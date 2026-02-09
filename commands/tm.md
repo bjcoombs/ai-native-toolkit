@@ -615,6 +615,8 @@ Do NOT do anything else. No code changes, no analysis. Just poll and notify.
 
 **Human can also type "check"** in the lead session to trigger an immediate merge check without waiting for the watcher.
 
+**Accidental input guard:** If the human sends an empty message, a single character, or the auto-suggested prompt text, treat it as a no-op. Reply with a brief status summary only — do NOT trigger expensive operations like merge checks or teammate messages. Only act on intentional commands like "check", "merged", or explicit instructions.
+
 ### Ephemeral Teammates Principle
 
 Teammates are **one task, one session**. Task Master is the coordination brain — all state lives there, not in session context.
