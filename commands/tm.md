@@ -362,7 +362,7 @@ You're an orchestrator. Spawn opus for complex code changes.
 
 **Prerequisite:** `$MARATHON_MODE` is `true` AND `$TEAMS_AVAILABLE` is `true`.
 
-This mode uses Claude Code Agent Teams to give each task its own teammate in a dedicated iTerm2 pane, with a shared task list for coordination.
+This mode uses Claude Code Agent Teams to give each task its own teammate session, with a shared task list for coordination.
 
 ### Step 1: Identify Tag and Ready Tasks
 
@@ -512,12 +512,13 @@ Waiting for teammates to create PRs. I'll report when PRs are ready for your rev
 
 **Lead behavior — two concurrent concerns:**
 
-The lead runs two loops simultaneously: reacting to teammate messages, and polling for human merges.
+The lead handles two concerns: reacting to teammate messages, and merge/conflict/comment detection via a dedicated watcher.
 
 #### Loop A: Teammate Messages (reactive)
 
-- On teammate message "PR created": Acknowledge, update tracking
-- On teammate message "PR ready": Acknowledge, report to user: "PR #X for <tag>.<task-id> is ready for your review"
+- On teammate message "Draft PR created": Acknowledge, update tracking, add PR to watcher list (respawn watcher if needed)
+- On teammate message "PR ready for review": Acknowledge, report to user: "PR #X for <tag>.<task-id> is ready for your review"
+- On teammate message "PR green": Acknowledge, report to user: "PR #X for <tag>.<task-id> — all checks passing, ready to merge"
 - On teammate message "Blocked":
   - **Merge conflicts** → Push back: message teammate "Resolve the merge conflicts yourself — fetch develop, merge, fix conflicts, commit, push. Only escalate if the conflict involves ambiguous architectural decisions."
   - **Genuinely blocked** (missing API, unclear requirements, needs human decision) → Report to user, ask for guidance
@@ -664,7 +665,7 @@ When `$MARATHON_MODE` is `true` but `$TEAMS_AVAILABLE` is `false`, the existing 
   │   ├─ Each teammate: setup worktree, implement, PR, review loop
   │   ├─ Lead dual loop:
   │   │   ├─ Loop A (reactive): teammate messages → track, report to human
-  │   │   └─ Loop B (proactive): poll PRs every 90s → detect merges → cleanup → spawn next
+  │   │   └─ Loop B (watcher): Haiku teammate polls PRs → detects merges/conflicts/comments → notifies lead
   │   └─ All done → shutdown team
   │
   ├─ No PR (implement/create)
@@ -686,7 +687,7 @@ When `$MARATHON_MODE` is `true` but `$TEAMS_AVAILABLE` is `false`, the existing 
 ```
 
 **Marathon Mode Behavior:**
-- **With Agent Teams**: Teammates get their own iTerm2 panes, shared task list, direct messaging. Lead coordinates lifecycle.
+- **With Agent Teams**: Teammates run as parallel sessions within the team, shared task list, direct messaging. Lead coordinates lifecycle.
 - **Without Agent Teams (fallback)**: Parallel subagents after each cleanup cycle.
 - Human merges PRs at their own pace (never auto-merge)
 - After merge detected → cleanup → check next ready → auto-start
