@@ -229,7 +229,8 @@ Each parallel agent runs the full `/tm <tag> <task-id>` workflow independently.
 5. **All review threads resolved** - No unresolved threads remain
 
 **Inline comment resolution rules:**
-- **Bot threads** (claude[bot], coderabbitai[bot]): Fix the code and push. Bots re-review and resolve their own threads
+- **CodeRabbit threads**: Fix the code and push. CodeRabbit re-reviews automatically and resolves its own threads. **NEVER reply in CodeRabbit threads** — CodeRabbit ignores replies from other bots ("Skipped: comment is from another GitHub bot"). Thread replies are wasted effort.
+- **claude[bot] threads**: Resolve directly via GraphQL `resolveReviewThread` mutation if the concern is addressed in the current code
 - **Human threads**: Fix the code, **reply inline** explaining the fix, `@mention` the reviewer to resolve. Do NOT resolve human threads — let the reviewer confirm
 
 #### Sync with develop (EVERY iteration, do this FIRST)
@@ -255,7 +256,8 @@ gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
   | select(.isResolved == false)
   | {id, author: .comments.nodes[0].author.login, body: .comments.nodes[0].body[0:100]}'
 # If unresolved threads remain:
-#   Bot author → code fix not pushed yet, or bot hasn't re-reviewed (wait/push)
+#   CodeRabbit author → fix code, push (triggers re-review). NEVER reply in thread.
+#   claude[bot] author → resolve via resolveReviewThread if addressed
 #   Human author → reply inline explaining fix, @mention them to resolve
 
 # 4. Check conversation for unaddressed comments
@@ -265,7 +267,8 @@ gh pr view <number> --comments
 **Decision tree:**
 - Merge conflicts → Resolve or report blocked
 - CI failing → Fix CI first
-- Unresolved bot threads → Fix code, push, wait for bot re-review
+- Unresolved CodeRabbit threads → Fix code, push, wait for re-review (never reply in thread)
+- Unresolved claude[bot] threads → Resolve via GraphQL if addressed
 - Unresolved human threads → Fix code, reply inline, @mention reviewer
 - Actionable conversation comments → Respond or fix
 - ALL clear → Output `<promise>PR_READY</promise>`
@@ -463,33 +466,60 @@ cd ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug>
 4. **Review loop**: Merge origin/develop first each iteration. Then check all 5 green criteria:
    - No merge conflicts with develop — **resolve conflicts yourself**, don't report blocked
    - CI passing
-   - No unresolved inline comments (bots resolve their own; reply to humans)
+   - No unresolved inline comments (fix code for CodeRabbit concerns — never reply in their threads; reply to humans)
    - No unaddressed conversation comments
    - All your review threads resolved
 5. Fix any issues, push, wait 60s, check again. Loop until all green.
    - **Merge conflicts are routine** — `git fetch origin develop && git merge origin/develop`, resolve conflicts, commit, push. Only report blocked if the conflict is genuinely ambiguous (e.g., two competing architectural approaches).
-6. **When PR is green**: Message the lead.
+6. **When review loop is green**, check auto-merge criteria (use jq filter file to avoid shell escaping):
+   ```bash
+   cat > /tmp/watcher-query.jq << 'JQEOF'
+   {
+     approvals: [.reviews[] | select(.state == "APPROVED")] | length,
+     changesRequested: [.reviews[] | select(.state == "CHANGES_REQUESTED")] | length,
+     failingChecks: [.statusCheckRollup[] | select(.conclusion != "SUCCESS" and .conclusion != "SKIPPED" and .conclusion != null)] | length,
+     pendingChecks: [.statusCheckRollup[] | select(.conclusion == null)] | length
+   }
+   JQEOF
+   gh pr view <number> --json reviews,statusCheckRollup | jq -f /tmp/watcher-query.jq
+   ```
+   - **Auto-merge eligible** (mergeable + CI green + ≥2 approvals + 0 changes requested) → merge directly:
+     ```bash
+     gh pr merge <number> --merge
+     ```
+     Then message lead and proceed straight to cleanup.
+   - **Not yet eligible** (e.g., awaiting approvals, changes requested) → message lead "PR green" and wait idle for the watcher to merge or lead to instruct.
 
 ## Communication
 - When draft PR is created: `SendMessage(type: "message", recipient: "lead", content: "Draft PR #<number> created for <tag>.<task-id>", summary: "Draft PR for <task-id>")`
 - When PR marked ready for review: `SendMessage(type: "message", recipient: "lead", content: "PR #<number> marked ready for review for <tag>.<task-id>", summary: "PR ready for review <task-id>")`
-- When PR is green (all checks passing): `SendMessage(type: "message", recipient: "lead", content: "PR #<number> all checks green for <tag>.<task-id>", summary: "PR green <task-id>")`
+- When PR auto-merged: `SendMessage(type: "message", recipient: "lead", content: "AUTO-MERGED: PR #<number> for <tag>.<task-id> — CI green, no conflicts, <N> approvals, 0 changes requested. Running cleanup.", summary: "PR #<number> auto-merged <task-id>")`
+- When PR green but not merge-eligible: `SendMessage(type: "message", recipient: "lead", content: "PR #<number> review loop clear for <tag>.<task-id> but not yet merge-eligible (<reason>). Waiting.", summary: "PR green, awaiting merge <task-id>")`
 - If blocked: `SendMessage(type: "message", recipient: "lead", content: "Blocked on <reason>", summary: "Blocked on <task-id>")`
 - If task is too complex to complete in one session: `SendMessage(type: "message", recipient: "lead", content: "Task <task-id> is too complex for a single session. Suggest splitting: <brief reasoning>", summary: "Too complex, suggest split <task-id>")`
   - Don't struggle silently — if you're going in circles or the scope is clearly larger than one PR, flag it early
 
 ## Lifecycle
-1. Implement, create draft PR early, mark ready when complete, review loop until green → message lead "PR green"
-2. Wait idle until lead messages you that the PR has been merged
-3. On "merged" message from lead, run cleanup:
+1. Implement, create draft PR early, mark ready when complete, review loop until green
+2. **If auto-merge criteria met** → merge directly, run cleanup, message lead, self-terminate:
+   ```bash
+   gh pr merge <number> --merge
+   cd ~/dev/github.com/<org>/<repo>
+   task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=done
+   cd <repo>-main && git worktree remove ../worktree/<tag>/<task-id>--<slug>
+   git branch -d <tag>--<task-id>--<slug>
+   ```
+   Message lead confirming auto-merge + cleanup complete. Approve any shutdown request.
+3. **If not merge-eligible** → message lead "PR green but awaiting <reason>", wait idle
+4. On "merged" message from lead (or watcher-triggered merge), run cleanup:
    ```bash
    cd ~/dev/github.com/<org>/<repo>
    task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=done
    cd <repo>-main && git worktree remove ../worktree/<tag>/<task-id>--<slug>
    git branch -d <tag>--<task-id>--<slug>
    ```
-4. Message lead confirming cleanup complete
-5. Approve shutdown request from lead (or self-terminate)
+5. Message lead confirming cleanup complete
+6. Approve shutdown request from lead (or self-terminate)
 """
 )
 ```
@@ -518,7 +548,7 @@ The lead handles two concerns: reacting to teammate messages, and merge/conflict
 
 - On teammate message "Draft PR created": Acknowledge, update tracking, add PR to watcher list (respawn watcher if needed)
 - On teammate message "PR ready for review": Acknowledge, report to user: "PR #X for <tag>.<task-id> is ready for your review"
-- On teammate message "PR green": Acknowledge, report to user: "PR #X for <tag>.<task-id> — all checks passing, ready to merge"
+- On teammate message "PR green": Acknowledge, report to user: "PR #X for <tag>.<task-id> — review loop clear, watcher will auto-merge when all criteria met"
 - On teammate message "Blocked":
   - **Merge conflicts** → Push back: message teammate "Resolve the merge conflicts yourself — fetch develop, merge, fix conflicts, commit, push. Only escalate if the conflict involves ambiguous architectural decisions."
   - **Genuinely blocked** (missing API, unclear requirements, needs human decision) → Report to user, ask for guidance
@@ -540,7 +570,7 @@ The lead handles two concerns: reacting to teammate messages, and merge/conflict
 
 #### Loop B: Merge Detection (watcher teammate)
 
-The lead spawns a dedicated **watcher** teammate (Haiku, minimal cost) that polls for merges and messages the lead when it detects one. This solves the turn-based limitation — the watcher's messages wake the lead.
+The lead spawns a dedicated **watcher** teammate (Haiku, minimal cost) that polls PRs, auto-merges when ready, and notifies the lead. This solves the turn-based limitation — the watcher's messages wake the lead.
 
 **Spawn watcher when there are PRs to track.** The watcher is ephemeral — killed and respawned whenever the PR list changes.
 
@@ -550,50 +580,77 @@ Task(
   team_name: "<tag>",
   name: "watcher",
   model: "haiku",
+  max_turns: 200,
   prompt: """
 # PR Watcher
 
-You are a lightweight polling agent. Check tracked PRs for state changes and notify the lead.
+You are a lightweight polling agent. Check tracked PRs for state changes, auto-merge when criteria are met, and notify the lead.
 
 ## Tracked PRs
 - PR #<number> → task <task-id> → teammate: task-<task-id>
 - PR #<number> → task <task-id> → teammate: task-<task-id>
 
+## Auto-Merge Criteria (ALL must be true)
+1. `mergeable` is `"MERGEABLE"` (no conflicts)
+2. Zero failing checks AND zero pending checks (CI fully green)
+3. At least 2 approvals (any combination of human or bot reviewers)
+4. Zero changes-requested reviews (`changesRequested` is 0)
+
 ## Loop
 Repeat until told to stop:
-1. Check all tracked PRs:
+1. Wait then check all tracked PRs (use jq filter file to avoid shell escaping issues with `!=`):
    ```bash
+   cat > /tmp/watcher-query.jq << 'JQEOF'
+   {
+     number,
+     mergedAt,
+     mergeable,
+     approvals: [.reviews[] | select(.state == "APPROVED")] | length,
+     changesRequested: [.reviews[] | select(.state == "CHANGES_REQUESTED")] | length,
+     failingChecks: [.statusCheckRollup[] | select(.conclusion != "SUCCESS" and .conclusion != "SKIPPED" and .conclusion != null)] | length,
+     pendingChecks: [.statusCheckRollup[] | select(.conclusion == null)] | length
+   }
+   JQEOF
+   sleep 90
    for PR in <pr-numbers>; do
-     gh pr view $PR --json number,mergedAt,mergeable --jq '{number, mergedAt, mergeable}'
+     echo "---PR $PR---"
+     gh pr view $PR --json number,mergedAt,mergeable,reviews,statusCheckRollup | jq -f /tmp/watcher-query.jq
    done
    ```
-2. **Merged** — if any PR has `mergedAt` set, message the lead:
-   `SendMessage(type: "message", recipient: "lead", content: "MERGED: PR #<number> (task <task-id>)", summary: "PR #<number> merged")`
-3. **Merge conflicts** — if `mergeable` is `"CONFLICTING"`, message the lead:
-   `SendMessage(type: "message", recipient: "lead", content: "CONFLICT: PR #<number> (task <task-id>) has merge conflicts with base branch", summary: "PR #<number> conflicts")`
-4. Check for new review activity:
-   ```bash
-   for PR in <pr-numbers>; do
-     gh api repos/<owner>/<repo>/pulls/$PR/comments \
-       --jq '[.[] | select(.created_at > "<last-check-timestamp>")] | length'
-   done
-   ```
-5. **New comments** — if count > 0, message the lead:
-   `SendMessage(type: "message", recipient: "lead", content: "COMMENTS: PR #<number> (task <task-id>) has <N> new review comments since last check", summary: "PR #<number> new comments")`
-6. Wait 90 seconds: `sleep 90`
-7. Repeat from step 1. Update `<last-check-timestamp>` to current time each iteration.
+2. For each PR, evaluate in priority order:
+   a. **Already merged** (`mergedAt` set) → message lead:
+      `SendMessage(type: "message", recipient: "lead", content: "MERGED: PR #<number> (task <task-id>) — merged externally", summary: "PR #<number> merged")`
+   b. **Auto-merge eligible** (all 4 criteria met) → merge then message lead:
+      ```bash
+      gh pr merge <number> --merge
+      ```
+      `SendMessage(type: "message", recipient: "lead", content: "AUTO-MERGED: PR #<number> (task <task-id>) — CI green, no conflicts, <N> approvals", summary: "PR #<number> auto-merged")`
+   c. **Merge conflicts** (`mergeable` is `"CONFLICTING"`) → message lead:
+      `SendMessage(type: "message", recipient: "lead", content: "CONFLICT: PR #<number> (task <task-id>) has merge conflicts with base branch", summary: "PR #<number> conflicts")`
+   d. **Changes requested** (`changesRequested` > 0) → message lead:
+      `SendMessage(type: "message", recipient: "lead", content: "CHANGES_REQUESTED: PR #<number> (task <task-id>) — <N> reviewer(s) requested changes", summary: "PR #<number> changes requested")`
+   e. **New review comments** (check via `gh api`):
+      ```bash
+      gh api repos/<owner>/<repo>/pulls/<number>/comments \
+        --jq '[.[] | select(.created_at > "<last-check-timestamp>")] | length'
+      ```
+      If count > 0 → message lead:
+      `SendMessage(type: "message", recipient: "lead", content: "COMMENTS: PR #<number> (task <task-id>) has <N> new review comments since last check", summary: "PR #<number> new comments")`
+3. Update `<last-check-timestamp>` to current time. Repeat from step 1.
 
 When the lead sends a shutdown request, approve it immediately.
-Do NOT do anything else. No code changes, no analysis. Just poll and notify.
+Do NOT do anything else. No code changes, no analysis. Just poll, merge when ready, and notify.
 """
 )
 ```
 
-**When the lead receives a notification from watcher:**
+**When the lead receives a merge notification (from watcher OR teammate):**
 
-**MERGED** notification:
+Merges can come from three sources: (a) watcher auto-merged, (b) teammate auto-merged (and already ran cleanup), (c) human merged externally.
+
+**MERGED / AUTO-MERGED from watcher or external:**
 1. **Shutdown the watcher** — PR list is stale
-2. Report to user: "Detected PR #X merged. Triggering cleanup for <tag>.<task-id>..."
+2. Report to user: "PR #X merged. Triggering cleanup for <tag>.<task-id>..."
 3. **Message the task teammate**: `SendMessage(type: "message", recipient: "task-<task-id>", content: "PR #X merged. Run cleanup: mark TM task done, remove worktree, delete branch. Then confirm.", summary: "PR merged, run cleanup")`
 4. Wait for teammate's cleanup confirmation, then **shutdown the task teammate**
 5. Mark internal task completed via TaskUpdate
@@ -605,9 +662,27 @@ Do NOT do anything else. No code changes, no analysis. Just poll and notify.
 8. **Respawn a fresh watcher** with the updated PR list (remaining + any new PRs)
 9. If all tasks done → Don't respawn watcher, proceed to [Step 6: Completion](#step-6-completion)
 
+**AUTO-MERGED from teammate (cleanup already done):**
+1. **Shutdown the watcher** — PR list is stale
+2. Report to user: "PR #X auto-merged by teammate. Cleanup already complete for <tag>.<task-id>"
+3. **Shutdown the task teammate** (cleanup already confirmed in their message)
+4. Mark internal task completed via TaskUpdate
+5. Check for newly unblocked tasks:
+   ```bash
+   task-master tags use "<tag>" && task-master list --ready --json
+   ```
+6. Spawn fresh task teammates for any newly ready tasks
+7. **Respawn a fresh watcher** with the updated PR list (remaining + any new PRs)
+8. If all tasks done → Don't respawn watcher, proceed to [Step 6: Completion](#step-6-completion)
+
 **CONFLICT** notification:
 1. **Message the task teammate**: `SendMessage(type: "message", recipient: "task-<task-id>", content: "Your PR has merge conflicts with the base branch. Fetch develop, merge, resolve conflicts, commit and push.", summary: "Resolve merge conflicts")`
 2. Watcher keeps polling — no need to kill/respawn for conflicts
+
+**CHANGES_REQUESTED** notification:
+1. Report to user: "PR #X for <tag>.<task-id> has changes requested by a reviewer"
+2. **Message the task teammate**: `SendMessage(type: "message", recipient: "task-<task-id>", content: "A reviewer requested changes on your PR. Check review comments, address the feedback, push fixes.", summary: "Changes requested on PR")`
+3. Watcher keeps polling — no need to kill/respawn
 
 **COMMENTS** notification:
 1. **Message the task teammate**: `SendMessage(type: "message", recipient: "task-<task-id>", content: "Your PR has new review comments. Check inline and conversation comments, address them, push fixes.", summary: "New review comments on PR")`
@@ -691,7 +766,7 @@ When `$MARATHON_MODE` is `true` but `$TEAMS_AVAILABLE` is `false`, the existing 
 **Marathon Mode Behavior:**
 - **With Agent Teams**: Teammates run as parallel sessions within the team, shared task list, direct messaging. Lead coordinates lifecycle.
 - **Without Agent Teams (fallback)**: Parallel subagents after each cleanup cycle.
-- Human merges PRs at their own pace (never auto-merge)
+- Watcher auto-merges when CI green + no conflicts + ≥2 approvals; human can also merge anytime
 - After merge detected → cleanup → check next ready → auto-start
 - Independent tasks spawn in parallel (multiple concurrent PRs)
 - Loop continues until all tasks in tag are done
@@ -725,7 +800,7 @@ Human merges PR     → (no command runs)
 
 ## Notes
 
-- Human merges PRs, never auto-merge (even in marathon mode)
+- Watcher auto-merges PRs when CI green, no conflicts, and ≥2 approvals; human can also merge manually
 - Subagents can bail if work is too large
 - `/tm` → report ready tasks
 - `/tm <tag>` → marathon mode (work through entire tag)
