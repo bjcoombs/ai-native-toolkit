@@ -39,12 +39,13 @@ Skill(
      - Analyze root cause
      - Implement fixes
      - Commit with descriptive message
-     - Push changes
+     - Push changes (CodeRabbit re-reviews and resolves its own threads automatically)
+     - **NEVER reply in CodeRabbit threads** — CodeRabbit ignores replies from other bots
      - Wait 30 seconds for CI
      - Report: "🔄 Iteration N: Fixed X issues"
      - Check status again (GOTO step 2)
-   
-   - **If ALL passing and NO bot comments**:
+
+   - **If ALL passing and NO unresolved threads**:
      - Report: "✅ PR #X: All checks passing, ready for human review"
      - Include final status footer
      - STOP
