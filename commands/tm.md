@@ -1,6 +1,6 @@
 ---
-description: Task Master - unified command for start, review, and close
-argument-hint: [tag [task-id]] (optional - derives context from worktree if omitted)
+description: Task Master - plan, start, review, and close
+argument-hint: [tag [task-id] | feature description] (optional - derives context from worktree if omitted)
 ---
 
 # Task Master Orchestrator
@@ -9,10 +9,12 @@ argument-hint: [tag [task-id]] (optional - derives context from worktree if omit
 
 > Thin orchestrator. Uses Ralph Loop for iteration when available, falls back to subagents.
 >
+> **Planning Mode** (`/tm use stripe as kyc provider`): When args don't match an existing tag, explores the codebase, writes a PRD, creates a tag, generates tasks, runs complexity analysis, and expands. Stops after planning — run `/tm <tag>` to start work.
+>
 > **Marathon Mode** (`/tm <tag>`): When only a tag is given (no task-id), automatically progress through all ready tasks.
 > When Agent Teams are available, each task gets its own teammate with shared task list.
 > When teams unavailable, falls back to parallel subagents.
-> YOU review and merge PRs at your own pace - marathon mode handles the mechanical workflow.
+> PRs auto-merge when CI green, no conflicts, ≥2 approvals, and 0 changes requested.
 
 ---
 
@@ -39,8 +41,19 @@ Set `$TEAMS_AVAILABLE` to `true` if result is `"1"`, otherwise `false`.
 
 **Parse arguments to determine mode:**
 - No arguments → Report mode
-- One argument (non-numeric, matches a TM tag) → Marathon mode (`$MARATHON_MODE = true`)
+- One argument that matches an existing TM tag → Marathon mode (`$MARATHON_MODE = true`)
 - Two arguments (tag + task-id) → Single task mode
+- **Arguments that don't match any existing tag** → Planning mode (`$PLANNING_MODE = true`)
+
+**Tag match check** (use tasks.json directly — CLI output has formatting that breaks grep):
+```bash
+cd ~/dev/github.com/<org>/<repo>
+FIRST_ARG="<first-argument>"
+jq -e --arg tag "$FIRST_ARG" '.[$tag]' .taskmaster/tasks/tasks.json >/dev/null 2>&1 && echo "TAG_EXISTS" || echo "NEW_IDEA"
+```
+
+**Planning mode early route:**
+If `$PLANNING_MODE`: Skip normal flow. Jump directly to [Planning Mode](#planning-mode).
 
 **Marathon + Agent Teams early route:**
 If `$MARATHON_MODE` AND `$TEAMS_AVAILABLE`: Skip normal single-task flow. Jump directly to [Marathon Mode: Agent Teams](#marathon-mode-agent-teams).
@@ -77,7 +90,8 @@ Is current directory a TM worktree (or cd'd to one via conversation context)?
 │   └─ No PR     → Ralph: full cycle / Fallback: implement-specialist
 │
 └─ NO → START mode
-    ├─ Args given → Setup worktree, then Ralph: full cycle / Fallback: start-specialist
+    ├─ Args match existing tag → Setup worktree, then Ralph: full cycle / Fallback: start-specialist
+    ├─ Args don't match any tag → PLANNING mode (explore → PRD → tasks → expand)
     └─ No args    → Report ready tasks (no subagent needed)
 ```
 
@@ -95,6 +109,118 @@ gh pr view --json number,state,mergedAt 2>/dev/null
 | `mergedAt` is set | cleanup-specialist | cleanup-specialist |
 | PR exists, open | Ralph review loop | review-specialist |
 | No PR | Ralph full cycle | implement-specialist |
+
+---
+
+## PLANNING MODE (args don't match any existing tag)
+
+The user has described a feature idea. Transform it into a fully planned Task Master tag with tasks, complexity analysis, and subtask breakdown.
+
+**Input**: `$ARGUMENTS` — a natural language description of the idea (e.g., "use stripe as another kyc provider")
+
+### Step 1: Explore the Codebase
+
+Understand the existing architecture relevant to the idea. Use Glob, Grep, Read — or spawn an Explore agent for deeper investigation.
+
+Focus on:
+- Existing patterns the feature should follow (interfaces, factories, adapters)
+- Files and modules that would be touched
+- Integration points and dependencies
+- Feasibility and complexity signals
+
+### Step 2: Write the PRD
+
+Based on exploration findings, write a PRD to `.taskmaster/prd/`:
+
+```bash
+# Auto-derive tag name from the description (lowercase, hyphens, max 40 chars)
+# e.g., "use stripe as another kyc provider" → "stripe-kyc-provider"
+TAG_NAME="<derived-tag-name>"
+```
+
+PRD structure (keep it concise — this feeds into task generation):
+
+```markdown
+# <Feature Title>
+
+## Problem Statement
+<What problem does this solve? Why now?>
+
+## Technical Context
+<Relevant existing patterns, interfaces, modules discovered during exploration>
+<File paths and line references>
+
+## Solution
+<What to build, following existing patterns>
+
+## Scope
+<What's in, what's explicitly out>
+
+## Success Criteria
+<How do we know it's done? Testable conditions>
+
+## Complexity Estimate
+<Initial story point estimate with reasoning>
+```
+
+```bash
+# Write the PRD
+mkdir -p ~/dev/github.com/<org>/<repo>/.taskmaster/prd
+# Write PRD content to .taskmaster/prd/<tag-name>.md
+```
+
+### Step 3: Create Tag and Generate Tasks
+
+```bash
+cd ~/dev/github.com/<org>/<repo>
+task-master tags add "$TAG_NAME"
+task-master tags use "$TAG_NAME"
+task-master parse-prd --input=".taskmaster/prd/$TAG_NAME.md"
+```
+
+### Step 4: Complexity Analysis
+
+```bash
+task-master analyze-complexity --research
+```
+
+### Step 5: Expand Tasks
+
+Expand tasks that warrant subtasks (typically complexity >= 5):
+
+```bash
+# Get tasks needing expansion
+task-master list --json | jq '.[] | select(.complexity >= 5) | .id'
+
+# Expand each
+for TASK_ID in <high-complexity-task-ids>; do
+  task-master expand --id=$TASK_ID --research
+done
+```
+
+### Step 6: Report and Stop
+
+Report the complete task breakdown and **terminate**. User reviews, then runs `/tm <tag>` in a fresh session to start work.
+
+```
+## Planned: <tag-name>
+
+PRD: .taskmaster/prd/<tag-name>.md
+
+| Task | Title | Points | Subtasks | Deps |
+|------|-------|--------|----------|------|
+| 1 | ... | 3 | 2 | - |
+| 2 | ... | 5 | 3 | 1 |
+| ... | ... | ... | ... | ... |
+
+**Total**: <N> points across <M> tasks
+**Critical path**: <task-ids> (<P> points sequential)
+**Parallel capacity**: <K> tasks can run concurrently in first wave
+
+Next: `/clear` then `/tm <tag-name>`
+```
+
+**Do NOT start implementation.** Planning mode produces the plan only.
 
 ---
 
@@ -181,7 +307,7 @@ Task(
 
 PR merged. Clean up in this order:
 1. Mark task done: `cd ~/dev/github.com/<org>/<repo> && task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=done`
-2. Remove worktree from <repo>-main: `cd <repo>-main && git worktree remove ../worktree/<tag>/<task-id>--<slug>`
+2. Remove worktree from <repo>-main: `cd <repo>-main && git worktree remove --force ../worktree/<tag>/<task-id>--<slug>`
 3. Delete branch: `git branch -d <tag>--<task-id>--<slug>`
 
 Report complete.
@@ -388,6 +514,7 @@ Before spawning, review the dependency graph and optimize:
 2. Identify the critical path (longest sequential chain)
 3. **Challenge unnecessary dependencies** — if task B depends on task A but they touch different files/modules, the dependency may be overly cautious. Remove it.
 4. Look for tasks chained sequentially that could run in parallel (e.g., "add API endpoint" → "add tests" could be parallel if tests can be written against the interface spec)
+5. **Detect shared-file conflicts** — if two tasks would modify the same file (e.g., both touch `manifest.proto` or both modify the same migration directory), force sequential execution even if dependency analysis says they're independent. Merge conflicts from parallel edits to the same file are predictable and avoidable. Check task descriptions and titles for overlapping modules/files.
 5. Report the optimized plan to the user:
    ```
    ## Dependency Analysis: <tag>
@@ -461,8 +588,8 @@ cd ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug>
 
 ## Workflow
 1. **Implement using TDD**: Write failing tests, make them pass, refactor. Commit incrementally.
-2. **Push and create draft PR early** (on first meaningful commit): `gh pr create --draft --title "<type>: <title>" --body "..."`. This gives the human visibility into progress. Continue pushing commits to the draft PR.
-3. **When implementation is complete**, mark ready for review: `gh pr ready <number>`. Set TM task status to review: `task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=review`
+2. **Push commits incrementally** during implementation for backup. Do NOT create a PR yet.
+3. **When implementation is complete**, create the PR and set TM status: `gh pr create --title "<type>: <title>" --body "..."` then `task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=review`. This ensures CodeRabbit and other bots review immediately.
 4. **Review loop**: Merge origin/develop first each iteration. Then check all 5 green criteria:
    - No merge conflicts with develop — **resolve conflicts yourself**, don't report blocked
    - CI passing
@@ -471,55 +598,22 @@ cd ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug>
    - All your review threads resolved
 5. Fix any issues, push, wait 60s, check again. Loop until all green.
    - **Merge conflicts are routine** — `git fetch origin develop && git merge origin/develop`, resolve conflicts, commit, push. Only report blocked if the conflict is genuinely ambiguous (e.g., two competing architectural approaches).
-6. **When review loop is green**, check auto-merge criteria (use jq filter file to avoid shell escaping):
-   ```bash
-   cat > /tmp/watcher-query.jq << 'JQEOF'
-   {
-     approvals: [.reviews[] | select(.state == "APPROVED")] | length,
-     changesRequested: [.reviews[] | select(.state == "CHANGES_REQUESTED")] | length,
-     failingChecks: [.statusCheckRollup[] | select(.conclusion != "SUCCESS" and .conclusion != "SKIPPED" and .conclusion != null)] | length,
-     pendingChecks: [.statusCheckRollup[] | select(.conclusion == null)] | length
-   }
-   JQEOF
-   gh pr view <number> --json reviews,statusCheckRollup | jq -f /tmp/watcher-query.jq
-   ```
-   - **Auto-merge eligible** (mergeable + CI green + ≥2 approvals + 0 changes requested) → merge directly:
-     ```bash
-     gh pr merge <number> --merge
-     ```
-     Then message lead and proceed straight to cleanup.
-   - **Not yet eligible** (e.g., awaiting approvals, changes requested) → message lead "PR green" and wait idle for the watcher to merge or lead to instruct.
+6. **When review loop is green**, message lead "REVIEW_CLEAR" and wait idle. The lead handles merge checks and cleanup — do NOT attempt to merge or clean up yourself.
 
 ## Communication
-- When draft PR is created: `SendMessage(type: "message", recipient: "lead", content: "Draft PR #<number> created for <tag>.<task-id>", summary: "Draft PR for <task-id>")`
-- When PR marked ready for review: `SendMessage(type: "message", recipient: "lead", content: "PR #<number> marked ready for review for <tag>.<task-id>", summary: "PR ready for review <task-id>")`
-- When PR auto-merged: `SendMessage(type: "message", recipient: "lead", content: "AUTO-MERGED: PR #<number> for <tag>.<task-id> — CI green, no conflicts, <N> approvals, 0 changes requested. Running cleanup.", summary: "PR #<number> auto-merged <task-id>")`
-- When PR green but not merge-eligible: `SendMessage(type: "message", recipient: "lead", content: "PR #<number> review loop clear for <tag>.<task-id> but not yet merge-eligible (<reason>). Waiting.", summary: "PR green, awaiting merge <task-id>")`
-- If blocked: `SendMessage(type: "message", recipient: "lead", content: "Blocked on <reason>", summary: "Blocked on <task-id>")`
-- If task is too complex to complete in one session: `SendMessage(type: "message", recipient: "lead", content: "Task <task-id> is too complex for a single session. Suggest splitting: <brief reasoning>", summary: "Too complex, suggest split <task-id>")`
+Only message the lead for **meaningful events**. Do NOT message for status updates, idle state, or "still working" — the lead sees your idle notifications automatically.
+
+- When PR is created: `SendMessage(type: "message", recipient: "lead", content: "PR_CREATED: PR #<number> for <tag>.<task-id>", summary: "PR created <task-id>")`
+- When review loop is clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR: PR #<number> for <tag>.<task-id> — all review criteria met", summary: "Review clear <task-id>")`
+- If blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED: <tag>.<task-id> — <reason>", summary: "Blocked <task-id>")`
+- If task is too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX: <tag>.<task-id> — <brief reasoning>", summary: "Too complex <task-id>")`
   - Don't struggle silently — if you're going in circles or the scope is clearly larger than one PR, flag it early
 
 ## Lifecycle
-1. Implement, create draft PR early, mark ready when complete, review loop until green
-2. **If auto-merge criteria met** → merge directly, run cleanup, message lead, self-terminate:
-   ```bash
-   gh pr merge <number> --merge
-   cd ~/dev/github.com/<org>/<repo>
-   task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=done
-   cd <repo>-main && git worktree remove ../worktree/<tag>/<task-id>--<slug>
-   git branch -d <tag>--<task-id>--<slug>
-   ```
-   Message lead confirming auto-merge + cleanup complete. Approve any shutdown request.
-3. **If not merge-eligible** → message lead "PR green but awaiting <reason>", wait idle
-4. On "merged" message from lead (or watcher-triggered merge), run cleanup:
-   ```bash
-   cd ~/dev/github.com/<org>/<repo>
-   task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=done
-   cd <repo>-main && git worktree remove ../worktree/<tag>/<task-id>--<slug>
-   git branch -d <tag>--<task-id>--<slug>
-   ```
-5. Message lead confirming cleanup complete
-6. Approve shutdown request from lead (or self-terminate)
+1. Implement, push commits incrementally, create PR when complete, review loop until green
+2. Message lead "REVIEW_CLEAR" and wait idle
+3. Lead handles: smart-merge (dismiss stale bot reviews, check mergeStateStatus, merge), cleanup (mark TM done, remove worktree, delete branch), then shuts you down
+4. Approve shutdown request from lead when received
 """
 )
 ```
@@ -540,15 +634,36 @@ After spawning teammates, report team status:
 Waiting for teammates to create PRs. I'll report when PRs are ready for your review.
 ```
 
-**Lead behavior — two concurrent concerns:**
+**PR tracking**: Persist tracking to a file so it survives context compaction:
+```bash
+# File: ~/.claude/teams/<tag>/pr-tracking.json
+# Structure: {"task-<id>": {"pr": <number>, "status": "open|merged|cleaning"}}
 
-The lead handles two concerns: reacting to teammate messages, and merge/conflict/comment detection via a dedicated watcher.
+# Write/update tracking
+TRACK_FILE=~/.claude/teams/<tag>/pr-tracking.json
+jq --arg task "task-<id>" --argjson pr <number> \
+  '.[$task] = {"pr": $pr, "status": "open"}' "$TRACK_FILE" > "$TRACK_FILE.tmp" \
+  && mv "$TRACK_FILE.tmp" "$TRACK_FILE"
 
-#### Loop A: Teammate Messages (reactive)
+# Read all tracked PRs
+jq -r 'to_entries[] | "\(.key) → PR #\(.value.pr) (\(.value.status))"' "$TRACK_FILE"
 
-- On teammate message "Draft PR created": Acknowledge, update tracking, add PR to watcher list (respawn watcher if needed)
-- On teammate message "PR ready for review": Acknowledge, report to user: "PR #X for <tag>.<task-id> is ready for your review"
-- On teammate message "PR green": Acknowledge, report to user: "PR #X for <tag>.<task-id> — review loop clear, watcher will auto-merge when all criteria met"
+# Remove after merge+cleanup
+jq --arg task "task-<id>" 'del(.[$task])' "$TRACK_FILE" > "$TRACK_FILE.tmp" \
+  && mv "$TRACK_FILE.tmp" "$TRACK_FILE"
+```
+Update on PR_CREATED messages, remove after merge+cleanup. Use this list when human types "check" to smart-merge all tracked PRs.
+
+**Context compaction recovery**: If the lead loses teammate context after compaction, read `pr-tracking.json` to rediscover active PRs, then check each PR's state via `gh pr view` to rebuild the current situation.
+
+**Lead behavior — reactive to teammate messages, runs smart-merge directly:**
+
+No watcher agent. The lead checks PRs and merges directly when teammates report in. This is faster, more reliable, and saves tokens.
+
+#### Teammate Messages (reactive)
+
+- On teammate message "PR_CREATED": Update tracking, report to user: "PR #X for <tag>.<task-id> is ready for review"
+- On teammate message "REVIEW_CLEAR": Run [Smart Merge](#smart-merge) for that PR
 - On teammate message "Blocked":
   - **Merge conflicts** → Push back: message teammate "Resolve the merge conflicts yourself — fetch develop, merge, fix conflicts, commit, push. Only escalate if the conflict involves ambiguous architectural decisions."
   - **Genuinely blocked** (missing API, unclear requirements, needs human decision) → Report to user, ask for guidance
@@ -568,127 +683,97 @@ The lead handles two concerns: reacting to teammate messages, and merge/conflict
   5. Report to user: "Task <task-id> was too complex. Split into N tasks, spawning teammates."
 - When multiple PRs ready, consolidate: "N PRs ready for your review: #X, #Y, #Z"
 
-#### Loop B: Merge Detection (watcher teammate)
+#### Smart Merge
 
-The lead spawns a dedicated **watcher** teammate (Haiku, minimal cost) that polls PRs, auto-merges when ready, and notifies the lead. This solves the turn-based limitation — the watcher's messages wake the lead.
+The lead runs smart-merge directly — no watcher agent. Triggered by teammate "REVIEW_CLEAR" messages or human typing "check".
 
-**Spawn watcher when there are PRs to track.** The watcher is ephemeral — killed and respawned whenever the PR list changes.
+```bash
+# Smart merge: check bot findings → dismiss stale → check merge state → merge
+PR=<number>
 
-```
-Task(
-  subagent_type: "general-purpose",
-  team_name: "<tag>",
-  name: "watcher",
-  model: "haiku",
-  max_turns: 200,
-  prompt: """
-# PR Watcher
+# Step 1: Check stale bot CHANGES_REQUESTED reviews for valid findings
+# CRITICAL: Don't blindly dismiss. Read the review comments first.
+# Bots like CodeRabbit leave stale CHANGES_REQUESTED even after approving
+# on re-review, but the original findings may still be valid.
+STALE_REVIEWS=$(gh api repos/<owner>/<repo>/pulls/$PR/reviews \
+  --jq '[.[] | select(.state == "CHANGES_REQUESTED" and (.user.login | endswith("[bot]")))]')
 
-You are a lightweight polling agent. Check tracked PRs for state changes, auto-merge when criteria are met, and notify the lead.
+# For each stale bot review, read its comments
+echo "$STALE_REVIEWS" | jq -r '.[].id' | while read REVIEW_ID; do
+  # Read the review's inline comments
+  COMMENTS=$(gh api repos/<owner>/<repo>/pulls/$PR/reviews/$REVIEW_ID/comments \
+    --jq '.[] | {path, line, body: .body[0:200]}')
 
-## Tracked PRs
-- PR #<number> → task <task-id> → teammate: task-<task-id>
-- PR #<number> → task <task-id> → teammate: task-<task-id>
+  # If comments exist, check if they were addressed by asking the teammate
+  # or by reading the current code at those locations.
+  # Only dismiss if concerns are addressed or the bot approved on a later pass.
+  # If uncertain, message the teammate to verify before dismissing.
 
-## Auto-Merge Criteria (ALL must be true)
-1. `mergeable` is `"MERGEABLE"` (no conflicts)
-2. Zero failing checks AND zero pending checks (CI fully green)
-3. At least 2 approvals (any combination of human or bot reviewers)
-4. Zero changes-requested reviews (`changesRequested` is 0)
+  gh api repos/<owner>/<repo>/pulls/$PR/reviews/$REVIEW_ID/dismissals \
+    --method PUT -f message="Stale bot review — verified findings addressed" -f event="DISMISS"
+done
 
-## Loop
-Repeat until told to stop:
-1. Wait then check all tracked PRs (use jq filter file to avoid shell escaping issues with `!=`):
-   ```bash
-   cat > /tmp/watcher-query.jq << 'JQEOF'
-   {
-     number,
-     mergedAt,
-     mergeable,
-     approvals: [.reviews[] | select(.state == "APPROVED")] | length,
-     changesRequested: [.reviews[] | select(.state == "CHANGES_REQUESTED")] | length,
-     failingChecks: [.statusCheckRollup[] | select(.conclusion != "SUCCESS" and .conclusion != "SKIPPED" and .conclusion != null)] | length,
-     pendingChecks: [.statusCheckRollup[] | select(.conclusion == null)] | length
-   }
-   JQEOF
-   sleep 90
-   for PR in <pr-numbers>; do
-     echo "---PR $PR---"
-     gh pr view $PR --json number,mergedAt,mergeable,reviews,statusCheckRollup | jq -f /tmp/watcher-query.jq
-   done
-   ```
-2. For each PR, evaluate in priority order:
-   a. **Already merged** (`mergedAt` set) → message lead:
-      `SendMessage(type: "message", recipient: "lead", content: "MERGED: PR #<number> (task <task-id>) — merged externally", summary: "PR #<number> merged")`
-   b. **Auto-merge eligible** (all 4 criteria met) → merge then message lead:
-      ```bash
-      gh pr merge <number> --merge
-      ```
-      `SendMessage(type: "message", recipient: "lead", content: "AUTO-MERGED: PR #<number> (task <task-id>) — CI green, no conflicts, <N> approvals", summary: "PR #<number> auto-merged")`
-   c. **Merge conflicts** (`mergeable` is `"CONFLICTING"`) → message lead:
-      `SendMessage(type: "message", recipient: "lead", content: "CONFLICT: PR #<number> (task <task-id>) has merge conflicts with base branch", summary: "PR #<number> conflicts")`
-   d. **Changes requested** (`changesRequested` > 0) → message lead:
-      `SendMessage(type: "message", recipient: "lead", content: "CHANGES_REQUESTED: PR #<number> (task <task-id>) — <N> reviewer(s) requested changes", summary: "PR #<number> changes requested")`
-   e. **New review comments** (check via `gh api`):
-      ```bash
-      gh api repos/<owner>/<repo>/pulls/<number>/comments \
-        --jq '[.[] | select(.created_at > "<last-check-timestamp>")] | length'
-      ```
-      If count > 0 → message lead:
-      `SendMessage(type: "message", recipient: "lead", content: "COMMENTS: PR #<number> (task <task-id>) has <N> new review comments since last check", summary: "PR #<number> new comments")`
-3. Update `<last-check-timestamp>` to current time. Repeat from step 1.
+# Step 2: Check merge state (mergeStateStatus is the real signal, not pending check counting)
+gh pr view $PR --json mergeStateStatus,mergedAt,reviews \
+  --jq '{
+    mergeStateStatus,
+    mergedAt,
+    approvals: [.reviews[] | select(.state == "APPROVED")] | length,
+    changesRequested: [.reviews[] | select(.state == "CHANGES_REQUESTED")] | length
+  }'
 
-When the lead sends a shutdown request, approve it immediately.
-Do NOT do anything else. No code changes, no analysis. Just poll, merge when ready, and notify.
-"""
-)
+# Step 3: Evaluate
+# - mergedAt set → already merged (human merged externally)
+# - mergeStateStatus == "CLEAN" AND approvals >= 2 AND changesRequested == 0 → merge
+# - mergeStateStatus == "BLOCKED" / "BEHIND" / "DIRTY" → not ready, report why
 ```
 
-**When the lead receives a merge notification (from watcher OR teammate):**
+**Auto-Merge Criteria (ALL must be true):**
+1. `mergeStateStatus` is `"CLEAN"` (GitHub's own rollup: CI green, no conflicts, branch protections met)
+2. At least 2 approvals (any combination of human or bot reviewers)
+3. Zero non-dismissed changes-requested reviews
 
-Merges can come from three sources: (a) watcher auto-merged, (b) teammate auto-merged (and already ran cleanup), (c) human merged externally.
+**After successful merge or detecting external merge:**
 
-**MERGED / AUTO-MERGED from watcher or external:**
-1. **Shutdown the watcher** — PR list is stale
-2. Report to user: "PR #X merged. Triggering cleanup for <tag>.<task-id>..."
-3. **Message the task teammate**: `SendMessage(type: "message", recipient: "task-<task-id>", content: "PR #X merged. Run cleanup: mark TM task done, remove worktree, delete branch. Then confirm.", summary: "PR merged, run cleanup")`
-4. Wait for teammate's cleanup confirmation, then **shutdown the task teammate**
-5. Mark internal task completed via TaskUpdate
-6. Check for newly unblocked tasks:
+Lead runs cleanup directly (teammates are unreliable at post-merge cleanup):
+```bash
+# Lead runs cleanup — do NOT delegate to teammate
+cd ~/dev/github.com/<org>/<repo>
+task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=done
+cd <repo>-main && git worktree remove --force ../worktree/<tag>/<task-id>--<slug>
+git branch -d <tag>--<task-id>--<slug>
+```
+
+Then:
+1. Report to user: "PR #X merged + cleaned up for <tag>.<task-id>"
+2. **Shutdown the task teammate**: `SendMessage(type: "shutdown_request", recipient: "task-<task-id>", ...)`
+3. Mark internal task completed via TaskUpdate
+4. Check for newly unblocked tasks:
    ```bash
    task-master tags use "<tag>" && task-master list --ready --json
    ```
-7. Spawn fresh task teammates for any newly ready tasks
-8. **Respawn a fresh watcher** with the updated PR list (remaining + any new PRs)
-9. If all tasks done → Don't respawn watcher, proceed to [Step 6: Completion](#step-6-completion)
+5. **Wave transition** — before spawning the next wave:
+   - Review any BLOCKED or TOO_COMPLEX signals from the completed wave
+   - Check if remaining tasks should be deferred or cancelled based on learnings
+   - If earlier tasks revealed patterns, customize next teammate prompts with context (e.g., "Note: the codebase uses X pattern for Y, follow it")
+6. Spawn fresh task teammates for any newly ready tasks (with adapted prompts)
+7. If all tasks done → proceed to [Step 6: Completion](#step-6-completion)
 
-**AUTO-MERGED from teammate (cleanup already done):**
-1. **Shutdown the watcher** — PR list is stale
-2. Report to user: "PR #X auto-merged by teammate. Cleanup already complete for <tag>.<task-id>"
-3. **Shutdown the task teammate** (cleanup already confirmed in their message)
-4. Mark internal task completed via TaskUpdate
-5. Check for newly unblocked tasks:
-   ```bash
-   task-master tags use "<tag>" && task-master list --ready --json
-   ```
-6. Spawn fresh task teammates for any newly ready tasks
-7. **Respawn a fresh watcher** with the updated PR list (remaining + any new PRs)
-8. If all tasks done → Don't respawn watcher, proceed to [Step 6: Completion](#step-6-completion)
+**If not merge-ready:**
+- `mergeStateStatus == "BLOCKED"` → report to user, message teammate to check CI / review requirements
+- `mergeStateStatus == "DIRTY"` → message teammate: "PR has merge conflicts, resolve them"
+- `changesRequested > 0` (non-bot) → report to user: "PR #X has human changes requested"
 
-**CONFLICT** notification:
-1. **Message the task teammate**: `SendMessage(type: "message", recipient: "task-<task-id>", content: "Your PR has merge conflicts with the base branch. Fetch develop, merge, resolve conflicts, commit and push.", summary: "Resolve merge conflicts")`
-2. Watcher keeps polling — no need to kill/respawn for conflicts
+**Human can type "check"** to trigger smart-merge for all tracked PRs immediately.
 
-**CHANGES_REQUESTED** notification:
-1. Report to user: "PR #X for <tag>.<task-id> has changes requested by a reviewer"
-2. **Message the task teammate**: `SendMessage(type: "message", recipient: "task-<task-id>", content: "A reviewer requested changes on your PR. Check review comments, address the feedback, push fixes.", summary: "Changes requested on PR")`
-3. Watcher keeps polling — no need to kill/respawn
+**Idle teammate without message**: If a teammate goes idle without sending a meaningful message (PR_CREATED or REVIEW_CLEAR), check their PR status directly:
+```bash
+gh pr list --state open --json number,headRefName \
+  --jq '.[] | select(.headRefName | test("<tag>--<task-id>"))'
+```
+If a PR exists, check its state and run smart-merge if eligible.
 
-**COMMENTS** notification:
-1. **Message the task teammate**: `SendMessage(type: "message", recipient: "task-<task-id>", content: "Your PR has new review comments. Check inline and conversation comments, address them, push fixes.", summary: "New review comments on PR")`
-2. Watcher keeps polling — no need to kill/respawn for comments
-
-**Human can also type "check"** in the lead session to trigger an immediate merge check without waiting for the watcher.
+**Multi-PR wave merges**: When merging multiple PRs from the same wave, merge one at a time. After each merge, give remaining teammates a moment to sync with develop before checking their merge eligibility. This prevents false "CLEAN" states that flip to "DIRTY" mid-merge.
 
 **Accidental input guard:** If the human sends an empty message, a single character, or the auto-suggested prompt text, treat it as a no-op. Reply with a brief status summary only — do NOT trigger expensive operations like merge checks or teammate messages. Only act on intentional commands like "check", "merged", or explicit instructions.
 
@@ -698,11 +783,11 @@ Teammates are **one task, one session**. Task Master is the coordination brain �
 
 **Lifecycle of a teammate:**
 ```
-Spawn (fresh) → Setup worktree → Implement → Draft PR (early) → Ready for review → Review loop → PR green → Idle
-  → Lead detects merge → Messages teammate → Teammate runs cleanup → Confirms → Shutdown
+Spawn (fresh) → Setup worktree → Implement (push commits) → Create PR (when complete) → Review loop → REVIEW_CLEAR → Idle
+  → Lead runs smart-merge + cleanup directly → Shuts down teammate
 ```
 
-The teammate stays alive through the full cycle because it already has the context (paths, branch names, task IDs) needed for cleanup. But once cleanup is done, the session is terminated — never reused for a different task.
+The teammate stays alive through the review loop so the lead can message them about CI failures or merge conflicts. Once the lead merges and cleans up, the teammate is shut down — never reused for a different task.
 
 **Why shutdown instead of reuse:**
 - Shutdown is instant. Compaction/clearing is slow and unreliable.
@@ -712,17 +797,59 @@ The teammate stays alive through the full cycle because it already has the conte
 
 **Never reuse a teammate for a different task.** Always shutdown + spawn fresh.
 
-### Step 6: Completion
+### Lead Authority
+
+The lead operates as a **tech lead running a sprint** — not a task router.
+
+**Trusted decisions (no human approval needed):**
+- Defer or cancel tasks that become irrelevant based on completed work
+- Create new Task Master tasks discovered during the marathon (`task-master add-task --title="..." --description="..."`)
+- Create follow-up tasks for tech debt or issues found during implementation
+- Fix minor style/consistency nits across PRs directly (commit to the branch)
+- Escalate model tier for a struggling teammate (shutdown + respawn on opus)
+- Limit concurrency if teammates are creating merge conflicts with each other
+- Reprioritize remaining tasks based on what earlier tasks revealed
+
+**Always escalate to human:**
+- Architectural changes not in the original task descriptions
+- Public API surface modifications
+- Deferring more than 30% of tasks in the tag
+- Ambiguous reviewer feedback that could go either way
+
+**Report judgment calls in status updates.** When the lead defers a task or changes approach, state what changed and why — this feeds into the retrospective.
+
+### Step 6: Completion and Retrospective
 
 When all tasks in tag are done:
 1. Shutdown any remaining teammates via `SendMessage(type: "shutdown_request", ...)` (most will already be shut down from the merge cycle)
 2. `TeamDelete()` to clean up team resources
-3. Report:
+3. **Run retrospective** — honest self-assessment of the marathon:
+
 ```
 ## Marathon Complete: <tag>
 
 All <N> tasks done. <N> PRs merged.
+
+### Retrospective
+
+**What worked well**
+- <specific patterns, tools, or approaches that were effective>
+
+**What didn't work**
+- <friction points, failures, wasted effort — be honest>
+
+**Suggested tweaks**
+- <concrete improvements to the /tm workflow based on this run>
+  <reference specific sections of tm.md if applicable>
+
+**Stats**
+- Tasks: <N> completed, <N> cancelled/deferred
+- PRs: <N> merged, <N> avg review iterations
+- Teammates: <N> spawned, <N> needed manual intervention
+- Merge friction: <stale reviews dismissed, conflicts resolved, etc.>
 ```
+
+The retro should be **honest and specific** — not a summary of what happened, but an analysis of what the lead would do differently next time. Flag any patterns that should be codified back into `/tm`.
 
 ---
 
@@ -735,15 +862,17 @@ When `$MARATHON_MODE` is `true` but `$TEAMS_AVAILABLE` is `false`, the existing 
 ## Orchestrator Flow
 
 ```
-/tm [tag [task-id]] → check Ralph → detect teams → parse args → route:
+/tm [args...] → check Ralph → detect teams → parse args → route:
+  │
+  ├─ Args don't match any tag → PLANNING mode
+  │   └─ Explore → PRD → create tag → parse tasks → complexity → expand → report → STOP
   │
   ├─ Marathon + Teams available → Agent Teams mode (dedicated section)
   │   ├─ Create team, spawn teammates for ready tasks
-  │   ├─ Each teammate: setup worktree, implement, PR, review loop
-  │   ├─ Lead dual loop:
-  │   │   ├─ Loop A (reactive): teammate messages → track, report to human
-  │   │   └─ Loop B (watcher): Haiku teammate polls PRs → detects merges/conflicts/comments → notifies lead
-  │   └─ All done → shutdown team
+  │   ├─ Each teammate: setup worktree, implement, PR, review loop → REVIEW_CLEAR
+  │   ├─ Lead: react to messages, smart-merge (dismiss stale bots, check mergeStateStatus, merge)
+  │   ├─ Lead runs cleanup directly, shuts down teammate, spawns next wave
+  │   └─ All done → retro → shutdown team
   │
   ├─ No PR (implement/create)
   │   ├─ Ralph available → invoke Ralph (full cycle)
@@ -764,9 +893,9 @@ When `$MARATHON_MODE` is `true` but `$TEAMS_AVAILABLE` is `false`, the existing 
 ```
 
 **Marathon Mode Behavior:**
-- **With Agent Teams**: Teammates run as parallel sessions within the team, shared task list, direct messaging. Lead coordinates lifecycle.
+- **With Agent Teams**: Teammates implement + review loop. Lead runs smart-merge and cleanup directly — no watcher agent.
 - **Without Agent Teams (fallback)**: Parallel subagents after each cleanup cycle.
-- Watcher auto-merges when CI green + no conflicts + ≥2 approvals; human can also merge anytime
+- Lead auto-merges when mergeStateStatus CLEAN + ≥2 approvals + 0 changes requested (stale bot reviews auto-dismissed)
 - After merge detected → cleanup → check next ready → auto-start
 - Independent tasks spawn in parallel (multiple concurrent PRs)
 - Loop continues until all tasks in tag are done
@@ -792,17 +921,23 @@ When `$MARATHON_MODE` is `true` but `$TEAMS_AVAILABLE` is `false`, the existing 
 Implementation      → Subtasks: pending → review (code complete)
 All subtasks review → Parent: STAYS in-progress
 PR created/polished → Parent: STAYS in-progress
+
+# Single-task mode:
 Human merges PR     → (no command runs)
 /tm after merge     → Parent: in-progress → done
+
+# Marathon mode:
+Lead smart-merges   → Lead runs cleanup → Task: in-progress → done
 ```
 
 ---
 
 ## Notes
 
-- Watcher auto-merges PRs when CI green, no conflicts, and ≥2 approvals; human can also merge manually
+- Lead runs smart-merge directly (no watcher agent) — dismiss stale bot reviews, check mergeStateStatus, merge
 - Subagents can bail if work is too large
 - `/tm` → report ready tasks
+- `/tm <description that doesn't match a tag>` → planning mode (explore → PRD → tasks → expand → stop)
 - `/tm <tag>` → marathon mode (work through entire tag)
 - `/tm <tag> <task-id>` → single task mode
 - **Marathon mode**: Runs continuously until all tasks in tag are done
