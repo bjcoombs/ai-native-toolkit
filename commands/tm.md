@@ -380,6 +380,7 @@ You're an orchestrator. Spawn opus for complex code changes.
 TAG=$(echo "$ARGUMENTS" | xargs)
 cd ~/dev/github.com/<org>/<repo>
 task-master tags use "$TAG" && task-master list --json
+# Use jq on tasks.json for reliable status filtering (task-master next can suggest subtask IDs of done parents)
 jq '."<tag>".tasks[] | {id, title: .title[0:50], status, dependencies, complexity}' .taskmaster/tasks/tasks.json
 ```
 
@@ -455,7 +456,7 @@ fi
   "tasks": {
     "task-<id>": {
       "pr": 123,
-      "status": "working|review_clear|merged",
+      "status": "working|review_clear|merge_pending|merged",
       "model": "sonnet|opus",
       "wave": 1,
       "last_ci": "passing|failing|unstable|pending"
@@ -491,6 +492,13 @@ gh api repos/<owner>/<repo>/branches/develop/protection \
 Store non-required check names in `meta.flaky_checks`.
 
 ### Step 3: Spawn Teammates
+
+**Pre-spawn: Verify sacred dir is clean:**
+```bash
+cd ~/dev/github.com/<org>/<repo>/<repo>-main
+git status --porcelain | head -5
+```
+If dirty (from unrelated work in another terminal), stash or warn before spawning. Teammates branch from this directory — dirty state propagates.
 
 **Model selection:**
 - Complexity 1-6: `model: "sonnet"`
@@ -675,12 +683,18 @@ gh pr view $PR --json state,mergedAt,mergeStateStatus | jq '{state, mergedAt, me
 Trust the API, not the message.
 
 **Pre-merge teammate sync** — prevents orphaned commits:
+```bash
+# Persist intent in tracking (survives context compaction)
+jq --arg task "task-<id>" '.tasks[$task].status = "merge_pending"' "$TRACK_FILE" > "$TRACK_FILE.tmp" && mv "$TRACK_FILE.tmp" "$TRACK_FILE"
+```
 ```
 SendMessage(type: "message", recipient: "task-<task-id>",
   content: "MERGE_PENDING: PR #<number> is merge-eligible. Confirm idle.",
   summary: "Confirm idle before merge")
 ```
 Wait for IDLE_CONFIRMED before merging.
+
+**After context compaction**: Check tracking for `merge_pending` tasks. If found and teammate is idle, proceed with merge (the handshake was already initiated).
 
 **After merge:**
 ```bash
@@ -695,8 +709,8 @@ Then:
 2. Shutdown teammate
 3. Mark internal task completed
 4. Check for newly unblocked tasks
-5. **Wave transition**: Review signals from completed wave, adapt next prompts with learnings
-6. Spawn fresh teammates for ready tasks
+5. **Wave transition**: Batch-dismiss stale CRs across all eligible PRs before spawning next wave. Review signals from completed wave, adapt next prompts with learnings.
+6. Check ready tasks with `task-master list --json` filtered to `pending` status (**not** `task-master next` — `next` can suggest subtask IDs of done parents). Spawn fresh teammates for ready tasks.
 7. If all done → [Completion](#step-6-completion-and-retrospective)
 
 **If not merge-ready:**
