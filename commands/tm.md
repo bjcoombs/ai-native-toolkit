@@ -50,6 +50,17 @@ FIRST_ARG="<first-argument>"
 jq -e --arg tag "$FIRST_ARG" '.[$tag]' .taskmaster/tasks/tasks.json >/dev/null 2>&1 && echo "TAG_EXISTS" || echo "NEW_IDEA"
 ```
 
+**If NEW_IDEA, search for existing PRD in the repo:**
+```bash
+cd ~/dev/github.com/<org>/<repo>/<repo>-main
+# Search common PRD locations and filename patterns
+fd -t f "$FIRST_ARG" --extension md . | head -5
+# Also check conventional path
+ls .taskmaster/prd/$FIRST_ARG.md 2>/dev/null
+```
+- File found → `$PLANNING_MODE = true`, `$PRD_EXISTS = true`, `$PRD_FILE = <path>`
+- No match → `$PLANNING_MODE = true`, `$PRD_EXISTS = false`
+
 **Early routes:**
 - If `$PLANNING_MODE`: Jump to [Planning Mode](#planning-mode)
 - If `$MARATHON_MODE` AND `$TEAMS_AVAILABLE`: Jump to [Marathon Mode: Agent Teams](#marathon-mode-agent-teams)
@@ -103,18 +114,75 @@ gh pr view --json number,state,mergedAt 2>/dev/null
 
 ## Planning Mode
 
-The user has described a feature idea. Transform it into a fully planned Task Master tag.
+**If `$PRD_EXISTS`**: Fast path — PRD already written, go straight to task generation.
+**If not**: Slow path — explore codebase and write the PRD first.
+
+### Fast Path (PRD exists)
+
+#### Step 1: Read PRD and Estimate Task Count
+
+```bash
+TAG_NAME="$FIRST_ARG"
+# $PRD_FILE set during Phase 1 detection
+```
+
+Read the PRD. Estimate how many top-level tasks it should produce, optimizing for **maximum concurrency** — prefer many independent tasks over fewer sequential ones. Consider:
+- Each distinct module/component/endpoint = separate task
+- Shared infrastructure (types, config, migrations) = early task others depend on
+- Tests that can run independently = separate tasks
+- Documentation = separate task (parallelizes with everything)
+
+#### Step 2: Parse PRD as New Tag
+
+```bash
+cd ~/dev/github.com/<org>/<repo>
+task-master tags add "$TAG_NAME"
+task-master tags use "$TAG_NAME"
+task-master parse-prd --input="$PRD_FILE" --num-tasks=<estimated-count>
+```
+
+#### Step 3: Complexity Analysis
+
+```bash
+task-master analyze-complexity --research
+```
+
+#### Step 4: Expand into Subtasks
+
+```bash
+task-master tags use "$TAG_NAME" && task-master list --json
+```
+
+Expand tasks with complexity >= 5:
+```bash
+for TASK_ID in <high-complexity-task-ids>; do
+  task-master expand --id=$TASK_ID --research
+done
+```
+
+#### Step 5: Validate Dependency Graph
+
+Review the generated dependency tree and optimize for concurrency:
+1. Challenge sequential dependencies — are they genuinely blocking or just ordered by convention?
+2. Identify tasks that could run in parallel but are chained
+3. Apply fixes:
+   ```bash
+   task-master update-task --id=<task-id> --prompt="Remove dependency on task <X>, these are independent"
+   ```
+4. Report the optimized plan (see [Report and Stop](#report-and-stop))
+
+### Slow Path (New idea, no PRD)
 
 **Input**: `$ARGUMENTS` — natural language description (e.g., "use stripe as another kyc provider")
 
-### Step 1: Explore the Codebase
+#### Step 1: Explore the Codebase
 
 Use Glob, Grep, Read — or spawn an Explore agent for deeper investigation. Focus on:
 - Existing patterns the feature should follow
 - Files and modules that would be touched
 - Integration points and dependencies
 
-### Step 2: Write the PRD
+#### Step 2: Write the PRD
 
 ```bash
 TAG_NAME="<derived-tag-name>"  # lowercase, hyphens, max 40 chars
@@ -133,31 +201,11 @@ PRD structure:
 ## Complexity Estimate
 ```
 
-### Step 3: Create Tag and Generate Tasks
+#### Step 3-5: Same as Fast Path
 
-```bash
-cd ~/dev/github.com/<org>/<repo>
-task-master tags add "$TAG_NAME"
-task-master tags use "$TAG_NAME"
-task-master parse-prd --input=".taskmaster/prd/$TAG_NAME.md"
-```
+Create tag, parse PRD, complexity analysis, expand, validate dependencies.
 
-### Step 4: Complexity Analysis
-
-```bash
-task-master analyze-complexity --research
-```
-
-### Step 5: Expand Tasks
-
-```bash
-task-master list --json | jq '.[] | select(.complexity >= 5) | .id'
-for TASK_ID in <high-complexity-task-ids>; do
-  task-master expand --id=$TASK_ID --research
-done
-```
-
-### Step 6: Report and Stop
+### Report and Stop
 
 ```
 ## Planned: <tag-name>
