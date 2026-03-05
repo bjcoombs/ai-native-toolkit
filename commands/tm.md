@@ -633,11 +633,16 @@ gh pr view --json reviews | jq '.reviews[] | select(.state != "APPROVED")'
      | while read RID; do gh api repos/<owner>/<repo>/pulls/<number>/reviews/$RID/dismissals \
        --method PUT -f message="Stale bot review" -f event="DISMISS"; done
      ```
-6. **Before reporting REVIEW_CLEAR**, verify via API:
+6. **Before reporting REVIEW_CLEAR**, verify ALL criteria via API (not just merge state):
    ```bash
+   # Merge state
    gh pr view <number> --json mergeStateStatus,state | jq '{mergeStateStatus, state}'
+   # Unresolved thread count (MUST be 0)
+   gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
+     pullRequest(number: <number>) { reviewThreads(first: 100) { nodes { isResolved } } }
+   }}' | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length'
    ```
-   Only report if `mergeStateStatus` is CLEAN or UNSTABLE. If BLOCKED/DIRTY, fix and loop again.
+   Only report REVIEW_CLEAR if `mergeStateStatus` is CLEAN/UNSTABLE **AND** unresolved threads = 0. If either fails, fix and loop again.
 
 ## Communication
 Only message the lead for **meaningful events**:
@@ -685,14 +690,21 @@ Report team status after spawning:
 2. Decompose: `task-master expand --id=<task-id> --research` (subtasks) or cancel + create new peer tasks (sibling split)
 3. Spawn fresh teammates for resulting tasks
 
-**Unreliable REVIEW_CLEAR**: Don't rely solely on messages. **Proactively poll tracked PRs** when any teammate goes idle:
+**Unreliable REVIEW_CLEAR**: Don't rely solely on messages. **Proactively poll ALL tracked PRs** on two triggers:
+1. When any teammate goes idle or sends a message
+2. **Periodically** — every ~30 minutes during long marathons to catch stalled teammates early
+
 ```bash
 for PR in $(jq -r '.tasks | to_entries[] | select(.value.status == "working") | .value.pr' "$TRACK_FILE"); do
-  gh pr view $PR --json mergeStateStatus,mergedAt,statusCheckRollup \
-    | jq '{mergeStateStatus, mergedAt, checks: [.statusCheckRollup[] | select(.conclusion != "SUCCESS" and .conclusion != "SKIPPED" and .conclusion != null)] | length}'
+  THREADS=$(gh api graphql -f query="query { repository(owner: \"<owner>\", name: \"<repo>\") {
+    pullRequest(number: $PR) { reviewThreads(first: 100) { nodes { isResolved } } }
+  }}" | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')
+  MERGE=$(gh pr view $PR --json mergeStateStatus,mergedAt,statusCheckRollup \
+    | jq '{mergeStateStatus, mergedAt, checks: [.statusCheckRollup[] | select(.conclusion != "SUCCESS" and .conclusion != "SKIPPED" and .conclusion != null)] | length}')
+  echo "PR #$PR: threads=$THREADS merge=$MERGE"
 done
 ```
-If green with no unresolved threads, run smart-merge regardless of teammate message.
+If green with 0 unresolved threads, run smart-merge regardless of teammate message. If stalled (teammate idle but PR not green), message teammate to continue.
 
 **Accidental input guard:** Empty messages, single characters, or auto-suggested prompt text → brief status summary only, no expensive operations.
 
