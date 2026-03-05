@@ -597,6 +597,13 @@ gotchas. This prevents discovering project conventions through CI failures.>
 gh pr view --json reviews | jq '.reviews[] | select(.state != "APPROVED")'
 ```
 
+## Pre-empt Predictable Bot Feedback
+CodeRabbit patterns that consistently trigger review comments — address during implementation, not in the review loop:
+- **Path fields in docs/config**: Always specify "relative to X" on first mention
+- **Error handling**: Always wrap external calls with context (don't return bare errors)
+- **Unused parameters/imports**: Clean up before pushing
+- **Missing nil/null checks**: Add guards on any pointer/optional value from external input
+
 ## Known Conflict Patterns
 <If $HOT_FILES identified, include here>
 - **Import/route files** (e.g., App.tsx, index.ts): Accept BOTH sides — additions are additive.
