@@ -153,9 +153,11 @@ task-master analyze-complexity --research
 task-master tags use "$TAG_NAME" && task-master list --json
 ```
 
-Expand tasks with complexity >= 5:
+Expand tasks with complexity >= 5 that are **not already done**:
 ```bash
-for TASK_ID in <high-complexity-task-ids>; do
+# NEVER expand done tasks — creates phantom subtasks that are busywork to close.
+# If a parent is merged, create new peer tasks instead.
+for TASK_ID in <high-complexity-pending-task-ids>; do
   task-master expand --id=$TASK_ID --research
 done
 ```
@@ -439,7 +441,11 @@ jq '."<tag>".tasks[] | {id, title: .title[0:50], status, dependencies, complexit
 3. **Challenge unnecessary dependencies** — different files/modules may not need sequencing
 4. Look for tasks chained sequentially that could run in parallel
 5. **Detect shared-file conflicts** — force sequential execution for tasks modifying the same file
-6. **Combine tasks that are the same deliverable** — if two tasks produce tightly coupled output (e.g., "add resources" + "add docs for resources"), combine into one teammate. Signals: one is docs/config for the other, they share files, one is meaningless without the other.
+6. **Combine tasks aggressively** — merge into one teammate when:
+   - Tightly coupled output (e.g., "add resources" + "add docs for resources")
+   - Content-only tasks touching non-overlapping directories (e.g., adding 3 independent pattern dirs)
+   - One is docs/config for the other, or one is meaningless without the other
+   - Small tasks (complexity 1-2) that share a theme — PR-per-task overhead exceeds the work itself
 7. **Identify hot files** — files touched by many tasks. Record as `$HOT_FILES` for:
    - Teammate prompts: include conflict resolution patterns
    - Merge ordering: hot-file PRs merge last
