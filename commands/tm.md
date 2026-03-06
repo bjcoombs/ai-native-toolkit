@@ -654,6 +654,8 @@ gh pr view --json reviews | jq '.reviews[] | select(.state != "APPROVED")'
 Only message the lead for **meaningful events**:
 - PR created: `SendMessage(type: "message", recipient: "lead", content: "PR_CREATED: PR #<number> for <tag>.<task-id>", summary: "PR created <task-id>")`
 - Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR: PR #<number> for <tag>.<task-id> — all criteria met", summary: "Review clear <task-id>")`
+- Clarification needed: `SendMessage(type: "message", recipient: "lead", content: "CLARIFICATION_NEEDED: <tag>.<task-id> — <what's unclear and your two interpretations>", summary: "Clarification needed <task-id>")`
+  If requirements conflict with the codebase, or multiple valid interpretations exist, ask rather than guess.
 - Blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED: <tag>.<task-id> — <reason>", summary: "Blocked <task-id>")`
 - Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX: <tag>.<task-id> — <brief reasoning>", summary: "Too complex <task-id>")`
 
@@ -685,6 +687,7 @@ Report team status after spawning:
 |---------|-------------|
 | PR_CREATED | Update tracking, report to user |
 | REVIEW_CLEAR | Run [Smart Merge](#smart-merge) — teammate is idle, merge directly |
+| CLARIFICATION_NEEDED | Answer from task context, or relay to user if genuinely ambiguous |
 | BLOCKED (merge conflicts) | Push back: "Resolve conflicts yourself" |
 | BLOCKED (genuine) | Report to user, ask for guidance |
 | TOO_COMPLEX | Shutdown teammate, decompose task, spawn fresh |
