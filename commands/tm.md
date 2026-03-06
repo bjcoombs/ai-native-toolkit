@@ -446,9 +446,13 @@ jq '."<tag>".tasks[] | {id, title: .title[0:50], status, dependencies, complexit
    - Content-only tasks touching non-overlapping directories (e.g., adding 3 independent pattern dirs)
    - One is docs/config for the other, or one is meaningless without the other
    - Small tasks (complexity 1-2) that share a theme — PR-per-task overhead exceeds the work itself
-7. **Identify hot files** — files touched by many tasks. Record as `$HOT_FILES` for:
-   - Teammate prompts: include conflict resolution patterns
-   - Merge ordering: hot-file PRs merge last
+7. **Identify hot files** — files touched by multiple tasks. Record as `$HOT_FILES` for:
+   - **Add explicit TM dependencies** between tasks touching the same hot file — merge the simpler/faster task first, then the other depends on it. This eliminates merge conflict risk entirely (the cost is the dependent task waits, but that's cheaper than conflict resolution).
+     ```bash
+     task-master add-dependency --id=<later-task> --depends-on=<earlier-task>
+     ```
+   - Teammate prompts: include conflict resolution patterns as fallback
+   - Merge ordering: if dependencies aren't feasible (e.g., 3+ tasks on same file), hot-file PRs merge last
    - If 5+ tasks touch one file, consider a dedicated consolidation task
 8. Report the optimized plan:
    ```
@@ -602,6 +606,8 @@ gh pr view --json reviews | jq '.reviews[] | select(.state != "APPROVED")'
 - **Import/route files** (e.g., App.tsx, index.ts): Accept BOTH sides — additions are additive.
 - **Barrel exports** (e.g., shared/index.ts): Accept both sides.
 - **Config/manifest files**: Accept both sides unless same key modified differently (then escalate).
+- **JSX return blocks / component render methods**: Do NOT attempt line-by-line resolution. Both sides may add children, tabs, panels to the same component — requires understanding the component structure holistically. **Escalate immediately** with BLOCKED message.
+- **Same-line conflicts** (both sides modify identical lines differently): **Escalate immediately.** Do not guess — message lead with the file, line range, and both versions.
 
 ## Workflow
 1. **Implement using TDD**: Write failing tests, make them pass, refactor. Commit incrementally.
@@ -648,7 +654,9 @@ gh pr view --json reviews | jq '.reviews[] | select(.state != "APPROVED")'
 Only message the lead for **meaningful events**:
 - PR created: `SendMessage(type: "message", recipient: "lead", content: "PR_CREATED: PR #<number> for <tag>.<task-id>", summary: "PR created <task-id>")`
 - Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR: PR #<number> for <tag>.<task-id> — all criteria met", summary: "Review clear <task-id>")`
-- **On MERGE_PENDING from lead**: Finish current atomic operation, then confirm: `SendMessage(type: "message", recipient: "lead", content: "IDLE_CONFIRMED: task-<task-id> idle, safe to merge", summary: "Idle confirmed <task-id>")`
+- **On MERGE_PENDING from lead**: Stop all work immediately (finish current atomic operation only), then respond with exactly:
+  `SendMessage(type: "message", recipient: "lead", content: "IDLE_CONFIRMED: task-<task-id> idle, safe to merge", summary: "Idle confirmed <task-id>")`
+  Do NOT rely on the system idle notification — you MUST send this explicit message. The lead cannot proceed without it.
 - Blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED: <tag>.<task-id> — <reason>", summary: "Blocked <task-id>")`
 - Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX: <tag>.<task-id> — <brief reasoning>", summary: "Too complex <task-id>")`
 
@@ -706,6 +714,8 @@ done
 ```
 If green with 0 unresolved threads, run smart-merge regardless of teammate message. If stalled (teammate idle but PR not green), message teammate to continue.
 
+**Lead overlap rule:** Never block on a single PR's CI. While waiting for CI on one PR, process other actionable items: teammate shutdowns, tracking updates, next-wave setup, cleanup of merged PRs, spawning newly unblocked tasks. The lead loop is event-driven, not sequential.
+
 **Accidental input guard:** Empty messages, single characters, or auto-suggested prompt text → brief status summary only, no expensive operations.
 
 #### Smart Merge
@@ -741,6 +751,8 @@ gh pr view $PR --json mergeStateStatus,mergedAt,reviews \
 3. Zero non-dismissed changes-requested reviews
 
 **UNSTABLE handling:** If `mergeStateStatus == "UNSTABLE"`, check failing checks against `meta.flaky_checks`. If ALL failing checks are non-required, treat as merge-eligible. Report: "Merging with UNSTABLE — only non-required checks failing: <names>"
+
+**UNKNOWN handling:** GitHub sometimes returns `mergeStateStatus: "UNKNOWN"` even when all checks pass. If UNKNOWN but CI all green and 0 unresolved threads, retry up to 3 times with 30s backoff. If still UNKNOWN after retries, treat as CLEAN and proceed (log the override).
 
 **Verify before merging** — never trust teammate claims:
 ```bash
@@ -855,29 +867,43 @@ Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`.
 
 1. Shutdown remaining teammates
 2. `TeamDelete()`
-3. Run retrospective:
+3. Read the retro log: `~/.claude/projects/-Users-ben-dev-github-com-meridianhub-meridian/memory/marathon-retros.md`
+4. Run retrospective using the structured format below
+5. Append this marathon to the retro log (Marathon History + update Template Changes validation)
 
 ```
 ## Marathon Complete: <tag>
 
 All <N> tasks done. <N> PRs merged.
 
+<PR table: Wave | PR | Tasks | Title | Merged time>
+
 ### Retrospective
 
+**Template changes tested this run**
+<Check marathon-retros.md Template Changes table for "Pending" items.
+For each that was exercised: did it help, hurt, or not apply? Mark validated.>
+
 **What worked well**
-- <specific patterns, tools, or approaches>
+- <specific patterns, tools, or approaches — with evidence>
 
-**What didn't work**
-- <friction points, failures — be honest>
+**What didn't work — with waste estimate**
+- <friction point>: ~<N> min lost. Root cause: <X>
+- <friction point>: ~<N> min lost. Root cause: <X>
 
-**Suggested tweaks**
-- <concrete improvements to /tm>
+**Lead decisions log**
+- <decision>: <alternatives considered> -> <chosen> because <reason>
+(task combinations, dependency changes, merge ordering, model upgrades, interventions)
+
+**Suggested /tm changes**
+- <concrete change with rationale>
 
 **Stats**
 - Tasks: <N> completed, <N> cancelled/deferred
 - PRs: <N> merged, <N> avg review iterations
-- Teammates: <N> spawned, <N> needed intervention
-- Merge friction: <stale reviews, conflicts, etc.>
+- Teammates: <N> spawned (<N> sonnet, <N> opus), <N> needed intervention
+- Wall clock: ~<N> min spawn to final merge
+- Estimated waste: ~<N> min (CI waits, conflict resolution, stalled teammates)
 ```
 
 ---
