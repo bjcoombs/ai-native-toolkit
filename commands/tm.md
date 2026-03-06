@@ -440,20 +440,20 @@ jq '."<tag>".tasks[] | {id, title: .title[0:50], status, dependencies, complexit
 2. Identify the critical path (longest sequential chain)
 3. **Challenge unnecessary dependencies** — different files/modules may not need sequencing
 4. Look for tasks chained sequentially that could run in parallel
-5. **Detect shared-file conflicts** — force sequential execution for tasks modifying the same file
-6. **Combine tasks aggressively** — merge into one teammate when:
+5. **Identify hot files** — files touched by multiple tasks. Record as `$HOT_FILES`.
+6. **Primary mitigation: combine tasks that share hot files** into one teammate. This eliminates merge conflicts entirely (proven across 3 marathons: 0 conflicts when combining). Combine when:
+   - Tasks share hot files (strongest signal — always prefer combining over dependency management)
    - Tightly coupled output (e.g., "add resources" + "add docs for resources")
    - Content-only tasks touching non-overlapping directories (e.g., adding 3 independent pattern dirs)
    - One is docs/config for the other, or one is meaningless without the other
    - Small tasks (complexity 1-2) that share a theme — PR-per-task overhead exceeds the work itself
-7. **Identify hot files** — files touched by multiple tasks. Record as `$HOT_FILES` for:
-   - **Add explicit TM dependencies** between tasks touching the same hot file — merge the simpler/faster task first, then the other depends on it. This eliminates merge conflict risk entirely (the cost is the dependent task waits, but that's cheaper than conflict resolution).
+7. **Fallback: TM dependencies** — when combining isn't feasible (both tasks complexity 8+, fundamentally different concerns despite shared file, or 5+ tasks on one file):
+   - **Add explicit TM dependencies** — merge the simpler/faster task first, then the other depends on it.
      ```bash
      task-master add-dependency --id=<later-task> --depends-on=<earlier-task>
      ```
-   - Teammate prompts: include conflict resolution patterns as fallback
-   - Merge ordering: if dependencies aren't feasible (e.g., 3+ tasks on same file), hot-file PRs merge last
-   - If 5+ tasks touch one file, consider a dedicated consolidation task
+   - Teammate prompts: include conflict resolution patterns
+   - If 5+ tasks touch one file and combining is unwieldy, consider a dedicated consolidation task
 8. Report the optimized plan:
    ```
    ## Dependency Analysis: <tag>
@@ -514,7 +514,7 @@ fi
   "tasks": {
     "task-<id>": {
       "pr": 123,
-      "status": "working|review_clear|merge_pending|merged",
+      "status": "working|review_clear|merged",
       "model": "sonnet|opus",
       "wave": 1,
       "last_ci": "passing|failing|unstable|pending"
@@ -654,16 +654,13 @@ gh pr view --json reviews | jq '.reviews[] | select(.state != "APPROVED")'
 Only message the lead for **meaningful events**:
 - PR created: `SendMessage(type: "message", recipient: "lead", content: "PR_CREATED: PR #<number> for <tag>.<task-id>", summary: "PR created <task-id>")`
 - Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR: PR #<number> for <tag>.<task-id> — all criteria met", summary: "Review clear <task-id>")`
-- **On MERGE_PENDING from lead**: Stop all work immediately (finish current atomic operation only), then respond with exactly:
-  `SendMessage(type: "message", recipient: "lead", content: "IDLE_CONFIRMED: task-<task-id> idle, safe to merge", summary: "Idle confirmed <task-id>")`
-  Do NOT rely on the system idle notification — you MUST send this explicit message. The lead cannot proceed without it.
 - Blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED: <tag>.<task-id> — <reason>", summary: "Blocked <task-id>")`
 - Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX: <tag>.<task-id> — <brief reasoning>", summary: "Too complex <task-id>")`
 
 ## Lifecycle
 1. Implement → push incrementally → create PR → review loop until green
 2. Message lead REVIEW_CLEAR and wait idle
-3. Lead handles merge, cleanup, and shuts you down
+3. Lead merges directly (no handshake needed), cleans up, and shuts you down
 4. Approve shutdown request when received
 """
 )
@@ -687,8 +684,7 @@ Report team status after spawning:
 | Message | Lead Action |
 |---------|-------------|
 | PR_CREATED | Update tracking, report to user |
-| REVIEW_CLEAR | Run [Smart Merge](#smart-merge) |
-| IDLE_CONFIRMED | Proceed with merge |
+| REVIEW_CLEAR | Run [Smart Merge](#smart-merge) — teammate is idle, merge directly |
 | BLOCKED (merge conflicts) | Push back: "Resolve conflicts yourself" |
 | BLOCKED (genuine) | Report to user, ask for guidance |
 | TOO_COMPLEX | Shutdown teammate, decompose task, spawn fresh |
@@ -747,7 +743,7 @@ gh pr view $PR --json mergeStateStatus,mergedAt,reviews \
 
 **Auto-Merge Criteria (ALL must be true):**
 1. `mergeStateStatus` is `"CLEAN"` — OR `"UNSTABLE"` with only non-required checks failing
-2. At least 2 approvals
+2. At least 2 approvals — OR 1 approval for markdown-only PRs (CodeRabbit skips them)
 3. Zero non-dismissed changes-requested reviews
 
 **UNSTABLE handling:** If `mergeStateStatus == "UNSTABLE"`, check failing checks against `meta.flaky_checks`. If ALL failing checks are non-required, treat as merge-eligible. Report: "Merging with UNSTABLE — only non-required checks failing: <names>"
@@ -760,19 +756,7 @@ gh pr view $PR --json state,mergedAt,mergeStateStatus | jq '{state, mergedAt, me
 ```
 Trust the API, not the message.
 
-**Pre-merge teammate sync** — prevents orphaned commits:
-```bash
-# Persist intent in tracking (survives context compaction)
-jq --arg task "task-<id>" '.tasks[$task].status = "merge_pending"' "$TRACK_FILE" > "$TRACK_FILE.tmp" && mv "$TRACK_FILE.tmp" "$TRACK_FILE"
-```
-```
-SendMessage(type: "message", recipient: "task-<task-id>",
-  content: "MERGE_PENDING: PR #<number> is merge-eligible. Confirm idle.",
-  summary: "Confirm idle before merge")
-```
-Wait for IDLE_CONFIRMED before merging.
-
-**After context compaction**: Check tracking for `merge_pending` tasks. If found and teammate is idle, proceed with merge (the handshake was already initiated).
+**Merge directly when teammate is idle.** After REVIEW_CLEAR, teammates go idle automatically. No handshake needed — just verify the PR via API and merge. The lead overlap rule means you're already processing other work while teammates finish.
 
 **After merge:**
 ```bash
