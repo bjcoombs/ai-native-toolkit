@@ -639,16 +639,17 @@ gh pr view --json reviews | jq '.reviews[] | select(.state != "APPROVED")'
      | while read RID; do gh api repos/<owner>/<repo>/pulls/<number>/reviews/$RID/dismissals \
        --method PUT -f message="Stale bot review" -f event="DISMISS"; done
      ```
-6. **Before reporting REVIEW_CLEAR**, verify ALL criteria via API (not just merge state):
+6. **Before reporting REVIEW_CLEAR**, verify ALL criteria via API (not just merge state). This is a hard gate — do NOT skip it:
    ```bash
    # Merge state
    gh pr view <number> --json mergeStateStatus,state | jq '{mergeStateStatus, state}'
    # Unresolved thread count (MUST be 0)
-   gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
+   UNRESOLVED=$(gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
      pullRequest(number: <number>) { reviewThreads(first: 100) { nodes { isResolved } } }
-   }}' | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length'
+   }}' | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')
+   echo "Unresolved threads: $UNRESOLVED"
    ```
-   Only report REVIEW_CLEAR if `mergeStateStatus` is CLEAN/UNSTABLE **AND** unresolved threads = 0. If either fails, fix and loop again.
+   Only report REVIEW_CLEAR if `mergeStateStatus` is CLEAN/UNSTABLE **AND** `$UNRESOLVED` = 0. If either fails, fix and loop again. **Do NOT report REVIEW_CLEAR and then go idle** — the lead trusts this signal to merge without re-verifying threads.
 
 ## Communication
 Only message the lead for **meaningful events**:
@@ -658,6 +659,10 @@ Only message the lead for **meaningful events**:
   If requirements conflict with the codebase, or multiple valid interpretations exist, ask rather than guess.
 - Blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED: <tag>.<task-id> — <reason>", summary: "Blocked <task-id>")`
 - Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX: <tag>.<task-id> — <brief reasoning>", summary: "Too complex <task-id>")`
+
+## Scope
+- Only create PRs on YOUR branch (`<tag>--<task-id>--<slug>`). Never create PRs on other branches or for work outside your assigned task.
+- If you discover related work that needs doing, mention it in your PR description — don't create additional PRs.
 
 ## Lifecycle
 1. Implement → push incrementally → create PR → review loop until green
@@ -748,8 +753,9 @@ gh pr view $PR --json mergeStateStatus,mergedAt,reviews \
 1. `mergeStateStatus` is `"CLEAN"` — OR `"UNSTABLE"` with only non-required checks failing
 2. At least 2 approvals — OR 1 approval for markdown-only PRs (CodeRabbit skips them)
 3. Zero non-dismissed changes-requested reviews
+4. **Develop is healthy** — if the PR's CI failures exist on develop too (pre-existing), do NOT merge and compound the problem. Instead, spawn a separate worktree/PR to fix the failing tests on develop first, then rebase and merge the original PR.
 
-**UNSTABLE handling:** If `mergeStateStatus == "UNSTABLE"`, check failing checks against `meta.flaky_checks`. If ALL failing checks are non-required, treat as merge-eligible. Report: "Merging with UNSTABLE — only non-required checks failing: <names>"
+**UNSTABLE handling:** If `mergeStateStatus == "UNSTABLE"`, check failing checks against `meta.flaky_checks`. If ALL failing checks are non-required AND not pre-existing on develop, treat as merge-eligible. Report: "Merging with UNSTABLE — only non-required checks failing: <names>". If failures ARE pre-existing on develop, fix develop first (criterion 4).
 
 **UNKNOWN handling:** GitHub sometimes returns `mergeStateStatus: "UNKNOWN"` even when all checks pass. If UNKNOWN but CI all green and 0 unresolved threads, retry up to 3 times with 30s backoff. If still UNKNOWN after retries, treat as CLEAN and proceed (log the override).
 
