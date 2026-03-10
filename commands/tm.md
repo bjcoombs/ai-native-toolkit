@@ -328,7 +328,7 @@ git fetch origin develop && git merge origin/develop --no-edit
 **2. Check criteria:**
 ```bash
 # CI
-gh pr checks <number> --json state --jq '.[] | select(.state != "SUCCESS" and .state != "SKIPPED")' | head -1
+gh pr checks <number> --json state | jq '.[] | select(.state == "FAILURE" or .state == "CANCELLED")' | head -1
 
 # Unresolved threads (with path/line for local code checking)
 gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
@@ -593,12 +593,18 @@ cd ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug>
 <Include relevant sections from the repo's CLAUDE.md — testing patterns, coding standards, common
 gotchas. This prevents discovering project conventions through CI failures.>
 
-## Shell Pitfall
+## Shell Pitfalls
 **Never use `gh ... --jq` with complex filters.** Always pipe to `jq`:
 ```bash
-# WRONG: gh pr view --json reviews --jq '.reviews[] | select(.state != "APPROVED")'
+# WRONG: gh pr view --json reviews --jq '.reviews[] | select(.state == "CHANGES_REQUESTED")'
 # RIGHT:
-gh pr view --json reviews | jq '.reviews[] | select(.state != "APPROVED")'
+gh pr view --json reviews | jq '.reviews[] | select(.state == "CHANGES_REQUESTED")'
+```
+
+**Use positive jq filters, not negative.** zsh escapes `!=` to `\!=`, breaking filters silently:
+```bash
+# WRONG: select(.conclusion != "SUCCESS")   — zsh mangles !=
+# RIGHT: select(.conclusion == "FAILURE")   — positive match, shell-safe
 ```
 
 ## Known Conflict Patterns
@@ -712,7 +718,7 @@ for PR in $(jq -r '.tasks | to_entries[] | select(.value.status == "working") | 
     pullRequest(number: $PR) { reviewThreads(first: 100) { nodes { isResolved } } }
   }}" | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')
   MERGE=$(gh pr view $PR --json mergeStateStatus,mergedAt,statusCheckRollup \
-    | jq '{mergeStateStatus, mergedAt, checks: [.statusCheckRollup[] | select(.conclusion != "SUCCESS" and .conclusion != "SKIPPED" and .conclusion != null)] | length}')
+    | jq '{mergeStateStatus, mergedAt, checks: [.statusCheckRollup[] | select(.conclusion == "FAILURE" or .conclusion == "CANCELLED")] | length}')
   echo "PR #$PR: threads=$THREADS merge=$MERGE"
 done
 ```
