@@ -708,6 +708,8 @@ Report team status after spawning:
 2. Decompose: `task-master expand --id=<task-id> --research` (subtasks) or cancel + create new peer tasks (sibling split)
 3. Spawn fresh teammates for resulting tasks
 
+**Non-responsive teammate escalation**: If a teammate ignores a direct instruction (nudge to fix CI, address review feedback, follow lead guidance), don't keep nudging. Shut it down and respawn the same task on opus. Sonnet teammates occasionally go unresponsive; opus has a 0-intervention rate across all marathons. The cost increase is cheaper than the lead's time spent nudging.
+
 **Unreliable REVIEW_CLEAR**: Don't rely solely on messages. **Proactively poll ALL tracked PRs** on two triggers:
 1. When any teammate goes idle or sends a message
 2. **Periodically** — every ~30 minutes during long marathons to catch stalled teammates early
