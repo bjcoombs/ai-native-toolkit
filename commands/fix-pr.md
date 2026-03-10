@@ -38,12 +38,15 @@ Skill(
 
 ---
 
-## Shell Pitfall: gh --jq escaping
-**Never use `gh ... --jq` with complex filters containing `!=`, `$`, or shell metacharacters.** Always pipe to `jq` separately:
+## Shell Pitfalls
+**Never use `gh ... --jq` with complex filters.** Always pipe to `jq` separately.
+
+**Use positive jq filters, not negative.** zsh escapes `!=` to `\!=`, breaking filters silently:
 ```bash
 # WRONG: gh pr view --json reviews --jq '.reviews[] | select(.state != "APPROVED")'
+# WRONG: gh pr view --json reviews | jq '.reviews[] | select(.state != "APPROVED")'
 # RIGHT:
-gh pr view --json reviews | jq '.reviews[] | select(.state != "APPROVED")'
+gh pr view --json reviews | jq '.reviews[] | select(.state == "CHANGES_REQUESTED")'
 ```
 
 ## Each Iteration
@@ -67,7 +70,7 @@ git fetch origin develop && git merge origin/develop --no-edit
 PR=$(gh pr view --json number --jq '.number')
 
 # CI status
-gh pr checks $PR --json state --jq '.[] | select(.state != "SUCCESS" and .state != "SKIPPED")'
+gh pr checks $PR --json name,state | jq '.[] | select(.state == "FAILURE" or .state == "CANCELLED")'
 
 # Unresolved review threads (covers inline comments from all reviewers)
 # Include path and line so we can check if the concern is already fixed locally
