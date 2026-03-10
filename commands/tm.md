@@ -868,9 +868,13 @@ Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`.
 
 1. Shutdown remaining teammates
 2. `TeamDelete()`
-3. Read the retro log: `~/.claude/projects/-Users-ben-dev-github-com-meridianhub-meridian/memory/marathon-retros.md`
-4. Run retrospective using the structured format below
-5. Append this marathon to the retro log (Marathon History + update Template Changes validation)
+3. **PRD delivery check** — re-read the original PRD/issue and its success criteria. Cross-reference against merged PRs. Report:
+   - Criteria met (with PR evidence)
+   - Criteria not met or partially met (flag for user)
+   - Scope that was delivered beyond the original PRD (emergent work)
+4. Read the retro log: `~/.claude/projects/-Users-ben-dev-github-com-meridianhub-meridian/memory/marathon-retros.md`
+5. Run retrospective using the structured format below
+6. Append this marathon to the retro log (Marathon History + update Template Changes validation)
 
 ```
 ## Marathon Complete: <tag>
@@ -878,6 +882,14 @@ Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`.
 All <N> tasks done. <N> PRs merged.
 
 <PR table: Wave | PR | Tasks | Title | Merged time>
+
+### PRD Delivery
+
+| Criterion | Status | Evidence |
+|-----------|--------|----------|
+| <success criterion from PRD> | Met / Partial / Not met | PR #<N>, ... |
+
+<If any not met, explain what's remaining and whether follow-up tasks are needed.>
 
 ### Retrospective
 
