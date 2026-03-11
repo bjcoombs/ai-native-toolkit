@@ -559,10 +559,12 @@ git status --porcelain | head -5
 If dirty (from unrelated work in another terminal), stash or warn before spawning. Teammates branch from this directory — dirty state propagates.
 
 **Model selection:**
-- Complexity 1-6: `model: "sonnet"`
-- Complexity 7+: `model: "opus"`
+- **Opus** (default for reliability): Multi-file PRs, review-heavy tasks, tasks touching shared files (barrel exports, routing, config), complexity 5+
+- **Sonnet** (cost-efficient for simple work): Single-file changes, isolated modules, complexity 1-4 with no shared-file risk, docs/config-only tasks
 
-Sonnet is the minimum — haiku cannot reliably handle review loops.
+Sonnet is cost-effective but has a recurring false REVIEW_CLEAR problem — reports review-clear without verifying all criteria (~15 min waste per marathon when it happens). Opus has 0 false signals across all marathons. When in doubt, use opus — the cost delta is cheaper than intervention time.
+
+Haiku cannot reliably handle review loops — never use for teammates.
 
 **Teammate prompt template:**
 ```
@@ -708,7 +710,7 @@ Report team status after spawning:
 2. Decompose: `task-master expand --id=<task-id> --research` (subtasks) or cancel + create new peer tasks (sibling split)
 3. Spawn fresh teammates for resulting tasks
 
-**Non-responsive teammate escalation**: If a teammate ignores a direct instruction (nudge to fix CI, address review feedback, follow lead guidance), don't keep nudging. Shut it down and respawn the same task on opus. Sonnet teammates occasionally go unresponsive; opus has a 0-intervention rate across all marathons. The cost increase is cheaper than the lead's time spent nudging.
+**Non-responsive teammate escalation**: If a teammate ignores a direct instruction (nudge to fix CI, address review feedback, follow lead guidance) or sends a false REVIEW_CLEAR (claims ready but criteria aren't met), don't keep nudging. Shut it down and respawn the same task on opus. One strike — don't give sonnet a second chance on the same task.
 
 **Unreliable REVIEW_CLEAR**: Don't rely solely on messages. **Proactively poll ALL tracked PRs** on two triggers:
 1. When any teammate goes idle or sends a message
