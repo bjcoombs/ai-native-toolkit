@@ -14,7 +14,10 @@ Enter autonomous PR review loop for the current branch's PR. Loops until the PR 
 
 **Thread resolution rules:**
 - **CodeRabbit threads**: Fix the code and push. CodeRabbit re-reviews automatically and resolves its own threads. **NEVER reply in CodeRabbit threads** — CodeRabbit ignores replies from other bots.
-- **claude[bot] threads**: Resolve directly via GraphQL `resolveReviewThread` mutation if the concern is addressed in the current code.
+- **claude[bot] threads**: Resolve directly via GraphQL if addressed. Use jq JSON builder (avoids zsh `$` escaping):
+  ```bash
+  jq -n --arg tid "$THREAD_ID" '{"query": "mutation { resolveReviewThread(input: {threadId: \"\($tid)\"}) { thread { isResolved } } }"}' | gh api graphql --input -
+  ```
 - **Human threads**: Fix the code, reply inline explaining the fix, `@mention` the reviewer. Do NOT resolve human threads — let the reviewer confirm.
 
 ---
@@ -176,7 +179,8 @@ gh pr view <number> --comments
 gh run view <run-id> --log-failed
 
 # Resolve a review thread (for claude[bot] threads)
-gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "<thread-id>"}) { thread { isResolved } } }'
+# Resolve a review thread (jq builder avoids zsh $ escaping)
+jq -n --arg tid "$THREAD_ID" '{"query": "mutation { resolveReviewThread(input: {threadId: \"\($tid)\"}) { thread { isResolved } } }"}' | gh api graphql --input -
 ```
 
 ## Important

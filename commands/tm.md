@@ -315,7 +315,10 @@ task-master tags use "<tag>" && task-master list --ready --json
 
 **Thread resolution rules:**
 - **CodeRabbit**: Fix code, push. Auto-resolves on re-review. **NEVER reply in CodeRabbit threads.**
-- **claude[bot]**: Resolve via GraphQL `resolveReviewThread` if addressed
+- **claude[bot]**: Resolve via GraphQL if addressed. Use jq JSON builder to avoid zsh `$` escaping:
+  ```bash
+  jq -n --arg tid "$THREAD_ID" '{"query": "mutation { resolveReviewThread(input: {threadId: \"\($tid)\"}) { thread { isResolved } } }"}' | gh api graphql --input -
+  ```
 - **Human**: Fix code, reply inline, @mention reviewer. Do NOT resolve — let them confirm.
 
 #### Each Iteration
