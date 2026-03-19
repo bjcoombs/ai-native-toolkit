@@ -427,6 +427,9 @@ You're an orchestrator. Spawn opus for complex code changes.
 
 **Prerequisite:** `$MARATHON_MODE` AND `$TEAMS_AVAILABLE`.
 
+**CRITICAL: Task Master Global Tag State Rule**
+Never run `task-master add-task`, `set-status`, or `update-task` as parallel background jobs. Each command internally switches the global tag, and concurrent invocations race — tasks silently land on wrong tags. Always run TM write commands **sequentially inline**. This was validated in the 047-security-audit marathon where 10 background `add-task` calls created tasks on wrong tags.
+
 ### Step 1: Identify Tag and Ready Tasks
 
 ```bash
@@ -561,6 +564,14 @@ git status --porcelain | head -5
 ```
 If dirty (from unrelated work in another terminal), stash or warn before spawning. Teammates branch from this directory — dirty state propagates.
 
+**Pre-spawn: Check for already-completed work:**
+Before spawning Wave 1, check recent merged PRs for task keywords to avoid spawning work that's already done:
+```bash
+gh pr list --state merged --limit 20 --json title,mergedAt,headRefName \
+  | jq '.[] | select(.headRefName | test("<tag>")) | {title, mergedAt, headRefName}'
+```
+Cross-reference with pending tasks. If a task's work was already merged (e.g., from a prior crashed marathon), mark it done and skip spawning.
+
 **Model selection:**
 - **Opus** (default for reliability): Multi-file PRs, review-heavy tasks, tasks touching shared files (barrel exports, routing, config), complexity 5+
 - **Sonnet** (cost-efficient for simple work): Single-file changes, isolated modules, complexity 1-4 with no shared-file risk, docs/config-only tasks
@@ -593,6 +604,12 @@ cd ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug>
 
 ## Requirements
 <task-description-and-subtasks from task-master show>
+
+## Architectural Direction
+<Include any architectural guidance, design decisions, or constraints from the lead HERE in the
+first message. Do NOT send architectural direction as a follow-up — teammates may lose context
+between messages. If the lead has opinions about approach, patterns to follow, or files to
+reference, they go here.>
 
 ## Project Guidelines
 <Include relevant sections from the repo's CLAUDE.md — testing patterns, coding standards, common
@@ -642,6 +659,7 @@ gh pr view --json reviews | jq '.reviews[] | select(.state == "CHANGES_REQUESTED
    - No unaddressed conversation comments
    - All your review threads resolved
 5. Fix issues, push, wait 60s, check again.
+   - **Contradictory bot comments** (e.g., CodeRabbit suggests X, Claude bot suggests opposite) — resolve yourself using your best judgment. Do NOT escalate as BLOCKED. Pick the approach that best fits the codebase patterns and explain your choice in the commit message.
    - **Merge conflicts are routine** — resolve using Known Conflict Patterns. Only escalate if genuinely ambiguous.
    - **After each push**, dismiss stale bot CHANGES_REQUESTED reviews:
      ```bash
@@ -666,8 +684,9 @@ gh pr view --json reviews | jq '.reviews[] | select(.state == "CHANGES_REQUESTED
 Only message the lead for **meaningful events**:
 - PR created: `SendMessage(type: "message", recipient: "lead", content: "PR_CREATED: PR #<number> for <tag>.<task-id>", summary: "PR created <task-id>")`
 - Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR: PR #<number> for <tag>.<task-id> — all criteria met", summary: "Review clear <task-id>")`
-- Clarification needed: `SendMessage(type: "message", recipient: "lead", content: "CLARIFICATION_NEEDED: <tag>.<task-id> — <what's unclear and your two interpretations>", summary: "Clarification needed <task-id>")`
-  If requirements conflict with the codebase, or multiple valid interpretations exist, ask rather than guess.
+- Clarification needed (use sparingly — never exercised across 15+ marathons, so default to making a judgment call yourself):
+  `SendMessage(type: "message", recipient: "lead", content: "CLARIFICATION_NEEDED: <tag>.<task-id> — <what's unclear and your two interpretations>", summary: "Clarification needed <task-id>")`
+  Only if requirements genuinely conflict with the codebase AND you cannot make a reasonable judgment call.
 - Blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED: <tag>.<task-id> — <reason>", summary: "Blocked <task-id>")`
 - Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX: <tag>.<task-id> — <brief reasoning>", summary: "Too complex <task-id>")`
 
@@ -714,6 +733,12 @@ Report team status after spawning:
 3. Spawn fresh teammates for resulting tasks
 
 **Non-responsive teammate escalation**: If a teammate ignores a direct instruction (nudge to fix CI, address review feedback, follow lead guidance) or sends a false REVIEW_CLEAR (claims ready but criteria aren't met), don't keep nudging. Shut it down and respawn the same task on opus. One strike — don't give sonnet a second chance on the same task.
+
+**Idle teammate ≠ dead teammate**: Before killing an idle teammate, check if their worktree has subagent activity. Subagents run as child processes and cause idle notifications on the parent. Check for recent file modifications or running processes in the worktree before assuming the teammate is stalled:
+```bash
+# Check for recent activity in teammate's worktree (files modified in last 5 min)
+find ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug> -mmin -5 -type f | head -3
+```
 
 **Unreliable REVIEW_CLEAR**: Don't rely solely on messages. **Proactively poll ALL tracked PRs** on two triggers:
 1. When any teammate goes idle or sends a message
@@ -833,6 +858,8 @@ Never reuse a teammate for a different task. Shutdown + spawn fresh.
 ### Lead Authority
 
 The lead operates as a **tech lead running a sprint** — not a task router.
+
+**The lead delegates, never executes.** During a marathon, the lead's job is to coordinate: merge PRs, resolve threads, spawn teammates, monitor status. Any long-running work (tests, coverage, code exploration, implementation) must be delegated to a teammate or subagent. Running `go test` or similar locally as lead wastes ~20 min and blocks coordination.
 
 **Trusted decisions (no human approval needed):**
 - Defer or cancel tasks that become irrelevant
