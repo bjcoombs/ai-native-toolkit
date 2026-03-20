@@ -123,6 +123,32 @@ ls "$REPO_ROOT"/scripts/*convention* "$REPO_ROOT"/scripts/*verify* 2>/dev/null
 - Partial: Some convention scripts exist but incomplete coverage
 - Missing: No architecture tests or convention enforcement
 
+### Pre-check: Test Inventory
+
+Before assessing CI and coverage, count what's actually there to run. A repo with zero tests makes every downstream layer meaningless.
+
+```bash
+# Count test files by language
+fd -t f '_test\.go$' "$REPO_ROOT" 2>/dev/null | wc -l        # Go
+fd -t f '\.test\.(ts|tsx|js|jsx)$' "$REPO_ROOT" 2>/dev/null | wc -l  # JS/TS
+fd -t f '(Test|IT)\.java$' "$REPO_ROOT" 2>/dev/null | wc -l  # Java
+fd -t f 'test_.*\.py$' "$REPO_ROOT" 2>/dev/null | wc -l      # Python
+fd -t f '_test\.rs$' "$REPO_ROOT" 2>/dev/null | wc -l        # Rust
+
+# Categorize: unit vs integration vs e2e
+fd -t f '(integration|e2e|acceptance)' "$REPO_ROOT" --extension go --extension ts --extension java --extension py 2>/dev/null | wc -l
+```
+
+**Report as a summary line in the output:**
+```
+Tests: <N> test files (<M> unit, <K> integration/e2e) across <languages>
+```
+
+**If zero tests found**, flag prominently:
+> **No tests detected.** CI pipeline, coverage gates, and review bots have nothing to validate against. Writing tests is the prerequisite for every other layer.
+
+This should bump the test-less repo's score down and make "add tests" the #1 action.
+
 ### Layer 4: CI Pipeline (Automated Safety Net)
 
 **Scan for CI configuration:**
