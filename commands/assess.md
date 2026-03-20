@@ -77,16 +77,27 @@ Missing docs don't reduce the layer score (breadcrumbs are the primary signal), 
 
 ### Layer 1: Code Design (Compile-Time Correctness)
 
-**Scan for type safety indicators:**
+**Scan for type safety indicators** (check whichever languages are present):
 ```bash
-# Check language-specific type strictness
 # TypeScript: strict mode
 rg '"strict"\s*:\s*true' "$REPO_ROOT" --glob 'tsconfig*.json' --type json
-# Go: check for generics usage, custom types
+# Go: generics, custom types
 rg 'type\s+\w+\[' "$REPO_ROOT" --type go --head-limit 5
-# Python: type hints, mypy config
-ls "$REPO_ROOT"/{mypy.ini,pyproject.toml,.mypy.ini} 2>/dev/null
-rg 'tool.mypy|mypy' "$REPO_ROOT/pyproject.toml" 2>/dev/null
+# Python: mypy, pyright, type hints
+ls "$REPO_ROOT"/{mypy.ini,pyrightconfig.json,.mypy.ini} 2>/dev/null
+rg 'tool.mypy|tool.pyright' "$REPO_ROOT/pyproject.toml" 2>/dev/null
+# Java/Kotlin: records, sealed, final classes
+rg '^\s*(public\s+)?record\s+' "$REPO_ROOT" --type java --head-limit 5
+rg 'sealed\s+(class|interface)' "$REPO_ROOT" --type java --type kotlin --head-limit 5
+# C#: nullable enable, records
+rg '<Nullable>enable</Nullable>' "$REPO_ROOT" --glob '*.csproj' --head-limit 3
+# Rust: inherently type-safe, check for unsafe blocks
+rg 'unsafe\s*\{' "$REPO_ROOT" --type rust | wc -l
+# Ruby: Sorbet type checking
+ls "$REPO_ROOT"/sorbet/ 2>/dev/null
+rg 'typed:\s*(true|strict|strong)' "$REPO_ROOT" --type ruby --head-limit 3
+# Dart: null safety
+rg 'sdk:\s*.>=\s*[23]\.' "$REPO_ROOT/pubspec.yaml" 2>/dev/null
 ```
 
 **Sample code for patterns** (read 2-3 files from core modules):
@@ -101,12 +112,29 @@ rg 'tool.mypy|mypy' "$REPO_ROOT/pyproject.toml" 2>/dev/null
 
 ### Layer 2: Linters (Style and Correctness Enforcement)
 
-**Scan for linter configuration:**
+**Scan for linter configuration** (check whichever languages are present):
 ```bash
-# Common linter configs
-ls -la "$REPO_ROOT"/{.golangci.yml,.golangci.yaml,.eslintrc*,.eslintrc.json,eslint.config.*,biome.json,.prettierrc*,ruff.toml,.ruff.toml,pyproject.toml,.flake8} 2>/dev/null
-# Check package.json for lint scripts
+# Go
+ls "$REPO_ROOT"/{.golangci.yml,.golangci.yaml} 2>/dev/null
+# JS/TS
+ls "$REPO_ROOT"/{.eslintrc*,eslint.config.*,biome.json,.prettierrc*} 2>/dev/null
 rg '"lint"' "$REPO_ROOT/package.json" 2>/dev/null
+# Python
+ls "$REPO_ROOT"/{ruff.toml,.ruff.toml,.flake8,.pylintrc} 2>/dev/null
+rg 'tool.ruff|tool.pylint|tool.flake8' "$REPO_ROOT/pyproject.toml" 2>/dev/null
+# Java/Kotlin
+rg 'checkstyle|spotbugs|pmd|spotless|error-prone|detekt' "$REPO_ROOT"/{pom.xml,build.gradle*} 2>/dev/null
+# C#
+ls "$REPO_ROOT"/{.editorconfig,*.ruleset,Directory.Build.props} 2>/dev/null
+rg 'EnableNETAnalyzers|AnalysisLevel' "$REPO_ROOT" --glob '*.csproj' --head-limit 3
+# Ruby
+ls "$REPO_ROOT"/.rubocop.yml 2>/dev/null
+# Rust
+ls "$REPO_ROOT"/clippy.toml "$REPO_ROOT"/.clippy.toml 2>/dev/null
+# Dart
+ls "$REPO_ROOT"/analysis_options.yaml 2>/dev/null
+# Swift
+ls "$REPO_ROOT"/.swiftlint.yml 2>/dev/null
 ```
 
 **If found, assess AI-relevant rules** by reading the config:
@@ -151,15 +179,22 @@ ls "$REPO_ROOT"/scripts/*convention* "$REPO_ROOT"/scripts/*verify* 2>/dev/null
 Before assessing CI and coverage, count what's actually there to run. A repo with zero tests makes every downstream layer meaningless.
 
 ```bash
-# Count test files by language
-fd -t f '_test\.go$' "$REPO_ROOT" 2>/dev/null | wc -l        # Go
-fd -t f '\.test\.(ts|tsx|js|jsx)$' "$REPO_ROOT" 2>/dev/null | wc -l  # JS/TS
-fd -t f '(Test|IT)\.java$' "$REPO_ROOT" 2>/dev/null | wc -l  # Java
-fd -t f 'test_.*\.py$' "$REPO_ROOT" 2>/dev/null | wc -l      # Python
-fd -t f '_test\.rs$' "$REPO_ROOT" 2>/dev/null | wc -l        # Rust
+# Count test files by language (detect what's in use, don't assume)
+fd -t f '_test\.go$' "$REPO_ROOT" 2>/dev/null | wc -l                          # Go
+fd -t f '\.(test|spec)\.(ts|tsx|js|jsx|mjs)$' "$REPO_ROOT" 2>/dev/null | wc -l # JS/TS (jest, vitest, mocha)
+fd -t f '(Test|IT|Tests)\.java$' "$REPO_ROOT" 2>/dev/null | wc -l              # Java (JUnit, TestNG)
+fd -t f '(Test|IT|Tests)\.kt$' "$REPO_ROOT" 2>/dev/null | wc -l                # Kotlin
+fd -t f '(test_.*|.*_test)\.py$' "$REPO_ROOT" 2>/dev/null | wc -l              # Python (pytest, unittest)
+fd -t f '_test\.rs$' "$REPO_ROOT" 2>/dev/null | wc -l                          # Rust
+fd -t f '(Test|Spec)\.cs$' "$REPO_ROOT" 2>/dev/null | wc -l                    # C# (xUnit, NUnit)
+fd -t f '_test\.rb$' "$REPO_ROOT" 2>/dev/null | wc -l                          # Ruby (RSpec, minitest)
+fd -t f '_test\.dart$' "$REPO_ROOT" 2>/dev/null | wc -l                        # Dart/Flutter
+fd -t f '\.test\.swift$' "$REPO_ROOT" 2>/dev/null | wc -l                      # Swift (XCTest)
 
-# Categorize: unit vs integration vs e2e
-fd -t f '(integration|e2e|acceptance)' "$REPO_ROOT" --extension go --extension ts --extension java --extension py 2>/dev/null | wc -l
+# Only report languages with >0 test files. Skip the rest.
+
+# Categorize: unit vs integration vs e2e (look at directory names and file names)
+fd -t f -p '(integration|e2e|acceptance|functional|contract)' "$REPO_ROOT" 2>/dev/null | wc -l
 ```
 
 **Report as a summary line in the output:**
