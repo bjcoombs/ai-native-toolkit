@@ -280,14 +280,23 @@ done
 
 ### Layer 7: Retrospective Loop (Self-Improving System)
 
-**Scan for retro infrastructure:**
+**Scan for retro and orchestration infrastructure:**
 ```bash
-# Retro logs, feedback files
-fd -t f '(retro|retrospective|feedback|learnings)' "$REPO_ROOT" 2>/dev/null
-# Task Master or similar orchestration with retro capability
-ls "$REPO_ROOT"/.taskmaster/ 2>/dev/null
+# Retro logs, feedback files, learnings
+fd -t f '(retro|retrospective|feedback|learnings|postmortem|post-mortem)' "$REPO_ROOT" 2>/dev/null
+
+# AI task orchestration tools (any of these indicate structured AI workflow)
+ls "$REPO_ROOT"/.taskmaster/ 2>/dev/null          # Task Master
+ls "$REPO_ROOT"/.speckit/ 2>/dev/null              # SpecKit
+ls "$REPO_ROOT"/.gsd/ 2>/dev/null                  # GSD
+ls "$REPO_ROOT"/.sweep/ 2>/dev/null                # Sweep
+ls "$REPO_ROOT"/.devin/ 2>/dev/null                # Devin
+ls "$REPO_ROOT"/.aider* 2>/dev/null                # Aider
+ls "$REPO_ROOT"/.continue/ 2>/dev/null             # Continue
+fd -t f '(kanban|backlog|sprint|iteration)' "$REPO_ROOT" --extension md --extension json --extension yaml 2>/dev/null | head -3
+
 # Check for retro-related content in instruction files
-rg -i 'retrospective|retro|feedback loop|learnings' "$REPO_ROOT"/{CLAUDE.md,.cursorrules,AGENTS.md} 2>/dev/null
+rg -i 'retrospective|retro|feedback loop|learnings|post.?mortem' "$REPO_ROOT"/{CLAUDE.md,.cursorrules,AGENTS.md,AGENTS.md} 2>/dev/null
 ```
 
 **Assess loop closure:**
