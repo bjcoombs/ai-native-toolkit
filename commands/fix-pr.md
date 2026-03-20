@@ -33,7 +33,7 @@ ls ~/.claude/plugins/cache/claude-plugins-official/ralph-loop/*/commands/ralph-l
 ```
 Skill(
   skill: "ralph-loop:ralph-loop",
-  args: "Fix PR autonomously. Get PR number. EACH iteration: merge origin/develop first, then check all 5 green criteria -- no merge conflicts, CI passing, no unresolved inline comments, conversation addressed, all review threads resolved. Fix issues, commit, push, wait 60s, repeat. Output \\<promise\\>PR_READY\\</promise\\> when ALL 5 criteria are met. --max-iterations 10 --completion-promise PR_READY"
+  args: "Fix PR autonomously. Get PR number. EACH iteration: merge origin/develop first, then check all 5 green criteria -- no merge conflicts, CI passing, no unresolved inline comments, conversation addressed, all review threads resolved. Fix issues, commit, push, then block on CI with gh pr checks <number> --watch --fail-fast before checking threads. Output \\<promise\\>PR_READY\\</promise\\> when ALL 5 criteria are met. --max-iterations 10 --completion-promise PR_READY"
 )
 ```
 
@@ -104,7 +104,7 @@ gh pr view $PR --comments
 - Actionable conversation comments → Respond or fix
 - **ALL 5 criteria met** → Report ready, STOP
 
-Wait 60s between iterations for CI to start.
+After pushing, block on CI with `gh pr checks <number> --watch --fail-fast` instead of blind sleep. Only check threads after CI settles.
 
 ---
 

@@ -362,7 +362,7 @@ gh pr view <number> --comments
 ```
 Skill(
   skill: "ralph-loop:ralph-loop",
-  args: "Review PR <number> for <tag>.<task-id> in <worktree-path>. FIRST merge origin/develop to stay in sync. Then loop until ALL green -- no merge conflicts, CI passing, no unresolved inline comments, conversation addressed, your review threads resolved. Fix issues, push, wait 60s, check again. --max-iterations 10 --completion-promise PR_READY --tag <tag> --task <task-id>"
+  args: "Review PR <number> for <tag>.<task-id> in <worktree-path>. FIRST merge origin/develop to stay in sync. Then loop until ALL green -- no merge conflicts, CI passing, no unresolved inline comments, conversation addressed, your review threads resolved. Fix issues, push, then block on CI with gh pr checks <number> --watch --fail-fast before checking threads. --max-iterations 10 --completion-promise PR_READY --tag <tag> --task <task-id>"
 )
 ```
 
@@ -658,7 +658,11 @@ gh pr view --json reviews | jq '.reviews[] | select(.state == "CHANGES_REQUESTED
    - No unresolved inline comments (fix for CodeRabbit — never reply in threads; reply to humans)
    - No unaddressed conversation comments
    - All your review threads resolved
-5. Fix issues, push, wait 60s, check again.
+5. Fix issues, push, then **block on CI** (don't blind-sleep):
+   ```bash
+   gh pr checks <number> --watch --fail-fast
+   ```
+   This blocks until CI completes — no wasted wait time. Only check threads AFTER CI settles.
    - **Contradictory bot comments** (e.g., CodeRabbit suggests X, Claude bot suggests opposite) — resolve yourself using your best judgment. Do NOT escalate as BLOCKED. Pick the approach that best fits the codebase patterns and explain your choice in the commit message.
    - **Merge conflicts are routine** — resolve using Known Conflict Patterns. Only escalate if genuinely ambiguous.
    - **After each push**, dismiss stale bot CHANGES_REQUESTED reviews:
