@@ -248,16 +248,31 @@ Calculate the score (0-7 based on layers present, +0.5 for partial) and generate
 | 4-5 | Solid | Contracts catch most issues. Agent is productive |
 | 6-7 | AI-Native | System self-improves. Agents work reliably at scale |
 
-## Highest-Leverage Next Steps
+## Top 3 Actions
 
-<Ordered list of 3-5 specific, actionable recommendations based on gaps found.
 Prioritize by leverage: breadcrumbs and CI first, then linters and coverage,
-then architecture tests and retro loops. Each recommendation should reference
-the specific gap and include concrete first actions.>
+then architecture tests and retro loops. Each action should be completable
+in a single session.
+
+| # | Action | Layer | Effort | Command / First Step |
+|---|--------|-------|--------|---------------------|
+| 1 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` |
+| 2 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` |
+| 3 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` |
+
+### Why these three?
+<2-3 sentences explaining why these are highest leverage. Connect to specific
+gaps from the table above. Be concrete about what each action prevents.>
+
+## Additional Opportunities
+
+<If more than 3 gaps exist, list remaining as brief bullets. Keep to one line each.
+These are "after you've done the top 3" items.>
 
 ## Strengths
 
-<What this repo already does well. Acknowledge existing infrastructure.>
+<3-5 bullet points. What this repo already does well. Be specific — name files,
+tools, and patterns. Acknowledge existing infrastructure.>
 ```
 
 ## Principles
