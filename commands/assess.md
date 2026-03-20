@@ -47,6 +47,29 @@ ls -la "$REPO_ROOT"/{CLAUDE.md,.cursorrules,AGENTS.md,GEMINI.md,.github/copilot-
 - Does it reference specific files/patterns in the codebase?
 - Is it current? (check git log for last modification date)
 
+**Also scan for orientation docs** - can an agent find its way around?
+```bash
+# README
+ls "$REPO_ROOT"/README.md 2>/dev/null
+# Architecture / structure docs
+fd -t f '(architecture|structure|overview|getting-started)' "$REPO_ROOT/docs" "$REPO_ROOT" --extension md 2>/dev/null | head -5
+# ADRs / decision records
+fd -t d '(adr|decisions|rfcs)' "$REPO_ROOT" 2>/dev/null
+ls "$REPO_ROOT"/docs/adr/ "$REPO_ROOT"/docs/decisions/ 2>/dev/null | head -3
+# API docs (OpenAPI, proto, AsyncAPI)
+fd -t f '\.(proto|swagger|openapi)' "$REPO_ROOT" 2>/dev/null | head -5
+ls "$REPO_ROOT"/{openapi,asyncapi,swagger}* 2>/dev/null
+# Package/module-level docs
+fd -t f 'doc\.go$' "$REPO_ROOT" 2>/dev/null | wc -l  # Go
+```
+
+**Report doc quality as a summary line:**
+```
+Docs: README [yes/no], architecture guide [yes/no], ADRs [N found], API specs [N found], package docs [N found]
+```
+
+Missing docs don't reduce the layer score (breadcrumbs are the primary signal), but flag gaps in the report. An agent with good breadcrumbs but no README or architecture docs can follow rules but can't orient itself in unfamiliar parts of the codebase.
+
 **Scoring:**
 - Present: Instruction file exists with specific, actionable breadcrumbs
 - Partial: File exists but is generic, stale, or mostly boilerplate
