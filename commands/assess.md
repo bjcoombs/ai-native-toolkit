@@ -278,14 +278,13 @@ done
 - Partial: Bot configured but not active, or only running basic checks
 - Missing: No automated code review
 
-### Layer 7: Retrospective Loop (Self-Improving System)
+### Layer 7: AI Project Management (Orchestration and Feedback)
 
-**Scan for retro and orchestration infrastructure:**
+Does the project treat AI agents as contributors to plan around - with structured task management, workflow orchestration, and a feedback loop that improves the system over time?
+
+**Scan for AI orchestration tooling:**
 ```bash
-# Retro logs, feedback files, learnings
-fd -t f '(retro|retrospective|feedback|learnings|postmortem|post-mortem)' "$REPO_ROOT" 2>/dev/null
-
-# AI task orchestration tools (any of these indicate structured AI workflow)
+# Task/workflow orchestration
 ls "$REPO_ROOT"/.taskmaster/ 2>/dev/null          # Task Master
 ls "$REPO_ROOT"/.speckit/ 2>/dev/null              # SpecKit
 ls "$REPO_ROOT"/.gsd/ 2>/dev/null                  # GSD
@@ -294,21 +293,26 @@ ls "$REPO_ROOT"/.devin/ 2>/dev/null                # Devin
 ls "$REPO_ROOT"/.aider* 2>/dev/null                # Aider
 ls "$REPO_ROOT"/.continue/ 2>/dev/null             # Continue
 fd -t f '(kanban|backlog|sprint|iteration)' "$REPO_ROOT" --extension md --extension json --extension yaml 2>/dev/null | head -3
-
-# Check for retro-related content in instruction files
-rg -i 'retrospective|retro|feedback loop|learnings|post.?mortem' "$REPO_ROOT"/{CLAUDE.md,.cursorrules,AGENTS.md,AGENTS.md} 2>/dev/null
 ```
 
-**Assess loop closure:**
-- Are retros generated automatically?
-- Do retros feed back into breadcrumbs/contracts?
-- Is there a human approval gate?
-- Evidence of breadcrumbs added from retro findings?
+**Scan for feedback loop infrastructure:**
+```bash
+# Retro logs, learnings, postmortems
+fd -t f '(retro|retrospective|feedback|learnings|postmortem|post-mortem)' "$REPO_ROOT" 2>/dev/null
+# Feedback references in instruction files
+rg -i 'retrospective|retro|feedback loop|learnings|post.?mortem' "$REPO_ROOT"/{CLAUDE.md,.cursorrules,AGENTS.md} 2>/dev/null
+```
+
+**Assess across three dimensions:**
+
+1. **Task orchestration** - Are AI tasks structured and tracked? (Task Master tags, SpecKit specs, GSD tasks, GitHub Projects with AI labels, etc.)
+2. **Feedback loop** - Do learnings feed back into contracts? (retro logs, breadcrumb updates traced to incidents, iterative CLAUDE.md refinement)
+3. **Workflow maturity** - Is there evidence of repeated AI work cycles? (multiple completed tags/sprints, merged PR history from AI branches, wave-based orchestration)
 
 **Scoring:**
-- Present: Structured retros generated, findings feed back into contracts
-- Partial: Some retro notes exist but no systematic feedback loop
-- Missing: No retrospective infrastructure
+- Present: Structured AI task management with feedback loop that updates contracts
+- Partial: Some orchestration tooling exists but no systematic feedback loop, or ad-hoc retro notes without structured process
+- Missing: No AI-aware project management
 
 ## Step 3: Score and Report
 
@@ -330,7 +334,7 @@ Calculate the score (0-7 based on layers present, +0.5 for partial) and generate
 | 4: CI Pipeline | Present/Partial/Missing | <what was found> | <what's missing> |
 | 5: Coverage Gates | Present/Partial/Missing | <what was found> | <what's missing> |
 | 6: Code Review Bots | Present/Partial/Missing | <what was found> | <what's missing> |
-| 7: Retro Loop | Present/Partial/Missing | <what was found> | <what's missing> |
+| 7: AI Project Mgmt | Present/Partial/Missing | <what was found> | <what's missing> |
 
 ## Maturity Level
 
