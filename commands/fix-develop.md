@@ -90,23 +90,6 @@ EOF
 
 ## Step 4: Loop Until Green
 
-### Check for Ralph Plugin
-
-```bash
-ls ~/.claude/plugins/cache/claude-plugins-official/ralph-loop/*/commands/ralph-loop.md 2>/dev/null && echo "RALPH_AVAILABLE" || echo "RALPH_NOT_AVAILABLE"
-```
-
-**If Ralph available:**
-
-```
-Skill(
-  skill: "ralph-loop:ralph-loop",
-  args: "Fix develop CI PR. EACH iteration: check CI status, inline comments, conversation comments. Fix issues, commit, push, wait 60s, repeat. Output \\<promise\\>DEVELOP_FIXED\\</promise\\> when CI passes and all comments addressed. --max-iterations 10 --completion-promise DEVELOP_FIXED"
-)
-```
-
-**If Ralph NOT available:** Use manual loop below.
-
 ### Each Iteration
 
 ```bash
