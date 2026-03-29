@@ -22,25 +22,6 @@ Enter autonomous PR review loop for the current branch's PR. Loops until the PR 
 
 ---
 
-## Check for Ralph Plugin
-
-```bash
-ls ~/.claude/plugins/cache/claude-plugins-official/ralph-loop/*/commands/ralph-loop.md 2>/dev/null && echo "RALPH_AVAILABLE" || echo "RALPH_NOT_AVAILABLE"
-```
-
-**If Ralph available:** Use Ralph for iteration (preserves context between iterations).
-
-```
-Skill(
-  skill: "ralph-loop:ralph-loop",
-  args: "Fix PR autonomously. Get PR number. EACH iteration: merge origin/develop first, then check all 5 green criteria -- no merge conflicts, CI passing, no unresolved inline comments, conversation addressed, all review threads resolved. Fix issues, commit, push, then block on CI with gh pr checks <number> --watch --fail-fast before checking threads. Output \\<promise\\>PR_READY\\</promise\\> when ALL 5 criteria are met. --max-iterations 10 --completion-promise PR_READY"
-)
-```
-
-**If Ralph NOT available:** Use manual loop below (may burn context on many iterations).
-
----
-
 ## Shell Pitfalls
 **Never use `gh ... --jq` with complex filters.** Always pipe to `jq` separately.
 
@@ -67,16 +48,17 @@ git fetch origin develop && git merge origin/develop --no-edit
 - **Barrel exports** (e.g., shared/index.ts): Accept both sides — each adds its own export
 - **Config/manifest files**: Accept both sides unless the same key is modified differently (then ask)
 
-### Step 2: Check remaining criteria
+### Step 2: Check all criteria concurrently
 
 ```bash
 PR=$(gh pr view --json number --jq '.number')
 
-# CI status
-gh pr checks $PR --json name,state | jq '.[] | select(.state == "FAILURE" or .state == "CANCELLED")'
+# Start CI watch in background
+gh pr checks $PR --watch --fail-fast &
+CI_PID=$!
 
+# While CI runs, check threads and comments (don't wait for CI)
 # Unresolved review threads (covers inline comments from all reviewers)
-# Include path and line so we can check if the concern is already fixed locally
 gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
   pullRequest(number: '$PR') { reviewThreads(first: 50) { nodes {
     id isResolved path line comments(first: 1) { nodes { author { login } body } }
@@ -85,7 +67,7 @@ gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
   | {id, author: .comments.nodes[0].author.login, path, line, body: .comments.nodes[0].body[0:200]}'
 
 # For each unresolved thread with a path, check current local code to see if already fixed:
-# Read the local file at the referenced line — if the concern is addressed in the current
+# Read the local file at the referenced line - if the concern is addressed in the current
 # working tree, resolve the thread directly (for bot threads) instead of pushing and waiting
 # for a re-review cycle.
 # Example: sed -n '<line-5>,<line+5>p' <path>
@@ -94,17 +76,21 @@ gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
 gh pr view $PR --comments
 ```
 
-### Step 3: Fix and loop
+### Step 3: Fix and batch
 
-**Decision tree:**
-- Merge conflicts → Resolve using patterns above, or report blocked if ambiguous
-- CI failing → Fix code, commit, push
-- Unresolved bot threads (CodeRabbit, claude[bot]) → **Check local code first** at the referenced path:line. If the concern is already addressed in the working tree, resolve the thread directly via GraphQL (saves a push→wait→re-review cycle). If not addressed, fix the code, then push.
-- Unresolved human threads → Fix code, reply inline, @mention reviewer
-- Actionable conversation comments → Respond or fix
-- **ALL 5 criteria met** → Report ready, STOP
+**Fix issues locally while CI runs** - stage changes but don't push yet:
+- Unresolved bot threads (CodeRabbit, claude[bot]) - **Check local code first** at the referenced path:line. If already addressed, resolve via GraphQL immediately (no push needed). If not, fix the code and `git add`.
+- Unresolved human threads - Fix code, reply inline, @mention reviewer
+- Actionable conversation comments - Respond or fix
+- Merge conflicts - Resolve using patterns above, or report blocked if ambiguous
 
-After pushing, block on CI with `gh pr checks <number> --watch --fail-fast` instead of blind sleep. Only check threads after CI settles.
+**When CI finishes** (`wait $CI_PID`):
+- CI passed + no local fixes staged: evaluate whether all 5 criteria are met
+- CI passed + local fixes staged: push once (batches all thread fixes into one CI cycle)
+- CI failed: fix CI issues too, then push everything together
+- **ALL 5 criteria met** - Report ready, STOP
+
+**This batches fixes into fewer pushes.** A 15-min CI run where CodeRabbit posts at minute 2 no longer wastes 13 minutes idle - thread fixes are ready before CI finishes, saving a full CI cycle.
 
 ---
 

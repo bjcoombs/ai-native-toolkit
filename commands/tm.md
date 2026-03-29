@@ -7,7 +7,7 @@ argument-hint: [tag [task-id] | feature description] (optional - derives context
 
 **$ARGUMENTS**
 
-> Thin orchestrator. Uses Ralph Loop for iteration when available, falls back to subagents.
+> Thin orchestrator. Delegates to subagents for implementation and review loops.
 >
 > **Planning Mode** (`/tm use stripe as kyc provider`): When args don't match an existing tag, explores the codebase, writes a PRD, creates a tag, generates tasks, runs complexity analysis, and expands. Stops after planning — run `/tm <tag>` to start work.
 >
@@ -21,17 +21,11 @@ argument-hint: [tag [task-id] | feature description] (optional - derives context
 ## Phase 0: Detect Capabilities
 
 ```bash
-# Ralph plugin
-ls ~/.claude/plugins/cache/claude-plugins-official/ralph-loop/*/commands/ralph-loop.md 2>/dev/null && echo "RALPH_AVAILABLE" || echo "RALPH_NOT_AVAILABLE"
-
 # Agent Teams
 echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 ```
 
-Set `$RALPH_AVAILABLE` and `$TEAMS_AVAILABLE` (`true` if result is `"1"`).
-
-If Ralph not available, warn once:
-> ⚠️ Ralph Loop plugin not installed. Using subagents (may burn context on long test runs). Install: `/plugin install ralph-loop`
+Set `$TEAMS_AVAILABLE` (`true` if result is `"1"`).
 
 ---
 
@@ -104,11 +98,11 @@ Is current directory a TM worktree?
 gh pr view --json number,state,mergedAt 2>/dev/null
 ```
 
-| Condition | Action (Ralph) | Action (Fallback) |
-|-----------|----------------|-------------------|
-| `mergedAt` is set | cleanup-specialist | cleanup-specialist |
-| PR exists, open | Ralph review loop | review-specialist |
-| No PR | Ralph full cycle | implement-specialist |
+| Condition | Action |
+|-----------|--------|
+| `mergedAt` is set | CLEANUP mode |
+| PR exists, open | REVIEW mode |
+| No PR | IMPLEMENT mode |
 
 ---
 
@@ -288,7 +282,7 @@ Task(
 PR merged. Clean up in this order:
 1. Mark task done: `cd ~/dev/github.com/<org>/<repo> && task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=done`
 2. Remove worktree from <repo>-main: `cd <repo>-main && git worktree remove --force ../worktree/<tag>/<task-id>--<slug>`
-3. Delete branch: `git branch -d <tag>--<task-id>--<slug>`
+3. Delete branch: `git branch -D <tag>--<task-id>--<slug>`
 """
 )
 ```
@@ -354,21 +348,10 @@ gh pr view <number> --comments
 - Unresolved human threads → Fix code, reply inline, @mention reviewer
 - ALL clear → Output `<promise>PR_READY</promise>`
 
-#### Review Loop (Ralph or Fallback)
+#### Review Loop
 
-**CRITICAL**: Ralph args are passed to bash UNQUOTED. Shell special chars will break. Reference tasks by ID only.
-
-**If Ralph available:**
 ```
-Skill(
-  skill: "ralph-loop:ralph-loop",
-  args: "Review PR <number> for <tag>.<task-id> in <worktree-path>. FIRST merge origin/develop to stay in sync. Then loop until ALL green -- no merge conflicts, CI passing, no unresolved inline comments, conversation addressed, your review threads resolved. Fix issues, push, then block on CI with gh pr checks <number> --watch --fail-fast before checking threads. --max-iterations 10 --completion-promise PR_READY --tag <tag> --task <task-id>"
-)
-```
-
-**If Ralph NOT available:**
-```
-Task(
+Agent(
   subagent_type: "general-purpose",
   model: "sonnet",
   prompt: """
@@ -380,7 +363,7 @@ Each iteration: merge origin/develop first. Loop until ALL green:
 1. No merge conflicts  2. CI passing  3. No unresolved inline comments
 4. No unaddressed conversation comments  5. All YOUR review threads resolved
 
-Fix issues, push, wait for CI, repeat. Spawn opus for complex code changes.
+Fix issues, push, block on CI with `gh pr checks <number> --watch --fail-fast` before checking threads.
 Report: ready, waiting, or blocked.
 """
 )
@@ -390,24 +373,14 @@ Report: ready, waiting, or blocked.
 
 ### Mode: Implement or Create PR
 
-**If Ralph available:**
 ```
-Skill(
-  skill: "ralph-loop:ralph-loop",
-  args: "Complete <tag>.<task-id> in <worktree-path>. Run task-master show <task-id> for requirements. TDD -- test, fix, commit. Push, create PR, then loop until ALL green. Each iteration merge origin/develop first, then check -- no merge conflicts, CI passing, no unresolved inline comments, conversation addressed, your review threads resolved. --max-iterations 20 --completion-promise PR_READY --tag <tag> --task <task-id>"
-)
-```
-
-**If Ralph NOT available:**
-```
-Task(
+Agent(
   subagent_type: "general-purpose",
   model: "sonnet",
   prompt: """
 # Implement <tag>.<task-id>: <task-title>
 
 Working directory: <worktree-path>
-You're an orchestrator. Spawn opus for complex code changes.
 
 ## Requirements
 <task-description-and-subtasks>
@@ -415,8 +388,9 @@ You're an orchestrator. Spawn opus for complex code changes.
 ## Flow
 1. Implement using TDD (run tests, fix failures, commit)
 2. Push and create PR
-3. Monitor CI, fix issues
-4. Report: PR ready, waiting, or blocked
+3. Review loop: merge origin/develop first each iteration, then check all 5 criteria (no merge conflicts, CI passing, no unresolved inline comments, no unaddressed conversation comments, all review threads resolved)
+4. Block on CI with `gh pr checks <number> --watch --fail-fast` before checking threads
+5. Report: PR ready, waiting, or blocked
 """
 )
 ```
@@ -652,19 +626,47 @@ gh pr view --json reviews | jq '.reviews[] | select(.state == "CHANGES_REQUESTED
      gh pr view <number> --json state,mergeStateStatus | jq '{state, mergeStateStatus}'
      ```
      If DIRTY or BLOCKED, fix before entering review loop.
-4. **Review loop**: Merge origin/develop first each iteration. Check all 5 green criteria:
-   - No merge conflicts — resolve using patterns above
+4. **Review loop** - concurrent monitoring after each push. All 5 green criteria must be met:
+   - No merge conflicts with develop
    - CI passing
-   - No unresolved inline comments (fix for CodeRabbit — never reply in threads; reply to humans)
+   - No unresolved inline comments (fix for CodeRabbit - never reply in threads; reply to humans)
    - No unaddressed conversation comments
    - All your review threads resolved
-5. Fix issues, push, then **block on CI** (don't blind-sleep):
+5. **After pushing, monitor CI and reviews concurrently** (don't wait for CI to check threads):
    ```bash
-   gh pr checks <number> --watch --fail-fast
+   # Start CI watch in background
+   gh pr checks <number> --watch --fail-fast &
+   CI_PID=$!
+
+   # While CI runs, check for review threads, comments, and develop drift
+   git fetch origin develop
+   git diff --stat origin/develop...HEAD | tail -1  # check for drift
+
+   # Check unresolved threads (CodeRabbit posts within 2-5 min of push)
+   gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
+     pullRequest(number: <number>) { reviewThreads(first: 50) { nodes {
+       id isResolved path line comments(first: 1) { nodes { author { login } body } }
+     }}}}}'  --jq '.data.repository.pullRequest.reviewThreads.nodes[]
+     | select(.isResolved == false)
+     | {id, author: .comments.nodes[0].author.login, path, line, body: .comments.nodes[0].body[0:200]}'
+
+   # Check conversation comments
+   gh pr view <number> --comments
    ```
-   This blocks until CI completes — no wasted wait time. Only check threads AFTER CI settles.
-   - **Contradictory bot comments** (e.g., CodeRabbit suggests X, Claude bot suggests opposite) — resolve yourself using your best judgment. Do NOT escalate as BLOCKED. Pick the approach that best fits the codebase patterns and explain your choice in the commit message.
-   - **Merge conflicts are routine** — resolve using Known Conflict Patterns. Only escalate if genuinely ambiguous.
+   **Fix issues locally while CI runs** - stage changes but batch them:
+   - Review threads with code fixes: fix locally, `git add` but don't push yet
+   - Develop drift: `git merge origin/develop --no-edit`
+   - Bot threads already addressed in local code: resolve via GraphQL immediately (no push needed)
+
+   **When CI finishes** (`wait $CI_PID`):
+   - CI passed + no local fixes staged: check threads one final time, then evaluate REVIEW_CLEAR
+   - CI passed + local fixes staged: push once (batches all thread fixes into one CI cycle)
+   - CI failed: fix CI issues too, then push everything together
+
+   **This batches fixes into fewer pushes, saving full CI cycles.** A 15-min CI run where CodeRabbit posts at minute 2 no longer wastes 13 minutes of idle time.
+
+   - **Contradictory bot comments** (e.g., CodeRabbit suggests X, Claude bot suggests opposite) - resolve yourself using your best judgment. Do NOT escalate as BLOCKED. Pick the approach that best fits the codebase patterns and explain your choice in the commit message.
+   - **Merge conflicts are routine** - resolve using Known Conflict Patterns. Only escalate if genuinely ambiguous.
    - **After each push**, dismiss stale bot CHANGES_REQUESTED reviews:
      ```bash
      gh api repos/<owner>/<repo>/pulls/<number>/reviews \
@@ -676,21 +678,21 @@ gh pr view --json reviews | jq '.reviews[] | select(.state == "CHANGES_REQUESTED
    ```bash
    # Merge state
    gh pr view <number> --json mergeStateStatus,state | jq '{mergeStateStatus, state}'
+   # CI fully complete (0 pending - don't report while checks still running)
+   PENDING=$(gh pr checks <number> --json state | jq '[.[] | select(.state == "PENDING" or .state == "QUEUED")] | length')
+   echo "Pending checks: $PENDING"
    # Unresolved thread count (MUST be 0)
    UNRESOLVED=$(gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
      pullRequest(number: <number>) { reviewThreads(first: 100) { nodes { isResolved } } }
    }}' | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')
    echo "Unresolved threads: $UNRESOLVED"
    ```
-   Only report REVIEW_CLEAR if `mergeStateStatus` is CLEAN/UNSTABLE **AND** `$UNRESOLVED` = 0. If either fails, fix and loop again. **Do NOT report REVIEW_CLEAR and then go idle** — the lead trusts this signal to merge without re-verifying threads.
+   Only report REVIEW_CLEAR if `mergeStateStatus` is CLEAN/UNSTABLE **AND** `$PENDING` = 0 **AND** `$UNRESOLVED` = 0. If any fail, fix and loop again. **Do NOT report REVIEW_CLEAR and then go idle** - the lead trusts this signal to merge without re-verifying.
 
 ## Communication
 Only message the lead for **meaningful events**:
 - PR created: `SendMessage(type: "message", recipient: "lead", content: "PR_CREATED: PR #<number> for <tag>.<task-id>", summary: "PR created <task-id>")`
 - Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR: PR #<number> for <tag>.<task-id> — all criteria met", summary: "Review clear <task-id>")`
-- Clarification needed (use sparingly — never exercised across 15+ marathons, so default to making a judgment call yourself):
-  `SendMessage(type: "message", recipient: "lead", content: "CLARIFICATION_NEEDED: <tag>.<task-id> — <what's unclear and your two interpretations>", summary: "Clarification needed <task-id>")`
-  Only if requirements genuinely conflict with the codebase AND you cannot make a reasonable judgment call.
 - Blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED: <tag>.<task-id> — <reason>", summary: "Blocked <task-id>")`
 - Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX: <tag>.<task-id> — <brief reasoning>", summary: "Too complex <task-id>")`
 
@@ -735,6 +737,8 @@ Report team status after spawning:
 1. Shutdown teammate, clean up failed worktree/branch
 2. Decompose: `task-master expand --id=<task-id> --research` (subtasks) or cancel + create new peer tasks (sibling split)
 3. Spawn fresh teammates for resulting tasks
+
+**Lead conflict resolution**: When a teammate is idle and their PR is DIRTY (merge conflict), resolve it directly instead of nudging the teammate. Pull develop, resolve the conflict, push. Faster than round-tripping to an idle teammate (~10 min saved per conflict, validated in tenant-branding and economy-generator).
 
 **Non-responsive teammate escalation**: If a teammate ignores a direct instruction (nudge to fix CI, address review feedback, follow lead guidance) or sends a false REVIEW_CLEAR (claims ready but criteria aren't met), don't keep nudging. Shut it down and respawn the same task on opus. One strike — don't give sonnet a second chance on the same task.
 
@@ -814,7 +818,7 @@ Trust the API, not the message.
 cd ~/dev/github.com/<org>/<repo>
 task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=done
 cd <repo>-main && git worktree remove --force ../worktree/<tag>/<task-id>--<slug>
-git branch -d <tag>--<task-id>--<slug>
+git branch -D <tag>--<task-id>--<slug>
 ```
 
 Then:
@@ -972,8 +976,8 @@ When `$MARATHON_MODE` but `$TEAMS_AVAILABLE` is `false`, use parallel subagents 
   │
   ├─ Marathon + Teams → AGENT TEAMS (spawn teammates, smart-merge, waves)
   │
-  ├─ No PR → IMPLEMENT (Ralph or subagent)
-  ├─ PR open → REVIEW (Ralph or subagent)
+  ├─ No PR → IMPLEMENT (subagent)
+  ├─ PR open → REVIEW (subagent)
   ├─ PR merged → CLEANUP → (marathon? check next ready)
   │
   └─ No context → report ready tasks
