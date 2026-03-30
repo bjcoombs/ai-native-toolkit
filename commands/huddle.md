@@ -1,5 +1,5 @@
 ---
-description: "Six Thinking Hats team analysis — AI meeting with Blue Hat as chair and professional lens team members who cycle through hat phases"
+description: "Huddle - structured multi-perspective analysis with professional lens team members who cycle through Six Thinking Hats phases"
 argument-hint: "<topic or problem to analyze>"
 ---
 
@@ -265,7 +265,7 @@ Do this for each member.
 
 ## Differences from /6hats
 
-| Aspect | /6hats (parallel) | /6hats-team (meeting) |
+| Aspect | /6hats (parallel) | /huddle (meeting) |
 |--------|-------------------|----------------------|
 | Speed | Fast (~5 min) | 45-90 min target |
 | Interaction | None (isolated agents) | Rich (peer-to-peer dialogue) |
@@ -274,7 +274,7 @@ Do this for each member.
 | Blue Hat | Synthesizer at end | Active facilitator throughout |
 | Faithfulness to De Bono | Low | High |
 
-Use `/6hats` for quick assessments. Use `/6hats-team` when the topic warrants deliberation and you have 60-90 minutes.
+Use `/6hats` for quick assessments. Use `/huddle` when the topic warrants deliberation and you have 60-90 minutes.
 
 ## Lessons Learned
 
@@ -286,7 +286,7 @@ Use `/6hats` for quick assessments. Use `/6hats-team` when the topic warrants de
 - **4 phases (W-B-Y-G) is the default.** 5 phases (with Red) is only for non-technical topics. 2 phases (W-B) is enough for simple questions.
 
 ## Usage
-`/6hats-team [topic or problem to analyze]`
+`/huddle [topic or problem to analyze]`
 
 ## Example
-`/6hats-team Should we migrate our monolith to microservices?`
+`/huddle Should we migrate our monolith to microservices?`
