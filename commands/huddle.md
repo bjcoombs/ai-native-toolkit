@@ -36,9 +36,9 @@ Assess the topic to determine:
 2. **Professional lenses** that create productive tension for THIS topic. Pick identities whose perspectives will surface genuinely different observations. Avoid overlapping lenses (e.g., SRE + Platform Engineer have high overlap - pick one).
 3. **Hat sequence** based on problem type (reuse sequences from `/6hats`):
    - Simple: White → Black (2 phases, ~20 min)
-   - Moderate: White → Black → Yellow → Green (4 phases, ~45 min)
-   - Complex: White → Black → Yellow → Green (4 phases, ~60 min)
-   - Skip Red Hat for technical reviews - gut reactions overlap with Black Hat for code/architecture topics. Reserve Red Hat for people/process/culture decisions where emotional signals matter.
+   - Moderate: White → Red → Black → Yellow → Green (5 phases, ~50 min)
+   - Complex: White → Red → Black → Yellow → Green (5 phases, ~70 min)
+   - **Red Hat is always available.** It gives permission to ask "what does my gut say?" - often the fastest shortcut to clarity. Consider it especially when there are human actors affected (on-call engineers, future maintainers, affected teams), or when something feels off but you can't articulate why yet.
    - **Target 45-90 minutes total.** If it's taking longer, reduce phases or team size.
 
 **Lens selection examples** (not exhaustive — choose what fits):
@@ -130,6 +130,8 @@ Shape every hat agent prompt through your lens:
 - DO: "As a security engineer investigating X, I need you to focus on authentication flows, token handling, and access control. What are the facts about [specific security concern]?" (lens-shaped)
 
 Your professional lens determines WHAT you ask each hat to investigate. The hat methodology determines HOW it investigates.
+
+**Lane discipline**: Stay within the hat's defined methodology. Each hat has a "Not My Job" section — respect those boundaries. Don't duplicate other hats' concerns.
 ```
 
 ### Step 4: Facilitate Hat Phases
@@ -259,7 +261,7 @@ Do this for each member.
 ### Adapt the Sequence
 - If White Hat reveals the problem is simpler than expected, skip some phases
 - If Black Hat surfaces a critical risk, give Green Hat more time
-- **Skip Red Hat for technical reviews** - gut reactions overlap with Black Hat for code/architecture. Use Red Hat for people, process, or culture topics where emotional signals add unique information.
+- Red Hat is permission to check your gut - use it when something feels off or people are affected
 - The sequence is a guide, not a straitjacket
 - **Target total meeting time**: 45-90 minutes. If approaching 90 min, compress remaining phases or go straight to verdict.
 
@@ -280,10 +282,10 @@ Use `/6hats` for quick assessments. Use `/huddle` when the topic warrants delibe
 
 - **Embed first phase in spawn prompt.** Members who are spawned with "read the material and wait" go idle. Members who are spawned with "read the material and immediately investigate X" start working.
 - **3 members is the sweet spot.** A fourth member adds ~50% more wall clock time but only ~15% more signal. Use 4 only when perspectives are truly orthogonal.
-- **Skip Red Hat for technical reviews.** Gut reactions and critical judgment overlap heavily for code/architecture topics. Red Hat adds unique value for people/process/culture decisions.
+- **Don't skip Red Hat reflexively.** It's permission to ask "what does my gut say?" - often the fastest shortcut to clarity. Especially valuable when people are affected or something feels off.
 - **Move on without stragglers.** One nudge per straggler. If they don't respond, proceed with N-1 findings. Don't block the meeting.
 - **Concrete phase prompts, not vague ones.** "What are the risks?" produces confusion. "The dunning race condition and demo conflict are the two biggest risks from Black Hat - how do we fix them?" produces action.
-- **4 phases (W-B-Y-G) is the default.** 5 phases (with Red) is only for non-technical topics. 2 phases (W-B) is enough for simple questions.
+- **Red Hat after White is a natural pairing.** Facts first, then gut check - grounds intuition in evidence. But the chair decides what fits the topic.
 
 ## Usage
 `/huddle [topic or problem to analyze]`
