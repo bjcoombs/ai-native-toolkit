@@ -14,7 +14,7 @@ argument-hint: [tag [task-id] | feature description] (optional - derives context
 > **Marathon Mode** (`/tm <tag>`): When only a tag is given (no task-id), automatically progress through all ready tasks.
 > When Agent Teams are available, each task gets its own teammate with shared task list.
 > When teams unavailable, falls back to parallel subagents.
-> PRs auto-merge when CI green, no conflicts, ≥2 approvals, and 0 changes requested.
+> PRs auto-merge when CI green, no conflicts, required approvals met, and 0 changes requested.
 
 ---
 
@@ -26,6 +26,21 @@ echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 ```
 
 Set `$TEAMS_AVAILABLE` (`true` if result is `"1"`).
+
+### Project-Specific Configuration
+
+Read the repo's CLAUDE.md for a `## Marathon Configuration` section. This provides project-specific overrides for marathon behavior. Extract these values (with defaults if section is missing):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `$BASE_BRANCH` | `main` | Branch to create worktrees from and merge PRs into |
+| `$REQUIRED_APPROVALS` | 1 | Minimum approvals for auto-merge |
+| `$MARKDOWN_APPROVALS` | 1 | Approvals for markdown-only PRs |
+| `$RETRO_LOG` | (none) | Path to retrospective log file |
+| Bot reviewer rules | (none) | Per-bot thread resolution patterns |
+| CI patterns | (none) | Known flaky checks, pre-existing failures |
+
+If no Marathon Configuration section exists, use defaults. The template below uses `$BASE_BRANCH` where previous versions hardcoded `develop`.
 
 ---
 
@@ -237,7 +252,7 @@ Report ready tasks and **terminate**. Do NOT launch subagent.
 **Step 1: Setup**
 ```bash
 cd ~/dev/github.com/<org>/<repo>/<repo>-main
-git checkout develop && git pull origin develop
+git checkout $BASE_BRANCH && git pull origin $BASE_BRANCH
 git branch <tag>--<task-id>--<slug>
 mkdir -p ../worktree/<tag>
 git worktree add ../worktree/<tag>/<task-id>--<slug> <tag>--<task-id>--<slug>
@@ -301,15 +316,15 @@ task-master tags use "<tag>" && task-master list --ready --json
 
 #### Ready Criteria (ALL must be true)
 
-1. **Branch in sync** — no merge conflicts with develop
+1. **Branch in sync** — no merge conflicts with `$BASE_BRANCH`
 2. **CI passing** — all checks succeed (or skipped)
 3. **All inline comments addressed** — see thread resolution rules
 4. **No unaddressed conversation comments**
 5. **All review threads resolved**
 
 **Thread resolution rules:**
-- **CodeRabbit**: Fix code, push. Auto-resolves on re-review. **NEVER reply in CodeRabbit threads.**
-- **claude[bot]**: Resolve via GraphQL if addressed. Use jq JSON builder to avoid zsh `$` escaping:
+Follow bot reviewer rules from the project's CLAUDE.md Marathon Configuration. Generic defaults:
+- **Bot reviewers**: Fix code, push. Resolve bot threads via GraphQL if addressed. Use jq JSON builder to avoid zsh `$` escaping:
   ```bash
   jq -n --arg tid "$THREAD_ID" '{"query": "mutation { resolveReviewThread(input: {threadId: \"\($tid)\"}) { thread { isResolved } } }"}' | gh api graphql --input -
   ```
@@ -317,9 +332,9 @@ task-master tags use "<tag>" && task-master list --ready --json
 
 #### Each Iteration
 
-**1. Sync with develop (FIRST):**
+**1. Sync with `$BASE_BRANCH` (FIRST):**
 ```bash
-git fetch origin develop && git merge origin/develop --no-edit
+git fetch origin $BASE_BRANCH && git merge origin/$BASE_BRANCH --no-edit
 ```
 
 **2. Check criteria:**
@@ -359,11 +374,13 @@ Agent(
 
 Working directory: <worktree-path>
 
-Each iteration: merge origin/develop first. Loop until ALL green:
+Each iteration: merge origin/$BASE_BRANCH first. Loop until ALL green:
 1. No merge conflicts  2. CI passing  3. No unresolved inline comments
 4. No unaddressed conversation comments  5. All YOUR review threads resolved
 
-Fix issues, push, block on CI with `gh pr checks <number> --watch --fail-fast` before checking threads.
+Fix issues, push, then spawn a background agent to watch CI:
+  Agent(run_in_background: true, prompt: "Run gh pr checks <number> --watch --fail-fast, then check threads and comments. Return report.")
+Stay responsive to messages while CI runs.
 Report: ready, waiting, or blocked.
 """
 )
@@ -388,8 +405,10 @@ Working directory: <worktree-path>
 ## Flow
 1. Implement using TDD (run tests, fix failures, commit)
 2. Push and create PR
-3. Review loop: merge origin/develop first each iteration, then check all 5 criteria (no merge conflicts, CI passing, no unresolved inline comments, no unaddressed conversation comments, all review threads resolved)
-4. Block on CI with `gh pr checks <number> --watch --fail-fast` before checking threads
+3. Review loop: merge origin/$BASE_BRANCH first each iteration, then check all 5 criteria (no merge conflicts, CI passing, no unresolved inline comments, no unaddressed conversation comments, all review threads resolved)
+4. After pushing, spawn a background agent to watch CI (never block on CI yourself):
+   Agent(run_in_background: true, prompt: "Run gh pr checks <number> --watch --fail-fast, then check threads and comments. Return report.")
+   Stay responsive to messages while CI runs.
 5. Report: PR ready, waiting, or blocked
 """
 )
@@ -524,7 +543,7 @@ jq --arg task "task-<id>" '.tasks |= del(.[$task])' "$TRACK_FILE" > "$TRACK_FILE
 
 **Identify known-flaky checks at marathon start:**
 ```bash
-gh api repos/<owner>/<repo>/branches/develop/protection \
+gh api repos/<owner>/<repo>/branches/$BASE_BRANCH/protection \
   --jq '.required_status_checks.contexts // []'
 ```
 Store non-required check names in `meta.flaky_checks`.
@@ -567,7 +586,7 @@ Task(
 ## Setup
 ```bash
 cd ~/dev/github.com/<org>/<repo>/<repo>-main
-git checkout develop && git pull origin develop
+git checkout $BASE_BRANCH && git pull origin $BASE_BRANCH
 git branch <tag>--<task-id>--<slug>
 mkdir -p ../worktree/<tag>
 git worktree add ../worktree/<tag>/<task-id>--<slug> <tag>--<task-id>--<slug>
@@ -626,46 +645,40 @@ gh pr view --json reviews | jq '.reviews[] | select(.state == "CHANGES_REQUESTED
      gh pr view <number> --json state,mergeStateStatus | jq '{state, mergeStateStatus}'
      ```
      If DIRTY or BLOCKED, fix before entering review loop.
-4. **Review loop** - concurrent monitoring after each push. All 5 green criteria must be met:
-   - No merge conflicts with develop
+4. **Review loop** - non-blocking monitoring after each push. All 5 green criteria must be met:
+   - No merge conflicts with $BASE_BRANCH
    - CI passing
-   - No unresolved inline comments (fix for CodeRabbit - never reply in threads; reply to humans)
+   - No unresolved inline comments (follow bot reviewer rules from CLAUDE.md; reply to humans)
    - No unaddressed conversation comments
    - All your review threads resolved
-5. **After pushing, monitor CI and reviews concurrently** (don't wait for CI to check threads):
-   ```bash
-   # Start CI watch in background
-   gh pr checks <number> --watch --fail-fast &
-   CI_PID=$!
-
-   # While CI runs, check for review threads, comments, and develop drift
-   git fetch origin develop
-   git diff --stat origin/develop...HEAD | tail -1  # check for drift
-
-   # Check unresolved threads (CodeRabbit posts within 2-5 min of push)
-   gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
-     pullRequest(number: <number>) { reviewThreads(first: 50) { nodes {
-       id isResolved path line comments(first: 1) { nodes { author { login } body } }
-     }}}}}'  --jq '.data.repository.pullRequest.reviewThreads.nodes[]
-     | select(.isResolved == false)
-     | {id, author: .comments.nodes[0].author.login, path, line, body: .comments.nodes[0].body[0:200]}'
-
-   # Check conversation comments
-   gh pr view <number> --comments
+5. **After pushing, delegate CI monitoring to a background agent** (never block on CI yourself):
    ```
-   **Fix issues locally while CI runs** - stage changes but batch them:
-   - Review threads with code fixes: fix locally, `git add` but don't push yet
-   - Develop drift: `git merge origin/develop --no-edit`
-   - Bot threads already addressed in local code: resolve via GraphQL immediately (no push needed)
+   Agent(
+     run_in_background: true,
+     prompt: """
+     Monitor PR #<number> for CI completion and review state.
+     Working directory: <worktree-path>
 
-   **When CI finishes** (`wait $CI_PID`):
-   - CI passed + no local fixes staged: check threads one final time, then evaluate REVIEW_CLEAR
-   - CI passed + local fixes staged: push once (batches all thread fixes into one CI cycle)
-   - CI failed: fix CI issues too, then push everything together
+     1. Block on CI: `gh pr checks <number> --watch --fail-fast`
+     2. When CI settles, gather full state:
+        - CI result: `gh pr checks <number> --json name,state,conclusion`
+        - Merge state: `gh pr view <number> --json mergeStateStatus,state`
+        - Unresolved threads: `gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") { pullRequest(number: <number>) { reviewThreads(first: 50) { nodes { id isResolved path line comments(first: 1) { nodes { author { login } body } } } } } } }' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | {id, author: .comments.nodes[0].author.login, path, line, body: .comments.nodes[0].body[0:200]}'`
+        - Conversation comments: `gh pr view <number> --comments --json comments`
+        - Pending checks: `gh pr checks <number> --json state | jq '[.[] | select(.state == "PENDING" or .state == "QUEUED")] | length'`
+     3. Return a structured report with all findings.
+     """
+   )
+   ```
+   **You are now FREE.** Process any lead messages at your turn boundary. The background agent handles CI watching - you never block.
 
-   **This batches fixes into fewer pushes, saving full CI cycles.** A 15-min CI run where CodeRabbit posts at minute 2 no longer wastes 13 minutes of idle time.
+   **When the background agent notification arrives**, act on its report:
+   - CI passed + 0 unresolved threads + 0 comments: evaluate REVIEW_CLEAR criteria
+   - CI passed + threads/comments: fix issues locally, push, spawn a new background watcher
+   - CI failed: fix failures locally, push, spawn a new background watcher
+   - Batch fixes into fewer pushes - fix threads AND CI issues together before pushing
 
-   - **Contradictory bot comments** (e.g., CodeRabbit suggests X, Claude bot suggests opposite) - resolve yourself using your best judgment. Do NOT escalate as BLOCKED. Pick the approach that best fits the codebase patterns and explain your choice in the commit message.
+   - **Contradictory bot comments** - resolve yourself using your best judgment. Do NOT escalate as BLOCKED. Pick the approach that best fits the codebase patterns.
    - **Merge conflicts are routine** - resolve using Known Conflict Patterns. Only escalate if genuinely ambiguous.
    - **After each push**, dismiss stale bot CHANGES_REQUESTED reviews:
      ```bash
@@ -738,7 +751,7 @@ Report team status after spawning:
 2. Decompose: `task-master expand --id=<task-id> --research` (subtasks) or cancel + create new peer tasks (sibling split)
 3. Spawn fresh teammates for resulting tasks
 
-**Lead conflict resolution**: When a teammate is idle and their PR is DIRTY (merge conflict), resolve it directly instead of nudging the teammate. Pull develop, resolve the conflict, push. Faster than round-tripping to an idle teammate (~10 min saved per conflict, validated in tenant-branding and economy-generator).
+**Lead conflict resolution**: When a teammate is idle and their PR is DIRTY (merge conflict), resolve it directly instead of nudging the teammate. Pull `$BASE_BRANCH`, resolve the conflict, push. Faster than round-tripping to an idle teammate (~10 min saved per conflict).
 
 **Non-responsive teammate escalation**: If a teammate ignores a direct instruction (nudge to fix CI, address review feedback, follow lead guidance) or sends a false REVIEW_CLEAR (claims ready but criteria aren't met), don't keep nudging. Shut it down and respawn the same task on opus. One strike — don't give sonnet a second chance on the same task.
 
@@ -772,7 +785,7 @@ If green with 0 unresolved threads, run smart-merge regardless of teammate messa
 
 Triggered by REVIEW_CLEAR, idle teammate with green PR, or human typing "check".
 
-**Known: Stale CodeRabbit CHANGES_REQUESTED.** When `request_changes_workflow` is enabled, CodeRabbit submits CR reviews. When it re-reviews and approves, GitHub does NOT dismiss the old CR. This is a GitHub limitation. Every PR needs stale CR dismissal. Don't investigate — just dismiss.
+**Known: Stale bot CHANGES_REQUESTED.** Some bot reviewers submit CR reviews that GitHub does not auto-dismiss on re-review. Check the project's Marathon Configuration for bot-specific patterns. Default: dismiss any stale bot CHANGES_REQUESTED before merging.
 
 ```bash
 PR=<number>
@@ -797,11 +810,11 @@ gh pr view $PR --json mergeStateStatus,mergedAt,reviews \
 
 **Auto-Merge Criteria (ALL must be true):**
 1. `mergeStateStatus` is `"CLEAN"` — OR `"UNSTABLE"` with only non-required checks failing
-2. At least 2 approvals — OR 1 approval for markdown-only PRs (CodeRabbit skips them)
+2. At least `$REQUIRED_APPROVALS` approvals — OR `$MARKDOWN_APPROVALS` for markdown-only PRs (some bot reviewers skip them)
 3. Zero non-dismissed changes-requested reviews
-4. **Develop is healthy** — if the PR's CI failures exist on develop too (pre-existing), do NOT merge and compound the problem. Instead, spawn a separate worktree/PR to fix the failing tests on develop first, then rebase and merge the original PR.
+4. **Base branch is healthy** — if the PR's CI failures exist on `$BASE_BRANCH` too (pre-existing), do NOT merge and compound the problem. Instead, spawn a separate worktree/PR to fix the failing tests on `$BASE_BRANCH` first, then rebase and merge the original PR.
 
-**UNSTABLE handling:** If `mergeStateStatus == "UNSTABLE"`, check failing checks against `meta.flaky_checks`. If ALL failing checks are non-required AND not pre-existing on develop, treat as merge-eligible. Report: "Merging with UNSTABLE — only non-required checks failing: <names>". If failures ARE pre-existing on develop, fix develop first (criterion 4).
+**UNSTABLE handling:** If `mergeStateStatus == "UNSTABLE"`, check failing checks against `meta.flaky_checks` and any CI patterns from the project's Marathon Configuration. If ALL failing checks are non-required AND not pre-existing on `$BASE_BRANCH`, treat as merge-eligible. Report: "Merging with UNSTABLE — only non-required checks failing: <names>". If failures ARE pre-existing on `$BASE_BRANCH`, fix it first (criterion 4).
 
 **UNKNOWN handling:** GitHub sometimes returns `mergeStateStatus: "UNKNOWN"` even when all checks pass. If UNKNOWN but CI all green and 0 unresolved threads, retry up to 3 times with 30s backoff. If still UNKNOWN after retries, treat as CLEAN and proceed (log the override).
 
@@ -867,7 +880,7 @@ Never reuse a teammate for a different task. Shutdown + spawn fresh.
 
 The lead operates as a **tech lead running a sprint** — not a task router.
 
-**The lead delegates, never executes.** During a marathon, the lead's job is to coordinate: merge PRs, resolve threads, spawn teammates, monitor status. Any long-running work (tests, coverage, code exploration, implementation) must be delegated to a teammate or subagent. Running `go test` or similar locally as lead wastes ~20 min and blocks coordination.
+**The lead delegates, never executes.** During a marathon, the lead's job is to coordinate: merge PRs, spawn teammates, monitor status. Any work that takes more than ~30 seconds (tests, coverage, code exploration, implementation, thread resolution) must be delegated to a teammate or subagent. The lead must stay responsive to teammate messages at all times. The moment the lead starts executing, messages queue up and momentum stalls.
 
 **Trusted decisions (no human approval needed):**
 - Defer or cancel tasks that become irrelevant
@@ -912,7 +925,7 @@ Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`.
    - Criteria met (with PR evidence)
    - Criteria not met or partially met (flag for user)
    - Scope that was delivered beyond the original PRD (emergent work)
-4. Read the retro log: `~/.claude/projects/-Users-ben-dev-github-com-meridianhub-meridian/memory/marathon-retros.md`
+4. Read the retro log (path from Marathon Configuration `$RETRO_LOG`, or skip if not configured)
 5. Run retrospective using the structured format below
 6. Append this marathon to the retro log (Marathon History + update Template Changes validation)
 

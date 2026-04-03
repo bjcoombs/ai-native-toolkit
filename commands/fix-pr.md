@@ -6,15 +6,15 @@ Enter autonomous PR review loop for the current branch's PR. Loops until the PR 
 
 ## Ready Criteria (ALL must be true)
 
-1. **Branch in sync** — no merge conflicts with develop
+1. **Branch in sync** — no merge conflicts with base branch
 2. **CI passing** — all checks succeed (or skipped)
 3. **All inline comments addressed** — see thread resolution rules
 4. **No unaddressed conversation comments** — actionable feedback responded to
 5. **All review threads resolved** — no unresolved threads remain
 
 **Thread resolution rules:**
-- **CodeRabbit threads**: Fix the code and push. CodeRabbit re-reviews automatically and resolves its own threads. **NEVER reply in CodeRabbit threads** — CodeRabbit ignores replies from other bots.
-- **claude[bot] threads**: Resolve directly via GraphQL if addressed. Use jq JSON builder (avoids zsh `$` escaping):
+Follow bot reviewer rules from the project's CLAUDE.md Marathon Configuration. Generic defaults:
+- **Bot threads**: Fix the code and push. Resolve via GraphQL if addressed. Use jq JSON builder (avoids zsh `$` escaping):
   ```bash
   jq -n --arg tid "$THREAD_ID" '{"query": "mutation { resolveReviewThread(input: {threadId: \"\($tid)\"}) { thread { isResolved } } }"}' | gh api graphql --input -
   ```
@@ -35,10 +35,11 @@ gh pr view --json reviews | jq '.reviews[] | select(.state == "CHANGES_REQUESTED
 
 ## Each Iteration
 
-### Step 1: Sync with develop (FIRST, every iteration)
+### Step 1: Sync with base branch (FIRST, every iteration)
 
 ```bash
-git fetch origin develop && git merge origin/develop --no-edit
+BASE=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null || echo "main")
+git fetch origin $BASE && git merge origin/$BASE --no-edit
 # If conflicts: resolve them, commit, push
 # If can't auto-resolve: report blocked with details
 ```
@@ -48,17 +49,33 @@ git fetch origin develop && git merge origin/develop --no-edit
 - **Barrel exports** (e.g., shared/index.ts): Accept both sides — each adds its own export
 - **Config/manifest files**: Accept both sides unless the same key is modified differently (then ask)
 
-### Step 2: Check all criteria concurrently
+### Step 2: Check all criteria - delegate CI to background agent
 
 ```bash
 PR=$(gh pr view --json number --jq '.number')
+```
 
-# Start CI watch in background
-gh pr checks $PR --watch --fail-fast &
-CI_PID=$!
+**Spawn a background agent to watch CI** (never block on CI yourself):
+```
+Agent(
+  run_in_background: true,
+  prompt: """
+  Monitor PR #$PR for CI completion and review state.
 
-# While CI runs, check threads and comments (don't wait for CI)
-# Unresolved review threads (covers inline comments from all reviewers)
+  1. Block on CI: `gh pr checks $PR --watch --fail-fast`
+  2. When CI settles, gather:
+     - CI result: `gh pr checks $PR --json name,state,conclusion`
+     - Unresolved threads: `gh api graphql ...` (all unresolved with path/line/author/body)
+     - Conversation comments: `gh pr view $PR --comments --json comments`
+     - Pending checks count
+  3. Return structured report.
+  """
+)
+```
+
+**While CI runs (you are FREE)**, do an immediate check for threads and comments:
+```bash
+# Quick thread check - fix what you can now
 gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
   pullRequest(number: '$PR') { reviewThreads(first: 50) { nodes {
     id isResolved path line comments(first: 1) { nodes { author { login } body } }
@@ -66,11 +83,8 @@ gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
   | select(.isResolved == false)
   | {id, author: .comments.nodes[0].author.login, path, line, body: .comments.nodes[0].body[0:200]}'
 
-# For each unresolved thread with a path, check current local code to see if already fixed:
-# Read the local file at the referenced line - if the concern is addressed in the current
-# working tree, resolve the thread directly (for bot threads) instead of pushing and waiting
-# for a re-review cycle.
-# Example: sed -n '<line-5>,<line+5>p' <path>
+# For each unresolved thread with a path, check local code to see if already fixed.
+# If addressed, resolve bot threads via GraphQL immediately (no push needed).
 
 # Conversation comments
 gh pr view $PR --comments
@@ -79,25 +93,25 @@ gh pr view $PR --comments
 ### Step 3: Fix and batch
 
 **Fix issues locally while CI runs** - stage changes but don't push yet:
-- Unresolved bot threads (CodeRabbit, claude[bot]) - **Check local code first** at the referenced path:line. If already addressed, resolve via GraphQL immediately (no push needed). If not, fix the code and `git add`.
+- Unresolved bot threads - **Check local code first** at the referenced path:line. If already addressed, resolve via GraphQL immediately (no push needed). If not, fix the code and `git add`. Follow bot reviewer rules from CLAUDE.md Marathon Configuration.
 - Unresolved human threads - Fix code, reply inline, @mention reviewer
 - Actionable conversation comments - Respond or fix
 - Merge conflicts - Resolve using patterns above, or report blocked if ambiguous
 
-**When CI finishes** (`wait $CI_PID`):
+**When background agent notification arrives** (CI settled):
 - CI passed + no local fixes staged: evaluate whether all 5 criteria are met
 - CI passed + local fixes staged: push once (batches all thread fixes into one CI cycle)
-- CI failed: fix CI issues too, then push everything together
+- CI failed: fix CI issues too, then push everything together, spawn new background watcher
 - **ALL 5 criteria met** - Report ready, STOP
 
-**This batches fixes into fewer pushes.** A 15-min CI run where CodeRabbit posts at minute 2 no longer wastes 13 minutes idle - thread fixes are ready before CI finishes, saving a full CI cycle.
+**This keeps you responsive.** While CI runs, you process threads and comments. When CI settles, you act on the full report. No blocking waits.
 
 ---
 
 ## Protocol
 
 1. **Autonomous Loop** (DO NOT ask for permission between iterations):
-   - Sync develop, check all 5 criteria, fix issues, push
+   - Sync base branch, check all 5 criteria, fix issues, push
    - Report: "Iteration N: Fixed X issues" or "Iteration N: Waiting for CI"
    - Loop until all green
 
@@ -115,19 +129,19 @@ gh pr view $PR --comments
 
 ```
 🔄 Iteration 1: Checking PR #123...
-   ⚠️ Merge conflict with develop in App.tsx — resolving (accept both sides)
+   ⚠️ Merge conflict with base branch in App.tsx — resolving (accept both sides)
    ❌ CI: TypeScript errors in user.service.ts
    ❌ CodeRabbit: 2 unresolved threads (missing error handling)
    Fixing...
 
 🔄 Iteration 2: Checking PR #123...
-   ✅ In sync with develop
+   ✅ In sync with base branch
    ✅ CI passing
    ❌ CodeRabbit: 1 remaining thread (async pattern)
    Fixing...
 
 🔄 Iteration 3: Checking PR #123...
-   ✅ In sync with develop
+   ✅ In sync with base branch
    ✅ CI passing
    ✅ All threads resolved
    ✅ No unaddressed comments
@@ -172,6 +186,6 @@ jq -n --arg tid "$THREAD_ID" '{"query": "mutation { resolveReviewThread(input: {
 ## Important
 
 - **NO permission needed** between iterations — keep looping autonomously
-- **Sync develop FIRST** every iteration — prevents cascade conflicts
+- **Sync base branch FIRST** every iteration — prevents cascade conflicts
 - **Stop criteria**: ALL 5 criteria green (not just CI + comments)
 - **Max iterations**: 10 (ask for help after that)
