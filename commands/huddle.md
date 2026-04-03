@@ -32,26 +32,14 @@ If called without arguments, respond with:
 
 Assess the topic to determine:
 
-1. **Team size** (2-4 members, default 3). Prefer 3 - a fourth only adds value when perspectives are truly orthogonal. More members = longer phases and more nudging required.
-2. **Professional lenses** that create productive tension for THIS topic. Pick identities whose perspectives will surface genuinely different observations. Avoid overlapping lenses (e.g., SRE + Platform Engineer have high overlap - pick one).
-3. **Hat sequence** based on problem type (reuse sequences from `/6hats`):
+1. **Team size**: Odd numbers (3, 5) give natural voting balance for dissent. 3 is the sweet spot - a 5th only adds value when perspectives are truly orthogonal. More members = longer phases and more nudging required. Use your judgement.
+2. **Professional lenses** that create productive tension for THIS topic. Pick identities whose perspectives will surface genuinely different observations. Avoid overlapping lenses. You know what expertise fits - choose what creates the most useful disagreement.
+3. **Hat sequence** based on problem type:
    - Simple: White → Black (2 phases, ~20 min)
    - Moderate: White → Red → Black → Yellow → Green (5 phases, ~50 min)
    - Complex: White → Red → Black → Yellow → Green (5 phases, ~70 min)
-   - **Red Hat is always available.** It gives permission to ask "what does my gut say?" - often the fastest shortcut to clarity. Consider it especially when there are human actors affected (on-call engineers, future maintainers, affected teams), or when something feels off but you can't articulate why yet.
+   - **Red Hat is always available.** It gives permission to ask "what does my gut say?" - often the fastest shortcut to clarity. Consider it especially when there are human actors affected, or when something feels off but you can't articulate why yet.
    - **Target 45-90 minutes total.** If it's taking longer, reduce phases or team size.
-
-**Lens selection examples** (not exhaustive — choose what fits):
-
-| Topic Type | Useful Lenses |
-|------------|---------------|
-| Production incident | SRE, Backend Engineer, DBA |
-| New feature | Product Manager, Engineer, Designer |
-| Architecture decision | Backend, Frontend, Security, Platform |
-| Cost optimization | Finance/Ops, SRE, Engineering |
-| API design | API Consumer, Backend Engineer, Security |
-| Migration | DBA, Backend Engineer, QA |
-| Team/process change | Engineering Manager, IC Engineer, Product |
 
 Announce your team composition and sequence to the user before proceeding.
 
@@ -281,7 +269,7 @@ Use `/6hats` for quick assessments. Use `/huddle` when the topic warrants delibe
 ## Lessons Learned
 
 - **Embed first phase in spawn prompt.** Members who are spawned with "read the material and wait" go idle. Members who are spawned with "read the material and immediately investigate X" start working.
-- **3 members is the sweet spot.** A fourth member adds ~50% more wall clock time but only ~15% more signal. Use 4 only when perspectives are truly orthogonal.
+- **Odd numbers for voting balance.** 3 is the sweet spot. 5 only when perspectives are truly orthogonal - each additional member adds wall clock time faster than signal.
 - **Don't skip Red Hat reflexively.** It's permission to ask "what does my gut say?" - often the fastest shortcut to clarity. Especially valuable when people are affected or something feels off.
 - **Move on without stragglers.** One nudge per straggler. If they don't respond, proceed with N-1 findings. Don't block the meeting.
 - **Concrete phase prompts, not vague ones.** "What are the risks?" produces confusion. "The dunning race condition and demo conflict are the two biggest risks from Black Hat - how do we fix them?" produces action.
