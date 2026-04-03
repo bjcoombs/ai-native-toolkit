@@ -291,24 +291,13 @@ TASK_ID="${TASK_DIR%%--*}"
 
 ### Mode: Cleanup
 
-**CRITICAL: cd to repo root BEFORE launching subagent.** The subagent will delete the worktree.
-
-```bash
-cd ~/dev/github.com/<org>/<repo> && pwd
-```
+cd to repo root first (subagent will delete the worktree).
 
 ```
-Task(
+Agent(
   subagent_type: "general-purpose",
   model: "sonnet",
-  prompt: """
-# Cleanup <tag>.<task-id>
-
-PR merged. Clean up in this order:
-1. Mark task done: `cd ~/dev/github.com/<org>/<repo> && task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=done`
-2. Remove worktree from <repo>-main: `cd <repo>-main && git worktree remove --force ../worktree/<tag>/<task-id>--<slug>`
-3. Delete branch: `git branch -D <tag>--<task-id>--<slug>`
-"""
+  prompt: "PR merged for <tag>.<task-id>. From ~/dev/github.com/<org>/<repo>: mark task done, remove worktree, delete branch."
 )
 ```
 
@@ -404,23 +393,7 @@ Report: ready, waiting, or blocked.
 Agent(
   subagent_type: "general-purpose",
   model: "sonnet",
-  prompt: """
-# Implement <tag>.<task-id>: <task-title>
-
-Working directory: <worktree-path>
-
-## Requirements
-<task-description-and-subtasks>
-
-## Flow
-1. Implement using TDD (run tests, fix failures, commit)
-2. Push and create PR
-3. Review loop: merge origin/$BASE_BRANCH first each iteration, then check all 5 criteria (no merge conflicts, CI passing, no unresolved inline comments, no unaddressed conversation comments, all review threads resolved)
-4. After pushing, spawn a background agent to watch CI (never block on CI yourself):
-   Agent(run_in_background: true, prompt: "Run gh pr checks <number> --watch --fail-fast, then check threads and comments. Return report.")
-   Stay responsive to messages while CI runs.
-5. Report: PR ready, waiting, or blocked
-"""
+  prompt: "Implement <tag>.<task-id>: <task-title> in <worktree-path>. Requirements: <task-description-and-subtasks>. TDD, push, create PR, review loop (5 criteria: no conflicts, CI green, no unresolved threads/comments), background CI watcher. Report: ready, waiting, or blocked."
 )
 ```
 
@@ -560,13 +533,6 @@ Store non-required check names in `meta.flaky_checks`.
 
 ### Step 3: Spawn Teammates
 
-**Pre-spawn: Verify sacred dir is clean:**
-```bash
-cd ~/dev/github.com/<org>/<repo>/<repo>-main
-git status --porcelain | head -5
-```
-If dirty (from unrelated work in another terminal), stash or warn before spawning. Teammates branch from this directory — dirty state propagates.
-
 **Pre-spawn: Check for already-completed work:**
 Before spawning Wave 1, check recent merged PRs for task keywords to avoid spawning work that's already done:
 ```bash
@@ -594,123 +560,36 @@ Task(
 # Implement <tag>.<task-id>: <task-title>
 
 ## Setup
-```bash
-cd ~/dev/github.com/<org>/<repo>/<repo>-main
-git checkout $BASE_BRANCH && git pull origin $BASE_BRANCH
-git branch <tag>--<task-id>--<slug>
-mkdir -p ../worktree/<tag>
-git worktree add ../worktree/<tag>/<task-id>--<slug> <tag>--<task-id>--<slug>
-cd ~/dev/github.com/<org>/<repo>
-task-master tags use "<tag>" && task-master set-status --id=<task-id> --status=in-progress
-cd ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug>
-```
+Create worktree from $BASE_BRANCH, set task in-progress, cd to worktree. Standard TM worktree pattern: `worktree/<tag>/<task-id>--<slug>`.
 
 ## Requirements
 <task-description-and-subtasks from task-master show>
 
 ## Architectural Direction
-<Include any architectural guidance, design decisions, or constraints from the lead HERE in the
-first message. Do NOT send architectural direction as a follow-up — teammates may lose context
-between messages. If the lead has opinions about approach, patterns to follow, or files to
-reference, they go here.>
+<Include architectural guidance, design decisions, or constraints from the lead HERE in the
+first message. Teammates may lose context between messages.>
 
 ## Project Guidelines
-<Include relevant sections from the repo's CLAUDE.md — testing patterns, coding standards, common
-gotchas. This prevents discovering project conventions through CI failures.>
+<Include relevant sections from the repo's CLAUDE.md - testing patterns, coding standards.>
 
-## Shell Pitfalls
-**Never use `gh ... --jq` with complex filters.** Always pipe to `jq`:
-```bash
-# WRONG: gh pr view --json reviews --jq '.reviews[] | select(.state == "CHANGES_REQUESTED")'
-# RIGHT:
-gh pr view --json reviews | jq '.reviews[] | select(.state == "CHANGES_REQUESTED")'
-```
-
-**Use positive jq filters, not negative.** zsh escapes `!=` to `\!=`, breaking filters silently:
-```bash
-# WRONG: select(.conclusion != "SUCCESS")   — zsh mangles !=
-# RIGHT: select(.conclusion == "FAILURE")   — positive match, shell-safe
-```
+## Shell Rules
+Always pipe `gh` output to `jq` (never use `gh --jq` with complex filters). Use positive jq filters (`== "FAILURE"` not `!= "SUCCESS"`) - zsh mangles `!=`.
 
 ## Known Conflict Patterns
-<If $HOT_FILES identified, include here>
-- **Import/route files** (e.g., App.tsx, index.ts): Accept BOTH sides — additions are additive.
-- **Barrel exports** (e.g., shared/index.ts): Accept both sides.
-- **Config/manifest files**: Accept both sides unless same key modified differently (then escalate).
-- **JSX return blocks / component render methods**: Do NOT attempt line-by-line resolution. Both sides may add children, tabs, panels to the same component — requires understanding the component structure holistically. **Escalate immediately** with BLOCKED message.
-- **Same-line conflicts** (both sides modify identical lines differently): **Escalate immediately.** Do not guess — message lead with the file, line range, and both versions.
+<If $HOT_FILES identified, include here. Otherwise omit.>
+Additive files (imports, barrel exports, routes): accept both sides. Same-line conflicts or complex JSX blocks: escalate immediately with file, line range, and both versions.
 
 ## Workflow
-1. **Implement using TDD**: Write failing tests, make them pass, refactor. Commit incrementally.
-2. **Push commits incrementally** for backup. Do NOT create a PR yet.
-3. **Before creating a PR**, check if one already exists:
-   ```bash
-   gh pr list --head "<branch-name>" --state all --json number,state,mergedAt
-   ```
-   - PR exists and merged → your work is done. Message lead and wait idle.
-   - PR exists and open → use that PR.
-   - No PR → create one, then set TM status to review.
-   - **After creating/finding PR**, verify state:
-     ```bash
-     gh pr view <number> --json state,mergeStateStatus | jq '{state, mergeStateStatus}'
-     ```
-     If DIRTY or BLOCKED, fix before entering review loop.
-4. **Review loop** - non-blocking monitoring after each push. All 5 green criteria must be met:
-   - No merge conflicts with $BASE_BRANCH
-   - CI passing
-   - No unresolved inline comments (follow bot reviewer rules from CLAUDE.md; reply to humans)
-   - No unaddressed conversation comments
-   - All your review threads resolved
-5. **After pushing, delegate CI monitoring to a background agent** (never block on CI yourself):
-   ```
-   Agent(
-     run_in_background: true,
-     prompt: """
-     Monitor PR #<number> for CI completion and review state.
-     Working directory: <worktree-path>
-
-     1. Block on CI: `gh pr checks <number> --watch --fail-fast`
-     2. When CI settles, gather full state:
-        - CI result: `gh pr checks <number> --json name,state,conclusion`
-        - Merge state: `gh pr view <number> --json mergeStateStatus,state`
-        - Unresolved threads: `gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") { pullRequest(number: <number>) { reviewThreads(first: 50) { nodes { id isResolved path line comments(first: 1) { nodes { author { login } body } } } } } } }' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | {id, author: .comments.nodes[0].author.login, path, line, body: .comments.nodes[0].body[0:200]}'`
-        - Conversation comments: `gh pr view <number> --comments --json comments`
-        - Pending checks: `gh pr checks <number> --json state | jq '[.[] | select(.state == "PENDING" or .state == "QUEUED")] | length'`
-     3. Return a structured report with all findings.
-     """
-   )
-   ```
-   **You are now FREE.** Process any lead messages at your turn boundary. The background agent handles CI watching - you never block.
-
-   **When the background agent notification arrives**, act on its report:
-   - CI passed + 0 unresolved threads + 0 comments: evaluate REVIEW_CLEAR criteria
-   - CI passed + threads/comments: fix issues locally, push, spawn a new background watcher
-   - CI failed: fix failures locally, push, spawn a new background watcher
-   - Batch fixes into fewer pushes - fix threads AND CI issues together before pushing
-
-   - **Contradictory bot comments** - resolve yourself using your best judgment. Do NOT escalate as BLOCKED. Pick the approach that best fits the codebase patterns.
-   - **Merge conflicts are routine** - resolve using Known Conflict Patterns. Only escalate if genuinely ambiguous.
-   - **After each push**, dismiss stale bot CHANGES_REQUESTED reviews:
-     ```bash
-     gh api repos/<owner>/<repo>/pulls/<number>/reviews \
-       --jq '.[] | select(.state == "CHANGES_REQUESTED" and (.user.login | endswith("[bot]"))) | .id' \
-     | while read RID; do gh api repos/<owner>/<repo>/pulls/<number>/reviews/$RID/dismissals \
-       --method PUT -f message="Stale bot review" -f event="DISMISS"; done
-     ```
-6. **Before reporting REVIEW_CLEAR**, verify ALL criteria via API (not just merge state). This is a hard gate — do NOT skip it:
-   ```bash
-   # Merge state
-   gh pr view <number> --json mergeStateStatus,state | jq '{mergeStateStatus, state}'
-   # CI fully complete (0 pending - don't report while checks still running)
-   PENDING=$(gh pr checks <number> --json state | jq '[.[] | select(.state == "PENDING" or .state == "QUEUED")] | length')
-   echo "Pending checks: $PENDING"
-   # Unresolved thread count (MUST be 0)
-   UNRESOLVED=$(gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") {
-     pullRequest(number: <number>) { reviewThreads(first: 100) { nodes { isResolved } } }
-   }}' | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')
-   echo "Unresolved threads: $UNRESOLVED"
-   ```
-   Only report REVIEW_CLEAR if `mergeStateStatus` is CLEAN/UNSTABLE **AND** `$PENDING` = 0 **AND** `$UNRESOLVED` = 0. If any fail, fix and loop again. **Do NOT report REVIEW_CLEAR and then go idle** - the lead trusts this signal to merge without re-verifying.
+1. **Implement using TDD**. Push commits incrementally for backup.
+2. **Before creating PR**, check for existing: `gh pr list --head "<branch-name>" --state all --json number,state,mergedAt`
+   - Merged → message lead, wait idle. Open → use it. None → create one.
+3. **Review loop** - all 5 criteria must be green:
+   No merge conflicts | CI passing | No unresolved inline comments | No unaddressed conversation comments | All review threads resolved
+4. **After pushing, spawn background CI watcher** (never block on CI yourself):
+   `Agent(run_in_background: true, prompt: "Run gh pr checks <number> --watch --fail-fast, then check threads/comments/merge state. Return structured report.")`
+   Stay responsive to lead messages while CI runs.
+5. **When background agent reports**: fix issues, batch fixes into fewer pushes, spawn new watcher after each push. Dismiss stale bot CHANGES_REQUESTED reviews after each push. Contradictory bot comments - resolve yourself, don't escalate. Merge conflicts - resolve using conflict patterns, only escalate if genuinely ambiguous.
+6. **Before reporting REVIEW_CLEAR**, verify ALL criteria via API: `mergeStateStatus` CLEAN/UNSTABLE, 0 pending checks, 0 unresolved threads. This is a hard gate - the lead trusts this signal to merge without re-verifying.
 
 ## Communication
 Only message the lead for **meaningful events**:
@@ -1006,26 +885,3 @@ When `$MARATHON_MODE` but `$TEAMS_AVAILABLE` is `false`, use parallel subagents 
   └─ No context → report ready tasks
 ```
 
----
-
-## Task Status Reference
-
-| Status | Meaning |
-|--------|---------|
-| pending | Not started |
-| in-progress | Currently being worked on |
-| review | Implementation complete, PR pending merge |
-| done | PR merged, work verified |
-| blocked | Cannot proceed due to external dependency |
-| deferred | Postponed |
-| cancelled | Will not be done |
-
-**Lifecycle:**
-```
-Start → pending → in-progress
-Subtask complete → review (NOT done)
-PR merged → done (parent task)
-
-Marathon: Lead smart-merges → cleanup → done
-Single: Human merges → /tm → done
-```
