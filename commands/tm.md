@@ -40,7 +40,17 @@ Read the repo's CLAUDE.md for a `## Marathon Configuration` section. This provid
 | Bot reviewer rules | (none) | Per-bot thread resolution patterns |
 | CI patterns | (none) | Known flaky checks, pre-existing failures |
 
-If no Marathon Configuration section exists, use defaults. The template below uses `$BASE_BRANCH` where previous versions hardcoded `develop`.
+If no Marathon Configuration section exists, **prompt the user to set one up before starting marathon mode**:
+```
+No Marathon Configuration found in this project's CLAUDE.md.
+
+For best results, add a ## Marathon Configuration section to your project's CLAUDE.md.
+Run `/tm-marathon-config-example` to see the template, then copy and customize it.
+
+Proceeding with defaults: base branch=main, 1 approval, no bot reviewer rules.
+```
+
+Defaults apply for non-marathon use (single task mode, planning mode) without prompting. The template below uses `$BASE_BRANCH` where previous versions hardcoded `develop`.
 
 ---
 
