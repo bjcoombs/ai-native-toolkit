@@ -223,16 +223,16 @@ After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. 
 
 ### Step 6: Shutdown the Team
 
-After delivering the verdict, gracefully shut down all team members:
+After delivering the verdict:
 
-```
-SendMessage(
-  to: "<member-name>",
-  message: { type: "shutdown_request", reason: "Analysis complete" }
-)
-```
+1. Send shutdown requests to each member:
+   ```
+   SendMessage(to: "<member-name>", message: { type: "shutdown_request", reason: "Analysis complete" })
+   ```
+2. Wait for all shutdown approvals
+3. Call `TeamDelete()` to clear team context from the session
 
-Do this for each member.
+**TeamDelete is mandatory.** Without it, teamContext persists and blocks future team creation in this session. The sequence is always: shutdown teammates → wait for approvals → TeamDelete.
 
 ## Facilitation Principles
 
