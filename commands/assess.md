@@ -9,15 +9,6 @@ Assess how ready this codebase is for sustained AI agent contribution using the 
 
 **$ARGUMENTS**
 
-## How This Works
-
-Scan the codebase for evidence of each contract layer. For each layer, determine:
-- **Present**: Evidence found and functional
-- **Partial**: Some evidence but incomplete or weak
-- **Missing**: No evidence found
-
-Then score, report gaps, and recommend next steps.
-
 ## Step 1: Determine Repo Root
 
 ```bash
@@ -372,15 +363,4 @@ These are "after you've done the top 3" items.>
 tools, and patterns. Acknowledge existing infrastructure.>
 ```
 
-## Principles
-
-- **Evidence-based**: Every assessment is backed by specific files or checks found (or not found)
-- **Actionable**: Recommendations include concrete first steps, not vague advice
-- **Fair**: A repo doesn't need all 7 layers to be useful. Score reflects where they are, recommendations show the path forward
-- **Non-judgmental**: A score of 2 isn't "bad" — it's "here, with a clear path to 5"
-- **Fast**: This should complete in under 2 minutes. Scan, don't deep-read
-
-## No Arguments Behavior
-
-If no path is provided, assess the current repository (from git root).
-If not in a git repo, ask: "Which repository would you like me to assess?"
+Complete the full assessment in under 2 minutes. Scan, don't deep-read.
