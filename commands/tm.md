@@ -808,9 +808,10 @@ Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`.
 
 ### Step 6: Completion and Retrospective
 
-1. Shutdown remaining teammates
-2. `TeamDelete()`
-3. **PRD delivery check** — re-read the original PRD/issue and its success criteria. Cross-reference against merged PRs. Report:
+1. Send `shutdown_request` to each remaining teammate
+2. Wait for all shutdown approvals
+3. Call `TeamDelete()` - if it fails with "active members", verify panes are dead and retry. **TeamDelete is mandatory** - without it, teamContext persists and blocks future team creation in this session.
+4. **PRD delivery check** — re-read the original PRD/issue and its success criteria. Cross-reference against merged PRs. Report:
    - Criteria met (with PR evidence)
    - Criteria not met or partially met (flag for user)
    - Scope that was delivered beyond the original PRD (emergent work)
