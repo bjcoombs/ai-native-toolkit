@@ -3,28 +3,22 @@ description: "Huddle - structured multi-perspective analysis with professional l
 argument-hint: "<topic or problem to analyze>"
 ---
 
-# Six Thinking Hats: Team Meeting Mode
+# Huddle - Six Thinking Hats Analysis
 
-A faithful implementation of De Bono's Six Thinking Hats using Team Mode. Blue Hat chairs a meeting of professional experts who cycle through hat phases together, discussing peer-to-peer and calling hat agents for deep investigation.
+Scales from a solo gut check to a board-level deliberation using Fibonacci team sizing.
 
 ## Architecture
 
-```
-You (Blue Hat — Chair / Team Lead)
-  └── Team Members (persistent professional lenses)
-        └── Hat Agents (called by members during each phase)
-```
+**You are Blue Hat** - the chair. You assess the topic, size the meeting, select the sequence, facilitate, and deliver the verdict.
 
-**You are Blue Hat.** You chair the meeting, select the team composition, facilitate each phase, steer discussion, and deliver the verdict.
+**Hat agents** (`white-hat`, `red-hat`, `black-hat`, `yellow-hat`, `green-hat`) are methodology specialists in `~/.claude/agents/`.
 
-**Team members** are persistent general-purpose agents with professional identities. They stay for the entire meeting and cycle through all hat phases. They can call hat agents (`white-hat`, `red-hat`, `black-hat`, `yellow-hat`, `green-hat`) as subagents for deep investigation.
-
-**Hat agents** are the existing methodology specialists in `~/.claude/agents/`. Team members invoke them during the relevant phase to apply that hat's thinking methodology through their professional lens.
+**Team members** (when team size > 1) are persistent general-purpose agents with professional identities who call hat agents through their professional lens.
 
 ## No Arguments Behavior
 
 If called without arguments, respond with:
-"What topic or problem would you like the team to analyze?"
+"What topic or problem would you like to analyze?"
 
 ## Protocol
 
@@ -32,16 +26,35 @@ If called without arguments, respond with:
 
 Assess the topic to determine:
 
-1. **Team size**: Odd numbers (3, 5) give natural voting balance for dissent. 3 is the sweet spot - a 5th only adds value when perspectives are truly orthogonal. More members = longer phases and more nudging required. Use your judgement.
-2. **Professional lenses** that create productive tension for THIS topic. Pick identities whose perspectives will surface genuinely different observations. Avoid overlapping lenses. You know what expertise fits - choose what creates the most useful disagreement.
+1. **Team size** - Fibonacci numbers scale naturally with complexity:
+
+   | Size | Mode | Use |
+   |------|------|-----|
+   | **1** | Solo | Quick analysis. You spawn hat agents in parallel, synthesize yourself. Fast (~5 min). |
+   | **2** | Debate | Two opposing lenses. Forced productive tension. |
+   | **3** | Huddle | Sweet spot. Most deliberations. |
+   | **5** | Panel | Broader perspectives. Cross-functional decisions. |
+   | **8+** | Board | Major strategic decisions. Use sub-groups that report to the chair. |
+
+   Odd numbers (1, 3, 5, 13) give natural voting balance. Even numbers (2, 8) force productive tension through forced disagreement. Use your judgement.
+
+2. **Professional lenses** (for size 2+) that create productive tension for THIS topic. You know what expertise fits - choose what creates the most useful disagreement.
+
 3. **Hat sequence** based on problem type:
-   - Simple: White → Black (2 phases, ~20 min)
-   - Moderate: White → Red → Black → Yellow → Green (5 phases, ~50 min)
-   - Complex: White → Red → Black → Yellow → Green (5 phases, ~70 min)
-   - **Red Hat is always available.** It gives permission to ask "what does my gut say?" - often the fastest shortcut to clarity. Consider it especially when there are human actors affected, or when something feels off but you can't articulate why yet.
-   - **Target 45-90 minutes total.** If it's taking longer, reduce phases or team size.
+   - Quick: Red only (gut check, 30 seconds)
+   - Simple: White → Black (2 phases)
+   - Moderate: White → Red → Black → Yellow → Green (5 phases)
+   - Complex: White → Red → Black → Yellow → Green (5 phases, deeper investigation)
+   - **Red Hat is always available.** Permission to ask "what does my gut say?"
+   - Adapt the sequence to the topic. These are guides, not straitjackets.
 
 Announce your team composition and sequence to the user before proceeding.
+
+### Solo Mode (Size 1)
+
+Spawn hat agents in parallel based on your chosen sequence. Each agent operates independently on the topic. Collect results, then synthesize as Blue Hat. No team, no discussion - just parallel analysis.
+
+For team modes (size 2+), continue to Step 2.
 
 ### Step 2: Create the Team
 
@@ -253,30 +266,19 @@ Do this for each member.
 - The sequence is a guide, not a straitjacket
 - **Target total meeting time**: 45-90 minutes. If approaching 90 min, compress remaining phases or go straight to verdict.
 
-## Differences from /6hats
-
-| Aspect | /6hats (parallel) | /huddle (meeting) |
-|--------|-------------------|----------------------|
-| Speed | Fast (~5 min) | 45-90 min target |
-| Interaction | None (isolated agents) | Rich (peer-to-peer dialogue) |
-| Diversity | Hat methodology only | Hat methodology x professional lens |
-| Emergence | None | Ideas build on each other |
-| Blue Hat | Synthesizer at end | Active facilitator throughout |
-| Faithfulness to De Bono | Low | High |
-
-Use `/6hats` for quick assessments. Use `/huddle` when the topic warrants deliberation and you have 60-90 minutes.
-
 ## Lessons Learned
 
-- **Embed first phase in spawn prompt.** Members who are spawned with "read the material and wait" go idle. Members who are spawned with "read the material and immediately investigate X" start working.
-- **Odd numbers for voting balance.** 3 is the sweet spot. 5 only when perspectives are truly orthogonal - each additional member adds wall clock time faster than signal.
-- **Don't skip Red Hat reflexively.** It's permission to ask "what does my gut say?" - often the fastest shortcut to clarity. Especially valuable when people are affected or something feels off.
-- **Move on without stragglers.** One nudge per straggler. If they don't respond, proceed with N-1 findings. Don't block the meeting.
-- **Concrete phase prompts, not vague ones.** "What are the risks?" produces confusion. "The dunning race condition and demo conflict are the two biggest risks from Black Hat - how do we fix them?" produces action.
-- **Red Hat after White is a natural pairing.** Facts first, then gut check - grounds intuition in evidence. But the chair decides what fits the topic.
+- **Embed first phase in spawn prompt.** Members spawned with "investigate X" start immediately. Members spawned with "wait" go idle.
+- **Fibonacci sizing works.** 3 is the sweet spot. Each jump (3→5→8) adds wall clock time faster than signal. Match size to stakes.
+- **Red Hat is always available.** Permission to ask "what does my gut say?" - often the fastest shortcut to clarity.
+- **Move on without stragglers.** One nudge per straggler. If they don't respond, proceed with N-1 findings.
+- **Concrete phase prompts.** "The dunning race condition is the biggest risk - how do we fix it?" produces action. "What are the risks?" produces confusion.
+- **Red Hat after White is a natural pairing.** Facts first, then gut check - grounds intuition in evidence.
 
 ## Usage
 `/huddle [topic or problem to analyze]`
 
-## Example
-`/huddle Should we migrate our monolith to microservices?`
+## Examples
+- `/huddle Should we migrate our monolith to microservices?` (size 3-5 deliberation)
+- `/huddle quick gut check on this API design` (size 1 solo analysis)
+- `/6hats database query performance issue` (alias for size 1 solo)
