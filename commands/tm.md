@@ -316,7 +316,7 @@ task-master tags use "<tag>" && task-master list --ready --json
 #### Ready Criteria (ALL must be true)
 
 1. **Branch in sync** — no merge conflicts with `$BASE_BRANCH`
-2. **CI passing** — all checks succeed (or skipped)
+2. **CI passing** — ALL checks succeed, including coverage status checks (codecov, coveralls, etc.) — not just build and test
 3. **All inline comments addressed** — see thread resolution rules
 4. **No unaddressed conversation comments**
 5. **All review threads resolved**
@@ -584,7 +584,7 @@ Additive files (imports, barrel exports, routes): accept both sides. Same-line c
 2. **Before creating PR**, check for existing: `gh pr list --head "<branch-name>" --state all --json number,state,mergedAt`
    - Merged → message lead, wait idle. Open → use it. None → create one.
 3. **Review loop** - all 5 criteria must be green:
-   No merge conflicts | CI passing | No unresolved inline comments | No unaddressed conversation comments | All review threads resolved
+   No merge conflicts | ALL CI checks passing (including coverage gates) | No unresolved inline comments | No unaddressed conversation comments | All review threads resolved
 4. **After pushing, spawn background CI watcher** (never block on CI yourself):
    `Agent(run_in_background: true, prompt: "Run gh pr checks <number> --watch --fail-fast, then check threads/comments/merge state. Return structured report.")`
    Stay responsive to lead messages while CI runs.
