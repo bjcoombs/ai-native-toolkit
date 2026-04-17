@@ -6,13 +6,18 @@ Personal Claude Code configuration, customizations, and workflow tools.
 
 ## Contents
 
-### Task Master Commands
-
-Workflow commands for managing tasks with [Task Master](https://github.com/eyaltoledano/claude-task-master):
+### Commands
 
 | Command | Description |
 |---------|-------------|
-| `/tm` | Unified context-aware command - starts, reviews, or cleans up tasks based on current state |
+| `/tm` | Task Master orchestration — context-aware: starts, reviews, or cleans up tasks based on current state |
+| `/tm-marathon-config-example` | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` |
+| `/huddle` | Multi-perspective analysis with persistent professional lenses cycling through Six Hats phases |
+| `/6hats` | Solo Six Hats analysis — alias for `/huddle` with team size 1 |
+| `/assess` | Layered codebase assessment for AI-agent contributor readiness |
+| `/understand` | Deep understanding mode (nemawashi) — exhaustive context-gathering before action |
+| `/fix-pr` | Autonomous PR fixing loop — iterates on CI failures and review comments until green |
+| `/fix-develop` | Autonomous fix loop for failing CI on the repo's default branch |
 
 The `/tm` command detects context automatically:
 - **Not in worktree** → Start mode (begin next task or specified task)
@@ -20,15 +25,12 @@ The `/tm` command detects context automatically:
 
 ### Six Thinking Hats Framework
 
-A blind spot detector for high-stakes decisions, based on Edward de Bono's Six Thinking Hats method.
-
-#### How to Run
+A blind spot detector for high-stakes decisions, based on Edward de Bono's Six Thinking Hats method. Use `/6hats` for a quick parallel analysis or `/huddle` for a multi-perspective deliberation.
 
 ```
 /6hats Should we rewrite our monolith in microservices?
+/huddle Should we migrate our monolith to microservices?
 ```
-
-This spawns six independent agents that analyze your question from different angles, then synthesizes their perspectives into an opinionated recommendation.
 
 | Agent | Role |
 |-------|------|
@@ -38,6 +40,7 @@ This spawns six independent agents that analyze your question from different ang
 | `yellow-hat` | Benefits and opportunities |
 | `green-hat` | Creative alternatives |
 | `blue-hat` | Synthesis and recommendation |
+| `scribe` | Structures hat output into actionable documentation (invoke directly via `Task(subagent_type="scribe")`) |
 
 #### The Trade-off: Tokens vs Blind Spots
 
@@ -70,11 +73,16 @@ Use Six Hats when the stakes justify the token cost. Skip it for debugging, impl
 ```
 claude-config/
 ├── README.md
-├── CLAUDE.md           # Personal guidelines and instructions
+├── CLAUDE.md                          # Personal guidelines and instructions
 ├── commands/
-│   ├── tm.md           # Task Master unified command
-│   ├── 6hats.md        # Six Hats orchestration
-│   └── ...
+│   ├── tm.md                          # Task Master unified command
+│   ├── tm-marathon-config-example.md  # CLAUDE.md snippet for marathon mode
+│   ├── huddle.md                      # Multi-lens Six Hats deliberation
+│   ├── 6hats.md                       # Solo Six Hats (alias for huddle)
+│   ├── assess.md                      # Codebase readiness assessment
+│   ├── understand.md                  # Nemawashi context-gathering
+│   ├── fix-pr.md                      # Autonomous PR fix loop
+│   └── fix-develop.md                 # Autonomous default-branch fix loop
 └── agents/
     ├── white-hat.md
     ├── red-hat.md
@@ -82,7 +90,7 @@ claude-config/
     ├── yellow-hat.md
     ├── green-hat.md
     ├── blue-hat.md
-    └── scribe.md
+    └── scribe.md                      # Structures hat output into docs
 ```
 
 ## Installation
