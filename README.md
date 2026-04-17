@@ -2,7 +2,7 @@
 
 Personal Claude Code configuration, customizations, and workflow tools.
 
-> **Note**: This setup is opinionated. See [Git Workflow](#git-workflow) below for details.
+> **Heads up — not portable.** This config is tuned to one author's daily setup: a `<repo>-main/` + `worktree/` directory layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. The opinionated framework agents (`/huddle`, `/6hats`, `/assess`, `/understand`) are reasonably portable; the workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in those assumptions and may need editing before they work for you. See [Git Workflow](#git-workflow) and [Adapting for Your Workflow](#adapting-for-your-workflow) below.
 
 ## Contents
 
@@ -169,9 +169,13 @@ The `/tm` command handles worktree creation and cleanup automatically based on t
 
 ### Adapting for Your Workflow
 
-If you prefer a different structure, you'll need to modify:
-- `commands/tm.md` - the path patterns and worktree creation logic
-- Your `CLAUDE.md` - any references to the directory structure
+The framework agents (`/huddle`, `/6hats`, `/assess`, `/understand`) are reusable as-is. The workflow commands embed assumptions you will likely need to override:
+
+- **Directory layout** — `commands/tm.md`, `commands/fix-pr.md`, `commands/fix-develop.md` all assume `~/dev/github.com/<org>/<repo>/<repo>-main/` + sibling `worktree/`. Edit the path patterns to match your structure.
+- **Default branch** — `/fix-develop` derives the branch via `gh repo view --json defaultBranchRef`. `/tm` uses a `$BASE_BRANCH` variable. Other commands may still reference `develop` in prose; check before relying on them on a `main`-default repo.
+- **Required external tools** — `gh` CLI for GitHub, Task Master for `/tm`, optional Agent Teams capability flag (`$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`) for `/tm` marathon mode.
+- **Review-bot conventions** — PR-loop logic in `/tm`, `/fix-pr`, `/fix-develop` distinguishes CodeRabbit, claude[bot], and human threads. Adjust if your repo uses different bots.
+- **CLAUDE.md** — your global / project `CLAUDE.md` references to the directory structure need to match.
 
 ## License
 
