@@ -851,8 +851,11 @@ For each that was exercised: did it help, hurt, or not apply? Mark validated.>
 - <decision>: <alternatives considered> -> <chosen> because <reason>
 (task combinations, dependency changes, merge ordering, model upgrades, interventions)
 
-**Suggested /tm changes**
-- <concrete change with rationale>
+**Where does this learning belong?** (specific command / cross-cutting rule / README / don't capture)
+- <target file or section>: <concrete change with rationale>
+
+**What clause is no longer earning its place?**
+- <existing rule or block>: <reason it can be removed or demoted>
 
 **Stats**
 - Tasks: <N> completed, <N> cancelled/deferred
