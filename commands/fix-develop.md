@@ -9,11 +9,18 @@ Assess failing CI on develop (or nightly build), create a worktree with a fix, p
 ## Step 1: Assess Develop Health
 
 ```bash
+set -euo pipefail
+
 # Identify the repo
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
 REPO_NAME=$(basename "$REPO_ROOT")
 ORG=$(gh repo view --json owner --jq '.owner.login')
 REPO=$(gh repo view --json name --jq '.name')
+
+# Fail fast if any of the above came back empty (wrong pane, no gh auth, not a repo)
+: "${REPO_ROOT:?Not inside a git repo — re-run from the target repo}"
+: "${ORG:?gh repo view returned no owner — check gh auth and current directory}"
+: "${REPO:?gh repo view returned no name — check gh auth and current directory}"
 
 # Get latest develop CI status
 gh api repos/$ORG/$REPO/commits/develop/status --jq '{state: .state, total: .total_count}'
@@ -55,7 +62,11 @@ Proceeding to create fix PR...
 ## Step 3: Create Worktree and Fix
 
 ```bash
-# From repo-main (sacred, always on develop)
+set -euo pipefail
+: "${ORG:?ORG unset — re-run Step 1 to derive repo identity}"
+: "${REPO:?REPO unset — re-run Step 1 to derive repo identity}"
+
+# From repo-main (sacred, always on default branch)
 cd ~/dev/github.com/$ORG/$REPO/$REPO-main
 git checkout develop && git pull origin develop
 
