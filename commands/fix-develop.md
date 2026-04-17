@@ -73,8 +73,9 @@ set -euo pipefail
 cd ~/dev/github.com/$ORG/$REPO/$REPO-main
 git checkout $DEFAULT_BRANCH && git pull origin $DEFAULT_BRANCH
 
-# Create fix branch and worktree
-BRANCH_NAME="fix-${DEFAULT_BRANCH}-$(date +%Y%m%d)-$(echo '<brief-description>' | tr ' ' '-')"
+# Create fix branch and worktree (slug the default branch in case it contains '/')
+DEFAULT_BRANCH_SLUG="${DEFAULT_BRANCH//\//-}"
+BRANCH_NAME="fix-${DEFAULT_BRANCH_SLUG}-$(date +%Y%m%d)-$(echo '<brief-description>' | tr ' ' '-')"
 git branch $BRANCH_NAME
 git worktree add ../worktree/$BRANCH_NAME $BRANCH_NAME
 cd ../worktree/$BRANCH_NAME

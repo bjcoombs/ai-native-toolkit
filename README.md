@@ -27,7 +27,7 @@ The `/tm` command detects context automatically:
 
 A blind spot detector for high-stakes decisions, based on Edward de Bono's Six Thinking Hats method. Use `/6hats` for a quick parallel analysis or `/huddle` for a multi-perspective deliberation.
 
-```
+```text
 /6hats Should we rewrite our monolith in microservices?
 /huddle Should we migrate our monolith to microservices?
 ```
