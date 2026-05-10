@@ -1,29 +1,38 @@
-# Fix Develop Branch
+# Fix Default Branch
 
-Assess failing CI on develop (or nightly build), create a worktree with a fix, push a PR, and loop until CI passes and review comments are addressed.
+Assess failing CI on the repo's default branch (main / develop / etc., or nightly build), create a worktree with a fix, push a PR, and loop until CI passes and review comments are addressed.
 
-**Usage**: `/fix-develop [repo-path]` — defaults to current repo context.
+**Usage**: `/fix-develop [repo-path]` — defaults to current repo context. (Command name is historical; works on whichever branch the repo treats as default.)
 
 ---
 
-## Step 1: Assess Develop Health
+## Step 1: Assess Default Branch Health
 
 ```bash
+set -euo pipefail
+
 # Identify the repo
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
 REPO_NAME=$(basename "$REPO_ROOT")
 ORG=$(gh repo view --json owner --jq '.owner.login')
 REPO=$(gh repo view --json name --jq '.name')
+DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
 
-# Get latest develop CI status
-gh api repos/$ORG/$REPO/commits/develop/status --jq '{state: .state, total: .total_count}'
+# Fail fast if any of the above came back empty (wrong pane, no gh auth, not a repo)
+: "${REPO_ROOT:?Not inside a git repo — re-run from the target repo}"
+: "${ORG:?gh repo view returned no owner — check gh auth and current directory}"
+: "${REPO:?gh repo view returned no name — check gh auth and current directory}"
+: "${DEFAULT_BRANCH:?gh repo view returned no defaultBranchRef — check gh auth}"
 
-# Get failing workflow runs on develop
-gh run list --branch develop --status failure --limit 5 --json databaseId,name,conclusion,createdAt \
+# Get latest CI status on the default branch
+gh api repos/$ORG/$REPO/commits/$DEFAULT_BRANCH/status --jq '{state: .state, total: .total_count}'
+
+# Get failing workflow runs on the default branch
+gh run list --branch $DEFAULT_BRANCH --status failure --limit 5 --json databaseId,name,conclusion,createdAt \
   | jq '.[] | {id: .databaseId, name, conclusion, created: .createdAt}'
 ```
 
-If develop is green, report "Develop is healthy, nothing to fix" and STOP.
+If the default branch is green, report "$DEFAULT_BRANCH is healthy, nothing to fix" and STOP.
 
 ## Step 2: Diagnose Failures
 
@@ -42,9 +51,9 @@ gh run view $RUN_ID --log-failed 2>&1 | tail -100
 
 Report diagnosis to user before proceeding:
 ```
-## Develop Diagnosis
+## Default Branch Diagnosis
 
-Branch: develop
+Branch: <DEFAULT_BRANCH>
 Failing runs: <list>
 Root cause: <assessment>
 Proposed fix: <plan>
@@ -55,12 +64,18 @@ Proceeding to create fix PR...
 ## Step 3: Create Worktree and Fix
 
 ```bash
-# From repo-main (sacred, always on develop)
-cd ~/dev/github.com/$ORG/$REPO/$REPO-main
-git checkout develop && git pull origin develop
+set -euo pipefail
+: "${ORG:?ORG unset — re-run Step 1 to derive repo identity}"
+: "${REPO:?REPO unset — re-run Step 1 to derive repo identity}"
+: "${DEFAULT_BRANCH:?DEFAULT_BRANCH unset — re-run Step 1 to derive repo identity}"
 
-# Create fix branch and worktree
-BRANCH_NAME="fix-develop-$(date +%Y%m%d)-$(echo '<brief-description>' | tr ' ' '-')"
+# From repo-main (sacred, always on default branch)
+cd ~/dev/github.com/$ORG/$REPO/$REPO-main
+git checkout $DEFAULT_BRANCH && git pull origin $DEFAULT_BRANCH
+
+# Create fix branch and worktree (slug the default branch in case it contains '/')
+DEFAULT_BRANCH_SLUG="${DEFAULT_BRANCH//\//-}"
+BRANCH_NAME="fix-${DEFAULT_BRANCH_SLUG}-$(date +%Y%m%d)-$(echo '<brief-description>' | tr ' ' '-')"
 git branch $BRANCH_NAME
 git worktree add ../worktree/$BRANCH_NAME $BRANCH_NAME
 cd ../worktree/$BRANCH_NAME
@@ -74,8 +89,8 @@ git add <specific-files>
 git commit -m "fix: <description of what was failing and why>"
 git push -u origin $BRANCH_NAME
 
-# Create PR targeting develop
-gh pr create --base develop --title "fix: Resolve failing CI on develop" --body "$(cat <<'EOF'
+# Create PR targeting the default branch
+gh pr create --base $DEFAULT_BRANCH --title "fix: Resolve failing CI on $DEFAULT_BRANCH" --body "$(cat <<'EOF'
 ## Summary
 - <What was failing>
 - <Root cause>
@@ -131,13 +146,13 @@ Wait 60s between iterations for CI to start.
    ```
    PR #X: CI passing, all comments addressed. Ready for merge.
 
-   This fixes the following develop failures:
+   This fixes the following $DEFAULT_BRANCH failures:
    - <list of what was broken>
 
    ---
    ## Current Work
 
-   PR: #X - Fix failing CI on develop
+   PR: #X - Fix failing CI on $DEFAULT_BRANCH
       https://github.com/org/repo/pull/X
 
    Latest: All green after N iterations
