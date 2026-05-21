@@ -400,7 +400,7 @@ def write_svg(rects: list, root: Path, W: float, H: float,
             )
 
     parts.append('</svg>')
-    out_path.write_text("\n".join(parts))
+    out_path.write_text("\n".join(parts), encoding="utf-8")
 
 
 def _adaptive_cap(values: list[float]) -> tuple[float, str]:
@@ -549,7 +549,7 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         "top_large": strip(by_loc[:10]),
     }
 
-    out_path.write_text(json.dumps(stats, indent=2))
+    out_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
     print(f"wrote {out_path}")
 
 
