@@ -1,0 +1,51 @@
+{
+  "files_scored": 1,
+  "scoring_coverage": {
+    "lizard": 1,
+    "scc": 0
+  },
+  "churn_window": "commits (all-time)",
+  "loc": {
+    "p50": 453.0,
+    "p95": 453.0,
+    "max": 453.0,
+    "total": 453
+  },
+  "ccn": {
+    "p50": 117.0,
+    "p95": 117.0,
+    "max": 117.0
+  },
+  "churn": {
+    "p50": 1.0,
+    "p95": 1.0,
+    "max": 1.0
+  },
+  "top_hotspots": [
+    {
+      "path": "skills/assess/scripts/complexity-treemap.py",
+      "loc": 453,
+      "ccn": 117.0,
+      "churn": 1,
+      "source": "lizard"
+    }
+  ],
+  "top_complex": [
+    {
+      "path": "skills/assess/scripts/complexity-treemap.py",
+      "loc": 453,
+      "ccn": 117.0,
+      "churn": 1,
+      "source": "lizard"
+    }
+  ],
+  "top_large": [
+    {
+      "path": "skills/assess/scripts/complexity-treemap.py",
+      "loc": 453,
+      "ccn": 117.0,
+      "churn": 1,
+      "source": "lizard"
+    }
+  ]
+}

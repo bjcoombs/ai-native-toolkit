@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" preserveAspectRatio="xMidYMid meet">
+<style>
+  rect:hover { stroke: #000; stroke-width: 1.5; }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #1a1a1a; pointer-events: none; text-anchor: middle; dominant-baseline: middle; }
+</style>
+<rect x="0.00" y="0.00" width="1600.00" height="1000.00" fill="#a50026" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/complexity-treemap.py
+453 loc · ccn 117 · commits (all-time) 1</title></rect>
+</svg>

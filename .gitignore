@@ -8,6 +8,7 @@
 !/commands/
 !/skills/
 !/LICENSE
+!/.assess/
 
 # Still ignore .DS_Store files everywhere
 **/.DS_Store
