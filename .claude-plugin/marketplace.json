@@ -1,0 +1,13 @@
+{
+  "name": "ai-native-toolkit",
+  "owner": {
+    "name": "Ben Coombs"
+  },
+  "plugins": [
+    {
+      "name": "ai-native-toolkit",
+      "source": "./",
+      "description": "Skills for AI-native development: /assess (codebase readiness scoring + complexity hotspot SVG) and /huddle (Six Thinking Hats deliberation with Fibonacci team sizing). Also bundles personal workflow commands."
+    }
+  ]
+}
