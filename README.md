@@ -115,7 +115,7 @@ ai-native-toolkit/
 
 **Run this from inside a Claude Code session**, not your shell — `/plugin` is a Claude Code command, not a CLI:
 
-```
+```text
 /plugin add https://github.com/bjcoombs/ai-native-toolkit
 ```
 
