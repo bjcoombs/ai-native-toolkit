@@ -74,6 +74,8 @@ Use Six Hats when the stakes justify the token cost. Skip it for debugging, impl
 claude-config/
 ├── README.md
 ├── CLAUDE.md                          # Personal guidelines and instructions
+├── .claude-plugin/
+│   └── plugin.json                    # Plugin manifest (enables /plugin add)
 ├── skills/
 │   ├── assess/
 │   │   ├── SKILL.md                   # Codebase readiness assessment + complexity hotspot
@@ -106,17 +108,30 @@ Commands (`commands/<name>.md`) are slash-only prompts with no bundled assets �
 
 ## Installation
 
-Clone to your Claude Code configuration directory:
+### As a plugin (recommended)
+
+Install via Claude Code's plugin manager — gives you the skills, commands, and agents in a namespaced bundle that doesn't touch your existing `~/.claude/` files:
+
+```
+/plugin add https://github.com/bjcoombs/claude-config
+```
+
+Skills are namespaced under the plugin: `/claude-config:assess`, `/claude-config:huddle`, etc. Update with `/plugin update claude-config`, remove with `/plugin remove claude-config`.
+
+### As a full `~/.claude/` clone (alternative)
+
+If you want this repo to *be* your entire Claude Code config, clone it into `~/.claude/`:
 
 ```bash
 git clone git@github.com:bjcoombs/claude-config.git ~/.claude/
 ```
 
-Or if you already have a `.claude` directory:
+If `~/.claude/` already exists and you only want the skills/commands/agents:
 
 ```bash
 git clone git@github.com:bjcoombs/claude-config.git /tmp/claude-config
-cp -r /tmp/claude-config/agents ~/.claude/
+cp -r /tmp/claude-config/skills   ~/.claude/
+cp -r /tmp/claude-config/agents   ~/.claude/
 cp -r /tmp/claude-config/commands ~/.claude/
 ```
 

@@ -3,6 +3,7 @@
 
 # But not these files and directories
 !/.gitignore
+!/.claude-plugin/
 !/agents/
 !/commands/
 !/skills/
