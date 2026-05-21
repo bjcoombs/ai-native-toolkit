@@ -40,12 +40,20 @@ Output is a single self-contained SVG with hover tooltips on every block
 (file path, LOC, complexity, recent commit count). Pass --labels to also
 annotate large blocks with text.
 
+Build artifacts (main.dart.js, *.min.js, *.bundle.js, *.map, files under
+node_modules/dist/build/.next/.nuxt/etc.) are filtered by default so one
+compiled bundle doesn't dominate the treemap. If a single file still
+holds >30% of total LOC after filtering, a warning prints to stderr
+suggesting it might be a build artifact that needs .gitignore. Pass
+--include-artifacts to disable the filter.
+
 Usage:
-    uv run skills/assess/scripts/complexity-treemap.py <path> [-o out.svg] [--labels]
+    uv run skills/assess/scripts/complexity-treemap.py <path> [-o out.svg] [--labels] [--include-artifacts]
 """
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import html
 import json
 import math
@@ -64,10 +72,44 @@ import squarify
 EXCLUDE_DIRS = {".git", "node_modules", "dist", "build", "target", "vendor",
                 ".venv", "venv", "__pycache__", ".gradle", ".idea", ".mvn",
                 "worktree", ".understand-anything", ".obsidian",
-                ".taskmaster", ".claude"}
+                ".taskmaster", ".claude",
+                # modern web framework build outputs
+                ".next", ".nuxt", ".output", ".svelte-kit", ".astro",
+                "out", "coverage", "htmlcov",
+                # iOS/Xcode
+                "Pods", "DerivedData",
+                # Flutter web build output (lives under web/ or public/)
+                "flutter_assets"}
+
+# Filenames that match these glob patterns are treated as build artifacts
+# and excluded from scoring. Triggers when a single compiled bundle is
+# eating 78% of the codebase LOC and skewing every percentile (see
+# https://github.com/bjcoombs/ai-native-toolkit/issues for the case that
+# prompted this). Pass --include-artifacts to disable.
+EXCLUDE_FILE_PATTERNS = [
+    # Minified / bundled JS-CSS
+    "*.min.js", "*.min.mjs", "*.min.css",
+    "*.bundle.js", "*.bundle.mjs", "*.bundle.css",
+    "*.chunk.js", "*.chunk.mjs",
+    "*-bundle.js", "*-min.js",
+    # Sourcemaps and build metadata
+    "*.map", "*.tsbuildinfo",
+    # Flutter web outputs
+    "main.dart.js", "flutter_service_worker.js", "flutter.js",
+    # PWA / service worker stubs
+    "service-worker.js", "sw.js", "workbox-*.js",
+]
 
 
-def lizard_scores(root: Path) -> dict[Path, tuple[int, float]]:
+def _is_build_artifact(rel: Path) -> bool:
+    """True if rel matches any EXCLUDE_FILE_PATTERNS glob (basename match)."""
+    name = rel.name
+    return any(fnmatch.fnmatch(name, pat) for pat in EXCLUDE_FILE_PATTERNS)
+
+
+def lizard_scores(
+    root: Path, include_artifacts: bool = False,
+) -> dict[Path, tuple[int, float]]:
     scores: dict[Path, tuple[int, float]] = {}
     for f in lizard.analyze(paths=[str(root)], exclude_pattern=[]):
         path = Path(f.filename).resolve()
@@ -77,12 +119,16 @@ def lizard_scores(root: Path) -> dict[Path, tuple[int, float]]:
             continue
         if any(part in EXCLUDE_DIRS for part in rel.parts):
             continue
+        if not include_artifacts and _is_build_artifact(rel):
+            continue
         ccn = sum(fn.cyclomatic_complexity for fn in f.function_list) or 1
         scores[path] = (f.nloc, float(ccn))
     return scores
 
 
-def scc_scores(root: Path) -> dict[Path, tuple[int, float]]:
+def scc_scores(
+    root: Path, include_artifacts: bool = False,
+) -> dict[Path, tuple[int, float]]:
     if shutil.which("scc") is None:
         return {}
     excludes = ",".join(EXCLUDE_DIRS)
@@ -106,6 +152,12 @@ def scc_scores(root: Path) -> dict[Path, tuple[int, float]]:
     for lang_block in payload:
         for f in lang_block.get("Files", []):
             path = Path(f["Location"]).resolve()
+            try:
+                rel = path.relative_to(root)
+            except ValueError:
+                continue
+            if not include_artifacts and _is_build_artifact(rel):
+                continue
             scores[path] = (int(f["Code"]), float(f["Complexity"]))
     return scores
 
@@ -226,7 +278,8 @@ def _git_not_found_warning(root: Path) -> None:
     )
 
 
-def collect(root: Path, by: str = "complexity"
+def collect(root: Path, by: str = "complexity",
+            include_artifacts: bool = False,
             ) -> tuple[list[tuple[Path, int, float, str]], str,
                        dict[Path, int] | None, str | None]:
     """Returns (files, effective_by, aux_data, aux_label).
@@ -236,8 +289,8 @@ def collect(root: Path, by: str = "complexity"
     - aux_data: secondary per-file signal (hotspot mode only); None otherwise
     - aux_label: human label for aux signal in tooltips
     """
-    lz = lizard_scores(root)
-    sc = scc_scores(root)
+    lz = lizard_scores(root, include_artifacts=include_artifacts)
+    sc = scc_scores(root, include_artifacts=include_artifacts)
     files: list[tuple[Path, int, float, str]] = []
     for path, (loc, ccn) in lz.items():
         files.append((path, loc, ccn, "lizard"))
@@ -401,6 +454,39 @@ def write_svg(rects: list, root: Path, W: float, H: float,
 
     parts.append('</svg>')
     out_path.write_text("\n".join(parts), encoding="utf-8")
+
+
+DOMINANCE_WARN_THRESHOLD = 0.30  # one file >30% of total LOC = suspicious
+
+
+def _warn_if_dominated_by_one_file(
+    files: list[tuple[Path, int, float, str]],
+) -> None:
+    """If a single file is >30% of total LOC, flag it as likely-build-artifact.
+
+    Compiled bundles (main.dart.js, *.min.js) that slip past the filter
+    skew every percentile and dominate the treemap. The size signal alone
+    is enough to flag suspects - human-written codebases rarely have one
+    file holding a third of the LOC.
+    """
+    if len(files) < 2:
+        return
+    total_loc = sum(f[1] for f in files)
+    if total_loc == 0:
+        return
+    biggest = max(files, key=lambda f: f[1])
+    share = biggest[1] / total_loc
+    if share < DOMINANCE_WARN_THRESHOLD:
+        return
+    print(
+        f"warning: one file holds {share:.0%} of scoreable LOC "
+        f"({biggest[1]:,} of {total_loc:,}).\n"
+        f"         {biggest[0].name} - looks like a build artifact or "
+        f"generated file.\n"
+        f"         If so, add it to .gitignore and re-run. To score it "
+        f"anyway, pass --include-artifacts.",
+        file=sys.stderr,
+    )
 
 
 def _adaptive_cap(values: list[float]) -> tuple[float, str]:
@@ -575,6 +661,13 @@ def main() -> int:
               "top hotspot/complex/large files). Used by /assess to score "
               "Layer 2 and surface specific improvement actions."),
     )
+    ap.add_argument(
+        "--include-artifacts", action="store_true",
+        help=("Score known build artifacts that are normally filtered "
+              "(main.dart.js, *.min.js, *.bundle.js, *.map, etc.). "
+              "Use this only when you specifically want to visualise "
+              "the build output - typically you'd .gitignore these instead."),
+    )
     args = ap.parse_args()
 
     root = args.path.resolve()
@@ -582,10 +675,14 @@ def main() -> int:
         print(f"error: {root} is not a directory", file=sys.stderr)
         return 1
 
-    files, effective_by, aux_data, aux_label = collect(root, by="hotspot")
+    files, effective_by, aux_data, aux_label = collect(
+        root, by="hotspot", include_artifacts=args.include_artifacts,
+    )
     if not files:
         print("error: no scoreable files found", file=sys.stderr)
         return 1
+
+    _warn_if_dominated_by_one_file(files)
     default_name = f"hotspot-{root.name}.svg"
     out = args.out or Path(default_name)
     render(files, root, out, f"Hotspot: {root.name}",

@@ -52,6 +52,14 @@ The script prints a one-line summary (file count, lizard vs scc coverage, churn 
 
 **Dependencies:** the script uses PEP 723 inline metadata (`lizard`, `squarify`, `matplotlib`, `numpy`). `uv` resolves them on first run. Optional: `brew install scc` extends coverage to 200+ languages beyond what lizard handles natively.
 
+**Build artifacts are filtered by default.** The script excludes `main.dart.js`, `*.min.js`, `*.bundle.js`, `*.chunk.js`, `*.map`, sourcemaps, service workers, and files under `node_modules/`, `dist/`, `build/`, `.next/`, `.nuxt/`, `.output/`, `coverage/`, etc. (full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS`). If you specifically want to score these, pass `--include-artifacts`.
+
+**Dominance warning.** If a single file still holds >30% of total scoreable LOC after filtering (the threshold compiled bundles typically cross), the script prints a warning to stderr identifying the file. When you see this:
+
+- Surface it in the report's "Hotspot snapshot" section as a finding: "`<file>` holds X% of LOC and is likely a build artifact - recommend adding to `.gitignore` and re-running."
+- Add a Top 3 Action: "Add `<file>` (and similar compiled outputs) to `.gitignore` and remove from tracking. Re-run `/assess` to get a meaningful treemap."
+- Do NOT skip the rest of the assessment - the layered scan still produces useful signal.
+
 **If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated — <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
 
 ## Step 3: Scan Each Layer
