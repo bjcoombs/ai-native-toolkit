@@ -7,8 +7,5 @@
     "name": "Ben Coombs"
   },
   "homepage": "https://github.com/bjcoombs/ai-native-toolkit",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/bjcoombs/ai-native-toolkit.git"
-  }
+  "repository": "https://github.com/bjcoombs/ai-native-toolkit.git"
 }
