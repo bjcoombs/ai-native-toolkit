@@ -5,6 +5,7 @@
 !/.gitignore
 !/agents/
 !/commands/
+!/skills/
 
 # Still ignore .DS_Store files everywhere
 **/.DS_Store
