@@ -1,15 +1,20 @@
 ---
-description: "Assess a codebase's readiness for AI agent contributors using the layered contract model"
-argument-hint: "[path to repo] (defaults to current directory)"
+name: assess
+description: "Assess a codebase's readiness for AI agent contributors using the layered contract model, and generate a complexity hotspot SVG treemap (size = LOC, hue = cyclomatic complexity, saturation = recent git churn). TRIGGER when the user types /assess, asks for an AI-readiness review, wants a complexity heatmap or hotspot map, asks 'how complex is this code?', wants migration risk triage, or asks for a codebase snapshot/report. Produces an MD report + SVG that can be opened as a PR in the target repo."
 ---
 
-# AI Readiness Assessment
+# AI Readiness Assessment + Complexity Hotspot
 
-Assess how ready this codebase is for sustained AI agent contribution using the layered contract model from the AI-Native Codebase Architecture guide.
+Two artefacts in one pass against a target repo:
+
+1. **Layered contract assessment** — 0–7 score across breadcrumbs, types, linters, architecture tests, CI, coverage, review bots, AI project management.
+2. **Complexity hotspot SVG** — Codecov-style treemap. Size = LOC. Hue = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = highest risk.
+
+Both land as files inside the target repo. The skill always writes them locally; after writing, **ask the user** whether to open a PR in the target repo with both artefacts.
 
 **$ARGUMENTS**
 
-## Step 1: Determine Repo Root
+## Step 1: Determine Repo Root and Output Directory
 
 ```bash
 # If arguments provided, use that path. Otherwise use pwd.
@@ -19,7 +24,37 @@ git rev-parse --show-toplevel
 
 Set `$REPO_ROOT` to the result. All scanning happens from here.
 
-## Step 2: Scan Each Layer
+Decide the output directory (default: `$REPO_ROOT/.assess/`). Create it if needed:
+
+```bash
+mkdir -p "$REPO_ROOT/.assess"
+```
+
+Artefacts will land at:
+- `$REPO_ROOT/.assess/complexity-heatmap.svg`
+- `$REPO_ROOT/.assess/complexity-stats.json`
+- `$REPO_ROOT/.assess/assess-report.md`
+
+## Step 2: Generate Complexity Hotspot SVG + Stats Sidecar
+
+Run the bundled treemap script. It produces a self-contained SVG with hover tooltips on every block **and** a JSON stats sidecar consumed by Layer 2 scoring and the Top 3 Actions table.
+
+```bash
+# Resolve the script path relative to this skill. The skill lives at
+# ~/.claude/skills/assess/SKILL.md, so the script is alongside it.
+SKILL_DIR="$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")"
+uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" \
+    -o "$REPO_ROOT/.assess/complexity-heatmap.svg" \
+    --stats "$REPO_ROOT/.assess/complexity-stats.json"
+```
+
+The script prints a one-line summary (file count, lizard vs scc coverage, churn window chosen, top 5 biggest files). The stats sidecar contains percentiles (p50/p95/max for LOC, CCN, churn) and ranked lists of the top 10 files by hotspot score, raw CCN, and raw LOC. Both feed the report.
+
+**Dependencies:** the script uses PEP 723 inline metadata (`lizard`, `squarify`, `matplotlib`, `numpy`). `uv` resolves them on first run. Optional: `brew install scc` extends coverage to 200+ languages beyond what lizard handles natively.
+
+**If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated — <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
+
+## Step 3: Scan Each Layer
 
 Run these checks in parallel where possible. For each layer, collect evidence and assess quality.
 
@@ -131,15 +166,50 @@ ls "$REPO_ROOT"/.swiftlint.yml 2>/dev/null
 **If found, assess AI-relevant rules** by reading the config:
 - Unexplained lint suppression rules? (nolintlint, no-restricted-syntax)
 - TODO/FIXME detection? (godox, no-warning-comments)
-- Function length limits? (funlen, max-lines-per-function)
-- Complexity limits? (cyclop, complexity)
+- **Function length limits?** (`funlen`, `max-lines-per-function`, `MethodLength`, `function-max-lines`)
+- **Cyclomatic complexity limits?** (`cyclop`, `gocognit`, `complexity`, `CyclomaticComplexity`, `too-many-statements`, `cognitive-complexity`, `cognitive_complexity`)
+- **File size limits?** (`max-lines`, `FileLength`, `file-max-lines`, `lines-per-file`)
 - Exhaustive matching? (exhaustive, strict unions)
 - Import boundary rules? (depguard, no-restricted-imports)
 
-**Scoring:**
-- Present: Linter configured with AI failure mode rules, strict enforcement
-- Partial: Linter exists but basic config, no AI-specific rules
-- Missing: No linter configuration found
+**Cross-reference treemap evidence.** Read the stats sidecar to see what the linter actually catches in the wild — but only if Step 2 produced it. The sidecar is missing whenever the treemap script failed (no `uv`, non-git path, no scoreable files, etc.).
+
+```bash
+STATS="$REPO_ROOT/.assess/complexity-stats.json"
+if [ -f "$STATS" ]; then
+  jq '{
+    loc_p95: .loc.p95, loc_max: .loc.max,
+    ccn_p95: .ccn.p95, ccn_max: .ccn.max,
+    worst_complex: .top_complex[:3] | map(.path),
+    worst_large: .top_large[:3] | map(.path)
+  }' "$STATS"
+else
+  echo "complexity-stats.json not present; scoring Layer 2 on linter config alone."
+fi
+```
+
+If the sidecar is missing, skip the combined-scoring matrix below and fall back to the original Layer 2 rule: Present if linter config includes AI-relevant rules (including complexity/length), Partial if linter exists without them, Missing if no linter at all. Record "treemap unavailable" in the Evidence column so the gap is auditable.
+
+Thresholds for "high" (based on industry conventions — adjust for context):
+
+| Signal | Watch | High |
+|---|---|---|
+| p95 cyclomatic complexity | ≥ 10 | ≥ 15 |
+| max cyclomatic complexity | ≥ 30 | ≥ 50 |
+| p95 file size (LOC) | ≥ 500 | ≥ 800 |
+| max file size (LOC) | ≥ 1500 | ≥ 2000 |
+
+**Combined scoring** (linter config ∩ treemap evidence):
+
+| Linter has complexity/length rules? | Treemap p95 / max in "High" range? | Score |
+|---|---|---|
+| Yes, enforced (CI blocks) | Either way — rules ratchet the legacy | **Present** |
+| Yes but lenient / excludes legacy | High | **Partial** — rules exist, legacy unfenced |
+| Linter exists, no complexity/length rules | Not high | **Partial** — gap but no evidence yet |
+| Linter exists, no complexity/length rules | High | **Missing** — concrete evidence of the gap |
+| No linter at all | Either | **Missing** |
+
+When scoring Partial or Missing on this combined check, name the top 3 worst offenders from `top_complex` / `top_large` in the report's Evidence/Gap columns. Those are the files the missing rule would have flagged.
 
 ### Layer 3: Architecture Tests (Conventions as Contracts)
 
@@ -305,14 +375,43 @@ rg -i 'retrospective|retro|feedback loop|learnings|post.?mortem' "$REPO_ROOT"/{C
 - Partial: Some orchestration tooling exists but no systematic feedback loop, or ad-hoc retro notes without structured process
 - Missing: No AI-aware project management
 
-## Step 3: Score and Report
+## Step 4: Score and Write the Report
 
-Calculate the score (0-7 based on layers present, +0.5 for partial) and generate the report.
+Calculate the score (0-7 based on layers present, +0.5 for partial) and write the report to `$REPO_ROOT/.assess/assess-report.md`.
 
-**Output format:**
+**Report format** (write this to disk verbatim, filling in the placeholders):
 
 ```markdown
-# AI Readiness Assessment: <repo-name>
+# Codebase Assessment: <repo-name>
+
+_Generated <YYYY-MM-DD>._
+
+## How to read this report
+
+This is an improvement roadmap, not a verdict. It pairs two views:
+
+- **Where the codebase is today** — the hotspot SVG shows current complexity and churn at a glance. Vivid red = complex AND actively changing = the files most likely to bite an agent (or a human) next week.
+- **What scaffolding is in place to keep it from getting worse** — the 7-layer AI Readiness score measures whether the system enforces contracts that catch the issues the hotspots reveal.
+
+A codebase can be 7/7 and still on fire (great scaffolding, legacy debt) — or 2/7 with a calm treemap (small codebase, no enforcement needed yet). The pair matters.
+
+The "Top 3 Actions" table at the bottom names specific files. Start there.
+
+## Hotspot snapshot
+
+![Complexity hotspot](./complexity-heatmap.svg)
+
+- **Files scored:** <N>
+- **Churn window chosen:** <last 12mo | last 24mo | last 5y | all-time>
+- **Complexity profile:** p95 ccn <N> (max <M>); p95 LOC <N> (max <M>)
+- **Top hotspots** (composite: complexity × recent churn):
+  1. `<path>` — <loc> LOC, ccn <N>, <M> commits in window
+  2. ...
+  3. ...
+
+Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk.
+
+## AI Readiness
 
 **Score: X / 7** — <maturity-label>
 
@@ -327,7 +426,7 @@ Calculate the score (0-7 based on layers present, +0.5 for partial) and generate
 | 6: Code Review Bots | Present/Partial/Missing | <what was found> | <what's missing> |
 | 7: AI Project Mgmt | Present/Partial/Missing | <what was found> | <what's missing> |
 
-## Maturity Level
+### Maturity Level
 
 | Score | Level | Description |
 |-------|-------|-------------|
@@ -338,29 +437,48 @@ Calculate the score (0-7 based on layers present, +0.5 for partial) and generate
 
 ## Top 3 Actions
 
-Prioritize by leverage: breadcrumbs and CI first, then linters and coverage,
-then architecture tests and retro loops. Each action should be completable
-in a single session.
+Prioritize by leverage: breadcrumbs and CI first, then linters and coverage, then architecture tests and retro loops. Each action should be completable in a single session and reference **specific files** from the hotspot snapshot wherever possible — generic advice is the failure mode this report exists to prevent.
 
-| # | Action | Layer | Effort | Command / First Step |
-|---|--------|-------|--------|---------------------|
-| 1 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` |
-| 2 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` |
-| 3 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` |
+| # | Action | Layer | Effort | Command / First Step | Hotspot files this addresses |
+|---|--------|-------|--------|---------------------|------------------------------|
+| 1 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths from top_hotspots / top_complex / top_large, or "—" if not file-specific> |
+| 2 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths or —> |
+| 3 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths or —> |
+
+Good actions look like:
+
+> _"Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67), `internal/sync/reconciler.go` (ccn 54)."_
+
+Generic actions to avoid:
+
+> ~~_"Improve code quality"_~~ — name the files and the threshold.
+> ~~_"Add a linter"_~~ — name the linter, the rule, and the first three files it will flag.
 
 ### Why these three?
-<2-3 sentences explaining why these are highest leverage. Connect to specific
-gaps from the table above. Be concrete about what each action prevents.>
+<2-3 sentences explaining why these are highest leverage. Connect to specific gaps from the table above and to hotspot files where relevant. Be concrete about what each action prevents.>
 
 ## Additional Opportunities
 
-<If more than 3 gaps exist, list remaining as brief bullets. Keep to one line each.
-These are "after you've done the top 3" items.>
+<If more than 3 gaps exist, list remaining as brief bullets. Keep to one line each. These are "after you've done the top 3" items.>
 
 ## Strengths
 
-<3-5 bullet points. What this repo already does well. Be specific — name files,
-tools, and patterns. Acknowledge existing infrastructure.>
+<3-5 bullet points. What this repo already does well. Be specific — name files, tools, and patterns. Acknowledge existing infrastructure.>
 ```
 
 Complete the full assessment in under 2 minutes. Scan, don't deep-read.
+
+The SVG is referenced by relative path (`./complexity-heatmap.svg`) so GitHub renders it inline when the MD is viewed in a PR or on the file page.
+
+## Step 5: Ask Whether to Open a PR
+
+After writing both files, surface them and ask the user — verbatim — something like:
+
+> Wrote `.assess/assess-report.md` and `.assess/complexity-heatmap.svg` in `<repo-name>`. Want me to open a PR in this repo with both files, or leave them local for you to review first?
+
+If the user says **yes / PR**:
+1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
+2. Stage and commit both files. Commit message: `docs: Add AI-readiness assessment + complexity hotspot snapshot`.
+3. Push the branch and open a PR. Title: `docs: Codebase assessment — <YYYY-MM-DD>`. Body: paste the report's Top 3 Actions table and a one-line summary of the hotspot snapshot, then link to the full MD file in the PR diff.
+
+If the user says **no / leave it**: stop. Files stay in `.assess/` for them to review.

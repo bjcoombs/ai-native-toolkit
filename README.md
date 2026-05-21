@@ -74,12 +74,17 @@ Use Six Hats when the stakes justify the token cost. Skip it for debugging, impl
 claude-config/
 ├── README.md
 ├── CLAUDE.md                          # Personal guidelines and instructions
+├── skills/
+│   ├── assess/
+│   │   ├── SKILL.md                   # Codebase readiness assessment + complexity hotspot
+│   │   └── scripts/
+│   │       └── complexity-treemap.py  # Codecov-style hotspot SVG generator
+│   └── huddle/
+│       └── SKILL.md                   # Multi-lens Six Hats deliberation
 ├── commands/
 │   ├── tm.md                          # Task Master unified command
 │   ├── tm-marathon-config-example.md  # CLAUDE.md snippet for marathon mode
-│   ├── huddle.md                      # Multi-lens Six Hats deliberation
 │   ├── 6hats.md                       # Solo Six Hats (alias for huddle)
-│   ├── assess.md                      # Codebase readiness assessment
 │   ├── understand.md                  # Nemawashi context-gathering
 │   ├── fix-pr.md                      # Autonomous PR fix loop
 │   └── fix-develop.md                 # Autonomous default-branch fix loop
@@ -92,6 +97,12 @@ claude-config/
     ├── blue-hat.md
     └── scribe.md                      # Structures hat output into docs
 ```
+
+### Skills vs commands
+
+Skills (`skills/<name>/SKILL.md`) carry an instruction file *plus* bundled assets (scripts, templates). The Claude Code runtime auto-discovers them and the agent invokes the relevant skill when its `description` matches the user's request. `/assess` ships `complexity-treemap.py` alongside its SKILL.md so the agent can run the treemap without external setup.
+
+Commands (`commands/<name>.md`) are slash-only prompts with no bundled assets — kept for workflows that don't need supporting scripts.
 
 ## Installation
 

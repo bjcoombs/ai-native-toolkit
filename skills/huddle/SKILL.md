@@ -1,6 +1,6 @@
 ---
-description: "Huddle - structured multi-perspective analysis with professional lens team members who cycle through Six Thinking Hats phases"
-argument-hint: "<topic or problem to analyze>"
+name: huddle
+description: "Structured multi-perspective analysis using Six Thinking Hats with professional lens team members. TRIGGER when the user types /huddle, asks to run a huddle, wants a panel/board/team to analyze a decision, asks for multi-perspective analysis, debate, or red-team/blue-team review, or wants to weigh a hard call from several angles. Scales from solo (1 agent) to board-level (8+) using Fibonacci sizing."
 ---
 
 # Huddle - Six Thinking Hats Analysis
