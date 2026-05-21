@@ -172,16 +172,23 @@ ls "$REPO_ROOT"/.swiftlint.yml 2>/dev/null
 - Exhaustive matching? (exhaustive, strict unions)
 - Import boundary rules? (depguard, no-restricted-imports)
 
-**Cross-reference treemap evidence.** Read the stats sidecar to see what the linter actually catches in the wild:
+**Cross-reference treemap evidence.** Read the stats sidecar to see what the linter actually catches in the wild — but only if Step 2 produced it. The sidecar is missing whenever the treemap script failed (no `uv`, non-git path, no scoreable files, etc.).
 
 ```bash
-jq '{
-  loc_p95: .loc.p95, loc_max: .loc.max,
-  ccn_p95: .ccn.p95, ccn_max: .ccn.max,
-  worst_complex: .top_complex[:3] | map(.path),
-  worst_large: .top_large[:3] | map(.path)
-}' "$REPO_ROOT/.assess/complexity-stats.json"
+STATS="$REPO_ROOT/.assess/complexity-stats.json"
+if [ -f "$STATS" ]; then
+  jq '{
+    loc_p95: .loc.p95, loc_max: .loc.max,
+    ccn_p95: .ccn.p95, ccn_max: .ccn.max,
+    worst_complex: .top_complex[:3] | map(.path),
+    worst_large: .top_large[:3] | map(.path)
+  }' "$STATS"
+else
+  echo "complexity-stats.json not present; scoring Layer 2 on linter config alone."
+fi
 ```
+
+If the sidecar is missing, skip the combined-scoring matrix below and fall back to the original Layer 2 rule: Present if linter config includes AI-relevant rules (including complexity/length), Partial if linter exists without them, Missing if no linter at all. Record "treemap unavailable" in the Evidence column so the gap is auditable.
 
 Thresholds for "high" (based on industry conventions — adjust for context):
 
