@@ -80,7 +80,7 @@ Use Six Hats when the stakes justify the token cost. Skip it for debugging, impl
 ## Repository Structure
 
 ```
-claude-config/
+ai-native-toolkit/
 ├── README.md
 ├── CLAUDE.md                          # Personal guidelines and instructions
 ├── .claude-plugin/
@@ -116,26 +116,26 @@ claude-config/
 Install via Claude Code's plugin manager — gives you the skills, commands, and agents in a namespaced bundle that doesn't touch your existing `~/.claude/` files:
 
 ```
-/plugin add https://github.com/bjcoombs/claude-config
+/plugin add https://github.com/bjcoombs/ai-native-toolkit
 ```
 
-Skills are namespaced under the plugin: `/claude-config:assess`, `/claude-config:huddle`, etc. Update with `/plugin update claude-config`, remove with `/plugin remove claude-config`.
+Skills are namespaced under the plugin: `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`, etc. Update with `/plugin update ai-native-toolkit`, remove with `/plugin remove ai-native-toolkit`.
 
 ### As a full `~/.claude/` clone (alternative)
 
 If you want this repo to *be* your entire Claude Code config, clone it into `~/.claude/`:
 
 ```bash
-git clone git@github.com:bjcoombs/claude-config.git ~/.claude/
+git clone git@github.com:bjcoombs/ai-native-toolkit.git ~/.claude/
 ```
 
 If `~/.claude/` already exists and you only want the skills/commands/agents:
 
 ```bash
-git clone git@github.com:bjcoombs/claude-config.git /tmp/claude-config
-cp -r /tmp/claude-config/skills   ~/.claude/
-cp -r /tmp/claude-config/agents   ~/.claude/
-cp -r /tmp/claude-config/commands ~/.claude/
+git clone git@github.com:bjcoombs/ai-native-toolkit.git /tmp/ai-native-toolkit
+cp -r /tmp/ai-native-toolkit/skills   ~/.claude/
+cp -r /tmp/ai-native-toolkit/agents   ~/.claude/
+cp -r /tmp/ai-native-toolkit/commands ~/.claude/
 ```
 
 ## Git Workflow

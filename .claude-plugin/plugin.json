@@ -1,13 +1,13 @@
 {
-  "name": "claude-config",
+  "name": "ai-native-toolkit",
   "description": "Reusable Claude Code skills, commands, and agents: codebase assessment with complexity hotspot heatmaps, Six Thinking Hats deliberation (solo and multi-agent), Task Master workflow integration, and autonomous PR/branch fix loops.",
   "version": "1.0.0",
   "author": {
     "name": "Ben Coombs"
   },
-  "homepage": "https://github.com/bjcoombs/claude-config",
+  "homepage": "https://github.com/bjcoombs/ai-native-toolkit",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bjcoombs/claude-config.git"
+    "url": "https://github.com/bjcoombs/ai-native-toolkit.git"
   }
 }
