@@ -86,13 +86,24 @@ def scc_scores(root: Path) -> dict[Path, tuple[int, float]]:
     if shutil.which("scc") is None:
         return {}
     excludes = ",".join(EXCLUDE_DIRS)
-    raw = subprocess.run(
-        ["scc", "--by-file", "--format", "json",
-         f"--exclude-dir={excludes}", str(root)],
-        capture_output=True, text=True, check=True,
-    ).stdout
+    try:
+        raw = subprocess.run(
+            ["scc", "--by-file", "--format", "json",
+             f"--exclude-dir={excludes}", str(root)],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"warning: scc failed ({e}); continuing without scc scores",
+              file=sys.stderr)
+        return {}
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        print("warning: scc returned invalid JSON; continuing without scc scores",
+              file=sys.stderr)
+        return {}
     scores: dict[Path, tuple[int, float]] = {}
-    for lang_block in json.loads(raw):
+    for lang_block in payload:
         for f in lang_block.get("Files", []):
             path = Path(f["Location"]).resolve()
             scores[path] = (int(f["Code"]), float(f["Complexity"]))
@@ -342,7 +353,7 @@ def write_svg(rects: list, root: Path, W: float, H: float,
               metric_label: str) -> None:
     label_threshold = (W * H) / 200
     parts: list[str] = [
-        f'<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
+        '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'viewBox="0 0 {W:.0f} {H:.0f}" '
         f'width="{W:.0f}" height="{H:.0f}" '
@@ -547,7 +558,8 @@ def main() -> int:
         description=(
             "Render a Codecov-style hotspot treemap of any folder. "
             "Hue = cyclomatic complexity, saturation = recent git churn "
-            "(last 6 months). Vivid red = complex AND active = highest risk."
+            "(auto-windowed: 12mo -> 24mo -> 5y -> all-time). "
+            "Vivid red = complex AND active = highest risk."
         ))
     ap.add_argument("path", type=Path, help="Directory to analyse")
     ap.add_argument(
