@@ -113,13 +113,16 @@ ai-native-toolkit/
 
 ### As a plugin (recommended)
 
-**Run this from inside a Claude Code session**, not your shell — `/plugin` is a Claude Code command, not a CLI:
+**Run these from inside a Claude Code session**, not your shell — `/plugin` is a Claude Code command, not a CLI. Two steps: register the marketplace, then install the plugin from it.
 
 ```text
-/plugin add https://github.com/bjcoombs/ai-native-toolkit
+/plugin marketplace add https://github.com/bjcoombs/ai-native-toolkit
+/plugin install ai-native-toolkit@ai-native-toolkit
 ```
 
-You get the skills, commands, and agents in a namespaced bundle that doesn't touch your existing `~/.claude/` files. Skills appear as `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`, etc. Update with `/plugin update ai-native-toolkit`, remove with `/plugin remove ai-native-toolkit`.
+You get the skills, commands, and agents in a namespaced bundle that doesn't touch your existing `~/.claude/` files. Skills appear as `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`, etc.
+
+Update with `/plugin update ai-native-toolkit`, remove with `/plugin remove ai-native-toolkit`.
 
 ### As a full `~/.claude/` clone (alternative)
 
