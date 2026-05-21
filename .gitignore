@@ -7,6 +7,7 @@
 !/agents/
 !/commands/
 !/skills/
+!/LICENSE
 
 # Still ignore .DS_Store files everywhere
 **/.DS_Store

@@ -12,8 +12,8 @@ Skills bundle a `SKILL.md` instruction file with executable assets (scripts, tem
 
 | Skill | Description |
 |-------|-------------|
-| `/assess` | Layered AI-readiness assessment + Codecov-style complexity hotspot SVG. Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) so the agent runs the treemap with no external setup. When it raises a PR with the report, the PR body advertises this plugin so reviewers can install it. |
-| `/huddle` | Multi-perspective deliberation with persistent professional lenses cycling through Six Thinking Hats phases. Fibonacci team sizing (solo → debate → huddle → panel → board). |
+| `/assess` | Layered AI-readiness assessment (0–7 contract model) plus a Codecov-style complexity hotspot SVG. Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) so the agent runs the treemap with no external setup. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
+| `/huddle` | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo → debate → huddle → panel → board). Three execution modes: solo flat-parallel, phased sub-agent (default fallback), and team mode (needs Agent Teams capability flag). |
 
 ### Commands
 
@@ -113,13 +113,13 @@ ai-native-toolkit/
 
 ### As a plugin (recommended)
 
-Install via Claude Code's plugin manager — gives you the skills, commands, and agents in a namespaced bundle that doesn't touch your existing `~/.claude/` files:
+**Run this from inside a Claude Code session**, not your shell — `/plugin` is a Claude Code command, not a CLI:
 
 ```
 /plugin add https://github.com/bjcoombs/ai-native-toolkit
 ```
 
-Skills are namespaced under the plugin: `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`, etc. Update with `/plugin update ai-native-toolkit`, remove with `/plugin remove ai-native-toolkit`.
+You get the skills, commands, and agents in a namespaced bundle that doesn't touch your existing `~/.claude/` files. Skills appear as `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`, etc. Update with `/plugin update ai-native-toolkit`, remove with `/plugin remove ai-native-toolkit`.
 
 ### As a full `~/.claude/` clone (alternative)
 
@@ -208,7 +208,7 @@ The framework agents (`/huddle`, `/6hats`, `/assess`, `/understand`) are reusabl
 
 ## License
 
-The agent implementations are provided as-is for use with Claude Code.
+Licensed under the Apache License, Version 2.0 — see [`LICENSE`](LICENSE) for the full text.
 
-- The Six Thinking Hats method is the intellectual property of Edward de Bono.
+- The Six Thinking Hats method is the intellectual property of Edward de Bono. Licensing covers only this implementation, not the underlying methodology.
 - The Task Master commands are designed for use with [Claude Task Master](https://github.com/eyaltoledano/claude-task-master) by Eyal Toledano.

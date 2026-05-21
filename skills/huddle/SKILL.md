@@ -110,7 +110,7 @@ When team size > 1 but `TeamCreate` is unavailable, do not collapse to flat-para
 - Phase ordering preserved — Black Hat sees White Hat's facts via the synopsis.
 - No `TeamCreate` / `SendMessage` required; uses only the standard Agent tool.
 
-**Cost relative to team mode:** lower — no `SendMessage` cross-talk overhead, no persistent agent state to maintain. Cost relative to flat-parallel: higher — multiple phases × multiple lenses. Roughly 2–4× flat-parallel, 0.3–0.6× full team mode. Usually the right default when the flag is off and the decision warrants more than a gut check.
+**Cost:** roughly 2–4× flat-parallel (see Capability Requirements table). The synopsis grows with each phase (200–400 words per phase → up to ~2KB by phase 5), and that growing synopsis is passed into every sub-agent on every subsequent phase, so the cost skews late in the sequence. Still well below team mode because there's no `SendMessage` cross-talk overhead and no persistent agent state to maintain. Usually the right default when the flag is off and the decision warrants more than a gut check.
 
 For team modes (size 2+) with the flag enabled, continue to Step 2.
 
