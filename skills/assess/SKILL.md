@@ -37,7 +37,55 @@ Artefacts will land at:
 
 ## Step 2: Generate Complexity Hotspot SVG + Stats Sidecar
 
-Run the bundled treemap script. It produces a self-contained SVG with hover tooltips on every block **and** a JSON stats sidecar consumed by Layer 2 scoring and the Top 3 Actions table.
+### 2a: Offer to install `scc` (one-time per repo)
+
+The bundled treemap uses [`lizard`](https://github.com/terryyin/lizard) (Python, Go, JS, Java, C/C++, etc.) by default. Optional `scc` extends coverage to 200+ languages including markdown, JSON, YAML, SQL, and shell — useful when the repo's surface is more than just traditional source code.
+
+Before scanning, check three signals:
+
+```bash
+# 1. Is scc already on PATH?
+command -v scc >/dev/null 2>&1 && SCC_PRESENT=1 || SCC_PRESENT=0
+
+# 2. Has the user previously declined for this repo?
+[ -f "$REPO_ROOT/.assess/.no-scc" ] && SCC_DECLINED=1 || SCC_DECLINED=0
+
+# 3. Is the repo mostly markdown/data/config (where lizard alone will be sparse)?
+#    Cheap heuristic: count non-code files vs code files.
+CODE_FILES=$(fd -t f -e py -e js -e ts -e tsx -e jsx -e go -e java -e kt -e rs -e rb -e cs -e swift -e dart -e cpp -e c -e h -e php "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
+NONCODE_FILES=$(fd -t f -e md -e json -e yaml -e yml -e toml -e sh -e sql "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
+```
+
+**Offer the install only if all three are true:** `SCC_PRESENT=0`, `SCC_DECLINED=0`, and the repo looks lizard-sparse (`CODE_FILES < NONCODE_FILES` or `CODE_FILES < 10`). Otherwise skip straight to 2b.
+
+When offering, use **AskUserQuestion** with three options (do **not** auto-install — `brew install` is a system mutation):
+
+- **Install scc** — run the appropriate installer for the platform and continue.
+- **Skip for now** — proceed with lizard only. Don't write the marker; ask again next run.
+- **Skip permanently for this repo** — write `$REPO_ROOT/.assess/.no-scc` so future runs don't ask. Recommended for prompt repos or pure-docs repos where lizard-only is genuinely fine.
+
+Phrase the question so the user understands the trade-off, e.g.:
+
+> "This repo has <N> code files and <M> non-code files (markdown/JSON/YAML). `scc` would include the non-code files in the treemap; without it the treemap may be sparse. Install `scc`?"
+
+If the user picks **Install scc**, run the platform-appropriate command:
+
+```bash
+# macOS (Homebrew)
+[ "$(uname)" = "Darwin" ] && command -v brew >/dev/null && brew install scc
+
+# Linux (try common package managers, fall back to go install or manual)
+[ "$(uname)" = "Linux" ] && {
+  command -v apt >/dev/null && sudo apt install -y scc \
+    || command -v dnf >/dev/null && sudo dnf install -y scc \
+    || command -v go >/dev/null && go install github.com/boyter/scc/v3@latest \
+    || echo "Install scc manually: https://github.com/boyter/scc#installation"
+}
+```
+
+If the install fails or the platform isn't covered, fall back to lizard-only and continue — don't block the assessment.
+
+### 2b: Run the treemap
 
 ```bash
 # Resolve the script path relative to this skill. The skill lives at
@@ -50,7 +98,7 @@ uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" \
 
 The script prints a one-line summary (file count, lizard vs scc coverage, churn window chosen, top 5 biggest files). The stats sidecar contains percentiles (p50/p95/max for LOC, CCN, churn) and ranked lists of the top 10 files by hotspot score, raw CCN, and raw LOC. Both feed the report.
 
-**Dependencies:** the script uses PEP 723 inline metadata (`lizard`, `squarify`, `matplotlib`, `numpy`). `uv` resolves them on first run. Optional: `brew install scc` extends coverage to 200+ languages beyond what lizard handles natively.
+**Dependencies:** the script uses PEP 723 inline metadata (`lizard`, `squarify`, `matplotlib`, `numpy`). `uv` resolves them on first run.
 
 **If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated — <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
 
