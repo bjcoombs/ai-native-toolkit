@@ -2,19 +2,28 @@
 
 Personal Claude Code configuration, customizations, and workflow tools.
 
-> **Heads up — not portable.** This config is tuned to one author's daily setup: a `<repo>-main/` + `worktree/` directory layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. The opinionated framework agents (`/huddle`, `/6hats`, `/assess`, `/understand`) are reasonably portable; the workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in those assumptions and may need editing before they work for you. See [Git Workflow](#git-workflow) and [Adapting for Your Workflow](#adapting-for-your-workflow) below.
+> **Portability split.** The framework pieces (`/huddle`, `/6hats`, `/assess`, `/understand` and their agents) are portable and installable as a Claude Code plugin — see [Installation](#installation) below. The workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. Read [Adapting for Your Workflow](#adapting-for-your-workflow) before relying on the workflow commands in a different setup.
 
 ## Contents
 
+### Skills
+
+Skills bundle a `SKILL.md` instruction file with executable assets (scripts, templates). The Claude Code runtime auto-discovers them and invokes them when their `description` matches the user's request.
+
+| Skill | Description |
+|-------|-------------|
+| `/assess` | Layered AI-readiness assessment + Codecov-style complexity hotspot SVG. Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) so the agent runs the treemap with no external setup. When it raises a PR with the report, the PR body advertises this plugin so reviewers can install it. |
+| `/huddle` | Multi-perspective deliberation with persistent professional lenses cycling through Six Thinking Hats phases. Fibonacci team sizing (solo → debate → huddle → panel → board). |
+
 ### Commands
+
+Slash-only prompts — no bundled assets.
 
 | Command | Description |
 |---------|-------------|
 | `/tm` | Task Master orchestration — context-aware: starts, reviews, or cleans up tasks based on current state |
 | `/tm-marathon-config-example` | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` |
-| `/huddle` | Multi-perspective analysis with persistent professional lenses cycling through Six Hats phases |
 | `/6hats` | Solo Six Hats analysis — alias for `/huddle` with team size 1 |
-| `/assess` | Layered codebase assessment for AI-agent contributor readiness |
 | `/understand` | Deep understanding mode (nemawashi) — exhaustive context-gathering before action |
 | `/fix-pr` | Autonomous PR fixing loop — iterates on CI failures and review comments until green |
 | `/fix-develop` | Autonomous fix loop for failing CI on the repo's default branch |
@@ -99,12 +108,6 @@ claude-config/
     ├── blue-hat.md
     └── scribe.md                      # Structures hat output into docs
 ```
-
-### Skills vs commands
-
-Skills (`skills/<name>/SKILL.md`) carry an instruction file *plus* bundled assets (scripts, templates). The Claude Code runtime auto-discovers them and the agent invokes the relevant skill when its `description` matches the user's request. `/assess` ships `complexity-treemap.py` alongside its SKILL.md so the agent can run the treemap without external setup.
-
-Commands (`commands/<name>.md`) are slash-only prompts with no bundled assets — kept for workflows that don't need supporting scripts.
 
 ## Installation
 
