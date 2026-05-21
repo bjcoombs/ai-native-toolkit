@@ -48,6 +48,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import math
 import shutil
 import subprocess
 import sys
@@ -465,6 +466,82 @@ def render(files: list[tuple[Path, int, float, str]],
                   f"[{src:6}]  {rel}")
 
 
+def write_stats(files: list[tuple[Path, int, float, str]],
+                aux_data: dict[Path, int] | None,
+                aux_label: str | None,
+                root: Path, out_path: Path) -> None:
+    """Write a JSON stats sidecar summarising the treemap data.
+
+    Consumed by the /assess skill: percentiles drive Layer 2 scoring,
+    top hotspot lists become the named files in the actions table.
+    Composite hotspot score = ccn * (1 + log1p(churn)), so a vivid
+    red block (complex AND active) outranks a frozen complex file.
+    """
+    locs = [f[1] for f in files]
+    ccns = [f[2] for f in files]
+    churns = ([float(aux_data.get(f[0], 0)) for f in files]
+              if aux_data is not None else [])
+
+    def pct(values: list[float], q: float) -> float:
+        return float(np.percentile(values, q)) if values else 0.0
+
+    def rel(p: Path) -> str:
+        try:
+            return str(p.relative_to(root))
+        except ValueError:
+            return str(p)
+
+    enriched = []
+    for path, loc, ccn, src in files:
+        churn = float(aux_data.get(path, 0)) if aux_data else 0.0
+        enriched.append({
+            "path": rel(path),
+            "loc": int(loc),
+            "ccn": float(ccn),
+            "churn": int(churn) if aux_data else None,
+            "source": src,
+            "_score": ccn * (1.0 + math.log1p(churn)),
+        })
+
+    def strip(rows: list[dict]) -> list[dict]:
+        return [{k: v for k, v in r.items() if k != "_score"} for r in rows]
+
+    by_score = sorted(enriched, key=lambda f: -f["_score"])
+    by_ccn = sorted(enriched, key=lambda f: -f["ccn"])
+    by_loc = sorted(enriched, key=lambda f: -f["loc"])
+
+    stats: dict = {
+        "files_scored": len(files),
+        "scoring_coverage": {
+            "lizard": sum(1 for f in files if f[3] == "lizard"),
+            "scc": sum(1 for f in files if f[3] == "scc"),
+        },
+        "churn_window": aux_label,
+        "loc": {
+            "p50": pct(locs, 50),
+            "p95": pct(locs, 95),
+            "max": float(max(locs)) if locs else 0.0,
+            "total": sum(locs),
+        },
+        "ccn": {
+            "p50": pct(ccns, 50),
+            "p95": pct(ccns, 95),
+            "max": float(max(ccns)) if ccns else 0.0,
+        },
+        "churn": ({
+            "p50": pct(churns, 50),
+            "p95": pct(churns, 95),
+            "max": float(max(churns)) if churns else 0.0,
+        } if aux_data is not None else None),
+        "top_hotspots": strip(by_score[:10]),
+        "top_complex": strip(by_ccn[:10]),
+        "top_large": strip(by_loc[:10]),
+    }
+
+    out_path.write_text(json.dumps(stats, indent=2))
+    print(f"wrote {out_path}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=(
@@ -480,6 +557,12 @@ def main() -> int:
     )
     ap.add_argument("--labels", action="store_true",
                     help="Annotate large blocks with filename, LOC and metric")
+    ap.add_argument(
+        "--stats", type=Path,
+        help=("Write a JSON stats sidecar (file count, LOC/CCN percentiles, "
+              "top hotspot/complex/large files). Used by /assess to score "
+              "Layer 2 and surface specific improvement actions."),
+    )
     args = ap.parse_args()
 
     root = args.path.resolve()
@@ -496,6 +579,8 @@ def main() -> int:
     render(files, root, out, f"Hotspot: {root.name}",
            show_labels=args.labels, by=effective_by,
            aux_data=aux_data, aux_label=aux_label)
+    if args.stats:
+        write_stats(files, aux_data, aux_label, root, args.stats)
     return 0
 
 

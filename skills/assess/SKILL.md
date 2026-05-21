@@ -32,21 +32,23 @@ mkdir -p "$REPO_ROOT/.assess"
 
 Artefacts will land at:
 - `$REPO_ROOT/.assess/complexity-heatmap.svg`
+- `$REPO_ROOT/.assess/complexity-stats.json`
 - `$REPO_ROOT/.assess/assess-report.md`
 
-## Step 2: Generate Complexity Hotspot SVG
+## Step 2: Generate Complexity Hotspot SVG + Stats Sidecar
 
-Run the bundled treemap script. It produces a single self-contained SVG with hover tooltips on every block.
+Run the bundled treemap script. It produces a self-contained SVG with hover tooltips on every block **and** a JSON stats sidecar consumed by Layer 2 scoring and the Top 3 Actions table.
 
 ```bash
 # Resolve the script path relative to this skill. The skill lives at
 # ~/.claude/skills/assess/SKILL.md, so the script is alongside it.
 SKILL_DIR="$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")"
 uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" \
-    -o "$REPO_ROOT/.assess/complexity-heatmap.svg"
+    -o "$REPO_ROOT/.assess/complexity-heatmap.svg" \
+    --stats "$REPO_ROOT/.assess/complexity-stats.json"
 ```
 
-The script prints a one-line summary (file count, lizard vs scc coverage, churn window chosen, top 5 biggest files). Capture this output — it goes into the report's "Hotspot snapshot" section.
+The script prints a one-line summary (file count, lizard vs scc coverage, churn window chosen, top 5 biggest files). The stats sidecar contains percentiles (p50/p95/max for LOC, CCN, churn) and ranked lists of the top 10 files by hotspot score, raw CCN, and raw LOC. Both feed the report.
 
 **Dependencies:** the script uses PEP 723 inline metadata (`lizard`, `squarify`, `matplotlib`, `numpy`). `uv` resolves them on first run. Optional: `brew install scc` extends coverage to 200+ languages beyond what lizard handles natively.
 
@@ -164,15 +166,43 @@ ls "$REPO_ROOT"/.swiftlint.yml 2>/dev/null
 **If found, assess AI-relevant rules** by reading the config:
 - Unexplained lint suppression rules? (nolintlint, no-restricted-syntax)
 - TODO/FIXME detection? (godox, no-warning-comments)
-- Function length limits? (funlen, max-lines-per-function)
-- Complexity limits? (cyclop, complexity)
+- **Function length limits?** (`funlen`, `max-lines-per-function`, `MethodLength`, `function-max-lines`)
+- **Cyclomatic complexity limits?** (`cyclop`, `gocognit`, `complexity`, `CyclomaticComplexity`, `too-many-statements`, `cognitive-complexity`, `cognitive_complexity`)
+- **File size limits?** (`max-lines`, `FileLength`, `file-max-lines`, `lines-per-file`)
 - Exhaustive matching? (exhaustive, strict unions)
 - Import boundary rules? (depguard, no-restricted-imports)
 
-**Scoring:**
-- Present: Linter configured with AI failure mode rules, strict enforcement
-- Partial: Linter exists but basic config, no AI-specific rules
-- Missing: No linter configuration found
+**Cross-reference treemap evidence.** Read the stats sidecar to see what the linter actually catches in the wild:
+
+```bash
+jq '{
+  loc_p95: .loc.p95, loc_max: .loc.max,
+  ccn_p95: .ccn.p95, ccn_max: .ccn.max,
+  worst_complex: .top_complex[:3] | map(.path),
+  worst_large: .top_large[:3] | map(.path)
+}' "$REPO_ROOT/.assess/complexity-stats.json"
+```
+
+Thresholds for "high" (based on industry conventions — adjust for context):
+
+| Signal | Watch | High |
+|---|---|---|
+| p95 cyclomatic complexity | ≥ 10 | ≥ 15 |
+| max cyclomatic complexity | ≥ 30 | ≥ 50 |
+| p95 file size (LOC) | ≥ 500 | ≥ 800 |
+| max file size (LOC) | ≥ 1500 | ≥ 2000 |
+
+**Combined scoring** (linter config ∩ treemap evidence):
+
+| Linter has complexity/length rules? | Treemap p95 / max in "High" range? | Score |
+|---|---|---|
+| Yes, enforced (CI blocks) | Either way — rules ratchet the legacy | **Present** |
+| Yes but lenient / excludes legacy | High | **Partial** — rules exist, legacy unfenced |
+| Linter exists, no complexity/length rules | Not high | **Partial** — gap but no evidence yet |
+| Linter exists, no complexity/length rules | High | **Missing** — concrete evidence of the gap |
+| No linter at all | Either | **Missing** |
+
+When scoring Partial or Missing on this combined check, name the top 3 worst offenders from `top_complex` / `top_large` in the report's Evidence/Gap columns. Those are the files the missing rule would have flagged.
 
 ### Layer 3: Architecture Tests (Conventions as Contracts)
 
@@ -349,13 +379,25 @@ Calculate the score (0-7 based on layers present, +0.5 for partial) and write th
 
 _Generated <YYYY-MM-DD>._
 
+## How to read this report
+
+This is an improvement roadmap, not a verdict. It pairs two views:
+
+- **Where the codebase is today** — the hotspot SVG shows current complexity and churn at a glance. Vivid red = complex AND actively changing = the files most likely to bite an agent (or a human) next week.
+- **What scaffolding is in place to keep it from getting worse** — the 7-layer AI Readiness score measures whether the system enforces contracts that catch the issues the hotspots reveal.
+
+A codebase can be 7/7 and still on fire (great scaffolding, legacy debt) — or 2/7 with a calm treemap (small codebase, no enforcement needed yet). The pair matters.
+
+The "Top 3 Actions" table at the bottom names specific files. Start there.
+
 ## Hotspot snapshot
 
 ![Complexity hotspot](./complexity-heatmap.svg)
 
 - **Files scored:** <N>
 - **Churn window chosen:** <last 12mo | last 24mo | last 5y | all-time>
-- **Top hotspots** (size × complexity × churn):
+- **Complexity profile:** p95 ccn <N> (max <M>); p95 LOC <N> (max <M>)
+- **Top hotspots** (composite: complexity × recent churn):
   1. `<path>` — <loc> LOC, ccn <N>, <M> commits in window
   2. ...
   3. ...
@@ -388,13 +430,22 @@ Size encodes lines of code, hue encodes cyclomatic complexity (red = high), satu
 
 ## Top 3 Actions
 
-Prioritize by leverage: breadcrumbs and CI first, then linters and coverage, then architecture tests and retro loops. Each action should be completable in a single session.
+Prioritize by leverage: breadcrumbs and CI first, then linters and coverage, then architecture tests and retro loops. Each action should be completable in a single session and reference **specific files** from the hotspot snapshot wherever possible — generic advice is the failure mode this report exists to prevent.
 
-| # | Action | Layer | Effort | Command / First Step |
-|---|--------|-------|--------|---------------------|
-| 1 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` |
-| 2 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` |
-| 3 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` |
+| # | Action | Layer | Effort | Command / First Step | Hotspot files this addresses |
+|---|--------|-------|--------|---------------------|------------------------------|
+| 1 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths from top_hotspots / top_complex / top_large, or "—" if not file-specific> |
+| 2 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths or —> |
+| 3 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths or —> |
+
+Good actions look like:
+
+> _"Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67), `internal/sync/reconciler.go` (ccn 54)."_
+
+Generic actions to avoid:
+
+> ~~_"Improve code quality"_~~ — name the files and the threshold.
+> ~~_"Add a linter"_~~ — name the linter, the rule, and the first three files it will flag.
 
 ### Why these three?
 <2-3 sentences explaining why these are highest leverage. Connect to specific gaps from the table above and to hotspot files where relevant. Be concrete about what each action prevents.>
