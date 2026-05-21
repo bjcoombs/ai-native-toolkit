@@ -15,6 +15,22 @@ Scales from a solo gut check to a board-level deliberation using Fibonacci team 
 
 **Team members** (when team size > 1) are persistent general-purpose agents with professional identities who call hat agents through their professional lens.
 
+## Capability Requirements
+
+**Solo mode (size 1) works everywhere.** Hat agents fire in parallel via the standard Agent tool and Blue Hat synthesises. No special setup, low token cost. This is the default if the session has no team support.
+
+**Team modes (size 2+) need the Agent Teams capability flag** enabled in your environment:
+
+```bash
+export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+```
+
+Without it, `TeamCreate`, `SendMessage`, and the other Team* tools used in Steps 2–6 are unavailable. If you invoke `/huddle` with a team size > 1 and the flag is off, drop to solo mode and tell the user why.
+
+**Why enable team mode:** persistent professional-lens agents talking to each other across phases produce noticeably deeper synthesis than parallel one-shot calls — disagreements get rebutted, edge cases surface from cross-talk, and the verdict feels like real deliberation rather than five summaries glued together.
+
+**Cost trade-off:** team modes burn roughly 5–15× the tokens of solo (multiple agents × multiple phases × `SendMessage` cross-talk). Reserve for decisions where being wrong costs 100× more than the analysis — architecture choices, irreversible migrations, hiring calls, contractual commitments. Use solo for "what do I think?" gut checks.
+
 ## No Arguments Behavior
 
 If called without arguments, respond with:
