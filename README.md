@@ -2,19 +2,28 @@
 
 Personal Claude Code configuration, customizations, and workflow tools.
 
-> **Heads up — not portable.** This config is tuned to one author's daily setup: a `<repo>-main/` + `worktree/` directory layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. The opinionated framework agents (`/huddle`, `/6hats`, `/assess`, `/understand`) are reasonably portable; the workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in those assumptions and may need editing before they work for you. See [Git Workflow](#git-workflow) and [Adapting for Your Workflow](#adapting-for-your-workflow) below.
+> **Portability split.** The framework pieces (`/huddle`, `/6hats`, `/assess`, `/understand` and their agents) are portable and installable as a Claude Code plugin — see [Installation](#installation) below. The workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. Read [Adapting for Your Workflow](#adapting-for-your-workflow) before relying on the workflow commands in a different setup.
 
 ## Contents
 
+### Skills
+
+Skills bundle a `SKILL.md` instruction file with executable assets (scripts, templates). The Claude Code runtime auto-discovers them and invokes them when their `description` matches the user's request.
+
+| Skill | Description |
+|-------|-------------|
+| `/assess` | Layered AI-readiness assessment (0–7 contract model) plus a Codecov-style complexity hotspot SVG. Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) so the agent runs the treemap with no external setup. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
+| `/huddle` | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo → debate → huddle → panel → board). Three execution modes: solo flat-parallel, phased sub-agent (default fallback), and team mode (needs Agent Teams capability flag). |
+
 ### Commands
+
+Slash-only prompts — no bundled assets.
 
 | Command | Description |
 |---------|-------------|
 | `/tm` | Task Master orchestration — context-aware: starts, reviews, or cleans up tasks based on current state |
 | `/tm-marathon-config-example` | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` |
-| `/huddle` | Multi-perspective analysis with persistent professional lenses cycling through Six Hats phases |
 | `/6hats` | Solo Six Hats analysis — alias for `/huddle` with team size 1 |
-| `/assess` | Layered codebase assessment for AI-agent contributor readiness |
 | `/understand` | Deep understanding mode (nemawashi) — exhaustive context-gathering before action |
 | `/fix-pr` | Autonomous PR fixing loop — iterates on CI failures and review comments until green |
 | `/fix-develop` | Autonomous fix loop for failing CI on the repo's default branch |
@@ -71,9 +80,11 @@ Use Six Hats when the stakes justify the token cost. Skip it for debugging, impl
 ## Repository Structure
 
 ```
-claude-config/
+ai-native-toolkit/
 ├── README.md
 ├── CLAUDE.md                          # Personal guidelines and instructions
+├── .claude-plugin/
+│   └── plugin.json                    # Plugin manifest (enables /plugin add)
 ├── skills/
 │   ├── assess/
 │   │   ├── SKILL.md                   # Codebase readiness assessment + complexity hotspot
@@ -98,26 +109,33 @@ claude-config/
     └── scribe.md                      # Structures hat output into docs
 ```
 
-### Skills vs commands
-
-Skills (`skills/<name>/SKILL.md`) carry an instruction file *plus* bundled assets (scripts, templates). The Claude Code runtime auto-discovers them and the agent invokes the relevant skill when its `description` matches the user's request. `/assess` ships `complexity-treemap.py` alongside its SKILL.md so the agent can run the treemap without external setup.
-
-Commands (`commands/<name>.md`) are slash-only prompts with no bundled assets — kept for workflows that don't need supporting scripts.
-
 ## Installation
 
-Clone to your Claude Code configuration directory:
+### As a plugin (recommended)
 
-```bash
-git clone git@github.com:bjcoombs/claude-config.git ~/.claude/
+**Run this from inside a Claude Code session**, not your shell — `/plugin` is a Claude Code command, not a CLI:
+
+```text
+/plugin add https://github.com/bjcoombs/ai-native-toolkit
 ```
 
-Or if you already have a `.claude` directory:
+You get the skills, commands, and agents in a namespaced bundle that doesn't touch your existing `~/.claude/` files. Skills appear as `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`, etc. Update with `/plugin update ai-native-toolkit`, remove with `/plugin remove ai-native-toolkit`.
+
+### As a full `~/.claude/` clone (alternative)
+
+If you want this repo to *be* your entire Claude Code config, clone it into `~/.claude/`:
 
 ```bash
-git clone git@github.com:bjcoombs/claude-config.git /tmp/claude-config
-cp -r /tmp/claude-config/agents ~/.claude/
-cp -r /tmp/claude-config/commands ~/.claude/
+git clone git@github.com:bjcoombs/ai-native-toolkit.git ~/.claude/
+```
+
+If `~/.claude/` already exists and you only want the skills/commands/agents:
+
+```bash
+git clone git@github.com:bjcoombs/ai-native-toolkit.git /tmp/ai-native-toolkit
+cp -r /tmp/ai-native-toolkit/skills   ~/.claude/
+cp -r /tmp/ai-native-toolkit/agents   ~/.claude/
+cp -r /tmp/ai-native-toolkit/commands ~/.claude/
 ```
 
 ## Git Workflow
@@ -190,7 +208,7 @@ The framework agents (`/huddle`, `/6hats`, `/assess`, `/understand`) are reusabl
 
 ## License
 
-The agent implementations are provided as-is for use with Claude Code.
+Licensed under the Apache License, Version 2.0 — see [`LICENSE`](LICENSE) for the full text.
 
-- The Six Thinking Hats method is the intellectual property of Edward de Bono.
+- The Six Thinking Hats method is the intellectual property of Edward de Bono. Licensing covers only this implementation, not the underlying methodology.
 - The Task Master commands are designed for use with [Claude Task Master](https://github.com/eyaltoledano/claude-task-master) by Eyal Toledano.

@@ -15,6 +15,28 @@ Scales from a solo gut check to a board-level deliberation using Fibonacci team 
 
 **Team members** (when team size > 1) are persistent general-purpose agents with professional identities who call hat agents through their professional lens.
 
+## Capability Requirements
+
+Three execution modes exist; the skill picks one automatically based on team size and whether the Agent Teams capability flag is enabled.
+
+| Mode | When chosen | Mechanism | Cost (relative) |
+|------|-------------|-----------|----------------|
+| **Solo flat-parallel** | Size 1 | Hat agents fire in parallel via standard Agent tool; Blue Hat synthesises | 1× |
+| **Phased sub-agent** | Size 2+, no flag | Iterate phases sequentially; spawn N sub-agents per phase (one per lens), each with fresh context, briefed via a running synopsis Blue Hat maintains | 2–4× |
+| **Team mode** | Size 2+, flag enabled | Persistent `TeamCreate` agents cross-talk via `SendMessage` across phases | 5–15× |
+
+**Agent Teams flag** enables `TeamCreate`, `SendMessage`, and related tools. Enable in your environment:
+
+```bash
+export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+```
+
+Without the flag, `/huddle` still runs multi-perspective deliberations via phased sub-agent mode — it just trades cross-talk between agents for a running synopsis Blue Hat maintains as the persistent memory. Quality drops a little, cost drops a lot.
+
+**Why enable team mode anyway:** persistent professional-lens agents talking to each other across phases produce noticeably deeper synthesis — disagreements get rebutted in real time, edge cases surface from cross-talk, and the verdict feels like real deliberation rather than serially-summarised opinions. Worth it for decisions where being wrong costs 100× more than the analysis: architecture choices, irreversible migrations, hiring calls, contractual commitments.
+
+**Tell the user which mode you're in** before you start. One line: "Running in phased sub-agent mode (3 lenses, 5 phases — Agent Teams flag not detected)."
+
 ## No Arguments Behavior
 
 If called without arguments, respond with:
@@ -50,11 +72,47 @@ Assess the topic to determine:
 
 Announce your team composition and sequence to the user before proceeding.
 
-### Solo Mode (Size 1)
+### Branch by capability
 
-Spawn hat agents in parallel based on your chosen sequence. Each agent operates independently on the topic. Collect results, then synthesize as Blue Hat. No team, no discussion - just parallel analysis.
+After Step 1 you have a team size, a list of professional lenses, and a hat sequence. How you execute them depends on which capability is available:
 
-For team modes (size 2+), continue to Step 2.
+| Configuration | Execution mode |
+|---|---|
+| Size 1 | **Solo flat-parallel** (below) |
+| Size 2+ AND Agent Teams flag enabled | **Team Mode** (Step 2 onwards) |
+| Size 2+ AND Agent Teams flag NOT enabled | **Phased Sub-Agent Mode** (below) |
+
+### Solo flat-parallel (Size 1)
+
+Spawn hat agents in parallel based on your chosen sequence. Each agent operates independently on the topic. Collect results, then synthesize as Blue Hat. No team, no discussion — just parallel analysis.
+
+### Phased Sub-Agent Mode (Size 2+, no team flag)
+
+When team size > 1 but `TeamCreate` is unavailable, do not collapse to flat-parallel — that throws away both phase ordering and multi-lens diversity. Instead, iterate phases sequentially and spawn fresh sub-agents per phase:
+
+**Loop over each hat phase in your sequence:**
+
+1. **Announce the phase to the user.** "Phase 3 of 5: Black Hat — risks."
+2. **For each professional lens, spawn a sub-agent in parallel** for this phase. Each sub-agent gets:
+   - Its persona (the professional lens you assigned in Step 1)
+   - The hat methodology for this phase (point it at `~/.claude/agents/<hat>-hat.md`)
+   - The topic
+   - **A running synopsis you maintain as Blue Hat** — a 200-400 word summary of what every prior phase produced. This is how cross-phase continuity survives without a persistent team. Each sub-agent has a fresh context window, so the synopsis is its only memory of what came before.
+3. **Collect all sub-agent outputs.** As Blue Hat, write a 100-200 word phase summary capturing: what each lens contributed, where they agreed, where they conflicted, what changed your view. Append this to the running synopsis.
+4. **Surface the phase summary to the user** before moving on. Short, scannable.
+
+**At the end of all phases**, deliver the verdict as in team mode (Step 5 below): one paragraph stating the decision, the strongest dissent, and the conditions under which you'd reverse.
+
+**Why this works without team mode:**
+
+- Each sub-agent gets a clean context window (the equivalent benefit to a persistent team member's fresh perspective).
+- Multi-lens diversity preserved — N professionals still weigh in per phase.
+- Phase ordering preserved — Black Hat sees White Hat's facts via the synopsis.
+- No `TeamCreate` / `SendMessage` required; uses only the standard Agent tool.
+
+**Cost:** roughly 2–4× flat-parallel (see Capability Requirements table). The synopsis grows with each phase (200–400 words per phase → up to ~2KB by phase 5), and that growing synopsis is passed into every sub-agent on every subsequent phase, so the cost skews late in the sequence. Still well below team mode because there's no `SendMessage` cross-talk overhead and no persistent agent state to maintain. Usually the right default when the flag is off and the decision warrants more than a gut check.
+
+For team modes (size 2+) with the flag enabled, continue to Step 2.
 
 ### Step 2: Create the Team
 
