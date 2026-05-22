@@ -15,6 +15,8 @@ The headline pieces are two **skills**:
 
 Alongside the SVG you get an `assess-report.md`: a 0-7 layered readiness score (breadcrumbs, type safety, linters, architecture tests, CI, coverage, review bots, AI project management), three concrete leverage actions naming specific files, and a stats sidecar (`complexity-stats.json`) with percentiles and ranked hotspot lists.
 
+**Build artifacts and generated code are filtered by default** so a single `main.dart.js` or thousands of lines of `.pb.go` don't dominate the treemap. The filter catches minified bundles (`*.min.js`, `*.bundle.js`, `main.dart.js`), sourcemaps, protobuf bindings (`*.pb.go`, `*.connect.go`, `*_pb.ts`), Go generators (`wire_gen.go`, `zz_generated_*.go`), .NET source generators (`*.designer.cs`, `*.g.cs`), Dart codegen (`*.freezed.dart`, `*.g.dart`), and files under build dirs (`dist/`, `build/`, `.next/`, `.nuxt/`, `node_modules/`, etc.). Pass `--include-artifacts` to disable. If a single file still holds >30% of total LOC after filtering, the script warns - usually that's a build artifact that needs `.gitignore`.
+
 The skill runs locally - lizard, optional scc, and git log do the analysis in your Claude Code session. No data leaves the machine.
 
 > **Portability split.** The framework pieces (`/assess`, `/huddle`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session. The workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
@@ -62,7 +64,7 @@ Spawns a Fibonacci-sized team (default 3) that cycles through De Bono's six hats
 
 | Skill | Description |
 |-------|-------------|
-| `/assess` | Layered AI-readiness assessment (0-7 contract model) plus a Codecov-style complexity hotspot SVG. Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) so the agent runs the treemap with no external setup. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
+| `/assess` | Layered AI-readiness assessment (0-7 contract model) plus a Codecov-style complexity hotspot SVG. Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) so the agent runs the treemap with no external setup. Filters build artifacts and generated code by default (opt-out with `--include-artifacts`); warns when one file dominates LOC. Offers to install optional `scc` for repos heavy in markdown/JSON/YAML. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
 | `/huddle` | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board). Three execution modes: solo flat-parallel, phased sub-agent (default fallback), and team mode (needs Agent Teams capability flag). |
 
 ### Commands (slash-only, no bundled assets)
