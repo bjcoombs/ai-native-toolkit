@@ -203,9 +203,15 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
             loc=h.get("loc", 0),
             ccn=h.get("ccn", 0),
             commits=h.get("commits", 0),
-            has_tests=False,  # filled in by a follow-up plan (test pairing)
+            has_tests=None,  # unknown until test pairing feature lands (deferred)
             history_rows=f"| {run_date} | {h.get('loc', 0)} | {h.get('ccn', 0)} | {h.get('commits', 0)} | {status} |",
-            briefing=f"Hot file in this repo. CCN {h.get('ccn', 0)}, {h.get('loc', 0)} LOC.",
+            briefing=(
+                f"Hotspot ({status}). "
+                f"{h.get('loc', 0)} LOC, "
+                f"max cyclomatic complexity {h.get('ccn', 0)}, "
+                f"{h.get('commits', 0)} commits in churn window. "
+                "(Briefing refined by LLM via assess_finalize - see Suggested actions below.)"
+            ),
             actions="- Pending LLM-generated suggestions",
         )
 

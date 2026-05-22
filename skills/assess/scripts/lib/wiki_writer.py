@@ -102,14 +102,22 @@ def write_hotspot_page(
     loc: int,
     ccn: int,
     commits: int,
-    has_tests: bool,
+    has_tests: bool | None,
     history_rows: str,
     briefing: str,
     actions: str,
 ) -> None:
-    """(Re)write hotspots/<slug>.md."""
+    """(Re)write hotspots/<slug>.md.
+
+    has_tests=None means "we don't know yet" - shown as "unknown" in the page.
+    Test-to-code pairing is a deferred feature; honest reporting beats lying.
+    """
     hotspots_dir = assess_dir / "hotspots"
     hotspots_dir.mkdir(exist_ok=True)
+    if has_tests is None:
+        has_tests_str = "unknown"
+    else:
+        has_tests_str = "yes" if has_tests else "no"
     content = _load_template("hotspot.md.template").format(
         path=path,
         first_flagged=first_flagged,
@@ -118,7 +126,7 @@ def write_hotspot_page(
         loc=loc,
         ccn=ccn,
         commits=commits,
-        has_tests="yes" if has_tests else "no",
+        has_tests=has_tests_str,
         history_rows=history_rows,
         briefing=briefing,
         actions=actions,

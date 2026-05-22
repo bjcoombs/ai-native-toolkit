@@ -305,3 +305,29 @@ def test_scans_docs_subdirectory(tmp_path: Path, fixtures_dir: Path) -> None:
 
     ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
     assert "docs/CLAUDE.md" in ctx["instruction_files"]
+
+
+def test_briefing_includes_loc_ccn_commits_and_status(tmp_path: Path) -> None:
+    """The auto-generated briefing should reflect the actual stats, not be vague."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 10, "loc": {"p50": 10, "p95": 30, "max": 50},
+        "ccn": {"p50": 1, "p95": 3, "max": 5},
+        "top_hotspots": [
+            {"path": "src/foo.go", "loc": 500, "ccn": 20, "commits": 15},
+        ],
+        "top_complex": [{"path": "src/foo.go", "ccn": 20}],
+        "top_large": [{"path": "src/foo.go", "loc": 500}],
+    }))
+    build_run_context(repo_root=repo, run_date="2026-05-22")
+
+    page = next((assess_dir / "hotspots").iterdir())
+    content = page.read_text(encoding="utf-8")
+    assert "500 LOC" in content
+    assert "max cyclomatic complexity 20" in content
+    assert "15 commits" in content
+    # has_tests should be "unknown" now, not "no"
+    assert "Has test file | unknown" in content
