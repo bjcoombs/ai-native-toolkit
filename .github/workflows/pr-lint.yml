@@ -33,11 +33,13 @@ jobs:
             docs
             chore
             refactor
+            ci
+            build
+            test
+            perf
+            style
+            revert
           requireScope: false
-          subjectPattern: ^(?![A-Z]).+$
-          subjectPatternError: |
-            The subject "{subject}" must start with a lowercase letter.
-            Example: feat(assess): filter generated code
 
   auto-label:
     name: Auto-label from PR title
