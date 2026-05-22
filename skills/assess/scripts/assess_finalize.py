@@ -43,20 +43,33 @@ def _finalize_log(assess_dir: Path, *, score: float, maturity_label: str, top_ac
         return
 
     text = log_path.read_text(encoding="utf-8")
-    # Replace the AI Readiness placeholder - only the first occurrence (latest entry)
-    text = re.sub(
-        r"\*\*AI Readiness:\*\* [\d.]+ / 7 \(\(LLM fills in\)\)",
-        lambda _m: f"**AI Readiness:** {score} / 7 ({maturity_label})",
+    # Replace the LAST occurrence of each placeholder - log entries are appended
+    # (newest at the bottom of the file), and we want to finalize the latest run.
+    # An unfinalized older entry stays untouched as historical evidence.
+    text = _replace_last(
         text,
-        count=1,
+        pattern=r"\*\*AI Readiness:\*\* [\d.]+ / 7 \(\(LLM fills in\)\)",
+        replacement=f"**AI Readiness:** {score} / 7 ({maturity_label})",
     )
-    text = re.sub(
-        r"\*\*Top action:\*\* Deterministic ranker not yet wired \(LLM picks Top 3\)",
-        lambda _m: f"**Top action:** {top_action}",
+    text = _replace_last(
         text,
-        count=1,
+        pattern=r"\*\*Top action:\*\* Deterministic ranker not yet wired \(LLM picks Top 3\)",
+        replacement=f"**Top action:** {top_action}",
     )
     log_path.write_text(text, encoding="utf-8")
+
+
+def _replace_last(text: str, *, pattern: str, replacement: str) -> str:
+    """Replace the LAST occurrence of pattern in text with replacement (literal).
+
+    Uses slicing rather than re.sub so the replacement is a literal string,
+    not subject to backreference interpretation.
+    """
+    matches = list(re.finditer(pattern, text))
+    if not matches:
+        return text
+    last = matches[-1]
+    return text[:last.start()] + replacement + text[last.end():]
 
 
 def _finalize_hotspot_actions(assess_dir: Path, *, hotspot_actions: dict[str, list[str]]) -> None:

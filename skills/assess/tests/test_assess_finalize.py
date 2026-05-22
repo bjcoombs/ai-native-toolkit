@@ -157,3 +157,49 @@ def test_finalize_hotspot_action_handles_backslash(tmp_assess_dir: Path) -> None
     finalize_run(assess_dir=tmp_assess_dir)
     page = (tmp_assess_dir / "hotspots" / f"{slug}.md").read_text(encoding="utf-8")
     assert r"Use \1 to denote first capture group" in page
+
+
+def test_finalize_updates_last_entry_when_older_entry_unfinalized(tmp_assess_dir: Path) -> None:
+    """When an older log entry still has placeholders, finalize updates the LATEST.
+
+    Log entries are appended (newest at bottom). If we finalized the first match,
+    we'd overwrite stale historical data and leave the new run unfilled.
+    The older unfinalized entry stays as evidence of "this run wasn't finalized."
+    """
+    # Seed two entries: older (unfinalized, placeholders intact) then newer (also placeholders)
+    (tmp_assess_dir / "log.md").write_text(
+        "# Assess Log\n\n"
+        "## 2026-05-01\n\n"
+        "- **Files scored:** 80\n"
+        "- **AI Readiness:** 0.0 / 7 ((LLM fills in))\n"
+        "- **Top action:** Deterministic ranker not yet wired (LLM picks Top 3)\n\n"
+        "---\n\n"
+        "## 2026-05-22\n\n"
+        "- **Files scored:** 100\n"
+        "- **AI Readiness:** 0.0 / 7 ((LLM fills in))\n"
+        "- **Top action:** Deterministic ranker not yet wired (LLM picks Top 3)\n\n"
+        "---\n",
+        encoding="utf-8",
+    )
+    finalize_input = {
+        "score": 6.5,
+        "maturity_label": "Solid",
+        "top_action": "Add cyclop rule (threshold 15) to .golangci.yml",
+        "hotspot_actions": {},
+    }
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+
+    # The 2026-05-22 (latest) entry got filled
+    latest_section = content.split("## 2026-05-22")[1]
+    assert "AI Readiness:** 6.5 / 7 (Solid)" in latest_section
+    assert "Top action:** Add cyclop rule (threshold 15) to .golangci.yml" in latest_section
+
+    # The 2026-05-01 (older) entry's placeholders are PRESERVED as historical evidence
+    older_section = content.split("## 2026-05-22")[0]
+    assert "AI Readiness:** 0.0 / 7 ((LLM fills in))" in older_section
+    assert "Deterministic ranker not yet wired" in older_section
