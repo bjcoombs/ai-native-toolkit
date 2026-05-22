@@ -37,7 +37,7 @@ def test_build_run_context_first_run(tmp_path: Path) -> None:
     assert ctx["run_date"] == "2026-05-22"
     assert ctx["stats_summary"]["files_scored"] == 50
     assert ctx["instruction_files"] == {}  # nothing found
-    assert ctx["instructions_grade"] == "F"  # no instructions = F
+    assert ctx["instructions_grade"] is None  # no instructions = None (distinct from F)
     assert ctx["diff"]["new"] == 1
     assert ctx["diff"]["graduated"] == 0
     assert (assess_dir / "log.md").exists()
@@ -178,3 +178,156 @@ def test_build_run_context_includes_anomalies_field(tmp_path: Path) -> None:
     assert "anomalies" in ctx
     codes = {a["code"] for a in ctx["anomalies"]}
     assert "ZERO_FILES_SCORED" in codes
+
+
+def test_instructions_grade_is_None_when_no_files(tmp_path: Path) -> None:
+    """When no instruction file exists, instructions_grade is None (not 'F').
+
+    Distinct from F: F means a file exists but scored badly. None means there's
+    no file at all - different remediation ("create the file" vs "fix the file").
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0,
+        "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert ctx["instructions_grade"] is None
+    assert ctx["instruction_files"] == {}
+
+
+def test_repo_root_not_in_ctx(tmp_path: Path) -> None:
+    """ctx should not contain repo_root - it leaks the author's absolute path.
+
+    The LLM consumer has $REPO_ROOT from its shell context; no need to serialize it.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert "repo_root" not in ctx
+
+
+def test_plugin_version_in_ctx(tmp_path: Path) -> None:
+    """ctx should include plugin_version so the LLM can surface it in the report.
+
+    Mitigates the multi-version cache footgun: if /reload-plugins lands on an old
+    cached version, the report shows that version and the user can spot the drift.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert "plugin_version" in ctx
+    assert isinstance(ctx["plugin_version"], str)
+    assert ctx["plugin_version"].count(".") >= 1
+
+
+def test_scans_github_claude_instructions(tmp_path: Path, fixtures_dir: Path) -> None:
+    """The scan finds .github/claude-instructions.md - a real-world non-canonical location.
+
+    Surfaced by the v1.4 meridian run: .github/claude-review-instructions.md was a
+    legitimate 795-line breadcrumb file that the canonical-paths-only scan missed.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    github_dir = repo / ".github"
+    github_dir.mkdir()
+    (github_dir / "claude-instructions.md").write_text(
+        (fixtures_dir / "good_instructions.md").read_text()
+    )
+
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert ".github/claude-instructions.md" in ctx["instruction_files"]
+
+
+def test_scans_github_claude_review_instructions(tmp_path: Path, fixtures_dir: Path) -> None:
+    """The scan finds .github/claude-review-instructions.md (used by claude-review bots)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    github_dir = repo / ".github"
+    github_dir.mkdir()
+    (github_dir / "claude-review-instructions.md").write_text(
+        (fixtures_dir / "good_instructions.md").read_text()
+    )
+
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert ".github/claude-review-instructions.md" in ctx["instruction_files"]
+
+
+def test_scans_docs_subdirectory(tmp_path: Path, fixtures_dir: Path) -> None:
+    """The scan finds docs/CLAUDE.md (some projects keep instruction files there)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    docs_dir = repo / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "CLAUDE.md").write_text(
+        (fixtures_dir / "good_instructions.md").read_text()
+    )
+
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert "docs/CLAUDE.md" in ctx["instruction_files"]
+
+
+def test_briefing_includes_loc_ccn_commits_and_status(tmp_path: Path) -> None:
+    """The auto-generated briefing should reflect the actual stats, not be vague."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 10, "loc": {"p50": 10, "p95": 30, "max": 50},
+        "ccn": {"p50": 1, "p95": 3, "max": 5},
+        "top_hotspots": [
+            {"path": "src/foo.go", "loc": 500, "ccn": 20, "commits": 15},
+        ],
+        "top_complex": [{"path": "src/foo.go", "ccn": 20}],
+        "top_large": [{"path": "src/foo.go", "loc": 500}],
+    }))
+    build_run_context(repo_root=repo, run_date="2026-05-22")
+
+    page = next((assess_dir / "hotspots").iterdir())
+    content = page.read_text(encoding="utf-8")
+    assert "500 LOC" in content
+    assert "max cyclomatic complexity 20" in content
+    assert "15 commits" in content
+    # has_tests should be "unknown" now, not "no"
+    assert "Has test file | unknown" in content

@@ -32,8 +32,6 @@ From inside a Claude Code session (not a shell - `/plugin` is a Claude Code comm
 
 Skills appear namespaced: `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`. Update with `/plugin update ai-native-toolkit`. Remove with `/plugin remove ai-native-toolkit`. The plugin doesn't touch your existing `~/.claude/` files.
 
-If you'd rather have this repo *be* your entire Claude Code config, see [Full clone install](#full-clone-install) below.
-
 ## Try it
 
 ### Assess a codebase
@@ -149,23 +147,6 @@ git branch fix-login-bug
 git worktree add ../worktree/fix-login-bug fix-login-bug
 cd ../worktree/fix-login-bug
 # work, commit, push, create PR
-```
-
-## Full clone install
-
-If you want this repo to *be* your entire Claude Code config (instead of installing it as a plugin):
-
-```bash
-git clone git@github.com:bjcoombs/ai-native-toolkit.git ~/.claude/
-```
-
-If `~/.claude/` already exists and you only want the skills/commands/agents:
-
-```bash
-git clone git@github.com:bjcoombs/ai-native-toolkit.git /tmp/ai-native-toolkit
-cp -r /tmp/ai-native-toolkit/skills   ~/.claude/
-cp -r /tmp/ai-native-toolkit/agents   ~/.claude/
-cp -r /tmp/ai-native-toolkit/commands ~/.claude/
 ```
 
 ## Repository structure

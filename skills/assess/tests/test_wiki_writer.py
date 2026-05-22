@@ -115,3 +115,27 @@ def test_write_hotspot_page_creates_file(tmp_assess_dir: Path) -> None:
     assert "src/foo.go" in content
     assert "regressed" in content
     assert "handler_test.go" in content
+
+
+def test_write_hotspot_page_unknown_has_tests(tmp_assess_dir: Path) -> None:
+    """When has_tests is None, the page shows 'unknown' (not 'no').
+
+    Test pairing is a deferred feature; honest reporting beats false negatives.
+    """
+    write_hotspot_page(
+        tmp_assess_dir,
+        path="src/foo.go",
+        first_flagged="2026-01-01",
+        last_seen="2026-05-22",
+        status="active",
+        loc=600,
+        ccn=30,
+        commits=15,
+        has_tests=None,
+        history_rows="| 2026-05-22 | 600 | 30 | 15 | active |",
+        briefing="Go API handler.",
+        actions="- Investigate complexity",
+    )
+    page = next((tmp_assess_dir / "hotspots").iterdir())
+    content = page.read_text(encoding="utf-8")
+    assert "Has test file | unknown" in content
