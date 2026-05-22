@@ -1,0 +1,62 @@
+name: PR Title Lint + Auto-Label
+
+# Two jobs in one workflow:
+#  1. Validate the PR title is conventional-commit format
+#     (feat|fix|docs|chore|refactor)(scope?)(!)?: description
+#     A failing title blocks merge once branch protection requires this check.
+#  2. Extract the type from the title and apply the matching label
+#     so .github/release.yml can categorise the PR in auto-generated
+#     release notes. Labels: feat / fix / docs / chore / refactor.
+#     Breaking changes (`feat!:` or `feat(scope)!:`) also get a `breaking`
+#     label (create with `gh label create breaking` if you want it).
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  lint-title:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            chore
+            refactor
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The subject "{subject}" must start with a lowercase letter.
+            Example: feat(assess): filter generated code
+
+  auto-label:
+    name: Auto-label from PR title
+    needs: lint-title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const match = title.match(/^(feat|fix|docs|chore|refactor)(\([^)]+\))?(!)?:/);
+            if (!match) return;
+
+            const labels = [match[1]];
+            if (match[3]) labels.push('breaking');
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels,
+            });
