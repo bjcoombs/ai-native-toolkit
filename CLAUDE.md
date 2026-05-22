@@ -58,11 +58,36 @@ Commands without frontmatter still work but provide no `/help` description.
 ## CI
 
 - `.github/workflows/pr-lint.yml` validates PR titles match conventional-commit format and auto-applies the matching label (`feat` / `fix` / `docs` / `chore` / `refactor`). Other conventional types (`ci`, `build`, `test`, `perf`, `style`, `revert`) pass validation but aren't auto-labelled.
+- `.github/workflows/tests.yml` runs `uv run --with pytest pytest -v` against `skills/assess/` on every PR and push to `main`. A red test is a real regression - the deterministic core is reproducible, so flakes shouldn't happen.
 - `.github/release.yml` configures categorised release notes when running `gh release create --generate-notes`. See the file for the label-to-category mapping.
+
+## /assess architecture
+
+Deterministic core in `skills/assess/scripts/lib/` does all data work; the LLM only writes prose.
+
+- `lib/agent_instructions_grader.py` - heuristic scoring of CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md (regex + arithmetic, no AI)
+- `lib/stats_diff.py` - cross-run comparison (graduated/regressed/new/persistent hotspots)
+- `lib/wiki_writer.py` - renders `index.md`, `log.md`, `hotspots/*.md` from templates
+- `lib/anomaly_detector.py` - flags suspicious run results for self-feedback
+- `scripts/assess_core.py` - orchestrator; writes `run-context.json` for the LLM to read
+
+Tests live in `skills/assess/tests/` and run via `uv run --with pytest pytest`. Add a test alongside any change to a deterministic module - that's the contract that lets us trust the output regardless of which LLM is driving.
+
+The `.assess/` directory in a target repo is a compounding wiki:
+
+- `assess-report.md` - latest prose-heavy summary (LLM-written)
+- `complexity-stats.json` + `.prior.json` - current and previous run sidecars
+- `complexity-heatmap.svg` - current treemap
+- `run-context.json` - structured data the LLM uses for prose
+- `index.md` - catalog of every hotspot ever flagged (deterministic)
+- `log.md` - append-only run history (deterministic)
+- `hotspots/<slug>.md` - per-file persistent page (deterministic)
+
+Each `/assess` run reads the prior state from this directory and adds to it. Hotspots that leave the top list graduate. The wiki is the value, not any single snapshot.
 
 ## What this repo doesn't have (and that's fine)
 
-- No tests for the Python script - small enough to smoke-test by running `uv run skills/assess/scripts/complexity-treemap.py .`.
+- Test coverage focused on the deterministic core under `skills/assess/`. `complexity-treemap.py` is still smoke-tested rather than unit-tested - it's a thin CLI wrapper around lizard/squarify.
 - No coverage gates - same reason.
 
 ## Compatibility

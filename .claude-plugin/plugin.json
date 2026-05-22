@@ -1,7 +1,7 @@
 {
   "name": "ai-native-toolkit",
   "description": "Skills for AI-native development. /assess scores a codebase's readiness for AI agent contributors (0-7 layered contract model) and generates a Codecov-style complexity hotspot SVG. /huddle runs structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing. Also bundles personal workflow commands (Task Master orchestration, autonomous PR/branch fix loops) that may need adaptation outside the author's setup.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "license": "Apache-2.0",
   "author": {
     "name": "Ben Coombs"

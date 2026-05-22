@@ -87,14 +87,7 @@ If the install fails or the platform isn't covered, fall back to lizard-only and
 
 ### 2b: Run the treemap
 
-```bash
-# Resolve the script path relative to this skill. The skill lives at
-# ~/.claude/skills/assess/SKILL.md, so the script is alongside it.
-SKILL_DIR="$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")"
-uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" \
-    -o "$REPO_ROOT/.assess/complexity-heatmap.svg" \
-    --stats "$REPO_ROOT/.assess/complexity-stats.json"
-```
+Run the bundled treemap script alongside the deterministic core - see the chained block below.
 
 The script prints a one-line summary (file count, lizard vs scc coverage, churn window chosen, top 5 biggest files). The stats sidecar contains percentiles (p50/p95/max for LOC, CCN, churn) and ranked lists of the top 10 files by hotspot score, raw CCN, and raw LOC. Both feed the report.
 
@@ -115,24 +108,58 @@ Full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS
 
 **If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated — <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
 
+Run the full sequence - rotate the prior sidecar first, then the treemap, then the deterministic core:
+
+```bash
+# Rotate the prior stats sidecar so the diff has something to compare against next run
+if [ -f "$REPO_ROOT/.assess/complexity-stats.json" ]; then
+  cp "$REPO_ROOT/.assess/complexity-stats.json" "$REPO_ROOT/.assess/complexity-stats.prior.json" 2>/dev/null || true
+fi
+
+# Resolve the script path relative to this skill. The skill lives at
+# ~/.claude/skills/assess/SKILL.md, so the script is alongside it.
+SKILL_DIR="$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")"
+
+# Run the treemap (produces fresh complexity-stats.json)
+uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" \
+    -o "$REPO_ROOT/.assess/complexity-heatmap.svg" \
+    --stats "$REPO_ROOT/.assess/complexity-stats.json"
+
+# Run the deterministic core (instruction-file grading, stats diff, wiki files, run-context.json)
+uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT"
+```
+
+Now `$REPO_ROOT/.assess/run-context.json` contains the structured data you need for the prose sections. Read it before writing the report.
+
 ## Step 3: Scan Each Layer
 
 Run these checks in parallel where possible. For each layer, collect evidence and assess quality.
 
 ### Layer 0: Breadcrumbs (Behavioral Contracts)
 
-**Scan for instruction files:**
+Read the agent instruction file grades from `run-context.json`:
+
 ```bash
-# Check all known instruction file locations
-ls -la "$REPO_ROOT"/{CLAUDE.md,.cursorrules,AGENTS.md,GEMINI.md,.github/copilot-instructions.md} 2>/dev/null
+jq '.instruction_files, .instructions_grade' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-**If found, assess quality** by reading the file(s):
-- Does it contain specific, actionable rules? (not just "follow best practices")
-- Does it use strong language for hard rules? ("NEVER", "ALWAYS")
-- Does it include technology choices and banned patterns?
-- Does it reference specific files/patterns in the codebase?
-- Is it current? (check git log for last modification date)
+`.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). The same heuristic grader scores each present file. For each:
+- `grade: "A" | "B+" | ...` - report verbatim per file
+- `subscores.positive_directives` - count of positive directives found
+- `subscores.tradeoff_phrases` - count of reasoning phrases
+- `subscores.path_references` - count of file path references
+- `freshness_days` - days since last edit
+
+`.instructions_grade` is the best grade across all present files - use this for the layer scoring.
+
+**Scoring rule:** trust the deterministic grade.
+- A/A-/B+ → **Present**
+- B/C → **Partial**
+- D/F → **Missing** (or **Partial** if at least one file exists but scores low - note the grade)
+
+When multiple instruction files are present (e.g. CLAUDE.md and AGENTS.md as symlinks of the same content), list each in the report.
+
+This replaces the prior subjective "is it generic?" check. The grader rewards positive directives and tradeoff reasoning; it penalizes pure-negative framing and staleness.
 
 **Also scan for orientation docs** - can an agent find its way around?
 ```bash
@@ -156,11 +183,6 @@ Docs: README [yes/no], architecture guide [yes/no], ADRs [N found], API specs [N
 ```
 
 Missing docs don't reduce the layer score (breadcrumbs are the primary signal), but flag gaps in the report. An agent with good breadcrumbs but no README or architecture docs can follow rules but can't orient itself in unfamiliar parts of the codebase.
-
-**Scoring:**
-- Present: Instruction file exists with specific, actionable breadcrumbs
-- Partial: File exists but is generic, stale, or mostly boilerplate
-- Missing: No instruction files found
 
 ### Layer 1: Code Design (Compile-Time Correctness)
 
@@ -436,6 +458,23 @@ rg -i 'retrospective|retro|feedback loop|learnings|post.?mortem' "$REPO_ROOT"/{C
 - Partial: Some orchestration tooling exists but no systematic feedback loop, or ad-hoc retro notes without structured process
 - Missing: No AI-aware project management
 
+## Step 3.5: Read Cross-Run Context
+
+Before scoring, check what changed since the last run:
+
+```bash
+jq '.diff, .diff_detail' "$REPO_ROOT/.assess/run-context.json"
+```
+
+If `prior` was None (first run), skip this section in the report. Otherwise, populate a "What Changed Since Last Run" section in the report:
+
+- **Graduated** (good): list paths from `diff_detail.graduated` - hotspots that left the top list
+- **Regressed** (bad): list paths from `diff_detail.regressed` with their `ccn_delta` / `commits_delta`
+- **New** (watch): list paths from `diff_detail.new`
+- **Persistent** (structural debt if N runs in a row): list paths from `diff_detail.persistent`
+
+The wiki files at `.assess/index.md` and `.assess/hotspots/*.md` are already updated by `assess_core.py` - you don't need to write them. You only write the prose summary in `assess-report.md`.
+
 ## Step 4: Score and Write the Report
 
 Calculate the score (0-7 based on layers present, +0.5 for partial) and write the report to `$REPO_ROOT/.assess/assess-report.md`.
@@ -508,6 +547,8 @@ Prioritize by leverage: breadcrumbs and CI first, then linters and coverage, the
 
 The `Issue` column is filled in by Step 6 if the user opts to create tracking issues. Leave as `—` initially.
 
+**Frame actions positively.** "Add `cyclop` rule (threshold 15) to `.golangci.yml`" beats "Stop letting complex code through CI." Positive directives are easier for the next contributor (human or LLM) to act on - they say what to do, not what to avoid. If you find yourself writing "Don't X" or "Never Y", convert to "Use X (because Z)" instead.
+
 Good actions look like:
 
 > _"Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67), `internal/sync/reconciler.go` (ccn 54)."_
@@ -527,6 +568,8 @@ Generic actions to avoid:
 ## Strengths
 
 <3-5 bullet points. What this repo already does well. Be specific — name files, tools, and patterns. Acknowledge existing infrastructure.>
+
+**Wiki:** see `.assess/index.md` for the full hotspot catalog across all runs, `.assess/log.md` for run history, and `.assess/hotspots/<file>.md` for per-file briefings.
 
 ---
 
@@ -673,3 +716,41 @@ End with a short, tracker-specific summary. Examples:
 > Created 3 Task Master tasks under tag `assess-2026-05-22`: #1.1, #1.2, #1.3. Run `task-master next` to start.
 
 > Action 1 already tracked in PROJ-1024 (in progress) - linked. Created PROJ-1198 (Action 2) and PROJ-1199 (Action 3) in Jira.
+
+## Step 7: Tool Feedback (Optional)
+
+Close the loop: surface detected anomalies and offer the user a chance to file feedback against the toolkit.
+
+```bash
+jq '.anomalies' "$REPO_ROOT/.assess/run-context.json"
+```
+
+If the array is non-empty, list each anomaly to the user:
+
+> Detected anomalies in this run:
+> - `<code>`: <description>
+>
+> These may indicate a bug or miscalibration in `/assess`. Want to file feedback so the toolkit can improve?
+
+Always also offer the open-ended option, even when no anomalies were detected:
+
+> Anything else in this report look wrong or surprising? Filing feedback helps `/assess` improve for everyone.
+
+If the user wants to file feedback, build a sanitized issue body from `run-context.json`:
+
+- **Include**: plugin version, run date, files_scored, instructions_grade (top-level) + per-file subscores (numbers only - file basenames like `CLAUDE.md` are public), stats percentiles (p50/p95/max for LOC and CCN), diff summary counts, anomaly codes.
+- **Never include**: file paths, code snippets, repo name, commit messages, hotspot path lists.
+
+Prepend the body with: `_This feedback was generated by /assess. The data below is sanitized - no file paths or code content._`
+
+Show the body to the user, then run (after explicit confirmation, per the never-auto-create-issues rule):
+
+```bash
+gh issue create \
+  --repo bjcoombs/ai-native-toolkit \
+  --label assess-feedback \
+  --title "[assess-feedback] <user's summary>" \
+  --body "$BODY"
+```
+
+The user adds their observation in their own words; the pre-fill is just the deterministic context. Positive framing applies here too: "the grader missed positive directives in section X" beats "the grader is broken."

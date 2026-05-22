@@ -1,0 +1,28 @@
+name: Tests
+
+# Runs the pytest suite for the /assess deterministic core.
+# The core is intentionally deterministic - same input, same output - so
+# CI failure means a real regression, not flake.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: skills/assess pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Run pytest
+        run: uv run --with pytest pytest -v
+        working-directory: skills/assess
