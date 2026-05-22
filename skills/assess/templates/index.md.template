@@ -1,0 +1,20 @@
+# Assess Wiki Index
+
+_Last updated: {last_updated}_
+
+Catalog of every hotspot ever flagged by `/assess` in this repo. Status reflects the most recent run.
+
+| File | First Flagged | Last Seen | Status | Latest CCN | Latest LOC |
+|------|---------------|-----------|--------|------------|------------|
+{hotspot_rows}
+
+## Legend
+
+- **active** - in the latest top hotspots list
+- **graduated** - was a hotspot, no longer is (good)
+- **regressed** - still a hotspot, and getting worse
+- **persistent** - still a hotspot, roughly unchanged
+
+## How this gets updated
+
+Each `/assess` run reads this file, the prior `complexity-stats.json`, and the latest run output, then rewrites this index. Per-file detail lives in `hotspots/<slug>.md`. Run history lives in `log.md`.

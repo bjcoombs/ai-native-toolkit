@@ -1,0 +1,28 @@
+# Hotspot: `{path}`
+
+_First flagged: {first_flagged}. Last seen: {last_seen}. Status: {status}._
+
+## Current metrics
+
+| Metric | Value |
+|--------|-------|
+| LOC | {loc} |
+| Cyclomatic complexity (file max) | {ccn} |
+| Commits in churn window | {commits} |
+| Has test file | {has_tests} |
+
+## History across runs
+
+| Run date | LOC | CCN | Commits | Status |
+|----------|-----|-----|---------|--------|
+{history_rows}
+
+## Briefing for editing this file
+
+Use this briefing when about to modify `{path}`:
+
+{briefing}
+
+## Suggested actions
+
+{actions}
