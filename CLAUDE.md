@@ -70,6 +70,7 @@ Deterministic core in `skills/assess/scripts/lib/` does all data work; the LLM o
 - `lib/wiki_writer.py` - renders `index.md`, `log.md`, `hotspots/*.md` from templates
 - `lib/anomaly_detector.py` - flags suspicious run results for self-feedback
 - `scripts/assess_core.py` - orchestrator; writes `run-context.json` for the LLM to read
+- `scripts/assess_finalize.py` - LLM write-back; reads `.assess/finalize-input.json` and replaces deterministic-core placeholders in `log.md` and `hotspots/*.md` with the LLM-derived score and per-file actions.
 
 Tests live in `skills/assess/tests/` and run via `uv run --with pytest pytest`. Add a test alongside any change to a deterministic module - that's the contract that lets us trust the output regardless of which LLM is driving.
 
@@ -84,6 +85,10 @@ The `.assess/` directory in a target repo is a compounding wiki:
 - `hotspots/<slug>.md` - per-file persistent page (deterministic)
 
 Each `/assess` run reads the prior state from this directory and adds to it. Hotspots that leave the top list graduate. The wiki is the value, not any single snapshot.
+
+**The LLM write-back pattern.** The deterministic core writes log/hotspot files with placeholders. After the LLM derives the score, top action, and per-hotspot suggestions, it writes `.assess/finalize-input.json` and invokes `assess_finalize.py` to replace the placeholders in place. This keeps the deterministic core ignorant of LLM-derived content while still producing a wiki where every value is filled.
+
+**Schema convention.** `instructions_grade` is `Optional[str]` - `null` means no instruction file was found at any known location (different remediation from F). The Layer 0 scoring rule in `SKILL.md` distinguishes these cases.
 
 ## What this repo doesn't have (and that's fine)
 
