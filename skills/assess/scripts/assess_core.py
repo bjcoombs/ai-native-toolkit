@@ -46,11 +46,18 @@ from lib.wiki_writer import (
 # Known agent instruction file locations (relative to repo root).
 # The same heuristic grader applies to all of them.
 INSTRUCTION_FILE_PATHS = [
+    # Canonical repo-root locations
     "CLAUDE.md",
     "AGENTS.md",
     "GEMINI.md",
     ".cursorrules",
+    # Tool-specific locations under .github/
     ".github/copilot-instructions.md",
+    ".github/claude-instructions.md",
+    ".github/claude-review-instructions.md",
+    # docs/ subdirectory variants used by some projects
+    "docs/CLAUDE.md",
+    "docs/AGENTS.md",
 ]
 
 # Grade ranking (best -> worst) for picking a top-level grade across multiple files.

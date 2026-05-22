@@ -238,3 +238,70 @@ def test_plugin_version_in_ctx(tmp_path: Path) -> None:
     assert "plugin_version" in ctx
     assert isinstance(ctx["plugin_version"], str)
     assert ctx["plugin_version"].count(".") >= 1
+
+
+def test_scans_github_claude_instructions(tmp_path: Path, fixtures_dir: Path) -> None:
+    """The scan finds .github/claude-instructions.md - a real-world non-canonical location.
+
+    Surfaced by the v1.4 meridian run: .github/claude-review-instructions.md was a
+    legitimate 795-line breadcrumb file that the canonical-paths-only scan missed.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    github_dir = repo / ".github"
+    github_dir.mkdir()
+    (github_dir / "claude-instructions.md").write_text(
+        (fixtures_dir / "good_instructions.md").read_text()
+    )
+
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert ".github/claude-instructions.md" in ctx["instruction_files"]
+
+
+def test_scans_github_claude_review_instructions(tmp_path: Path, fixtures_dir: Path) -> None:
+    """The scan finds .github/claude-review-instructions.md (used by claude-review bots)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    github_dir = repo / ".github"
+    github_dir.mkdir()
+    (github_dir / "claude-review-instructions.md").write_text(
+        (fixtures_dir / "good_instructions.md").read_text()
+    )
+
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert ".github/claude-review-instructions.md" in ctx["instruction_files"]
+
+
+def test_scans_docs_subdirectory(tmp_path: Path, fixtures_dir: Path) -> None:
+    """The scan finds docs/CLAUDE.md (some projects keep instruction files there)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    docs_dir = repo / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "CLAUDE.md").write_text(
+        (fixtures_dir / "good_instructions.md").read_text()
+    )
+
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert "docs/CLAUDE.md" in ctx["instruction_files"]
