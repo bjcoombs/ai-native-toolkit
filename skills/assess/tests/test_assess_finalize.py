@@ -112,3 +112,48 @@ def test_finalize_hotspot_without_match_is_skipped(tmp_assess_dir: Path) -> None
 
     # Should not raise
     finalize_run(assess_dir=tmp_assess_dir)
+
+
+def test_finalize_log_handles_backslash_in_top_action(tmp_assess_dir: Path) -> None:
+    """Top action text containing \\1 must be inserted literally, not as a regex backreference."""
+    _seed_log_md(tmp_assess_dir)
+    finalize_input = {
+        "score": 6.0,
+        "maturity_label": "Solid",
+        # Adversarial: contains \1 which would be a re.sub backreference if not handled
+        "top_action": r"Replace `\1` capture group references in regexes",
+        "hotspot_actions": {},
+    }
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert r"Replace `\1` capture group references" in content
+
+
+def test_finalize_hotspot_action_handles_backslash(tmp_assess_dir: Path) -> None:
+    """Hotspot action text containing \\1 must be inserted literally."""
+    from lib.wiki_writer import slug_for_path
+    slug = slug_for_path("src/foo.go")
+    _seed_hotspot_page(tmp_assess_dir, slug=slug)
+    _seed_log_md(tmp_assess_dir)
+    finalize_input = {
+        "score": 6.0,
+        "maturity_label": "Solid",
+        "top_action": "x",
+        "hotspot_actions": {
+            "src/foo.go": [
+                r"Use \1 to denote first capture group",
+                "Add tests",
+            ],
+        },
+    }
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+    page = (tmp_assess_dir / "hotspots" / f"{slug}.md").read_text(encoding="utf-8")
+    assert r"Use \1 to denote first capture group" in page

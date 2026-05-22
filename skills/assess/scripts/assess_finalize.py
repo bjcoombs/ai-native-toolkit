@@ -46,13 +46,13 @@ def _finalize_log(assess_dir: Path, *, score: float, maturity_label: str, top_ac
     # Replace the AI Readiness placeholder - only the first occurrence (latest entry)
     text = re.sub(
         r"\*\*AI Readiness:\*\* [\d.]+ / 7 \(\(LLM fills in\)\)",
-        f"**AI Readiness:** {score} / 7 ({maturity_label})",
+        lambda _m: f"**AI Readiness:** {score} / 7 ({maturity_label})",
         text,
         count=1,
     )
     text = re.sub(
         r"\*\*Top action:\*\* Deterministic ranker not yet wired \(LLM picks Top 3\)",
-        f"**Top action:** {top_action}",
+        lambda _m: f"**Top action:** {top_action}",
         text,
         count=1,
     )
@@ -81,7 +81,7 @@ def _finalize_hotspot_actions(assess_dir: Path, *, hotspot_actions: dict[str, li
         # Replace the section content between "## Suggested actions" and end-of-file (or next ## heading)
         new_text = re.sub(
             r"(## Suggested actions\s*\n\s*\n).*?(\n##\s|$)",
-            rf"\1{actions_block}\n\2",
+            lambda m: m.group(1) + actions_block + "\n" + m.group(2),
             page_text,
             count=1,
             flags=re.DOTALL,
