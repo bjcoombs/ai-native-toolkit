@@ -26,7 +26,7 @@ def _ctx(**overrides) -> dict:
         "diff": {"new": 1, "graduated": 0, "regressed": 0, "persistent": 1},
     }
     for k, v in overrides.items():
-        if isinstance(base.get(k), dict) and isinstance(v, dict):
+        if isinstance(base.get(k), dict) and isinstance(v, dict) and v:
             base[k].update(v)
         else:
             base[k] = v
