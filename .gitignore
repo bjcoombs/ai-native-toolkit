@@ -9,11 +9,14 @@
 !/skills/
 !/LICENSE
 !/docs/
+!/.github/
 
 # Still ignore .DS_Store files everywhere
 **/.DS_Store
 
-# Claude-specific files to ignore
+# Ignore nested CLAUDE.md files (e.g. user's personal config when they
+# clone this into ~/.claude/). The root /CLAUDE.md is re-allowlisted
+# below - it's the in-repo agent contract.
 .claude/
-CLAUDE.md
 **/CLAUDE.md
+!/CLAUDE.md
