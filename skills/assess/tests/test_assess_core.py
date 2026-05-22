@@ -159,3 +159,21 @@ def test_build_run_context_writes_hotspot_pages(tmp_path: Path) -> None:
     hotspots = list((assess_dir / "hotspots").iterdir())
     assert len(hotspots) == 1
     assert hotspots[0].name == "src-foo-go.md"
+
+
+def test_build_run_context_includes_anomalies_field(tmp_path: Path) -> None:
+    """Every run-context.json must have an anomalies array (possibly empty)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0,
+        "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert "anomalies" in ctx
+    codes = {a["code"] for a in ctx["anomalies"]}
+    assert "ZERO_FILES_SCORED" in codes

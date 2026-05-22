@@ -32,6 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.agent_instructions_grader import grade_instructions
+from lib.anomaly_detector import detect_anomalies
 from lib.stats_diff import diff_stats, load_stats
 from lib.wiki_writer import (
     HotspotEntry,
@@ -205,6 +206,10 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
             "persistent": [h.__dict__ for h in diff.persistent],
         },
     }
+    ctx["anomalies"] = [
+        {"code": a.code, "description": a.description, "detail": a.detail}
+        for a in detect_anomalies(ctx)
+    ]
     (assess_dir / "run-context.json").write_text(json.dumps(ctx, indent=2))
     return ctx
 
