@@ -58,6 +58,7 @@ Commands without frontmatter still work but provide no `/help` description.
 ## CI
 
 - `.github/workflows/pr-lint.yml` validates PR titles match conventional-commit format and auto-applies the matching label (`feat` / `fix` / `docs` / `chore` / `refactor`). Other conventional types (`ci`, `build`, `test`, `perf`, `style`, `revert`) pass validation but aren't auto-labelled.
+- `.github/workflows/tests.yml` runs `uv run --with pytest pytest -v` against `skills/assess/` on every PR and push to `main`. A red test is a real regression - the deterministic core is reproducible, so flakes shouldn't happen.
 - `.github/release.yml` configures categorised release notes when running `gh release create --generate-notes`. See the file for the label-to-category mapping.
 
 ## /assess architecture
