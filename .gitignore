@@ -9,6 +9,7 @@
 !/skills/
 !/LICENSE
 !/docs/
+!/.github/
 
 # Still ignore .DS_Store files everywhere
 **/.DS_Store
