@@ -1,0 +1,18 @@
+{
+  "files_scored": 100,
+  "loc": {"p50": 50, "p95": 400, "max": 1200},
+  "ccn": {"p50": 3, "p95": 12, "max": 45},
+  "top_hotspots": [
+    {"path": "src/legacy/parser.go", "loc": 800, "ccn": 35, "commits": 12},
+    {"path": "src/api/handler.go", "loc": 600, "ccn": 28, "commits": 8},
+    {"path": "src/util/helpers.go", "loc": 400, "ccn": 18, "commits": 5}
+  ],
+  "top_complex": [
+    {"path": "src/legacy/parser.go", "ccn": 35},
+    {"path": "src/api/handler.go", "ccn": 28}
+  ],
+  "top_large": [
+    {"path": "src/legacy/parser.go", "loc": 800},
+    {"path": "src/api/handler.go", "loc": 600}
+  ]
+}

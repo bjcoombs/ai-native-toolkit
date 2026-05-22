@@ -1,0 +1,18 @@
+{
+  "files_scored": 105,
+  "loc": {"p50": 52, "p95": 410, "max": 1300},
+  "ccn": {"p50": 3, "p95": 13, "max": 48},
+  "top_hotspots": [
+    {"path": "src/api/handler.go", "loc": 700, "ccn": 32, "commits": 15},
+    {"path": "src/new/feature.go", "loc": 500, "ccn": 22, "commits": 6},
+    {"path": "src/util/helpers.go", "loc": 400, "ccn": 18, "commits": 5}
+  ],
+  "top_complex": [
+    {"path": "src/api/handler.go", "ccn": 32},
+    {"path": "src/new/feature.go", "ccn": 22}
+  ],
+  "top_large": [
+    {"path": "src/api/handler.go", "loc": 700},
+    {"path": "src/new/feature.go", "loc": 500}
+  ]
+}
