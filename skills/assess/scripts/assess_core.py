@@ -76,12 +76,14 @@ def _file_freshness_days(file_path: Path) -> int:
         return 0
 
 
-def _grade_instruction_files(repo_root: Path) -> tuple[dict[str, dict], str]:
+def _grade_instruction_files(repo_root: Path) -> tuple[dict[str, dict], str | None]:
     """Scan all known instruction file locations and grade each one found.
 
     Returns: (files_dict, best_grade)
         files_dict: keyed by filename, e.g. {"CLAUDE.md": {grade, score, ...}, "AGENTS.md": {...}}
-        best_grade: best letter grade across all present files; "F" if none found.
+        best_grade: best letter grade across all present files; None if none found.
+            None is distinct from "F": None means no file exists ("create the file"),
+            "F" means a file exists but scored poorly ("fix the file").
     """
     found: dict[str, dict] = {}
     for rel_path in INSTRUCTION_FILE_PATHS:
@@ -101,9 +103,23 @@ def _grade_instruction_files(repo_root: Path) -> tuple[dict[str, dict], str]:
         }
 
     if not found:
-        return {}, "F"
+        return {}, None
     best = max(found.values(), key=lambda v: GRADE_RANK.get(v["grade"], 0))
     return found, best["grade"]
+
+
+def _read_plugin_version() -> str:
+    """Read the plugin version from .claude-plugin/plugin.json.
+
+    The plugin.json lives three directories up from this script:
+        scripts/assess_core.py -> scripts/ -> skills/assess/ -> skills/ -> repo root
+    """
+    plugin_json = Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json"
+    try:
+        data = json.loads(plugin_json.read_text(encoding="utf-8"))
+        return str(data.get("version", "unknown"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return "unknown"
 
 
 def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
@@ -219,7 +235,6 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
 
     ctx = {
         "run_date": run_date,
-        "repo_root": str(repo_root),
         "prior_stats_exists": prior_exists,
         "stats_summary": {
             "files_scored": current.get("files_scored", 0),
@@ -237,6 +252,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
             "persistent": [h.__dict__ for h in diff.persistent],
         },
     }
+    ctx["plugin_version"] = _read_plugin_version()
     ctx["anomalies"] = [
         {"code": a.code, "description": a.description, "detail": a.detail}
         for a in detect_anomalies(ctx)

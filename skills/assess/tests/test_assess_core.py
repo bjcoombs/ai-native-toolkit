@@ -37,7 +37,7 @@ def test_build_run_context_first_run(tmp_path: Path) -> None:
     assert ctx["run_date"] == "2026-05-22"
     assert ctx["stats_summary"]["files_scored"] == 50
     assert ctx["instruction_files"] == {}  # nothing found
-    assert ctx["instructions_grade"] == "F"  # no instructions = F
+    assert ctx["instructions_grade"] is None  # no instructions = None (distinct from F)
     assert ctx["diff"]["new"] == 1
     assert ctx["diff"]["graduated"] == 0
     assert (assess_dir / "log.md").exists()
@@ -178,3 +178,63 @@ def test_build_run_context_includes_anomalies_field(tmp_path: Path) -> None:
     assert "anomalies" in ctx
     codes = {a["code"] for a in ctx["anomalies"]}
     assert "ZERO_FILES_SCORED" in codes
+
+
+def test_instructions_grade_is_None_when_no_files(tmp_path: Path) -> None:
+    """When no instruction file exists, instructions_grade is None (not 'F').
+
+    Distinct from F: F means a file exists but scored badly. None means there's
+    no file at all - different remediation ("create the file" vs "fix the file").
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0,
+        "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert ctx["instructions_grade"] is None
+    assert ctx["instruction_files"] == {}
+
+
+def test_repo_root_not_in_ctx(tmp_path: Path) -> None:
+    """ctx should not contain repo_root - it leaks the author's absolute path.
+
+    The LLM consumer has $REPO_ROOT from its shell context; no need to serialize it.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert "repo_root" not in ctx
+
+
+def test_plugin_version_in_ctx(tmp_path: Path) -> None:
+    """ctx should include plugin_version so the LLM can surface it in the report.
+
+    Mitigates the multi-version cache footgun: if /reload-plugins lands on an old
+    cached version, the report shows that version and the user can spot the drift.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert "plugin_version" in ctx
+    assert isinstance(ctx["plugin_version"], str)
+    assert ctx["plugin_version"].count(".") >= 1

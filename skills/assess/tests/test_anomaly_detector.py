@@ -145,3 +145,15 @@ def test_anomaly_has_code_description_detail() -> None:
     assert len(anomalies) >= 1
     a = anomalies[0]
     assert a.code and a.description and a.detail
+
+
+def test_no_anomalies_when_no_instruction_files() -> None:
+    """A repo with no instruction files at all is a valid (if poor) state, not an anomaly.
+
+    The grade is None (distinct from F). INSTRUCTION_FILE_GRADE_MISMATCH should not fire
+    because there's no file to mismatch with.
+    """
+    ctx = _ctx(instruction_files={}, instructions_grade=None)
+    anomalies = detect_anomalies(ctx)
+    codes = {a.code for a in anomalies}
+    assert "INSTRUCTION_FILE_GRADE_MISMATCH" not in codes
