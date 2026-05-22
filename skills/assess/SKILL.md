@@ -572,100 +572,104 @@ If the user says **yes / PR**:
 
 If the user says **no / leave it**: stop. Files stay in `.assess/` for them to review — the plugin footer in the MD already advertises the tool when anyone opens the file.
 
-## Step 6: Ask Whether to Create Tracking Issues for the Top 3 Actions
+## Step 6: Offer to Track the Top 3 Actions in the User's Issue Tracker
 
-After Step 5 (whether the PR was opened or not), surface a separate question:
+After Step 5 (whether a PR was opened or not), surface a separate question:
 
-> Want me to also create 3 GitHub issues for the Top 3 Actions? Each becomes a trackable, closeable, assignable work item.
-
-Skip this step entirely if:
-- The target is not a GitHub repo (`gh repo view` returns no remote, or remote is GitLab / Codeberg / etc.).
-- `gh` is not authenticated.
+> Want me to create tracking items for the Top 3 Actions in your issue tracker? Each becomes a closeable, assignable work item rather than a bullet buried in a PR description.
 
 If the user says **no**: stop. The Top 3 Actions table in the PR/report still lists everything inline.
 
-If the user says **yes**:
+If the user says **yes**, proceed agnostically - **don't assume GitHub** (or any specific tracker). Use your judgment based on what's actually in front of you.
 
-### 6a: Ensure the `assess-finding` label exists
+### 6a: Identify the user's issue tracker
 
-The label is the dedup key for idempotent reruns. Create it if missing:
+Look at every signal available and pick the one the user actually uses. Examples of signals (not an exhaustive list):
 
-```bash
-gh label list --repo <owner/repo> --json name -q '.[].name' | grep -qx assess-finding \
-  || gh label create assess-finding \
-       --repo <owner/repo> \
-       --description "Issue created by /ai-native-toolkit:assess" \
-       --color 5319e7
-```
+- **The user's global instructions** (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`) often state the tracker explicitly: "issues live in Linear project FOO", "we use Task Master", "Jira project ABC", etc.
+- **Project-level instructions** in the target repo's `CLAUDE.md` / `AGENTS.md` / contribution docs.
+- **Project files**: `.taskmaster/` directory, `.acli/` config, `.linear/` dotfiles, GitHub/GitLab remote, a Notion link in the README, etc.
+- **Authenticated CLIs**: `gh auth status`, `glab auth status`, `acli` configuration, `linear` CLI tokens, anything similar.
+- **Conversation history**: if the user just used a tracker, prefer that one.
 
-### 6b: Check for existing assess-generated issues (idempotency)
+This is not a fixed list. The user might track work in Omnifocus, Apple Notes, a Google Doc, a Notion database, a Slack channel, or anything else. **Use judgment**, don't enumerate.
 
-Before creating, list all `assess-finding`-labelled issues (open AND closed) and compare titles:
+**Decision rules:**
 
-```bash
-gh issue list --repo <owner/repo> \
-  --label assess-finding \
-  --state all \
-  --limit 100 \
-  --json number,title,state
-```
+1. **One clear signal** (e.g. only `.taskmaster/` present, or global CLAUDE.md says "use Linear") - use that tracker without asking.
+2. **Multiple plausible signals** (e.g. GitHub remote + `.taskmaster/` + Jira project mentioned) - **ask the user**. List what you saw and let them pick:
+   > I see signals for both Task Master (`.taskmaster/` directory) and GitHub Issues (GitHub remote, `gh` authenticated). Which should I create the tracking items in?
+3. **No clear signal** - ask:
+   > I couldn't tell which tracker you use. Where should I create the tracking items? (e.g. GitHub Issues, Task Master, Jira, Linear, somewhere else - or skip)
 
-For each of the three Top 3 Actions:
+When asking, use **AskUserQuestion** with the detected options plus a "something else" / "skip" escape hatch.
 
-- **Exact title match found**: reuse the existing issue number. Don't create a new one. Note in the PR body whether it's `open` or `closed` (a closed match means the gap was previously addressed and either re-emerged or the closure was premature - flag this to the user in the chat output but don't force a decision).
-- **No match**: create a new issue (Step 6c).
+### 6b: Create items in the chosen tracker
 
-This makes re-runs idempotent: running `/assess` on the same repo twice doesn't spam duplicate issues.
+Once the tracker is known, use its native tooling. The skill doesn't enumerate every CLI - rely on your general knowledge of the tool. A few examples:
 
-### 6c: Create one issue per new (unmatched) action
+| Tracker | Typical command |
+|---|---|
+| GitHub Issues | `gh issue create --label assess-finding --title "..." --body "..."` |
+| GitLab Issues | `glab issue create --label assess-finding ...` |
+| Jira (via acli) | `acli workitem create ...` (see project's Atlassian instructions) |
+| Task Master | `task-master add-task --prompt "..."` (under the current tag, or ask) |
+| Linear (via CLI) | `linear issue create ...` |
+| Anything else | follow the user's documented convention |
 
-For each unmatched action:
+For each Top 3 Action, the item should contain:
 
-```bash
-gh issue create --repo <owner/repo> \
-  --label assess-finding \
-  --title "<action title verbatim from the Top 3 table>" \
-  --body "$(cat <<'EOF'
-<full action body: the same one-line action text, plus the Command / First Step,
-plus the named Hotspot files this addresses, plus the "Why these three" reasoning
-sentence that applies to this specific action>
+- **Title**: the action title verbatim from the Top 3 table
+- **Body**: the action detail (Command / First Step, Hotspot files, the "Why these three" reasoning), a small metadata block (Layer, Effort, link to the assessment PR if one was opened), and a one-line footer linking back to the plugin
+- **Tag / Label / Category** that supports idempotency (see 6c)
+
+Example minimal body shape (adapt to the tracker's conventions):
+
+```markdown
+<action one-line>
+
+<Command / First Step>
+
+<Hotspot files this addresses>
+
+<Why-this-action reasoning>
 
 ### From /assess
-
-- **Layer**: <layer number and name>
-- **Effort**: <small | medium | large>
-- **Assessment PR**: #<PR-number from Step 5 if a PR was opened, otherwise omit this line>
+- Layer: <N>: <name>
+- Effort: <small | medium | large>
+- Assessment PR: <PR link or omit if no PR>
 
 ---
-
-_Generated by [`/assess`](https://github.com/bjcoombs/ai-native-toolkit)._
-EOF
-)"
+Generated by /assess - https://github.com/bjcoombs/ai-native-toolkit
 ```
 
-Keep the issue body tight: the action detail + the metadata block + the one-line footer. The footer is link-only per the agreed minimal style (not a full install pitch - that's already on the PR).
+### 6c: Idempotency
 
-### 6d: Update the PR body to link the issues
+Re-running `/assess` on the same repo must not create duplicate tracking items. The dedup mechanism depends on the tracker:
 
-If a PR was opened in Step 5, edit its body so the `Issue` column in the Top 3 Actions table references the issue numbers:
+- **Tag/label-based** (GitHub, GitLab, Linear, Jira labels): apply a stable label like `assess-finding` and search by `label + title` before creating. Open OR closed match → reuse.
+- **Search-based** (Jira via JQL, Notion, Linear queries): search the tracker for items with the action title. Match → reuse.
+- **Hierarchical** (Task Master): list the current tag's tasks; compare titles. Match → reuse.
+- **Free-form** (Apple Notes, Google Docs, plain markdown files): no reliable structured dedup. In this case, list existing items the user can see, **show them, and ask before re-creating**: "I see 3 existing items that look like these. Re-create, skip, or update? "
 
-```bash
-# Pull the current body, regex-replace the "—" placeholders, push back
-gh pr view <PR-number> --repo <owner/repo> --json body -q .body > /tmp/pr-body.md
-# Replace the first three "—" entries in the Issue column with #N references
-# Easiest: re-render the table from the assess-report and update both the
-# report file and the PR body to match.
-gh pr edit <PR-number> --repo <owner/repo> --body-file /tmp/pr-body.md
-```
+In all cases, before creating: search first. If a match is found (open or closed in trackers that have state), reuse it. If a match was previously closed (the gap was once resolved but has re-emerged), flag this to the user in the chat output - don't silently re-open or duplicate.
 
-Also update `.assess/assess-report.md` locally so the on-disk report and the PR description stay in sync. If you do this via the worktree before pushing, the commit includes the issue refs.
+### 6d: Link the items back to the assessment
+
+How the link is recorded depends on the tracker, but the goal is the same: someone reading the assessment PR / report can click through to the items, and someone reading an item can click back to the assessment.
+
+- **GitHub PR + GitHub Issues** (the original flow): edit the PR body so the `Issue` column in the Top 3 Actions table replaces `—` with `#N` references. Update `.assess/assess-report.md` locally so the on-disk report stays in sync (commit the change if you're working in a worktree before pushing).
+- **GitHub PR + Task Master tasks**: include the task IDs in the `Issue` column (e.g. `TM #1.2`). Reference the assessment PR URL in each task's body.
+- **GitHub PR + Jira**: include the Jira keys (e.g. `PROJ-1234`) in the `Issue` column. Set the assessment PR URL as a Jira link.
+- **No PR was opened**: update only `.assess/assess-report.md` locally with the item references.
+- **Other trackers**: do whatever makes the cross-link work; if the tracker doesn't support links back, include the assessment date + PR URL (if any) in each item's body so a human can trace it.
 
 ### 6e: Report back to the user
 
-End with a short summary:
+End with a short, tracker-specific summary. Examples:
 
-> Created 3 issues: #42 (Action 1), #43 (Action 2), #44 (Action 3). Linked from the assessment PR. All labelled `assess-finding` so re-running `/assess` later won't duplicate them.
+> Created 3 GitHub issues: #42 (Action 1), #43 (Action 2), #44 (Action 3). Linked from the assessment PR. All labelled `assess-finding` so re-running `/assess` later won't duplicate them.
 
-Or, if some were deduped:
+> Created 3 Task Master tasks under tag `assess-2026-05-22`: #1.1, #1.2, #1.3. Run `task-master next` to start.
 
-> Action 1 already tracked in #38 (open) - linked. Created #42 (Action 2) and #43 (Action 3). All labelled `assess-finding`.
+> Action 1 already tracked in PROJ-1024 (in progress) - linked. Created PROJ-1198 (Action 2) and PROJ-1199 (Action 3) in Jira.
