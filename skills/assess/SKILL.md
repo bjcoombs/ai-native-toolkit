@@ -87,14 +87,7 @@ If the install fails or the platform isn't covered, fall back to lizard-only and
 
 ### 2b: Run the treemap
 
-```bash
-# Resolve the script path relative to this skill. The skill lives at
-# ~/.claude/skills/assess/SKILL.md, so the script is alongside it.
-SKILL_DIR="$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")"
-uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" \
-    -o "$REPO_ROOT/.assess/complexity-heatmap.svg" \
-    --stats "$REPO_ROOT/.assess/complexity-stats.json"
-```
+Run the bundled treemap script alongside the deterministic core - see the chained block below.
 
 The script prints a one-line summary (file count, lizard vs scc coverage, churn window chosen, top 5 biggest files). The stats sidecar contains percentiles (p50/p95/max for LOC, CCN, churn) and ranked lists of the top 10 files by hotspot score, raw CCN, and raw LOC. Both feed the report.
 
@@ -115,13 +108,17 @@ Full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS
 
 **If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated — <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
 
-After the treemap completes, run the deterministic core to produce the wiki files and the run context:
+Run the full sequence - rotate the prior sidecar first, then the treemap, then the deterministic core:
 
 ```bash
 # Rotate the prior stats sidecar so the diff has something to compare against next run
 if [ -f "$REPO_ROOT/.assess/complexity-stats.json" ]; then
   cp "$REPO_ROOT/.assess/complexity-stats.json" "$REPO_ROOT/.assess/complexity-stats.prior.json" 2>/dev/null || true
 fi
+
+# Resolve the script path relative to this skill. The skill lives at
+# ~/.claude/skills/assess/SKILL.md, so the script is alongside it.
+SKILL_DIR="$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")"
 
 # Run the treemap (produces fresh complexity-stats.json)
 uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" \
