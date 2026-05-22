@@ -55,9 +55,13 @@ Commands without frontmatter still work but provide no `/help` description.
 - Every skill auto-discovered from `skills/` must have a valid `SKILL.md`.
 - Commands that orchestrate agents should explicitly reference the agent name. Commands that are pure orchestrators (no subagent invocation) should say so in their body so an agent reading the file isn't confused.
 
+## CI
+
+- `.github/workflows/pr-lint.yml` validates PR titles match conventional-commit format and auto-applies the matching label (`feat` / `fix` / `docs` / `chore` / `refactor`). Other conventional types (`ci`, `build`, `test`, `perf`, `style`, `revert`) pass validation but aren't auto-labelled.
+- `.github/release.yml` configures categorised release notes when running `gh release create --generate-notes`. See the file for the label-to-category mapping.
+
 ## What this repo doesn't have (and that's fine)
 
-- No CI - the plugin has no executable surface beyond one Python script. If a frontmatter validator or markdown linter is added, it should live in `.github/workflows/`.
 - No tests for the Python script - small enough to smoke-test by running `uv run skills/assess/scripts/complexity-treemap.py .`.
 - No coverage gates - same reason.
 
