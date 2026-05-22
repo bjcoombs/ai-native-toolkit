@@ -1,0 +1,43 @@
+# Categories shown in GitHub-generated release notes.
+# https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+#
+# A PR appears in the first category whose `labels` it matches. The `*`
+# catch-all at the end picks up anything unlabelled. Labels listed here
+# must exist on the repo (the four below are GitHub defaults plus
+# 'chore' which is conventional-commit style; create that one with:
+#   gh label create chore --description "Maintenance, refactors, CI"
+# ).
+#
+# To cut a release once PRs are merged:
+#   1. Bump .claude-plugin/plugin.json version in a small PR (CLAUDE.md
+#      rule: same-PR bump for features; this is the case where it
+#      hasn't been done).
+#   2. After merge, tag and push:
+#        git tag v$(jq -r .version .claude-plugin/plugin.json)
+#        git push origin --tags
+#   3. Create the release with auto-notes:
+#        gh release create vX.Y.Z --generate-notes
+#
+# The notes will group merged PRs by label per the config below.
+
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+      - skip-changelog
+  categories:
+    - title: Features
+      labels:
+        - enhancement
+        - feat
+    - title: Fixes
+      labels:
+        - bug
+        - fix
+    - title: Documentation
+      labels:
+        - documentation
+        - docs
+    - title: Other Changes
+      labels:
+        - "*"
