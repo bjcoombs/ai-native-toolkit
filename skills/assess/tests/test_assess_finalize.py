@@ -1,0 +1,114 @@
+"""End-to-end test for assess_finalize - the LLM write-back script."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from assess_finalize import finalize_run
+
+
+def _seed_log_md(assess_dir: Path) -> None:
+    """Seed a log.md with one entry that has placeholders awaiting LLM fill."""
+    (assess_dir / "log.md").write_text(
+        "# Assess Log\n\n"
+        "## 2026-05-22\n\n"
+        "- **Files scored:** 100\n"
+        "- **AI Readiness:** 0.0 / 7 ((LLM fills in))\n"
+        "- **Instructions grade:** B+\n"
+        "- **Hotspot transitions:** 1 graduated, 0 regressed, 0 new, 2 persistent\n"
+        "- **Top action:** Deterministic ranker not yet wired (LLM picks Top 3)\n\n"
+        "[Full report](./assess-report.md)\n\n"
+        "---\n",
+        encoding="utf-8",
+    )
+
+
+def _seed_hotspot_page(assess_dir: Path, slug: str) -> None:
+    (assess_dir / "hotspots").mkdir(exist_ok=True)
+    (assess_dir / "hotspots" / f"{slug}.md").write_text(
+        "# Hotspot: `src/foo.go`\n\n"
+        "## Suggested actions\n\n"
+        "- Pending LLM-generated suggestions\n",
+        encoding="utf-8",
+    )
+
+
+def test_finalize_updates_log_last_entry(tmp_assess_dir: Path) -> None:
+    """The latest log.md entry gets its placeholders replaced with LLM-provided values."""
+    _seed_log_md(tmp_assess_dir)
+    finalize_input = {
+        "score": 6.0,
+        "maturity_label": "Solid",
+        "top_action": "Add cyclop rule to .golangci.yml (threshold 15)",
+        "hotspot_actions": {},
+    }
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "AI Readiness:** 6.0 / 7 (Solid)" in content
+    assert "Top action:** Add cyclop rule to .golangci.yml (threshold 15)" in content
+    # Placeholders must be gone
+    assert "((LLM fills in))" not in content
+    assert "Deterministic ranker not yet wired" not in content
+
+
+def test_finalize_updates_hotspot_actions(tmp_assess_dir: Path) -> None:
+    """Hotspot pages get their 'Suggested actions' section rewritten with LLM input."""
+    # The slug for "src/foo.go" includes a sha256[:8] hash - use the same function the script uses
+    from lib.wiki_writer import slug_for_path
+    slug = slug_for_path("src/foo.go")
+    _seed_hotspot_page(tmp_assess_dir, slug=slug)
+    finalize_input = {
+        "score": 6.0,
+        "maturity_label": "Solid",
+        "top_action": "x",
+        "hotspot_actions": {
+            "src/foo.go": [
+                "Split parseLine into smaller functions",
+                "Add a test file at src/foo_test.go",
+            ],
+        },
+    }
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+    # Need a log.md too since finalize_run does both
+    _seed_log_md(tmp_assess_dir)
+
+    finalize_run(assess_dir=tmp_assess_dir)
+    page = (tmp_assess_dir / "hotspots" / f"{slug}.md").read_text(encoding="utf-8")
+    assert "Split parseLine" in page
+    assert "Add a test file at src/foo_test.go" in page
+    assert "Pending LLM-generated suggestions" not in page
+
+
+def test_finalize_missing_input_raises(tmp_assess_dir: Path) -> None:
+    """If finalize-input.json doesn't exist, raise a clear error."""
+    with pytest.raises(FileNotFoundError):
+        finalize_run(assess_dir=tmp_assess_dir)
+
+
+def test_finalize_hotspot_without_match_is_skipped(tmp_assess_dir: Path) -> None:
+    """An entry in hotspot_actions whose page doesn't exist is silently skipped.
+
+    This is forward-compatible with the path lifecycle: a hotspot might graduate
+    between when the LLM read the data and when finalize runs.
+    """
+    _seed_log_md(tmp_assess_dir)
+    finalize_input = {
+        "score": 6.0,
+        "maturity_label": "Solid",
+        "top_action": "x",
+        "hotspot_actions": {"src/nonexistent.go": ["something"]},
+    }
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+
+    # Should not raise
+    finalize_run(assess_dir=tmp_assess_dir)
