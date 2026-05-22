@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Refactor `/assess` so all data work runs in deterministic Python (heuristic CLAUDE.md grading, stats diffing across runs, template-driven MD generation), with the LLM responsible only for prose synthesis. Restructure `.assess/` as a compounding wiki (`index.md`, `log.md`, `hotspots/*.md`) so each run reads prior state and updates entity pages rather than overwriting a snapshot.
+**Goal:** Refactor `/assess` so all data work runs in deterministic Python (heuristic grading of agent instruction files - CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md - stats diffing across runs, template-driven MD generation), with the LLM responsible only for prose synthesis. Restructure `.assess/` as a compounding wiki (`index.md`, `log.md`, `hotspots/*.md`) so each run reads prior state and updates entity pages rather than overwriting a snapshot.
 
 **Architecture:** New Python modules under `skills/assess/scripts/lib/` handle grading, diffing, and wiki writing - each independently testable with pytest. A new orchestrator `assess_core.py` runs the deterministic pipeline before the LLM does anything; it produces a structured JSON `run-context.json` the SKILL.md instructions consume. Templates under `skills/assess/templates/` produce all MD files except the prose-heavy report sections. Tests in `skills/assess/tests/` cover every deterministic function.
 
@@ -27,9 +27,10 @@ skills/assess/
 │   ├── assess_core.py                [CREATE: orchestrates deterministic pipeline]
 │   └── lib/
 │       ├── __init__.py               [CREATE]
-│       ├── claudemd_grader.py        [CREATE: heuristic CLAUDE.md scoring]
+│       ├── agent_instructions_grader.py  [CREATE: grades CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md]
 │       ├── stats_diff.py             [CREATE: prior-vs-current comparison]
-│       └── wiki_writer.py            [CREATE: render templates → MD files]
+│       ├── wiki_writer.py            [CREATE: render templates → MD files]
+│       └── anomaly_detector.py       [CREATE: detect suspicious run results]
 ├── templates/
 │   ├── index.md.template             [CREATE: wiki catalog]
 │   ├── log_entry.md.template         [CREATE: append-only run record]
@@ -37,13 +38,14 @@ skills/assess/
 └── tests/
     ├── __init__.py                   [CREATE]
     ├── conftest.py                   [CREATE: shared fixtures]
-    ├── test_claudemd_grader.py       [CREATE]
+    ├── test_agent_instructions_grader.py  [CREATE]
     ├── test_stats_diff.py            [CREATE]
     ├── test_wiki_writer.py           [CREATE]
     ├── test_assess_core.py           [CREATE: end-to-end]
+    ├── test_anomaly_detector.py      [CREATE]
     └── fixtures/
-        ├── good_claudemd.md          [CREATE]
-        ├── bad_claudemd.md           [CREATE]
+        ├── good_instructions.md      [CREATE]
+        ├── bad_instructions.md       [CREATE]
         ├── prior_stats.json          [CREATE]
         └── current_stats.json        [CREATE]
 
@@ -90,9 +92,11 @@ addopts = "-v --tb=short"
 """Deterministic core modules for /assess.
 
 Public surface:
-    claudemd_grader: heuristic scoring of CLAUDE.md files
-    stats_diff:      compare current vs prior complexity stats
-    wiki_writer:     render wiki MD files from templates
+    agent_instructions_grader: heuristic scoring of agent instruction files
+                               (CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules,
+                               .github/copilot-instructions.md)
+    stats_diff:                compare current vs prior complexity stats
+    wiki_writer:               render wiki MD files from templates
 """
 
 __version__ = "0.1.0"
@@ -178,18 +182,20 @@ git commit -m "feat(assess): Set up pytest harness for deterministic core"
 
 ---
 
-## Task 2: Heuristic CLAUDE.md grader
+## Task 2: Heuristic agent-instructions grader
+
+The grader is file-agnostic - it scores any agent instruction file (CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, .github/copilot-instructions.md) on the same heuristics. The orchestrator in Task 6 scans for whichever files exist.
 
 **Files:**
-- Create: `skills/assess/tests/fixtures/good_claudemd.md`
-- Create: `skills/assess/tests/fixtures/bad_claudemd.md`
-- Create: `skills/assess/tests/test_claudemd_grader.py`
-- Create: `skills/assess/scripts/lib/claudemd_grader.py`
+- Create: `skills/assess/tests/fixtures/good_instructions.md`
+- Create: `skills/assess/tests/fixtures/bad_instructions.md`
+- Create: `skills/assess/tests/test_agent_instructions_grader.py`
+- Create: `skills/assess/scripts/lib/agent_instructions_grader.py`
 
-- [ ] **Step 1: Create good_claudemd fixture (positive directives, tradeoffs, paths)**
+- [ ] **Step 1: Create good_instructions fixture (positive directives, tradeoffs, paths)**
 
 ```markdown
-<!-- skills/assess/tests/fixtures/good_claudemd.md -->
+<!-- skills/assess/tests/fixtures/good_instructions.md -->
 # Project Guidelines
 
 ## Approach
@@ -211,10 +217,10 @@ git commit -m "feat(assess): Set up pytest harness for deterministic core"
 - Tests run green before opening a PR.
 ```
 
-- [ ] **Step 2: Create bad_claudemd fixture (generic, no specifics)**
+- [ ] **Step 2: Create bad_instructions fixture (generic, no specifics)**
 
 ```markdown
-<!-- skills/assess/tests/fixtures/bad_claudemd.md -->
+<!-- skills/assess/tests/fixtures/bad_instructions.md -->
 # Project Guidelines
 
 Write clean code. Follow best practices. Be careful with security.
@@ -227,31 +233,36 @@ Use good libraries. Test your code. Be a good engineer.
 - [ ] **Step 3: Write tests for grader**
 
 ```python
-# skills/assess/tests/test_claudemd_grader.py
-"""Tests for heuristic CLAUDE.md grader."""
+# skills/assess/tests/test_agent_instructions_grader.py
+"""Tests for heuristic agent-instructions grader.
+
+Grades any of: CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules,
+.github/copilot-instructions.md. The grader operates on text + freshness,
+so it's filename-agnostic - the file selection lives in assess_core.
+"""
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from lib.claudemd_grader import (
+from lib.agent_instructions_grader import (
     count_positive_directives,
     count_tradeoff_phrases,
     count_path_references,
     count_verifiable_outcomes,
-    grade_claudemd,
+    grade_instructions,
 )
 
 
 @pytest.fixture
 def good_text(fixtures_dir: Path) -> str:
-    return (fixtures_dir / "good_claudemd.md").read_text()
+    return (fixtures_dir / "good_instructions.md").read_text()
 
 
 @pytest.fixture
 def bad_text(fixtures_dir: Path) -> str:
-    return (fixtures_dir / "bad_claudemd.md").read_text()
+    return (fixtures_dir / "bad_instructions.md").read_text()
 
 
 def test_positive_directives_good_outscores_bad(good_text: str, bad_text: str) -> None:
@@ -280,8 +291,8 @@ def test_verifiable_outcomes_only_in_good(good_text: str, bad_text: str) -> None
 
 
 def test_grade_returns_letter_grade(good_text: str, bad_text: str) -> None:
-    good = grade_claudemd(good_text, freshness_days=10)
-    bad = grade_claudemd(bad_text, freshness_days=10)
+    good = grade_instructions(good_text, freshness_days=10)
+    bad = grade_instructions(bad_text, freshness_days=10)
 
     assert good.grade in {"A", "A-", "B+", "B"}
     assert bad.grade in {"D", "F"}
@@ -289,19 +300,19 @@ def test_grade_returns_letter_grade(good_text: str, bad_text: str) -> None:
 
 
 def test_grade_penalizes_staleness(good_text: str) -> None:
-    fresh = grade_claudemd(good_text, freshness_days=10)
-    stale = grade_claudemd(good_text, freshness_days=400)
+    fresh = grade_instructions(good_text, freshness_days=10)
+    stale = grade_instructions(good_text, freshness_days=400)
     assert stale.score < fresh.score
 
 
 def test_grade_empty_string_is_F() -> None:
-    empty = grade_claudemd("", freshness_days=0)
+    empty = grade_instructions("", freshness_days=0)
     assert empty.grade == "F"
     assert empty.score == 0
 
 
 def test_subscores_in_result(good_text: str) -> None:
-    result = grade_claudemd(good_text, freshness_days=10)
+    result = grade_instructions(good_text, freshness_days=10)
     assert result.subscores["positive_directives"] >= 5
     assert result.subscores["path_references"] >= 4
     assert "tradeoff_phrases" in result.subscores
@@ -310,18 +321,19 @@ def test_subscores_in_result(good_text: str) -> None:
 
 - [ ] **Step 4: Run tests to verify all fail**
 
-Run: `cd skills/assess && uv run --with pytest pytest tests/test_claudemd_grader.py -v`
+Run: `cd skills/assess && uv run --with pytest pytest tests/test_agent_instructions_grader.py -v`
 
-Expected: ImportError on `lib.claudemd_grader` for all tests.
+Expected: ImportError on `lib.agent_instructions_grader` for all tests.
 
 - [ ] **Step 5: Implement the grader**
 
 ```python
-# skills/assess/scripts/lib/claudemd_grader.py
-"""Heuristic CLAUDE.md grader.
+# skills/assess/scripts/lib/agent_instructions_grader.py
+"""Heuristic agent-instructions grader.
 
-Scores a CLAUDE.md file on signals that correlate with usefulness to an
-LLM contributor:
+Filename-agnostic. Scores any agent instruction file - CLAUDE.md, AGENTS.md,
+GEMINI.md, .cursorrules, .github/copilot-instructions.md - on signals that
+correlate with usefulness to an LLM contributor:
 
     positive_directives: "Use X", "Prefer Y", "Default to Z" (positive framing)
     tradeoff_phrases:    "because", "over X", "instead of", "rather than"
@@ -416,8 +428,8 @@ def _letter_grade(score: int) -> str:
     return "F"
 
 
-def grade_claudemd(text: str, freshness_days: int) -> Grade:
-    """Score a CLAUDE.md and return a Grade.
+def grade_instructions(text: str, freshness_days: int) -> Grade:
+    """Score an agent instruction file (CLAUDE.md / AGENTS.md / GEMINI.md / etc.) and return a Grade.
 
     Scoring weights (max 100):
         positive_directives:  3 points each, capped at 30
@@ -454,18 +466,18 @@ def grade_claudemd(text: str, freshness_days: int) -> Grade:
 
 - [ ] **Step 6: Run tests to verify all pass**
 
-Run: `cd skills/assess && uv run --with pytest pytest tests/test_claudemd_grader.py -v`
+Run: `cd skills/assess && uv run --with pytest pytest tests/test_agent_instructions_grader.py -v`
 
 Expected: 7 passed.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add skills/assess/scripts/lib/claudemd_grader.py \
-        skills/assess/tests/test_claudemd_grader.py \
-        skills/assess/tests/fixtures/good_claudemd.md \
-        skills/assess/tests/fixtures/bad_claudemd.md
-git commit -m "feat(assess): Add heuristic CLAUDE.md grader"
+git add skills/assess/scripts/lib/agent_instructions_grader.py \
+        skills/assess/tests/test_agent_instructions_grader.py \
+        skills/assess/tests/fixtures/good_instructions.md \
+        skills/assess/tests/fixtures/bad_instructions.md
+git commit -m "feat(assess): Add heuristic agent-instructions grader"
 ```
 
 ---
@@ -767,7 +779,7 @@ Each `/assess` run reads this file, the prior `complexity-stats.json`, and the l
 
 - **Files scored:** {files_scored}
 - **AI Readiness:** {readiness_score} / 7 ({maturity_label})
-- **CLAUDE.md grade:** {claudemd_grade}
+- **Instructions grade:** {instructions_grade}
 - **Hotspot transitions:** {graduated_count} graduated, {regressed_count} regressed, {new_count} new, {persistent_count} persistent
 - **Top action:** {top_action}
 
@@ -823,7 +835,7 @@ print('index template OK')
 
 tpl = Path('templates/log_entry.md.template').read_text()
 out = tpl.format(run_date='2026-05-22', files_scored=100, readiness_score=4.5,
-                 maturity_label='Solid', claudemd_grade='B+',
+                 maturity_label='Solid', instructions_grade='B+',
                  graduated_count=1, regressed_count=1, new_count=1, persistent_count=1,
                  top_action='Add complexity rules', report_link='./assess-report.md')
 assert '2026-05-22' in out
@@ -918,7 +930,7 @@ def test_write_index_overwrites(tmp_assess_dir: Path) -> None:
 def test_append_log_entry_creates_file_if_missing(tmp_assess_dir: Path) -> None:
     entry = LogEntry(
         run_date="2026-05-22", files_scored=100, readiness_score=4.5,
-        maturity_label="Solid", claudemd_grade="B+",
+        maturity_label="Solid", instructions_grade="B+",
         graduated_count=1, regressed_count=0, new_count=0, persistent_count=2,
         top_action="Add complexity rules to .golangci.yml",
     )
@@ -932,7 +944,7 @@ def test_append_log_entry_appends(tmp_assess_dir: Path) -> None:
     (tmp_assess_dir / "log.md").write_text("# Assess Log\n\n## 2026-05-01\n\nOld entry.\n\n---\n")
     entry = LogEntry(
         run_date="2026-05-22", files_scored=100, readiness_score=4.5,
-        maturity_label="Solid", claudemd_grade="B+",
+        maturity_label="Solid", instructions_grade="B+",
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="Action X",
     )
@@ -1007,7 +1019,7 @@ class LogEntry:
     files_scored: int
     readiness_score: float
     maturity_label: str
-    claudemd_grade: str
+    instructions_grade: str
     graduated_count: int
     regressed_count: int
     new_count: int
@@ -1048,7 +1060,7 @@ def append_log_entry(assess_dir: Path, entry: LogEntry) -> None:
         files_scored=entry.files_scored,
         readiness_score=entry.readiness_score,
         maturity_label=entry.maturity_label,
-        claudemd_grade=entry.claudemd_grade,
+        instructions_grade=entry.instructions_grade,
         graduated_count=entry.graduated_count,
         regressed_count=entry.regressed_count,
         new_count=entry.new_count,
@@ -1140,7 +1152,7 @@ from assess_core import build_run_context
 
 
 def test_build_run_context_first_run(tmp_path: Path) -> None:
-    """No prior .assess/, no CLAUDE.md - everything is 'new' or 'missing'."""
+    """No prior .assess/, no instruction files - 'new' diff, empty instructions."""
     repo = tmp_path / "repo"
     repo.mkdir()
     assess_dir = repo / ".assess"
@@ -1162,17 +1174,18 @@ def test_build_run_context_first_run(tmp_path: Path) -> None:
 
     assert ctx["run_date"] == "2026-05-22"
     assert ctx["stats_summary"]["files_scored"] == 50
-    assert ctx["claudemd"]["grade"] == "F"  # no CLAUDE.md
+    assert ctx["instruction_files"] == {}  # nothing found
+    assert ctx["instructions_grade"] == "F"  # no instructions = F
     assert ctx["diff"]["new"] == 1
     assert ctx["diff"]["graduated"] == 0
     assert (assess_dir / "log.md").exists()
     assert (assess_dir / "index.md").exists()
 
 
-def test_build_run_context_with_claudemd(tmp_path: Path, fixtures_dir: Path) -> None:
+def test_build_run_context_with_claude_md(tmp_path: Path, fixtures_dir: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / "CLAUDE.md").write_text((fixtures_dir / "good_claudemd.md").read_text())
+    (repo / "CLAUDE.md").write_text((fixtures_dir / "good_instructions.md").read_text())
     assess_dir = repo / ".assess"
     assess_dir.mkdir()
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
@@ -1182,8 +1195,53 @@ def test_build_run_context_with_claudemd(tmp_path: Path, fixtures_dir: Path) -> 
     }))
 
     ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
-    assert ctx["claudemd"]["grade"] in {"A", "A-", "B+", "B"}
-    assert ctx["claudemd"]["subscores"]["positive_directives"] >= 5
+    assert "CLAUDE.md" in ctx["instruction_files"]
+    assert ctx["instruction_files"]["CLAUDE.md"]["grade"] in {"A", "A-", "B+", "B"}
+    assert ctx["instruction_files"]["CLAUDE.md"]["subscores"]["positive_directives"] >= 5
+    # Top-level instructions_grade reflects the best of the present files
+    assert ctx["instructions_grade"] in {"A", "A-", "B+", "B"}
+
+
+def test_build_run_context_with_agents_md(tmp_path: Path, fixtures_dir: Path) -> None:
+    """The grader is filename-agnostic - works for AGENTS.md too."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "AGENTS.md").write_text((fixtures_dir / "good_instructions.md").read_text())
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 10, "loc": {"p50": 10, "p95": 30, "max": 50},
+        "ccn": {"p50": 1, "p95": 3, "max": 5},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert "AGENTS.md" in ctx["instruction_files"]
+    assert ctx["instruction_files"]["AGENTS.md"]["grade"] in {"A", "A-", "B+", "B"}
+
+
+def test_build_run_context_with_multiple_instruction_files(tmp_path: Path, fixtures_dir: Path) -> None:
+    """A repo can have CLAUDE.md AND AGENTS.md AND GEMINI.md (all pointing at the same content)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    good = (fixtures_dir / "good_instructions.md").read_text()
+    bad = (fixtures_dir / "bad_instructions.md").read_text()
+    (repo / "CLAUDE.md").write_text(good)
+    (repo / "AGENTS.md").write_text(good)
+    (repo / "GEMINI.md").write_text(bad)
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 10, "loc": {"p50": 10, "p95": 30, "max": 50},
+        "ccn": {"p50": 1, "p95": 3, "max": 5},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    keys = set(ctx["instruction_files"].keys())
+    assert {"CLAUDE.md", "AGENTS.md", "GEMINI.md"} <= keys
+    # Top-level grade reflects the BEST of the present files
+    assert ctx["instructions_grade"] in {"A", "A-", "B+", "B"}
 
 
 def test_build_run_context_second_run_sees_diff(tmp_path: Path) -> None:
@@ -1284,7 +1342,7 @@ from pathlib import Path
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.claudemd_grader import grade_claudemd
+from lib.agent_instructions_grader import grade_instructions
 from lib.stats_diff import diff_stats, load_stats
 from lib.wiki_writer import (
     HotspotEntry,
@@ -1295,12 +1353,26 @@ from lib.wiki_writer import (
 )
 
 
-def _claudemd_freshness_days(claudemd_path: Path) -> int:
-    """Days since the CLAUDE.md was last touched in git."""
+# Known agent instruction file locations (relative to repo root).
+# The same heuristic grader applies to all of them.
+INSTRUCTION_FILE_PATHS = [
+    "CLAUDE.md",
+    "AGENTS.md",
+    "GEMINI.md",
+    ".cursorrules",
+    ".github/copilot-instructions.md",
+]
+
+# Grade ranking (best → worst) for picking a top-level grade across multiple files.
+GRADE_RANK = {"A": 7, "A-": 6, "B+": 5, "B": 4, "C": 3, "D": 2, "F": 1}
+
+
+def _file_freshness_days(file_path: Path) -> int:
+    """Days since file_path was last touched in git. Returns 0 if not in git."""
     try:
         out = subprocess.run(
-            ["git", "log", "-1", "--format=%ct", "--", str(claudemd_path)],
-            cwd=claudemd_path.parent,
+            ["git", "log", "-1", "--format=%ct", "--", str(file_path)],
+            cwd=file_path.parent if file_path.parent.exists() else Path.cwd(),
             capture_output=True,
             text=True,
             check=False,
@@ -1314,20 +1386,34 @@ def _claudemd_freshness_days(claudemd_path: Path) -> int:
         return 0
 
 
-def _grade_claudemd_if_present(repo_root: Path) -> dict:
-    candidate = repo_root / "CLAUDE.md"
-    if not candidate.exists():
-        return {"grade": "F", "score": 0, "subscores": {}, "present": False}
-    text = candidate.read_text()
-    freshness = _claudemd_freshness_days(candidate)
-    grade = grade_claudemd(text, freshness_days=freshness)
-    return {
-        "grade": grade.grade,
-        "score": grade.score,
-        "subscores": grade.subscores,
-        "freshness_days": freshness,
-        "present": True,
-    }
+def _grade_instruction_files(repo_root: Path) -> tuple[dict[str, dict], str]:
+    """Scan all known instruction file locations and grade each one found.
+
+    Returns: (files_dict, best_grade)
+        files_dict: keyed by filename, e.g. {"CLAUDE.md": {grade, score, ...}, "AGENTS.md": {...}}
+        best_grade: best letter grade across all present files; "F" if none found.
+    """
+    found: dict[str, dict] = {}
+    for rel_path in INSTRUCTION_FILE_PATHS:
+        candidate = repo_root / rel_path
+        if not candidate.exists():
+            continue
+        text = candidate.read_text()
+        freshness = _file_freshness_days(candidate)
+        grade = grade_instructions(text, freshness_days=freshness)
+        found[rel_path] = {
+            "grade": grade.grade,
+            "score": grade.score,
+            "subscores": grade.subscores,
+            "freshness_days": freshness,
+            "line_count": len(text.splitlines()),
+            "present": True,
+        }
+
+    if not found:
+        return {}, "F"
+    best = max(found.values(), key=lambda v: GRADE_RANK.get(v["grade"], 0))
+    return found, best["grade"]
 
 
 def _status_for_path(path: str, diff_summary: dict, current_paths: set[str]) -> str:
@@ -1350,7 +1436,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     prior = load_stats(assess_dir / "complexity-stats.prior.json")
 
     diff = diff_stats(prior=prior, current=current)
-    claudemd = _grade_claudemd_if_present(repo_root)
+    instruction_files, instructions_grade = _grade_instruction_files(repo_root)
 
     # Build status map: which paths are graduated, new, regressed, persistent
     status_map: dict[str, str] = {}
@@ -1409,7 +1495,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         files_scored=current.get("files_scored", 0),
         readiness_score=0.0,  # LLM produces the layered score
         maturity_label="(LLM fills in)",
-        claudemd_grade=claudemd["grade"],
+        instructions_grade=instructions_grade,
         graduated_count=len(diff.graduated),
         regressed_count=len(diff.regressed),
         new_count=len(diff.new),
@@ -1427,7 +1513,8 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
             "ccn": current.get("ccn", {}),
             "top_hotspots": current.get("top_hotspots", []),
         },
-        "claudemd": claudemd,
+        "instruction_files": instruction_files,
+        "instructions_grade": instructions_grade,
         "diff": diff.summary(),
         "diff_detail": {
             "graduated": [h.__dict__ for h in diff.graduated],
@@ -1508,7 +1595,7 @@ uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" \
     -o "$REPO_ROOT/.assess/complexity-heatmap.svg" \
     --stats "$REPO_ROOT/.assess/complexity-stats.json"
 
-# Run the deterministic core (CLAUDE.md grade, stats diff, wiki files, run-context.json)
+# Run the deterministic core (instruction-file grading, stats diff, wiki files, run-context.json)
 uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT"
 \`\`\`
 
@@ -1524,23 +1611,27 @@ Find the Layer 0 section. Replace the manual `ls CLAUDE.md` instructions with:
 ```markdown
 ### Layer 0: Breadcrumbs (Behavioral Contracts)
 
-Read the CLAUDE.md grade from `run-context.json`:
+Read the agent instruction file grades from `run-context.json`:
 
 \`\`\`bash
-jq '.claudemd' "$REPO_ROOT/.assess/run-context.json"
+jq '.instruction_files, .instructions_grade' "$REPO_ROOT/.assess/run-context.json"
 \`\`\`
 
-Use this directly for the report:
-- `grade: "A" | "B+" | ...` - report verbatim
+`.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). The same heuristic grader scores each present file. For each:
+- `grade: "A" | "B+" | ...` - report verbatim per file
 - `subscores.positive_directives` - count of positive directives found
 - `subscores.tradeoff_phrases` - count of reasoning phrases
 - `subscores.path_references` - count of file path references
-- `freshness_days` - days since last CLAUDE.md edit
+- `freshness_days` - days since last edit
 
-**Scoring rule:** trust the grade. The heuristic is deterministic and tested.
+`.instructions_grade` is the best grade across all present files - use this for the layer scoring.
+
+**Scoring rule:** trust the deterministic grade.
 - A/A-/B+ → **Present**
 - B/C → **Partial**
-- D/F → **Missing** (or **Partial** if file exists but scores low - note the grade)
+- D/F → **Missing** (or **Partial** if at least one file exists but scores low - note the grade)
+
+When multiple instruction files are present (e.g. CLAUDE.md and AGENTS.md as symlinks of the same content), list each in the report.
 
 This replaces the prior subjective "is it generic?" check. The grader rewards positive directives and tradeoff reasoning; it penalizes pure-negative framing and staleness.
 ```
@@ -1603,7 +1694,329 @@ git commit -m "feat(assess): Wire SKILL.md to deterministic core and wiki"
 
 ---
 
-## Task 8: Documentation and version bump
+## Task 8: Self-feedback via anomaly detection
+
+**Files:**
+- Create: `skills/assess/tests/test_anomaly_detector.py`
+- Create: `skills/assess/scripts/lib/anomaly_detector.py`
+- Modify: `skills/assess/scripts/assess_core.py` (add `line_count` + `anomalies` to run-context)
+- Modify: `skills/assess/tests/test_assess_core.py` (regression test for anomaly inclusion)
+- Modify: `skills/assess/SKILL.md` (add Step 7: Tool Feedback)
+
+The anomaly detector inspects `run-context.json` and flags suspicious patterns (zero files scored, all-zero complexity, empty hotspots in a large repo, instruction-file grade mismatch on any of CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md, stats rotation failure). Each anomaly carries a sanitized `detail` string - no file paths, no code - safe to ship in a self-feedback GitHub issue against the toolkit.
+
+- [ ] **Step 1: Write tests for anomaly detector**
+
+```python
+# skills/assess/tests/test_anomaly_detector.py
+"""Tests for anomaly detection on /assess run output."""
+from __future__ import annotations
+
+from lib.anomaly_detector import Anomaly, detect_anomalies
+
+
+def _ctx(**overrides) -> dict:
+    """Build a healthy context, then apply overrides for the test."""
+    base = {
+        "stats_summary": {
+            "files_scored": 100,
+            "loc": {"p50": 30, "p95": 200, "max": 500},
+            "ccn": {"p50": 3, "p95": 8, "max": 25},
+            "top_hotspots": [
+                {"path": "src/a.go", "loc": 400, "ccn": 25, "commits": 5},
+                {"path": "src/b.go", "loc": 300, "ccn": 18, "commits": 3},
+            ],
+        },
+        "instruction_files": {
+            "CLAUDE.md": {
+                "present": True, "grade": "B+", "score": 62, "line_count": 80, "subscores": {},
+            },
+        },
+        "instructions_grade": "B+",
+        "diff": {"new": 1, "graduated": 0, "regressed": 0, "persistent": 1},
+    }
+    for k, v in overrides.items():
+        if isinstance(base.get(k), dict) and isinstance(v, dict):
+            base[k].update(v)
+        else:
+            base[k] = v
+    return base
+
+
+def test_no_anomalies_in_healthy_run() -> None:
+    assert detect_anomalies(_ctx()) == []
+
+
+def test_zero_files_scored() -> None:
+    anomalies = detect_anomalies(_ctx(stats_summary={"files_scored": 0}))
+    assert "ZERO_FILES_SCORED" in {a.code for a in anomalies}
+
+
+def test_zero_complexity_with_files() -> None:
+    anomalies = detect_anomalies(_ctx(stats_summary={
+        "files_scored": 50, "ccn": {"p50": 0, "p95": 0, "max": 0},
+    }))
+    assert "ZERO_COMPLEXITY" in {a.code for a in anomalies}
+
+
+def test_empty_hotspots_large_repo() -> None:
+    anomalies = detect_anomalies(_ctx(stats_summary={
+        "files_scored": 250, "top_hotspots": [],
+    }))
+    assert "EMPTY_HOTSPOTS" in {a.code for a in anomalies}
+
+
+def test_instruction_file_grade_mismatch_long_file_low_grade() -> None:
+    """An instruction file that's >200 lines but grades F is suspicious."""
+    anomalies = detect_anomalies(_ctx(
+        instruction_files={"CLAUDE.md": {
+            "present": True, "grade": "F", "score": 10, "line_count": 350, "subscores": {},
+        }},
+        instructions_grade="F",
+    ))
+    assert "INSTRUCTION_FILE_GRADE_MISMATCH" in {a.code for a in anomalies}
+
+
+def test_instruction_file_grade_mismatch_for_agents_md() -> None:
+    """The check applies to any instruction filename, not just CLAUDE.md."""
+    anomalies = detect_anomalies(_ctx(
+        instruction_files={"AGENTS.md": {
+            "present": True, "grade": "F", "score": 10, "line_count": 300, "subscores": {},
+        }},
+        instructions_grade="F",
+    ))
+    assert "INSTRUCTION_FILE_GRADE_MISMATCH" in {a.code for a in anomalies}
+
+
+def test_all_hotspots_new_means_rotation_failed() -> None:
+    anomalies = detect_anomalies(_ctx(
+        diff={"new": 8, "graduated": 0, "regressed": 0, "persistent": 0},
+        stats_summary={"files_scored": 100, "top_hotspots": [
+            {"path": f"src/{i}.go", "loc": 300, "ccn": 15, "commits": 2} for i in range(8)
+        ]},
+    ))
+    assert "ALL_NEW_HOTSPOTS" in {a.code for a in anomalies}
+
+
+def test_anomaly_detail_excludes_paths() -> None:
+    """Detail strings must never contain file paths - they ship to public issues."""
+    anomalies = detect_anomalies(_ctx(stats_summary={"files_scored": 0}))
+    for a in anomalies:
+        assert "/" not in a.detail
+        assert ".go" not in a.detail
+        assert ".py" not in a.detail
+
+
+def test_anomaly_has_code_description_detail() -> None:
+    anomalies = detect_anomalies(_ctx(stats_summary={"files_scored": 0}))
+    assert len(anomalies) >= 1
+    a = anomalies[0]
+    assert a.code and a.description and a.detail
+```
+
+- [ ] **Step 2: Run tests to verify all fail**
+
+Run: `cd skills/assess && uv run --with pytest pytest tests/test_anomaly_detector.py -v`
+
+Expected: ImportError for `lib.anomaly_detector`.
+
+- [ ] **Step 3: Implement anomaly_detector**
+
+```python
+# skills/assess/scripts/lib/anomaly_detector.py
+"""Detect anomalies in /assess run output.
+
+Pure inspection of a run-context dict. No LLM, no file IO. Deterministic.
+
+The detail strings on each Anomaly are SAFE-TO-SHARE: counts and grades only,
+never paths or code. They form the body of self-feedback issues filed against
+the toolkit repo.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass
+class Anomaly:
+    code: str
+    description: str
+    detail: str  # sanitized - no paths, no code
+
+
+def detect_anomalies(context: dict) -> list[Anomaly]:
+    """Inspect a run-context dict and return any anomalies found."""
+    found: list[Anomaly] = []
+    stats = context.get("stats_summary", {})
+    instruction_files = context.get("instruction_files", {})
+    diff = context.get("diff", {})
+
+    files_scored = stats.get("files_scored", 0)
+    ccn = stats.get("ccn", {})
+    hotspots = stats.get("top_hotspots", [])
+
+    if files_scored == 0:
+        found.append(Anomaly(
+            code="ZERO_FILES_SCORED",
+            description="Treemap reported 0 files scored.",
+            detail="files_scored=0",
+        ))
+
+    if files_scored > 5 and ccn.get("p95", 0) == 0 and ccn.get("max", 0) == 0:
+        found.append(Anomaly(
+            code="ZERO_COMPLEXITY",
+            description="All complexity metrics are zero despite files being scored.",
+            detail=f"files_scored={files_scored}, ccn_p95=0, ccn_max=0",
+        ))
+
+    if files_scored > 200 and len(hotspots) == 0:
+        found.append(Anomaly(
+            code="EMPTY_HOTSPOTS",
+            description="Large repo but no hotspots emerged.",
+            detail=f"files_scored={files_scored}, hotspots_count=0",
+        ))
+
+    # Iterate over all present instruction files - the same check applies to each.
+    for filename, file_info in instruction_files.items():
+        if file_info.get("grade") == "F" and file_info.get("line_count", 0) > 200:
+            # Use the file's basename for the detail so we don't leak any
+            # repo-relative directory structure (e.g. .github/copilot-instructions.md).
+            kind = filename.rsplit("/", 1)[-1]
+            found.append(Anomaly(
+                code="INSTRUCTION_FILE_GRADE_MISMATCH",
+                description=f"{kind} is substantial but graded F.",
+                detail=f"file={kind}, line_count={file_info.get('line_count')}, grade=F",
+            ))
+
+    hotspot_count = len(hotspots)
+    new_count = diff.get("new", 0)
+    persistent_count = diff.get("persistent", 0)
+    if hotspot_count > 5 and new_count == hotspot_count and persistent_count == 0:
+        found.append(Anomaly(
+            code="ALL_NEW_HOTSPOTS",
+            description="All hotspots are new (none persisted). Stats rotation may have failed.",
+            detail=f"hotspot_count={hotspot_count}, new_count={new_count}, persistent_count=0",
+        ))
+
+    return found
+```
+
+- [ ] **Step 4: Run tests to verify all pass**
+
+Run: `cd skills/assess && uv run --with pytest pytest tests/test_anomaly_detector.py -v`
+
+Expected: 8 passed.
+
+- [ ] **Step 5: Wire anomaly detection into assess_core**
+
+Modify `skills/assess/scripts/assess_core.py` in three places.
+
+**5a:** Add the import alongside the existing lib imports:
+
+```python
+from lib.anomaly_detector import detect_anomalies
+```
+
+**5b:** No code change needed in `_grade_instruction_files` - the function already attaches `line_count` to each file's dict (introduced in Task 6). Just confirm by reading the function and verifying `"line_count": len(text.splitlines())` is present.
+
+**5c:** In `build_run_context`, immediately before the `run-context.json` write, attach the anomalies array:
+
+```python
+    ctx["anomalies"] = [
+        {"code": a.code, "description": a.description, "detail": a.detail}
+        for a in detect_anomalies(ctx)
+    ]
+    (assess_dir / "run-context.json").write_text(json.dumps(ctx, indent=2))
+    return ctx
+```
+
+- [ ] **Step 6: Add a regression test for anomaly inclusion**
+
+Append to `skills/assess/tests/test_assess_core.py`:
+
+```python
+def test_build_run_context_includes_anomalies_field(tmp_path: Path) -> None:
+    """Every run-context.json must have an anomalies array (possibly empty)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0,
+        "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert "anomalies" in ctx
+    codes = {a["code"] for a in ctx["anomalies"]}
+    assert "ZERO_FILES_SCORED" in codes
+```
+
+- [ ] **Step 7: Run full suite as regression check**
+
+Run: `cd skills/assess && uv run --with pytest pytest -v`
+
+Expected: all tests pass (previous ~27 + 8 anomaly tests + 1 new assess_core regression = ~36).
+
+- [ ] **Step 8: Add Step 7 (Tool Feedback) to SKILL.md**
+
+Append to `skills/assess/SKILL.md` (after the existing Step 5/6 content). Use a 4-backtick outer fence in the plan so the inner bash fences render correctly:
+
+````markdown
+## Step 7: Tool Feedback (Optional)
+
+Close the loop: surface detected anomalies and offer the user a chance to file feedback against the toolkit.
+
+```bash
+jq '.anomalies' "$REPO_ROOT/.assess/run-context.json"
+```
+
+If the array is non-empty, list each anomaly to the user:
+
+> Detected anomalies in this run:
+> - `<code>`: <description>
+>
+> These may indicate a bug or miscalibration in `/assess`. Want to file feedback so the toolkit can improve?
+
+Always also offer the open-ended option, even when no anomalies were detected:
+
+> Anything else in this report look wrong or surprising? Filing feedback helps `/assess` improve for everyone.
+
+If the user wants to file feedback, build a sanitized issue body from `run-context.json`:
+
+- **Include**: plugin version, run date, files_scored, layer scores (numbers), instructions_grade (top-level) + per-file subscores (numbers only - file basenames like `CLAUDE.md` are public), stats percentiles (p50/p95/max for LOC and CCN), diff summary counts, anomaly codes.
+- **Never include**: file paths, code snippets, repo name, commit messages, hotspot path lists.
+
+Prepend the body with: `_This feedback was generated by /assess. The data below is sanitized - no file paths or code content._`
+
+Show the body to the user, then run (after explicit confirmation, per the never-auto-create-issues rule):
+
+```bash
+gh issue create \
+  --repo bjcoombs/ai-native-toolkit \
+  --label assess-feedback \
+  --title "[assess-feedback] <user's summary>" \
+  --body "$BODY"
+```
+
+The user adds their observation in their own words; the pre-fill is just the deterministic context. Positive framing applies here too: "the grader missed positive directives in section X" beats "the grader is broken."
+````
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add skills/assess/scripts/lib/anomaly_detector.py \
+        skills/assess/tests/test_anomaly_detector.py \
+        skills/assess/scripts/assess_core.py \
+        skills/assess/tests/test_assess_core.py \
+        skills/assess/SKILL.md
+git commit -m "feat(assess): Add anomaly detection and self-feedback issue creation"
+```
+
+---
+
+## Task 9: Documentation and version bump
 
 **Files:**
 - Modify: `CLAUDE.md`
@@ -1618,7 +2031,7 @@ Add a new section after the existing "## CI" section:
 
 Deterministic core in `skills/assess/scripts/lib/` does all data work; the LLM only writes prose.
 
-- `lib/claudemd_grader.py` - heuristic CLAUDE.md scoring (regex + arithmetic, no AI)
+- `lib/agent_instructions_grader.py` - heuristic scoring of CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md (regex + arithmetic, no AI)
 - `lib/stats_diff.py` - cross-run comparison (graduated/regressed/new/persistent hotspots)
 - `lib/wiki_writer.py` - renders `index.md`, `log.md`, `hotspots/*.md` from templates
 - `scripts/assess_core.py` - orchestrator; writes `run-context.json` for the LLM to read
@@ -1681,7 +2094,7 @@ git push -u origin assess-deterministic-wiki
 gh pr create --title "feat(assess): Add deterministic core + compounding wiki" --body "$(cat <<'EOF'
 ## Summary
 
-- Refactor /assess so all data work runs in deterministic Python (heuristic CLAUDE.md grading, stats diffing, template-driven MD generation)
+- Refactor /assess so all data work runs in deterministic Python (heuristic grading of agent instruction files - CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md - stats diffing, template-driven MD generation)
 - LLM responsible only for prose synthesis
 - `.assess/` becomes a compounding wiki: `index.md`, `log.md`, `hotspots/<file>.md`
 - Each run reads prior state and updates entity pages rather than overwriting
@@ -1689,7 +2102,7 @@ gh pr create --title "feat(assess): Add deterministic core + compounding wiki" -
 ## Architecture
 
 New Python modules under `skills/assess/scripts/lib/`:
-- `claudemd_grader.py` - heuristic CLAUDE.md scoring (positive directives, tradeoff phrases, path refs, verifiable outcomes, freshness)
+- `agent_instructions_grader.py` - heuristic scoring for any agent instruction file (positive directives, tradeoff phrases, path refs, verifiable outcomes, freshness). The orchestrator scans for CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, .github/copilot-instructions.md and grades each one present.
 - `stats_diff.py` - cross-run comparison (graduated/regressed/new/persistent)
 - `wiki_writer.py` - render templates → MD files
 
@@ -1728,7 +2141,7 @@ If CI fails: fix, commit, push. Repeat until green.
 ## Self-Review Notes
 
 **Spec coverage:**
-- Heuristic CLAUDE.md grading (Task 2) - covers user's "grade content, not existence" request
+- Heuristic agent-instructions grading (Task 2) - covers user's "grade content, not existence" request; file-agnostic so it works for any of CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md
 - Standard tooling over AI (Tasks 2, 3, 5, 6) - deterministic Python throughout
 - Positive-framing reward in grader (Task 2) - directly addresses the user's catch about my own negative framing
 - Loop awareness via prior-stats read (Tasks 3, 6) - matches user's "the loop happens naturally" insight
@@ -1741,7 +2154,9 @@ If CI fails: fix, commit, push. Repeat until green.
 
 **Type consistency check:**
 - `HotspotEntry`, `LogEntry`, `HotspotTransition`, `Grade`, `StatsDiff` are the dataclasses; each used identically across modules
-- `grade_claudemd(text, freshness_days=int)` signature consistent across grader, assess_core, tests
+- `grade_instructions(text, freshness_days=int)` signature consistent across grader, assess_core, tests
+- `instruction_files` dict schema consistent: keyed by relative filename, each value has `grade`, `score`, `subscores`, `freshness_days`, `line_count`, `present`
+- `instructions_grade` top-level field is the best grade across all present files (or `F` if none)
 - `diff_stats(*, prior, current)` keyword-only, consistent
 
 **Placeholder scan:** none found - every code block has full implementation.
@@ -1754,7 +2169,7 @@ Plan complete and saved to `docs/superpowers/plans/2026-05-22-assess-determinist
 
 Two execution options:
 
-**1. Subagent-Driven (recommended)** - Dispatch a fresh subagent per task, review between tasks, fast iteration. Best for plans this long (8 tasks, ~50 steps).
+**1. Subagent-Driven (recommended)** - Dispatch a fresh subagent per task, review between tasks, fast iteration. Best for plans this long (9 tasks, ~57 steps).
 
 **2. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints. Faster if I stay focused, but heavier on context.
 
