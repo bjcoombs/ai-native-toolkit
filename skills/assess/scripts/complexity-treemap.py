@@ -41,11 +41,14 @@ Output is a single self-contained SVG with hover tooltips on every block
 annotate large blocks with text.
 
 Build artifacts (main.dart.js, *.min.js, *.bundle.js, *.map, files under
-node_modules/dist/build/.next/.nuxt/etc.) are filtered by default so one
-compiled bundle doesn't dominate the treemap. If a single file still
-holds >30% of total LOC after filtering, a warning prints to stderr
-suggesting it might be a build artifact that needs .gitignore. Pass
---include-artifacts to disable the filter.
+node_modules/dist/build/.next/.nuxt/etc.) and generated code (*.pb.go,
+*.connect.go, *_pb.ts, wire_gen.go, zz_generated_*.go, *.freezed.dart,
+*.designer.cs, etc.) are filtered by default so compiled bundles and
+protoc-emitted bindings don't dominate the "most complex" lists with
+code nobody wrote by hand. If a single remaining file still holds >30%
+of total LOC, a warning prints to stderr suggesting it might be a build
+artifact that needs .gitignore. Pass --include-artifacts to disable the
+filter entirely.
 
 Usage:
     uv run skills/assess/scripts/complexity-treemap.py <path> [-o out.svg] [--labels] [--include-artifacts]
@@ -82,11 +85,16 @@ EXCLUDE_DIRS = {".git", "node_modules", "dist", "build", "target", "vendor",
                 "flutter_assets"}
 
 # Filenames that match these glob patterns are treated as build artifacts
-# and excluded from scoring. Triggers when a single compiled bundle is
-# eating 78% of the codebase LOC and skewing every percentile (see
-# https://github.com/bjcoombs/ai-native-toolkit/issues for the case that
-# prompted this). Pass --include-artifacts to disable.
+# or generated code and excluded from scoring. Two motivations:
+#   - Compiled bundles (main.dart.js etc.) eat 78% of LOC and skew
+#     every percentile (see PR #12).
+#   - Generated bindings (.pb.go, *_pb.ts etc.) dominate "most complex"
+#     lists with machine-emitted switch statements and getters that
+#     nobody wrote by hand (see meridian PR #2212 - 8/10 most-complex
+#     files were protobuf bindings).
+# Pass --include-artifacts to disable.
 EXCLUDE_FILE_PATTERNS = [
+    # --- build artifacts ---
     # Minified / bundled JS-CSS
     "*.min.js", "*.min.mjs", "*.min.css",
     "*.bundle.js", "*.bundle.mjs", "*.bundle.css",
@@ -98,6 +106,26 @@ EXCLUDE_FILE_PATTERNS = [
     "main.dart.js", "flutter_service_worker.js", "flutter.js",
     # PWA / service worker stubs
     "service-worker.js", "sw.js", "workbox-*.js",
+
+    # --- generated code ---
+    # Go protobuf / gRPC / grpc-gateway / Connect
+    "*.pb.go", "*_grpc.pb.go", "*.pb.gw.go", "*.connect.go",
+    # JS/TS protobuf / Connect (buf, ts-proto, protoc-gen-grpc-web)
+    "*_pb.ts", "*_pb.d.ts", "*_pb.js",
+    "*_connect.ts", "*_connect.d.ts", "*_connect.js",
+    # Python protobuf
+    "*_pb2.py", "*_pb2_grpc.py",
+    # C++ protobuf
+    "*.pb.cc", "*.pb.h",
+    # Go generators (wire, controller-gen, mockgen, bindata)
+    "*.gen.go", "*.generated.go",
+    "wire_gen.go",
+    "zz_generated_*.go",
+    "bindata.go", "bindata_assetfs.go",
+    # .NET designer / source generators
+    "*.designer.cs", "*.g.cs", "*.g.i.cs",
+    # Dart/Flutter codegen (freezed, json_serializable, riverpod, get_it)
+    "*.freezed.dart", "*.g.dart", "*.gr.dart", "*.config.dart",
 ]
 
 
