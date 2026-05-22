@@ -43,7 +43,7 @@ def load_stats(path: Path) -> dict | None:
     """Load stats JSON from path, or None if file doesn't exist."""
     if not path.exists():
         return None
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def diff_stats(*, prior: dict | None, current: dict) -> StatsDiff:

@@ -17,12 +17,22 @@ from lib.wiki_writer import (
 
 
 def test_slug_for_path_basic() -> None:
-    assert slug_for_path("src/foo/bar.go") == "src-foo-bar-go"
-    assert slug_for_path("services/api/handler.ts") == "services-api-handler-ts"
+    assert slug_for_path("src/foo/bar.go").startswith("src-foo-bar-go-")
+    assert slug_for_path("services/api/handler.ts").startswith("services-api-handler-ts-")
 
 
 def test_slug_for_path_handles_special_chars() -> None:
-    assert slug_for_path("src/foo bar/baz.go") == "src-foo-bar-baz-go"
+    assert slug_for_path("src/foo bar/baz.go").startswith("src-foo-bar-baz-go-")
+
+
+def test_slug_for_path_avoids_collision() -> None:
+    """Distinct paths must produce distinct slugs even when they normalize the same."""
+    slug_a = slug_for_path("src/foo-bar.py")
+    slug_b = slug_for_path("src/foo/bar.py")
+    assert slug_a != slug_b
+    # Both still start with the readable form
+    assert slug_a.startswith("src-foo-bar-py-")
+    assert slug_b.startswith("src-foo-bar-py-")
 
 
 def test_write_index_creates_file(tmp_assess_dir: Path) -> None:
@@ -95,9 +105,13 @@ def test_write_hotspot_page_creates_file(tmp_assess_dir: Path) -> None:
         briefing="Go API handler. Pairs with handler_test.go (which is missing).",
         actions="- Add `handler_test.go`\n- Split into smaller functions",
     )
-    page = tmp_assess_dir / "hotspots" / "src-foo-go.md"
-    assert page.exists()
-    content = page.read_text()
+    hotspots_dir = tmp_assess_dir / "hotspots"
+    pages = list(hotspots_dir.iterdir())
+    assert len(pages) == 1
+    page = pages[0]
+    assert page.name.startswith("src-foo-go-")
+    assert page.name.endswith(".md")
+    content = page.read_text(encoding="utf-8")
     assert "src/foo.go" in content
     assert "regressed" in content
     assert "handler_test.go" in content

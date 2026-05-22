@@ -158,7 +158,8 @@ def test_build_run_context_writes_hotspot_pages(tmp_path: Path) -> None:
     build_run_context(repo_root=repo, run_date="2026-05-22")
     hotspots = list((assess_dir / "hotspots").iterdir())
     assert len(hotspots) == 1
-    assert hotspots[0].name == "src-foo-go.md"
+    assert hotspots[0].name.startswith("src-foo-go-")
+    assert hotspots[0].name.endswith(".md")
 
 
 def test_build_run_context_includes_anomalies_field(tmp_path: Path) -> None:

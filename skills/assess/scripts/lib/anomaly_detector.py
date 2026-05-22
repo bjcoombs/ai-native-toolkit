@@ -65,7 +65,8 @@ def detect_anomalies(context: dict) -> list[Anomaly]:
     hotspot_count = len(hotspots)
     new_count = diff.get("new", 0)
     persistent_count = diff.get("persistent", 0)
-    if hotspot_count > 5 and new_count == hotspot_count and persistent_count == 0:
+    prior_exists = context.get("prior_stats_exists", False)
+    if prior_exists and hotspot_count > 5 and new_count == hotspot_count and persistent_count == 0:
         found.append(Anomaly(
             code="ALL_NEW_HOTSPOTS",
             description="All hotspots are new (none persisted). Stats rotation may have failed.",

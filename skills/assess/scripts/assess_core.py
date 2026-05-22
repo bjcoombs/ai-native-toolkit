@@ -88,7 +88,7 @@ def _grade_instruction_files(repo_root: Path) -> tuple[dict[str, dict], str]:
         candidate = repo_root / rel_path
         if not candidate.exists():
             continue
-        text = candidate.read_text()
+        text = candidate.read_text(encoding="utf-8")
         freshness = _file_freshness_days(candidate)
         grade = grade_instructions(text, freshness_days=freshness)
         found[rel_path] = {
@@ -106,20 +106,43 @@ def _grade_instruction_files(repo_root: Path) -> tuple[dict[str, dict], str]:
     return found, best["grade"]
 
 
+def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
+    """Load the first-flagged date map from .assess/first-flagged.json.
+
+    Returns an empty dict if the file does not exist yet (first run).
+    """
+    state_file = assess_dir / "first-flagged.json"
+    if not state_file.exists():
+        return {}
+    return json.loads(state_file.read_text(encoding="utf-8"))
+
+
+def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None:
+    """Persist the first-flagged date map to .assess/first-flagged.json."""
+    (assess_dir / "first-flagged.json").write_text(
+        json.dumps(first_flagged, indent=2), encoding="utf-8"
+    )
+
+
 def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     """Run the deterministic pipeline and return the structured context dict.
 
     Side effects: writes index.md, log.md, hotspots/*.md, run-context.json.
     """
     assess_dir = repo_root / ".assess"
+    assess_dir.mkdir(parents=True, exist_ok=True)
     current = load_stats(assess_dir / "complexity-stats.json") or {
         "files_scored": 0, "top_hotspots": [], "top_complex": [], "top_large": [],
         "loc": {}, "ccn": {},
     }
     prior = load_stats(assess_dir / "complexity-stats.prior.json")
+    prior_exists = prior is not None
 
     diff = diff_stats(prior=prior, current=current)
     instruction_files, instructions_grade = _grade_instruction_files(repo_root)
+
+    # Load (and later update) the persistent first-flagged date map
+    first_flagged_map = _load_first_flagged(assess_dir)
 
     # Build status map: which paths are graduated, new, regressed, persistent
     status_map: dict[str, str] = {}
@@ -135,10 +158,14 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # Wiki: hotspot pages for current top hotspots
     hotspot_entries: list[HotspotEntry] = []
     for h in current.get("top_hotspots", []):
+        # Preserve the original first_flagged date; only set it to run_date on first appearance.
+        if h["path"] not in first_flagged_map:
+            first_flagged_map[h["path"]] = run_date
+        first_flagged = first_flagged_map[h["path"]]
         status = status_map.get(h["path"], "active")
         hotspot_entries.append(HotspotEntry(
             path=h["path"],
-            first_flagged=run_date,    # refined in a later plan via log scan
+            first_flagged=first_flagged,
             last_seen=run_date,
             status=status,
             ccn=h.get("ccn", 0),
@@ -147,7 +174,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         write_hotspot_page(
             assess_dir,
             path=h["path"],
-            first_flagged=run_date,
+            first_flagged=first_flagged,
             last_seen=run_date,
             status=status,
             loc=h.get("loc", 0),
@@ -163,12 +190,15 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     for h in diff.graduated:
         hotspot_entries.append(HotspotEntry(
             path=h.path,
-            first_flagged=run_date,
+            first_flagged=first_flagged_map.get(h.path, run_date),
             last_seen=run_date,
             status="graduated",
             ccn=0,
             loc=0,
         ))
+
+    # Persist the updated first-flagged map for future runs
+    _save_first_flagged(assess_dir, first_flagged_map)
 
     write_index(assess_dir, hotspot_entries, last_updated=run_date)
 
@@ -190,6 +220,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     ctx = {
         "run_date": run_date,
         "repo_root": str(repo_root),
+        "prior_stats_exists": prior_exists,
         "stats_summary": {
             "files_scored": current.get("files_scored", 0),
             "loc": current.get("loc", {}),
@@ -210,7 +241,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         {"code": a.code, "description": a.description, "detail": a.detail}
         for a in detect_anomalies(ctx)
     ]
-    (assess_dir / "run-context.json").write_text(json.dumps(ctx, indent=2))
+    (assess_dir / "run-context.json").write_text(json.dumps(ctx, indent=2), encoding="utf-8")
     return ctx
 
 
