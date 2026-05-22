@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-@dataclass
+@dataclass(frozen=True)
 class HotspotTransition:
     path: str
     ccn_delta: int = 0
@@ -79,6 +79,8 @@ def diff_stats(*, prior: dict | None, current: dict) -> StatsDiff:
             loc_delta=loc_delta,
         )
 
+        # Regressed: higher cyclomatic complexity, OR grew by >50 LOC across >2 commits.
+        # The compound branch is a churn proxy - a single large refactor isn't treated as regression.
         if ccn_delta > 0 or (loc_delta > 50 and commits_delta > 2):
             diff.regressed.append(transition)
         else:
