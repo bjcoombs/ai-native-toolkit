@@ -30,7 +30,7 @@ POSITIVE_DIRECTIVE_PATTERNS = [
 
 TRADEOFF_PATTERNS = [
     r"\bbecause\b",
-    r"\bover\s+\w+",
+    r"\bover\s+(?!the\b|a\b|an\b|time\b|all\b|here\b|there\b|to\b|in\b|on\b|with\b)\w+",
     r"\binstead of\b",
     r"\brather than\b",
     r"\btradeoff\b",
@@ -49,7 +49,7 @@ VERIFIABLE_PATTERNS = [
 ]
 
 
-@dataclass
+@dataclass(frozen=True)
 class Grade:
     score: int
     grade: str
