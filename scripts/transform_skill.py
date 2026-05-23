@@ -24,7 +24,7 @@ def apply_chat_replace(text: str, replacements: dict[str, str]) -> str:
     out: list[str] = []
     i = 0
     while i < len(lines):
-        m = _REPLACE_PATTERN.match(lines[i].rstrip())
+        m = _REPLACE_PATTERN.match(lines[i].strip())
         if m:
             key = m.group(1)
             if key in replacements:

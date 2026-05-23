@@ -42,6 +42,13 @@ def test_replace_substitutes_next_line():
     assert result == "before\nreplacement\nafter\n"
 
 
+def test_replace_indented_marker():
+    # Markers inside indented code blocks (e.g. markdown list continuations) must match
+    text = "before\n   <!-- chat-replace:my-key -->\noriginal\nafter\n"
+    result = apply_chat_replace(text, {"my-key": "replacement"})
+    assert result == "before\nreplacement\nafter\n"
+
+
 def test_replace_unknown_key_leaves_line():
     text = "<!-- chat-replace:unknown -->\noriginal\n"
     result = apply_chat_replace(text, {"other": "x"})
