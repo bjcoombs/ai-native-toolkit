@@ -104,3 +104,38 @@ def test_orphan_unconsumed_replace():
 
 def test_no_orphans_clean_text():
     assert check_orphan_markers("clean text\n") == []
+
+
+# ── standalone_skill_config smoke tests ─────────────────────────────────────
+
+def test_config_has_required_keys():
+    from standalone_skill_config import SKILLS
+    required = {
+        "standalone_name", "standalone_description",
+        "source_dir", "replacements", "exclude_dirs",
+    }
+    for name, cfg in SKILLS.items():
+        missing = required - set(cfg)
+        assert not missing, f"SKILLS['{name}'] missing keys: {missing}"
+
+
+def test_assess_config_covers_all_markers():
+    from standalone_skill_config import SKILLS
+    from pathlib import Path
+    import re
+    text = Path("../skills/assess/SKILL.md").read_text()
+    in_file = set(re.findall(r"<!-- chat-replace:(\S+?) -->", text))
+    in_config = set(SKILLS["assess"]["replacements"])
+    uncovered = in_file - in_config
+    assert not uncovered, f"assess markers with no config entry: {uncovered}"
+
+
+def test_huddle_config_has_no_orphan_replace_markers():
+    from standalone_skill_config import SKILLS
+    from pathlib import Path
+    import re
+    text = Path("../skills/huddle/SKILL.md").read_text()
+    in_file = set(re.findall(r"<!-- chat-replace:(\S+?) -->", text))
+    # huddle uses chat-skip+inline only; no chat-replace markers expected
+    assert not in_file, f"unexpected chat-replace markers in huddle: {in_file}"
+    assert SKILLS["huddle"]["replacements"] == {}, "huddle replacements should be empty"
