@@ -32,6 +32,19 @@ From inside a Claude Code session (not a shell - `/plugin` is a Claude Code comm
 
 Skills appear namespaced: `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`. Update with `/plugin update ai-native-toolkit`. Remove with `/plugin remove ai-native-toolkit`. The plugin doesn't touch your existing `~/.claude/` files.
 
+## Also available in Claude Desktop chat and Cowork
+
+`/assess` and `/huddle` are available as standalone skill ZIPs — no Claude Code session or plugin install required. Works in Claude Desktop chat, claude.ai web, and Cowork.
+
+**Install:**
+1. Download `assess.zip` and `huddle.zip` from the [standalone-skills-latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/tag/standalone-skills-latest)
+2. In Claude Desktop or claude.ai: **Settings → Customize → Skills → Upload Skill**
+3. Upload each ZIP and toggle the skill on
+
+In this context `/huddle` runs in solo or phased sub-agent mode — Claude reasons through each hat phase directly. Team mode (persistent agents with cross-talk) requires Claude Code. `/assess` runs the full layer assessment; the SVG treemap and deterministic wiki require terminal access to the bundled scripts.
+
+After installing, verify trigger descriptions work as expected: try "how AI-ready is this codebase?" for assess and "run a huddle on this decision" for huddle in a fresh chat. If a skill doesn't auto-activate, check that it's toggled on and update `standalone_description` in `scripts/standalone_skill_config.py` if the phrasing misses.
+
 ## Try it
 
 ### Assess a codebase
@@ -179,6 +192,15 @@ ai-native-toolkit/
 │   ├── green-hat.md
 │   ├── blue-hat.md
 │   └── scribe.md
+├── scripts/                           # Standalone skill ZIP build pipeline
+│   ├── transform_skill.py             # Marker-based SKILL.md transformer
+│   ├── standalone_skill_config.py     # Per-skill config (names, descriptions, replacements)
+│   ├── build-standalone-skills.sh     # Build orchestrator
+│   ├── pyproject.toml
+│   └── tests/
+│       ├── test_transform.py          # Transformer unit tests
+│       └── test_integration.py        # Full-build ZIP content validation
+├── dist/                              # Generated ZIPs (gitignored; published via CI)
 └── docs/
     └── example-heatmap.svg            # Sanitized real-world /assess output (README hero)
 ```
