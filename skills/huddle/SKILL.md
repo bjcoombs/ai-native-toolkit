@@ -23,8 +23,12 @@ Three execution modes exist; the skill picks one automatically based on team siz
 |------|-------------|-----------|----------------|
 | **Solo flat-parallel** | Size 1 | Hat agents fire in parallel via standard Agent tool; Blue Hat synthesises | 1× |
 | **Phased sub-agent** | Size 2+, no flag | Iterate phases sequentially; spawn N sub-agents per phase (one per lens), each with fresh context, briefed via a running synopsis Blue Hat maintains | 2–4× |
+<!-- chat-skip:start -->
 | **Team mode** | Size 2+, flag enabled | Persistent `TeamCreate` agents cross-talk via `SendMessage` across phases | 5–15× |
+<!-- chat-skip:end -->
+| **Team mode** | Size 2+, Claude Code only | Persistent agents with cross-talk — not available in standalone context | — |
 
+<!-- chat-skip:start -->
 **Agent Teams flag** enables `TeamCreate`, `SendMessage`, and related tools. Enable in your environment:
 
 ```bash
@@ -34,6 +38,7 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 Without the flag, `/huddle` still runs multi-perspective deliberations via phased sub-agent mode — it just trades cross-talk between agents for a running synopsis Blue Hat maintains as the persistent memory. Quality drops a little, cost drops a lot.
 
 **Why enable team mode anyway:** persistent professional-lens agents talking to each other across phases produce noticeably deeper synthesis — disagreements get rebutted in real time, edge cases surface from cross-talk, and the verdict feels like real deliberation rather than serially-summarised opinions. Worth it for decisions where being wrong costs 100× more than the analysis: architecture choices, irreversible migrations, hiring calls, contractual commitments.
+<!-- chat-skip:end -->
 
 **Tell the user which mode you're in** before you start. One line: "Running in phased sub-agent mode (3 lenses, 5 phases — Agent Teams flag not detected)."
 
@@ -88,7 +93,10 @@ Spawn hat agents in parallel based on your chosen sequence. Each agent operates 
 
 ### Phased Sub-Agent Mode (Size 2+, no team flag)
 
+<!-- chat-skip:start -->
 When team size > 1 but `TeamCreate` is unavailable, do not collapse to flat-parallel — that throws away both phase ordering and multi-lens diversity. Instead, iterate phases sequentially and spawn fresh sub-agents per phase:
+<!-- chat-skip:end -->
+When team size > 1 but team mode is unavailable, do not collapse to flat-parallel — that throws away both phase ordering and multi-lens diversity. Instead, iterate phases sequentially and spawn fresh sub-agents per phase:
 
 **Loop over each hat phase in your sequence:**
 
@@ -108,12 +116,19 @@ When team size > 1 but `TeamCreate` is unavailable, do not collapse to flat-para
 - Each sub-agent gets a clean context window (the equivalent benefit to a persistent team member's fresh perspective).
 - Multi-lens diversity preserved — N professionals still weigh in per phase.
 - Phase ordering preserved — Black Hat sees White Hat's facts via the synopsis.
+<!-- chat-skip:start -->
 - No `TeamCreate` / `SendMessage` required; uses only the standard Agent tool.
+<!-- chat-skip:end -->
+- No team mode infrastructure required; uses only the standard Agent tool.
 
+<!-- chat-skip:start -->
 **Cost:** roughly 2–4× flat-parallel (see Capability Requirements table). The synopsis grows with each phase (200–400 words per phase → up to ~2KB by phase 5), and that growing synopsis is passed into every sub-agent on every subsequent phase, so the cost skews late in the sequence. Still well below team mode because there's no `SendMessage` cross-talk overhead and no persistent agent state to maintain. Usually the right default when the flag is off and the decision warrants more than a gut check.
+<!-- chat-skip:end -->
+**Cost:** roughly 2–4× flat-parallel (see Capability Requirements table). The synopsis grows with each phase (200–400 words per phase → up to ~2KB by phase 5), and that growing synopsis is passed into every sub-agent on every subsequent phase, so the cost skews late in the sequence. Still well below team mode because there is no cross-talk overhead or persistent agent state to maintain. Usually the right default for complex decisions that warrant more than a gut check.
 
 For team modes (size 2+) with the flag enabled, continue to Step 2.
 
+<!-- chat-skip:start -->
 ### Step 2: Create the Team
 
 ```
@@ -122,7 +137,9 @@ TeamCreate(
   description: "Six Hats team analysis of: <topic>"
 )
 ```
+<!-- chat-skip:end -->
 
+<!-- chat-skip:start -->
 ### Step 3: Spawn Team Members
 
 Spawn ALL members in parallel (single message with multiple Agent tool calls). Each member is a general-purpose agent with their professional identity and **explicit first-phase instructions**.
@@ -192,7 +209,9 @@ Your professional lens determines WHAT you ask each hat to investigate. The hat 
 
 **Lane discipline**: Stay within the hat's defined methodology. Each hat has a "Not My Job" section — respect those boundaries. Don't duplicate other hats' concerns.
 ```
+<!-- chat-skip:end -->
 
+<!-- chat-skip:start -->
 ### Step 4: Facilitate Hat Phases
 
 For each hat in your chosen sequence, facilitate a phase:
@@ -239,6 +258,7 @@ SendMessage(
 ```
 
 Carry forward key tensions or open questions into the framing of the next phase.
+<!-- chat-skip:end -->
 
 ### Step 5: Deliver the Verdict
 
@@ -279,6 +299,7 @@ After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. 
 3. [What to monitor]
 ```
 
+<!-- chat-skip:start -->
 ### Step 6: Shutdown the Team
 
 After delivering the verdict:
@@ -291,6 +312,7 @@ After delivering the verdict:
 3. Call `TeamDelete()` to clear team context from the session
 
 **TeamDelete is mandatory.** Without it, teamContext persists and blocks future team creation in this session. The sequence is always: shutdown teammates → wait for approvals → TeamDelete.
+<!-- chat-skip:end -->
 
 ## Facilitation Principles
 
