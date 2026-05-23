@@ -9,6 +9,9 @@
 !/skills/
 !/LICENSE
 !/docs/
+!/scripts/
+!/dist/
+dist/standalone-skills/
 !/.github/
 
 # Still ignore .DS_Store files everywhere
