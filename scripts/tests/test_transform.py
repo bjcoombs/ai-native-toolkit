@@ -1,5 +1,4 @@
 """Unit tests for transform_skill.py primitives."""
-import textwrap
 import pytest
 from transform_skill import (
     strip_chat_skip,
