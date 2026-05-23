@@ -21,7 +21,7 @@ SKILLS: dict[str, dict] = {
             "terminal access; the layered assessment works in any context."
         ),
         "source_dir": "skills/assess",
-        "exclude_dirs": {"tests", "__pycache__", ".pytest_cache"},
+        "exclude_dirs": {"tests", "__pycache__", ".pytest_cache", ".venv"},
         "replacements": {
             "uv-treemap": (
                 'uv run scripts/complexity-treemap.py "$REPO_ROOT" '

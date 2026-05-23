@@ -72,7 +72,7 @@ def build_standalone_skill_zip(
     standalone_name: str,
     standalone_description: str,
     replacements: dict[str, str],
-    exclude_dirs: frozenset[str] = frozenset({"tests", "__pycache__", ".pytest_cache"}),
+    exclude_dirs: frozenset[str] = frozenset({"tests", "__pycache__", ".pytest_cache", ".venv"}),
 ) -> list[str]:
     """
     Transform *skill_source_dir* and write a standalone ZIP to *out_zip*.
