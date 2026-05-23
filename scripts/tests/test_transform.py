@@ -130,8 +130,9 @@ def test_assess_config_covers_all_markers():
     from standalone_skill_config import SKILLS
     from pathlib import Path
     import re
-    text = Path("../skills/assess/SKILL.md").read_text()
-    in_file = set(re.findall(r"<!-- chat-replace:(\S+?) -->", text))
+    in_file: set[str] = set()
+    for md in Path("../skills/assess").rglob("*.md"):
+        in_file |= set(re.findall(r"<!-- chat-replace:(\S+?) -->", md.read_text()))
     in_config = set(SKILLS["assess"]["replacements"])
     uncovered = in_file - in_config
     assert not uncovered, f"assess markers with no config entry: {uncovered}"
@@ -141,8 +142,9 @@ def test_huddle_config_has_no_orphan_replace_markers():
     from standalone_skill_config import SKILLS
     from pathlib import Path
     import re
-    text = Path("../skills/huddle/SKILL.md").read_text()
-    in_file = set(re.findall(r"<!-- chat-replace:(\S+?) -->", text))
+    in_file: set[str] = set()
+    for md in Path("../skills/huddle").rglob("*.md"):
+        in_file |= set(re.findall(r"<!-- chat-replace:(\S+?) -->", md.read_text()))
     # huddle uses chat-skip+inline only; no chat-replace markers expected
     assert not in_file, f"unexpected chat-replace markers in huddle: {in_file}"
     assert SKILLS["huddle"]["replacements"] == {}, "huddle replacements should be empty"

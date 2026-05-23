@@ -7,8 +7,8 @@ import zipfile
 from pathlib import Path
 
 _SKIP_PATTERN = re.compile(
-    r"<!-- chat-skip:start -->.*?<!-- chat-skip:end -->\n?",
-    re.DOTALL,
+    r"^[ \t]*<!-- chat-skip:start -->.*?^[ \t]*<!-- chat-skip:end -->\n?",
+    re.DOTALL | re.MULTILINE,
 )
 _REPLACE_PATTERN = re.compile(r"<!-- chat-replace:(\S+?) -->")
 

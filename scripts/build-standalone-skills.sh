@@ -38,12 +38,22 @@ requested = set(sys.argv[3:]) if len(sys.argv) > 3 else None
 from standalone_skill_config import SKILLS
 from transform_skill import build_standalone_skill_zip
 
+if requested:
+    unknown = sorted(requested - set(SKILLS.keys()))
+    if unknown:
+        print(f"Unknown skill(s): {', '.join(unknown)}", file=sys.stderr)
+        sys.exit(1)
+
 results: dict[str, str] = {}
 for name, cfg in SKILLS.items():
     if requested and name not in requested:
         continue
     out_zip = dest / f"{cfg['standalone_name']}.zip"
-    print(f"Building {name} -> {out_zip.relative_to(repo_root)} ...", flush=True)
+    try:
+        display_path = out_zip.relative_to(repo_root)
+    except ValueError:
+        display_path = out_zip
+    print(f"Building {name} -> {display_path} ...", flush=True)
     issues = build_standalone_skill_zip(
         skill_source_dir=repo_root / cfg["source_dir"],
         out_zip=out_zip,
