@@ -17,7 +17,12 @@ DEST="$REPO_ROOT/dist/standalone-skills"
 SKILLS_TO_BUILD=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dest)   DEST="$2"; shift 2 ;;
+    --dest)
+      if [[ $# -lt 2 || "$2" == -* ]]; then
+        echo "Error: --dest requires a value" >&2; exit 1
+      fi
+      DEST="$2"; shift 2
+      ;;
     --dest=*) DEST="${1#*=}"; shift ;;
     -*)        echo "Unknown flag: $1" >&2; exit 1 ;;
     *)         SKILLS_TO_BUILD+=("$1"); shift ;;
