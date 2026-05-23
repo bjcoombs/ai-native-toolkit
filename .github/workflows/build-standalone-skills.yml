@@ -1,0 +1,62 @@
+name: Build and publish standalone skill ZIPs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .claude-plugin/plugin.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check whether plugin version changed
+        id: version-check
+        run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
+
+          old=$(git show "$BEFORE:.claude-plugin/plugin.json" 2>/dev/null \
+            | python3 -c "import json,sys; print(json.load(sys.stdin).get('version',''))" \
+            || echo "")
+          new=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json')).get('version',''))")
+
+          echo "old=$old  new=$new"
+          if [ "$old" = "$new" ]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true"  >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        if: steps.version-check.outputs.build == 'true' || github.event_name == 'workflow_dispatch'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build standalone skill ZIPs
+        if: steps.version-check.outputs.build == 'true' || github.event_name == 'workflow_dispatch'
+        run: bash scripts/build-standalone-skills.sh
+
+      - name: Publish to standalone-skills-latest release
+        if: steps.version-check.outputs.build == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+
+          gh release delete standalone-skills-latest --yes 2>/dev/null || true
+          gh release create standalone-skills-latest \
+            --title "Standalone skill ZIPs — latest (v${VERSION})" \
+            --notes "Standalone skill ZIPs for Claude Desktop and claude.ai. Install via Settings → Customize → Skills → Upload Skill. Rebuilt automatically on every plugin version bump." \
+            --latest=false \
+            dist/standalone-skills/*.zip
