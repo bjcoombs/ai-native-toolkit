@@ -1200,6 +1200,8 @@ In `README.md`, after the existing `## Install` section add:
 3. Upload each ZIP and toggle the skill on
 
 In this context `/huddle` runs in solo or phased sub-agent mode — Claude reasons through each hat phase directly. Team mode (persistent agents with cross-talk) requires Claude Code. `/assess` runs the full layer assessment; the SVG treemap and deterministic wiki require terminal access to the bundled scripts.
+
+After installing, verify trigger descriptions work as expected: try "how AI-ready is this codebase?" for assess and "run a huddle on this decision" for huddle in a fresh chat. If a skill doesn't auto-activate, check that it's toggled on and update `standalone_description` in `scripts/standalone_skill_config.py` if the phrasing misses.
 ```
 
 - [ ] **Step 2: Update the repository structure diagram**
@@ -1308,68 +1310,6 @@ git commit -m "chore: document standalone skill pipeline, bump to v1.5.1"
 
 ---
 
-## Task 13: Manual skill eval checklist
-
-This task is not automated — run it by hand before publishing the release. Verifies that the standalone skill ZIPs trigger correctly and produce correct output.
-
-**Setup:** Install both ZIPs in Claude Desktop or claude.ai:
-`Settings → Customize → Skills → Upload Skill` → upload `assess.zip`, toggle on → upload `huddle.zip`, toggle on.
-
-- [ ] **assess — trigger tests (each in a fresh chat)**
-
-| Prompt | Expected |
-|--------|----------|
-| "How AI-ready is this codebase?" | assess skill activates |
-| "Run assess on this repo" | assess skill activates |
-| "Give me a complexity heatmap" | assess skill activates |
-| "Score this code for AI agent contributors" | assess skill activates |
-| "What's the migration risk in this codebase?" | assess skill activates |
-| "Help me write a function" | assess skill does **not** activate |
-
-- [ ] **assess — output correctness (one real run)**
-
-Paste or describe a small codebase and ask for an assessment. Verify:
-- [ ] Response follows the report format (Hotspot snapshot, AI Readiness table, Top 3 Actions)
-- [ ] No reference to `SKILL_DIR` in Claude's response
-- [ ] No `/ai-native-toolkit:assess` in Claude's response
-- [ ] No plugin install instructions in the report footer
-- [ ] Score is 0–7; maturity label matches score range
-
-- [ ] **huddle — trigger tests (each in a fresh chat)**
-
-| Prompt | Expected |
-|--------|----------|
-| "Should we rewrite this in Go?" | huddle skill activates |
-| "Run a huddle on this architecture decision" | huddle skill activates |
-| "I need a multi-perspective analysis of X" | huddle skill activates |
-| "Red-team this idea" | huddle activates (or 6hats) |
-| "Help me debug this error" | huddle does **not** activate |
-
-- [ ] **huddle — output correctness (one real run)**
-
-Run `/huddle Should we migrate our monolith to microservices?`. Verify:
-- [ ] Claude announces team size and hat sequence
-- [ ] Runs in solo or phased sub-agent mode (no attempt to call TeamCreate/SendMessage)
-- [ ] All relevant hat phases complete
-- [ ] Delivers Chairperson's Summary with Recommendation
-- [ ] No reference to Agent Teams capability flag
-
-- [ ] **Once eval passes:** publish the release
-
-```bash
-cd /Users/jerome/tools/skills/ai-native-toolkit
-bash scripts/build-standalone-skills.sh
-gh release delete standalone-skills-latest --yes 2>/dev/null || true
-VERSION=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json'))['version'])")
-gh release create standalone-skills-latest \
-  --title "Standalone skill ZIPs — v${VERSION}" \
-  --notes "Install via Settings → Customize → Skills → Upload Skill." \
-  --latest=false \
-  dist/standalone-skills/*.zip
-```
-
----
-
 ## Self-Review
 
 **Spec coverage:**
@@ -1378,8 +1318,7 @@ gh release create standalone-skills-latest \
 - ✅ Tests in `scripts/tests/` (not `scripts/` root), matching the `skills/assess/tests/` pattern
 - ✅ `tests.yml` extended with a second job for `scripts/tests/` — pipeline tests run in CI on every PR and push
 - ✅ Integration tests: full build run against real skill directories with forbidden-string sweeps on all `.md` entries, expected-files checks, tests-excluded check, determinism check
-- ✅ Manual eval checklist: trigger phrases, false-positive checks, output correctness checks for both skills
-- ✅ README updated: standalone install section, updated repo structure diagram
+- ✅ README updated: standalone install section (includes post-install trigger verification note), updated repo structure diagram
 - ✅ CLAUDE.md updated: pipeline docs, marker rules, when to add markers
 - ✅ Version bumped 1.5.0 → 1.5.1
 
