@@ -4,7 +4,7 @@ A Claude Code plugin: skills, agents, and commands for AI-native development. Ru
 
 The headline pieces are two **skills**:
 
-- **`/assess`** - score any codebase's readiness for AI agent contributors against a 7-layer contract model, with a Codecov-style complexity hotspot SVG. Generates a report + treemap and opens a PR in the target repo.
+- **`/assess`** - score any codebase's readiness for AI agent contributors against a layered contract model (agent instructions, types, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG. Generates a report + treemap and opens a PR in the target repo.
 - **`/huddle`** - structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board).
 
 ## What `/assess` produces
@@ -13,9 +13,32 @@ The headline pieces are two **skills**:
 
 > Real output from `/ai-native-toolkit:assess` run against a ~150k-LOC private monorepo (file paths sanitized). Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk an agent (or human) is most likely to break next week. Hover any block for its LOC, CCN, and recent commit count.
 
-Alongside the SVG you get an `assess-report.md`: a 0-7 layered readiness score (breadcrumbs, type safety, linters, architecture tests, CI, coverage, review bots, AI project management), three concrete leverage actions naming specific files, and a stats sidecar (`complexity-stats.json`) with percentiles and ranked hotspot lists.
+### Why this matters for an AI-driven codebase
 
-**Build artifacts and generated code are filtered by default** so a single `main.dart.js` or thousands of lines of `.pb.go` don't dominate the treemap. The filter catches minified bundles (`*.min.js`, `*.bundle.js`, `main.dart.js`), sourcemaps, protobuf bindings (`*.pb.go`, `*.connect.go`, `*_pb.ts`), Go generators (`wire_gen.go`, `zz_generated_*.go`), .NET source generators (`*.designer.cs`, `*.g.cs`), Dart codegen (`*.freezed.dart`, `*.g.dart`), and files under build dirs (`dist/`, `build/`, `.next/`, `.nuxt/`, `node_modules/`, etc.). Pass `--include-artifacts` to disable. If a single file still holds >30% of total LOC after filtering, the script warns - usually that's a build artifact that needs `.gitignore`.
+Once a codebase outgrows any single LLM context window and AI agents become regular contributors, code quality stops being a function of *who knows what* and starts being a function of *what the system enforces*. Norms ("we prefer X") fail because new contributors - especially AI agents starting each session fresh - never read them. Contracts ("the build fails if you don't do X") work because they're enforced regardless of who's reading.
+
+`/assess` gives you two paired views to act on that. The SVG above shows **where the codebase is today** - which files will bite next week. The accompanying `assess-report.md` shows **what scaffolding is in place to stop it getting worse** - a score across the layers below, each marked Present / Partial / Missing with concrete evidence:
+
+| Layer | What it enforces |
+|-------|------------------|
+| 0: Agent Instructions | Compact rules in `CLAUDE.md` / `AGENTS.md` / `copilot-instructions` that steer agent behaviour ("NEVER use `time.Sleep` in tests", "CockroachDB not PostgreSQL") |
+| 1: Code Design | Compile-time correctness via types - dimensional types, generated API clients, exhaustive enums |
+| 2: Linters | Style + correctness with rules targeting AI failure modes (suppressions, complexity gates, leftover TODOs) |
+| 3: Architecture Tests | Structural rules as executable tests (`depguard`, ArchUnit-style boundary checks) |
+| 4: CI Pipeline | Every PR runs everything; failing pipeline blocks merge |
+| 5: Coverage Gates | Test discipline as a build contract |
+| 6: Review Bots | Design-level feedback (CodeRabbit, claude[bot]) catching what linters can't |
+| 7: AI Project Management | Retros, task tracking, the feedback loop that keeps the contracts above current |
+
+A codebase can be 7/7 and still on fire (great scaffolding, legacy debt) or 2/7 with a calm treemap (small codebase, no enforcement needed yet). The score tells you whether the system will catch the next class of pain before it lands; the SVG tells you where today's pain already is. The report's **Top 3 Actions** table names specific files, always - "improve code quality" is the failure mode `/assess` exists to prevent; "Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67)" is what makes the report actionable.
+
+**The compounding payoff.** Contracts are front-loaded - types, lint rules, architecture tests, agent instructions all take time to write. The payoff compounds: every new service, feature, and contributor inherits the contracts that already exist. Skip them and you lose 15-45 minutes per AI session to convention drift, rework, and false signals - forever. Run `/assess` periodically to ratchet the score upward; each layer you add closes a recurring cost.
+
+A stats sidecar (`complexity-stats.json`) accompanies the report with percentiles and ranked file lists that feed the treemap and the report's hotspot callouts.
+
+### Build artifacts and generated code are filtered by default
+
+A single `main.dart.js` or thousands of lines of `.pb.go` shouldn't dominate the treemap. The filter catches minified bundles (`*.min.js`, `*.bundle.js`, `main.dart.js`), sourcemaps, protobuf bindings (`*.pb.go`, `*.connect.go`, `*_pb.ts`), Go generators (`wire_gen.go`, `zz_generated_*.go`), .NET source generators (`*.designer.cs`, `*.g.cs`), Dart codegen (`*.freezed.dart`, `*.g.dart`), and files under build dirs (`dist/`, `build/`, `.next/`, `.nuxt/`, `node_modules/`, etc.). Pass `--include-artifacts` to disable. If a single file still holds >30% of total LOC after filtering, the script warns - usually that's a build artifact that needs `.gitignore`.
 
 The skill runs locally - lizard, optional scc, and git log do the analysis in your Claude Code session. No data leaves the machine.
 
