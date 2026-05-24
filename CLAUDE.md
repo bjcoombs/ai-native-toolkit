@@ -61,6 +61,35 @@ Commands without frontmatter still work but provide no `/help` description.
 - `.github/workflows/tests.yml` runs `uv run --with pytest pytest -v` against `skills/assess/` on every PR and push to `main`. A red test is a real regression - the deterministic core is reproducible, so flakes shouldn't happen.
 - `.github/release.yml` configures categorised release notes when running `gh release create --generate-notes`. See the file for the label-to-category mapping.
 
+## Standalone skill pipeline
+
+`assess` and `huddle` are also distributed as standalone ZIPs for Claude Desktop chat and Cowork via `Settings → Customize → Skills → Upload Skill`.
+
+**Build locally:**
+```bash
+bash scripts/build-standalone-skills.sh            # all skills → dist/standalone-skills/
+bash scripts/build-standalone-skills.sh assess     # one skill
+bash scripts/build-standalone-skills.sh --dest ~/Desktop  # custom output dir
+```
+
+**How it works:** HTML comment markers in source SKILL.md files flag plugin-only content. `scripts/transform_skill.py` strips `<!-- chat-skip:start/end -->` blocks and applies `<!-- chat-replace:key -->` substitutions defined in `scripts/standalone_skill_config.py`. The pipeline is tested via `uv run --with pytest pytest` from `scripts/`.
+
+**Tests:**
+- `scripts/tests/test_transform.py` — unit tests for transformer primitives
+- `scripts/tests/test_integration.py` — full-build ZIP content validation (forbidden strings, expected files)
+- Run: `cd scripts && uv run --with pytest pytest -v`
+
+**CI:** `.github/workflows/build-standalone-skills.yml` triggers on `plugin.json` version bumps and publishes to the `standalone-skills-latest` rolling release. `.github/workflows/tests.yml` now runs both the `skills/assess/` suite and the `scripts/` suite on every PR and push.
+
+**Marker rules:**
+- `<!-- chat-skip:start/end -->` — wraps content to remove entirely (plugin path resolution, `$ARGUMENTS`, agent-orchestration infrastructure, namespaced slash commands)
+- `<!-- chat-replace:key -->` + next line — replaces one line with the standalone text defined in `standalone_skill_config.py`
+- Apply markers to ALL `.md` files in the skill directory, not just `SKILL.md` — reference files with plugin-specific content will leak into the ZIP if unmarked
+- Markers must be balanced; keep them at line start (the transformer handles indented markers via `.strip()`, but line-start is cleaner)
+- Run `cd scripts && uv run --with pytest pytest -v` to validate after any marker changes
+
+**When to add markers:** any new skill content that references `SKILL_DIR`, `$ARGUMENTS`, a namespaced slash command (`/ai-native-toolkit:*`), or a Claude Code–only tool (`Agent`, `TeamCreate`, `SendMessage`, `TeamDelete`).
+
 ## /assess architecture
 
 Deterministic core in `skills/assess/scripts/lib/` does all data work; the LLM only writes prose.
