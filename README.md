@@ -32,18 +32,49 @@ From inside a Claude Code session (not a shell - `/plugin` is a Claude Code comm
 
 Skills appear namespaced: `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`. Update with `/plugin update ai-native-toolkit`. Remove with `/plugin remove ai-native-toolkit`. The plugin doesn't touch your existing `~/.claude/` files.
 
-## Also available in Claude Desktop chat and Cowork
+## Also available in Claude Desktop and claude.ai web
 
-`/assess` and `/huddle` are available as standalone skill ZIPs — no Claude Code session or plugin install required. Works in Claude Desktop chat, claude.ai web, and Cowork.
+`/assess` and `/huddle` are installable as standalone skill ZIPs - no Claude Code required. Verified working in claude.ai web and Claude Desktop.
 
-**Install:**
-1. Download `assess.zip` and `huddle.zip` from the [standalone-skills-latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/tag/standalone-skills-latest)
-2. In Claude Desktop or claude.ai: **Settings → Customize → Skills → Upload Skill**
-3. Upload each ZIP and toggle the skill on
+### Two install paths - pick by where you use Claude
 
-In this context `/huddle` runs in solo or phased sub-agent mode — Claude reasons through each hat phase directly. Team mode (persistent agents with cross-talk) requires Claude Code. `/assess` runs the full layer assessment; the SVG treemap and deterministic wiki require terminal access to the bundled scripts.
+| You use... | Install via | Updates |
+|---|---|---|
+| Claude Code | `/plugin install` (see [Install](#install) above) | Automatic on `/plugin update`. Use this when available - it's the maintained path. |
+| claude.ai web or Claude Desktop only | Manual ZIP upload (below) | Manual: re-download the ZIP and re-upload when a new release ships. Watch the repo's [Releases](https://github.com/bjcoombs/ai-native-toolkit/releases) page if you want notifications. |
 
-After installing, verify trigger descriptions work as expected: try "how AI-ready is this codebase?" for assess and "run a huddle on this decision" for huddle in a fresh chat. If a skill doesn't auto-activate, check that it's toggled on and update `standalone_description` in `scripts/standalone_skill_config.py` if the phrasing misses.
+The ZIPs are rebuilt automatically from the same source on every plugin version bump, so feature parity is maintained - only the update mechanism differs.
+
+### Prerequisites for the ZIP path
+
+- A paid plan (Pro, Max, Team, or Enterprise) - Skills upload is not on the Free tier.
+- For `/assess`: **Settings → Capabilities → Code execution and file creation** must be on (required for the Python scripts). Enable **Allow network egress** too if your repo's `pyproject.toml` pulls dependencies.
+- `/huddle` needs neither - it's pure reasoning.
+
+### Install (claude.ai web - verified path)
+
+1. Download `assess.zip` and `huddle.zip` from the [standalone-skills-latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/tag/standalone-skills-latest).
+2. Open https://claude.ai/customize/skills (or sidebar → Customize → Skills).
+3. Click the **+** at the top right of the Skills column.
+4. Hover **Create skill →** then click **Upload a skill**.
+5. Select the `.zip` (don't unzip).
+6. Confirm the skill appears under **Personal skills** with toggle on and **Trigger: Slash command + auto**.
+
+Claude Desktop has the same Skills uploader under Settings; the flow is analogous.
+
+### Verify the auto-trigger works
+
+In a fresh chat, try:
+
+- **assess**: "How AI-ready is this codebase?" / "Give me a complexity heatmap"
+- **huddle**: "Run a huddle on [decision]" / "Give me red-team/blue-team analysis of [question]"
+
+If a skill only fires on `/skill-name` and not on natural language, the frontmatter description is missing trigger phrasing - edit `standalone_description` in `scripts/standalone_skill_config.py` and rebuild.
+
+### Capability differences vs Claude Code
+
+- `/huddle` runs in solo or phased sub-agent mode here - Claude reasons through each hat phase directly. Team mode (persistent agents with cross-talk) requires Claude Code.
+- `/assess` runs the full layered assessment. The SVG treemap and deterministic wiki need terminal access to the bundled scripts.
 
 ## Try it
 
