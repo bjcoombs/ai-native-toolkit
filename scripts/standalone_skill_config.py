@@ -8,6 +8,9 @@ Each entry in SKILLS maps a skill name to:
   source_dir             — path relative to repo root
   replacements           — dict mapping chat-replace:KEY → replacement text
   exclude_dirs           — subdirectories omitted from the ZIP
+  bundle_files           — optional dict mapping ZIP-relative dest paths → source
+                           paths (relative to repo root). Markdown files have their
+                           YAML frontmatter stripped during bundling.
 """
 
 SKILLS: dict[str, dict] = {
@@ -47,10 +50,43 @@ SKILLS: dict[str, dict] = {
             "to run a huddle, wanting multi-perspective or red-team/blue-team analysis, needing "
             "to weigh a hard decision from several angles, or wanting panel/board deliberation. "
             "Scales from solo gut-check (1) to board-level deliberation (8+) using Fibonacci "
-            "team sizing. Team mode with persistent agents requires Claude Code."
+            "team sizing. Team mode with persistent agents requires the Claude Code CLI."
         ),
         "source_dir": "skills/huddle",
         "exclude_dirs": set(),
-        "replacements": {},
+        "replacements": {
+            "hat-source": (
+                "**Hat methodologies** (`white-hat`, `red-hat`, `black-hat`, "
+                "`yellow-hat`, `green-hat`, `blue-hat`) are bundled inside this "
+                "skill at `hats/<hat>-hat.md`. Spawn prompts instruct sub-agents "
+                "to `Read('hats/<hat>-hat.md')` before applying the methodology "
+                "— this is how a fresh-context sub-agent learns the hat without "
+                "depending on Claude-Code-only agent infrastructure."
+            ),
+            "phased-spawn-instructions": (
+                "   - The hat methodology for this phase: instruct the sub-agent "
+                "to call `Read('hats/<hat>-hat.md')` (relative to the skill root) "
+                "and apply that methodology"
+            ),
+            "capability-detection": (
+                "**This standalone build runs phased sub-agent mode for size 2+.** "
+                "Team mode (persistent agents with cross-talk) is only available "
+                "in the Claude Code CLI and is not reachable from here. Tell the "
+                "user one line: \"Running in phased sub-agent mode (N lenses, M "
+                "phases — standalone build, team mode not available).\""
+            ),
+        },
+        # Bundle the hat methodology files inside the ZIP so standalone-mode
+        # sub-agents can read them via relative paths. Without this they'd
+        # depend on `~/.claude/agents/*-hat.md` which only exists in plugin
+        # installs.
+        "bundle_files": {
+            "hats/white-hat.md": "agents/white-hat.md",
+            "hats/red-hat.md": "agents/red-hat.md",
+            "hats/black-hat.md": "agents/black-hat.md",
+            "hats/yellow-hat.md": "agents/yellow-hat.md",
+            "hats/green-hat.md": "agents/green-hat.md",
+            "hats/blue-hat.md": "agents/blue-hat.md",
+        },
     },
 }

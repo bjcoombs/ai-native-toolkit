@@ -10,6 +10,7 @@ from transform_skill import (
     check_orphan_markers,
     override_frontmatter,
     strip_chat_skip,
+    strip_frontmatter,
 )
 
 
@@ -203,13 +204,109 @@ def test_required_excludes_applied_even_when_caller_passes_empty_set(tmp_path):
         )
 
 
-def test_huddle_config_has_no_orphan_replace_markers():
+# ── strip_frontmatter ──────────────────────────────────────────────────────
+
+def test_strip_frontmatter_removes_yaml_block():
+    text = "---\nname: x\ndescription: y\n---\nbody here\n"
+    assert strip_frontmatter(text) == "body here\n"
+
+
+def test_strip_frontmatter_handles_multiline_yaml():
+    text = "---\nname: x\ncolor: red\nmodel: inherit\n---\n\nfirst para.\n\nsecond.\n"
+    assert strip_frontmatter(text) == "first para.\n\nsecond.\n"
+
+
+def test_strip_frontmatter_no_frontmatter_unchanged():
+    text = "just body\nno frontmatter here\n"
+    assert strip_frontmatter(text) == text
+
+
+# ── bundle_files ───────────────────────────────────────────────────────────
+
+def test_bundle_files_copies_extra_files_into_zip(tmp_path):
+    src = _make_fake_skill(tmp_path)
+    extras_dir = tmp_path / "extras"
+    extras_dir.mkdir()
+    (extras_dir / "hat-a.md").write_text(
+        "---\nname: hat-a\ncolor: red\n---\nMethodology body.\n"
+    )
+    (extras_dir / "hat-b.md").write_text(
+        "---\nname: hat-b\n---\nOther methodology.\n"
+    )
+    out_zip = tmp_path / "fake.zip"
+    issues = build_standalone_skill_zip(
+        skill_source_dir=src,
+        out_zip=out_zip,
+        standalone_name="fake",
+        standalone_description="fake desc",
+        replacements={},
+        bundle_files={
+            "hats/hat-a.md": extras_dir / "hat-a.md",
+            "hats/hat-b.md": extras_dir / "hat-b.md",
+        },
+    )
+    assert issues == []
+    with zipfile.ZipFile(out_zip) as zf:
+        assert "fake/hats/hat-a.md" in zf.namelist()
+        assert "fake/hats/hat-b.md" in zf.namelist()
+        body_a = zf.read("fake/hats/hat-a.md").decode("utf-8")
+        assert body_a == "Methodology body.\n", "frontmatter should be stripped"
+        assert "color: red" not in body_a
+
+
+def test_bundle_files_missing_source_raises(tmp_path):
+    src = _make_fake_skill(tmp_path)
+    out_zip = tmp_path / "fake.zip"
+    with pytest.raises(FileNotFoundError, match="bundle_files source missing"):
+        build_standalone_skill_zip(
+            skill_source_dir=src,
+            out_zip=out_zip,
+            standalone_name="fake",
+            standalone_description="fake desc",
+            replacements={},
+            bundle_files={"hats/missing.md": tmp_path / "does-not-exist.md"},
+        )
+
+
+def test_huddle_real_build_contains_all_hat_files(tmp_path):
+    """Integration check: real huddle build bundles all 6 hat methodologies."""
+    from standalone_skill_config import SKILLS
+    repo_root = Path(__file__).parent.parent.parent
+    cfg = SKILLS["huddle"]
+    bundle_files = {
+        dest_rel: repo_root / src_rel
+        for dest_rel, src_rel in cfg.get("bundle_files", {}).items()
+    }
+    out_zip = tmp_path / "huddle.zip"
+    issues = build_standalone_skill_zip(
+        skill_source_dir=repo_root / cfg["source_dir"],
+        out_zip=out_zip,
+        standalone_name=cfg["standalone_name"],
+        standalone_description=cfg["standalone_description"],
+        replacements=cfg["replacements"],
+        exclude_dirs=frozenset(cfg["exclude_dirs"]),
+        bundle_files=bundle_files,
+    )
+    assert issues == []
+    with zipfile.ZipFile(out_zip) as zf:
+        names = zf.namelist()
+        for hat in ["white", "red", "black", "yellow", "green", "blue"]:
+            assert f"huddle/hats/{hat}-hat.md" in names, f"missing {hat}-hat.md"
+            body = zf.read(f"huddle/hats/{hat}-hat.md").decode("utf-8")
+            assert not body.startswith("---"), f"{hat}-hat.md still has frontmatter"
+
+
+def test_huddle_config_covers_all_markers():
+    """Every chat-replace marker in huddle sources must have a config entry,
+    and every config entry must correspond to a marker in the source."""
     from standalone_skill_config import SKILLS
     from pathlib import Path
     import re
     in_file: set[str] = set()
     for md in Path("../skills/huddle").rglob("*.md"):
         in_file |= set(re.findall(r"<!-- chat-replace:(\S+?) -->", md.read_text()))
-    # huddle uses chat-skip+inline only; no chat-replace markers expected
-    assert not in_file, f"unexpected chat-replace markers in huddle: {in_file}"
-    assert SKILLS["huddle"]["replacements"] == {}, "huddle replacements should be empty"
+    in_config = set(SKILLS["huddle"]["replacements"])
+    uncovered = in_file - in_config
+    unused = in_config - in_file
+    assert not uncovered, f"huddle markers with no config entry: {uncovered}"
+    assert not unused, f"huddle config keys with no marker in source: {unused}"

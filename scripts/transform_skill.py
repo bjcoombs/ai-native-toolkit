@@ -85,6 +85,14 @@ def _transform_md(text: str, replacements: dict[str, str]) -> str:
     return text
 
 
+def strip_frontmatter(text: str) -> str:
+    """Return *text* with any leading YAML frontmatter (--- ... ---) removed."""
+    m = _FRONTMATTER_PATTERN.match(text)
+    if not m:
+        return text
+    return text[m.end():].lstrip("\n")
+
+
 def build_standalone_skill_zip(
     skill_source_dir: Path,
     out_zip: Path,
@@ -92,6 +100,7 @@ def build_standalone_skill_zip(
     standalone_description: str,
     replacements: dict[str, str],
     exclude_dirs: frozenset[str] = frozenset({"tests"}),
+    bundle_files: dict[str, Path] | None = None,
 ) -> list[str]:
     """
     Transform *skill_source_dir* and write a standalone ZIP to *out_zip*.
@@ -102,6 +111,11 @@ def build_standalone_skill_zip(
     ``REQUIRED_EXCLUDES`` (``__pycache__``, ``.pytest_cache``, ``.venv``) are
     always excluded in addition to *exclude_dirs* — callers cannot opt out of
     these tooling artefacts.
+
+    ``bundle_files`` maps destination paths (relative to the skill root inside
+    the ZIP) to source ``Path`` objects somewhere on disk. Markdown bundled
+    files have their YAML frontmatter stripped so the body reads as plain
+    methodology rather than Claude-Code-agent metadata.
     """
     effective_excludes = exclude_dirs | REQUIRED_EXCLUDES
     staging = out_zip.parent / f"_staging_{standalone_name}"
@@ -123,6 +137,19 @@ def build_standalone_skill_zip(
             dest.write_text(_transform_md(src.read_text("utf-8"), replacements), "utf-8")
         else:
             shutil.copy2(src, dest)
+
+    if bundle_files:
+        for rel_dest, src_path in bundle_files.items():
+            if not src_path.exists():
+                raise FileNotFoundError(
+                    f"bundle_files source missing: {src_path} (for {rel_dest})"
+                )
+            dest = target_root / rel_dest
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if src_path.suffix == ".md":
+                dest.write_text(strip_frontmatter(src_path.read_text("utf-8")), "utf-8")
+            else:
+                shutil.copy2(src_path, dest)
 
     skill_md = target_root / "SKILL.md"
     if skill_md.exists():

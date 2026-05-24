@@ -11,13 +11,23 @@ Scales from a solo gut check to a board-level deliberation using Fibonacci team 
 
 **You are Blue Hat** - the chair. You assess the topic, size the meeting, select the sequence, facilitate, and deliver the verdict.
 
-**Hat agents** (`white-hat`, `red-hat`, `black-hat`, `yellow-hat`, `green-hat`) are methodology specialists in `~/.claude/agents/`.
+<!-- chat-replace:hat-source -->
+**Hat agents** (`white-hat`, `red-hat`, `black-hat`, `yellow-hat`, `green-hat`) are methodology specialists in `~/.claude/agents/`, dispatched via the `Agent` tool with `subagent_type=<hat>`.
 
 **Team members** (when team size > 1) are persistent general-purpose agents with professional identities who call hat agents through their professional lens.
 
 ## Capability Requirements
 
-Three execution modes exist; the skill picks one automatically based on team size and whether the Agent Teams capability flag is enabled.
+<!-- chat-skip:start -->
+Three execution modes exist. Pick one **deterministically** by this rule, in order:
+
+1. If team size = 1 → **Solo flat-parallel**.
+2. If team size ≥ 2 AND you can confirm the team-mode capability is available in your environment → **Team mode**.
+3. Otherwise (team size ≥ 2 and you cannot confirm team mode) → **Phased sub-agent mode**.
+
+If you're unsure whether team mode is available, default to phased — do not guess it's on. Phased mode degrades gracefully; attempting team mode without the capability fails loudly.
+<!-- chat-skip:end -->
+Two execution modes are reachable in this standalone build. Pick one deterministically: team size = 1 → solo flat-parallel; team size ≥ 2 → phased sub-agent mode. Team mode (persistent agents with cross-talk) is only available in the Claude Code CLI and is not reachable from here.
 
 | Mode | When chosen | Mechanism | Cost (relative) |
 |------|-------------|-----------|----------------|
@@ -40,6 +50,7 @@ Without the flag, `/huddle` still runs multi-perspective deliberations via phase
 **Why enable team mode anyway:** persistent professional-lens agents talking to each other across phases produce noticeably deeper synthesis — disagreements get rebutted in real time, edge cases surface from cross-talk, and the verdict feels like real deliberation rather than serially-summarised opinions. Worth it for decisions where being wrong costs 100× more than the analysis: architecture choices, irreversible migrations, hiring calls, contractual commitments.
 <!-- chat-skip:end -->
 
+<!-- chat-replace:capability-detection -->
 **Tell the user which mode you're in** before you start. One line: "Running in phased sub-agent mode (3 lenses, 5 phases — Agent Teams flag not detected)."
 
 ## No Arguments Behavior
@@ -57,7 +68,7 @@ Assess the topic to determine:
 
    | Size | Mode | Use |
    |------|------|-----|
-   | **1** | Solo | Quick analysis. You spawn hat agents in parallel, synthesize yourself. Fast (~5 min). |
+   | **1** | Solo | Quick analysis. You spawn hat agents in parallel, synthesize yourself. Cheapest tier. |
    | **2** | Debate | Two opposing lenses. Forced productive tension. |
    | **3** | Huddle | Sweet spot. Most deliberations. |
    | **5** | Panel | Broader perspectives. Cross-functional decisions. |
@@ -103,11 +114,14 @@ When team size > 1 but team mode is unavailable, do not collapse to flat-paralle
 1. **Announce the phase to the user.** "Phase 3 of 5: Black Hat — risks."
 2. **For each professional lens, spawn a sub-agent in parallel** for this phase. Each sub-agent gets:
    - Its persona (the professional lens you assigned in Step 1)
-   - The hat methodology for this phase (point it at `~/.claude/agents/<hat>-hat.md`)
+<!-- chat-replace:phased-spawn-instructions -->
+   - The hat methodology for this phase (`Agent` tool with `subagent_type=<hat>` resolves the agent file from `~/.claude/agents/`)
    - The topic
    - **A running synopsis you maintain as Blue Hat** — a 200-400 word summary of what every prior phase produced. This is how cross-phase continuity survives without a persistent team. Each sub-agent has a fresh context window, so the synopsis is its only memory of what came before.
 3. **Collect all sub-agent outputs.** As Blue Hat, write a 100-200 word phase summary capturing: what each lens contributed, where they agreed, where they conflicted, what changed your view. Append this to the running synopsis.
 4. **Surface the phase summary to the user** before moving on. Short, scannable.
+
+**When to collapse to one sub-agent per phase voicing all lenses.** Default is one sub-agent per lens per phase (preserves independent fresh contexts). But total spawns = `team_size × phases` — a size-5 board × 5 phases = 25 sub-agent calls. When that count exceeds ~8–10, or when running in a chat UI where spawn latency is user-visible, collapse to **one sub-agent per phase voicing all lenses**. When you do, **explicitly instruct that sub-agent to keep the lenses cognitively distinct** — separate labelled sections per lens, no blending. Without that instruction the lenses blur and you lose most of the multi-perspective value. This is a degraded fallback, not a third mode; reach for it deliberately.
 
 **At the end of all phases**, deliver the verdict as in team mode (Step 5 below): one paragraph stating the decision, the strongest dissent, and the conditions under which you'd reverse.
 
@@ -344,7 +358,7 @@ After delivering the verdict:
 - If Black Hat surfaces a critical risk, give Green Hat more time
 - Red Hat is permission to check your gut - use it when something feels off or people are affected
 - The sequence is a guide, not a straitjacket
-- **Target total meeting time**: 45-90 minutes. If approaching 90 min, compress remaining phases or go straight to verdict.
+- **Target depth, not duration.** Wall-clock time depends on the runtime — chat surfaces complete in minutes, CLI team mode can take longer. Use phase count and message budget as the lever: 5 phases × 2–3 substantive messages per member per phase is the default ceiling. If you've hit that ceiling without convergence, compress remaining phases or go straight to verdict — adding more rounds rarely changes the answer.
 
 ## Lessons Learned
 
