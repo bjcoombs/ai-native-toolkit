@@ -296,6 +296,50 @@ def test_huddle_real_build_contains_all_hat_files(tmp_path):
             assert not body.startswith("---"), f"{hat}-hat.md still has frontmatter"
 
 
+def test_huddle_plugin_source_retains_team_mode_infrastructure():
+    """Plugin SKILL.md must keep the full team-mode flow.
+
+    Pairs with the integration-test assertions that team-mode tool names are
+    absent from the *standalone* ZIP. Together these enforce the invariant:
+    plugin install gets team mode; standalone strips it. A PR that accidentally
+    removed team-mode content from the source would let standalone pass (the
+    forbidden strings would still be absent) but silently regress the plugin —
+    this test catches that case.
+
+    If you are intentionally removing team mode from the plugin (e.g.
+    deprecation), delete this test in the same PR with a note in the commit
+    message explaining the deprecation path.
+    """
+    from pathlib import Path
+    source = Path("../skills/huddle/SKILL.md").read_text("utf-8")
+
+    required_tool_names = [
+        "TeamCreate",          # team creation
+        "SendMessage",         # cross-agent messaging
+        "TeamDelete",          # team shutdown
+        "subagent_type",       # Agent-tool dispatch path
+        "~/.claude/agents",    # hat methodology resolution in plugin
+        "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",  # capability env var
+    ]
+    for token in required_tool_names:
+        assert token in source, (
+            f"plugin SKILL.md missing team-mode token {token!r} — "
+            "team mode appears to have been removed from the source. "
+            "If intentional, remove this test in the same PR."
+        )
+
+    required_section_headers = [
+        "### Step 2: Create the Team",
+        "### Step 3: Spawn Team Members",
+        "### Step 4: Facilitate Hat Phases",
+        "### Step 6: Shutdown the Team",
+    ]
+    for header in required_section_headers:
+        assert header in source, (
+            f"plugin SKILL.md missing team-mode section {header!r}"
+        )
+
+
 def test_huddle_config_covers_all_markers():
     """Every chat-replace marker in huddle sources must have a config entry,
     and every config entry must correspond to a marker in the source."""
