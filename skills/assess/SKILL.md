@@ -7,7 +7,7 @@ description: "Assess a codebase's readiness for AI agent contributors using the 
 
 Two artefacts in one pass against a target repo:
 
-1. **Layered contract assessment** — 0–7 score across breadcrumbs, types, linters, architecture tests, CI, coverage, review bots, AI project management.
+1. **Layered contract assessment** — 0–7 score across agent instructions, types, linters, architecture tests, CI, coverage, review bots, AI project management.
 2. **Complexity hotspot SVG** — Codecov-style treemap. Size = LOC. Hue = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = highest risk.
 
 Both land as files inside the target repo. The skill always writes them locally; after writing, **ask the user** whether to open a PR in the target repo with both artefacts.
@@ -143,7 +143,7 @@ The `plugin_version` field in `run-context.json` tells you which plugin version 
 
 Run these checks in parallel where possible. For each layer, collect evidence and assess quality.
 
-### Layer 0: Breadcrumbs (Behavioral Contracts)
+### Layer 0: Agent Instructions (Behavioral Contracts)
 
 Read the agent instruction file grades from `run-context.json`:
 
@@ -193,7 +193,7 @@ fd -t f 'doc\.go$' "$REPO_ROOT" 2>/dev/null | wc -l  # Go
 Docs: README [yes/no], architecture guide [yes/no], ADRs [N found], API specs [N found], package docs [N found]
 ```
 
-Missing docs don't reduce the layer score (breadcrumbs are the primary signal), but flag gaps in the report. An agent with good breadcrumbs but no README or architecture docs can follow rules but can't orient itself in unfamiliar parts of the codebase.
+Missing docs don't reduce the layer score (agent instructions are the primary signal), but flag gaps in the report. An agent with good agent instructions but no README or architecture docs can follow rules but can't orient itself in unfamiliar parts of the codebase.
 
 ### Layer 1: Code Design (Compile-Time Correctness)
 
@@ -461,7 +461,7 @@ rg -i 'retrospective|retro|feedback loop|learnings|post.?mortem' "$REPO_ROOT"/{C
 **Assess across three dimensions:**
 
 1. **Task orchestration** - Are AI tasks structured and tracked? (Task Master tags, SpecKit specs, GSD tasks, GitHub Projects with AI labels, etc.)
-2. **Feedback loop** - Do learnings feed back into contracts? (retro logs, breadcrumb updates traced to incidents, iterative CLAUDE.md refinement)
+2. **Feedback loop** - Do learnings feed back into contracts? (retro logs, agent instruction updates traced to incidents, iterative CLAUDE.md refinement)
 3. **Workflow maturity** - Is there evidence of repeated AI work cycles? (multiple completed tags/sprints, merged PR history from AI branches, wave-based orchestration)
 
 **Scoring:**
@@ -528,7 +528,7 @@ Size encodes lines of code, hue encodes cyclomatic complexity (red = high), satu
 
 | Layer | Status | Evidence | Gap |
 |-------|--------|----------|-----|
-| 0: Breadcrumbs | Present/Partial/Missing | <what was found> | <what's missing> |
+| 0: Agent Instructions | Present/Partial/Missing | <what was found> | <what's missing> |
 | 1: Code Design | Present/Partial/Missing | <what was found> | <what's missing> |
 | 2: Linters | Present/Partial/Missing | <what was found> | <what's missing> |
 | 3: Architecture Tests | Present/Partial/Missing | <what was found> | <what's missing> |
@@ -548,7 +548,7 @@ Size encodes lines of code, hue encodes cyclomatic complexity (red = high), satu
 
 ## Top 3 Actions
 
-Prioritize by leverage: breadcrumbs and CI first, then linters and coverage, then architecture tests and retro loops. Each action should be completable in a single session and reference **specific files** from the hotspot snapshot wherever possible — generic advice is the failure mode this report exists to prevent.
+Prioritize by leverage: agent instructions and CI first, then linters and coverage, then architecture tests and retro loops. Each action should be completable in a single session and reference **specific files** from the hotspot snapshot wherever possible — generic advice is the failure mode this report exists to prevent.
 
 | # | Action | Layer | Effort | Command / First Step | Hotspot files this addresses | Issue |
 |---|--------|-------|--------|---------------------|------------------------------|-------|
