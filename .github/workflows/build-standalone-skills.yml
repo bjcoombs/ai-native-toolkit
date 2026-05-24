@@ -37,11 +37,9 @@ jobs:
             echo "build=true"  >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set up Python
+      - name: Install uv
         if: steps.version-check.outputs.build == 'true' || github.event_name == 'workflow_dispatch'
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
-        with:
-          python-version: "3.11"
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4
 
       - name: Build standalone skill ZIPs
         if: steps.version-check.outputs.build == 'true' || github.event_name == 'workflow_dispatch'
