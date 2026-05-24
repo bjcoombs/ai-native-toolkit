@@ -61,6 +61,10 @@ for name, cfg in SKILLS.items():
     except ValueError:
         display_path = out_zip
     print(f"Building {name} -> {display_path} ...", flush=True)
+    bundle_files = {
+        dest_rel: repo_root / src_rel
+        for dest_rel, src_rel in cfg.get("bundle_files", {}).items()
+    }
     issues = build_standalone_skill_zip(
         skill_source_dir=repo_root / cfg["source_dir"],
         out_zip=out_zip,
@@ -68,6 +72,7 @@ for name, cfg in SKILLS.items():
         standalone_description=cfg["standalone_description"],
         replacements=cfg["replacements"],
         exclude_dirs=frozenset(cfg["exclude_dirs"]),
+        bundle_files=bundle_files,
     )
     if issues:
         print(f"  FAIL — {len(issues)} issue(s):")
