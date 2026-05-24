@@ -221,6 +221,23 @@ def test_strip_frontmatter_no_frontmatter_unchanged():
     assert strip_frontmatter(text) == text
 
 
+def test_strip_frontmatter_handles_crlf_line_endings():
+    text = "---\r\nname: x\r\ncolor: red\r\n---\r\nbody here\r\n"
+    assert strip_frontmatter(text) == "body here\r\n"
+
+
+def test_strip_frontmatter_handles_closing_fence_at_eof():
+    # No trailing newline after the closing ---
+    text = "---\nname: x\n---"
+    assert strip_frontmatter(text) == ""
+
+
+def test_strip_frontmatter_handles_eof_with_body_after():
+    # Closing fence with body but no trailing newline at EOF
+    text = "---\nname: x\n---\nbody"
+    assert strip_frontmatter(text) == "body"
+
+
 # ── bundle_files ───────────────────────────────────────────────────────────
 
 def test_bundle_files_copies_extra_files_into_zip(tmp_path):
@@ -265,6 +282,40 @@ def test_bundle_files_missing_source_raises(tmp_path):
             standalone_description="fake desc",
             replacements={},
             bundle_files={"hats/missing.md": tmp_path / "does-not-exist.md"},
+        )
+
+
+def test_bundle_files_rejects_absolute_destination(tmp_path):
+    src = _make_fake_skill(tmp_path)
+    extras_dir = tmp_path / "extras"
+    extras_dir.mkdir()
+    (extras_dir / "hat.md").write_text("---\nname: x\n---\nbody\n")
+    out_zip = tmp_path / "fake.zip"
+    with pytest.raises(ValueError, match="relative path within the skill"):
+        build_standalone_skill_zip(
+            skill_source_dir=src,
+            out_zip=out_zip,
+            standalone_name="fake",
+            standalone_description="fake desc",
+            replacements={},
+            bundle_files={"/etc/passwd": extras_dir / "hat.md"},
+        )
+
+
+def test_bundle_files_rejects_parent_traversal(tmp_path):
+    src = _make_fake_skill(tmp_path)
+    extras_dir = tmp_path / "extras"
+    extras_dir.mkdir()
+    (extras_dir / "hat.md").write_text("---\nname: x\n---\nbody\n")
+    out_zip = tmp_path / "fake.zip"
+    with pytest.raises(ValueError, match="relative path within the skill"):
+        build_standalone_skill_zip(
+            skill_source_dir=src,
+            out_zip=out_zip,
+            standalone_name="fake",
+            standalone_description="fake desc",
+            replacements={},
+            bundle_files={"../escaped.md": extras_dir / "hat.md"},
         )
 
 

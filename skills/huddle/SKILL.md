@@ -95,7 +95,10 @@ After Step 1 you have a team size, a list of professional lenses, and a hat sequ
 | Configuration | Execution mode |
 |---|---|
 | Size 1 | **Solo flat-parallel** (below) |
+<!-- chat-skip:start -->
 | Size 2+ AND Agent Teams flag enabled | **Team Mode** (Step 2 onwards) |
+<!-- chat-skip:end -->
+<!-- chat-replace:branch-phased-row -->
 | Size 2+ AND Agent Teams flag NOT enabled | **Phased Sub-Agent Mode** (below) |
 
 ### Solo flat-parallel (Size 1)

@@ -75,6 +75,7 @@ SKILLS: dict[str, dict] = {
                 "user one line: \"Running in phased sub-agent mode (N lenses, M "
                 "phases — standalone build, team mode not available).\""
             ),
+            "branch-phased-row": "| Size 2+ | **Phased Sub-Agent Mode** (below) |",
         },
         # Bundle the hat methodology files inside the ZIP so standalone-mode
         # sub-agents can read them via relative paths. Without this they'd
