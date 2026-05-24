@@ -1,10 +1,15 @@
 """Unit tests for transform_skill.py primitives."""
+import zipfile
+from pathlib import Path
+
 import pytest
 from transform_skill import (
-    strip_chat_skip,
+    REQUIRED_EXCLUDES,
     apply_chat_replace,
-    override_frontmatter,
+    build_standalone_skill_zip,
     check_orphan_markers,
+    override_frontmatter,
+    strip_chat_skip,
 )
 
 
@@ -89,6 +94,26 @@ def test_frontmatter_preserves_body():
     assert "body content here" in result
 
 
+def test_frontmatter_does_not_touch_body_yaml_example():
+    # Regression: a fenced YAML example in the body must not be rewritten
+    # just because it contains name: / description: lines.
+    text = (
+        "---\nname: real\ndescription: \"real\"\n---\n\n"
+        "```yaml\nname: example\ndescription: \"shown in docs\"\n```\n"
+    )
+    result = override_frontmatter(text, "NEW", "NEW DESC")
+    assert "name: NEW" in result
+    assert "description: \"NEW DESC\"" in result
+    # Body example untouched
+    assert "name: example" in result
+    assert 'description: "shown in docs"' in result
+
+
+def test_frontmatter_no_frontmatter_returns_input_unchanged():
+    text = "no frontmatter here\nname: foo\n"
+    assert override_frontmatter(text, "x", "y") == text
+
+
 # ── check_orphan_markers ─────────────────────────────────────────────────────
 
 def test_orphan_unclosed_start():
@@ -136,6 +161,46 @@ def test_assess_config_covers_all_markers():
     in_config = set(SKILLS["assess"]["replacements"])
     uncovered = in_file - in_config
     assert not uncovered, f"assess markers with no config entry: {uncovered}"
+
+
+# ── build-level safety: REQUIRED_EXCLUDES always applied ───────────────────
+
+def _zip_names(out_zip: Path) -> list[str]:
+    with zipfile.ZipFile(out_zip) as zf:
+        return zf.namelist()
+
+
+def _make_fake_skill(root: Path) -> Path:
+    """Build a synthetic skill source with tooling artefacts."""
+    src = root / "fake_skill"
+    src.mkdir()
+    (src / "SKILL.md").write_text('---\nname: fake\ndescription: "fake"\n---\n# Body\n')
+    (src / "__pycache__").mkdir()
+    (src / "__pycache__" / "junk.pyc").write_bytes(b"junk")
+    (src / ".pytest_cache").mkdir()
+    (src / ".pytest_cache" / "v").write_text("cache")
+    (src / ".venv").mkdir()
+    (src / ".venv" / "pyvenv.cfg").write_text("home = /usr/bin")
+    return src
+
+
+def test_required_excludes_applied_even_when_caller_passes_empty_set(tmp_path):
+    src = _make_fake_skill(tmp_path)
+    out_zip = tmp_path / "fake.zip"
+    issues = build_standalone_skill_zip(
+        skill_source_dir=src,
+        out_zip=out_zip,
+        standalone_name="fake",
+        standalone_description="fake desc",
+        replacements={},
+        exclude_dirs=frozenset(),  # caller opts out of all configured excludes
+    )
+    assert issues == []
+    names = _zip_names(out_zip)
+    for forbidden in REQUIRED_EXCLUDES:
+        assert not any(forbidden in n for n in names), (
+            f"{forbidden!r} leaked into ZIP: {names}"
+        )
 
 
 def test_huddle_config_has_no_orphan_replace_markers():

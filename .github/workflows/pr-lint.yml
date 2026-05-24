@@ -17,6 +17,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  issues: write    # github.rest.issues.addLabels uses the issues API
 
 jobs:
   lint-title:

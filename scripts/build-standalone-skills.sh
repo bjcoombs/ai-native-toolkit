@@ -32,7 +32,9 @@ done
 mkdir -p "$DEST"
 
 cd "$SCRIPT_DIR"
-python3 - "$DEST" "$REPO_ROOT" ${SKILLS_TO_BUILD[@]+"${SKILLS_TO_BUILD[@]}"} <<'PYEOF'
+# Use `uv run` so the script honours scripts/pyproject.toml's `requires-python`
+# and provisions a matching interpreter even when system python3 is older.
+uv run python - "$DEST" "$REPO_ROOT" ${SKILLS_TO_BUILD[@]+"${SKILLS_TO_BUILD[@]}"} <<'PYEOF'
 import sys
 from pathlib import Path
 
