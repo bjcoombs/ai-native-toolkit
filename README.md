@@ -207,7 +207,7 @@ ai-native-toolkit/
 
 ## Contributors
 
-Thanks to [@franklywatson](https://github.com/franklywatson) (Jerome Pimmel) for the standalone skill ZIP pipeline that makes `/assess` and `/huddle` installable in Claude Desktop chat and Cowork ([#24](https://github.com/bjcoombs/ai-native-toolkit/pull/24)).
+Thanks to [@franklywatson](https://github.com/franklywatson) for the standalone skill ZIP pipeline that makes `/assess` and `/huddle` installable in Claude Desktop chat and Cowork ([#24](https://github.com/bjcoombs/ai-native-toolkit/pull/24)).
 
 ## License
 
