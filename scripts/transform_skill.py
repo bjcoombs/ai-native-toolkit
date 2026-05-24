@@ -11,6 +11,11 @@ _SKIP_PATTERN = re.compile(
     re.DOTALL | re.MULTILINE,
 )
 _REPLACE_PATTERN = re.compile(r"<!-- chat-replace:(\S+?) -->")
+_FRONTMATTER_PATTERN = re.compile(r"\A(---\n)(.*?)(\n---\n)", re.DOTALL)
+
+# Always excluded from the ZIP regardless of per-skill config — these are tooling
+# artefacts that should never ship.
+REQUIRED_EXCLUDES: frozenset[str] = frozenset({"__pycache__", ".pytest_cache", ".venv"})
 
 
 def strip_chat_skip(text: str) -> str:
@@ -37,15 +42,29 @@ def apply_chat_replace(text: str, replacements: dict[str, str]) -> str:
 
 
 def override_frontmatter(text: str, name: str, description: str) -> str:
-    """Rewrite name: and description: fields in YAML frontmatter."""
-    text = re.sub(r"^name:.*$", f"name: {name}", text, flags=re.MULTILINE)
-    text = re.sub(
-        r'^description:.*?(?=^\S|\Z)',
+    """Rewrite name: and description: fields in the YAML frontmatter only.
+
+    Body content is left untouched even if a line begins with `name:` or
+    `description:` (e.g. a fenced YAML example showing skill manifest syntax).
+    """
+    m = _FRONTMATTER_PATTERN.match(text)
+    if not m:
+        return text
+    fm_open, fm_body, fm_close = m.groups()
+    rest = text[m.end():]
+
+    fm_body = re.sub(r"^name:.*$", f"name: {name}", fm_body, flags=re.MULTILINE)
+    fm_body = re.sub(
+        r"^description:.*?(?=^\S|\Z)",
         f'description: "{description}"\n',
-        text,
+        fm_body,
         flags=re.MULTILINE | re.DOTALL,
     )
-    return text
+    # Strip the trailing newline left by the description replacement so the
+    # rebuilt document doesn't gain a blank line before the closing fence.
+    fm_body = fm_body.rstrip("\n")
+
+    return f"{fm_open}{fm_body}{fm_close}{rest}"
 
 
 def check_orphan_markers(text: str) -> list[str]:
@@ -72,14 +91,19 @@ def build_standalone_skill_zip(
     standalone_name: str,
     standalone_description: str,
     replacements: dict[str, str],
-    exclude_dirs: frozenset[str] = frozenset({"tests", "__pycache__", ".pytest_cache", ".venv"}),
+    exclude_dirs: frozenset[str] = frozenset({"tests"}),
 ) -> list[str]:
     """
     Transform *skill_source_dir* and write a standalone ZIP to *out_zip*.
 
     Returns validation issues; empty list means success. ZIP is not written if
     there are issues.
+
+    ``REQUIRED_EXCLUDES`` (``__pycache__``, ``.pytest_cache``, ``.venv``) are
+    always excluded in addition to *exclude_dirs* — callers cannot opt out of
+    these tooling artefacts.
     """
+    effective_excludes = exclude_dirs | REQUIRED_EXCLUDES
     staging = out_zip.parent / f"_staging_{standalone_name}"
     if staging.exists():
         shutil.rmtree(staging)
@@ -91,7 +115,7 @@ def build_standalone_skill_zip(
         if src.is_dir():
             continue
         rel = src.relative_to(skill_source_dir)
-        if any(part in exclude_dirs for part in rel.parts):
+        if any(part in effective_excludes for part in rel.parts):
             continue
         dest = target_root / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
