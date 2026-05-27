@@ -106,6 +106,10 @@ class DocGraphResult:
     ambiguous_wikilinks: int = 0
     vault_detected: bool = False
     obsidiantools_available: bool = False
+    # Full per-doc PageRank, keyed by rel path. Sizes the docs-staleness
+    # heatmap (a stale hub must dominate). Kept off as_dict() so run-context
+    # stays lean on doc-heavy repos -- the top-10 hubs are serialised instead.
+    pagerank: dict[str, float] = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return {
@@ -425,4 +429,5 @@ def _derive_signals(
         ambiguous_wikilinks=ambiguous,
         vault_detected=vault,
         obsidiantools_available=obs,
+        pagerank={k: round(v, 6) for k, v in pagerank.items()},
     )
