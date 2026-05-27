@@ -355,7 +355,7 @@ def write_stats(files: list[tuple[Path, int, float, str]],
                 root: Path, out_path: Path) -> None:
     """Write a JSON stats sidecar summarising the treemap data.
 
-    Consumed by the /assess skill: percentiles drive Layer 2 scoring,
+    Consumed by the /assess skill: percentiles drive Layer 3 (linter) scoring,
     top hotspot lists become the named files in the actions table.
     Composite hotspot score = ccn * (1 + log1p(churn)), so a vivid
     red block (complex AND active) outranks a frozen complex file.
@@ -445,7 +445,7 @@ def main() -> int:
         "--stats", type=Path,
         help=("Write a JSON stats sidecar (file count, LOC/CCN percentiles, "
               "top hotspot/complex/large files). Used by /assess to score "
-              "Layer 2 and surface specific improvement actions."),
+              "Layer 3 and surface specific improvement actions."),
     )
     ap.add_argument(
         "--include-artifacts", action="store_true",
