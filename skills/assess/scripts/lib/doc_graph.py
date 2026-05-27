@@ -331,6 +331,43 @@ def build_doc_graph(
     )
 
 
+def _pagerank(graph, alpha: float = 0.85, max_iter: int = 100,
+              tol: float = 1e-9) -> dict[str, float]:
+    """PageRank by pure-Python power iteration (with dangling-node handling).
+
+    networkx's own ``pagerank`` routes through a scipy/numpy backend, which the
+    deterministic core deliberately does not depend on. This keeps centrality
+    working with networkx alone — the graph structure is networkx's; only the
+    iteration is local. Semantics match ``nx.pagerank`` (dangling rank is
+    redistributed uniformly each step).
+    """
+    nodes = list(graph.nodes())
+    n = len(nodes)
+    if n == 0:
+        return {}
+    if graph.number_of_edges() == 0:
+        return {x: 1.0 / n for x in nodes}
+    out_deg = dict(graph.out_degree())
+    pr = {x: 1.0 / n for x in nodes}
+    for _ in range(max_iter):
+        prev = pr
+        dangling = sum(prev[x] for x in nodes if out_deg[x] == 0)
+        base = (1.0 - alpha) / n + alpha * dangling / n
+        nxt = {x: base for x in nodes}
+        for src in nodes:
+            d = out_deg[src]
+            if d == 0:
+                continue
+            share = alpha * prev[src] / d
+            for dst in graph.successors(src):
+                nxt[dst] += share
+        err = sum(abs(nxt[x] - prev[x]) for x in nodes)
+        pr = nxt
+        if err < tol:
+            break
+    return pr
+
+
 def _is_declared_moc(path: Path) -> bool:
     name = path.name.lower()
     if name in MOC_BASENAMES:
@@ -367,10 +404,7 @@ def _derive_signals(
     nodes = list(graph.nodes())
     n = len(nodes)
 
-    try:
-        pagerank = nx.pagerank(graph) if graph.number_of_edges() else {x: 1.0 / n for x in nodes}
-    except Exception:  # pragma: no cover - pagerank power-iteration edge cases
-        pagerank = {x: 1.0 / n for x in nodes}
+    pagerank = _pagerank(graph)
 
     in_deg = dict(graph.in_degree())
     out_deg = dict(graph.out_degree())

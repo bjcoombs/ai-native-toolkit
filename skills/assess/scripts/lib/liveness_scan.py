@@ -299,8 +299,12 @@ def _detect_discoverable(repo_root: Path) -> tuple[list[str], list[Path]]:
     signals: set[str] = set()
     runbooks: list[Path] = []
     for path in _iter_files(repo_root, {".md", ".mdx", ".markdown"}):
-        if _RUNBOOK_NAME_RE.search(path.stem) or _RUNBOOK_NAME_RE.search(path.parent.name):
-            signals.add(f"runbook/observability doc: {path.relative_to(repo_root)}")
+        rel = path.relative_to(repo_root)
+        # Match the doc's own name or an *intra-repo* directory (runbooks/,
+        # observability/) - never the repo-root dir name, which says nothing.
+        dir_parts = rel.parts[:-1]
+        if _RUNBOOK_NAME_RE.search(path.stem) or any(_RUNBOOK_NAME_RE.search(p) for p in dir_parts):
+            signals.add(f"runbook/observability doc: {rel}")
             runbooks.append(path)
             continue
         # Body-level signal even when the filename is plain.
@@ -321,13 +325,17 @@ def _detect_reachable(repo_root: Path, runbooks: list[Path]) -> list[str]:
         if _OBS_TOOL_RE.search(_read(mcp)):
             signals.add(f"MCP server over telemetry: {mcp.relative_to(repo_root)}")
 
-    # 2. Repo skills named for logs/metrics/traces.
-    for path in _iter_files(repo_root):
+    # 2. Repo skills named for logs/metrics/traces. These live under `skills/`
+    #    or `.claude/skills/` - the latter is in EXCLUDE_DIRS, so scan directly
+    #    rather than via _iter_files (which would skip .claude).
+    _skip = {"node_modules", ".venv", "venv", "dist", "build", ".git"}
+    for path in repo_root.rglob("SKILL.md"):
         rel = path.relative_to(repo_root)
         parts = [p.lower() for p in rel.parts]
-        if "skills" in parts and path.name.lower() == "skill.md":
-            if _OBS_TOOL_RE.search(path.parent.name):
-                signals.add(f"repo skill for telemetry: {rel}")
+        if any(p in _skip for p in parts):
+            continue
+        if "skills" in parts and _OBS_TOOL_RE.search(path.parent.name):
+            signals.add(f"repo skill for telemetry: {rel}")
 
     # 3. Runbooks whose fenced code blocks hold runnable query commands.
     for rb in runbooks:

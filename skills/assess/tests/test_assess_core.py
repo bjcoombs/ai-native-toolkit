@@ -10,7 +10,20 @@ from pathlib import Path
 
 import pytest
 
+import assess_core
 from assess_core import build_run_context
+
+
+def _minimal_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+    return repo
 
 
 def test_build_run_context_first_run(tmp_path: Path) -> None:
@@ -217,6 +230,53 @@ def test_repo_root_not_in_ctx(tmp_path: Path) -> None:
 
     ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
     assert "repo_root" not in ctx
+
+
+def test_readside_blocks_present_in_ctx(tmp_path: Path) -> None:
+    """run-context.json must carry the Layer 0/1 read-side blocks."""
+    repo = _minimal_repo(tmp_path)
+    (repo / "README.md").write_text("# Project\nsee [code](app.py)\n")
+    (repo / "app.py").write_text("x = 1\n")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    for key in ("doc_graph", "doc_staleness", "stale_hubs", "dead_code", "observability"):
+        assert key in ctx, f"missing read-side block: {key}"
+    assert ctx["doc_graph"]["available"] is True
+    assert ctx["doc_graph"]["doc_count"] == 1
+    assert ctx["doc_staleness"]["available"] is True
+    assert isinstance(ctx["stale_hubs"], list)
+    assert "rung" in ctx["observability"]
+    assert "candidate_count" in ctx["dead_code"]
+
+
+def test_stale_hubs_join_centrality_and_staleness(tmp_path: Path) -> None:
+    """stale_hubs ranks central docs by pagerank x staleness ratio."""
+    repo = _minimal_repo(tmp_path)
+    (repo / "hub.md").write_text("hub")
+    for i in range(3):
+        (repo / f"leaf{i}.md").write_text("see [hub](hub.md)")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    # Each stale-hub row carries both the centrality and staleness factors.
+    if ctx["stale_hubs"]:
+        row = ctx["stale_hubs"][0]
+        assert {"path", "pagerank", "ratio", "priority"} <= set(row)
+
+
+def test_readside_scan_failure_degrades_not_crashes(tmp_path: Path, monkeypatch) -> None:
+    """A raising scan must degrade to an unavailable marker, not blow up the run."""
+    repo = _minimal_repo(tmp_path)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("simulated scan failure")
+
+    monkeypatch.setattr(assess_core, "build_doc_graph", boom)
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    assert ctx["doc_graph"]["available"] is False
+    assert "failed" in ctx["doc_graph"]["reason"]
+    # downstream blocks still present
+    assert "observability" in ctx
+    assert ctx["stale_hubs"] == []  # can't join hubs without a graph
 
 
 def test_plugin_version_in_ctx(tmp_path: Path) -> None:
