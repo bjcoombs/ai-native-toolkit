@@ -19,6 +19,9 @@ The LLM reads run-context.json to ground that prose in deterministic data.
 """
 # /// script
 # requires-python = ">=3.11"
+# dependencies = [
+#     "networkx",
+# ]
 # ///
 from __future__ import annotations
 
@@ -33,6 +36,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.agent_instructions_grader import grade_instructions
 from lib.anomaly_detector import detect_anomalies
+from lib.doc_graph import build_doc_graph
+from lib.doc_staleness import analyze_doc_staleness
+from lib.liveness_scan import scan_liveness
 from lib.stats_diff import diff_stats, load_stats
 from lib.wiki_writer import (
     HotspotEntry,
@@ -145,6 +151,45 @@ def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None
     (assess_dir / "first-flagged.json").write_text(
         json.dumps(first_flagged, indent=2), encoding="utf-8"
     )
+
+
+def _safe(label: str, fn):
+    """Run a read-side scan, degrading to an unavailable marker on any failure.
+
+    Read-side signals are additive context for the LLM, never gates - a broken
+    scan must never block the assessment (PRD: "never block").
+    """
+    try:
+        return fn()
+    except Exception as e:  # noqa: BLE001 - intentional catch-all; degrade, don't crash
+        return {"available": False, "reason": f"{label} scan failed: {e}"}
+
+
+def _build_stale_hubs(doc_graph: dict, doc_staleness: dict) -> list[dict]:
+    """Centrality x staleness - the priority Layer 0 signal.
+
+    A stale *hub* (high PageRank) is the most dangerous lying map: everything
+    routes through it. We join the doc graph's central docs with their
+    staleness ratio so a stale hub surfaces as a top finding.
+    """
+    if not doc_graph.get("available") or not doc_staleness.get("available"):
+        return []
+    staleness_by_path = {d["path"]: d for d in doc_staleness.get("docs", [])}
+    hubs: list[dict] = []
+    for hub in doc_graph.get("hubs", []):
+        s = staleness_by_path.get(hub["path"])
+        if s is None:
+            continue
+        priority = round(hub["pagerank"] * s["ratio"], 3)
+        hubs.append({
+            "path": hub["path"],
+            "pagerank": hub["pagerank"],
+            "last_commit_days": s["last_commit_days"],
+            "code_churn_in_window": s["code_churn_in_window"],
+            "ratio": s["ratio"],
+            "priority": priority,
+        })
+    return sorted(hubs, key=lambda h: -h["priority"])
 
 
 def build_run_context(*, repo_root: Path, run_date: str) -> dict:
@@ -265,6 +310,23 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
             "persistent": [h.__dict__ for h in diff.persistent],
         },
     }
+
+    # Read-side foundation signals (Layer 0 navigability + Layer 1 liveness).
+    # Each is best-effort and degrades rather than blocking the assessment.
+    doc_graph = _safe("doc_graph", lambda: build_doc_graph(repo_root).as_dict())
+    doc_to_code = (doc_graph.get("doc_to_code_edges", [])
+                   if doc_graph.get("available") else [])
+    doc_staleness = _safe(
+        "doc_staleness",
+        lambda: analyze_doc_staleness(repo_root, doc_to_code_edges=doc_to_code),
+    )
+    liveness = _safe("liveness", lambda: scan_liveness(repo_root))
+    ctx["doc_graph"] = doc_graph
+    ctx["doc_staleness"] = doc_staleness
+    ctx["stale_hubs"] = _build_stale_hubs(doc_graph, doc_staleness)
+    ctx["dead_code"] = liveness.get("dead_code", {"available": False}) if isinstance(liveness, dict) else {"available": False}
+    ctx["observability"] = liveness.get("observability", {"rung": 0}) if isinstance(liveness, dict) else {"rung": 0}
+
     ctx["plugin_version"] = _read_plugin_version()
     ctx["anomalies"] = [
         {"code": a.code, "description": a.description, "detail": a.detail}

@@ -71,6 +71,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import squarify
 
+# Shared churn machinery lives in lib/git_churn.py so the code heatmap, the
+# docs heatmap, and the Layer 0 staleness metric all compute churn one way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib.git_churn import git_churn_scores, pick_churn_window  # noqa: E402
+
 
 EXCLUDE_DIRS = {".git", "node_modules", "dist", "build", "target", "vendor",
                 ".venv", "venv", "__pycache__", ".gradle", ".idea", ".mvn",
@@ -190,109 +195,6 @@ def scc_scores(
     return scores
 
 
-def git_churn_scores(root: Path, since: str | None = None) -> dict[Path, int]:
-    """Return {abs_path: commit_count} for files under root tracked in git.
-
-    Returns empty dict if root is not inside a git repo. Commit counts are
-    over the full history reachable from HEAD by default. Pass `since` as
-    a git-compatible date expression (e.g. "6 months ago") to window the
-    count. Renames are not followed - a file gets credit only under its
-    current name.
-    """
-    try:
-        repo_top = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
-        ).stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return {}
-    repo = Path(repo_top).resolve()
-
-    cmd = ["git", "-C", repo_top, "log",
-           "--pretty=format:", "--name-only"]
-    if since:
-        cmd.append(f"--since={since}")
-    try:
-        raw = subprocess.run(
-            cmd, capture_output=True, text=True, check=True,
-        ).stdout
-    except subprocess.CalledProcessError:
-        return {}
-
-    counts: dict[Path, int] = {}
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        path = (repo / line).resolve()
-        try:
-            path.relative_to(root)
-        except ValueError:
-            continue
-        counts[path] = counts.get(path, 0) + 1
-    return counts
-
-
-# Time windows tried in order from narrowest to widest. The first one
-# that gives both gradient depth (max >= MIN_MAX) AND visual coverage
-# (>= MIN_COVERAGE_PCT of files touched) wins. If nothing qualifies, we
-# fall back to the widest window that returned any data. since=None
-# means "full history".
-CHURN_WINDOWS: list[tuple[str, str | None]] = [
-    ("last 12mo", "12 months ago"),
-    ("last 24mo", "24 months ago"),
-    ("last 5y",   "5 years ago"),
-    ("all-time",  None),
-]
-MIN_MAX = 3          # max commits per file must clear this for visible gradient
-MIN_COVERAGE_PCT = 10.0   # % of scored files with any activity in the window
-
-
-def _pick_churn_window(
-    root: Path, files: list,
-) -> tuple[dict[Path, int] | None, str | None]:
-    """Walk CHURN_WINDOWS narrowest-to-widest; return the first window
-    that gives both gradient depth and visual coverage. Falls back to
-    the widest non-empty window if none qualify."""
-    file_paths = [f[0] for f in files]
-    total_files = max(len(file_paths), 1)
-    widest_fallback: tuple[dict[Path, int], str] | None = None
-
-    for label, since in CHURN_WINDOWS:
-        data = git_churn_scores(root, since=since)
-        if not data:
-            continue
-        # restrict to files we actually scored - "touched" means touched
-        # AND scoreable, so coverage % is comparable across windows
-        scored_hits = {p: data[p] for p in file_paths if p in data}
-        if not scored_hits:
-            continue
-        if widest_fallback is None or label == CHURN_WINDOWS[-1][0]:
-            widest_fallback = (data, label)
-        coverage = 100.0 * len(scored_hits) / total_files
-        max_commits = max(scored_hits.values())
-        if max_commits >= MIN_MAX and coverage >= MIN_COVERAGE_PCT:
-            if label != CHURN_WINDOWS[0][0]:
-                print(f"note: activity sparse - widened window to "
-                      f"{label} ({coverage:.0f}% of files touched, "
-                      f"max {max_commits} commits).",
-                      file=sys.stderr)
-            return ({p: data.get(p, 0) for p in file_paths},
-                    f"commits ({label})")
-
-    if widest_fallback is not None:
-        data, label = widest_fallback
-        scored_hits = {p: data[p] for p in file_paths if p in data}
-        coverage = 100.0 * len(scored_hits) / total_files
-        max_commits = max(scored_hits.values()) if scored_hits else 0
-        print(f"note: activity below thresholds in every window; "
-              f"using {label} ({coverage:.0f}% coverage, "
-              f"max {max_commits}).", file=sys.stderr)
-        return ({p: data.get(p, 0) for p in file_paths},
-                f"commits ({label})")
-    return None, None
-
-
 def _git_not_found_warning(root: Path) -> None:
     print(
         f"warning: no git history found for {root}\n"
@@ -340,7 +242,7 @@ def collect(root: Path, by: str = "complexity",
             files = [(p, loc, float(churn.get(p, 0)), src)
                      for p, loc, _m, src in files]
     elif by == "hotspot":
-        aux_data, aux_label = _pick_churn_window(root, files)
+        aux_data, aux_label = pick_churn_window(root, [f[0] for f in files])
         if aux_data is None:
             _git_not_found_warning(root)
             effective_by = "complexity"
