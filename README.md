@@ -64,7 +64,7 @@ Skills appear namespaced: `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddl
 | You use... | Install via | Updates |
 |---|---|---|
 | Claude Code | `/plugin install` (see [Install](#install) above) | Automatic on `/plugin update`. Use this when available - it's the maintained path. |
-| claude.ai web or Claude Desktop only | Manual ZIP upload (below) | Manual: re-download the ZIP and re-upload when a new release ships. Watch the repo's [Releases](https://github.com/bjcoombs/ai-native-toolkit/releases) page if you want notifications. |
+| claude.ai web or Claude Desktop only | Manual ZIP upload (below) | Manual: re-download from the rolling release and use the Skills UI's **Replace** option. See [Upgrading the standalone install](#upgrading-the-standalone-install) and [Staying notified of new versions](#staying-notified-of-new-versions) below. |
 
 The ZIPs are rebuilt automatically from the same source on every plugin version bump, so feature parity is maintained - only the update mechanism differs.
 
@@ -84,6 +84,27 @@ The ZIPs are rebuilt automatically from the same source on every plugin version 
 6. Confirm the skill appears under **Personal skills** with toggle on and **Trigger: Slash command + auto**.
 
 Claude Desktop has the same Skills uploader under Settings; the flow is analogous.
+
+### Upgrading the standalone install
+
+The Skills UI has a built-in **Replace** option - use it instead of uninstalling and re-uploading (Replace preserves any in-progress chats that reference the skill).
+
+1. Download the new `assess.zip` / `huddle.zip` from [standalone-skills-latest](https://github.com/bjcoombs/ai-native-toolkit/releases/tag/standalone-skills-latest).
+2. In Customize → Skills, click the skill you want to upgrade.
+3. Open the three-dot menu (⋮) in the top right of the detail pane.
+4. Click **Replace** and select the new `.zip`.
+5. The toggle and trigger settings persist; only the skill contents change.
+
+**Checking which version you have installed.** The skill's Description field in the Skills UI ends with `Standalone build vX.Y.Z` - that's the version that shipped in the ZIP you uploaded. Compare against the [latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/latest) to know if there's a newer one.
+
+### Staying notified of new versions
+
+Neither Claude Desktop nor claude.ai polls for skill updates - the platform has no notification mechanism for uploaded skills. Two opt-in ways to hear about new releases:
+
+- **GitHub Watch.** On the [repo page](https://github.com/bjcoombs/ai-native-toolkit), click **Watch → Custom → Releases**. You'll get an email (and a GitHub notification) whenever a new tag ships.
+- **Atom/RSS feed.** Subscribe to https://github.com/bjcoombs/ai-native-toolkit/releases.atom in any RSS reader (Reeder, Feedly, NetNewsWire, etc.).
+
+Plugin-install users get this for free via `/plugin update ai-native-toolkit` - no subscription needed.
 
 ### Verify the auto-trigger works
 

@@ -347,6 +347,39 @@ def test_huddle_real_build_contains_all_hat_files(tmp_path):
             assert not body.startswith("---"), f"{hat}-hat.md still has frontmatter"
 
 
+def test_all_standalone_descriptions_include_version_and_release_url():
+    """Every standalone_description must include the version and release URL.
+
+    Surfaces the installed version in the Skills UI so users can self-check
+    against the latest release, and points them at the right page to look.
+    Drift between config and plugin.json is impossible because both flow
+    from _plugin_version(), but a future contributor could still write a
+    description without `+ VERSION_SUFFIX` — this test catches that.
+    """
+    from standalone_skill_config import SKILLS, VERSION, RELEASES_URL
+    for name, cfg in SKILLS.items():
+        desc = cfg["standalone_description"]
+        assert f"v{VERSION}" in desc, (
+            f"SKILLS['{name}'] description missing version — "
+            f"append `+ VERSION_SUFFIX` after the trigger text"
+        )
+        assert RELEASES_URL in desc, (
+            f"SKILLS['{name}'] description missing releases URL"
+        )
+
+
+def test_plugin_version_matches_plugin_json():
+    """_plugin_version() must agree with .claude-plugin/plugin.json."""
+    import json
+    from pathlib import Path
+    from standalone_skill_config import VERSION
+    plugin_json = Path(__file__).parent.parent.parent / ".claude-plugin" / "plugin.json"
+    expected = json.loads(plugin_json.read_text("utf-8"))["version"]
+    assert VERSION == expected, (
+        f"VERSION ({VERSION!r}) does not match plugin.json ({expected!r})"
+    )
+
+
 def test_huddle_plugin_source_retains_team_mode_infrastructure():
     """Plugin SKILL.md must keep the full team-mode flow.
 

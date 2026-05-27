@@ -4,7 +4,10 @@ Per-skill configuration for the standalone skill ZIP build pipeline.
 Each entry in SKILLS maps a skill name to:
   standalone_name        — name field written into the ZIP's SKILL.md frontmatter
   standalone_description — description field (trigger-phrased for description-based
-                           auto-matching; no plugin namespacing)
+                           auto-matching; no plugin namespacing). The current
+                           plugin version + release URL are appended automatically
+                           at build time so users see which version they installed
+                           in the Skills UI and know where to check for updates.
   source_dir             — path relative to repo root
   replacements           — dict mapping chat-replace:KEY → replacement text
   exclude_dirs           — subdirectories omitted from the ZIP
@@ -12,6 +15,29 @@ Each entry in SKILLS maps a skill name to:
                            paths (relative to repo root). Markdown files have their
                            YAML frontmatter stripped during bundling.
 """
+
+import json
+from pathlib import Path
+
+
+def _plugin_version() -> str:
+    """Read the canonical version from .claude-plugin/plugin.json.
+
+    Standalone descriptions append this so users see the installed version
+    in the Skills UI and can compare against the latest release. Single
+    source of truth — drift impossible.
+    """
+    plugin_json = Path(__file__).parent.parent / ".claude-plugin" / "plugin.json"
+    return json.loads(plugin_json.read_text("utf-8"))["version"]
+
+
+VERSION = _plugin_version()
+RELEASES_URL = "https://github.com/bjcoombs/ai-native-toolkit/releases"
+VERSION_SUFFIX = (
+    f" Standalone build v{VERSION} — check {RELEASES_URL} for updates and "
+    "use the Skills UI's Replace option to upgrade in place."
+)
+
 
 SKILLS: dict[str, dict] = {
     "assess": {
@@ -22,6 +48,7 @@ SKILLS: dict[str, dict] = {
             "codebase assessment, complexity heatmap, migration risk triage, or 'how ready is "
             "this code for agents?'. Full script automation (SVG, deterministic core) requires "
             "terminal access; the layered assessment works in any context."
+            + VERSION_SUFFIX
         ),
         "source_dir": "skills/assess",
         "exclude_dirs": {"tests", "__pycache__", ".pytest_cache", ".venv"},
@@ -51,6 +78,7 @@ SKILLS: dict[str, dict] = {
             "to weigh a hard decision from several angles, or wanting panel/board deliberation. "
             "Scales from solo gut-check (1) to board-level deliberation (8+) using Fibonacci "
             "team sizing. Team mode with persistent agents requires the Claude Code CLI."
+            + VERSION_SUFFIX
         ),
         "source_dir": "skills/huddle",
         "exclude_dirs": set(),
