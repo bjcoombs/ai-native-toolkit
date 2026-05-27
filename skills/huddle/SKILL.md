@@ -151,7 +151,9 @@ TeamCreate(
 
 Spawn ALL members in parallel (single message with multiple Agent tool calls). Each member is a general-purpose agent with their professional identity and **explicit first-phase instructions**.
 
-**CRITICAL**: Include the first hat phase instructions directly in the spawn prompt. Do NOT send a separate broadcast to start the first phase - members should begin investigating immediately after reading the source material. This eliminates the idle-then-nudge cycle that wastes time.
+**CRITICAL**: Include the first hat phase instructions directly in the spawn prompt. Do NOT send a separate message to start the first phase - members should begin investigating immediately after reading the source material. This eliminates the idle-then-nudge cycle that wastes time.
+
+**Supply the roster.** There is no broadcast — members share findings by sending one `SendMessage` per teammate. So each spawn prompt must list that member's peers by name (the `## Your Teammates` line in the template below). You're spawning everyone, so you know all the names; give each member the others.
 
 For each member, use the Agent tool:
 
@@ -175,13 +177,17 @@ You are a [PROFESSIONAL ROLE] participating in a Six Thinking Hats team meeting 
 
 You are a [ROLE] with deep expertise in [DOMAIN]. This identity persists across ALL phases of the meeting. You see everything through the lens of your professional experience.
 
+## Your Teammates
+
+[ROSTER — the chair lists every other member's name slug here, e.g. "security-eng, product-mgr, sre".] You share findings by sending one `SendMessage` per teammate name; there is no broadcast. If this roster is missing, read `~/.claude/teams/{team}/config.json` and use `members[].name` (excluding yourself) as your peer list.
+
 ## IMMEDIATE FIRST TASK
 
 Read [SOURCE FILES]. Then immediately begin the [FIRST HAT COLOR] Hat phase:
 
 1. Spawn the [hat-color]-hat agent: Agent(subagent_type="[hat-color]-hat", prompt="As a [ROLE] investigating [TOPIC], focus on [SPECIFIC LENS-SHAPED QUESTIONS]. Read [SOURCE FILES] and investigate: [2-3 CONCRETE QUESTIONS FROM YOUR LENS].")
 
-2. When the agent returns, share your key findings with the team via SendMessage(to="*"). Lead with what's most important from your professional perspective.
+2. When the agent returns, share your key findings with each teammate individually — one `SendMessage(to: "<teammate-name>", …)` per name on your roster (broadcast is unsupported). Lead with what's most important from your professional perspective.
 
 3. Read what other team members share. Respond directly to specific members via SendMessage when you see something they missed, want to build on their observation, disagree based on your expertise, or have a question.
 
@@ -192,7 +198,7 @@ Read [SOURCE FILES]. Then immediately begin the [FIRST HAT COLOR] Hat phase:
 Blue Hat (the team lead) will announce each new phase. When announced:
 
 1. **Spawn the hat agent** with a prompt shaped by YOUR professional lens
-2. **Share findings** via SendMessage(to="*")
+2. **Share findings** with each teammate individually — one `SendMessage` per name on your roster (no broadcast)
 3. **Discuss with peers** — 2-3 substantive messages max per phase
 4. **Follow Blue's direction** — when Blue says move on, move on
 
@@ -225,11 +231,12 @@ For each hat in your chosen sequence, facilitate a phase:
 
 **4a. Announce the phase**
 
-Note: The first phase is embedded in the member spawn prompts (Step 3). For subsequent phases, send a broadcast:
+Note: The first phase is embedded in the member spawn prompts (Step 3). For subsequent phases, send the identical announcement to each member individually — one `SendMessage` per member name (there is no all-recipients broadcast). You spawned the team, so you already know every name:
 
 ```
+for each <member-name> in your team:
 SendMessage(
-  to: "*",
+  to: "<member-name>",
   message: "[HAT COLOR] Hat phase. [Framing question for this phase].
 
   Spawn the [hat-color]-hat agent with a prompt shaped by your professional expertise. Share your findings, then discuss with your peers.
@@ -252,11 +259,12 @@ As messages come in from team members:
 
 **4c. Move to next phase**
 
-Move on when you have findings from at least N-1 members (e.g., 2 of 3). Do not wait indefinitely for every member. Announce the transition with a summary:
+Move on when you have findings from at least N-1 members (e.g., 2 of 3). Do not wait indefinitely for every member. Announce the transition to each member individually — one `SendMessage` per member name (there is no all-recipients broadcast):
 
 ```
+for each <member-name> in your team:
 SendMessage(
-  to: "*",
+  to: "<member-name>",
   message: "[1-2 sentence summary of key takeaway from this phase]. Moving to [NEXT HAT] phase.
 
   [Specific framing questions informed by what was just surfaced]",
@@ -340,6 +348,9 @@ After delivering the verdict:
 
 ### Control Pacing
 - Max ~2-3 substantive messages per member per phase
+<!-- chat-skip:start -->
+- In team mode each "share" fans out to N-1 per-recipient sends (no broadcast), so the wire traffic is the message count times N-1 — keep the per-member ceiling tight and rely on Fibonacci sizing to keep N small
+<!-- chat-skip:end -->
 - Extend if the dialogue is producing genuine insight
 - Cut short if responses are repetitive or circular
 - **Move on after N-1 members have contributed** - don't block on stragglers
@@ -361,6 +372,9 @@ After delivering the verdict:
 - **Move on without stragglers.** One nudge per straggler. If they don't respond, proceed with N-1 findings.
 - **Concrete phase prompts.** "The dunning race condition is the biggest risk - how do we fix it?" produces action. "What are the risks?" produces confusion.
 - **Red Hat after White is a natural pairing.** Facts first, then gut check - grounds intuition in evidence.
+<!-- chat-skip:start -->
+- **Broadcast — one message to all teammates at once — is unsupported; address each teammate by name.** In team mode both the chair and members send one `SendMessage` per recipient, so every member needs the roster of peer names in its spawn prompt.
+<!-- chat-skip:end -->
 
 ## Usage
 `/huddle [topic or problem to analyze]`

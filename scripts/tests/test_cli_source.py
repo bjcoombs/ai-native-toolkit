@@ -31,6 +31,15 @@ STANDALONE_ONLY_PHRASES = [
     "Claude Code only",
 ]
 
+# The Agent Teams runtime removed fan-out broadcast: a SendMessage with to="*"
+# is rejected ("broadcast (to: "*") is no longer supported — send a message per
+# recipient"). Any raw SKILL.md instructing a broadcast ships to the CLI and
+# stalls a live team-mode run — phases never get announced and findings never
+# get shared. Sends must be addressed to a named recipient, so the literal is
+# banned outright (even in "don't do this" prose), keeping this a dead-simple
+# substring guard with no usage-vs-mention exceptions to get wrong.
+BROADCAST_LITERALS = ['to: "*"', 'to="*"']
+
 
 def _raw_skill_md(skill_name: str) -> str:
     cfg = SKILLS[skill_name]
@@ -64,6 +73,21 @@ def test_standalone_replacements_not_in_raw_source(skill_name):
         f"{skill_name}/SKILL.md contains the standalone replacement text for "
         f"{leaked} verbatim. The line after a chat-replace marker is the CLI "
         f"default and must differ from the config replacement."
+    )
+
+
+@pytest.mark.parametrize("skill_name", sorted(SKILLS))
+def test_no_broadcast_literal_in_raw_source(skill_name):
+    """No SKILL.md may instruct a fan-out broadcast. to="*" was removed from the
+    Agent Teams runtime; a broadcast send is rejected and a live team-mode huddle
+    stalls. Both chair and members must address each teammate by name."""
+    raw = _raw_skill_md(skill_name)
+    leaked = [literal for literal in BROADCAST_LITERALS if literal in raw]
+    assert not leaked, (
+        f"{skill_name}/SKILL.md contains broadcast literal(s) {leaked}. The Agent "
+        f"Teams runtime rejects to=\"*\"; send one SendMessage per named recipient. "
+        f"Remove the literal even from explanatory prose (reword to e.g. "
+        f"'all-recipients broadcast')."
     )
 
 
