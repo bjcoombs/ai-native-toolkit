@@ -104,6 +104,17 @@ SKILLS: dict[str, dict] = {
                 "phases — standalone build, team mode not available).\""
             ),
             "branch-phased-row": "| Size 2+ | **Phased Sub-Agent Mode** (below) |",
+            "execution-mode-rule": (
+                "Two execution modes are reachable in this standalone build. "
+                "Pick one deterministically: team size = 1 → solo flat-parallel; "
+                "team size ≥ 2 → phased sub-agent mode. Team mode (persistent "
+                "agents with cross-talk) is only available in the Claude Code CLI "
+                "and is not reachable from here."
+            ),
+            "team-mode-row": (
+                "| **Team mode** | Size 2+, Claude Code only | Persistent agents "
+                "with cross-talk — not available in standalone context | — |"
+            ),
         },
         # Bundle the hat methodology files inside the ZIP so standalone-mode
         # sub-agents can read them via relative paths. Without this they'd

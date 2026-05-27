@@ -18,25 +18,15 @@ Scales from a solo gut check to a board-level deliberation using Fibonacci team 
 
 ## Capability Requirements
 
-<!-- chat-skip:start -->
-Three execution modes exist. Pick one **deterministically** by this rule, in order:
-
-1. If team size = 1 → **Solo flat-parallel**.
-2. If team size ≥ 2 AND you can confirm the team-mode capability is available in your environment → **Team mode**.
-3. Otherwise (team size ≥ 2 and you cannot confirm team mode) → **Phased sub-agent mode**.
-
-If you're unsure whether team mode is available, default to phased — do not guess it's on. Phased mode degrades gracefully; attempting team mode without the capability fails loudly.
-<!-- chat-skip:end -->
-Two execution modes are reachable in this standalone build. Pick one deterministically: team size = 1 → solo flat-parallel; team size ≥ 2 → phased sub-agent mode. Team mode (persistent agents with cross-talk) is only available in the Claude Code CLI and is not reachable from here.
+<!-- chat-replace:execution-mode-rule -->
+Three execution modes exist. Pick one **deterministically**: team size = 1 → **solo flat-parallel**; team size ≥ 2 AND you can confirm the team-mode capability (`TeamCreate` / `SendMessage`) is available → **team mode**; otherwise → **phased sub-agent mode**. If you cannot confirm team mode, default to phased — it degrades gracefully, whereas attempting team mode without the capability fails loudly.
 
 | Mode | When chosen | Mechanism | Cost (relative) |
 |------|-------------|-----------|----------------|
 | **Solo flat-parallel** | Size 1 | Hat agents fire in parallel via standard Agent tool; Blue Hat synthesises | 1× |
 | **Phased sub-agent** | Size 2+, no flag | Iterate phases sequentially; spawn N sub-agents per phase (one per lens), each with fresh context, briefed via a running synopsis Blue Hat maintains | 2–4× |
-<!-- chat-skip:start -->
+<!-- chat-replace:team-mode-row -->
 | **Team mode** | Size 2+, flag enabled | Persistent `TeamCreate` agents cross-talk via `SendMessage` across phases | 5–15× |
-<!-- chat-skip:end -->
-| **Team mode** | Size 2+, Claude Code only | Persistent agents with cross-talk — not available in standalone context | — |
 
 <!-- chat-skip:start -->
 **Agent Teams flag** enables `TeamCreate`, `SendMessage`, and related tools. Enable in your environment:
@@ -51,7 +41,7 @@ Without the flag, `/huddle` still runs multi-perspective deliberations via phase
 <!-- chat-skip:end -->
 
 <!-- chat-replace:capability-detection -->
-**Tell the user which mode you're in** before you start. One line: "Running in phased sub-agent mode (3 lenses, 5 phases — Agent Teams flag not detected)."
+**Tell the user which mode you're in** before you start. If the Agent Teams capability (`TeamCreate` / `SendMessage`) is available and team size ≥ 2, announce team mode — one line, e.g. "Running in team mode (3 professional lenses, 5 phases — persistent agents)." Otherwise announce phased sub-agent mode, e.g. "Running in phased sub-agent mode (3 lenses, 5 phases)."
 
 ## No Arguments Behavior
 

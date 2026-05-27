@@ -17,6 +17,13 @@ dist/standalone-skills/
 # Still ignore .DS_Store files everywhere
 **/.DS_Store
 
+# Python tooling artefacts under the allowlisted dirs above (scripts/, etc.)
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.venv/
+**/uv.lock
+
 # Ignore nested CLAUDE.md files (e.g. user's personal config when they
 # clone this into ~/.claude/). The root /CLAUDE.md is re-allowlisted
 # below - it's the in-repo agent contract.
