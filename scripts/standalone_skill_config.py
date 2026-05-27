@@ -43,11 +43,13 @@ SKILLS: dict[str, dict] = {
     "assess": {
         "standalone_name": "assess",
         "standalone_description": (
-            "Assess a codebase's AI-agent readiness (0-7 layered contract model) and generate "
-            "a complexity hotspot SVG treemap. TRIGGER when asked for an AI-readiness review, "
-            "codebase assessment, complexity heatmap, migration risk triage, or 'how ready is "
-            "this code for agents?'. Full script automation (SVG, deterministic core) requires "
-            "terminal access; the layered assessment works in any context."
+            "Assess a codebase's AI-agent readiness (0-8 layered contract model spanning "
+            "navigability, runtime liveness, and the write-side gates) and generate complexity "
+            "and docs-staleness hotspot SVG treemaps. TRIGGER when asked for an AI-readiness "
+            "review, codebase assessment, complexity or docs-staleness heatmap, migration risk "
+            "triage, or 'how ready is this code for agents?'. Full script automation (SVGs, "
+            "deterministic core) requires terminal access; the layered assessment works in any "
+            "context."
             + VERSION_SUFFIX
         ),
         "source_dir": "skills/assess",
@@ -57,6 +59,11 @@ SKILLS: dict[str, dict] = {
                 'uv run scripts/complexity-treemap.py "$REPO_ROOT" '
                 '-o "$REPO_ROOT/.assess/complexity-heatmap.svg" '
                 '--stats "$REPO_ROOT/.assess/complexity-stats.json"'
+            ),
+            "uv-docs-treemap": (
+                'uv run scripts/docs-staleness-treemap.py "$REPO_ROOT" '
+                '-o "$REPO_ROOT/.assess/docs-staleness-heatmap.svg" '
+                '--stats "$REPO_ROOT/.assess/docs-staleness-stats.json"'
             ),
             "uv-core": 'uv run scripts/assess_core.py "$REPO_ROOT"',
             "uv-finalize": 'uv run scripts/assess_finalize.py "$REPO_ROOT"',

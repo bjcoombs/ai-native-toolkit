@@ -15,7 +15,7 @@ def _seed_log_md(assess_dir: Path) -> None:
         "# Assess Log\n\n"
         "## 2026-05-22\n\n"
         "- **Files scored:** 100\n"
-        "- **AI Readiness:** 0.0 / 7 ((LLM fills in))\n"
+        "- **AI Readiness:** 0.0 / 8 ((LLM fills in))\n"
         "- **Instructions grade:** B+\n"
         "- **Hotspot transitions:** 1 graduated, 0 regressed, 0 new, 2 persistent\n"
         "- **Top action:** Deterministic ranker not yet wired (LLM picks Top 3)\n\n"
@@ -50,7 +50,7 @@ def test_finalize_updates_log_last_entry(tmp_assess_dir: Path) -> None:
 
     finalize_run(assess_dir=tmp_assess_dir)
     content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "AI Readiness:** 6.0 / 7 (Solid)" in content
+    assert "AI Readiness:** 6.0 / 8 (Solid)" in content
     assert "Top action:** Add cyclop rule to .golangci.yml (threshold 15)" in content
     # Placeholders must be gone
     assert "((LLM fills in))" not in content
@@ -171,12 +171,12 @@ def test_finalize_updates_last_entry_when_older_entry_unfinalized(tmp_assess_dir
         "# Assess Log\n\n"
         "## 2026-05-01\n\n"
         "- **Files scored:** 80\n"
-        "- **AI Readiness:** 0.0 / 7 ((LLM fills in))\n"
+        "- **AI Readiness:** 0.0 / 8 ((LLM fills in))\n"
         "- **Top action:** Deterministic ranker not yet wired (LLM picks Top 3)\n\n"
         "---\n\n"
         "## 2026-05-22\n\n"
         "- **Files scored:** 100\n"
-        "- **AI Readiness:** 0.0 / 7 ((LLM fills in))\n"
+        "- **AI Readiness:** 0.0 / 8 ((LLM fills in))\n"
         "- **Top action:** Deterministic ranker not yet wired (LLM picks Top 3)\n\n"
         "---\n",
         encoding="utf-8",
@@ -196,10 +196,10 @@ def test_finalize_updates_last_entry_when_older_entry_unfinalized(tmp_assess_dir
 
     # The 2026-05-22 (latest) entry got filled
     latest_section = content.split("## 2026-05-22")[1]
-    assert "AI Readiness:** 6.5 / 7 (Solid)" in latest_section
+    assert "AI Readiness:** 6.5 / 8 (Solid)" in latest_section
     assert "Top action:** Add cyclop rule (threshold 15) to .golangci.yml" in latest_section
 
     # The 2026-05-01 (older) entry's placeholders are PRESERVED as historical evidence
     older_section = content.split("## 2026-05-22")[0]
-    assert "AI Readiness:** 0.0 / 7 ((LLM fills in))" in older_section
+    assert "AI Readiness:** 0.0 / 8 ((LLM fills in))" in older_section
     assert "Deterministic ranker not yet wired" in older_section
