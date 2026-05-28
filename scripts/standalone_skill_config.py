@@ -44,12 +44,12 @@ SKILLS: dict[str, dict] = {
         "standalone_name": "assess",
         "standalone_description": (
             "Assess a codebase's AI-agent readiness (0-8 layered contract model spanning "
-            "navigability, runtime liveness, and the write-side gates) and generate complexity "
-            "and docs-staleness hotspot SVG treemaps. TRIGGER when asked for an AI-readiness "
-            "review, codebase assessment, complexity or docs-staleness heatmap, migration risk "
-            "triage, or 'how ready is this code for agents?'. Full script automation (SVGs, "
-            "deterministic core) requires terminal access; the layered assessment works in any "
-            "context."
+            "navigability, runtime liveness, and the write-side gates) and generate a complexity "
+            "hotspot SVG and a doc-navigability graph SVG. TRIGGER when asked for an AI-readiness "
+            "review, codebase assessment, complexity heatmap, doc navigability/connectivity map, "
+            "migration risk triage, or 'how ready is this code for agents?'. Full script "
+            "automation (SVGs, deterministic core) requires terminal access; the layered "
+            "assessment works in any context."
             + VERSION_SUFFIX
         ),
         "source_dir": "skills/assess",
@@ -60,10 +60,9 @@ SKILLS: dict[str, dict] = {
                 '-o "$REPO_ROOT/.assess/complexity-heatmap.svg" '
                 '--stats "$REPO_ROOT/.assess/complexity-stats.json"'
             ),
-            "uv-docs-treemap": (
-                'uv run scripts/docs-staleness-treemap.py "$REPO_ROOT" '
-                '-o "$REPO_ROOT/.assess/docs-staleness-heatmap.svg" '
-                '--stats "$REPO_ROOT/.assess/docs-staleness-stats.json"'
+            "uv-doc-graph": (
+                'uv run scripts/doc-graph-svg.py "$REPO_ROOT" '
+                '-o "$REPO_ROOT/.assess/doc-graph.svg"'
             ),
             "uv-core": 'uv run scripts/assess_core.py "$REPO_ROOT"',
             "uv-finalize": 'uv run scripts/assess_finalize.py "$REPO_ROOT"',
