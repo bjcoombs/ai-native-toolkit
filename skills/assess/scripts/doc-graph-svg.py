@@ -361,6 +361,16 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
 def _title(result, n: int, cw: float) -> str:
     """Two centred lines at the top: headline + one-line stats."""
     mid = cw / 2
+    links = len(result.broken_links)
+    ghosts = len(group_broken_links(result.broken_links))
+    if not links:
+        broken_clause = ""
+    elif ghosts < links:
+        # Several links point at the same absent file; show the link total and
+        # the smaller count of distinct missing files they collapse to.
+        broken_clause = f' · {links} broken links to {ghosts} missing files'
+    else:
+        broken_clause = f' · {links} broken links'
     return "\n".join([
         f'<text x="{mid:.0f}" y="40" font-size="24" font-weight="600" '
         f'text-anchor="middle">Doc map — {n} docs, {result.graph.number_of_edges()} '
@@ -368,7 +378,7 @@ def _title(result, n: int, cw: float) -> str:
         f'<text x="{mid:.0f}" y="66" font-size="14" fill="#555" text-anchor="middle">'
         f'{result.orphan_rate:.0%} orphaned · {result.reachability_pct:.0%} '
         f'reachable from the entry point'
-        + (f' · {len(result.broken_links)} broken links' if result.broken_links else '')
+        + broken_clause
         + '</text>',
     ])
 
