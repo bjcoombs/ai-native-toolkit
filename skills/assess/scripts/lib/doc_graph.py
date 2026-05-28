@@ -40,6 +40,8 @@ except ImportError:  # pragma: no cover - exercised only on a broken env
     nx = None  # type: ignore[assignment]
     _NETWORKX_AVAILABLE = False
 
+from lib.git_churn import tracked_files  # noqa: E402
+
 
 DOC_EXTENSIONS = {".md", ".mdx", ".markdown"}
 
@@ -138,8 +140,31 @@ class DocGraphResult:
         }
 
 
+def is_repo_file(path: Path, repo_root: Path, tracked: set[Path] | None) -> bool:
+    """True if `path` is genuinely part of the repo.
+
+    Excludes two classes of non-repo file the scan must ignore:
+      - symlinks (or rglob escapes) whose *resolved* path lands outside the
+        repo - e.g. a CLAUDE.md symlinked to the user's home;
+      - untracked / git-ignored files when the repo is under git (e.g. a
+        contributor's personal notes left in the working tree). `tracked` is
+        None for non-git trees, in which case only the symlink guard applies.
+    """
+    try:
+        real = path.resolve()
+    except OSError:
+        return False
+    if not real.is_relative_to(repo_root):
+        return False
+    if tracked is not None and real not in tracked:
+        return False
+    return True
+
+
 def discover_doc_files(repo_root: Path) -> list[Path]:
-    """Return all markdown docs under repo_root, skipping excluded dirs."""
+    """Return all in-repo markdown docs under repo_root, skipping excluded dirs."""
+    repo_root = repo_root.resolve()
+    tracked = tracked_files(repo_root)
     docs: list[Path] = []
     for path in repo_root.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in DOC_EXTENSIONS:
@@ -149,6 +174,8 @@ def discover_doc_files(repo_root: Path) -> list[Path]:
         except ValueError:
             continue
         if any(part in EXCLUDE_DIRS for part in rel.parts):
+            continue
+        if not is_repo_file(path, repo_root, tracked):
             continue
         docs.append(path)
     return sorted(docs)

@@ -25,8 +25,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from lib.doc_graph import CODE_EXTENSIONS, DOC_EXTENSIONS, EXCLUDE_DIRS
-from lib.git_churn import file_last_commit_days, git_churn_scores, pick_churn_window
+from lib.doc_graph import CODE_EXTENSIONS, DOC_EXTENSIONS, EXCLUDE_DIRS, is_repo_file
+from lib.git_churn import (
+    file_last_commit_days,
+    git_churn_scores,
+    pick_churn_window,
+    tracked_files,
+)
 
 
 # Docs that describe the directory they live in. Precedence (best first) when a
@@ -64,10 +69,13 @@ class DocStaleness:
         }
 
 
-def discover_code_files(repo_root: Path) -> list[Path]:
+def _discover(repo_root: Path, exts: set[str]) -> list[Path]:
+    """In-repo files with the given extensions (tracked + within repo only)."""
+    repo_root = repo_root.resolve()
+    tracked = tracked_files(repo_root)
     files: list[Path] = []
     for path in repo_root.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in CODE_EXTENSIONS:
+        if not path.is_file() or path.suffix.lower() not in exts:
             continue
         try:
             rel = path.relative_to(repo_root)
@@ -75,23 +83,18 @@ def discover_code_files(repo_root: Path) -> list[Path]:
             continue
         if any(part in EXCLUDE_DIRS for part in rel.parts):
             continue
+        if not is_repo_file(path, repo_root, tracked):
+            continue
         files.append(path)
     return sorted(files)
+
+
+def discover_code_files(repo_root: Path) -> list[Path]:
+    return _discover(repo_root, CODE_EXTENSIONS)
 
 
 def discover_doc_files(repo_root: Path) -> list[Path]:
-    files: list[Path] = []
-    for path in repo_root.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in DOC_EXTENSIONS:
-            continue
-        try:
-            rel = path.relative_to(repo_root)
-        except ValueError:
-            continue
-        if any(part in EXCLUDE_DIRS for part in rel.parts):
-            continue
-        files.append(path)
-    return sorted(files)
+    return _discover(repo_root, DOC_EXTENSIONS)
 
 
 def _is_base_doc(doc: Path) -> bool:

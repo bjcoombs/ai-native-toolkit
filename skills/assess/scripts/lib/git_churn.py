@@ -96,6 +96,37 @@ def file_last_commit_days(path: Path) -> int | None:
     return max(0, int(delta // 86400))
 
 
+def tracked_files(root: Path) -> set[Path] | None:
+    """Resolved absolute paths of git-tracked files under `root`.
+
+    This is the precise definition of "files in the repo": it excludes
+    untracked and ignored files (e.g. a contributor's personal CLAUDE.md left
+    in the working tree). Returns None when `root` isn't a git repo, so callers
+    fall back to a plain filesystem walk.
+    """
+    try:
+        repo_top = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout.strip()
+        raw = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "--full-name", "-z"],
+            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    repo = Path(repo_top)
+    out: set[Path] = set()
+    for rel in raw.split("\0"):
+        if not rel:
+            continue
+        try:
+            out.add((repo / rel).resolve())
+        except OSError:
+            continue
+    return out
+
+
 # Time windows tried in order from narrowest to widest. The first one
 # that gives both gradient depth (max >= MIN_MAX) AND visual coverage
 # (>= MIN_COVERAGE_PCT of files touched) wins. If nothing qualifies, we
