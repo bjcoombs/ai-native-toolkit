@@ -159,6 +159,73 @@ def test_finalize_hotspot_action_handles_backslash(tmp_assess_dir: Path) -> None
     assert r"Use \1 to denote first capture group" in page
 
 
+def test_finalize_reads_from_cache_path(tmp_assess_dir: Path) -> None:
+    """The preferred input location is `.assess/.cache/finalize-input.json`."""
+    _seed_log_md(tmp_assess_dir)
+    cache_dir = tmp_assess_dir / ".cache"
+    cache_dir.mkdir()
+    (cache_dir / "finalize-input.json").write_text(
+        json.dumps({
+            "score": 7.0, "maturity_label": "AI-Native",
+            "top_action": "x", "hotspot_actions": {},
+        }),
+        encoding="utf-8",
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "AI Readiness:** 7.0 / 8 (AI-Native)" in content
+
+
+def test_finalize_deletes_input_after_success(tmp_assess_dir: Path) -> None:
+    """The input file is one-off: delete it on success so it can't leak into commits."""
+    _seed_log_md(tmp_assess_dir)
+    legacy = tmp_assess_dir / "finalize-input.json"
+    legacy.write_text(
+        json.dumps({
+            "score": 6.0, "maturity_label": "Solid",
+            "top_action": "x", "hotspot_actions": {},
+        }),
+        encoding="utf-8",
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+    assert not legacy.exists()
+
+
+def test_finalize_cleans_up_legacy_when_cache_present(tmp_assess_dir: Path) -> None:
+    """If both cache and legacy paths exist (e.g. an older run left a stale
+    legacy file), finalize prefers cache and cleans up both.
+    """
+    _seed_log_md(tmp_assess_dir)
+    cache_dir = tmp_assess_dir / ".cache"
+    cache_dir.mkdir()
+    cache_path = cache_dir / "finalize-input.json"
+    cache_path.write_text(
+        json.dumps({
+            "score": 7.0, "maturity_label": "AI-Native",
+            "top_action": "current", "hotspot_actions": {},
+        }),
+        encoding="utf-8",
+    )
+    legacy = tmp_assess_dir / "finalize-input.json"
+    legacy.write_text(
+        json.dumps({
+            "score": 3.0, "maturity_label": "Basic",
+            "top_action": "stale", "hotspot_actions": {},
+        }),
+        encoding="utf-8",
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+    # Cache wins (the value the report just published).
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "AI-Native" in content
+    # Both files cleaned up.
+    assert not cache_path.exists()
+    assert not legacy.exists()
+
+
 def test_finalize_updates_last_entry_when_older_entry_unfinalized(tmp_assess_dir: Path) -> None:
     """When an older log entry still has placeholders, finalize updates the LATEST.
 

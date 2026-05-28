@@ -312,10 +312,81 @@ def test_stale_hubs_join_centrality_and_staleness(tmp_path: Path) -> None:
         (repo / f"leaf{i}.md").write_text("see [hub](hub.md)")
 
     ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
-    # Each stale-hub row carries both the centrality and staleness factors.
+    # Each stale-hub row carries both the centrality and staleness factors,
+    # plus the subject_method + confidence that surface coarse-proxy entries.
     if ctx["stale_hubs"]:
         row = ctx["stale_hubs"][0]
-        assert {"path", "pagerank", "ratio", "priority"} <= set(row)
+        assert {"path", "pagerank", "ratio", "priority",
+                "subject_method", "confidence"} <= set(row)
+        assert row["confidence"] in {"low", "high"}
+
+
+def test_stale_hubs_confidence_low_for_repo_baseline(tmp_path: Path) -> None:
+    """Hubs whose subject_method is repo-baseline must surface confidence=low.
+
+    Without a derivable subject, the staleness ratio shares a denominator with
+    every other baseline entry - the priority composite looks comparable when
+    it isn't. The confidence flag lets the report discount accordingly.
+    """
+    repo = _minimal_repo(tmp_path)
+    (repo / "hub.md").write_text("hub with no association")
+    for i in range(3):
+        (repo / f"leaf{i}.md").write_text("see [hub](hub.md)")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    # All docs here are floating (no co-location, no parallel docs/, no explicit
+    # links), so every staleness entry falls back to repo-baseline.
+    assert ctx["doc_staleness"]["available"] is True
+    for d in ctx["doc_staleness"]["docs"]:
+        if d["subject_method"] == "repo-baseline":
+            assert d["confidence"] == "low"
+    for h in ctx["stale_hubs"]:
+        if h["subject_method"] == "repo-baseline":
+            assert h["confidence"] == "low"
+
+
+def test_stale_hubs_sort_deweights_low_confidence(tmp_path: Path) -> None:
+    """A precise-subject hub at half the raw priority of a baseline hub still
+    outranks it. The sort multiplies low-confidence priority by 0.5.
+    """
+    from assess_core import _build_stale_hubs  # type: ignore[import-not-found]
+
+    doc_graph = {
+        "available": True,
+        "hubs": [
+            {"path": "baseline.md", "pagerank": 1.0},
+            {"path": "precise.md", "pagerank": 0.6},
+        ],
+    }
+    doc_staleness = {
+        "available": True,
+        "docs": [
+            {"path": "baseline.md", "last_commit_days": 100,
+             "code_churn_in_window": 500, "ratio": 100.0,
+             "subject_method": "repo-baseline", "confidence": "low"},
+            {"path": "precise.md", "last_commit_days": 100,
+             "code_churn_in_window": 20, "ratio": 80.0,
+             "subject_method": "nearest-ancestor", "confidence": "high"},
+        ],
+    }
+    hubs = _build_stale_hubs(doc_graph, doc_staleness)
+    # Raw priorities: baseline = 100.0 * 1.0 = 100; precise = 80.0 * 0.6 = 48.
+    # After the 0.5x low-confidence multiplier in the sort: baseline -> 50,
+    # precise -> 48; baseline still wins. Test the inverse case directly.
+    doc_staleness_b = dict(doc_staleness)
+    doc_staleness_b["docs"] = [
+        {"path": "baseline.md", "last_commit_days": 100,
+         "code_churn_in_window": 200, "ratio": 80.0,
+         "subject_method": "repo-baseline", "confidence": "low"},
+        {"path": "precise.md", "last_commit_days": 100,
+         "code_churn_in_window": 20, "ratio": 70.0,
+         "subject_method": "nearest-ancestor", "confidence": "high"},
+    ]
+    hubs = _build_stale_hubs(doc_graph, doc_staleness_b)
+    # baseline raw = 80.0 -> sorted at 40; precise raw = 42.0 -> wins.
+    assert hubs[0]["path"] == "precise.md"
+    # Raw priority still reflects the unweighted composite (for transparency).
+    assert hubs[0]["priority"] == 42.0
 
 
 def test_readside_scan_failure_degrades_not_crashes(tmp_path: Path, monkeypatch) -> None:

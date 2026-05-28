@@ -57,6 +57,13 @@ class DocStaleness:
     subject_method: str
     ratio: float
 
+    @property
+    def confidence(self) -> str:
+        # repo-baseline uses repo-wide churn (no derivable subject), so a
+        # stale-ratio computed against it is a coarse proxy. Mark it low so a
+        # reader knows to discount before acting on the ranking.
+        return "low" if self.subject_method == "repo-baseline" else "high"
+
     def as_dict(self) -> dict:
         return {
             "path": self.path,
@@ -66,6 +73,7 @@ class DocStaleness:
             "subject_code_count": self.subject_code_count,
             "subject_method": self.subject_method,
             "ratio": round(self.ratio, 2),
+            "confidence": self.confidence,
         }
 
 
@@ -267,9 +275,19 @@ def analyze_doc_staleness(
     pct_code_under_base = code_under_base / len(code_files) if code_files else 0.0
     pct_docs_mapping = docs_mapping_to_code / len(docs) if docs else 0.0
 
+    # Modularity coverage is *size-weighted*: a 200-file service without a base
+    # doc is a real navigability gap, a 3-file utility dir without one isn't.
+    # Counting every code-containing directory equally (the un-weighted ratio
+    # below) penalises nested internal dirs (`services/<x>/internal/`,
+    # `adapters/persistence/`) the same as top-level service roots and pushes
+    # the headline to near-zero on any non-trivial repo. The weighted ratio is
+    # the fraction of *code* (by file count) sitting under a base doc - identical
+    # to `pct_code_under_base_doc`. Both are reported so the denominator stays
+    # auditable.
     module_dirs_with_base = len(base_doc_dirs)
     module_dir_count = len(code_dirs)
-    base_doc_coverage = module_dirs_with_base / module_dir_count if module_dir_count else 0.0
+    base_doc_dir_ratio = module_dirs_with_base / module_dir_count if module_dir_count else 0.0
+    base_doc_coverage = pct_code_under_base
 
     return {
         "available": True,
@@ -288,6 +306,7 @@ def analyze_doc_staleness(
             "module_dir_count": module_dir_count,
             "module_dirs_with_base_doc": module_dirs_with_base,
             "base_doc_coverage": round(base_doc_coverage, 3),
+            "base_doc_dir_ratio": round(base_doc_dir_ratio, 3),
             "code_file_count": len(code_files),
             "large_repo": len(code_files) >= LARGE_REPO_CODE_FILES,
         },

@@ -86,7 +86,7 @@ CODE_FILES=$(fd -t f -e py -e js -e ts -e tsx -e jsx -e go -e java -e kt -e rs -
 NONCODE_FILES=$(fd -t f -e md -e json -e yaml -e yml -e toml -e sh -e sql "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
 ```
 
-**Offer the install only if all three are true:** `SCC_PRESENT=0`, `SCC_DECLINED=0`, and the repo looks lizard-sparse (`CODE_FILES < NONCODE_FILES` or `CODE_FILES < 10`). Otherwise skip straight to 2b.
+**Offer the install only if all three are true:** `SCC_PRESENT=0`, `SCC_DECLINED=0`, and the repo looks lizard-sparse (`CODE_FILES < NONCODE_FILES` or `CODE_FILES < 10`). Otherwise skip straight to 2b (or 2c if 2b has nothing to offer).
 
 When offering, use **AskUserQuestion** with three options (do **not** auto-install — `brew install` is a system mutation):
 
@@ -115,7 +115,59 @@ If the user picks **Install scc**, run the platform-appropriate command:
 
 If the install fails or the platform isn't covered, fall back to lizard-only and continue — don't block the assessment.
 
-### 2b: Run the treemap
+### 2b: Offer to install per-language dead-code tools (one-time per tool)
+
+Layer 1's intra-repo dead-code scan calls a per-language tool (`vulture` for Python, `ts-prune`/`knip` for TS/JS, `staticcheck`/`deadcode` for Go). When the tool is absent, the scan degrades to `tool_absent` and the user has no resolution path inside the skill - they'd have to know which tool fits the language, which package manager to use, and run the install themselves. The same install-offer pattern as Step 2a closes the loop without leaving them to figure it out.
+
+Detect languages with cheap `fd` counts (mirroring Step 2a's heuristic - the treemap script's own classification isn't exposed in the stats sidecar, and shelling out is fine here):
+
+```bash
+PY_FILES=$(fd -t f -e py "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
+TS_FILES=$(fd -t f -e ts -e tsx "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
+GO_FILES=$(fd -t f -e go "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
+
+# Per-language candidate tool. Prefer the read-only tool first - `ts-prune` over
+# `knip` for TS, `staticcheck` over `deadcode` for Go - so the user isn't asked
+# twice for the same job and the chosen tool doesn't need to build the project.
+needs_offer() {
+  # $1 = tool; $2 = file count for the language; returns 0 if we should ask.
+  local tool="$1" count="$2" min="${3:-5}"
+  [ "$count" -ge "$min" ] || return 1
+  command -v "$tool" >/dev/null 2>&1 && return 1     # already installed
+  [ -f "$REPO_ROOT/.assess/.no-$tool" ] && return 1  # user declined permanently
+  return 0
+}
+
+OFFERS=()  # each entry: "language|tool|install_cmd"
+needs_offer vulture "$PY_FILES"      && OFFERS+=("python|vulture|pip install vulture (or 'uv tool install vulture')")
+needs_offer ts-prune "$TS_FILES"     && OFFERS+=("typescript|ts-prune|npm install -g ts-prune")
+needs_offer staticcheck "$GO_FILES"  && OFFERS+=("go|staticcheck|go install honnef.co/go/tools/cmd/staticcheck@latest (or 'brew install staticcheck')")
+```
+
+If `OFFERS` is empty (no language hits the threshold, or every tool is already installed/declined), skip straight to 2c.
+
+Otherwise, batch the questions into **a single AskUserQuestion call** — one question per language in `OFFERS`, three options per question:
+
+- **Install <tool>** — run the cited install command and continue.
+- **Skip for now** — proceed without the tool. Don't write a marker; ask again next run.
+- **Skip permanently for this repo** — write `$REPO_ROOT/.assess/.no-<tool>` so future runs don't ask. Recommended when the language only appears in scripts/configs that don't warrant symbol-level reachability.
+
+Phrase each question so the gain is concrete, e.g.:
+
+> "This repo has 47 Go files. `staticcheck -checks U1000` would let `/assess` flag unreachable Go funcs as Layer 1 candidates. Install? (`go install honnef.co/go/tools/cmd/staticcheck@latest` or `brew install staticcheck`)"
+
+When the user picks **Install <tool>**, run the platform-appropriate command from the offer. Surface any install failure as a chat message and continue - dead-code tools are degrade-don't-block (same contract as scc); a missing tool reduces Layer 1's precision but never gates the assessment.
+
+When the user picks **Skip permanently for this repo**, write the marker:
+
+```bash
+mkdir -p "$REPO_ROOT/.assess"
+touch "$REPO_ROOT/.assess/.no-<tool>"   # e.g. .no-staticcheck
+```
+
+For multi-language repos with several offers, the AskUserQuestion call lists every language in one prompt rather than serialising. The user answers once and the run proceeds with whichever tools they accepted.
+
+### 2c: Run the treemap
 
 Run the bundled treemap script alongside the deterministic core - see the chained block below.
 
@@ -629,7 +681,7 @@ Colour = staleness (vivid red = a frozen doc beside churning code = a lying map)
 | Layer | Band | Status | Evidence | Gap |
 |-------|------|--------|----------|-----|
 | 0: Agent Instructions & Navigability | read | Present/Partial/Missing | <what was found> | <what's missing> |
-| 1: Runtime Legibility / Liveness | read | Present/Partial/Missing | <what was found> | <what's missing> |
+| 1: Runtime Legibility / Liveness | read | Present/Partial/Missing | <what was found - if rung 3, append: "Reachable *if* the agent has `<tools cited in runbooks>` in its execution environment"> | <what's missing> |
 | 2: Code Design | write | Present/Partial/Missing | <what was found> | <what's missing> |
 | 3: Linters | write | Present/Partial/Missing | <what was found> | <what's missing> |
 | 4: Architecture Tests | write | Present/Partial/Missing | <what was found> | <what's missing> |
@@ -637,6 +689,23 @@ Colour = staleness (vivid red = a frozen doc beside churning code = a lying map)
 | 6: Coverage Gates | write | Present/Partial/Missing | <what was found> | <what's missing> |
 | 7: Code Review Bots | write | Present/Partial/Missing | <what was found> | <what's missing> |
 | 8: AI Project Mgmt (capstone) | meta | Present/Partial/Missing | <what was found> | <what's missing> |
+
+**Layer 1 evidence carries an explicit caveat by default.** The Layer 1 spec is honest about its boundary: this scores what the *repo* makes agent-reachable, not what the agent has installed at runtime. So when Layer 1 is **Present** (rung 3), the Evidence cell should not read "Reachable, full stop" - it should name the cited tools and conditionalise on their availability. Example: _"Runbook fences `kubectl logs`, `stern`, `logcli`; reachable *if* the agent has these in its execution context."_ When Partial or Missing, the caveat is moot - no rung-3 claim is being made.
+
+### Score derivation (worked)
+
+The layered model has 9 layers (0-8); the display caps at "X / 8" so the headline matches the maturity band table. Compute the raw sum, then apply two rules:
+
+1. **Raw sum**: Present = 1, Partial = 0.5, Missing = 0. With 9 layers, the maximum raw sum is 9.0.
+2. **Cap at 8**: the displayed score is `min(raw_sum, 8.0)`. A 9.0 (every layer Present) caps at 8.0 = ceiling. This keeps the band table (0-2 / 3-4 / 5-6 / 7-8) consistent with the headline.
+
+Worked example: 7 layers Present + 2 layers Partial = 7×1 + 2×0.5 = 8.0 raw. Two partials below ceiling shouldn't display as "all perfect", so by the cap rule the **displayed score is 7.0 / 8** - you subtract the half-points the partials cost relative to a Present (each Partial costs 0.5 vs ceiling, two of them cost 1.0, so 8 ceiling - 1.0 = 7.0). Equivalent shortcut: `min(raw_sum, 8 - 0.5 × num_partials_when_raw_sum_would_exceed_8)`. The general case is just `min(raw_sum, 8)`.
+
+Other examples:
+- 8 Present + 1 Missing → raw 8.0 → display **8.0 / 8** (AI-Native).
+- 6 Present + 2 Partial + 1 Missing → raw 7.0 → display **7.0 / 8** (AI-Native).
+- 4 Present + 3 Partial + 2 Missing → raw 5.5 → display **5.5 / 8** (Solid).
+- 0 Present + 0 Partial → raw 0.0 → display **0.0 / 8** (Not Ready).
 
 ### Maturity Level
 
@@ -846,10 +915,13 @@ End with a short, tracker-specific summary. Examples:
 
 ## Step 7.5: Finalize the wiki (required)
 
-After writing `assess-report.md`, write `finalize-input.json` and invoke `assess_finalize.py` so the wiki files reflect the score and actions you chose.
+After writing `assess-report.md`, write `finalize-input.json` to the transient cache and invoke `assess_finalize.py` so the wiki files reflect the score and actions you chose.
+
+The input file lives under `.assess/.cache/` rather than directly in `.assess/` because it is a one-off LLM-authored input consumed immediately - it has no future utility and only creates noisy diffs if committed. `assess_finalize.py` reads the cache path first (and falls back to the legacy in-tree location if a prior run wrote one there), then **deletes** it on success so it cannot leak into a commit either way.
 
 ````bash
-cat > "$REPO_ROOT/.assess/finalize-input.json" <<'EOF'
+mkdir -p "$REPO_ROOT/.assess/.cache"
+cat > "$REPO_ROOT/.assess/.cache/finalize-input.json" <<'EOF'
 {
   "score": 6.0,
   "maturity_label": "Solid",

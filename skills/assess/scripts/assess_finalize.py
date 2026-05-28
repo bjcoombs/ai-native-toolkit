@@ -5,8 +5,13 @@ LLM-derived content (score, maturity label, top action, per-hotspot actions).
 After the LLM writes assess-report.md, it also writes finalize-input.json with
 its derived values and invokes this script to update the wiki files in place.
 
-Reads:
-    {repo_root}/.assess/finalize-input.json
+Reads (in order; first hit wins):
+    {repo_root}/.assess/.cache/finalize-input.json  (preferred - transient cache)
+    {repo_root}/.assess/finalize-input.json         (legacy - written to working tree)
+
+The input file is **consumed and deleted** on success. It carries no future
+utility past the run that produced it, and leaving it in the working tree
+caused noisy diffs when users committed `.assess/` (issue #39).
 
 Updates:
     {repo_root}/.assess/log.md           (last entry's placeholders)
@@ -102,12 +107,26 @@ def _finalize_hotspot_actions(assess_dir: Path, *, hotspot_actions: dict[str, li
         page_path.write_text(new_text, encoding="utf-8")
 
 
-def finalize_run(*, assess_dir: Path) -> None:
-    """Read finalize-input.json and apply it to log.md and hotspot pages."""
-    input_path = assess_dir / "finalize-input.json"
-    if not input_path.exists():
-        raise FileNotFoundError(f"finalize-input.json not found at {input_path}")
+def _locate_input(assess_dir: Path) -> Path:
+    """Find finalize-input.json. Prefer the transient cache location; fall back
+    to the legacy in-tree path for backwards compatibility.
+    """
+    cache_path = assess_dir / ".cache" / "finalize-input.json"
+    if cache_path.exists():
+        return cache_path
+    legacy = assess_dir / "finalize-input.json"
+    if legacy.exists():
+        return legacy
+    raise FileNotFoundError(
+        f"finalize-input.json not found at {cache_path} or {legacy}"
+    )
 
+
+def finalize_run(*, assess_dir: Path) -> None:
+    """Read finalize-input.json, apply it to log.md and hotspot pages, then
+    delete the input file (one-off, no future utility).
+    """
+    input_path = _locate_input(assess_dir)
     data = json.loads(input_path.read_text(encoding="utf-8"))
     _finalize_log(
         assess_dir,
@@ -116,6 +135,18 @@ def finalize_run(*, assess_dir: Path) -> None:
         top_action=data["top_action"],
     )
     _finalize_hotspot_actions(assess_dir, hotspot_actions=data.get("hotspot_actions", {}))
+    # Clean up: the input file is consumed - delete from both the cache and
+    # the legacy in-tree location so a stale copy can't leak into a commit.
+    try:
+        input_path.unlink()
+    except OSError:
+        pass
+    legacy = assess_dir / "finalize-input.json"
+    if legacy != input_path and legacy.exists():
+        try:
+            legacy.unlink()
+        except OSError:
+            pass
 
 
 def main() -> int:
