@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 # Cap every git call so a stuck invocation (huge repo, lock contention, a hung
@@ -96,13 +97,18 @@ def file_last_commit_days(path: Path) -> int | None:
     return max(0, int(delta // 86400))
 
 
-def tracked_files(root: Path) -> set[Path] | None:
+@lru_cache(maxsize=8)
+def tracked_files(root: Path) -> frozenset[Path] | None:
     """Resolved absolute paths of git-tracked files under `root`.
 
     This is the precise definition of "files in the repo": it excludes
     untracked and ignored files (e.g. a contributor's personal CLAUDE.md left
     in the working tree). Returns None when `root` isn't a git repo, so callers
     fall back to a plain filesystem walk.
+
+    Cached (read-only result) so the several callers in one assessment - doc
+    graph, staleness (x2), instruction grading - don't each shell out to git.
+    Pass an already-resolved `root` for cache hits.
     """
     try:
         repo_top = subprocess.run(
@@ -124,7 +130,7 @@ def tracked_files(root: Path) -> set[Path] | None:
             out.add((repo / rel).resolve())
         except OSError:
             continue
-    return out
+    return frozenset(out)
 
 
 # Time windows tried in order from narrowest to widest. The first one

@@ -310,7 +310,9 @@ def render(files: list[tuple[Path, int, float, str]],
 
     files_colored = []
     for f in files:
-        base = cmap(min(f[2] / cap, 1.0))
+        # Floor the ramp at 0.12 so the calm (low-complexity) end is a visible
+        # pale orange, not near-white that washes out against the white canvas.
+        base = cmap(0.12 + 0.88 * min(f[2] / cap, 1.0))
         if aux_data is not None:
             aux_val = float(aux_data.get(f[0], 0))
             color = blend_to_grey(base, aux_val / aux_cap)

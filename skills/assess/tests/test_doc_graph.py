@@ -140,6 +140,67 @@ def test_untracked_files_excluded_in_git_repo(git_repo) -> None:
     assert "personal.md" not in nodes
 
 
+def test_radial_shells_and_classify(tmp_path: Path) -> None:
+    """The headline claim — reachable = central, unreachable = banished to the
+    rim — is the BFS/shell logic; lock it in deterministically (no rendering)."""
+    from lib.doc_graph import classify_node, radial_shells
+    _write(tmp_path, "index.md", "# Index\n[[a]]")
+    _write(tmp_path, "a.md", "[[b]]")
+    _write(tmp_path, "b.md", "leaf")
+    _write(tmp_path, "lonely.md", "nobody links here")
+    r = build_doc_graph(tmp_path)
+    assert r.entry_points == ["index.md"]
+
+    shells = radial_shells(r.graph, set(r.entry_points))
+    assert shells[0] == ["index.md"]          # entry at the centre
+    assert "a.md" in shells[1]                 # 1 hop out
+    assert "b.md" in shells[2]                 # 2 hops out
+    assert "lonely.md" in shells[-1]           # unreachable -> outer rim
+    lonely_ring = next(i for i, s in enumerate(shells) if "lonely.md" in s)
+    assert lonely_ring > 2                      # past every reachable shell
+
+    entries, unreachable, orphans = set(r.entry_points), set(r.unreachable), set(r.orphans)
+    assert classify_node("index.md", entries, unreachable, orphans) == "entry"
+    assert classify_node("a.md", entries, unreachable, orphans) == "reachable"
+    assert classify_node("lonely.md", entries, unreachable, orphans) == "orphan"
+
+
+def test_broken_links_recorded_as_ghosts(tmp_path: Path) -> None:
+    """Links to files that don't exist are captured (wikilink + CommonMark) so
+    the renderer can draw them as ghost nodes."""
+    _write(tmp_path, "a.md", "[[ghost-note]] and [also](./missing.md) and [ok](b.md)")
+    _write(tmp_path, "b.md", "real")
+    r = build_doc_graph(tmp_path).as_dict()
+    targets = {bl["target"] for bl in r["broken_links"]}
+    assert "ghost-note" in targets          # dangling wikilink
+    assert "./missing.md" in targets        # broken CommonMark link
+    assert r["dangling_links"] == len(r["broken_links"])
+    # the valid link to b.md is not a ghost
+    assert not any(bl["target"] == "b.md" for bl in r["broken_links"])
+
+
+def test_directory_link_not_flagged_broken(tmp_path: Path) -> None:
+    """A link to an existing folder is valid navigation, not a broken link."""
+    (tmp_path / "guides").mkdir()
+    (tmp_path / "guides" / "x.md").write_text("hi", encoding="utf-8")
+    _write(tmp_path, "a.md", "see [folder](guides/) and [ghost](nope.md)")
+    r = build_doc_graph(tmp_path).as_dict()
+    targets = {bl["target"] for bl in r["broken_links"]}
+    assert "guides/" not in targets   # existing directory -> not broken
+    assert "nope.md" in targets       # genuinely missing -> ghost
+
+
+def test_missing_xrefs_named_not_linked(tmp_path: Path) -> None:
+    """A doc that names another doc's filename in prose but never links it."""
+    _write(tmp_path, "overview.md", "The payments.md flow is described elsewhere.")
+    _write(tmp_path, "payments.md", "payments")
+    _write(tmp_path, "linked.md", "see [payments](payments.md)")  # already linked
+    r = build_doc_graph(tmp_path).as_dict()
+    pairs = {(x["from"], x["to"]) for x in r["missing_xrefs"]}
+    assert ("overview.md", "payments.md") in pairs       # named, not linked
+    assert ("linked.md", "payments.md") not in pairs     # already linked -> not missing
+
+
 def test_degrades_when_networkx_unavailable(tmp_path: Path, monkeypatch) -> None:
     _write(tmp_path, "README.md", "[[a]]")
     _write(tmp_path, "a.md", "x")

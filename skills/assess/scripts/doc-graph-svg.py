@@ -46,7 +46,11 @@ import networkx as nx
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib.doc_graph import build_doc_graph  # noqa: E402
+from lib.doc_graph import (  # noqa: E402
+    build_doc_graph,
+    classify_node,
+    radial_shells,
+)
 from lib.doc_staleness import analyze_doc_staleness  # noqa: E402
 from lib.treemap_render import adaptive_cap, blend_to_grey, rgba_to_hex  # noqa: E402
 
@@ -63,20 +67,11 @@ COLOR_ORPHAN = "#D55E00"     # Okabe-Ito vermillion
 EDGE_COLOR = "#9aa0a6"
 ENTRY_RING = "#0072B2"       # blue ring marks the entry node when colour = staleness
 ORPHAN_RING = "#1a1a1a"      # dark dashed ring marks orphans when colour = staleness
+GHOST_COLOR = "#CC79A7"      # Okabe-Ito reddish-purple: broken-link "ghost" nodes
 
 W, H = 1600.0, 1000.0
 MARGIN = 70.0
 R_MIN, R_MAX = 4.0, 24.0
-
-
-def _classify(node: str, entries: set[str], unreachable: set[str], orphans: set[str]) -> str:
-    if node in entries:
-        return "entry"
-    if node not in unreachable:
-        return "reachable"
-    if node in orphans:
-        return "orphan"
-    return "island"
 
 
 _STATUS_COLOR = {
@@ -130,38 +125,55 @@ def _radial_positions(graph, entries: set[str], cx: float, cy: float, fit: float
     claim made literal: the navigable core is central, the lost docs are at the
     rim. The plot is centred at (cx, cy) and scaled to radius `fit`.
     """
-    # BFS distance from any entry over directed (out-) edges = reachability.
-    dist: dict[str, int] = {e: 0 for e in entries if e in graph}
-    frontier = list(dist)
-    while frontier:
-        nxt = []
-        for u in frontier:
-            for v in graph.successors(u):
-                if v not in dist:
-                    dist[v] = dist[u] + 1
-                    nxt.append(v)
-        frontier = nxt
-
-    all_nodes = list(graph.nodes())
-    max_d = max(dist.values(), default=0)
-    shells: list[list[str]] = []
-    for d in range(max_d + 1):
-        shells.append(sorted(n for n in all_nodes if dist.get(n) == d))
-    # Unreachable docs chunked into outer rings (circumference grows, so each
-    # outer ring can hold more without crowding).
-    unreachable = sorted(n for n in all_nodes if n not in dist)
-    i, ring = 0, 24
-    while i < len(unreachable):
-        shells.append(unreachable[i:i + ring])
-        i += ring
-        ring += 12
-    shells = [s for s in shells if s]
+    # Shell assignment (the BFS/distance logic) lives in
+    # lib.doc_graph.radial_shells, which is unit-tested; here we only turn the
+    # shells into x/y coordinates.
+    shells = radial_shells(graph, entries)
     if not shells:
         return {}
 
     raw = nx.shell_layout(graph, nlist=shells, rotate=0.3)
     max_r = max((math.hypot(x, y) for x, y in raw.values()), default=1.0) or 1.0
     return {n: (cx + x / max_r * fit, cy + y / max_r * fit) for n, (x, y) in raw.items()}
+
+
+def _render_ghosts(broken_links: list[dict], pos: dict, radius) -> str:
+    """Draw a 'ghost' node for each broken link — a link whose target file
+    doesn't exist. The ghost is a hollow dashed circle hanging off the source by
+    a dashed tether, labelled with the missing name: the label is the suggested
+    fix (create the file, or fix the link)."""
+    if not broken_links:
+        return ""
+    out: list[str] = []
+    per_source: dict[str, int] = {}
+    for bl in broken_links:
+        src = bl.get("from")
+        if src not in pos:
+            continue
+        k = per_source.get(src, 0)
+        per_source[src] = k + 1
+        sx, sy = pos[src]
+        ang = 0.6 + k * 0.9  # fan multiple ghosts around their source
+        off = radius(src) + 34
+        gx, gy = sx + off * math.cos(ang), sy + off * math.sin(ang)
+        name = bl.get("target", "?")
+        tip = html.escape(
+            f"BROKEN LINK\n{src} -> {name}\nmissing file: create it or fix the link",
+            quote=False)
+        out.append(
+            f'<line x1="{sx:.1f}" y1="{sy:.1f}" x2="{gx:.1f}" y2="{gy:.1f}" '
+            f'stroke="{GHOST_COLOR}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>'
+        )
+        out.append(
+            f'<circle cx="{gx:.1f}" cy="{gy:.1f}" r="7" fill="#ffffff" '
+            f'stroke="{GHOST_COLOR}" stroke-width="1.6" stroke-dasharray="3,2">'
+            f'<title>{tip}</title></circle>'
+        )
+        out.append(
+            f'<text x="{gx:.1f}" y="{gy - 11:.1f}" font-size="10" fill="{GHOST_COLOR}" '
+            f'text-anchor="middle">{html.escape(Path(name).name)}</text>'
+        )
+    return "\n".join(out)
 
 
 def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
@@ -279,25 +291,30 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
             f'stroke="{EDGE_COLOR}" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>'
         )
 
+    def size_text(node: str) -> str:
+        return (f"{sizes.get(node, 0):.0f} lines" if size_mode == "lines"
+                else f"centrality {sizes.get(node, 0):.3f}")
+
     # Nodes. The title (path + stats) lives in a hover tooltip; no inline text.
     label_nodes: list[tuple[float, float, float, str]] = []
     for node in nodes:
         x, y = pos[node]
         r = radius(node)
-        status = _classify(node, entries, unreachable, orphans)
+        status = classify_node(node, entries, unreachable, orphans)
         is_entry = status == "entry"
         # Staleness mode frees colour for staleness, so the entry root and
-        # orphans are called out by stroke (a non-colour cue), not fill.
+        # orphans are called out by stroke (a non-colour cue), not fill. A faint
+        # grey base stroke keeps pale (fresh) nodes visible on the white canvas.
         dash = ""
         if is_entry:
             stroke, sw = ENTRY_RING, 3.5
         elif colour == "staleness" and status == "orphan":
             stroke, sw, dash = ORPHAN_RING, 1.8, ' stroke-dasharray="3,2"'
         else:
-            stroke, sw = "#ffffff", 1.5
+            stroke, sw = "#b8b8b8", 1.0
         days_txt = f"{days[node]:.0f}d stale" if colour == "staleness" else ""
         tip = html.escape(
-            f"{node}\n{sizes.get(node, 0):.0f} lines · in {in_deg.get(node, 0)} · "
+            f"{node}\n{size_text(node)} · in {in_deg.get(node, 0)} · "
             f"out {out_deg.get(node, 0)} · {status}"
             + (f" · {days_txt}, subject churn {churn[node]:.0f}" if days_txt else ""),
             quote=False)
@@ -315,6 +332,7 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
             f'text-anchor="middle">{html.escape(name)}</text>'
         )
 
+    parts.append(_render_ghosts(result.broken_links, pos, radius))
     parts.append(_title(result, n, cw))
     parts.append(_legend(size_label, layout, colour, cw, ch, footer))
     parts.append('</svg>')
@@ -335,7 +353,9 @@ def _title(result, n: int, cw: float) -> str:
         f'links, {result.island_count} islands</text>',
         f'<text x="{mid:.0f}" y="66" font-size="14" fill="#555" text-anchor="middle">'
         f'{result.orphan_rate:.0%} orphaned · {result.reachability_pct:.0%} '
-        f'reachable from the entry point</text>',
+        f'reachable from the entry point'
+        + (f' · {len(result.broken_links)} broken links' if result.broken_links else '')
+        + '</text>',
     ])
 
 
@@ -361,13 +381,17 @@ def _legend(size_label: str, layout: str, colour: str, cw: float, ch: float,
                    'text-anchor="end">stable</text>')
         out.append(f'<rect x="{gx:.0f}" y="{y - 27:.0f}" width="110" height="12" rx="3" fill="url(#stalegrad)"/>')
         out.append(f'<text x="{gx + 116:.0f}" y="{y - 16:.0f}" font-size="12" fill="#555">lying map</text>')
-        ex = mid + 30
+        ex = mid + 10
         out.append(f'<circle cx="{ex:.0f}" cy="{y - 20:.0f}" r="8" fill="#dddddd" stroke="{ENTRY_RING}" stroke-width="3"/>')
         out.append(f'<text x="{ex + 14:.0f}" y="{y - 16:.0f}" font-size="13">entry</text>')
-        ox = mid + 130
+        ox = mid + 105
         out.append(f'<circle cx="{ox:.0f}" cy="{y - 20:.0f}" r="8" fill="#dddddd" stroke="{ORPHAN_RING}" '
                    'stroke-width="2" stroke-dasharray="3,2"/>')
         out.append(f'<text x="{ox + 14:.0f}" y="{y - 16:.0f}" font-size="13">orphan</text>')
+        gh = mid + 205
+        out.append(f'<circle cx="{gh:.0f}" cy="{y - 20:.0f}" r="8" fill="#ffffff" stroke="{GHOST_COLOR}" '
+                   'stroke-width="1.8" stroke-dasharray="3,2"/>')
+        out.append(f'<text x="{gh + 14:.0f}" y="{y - 16:.0f}" font-size="13">ghost (broken link)</text>')
         out.append(f'<text x="{mid:.0f}" y="{y + 20:.0f}" font-size="12" fill="#555" '
                    f'text-anchor="middle">colour = staleness · size = {size_label} · {struct}</text>')
         return "\n".join(out)
