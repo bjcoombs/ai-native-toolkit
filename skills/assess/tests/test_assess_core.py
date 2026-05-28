@@ -26,6 +26,61 @@ def _minimal_repo(tmp_path: Path) -> Path:
     return repo
 
 
+_EMPTY_STATS = json.dumps({
+    "files_scored": 0, "loc": {}, "ccn": {},
+    "top_hotspots": [], "top_complex": [], "top_large": [],
+})
+
+
+def _seed_assess(repo: Path) -> None:
+    (repo / ".assess").mkdir(exist_ok=True)
+    (repo / ".assess" / "complexity-stats.json").write_text(_EMPTY_STATS)
+
+
+def test_untracked_instruction_file_flagged_not_graded(git_repo, fixtures_dir: Path) -> None:
+    """Issue #34 Gap 1: an on-disk-but-untracked instruction file isn't credited
+    to the grade, and is surfaced as a finding."""
+    repo, commit = git_repo
+    good = (fixtures_dir / "good_instructions.md").read_text()
+    _seed_assess(repo)
+    (repo / ".github").mkdir()
+    (repo / ".github" / "copilot-instructions.md").write_text(good, encoding="utf-8")
+    commit("committed instructions")
+    (repo / "CLAUDE.md").write_text(good, encoding="utf-8")  # untracked (after commit)
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    assert ".github/copilot-instructions.md" in ctx["instruction_files"]
+    assert "CLAUDE.md" not in ctx["instruction_files"]          # untracked -> not graded
+    assert "CLAUDE.md" in ctx["untracked_instruction_files"]    # but flagged
+
+
+def test_dangling_symlink_instruction_is_broken_ref(git_repo) -> None:
+    """Issue #34 Gap 2: a committed instruction file that is a dangling symlink
+    is an advertised-but-broken reference."""
+    import os
+    repo, commit = git_repo
+    _seed_assess(repo)
+    (repo / "README.md").write_text("# Repo", encoding="utf-8")
+    os.symlink("missing-target.md", repo / ".cursorrules")  # dangling symlink
+    commit("init with dangling .cursorrules")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    refs = ctx["broken_instruction_refs"]
+    assert any(r.get("path") == ".cursorrules" and "symlink" in r["reason"] for r in refs)
+
+
+def test_broken_link_to_instruction_file_is_broken_ref(git_repo) -> None:
+    """Issue #34 Gap 2: an entry doc linking a missing instruction file."""
+    repo, commit = git_repo
+    _seed_assess(repo)
+    (repo / "README.md").write_text("see the [rules](AGENTS.md)", encoding="utf-8")
+    commit("init; README links a missing AGENTS.md")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    refs = ctx["broken_instruction_refs"]
+    assert any(Path(r.get("target", "")).name == "AGENTS.md" for r in refs)
+
+
 def test_build_run_context_first_run(tmp_path: Path) -> None:
     """No prior .assess/, no instruction files - 'new' diff, empty instructions."""
     repo = tmp_path / "repo"

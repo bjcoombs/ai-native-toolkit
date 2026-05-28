@@ -90,25 +90,45 @@ def _file_freshness_days(file_path: Path) -> int:
         return 0
 
 
-def _grade_instruction_files(repo_root: Path) -> tuple[dict[str, dict], str | None]:
+def _grade_instruction_files(
+    repo_root: Path,
+) -> tuple[dict[str, dict], str | None, list[str], list[dict]]:
     """Scan all known instruction file locations and grade each one found.
 
-    Returns: (files_dict, best_grade)
-        files_dict: keyed by filename, e.g. {"CLAUDE.md": {grade, score, ...}, "AGENTS.md": {...}}
-        best_grade: best letter grade across all present files; None if none found.
-            None is distinct from "F": None means no file exists ("create the file"),
-            "F" means a file exists but scored poorly ("fix the file").
+    Returns: (files_dict, best_grade, untracked, dangling_refs)
+        files_dict: keyed by filename, e.g. {"CLAUDE.md": {grade, score, ...}}.
+        best_grade: best letter grade across all *tracked, present* files; None
+            if none found. None is distinct from "F": None means no committed
+            file exists ("create the file"), "F" means one exists but scored
+            poorly ("fix the file").
+        untracked: instruction files that exist on disk but aren't part of the
+            repo (untracked / git-ignored / symlinked from outside). Surfaced as
+            a finding so a personal CLAUDE.md isn't silently credited *or*
+            silently ignored - the agent should note it isn't committed.
+        dangling_refs: instruction files that are dangling symlinks (committed
+            `.cursorrules -> missing-target`) - an advertised-but-broken
+            instruction surface.
     """
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
     found: dict[str, dict] = {}
+    untracked: list[str] = []
+    dangling_refs: list[dict] = []
     for rel_path in INSTRUCTION_FILE_PATHS:
         candidate = repo_root / rel_path
+        # A dangling symlink (an instruction file pointing at a missing target)
+        # exists() == False but is_symlink() == True - an advertised, broken
+        # instruction reference, not "no file".
+        if candidate.is_symlink() and not candidate.exists():
+            dangling_refs.append({"path": rel_path, "reason": "symlink target missing"})
+            continue
         if not candidate.exists():
             continue
-        # Only grade genuine repo files - not a contributor's untracked personal
-        # CLAUDE.md, nor one symlinked in from outside the repo.
+        # Only grade genuine repo files. An on-disk-but-untracked instruction
+        # file (a contributor's personal CLAUDE.md, or one symlinked in from
+        # outside) is recorded as a finding rather than credited to the score.
         if not is_repo_file(candidate, repo_root, tracked):
+            untracked.append(rel_path)
             continue
         text = candidate.read_text(encoding="utf-8")
         freshness = _file_freshness_days(candidate)
@@ -122,10 +142,30 @@ def _grade_instruction_files(repo_root: Path) -> tuple[dict[str, dict], str | No
             "present": True,
         }
 
-    if not found:
-        return {}, None
-    best = max(found.values(), key=lambda v: GRADE_RANK.get(v["grade"], 0))
-    return found, best["grade"]
+    best = (max(found.values(), key=lambda v: GRADE_RANK.get(v["grade"], 0))["grade"]
+            if found else None)
+    return found, best, untracked, dangling_refs
+
+
+# Basenames (lowercased) of the known instruction files, for cross-referencing
+# broken doc links against the instruction surface.
+_INSTRUCTION_BASENAMES = {Path(p).name.lower() for p in INSTRUCTION_FILE_PATHS}
+
+
+def _broken_instruction_refs(doc_graph: dict, dangling_refs: list[dict]) -> list[dict]:
+    """Combine dangling-symlink instruction files with broken doc links whose
+    target is an instruction file (an entry doc linking a missing CLAUDE.md).
+    These are advertised-but-broken instruction references."""
+    refs = list(dangling_refs)
+    if doc_graph.get("available"):
+        for bl in doc_graph.get("broken_links", []):
+            target = bl.get("target", "")
+            if Path(target).name.lower() in _INSTRUCTION_BASENAMES:
+                refs.append({
+                    "from": bl.get("from"), "target": target,
+                    "reason": "link to missing instruction file",
+                })
+    return refs
 
 
 def _read_plugin_version() -> str:
@@ -214,7 +254,8 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     prior_exists = prior is not None
 
     diff = diff_stats(prior=prior, current=current)
-    instruction_files, instructions_grade = _grade_instruction_files(repo_root)
+    instruction_files, instructions_grade, untracked_instr, dangling_instr = \
+        _grade_instruction_files(repo_root)
 
     # Load (and later update) the persistent first-flagged date map
     first_flagged_map = _load_first_flagged(assess_dir)
@@ -331,6 +372,13 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     ctx["doc_graph"] = doc_graph
     ctx["doc_staleness"] = doc_staleness
     ctx["stale_hubs"] = _build_stale_hubs(doc_graph, doc_staleness)
+    # Instruction-surface integrity (Layer 0): files present on disk but not
+    # committed, and advertised-but-broken instruction references (dangling
+    # symlinks + entry docs linking a missing instruction file). A broken
+    # instruction reference must penalise L0 even when one unrelated file grades
+    # well - see the Layer 0 scoring rule in SKILL.md.
+    ctx["untracked_instruction_files"] = untracked_instr
+    ctx["broken_instruction_refs"] = _broken_instruction_refs(doc_graph, dangling_instr)
     # When the scan failed, preserve failure semantics: a failed scan must not be
     # read as "no observability" (rung 0) - that would mis-score Layer 1 Missing
     # when the truth is "not assessed". Carry the reason instead.
