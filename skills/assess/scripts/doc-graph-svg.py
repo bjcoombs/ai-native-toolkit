@@ -49,6 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.doc_graph import (  # noqa: E402
     build_doc_graph,
     classify_node,
+    group_broken_links,
     radial_shells,
 )
 from lib.doc_staleness import analyze_doc_staleness  # noqa: E402
@@ -137,42 +138,55 @@ def _radial_positions(graph, entries: set[str], cx: float, cy: float, fit: float
     return {n: (cx + x / max_r * fit, cy + y / max_r * fit) for n, (x, y) in raw.items()}
 
 
-def _render_ghosts(broken_links: list[dict], pos: dict, radius) -> str:
-    """Draw a 'ghost' node for each broken link — a link whose target file
-    doesn't exist. The ghost is a hollow dashed circle hanging off the source by
-    a dashed tether, labelled with the missing name: the label is the suggested
-    fix (create the file, or fix the link)."""
+def _render_ghosts(broken_links: list[dict], pos: dict, radius,
+                   show_labels: bool = False) -> str:
+    """Draw one 'ghost' node per missing file — not per broken link. Several links
+    to the same absent target (e.g. README.md and CONTRIBUTING.md both pointing at
+    a missing CLAUDE.md) collapse to a single ghost they all tether to, so the map
+    shows one missing file rather than a cloud of duplicates.
+
+    Each ghost is a hollow dashed circle sitting just outside the centroid of the
+    sources that reference it, joined to each by a dashed tether. The missing name
+    lives in the hover tooltip; it is only drawn as a text label when
+    ``show_labels`` is set, so ghosts read like every other node (clean by
+    default, named on hover)."""
     if not broken_links:
         return ""
     out: list[str] = []
-    per_source: dict[str, int] = {}
-    for bl in broken_links:
-        src = bl.get("from")
-        if src not in pos:
+    for gi, group in enumerate(group_broken_links(broken_links)):
+        key = group["target"]
+        sources = [s for s in group["sources"] if s in pos]
+        if not sources:
             continue
-        k = per_source.get(src, 0)
-        per_source[src] = k + 1
-        sx, sy = pos[src]
-        ang = 0.6 + k * 0.9  # fan multiple ghosts around their source
-        off = radius(src) + 34
-        gx, gy = sx + off * math.cos(ang), sy + off * math.sin(ang)
-        name = bl.get("target", "?")
+        # Anchor the shared ghost at the centroid of its sources, pushed radially
+        # outward so it clears the cluster; fan distinct ghosts apart.
+        cx = sum(pos[s][0] for s in sources) / len(sources)
+        cy = sum(pos[s][1] for s in sources) / len(sources)
+        ang = 0.6 + gi * 0.9
+        off = max(radius(s) for s in sources) + 40
+        gx, gy = cx + off * math.cos(ang), cy + off * math.sin(ang)
+        for s in sources:
+            sx, sy = pos[s]
+            out.append(
+                f'<line x1="{sx:.1f}" y1="{sy:.1f}" x2="{gx:.1f}" y2="{gy:.1f}" '
+                f'stroke="{GHOST_COLOR}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>'
+            )
+        n = len(sources)
+        srcs = ", ".join(sources)
         tip = html.escape(
-            f"BROKEN LINK\n{src} -> {name}\nmissing file: create it or fix the link",
+            f"BROKEN LINK ({n} source{'s' if n != 1 else ''})\n"
+            f"{srcs} -> {key}\nmissing file: create it or fix the links",
             quote=False)
-        out.append(
-            f'<line x1="{sx:.1f}" y1="{sy:.1f}" x2="{gx:.1f}" y2="{gy:.1f}" '
-            f'stroke="{GHOST_COLOR}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>'
-        )
         out.append(
             f'<circle cx="{gx:.1f}" cy="{gy:.1f}" r="7" fill="#ffffff" '
             f'stroke="{GHOST_COLOR}" stroke-width="1.6" stroke-dasharray="3,2">'
             f'<title>{tip}</title></circle>'
         )
-        out.append(
-            f'<text x="{gx:.1f}" y="{gy - 11:.1f}" font-size="10" fill="{GHOST_COLOR}" '
-            f'text-anchor="middle">{html.escape(Path(name).name)}</text>'
-        )
+        if show_labels:
+            out.append(
+                f'<text x="{gx:.1f}" y="{gy - 11:.1f}" font-size="10" fill="{GHOST_COLOR}" '
+                f'text-anchor="middle">{html.escape(Path(key).name)}</text>'
+            )
     return "\n".join(out)
 
 
@@ -332,7 +346,7 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
             f'text-anchor="middle">{html.escape(name)}</text>'
         )
 
-    parts.append(_render_ghosts(result.broken_links, pos, radius))
+    parts.append(_render_ghosts(result.broken_links, pos, radius, show_labels))
     parts.append(_title(result, n, cw))
     parts.append(_legend(size_label, layout, colour, cw, ch, footer))
     parts.append('</svg>')
@@ -347,6 +361,16 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
 def _title(result, n: int, cw: float) -> str:
     """Two centred lines at the top: headline + one-line stats."""
     mid = cw / 2
+    links = len(result.broken_links)
+    ghosts = len(group_broken_links(result.broken_links))
+    if not links:
+        broken_clause = ""
+    elif ghosts < links:
+        # Several links point at the same absent file; show the link total and
+        # the smaller count of distinct missing files they collapse to.
+        broken_clause = f' · {links} broken links to {ghosts} missing files'
+    else:
+        broken_clause = f' · {links} broken links'
     return "\n".join([
         f'<text x="{mid:.0f}" y="40" font-size="24" font-weight="600" '
         f'text-anchor="middle">Doc map — {n} docs, {result.graph.number_of_edges()} '
@@ -354,7 +378,7 @@ def _title(result, n: int, cw: float) -> str:
         f'<text x="{mid:.0f}" y="66" font-size="14" fill="#555" text-anchor="middle">'
         f'{result.orphan_rate:.0%} orphaned · {result.reachability_pct:.0%} '
         f'reachable from the entry point'
-        + (f' · {len(result.broken_links)} broken links' if result.broken_links else '')
+        + broken_clause
         + '</text>',
     ])
 

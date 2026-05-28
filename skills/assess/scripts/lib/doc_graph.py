@@ -28,6 +28,7 @@ required. If ``networkx`` is unavailable the module degrades to an
 """
 from __future__ import annotations
 
+import posixpath
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -639,3 +640,59 @@ def _derive_signals(
         pagerank={k: round(v, 6) for k, v in pagerank.items()},
         graph=graph,
     )
+
+
+def _broken_link_key(src: str, target: str, kind: str | None) -> str:
+    """Canonical grouping key for a broken link's missing target.
+
+    Mirrors ``_resolve_mdlink``'s path arithmetic so links that point at the same
+    absent file share a key whatever way they're spelt:
+
+    - A markdown link starting ``/`` is root-absolute — resolved from the repo
+      root (``/CLAUDE.md`` -> ``CLAUDE.md``), matching ``_resolve_mdlink``'s
+      ``repo_root / target.lstrip("/")`` branch. Without this, ``/CLAUDE.md`` and
+      ``CLAUDE.md`` would key apart and the duplicate ghost this function exists
+      to kill would survive for the root-absolute spelling.
+    - Any other markdown link resolves relative to the source file's directory
+      (``../CLAUDE.md`` from a subdir collapses onto the root ``CLAUDE.md``).
+    - A wikilink resolves by note name globally, so it keys on the bare name.
+
+    Known limit (intentional, not fixed): wikilinks and markdown links live in
+    different resolution domains, so ``[[CLAUDE]]`` (key ``CLAUDE``) and
+    ``[x](CLAUDE.md)`` (key ``CLAUDE.md``) at the same missing file do not merge.
+    """
+    if kind == "wikilink":
+        return target  # wikilinks resolve by note name, not by directory
+    if not target:
+        return target
+    if target.startswith("/"):
+        return posixpath.normpath(target.lstrip("/"))
+    return posixpath.normpath(posixpath.join(posixpath.dirname(src), target))
+
+
+def group_broken_links(broken_links: list[dict]) -> list[dict]:
+    """Collapse broken links by the missing file they point at.
+
+    Several links can name the same non-existent target — `README.md` and
+    `CONTRIBUTING.md` both linking a missing `CLAUDE.md`, say. They describe one
+    absent file, so the renderer should draw one ghost they both tether to, not a
+    separate ghost per link.
+
+    Targets are normalised to a canonical key (see ``_broken_link_key``) before
+    grouping. Returns ``[{"target", "sources"}]`` ordered by descending source
+    count then key, so the most-referenced ghost is rendered first.
+    """
+    groups: dict[str, list[str]] = {}
+    for bl in broken_links:
+        src = bl.get("from") or ""
+        target = bl.get("target") or "?"
+        key = _broken_link_key(src, target, bl.get("kind"))
+        sources = groups.setdefault(key, [])
+        if src not in sources:
+            sources.append(src)
+    return [
+        {"target": key, "sources": sources}
+        for key, sources in sorted(
+            groups.items(), key=lambda kv: (-len(kv[1]), kv[0])
+        )
+    ]
