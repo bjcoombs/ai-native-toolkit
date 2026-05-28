@@ -9,19 +9,23 @@ The headline pieces are two **skills**:
 
 ## What `/assess` produces
 
-[![Example complexity hotspot from a real codebase](docs/example-heatmap.svg)](docs/example-heatmap.svg)
+Two paired views from a single run, on a real ~650k-LOC private monorepo (file paths sanitized). The first asks _can an agent find its way?_ The second asks _what's risky to change?_
 
-> Real output from `/ai-native-toolkit:assess` run against a ~650k-LOC private monorepo (file paths sanitized). Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk an agent (or human) is most likely to break next week. Hover any block for its LOC, CCN, and recent commit count.
+[![Example doc navigability map from a real codebase](docs/example-doc-graph.svg)](docs/example-doc-graph.svg)
 
-[![Example doc navigability map from the same codebase](docs/example-doc-graph.svg)](docs/example-doc-graph.svg)
+> Doc-navigability graph: 254 docs, 622 links, 43 islands, 30% reachable from the entry point. Structure encodes reachability (centre = entry, rings = link-distance from entry, rim = unreachable, dashed ring = orphan); colour encodes staleness (vivid red = a frozen doc beside churning code = a *lying map*); size encodes file length. The rim of orphans, the disconnected islands, the vivid-red hubs all become visible at a glance - this is the docs an agent would consult before changing anything, and whether they're still true. Hover any node for its in/out degree, reachability state, and staleness.
 
-> Doc-navigability graph from the same run (254 docs, 622 links, 43 islands, 30% reachable from the entry point). Structure encodes reachability (centre = entry, rings = link-distance from entry, rim = unreachable, dashed ring = orphan); colour encodes staleness in the same OrRd ramp as the heatmap (vivid red = a frozen doc beside churning code = a *lying map*); size encodes file length. Hover any node for its in/out degree, reachability state, and staleness. Read alongside the heatmap: the heatmap tells you what's risky to change; this tells you whether the docs an agent might consult before changing it are still true.
+[![Example complexity hotspot from the same codebase](docs/example-heatmap.svg)](docs/example-heatmap.svg)
+
+> Codecov-style complexity heatmap from the same run. Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk an agent (or human) is most likely to break next week. Hover any block for its LOC, CCN, and recent commit count. Read alongside the graph above: the graph tells you whether the map is honest; the heatmap tells you which territory is dangerous.
+
+Both SVGs are colour-blind-safe (OrRd ramp, no red-green).
 
 ### Why this matters for an AI-driven codebase
 
 Once a codebase outgrows any single LLM context window and AI agents become regular contributors, code quality stops being a function of *who knows what* and starts being a function of *what the system enforces*. Norms ("we prefer X") fail because new contributors - especially AI agents starting each session fresh - never read them. Contracts ("the build fails if you don't do X") work because they're enforced regardless of who's reading.
 
-`/assess` gives you paired views to act on that. The complexity SVG shows **where the codebase is today** - which files will bite next week. A doc-navigability graph shows **whether an agent can even find its way** - how much of the docs is reachable, and which are stale maps of churning code. The accompanying `assess-report.md` shows **what scaffolding is in place to stop it getting worse** - a score across the layers below, each marked Present / Partial / Missing with concrete evidence:
+`/assess` gives you paired views to act on that. The doc-navigability graph shows **whether an agent can even find its way** - how much of the docs is reachable, and which are stale maps of churning code. The complexity SVG shows **where the codebase is today** - which files will bite next week. The accompanying `assess-report.md` shows **what scaffolding is in place to stop it getting worse** - a score across the layers below, each marked Present / Partial / Missing with concrete evidence:
 
 The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can the agent form a true picture?), **write-side** (can it be trusted to produce good output?), and **meta** (does the system keep itself honest?).
 
@@ -142,10 +146,11 @@ If a skill only fires on `/skill-name` and not on natural language, the frontmat
 Runs against the current directory (or pass a path). Produces:
 
 - `.assess/assess-report.md` - layered score, top 3 leverage actions, hotspot callouts
-- `.assess/complexity-heatmap.svg` - the treemap shown above
+- `.assess/doc-graph.svg` - the doc-navigability graph shown above
+- `.assess/complexity-heatmap.svg` - the complexity treemap shown above
 - `.assess/complexity-stats.json` - percentiles and ranked file lists that feed the report
 
-After writing, the skill asks whether to open a PR in the target repo with both files.
+After writing, the skill asks whether to open a PR in the target repo with the report and both SVGs.
 
 ### Run a huddle on a hard decision
 
