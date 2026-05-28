@@ -40,6 +40,8 @@ except ImportError:  # pragma: no cover - exercised only on a broken env
     nx = None  # type: ignore[assignment]
     _NETWORKX_AVAILABLE = False
 
+from lib.git_churn import tracked_files  # noqa: E402
+
 
 DOC_EXTENSIONS = {".md", ".mdx", ".markdown"}
 
@@ -84,6 +86,18 @@ _WIKILINK_RE = re.compile(r"\[\[([^\[\]]+?)\]\]")
 _MDLINK_RE = re.compile(r"(?<!\!)\[(?:[^\]]*)\]\(([^)]+)\)")
 # Schemes / forms that are not intra-repo file links.
 _EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*://|^mailto:|^tel:", re.IGNORECASE)
+_FENCE_RE = re.compile(r"```.*?\n.*?```", re.DOTALL)  # fenced code blocks
+
+# Caps so a pathological repo can't bloat run-context.json.
+MAX_BROKEN_LINKS = 60
+MAX_MISSING_XREFS = 60
+# Conventional filenames that get mentioned all the time and don't need a
+# cross-reference every time they're named - excluded from the missing-xref scan.
+_XREF_SKIP_NAMES = {
+    "readme.md", "index.md", "_index.md", "license.md", "changelog.md",
+    "contributing.md", "code_of_conduct.md", "security.md", "agents.md",
+    "claude.md", "gemini.md", "home.md", "notes.md",
+}
 
 
 @dataclass
@@ -103,6 +117,12 @@ class DocGraphResult:
     moc_named_but_not_wired: list[str] = field(default_factory=list)
     doc_to_code_edges: list[dict] = field(default_factory=list)  # [{doc, code}]
     dangling_links: int = 0
+    # Broken links: a link whose target file doesn't exist (a "ghost"). The
+    # renderer draws these as ghost nodes - the missing name is the suggested fix.
+    broken_links: list[dict] = field(default_factory=list)  # [{from, target, kind}]
+    # Missing cross-references: a doc names another doc but never links to it
+    # (Karpathy Lint). [{from, to}].
+    missing_xrefs: list[dict] = field(default_factory=list)
     ambiguous_wikilinks: int = 0
     vault_detected: bool = False
     obsidiantools_available: bool = False
@@ -110,6 +130,10 @@ class DocGraphResult:
     # heatmap (a stale hub must dominate). Kept off as_dict() so run-context
     # stays lean on doc-heavy repos -- the top-10 hubs are serialised instead.
     pagerank: dict[str, float] = field(default_factory=dict)
+    # The underlying networkx DiGraph (nodes = doc rel-paths, edges = doc->doc).
+    # Kept off as_dict(); the connectivity-graph SVG renderer needs the full
+    # edge list that the serialised signals don't carry.
+    graph: object = None
 
     def as_dict(self) -> dict:
         return {
@@ -128,14 +152,39 @@ class DocGraphResult:
             "moc_named_but_not_wired": self.moc_named_but_not_wired,
             "doc_to_code_edges": self.doc_to_code_edges,
             "dangling_links": self.dangling_links,
+            "broken_links": self.broken_links,
+            "missing_xrefs": self.missing_xrefs,
             "ambiguous_wikilinks": self.ambiguous_wikilinks,
             "vault_detected": self.vault_detected,
             "obsidiantools_available": self.obsidiantools_available,
         }
 
 
+def is_repo_file(path: Path, repo_root: Path, tracked: set[Path] | None) -> bool:
+    """True if `path` is genuinely part of the repo.
+
+    Excludes two classes of non-repo file the scan must ignore:
+      - symlinks (or rglob escapes) whose *resolved* path lands outside the
+        repo - e.g. a CLAUDE.md symlinked to the user's home;
+      - untracked / git-ignored files when the repo is under git (e.g. a
+        contributor's personal notes left in the working tree). `tracked` is
+        None for non-git trees, in which case only the symlink guard applies.
+    """
+    try:
+        real = path.resolve()
+    except OSError:
+        return False
+    if not real.is_relative_to(repo_root):
+        return False
+    if tracked is not None and real not in tracked:
+        return False
+    return True
+
+
 def discover_doc_files(repo_root: Path) -> list[Path]:
-    """Return all markdown docs under repo_root, skipping excluded dirs."""
+    """Return all in-repo markdown docs under repo_root, skipping excluded dirs."""
+    repo_root = repo_root.resolve()
+    tracked = tracked_files(repo_root)
     docs: list[Path] = []
     for path in repo_root.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in DOC_EXTENSIONS:
@@ -145,6 +194,8 @@ def discover_doc_files(repo_root: Path) -> list[Path]:
         except ValueError:
             continue
         if any(part in EXCLUDE_DIRS for part in rel.parts):
+            continue
+        if not is_repo_file(path, repo_root, tracked):
             continue
         docs.append(path)
     return sorted(docs)
@@ -261,6 +312,100 @@ def _resolve_mdlink(
     return resolved
 
 
+def _target_exists(raw: str, source: Path, repo_root: Path) -> bool:
+    """True if a relative link resolves to an existing path (file OR directory)
+    within the repo. Used so a link to a folder (`docs/guides/`) isn't mistaken
+    for a broken link just because it isn't a file."""
+    target = _strip_anchor_and_alias(raw)
+    if not target or target.startswith("#") or _EXTERNAL_RE.match(target):
+        return False
+    candidate = (repo_root / target.lstrip("/")) if target.startswith("/") else (source.parent / target)
+    try:
+        resolved = candidate.resolve()
+    except (OSError, RuntimeError):
+        return False
+    if not resolved.exists():
+        return False
+    try:
+        resolved.relative_to(repo_root.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _missing_xrefs(docs, texts: dict, graph, repo_root: Path, rel) -> list[dict]:
+    """Docs that name another doc's filename in prose but never link to it
+    (Karpathy Lint: "missing cross-references").
+
+    High-precision: matches the exact filename (e.g. `payments.md`) outside
+    fenced code, only for non-conventional target docs, and only when no link
+    to that target already exists.
+    """
+    name_to_doc: dict[str, Path] = {
+        d.name.lower(): d for d in docs if d.name.lower() not in _XREF_SKIP_NAMES
+    }
+    if not name_to_doc:
+        return []
+    alt = "|".join(re.escape(n) for n in sorted(name_to_doc, key=len, reverse=True))
+    pattern = re.compile(r"(?<![\w./-])(" + alt + r")\b", re.IGNORECASE)
+    edges = set(graph.edges())
+    out: list[dict] = []
+    for d in docs:
+        text = texts.get(d)
+        if not text:
+            continue
+        body = _FENCE_RE.sub("", text)
+        seen: set[Path] = set()
+        for m in pattern.finditer(body):
+            t = name_to_doc.get(m.group(1).lower())
+            if t is None or t == d or t in seen:
+                continue
+            seen.add(t)
+            if (rel(d), rel(t)) not in edges:  # already linked -> not missing
+                out.append({"from": rel(d), "to": rel(t)})
+    return out
+
+
+def radial_shells(graph, entries, ring: int = 24) -> list[list[str]]:
+    """Order nodes into concentric shells by link-distance from the entry points.
+
+    Shell 0 = the entry points; shell k = docs k hops away (following links);
+    then the unreachable docs, chunked into progressively larger outer rings.
+    Pure graph traversal - no layout - so it's unit-testable without numpy.
+    """
+    dist: dict[str, int] = {e: 0 for e in entries if e in graph}
+    frontier = list(dist)
+    while frontier:
+        nxt = []
+        for u in frontier:
+            for v in graph.successors(u):
+                if v not in dist:
+                    dist[v] = dist[u] + 1
+                    nxt.append(v)
+        frontier = nxt
+    all_nodes = list(graph.nodes())
+    max_d = max(dist.values(), default=0)
+    shells = [sorted(n for n in all_nodes if dist.get(n) == d) for d in range(max_d + 1)]
+    unreachable = sorted(n for n in all_nodes if n not in dist)
+    i, cap = 0, ring
+    while i < len(unreachable):
+        shells.append(unreachable[i:i + cap])
+        i += cap
+        cap += 12
+    return [s for s in shells if s]
+
+
+def classify_node(node: str, entries: set, unreachable: set, orphans: set) -> str:
+    """Navigability status of a node: entry / reachable / orphan / island."""
+    if node in entries:
+        return "entry"
+    if node not in unreachable:
+        return "reachable"
+    if node in orphans:
+        return "orphan"
+    return "island"
+
+
 def build_doc_graph(
     repo_root: Path, doc_files: list[Path] | None = None,
 ) -> DocGraphResult:
@@ -296,8 +441,16 @@ def build_doc_graph(
         graph.add_node(rel(d))
 
     doc_to_code: list[dict] = []
-    dangling = 0
     ambiguous = 0
+    broken: list[dict] = []
+    _broken_seen: set[tuple[str, str]] = set()
+    texts: dict[Path, str] = {}
+
+    def _add_broken(src: Path, target: str, kind: str) -> None:
+        key = (rel(src), target)
+        if target and key not in _broken_seen:
+            _broken_seen.add(key)
+            broken.append({"from": rel(src), "target": target, "kind": kind})
 
     for d in docs:
         try:
@@ -306,6 +459,7 @@ def build_doc_graph(
             # Best-effort scan: skip an unreadable doc rather than aborting the
             # whole graph build (Layer 0 stays best-effort).
             continue
+        texts[d] = text
         # Wikilinks resolve by note name across the vault.
         for m in _WIKILINK_RE.finditer(text):
             tgt, amb = _resolve_wikilink(
@@ -314,14 +468,23 @@ def build_doc_graph(
             if amb:
                 ambiguous += 1
             if tgt is None:
-                dangling += 1
+                _add_broken(d, _strip_anchor_and_alias(m.group(1)), "wikilink")
                 continue
             if tgt in doc_set and tgt != d:
                 graph.add_edge(rel(d), rel(tgt))
         # CommonMark links resolve relative to the doc's directory.
         for m in _MDLINK_RE.finditer(text):
-            tgt = _resolve_mdlink(m.group(1), d, repo_root)
+            raw = m.group(1)
+            tgt = _resolve_mdlink(raw, d, repo_root)
             if tgt is None:
+                # A relative-looking link that resolves to nothing is broken
+                # (a "ghost"). External URLs, pure #anchors, and links to an
+                # existing directory are not broken.
+                cleaned = _strip_anchor_and_alias(raw)
+                if (cleaned and not raw.strip().startswith("#")
+                        and not _EXTERNAL_RE.match(cleaned)
+                        and not _target_exists(raw, d, repo_root)):
+                    _add_broken(d, cleaned, "mdlink")
                 continue
             if tgt.suffix.lower() in DOC_EXTENSIONS and tgt in doc_set:
                 if tgt != d:
@@ -329,11 +492,16 @@ def build_doc_graph(
             elif tgt.suffix.lower() in CODE_EXTENSIONS:
                 doc_to_code.append({"doc": rel(d), "code": rel(tgt)})
 
-    return _derive_signals(
+    missing = _missing_xrefs(docs, texts, graph, repo_root, rel)
+
+    result = _derive_signals(
         graph=graph, docs=docs, repo_root=repo_root, rel=rel,
-        doc_to_code=doc_to_code, dangling=dangling, ambiguous=ambiguous,
+        doc_to_code=doc_to_code, dangling=len(broken), ambiguous=ambiguous,
         vault=vault, obs=obs,
     )
+    result.broken_links = broken[:MAX_BROKEN_LINKS]
+    result.missing_xrefs = missing[:MAX_MISSING_XREFS]
+    return result
 
 
 def _pagerank(graph, alpha: float = 0.85, max_iter: int = 100,
@@ -469,4 +637,5 @@ def _derive_signals(
         vault_detected=vault,
         obsidiantools_available=obs,
         pagerank={k: round(v, 6) for k, v in pagerank.items()},
+        graph=graph,
     )

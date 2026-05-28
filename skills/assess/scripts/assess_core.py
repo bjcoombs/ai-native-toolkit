@@ -36,8 +36,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.agent_instructions_grader import grade_instructions
 from lib.anomaly_detector import detect_anomalies
-from lib.doc_graph import build_doc_graph
+from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.doc_staleness import analyze_doc_staleness
+from lib.git_churn import tracked_files
 from lib.liveness_scan import scan_liveness
 from lib.stats_diff import diff_stats, load_stats
 from lib.wiki_writer import (
@@ -98,10 +99,16 @@ def _grade_instruction_files(repo_root: Path) -> tuple[dict[str, dict], str | No
             None is distinct from "F": None means no file exists ("create the file"),
             "F" means a file exists but scored poorly ("fix the file").
     """
+    repo_root = repo_root.resolve()
+    tracked = tracked_files(repo_root)
     found: dict[str, dict] = {}
     for rel_path in INSTRUCTION_FILE_PATHS:
         candidate = repo_root / rel_path
         if not candidate.exists():
+            continue
+        # Only grade genuine repo files - not a contributor's untracked personal
+        # CLAUDE.md, nor one symlinked in from outside the repo.
+        if not is_repo_file(candidate, repo_root, tracked):
             continue
         text = candidate.read_text(encoding="utf-8")
         freshness = _file_freshness_days(candidate)

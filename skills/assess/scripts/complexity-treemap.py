@@ -15,7 +15,8 @@ three signals on one canvas (Adam Tornhill "hotspot" pattern, CodeScene-
 style saturation):
 
   - Size        -> lines of code
-  - Hue         -> cyclomatic complexity (red = complex, green = simple)
+  - Hue         -> cyclomatic complexity (dark red = complex, pale = simple;
+                   colour-blind-safe OrRd ramp, no red-green)
   - Saturation  -> recent git churn (vivid = active, grey = stable)
 
 Vivid red = complex AND actively changing = highest migration risk.
@@ -297,7 +298,9 @@ def render(files: list[tuple[Path, int, float, str]],
     metric_label = "commits" if by == "churn" else "ccn"
     metrics = [f[2] for f in files]
     cap, cap_kind = adaptive_cap(metrics)
-    cmap = plt.get_cmap("RdYlGn_r")
+    # OrRd (ColorBrewer): colour-blind-safe sequential ramp, pale = simple ->
+    # dark red = complex. Avoids the red-green of RdYlGn (the most common CVD).
+    cmap = plt.get_cmap("OrRd")
 
     aux_cap = 1.0
     aux_cap_kind = ""
@@ -307,7 +310,9 @@ def render(files: list[tuple[Path, int, float, str]],
 
     files_colored = []
     for f in files:
-        base = cmap(min(f[2] / cap, 1.0))
+        # Floor the ramp at 0.12 so the calm (low-complexity) end is a visible
+        # pale orange, not near-white that washes out against the white canvas.
+        base = cmap(0.12 + 0.88 * min(f[2] / cap, 1.0))
         if aux_data is not None:
             aux_val = float(aux_data.get(f[0], 0))
             color = blend_to_grey(base, aux_val / aux_cap)

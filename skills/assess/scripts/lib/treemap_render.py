@@ -17,7 +17,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
-import squarify
+
+# `squarify` is imported lazily inside layout() so light consumers of the colour
+# helpers (rgba_to_hex / blend_to_grey / adaptive_cap) - e.g. the doc-graph
+# renderer - don't have to depend on it.
 
 
 @dataclass
@@ -84,6 +87,7 @@ def build_tree(files_with_color, root: Path,
 
 def layout(node: Node, x: float, y: float, w: float, h: float,
            out: list) -> None:
+    import squarify
     if node.is_file:
         out.append((x, y, w, h, node))
         return

@@ -4,7 +4,7 @@ A Claude Code plugin: skills, agents, and commands for AI-native development. Ru
 
 The headline pieces are two **skills**:
 
-- **`/assess`** - score any codebase's readiness for AI agent contributors against a layered contract model (agent instructions, types, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG. Generates a report + treemap and opens a PR in the target repo.
+- **`/assess`** - score any codebase's readiness for AI agent contributors against an 8-layer contract model (navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Generates a report + the two SVGs and opens a PR in the target repo.
 - **`/huddle`** - structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board).
 
 ## What `/assess` produces
@@ -17,20 +17,25 @@ The headline pieces are two **skills**:
 
 Once a codebase outgrows any single LLM context window and AI agents become regular contributors, code quality stops being a function of *who knows what* and starts being a function of *what the system enforces*. Norms ("we prefer X") fail because new contributors - especially AI agents starting each session fresh - never read them. Contracts ("the build fails if you don't do X") work because they're enforced regardless of who's reading.
 
-`/assess` gives you two paired views to act on that. The SVG above shows **where the codebase is today** - which files will bite next week. The accompanying `assess-report.md` shows **what scaffolding is in place to stop it getting worse** - a score across the layers below, each marked Present / Partial / Missing with concrete evidence:
+`/assess` gives you paired views to act on that. The complexity SVG shows **where the codebase is today** - which files will bite next week. A doc-navigability graph shows **whether an agent can even find its way** - how much of the docs is reachable, and which are stale maps of churning code. The accompanying `assess-report.md` shows **what scaffolding is in place to stop it getting worse** - a score across the layers below, each marked Present / Partial / Missing with concrete evidence:
 
-| Layer | What it enforces |
-|-------|------------------|
-| 0: Agent Instructions | Compact rules in `CLAUDE.md` / `AGENTS.md` / `copilot-instructions` that steer agent behaviour ("NEVER use `time.Sleep` in tests", "CockroachDB not PostgreSQL") |
-| 1: Code Design | Compile-time correctness via types - dimensional types, generated API clients, exhaustive enums |
-| 2: Linters | Style + correctness with rules targeting AI failure modes (suppressions, complexity gates, leftover TODOs) |
-| 3: Architecture Tests | Structural rules as executable tests (`depguard`, ArchUnit-style boundary checks) |
-| 4: CI Pipeline | Every PR runs everything; failing pipeline blocks merge |
-| 5: Coverage Gates | Test discipline as a build contract |
-| 6: Review Bots | Design-level feedback (CodeRabbit, claude[bot]) catching what linters can't |
-| 7: AI Project Management | Retros, task tracking, the feedback loop that keeps the contracts above current |
+The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can the agent form a true picture?), **write-side** (can it be trusted to produce good output?), and **meta** (does the system keep itself honest?).
 
-A codebase can be 7/7 and still on fire (great scaffolding, legacy debt) or 2/7 with a calm treemap (small codebase, no enforcement needed yet). The score tells you whether the system will catch the next class of pain before it lands; the SVG tells you where today's pain already is. The report's **Top 3 Actions** table names specific files, always - "improve code quality" is the failure mode `/assess` exists to prevent; "Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67)" is what makes the report actionable.
+| Layer | Band | What it enforces |
+|-------|------|------------------|
+| 0: Agent Instructions & Navigability | read | Compact rules in `CLAUDE.md` / `AGENTS.md` / `copilot-instructions`, plus a navigable doc graph (can an agent traverse links to the right place, and is what it finds still true?) |
+| 1: Runtime Legibility / Liveness | read | Is the code actually live, and can the agent find out? Intra-repo dead-code signals + observability the agent can reach (logs/metrics/traces) |
+| 2: Code Design | write | Compile-time correctness via types - dimensional types, generated API clients, exhaustive enums |
+| 3: Linters | write | Style + correctness with rules targeting AI failure modes (suppressions, complexity gates, leftover TODOs) |
+| 4: Architecture Tests | write | Structural rules as executable tests (`depguard`, ArchUnit-style boundary checks) |
+| 5: CI Pipeline | write | Every PR runs everything; failing pipeline blocks merge |
+| 6: Coverage Gates | write | Test discipline as a build contract |
+| 7: Review Bots | write | Design-level feedback (CodeRabbit, claude[bot]) catching what linters can't |
+| 8: AI Project Management | meta | Retros, task tracking, the feedback loop that keeps the contracts above current |
+
+The Layer 0 navigability model — treating the docs as a link graph an agent must traverse — adapts the **"Lint"** health-check from [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (hubs, orphans, connectivity, an `index.md` catalog and `log.md`), making its *structural* checks deterministic. The semantic ones it also lists — contradictions between pages, concepts lacking a page — stay out of scope (an LLM/Phase-2 job).
+
+A codebase can be 8/8 and still on fire (great scaffolding, legacy debt) or 2/8 with a calm treemap (small codebase, no enforcement needed yet). The score tells you whether the system will catch the next class of pain before it lands; the SVG tells you where today's pain already is. The report's **Top 3 Actions** table names specific files, always - "improve code quality" is the failure mode `/assess` exists to prevent; "Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67)" is what makes the report actionable.
 
 **The compounding payoff.** Contracts are front-loaded - types, lint rules, architecture tests, agent instructions all take time to write. The payoff compounds: every new service, feature, and contributor inherits the contracts that already exist. Skip them and you lose 15-45 minutes per AI session to convention drift, rework, and false signals - forever. Run `/assess` periodically to ratchet the score upward; each layer you add closes a recurring cost.
 
@@ -150,7 +155,7 @@ Spawns a Fibonacci-sized team (default 3) that cycles through De Bono's six hats
 
 | Skill | Description |
 |-------|-------------|
-| `/assess` | Layered AI-readiness assessment (0-7 contract model) plus a Codecov-style complexity hotspot SVG. Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) so the agent runs the treemap with no external setup. Filters build artifacts and generated code by default (opt-out with `--include-artifacts`); warns when one file dominates LOC. Offers to install optional `scc` for repos heavy in markdown/JSON/YAML. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
+| `/assess` | Layered AI-readiness assessment (0-8 contract model) plus a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) and [`doc-graph-svg.py`](skills/assess/scripts/doc-graph-svg.py) so the agent runs them with no external setup. Filters build artifacts and generated code by default (opt-out with `--include-artifacts`); warns when one file dominates LOC. Offers to install optional `scc` for repos heavy in markdown/JSON/YAML. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
 | `/huddle` | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board). Three execution modes: solo flat-parallel, phased sub-agent (default fallback), and team mode (needs Agent Teams capability flag). |
 
 ### Commands (slash-only, no bundled assets)

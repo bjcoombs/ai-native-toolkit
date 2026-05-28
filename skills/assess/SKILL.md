@@ -8,8 +8,10 @@ description: "Assess a codebase's readiness for AI agent contributors using the 
 Three artefacts in one pass against a target repo:
 
 1. **Layered contract assessment** — 0–8 score across navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, and AI project management.
-2. **Complexity hotspot SVG** — Codecov-style treemap. Size = LOC. Hue = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = riskiest to change.
-3. **Docs-staleness SVG** — the inverted twin. Size = doc link-graph centrality. Hue = doc staleness. Saturation = churn of the code the doc describes. Vivid red = a frozen doc whose subject is moving = the most dangerous *lying map*.
+2. **Complexity hotspot SVG** — Codecov-style treemap of the code. Size = LOC. Colour = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = riskiest to change.
+3. **Doc navigability SVG** — a node-graph of the docs. Structure = connectivity (centre = entry, rim = unreachable, dashed ring = orphan); colour = staleness (vivid red = a frozen doc beside churning code = a *lying map*); size = file length. Folds navigability and the decaying-map signal into one artifact.
+
+Both SVGs are colour-blind-safe by default (OrRd ramp, no red-green).
 
 All land as files inside the target repo. The skill always writes them locally; after writing, **ask the user** whether to open a PR in the target repo with the artefacts.
 
@@ -53,18 +55,17 @@ mkdir -p "$REPO_ROOT/.assess"
 Artefacts will land at:
 - `$REPO_ROOT/.assess/complexity-heatmap.svg`
 - `$REPO_ROOT/.assess/complexity-stats.json`
-- `$REPO_ROOT/.assess/docs-staleness-heatmap.svg`
-- `$REPO_ROOT/.assess/docs-staleness-stats.json`
+- `$REPO_ROOT/.assess/doc-graph.svg`
 - `$REPO_ROOT/.assess/assess-report.md`
 
-## Step 2: Generate Both Heatmaps + Stats Sidecars
+## Step 2: Generate the Code Heatmap + Doc Graph
 
-This step produces **two** treemaps that share one visual grammar (size / hue / saturation) but encode opposite risk models:
+This step produces **two** views of the codebase, both colour-blind-safe (OrRd ramp, no red-green):
 
-- **Complexity heatmap** (`complexity-heatmap.svg`) — code. Red = "hard to change safely".
-- **Docs-staleness heatmap** (`docs-staleness-heatmap.svg`) — docs. Red = "actively misleading". A frozen doc whose subject is churning is the most dangerous lying map; a stale doc beside dead code is pale.
+- **Complexity heatmap** (`complexity-heatmap.svg`) — a treemap of the *code*. Size = LOC, colour = cyclomatic complexity, saturation = recent churn. Vivid red = complex AND active = "hard to change safely".
+- **Doc navigability graph** (`doc-graph.svg`) — a node-graph of the *docs*. Structure shows connectivity (centre = entry point, rings = link-distance, rim = unreachable; orphans carry a dashed ring); colour shows staleness in the same grammar as the code heatmap (vivid red = a frozen doc beside churning code = a lying map); size = file length. It folds both Layer 0 doc signals — navigability and the decaying-map — into one artifact.
 
-Feed the complexity stats into the linter/complexity layer (Layer 3) and the docs-staleness stats into **Layer 0**.
+Feed the complexity stats into the linter/complexity layer (Layer 3) and the `doc_graph` / `doc_staleness` blocks of `run-context.json` into **Layer 0** (the graph SVG is the visual; the score reads the structured blocks).
 
 ### 2a: Offer to install `scc` (one-time per repo)
 
@@ -160,9 +161,9 @@ SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)"
 <!-- chat-replace:uv-treemap -->
 uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/complexity-heatmap.svg" --stats "$REPO_ROOT/.assess/complexity-stats.json"
 
-# Run the docs-staleness treemap (the inverted heatmap; feeds Layer 0)
-<!-- chat-replace:uv-docs-treemap -->
-uv run "$SKILL_DIR/scripts/docs-staleness-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/docs-staleness-heatmap.svg" --stats "$REPO_ROOT/.assess/docs-staleness-stats.json"
+# Run the doc navigability graph (connectivity + staleness in one SVG; feeds Layer 0)
+<!-- chat-replace:uv-doc-graph -->
+uv run "$SKILL_DIR/scripts/doc-graph-svg.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/doc-graph.svg"
 
 # Run the deterministic core (instruction grading, doc link-graph, doc staleness,
 # liveness/dead-code, observability rungs, stats diff, wiki files, run-context.json)
@@ -170,7 +171,7 @@ uv run "$SKILL_DIR/scripts/docs-staleness-treemap.py" "$REPO_ROOT" -o "$REPO_ROO
 uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT"
 ```
 
-Either treemap is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated — <reason>" in the report and continue. The docs-staleness treemap shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
+Either SVG is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated — <reason>" in the report and continue. The doc graph shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
 
 Now `$REPO_ROOT/.assess/run-context.json` contains the structured data you need for the prose sections. Read it before writing the report.
 
@@ -221,13 +222,16 @@ Navigability is a graph property, so the deterministic core measures it as one. 
 jq '.doc_graph, .doc_staleness.association, .doc_staleness.modularity, .stale_hubs[:5]' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-Recognise the full range of navigability artefacts (not just README/ADR/API specs): a Map-of-Content (MOC) / index note, a linked-doc graph (cross-referenced markdown — the Karpathy-pattern LLM wiki), `AGENTS.md`, and **repo skills** (`.claude/skills/`, `skills/`). The graph already accounts for all of these.
+Recognise the full range of navigability artefacts (not just README/ADR/API specs): a Map-of-Content (MOC) / index note, a linked-doc graph (cross-referenced markdown — the [Karpathy-pattern LLM wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)), `AGENTS.md`, and **repo skills** (`.claude/skills/`, `skills/`). The graph already accounts for all of these. The signals below are the deterministic subset of Karpathy's wiki "Lint" health-check — hubs, orphans, connectivity, dangling references — applied to a code repo's docs.
 
 Score navigability from these signals:
 
 - **Connectivity / reachability (the headline metric).** A *good* doc set is one connected island, fully reachable from the entry points (README / `AGENTS.md` / top MOC). `doc_graph.island_count == 1` and `reachability_pct` near 1.0 is navigable; a high `orphan_rate` or many islands strands both humans and agents (both traverse links). Name the orphan docs.
 - **Hubs / MOCs by centrality.** `doc_graph.hubs` are the load-bearing docs (highest PageRank). A stale hub is the most dangerous lying map — everything routes through it.
 - **MOC validation (declared vs structural).** `doc_graph.moc_named_but_not_wired` lists docs *named* like a map (`index.md`, "MOC") that aren't structural hubs — named but not wired. Flag each as a finding: the graph shows the map isn't actually built.
+- **Broken links / ghost files (Karpathy Lint).** `doc_graph.broken_links` lists links whose target file doesn't exist — `{from, target, kind}`. The doc graph draws each as a labelled "ghost" node, and the missing name *is* the suggested fix (create the file or correct the link). Name a few and recommend the fix; `dangling_links` is the count. `ambiguous_wikilinks` (a bare `[[name]]` matching several files) is a milder smell worth noting.
+- **Missing cross-references (Karpathy Lint).** `doc_graph.missing_xrefs` lists `{from, to}` pairs where a doc *names another doc's filename in prose but never links to it* — "concepts mentioned but lacking the connection". Suggest adding the links so traversal (human or agent) actually reaches them.
+- **Contradictions are out of deterministic scope — hand them to an LLM.** The remaining Karpathy Lint item — contradictions between pages — can't be detected structurally. When the doc set is non-trivial, add a Top-3 / Additional action telling the user to have *their* agent read the doc set for contradictions and stale claims (e.g. "run your LLM over `docs/` to flag pages that contradict each other or the code"). State plainly that `/assess` does not check this.
 - **Centrality × staleness (the priority signal).** `stale_hubs` is ranked by `pagerank × staleness ratio`. The top entry — a central doc whose subject code is churning while the doc sits frozen — is a top finding. This feeds both the docs heatmap and this score.
 - **Doc→code association as a maturity signal.** `doc_staleness.association.pct_code_under_base_doc` and `pct_docs_mapping_to_code`: if the doc→code map is derivable from structure (clean hierarchy/convention), that's positive navigability; docs floating disconnected from the code they describe is a gap.
 - **Modular base docs, size-weighted.** `doc_staleness.modularity`: a module owning a *maintained* base doc is what makes a large codebase navigable to humans and deterministically mappable for an agent. **Weight by size** — do not penalise a small/single-purpose repo (`large_repo: false`); for a `large_repo: true` with low `base_doc_coverage`, flag the Layer 0 gap with remediation "decompose into modules; add a maintained base doc per module." The per-module docs are held to the same maintenance standard — the target is *modular + maintained*, never just "more docs."
@@ -574,18 +578,18 @@ _Generated <YYYY-MM-DD>._
 This is an improvement roadmap, not a verdict. It measures one thing: **is the codebase kept honest, not just scaffolded.** It pairs three views:
 
 - **Where the codebase is today** — the complexity heatmap shows current complexity and churn. Vivid red = complex AND actively changing = the files most likely to bite an agent (or a human) next week.
-- **Where the map is lying** — the docs-staleness heatmap shows which docs have frozen while their subject code moved. Vivid red = a load-bearing doc whose subject is churning = a map that will navigate the reader fast to a wrong, current-looking conclusion.
+- **Whether an agent can navigate it** — the doc graph shows the docs' link structure: how much is reachable from the entry point, and which docs are stale maps of churning code.
 - **What keeps it from getting worse** — the AI Readiness score (0–8) across three bands: read-side foundation (can the agent form a true picture?), write-side enforcement (can it be trusted to produce good output?), and meta (does the system keep itself honest over time?).
 
 A codebase can be 8/8 and still on fire (great scaffolding, legacy debt) — or 2/8 with a calm treemap (small codebase, no enforcement needed yet). The views matter together.
 
 The "Top 3 Actions" table at the bottom names specific files. Start there.
 
-## Hotspot snapshots
+## Snapshots
 
 ### Complexity — riskiest to change
 
-![Complexity hotspot](./complexity-heatmap.svg)
+[![Complexity hotspot](./complexity-heatmap.svg)](./complexity-heatmap.svg)
 
 - **Files scored:** <N>
 - **Churn window chosen:** <last 12mo | last 24mo | last 5y | all-time>
@@ -595,19 +599,18 @@ The "Top 3 Actions" table at the bottom names specific files. Start there.
   2. ...
   3. ...
 
-Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk.
+Size encodes lines of code, colour encodes cyclomatic complexity (dark red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk.
 
-### Docs staleness — most likely to mislead
+### Doc navigability — can an agent find its way?
 
-![Docs staleness](./docs-staleness-heatmap.svg)
+[![Doc map](./doc-graph.svg)](./doc-graph.svg)
 
-- **Docs scored:** <N> (size basis: <centrality | doc-length>)
-- **Navigability:** island count <N>, orphan rate <P%>, reachability <P%> from entry points
-- **Top lying maps** (size × staleness × subject churn):
-  1. `<doc path>` — stale <N>d, subject churn <M>, centrality <C>
-  2. ...
+Read the structured signal from `run-context.json` (`.doc_graph`, `.doc_staleness`, `.stale_hubs`) and write this section in **plain language** — explain the metrics, don't just dump numbers. Define each term the first time you use it:
 
-Size encodes link-graph centrality (load-bearing docs are biggest), hue encodes doc staleness (red = stale), saturation encodes churn of the code the doc describes (vivid = subject moving). Vivid red = a frozen doc whose subject is churning. Same grammar as the complexity map, opposite meaning: there red = "hard to change", here red = "actively misleading".
+- **Navigability, in words.** e.g. _"Of <N> docs, only <P%> are reachable by following links from the README — an agent landing here can discover <P%> of the documentation by traversal; the other <N> are orphans (nothing links to them) or sit in <K> disconnected islands."_ Pull `island_count`, `orphan_rate`, `reachability_pct`, and name 2–3 specific orphans/islands.
+- **Lying maps (stale docs of churning code).** Define the terms inline: **stale** = days since the doc itself last changed; **subject churn** = commits in the window to the code the doc describes; **centrality** = how many other docs point to it (a hub). A real lying map is **old AND beside genuinely churning code**. From `stale_hubs` / `doc_staleness.docs`, name the worst 2–3 — but **apply judgment, don't trust the raw composite**: when a doc's `subject_method` is `repo-baseline`, its "subject churn" is just the whole repo's churn (a coarse proxy), so a *recently-changed* doc (low stale-days) that merely happens to be a big hub is **not** a lying map — don't flag it. Prefer docs with a precise association (`nearest-ancestor` / `parallel-docs-tree` / `explicit-links`) and high stale-days.
+
+Colour = staleness (vivid red = a frozen doc beside churning code = a lying map); structure = reachability (centre = entry, rim = unreachable, dashed ring = orphan); size = file length. Hover a node in the SVG (opened on its own) for its path and stats.
 
 ## AI Readiness
 
@@ -686,7 +689,7 @@ _Report generated by [`/ai-native-toolkit:assess`](https://github.com/bjcoombs/a
 
 Complete the full assessment in under 2 minutes. Scan, don't deep-read.
 
-Both SVGs are referenced by relative path (`./complexity-heatmap.svg`, `./docs-staleness-heatmap.svg`) so GitHub renders them inline when the MD is viewed in a PR or on the file page. Omit a heatmap's section only if its script could not generate the SVG (record the reason instead).
+Both SVGs are embedded as **clickable, relative links** — `[![alt](./complexity-heatmap.svg)](./complexity-heatmap.svg)` and the same for `./doc-graph.svg`. The `viewBox` lets GitHub scale them to the content column; the link lets a reader open the SVG on its own (the doc graph's hover tooltips only work when the raw SVG is opened directly — GitHub renders the inline copy as a static image). Keep the link relative, never a `raw.githubusercontent.com` URL (those are branch-specific and rot on rename). Omit a section only if its script could not generate the SVG (record the reason instead).
 
 The plugin footer is important — it's how other engineers viewing the report in a PR discover the tool that produced it. Do not omit it.
 
@@ -694,18 +697,18 @@ The plugin footer is important — it's how other engineers viewing the report i
 
 After writing the files, surface them and ask the user — verbatim — something like:
 
-> Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/docs-staleness-heatmap.svg` in `<repo-name>`. Want me to open a PR in this repo with these files, or leave them local for you to review first?
+> Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Want me to open a PR in this repo with these files, or leave them local for you to review first?
 
 If the user says **yes / PR**:
 1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
-2. Stage and commit the report and both heatmaps. Commit message: `docs: Add AI-readiness assessment + complexity and docs-staleness snapshots`.
+2. Stage and commit the report, the complexity heatmap, and the doc graph. Commit message: `docs: Add AI-readiness assessment + complexity and doc-navigability snapshots`.
 3. Push the branch and open a PR. Title: `docs: Codebase assessment — <YYYY-MM-DD>`.
 4. **PR body must include the plugin reference at the bottom** so reviewers can install the tool that generated the report. Use this body template:
 
    ```markdown
    ## Summary
 
-   Snapshot of this codebase's AI-agent readiness, complexity hotspots, and docs staleness as of <YYYY-MM-DD>.
+   Snapshot of this codebase's AI-agent readiness, complexity hotspots, and doc navigability as of <YYYY-MM-DD>.
 
    - **AI Readiness:** <X / 8> — <maturity-label>
    - **Hotspot leader:** `<top hotspot path>` (<loc> LOC, ccn <N>, <M> commits in window)
@@ -715,7 +718,7 @@ If the user says **yes / PR**:
 
    <paste the Top 3 Actions table from .assess/assess-report.md verbatim>
 
-   Full report: [`.assess/assess-report.md`](./.assess/assess-report.md) (both heatmaps render inline).
+   Full report: [`.assess/assess-report.md`](./.assess/assess-report.md) (the heatmap and doc graph render inline).
 
    ---
 
