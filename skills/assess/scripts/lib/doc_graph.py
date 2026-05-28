@@ -28,6 +28,7 @@ required. If ``networkx`` is unavailable the module degrades to an
 """
 from __future__ import annotations
 
+import posixpath
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -639,3 +640,38 @@ def _derive_signals(
         pagerank={k: round(v, 6) for k, v in pagerank.items()},
         graph=graph,
     )
+
+
+def group_broken_links(broken_links: list[dict]) -> list[dict]:
+    """Collapse broken links by the missing file they point at.
+
+    Several links can name the same non-existent target — `README.md` and
+    `CONTRIBUTING.md` both linking a missing `CLAUDE.md`, say. They describe one
+    absent file, so the renderer should draw one ghost they both tether to, not a
+    separate ghost per link.
+
+    Targets are normalised to a canonical key before grouping: markdown links
+    resolve relative to their source file's directory (so `CLAUDE.md` from the
+    repo root and `../CLAUDE.md` from a subdir collapse when they land on the same
+    path), while wikilinks resolve by note name globally and key on the bare
+    name. Returns ``[{"target", "sources"}]`` ordered by descending source count
+    then key, so the most-referenced ghost is rendered first.
+    """
+    groups: dict[str, list[str]] = {}
+    for bl in broken_links:
+        src = bl.get("from") or ""
+        target = bl.get("target") or "?"
+        if bl.get("kind") == "wikilink":
+            key = target  # wikilinks resolve by note name, not by directory
+        else:
+            base = posixpath.dirname(src)
+            key = posixpath.normpath(posixpath.join(base, target)) if target else target
+        sources = groups.setdefault(key, [])
+        if src not in sources:
+            sources.append(src)
+    return [
+        {"target": key, "sources": sources}
+        for key, sources in sorted(
+            groups.items(), key=lambda kv: (-len(kv[1]), kv[0])
+        )
+    ]

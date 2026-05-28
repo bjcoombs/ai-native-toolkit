@@ -49,6 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.doc_graph import (  # noqa: E402
     build_doc_graph,
     classify_node,
+    group_broken_links,
     radial_shells,
 )
 from lib.doc_staleness import analyze_doc_staleness  # noqa: E402
@@ -138,32 +139,43 @@ def _radial_positions(graph, entries: set[str], cx: float, cy: float, fit: float
 
 
 def _render_ghosts(broken_links: list[dict], pos: dict, radius) -> str:
-    """Draw a 'ghost' node for each broken link — a link whose target file
-    doesn't exist. The ghost is a hollow dashed circle hanging off the source by
-    a dashed tether, labelled with the missing name: the label is the suggested
-    fix (create the file, or fix the link)."""
+    """Draw one 'ghost' node per missing file — not per broken link. Several links
+    to the same absent target (e.g. README.md and CONTRIBUTING.md both pointing at
+    a missing CLAUDE.md) collapse to a single ghost they all tether to, so the map
+    shows one missing file rather than a cloud of duplicates.
+
+    Each ghost is a hollow dashed circle sitting just outside the centroid of the
+    sources that reference it, joined to each by a dashed tether and labelled with
+    the missing name: the label is the suggested fix (create the file, or fix the
+    links)."""
     if not broken_links:
         return ""
     out: list[str] = []
-    per_source: dict[str, int] = {}
-    for bl in broken_links:
-        src = bl.get("from")
-        if src not in pos:
+    for gi, group in enumerate(group_broken_links(broken_links)):
+        key = group["target"]
+        sources = [s for s in group["sources"] if s in pos]
+        if not sources:
             continue
-        k = per_source.get(src, 0)
-        per_source[src] = k + 1
-        sx, sy = pos[src]
-        ang = 0.6 + k * 0.9  # fan multiple ghosts around their source
-        off = radius(src) + 34
-        gx, gy = sx + off * math.cos(ang), sy + off * math.sin(ang)
-        name = bl.get("target", "?")
+        # Anchor the shared ghost at the centroid of its sources, pushed radially
+        # outward so it clears the cluster; fan distinct ghosts so labels don't
+        # collide.
+        cx = sum(pos[s][0] for s in sources) / len(sources)
+        cy = sum(pos[s][1] for s in sources) / len(sources)
+        ang = 0.6 + gi * 0.9
+        off = max(radius(s) for s in sources) + 40
+        gx, gy = cx + off * math.cos(ang), cy + off * math.sin(ang)
+        for s in sources:
+            sx, sy = pos[s]
+            out.append(
+                f'<line x1="{sx:.1f}" y1="{sy:.1f}" x2="{gx:.1f}" y2="{gy:.1f}" '
+                f'stroke="{GHOST_COLOR}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>'
+            )
+        n = len(sources)
+        srcs = ", ".join(sources)
         tip = html.escape(
-            f"BROKEN LINK\n{src} -> {name}\nmissing file: create it or fix the link",
+            f"BROKEN LINK ({n} source{'s' if n != 1 else ''})\n"
+            f"{srcs} -> {key}\nmissing file: create it or fix the links",
             quote=False)
-        out.append(
-            f'<line x1="{sx:.1f}" y1="{sy:.1f}" x2="{gx:.1f}" y2="{gy:.1f}" '
-            f'stroke="{GHOST_COLOR}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>'
-        )
         out.append(
             f'<circle cx="{gx:.1f}" cy="{gy:.1f}" r="7" fill="#ffffff" '
             f'stroke="{GHOST_COLOR}" stroke-width="1.6" stroke-dasharray="3,2">'
@@ -171,7 +183,7 @@ def _render_ghosts(broken_links: list[dict], pos: dict, radius) -> str:
         )
         out.append(
             f'<text x="{gx:.1f}" y="{gy - 11:.1f}" font-size="10" fill="{GHOST_COLOR}" '
-            f'text-anchor="middle">{html.escape(Path(name).name)}</text>'
+            f'text-anchor="middle">{html.escape(Path(key).name)}</text>'
         )
     return "\n".join(out)
 
