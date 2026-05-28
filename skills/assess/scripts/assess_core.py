@@ -218,6 +218,13 @@ def _build_stale_hubs(doc_graph: dict, doc_staleness: dict) -> list[dict]:
     A stale *hub* (high PageRank) is the most dangerous lying map: everything
     routes through it. We join the doc graph's central docs with their
     staleness ratio so a stale hub surfaces as a top finding.
+
+    Each hub carries the underlying `subject_method` + a `confidence` flag.
+    `subject_method == "repo-baseline"` means the ratio is computed against
+    repo-wide churn (no derivable subject), so the priority composite shares
+    a denominator across every baseline entry - confidence on those is "low".
+    The sort halves the priority of low-confidence entries so a precise-subject
+    hub at half the raw priority of a baseline one still outranks it.
     """
     if not doc_graph.get("available") or not doc_staleness.get("available"):
         return []
@@ -228,15 +235,21 @@ def _build_stale_hubs(doc_graph: dict, doc_staleness: dict) -> list[dict]:
         if s is None:
             continue
         priority = round(hub["pagerank"] * s["ratio"], 3)
+        confidence = s.get("confidence", "high")
         hubs.append({
             "path": hub["path"],
             "pagerank": hub["pagerank"],
             "last_commit_days": s["last_commit_days"],
             "code_churn_in_window": s["code_churn_in_window"],
             "ratio": s["ratio"],
+            "subject_method": s.get("subject_method"),
+            "confidence": confidence,
             "priority": priority,
         })
-    return sorted(hubs, key=lambda h: -h["priority"])
+    return sorted(
+        hubs,
+        key=lambda h: -(h["priority"] * (0.5 if h["confidence"] == "low" else 1.0)),
+    )
 
 
 def build_run_context(*, repo_root: Path, run_date: str) -> dict:

@@ -69,6 +69,30 @@ def test_modularity_large_repo_flag(tmp_path: Path) -> None:
     r = analyze_doc_staleness(tmp_path)
     assert r["modularity"]["large_repo"] is True
     assert r["modularity"]["base_doc_coverage"] == 0.0  # no base docs anywhere
+    assert r["modularity"]["base_doc_dir_ratio"] == 0.0
+
+
+def test_base_doc_coverage_is_size_weighted(tmp_path: Path) -> None:
+    """One 30-file service with a base doc should not be drowned by ten
+    1-file utility dirs without one. Size-weighting reflects what an agent
+    actually needs to navigate; the un-weighted dir ratio is reported alongside
+    for transparency.
+    """
+    # A large module (30 files) with a base doc...
+    _write(tmp_path, "services/payments/README.md", "payments")
+    for i in range(30):
+        _write(tmp_path, f"services/payments/f{i}.py", "x")
+    # ...and ten utility/leaf dirs (1 file each) with no doc.
+    for i in range(10):
+        _write(tmp_path, f"internal/util{i}/u.py", "x")
+
+    r = analyze_doc_staleness(tmp_path)
+    # Un-weighted dir ratio is low (1 doc'd dir out of 11), but the size-weighted
+    # coverage reflects that ~75% of code sits under a maintained base doc.
+    assert r["modularity"]["base_doc_dir_ratio"] < 0.2
+    assert r["modularity"]["base_doc_coverage"] >= 0.7
+    # Sanity: the headline matches the same number the association block reports.
+    assert r["modularity"]["base_doc_coverage"] == r["association"]["pct_code_under_base_doc"]
 
 
 def test_no_git_degrades_to_zero_churn(tmp_path: Path) -> None:
