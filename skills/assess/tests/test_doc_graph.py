@@ -228,6 +228,32 @@ def test_group_broken_links_resolves_relative_targets() -> None:
     assert groups["docs/CLAUDE.md"] == ["docs/guide.md"]
 
 
+def test_group_broken_links_merges_root_absolute_spelling() -> None:
+    """A root-absolute link (/CLAUDE.md) and a plain one (CLAUDE.md) at the same
+    missing root file must merge — they only differ in spelling. Regression for
+    the leading-slash key mismatch."""
+    broken = [
+        {"from": "README.md", "target": "CLAUDE.md", "kind": "mdlink"},
+        {"from": "docs/guide.md", "target": "/CLAUDE.md", "kind": "mdlink"},
+    ]
+    groups = group_broken_links(broken)
+    assert len(groups) == 1
+    assert groups[0]["target"] == "CLAUDE.md"
+    assert sorted(groups[0]["sources"]) == ["README.md", "docs/guide.md"]
+
+
+def test_group_broken_links_wikilink_and_mdlink_do_not_merge() -> None:
+    """Documented limit: a wikilink ([[CLAUDE]]) and a markdown link (CLAUDE.md)
+    to the same missing file live in different resolution domains and stay
+    separate. Pinned so the behaviour is intentional, not accidental."""
+    broken = [
+        {"from": "a.md", "target": "CLAUDE", "kind": "wikilink"},
+        {"from": "b.md", "target": "CLAUDE.md", "kind": "mdlink"},
+    ]
+    keys = {g["target"] for g in group_broken_links(broken)}
+    assert keys == {"CLAUDE", "CLAUDE.md"}
+
+
 def test_group_broken_links_wikilinks_key_by_name() -> None:
     """Wikilinks resolve by note name globally, so they key on the bare name
     regardless of the source directory."""
