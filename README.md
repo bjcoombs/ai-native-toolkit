@@ -33,7 +33,7 @@ The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can 
 | 7: Review Bots | write | Design-level feedback (CodeRabbit, claude[bot]) catching what linters can't |
 | 8: AI Project Management | meta | Retros, task tracking, the feedback loop that keeps the contracts above current |
 
-The Layer 0 navigability model — treating the docs as a link graph an agent must traverse — is inspired by [Andrej Karpathy's LLM-friendly wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+The Layer 0 navigability model — treating the docs as a link graph an agent must traverse — adapts the **"Lint"** health-check from [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (hubs, orphans, connectivity, an `index.md` catalog and `log.md`), making its *structural* checks deterministic. The semantic ones it also lists — contradictions between pages, concepts lacking a page — stay out of scope (an LLM/Phase-2 job).
 
 A codebase can be 8/8 and still on fire (great scaffolding, legacy debt) or 2/8 with a calm treemap (small codebase, no enforcement needed yet). The score tells you whether the system will catch the next class of pain before it lands; the SVG tells you where today's pain already is. The report's **Top 3 Actions** table names specific files, always - "improve code quality" is the failure mode `/assess` exists to prevent; "Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67)" is what makes the report actionable.
 
