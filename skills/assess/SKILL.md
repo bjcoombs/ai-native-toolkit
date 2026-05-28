@@ -187,28 +187,33 @@ Layer 0 answers: *can the agent form a true picture before it acts?* It has two 
 
 #### 0a — Agent instruction files
 
-Read the agent instruction file grades from `run-context.json`:
+Read the agent instruction file grades and surface integrity from `run-context.json`:
 
 ```bash
-jq '.instruction_files, .instructions_grade' "$REPO_ROOT/.assess/run-context.json"
+jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .broken_instruction_refs' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-`.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). The same heuristic grader scores each present file. For each:
+`.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). Only **git-tracked** files are graded — a file present on disk but uncommitted is *not* credited (it isn't part of what the repo ships). The same heuristic grader scores each tracked file. For each:
 - `grade: "A" | "B+" | ...` - report verbatim per file
 - `subscores.positive_directives` - count of positive directives found
 - `subscores.tradeoff_phrases` - count of reasoning phrases
 - `subscores.path_references` - count of file path references
 - `freshness_days` - days since last edit
 
-`.instructions_grade` is the best grade across all present files - use this for the layer scoring.
+`.instructions_grade` is the best grade across all tracked files - the starting point for the layer scoring.
 
-**Scoring rule:** trust the deterministic grade.
-- `instructions_grade` is `null` → **Missing** (no instruction file found at any known location)
+**Scoring rule:** start from the deterministic grade, then apply the integrity overrides below.
+- `instructions_grade` is `null` → **Missing** (no committed instruction file at any known location)
 - A/A-/B+ → **Present**
 - B/C → **Partial**
 - D/F → **Partial** if at least one file exists but scores low - note the grade and recommend rewriting
 
-Important: a null grade and an F grade map to different remediation. Null means "create a CLAUDE.md / AGENTS.md (whichever the team uses)." F means "the file is there but needs rewriting." Don't conflate them in the report.
+**Integrity overrides (these can pull the half *below* the grade — a single good file does not rescue a broken instruction surface):**
+- **`broken_instruction_refs` is non-empty → cap the instruction half at Partial, or Missing if it's the *primary* instruction surface that's broken.** These are advertised-but-broken instruction references: a committed `.cursorrules`/`AGENTS.md`/`CLAUDE.md` that is a **dangling symlink** (`reason: symlink target missing`), or an entry doc that **links to a missing instruction file** (`reason: link to missing instruction file`). The truth-pressure model says a broken map scores at or below absent — a repo that *advertises* `.cursorrules` but the symlink dangles is worse than one that never claimed to have it. Name each broken ref and make "fix or remove the broken instruction reference" a Top-3 action. Do **not** let an unrelated file that happens to grade B+ keep the half at Present.
+- **`untracked_instruction_files` is non-empty → note it, don't score it.** An instruction file exists on disk but isn't committed, so nobody who clones gets it. Report "`<file>` present locally but untracked — commit it or it won't reach contributors (human or agent)"; never let it raise the grade.
+- **Surface within-band regression.** The Present/Partial/Missing bucket is coarse — "lost the primary instruction file and gained 40 dangling links" may not move the bucket. When `broken_instruction_refs` or a large `doc_graph.dangling_links` count appears, call out the regression explicitly in the report even if the band label is unchanged.
+
+Important: a null grade and an F grade map to different remediation. Null means "create a CLAUDE.md / AGENTS.md (whichever the team uses)." F means "the file is there but needs rewriting." A broken/dangling reference means "the file you point at is gone — fix the link or remove the claim." Don't conflate them.
 
 When multiple instruction files are present (e.g. CLAUDE.md and AGENTS.md as symlinks of the same content), list each in the report.
 
