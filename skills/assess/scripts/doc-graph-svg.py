@@ -138,16 +138,18 @@ def _radial_positions(graph, entries: set[str], cx: float, cy: float, fit: float
     return {n: (cx + x / max_r * fit, cy + y / max_r * fit) for n, (x, y) in raw.items()}
 
 
-def _render_ghosts(broken_links: list[dict], pos: dict, radius) -> str:
+def _render_ghosts(broken_links: list[dict], pos: dict, radius,
+                   show_labels: bool = False) -> str:
     """Draw one 'ghost' node per missing file — not per broken link. Several links
     to the same absent target (e.g. README.md and CONTRIBUTING.md both pointing at
     a missing CLAUDE.md) collapse to a single ghost they all tether to, so the map
     shows one missing file rather than a cloud of duplicates.
 
     Each ghost is a hollow dashed circle sitting just outside the centroid of the
-    sources that reference it, joined to each by a dashed tether and labelled with
-    the missing name: the label is the suggested fix (create the file, or fix the
-    links)."""
+    sources that reference it, joined to each by a dashed tether. The missing name
+    lives in the hover tooltip; it is only drawn as a text label when
+    ``show_labels`` is set, so ghosts read like every other node (clean by
+    default, named on hover)."""
     if not broken_links:
         return ""
     out: list[str] = []
@@ -157,8 +159,7 @@ def _render_ghosts(broken_links: list[dict], pos: dict, radius) -> str:
         if not sources:
             continue
         # Anchor the shared ghost at the centroid of its sources, pushed radially
-        # outward so it clears the cluster; fan distinct ghosts so labels don't
-        # collide.
+        # outward so it clears the cluster; fan distinct ghosts apart.
         cx = sum(pos[s][0] for s in sources) / len(sources)
         cy = sum(pos[s][1] for s in sources) / len(sources)
         ang = 0.6 + gi * 0.9
@@ -181,10 +182,11 @@ def _render_ghosts(broken_links: list[dict], pos: dict, radius) -> str:
             f'stroke="{GHOST_COLOR}" stroke-width="1.6" stroke-dasharray="3,2">'
             f'<title>{tip}</title></circle>'
         )
-        out.append(
-            f'<text x="{gx:.1f}" y="{gy - 11:.1f}" font-size="10" fill="{GHOST_COLOR}" '
-            f'text-anchor="middle">{html.escape(Path(key).name)}</text>'
-        )
+        if show_labels:
+            out.append(
+                f'<text x="{gx:.1f}" y="{gy - 11:.1f}" font-size="10" fill="{GHOST_COLOR}" '
+                f'text-anchor="middle">{html.escape(Path(key).name)}</text>'
+            )
     return "\n".join(out)
 
 
@@ -344,7 +346,7 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
             f'text-anchor="middle">{html.escape(name)}</text>'
         )
 
-    parts.append(_render_ghosts(result.broken_links, pos, radius))
+    parts.append(_render_ghosts(result.broken_links, pos, radius, show_labels))
     parts.append(_title(result, n, cw))
     parts.append(_legend(size_label, layout, colour, cw, ch, footer))
     parts.append('</svg>')
