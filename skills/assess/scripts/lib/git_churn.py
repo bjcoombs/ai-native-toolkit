@@ -16,6 +16,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Cap every git call so a stuck invocation (huge repo, lock contention, a hung
+# credential prompt) degrades to "no churn data" rather than blocking the run.
+GIT_TIMEOUT_SECONDS = 20
+
 
 def git_churn_scores(root: Path, since: str | None = None) -> dict[Path, int]:
     """Return {abs_path: commit_count} for files under root tracked in git.
@@ -30,8 +34,9 @@ def git_churn_scores(root: Path, since: str | None = None) -> dict[Path, int]:
         repo_top = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
             capture_output=True, text=True, check=True,
+            timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return {}
     repo = Path(repo_top).resolve()
 
@@ -42,8 +47,9 @@ def git_churn_scores(root: Path, since: str | None = None) -> dict[Path, int]:
     try:
         raw = subprocess.run(
             cmd, capture_output=True, text=True, check=True,
+            timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return {}
 
     counts: dict[Path, int] = {}
@@ -75,8 +81,9 @@ def file_last_commit_days(path: Path) -> int | None:
             ["git", "log", "-1", "--format=%ct", "--", str(path)],
             cwd=path.parent if path.parent.exists() else Path.cwd(),
             capture_output=True, text=True, check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
         )
-    except FileNotFoundError:
+    except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
     raw = out.stdout.strip()
     if not raw:

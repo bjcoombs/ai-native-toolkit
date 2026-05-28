@@ -212,24 +212,24 @@ def analyze_doc_staleness(
     method_counts: dict[str, int] = {}
     docs_mapping_to_code = 0
 
+    # Association precedence (per the PRD's ordered fallbacks): co-located base
+    # doc (nearest-ancestor) -> a parallel docs/ tree -> the doc's explicit code
+    # links -> repo-wide churn baseline.
     for d in docs:
         subject: list[Path]
         method: str
         if d in owned_by_doc:
             subject = owned_by_doc[d]
             method = "nearest-ancestor"
+        elif (par := _parallel_docs_subject(d, repo_root, code_dirs)) is not None:
+            subject = [c for c in code_files if any(sd in c.parents for sd in par)]
+            method = "parallel-docs-tree"
         elif explicit.get(rel(d)):
             subject = explicit[rel(d)]
             method = "explicit-links"
         else:
-            par = _parallel_docs_subject(d, repo_root, code_dirs)
-            if par is not None:
-                subject_dirs = par
-                subject = [c for c in code_files if any(sd in c.parents for sd in subject_dirs)]
-                method = "parallel-docs-tree"
-            else:
-                subject = []
-                method = "repo-baseline"
+            subject = []
+            method = "repo-baseline"
 
         if method != "repo-baseline":
             docs_mapping_to_code += 1

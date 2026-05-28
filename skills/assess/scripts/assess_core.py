@@ -324,8 +324,24 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     ctx["doc_graph"] = doc_graph
     ctx["doc_staleness"] = doc_staleness
     ctx["stale_hubs"] = _build_stale_hubs(doc_graph, doc_staleness)
-    ctx["dead_code"] = liveness.get("dead_code", {"available": False}) if isinstance(liveness, dict) else {"available": False}
-    ctx["observability"] = liveness.get("observability", {"rung": 0}) if isinstance(liveness, dict) else {"rung": 0}
+    # When the scan failed, preserve failure semantics: a failed scan must not be
+    # read as "no observability" (rung 0) - that would mis-score Layer 1 Missing
+    # when the truth is "not assessed". Carry the reason instead.
+    liveness_ok = isinstance(liveness, dict) and "dead_code" in liveness
+    reason = (liveness.get("reason", "liveness scan unavailable")
+              if isinstance(liveness, dict) else "liveness scan unavailable")
+    ctx["dead_code"] = (
+        liveness["dead_code"] if liveness_ok
+        else {"available": False, "candidate_count": 0, "candidates": [],
+              "tools": [], "reason": reason}
+    )
+    ctx["observability"] = (
+        liveness["observability"] if liveness_ok
+        else {"rung": None, "available": False, "reason": reason,
+              "instrumented": {"present": False, "signals": []},
+              "discoverable": {"present": False, "signals": []},
+              "reachable": {"present": False, "signals": []}}
+    )
 
     ctx["plugin_version"] = _read_plugin_version()
     ctx["anomalies"] = [

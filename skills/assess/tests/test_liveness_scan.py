@@ -156,6 +156,16 @@ def test_overloaded_token_names_do_not_reach_rung_3(tmp_path: Path) -> None:
     assert r.rung == 1            # instrumented only
 
 
+def test_observ_substring_does_not_reach_rung_3(tmp_path: Path) -> None:
+    """`observer`/`observation` are not observability tooling; only `observab*` is."""
+    _write(tmp_path, "requirements.txt", "structlog\n")
+    _write(tmp_path, ".mcp.json", '{"mcpServers":{"observer-service":{"command":"x"}}}')
+    assert scan_observability(tmp_path).rung == 1  # observer != observability
+
+    _write(tmp_path, ".mcp.json", '{"mcpServers":{"observability-gw":{"command":"x"}}}')
+    assert scan_observability(tmp_path).rung == 3  # observability is genuine
+
+
 def test_single_body_token_does_not_reach_discoverable(tmp_path: Path) -> None:
     """A lone product 'dashboard'/'alerting' mention isn't an observability doc."""
     _write(tmp_path, "features.md", "Our product dashboard shows charts to users.")

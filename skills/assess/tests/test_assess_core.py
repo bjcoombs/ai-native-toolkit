@@ -279,6 +279,22 @@ def test_readside_scan_failure_degrades_not_crashes(tmp_path: Path, monkeypatch)
     assert ctx["stale_hubs"] == []  # can't join hubs without a graph
 
 
+def test_failed_liveness_scan_is_not_scored_rung_0(tmp_path: Path, monkeypatch) -> None:
+    """A failed liveness scan must read as 'not assessed' (rung null), not as a
+    genuine rung 0 (no observability) - conflating them mis-scores Layer 1."""
+    repo = _minimal_repo(tmp_path)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("liveness blew up")
+
+    monkeypatch.setattr(assess_core, "scan_liveness", boom)
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    assert ctx["observability"]["available"] is False
+    assert ctx["observability"]["rung"] is None  # not 0
+    assert "reason" in ctx["observability"]
+    assert ctx["dead_code"]["available"] is False
+
+
 def test_plugin_version_in_ctx(tmp_path: Path) -> None:
     """ctx should include plugin_version so the LLM can surface it in the report.
 

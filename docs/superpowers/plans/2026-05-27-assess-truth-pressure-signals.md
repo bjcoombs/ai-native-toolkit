@@ -126,7 +126,7 @@ Rescaled maturity bands for `/8`:
 ### Part C — Framing, scoring, scaffolding
 
 - [ ] Add a short **truth-pressure framing** to the top of `SKILL.md`'s readiness section (the three bands; "kept honest, not present"). Keep standalone-divergent wording in config if any.
-- [ ] Apply the **Open Design Decision** renumbering (pending Ben's sign-off) across `SKILL.md` layer headers, the scoring matrix, the report template, and the maturity table (`/7` → `/8`, rescaled bands above).
+- [ ] Apply the renumbering (decided 2026-05-27 — see "Layer Position" above) across `SKILL.md` layer headers, the scoring matrix, the report template, and the maturity table (`/7` → `/8`, rescaled bands above).
 - [ ] Update `Top 3 Actions` guidance so a Partial on Layer 1 produces the *correct* remediation — e.g. "make existing observability agent-queryable" for the `meridian` case, **not** "add observability."
 
 ### Part D — Tests & release

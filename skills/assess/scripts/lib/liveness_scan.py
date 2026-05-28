@@ -303,7 +303,7 @@ def _fenced_code(text: str) -> str:
 _OBS_TOOL_RE = re.compile(
     r"\blog(s|ging|ger)?\b|\bmetrics?\b|\btrac(e|es|er|ing)\b|\btail\b|"
     r"\bdashboards?\b|\botel\b|\btempo\b|"
-    r"telemetr|observ|opentelemetry|grafana|prometheus|datadog|loki",
+    r"\btelemetr|\bobservab|opentelemetry|grafana|prometheus|datadog|loki",
     re.IGNORECASE)
 
 

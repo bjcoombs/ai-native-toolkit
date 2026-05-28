@@ -300,7 +300,12 @@ def build_doc_graph(
     ambiguous = 0
 
     for d in docs:
-        text = d.read_text(encoding="utf-8", errors="ignore")
+        try:
+            text = d.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            # Best-effort scan: skip an unreadable doc rather than aborting the
+            # whole graph build (Layer 0 stays best-effort).
+            continue
         # Wikilinks resolve by note name across the vault.
         for m in _WIKILINK_RE.finditer(text):
             tgt, amb = _resolve_wikilink(
