@@ -242,7 +242,9 @@ Read both tiers from `run-context.json`:
 jq '.dead_code, .observability' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-**Deterministic tier — intra-repo dead code (`dead_code`).** A best-effort scan (`vulture`/`ts-prune`/`knip`/`staticcheck`/`deadcode`) flags unused exports / unreferenced symbols. `dead_code.tools` reports per-language status (`ran` / `tool_absent` / `timeout`); `candidate_count` and `candidates` list the findings. Surface them in the report **with the explicit caveat** from `dead_code.caveat`: static reachability proves "nothing in *this* repo calls it," never "no external consumer calls it." Cross-boundary liveness needs the next tier. When `available: false`, report "intra-repo dead-code scan not run (no language tool present)" — degrade, don't penalise.
+**Deterministic tier — intra-repo dead code (`dead_code`).** A best-effort scan (`vulture`/`ts-prune`/`knip`/`staticcheck`/`deadcode`) flags unused exports / unreferenced symbols. `dead_code.tools` reports per-language status; `candidate_count` and `candidates` list the findings (already filtered to *this* repo — vendored/build dirs are excluded). Surface them in the report **with the explicit caveat** from `dead_code.caveat`: static reachability proves "nothing in *this* repo calls it," never "no external consumer calls it." Cross-boundary liveness needs the next tier. When `available: false`, report "intra-repo dead-code scan not run (no language tool present)" — degrade, don't penalise.
+
+Two `tools[].status` values need handling in the report: `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it — surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `timeout` / `tool_absent` likewise degrade, not penalise.
 
 **Observability tier (the decisive one) — three rungs (`observability.rung`, 0–3):**
 

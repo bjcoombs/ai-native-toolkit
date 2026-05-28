@@ -124,22 +124,42 @@ def _parse_knip(stdout: str) -> list[dict]:
     return out
 
 
-# language -> ordered tool preference. Each tool: cmd builder + parser.
-# Tools that need a full build (knip, staticcheck) are still attempted but
-# degrade gracefully on timeout / non-zero / unparseable output.
+def _vulture_excludes() -> str:
+    """Comma-separated glob patterns so vulture skips vendored / build dirs.
+
+    Without this a committed `.venv/` or vendored package can fill the
+    candidate cap with third-party dead code and crowd out *this* repo's.
+    """
+    return ",".join(f"*/{d}/*" for d in sorted(EXCLUDE_DIRS))
+
+
+# language -> ordered tool preference. Each tool: cmd builder, parser, and a
+# `builds` flag. Tools run from `.` (cwd=root) so they report repo-relative
+# paths, never the author's absolute layout. `builds` tools resolve/compile the
+# project (can hit the network and write the module cache), so they are NOT run
+# by default - that would make a "read-only assessor" mutate state. They are
+# reported as available-but-not-run unless explicitly opted in.
 _DEAD_CODE_TOOLS: list[dict] = [
-    {"language": "python", "tool": "vulture", "exts": {".py"},
-     "cmd": lambda root: ["vulture", str(root)], "parser": _parse_vulture},
+    {"language": "python", "tool": "vulture", "exts": {".py"}, "builds": False,
+     "cmd": lambda root: ["vulture", ".", "--exclude", _vulture_excludes()],
+     "parser": _parse_vulture},
     {"language": "typescript", "tool": "ts-prune", "exts": {".ts", ".tsx"},
+     "builds": False,
      "cmd": lambda root: ["ts-prune"], "parser": _parse_ts_prune},
     {"language": "typescript", "tool": "knip", "exts": {".ts", ".tsx", ".js", ".jsx"},
+     "builds": True,
      "cmd": lambda root: ["knip", "--reporter", "json"], "parser": _parse_knip},
-    {"language": "go", "tool": "deadcode", "exts": {".go"},
+    {"language": "go", "tool": "deadcode", "exts": {".go"}, "builds": True,
      "cmd": lambda root: ["deadcode", "./..."], "parser": _parse_deadcode},
-    {"language": "go", "tool": "staticcheck", "exts": {".go"},
+    {"language": "go", "tool": "staticcheck", "exts": {".go"}, "builds": True,
      "cmd": lambda root: ["staticcheck", "-checks", "U1000", "./..."],
      "parser": _parse_staticcheck},
 ]
+
+
+def _under_excluded(path_str: str) -> bool:
+    """True if a candidate path sits under a vendored / build directory."""
+    return any(part in EXCLUDE_DIRS for part in Path(path_str).parts)
 
 
 @dataclass
@@ -159,8 +179,14 @@ class DeadCodeResult:
         }
 
 
-def scan_dead_code(repo_root: Path, run: bool = True) -> DeadCodeResult:
-    """Best-effort intra-repo dead-code scan. Never raises."""
+def scan_dead_code(repo_root: Path, run: bool = True,
+                   run_build_tools: bool = False) -> DeadCodeResult:
+    """Best-effort intra-repo dead-code scan. Never raises.
+
+    Static tools (vulture, ts-prune) run by default. Tools that resolve/compile
+    the project (`builds: True` - deadcode, staticcheck, knip) are skipped
+    unless `run_build_tools` is set, so the default scan stays read-only.
+    """
     repo_root = repo_root.resolve()
     result = DeadCodeResult()
     seen_languages: set[str] = set()
@@ -183,6 +209,15 @@ def scan_dead_code(repo_root: Path, run: bool = True) -> DeadCodeResult:
                                  "status": "available_not_run",
                                  "reason": "execution disabled"})
             continue
+        if spec["builds"] and not run_build_tools:
+            result.tools.append({
+                "language": lang, "tool": tool, "status": "available_not_run",
+                "reason": (f"{tool} would build the project (may write the module "
+                           "cache / hit the network); not run by a read-only "
+                           f"assessment. Run `{' '.join(spec['cmd'](repo_root))}` "
+                           "manually to cross-check."),
+            })
+            continue
         try:
             proc = subprocess.run(
                 spec["cmd"](repo_root), cwd=str(repo_root),
@@ -198,7 +233,9 @@ def scan_dead_code(repo_root: Path, run: bool = True) -> DeadCodeResult:
             result.tools.append({"language": lang, "tool": tool,
                                  "status": "error", "reason": str(e)})
             continue
-        found = spec["parser"](proc.stdout)
+        # Keep the signal about THIS repo: drop candidates under vendored/build dirs.
+        found = [c for c in spec["parser"](proc.stdout)
+                 if not _under_excluded(c["path"])]
         result.available = True
         result.candidates.extend(found)
         result.tools.append({"language": lang, "tool": tool, "status": "ran",
@@ -208,10 +245,12 @@ def scan_dead_code(repo_root: Path, run: bool = True) -> DeadCodeResult:
 
 # ── observability tier ───────────────────────────────────────────────────
 
+# Exact manifest filenames. .NET .csproj files are matched by suffix instead
+# (the name varies per project), so they are not listed here.
 _MANIFESTS = [
     "package.json", "pyproject.toml", "requirements.txt", "Pipfile",
     "go.mod", "Cargo.toml", "pom.xml", "build.gradle", "build.gradle.kts",
-    "Gemfile", "composer.json", "*.csproj",
+    "Gemfile", "composer.json",
 ]
 
 # substring -> human signal name. Matched against manifest text (lowercased).
@@ -227,11 +266,19 @@ _INSTRUMENTED_SIGNALS = {
     "slog": "structured logging (slog)",
 }
 
+# Filename / directory signal: a file or dir literally named for runbooks /
+# observability / dashboards is a strong single-hit signal.
 _RUNBOOK_NAME_RE = re.compile(
     r"(observability|runbook|on[- ]?call|oncall|dashboards?)", re.IGNORECASE)
+# Body-content fallback: weaker, so it requires >=2 *distinct* hits (see
+# _detect_discoverable). `dashboard` is deliberately absent here - it's too
+# overloaded in product docs (a UI "dashboard" feature) and is already covered
+# by the filename signal when a doc is actually a dashboards runbook.
 _RUNBOOK_CONTENT_RE = re.compile(
-    r"\b(runbook|observability|dashboard|grafana|slo\b|sli\b|data[- ]freshness|"
-    r"alerting|on[- ]?call)\b", re.IGNORECASE)
+    r"\b(runbook|observability|grafana|prometheus|datadog|slo|sli|"
+    r"data[- ]freshness|alerting|on[- ]?call)\b", re.IGNORECASE)
+# Two distinct body tokens required before a plain-named doc counts as a runbook.
+_RUNBOOK_CONTENT_MIN_HITS = 2
 # Runnable query *commands* (not product names in prose) signal rung-3
 # reachability. Matched only against fenced code blocks so a runbook that merely
 # mentions "dashboards live in Grafana" doesn't get mistaken for one the agent
@@ -247,10 +294,17 @@ _FENCE_RE = re.compile(r"```.*?\n(.*?)```", re.DOTALL)
 def _fenced_code(text: str) -> str:
     """Concatenate the contents of fenced code blocks (```...```)."""
     return "\n".join(_FENCE_RE.findall(text))
-# Observability-flavoured names for MCP servers / repo skills (rung 3).
+# Observability-flavoured names for MCP servers / repo skills (rung 3) - the
+# rung the model says *decides* the Layer 1 score, so a false match inflates the
+# headline directly. Short/overloaded tokens are word-anchored so names like
+# changelog-generator, blog, catalog, login, dialog, backlog, detail, retail
+# don't get mistaken for telemetry channels. Distinctive tokens stay as
+# substrings (they don't collide with ordinary words).
 _OBS_TOOL_RE = re.compile(
-    r"(log|metric|trace|telemetr|observ|grafana|prometheus|datadog|loki|"
-    r"tempo|otel|dashboard|tail)", re.IGNORECASE)
+    r"\blog(s|ging|ger)?\b|\bmetrics?\b|\btrac(e|es|er|ing)\b|\btail\b|"
+    r"\bdashboards?\b|\botel\b|\btempo\b|"
+    r"telemetr|observ|opentelemetry|grafana|prometheus|datadog|loki",
+    re.IGNORECASE)
 
 
 def _iter_files(repo_root: Path, exts: set[str] | None = None) -> list[Path]:
@@ -274,31 +328,27 @@ def _read(path: Path) -> str:
         return ""
 
 
-def _detect_instrumented(repo_root: Path) -> list[str]:
+def _detect_instrumented(repo_root: Path, files: list[Path]) -> list[str]:
     signals: set[str] = set()
-    manifests = [
-        p for p in _iter_files(repo_root)
-        if p.name in _MANIFESTS or p.suffix == ".csproj"
-        or (p.name == "requirements.txt")
-    ]
-    for m in manifests:
-        text = _read(m).lower()
-        for needle, label in _INSTRUMENTED_SIGNALS.items():
-            if needle in text:
-                signals.add(label)
-    # Config-file presence is also instrumentation evidence.
-    for path in _iter_files(repo_root):
-        name = path.name.lower()
-        if name in {"otel-collector-config.yaml", "otel-collector-config.yml",
-                    "prometheus.yml", "prometheus.yaml"}:
+    for path in files:
+        if path.name in _MANIFESTS or path.suffix == ".csproj":
+            text = _read(path).lower()
+            for needle, label in _INSTRUMENTED_SIGNALS.items():
+                if needle in text:
+                    signals.add(label)
+        # Config-file presence is also instrumentation evidence.
+        if path.name.lower() in {"otel-collector-config.yaml", "otel-collector-config.yml",
+                                 "prometheus.yml", "prometheus.yaml"}:
             signals.add("telemetry config present")
     return sorted(signals)
 
 
-def _detect_discoverable(repo_root: Path) -> tuple[list[str], list[Path]]:
+def _detect_discoverable(repo_root: Path, files: list[Path]) -> tuple[list[str], list[Path]]:
     signals: set[str] = set()
     runbooks: list[Path] = []
-    for path in _iter_files(repo_root, {".md", ".mdx", ".markdown"}):
+    for path in files:
+        if path.suffix.lower() not in {".md", ".mdx", ".markdown"}:
+            continue
         rel = path.relative_to(repo_root)
         # Match the doc's own name or an *intra-repo* directory (runbooks/,
         # observability/) - never the repo-root dir name, which says nothing.
@@ -307,27 +357,30 @@ def _detect_discoverable(repo_root: Path) -> tuple[list[str], list[Path]]:
             signals.add(f"runbook/observability doc: {rel}")
             runbooks.append(path)
             continue
-        # Body-level signal even when the filename is plain.
-        text = _read(path)
-        if _RUNBOOK_CONTENT_RE.search(text):
-            signals.add(f"observability content: {path.relative_to(repo_root)}")
+        # Body-level fallback: weaker than a filename, so require >=2 distinct
+        # tokens. A single "alerting" or "dashboard" mention in product docs
+        # shouldn't tip a repo to discoverable (rung 2).
+        hits = {m.group(1).lower() for m in _RUNBOOK_CONTENT_RE.finditer(_read(path))}
+        if len(hits) >= _RUNBOOK_CONTENT_MIN_HITS:
+            signals.add(f"observability content ({', '.join(sorted(hits))}): {rel}")
             runbooks.append(path)
     return sorted(signals), runbooks
 
 
-def _detect_reachable(repo_root: Path, runbooks: list[Path]) -> list[str]:
+def _detect_reachable(repo_root: Path, files: list[Path],
+                      runbooks: list[Path]) -> list[str]:
     signals: set[str] = set()
 
     # 1. .mcp.json exposing an observability server.
-    for mcp in _iter_files(repo_root, {".json"}):
+    for mcp in files:
         if mcp.name != ".mcp.json":
             continue
         if _OBS_TOOL_RE.search(_read(mcp)):
             signals.add(f"MCP server over telemetry: {mcp.relative_to(repo_root)}")
 
     # 2. Repo skills named for logs/metrics/traces. These live under `skills/`
-    #    or `.claude/skills/` - the latter is in EXCLUDE_DIRS, so scan directly
-    #    rather than via _iter_files (which would skip .claude).
+    #    or `.claude/skills/` - the latter is in EXCLUDE_DIRS (so absent from
+    #    `files`), so scan directly for SKILL.md rather than reusing the walk.
     _skip = {"node_modules", ".venv", "venv", "dist", "build", ".git"}
     for path in repo_root.rglob("SKILL.md"):
         rel = path.relative_to(repo_root)
@@ -367,9 +420,11 @@ class ObservabilityResult:
 
 def scan_observability(repo_root: Path) -> ObservabilityResult:
     repo_root = repo_root.resolve()
-    instrumented = _detect_instrumented(repo_root)
-    discoverable, runbooks = _detect_discoverable(repo_root)
-    reachable = _detect_reachable(repo_root, runbooks)
+    # One tree walk shared across all three rung detectors (was ~4-5 walks).
+    files = _iter_files(repo_root)
+    instrumented = _detect_instrumented(repo_root, files)
+    discoverable, runbooks = _detect_discoverable(repo_root, files)
+    reachable = _detect_reachable(repo_root, files, runbooks)
     rung = 3 if reachable else 2 if discoverable else 1 if instrumented else 0
     return ObservabilityResult(
         instrumented=instrumented, discoverable=discoverable,
@@ -377,9 +432,16 @@ def scan_observability(repo_root: Path) -> ObservabilityResult:
     )
 
 
-def scan_liveness(repo_root: Path, run_dead_code: bool = True) -> dict:
-    """Top-level Layer 1 scan: dead-code candidates + observability rungs."""
+def scan_liveness(repo_root: Path, run_dead_code: bool = True,
+                  run_build_tools: bool = False) -> dict:
+    """Top-level Layer 1 scan: dead-code candidates + observability rungs.
+
+    `run_build_tools` defaults to False so the scan stays read-only - build-
+    mutating dead-code tools are reported as available-but-not-run.
+    """
     return {
-        "dead_code": scan_dead_code(repo_root, run=run_dead_code).as_dict(),
+        "dead_code": scan_dead_code(
+            repo_root, run=run_dead_code, run_build_tools=run_build_tools,
+        ).as_dict(),
         "observability": scan_observability(repo_root).as_dict(),
     }

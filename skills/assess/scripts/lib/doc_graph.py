@@ -205,12 +205,12 @@ def _resolve_wikilink(
     if not target:
         return None, False
     key = target.lower()
-    # Path-qualified wikilink (`[[folder/note]]`): try the relative-path index.
+    # Path-qualified wikilink (`[[folder/note]]`): try the relative-path index,
+    # which is keyed by both the suffixed and suffix-stripped relpath, so
+    # `[[folder/note]]` and `[[folder/note.md]]` both resolve here.
     if "/" in target or "\\" in target:
         norm = key.replace("\\", "/")
         if norm in by_relpath:
-            return by_relpath[norm], False
-        if norm.endswith(tuple(DOC_EXTENSIONS)) and norm in by_relpath:
             return by_relpath[norm], False
     # Bare note name: try basename (with and without .md), then stem.
     candidates: list[Path] = []

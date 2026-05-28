@@ -236,6 +236,13 @@ def analyze_doc_staleness(
             code_churn = sum(churn_map.get(c, 0) for c in subject)
             subject_count = len(subject)
         else:
+            # repo-baseline has no derivable subject, so the ratio uses
+            # repo-wide churn - a coarse proxy. In an active repo this can be
+            # high even for a freshly-written floating doc, so `ratio` alone
+            # over-flags here. `last_commit_days` is the corrective signal (the
+            # heatmap colours by staleness, and a floating doc won't be a graph
+            # hub, so its stale_hubs priority stays low). Read ratio together
+            # with subject_method and last_commit_days, not on its own.
             code_churn = repo_wide_code_churn
             subject_count = len(code_files)
 

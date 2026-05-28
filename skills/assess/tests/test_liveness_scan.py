@@ -143,3 +143,78 @@ def test_repo_skill_for_logs_is_reachable(tmp_path: Path) -> None:
     r = scan_observability(tmp_path)
     assert r.rung == 3
     assert any("repo skill" in s for s in r.reachable)
+
+
+def test_overloaded_token_names_do_not_reach_rung_3(tmp_path: Path) -> None:
+    """changelog/blog/login etc. must not be mistaken for telemetry channels."""
+    _write(tmp_path, "requirements.txt", "structlog\n")  # rung 1 instrumentation
+    _write(tmp_path, ".mcp.json", '{"mcpServers":{"changelog-bot":{"command":"x"},"login":{"command":"y"}}}')
+    _write(tmp_path, "skills/blog-publisher/SKILL.md", "# blog")
+    _write(tmp_path, "skills/catalog-search/SKILL.md", "# catalog")
+    r = scan_observability(tmp_path)
+    assert r.reachable == []      # no genuine log/metric/trace tool
+    assert r.rung == 1            # instrumented only
+
+
+def test_single_body_token_does_not_reach_discoverable(tmp_path: Path) -> None:
+    """A lone product 'dashboard'/'alerting' mention isn't an observability doc."""
+    _write(tmp_path, "features.md", "Our product dashboard shows charts to users.")
+    _write(tmp_path, "ops.md", "We have alerting in the UI.")
+    assert scan_observability(tmp_path).rung == 0
+
+
+def test_two_body_tokens_reach_discoverable(tmp_path: Path) -> None:
+    _write(tmp_path, "ops.md",
+           "We watch SLOs in Grafana and page via alerting when budgets burn.")
+    r = scan_observability(tmp_path)
+    assert r.rung == 2
+    assert r.discoverable
+
+
+# ── read-only: build-mutating dead-code tools are gated ────────────────────
+
+def test_build_tools_not_run_by_default(tmp_path: Path, monkeypatch) -> None:
+    """Go tools (deadcode/staticcheck) compile the project, so a read-only run
+    reports them available-but-not-run rather than executing them."""
+    _write(tmp_path, "main.go", "package main\nfunc main(){}")
+    monkeypatch.setattr(liveness.shutil, "which", lambda t: "/usr/bin/" + t)
+
+    def fake_run(cmd, **kwargs):
+        raise AssertionError("a build tool was executed in a read-only scan")
+
+    monkeypatch.setattr(liveness.subprocess, "run", fake_run)
+    r = scan_dead_code(tmp_path).as_dict()  # run_build_tools defaults False
+    deadcode = next(t for t in r["tools"] if t["tool"] == "deadcode")
+    assert deadcode["status"] == "available_not_run"
+    assert "build" in deadcode["reason"].lower()
+    assert r["candidate_count"] == 0
+
+
+def test_build_tools_run_when_opted_in(tmp_path: Path, monkeypatch) -> None:
+    _write(tmp_path, "main.go", "package main\nfunc main(){}")
+    monkeypatch.setattr(liveness.shutil, "which", lambda t: "/usr/bin/" + t)
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout="main.go:9:1: unreachable func: helper\n", stderr="")
+
+    monkeypatch.setattr(liveness.subprocess, "run", fake_run)
+    r = scan_dead_code(tmp_path, run_build_tools=True).as_dict()
+    assert r["available"] is True
+    assert r["candidate_count"] == 1
+
+
+def test_vendored_dead_code_is_filtered(tmp_path: Path, monkeypatch) -> None:
+    """Candidates under .venv/node_modules are dropped so the cap stays about THIS repo."""
+    _write(tmp_path, "app.py", "x = 1")
+    monkeypatch.setattr(liveness.shutil, "which", lambda t: "/usr/bin/" + t)
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 3, stderr="", stdout=(
+            ".venv/lib/dep.py:5: unused function 'vendored' (60% confidence)\n"
+            "app.py:1: unused function 'mine' (60% confidence)\n"))
+
+    monkeypatch.setattr(liveness.subprocess, "run", fake_run)
+    r = scan_dead_code(tmp_path).as_dict()
+    paths = {c["path"] for c in r["candidates"]}
+    assert paths == {"app.py"}  # vendored candidate dropped
