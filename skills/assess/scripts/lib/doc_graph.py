@@ -110,6 +110,10 @@ class DocGraphResult:
     # heatmap (a stale hub must dominate). Kept off as_dict() so run-context
     # stays lean on doc-heavy repos -- the top-10 hubs are serialised instead.
     pagerank: dict[str, float] = field(default_factory=dict)
+    # The underlying networkx DiGraph (nodes = doc rel-paths, edges = doc->doc).
+    # Kept off as_dict(); the connectivity-graph SVG renderer needs the full
+    # edge list that the serialised signals don't carry.
+    graph: object = None
 
     def as_dict(self) -> dict:
         return {
@@ -469,4 +473,5 @@ def _derive_signals(
         vault_detected=vault,
         obsidiantools_available=obs,
         pagerank={k: round(v, 6) for k, v in pagerank.items()},
+        graph=graph,
     )
