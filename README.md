@@ -11,7 +11,11 @@ The headline pieces are two **skills**:
 
 [![Example complexity hotspot from a real codebase](docs/example-heatmap.svg)](docs/example-heatmap.svg)
 
-> Real output from `/ai-native-toolkit:assess` run against a ~150k-LOC private monorepo (file paths sanitized). Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk an agent (or human) is most likely to break next week. Hover any block for its LOC, CCN, and recent commit count.
+> Real output from `/ai-native-toolkit:assess` run against a ~650k-LOC private monorepo (file paths sanitized). Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk an agent (or human) is most likely to break next week. Hover any block for its LOC, CCN, and recent commit count.
+
+[![Example doc navigability map from the same codebase](docs/example-doc-graph.svg)](docs/example-doc-graph.svg)
+
+> Doc-navigability graph from the same run (254 docs, 622 links, 43 islands, 30% reachable from the entry point). Structure encodes reachability (centre = entry, rings = link-distance from entry, rim = unreachable, dashed ring = orphan); colour encodes staleness in the same OrRd ramp as the heatmap (vivid red = a frozen doc beside churning code = a *lying map*); size encodes file length. Hover any node for its in/out degree, reachability state, and staleness. Read alongside the heatmap: the heatmap tells you what's risky to change; this tells you whether the docs an agent might consult before changing it are still true.
 
 ### Why this matters for an AI-driven codebase
 
@@ -34,6 +38,8 @@ The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can 
 | 8: AI Project Management | meta | Retros, task tracking, the feedback loop that keeps the contracts above current |
 
 The Layer 0 navigability model — treating the docs as a link graph an agent must traverse — adapts the **"Lint"** health-check from [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (hubs, orphans, connectivity, an `index.md` catalog and `log.md`), making its *structural* checks deterministic. The semantic ones it also lists — contradictions between pages, concepts lacking a page — stay out of scope (an LLM/Phase-2 job).
+
+**Traditional tooling, applied to an AI-era question.** The assessment itself runs on conventional static analysis — `lizard`/`scc`, git history, and graph metrics over the docs and code — not the model. The LLM only writes the prose around the numbers. So a full run is fast and spends almost no model tokens, and the structural findings are reproducible run-to-run.
 
 A codebase can be 8/8 and still on fire (great scaffolding, legacy debt) or 2/8 with a calm treemap (small codebase, no enforcement needed yet). The score tells you whether the system will catch the next class of pain before it lands; the SVG tells you where today's pain already is. The report's **Top 3 Actions** table names specific files, always - "improve code quality" is the failure mode `/assess` exists to prevent; "Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67)" is what makes the report actionable.
 
