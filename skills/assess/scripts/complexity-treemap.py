@@ -57,19 +57,29 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
-import html
 import json
 import math
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import lizard
 import matplotlib.pyplot as plt
 import numpy as np
-import squarify
+
+# Shared layout/SVG primitives and churn machinery live in lib/ so the code
+# heatmap, the docs heatmap, and the Layer 0 staleness metric reuse one
+# implementation. Only the colour mapping differs per heatmap and stays local.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib.git_churn import git_churn_scores, pick_churn_window  # noqa: E402
+from lib.treemap_render import (  # noqa: E402
+    adaptive_cap,
+    blend_to_grey,
+    build_tree,
+    layout,
+    write_svg,
+)
 
 
 EXCLUDE_DIRS = {".git", "node_modules", "dist", "build", "target", "vendor",
@@ -190,109 +200,6 @@ def scc_scores(
     return scores
 
 
-def git_churn_scores(root: Path, since: str | None = None) -> dict[Path, int]:
-    """Return {abs_path: commit_count} for files under root tracked in git.
-
-    Returns empty dict if root is not inside a git repo. Commit counts are
-    over the full history reachable from HEAD by default. Pass `since` as
-    a git-compatible date expression (e.g. "6 months ago") to window the
-    count. Renames are not followed - a file gets credit only under its
-    current name.
-    """
-    try:
-        repo_top = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
-        ).stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return {}
-    repo = Path(repo_top).resolve()
-
-    cmd = ["git", "-C", repo_top, "log",
-           "--pretty=format:", "--name-only"]
-    if since:
-        cmd.append(f"--since={since}")
-    try:
-        raw = subprocess.run(
-            cmd, capture_output=True, text=True, check=True,
-        ).stdout
-    except subprocess.CalledProcessError:
-        return {}
-
-    counts: dict[Path, int] = {}
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        path = (repo / line).resolve()
-        try:
-            path.relative_to(root)
-        except ValueError:
-            continue
-        counts[path] = counts.get(path, 0) + 1
-    return counts
-
-
-# Time windows tried in order from narrowest to widest. The first one
-# that gives both gradient depth (max >= MIN_MAX) AND visual coverage
-# (>= MIN_COVERAGE_PCT of files touched) wins. If nothing qualifies, we
-# fall back to the widest window that returned any data. since=None
-# means "full history".
-CHURN_WINDOWS: list[tuple[str, str | None]] = [
-    ("last 12mo", "12 months ago"),
-    ("last 24mo", "24 months ago"),
-    ("last 5y",   "5 years ago"),
-    ("all-time",  None),
-]
-MIN_MAX = 3          # max commits per file must clear this for visible gradient
-MIN_COVERAGE_PCT = 10.0   # % of scored files with any activity in the window
-
-
-def _pick_churn_window(
-    root: Path, files: list,
-) -> tuple[dict[Path, int] | None, str | None]:
-    """Walk CHURN_WINDOWS narrowest-to-widest; return the first window
-    that gives both gradient depth and visual coverage. Falls back to
-    the widest non-empty window if none qualify."""
-    file_paths = [f[0] for f in files]
-    total_files = max(len(file_paths), 1)
-    widest_fallback: tuple[dict[Path, int], str] | None = None
-
-    for label, since in CHURN_WINDOWS:
-        data = git_churn_scores(root, since=since)
-        if not data:
-            continue
-        # restrict to files we actually scored - "touched" means touched
-        # AND scoreable, so coverage % is comparable across windows
-        scored_hits = {p: data[p] for p in file_paths if p in data}
-        if not scored_hits:
-            continue
-        if widest_fallback is None or label == CHURN_WINDOWS[-1][0]:
-            widest_fallback = (data, label)
-        coverage = 100.0 * len(scored_hits) / total_files
-        max_commits = max(scored_hits.values())
-        if max_commits >= MIN_MAX and coverage >= MIN_COVERAGE_PCT:
-            if label != CHURN_WINDOWS[0][0]:
-                print(f"note: activity sparse - widened window to "
-                      f"{label} ({coverage:.0f}% of files touched, "
-                      f"max {max_commits} commits).",
-                      file=sys.stderr)
-            return ({p: data.get(p, 0) for p in file_paths},
-                    f"commits ({label})")
-
-    if widest_fallback is not None:
-        data, label = widest_fallback
-        scored_hits = {p: data[p] for p in file_paths if p in data}
-        coverage = 100.0 * len(scored_hits) / total_files
-        max_commits = max(scored_hits.values()) if scored_hits else 0
-        print(f"note: activity below thresholds in every window; "
-              f"using {label} ({coverage:.0f}% coverage, "
-              f"max {max_commits}).", file=sys.stderr)
-        return ({p: data.get(p, 0) for p in file_paths},
-                f"commits ({label})")
-    return None, None
-
-
 def _git_not_found_warning(root: Path) -> None:
     print(
         f"warning: no git history found for {root}\n"
@@ -340,148 +247,12 @@ def collect(root: Path, by: str = "complexity",
             files = [(p, loc, float(churn.get(p, 0)), src)
                      for p, loc, _m, src in files]
     elif by == "hotspot":
-        aux_data, aux_label = _pick_churn_window(root, files)
+        aux_data, aux_label = pick_churn_window(root, [f[0] for f in files])
         if aux_data is None:
             _git_not_found_warning(root)
             effective_by = "complexity"
 
     return files, effective_by, aux_data, aux_label
-
-
-@dataclass
-class Node:
-    name: str
-    size: int = 0
-    color: tuple = (0.5, 0.5, 0.5, 1.0)
-    loc: int = 0
-    metric: float = 0.0
-    aux_metric: float = 0.0
-    aux_label: str = ""
-    rel_path: str = ""
-    children: list["Node"] = field(default_factory=list)
-    is_file: bool = False
-
-
-def build_tree(files_with_color, root: Path,
-               aux_data: dict[Path, int] | None = None,
-               aux_label: str = "") -> Node:
-    rootnode = Node(name=root.name)
-    by_path: dict[Path, Node] = {root: rootnode}
-    for path, loc, metric, _src, color in files_with_color:
-        try:
-            rel = path.relative_to(root)
-        except ValueError:
-            continue
-        parent = rootnode
-        cur = root
-        for part in rel.parts[:-1]:
-            cur = cur / part
-            if cur not in by_path:
-                n = Node(name=part)
-                by_path[cur] = n
-                parent.children.append(n)
-            parent = by_path[cur]
-        aux_val = float(aux_data.get(path, 0)) if aux_data else 0.0
-        parent.children.append(Node(
-            name=rel.parts[-1], size=loc, color=color,
-            loc=loc, metric=metric, aux_metric=aux_val,
-            aux_label=aux_label, rel_path=str(rel), is_file=True,
-        ))
-
-    def roll(n: Node) -> int:
-        if n.is_file:
-            return n.size
-        n.size = sum(roll(c) for c in n.children)
-        return n.size
-    roll(rootnode)
-    return rootnode
-
-
-def layout(node: Node, x: float, y: float, w: float, h: float,
-           out: list) -> None:
-    if node.is_file:
-        out.append((x, y, w, h, node))
-        return
-    kids = sorted([c for c in node.children if c.size > 0],
-                  key=lambda c: -c.size)
-    if not kids or w <= 0 or h <= 0:
-        return
-    sizes = [c.size for c in kids]
-    norm = squarify.normalize_sizes(sizes, w, h)
-    placed = squarify.squarify(norm, x, y, w, h)
-    for child, r in zip(kids, placed):
-        layout(child, r["x"], r["y"], r["dx"], r["dy"], out)
-
-
-def _rgba_to_hex(rgba: tuple) -> str:
-    r, g, b = rgba[0], rgba[1], rgba[2]
-    return f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
-
-
-GREY = (0.82, 0.82, 0.84)  # cool light grey for "stable" / no recent churn
-
-
-def _blend_to_grey(rgba: tuple, factor: float) -> tuple:
-    """factor=0 returns full grey, factor=1 returns the original colour."""
-    factor = max(0.0, min(1.0, factor))
-    return tuple(
-        GREY[i] + (rgba[i] - GREY[i]) * factor for i in range(3)
-    ) + (1.0,)
-
-
-def write_svg(rects: list, root: Path, W: float, H: float,
-              out_path: Path, show_labels: bool,
-              metric_label: str) -> None:
-    label_threshold = (W * H) / 200
-    parts: list[str] = [
-        '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
-        f'<svg xmlns="http://www.w3.org/2000/svg" '
-        f'viewBox="0 0 {W:.0f} {H:.0f}" '
-        f'width="{W:.0f}" height="{H:.0f}" '
-        f'preserveAspectRatio="xMidYMid meet">',
-        '<style>',
-        '  rect:hover { stroke: #000; stroke-width: 1.5; }',
-        '  text { font-family: -apple-system, BlinkMacSystemFont, '
-        '"Segoe UI", sans-serif; fill: #1a1a1a; '
-        'pointer-events: none; text-anchor: middle; '
-        'dominant-baseline: middle; }',
-        '</style>',
-    ]
-
-    for x, y, w, h, node in rects:
-        rel = node.rel_path or node.name
-        line2 = f"{node.loc} loc · {metric_label} {node.metric:.0f}"
-        if node.aux_label:
-            line2 += f" · {node.aux_label} {node.aux_metric:.0f}"
-        tooltip = html.escape(f"{rel}\n{line2}", quote=False)
-        parts.append(
-            f'<rect x="{x:.2f}" y="{y:.2f}" '
-            f'width="{w:.2f}" height="{h:.2f}" '
-            f'fill="{_rgba_to_hex(node.color)}" '
-            f'stroke="white" stroke-width="0.5">'
-            f'<title>{tooltip}</title></rect>'
-        )
-
-    if show_labels:
-        for x, y, w, h, node in rects:
-            if w * h <= label_threshold:
-                continue
-            fs = max(7, min(int(min(w, h) / 6), 18))
-            cx, cy = x + w / 2, y + h / 2
-            name = html.escape(node.name)
-            parts.append(
-                f'<text x="{cx:.1f}" y="{cy - fs:.1f}" '
-                f'font-size="{fs}">{name}</text>'
-                f'<text x="{cx:.1f}" y="{cy + 2:.1f}" '
-                f'font-size="{max(6, fs - 2)}" fill="#444">'
-                f'{node.loc} loc</text>'
-                f'<text x="{cx:.1f}" y="{cy + fs + 4:.1f}" '
-                f'font-size="{max(6, fs - 2)}" fill="#444">'
-                f'{metric_label} {node.metric:.0f}</text>'
-            )
-
-    parts.append('</svg>')
-    out_path.write_text("\n".join(parts), encoding="utf-8")
 
 
 DOMINANCE_WARN_THRESHOLD = 0.30  # one file >30% of total LOC = suspicious
@@ -517,19 +288,6 @@ def _warn_if_dominated_by_one_file(
     )
 
 
-def _adaptive_cap(values: list[float]) -> tuple[float, str]:
-    """Pick a sensible cap: max for well-behaved data, p95 for outlier-heavy."""
-    if not values:
-        return 1.0, "max"
-    mx = float(max(values))
-    if mx == 0:
-        return 1.0, "max"
-    p95 = float(np.percentile(values, 95))
-    if p95 > 0 and mx > 5 * p95:
-        return p95, "p95 (outlier-suppressed)"
-    return mx, "max"
-
-
 def render(files: list[tuple[Path, int, float, str]],
            root: Path, out_path: Path, title: str,
            show_labels: bool = False,
@@ -538,21 +296,21 @@ def render(files: list[tuple[Path, int, float, str]],
            aux_label: str | None = None) -> None:
     metric_label = "commits" if by == "churn" else "ccn"
     metrics = [f[2] for f in files]
-    cap, cap_kind = _adaptive_cap(metrics)
+    cap, cap_kind = adaptive_cap(metrics)
     cmap = plt.get_cmap("RdYlGn_r")
 
     aux_cap = 1.0
     aux_cap_kind = ""
     if aux_data is not None:
         aux_values = [float(aux_data.get(f[0], 0)) for f in files]
-        aux_cap, aux_cap_kind = _adaptive_cap(aux_values)
+        aux_cap, aux_cap_kind = adaptive_cap(aux_values)
 
     files_colored = []
     for f in files:
         base = cmap(min(f[2] / cap, 1.0))
         if aux_data is not None:
             aux_val = float(aux_data.get(f[0], 0))
-            color = _blend_to_grey(base, aux_val / aux_cap)
+            color = blend_to_grey(base, aux_val / aux_cap)
         else:
             color = base
         files_colored.append((f[0], f[1], f[2], f[3], color))
@@ -597,7 +355,7 @@ def write_stats(files: list[tuple[Path, int, float, str]],
                 root: Path, out_path: Path) -> None:
     """Write a JSON stats sidecar summarising the treemap data.
 
-    Consumed by the /assess skill: percentiles drive Layer 2 scoring,
+    Consumed by the /assess skill: percentiles drive Layer 3 (linter) scoring,
     top hotspot lists become the named files in the actions table.
     Composite hotspot score = ccn * (1 + log1p(churn)), so a vivid
     red block (complex AND active) outranks a frozen complex file.
@@ -687,7 +445,7 @@ def main() -> int:
         "--stats", type=Path,
         help=("Write a JSON stats sidecar (file count, LOC/CCN percentiles, "
               "top hotspot/complex/large files). Used by /assess to score "
-              "Layer 2 and surface specific improvement actions."),
+              "Layer 3 and surface specific improvement actions."),
     )
     ap.add_argument(
         "--include-artifacts", action="store_true",

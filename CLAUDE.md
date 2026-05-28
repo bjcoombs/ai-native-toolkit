@@ -61,6 +61,12 @@ Commands without frontmatter still work but provide no `/help` description.
 - `.github/workflows/tests.yml` runs `uv run --with pytest pytest -v` against `skills/assess/` on every PR and push to `main`. A red test is a real regression - the deterministic core is reproducible, so flakes shouldn't happen.
 - `.github/release.yml` configures categorised release notes when running `gh release create --generate-notes`. See the file for the label-to-category mapping.
 
+**CI triggers only on `main`** (`pull_request`/`push` to `main`). A PR targeting `main` gets `tests.yml` + `pr-lint.yml` on every synchronize; pushes to other branches with no open PR don't run them.
+
+## Testing a branch before merging
+
+`/plugin install` only sees `main`. To test an unmerged branch's `SKILL.md` + scripts as a real plugin — or to run the scripts directly against a target repo — see [`docs/testing-a-branch-locally.md`](docs/testing-a-branch-locally.md). Key point: plugin skills resolve their bundled scripts via `$CLAUDE_PLUGIN_ROOT` (the version cache dir), not `~/.claude/skills/`.
+
 ## Standalone skill pipeline
 
 `assess` and `huddle` are also distributed as standalone ZIPs for Claude Desktop chat and Cowork via `Settings → Customize → Skills → Upload Skill`.

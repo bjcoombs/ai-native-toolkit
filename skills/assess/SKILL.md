@@ -5,12 +5,30 @@ description: "Assess a codebase's readiness for AI agent contributors using the 
 
 # AI Readiness Assessment + Complexity Hotspot
 
-Two artefacts in one pass against a target repo:
+Three artefacts in one pass against a target repo:
 
-1. **Layered contract assessment** — 0–7 score across agent instructions, types, linters, architecture tests, CI, coverage, review bots, AI project management.
-2. **Complexity hotspot SVG** — Codecov-style treemap. Size = LOC. Hue = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = highest risk.
+1. **Layered contract assessment** — 0–8 score across navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, and AI project management.
+2. **Complexity hotspot SVG** — Codecov-style treemap. Size = LOC. Hue = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = riskiest to change.
+3. **Docs-staleness SVG** — the inverted twin. Size = doc link-graph centrality. Hue = doc staleness. Saturation = churn of the code the doc describes. Vivid red = a frozen doc whose subject is moving = the most dangerous *lying map*.
 
-Both land as files inside the target repo. The skill always writes them locally; after writing, **ask the user** whether to open a PR in the target repo with both artefacts.
+All land as files inside the target repo. The skill always writes them locally; after writing, **ask the user** whether to open a PR in the target repo with the artefacts.
+
+## The model: truth-pressure, not presence
+
+Read this before scoring — it changes how you score. Across every layer, the real signal is never **presence**. It is whether a thing is under **active pressure to stay true**:
+
+- Tests keep **behaviour** honest (CI fails when it's wrong).
+- Retros / feedback loops keep the **process** honest (Layer 8 scores whether retros are *carried out*, not merely present).
+- Maintenance keeps **docs** honest (a wiki tracked against code churn).
+- Telemetry / liveness keeps **relevance** honest (is this code actually exercised).
+
+So **AI-readiness is the degree to which a codebase's self-descriptions are kept honest, not the degree to which scaffolding exists.** Score artefacts on *maintenance pressure*, not existence. A stale-but-present doc scores **at or below absent**: missing makes the agent go look; confidently-stale makes it navigate fast to a wrong, current-looking conclusion.
+
+The 9 layers (0–8) fall into three bands, ordered by dependency — what must hold for the next band to mean anything:
+
+- **Read-side foundation** (L0 navigability, L1 liveness) — can the agent form a *true picture* before it acts?
+- **Write-side enforcement** (L2–L7) — can the agent be trusted to produce good output? Only means something once you can trust that what you're reading is real and current.
+- **Meta** (L8 feedback) — does the system keep itself honest over time? Depends on a working enforced system to improve, so it stays last.
 
 <!-- chat-skip:start -->
 **$ARGUMENTS**
@@ -35,9 +53,18 @@ mkdir -p "$REPO_ROOT/.assess"
 Artefacts will land at:
 - `$REPO_ROOT/.assess/complexity-heatmap.svg`
 - `$REPO_ROOT/.assess/complexity-stats.json`
+- `$REPO_ROOT/.assess/docs-staleness-heatmap.svg`
+- `$REPO_ROOT/.assess/docs-staleness-stats.json`
 - `$REPO_ROOT/.assess/assess-report.md`
 
-## Step 2: Generate Complexity Hotspot SVG + Stats Sidecar
+## Step 2: Generate Both Heatmaps + Stats Sidecars
+
+This step produces **two** treemaps that share one visual grammar (size / hue / saturation) but encode opposite risk models:
+
+- **Complexity heatmap** (`complexity-heatmap.svg`) — code. Red = "hard to change safely".
+- **Docs-staleness heatmap** (`docs-staleness-heatmap.svg`) — docs. Red = "actively misleading". A frozen doc whose subject is churning is the most dangerous lying map; a stale doc beside dead code is pale.
+
+Feed the complexity stats into the linter/complexity layer (Layer 3) and the docs-staleness stats into **Layer 0**.
 
 ### 2a: Offer to install `scc` (one-time per repo)
 
@@ -118,32 +145,46 @@ if [ -f "$REPO_ROOT/.assess/complexity-stats.json" ]; then
   cp "$REPO_ROOT/.assess/complexity-stats.json" "$REPO_ROOT/.assess/complexity-stats.prior.json" 2>/dev/null || true
 fi
 
-# Resolve the script path relative to this skill. The skill lives at
-# ~/.claude/skills/assess/SKILL.md, so the script is alongside it.
 <!-- chat-skip:start -->
-SKILL_DIR="$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")"
+# Resolve this skill's own directory so we can run its bundled scripts. A
+# plugin install exposes $CLAUDE_PLUGIN_ROOT (the plugin root in the version
+# cache, e.g. ~/.claude/plugins/cache/<mp>/<plugin>/<ver>/); fall back to a
+# hand-placed ~/.claude/skills/assess/ copy when it isn't set. CLAUDE_PLUGIN_ROOT
+# is an environment variable, so it stays valid across later steps' shells too.
+SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"
+SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"
 <!-- chat-skip:end -->
 
-# Run the treemap (produces fresh complexity-stats.json)
+# Run the complexity treemap (produces fresh complexity-stats.json)
+# (single line: the standalone transform replaces the marker + one following line)
 <!-- chat-replace:uv-treemap -->
-uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" \
-    -o "$REPO_ROOT/.assess/complexity-heatmap.svg" \
-    --stats "$REPO_ROOT/.assess/complexity-stats.json"
+uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/complexity-heatmap.svg" --stats "$REPO_ROOT/.assess/complexity-stats.json"
 
-# Run the deterministic core (instruction-file grading, stats diff, wiki files, run-context.json)
+# Run the docs-staleness treemap (the inverted heatmap; feeds Layer 0)
+<!-- chat-replace:uv-docs-treemap -->
+uv run "$SKILL_DIR/scripts/docs-staleness-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/docs-staleness-heatmap.svg" --stats "$REPO_ROOT/.assess/docs-staleness-stats.json"
+
+# Run the deterministic core (instruction grading, doc link-graph, doc staleness,
+# liveness/dead-code, observability rungs, stats diff, wiki files, run-context.json)
 <!-- chat-replace:uv-core -->
 uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT"
 ```
 
+Either treemap is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated — <reason>" in the report and continue. The docs-staleness treemap shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
+
 Now `$REPO_ROOT/.assess/run-context.json` contains the structured data you need for the prose sections. Read it before writing the report.
 
-The `plugin_version` field in `run-context.json` tells you which plugin version produced this run. Surface it at the top of the report (e.g., "Generated by `/assess` v1.5.0") so readers can spot it if a stale cached version of the plugin produced unexpected output.
+The `plugin_version` field in `run-context.json` tells you which plugin version produced this run. Surface it at the top of the report (e.g., "Generated by `/assess` v1.8.0") so readers can spot it if a stale cached version of the plugin produced unexpected output.
 
 ## Step 3: Scan Each Layer
 
 Run these checks in parallel where possible. For each layer, collect evidence and assess quality.
 
-### Layer 0: Agent Instructions (Behavioral Contracts)
+### Layer 0: Agent Instructions & Navigability (Read-Side Foundation)
+
+Layer 0 answers: *can the agent form a true picture before it acts?* It has two halves — the agent instruction files (static intent) and the **navigability of the docs** (can the agent traverse to the right place, and is what it finds still true). Score both on maintenance pressure, not presence.
+
+#### 0a — Agent instruction files
 
 Read the agent instruction file grades from `run-context.json`:
 
@@ -172,30 +213,61 @@ When multiple instruction files are present (e.g. CLAUDE.md and AGENTS.md as sym
 
 This replaces the prior subjective "is it generic?" check. The grader rewards positive directives and tradeoff reasoning; it penalizes pure-negative framing and staleness.
 
-**Also scan for orientation docs** - can an agent find its way around?
+#### 0b — Navigability (measured as a graph, not a presence check)
+
+Navigability is a graph property, so the deterministic core measures it as one. Read the doc link-graph, staleness, and association signals from `run-context.json` — **do not re-scan for files by name**; the graph already identifies hubs by centrality without filename guessing:
+
 ```bash
-# README
-ls "$REPO_ROOT"/README.md 2>/dev/null
-# Architecture / structure docs
-fd -t f '(architecture|structure|overview|getting-started)' "$REPO_ROOT/docs" "$REPO_ROOT" --extension md 2>/dev/null | head -5
-# ADRs / decision records
-fd -t d '(adr|decisions|rfcs)' "$REPO_ROOT" 2>/dev/null
-ls "$REPO_ROOT"/docs/adr/ "$REPO_ROOT"/docs/decisions/ 2>/dev/null | head -3
-# API docs (OpenAPI, proto, AsyncAPI)
-fd -t f '\.(proto|swagger|openapi)' "$REPO_ROOT" 2>/dev/null | head -5
-ls "$REPO_ROOT"/{openapi,asyncapi,swagger}* 2>/dev/null
-# Package/module-level docs
-fd -t f 'doc\.go$' "$REPO_ROOT" 2>/dev/null | wc -l  # Go
+jq '.doc_graph, .doc_staleness.association, .doc_staleness.modularity, .stale_hubs[:5]' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-**Report doc quality as a summary line:**
-```
-Docs: README [yes/no], architecture guide [yes/no], ADRs [N found], API specs [N found], package docs [N found]
+Recognise the full range of navigability artefacts (not just README/ADR/API specs): a Map-of-Content (MOC) / index note, a linked-doc graph (cross-referenced markdown — the Karpathy-pattern LLM wiki), `AGENTS.md`, and **repo skills** (`.claude/skills/`, `skills/`). The graph already accounts for all of these.
+
+Score navigability from these signals:
+
+- **Connectivity / reachability (the headline metric).** A *good* doc set is one connected island, fully reachable from the entry points (README / `AGENTS.md` / top MOC). `doc_graph.island_count == 1` and `reachability_pct` near 1.0 is navigable; a high `orphan_rate` or many islands strands both humans and agents (both traverse links). Name the orphan docs.
+- **Hubs / MOCs by centrality.** `doc_graph.hubs` are the load-bearing docs (highest PageRank). A stale hub is the most dangerous lying map — everything routes through it.
+- **MOC validation (declared vs structural).** `doc_graph.moc_named_but_not_wired` lists docs *named* like a map (`index.md`, "MOC") that aren't structural hubs — named but not wired. Flag each as a finding: the graph shows the map isn't actually built.
+- **Centrality × staleness (the priority signal).** `stale_hubs` is ranked by `pagerank × staleness ratio`. The top entry — a central doc whose subject code is churning while the doc sits frozen — is a top finding. This feeds both the docs heatmap and this score.
+- **Doc→code association as a maturity signal.** `doc_staleness.association.pct_code_under_base_doc` and `pct_docs_mapping_to_code`: if the doc→code map is derivable from structure (clean hierarchy/convention), that's positive navigability; docs floating disconnected from the code they describe is a gap.
+- **Modular base docs, size-weighted.** `doc_staleness.modularity`: a module owning a *maintained* base doc is what makes a large codebase navigable to humans and deterministically mappable for an agent. **Weight by size** — do not penalise a small/single-purpose repo (`large_repo: false`); for a `large_repo: true` with low `base_doc_coverage`, flag the Layer 0 gap with remediation "decompose into modules; add a maintained base doc per module." The per-module docs are held to the same maintenance standard — the target is *modular + maintained*, never just "more docs."
+
+**Truth-pressure ordering of navigation aids** (weight maintained/executable aids higher): executable aids that run in CI (skills, doctests) **>** tests **>** linked-doc graph / MOC **>** prose. Executable aids fail loudly when they rot; prose rots silently.
+
+**Scoring rule (mirror the null-vs-F split):** a wiki/MOC/`AGENTS.md` scores **Present** only when *maintained* — its churn tracks the code's churn (low `stale_hubs` ratios, `island_count` ≈ 1, reachability high). Score **Partial/Missing** when stale relative to code churn or fragmented, and flag stale-but-present as **actively misleading** — score it at or below absent. Combine with 0a: strong instruction files **and** a maintained, navigable doc graph → Present; good instructions but a stale or fragmented doc set → Partial; neither → Missing.
+
+### Layer 1: Runtime Legibility / Liveness (Read-Side Foundation)
+
+Layer 1 answers: *is this code actually live, and can the agent find out?* A subsystem can pass every write-side layer — compiles, typed, linted, tested, reviewed — and still be **dead**: the data feeding it stopped, the consumer was re-pointed, but the code remains. Finding the code does not mean it is still used. This layer gates the entire write side: enforcing types/lint/coverage on dead code is wasted at best, misleading at worst.
+
+Read both tiers from `run-context.json`:
+
+```bash
+jq '.dead_code, .observability' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-Missing docs don't reduce the layer score (agent instructions are the primary signal), but flag gaps in the report. An agent with good agent instructions but no README or architecture docs can follow rules but can't orient itself in unfamiliar parts of the codebase.
+**Deterministic tier — intra-repo dead code (`dead_code`).** A best-effort scan (`vulture`/`ts-prune`/`knip`/`staticcheck`/`deadcode`) flags unused exports / unreferenced symbols. `dead_code.tools` reports per-language status; `candidate_count` and `candidates` list the findings (already filtered to *this* repo — vendored/build dirs are excluded). Surface them in the report **with the explicit caveat** from `dead_code.caveat`: static reachability proves "nothing in *this* repo calls it," never "no external consumer calls it." Cross-boundary liveness needs the next tier. When `available: false`, report "intra-repo dead-code scan not run (no language tool present)" — degrade, don't penalise.
 
-### Layer 1: Code Design (Compile-Time Correctness)
+Two `tools[].status` values need handling in the report: `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it — surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `timeout` / `tool_absent` likewise degrade, not penalise.
+
+**Observability tier (the decisive one) — three rungs (`observability.rung`, 0–3):**
+
+1. **Instrumented** — telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging). Necessary, not sufficient.
+2. **Discoverable** — an `OBSERVABILITY.md` / runbook tells the agent *where* runtime truth lives. Orients, but grants no access.
+3. **Reachable** — the agent has an *invokable* path to runtime state: an MCP server over logs/metrics/traces (`.mcp.json`), a repo skill that tails logs / queries metrics, or a runbook with runnable query commands. **This is the rung that decides the score** — without it the agent *knows* telemetry exists but cannot *use* it, so liveness stays unverifiable in practice. A Grafana no agent can query from stops at rung 1. **Boundary:** this scores what the *repo provides* toward agent-reachability; it cannot know the agent's live environment — say so in the report.
+
+**Scoring (by the rungs):**
+- **Present** — reaches **rung 3** (agent can read logs/metrics/traces via an invokable tool/skill/MCP) and dead code is removed or flagged.
+- **Partial** — instrumented, maybe discoverable, but **not agent-reachable** (rung 1–2 — the `meridian` case: telemetry exists, the agent can't use it), or candidate-dead code present and unflagged.
+- **Missing** — no runtime instrumentation (rung 0); liveness unknowable from the repo.
+
+If `observability.available` is `false` (rung `null`), the scan itself failed — report "liveness not assessed" and degrade, don't score it Missing (that's a real "rung 0", a different finding).
+
+**Encode the liveness asymmetry** in the report: *no traffic is strong evidence of dead; some traffic is weak evidence of live* (could be a healthcheck, a zombie client, or a once-a-year batch).
+
+**Encode the honest limit:** some liveness facts live only in people's heads ("kept for Legal, not wired up") — unreachable by code *or* telemetry. So treat **code-presence as a hypothesis, not a fact**: write "`X` is PRESENT; liveness NOT confirmed; needs telemetry or a named human," never assert liveness.
+
+### Layer 2: Code Design (Compile-Time Correctness)
 
 **Scan for type safety indicators** (check whichever languages are present):
 ```bash
@@ -230,7 +302,7 @@ rg 'sdk:\s*.>=\s*[23]\.' "$REPO_ROOT/pubspec.yaml" 2>/dev/null
 - Partial: Type checking exists but not strict, or inconsistent patterns
 - Missing: No type checking, primitive types everywhere, mutable state default
 
-### Layer 2: Linters (Style and Correctness Enforcement)
+### Layer 3: Linters (Style and Correctness Enforcement)
 
 **Scan for linter configuration** (check whichever languages are present):
 ```bash
@@ -278,11 +350,11 @@ if [ -f "$STATS" ]; then
     worst_large: .top_large[:3] | map(.path)
   }' "$STATS"
 else
-  echo "complexity-stats.json not present; scoring Layer 2 on linter config alone."
+  echo "complexity-stats.json not present; scoring Layer 3 on linter config alone."
 fi
 ```
 
-If the sidecar is missing, skip the combined-scoring matrix below and fall back to the original Layer 2 rule: Present if linter config includes AI-relevant rules (including complexity/length), Partial if linter exists without them, Missing if no linter at all. Record "treemap unavailable" in the Evidence column so the gap is auditable.
+If the sidecar is missing, skip the combined-scoring matrix below and fall back to the original Layer 3 rule: Present if linter config includes AI-relevant rules (including complexity/length), Partial if linter exists without them, Missing if no linter at all. Record "treemap unavailable" in the Evidence column so the gap is auditable.
 
 Thresholds for "high" (based on industry conventions — adjust for context):
 
@@ -305,7 +377,7 @@ Thresholds for "high" (based on industry conventions — adjust for context):
 
 When scoring Partial or Missing on this combined check, name the top 3 worst offenders from `top_complex` / `top_large` in the report's Evidence/Gap columns. Those are the files the missing rule would have flagged.
 
-### Layer 3: Architecture Tests (Conventions as Contracts)
+### Layer 4: Architecture Tests (Conventions as Contracts)
 
 **Scan for architecture test files:**
 ```bash
@@ -362,7 +434,7 @@ Tests: <N> test files (<M> unit, <K> integration/e2e) across <languages>
 
 This should bump the test-less repo's score down and make "add tests" the #1 action.
 
-### Layer 4: CI Pipeline (Automated Safety Net)
+### Layer 5: CI Pipeline (Automated Safety Net)
 
 **Scan for CI configuration:**
 ```bash
@@ -393,7 +465,7 @@ gh api repos/{owner}/{repo}/branches/develop/protection 2>/dev/null
 - Partial: CI exists but missing key steps, or failures are advisory
 - Missing: No CI configuration found
 
-### Layer 5: Coverage Gates (Test Completeness Enforcement)
+### Layer 6: Coverage Gates (Test Completeness Enforcement)
 
 **Scan for coverage configuration:**
 ```bash
@@ -415,7 +487,7 @@ rg 'coverage|codecov|coveralls' "$REPO_ROOT"/.github/workflows/*.yml 2>/dev/null
 - Partial: Coverage reported but not enforced, or thresholds too low
 - Missing: No coverage configuration or gates
 
-### Layer 6: Automated Code Review (Design-Level Feedback)
+### Layer 7: Automated Code Review (Design-Level Feedback)
 
 **Scan for review bot configuration:**
 ```bash
@@ -433,7 +505,7 @@ done
 - Partial: Bot configured but not active, or only running basic checks
 - Missing: No automated code review
 
-### Layer 7: AI Project Management (Orchestration and Feedback)
+### Layer 8: AI Project Management (Orchestration and Feedback) — Capstone
 
 Does the project treat AI agents as contributors to plan around - with structured task management, workflow orchestration, and a feedback loop that improves the system over time?
 
@@ -488,7 +560,7 @@ The wiki files at `.assess/index.md` and `.assess/hotspots/*.md` are already upd
 
 ## Step 4: Score and Write the Report
 
-Calculate the score (0-7 based on layers present, +0.5 for partial) and write the report to `$REPO_ROOT/.assess/assess-report.md`.
+Calculate the score (0-8 based on layers present, +0.5 for partial) and write the report to `$REPO_ROOT/.assess/assess-report.md`.
 
 **Report format** (write this to disk verbatim, filling in the placeholders):
 
@@ -499,16 +571,19 @@ _Generated <YYYY-MM-DD>._
 
 ## How to read this report
 
-This is an improvement roadmap, not a verdict. It pairs two views:
+This is an improvement roadmap, not a verdict. It measures one thing: **is the codebase kept honest, not just scaffolded.** It pairs three views:
 
-- **Where the codebase is today** — the hotspot SVG shows current complexity and churn at a glance. Vivid red = complex AND actively changing = the files most likely to bite an agent (or a human) next week.
-- **What scaffolding is in place to keep it from getting worse** — the 7-layer AI Readiness score measures whether the system enforces contracts that catch the issues the hotspots reveal.
+- **Where the codebase is today** — the complexity heatmap shows current complexity and churn. Vivid red = complex AND actively changing = the files most likely to bite an agent (or a human) next week.
+- **Where the map is lying** — the docs-staleness heatmap shows which docs have frozen while their subject code moved. Vivid red = a load-bearing doc whose subject is churning = a map that will navigate the reader fast to a wrong, current-looking conclusion.
+- **What keeps it from getting worse** — the AI Readiness score (0–8) across three bands: read-side foundation (can the agent form a true picture?), write-side enforcement (can it be trusted to produce good output?), and meta (does the system keep itself honest over time?).
 
-A codebase can be 7/7 and still on fire (great scaffolding, legacy debt) — or 2/7 with a calm treemap (small codebase, no enforcement needed yet). The pair matters.
+A codebase can be 8/8 and still on fire (great scaffolding, legacy debt) — or 2/8 with a calm treemap (small codebase, no enforcement needed yet). The views matter together.
 
 The "Top 3 Actions" table at the bottom names specific files. Start there.
 
-## Hotspot snapshot
+## Hotspot snapshots
+
+### Complexity — riskiest to change
 
 ![Complexity hotspot](./complexity-heatmap.svg)
 
@@ -522,29 +597,42 @@ The "Top 3 Actions" table at the bottom names specific files. Start there.
 
 Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk.
 
+### Docs staleness — most likely to mislead
+
+![Docs staleness](./docs-staleness-heatmap.svg)
+
+- **Docs scored:** <N> (size basis: <centrality | doc-length>)
+- **Navigability:** island count <N>, orphan rate <P%>, reachability <P%> from entry points
+- **Top lying maps** (size × staleness × subject churn):
+  1. `<doc path>` — stale <N>d, subject churn <M>, centrality <C>
+  2. ...
+
+Size encodes link-graph centrality (load-bearing docs are biggest), hue encodes doc staleness (red = stale), saturation encodes churn of the code the doc describes (vivid = subject moving). Vivid red = a frozen doc whose subject is churning. Same grammar as the complexity map, opposite meaning: there red = "hard to change", here red = "actively misleading".
+
 ## AI Readiness
 
-**Score: X / 7** — <maturity-label>
+**Score: X / 8** — <maturity-label>
 
-| Layer | Status | Evidence | Gap |
-|-------|--------|----------|-----|
-| 0: Agent Instructions | Present/Partial/Missing | <what was found> | <what's missing> |
-| 1: Code Design | Present/Partial/Missing | <what was found> | <what's missing> |
-| 2: Linters | Present/Partial/Missing | <what was found> | <what's missing> |
-| 3: Architecture Tests | Present/Partial/Missing | <what was found> | <what's missing> |
-| 4: CI Pipeline | Present/Partial/Missing | <what was found> | <what's missing> |
-| 5: Coverage Gates | Present/Partial/Missing | <what was found> | <what's missing> |
-| 6: Code Review Bots | Present/Partial/Missing | <what was found> | <what's missing> |
-| 7: AI Project Mgmt | Present/Partial/Missing | <what was found> | <what's missing> |
+| Layer | Band | Status | Evidence | Gap |
+|-------|------|--------|----------|-----|
+| 0: Agent Instructions & Navigability | read | Present/Partial/Missing | <what was found> | <what's missing> |
+| 1: Runtime Legibility / Liveness | read | Present/Partial/Missing | <what was found> | <what's missing> |
+| 2: Code Design | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 3: Linters | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 4: Architecture Tests | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 5: CI Pipeline | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 6: Coverage Gates | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 7: Code Review Bots | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 8: AI Project Mgmt (capstone) | meta | Present/Partial/Missing | <what was found> | <what's missing> |
 
 ### Maturity Level
 
 | Score | Level | Description |
 |-------|-------|-------------|
-| 0-1 | Not Ready | Agent will produce inconsistent, unvalidated code |
-| 2-3 | Basic | Norms exist but aren't enforced. Agent works but drifts |
-| 4-5 | Solid | Contracts catch most issues. Agent is productive |
-| 6-7 | AI-Native | System self-improves. Agents work reliably at scale |
+| 0-2 | Not Ready | Agent will produce inconsistent, unvalidated code |
+| 3-4 | Basic | Norms exist but aren't enforced. Agent works but drifts |
+| 5-6 | Solid | Contracts catch most issues. Agent is productive |
+| 7-8 | AI-Native | System self-improves. Agents work reliably at scale |
 
 ## Top 3 Actions
 
@@ -571,6 +659,12 @@ Generic actions to avoid:
 > ~~_"Improve code quality"_~~ — name the files and the threshold.
 > ~~_"Add a linter"_~~ — name the linter, the rule, and the first three files it will flag.
 
+**Read-side remediation must match the actual gap.** The diagnosis from Layers 0–1 changes the action:
+
+- **Layer 1 Partial because observability is instrumented but not agent-reachable** (rung 1–2 — the `meridian` case): the action is _"make existing observability agent-queryable"_ — e.g. "add a `.mcp.json` log/metrics server" or "add a `view-logs` repo skill wrapping `logcli`" — **not** "add observability" (it's already there; the gap is reachability).
+- **Layer 0 Partial because a hub doc is stale:** name the specific stale hub from `stale_hubs` and its churning subject — _"refresh `docs/architecture.md` (251d stale; subject `src/api/` had 47 commits in window)"_ — not "improve the docs".
+- **Layer 0 Partial because the doc set is fragmented:** name the orphans / islands — _"link the 6 orphan docs into the MOC; `index.md` is named but not wired (out-degree 0)"_.
+
 ### Why these three?
 <2-3 sentences explaining why these are highest leverage. Connect to specific gaps from the table above and to hotspot files where relevant. Be concrete about what each action prevents.>
 
@@ -592,35 +686,36 @@ _Report generated by [`/ai-native-toolkit:assess`](https://github.com/bjcoombs/a
 
 Complete the full assessment in under 2 minutes. Scan, don't deep-read.
 
-The SVG is referenced by relative path (`./complexity-heatmap.svg`) so GitHub renders it inline when the MD is viewed in a PR or on the file page.
+Both SVGs are referenced by relative path (`./complexity-heatmap.svg`, `./docs-staleness-heatmap.svg`) so GitHub renders them inline when the MD is viewed in a PR or on the file page. Omit a heatmap's section only if its script could not generate the SVG (record the reason instead).
 
 The plugin footer is important — it's how other engineers viewing the report in a PR discover the tool that produced it. Do not omit it.
 
 ## Step 5: Ask Whether to Open a PR
 
-After writing both files, surface them and ask the user — verbatim — something like:
+After writing the files, surface them and ask the user — verbatim — something like:
 
-> Wrote `.assess/assess-report.md` and `.assess/complexity-heatmap.svg` in `<repo-name>`. Want me to open a PR in this repo with both files, or leave them local for you to review first?
+> Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/docs-staleness-heatmap.svg` in `<repo-name>`. Want me to open a PR in this repo with these files, or leave them local for you to review first?
 
 If the user says **yes / PR**:
 1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
-2. Stage and commit both files. Commit message: `docs: Add AI-readiness assessment + complexity hotspot snapshot`.
+2. Stage and commit the report and both heatmaps. Commit message: `docs: Add AI-readiness assessment + complexity and docs-staleness snapshots`.
 3. Push the branch and open a PR. Title: `docs: Codebase assessment — <YYYY-MM-DD>`.
 4. **PR body must include the plugin reference at the bottom** so reviewers can install the tool that generated the report. Use this body template:
 
    ```markdown
    ## Summary
 
-   Snapshot of this codebase's AI-agent readiness and complexity hotspots as of <YYYY-MM-DD>.
+   Snapshot of this codebase's AI-agent readiness, complexity hotspots, and docs staleness as of <YYYY-MM-DD>.
 
-   - **AI Readiness:** <X / 7> — <maturity-label>
+   - **AI Readiness:** <X / 8> — <maturity-label>
    - **Hotspot leader:** `<top hotspot path>` (<loc> LOC, ccn <N>, <M> commits in window)
+   - **Top lying map:** `<top stale-hub doc>` (<N>d stale, subject churn <M>)
 
    ## Top 3 Actions
 
    <paste the Top 3 Actions table from .assess/assess-report.md verbatim>
 
-   Full report: [`.assess/assess-report.md`](./.assess/assess-report.md) (the complexity heatmap renders inline).
+   Full report: [`.assess/assess-report.md`](./.assess/assess-report.md) (both heatmaps render inline).
 
    ---
 
@@ -755,12 +850,18 @@ cat > "$REPO_ROOT/.assess/finalize-input.json" <<'EOF'
 }
 EOF
 
+<!-- chat-skip:start -->
+# Re-resolve the skill dir in case this runs in a fresh shell (Step 2's shell
+# var won't have survived; the env var $CLAUDE_PLUGIN_ROOT will).
+SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"
+SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"
+<!-- chat-skip:end -->
 <!-- chat-replace:uv-finalize -->
 uv run "$SKILL_DIR/scripts/assess_finalize.py" "$REPO_ROOT"
 ````
 
 This replaces:
-- `log.md`'s last entry placeholder `**AI Readiness:** 0.0 / 7 ((LLM fills in))` with your actual score and maturity label.
+- `log.md`'s last entry placeholder `**AI Readiness:** 0.0 / 8 ((LLM fills in))` with your actual score and maturity label.
 - `log.md`'s last entry placeholder `**Top action:** Deterministic ranker not yet wired ...` with your actual Top 1 action.
 - Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file.
 

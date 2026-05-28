@@ -48,8 +48,8 @@ def _finalize_log(assess_dir: Path, *, score: float, maturity_label: str, top_ac
     # An unfinalized older entry stays untouched as historical evidence.
     text = _replace_last(
         text,
-        pattern=r"\*\*AI Readiness:\*\* [\d.]+ / 7 \(\(LLM fills in\)\)",
-        replacement=f"**AI Readiness:** {score} / 7 ({maturity_label})",
+        pattern=r"\*\*AI Readiness:\*\* [\d.]+ / 8 \(\(LLM fills in\)\)",
+        replacement=f"**AI Readiness:** {score} / 8 ({maturity_label})",
     )
     text = _replace_last(
         text,
