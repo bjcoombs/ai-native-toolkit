@@ -61,6 +61,12 @@ class TestAssessBuild:
         for name, content in _md_contents(assess_zip).items():
             assert "SKILL_DIR" not in content, f"{name}: SKILL_DIR leaked"
 
+    def test_no_plugin_root_reference(self, assess_zip):
+        # The plugin-only path resolution ($CLAUDE_PLUGIN_ROOT) must be stripped;
+        # standalone uses bare scripts/ paths.
+        for name, content in _md_contents(assess_zip).items():
+            assert "CLAUDE_PLUGIN_ROOT" not in content, f"{name}: CLAUDE_PLUGIN_ROOT leaked"
+
     def test_no_dollar_arguments(self, assess_zip):
         for name, content in _md_contents(assess_zip).items():
             assert "$ARGUMENTS" not in content, f"{name}: $ARGUMENTS leaked"

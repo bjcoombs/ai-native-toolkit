@@ -145,10 +145,14 @@ if [ -f "$REPO_ROOT/.assess/complexity-stats.json" ]; then
   cp "$REPO_ROOT/.assess/complexity-stats.json" "$REPO_ROOT/.assess/complexity-stats.prior.json" 2>/dev/null || true
 fi
 
-# Resolve the script path relative to this skill. The skill lives at
-# ~/.claude/skills/assess/SKILL.md, so the script is alongside it.
 <!-- chat-skip:start -->
-SKILL_DIR="$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")"
+# Resolve this skill's own directory so we can run its bundled scripts. A
+# plugin install exposes $CLAUDE_PLUGIN_ROOT (the plugin root in the version
+# cache, e.g. ~/.claude/plugins/cache/<mp>/<plugin>/<ver>/); fall back to a
+# hand-placed ~/.claude/skills/assess/ copy when it isn't set. CLAUDE_PLUGIN_ROOT
+# is an environment variable, so it stays valid across later steps' shells too.
+SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"
+SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"
 <!-- chat-skip:end -->
 
 # Run the complexity treemap (produces fresh complexity-stats.json)
@@ -844,6 +848,12 @@ cat > "$REPO_ROOT/.assess/finalize-input.json" <<'EOF'
 }
 EOF
 
+<!-- chat-skip:start -->
+# Re-resolve the skill dir in case this runs in a fresh shell (Step 2's shell
+# var won't have survived; the env var $CLAUDE_PLUGIN_ROOT will).
+SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"
+SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"
+<!-- chat-skip:end -->
 <!-- chat-replace:uv-finalize -->
 uv run "$SKILL_DIR/scripts/assess_finalize.py" "$REPO_ROOT"
 ````
