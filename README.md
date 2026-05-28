@@ -11,7 +11,11 @@ The headline pieces are two **skills**:
 
 [![Example complexity hotspot from a real codebase](docs/example-heatmap.svg)](docs/example-heatmap.svg)
 
-> Real output from `/ai-native-toolkit:assess` run against a ~150k-LOC private monorepo (file paths sanitized). Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk an agent (or human) is most likely to break next week. Hover any block for its LOC, CCN, and recent commit count.
+> Real output from `/ai-native-toolkit:assess` run against a ~650k-LOC private monorepo (file paths sanitized). Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk an agent (or human) is most likely to break next week. Hover any block for its LOC, CCN, and recent commit count.
+
+[![Example doc navigability map from the same codebase](docs/example-doc-graph.svg)](docs/example-doc-graph.svg)
+
+> Doc-navigability graph from the same run (254 docs, 622 links, 43 islands, 30% reachable from the entry point). Structure encodes reachability (centre = entry, rings = link-distance from entry, rim = unreachable, dashed ring = orphan); colour encodes staleness in the same OrRd ramp as the heatmap (vivid red = a frozen doc beside churning code = a *lying map*); size encodes file length. Hover any node for its in/out degree, reachability state, and staleness. Read alongside the heatmap: the heatmap tells you what's risky to change; this tells you whether the docs an agent might consult before changing it are still true.
 
 ### Why this matters for an AI-driven codebase
 
