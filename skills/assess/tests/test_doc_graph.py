@@ -100,6 +100,46 @@ def test_excludes_assess_and_vendor_dirs(tmp_path: Path) -> None:
     assert r.doc_count == 1
 
 
+def test_graph_object_exposed_for_renderer(tmp_path: Path) -> None:
+    """DocGraphResult.graph carries the networkx graph (the SVG renderer needs
+    the full edge list, which as_dict doesn't serialise)."""
+    _write(tmp_path, "a.md", "[[b]]")
+    _write(tmp_path, "b.md", "x")
+    r = build_doc_graph(tmp_path)
+    assert r.graph is not None
+    assert set(r.graph.nodes()) == {"a.md", "b.md"}
+    assert "graph" not in r.as_dict()
+
+
+def test_is_repo_file_rejects_symlink_escape(tmp_path: Path) -> None:
+    import os
+    from lib.doc_graph import is_repo_file
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("not ours", encoding="utf-8")
+    (repo / "real.md").write_text("ours", encoding="utf-8")
+    os.symlink(outside, repo / "link.md")  # symlink inside repo -> outside
+    rr = repo.resolve()
+    assert is_repo_file(repo / "real.md", rr, None) is True
+    assert is_repo_file(repo / "link.md", rr, None) is False  # resolves outside repo
+
+
+def test_untracked_files_excluded_in_git_repo(git_repo) -> None:
+    """A contributor's untracked personal doc is not part of the repo and must
+    not be scanned (the external-CLAUDE.md class of false positive)."""
+    repo, commit = git_repo
+    (repo / "README.md").write_text("# Home\n[[guide]]", encoding="utf-8")
+    (repo / "guide.md").write_text("tracked", encoding="utf-8")
+    commit("docs")
+    (repo / "personal.md").write_text("my private notes", encoding="utf-8")  # untracked
+
+    r = build_doc_graph(repo)
+    nodes = set(r.graph.nodes())
+    assert {"README.md", "guide.md"} <= nodes
+    assert "personal.md" not in nodes
+
+
 def test_degrades_when_networkx_unavailable(tmp_path: Path, monkeypatch) -> None:
     _write(tmp_path, "README.md", "[[a]]")
     _write(tmp_path, "a.md", "x")

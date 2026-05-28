@@ -113,3 +113,18 @@ def test_fresh_doc_beside_fresh_code_has_low_ratio(git_repo) -> None:
     assert readme["last_commit_days"] is not None and readme["last_commit_days"] <= 30
     # doc and code moved together -> ratio stays near 1 (not a decaying map)
     assert readme["ratio"] <= 2
+
+
+def test_untracked_files_excluded_from_staleness(git_repo) -> None:
+    """Untracked personal docs/code are not part of the repo and aren't scored."""
+    repo, commit = git_repo
+    (repo / "README.md").write_text("doc", encoding="utf-8")
+    (repo / "app.py").write_text("x = 1", encoding="utf-8")
+    commit("init", days_ago=3)
+    (repo / "personal.md").write_text("private", encoding="utf-8")  # untracked
+
+    r = analyze_doc_staleness(repo)
+    doc_paths = {d["path"] for d in r["docs"]}
+    assert "README.md" in doc_paths
+    assert "personal.md" not in doc_paths
+    assert r["association"]["doc_count"] == 1  # only the tracked doc counted
