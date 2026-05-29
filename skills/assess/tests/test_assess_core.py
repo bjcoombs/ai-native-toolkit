@@ -681,3 +681,38 @@ def test_first_flagged_stamps_today_for_genuinely_new_hotspot(tmp_path: Path) ->
     fresh_page = next(p for p in (assess_dir / "hotspots").iterdir()
                       if p.name.startswith("src-fresh-go-"))
     assert "First flagged: 2026-05-22" in fresh_page.read_text(encoding="utf-8")
+
+
+def test_config_excludes_apply_to_all_scans(tmp_path: Path) -> None:
+    """`.assess/config.toml` excludes are loaded once by the orchestrator
+    and applied uniformly to the doc graph, doc staleness, and liveness
+    scan. A `regulatory-raw/` dir vanishes from every layer's view, not
+    just the treemap. This is the single load-bearing test for the
+    consistent-excludes design - if it passes, the schema rename and the
+    per-scan plumbing are wired correctly end-to-end."""
+    repo = _minimal_repo(tmp_path)
+    # Config opt-in.
+    (repo / ".assess" / "config.toml").write_text(
+        'exclude_dirs = ["regulatory-raw"]\n',
+        encoding="utf-8",
+    )
+    # Two docs (one in scope, one excluded) and two code files (same).
+    (repo / "README.md").write_text("see [main](./src/app.py)\n", encoding="utf-8")
+    (repo / "src").mkdir()
+    (repo / "src" / "app.py").write_text("def used(): pass\n", encoding="utf-8")
+    (repo / "regulatory-raw").mkdir()
+    (repo / "regulatory-raw" / "notes.md").write_text("ref data note\n", encoding="utf-8")
+    (repo / "regulatory-raw" / "loader.py").write_text("x = 1\n", encoding="utf-8")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+
+    # Doc graph: only README.md is counted.
+    assert ctx["doc_graph"]["doc_count"] == 1
+    # Doc staleness: only the in-scope doc + code file are counted.
+    assert ctx["doc_staleness"]["association"]["doc_count"] == 1
+    assert ctx["doc_staleness"]["association"]["code_file_count"] == 1
+    # Liveness: any candidate paths from the dead-code scan must not
+    # mention regulatory-raw (vulture etc. would either skip the dir
+    # via --exclude or get post-filtered).
+    for c in ctx["dead_code"].get("candidates", []):
+        assert "regulatory-raw" not in c.get("path", "")

@@ -197,12 +197,10 @@ def test_cli_exclude_classifies_glob_vs_dir(treemap, monkeypatch, tmp_path):
 
 def test_cli_exclude_merges_with_config_toml(treemap, monkeypatch, tmp_path):
     """`.assess/config.toml` and `--exclude` both layer onto the defaults;
-    neither replaces the other. Config-supplied dirs go to extra_dirs
-    verbatim (the config schema is explicit), CLI dirs join them, and
+    neither replaces the other. Config-supplied dirs join CLI dirs, and
     glob patterns merge across both sources."""
     (tmp_path / ".assess").mkdir()
     (tmp_path / ".assess" / "config.toml").write_text(
-        '[treemap]\n'
         'exclude_dirs = ["vetted-context", "regulatory-raw"]\n'
         'exclude_patterns = ["*.parquet"]\n',
         encoding="utf-8",
@@ -232,26 +230,25 @@ def test_cli_exclude_merges_with_config_toml(treemap, monkeypatch, tmp_path):
 def test_config_loader_missing_file_is_empty(tmp_path):
     """A repo with no .assess/config.toml degrades silently - no warning,
     no error, just an empty config (the common case)."""
-    from lib.assess_config import load_config, treemap_excludes
+    from lib.assess_config import load_excludes
 
-    cfg = load_config(tmp_path)
-    assert cfg == {}
-    dirs, pats = treemap_excludes(cfg)
-    assert dirs == []
+    dirs, pats = load_excludes(tmp_path)
+    assert dirs == set()
     assert pats == []
 
 
 def test_config_loader_malformed_toml_returns_empty(tmp_path, capsys):
     """A broken TOML file must never block the assessment - the loader
-    returns an empty config and prints a one-line warning."""
-    from lib.assess_config import load_config
+    returns empty excludes and prints a one-line warning."""
+    from lib.assess_config import load_excludes
 
     (tmp_path / ".assess").mkdir()
     (tmp_path / ".assess" / "config.toml").write_text(
         "this is not valid = = toml\n", encoding="utf-8",
     )
-    cfg = load_config(tmp_path)
-    assert cfg == {}
+    dirs, pats = load_excludes(tmp_path)
+    assert dirs == set()
+    assert pats == []
     captured = capsys.readouterr()
     assert "could not read" in captured.err
 
@@ -260,15 +257,30 @@ def test_config_loader_drops_non_string_entries(tmp_path):
     """A schema violation in one entry doesn't poison the rest - e.g.
     `exclude_dirs = ["regulatory-raw", 42]` keeps the string and drops
     the integer."""
-    from lib.assess_config import load_config, treemap_excludes
+    from lib.assess_config import load_excludes
 
     (tmp_path / ".assess").mkdir()
     (tmp_path / ".assess" / "config.toml").write_text(
-        '[treemap]\n'
         'exclude_dirs = ["regulatory-raw", 42, "vetted-context"]\n'
         'exclude_patterns = ["*.csv", true]\n',
         encoding="utf-8",
     )
-    dirs, pats = treemap_excludes(load_config(tmp_path))
-    assert dirs == ["regulatory-raw", "vetted-context"]
+    dirs, pats = load_excludes(tmp_path)
+    assert dirs == {"regulatory-raw", "vetted-context"}
+    assert pats == ["*.csv"]
+
+
+def test_config_loader_no_legacy_section_needed(tmp_path):
+    """The schema is top-level - no `[treemap]` or `[exclude]` wrapper.
+    The file is already namespaced by living under `.assess/config.toml`."""
+    from lib.assess_config import load_excludes
+
+    (tmp_path / ".assess").mkdir()
+    (tmp_path / ".assess" / "config.toml").write_text(
+        'exclude_dirs = ["regulatory-raw"]\n'
+        'exclude_patterns = ["*.csv"]\n',
+        encoding="utf-8",
+    )
+    dirs, pats = load_excludes(tmp_path)
+    assert dirs == {"regulatory-raw"}
     assert pats == ["*.csv"]

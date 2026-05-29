@@ -151,6 +151,34 @@ def test_real_links_outside_code_still_extracted(tmp_path: Path) -> None:
     assert any(p == "guide.md" for p, _ in edges) or r.edge_count >= 1
 
 
+def test_doc_graph_honors_user_exclude_dirs(tmp_path: Path) -> None:
+    """A user-supplied exclude (from `.assess/config.toml` or CLI) keeps
+    docs inside that directory out of the graph entirely - the same
+    semantics every other /assess scan applies. See test_assess_core for
+    the orchestrator-level integration that loads excludes once and
+    threads them everywhere."""
+    _write(tmp_path, "README.md", "see [vetted](./regulatory-raw/notes.md)\n")
+    _write(tmp_path, "regulatory-raw/notes.md", "ref data note")
+
+    # Baseline: both docs are counted.
+    assert build_doc_graph(tmp_path).doc_count == 2
+
+    # With the exclude: regulatory-raw/notes.md vanishes from the graph.
+    r = build_doc_graph(tmp_path, extra_exclude_dirs={"regulatory-raw"})
+    assert r.doc_count == 1
+
+
+def test_doc_graph_honors_user_exclude_patterns(tmp_path: Path) -> None:
+    """A glob pattern in the user excludes filters by basename. Same
+    fnmatch semantics as `EXCLUDE_FILE_PATTERNS`."""
+    _write(tmp_path, "README.md", "real")
+    _write(tmp_path, "SCRATCH-NOTES.md", "scratch")
+
+    assert build_doc_graph(tmp_path).doc_count == 2
+    r = build_doc_graph(tmp_path, extra_exclude_patterns=["SCRATCH-*.md"])
+    assert r.doc_count == 1
+
+
 def test_excludes_assess_and_vendor_dirs(tmp_path: Path) -> None:
     _write(tmp_path, "README.md", "real doc")
     _write(tmp_path, ".assess/log.md", "our own output")

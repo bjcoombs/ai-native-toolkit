@@ -77,10 +77,15 @@ class DocStaleness:
         }
 
 
-def _discover(repo_root: Path, exts: set[str]) -> list[Path]:
+def _discover(repo_root: Path, exts: set[str],
+              extra_exclude_dirs: set[str] | None = None,
+              extra_exclude_patterns: list[str] | None = None) -> list[Path]:
     """In-repo files with the given extensions (tracked + within repo only)."""
+    from lib.assess_config import is_user_excluded
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
+    extra_dirs = extra_exclude_dirs or set()
+    extra_pats = extra_exclude_patterns or []
     files: list[Path] = []
     for path in repo_root.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in exts:
@@ -91,18 +96,34 @@ def _discover(repo_root: Path, exts: set[str]) -> list[Path]:
             continue
         if any(part in EXCLUDE_DIRS for part in rel.parts):
             continue
+        if is_user_excluded(rel, extra_dirs, extra_pats):
+            continue
         if not is_repo_file(path, repo_root, tracked):
             continue
         files.append(path)
     return sorted(files)
 
 
-def discover_code_files(repo_root: Path) -> list[Path]:
-    return _discover(repo_root, CODE_EXTENSIONS)
+def discover_code_files(repo_root: Path,
+                        extra_exclude_dirs: set[str] | None = None,
+                        extra_exclude_patterns: list[str] | None = None,
+                        ) -> list[Path]:
+    return _discover(
+        repo_root, CODE_EXTENSIONS,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    )
 
 
-def discover_doc_files(repo_root: Path) -> list[Path]:
-    return _discover(repo_root, DOC_EXTENSIONS)
+def discover_doc_files(repo_root: Path,
+                       extra_exclude_dirs: set[str] | None = None,
+                       extra_exclude_patterns: list[str] | None = None,
+                       ) -> list[Path]:
+    return _discover(
+        repo_root, DOC_EXTENSIONS,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    )
 
 
 def _is_base_doc(doc: Path) -> bool:
@@ -180,11 +201,26 @@ def analyze_doc_staleness(
     repo_root: Path,
     doc_files: list[Path] | None = None,
     doc_to_code_edges: list[dict] | None = None,
+    extra_exclude_dirs: set[str] | None = None,
+    extra_exclude_patterns: list[str] | None = None,
 ) -> dict:
     """Compute the doc-staleness metric and doc->code association summary."""
     repo_root = repo_root.resolve()
-    docs = [d.resolve() for d in (doc_files if doc_files is not None else discover_doc_files(repo_root))]
-    code_files = discover_code_files(repo_root)
+    docs = [
+        d.resolve() for d in (
+            doc_files if doc_files is not None
+            else discover_doc_files(
+                repo_root,
+                extra_exclude_dirs=extra_exclude_dirs,
+                extra_exclude_patterns=extra_exclude_patterns,
+            )
+        )
+    ]
+    code_files = discover_code_files(
+        repo_root,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    )
 
     def rel(p: Path) -> str:
         return str(p.relative_to(repo_root))

@@ -48,12 +48,19 @@ STATIC_REACHABILITY_CAVEAT = (
 
 # ── dead-code tier ─────────────────────────────────────────────────────────
 
-def _has_ext(repo_root: Path, exts: set[str]) -> bool:
+def _has_ext(repo_root: Path, exts: set[str],
+             extra_exclude_dirs: set[str] | None = None,
+             extra_exclude_patterns: list[str] | None = None) -> bool:
+    from lib.assess_config import is_user_excluded
+    extra_dirs = extra_exclude_dirs or set()
+    extra_pats = extra_exclude_patterns or []
     for path in repo_root.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in exts:
             continue
         rel = path.relative_to(repo_root)
         if any(part in EXCLUDE_DIRS for part in rel.parts):
+            continue
+        if is_user_excluded(rel, extra_dirs, extra_pats):
             continue
         return True
     return False
@@ -124,13 +131,17 @@ def _parse_knip(stdout: str) -> list[dict]:
     return out
 
 
-def _vulture_excludes() -> str:
+def _vulture_excludes(extra_exclude_dirs: set[str] | None = None) -> str:
     """Comma-separated glob patterns so vulture skips vendored / build dirs.
 
     Without this a committed `.venv/` or vendored package can fill the
     candidate cap with third-party dead code and crowd out *this* repo's.
+    User-supplied `extra_exclude_dirs` (from `.assess/config.toml` or
+    `--exclude`) join the same list so a `regulatory-raw/` directory is
+    skipped at scan time, not just filtered after.
     """
-    return ",".join(f"*/{d}/*" for d in sorted(EXCLUDE_DIRS))
+    extras = extra_exclude_dirs or set()
+    return ",".join(f"*/{d}/*" for d in sorted(EXCLUDE_DIRS | extras))
 
 
 # language -> ordered tool preference. Each tool: cmd builder, parser, and a
@@ -139,27 +150,50 @@ def _vulture_excludes() -> str:
 # project (can hit the network and write the module cache), so they are NOT run
 # by default - that would make a "read-only assessor" mutate state. They are
 # reported as available-but-not-run unless explicitly opted in.
+# cmd-builder signature: `(root, extra_dirs)`. Only vulture currently uses
+# `extra_dirs` (it accepts a comma-separated `--exclude` list); the other
+# tools take their excludes from external config files or honour the
+# post-scan filter in `_under_excluded`.
 _DEAD_CODE_TOOLS: list[dict] = [
     {"language": "python", "tool": "vulture", "exts": {".py"}, "builds": False,
-     "cmd": lambda root: ["vulture", ".", "--exclude", _vulture_excludes()],
+     "cmd": lambda root, extra_dirs: [
+         "vulture", ".", "--exclude", _vulture_excludes(extra_dirs),
+     ],
      "parser": _parse_vulture},
     {"language": "typescript", "tool": "ts-prune", "exts": {".ts", ".tsx"},
      "builds": False,
-     "cmd": lambda root: ["ts-prune"], "parser": _parse_ts_prune},
+     "cmd": lambda root, extra_dirs: ["ts-prune"], "parser": _parse_ts_prune},
     {"language": "typescript", "tool": "knip", "exts": {".ts", ".tsx", ".js", ".jsx"},
      "builds": True,
-     "cmd": lambda root: ["knip", "--reporter", "json"], "parser": _parse_knip},
+     "cmd": lambda root, extra_dirs: ["knip", "--reporter", "json"],
+     "parser": _parse_knip},
     {"language": "go", "tool": "deadcode", "exts": {".go"}, "builds": True,
-     "cmd": lambda root: ["deadcode", "./..."], "parser": _parse_deadcode},
+     "cmd": lambda root, extra_dirs: ["deadcode", "./..."],
+     "parser": _parse_deadcode},
     {"language": "go", "tool": "staticcheck", "exts": {".go"}, "builds": True,
-     "cmd": lambda root: ["staticcheck", "-checks", "U1000", "./..."],
+     "cmd": lambda root, extra_dirs: [
+         "staticcheck", "-checks", "U1000", "./...",
+     ],
      "parser": _parse_staticcheck},
 ]
 
 
-def _under_excluded(path_str: str) -> bool:
-    """True if a candidate path sits under a vendored / build directory."""
-    return any(part in EXCLUDE_DIRS for part in Path(path_str).parts)
+def _under_excluded(path_str: str,
+                    extra_exclude_dirs: set[str] | None = None,
+                    extra_exclude_patterns: list[str] | None = None) -> bool:
+    """True if a candidate path sits under a vendored / build directory, or
+    matches a user-supplied exclude. Used to filter dead-code-tool output
+    so candidates from `regulatory-raw/` reference data don't surface."""
+    from lib.assess_config import is_user_excluded
+    parts = Path(path_str).parts
+    if any(part in EXCLUDE_DIRS for part in parts):
+        return True
+    if extra_exclude_dirs or extra_exclude_patterns:
+        return is_user_excluded(
+            Path(path_str), extra_exclude_dirs or set(),
+            extra_exclude_patterns or [],
+        )
+    return False
 
 
 @dataclass
@@ -180,22 +214,37 @@ class DeadCodeResult:
 
 
 def scan_dead_code(repo_root: Path, run: bool = True,
-                   run_build_tools: bool = False) -> DeadCodeResult:
+                   run_build_tools: bool = False,
+                   extra_exclude_dirs: set[str] | None = None,
+                   extra_exclude_patterns: list[str] | None = None,
+                   ) -> DeadCodeResult:
     """Best-effort intra-repo dead-code scan. Never raises.
 
     Static tools (vulture, ts-prune) run by default. Tools that resolve/compile
     the project (`builds: True` - deadcode, staticcheck, knip) are skipped
     unless `run_build_tools` is set, so the default scan stays read-only.
+
+    `extra_exclude_dirs` and `extra_exclude_patterns` come from
+    `.assess/config.toml` / `--exclude` and apply at three points: the
+    language-presence probe (`_has_ext` - so a repo whose only Python lives
+    in `regulatory-raw/` reports `tool_absent: no Python in scope`), the
+    vulture `--exclude` argument, and the post-scan filter on candidates.
     """
     repo_root = repo_root.resolve()
     result = DeadCodeResult()
     seen_languages: set[str] = set()
+    extra_dirs = extra_exclude_dirs or set()
+    extra_pats = extra_exclude_patterns or []
 
     for spec in _DEAD_CODE_TOOLS:
         lang = spec["language"]
         if lang in seen_languages:  # one tool per language: first available wins
             continue
-        if not _has_ext(repo_root, spec["exts"]):
+        if not _has_ext(
+            repo_root, spec["exts"],
+            extra_exclude_dirs=extra_dirs,
+            extra_exclude_patterns=extra_pats,
+        ):
             continue
         tool = spec["tool"]
         if shutil.which(tool) is None:
@@ -214,13 +263,13 @@ def scan_dead_code(repo_root: Path, run: bool = True,
                 "language": lang, "tool": tool, "status": "available_not_run",
                 "reason": (f"{tool} would build the project (may write the module "
                            "cache / hit the network); not run by a read-only "
-                           f"assessment. Run `{' '.join(spec['cmd'](repo_root))}` "
+                           f"assessment. Run `{' '.join(spec['cmd'](repo_root, extra_dirs))}` "
                            "manually to cross-check."),
             })
             continue
         try:
             proc = subprocess.run(
-                spec["cmd"](repo_root), cwd=str(repo_root),
+                spec["cmd"](repo_root, extra_dirs), cwd=str(repo_root),
                 capture_output=True, text=True, timeout=DEAD_CODE_TIMEOUT,
                 check=False,
             )
@@ -233,9 +282,16 @@ def scan_dead_code(repo_root: Path, run: bool = True,
             result.tools.append({"language": lang, "tool": tool,
                                  "status": "error", "reason": str(e)})
             continue
-        # Keep the signal about THIS repo: drop candidates under vendored/build dirs.
-        found = [c for c in spec["parser"](proc.stdout)
-                 if not _under_excluded(c["path"])]
+        # Keep the signal about THIS repo: drop candidates under vendored/build
+        # dirs OR under user-supplied excludes (regulatory-raw, etc.).
+        found = [
+            c for c in spec["parser"](proc.stdout)
+            if not _under_excluded(
+                c["path"],
+                extra_exclude_dirs=extra_dirs,
+                extra_exclude_patterns=extra_pats,
+            )
+        ]
         result.available = True
         result.candidates.extend(found)
         result.tools.append({"language": lang, "tool": tool, "status": "ran",
@@ -307,13 +363,21 @@ _OBS_TOOL_RE = re.compile(
     re.IGNORECASE)
 
 
-def _iter_files(repo_root: Path, exts: set[str] | None = None) -> list[Path]:
+def _iter_files(repo_root: Path, exts: set[str] | None = None,
+                extra_exclude_dirs: set[str] | None = None,
+                extra_exclude_patterns: list[str] | None = None,
+                ) -> list[Path]:
+    from lib.assess_config import is_user_excluded
+    extra_dirs = extra_exclude_dirs or set()
+    extra_pats = extra_exclude_patterns or []
     out: list[Path] = []
     for path in repo_root.rglob("*"):
         if not path.is_file():
             continue
         rel = path.relative_to(repo_root)
         if any(part in EXCLUDE_DIRS for part in rel.parts):
+            continue
+        if is_user_excluded(rel, extra_dirs, extra_pats):
             continue
         if exts is not None and path.suffix.lower() not in exts:
             continue
@@ -418,10 +482,17 @@ class ObservabilityResult:
         }
 
 
-def scan_observability(repo_root: Path) -> ObservabilityResult:
+def scan_observability(repo_root: Path,
+                       extra_exclude_dirs: set[str] | None = None,
+                       extra_exclude_patterns: list[str] | None = None,
+                       ) -> ObservabilityResult:
     repo_root = repo_root.resolve()
     # One tree walk shared across all three rung detectors (was ~4-5 walks).
-    files = _iter_files(repo_root)
+    files = _iter_files(
+        repo_root,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    )
     instrumented = _detect_instrumented(repo_root, files)
     discoverable, runbooks = _detect_discoverable(repo_root, files)
     reachable = _detect_reachable(repo_root, files, runbooks)
@@ -433,15 +504,27 @@ def scan_observability(repo_root: Path) -> ObservabilityResult:
 
 
 def scan_liveness(repo_root: Path, run_dead_code: bool = True,
-                  run_build_tools: bool = False) -> dict:
+                  run_build_tools: bool = False,
+                  extra_exclude_dirs: set[str] | None = None,
+                  extra_exclude_patterns: list[str] | None = None,
+                  ) -> dict:
     """Top-level Layer 1 scan: dead-code candidates + observability rungs.
 
     `run_build_tools` defaults to False so the scan stays read-only - build-
     mutating dead-code tools are reported as available-but-not-run.
+    `extra_exclude_dirs` and `extra_exclude_patterns` come from
+    `.assess/config.toml` / `--exclude` and apply to both the dead-code
+    scan and the observability tree walk.
     """
     return {
         "dead_code": scan_dead_code(
             repo_root, run=run_dead_code, run_build_tools=run_build_tools,
+            extra_exclude_dirs=extra_exclude_dirs,
+            extra_exclude_patterns=extra_exclude_patterns,
         ).as_dict(),
-        "observability": scan_observability(repo_root).as_dict(),
+        "observability": scan_observability(
+            repo_root,
+            extra_exclude_dirs=extra_exclude_dirs,
+            extra_exclude_patterns=extra_exclude_patterns,
+        ).as_dict(),
     }

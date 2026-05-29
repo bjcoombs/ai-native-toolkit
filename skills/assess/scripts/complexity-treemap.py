@@ -73,7 +73,7 @@ import numpy as np
 # heatmap, the docs heatmap, and the Layer 0 staleness metric reuse one
 # implementation. Only the colour mapping differs per heatmap and stays local.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib.assess_config import load_config, treemap_excludes  # noqa: E402
+from lib.assess_config import load_excludes  # noqa: E402
 from lib.git_churn import git_churn_scores, pick_churn_window  # noqa: E402
 from lib.treemap_render import (  # noqa: E402
     adaptive_cap,
@@ -559,8 +559,9 @@ def main() -> int:
     # the way the config does. A CLI pattern containing a glob char goes to
     # exclude_patterns; everything else goes to exclude_dirs (so the same
     # `--exclude regulatory-raw` shape works as a dir match without needing
-    # the user to pick the right list).
-    cfg_dirs, cfg_patterns = treemap_excludes(load_config(root))
+    # the user to pick the right list). The same lists feed every other
+    # /assess scan via the orchestrator - see `assess_core.build_run_context`.
+    cfg_dirs, cfg_patterns = load_excludes(root)
     extra_dirs: set[str] = set(cfg_dirs)
     extra_patterns: list[str] = list(cfg_patterns)
     for pat in args.exclude:
