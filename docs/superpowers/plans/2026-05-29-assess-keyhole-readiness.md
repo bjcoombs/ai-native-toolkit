@@ -1,10 +1,12 @@
 # Assess — Keyhole Readiness (Structural Legibility) — PRD
 
-> **For agentic workers:** Implement on a worktree branched from `main` (e.g. `assess-keyhole-readiness`). Committed home for this doc: `docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md`. Steps use checkbox (`- [ ]`) syntax for tracking. The eventual *implementation* is a **MINOR** feature (new deterministic signals + a new graph artifact + new `run-context.json` blocks, backward-compatible report shape) — bump `.claude-plugin/plugin.json` `.version` minor **in the implementing PR**, not in this planning PR (this PR is the plan only, mirroring the dismiss-false-positives PRD precedent). `skills/assess/SKILL.md` is subject to the standalone-ZIP transform (`chat-skip` / `chat-replace` markers + `scripts/standalone_skill_config.py`); keep standalone-divergent wording in config, not body prose, and rebuild/validate the ZIP.
+> **For agentic workers:** Implement on a worktree branched from `main` (e.g. `assess-keyhole-readiness`). Committed home for this doc: `docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md`. Steps use checkbox (`- [ ]`) syntax for tracking. The eventual *implementation* is a **MINOR** feature (new deterministic signals + derived findings + new `run-context.json` blocks; no graph in v1; backward-compatible report shape) — bump `.claude-plugin/plugin.json` `.version` minor **in the implementing PR**, not in this planning PR (this PR is the plan only, mirroring the dismiss-false-positives PRD precedent). `skills/assess/SKILL.md` is subject to the standalone-ZIP transform (`chat-skip` / `chat-replace` markers + `scripts/standalone_skill_config.py`); keep standalone-divergent wording in config, not body prose, and rebuild/validate the ZIP.
+>
+> **Revised after external review:** structured evidence is the product (not a visual); the named *joins* are first-class findings; B4 reframed from "ownership" to "where understanding lives"; the third graph is demoted to an optional, deferred Phase 5; build is historical-first with static dependency analysis last.
 
 **Type:** Feature / capability (new analysis axis)
 **Priority:** High — this is the signal `/assess` is missing for its core thesis: whether a too-big-for-any-context-window repo is *structured* so an agent can change it safely through the window.
-**Affected skill:** `skills/assess/` (`SKILL.md`, `scripts/assess_core.py`, `scripts/lib/`, new `scripts/lib/structure_graph.py` + `scripts/lib/change_coupling.py`, a new graph renderer, `tests/`).
+**Affected skill:** `skills/assess/` (`SKILL.md`, `scripts/assess_core.py`, `scripts/lib/`, new `scripts/lib/change_coupling.py` + `scripts/lib/structure_graph.py`, `tests/`).
 
 ---
 
@@ -85,7 +87,7 @@ Where they disagree is the most interesting output: a directory that looks modul
 - **B1. Change (temporal) coupling.** Files/dirs that change in the same commits. (Tornhill's metric; `code-maat` / `Hercules` compute it, or derive directly — `/assess` already parses `git log` for churn.)
 - **B2. Containment ratio** (answers "will it bleed out?"). For a module M: `commits touching only files in M ÷ commits touching M at all`. High = a real island, safe to hand an agent in isolation. Low = it bleeds. This is the direct, empirical keyhole-refactor-safety metric.
 - **B3. Static-vs-historical disagreement.** Cross A2/A3 with B1/B2: looks-modular-but-bleeds = hidden coupling (flag); looks-coupled-but-never-co-changes = leave it (suppress).
-- **B4. Knowledge-ownership islands.** Per-file/dir developer ownership from `git log --numstat` (Markus Harrer's technique: `ownership = a developer's additions ÷ total additions`; a >70%-owned file is a single-owner *knowledge* island; no >70% owner = distributed). Distinct from B1/B2 — this is about who *understands* a unit, not whether changes stay contained. **AI-era reframe:** classify the dominant author as **human / agent / none** (detect agent authorship from commit metadata — `Co-Authored-By:` trailers, bot committer accounts, session footers this repo already stamps). A unit owned by an automation account is **orphaned understanding made measurable** — the worst case, because the "owner" has no memory. And the traditional reading inverts: "distributed" is usually healthy bus-factor, but distribution across many agent sessions with no human anchor is everyone's-therefore-no-one's. This is the concrete feed for D2's velocity clock.
+- **B4. Where understanding lives** (not "ownership"). Harrer's mechanism — per-file/dir authorship share from `git log --numstat` (`share = a contributor's additions ÷ total additions`) — but the AI-era question isn't *who owns it*. Classic ownership no longer answers what matters: a directory touched by hundreds of agent sessions has enormous activity and effectively **zero retained understanding**. So compute three things, not an owner: **human anchor** (has a human substantively touched/reviewed it?), **intent source** (is there an externalised spec/doc stating what it should do?), and **authorship class** of recent change (human / agent / none — detect agents from `Co-Authored-By:` trailers, bot committers, session footers this repo already stamps). High activity ∧ no human anchor ∧ no intent source = **orphaned understanding**, the worst case, and the direct feed for D2's velocity clock. (Traditional single-owner bus-factor still falls out of the same data as a secondary signal.)
 
 ### C. Complexity × doc-state join (joins the two existing artifacts)
 
@@ -102,11 +104,34 @@ Doc value function: `≈ complexity_summarised × freshness`. Trivial-code docs 
 - **D1. Evidence ladder.** static reachability (have it, Layer 1; lies safe-ward via reflection/DI/entrypoints) → **runtime liveness** via observability the agent can reach (strong; needs the repo to expose it — that *is* the Layer 1 test) → value attribution (human judgement; out of deterministic scope).
 - **D2. The velocity clock.** Calendar age is dead as a metric — under AI velocity, "legacy" means **orphaned understanding**, which can happen on day one. Measure age in *comprehension-events*, not days. The real legacy flag is the **intersection**: high complexity ∧ owned by automation / no human anchor (B4, via blame + agent-authorship detection) ∧ no externalised intent (no spec doc) ∧ unknown/absent runtime liveness. None of the single existing metrics catch it; the intersection does.
 
+## Derived findings (the primary output)
+
+Individual metrics are inputs; the **joins** are the product. These named findings are computed deterministically from the blocks below and become the report's primary content. Each is a candidate for human judgement, never a verdict.
+
+| Finding | Intersection | Recommended action |
+|---|---|---|
+| **Hidden coupling** | modular statically (A2/A3) ∧ strong historical bleed (B1/B2) | investigate the seam — the static boundary is lying |
+| **Lying map** | high complexity ∧ stale doc (C) | fix or delete the doc; a wrong summary is worse than none |
+| **Unexplained complexity** | high complexity ∧ no doc ∧ no intent source | write the missing contract (do *not* auto-generate it) |
+| **Orphaned understanding** | high complexity ∧ no human anchor ∧ no intent source (B4) | assign a human anchor before further change |
+| **Candidate dead weight** | high complexity ∧ no runtime evidence ∧ no intent source (D) | verify liveness, then delete if dead (bias to keep) |
+| **Refactor boundary** *(positive)* | high containment ∧ low external coupling (B2) | safe to hand an agent in isolation |
+
+**Refactor boundary** is the one positive finding, and it answers the core question directly — *can an agent safely change this area through a keyhole?* — with a yes.
+
 ## Output / Artifacts
 
-- A **third graph SVG** alongside the treemap and doc-graph: a package/module view encoding modularity (clustering), containment (island-ness), and the danger-cells (stale-doc-on-complex, orphaned-and-unverified) by colour — reusing the existing colour-blind-safe ramp and the same hover-tooltip pattern. **Layout candidate:** directory-hierarchy **circle-packing** (Harrer's flare format) fits the fractal package model and the ownership/island encoding naturally — evaluate against a node-graph layout during Phase 4.
-- New `run-context.json` blocks (`structure`, `containment`, `doc_complexity_join`, `liveness_intersection`) consumed by the LLM write-back for prose; deterministic core writes placeholders, LLM fills judgement (existing pattern).
-- A ranked **"where to look" list**: the few units that score worst across axes, framed as candidates, with the proposed action (split / document / verify-or-delete) — never a score for elegance.
+**The structured evidence is the product; the report is its presentation layer.** The deterministic core writes new `run-context.json` blocks the LLM reasons over directly (it never sees raw data it must re-derive):
+
+- `structure` — SCC membership, modularity score, front-door ratio, comprehension footprint *(static; later phase)*.
+- `behaviour` — containment ratio, change-coupling pairs, static/history disagreement.
+- `documentation` — freshness, complexity coverage, stale-doc-on-complexity.
+- `understanding` — human anchor, intent source, authorship class (per B4).
+- `runtime` — static reachability, runtime evidence where available.
+
+From these the core emits the **derived findings** above plus a ranked **"where to look" list** — the few units worst across axes, each with a proposed action (split / document / anchor / verify-or-delete). The LLM fills judgement into placeholders (existing write-back pattern). Keep the report concise — no new sections that dilute attention.
+
+**Visualization is deferred and optional — not part of v1.** A combined multi-encoding graph was explored (`docs/keyhole-readiness-mockup.svg`) and rejected for v1: cramming structure, coupling, docs, understanding and runtime into one view is itself a smell, and unlike the treemap (one variable — complexity) and doc-graph (one variable — reachability), this data is genuinely *findings-shaped, not map-shaped*. Any later visual should be a **single-variable** cut — most likely the containment/island view alone — reusing the existing doc-graph renderer, never a bespoke edge-bundling engine, and never gating the deterministic value.
 
 ## Prior Art / Build-vs-Leverage
 
@@ -120,7 +145,7 @@ This sits squarely in **behavioral code analysis** (Adam Tornhill). We are alrea
 | [CodeCharta](https://github.com/MaibornWolff/codecharta) | OSS | visualizes metrics (imports code-maat/Tokei/CSV) | prior-art for the graph artifact |
 | [software-analytics](https://github.com/feststelltaste/software-analytics) (Markus Harrer) | OSS | pandas + GitPython notebooks; **Knowledge Islands** = per-file developer ownership (>70%), circle-packing viz | technique for B4 + the circle-packing layout option |
 
-**Lean:** compute B1/B2 (coupling, containment) **ourselves directly from `git log`** — the core already parses it for churn, it keeps the deterministic-core contract (no new runtime deps, reproducible), and it stays language-agnostic. Treat Hercules as an optional accelerator for very large histories, behind the same interface. Render the graph ourselves (we already produce two SVGs); CodeCharta is a fallback/interop, not a dependency. Static A1–A4 needs a per-language dep-graph parser — start with one language (below).
+**Lean:** compute B1/B2 (coupling, containment) **ourselves directly from `git log`** — the core already parses it for churn, it keeps the deterministic-core contract (no new runtime deps, reproducible), and it stays language-agnostic. Treat Hercules as an optional accelerator for very large histories, behind the same interface. No bespoke graph engine in v1 (see Output) — CodeCharta and Harrer's circle-packing are prior-art references should an optional single-variable visual be added later. Static A1–A4 needs a per-language dep-graph parser and is the *last* build piece (below).
 
 ## Scope / First Cut
 
@@ -129,15 +154,27 @@ This sits squarely in **behavioral code analysis** (Adam Tornhill). We are alrea
 - **Doc×complexity join (C)** ships in v1 (reuses existing complexity + doc-staleness).
 - **Value/liveness (D)** is **spec'd in full** but the runtime half is **validated-elsewhere** — this repo is mostly scripts/markdown with little runtime, so D1's static-reachability + D2's blame/intent intersection dogfood here; runtime corroboration is marked as needing an observability-bearing target repo.
 
-**Out of scope (v1):** automated value attribution (stays human); multi-language static dep-graphs; any auto-generation of docs; any automatic deletion (recommendations only).
+**Build priority** (historical-first — language-agnostic, dogfoods immediately, most directly answers the keyhole question):
+
+1. change coupling (B1)
+2. containment ratio (B2)
+3. complexity × documentation join (C)
+4. static/history disagreement → *hidden coupling* (B3)
+5. understanding analysis (B4) → *orphaned understanding*
+6. static dependency analysis (A) → comprehension footprint
+
+Static dependency analysis is **last**: it's the only language-specific, higher-cost piece, and containment (B2) already carries the keyhole-fit question in v1 as a language-agnostic proxy. The static footprint is the richer refinement, not the v1 gate.
+
+**Out of scope (v1):** automated value attribution (stays human); multi-language static dep-graphs; any auto-generation of docs; any automatic deletion (recommendations only); any graph rendering (deferred to optional Phase 5).
 
 ## Implementation Phases
 
-- [ ] **Phase 0 — git-log primitives.** `lib/change_coupling.py`: parse `git log --name-only`, compute B1 coupling pairs + B2 containment ratio per directory. Tests on a synthetic history. (Language-agnostic; dogfoods on this repo.)
-- [ ] **Phase 1 — static structure.** `lib/structure_graph.py`: Python dep-graph (`grimp`), A2 SCC/modularity, A3 front-door ratio, A1 comprehension footprint vs budget.
-- [ ] **Phase 2 — the join.** Cross complexity (existing) × doc-staleness (existing) → C matrix + doc value; cross A × B → B3 disagreement.
-- [ ] **Phase 3 — liveness intersection.** D2 legacy-intersection flag from blame + complexity + intent-doc presence + reachability.
-- [ ] **Phase 4 — artifact + write-back.** Third graph SVG; `run-context.json` blocks; LLM placeholders; ranked "where to look" list; SKILL.md guidance (with standalone markers); MINOR version bump; rebuild/validate ZIP.
+- [ ] **Phase 0 — git-log primitives.** `lib/change_coupling.py`: parse `git log --name-only` / `--numstat`; compute B1 coupling pairs, B2 containment ratio per directory, and B4 authorship / human-anchor signals. Tests on a synthetic history. (Language-agnostic; dogfoods on this repo.)
+- [ ] **Phase 1 — the doc join.** Cross existing complexity × existing doc-staleness → C; emit the *lying map* and *unexplained complexity* findings.
+- [ ] **Phase 2 — understanding + runtime.** B4 human-anchor / intent-source / authorship class; D static reachability; emit *orphaned understanding* and *candidate dead weight*.
+- [ ] **Phase 3 — static structure (last, language-specific).** `lib/structure_graph.py`: Python dep-graph (`grimp`), A2 SCC/modularity, A3 front-door ratio, A1 comprehension footprint vs budget; cross A × B → *hidden coupling*.
+- [ ] **Phase 4 — deterministic findings + write-back.** The five `run-context.json` blocks; derived findings; ranked attention list; LLM synthesis guidance + placeholders; SKILL.md guidance (with standalone markers); MINOR version bump; rebuild/validate ZIP. **No graph generation.**
+- [ ] **Phase 5 (optional, deferred) — single-variable visual.** Only if it earns its place: a containment/island view reusing the doc-graph renderer. Non-blocking; not part of the MINOR release above.
 
 ## Open Questions
 
