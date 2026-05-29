@@ -1,126 +1,110 @@
-# Anti-slop: full pattern catalog
+# Full checklist: Signs of AI writing
 
-The exhaustive checklist behind `SKILL.md`. The twelve high-frequency tells live in `SKILL.md`; this file adds the lower-frequency categories and gives more examples for each. Adapted from Wikipedia's "Signs of AI writing" essay (`Wikipedia:Signs_of_AI_writing`).
+Exhaustive companion to SKILL.md, adapted from Wikipedia's "Signs of AI writing." Use when doing a thorough audit. The summary in SKILL.md covers the most common offenders; this file adds the rest plus extra detail. No single sign is conclusive — look for clusters.
 
-Use this for a full audit. For everyday gate-checking, the `SKILL.md` shortlist is enough.
-
-## How to read this list
-
-A single match is noise. A cluster is the signal. Weight the language tells (what the text *says*) above the formatting tells (how it's punctuated or marked up) — formatting is trivially cleaned by anyone, so its absence proves nothing, but its presence alongside language tells confirms the diagnosis.
-
-The root failure is always the same: vague importance standing in for a specific fact. Every fix below is a special case of "add the fact or cut the claim."
-
----
-
-## Language and tone
-
-### Puffery and significance inflation
-Covered as tell #1. Watch for: stands/serves as a testament, plays a pivotal/vital/crucial role, leaves an indelible mark, rich cultural heritage, deeply rooted, a beacon of, cements its status, enduring legacy. Fix: state the fact that would justify the claim, or delete it.
-
-### Editorializing
-The text tells the reader how to feel or judges significance in the encyclopedia's own voice: "it is important to note," "it is worth mentioning," "notably," "interestingly," "remarkably," "tragically." Fix: cut the framing word; let the fact carry its own weight.
-
-### Vague attribution / weasel sourcing
-Claims attributed to unnamed authorities: "industry reports suggest," "experts say," "studies show," "it is widely regarded as," "many believe," "observers note." No specific source is given because none was checked. Fix: name and cite the actual source, or remove the claim.
-
-### Trailing -ing significance clauses
-Covered as tell #2. A participial tail that editorializes: "…, highlighting its importance," "…, reflecting a broader trend," "…, cementing its place in history." Fix: amputate the tail; the factual clause stands alone.
-
-### Rule of three
-Covered as tell #3. Tricolons everywhere — three adjectives, three clauses, three examples. Fix: vary the count and rhythm.
-
-### "Not X, but Y" and other manufactured antithesis
-Covered as tell #4. Also: "It's not just A, it's B," "more than just a C, it's a D," "far from being E, it is F." Fix: state the real point directly.
-
-### Elegant variation
-Compulsively swapping in synonyms to avoid repeating a noun, so one subject acquires three names in a paragraph: "the author… the wordsmith… the literary figure." Human writers repeat the plain word. Fix: pick one term and reuse it.
-
-### Filler and high-density AI diction
-Covered as tell #6. Beyond the watchlist there: leverage, utilize (for "use"), facilitate, spearhead, underscore, garner, myriad, plethora, in the realm of, when it comes to, at the end of the day, navigate the complexities/landscape. Fix: plain words or cut.
-
-### Overstated universality and superlatives
-"One of the most important," "widely considered," "renowned," "iconic," "world-class," "state-of-the-art," "cutting-edge" applied without evidence. Fix: drop the superlative or back it with a specific, sourced comparison.
+## Table of contents
+- A. Content tells
+- B. Language and grammar tells
+- C. Style tells
+- D. Communication / chatbot-leakage tells
+- E. Markup tells
+- F. Citation tells
 
 ---
 
-## Structure
+## A. Content tells
 
-### Promotional or summarizing conclusions
-Covered as tell #9. A final paragraph that adds no fact and only restates significance ("In conclusion / Overall / In summary, X remains a testament to…"). Fix: end on the last real fact.
+**A1. Puffery — significance, legacy, broader trends.** Inflates importance, claims the subject represents a wider movement, leaves an "indelible mark," etc. Applied even to etymology or population figures. Sometimes prefaced with a fake-humble hedge ("though little-known, X nonetheless…") before puffing anyway. *Watch:* stands/serves as, testament, pivotal/crucial/vital/key role, underscores its importance, reflects broader, enduring legacy, evolving landscape, deeply rooted, rich cultural heritage. **Fix:** cut, or substitute a concrete fact.
 
-### Grafted-on sections
-Boilerplate headings the topic didn't call for: "Challenges and Future Directions," "Legacy and Impact," "Significance," "Conclusion" on a short factual entry. Fix: delete the section or fold any real content into the body.
+**A2. Biology/ecology over-emphasis.** For species, over-stresses ecosystem connections and conservation status even when tenuous or unknown ("the general health of the ecosystem is crucial for this species"). **Fix:** keep only documented facts.
 
-### Symmetric scaffolding
-"From its humble beginnings to its current status…," "From A to B," paired intro/outro sentences that mirror each other, every section the same length and shape. Real writing is lumpier. Fix: let structure follow the material, not a template.
+**A3. Canned notability / source-narration.** Lists *types* of outlets, echoes sourcing-guideline jargon ("independent coverage," "national/regional media," "profiled in," "leading expert"), narrates the evidence rather than stating facts. **Fix:** state the fact, cite once.
 
-### Section title repeated in plaintext
-The section heading is restated as the first words of the paragraph ("History. The history of X begins…"). A formatting artifact of generated outlines. Fix: delete the restatement.
+**A4. "Active social media presence."** Idiosyncratic AI phrasing: "maintains a strong digital presence," "consistently demonstrated excellence in digital promotions." **Fix:** delete or replace with a specific, sourced detail.
 
-### List-itis
-Turning prose into bulleted lists by default, including lists of one or two items, or bullets that are full paragraphs. Fix: use prose for connected ideas; reserve lists for genuinely parallel, scannable items.
+**A5. Superficial analysis via trailing "-ing" clause.** Editorializing tacked on the end: "…, highlighting its role as a regional hub," "…, contributing to the socio-economic development of the region." Often unsupported synthesis. **Fix:** amputate the clause.
 
----
+**A6. Vague attributions / overgeneralized opinion.** "Industry experts say," "many critics argue," "it is widely regarded," with no actual source — or, in RAG models, a named source that didn't say it. *Watch:* some critics, observers note, it is considered, widely regarded as. **Fix:** attribute to a real source or remove.
 
-## Formatting and markup
+**A7. Rule of three.** Tricolons everywhere: "significant, sustained, and verifiable"; three parallel clauses; three examples by default. **Fix:** vary the count and rhythm.
 
-### Title Case headings and stray boldface
-Covered as tell #7. Also all-bold lead-ins on every list item. Fix: sentence case; bold only for defined terms or UI labels.
+**A8. Outline-like / promotional conclusions.** "Challenges," "Future Directions," "As the global landscape evolves…" sections grafted on; closing paragraphs that restate grand significance. **Fix:** end on the last real fact.
 
-### Em-dash overuse and curly quotes
-Covered as tell #8. Curly/smart quotes and apostrophes pasted into a document that uses straight ones, or mixed within one document. Fix: match the surrounding style; thin out the em dashes.
+**A9. Section summaries.** *Watch:* In summary, In conclusion, Overall… closing a section that didn't need summarizing. **Fix:** delete.
 
-### Markdown bleeding into the wrong format
-Covered as tell #11. `**bold**`, `##`, backticks, or `*` bullets surviving into wikitext, plain email, or a CMS field. Fix: convert to the target's real markup or strip it.
-
-### Emoji as formatting
-Bullets or headings decorated with emoji (✅, 🚀, 🔑, 📌) in contexts that don't use them. Fix: remove.
-
-### Inconsistent or American-by-default conventions
-Spelling, date format (Month DD, YYYY), or units silently switching to US defaults mid-document when the rest is British/metric. Fix: match the document's established convention.
+**A10. Leads that read like a definition/essay prompt.** Opening that treats the topic as an abstract concept to be explored rather than a subject to be described. **Fix:** lead with who/what/when/where.
 
 ---
 
-## Citations and facts
+## B. Language and grammar tells
 
-### Fabricated or broken references
-Covered as tell #12. Plausible-looking but nonexistent sources, dead or invented URLs, fake DOIs/ISBNs, real outlets credited with things they never published, citations whose content doesn't match the claim. Fix: verify each reference exists and supports the sentence; otherwise remove the claim.
+**B1. High-density AI diction.** delve, tapestry, testament, realm, navigate, boasts, robust, nuanced, multifaceted, intricate, pivotal, crucial, vital, foster, underscore, garner, showcase, leverage, seamless, holistic, comprehensive, rich, align with, resonate, vibrant, stark, meticulous, ever-evolving, treasure trove, game-changer, in the realm of, when it comes to, it's worth noting, it's important to note. (Diction shifts by model generation, but the *flavor* — fluent, elevated, generic — persists.) **Fix:** plain synonyms or cut.
 
-### Misattributed quotations
-A named person credited with a quote or judgment they never made, often phrased in slop diction ("Roger Ebert praised its enduring influence"). Fix: confirm the quote, or cut it.
+**B2. "Not X, but Y" / "Not only X, but also Y."** Manufactured contrast for false depth. **Fix:** state Y plainly.
 
-### Date and currency tells
-"As of [current year]" with no source, present-tense claims that will rot, "in recent years," round-number estimates with false precision. Fix: anchor to a dated, cited fact or qualify honestly.
+**B3. Elegant variation / forced lexical diversity.** Repetition-penalty makes the model rename the same thing repeatedly to avoid reuse ("the artist… the painter… the creator… the visionary"), producing unnatural synonym-cycling. **Fix:** use the plain repeated noun; repetition is fine.
 
----
+**B4. Excessive hedging / both-sides padding.** "While some may argue… others contend…" balancing where no real controversy exists. **Fix:** cut to the substantive point.
 
-## Chatbot leakage (the dead giveaways)
+**B5. Em-dash overuse.** Dramatic asides set off by em dashes at high frequency. **Fix:** vary punctuation.
 
-These mean text was pasted straight from a chat session without editing. Any one of them is conclusive on its own.
-
-- Direct address to a user: "I hope this helps!", "Certainly!", "Of course!", "Great question."
-- Offers to continue: "Would you like me to…", "Let me know if you'd like me to expand / add more / adjust the tone."
-- Self-reference: "As an AI language model," "As a large language model, I…," "I cannot browse the internet."
-- Knowledge-cutoff disclaimers: "As of my last update," "my training data."
-- Refusal / safety artifacts stranded in the output: "I'm sorry, but I can't…," "It's important to approach this topic respectfully."
-- Prompt echo: restating the instruction it was given ("Sure, here is a 500-word article about…").
-
-Fix: delete every trace. The deliverable is the prose, never a message about the prose.
+**B6. Overuse of transitional adverbs.** Additionally, Moreover, Furthermore, Consequently, Notably, Importantly opening many sentences. **Fix:** thin them out; let sentences connect by content.
 
 ---
 
-## Letter-like and talk-page writing
+## C. Style tells
 
-On collaborative or reference text, AI sometimes adopts a correspondence register: greetings ("Dear reader,"), sign-offs, "I would like to discuss," first-person editorializing on a talk page that reads like an essay rather than a focused comment, or excessive politeness and hedging ("I humbly suggest," "with respect"). Fix: match the register of the medium — encyclopedic for articles, terse and specific for discussion threads.
+**C1. Title Case headings.** Capitalizing Every Main Word. **Fix:** sentence case unless house style dictates.
+
+**C2. Overuse of boldface.** Bold scattered mid-sentence for emphasis. **Fix:** reserve for true labels/defined terms.
+
+**C3. Curly/directional quotation marks** where the document otherwise uses straight quotes — a paste tell. **Fix:** match surrounding style.
+
+**C4. Emoji as formatting.** Emoji prefixing headings or bullets (✅, 🚀, 📌). **Fix:** remove in formal/encyclopedic/professional contexts.
+
+**C5. Section titles in plain text.** Output broken into pseudo-sections with bare title lines ("Importance of Thorough Research") that aren't real headings. **Fix:** integrate into prose or use real headings.
 
 ---
 
-## Audit verdict template
+## D. Communication / chatbot-leakage tells
 
-Close every audit with a one-line diagnosis, not a score:
+**D1. Collaborative communication aimed at a user.** "Certainly!", "I hope this helps!", "Here's a draft…", "Would you like me to expand?", "Let me know if…". **Fix:** strip entirely.
 
-- "Heavy slop — puffery and rule-of-three throughout; three sentences carry no fact and should be cut, not reworded."
-- "Moderate — clean facts, but every section ends in a significance tail and the conclusion is pure peroration."
-- "Mostly clean — two trailing-participle clauses and curly quotes; five-minute fix."
+**D2. Self-reference / "as an AI."** Any mention of being a model, assistant, or language model. **Fix:** delete.
 
-If stripping the slop would leave almost nothing, that emptiness is the finding. Say so plainly rather than polishing a hollow draft.
+**D3. Knowledge-cutoff disclaimers & speculation about source gaps.** "As of my last update," "up to my last training update," "while specific details are limited/scarce," "information may not be current." **Fix:** delete; if a fact is genuinely uncertain, verify it instead of hedging.
+
+**D4. Prompt-refusal artifacts.** Leftover safety/refusal language ("I cannot assist with that," "as an AI I'm unable to…") embedded in a deliverable. **Fix:** remove.
+
+**D5. Letter-like writing in the wrong place.** Salutations and valedictions ("Dear editors," "Best regards") on content that isn't a letter (e.g., a wiki talk message or a doc). **Fix:** drop the epistolary frame.
+
+---
+
+## E. Markup tells
+
+**E1. Markdown bleeding into a non-Markdown target.** `**bold**`, `## headings`, `- bullets`, `[text](url)` pasted into wikitext, plain-text email, or a CMS that doesn't render it. **Fix:** convert to the target's real markup or remove.
+
+**E2. Broken / placeholder markup.** Malformed links, leftover `[[ ]]` or `{{ }}` fragments, `[insert citation]`, `[Source]`, `[Year]` placeholders. **Fix:** complete or remove.
+
+---
+
+## F. Citation tells
+
+**F1. Fabricated sources.** Plausible-looking but nonexistent books, articles, DOIs, or URLs. **Fix:** verify each; remove any you can't confirm.
+
+**F2. Broken external links.** Multiple 404s / dead domains in a new piece — strong AI signal. **Fix:** verify links resolve and support the claim.
+
+**F3. Misattributed claims.** A real source named, but it doesn't actually say what's attributed to it (common with RAG models: "Roger Ebert highlighted the lasting influence…"). **Fix:** check the source actually supports the sentence.
+
+**F4. Over-citation of trivia.** Inline-citing uncontroversial or trivial facts a human would leave unsourced, often echoing guideline wording. **Fix:** normalize to sensible citation density.
+
+---
+
+## Verdict guidance
+
+Weigh clusters, not isolated hits. Categorize the result:
+- **Clean:** at most a couple of incidental tics; no puffery, real specificity throughout.
+- **Light slop:** scattered filler words or a trailing clause or two; fixable in place.
+- **Heavy slop:** puffery + rule-of-three + vague attribution recurring; the prose is fluent but largely contentless. The honest fix is often to rebuild around real facts, not to reword.
+
+Always remember: the surface phrases are symptoms. The disease is content that says nothing while sounding important. Treat the disease.
