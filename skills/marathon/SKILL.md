@@ -108,7 +108,153 @@ Enumerate work units via the adapter's **enumerate** operation.
 
 ## Step 2: Team + Tracking
 
+```
+TeamCreate(
+  team_name: "<tag>",
+  description: "Marathon mode for tag <tag> - <N> tasks total, <M> ready"
+)
+```
+
+**PR tracking** — persisted in worktree dir (survives crashes and team cleanup):
+
+```bash
+TRACK_FILE=~/dev/github.com/<org>/<repo>/worktree/<tag>/pr-tracking.json
+mkdir -p "$(dirname "$TRACK_FILE")"
+
+if [ -f "$TRACK_FILE" ]; then
+  echo "EXISTING_TRACKING: reconciling against TM and GitHub"
+else
+  echo '{"meta":{"tag":"<tag>","wave":1,"repo":"<owner>/<repo>","flaky_checks":[]},"tasks":{}}' | jq . > "$TRACK_FILE"
+fi
+```
+
+**Reconciliation** (run at start if tracking file exists):
+1. Read unit status via the adapter's enumerate operation.
+2. Cross-reference each tracking entry:
+   - Source `done` but tracking `working` → merged externally. Remove from tracking.
+   - Source `in-progress` but PR merged on GitHub → mark unit done, remove from tracking.
+   - Source `pending` but tracking has PR → stale entry. Remove, check cleanup needed.
+   - Source `in-progress` and PR open → valid. Keep, update `last_ci`.
+3. Source `in-progress` but NOT in tracking → check GitHub for open PR. If found, add to tracking. If not, reset unit to `pending`.
+4. Write reconciled file.
+
+**Tracking structure:**
+```json
+{
+  "meta": {"tag": "<tag>", "wave": 1, "repo": "<owner>/<repo>", "flaky_checks": ["E2E"]},
+  "tasks": {
+    "task-<id>": {
+      "pr": 123,
+      "status": "working|review_clear|merged",
+      "model": "sonnet|opus",
+      "wave": 1,
+      "last_ci": "passing|failing|unstable|pending"
+    }
+  }
+}
+```
+
+**CRUD operations:**
+```bash
+# Add/update task
+jq --arg task "task-<id>" --argjson pr <number> --arg model "sonnet" --argjson wave 1 \
+  '.tasks[$task] = {"pr": $pr, "status": "working", "model": $model, "wave": $wave, "last_ci": "pending"}' \
+  "$TRACK_FILE" > "$TRACK_FILE.tmp" && mv "$TRACK_FILE.tmp" "$TRACK_FILE"
+
+# Update CI status
+jq --arg task "task-<id>" --arg ci "passing" \
+  '.tasks[$task].last_ci = $ci' "$TRACK_FILE" > "$TRACK_FILE.tmp" && mv "$TRACK_FILE.tmp" "$TRACK_FILE"
+
+# Read all
+jq -r '.tasks | to_entries[] | "\(.key) → PR #\(.value.pr) (\(.value.status), CI: \(.value.last_ci), wave \(.value.wave))"' "$TRACK_FILE"
+
+# Remove after merge+cleanup
+jq --arg task "task-<id>" '.tasks |= del(.[$task])' "$TRACK_FILE" > "$TRACK_FILE.tmp" \
+  && mv "$TRACK_FILE.tmp" "$TRACK_FILE"
+```
+
+**Identify known-flaky checks at marathon start:**
+```bash
+gh api repos/<owner>/<repo>/branches/$BASE_BRANCH/protection \
+  --jq '.required_status_checks.contexts // []'
+```
+Store non-required check names in `meta.flaky_checks`.
+
 ## Step 3: Spawn Teammates
+
+**Pre-spawn: Check for already-completed work:**
+Before spawning Wave 1, check recent merged PRs for task keywords to avoid spawning work that's already done:
+```bash
+gh pr list --state merged --limit 20 --json title,mergedAt,headRefName \
+  | jq '.[] | select(.headRefName | test("<tag>")) | {title, mergedAt, headRefName}'
+```
+Cross-reference with pending tasks. If a task's work was already merged (e.g., from a prior crashed marathon), mark it done and skip spawning.
+
+**Model selection:**
+- **Opus** (default for reliability): Multi-file PRs, review-heavy tasks, tasks touching shared files (barrel exports, routing, config), complexity 5+
+- **Sonnet** (cost-efficient for simple work): Single-file changes, isolated modules, complexity 1-4 with no shared-file risk, docs/config-only tasks
+
+Sonnet is cost-effective but has a recurring false REVIEW_CLEAR problem — reports review-clear without verifying all criteria (~15 min waste per marathon when it happens). Opus has 0 false signals across all marathons. When in doubt, use opus — the cost delta is cheaper than intervention time.
+
+Haiku cannot reliably handle review loops — never use for teammates.
+
+**Teammate prompt template:**
+```
+Task(
+  subagent_type: "general-purpose",
+  team_name: "<tag>",
+  name: "task-<task-id>",
+  model: "<chosen-model>",
+  prompt: """
+# Implement <tag>.<task-id>: <task-title>
+
+## Setup
+Set the unit in-progress via the adapter; create the worktree using the adapter's branch/worktree convention.
+
+## Requirements
+<task-description-and-subtasks from task-master show>
+
+## Architectural Direction
+<Include architectural guidance, design decisions, or constraints from the lead HERE in the
+first message. Teammates may lose context between messages.>
+
+## Project Guidelines
+<Include relevant sections from the repo's CLAUDE.md - testing patterns, coding standards.>
+
+## Shell Rules
+Always pipe `gh` output to `jq` (never use `gh --jq` with complex filters). Use positive jq filters (`== "FAILURE"` not `!= "SUCCESS"`) - zsh mangles `!=`.
+
+## Known Conflict Patterns
+<If $HOT_FILES identified, include here. Otherwise omit.>
+Additive files (imports, barrel exports, routes): accept both sides. Same-line conflicts or complex JSX blocks: escalate immediately with file, line range, and both versions.
+
+## Workflow
+1. **Implement using TDD**. Push commits incrementally for backup.
+2. **Before creating PR**, check for existing: `gh pr list --head "<branch-name>" --state all --json number,state,mergedAt`
+   - Merged → message lead, wait idle. Open → use it. None → create one.
+3. **Review loop:** Use the pr-review-merge skill to drive your PR to green (5 criteria, thread rules, background CI watcher, batch fixes). Do not block on CI yourself.
+
+## Communication
+Only message the lead for **meaningful events**:
+- PR created: `SendMessage(type: "message", recipient: "lead", content: "PR_CREATED: PR #<number> for <tag>.<task-id>", summary: "PR created <task-id>")`
+- Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR: PR #<number> for <tag>.<task-id> — all criteria met", summary: "Review clear <task-id>")`
+- Blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED: <tag>.<task-id> — <reason>", summary: "Blocked <task-id>")`
+- Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX: <tag>.<task-id> — <brief reasoning>", summary: "Too complex <task-id>")`
+
+## Scope
+- Only create PRs on YOUR branch (`<tag>--<task-id>--<slug>`). Never create PRs on other branches or for work outside your assigned task.
+- If you discover related work that needs doing, mention it in your PR description — don't create additional PRs.
+
+## Lifecycle
+1. Implement → push incrementally → create PR → review loop until green
+2. Message lead REVIEW_CLEAR and wait idle
+3. Lead merges directly (no handshake needed), cleans up, and shuts you down
+4. Approve shutdown request when received
+"""
+)
+```
+
+Spawn all independent teammates in a single message (parallel Task calls).
 
 ## Step 4: Lead Monitoring
 
