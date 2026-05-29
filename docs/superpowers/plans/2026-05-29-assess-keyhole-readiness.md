@@ -85,6 +85,7 @@ Where they disagree is the most interesting output: a directory that looks modul
 - **B1. Change (temporal) coupling.** Files/dirs that change in the same commits. (Tornhill's metric; `code-maat` / `Hercules` compute it, or derive directly — `/assess` already parses `git log` for churn.)
 - **B2. Containment ratio** (answers "will it bleed out?"). For a module M: `commits touching only files in M ÷ commits touching M at all`. High = a real island, safe to hand an agent in isolation. Low = it bleeds. This is the direct, empirical keyhole-refactor-safety metric.
 - **B3. Static-vs-historical disagreement.** Cross A2/A3 with B1/B2: looks-modular-but-bleeds = hidden coupling (flag); looks-coupled-but-never-co-changes = leave it (suppress).
+- **B4. Knowledge-ownership islands.** Per-file/dir developer ownership from `git log --numstat` (Markus Harrer's technique: `ownership = a developer's additions ÷ total additions`; a >70%-owned file is a single-owner *knowledge* island; no >70% owner = distributed). Distinct from B1/B2 — this is about who *understands* a unit, not whether changes stay contained. **AI-era reframe:** classify the dominant author as **human / agent / none** (detect agent authorship from commit metadata — `Co-Authored-By:` trailers, bot committer accounts, session footers this repo already stamps). A unit owned by an automation account is **orphaned understanding made measurable** — the worst case, because the "owner" has no memory. And the traditional reading inverts: "distributed" is usually healthy bus-factor, but distribution across many agent sessions with no human anchor is everyone's-therefore-no-one's. This is the concrete feed for D2's velocity clock.
 
 ### C. Complexity × doc-state join (joins the two existing artifacts)
 
@@ -99,11 +100,11 @@ Doc value function: `≈ complexity_summarised × freshness`. Trivial-code docs 
 ### D. Value / liveness (the third axis)
 
 - **D1. Evidence ladder.** static reachability (have it, Layer 1; lies safe-ward via reflection/DI/entrypoints) → **runtime liveness** via observability the agent can reach (strong; needs the repo to expose it — that *is* the Layer 1 test) → value attribution (human judgement; out of deterministic scope).
-- **D2. The velocity clock.** Calendar age is dead as a metric — under AI velocity, "legacy" means **orphaned understanding**, which can happen on day one. Measure age in *comprehension-events*, not days. The real legacy flag is the **intersection**: high complexity ∧ changed mostly by automation (git blame) ∧ no externalised intent (no spec doc) ∧ unknown/absent runtime liveness. None of the single existing metrics catch it; the intersection does.
+- **D2. The velocity clock.** Calendar age is dead as a metric — under AI velocity, "legacy" means **orphaned understanding**, which can happen on day one. Measure age in *comprehension-events*, not days. The real legacy flag is the **intersection**: high complexity ∧ owned by automation / no human anchor (B4, via blame + agent-authorship detection) ∧ no externalised intent (no spec doc) ∧ unknown/absent runtime liveness. None of the single existing metrics catch it; the intersection does.
 
 ## Output / Artifacts
 
-- A **third graph SVG** alongside the treemap and doc-graph: a package/module view encoding modularity (clustering), containment (island-ness), and the danger-cells (stale-doc-on-complex, orphaned-and-unverified) by colour — reusing the existing colour-blind-safe ramp and the same hover-tooltip pattern.
+- A **third graph SVG** alongside the treemap and doc-graph: a package/module view encoding modularity (clustering), containment (island-ness), and the danger-cells (stale-doc-on-complex, orphaned-and-unverified) by colour — reusing the existing colour-blind-safe ramp and the same hover-tooltip pattern. **Layout candidate:** directory-hierarchy **circle-packing** (Harrer's flare format) fits the fractal package model and the ownership/island encoding naturally — evaluate against a node-graph layout during Phase 4.
 - New `run-context.json` blocks (`structure`, `containment`, `doc_complexity_join`, `liveness_intersection`) consumed by the LLM write-back for prose; deterministic core writes placeholders, LLM fills judgement (existing pattern).
 - A ranked **"where to look" list**: the few units that score worst across axes, framed as candidates, with the proposed action (split / document / verify-or-delete) — never a score for elegance.
 
@@ -117,6 +118,7 @@ This sits squarely in **behavioral code analysis** (Adam Tornhill). We are alrea
 | [CodeScene](https://codescene.com/) | Commercial | temporal coupling, hotspots, knowledge maps, code health | prior-art benchmark, not a dependency |
 | [Hercules](https://github.com/src-d/hercules) | OSS | file co-change + developer coupling matrices from full history | optional engine for B1/B2 at scale |
 | [CodeCharta](https://github.com/MaibornWolff/codecharta) | OSS | visualizes metrics (imports code-maat/Tokei/CSV) | prior-art for the graph artifact |
+| [software-analytics](https://github.com/feststelltaste/software-analytics) (Markus Harrer) | OSS | pandas + GitPython notebooks; **Knowledge Islands** = per-file developer ownership (>70%), circle-packing viz | technique for B4 + the circle-packing layout option |
 
 **Lean:** compute B1/B2 (coupling, containment) **ourselves directly from `git log`** — the core already parses it for churn, it keeps the deterministic-core contract (no new runtime deps, reproducible), and it stays language-agnostic. Treat Hercules as an optional accelerator for very large histories, behind the same interface. Render the graph ourselves (we already produce two SVGs); CodeCharta is a fallback/interop, not a dependency. Static A1–A4 needs a per-language dep-graph parser — start with one language (below).
 
@@ -144,3 +146,4 @@ This sits squarely in **behavioral code analysis** (Adam Tornhill). We are alrea
 3. **Coupling thresholds.** What containment ratio counts as "an island"? Calibrate on this repo + 1–2 reference repos before baking a default.
 4. **Build vs import Hercules.** Confirm the direct `git log` path is fast enough on a large history before adding any dependency.
 5. **Where the value axis's human edge sits.** Exactly which D outputs are deterministic vs surfaced-for-judgement.
+6. **Human-vs-agent author attribution (B4).** How reliably can we classify a commit as agent-authored across repos? `Co-Authored-By:` trailers and session footers are high-precision but tool-specific; bot committer accounts vary. Define a conservative default (only classify when confident; otherwise "unknown") so the orphaned-understanding flag never libels a human author.
