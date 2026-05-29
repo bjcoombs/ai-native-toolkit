@@ -88,11 +88,22 @@ def load_config(repo_root: Path) -> dict:
 def _string_list(config: dict, key: str) -> list[str]:
     """Return `config[key]` filtered to strings only.
 
-    Schema violations on individual entries (e.g. `exclude_dirs =
-    ["regulatory-raw", 42]`) drop the bad entry and keep the rest - one
-    malformed value doesn't poison the rest of the config.
+    Honours the "degrade silently" contract on three failure modes:
+
+    - **Key missing**: returns `[]` (the common case).
+    - **Value is not a list** (e.g. `exclude_dirs = "regulatory-raw"` or
+      `exclude_dirs = 5`): returns `[]`. Iterating a string would produce
+      single-character "dir names" that match unexpectedly; iterating an
+      int would raise `TypeError` and propagate up through `load_excludes`
+      into the orchestrator, blocking the assessment.
+    - **List with non-string entries** (e.g. `exclude_dirs = ["foo", 42]`):
+      drops the bad entry, keeps the rest. One malformed value doesn't
+      poison the rest of the config.
     """
-    return [str(x) for x in config.get(key, []) if isinstance(x, str)]
+    value = config.get(key, [])
+    if not isinstance(value, list):
+        return []
+    return [str(x) for x in value if isinstance(x, str)]
 
 
 def load_excludes(repo_root: Path) -> tuple[set[str], list[str]]:

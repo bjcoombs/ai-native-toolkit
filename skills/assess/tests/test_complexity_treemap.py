@@ -284,3 +284,36 @@ def test_config_loader_no_legacy_section_needed(tmp_path):
     dirs, pats = load_excludes(tmp_path)
     assert dirs == {"regulatory-raw"}
     assert pats == ["*.csv"]
+
+
+def test_config_loader_scalar_string_degrades_to_empty(tmp_path):
+    """`exclude_dirs = "regulatory-raw"` (string, not list) used to iterate
+    character-by-character, silently producing single-char "dir names"
+    that match unexpectedly. The loader now rejects non-list values."""
+    from lib.assess_config import load_excludes
+
+    (tmp_path / ".assess").mkdir()
+    (tmp_path / ".assess" / "config.toml").write_text(
+        'exclude_dirs = "regulatory-raw"\n',
+        encoding="utf-8",
+    )
+    dirs, pats = load_excludes(tmp_path)
+    assert dirs == set()
+    assert pats == []
+
+
+def test_config_loader_scalar_int_does_not_raise(tmp_path):
+    """`exclude_dirs = 5` is valid TOML but the wrong type. It used to
+    raise `TypeError` (int not iterable), propagate through `load_excludes`,
+    and abort the whole assessment - the opposite of "degrade silently"."""
+    from lib.assess_config import load_excludes
+
+    (tmp_path / ".assess").mkdir()
+    (tmp_path / ".assess" / "config.toml").write_text(
+        'exclude_dirs = 5\nexclude_patterns = true\n',
+        encoding="utf-8",
+    )
+    # The test passes if this call returns without raising.
+    dirs, pats = load_excludes(tmp_path)
+    assert dirs == set()
+    assert pats == []

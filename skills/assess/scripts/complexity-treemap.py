@@ -543,7 +543,7 @@ def main() -> int:
               "name; a glob (`*.csv`) is matched against the basename. "
               "Extends the built-in defaults rather than replacing them. "
               "For a durable per-repo exclude list, use "
-              "`.assess/config.toml` (`[treemap].exclude_dirs` / "
+              "`.assess/config.toml` (top-level `exclude_dirs` / "
               "`exclude_patterns`)."),
     )
     args = ap.parse_args()
