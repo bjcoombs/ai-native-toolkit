@@ -274,7 +274,7 @@ Layer 0 answers: *can the agent form a true picture before it acts?* It has two 
 Read the agent instruction file grades and surface integrity from `run-context.json`:
 
 ```bash
-jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .broken_instruction_refs' "$REPO_ROOT/.assess/run-context.json"
+jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .broken_instruction_refs, .skills_present, .skills_count, .skill_files, .instruction_file_size' "$REPO_ROOT/.assess/run-context.json"
 ```
 
 `.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). Only **git-tracked** files are graded - a file present on disk but uncommitted is *not* credited (it isn't part of what the repo ships). The same heuristic grader scores each tracked file. For each:
@@ -282,7 +282,11 @@ jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .brok
 - `subscores.positive_directives` - count of positive directives found
 - `subscores.tradeoff_phrases` - count of reasoning phrases
 - `subscores.path_references` - count of file path references
+- `subscores.line_count` / `subscores.word_count` - file size (feeds the bloat penalty below)
+- `subscores.bloat_penalty` - points subtracted for an oversized monolith with no skills factoring (0 when lean or when the repo delegates to skills)
 - `freshness_days` - days since last edit
+
+`.skills_present` / `.skills_count` / `.skill_files` describe whether the repo factors guidance into on-demand skills (`.claude/skills/`, `skills/`). `.instruction_file_size` mirrors the per-file `line_count` / `word_count` / `bloat_penalty` for quick reference.
 
 `.instructions_grade` is the best grade across all tracked files - the starting point for the layer scoring.
 
@@ -291,6 +295,12 @@ jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .brok
 - A/A-/B+ → **Present**
 - B/C → **Partial**
 - D/F → **Partial** if at least one file exists but scores low - note the grade and recommend rewriting
+
+**Size vs progressive disclosure (deterministic penalty - this LOWERS the grade, not just a flag):**
+- `skills_present: true` and/or the instruction text contains progressive-disclosure pointers → **no penalty**; the repo factors guidance into on-demand skills (loaded when relevant), which is scored positively - a lean pointer file beats a wall of text the agent must hold in full context.
+- `instruction_file_size[path].bloat_penalty > 0` → an oversized monolithic instruction file with no skills factoring. The bloat penalty **LOWERS the grade** (5-15 points by overage: 500/750/1000 lines or 3000/4500/6000 words). **This is a scoring negative, not just a flag** - the file scores **strictly below** an equivalent lean-file-plus-skills repo. Name it in the Evidence column and add the remediation action "factor guidance into `.claude/skills/` for progressive disclosure".
+- A lean instruction file that delegates to maintained skills scores **strictly above** an oversized monolith with equivalent content - the monolith is penalized, not merely annotated.
+- Conservative thresholds (500 lines / 3000 words) ensure small/legitimate instruction files are **never** penalized. This is the write-side mirror of the "modular base docs" principle in 0b: *modular + maintained, never just "more"* - an instruction file earns its grade by being navigable, not by being large.
 
 **Integrity overrides (these can pull the half *below* the grade - a single good file does not rescue a broken instruction surface):**
 - **`broken_instruction_refs` is non-empty → cap the instruction half at Partial, or Missing if it's the *primary* instruction surface that's broken.** These are advertised-but-broken instruction references: a committed `.cursorrules`/`AGENTS.md`/`CLAUDE.md` that is a **dangling symlink** (`reason: symlink target missing`), or an entry doc that **links to a missing instruction file** (`reason: link to missing instruction file`). The truth-pressure model says a broken map scores at or below absent - a repo that *advertises* `.cursorrules` but the symlink dangles is worse than one that never claimed to have it. Name each broken ref and make "fix or remove the broken instruction reference" a Top-3 action. Do **not** let an unrelated file that happens to grade B+ keep the half at Present. **But don't let the score mislead either:** if a committed instruction file still grades passing while the *advertised* surface dangles (e.g. a B+ `.github/copilot-instructions.md` while a referenced `CLAUDE.md` is missing), prefer **Partial** over Missing, and in the Evidence cell name that committed file and its grade. A human reviewer would call this Partial; reserve **Missing** for genuine absence. Either way the report must read as *the advertised surface is broken*, never *no instructions exist*.
