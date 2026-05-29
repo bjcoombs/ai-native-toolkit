@@ -564,16 +564,26 @@ rg 'threshold|min_coverage|coverageThreshold|branches.*[0-9]' "$REPO_ROOT"/{code
 rg 'coverage|codecov|coveralls' "$REPO_ROOT"/.github/workflows/*.yml 2>/dev/null | head -5
 ```
 
-**Assess gate strictness:**
-- Project-wide minimum threshold?
-- Per-PR patch coverage requirement?
-- Per-component thresholds?
+**Scan for mutation testing:**
+```bash
+# Mutation testing tools (mutmut, Stryker, PITest, cargo-mutants, etc.)
+rg 'mutmut|stryker|pitest|cargo-mutants|mutation' "$REPO_ROOT"/{Makefile,pyproject.toml,package.json,build.gradle,pom.xml,.github/workflows/*.yml} 2>/dev/null | head -5
+# Check for mutation reports or survivor logs
+fd -t f '(mutation|survivor|mutant)' "$REPO_ROOT" --extension json --extension xml --extension html 2>/dev/null | head -3
+```
+
+**Assess behaviour-constraint signal:**
+- Are coverage gates enforced (CI fails below threshold, patch coverage required)?
+- Is there mutation testing in CI — and what is the reported mutation/survivor score?
+- If no mutation testing: are there proxy signals for hollow tests — low assertion-per-test ratio, assertion clusters on internal state rather than observable behaviour, or `assert True`-style stubs?
 - Does CI fail on coverage regression?
 
 **Scoring:**
-- Present: Coverage gates block PRs below threshold, patch coverage enforced
-- Partial: Coverage reported but not enforced, or thresholds too low
-- Missing: No coverage configuration or gates
+- Present: Coverage gates enforced with patch-level requirements, AND tests carry truth-pressure — mutation score or survivor-density analysis shows tests pin observable behaviour; or cheap heuristics (assertion-per-test ratio, no hollow-assertion clusters) confirm no gap between lines executed and lines constrained.
+- Partial: Coverage gates enforced but truth-pressure unverified or weak — high line coverage with unknown/low mutation score, known survivor clusters, or assertion-on-internal-state patterns (the "meridian resume" case: 80%+ line coverage, near-zero mutation score). See Lying Signals (Part E) for the hollow-gate pattern.
+- Missing: No coverage configuration or gates.
+
+**Asymmetry rule:** A high-coverage repo whose tests do not constrain behaviour scores **at or below** a repo with honest lower coverage. A confident-but-hollow gate is actively misleading; honest low coverage is merely incomplete.
 
 ### Layer 7: Automated Code Review (Design-Level Feedback)
 
@@ -773,6 +783,7 @@ Generic actions to avoid:
 - **Layer 1 Partial because observability is instrumented but not agent-reachable** (rung 1–2 — the `meridian` case): the action is _"make existing observability agent-queryable"_ — e.g. "add a `.mcp.json` log/metrics server" or "add a `view-logs` repo skill wrapping `logcli`" — **not** "add observability" (it's already there; the gap is reachability).
 - **Layer 0 Partial because a hub doc is stale:** name the specific stale hub from `stale_hubs` and its churning subject — _"refresh `docs/architecture.md` (251d stale; subject `src/api/` had 47 commits in window)"_ — not "improve the docs".
 - **Layer 0 Partial because the doc set is fragmented:** name the orphans / islands — _"link the 6 orphan docs into the MOC; `index.md` is named but not wired (out-degree 0)"_.
+- **Layer 6 Partial because coverage is enforced but truth-pressure is unverified:** the actions are _"strengthen assertions to pin observable behaviour at the named survivors"_ and _"add mutation testing to CI (e.g. `mutmut`, Stryker, PITest)"_ — **not** "raise the coverage threshold" (higher line-coverage numbers manufacture more lying signal without improving behavioural constraint).
 
 ### Why these three?
 <2-3 sentences explaining why these are highest leverage. Connect to specific gaps from the table above and to hotspot files where relevant. Be concrete about what each action prevents.>
