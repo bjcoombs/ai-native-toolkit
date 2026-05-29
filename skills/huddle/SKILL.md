@@ -19,14 +19,14 @@ Scales from a solo gut check to a board-level deliberation using Fibonacci team 
 ## Capability Requirements
 
 <!-- chat-replace:execution-mode-rule -->
-Three execution modes exist. Pick one **deterministically**: team size = 1 → **solo flat-parallel**; team size ≥ 2 AND you can confirm the team-mode capability (`TeamCreate` / `SendMessage`) is available → **team mode**; otherwise → **phased sub-agent mode**. If you cannot confirm team mode, default to phased — it degrades gracefully, whereas attempting team mode without the capability fails loudly.
+Three execution modes exist. Pick one **deterministically**: team size = 1 → **solo flat-parallel**; team size ≥ 2 AND you can confirm the team-mode capability (`TeamCreate` / `SendMessage`) is available → **team mode**; otherwise → **phased sub-agent mode**. If you cannot confirm team mode, default to phased - it degrades gracefully, whereas attempting team mode without the capability fails loudly.
 
 | Mode | When chosen | Mechanism | Cost (relative) |
 |------|-------------|-----------|----------------|
 | **Solo flat-parallel** | Size 1 | Hat agents fire in parallel via standard Agent tool; Blue Hat synthesises | 1× |
-| **Phased sub-agent** | Size 2+, no flag | Iterate phases sequentially; spawn N sub-agents per phase (one per lens), each with fresh context, briefed via a running synopsis Blue Hat maintains | 2–4× |
+| **Phased sub-agent** | Size 2+, no flag | Iterate phases sequentially; spawn N sub-agents per phase (one per lens), each with fresh context, briefed via a running synopsis Blue Hat maintains | 2-4× |
 <!-- chat-replace:team-mode-row -->
-| **Team mode** | Size 2+, flag enabled | Persistent `TeamCreate` agents cross-talk via `SendMessage` across phases | 5–15× |
+| **Team mode** | Size 2+, flag enabled | Persistent `TeamCreate` agents cross-talk via `SendMessage` across phases | 5-15× |
 
 <!-- chat-skip:start -->
 **Agent Teams flag** enables `TeamCreate`, `SendMessage`, and related tools. Enable in your environment:
@@ -35,13 +35,13 @@ Three execution modes exist. Pick one **deterministically**: team size = 1 → *
 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 ```
 
-Without the flag, `/huddle` still runs multi-perspective deliberations via phased sub-agent mode — it just trades cross-talk between agents for a running synopsis Blue Hat maintains as the persistent memory. Quality drops a little, cost drops a lot.
+Without the flag, `/huddle` still runs multi-perspective deliberations via phased sub-agent mode - it just trades cross-talk between agents for a running synopsis Blue Hat maintains as the persistent memory. Quality drops a little, cost drops a lot.
 
-**Why enable team mode anyway:** persistent professional-lens agents talking to each other across phases produce noticeably deeper synthesis — disagreements get rebutted in real time, edge cases surface from cross-talk, and the verdict feels like real deliberation rather than serially-summarised opinions. Worth it for decisions where being wrong costs 100× more than the analysis: architecture choices, irreversible migrations, hiring calls, contractual commitments.
+**Why enable team mode anyway:** persistent professional-lens agents talking to each other across phases produce noticeably deeper synthesis - disagreements get rebutted in real time, edge cases surface from cross-talk, and the verdict feels like real deliberation rather than serially-summarised opinions. Worth it for decisions where being wrong costs 100× more than the analysis: architecture choices, irreversible migrations, hiring calls, contractual commitments.
 <!-- chat-skip:end -->
 
 <!-- chat-replace:capability-detection -->
-**Tell the user which mode you're in** before you start. If the Agent Teams capability (`TeamCreate` / `SendMessage`) is available and team size ≥ 2, announce team mode — one line, e.g. "Running in team mode (3 professional lenses, 5 phases — persistent agents)." Otherwise announce phased sub-agent mode, e.g. "Running in phased sub-agent mode (3 lenses, 5 phases)."
+**Tell the user which mode you're in** before you start. If the Agent Teams capability (`TeamCreate` / `SendMessage`) is available and team size ≥ 2, announce team mode - one line, e.g. "Running in team mode (3 professional lenses, 5 phases - persistent agents)." Otherwise announce phased sub-agent mode, e.g. "Running in phased sub-agent mode (3 lenses, 5 phases)."
 
 ## No Arguments Behavior
 
@@ -64,7 +64,7 @@ Assess the topic to determine:
    | **5** | Panel | Broader perspectives. Cross-functional decisions. |
    | **8+** | Board | Major strategic decisions. Use sub-groups that report to the chair. |
 
-   Odd numbers (1, 3, 5, 13) give natural voting balance. Even numbers (2, 8) force productive tension through forced disagreement. Use your judgement.
+   Odd numbers (1, 3, 5, 13) give natural voting balance. Even numbers (2, 8) force productive tension through disagreement. Use your judgement.
 
 2. **Professional lenses** (for size 2+) that create productive tension for THIS topic. You know what expertise fits - choose what creates the most useful disagreement.
 
@@ -93,45 +93,45 @@ After Step 1 you have a team size, a list of professional lenses, and a hat sequ
 
 ### Solo flat-parallel (Size 1)
 
-Spawn hat agents in parallel based on your chosen sequence. Each agent operates independently on the topic. Collect results, then synthesize as Blue Hat. No team, no discussion — just parallel analysis.
+Spawn hat agents in parallel based on your chosen sequence. Each agent operates independently on the topic. Collect results, then synthesize as Blue Hat. No team, no discussion - just parallel analysis.
 
 ### Phased Sub-Agent Mode (Size 2+, no team flag)
 
 <!-- chat-skip:start -->
-When team size > 1 but `TeamCreate` is unavailable, do not collapse to flat-parallel — that throws away both phase ordering and multi-lens diversity. Instead, iterate phases sequentially and spawn fresh sub-agents per phase:
+When team size > 1 but `TeamCreate` is unavailable, do not collapse to flat-parallel - that throws away both phase ordering and multi-lens diversity. Instead, iterate phases sequentially and spawn fresh sub-agents per phase:
 <!-- chat-skip:end -->
-When team size > 1 but team mode is unavailable, do not collapse to flat-parallel — that throws away both phase ordering and multi-lens diversity. Instead, iterate phases sequentially and spawn fresh sub-agents per phase:
+When team size > 1 but team mode is unavailable, do not collapse to flat-parallel - that throws away both phase ordering and multi-lens diversity. Instead, iterate phases sequentially and spawn fresh sub-agents per phase:
 
 **Loop over each hat phase in your sequence:**
 
-1. **Announce the phase to the user.** "Phase 3 of 5: Black Hat — risks."
+1. **Announce the phase to the user.** "Phase 3 of 5: Black Hat - risks."
 2. **For each professional lens, spawn a sub-agent in parallel** for this phase. Each sub-agent gets:
    - Its persona (the professional lens you assigned in Step 1)
 <!-- chat-replace:phased-spawn-instructions -->
    - The hat methodology for this phase (`Agent` tool with `subagent_type=<hat>` resolves the agent file from `~/.claude/agents/`)
    - The topic
-   - **A running synopsis you maintain as Blue Hat** — a 200-400 word summary of what every prior phase produced. This is how cross-phase continuity survives without a persistent team. Each sub-agent has a fresh context window, so the synopsis is its only memory of what came before.
+   - **A running synopsis you maintain as Blue Hat** - a 200-400 word summary of what every prior phase produced. This is how cross-phase continuity survives without a persistent team. Each sub-agent has a fresh context window, so the synopsis is its only memory of what came before.
 3. **Collect all sub-agent outputs.** As Blue Hat, write a 100-200 word phase summary capturing: what each lens contributed, where they agreed, where they conflicted, what changed your view. Append this to the running synopsis.
 4. **Surface the phase summary to the user** before moving on. Short, scannable.
 
-**When to collapse to one sub-agent per phase voicing all lenses.** Default is one sub-agent per lens per phase (preserves independent fresh contexts). But total spawns = `team_size × phases` — a size-5 board × 5 phases = 25 sub-agent calls. When that count exceeds ~8–10, or when running in a chat UI where spawn latency is user-visible, collapse to **one sub-agent per phase voicing all lenses**. When you do, **explicitly instruct that sub-agent to keep the lenses cognitively distinct** — separate labelled sections per lens, no blending. Without that instruction the lenses blur and you lose most of the multi-perspective value. This is a degraded fallback, not a third mode; reach for it deliberately.
+**When to collapse to one sub-agent per phase voicing all lenses.** Default is one sub-agent per lens per phase (preserves independent fresh contexts). But total spawns = `team_size × phases` - a size-5 board × 5 phases = 25 sub-agent calls. When that count exceeds ~8-10, or when running in a chat UI where spawn latency is user-visible, collapse to **one sub-agent per phase voicing all lenses**. When you do, **explicitly instruct that sub-agent to keep the lenses cognitively distinct** - separate labelled sections per lens, no blending. Without that instruction the lenses blur and you lose most of the multi-perspective value. This is a degraded fallback, not a third mode; reach for it deliberately.
 
 **At the end of all phases**, deliver the verdict as in team mode (Step 5 below): one paragraph stating the decision, the strongest dissent, and the conditions under which you'd reverse.
 
 **Why this works without team mode:**
 
 - Each sub-agent gets a clean context window (the equivalent benefit to a persistent team member's fresh perspective).
-- Multi-lens diversity preserved — N professionals still weigh in per phase.
-- Phase ordering preserved — Black Hat sees White Hat's facts via the synopsis.
+- Multi-lens diversity preserved - N professionals still weigh in per phase.
+- Phase ordering preserved - Black Hat sees White Hat's facts via the synopsis.
 <!-- chat-skip:start -->
 - No `TeamCreate` / `SendMessage` required; uses only the standard Agent tool.
 <!-- chat-skip:end -->
 - No team mode infrastructure required; uses only the standard Agent tool.
 
 <!-- chat-skip:start -->
-**Cost:** roughly 2–4× flat-parallel (see Capability Requirements table). The synopsis grows with each phase (200–400 words per phase → up to ~2KB by phase 5), and that growing synopsis is passed into every sub-agent on every subsequent phase, so the cost skews late in the sequence. Still well below team mode because there's no `SendMessage` cross-talk overhead and no persistent agent state to maintain. Usually the right default when the flag is off and the decision warrants more than a gut check.
+**Cost:** roughly 2-4× flat-parallel (see Capability Requirements table). The synopsis grows with each phase (200-400 words per phase → up to ~2KB by phase 5), and that growing synopsis is passed into every sub-agent on every subsequent phase, so the cost skews late in the sequence. Still well below team mode because there's no `SendMessage` cross-talk overhead and no persistent agent state to maintain. Usually the right default when the flag is off and the decision warrants more than a gut check.
 <!-- chat-skip:end -->
-**Cost:** roughly 2–4× flat-parallel (see Capability Requirements table). The synopsis grows with each phase (200–400 words per phase → up to ~2KB by phase 5), and that growing synopsis is passed into every sub-agent on every subsequent phase, so the cost skews late in the sequence. Still well below team mode because there is no cross-talk overhead or persistent agent state to maintain. Usually the right default for complex decisions that warrant more than a gut check.
+**Cost:** roughly 2-4× flat-parallel (see Capability Requirements table). The synopsis grows with each phase (200-400 words per phase → up to ~2KB by phase 5), and that growing synopsis is passed into every sub-agent on every subsequent phase, so the cost skews late in the sequence. Still well below team mode because there is no cross-talk overhead or persistent agent state to maintain. Usually the right default for complex decisions that warrant more than a gut check.
 
 For team modes (size 2+) with the flag enabled, continue to Step 2.
 
@@ -153,7 +153,7 @@ Spawn ALL members in parallel (single message with multiple Agent tool calls). E
 
 **CRITICAL**: Include the first hat phase instructions directly in the spawn prompt. Do NOT send a separate message to start the first phase - members should begin investigating immediately after reading the source material. This eliminates the idle-then-nudge cycle that wastes time.
 
-**Supply the roster.** There is no broadcast — members share findings by sending one `SendMessage` per teammate. So each spawn prompt must list that member's peers by name (the `## Your Teammates` line in the template below). You're spawning everyone, so you know all the names; give each member the others.
+**Supply the roster.** There is no broadcast - members share findings by sending one `SendMessage` per teammate. So each spawn prompt must list that member's peers by name (the `## Your Teammates` line in the template below). You're spawning everyone, so you know all the names; give each member the others.
 
 For each member, use the Agent tool:
 
@@ -231,7 +231,7 @@ For each hat in your chosen sequence, facilitate a phase:
 
 **4a. Announce the phase**
 
-Note: The first phase is embedded in the member spawn prompts (Step 3). For subsequent phases, send the identical announcement to each member individually — one `SendMessage` per member name (there is no all-recipients broadcast). You spawned the team, so you already know every name:
+Note: The first phase is embedded in the member spawn prompts (Step 3). For subsequent phases, send the identical announcement to each member individually - one `SendMessage` per member name (there is no all-recipients broadcast). You spawned the team, so you already know every name:
 
 ```
 for each <member-name> in your team:
@@ -251,7 +251,7 @@ SendMessage(
 **4b. Monitor the discussion**
 
 As messages come in from team members:
-- Let them discuss peer-to-peer — don't relay messages
+- Let them discuss peer-to-peer - don't relay messages
 - Intervene if someone drifts off the current hat's focus
 - If a member goes idle without sharing findings, send ONE direct nudge with an explicit agent spawn prompt. If they don't respond after the nudge, move on - don't block the meeting on one member.
 - Note consensus and dissent internally
@@ -259,7 +259,7 @@ As messages come in from team members:
 
 **4c. Move to next phase**
 
-Move on when you have findings from at least N-1 members (e.g., 2 of 3). Do not wait indefinitely for every member. Announce the transition to each member individually — one `SendMessage` per member name (there is no all-recipients broadcast):
+Move on when you have findings from at least N-1 members (e.g., 2 of 3). Do not wait indefinitely for every member. Announce the transition to each member individually - one `SendMessage` per member name (there is no all-recipients broadcast):
 
 ```
 for each <member-name> in your team:
@@ -332,24 +332,24 @@ After delivering the verdict:
 ## Facilitation Principles
 
 ### Be a Chair, Not a Switchboard
-- Don't relay messages between members — they talk directly
+- Don't relay messages between members - they talk directly
 - Intervene to steer, not to summarize every exchange
 - Your value is in framing questions and knowing when to move on
 
 ### Carry Context Forward
 - Each phase builds on prior phases
-- Reference prior findings when framing new phases: "Black Hat found X risk — Green Hat, how might we address that creatively?"
+- Reference prior findings when framing new phases: "Black Hat found X risk - Green Hat, how might we address that creatively?"
 - Accumulated context is what makes sequential phases valuable
 
 ### Preserve Dissent
-- Don't force consensus — note it when it exists, report it when it doesn't
+- Don't force consensus - note it when it exists, report it when it doesn't
 - "3 of 4 experts recommend X, but Security dissents because Y" is a useful output
 - Dissent is signal, not failure
 
 ### Control Pacing
 - Max ~2-3 substantive messages per member per phase
 <!-- chat-skip:start -->
-- In team mode each "share" fans out to N-1 per-recipient sends (no broadcast), so the wire traffic is the message count times N-1 — keep the per-member ceiling tight and rely on Fibonacci sizing to keep N small
+- In team mode each "share" fans out to N-1 per-recipient sends (no broadcast), so the wire traffic is the message count times N-1 - keep the per-member ceiling tight and rely on Fibonacci sizing to keep N small
 <!-- chat-skip:end -->
 - Extend if the dialogue is producing genuine insight
 - Cut short if responses are repetitive or circular
@@ -362,7 +362,7 @@ After delivering the verdict:
 - If Black Hat surfaces a critical risk, give Green Hat more time
 - Red Hat is permission to check your gut - use it when something feels off or people are affected
 - The sequence is a guide, not a straitjacket
-- **Target depth, not duration.** Wall-clock time depends on the runtime — chat surfaces complete in minutes, CLI team mode can take longer. Use phase count and message budget as the lever: 5 phases × 2–3 substantive messages per member per phase is the default ceiling. If you've hit that ceiling without convergence, compress remaining phases or go straight to verdict — adding more rounds rarely changes the answer.
+- **Target depth, not duration.** Wall-clock time depends on the runtime - chat surfaces complete in minutes, CLI team mode can take longer. Use phase count and message budget as the lever: 5 phases × 2-3 substantive messages per member per phase is the default ceiling. If you've hit that ceiling without convergence, compress remaining phases or go straight to verdict - adding more rounds rarely changes the answer.
 
 ## Lessons Learned
 
@@ -373,7 +373,7 @@ After delivering the verdict:
 - **Concrete phase prompts.** "The dunning race condition is the biggest risk - how do we fix it?" produces action. "What are the risks?" produces confusion.
 - **Red Hat after White is a natural pairing.** Facts first, then gut check - grounds intuition in evidence.
 <!-- chat-skip:start -->
-- **Broadcast — one message to all teammates at once — is unsupported; address each teammate by name.** In team mode both the chair and members send one `SendMessage` per recipient, so every member needs the roster of peer names in its spawn prompt.
+- **Broadcast - one message to all teammates at once - is unsupported; address each teammate by name.** In team mode both the chair and members send one `SendMessage` per recipient, so every member needs the roster of peer names in its spawn prompt.
 <!-- chat-skip:end -->
 
 ## Usage

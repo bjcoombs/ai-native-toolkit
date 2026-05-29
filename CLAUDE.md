@@ -65,7 +65,7 @@ Commands without frontmatter still work but provide no `/help` description.
 
 ## Testing a branch before merging
 
-`/plugin install` only sees `main`. To test an unmerged branch's `SKILL.md` + scripts as a real plugin — or to run the scripts directly against a target repo — see [`docs/testing-a-branch-locally.md`](docs/testing-a-branch-locally.md). Key point: plugin skills resolve their bundled scripts via `$CLAUDE_PLUGIN_ROOT` (the version cache dir), not `~/.claude/skills/`.
+`/plugin install` only sees `main`. To test an unmerged branch's `SKILL.md` + scripts as a real plugin - or to run the scripts directly against a target repo - see [`docs/testing-a-branch-locally.md`](docs/testing-a-branch-locally.md). Key point: plugin skills resolve their bundled scripts via `$CLAUDE_PLUGIN_ROOT` (the version cache dir), not `~/.claude/skills/`.
 
 ## Standalone skill pipeline
 
@@ -81,20 +81,20 @@ bash scripts/build-standalone-skills.sh --dest ~/Desktop  # custom output dir
 **How it works:** HTML comment markers in source SKILL.md files flag plugin-only content. `scripts/transform_skill.py` strips `<!-- chat-skip:start/end -->` blocks and applies `<!-- chat-replace:key -->` substitutions defined in `scripts/standalone_skill_config.py`. The pipeline is tested via `uv run --with pytest pytest` from `scripts/`.
 
 **Tests:**
-- `scripts/tests/test_transform.py` — unit tests for transformer primitives
-- `scripts/tests/test_integration.py` — full-build ZIP content validation (forbidden strings, expected files)
+- `scripts/tests/test_transform.py` - unit tests for transformer primitives
+- `scripts/tests/test_integration.py` - full-build ZIP content validation (forbidden strings, expected files)
 - Run: `cd scripts && uv run --with pytest pytest -v`
 
 **CI:** `.github/workflows/build-standalone-skills.yml` triggers on `plugin.json` version bumps and publishes to the `standalone-skills-latest` rolling release. `.github/workflows/tests.yml` now runs both the `skills/assess/` suite and the `scripts/` suite on every PR and push.
 
 **Marker rules:**
-- `<!-- chat-skip:start/end -->` — wraps content to remove entirely (plugin path resolution, `$ARGUMENTS`, agent-orchestration infrastructure, namespaced slash commands)
-- `<!-- chat-replace:key -->` + next line — replaces one line with the standalone text defined in `standalone_skill_config.py`
-- Apply markers to ALL `.md` files in the skill directory, not just `SKILL.md` — reference files with plugin-specific content will leak into the ZIP if unmarked
+- `<!-- chat-skip:start/end -->` - wraps content to remove entirely (plugin path resolution, `$ARGUMENTS`, agent-orchestration infrastructure, namespaced slash commands)
+- `<!-- chat-replace:key -->` + next line - replaces one line with the standalone text defined in `standalone_skill_config.py`
+- Apply markers to ALL `.md` files in the skill directory, not just `SKILL.md` - reference files with plugin-specific content will leak into the ZIP if unmarked
 - Markers must be balanced; keep them at line start (the transformer handles indented markers via `.strip()`, but line-start is cleaner)
 - Run `cd scripts && uv run --with pytest pytest -v` to validate after any marker changes
 
-**When to add markers:** any new skill content that references `SKILL_DIR`, `$ARGUMENTS`, a namespaced slash command (`/ai-native-toolkit:*`), or a Claude Code–only tool (`Agent`, `TeamCreate`, `SendMessage`, `TeamDelete`).
+**When to add markers:** any new skill content that references `SKILL_DIR`, `$ARGUMENTS`, a namespaced slash command (`/ai-native-toolkit:*`), or a Claude Code-only tool (`Agent`, `TeamCreate`, `SendMessage`, `TeamDelete`).
 
 ## /assess architecture
 

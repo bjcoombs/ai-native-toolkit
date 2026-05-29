@@ -1,32 +1,32 @@
 ---
 name: deslop
-description: "Detect and remove the telltale signs of AI-generated 'slop' from any written text — articles, reports, emails, essays, bios, marketing copy, documentation, encyclopedia entries, or anything meant to read as if a thoughtful human wrote it. Apply silently as a quality gate before finalizing substantial prose, and explicitly when asked to clean a draft. TRIGGER when the user says 'make this sound less like AI', 'remove the AI tells', 'de-slop this', 'check if this reads as AI-written', 'make it sound human', 'edit out the ChatGPT voice', or critiques a draft as generic, puffy, or robotic. Based on Wikipedia's 'Signs of AI writing' field guide."
+description: "Detect and remove the telltale signs of AI-generated 'slop' from any written text - articles, reports, emails, essays, bios, marketing copy, documentation, encyclopedia entries, or anything meant to read as if a thoughtful human wrote it. Apply silently as a quality gate before finalizing substantial prose, and explicitly when asked to clean a draft. TRIGGER when the user says 'make this sound less like AI', 'remove the AI tells', 'de-slop this', 'check if this reads as AI-written', 'make it sound human', 'edit out the ChatGPT voice', or critiques a draft as generic, puffy, or robotic. Based on Wikipedia's 'Signs of AI writing' field guide."
 ---
 
 # Deslop: removing the signs of AI writing
 
-LLMs have an identifiable writing style. Left unchecked, AI prose regresses toward the statistical mean: it smooths specific, unusual, verifiable facts into generic, positive, important-sounding filler. The result reads fluent but hollow — "slop." This skill is a field guide to catching and fixing those tells.
+LLMs have an identifiable writing style. Left unchecked, AI prose regresses toward the statistical mean: it smooths specific, unusual, verifiable facts into generic, positive, important-sounding filler. The result reads fluent but hollow - "slop." This skill is a field guide to catching and fixing those tells.
 
 ## How to use this skill
 
 There are two modes:
 
 1. **Gate mode (default, silent).** When you are *writing* substantial prose, self-check the draft against the patterns below before presenting it. Don't announce that you're doing this; just produce clean output.
-2. **Audit mode (explicit).** When the user gives you text and asks you to de-slop it, critique it, or check whether it sounds AI-written, scan against every category, then either (a) return an edited version, or (b) return a findings list with specific quoted offenders and fixes — match whatever the user asked for.
+2. **Audit mode (explicit).** When the user gives you text and asks you to de-slop it, critique it, or check whether it sounds AI-written, scan against every category, then either (a) return an edited version, or (b) return a findings list with specific quoted offenders and fixes - match whatever the user asked for.
 
 For a full audit of an external file, read `references/full-checklist.md` for the exhaustive pattern list with examples. The summary below covers the high-frequency offenders that catch ~90% of slop.
 
 ## Critical mindset
 
 - **The patterns are signals, not crimes.** Humans write some of these too (blogs, editorials, press releases). The presence of one phrase doesn't condemn a text; a *cluster* of them is the tell. Don't mechanically purge every "however."
-- **Fixing the surface tic is not the goal — fixing the underlying emptiness is.** Deleting the word "underscores" while leaving a sentence that says nothing just makes the slop harder to detect. If a sentence only puffs up significance and carries no fact, cut the whole sentence, don't reword it.
+- **Fixing the surface tic is not the goal - fixing the underlying emptiness is.** Deleting the word "underscores" while leaving a sentence that says nothing just makes the slop harder to detect. If a sentence only puffs up significance and carries no fact, cut the whole sentence, don't reword it.
 - **Specificity is the antidote.** The core failure of slop is vagueness masquerading as importance. Replace "a revolutionary titan of industry" with "inventor of the first train-coupling device." When you can't add a real fact, delete the claim.
 
 ## The high-frequency tells
 
 ### 1. Puffery: undue emphasis on significance and legacy
 
-AI inflates importance by asserting that the subject represents some broader trend or leaves a lasting mark — even for mundane subjects.
+AI inflates importance by asserting that the subject represents some broader trend or leaves a lasting mark - even for mundane subjects.
 
 > Watch words: *stands/serves as, is a testament/reminder, plays a vital/significant/crucial/pivotal/key role, underscores/highlights its importance, reflects broader, symbolizing its enduring/lasting, contributing to the, setting the stage for, marking a shift, key turning point, evolving landscape, focal point, indelible mark, deeply rooted, rich cultural heritage.*
 
@@ -34,7 +34,7 @@ AI inflates importance by asserting that the subject represents some broader tre
 
 ### 2. Superficial analysis tacked onto sentence ends
 
-A trailing present-participle ("-ing") phrase that editorializes about significance, impact, or implication — often a synthesis the sources don't support.
+A trailing present-participle ("-ing") phrase that editorializes about significance, impact, or implication - often a synthesis the sources don't support.
 
 > Watch words: *highlighting/underscoring/emphasizing…, ensuring…, reflecting/symbolizing…, contributing to…, fostering…, cultivating…, encompassing…, valuable insights, aligning/resonating with…*
 
@@ -78,7 +78,7 @@ AI capitalizes Every Main Word in section headings and scatters **bold** mid-sen
 
 Heavy reliance on em dashes for dramatic asides, and "smart"/directional quotation marks where the surrounding document uses straight ones (a copy-paste tell).
 
-**Fix:** Vary punctuation — commas, periods, parentheses. Match the document's existing quote style.
+**Fix:** Vary punctuation - commas, periods, parentheses. Match the document's existing quote style.
 
 ### 9. Outline-like / promotional conclusions
 
@@ -106,14 +106,14 @@ AI invents plausible-looking sources, dead URLs, fake DOIs, or attributes claims
 
 ## Output formats
 
-**When editing:** Return the cleaned text. If the user wants to see what changed, follow with a short bullet list of the categories you hit and why — quote the worst offenders.
+**When editing:** Return the cleaned text. If the user wants to see what changed, follow with a short bullet list of the categories you hit and why - quote the worst offenders.
 
 **When auditing without editing:** Produce a findings list. For each issue: the quoted phrase, the category number above, and a one-line fix. Close with an overall verdict (e.g., "heavy slop — puffery and rule-of-three throughout" vs. "mostly clean, two trailing-participle clauses").
 
-**Always:** Prioritize the underlying emptiness over surface tics. If removing the slop would gut the text down to nothing, that's the real finding — say so. The fix for a paragraph that only asserts importance is to get a real fact or delete it, not to reword the puffery.
+**Always:** Prioritize the underlying emptiness over surface tics. If removing the slop would gut the text down to nothing, that's the real finding - say so. The fix for a paragraph that only asserts importance is to get a real fact or delete it, not to reword the puffery.
 
 For the complete pattern catalog (including vague attributions, "elegant variation," letter-like talk-page writing, emoji-as-formatting, section-title-in-plaintext, prompt-refusal artifacts, and date-handling tells), see `references/full-checklist.md`.
 
 ## Provenance and freshness
 
-Derived from Wikipedia's "Signs of AI writing" (`Wikipedia:Signs_of_AI_writing`) as captured on **29 May 2026**. The tells drift as models change — diction that marked one model generation reads clean in the next, and new tics appear. Treat this snapshot as a point-in-time field guide, not a permanent one. **If this skill has not been updated in a while, strongly prefer re-deriving it: pull the live Wikipedia page, diff it against this version, and refresh the patterns before relying on the output.** A stale slop-detector is worse than none, because it gives false confidence while missing the current generation's tells.
+Derived from Wikipedia's "Signs of AI writing" (`Wikipedia:Signs_of_AI_writing`) as captured on **29 May 2026**. The tells drift as models change - diction that marked one model generation reads clean in the next, and new tics appear. Treat this snapshot as a point-in-time field guide, not a permanent one. **If this skill has not been updated in a while, strongly prefer re-deriving it: pull the live Wikipedia page, diff it against this version, and refresh the patterns before relying on the output.** A stale slop-detector is worse than none, because it gives false confidence while missing the current generation's tells.

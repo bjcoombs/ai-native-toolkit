@@ -1,6 +1,6 @@
 # Fix PR Autonomously
 
-Enter autonomous PR review loop for the current branch's PR. Loops until the PR is merge-ready across ALL criteria — not just CI.
+Enter autonomous PR review loop for the current branch's PR. Loops until the PR is merge-ready across ALL criteria, not just CI.
 
 ---
 
@@ -90,7 +90,7 @@ gh run view <run-id> --log-failed
 
 ## Important
 
-- **NO permission needed** between iterations — keep looping autonomously
-- **Sync base branch FIRST** every iteration — prevents cascade conflicts
+- **NO permission needed** between iterations - keep looping autonomously
+- **Sync base branch FIRST** every iteration - prevents cascade conflicts
 - **Stop criteria**: ALL 5 criteria green (not just CI + comments)
 - **Max iterations**: 10 (ask for help after that)

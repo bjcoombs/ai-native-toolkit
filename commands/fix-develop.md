@@ -2,7 +2,7 @@
 
 Assess failing CI on the repo's default branch (main / develop / etc., or nightly build), create a worktree with a fix, push a PR, and loop until CI passes and review comments are addressed.
 
-**Usage**: `/fix-develop [repo-path]` — defaults to current repo context. (Command name is historical; works on whichever branch the repo treats as default.)
+**Usage**: `/fix-develop [repo-path]` - defaults to current repo context. (Command name is historical; works on whichever branch the repo treats as default.)
 
 ---
 
@@ -44,10 +44,10 @@ gh run view $RUN_ID --log-failed 2>&1 | tail -100
 ```
 
 **Categorize failures:**
-- **Test failures** — read the failing test + source code to understand root cause
-- **Lint/build errors** — read the offending file at the reported line
-- **Flaky/infrastructure** — check if the same test passed on a recent re-run. If so, report as flaky (not actionable) and STOP
-- **Dependency issues** — check if a dependency update broke something
+- **Test failures** - read the failing test + source code to understand root cause
+- **Lint/build errors** - read the offending file at the reported line
+- **Flaky/infrastructure** - check if the same test passed on a recent re-run. If so, report as flaky (not actionable) and STOP
+- **Dependency issues** - check if a dependency update broke something
 
 Report diagnosis to user before proceeding:
 ```
@@ -81,7 +81,7 @@ git worktree add ../worktree/$BRANCH_NAME $BRANCH_NAME
 cd ../worktree/$BRANCH_NAME
 ```
 
-Implement the fix. Keep changes minimal — fix the failing tests/build only. Do not refactor, do not improve, do not clean up.
+Implement the fix. Keep changes minimal - fix the failing tests/build only. Do not refactor, do not improve, do not clean up.
 
 ```bash
 # Commit and push
@@ -113,7 +113,7 @@ and the positive-jq-filter pitfalls.
 
 ## Protocol
 
-1. **Autonomous Loop** — no permission needed between iterations:
+1. **Autonomous Loop** - no permission needed between iterations:
    - Check CI + comments, fix, push
    - Report: "Iteration N: Fixed X issues" or "Iteration N: Waiting for CI"
 
@@ -150,8 +150,8 @@ and the positive-jq-filter pitfalls.
 
 ## Important
 
-- **Minimal fixes only** — fix what's broken, nothing else
-- **Use positive jq filters** — `select(.state == "FAILURE")` not `select(.state != "SUCCESS")`
-- **Never work in repo-main** — always create a worktree
+- **Minimal fixes only** - fix what's broken, nothing else
+- **Use positive jq filters** - `select(.state == "FAILURE")` not `select(.state != "SUCCESS")`
+- **Never work in repo-main** - always create a worktree
 - **Max iterations**: 10 (ask for help after that)
-- **If flaky/infrastructure**: Report and STOP — don't create a PR for transient failures
+- **If flaky/infrastructure**: Report and STOP - don't create a PR for transient failures
