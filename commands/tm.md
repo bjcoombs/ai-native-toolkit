@@ -286,7 +286,7 @@ cd ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug>
 task-master show <task-id> --json
 ```
 
-**Step 3: Implement** — See [Implement Mode](#mode-implement-or-create_pr) below.
+**Step 3: Implement** — See [Implement Mode](#mode-implement-or-create-pr) below.
 
 ---
 

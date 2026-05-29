@@ -274,17 +274,22 @@ ai-native-toolkit/
 │   │       └── complexity-treemap.py  # Codecov-style hotspot SVG generator
 │   ├── huddle/
 │   │   └── SKILL.md                   # Multi-lens Six Hats deliberation
-│   └── deslop/
-│       ├── SKILL.md                   # Remove the signs of AI writing (12 high-frequency tells)
-│       └── references/
-│           └── full-checklist.md      # Exhaustive A-F catalog (Wikipedia-derived)
+│   ├── deslop/
+│   │   ├── SKILL.md                   # Remove the signs of AI writing (12 high-frequency tells)
+│   │   └── references/
+│   │       └── full-checklist.md      # Exhaustive A-F catalog (Wikipedia-derived)
+│   ├── marathon/
+│   │   └── SKILL.md                   # Parallel agent marathon orchestration
+│   └── pr-review-merge/
+│       └── SKILL.md                   # PR review, iteration, and merge lifecycle
 ├── commands/
 │   ├── tm.md
 │   ├── tm-marathon-config-example.md
 │   ├── 6hats.md
 │   ├── understand.md
 │   ├── fix-pr.md
-│   └── fix-develop.md
+│   ├── fix-develop.md
+│   └── issues.md
 ├── agents/
 │   ├── white-hat.md
 │   ├── red-hat.md
