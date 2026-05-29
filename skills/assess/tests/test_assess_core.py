@@ -208,6 +208,96 @@ def test_build_run_context_second_run_sees_diff(tmp_path: Path) -> None:
     assert ctx["diff"]["new"] == 1
 
 
+def test_graduated_index_row_carries_current_metrics(tmp_path: Path) -> None:
+    """Issue #52 Bug 1: when a file graduates off top_hotspots[:10] but is
+    still present in top_complex or top_large, the index row must show its
+    *current* CCN and LOC, not 0. Zero in those columns reads as "the file
+    was emptied," contradicts assess-report.md, and misleads reviewers."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+
+    # Prior run: src/legacy.go was a top hotspot.
+    prior_stats = {
+        "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "src/legacy.go", "loc": 1096, "ccn": 172, "commits": 5},
+        ],
+        "top_complex": [{"path": "src/legacy.go", "ccn": 172}],
+        "top_large": [{"path": "src/legacy.go", "loc": 1096}],
+    }
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+
+    # Current run: src/legacy.go dropped off top_hotspots (a bigger file
+    # took its slot) but still appears in top_complex and top_large at its
+    # actual current metrics. This is the case CodeRabbit caught.
+    current_stats = {
+        "files_scored": 55, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "src/giant.go", "loc": 2500, "ccn": 200, "commits": 8},
+        ],
+        "top_complex": [
+            {"path": "src/giant.go", "ccn": 200},
+            {"path": "src/legacy.go", "ccn": 172},
+        ],
+        "top_large": [
+            {"path": "src/giant.go", "loc": 2500},
+            {"path": "src/legacy.go", "loc": 1096},
+        ],
+    }
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+
+    build_run_context(repo_root=repo, run_date="2026-05-29")
+    index = (assess_dir / "index.md").read_text(encoding="utf-8")
+
+    # The graduated row must reflect reality: 1,096 LOC, ccn 172. NEVER 0.
+    legacy_row = next(line for line in index.splitlines() if "src/legacy.go" in line)
+    assert "graduated" in legacy_row
+    assert "| 172 | 1096 |" in legacy_row, (
+        f"expected current ccn/loc, got: {legacy_row}"
+    )
+    # The active row stays intact.
+    assert "src/giant.go" in index
+
+
+def test_graduated_index_row_uses_dash_when_metrics_unknown(tmp_path: Path) -> None:
+    """When a graduated file fell off every top-N list (no current metrics
+    available anywhere), the row renders `-` rather than misleading zeros."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+
+    # Prior: src/legacy.go was a hotspot.
+    prior_stats = {
+        "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "src/legacy.go", "loc": 800, "ccn": 90, "commits": 3},
+        ],
+        "top_complex": [{"path": "src/legacy.go", "ccn": 90}],
+        "top_large": [{"path": "src/legacy.go", "loc": 800}],
+    }
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+
+    # Current: src/legacy.go fell off ALL top-N lists (none of them mention it).
+    current_stats = {
+        "files_scored": 55, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "src/new.go", "loc": 600, "ccn": 80, "commits": 4},
+        ],
+        "top_complex": [{"path": "src/new.go", "ccn": 80}],
+        "top_large": [{"path": "src/new.go", "loc": 600}],
+    }
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+
+    build_run_context(repo_root=repo, run_date="2026-05-29")
+    index = (assess_dir / "index.md").read_text(encoding="utf-8")
+    legacy_row = next(line for line in index.splitlines() if "src/legacy.go" in line)
+    # Sentinel "-" not "0" - never lie about the size.
+    assert "| - | - |" in legacy_row
+
+
 def test_build_run_context_writes_hotspot_pages(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

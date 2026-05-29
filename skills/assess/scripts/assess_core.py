@@ -403,7 +403,31 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
             actions="- Pending LLM-generated suggestions",
         )
 
-    # Also surface graduated hotspots in the index
+    # Also surface graduated hotspots in the index. Carry the file's actual
+    # current metrics across the three top-N lists in `current` - graduating
+    # off `top_hotspots[:10]` means the file fell out of the composite
+    # ranking, NOT that its LOC or CCN dropped to zero. A graduated file
+    # almost always still appears in `top_complex` (top 10 by raw CCN) or
+    # `top_large` (top 10 by raw LOC) since those are wider views, so we
+    # can recover real numbers in the common case. Merge metrics per-path
+    # because top_complex entries carry only `ccn` and top_large entries
+    # carry only `loc` - only top_hotspots carries both. When a metric
+    # genuinely isn't present in any list, leave it as None - the wiki
+    # renders None as "-" rather than misleading zeros (issue #52 Bug 1).
+    current_locs: dict[str, int] = {}
+    current_ccns: dict[str, int] = {}
+    for src_key in ("top_hotspots", "top_complex", "top_large"):
+        for entry in current.get(src_key, []):
+            path = entry.get("path")
+            if not path:
+                continue
+            loc = entry.get("loc")
+            ccn = entry.get("ccn")
+            if loc is not None and path not in current_locs:
+                current_locs[path] = int(loc)
+            if ccn is not None and path not in current_ccns:
+                current_ccns[path] = int(ccn)
+
     for h in diff.graduated:
         hotspot_entries.append(HotspotEntry(
             path=h.path,
@@ -412,8 +436,8 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
             first_flagged=first_flagged_map.get(h.path, "unknown"),
             last_seen=run_date,
             status="graduated",
-            ccn=0,
-            loc=0,
+            ccn=current_ccns.get(h.path),
+            loc=current_locs.get(h.path),
         ))
 
     # Persist the updated first-flagged map for future runs
@@ -433,6 +457,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         new_count=len(diff.new),
         persistent_count=len(diff.persistent),
         top_action=top_action,
+        plugin_version=_read_plugin_version(),
     )
     append_log_entry(assess_dir, log_entry)
 
