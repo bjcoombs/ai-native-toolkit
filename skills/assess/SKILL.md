@@ -7,9 +7,9 @@ description: "Assess a codebase's readiness for AI agent contributors using the 
 
 Three artefacts in one pass against a target repo:
 
-1. **Layered contract assessment** — 0–8 score across navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, and AI project management.
-2. **Complexity hotspot SVG** — Codecov-style treemap of the code. Size = LOC. Colour = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = riskiest to change.
-3. **Doc navigability SVG** — a node-graph of the docs. Structure = connectivity (centre = entry, rim = unreachable, dashed ring = orphan); colour = staleness (vivid red = a frozen doc beside churning code = a *lying map*); size = file length. Folds navigability and the decaying-map signal into one artifact.
+1. **Layered contract assessment** - 0-8 score across navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, and AI project management.
+2. **Complexity hotspot SVG** - Codecov-style treemap of the code. Size = LOC. Colour = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = riskiest to change.
+3. **Doc navigability SVG** - a node-graph of the docs. Structure = connectivity (centre = entry, rim = unreachable, dashed ring = orphan); colour = staleness (vivid red = a frozen doc beside churning code = a *lying map*); size = file length. Folds navigability and the decaying-map signal into one artifact.
 
 Both SVGs are colour-blind-safe by default (OrRd ramp, no red-green).
 
@@ -17,7 +17,7 @@ All land as files inside the target repo. The skill always writes them locally; 
 
 ## The model: truth-pressure, not presence
 
-Read this before scoring — it changes how you score. Across every layer, the real signal is never **presence**. It is whether a thing is under **active pressure to stay true**:
+Read this before scoring - it changes how you score. Across every layer, the real signal is never **presence**. It is whether a thing is under **active pressure to stay true**:
 
 - Tests keep **behaviour** honest (CI fails when it's wrong).
 - Retros / feedback loops keep the **process** honest (Layer 8 scores whether retros are *carried out*, not merely present).
@@ -26,11 +26,11 @@ Read this before scoring — it changes how you score. Across every layer, the r
 
 So **AI-readiness is the degree to which a codebase's self-descriptions are kept honest, not the degree to which scaffolding exists.** Score artefacts on *maintenance pressure*, not existence. A stale-but-present doc scores **at or below absent**: missing makes the agent go look; confidently-stale makes it navigate fast to a wrong, current-looking conclusion.
 
-The 9 layers (0–8) fall into three bands, ordered by dependency — what must hold for the next band to mean anything:
+The 9 layers (0-8) fall into three bands, ordered by dependency - what must hold for the next band to mean anything:
 
-- **Read-side foundation** (L0 navigability, L1 liveness) — can the agent form a *true picture* before it acts?
-- **Write-side enforcement** (L2–L7) — can the agent be trusted to produce good output? Only means something once you can trust that what you're reading is real and current.
-- **Meta** (L8 feedback) — does the system keep itself honest over time? Depends on a working enforced system to improve, so it stays last.
+- **Read-side foundation** (L0 navigability, L1 liveness) - can the agent form a *true picture* before it acts?
+- **Write-side enforcement** (L2-L7) - can the agent be trusted to produce good output? Only means something once you can trust that what you're reading is real and current.
+- **Meta** (L8 feedback) - does the system keep itself honest over time? Depends on a working enforced system to improve, so it stays last.
 
 <!-- chat-skip:start -->
 **$ARGUMENTS**
@@ -64,14 +64,14 @@ Artefacts will land at:
 
 This step produces **two** views of the codebase, both colour-blind-safe (OrRd ramp, no red-green):
 
-- **Complexity heatmap** (`complexity-heatmap.svg`) — a treemap of the *code*. Size = LOC, colour = cyclomatic complexity, saturation = recent churn. Vivid red = complex AND active = "hard to change safely".
-- **Doc navigability graph** (`doc-graph.svg`) — a node-graph of the *docs*. Structure shows connectivity (centre = entry point, rings = link-distance, rim = unreachable; orphans carry a dashed ring); colour shows staleness in the same grammar as the code heatmap (vivid red = a frozen doc beside churning code = a lying map); size = file length. It folds both Layer 0 doc signals — navigability and the decaying-map — into one artifact.
+- **Complexity heatmap** (`complexity-heatmap.svg`) - a treemap of the *code*. Size = LOC, colour = cyclomatic complexity, saturation = recent churn. Vivid red = complex AND active = "hard to change safely".
+- **Doc navigability graph** (`doc-graph.svg`) - a node-graph of the *docs*. Structure shows connectivity (centre = entry point, rings = link-distance, rim = unreachable; orphans carry a dashed ring); colour shows staleness in the same grammar as the code heatmap (vivid red = a frozen doc beside churning code = a lying map); size = file length. It folds both Layer 0 doc signals - navigability and the decaying-map - into one artifact.
 
 Feed the complexity stats into the linter/complexity layer (Layer 3) and the `doc_graph` / `doc_staleness` blocks of `run-context.json` into **Layer 0** (the graph SVG is the visual; the score reads the structured blocks).
 
 ### 2a: Offer to install `scc` (one-time per repo)
 
-The bundled treemap uses [`lizard`](https://github.com/terryyin/lizard) (Python, Go, JS, Java, C/C++, etc.) by default. Optional `scc` extends coverage to 200+ languages including markdown, JSON, YAML, SQL, and shell — useful when the repo's surface is more than just traditional source code.
+The bundled treemap uses [`lizard`](https://github.com/terryyin/lizard) (Python, Go, JS, Java, C/C++, etc.) by default. Optional `scc` extends coverage to 200+ languages including markdown, JSON, YAML, SQL, and shell - useful when the repo's surface is more than just traditional source code.
 
 Before scanning, check three signals:
 
@@ -93,11 +93,11 @@ NONCODE_FILES=$(fd -t f -e md -e json -e yaml -e yml -e toml -e sh -e sql . "$RE
 
 **Offer the install only if all three are true:** `SCC_PRESENT=0`, `SCC_DECLINED=0`, and the repo looks lizard-sparse (`CODE_FILES < NONCODE_FILES` or `CODE_FILES < 10`). Otherwise skip straight to 2b (or 2c if 2b has nothing to offer).
 
-When offering, use **AskUserQuestion** with three options (do **not** auto-install — `brew install` is a system mutation):
+When offering, use **AskUserQuestion** with three options (do **not** auto-install - `brew install` is a system mutation):
 
-- **Install scc** — run the appropriate installer for the platform and continue.
-- **Skip for now** — proceed with lizard only. Don't write the marker; ask again next run.
-- **Skip permanently for this repo** — write `$REPO_ROOT/.assess/.no-scc` so future runs don't ask. Recommended for prompt repos or pure-docs repos where lizard-only is genuinely fine.
+- **Install scc** - run the appropriate installer for the platform and continue.
+- **Skip for now** - proceed with lizard only. Don't write the marker; ask again next run.
+- **Skip permanently for this repo** - write `$REPO_ROOT/.assess/.no-scc` so future runs don't ask. Recommended for prompt repos or pure-docs repos where lizard-only is genuinely fine.
 
 Phrase the question so the user understands the trade-off, e.g.:
 
@@ -118,7 +118,7 @@ If the user picks **Install scc**, run the platform-appropriate command:
 }
 ```
 
-If the install fails or the platform isn't covered, fall back to lizard-only and continue — don't block the assessment.
+If the install fails or the platform isn't covered, fall back to lizard-only and continue - don't block the assessment.
 
 ### 2b: Offer to install per-language dead-code tools (one-time per tool)
 
@@ -151,11 +151,11 @@ needs_offer staticcheck "$GO_FILES"  && OFFERS+=("go|staticcheck|go install honn
 
 If `OFFERS` is empty (no language hits the threshold, or every tool is already installed/declined), skip straight to 2c.
 
-Otherwise, batch the questions into **a single AskUserQuestion call** — one question per language in `OFFERS`, three options per question:
+Otherwise, batch the questions into **a single AskUserQuestion call** - one question per language in `OFFERS`, three options per question:
 
-- **Install <tool>** — run the cited install command and continue.
-- **Skip for now** — proceed without the tool. Don't write a marker; ask again next run.
-- **Skip permanently for this repo** — write `$REPO_ROOT/.assess/.no-<tool>` so future runs don't ask. Recommended when the language only appears in scripts/configs that don't warrant symbol-level reachability.
+- **Install <tool>** - run the cited install command and continue.
+- **Skip for now** - proceed without the tool. Don't write a marker; ask again next run.
+- **Skip permanently for this repo** - write `$REPO_ROOT/.assess/.no-<tool>` so future runs don't ask. Recommended when the language only appears in scripts/configs that don't warrant symbol-level reachability.
 
 Phrase each question so the gain is concrete, e.g.:
 
@@ -213,7 +213,7 @@ Full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS
 
 The script's own output directory `.assess/` is excluded automatically - prior runs' `run-context.json` and SVGs never feed the next run's heatmap, the doc graph, or the dead-code scan.
 
-**If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated — <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
+**If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated - <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
 
 Run the full sequence - rotate the prior sidecar first, then the treemap, then the deterministic core:
 
@@ -248,7 +248,7 @@ uv run "$SKILL_DIR/scripts/doc-graph-svg.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess
 uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT"
 ```
 
-Either SVG is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated — <reason>" in the report and continue. The doc graph shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
+Either SVG is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated - <reason>" in the report and continue. The doc graph shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
 
 Now `$REPO_ROOT/.assess/run-context.json` contains the structured data you need for the prose sections. Read it before writing the report.
 
@@ -260,9 +260,9 @@ Run these checks in parallel where possible. For each layer, collect evidence an
 
 ### Layer 0: Agent Instructions & Navigability (Read-Side Foundation)
 
-Layer 0 answers: *can the agent form a true picture before it acts?* It has two halves — the agent instruction files (static intent) and the **navigability of the docs** (can the agent traverse to the right place, and is what it finds still true). Score both on maintenance pressure, not presence.
+Layer 0 answers: *can the agent form a true picture before it acts?* It has two halves - the agent instruction files (static intent) and the **navigability of the docs** (can the agent traverse to the right place, and is what it finds still true). Score both on maintenance pressure, not presence.
 
-#### 0a — Agent instruction files
+#### 0a - Agent instruction files
 
 Read the agent instruction file grades and surface integrity from `run-context.json`:
 
@@ -270,7 +270,7 @@ Read the agent instruction file grades and surface integrity from `run-context.j
 jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .broken_instruction_refs' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-`.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). Only **git-tracked** files are graded — a file present on disk but uncommitted is *not* credited (it isn't part of what the repo ships). The same heuristic grader scores each tracked file. For each:
+`.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). Only **git-tracked** files are graded - a file present on disk but uncommitted is *not* credited (it isn't part of what the repo ships). The same heuristic grader scores each tracked file. For each:
 - `grade: "A" | "B+" | ...` - report verbatim per file
 - `subscores.positive_directives` - count of positive directives found
 - `subscores.tradeoff_phrases` - count of reasoning phrases
@@ -285,48 +285,48 @@ jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .brok
 - B/C → **Partial**
 - D/F → **Partial** if at least one file exists but scores low - note the grade and recommend rewriting
 
-**Integrity overrides (these can pull the half *below* the grade — a single good file does not rescue a broken instruction surface):**
-- **`broken_instruction_refs` is non-empty → cap the instruction half at Partial, or Missing if it's the *primary* instruction surface that's broken.** These are advertised-but-broken instruction references: a committed `.cursorrules`/`AGENTS.md`/`CLAUDE.md` that is a **dangling symlink** (`reason: symlink target missing`), or an entry doc that **links to a missing instruction file** (`reason: link to missing instruction file`). The truth-pressure model says a broken map scores at or below absent — a repo that *advertises* `.cursorrules` but the symlink dangles is worse than one that never claimed to have it. Name each broken ref and make "fix or remove the broken instruction reference" a Top-3 action. Do **not** let an unrelated file that happens to grade B+ keep the half at Present. **But don't let the score mislead either:** if a committed instruction file still grades passing while the *advertised* surface dangles (e.g. a B+ `.github/copilot-instructions.md` while a referenced `CLAUDE.md` is missing), prefer **Partial** over Missing, and in the Evidence cell name that committed file and its grade. A human reviewer would call this Partial; reserve **Missing** for genuine absence. Either way the report must read as *the advertised surface is broken*, never *no instructions exist*.
-- **`untracked_instruction_files` is non-empty → note it, don't score it.** An instruction file exists on disk but isn't committed, so nobody who clones gets it. Report "`<file>` present locally but untracked — commit it or it won't reach contributors (human or agent)"; never let it raise the grade.
-- **Surface within-band regression.** The Present/Partial/Missing bucket is coarse — "lost the primary instruction file and gained 40 dangling links" may not move the bucket. When `broken_instruction_refs` or a large `doc_graph.dangling_links` count appears, call out the regression explicitly in the report even if the band label is unchanged.
+**Integrity overrides (these can pull the half *below* the grade - a single good file does not rescue a broken instruction surface):**
+- **`broken_instruction_refs` is non-empty → cap the instruction half at Partial, or Missing if it's the *primary* instruction surface that's broken.** These are advertised-but-broken instruction references: a committed `.cursorrules`/`AGENTS.md`/`CLAUDE.md` that is a **dangling symlink** (`reason: symlink target missing`), or an entry doc that **links to a missing instruction file** (`reason: link to missing instruction file`). The truth-pressure model says a broken map scores at or below absent - a repo that *advertises* `.cursorrules` but the symlink dangles is worse than one that never claimed to have it. Name each broken ref and make "fix or remove the broken instruction reference" a Top-3 action. Do **not** let an unrelated file that happens to grade B+ keep the half at Present. **But don't let the score mislead either:** if a committed instruction file still grades passing while the *advertised* surface dangles (e.g. a B+ `.github/copilot-instructions.md` while a referenced `CLAUDE.md` is missing), prefer **Partial** over Missing, and in the Evidence cell name that committed file and its grade. A human reviewer would call this Partial; reserve **Missing** for genuine absence. Either way the report must read as *the advertised surface is broken*, never *no instructions exist*.
+- **`untracked_instruction_files` is non-empty → note it, don't score it.** An instruction file exists on disk but isn't committed, so nobody who clones gets it. Report "`<file>` present locally but untracked - commit it or it won't reach contributors (human or agent)"; never let it raise the grade.
+- **Surface within-band regression.** The Present/Partial/Missing bucket is coarse - "lost the primary instruction file and gained 40 dangling links" may not move the bucket. When `broken_instruction_refs` or a large `doc_graph.dangling_links` count appears, call out the regression explicitly in the report even if the band label is unchanged.
 
-Important: a null grade and an F grade map to different remediation. Null means "create a CLAUDE.md / AGENTS.md (whichever the team uses)." F means "the file is there but needs rewriting." A broken/dangling reference means "the file you point at isn't reachable — fix the link or remove the claim." Don't conflate them.
+Important: a null grade and an F grade map to different remediation. Null means "create a CLAUDE.md / AGENTS.md (whichever the team uses)." F means "the file is there but needs rewriting." A broken/dangling reference means "the file you point at isn't reachable - fix the link or remove the claim." Don't conflate them.
 
-For a dangling reference, the right verb depends on the target's actual state — **don't default to `git add`**, since the file may never have been written. Check `untracked_instruction_files`: if the target appears there it exists on disk, so the action is *commit it* (`git add <file>`); if it appears nowhere, it was never created, so the action is *write it* (then commit) — or *remove the dangling claim*. "`git add CLAUDE.md`" is only correct when `CLAUDE.md` is actually present-but-untracked.
+For a dangling reference, the right verb depends on the target's actual state - **don't default to `git add`**, since the file may never have been written. Check `untracked_instruction_files`: if the target appears there it exists on disk, so the action is *commit it* (`git add <file>`); if it appears nowhere, it was never created, so the action is *write it* (then commit) - or *remove the dangling claim*. "`git add CLAUDE.md`" is only correct when `CLAUDE.md` is actually present-but-untracked.
 
 When multiple instruction files are present (e.g. CLAUDE.md and AGENTS.md as symlinks of the same content), list each in the report.
 
 This replaces the prior subjective "is it generic?" check. The grader rewards positive directives and tradeoff reasoning; it penalizes pure-negative framing and staleness.
 
-#### 0b — Navigability (measured as a graph, not a presence check)
+#### 0b - Navigability (measured as a graph, not a presence check)
 
-Navigability is a graph property, so the deterministic core measures it as one. Read the doc link-graph, staleness, and association signals from `run-context.json` — **do not re-scan for files by name**; the graph already identifies hubs by centrality without filename guessing:
+Navigability is a graph property, so the deterministic core measures it as one. Read the doc link-graph, staleness, and association signals from `run-context.json` - **do not re-scan for files by name**; the graph already identifies hubs by centrality without filename guessing:
 
 ```bash
 jq '.doc_graph, .doc_staleness.association, .doc_staleness.modularity, .stale_hubs[:5]' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-Recognise the full range of navigability artefacts (not just README/ADR/API specs): a Map-of-Content (MOC) / index note, a linked-doc graph (cross-referenced markdown — the [Karpathy-pattern LLM wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)), `AGENTS.md`, and **repo skills** (`.claude/skills/`, `skills/`). The graph already accounts for all of these. The signals below are the deterministic subset of Karpathy's wiki "Lint" health-check — hubs, orphans, connectivity, dangling references — applied to a code repo's docs.
+Recognise the full range of navigability artefacts (not just README/ADR/API specs): a Map-of-Content (MOC) / index note, a linked-doc graph (cross-referenced markdown - the [Karpathy-pattern LLM wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)), `AGENTS.md`, and **repo skills** (`.claude/skills/`, `skills/`). The graph already accounts for all of these. The signals below are the deterministic subset of Karpathy's wiki "Lint" health-check - hubs, orphans, connectivity, dangling references - applied to a code repo's docs.
 
 Score navigability from these signals:
 
-- **Connectivity / reachability (a wayfinding signal — read it as *curation*, not *access*).** A *good* doc set is one connected island, fully reachable from the entry points (README / `AGENTS.md` / top MOC). `doc_graph.island_count == 1` and `reachability_pct` near 1.0 is navigable; a high `orphan_rate` or many islands weakens wayfinding for both humans and agents. **Keep the claim honest:** link-reachability measures whether the docs are *curated into a navigable map*, not whether content is *reachable at all* — an agent can always `ls docs/` and open any file by path. So low reachability means **uncurated** (poor signal-vs-noise / weak wayfinding), not **inaccessible**. Weight it accordingly — an index/MOC is worth adding, but a directory-organised docs tree with low link-reachability is not the emergency "an agent can only discover 9%" makes it sound. Name the orphan docs.
-- **Hubs / MOCs by centrality.** `doc_graph.hubs` are the load-bearing docs (highest PageRank). A stale hub is the most dangerous lying map — everything routes through it.
-- **MOC validation (declared vs structural).** `doc_graph.moc_named_but_not_wired` lists docs *named* like a map (`index.md`, "MOC") that aren't structural hubs — named but not wired. Flag each as a finding: the graph shows the map isn't actually built.
-- **Broken links / ghost files.** `doc_graph.broken_links` lists links whose target file doesn't exist — `{from, target, kind}`. The doc graph draws each as a labelled "ghost" node, and the missing name *is* the suggested fix (create the file or correct the link). Name a few and recommend the fix; `dangling_links` is the count. `ambiguous_wikilinks` (a bare `[[name]]` matching several files) is a milder smell worth noting.
-- **Missing cross-references.** `doc_graph.missing_xrefs` lists `{from, to}` pairs where a doc *names another doc's filename in prose but never links to it* — "concepts mentioned but lacking the connection". Suggest adding the links so traversal (human or agent) actually reaches them.
-- **Contradictions are out of deterministic scope — hand them to an LLM.** The remaining lint check — contradictions between pages — can't be detected structurally. When the doc set is non-trivial, add a Top-3 / Additional action telling the user to have *their* agent read the doc set for contradictions and stale claims (e.g. "run your LLM over `docs/` to flag pages that contradict each other or the code"). State plainly that `/assess` does not check this.
-- **Centrality × staleness (the priority signal).** `stale_hubs` is ranked by `pagerank × staleness ratio`. The top entry — a central doc whose subject code is churning while the doc sits frozen — is a top finding. This feeds both the docs heatmap and this score.
+- **Connectivity / reachability (a wayfinding signal - read it as *curation*, not *access*).** A *good* doc set is one connected island, fully reachable from the entry points (README / `AGENTS.md` / top MOC). `doc_graph.island_count == 1` and `reachability_pct` near 1.0 is navigable; a high `orphan_rate` or many islands weakens wayfinding for both humans and agents. **Keep the claim honest:** link-reachability measures whether the docs are *curated into a navigable map*, not whether content is *reachable at all* - an agent can always `ls docs/` and open any file by path. So low reachability means **uncurated** (poor signal-vs-noise / weak wayfinding), not **inaccessible**. Weight it accordingly - an index/MOC is worth adding, but a directory-organised docs tree with low link-reachability is not the emergency "an agent can only discover 9%" makes it sound. Name the orphan docs.
+- **Hubs / MOCs by centrality.** `doc_graph.hubs` are the load-bearing docs (highest PageRank). A stale hub is the most dangerous lying map - everything routes through it.
+- **MOC validation (declared vs structural).** `doc_graph.moc_named_but_not_wired` lists docs *named* like a map (`index.md`, "MOC") that aren't structural hubs - named but not wired. Flag each as a finding: the graph shows the map isn't actually built.
+- **Broken links / ghost files.** `doc_graph.broken_links` lists links whose target file doesn't exist - `{from, target, kind}`. The doc graph draws each as a labelled "ghost" node, and the missing name *is* the suggested fix (create the file or correct the link). Name a few and recommend the fix; `dangling_links` is the count. `ambiguous_wikilinks` (a bare `[[name]]` matching several files) is a milder smell worth noting.
+- **Missing cross-references.** `doc_graph.missing_xrefs` lists `{from, to}` pairs where a doc *names another doc's filename in prose but never links to it* - "concepts mentioned but lacking the connection". Suggest adding the links so traversal (human or agent) actually reaches them.
+- **Contradictions are out of deterministic scope - hand them to an LLM.** The remaining lint check - contradictions between pages - can't be detected structurally. When the doc set is non-trivial, add a Top-3 / Additional action telling the user to have *their* agent read the doc set for contradictions and stale claims (e.g. "run your LLM over `docs/` to flag pages that contradict each other or the code"). State plainly that `/assess` does not check this.
+- **Centrality × staleness (the priority signal).** `stale_hubs` is ranked by `pagerank × staleness ratio`. The top entry - a central doc whose subject code is churning while the doc sits frozen - is a top finding. This feeds both the docs heatmap and this score.
 - **Doc→code association as a maturity signal.** `doc_staleness.association.pct_code_under_base_doc` and `pct_docs_mapping_to_code`: if the doc→code map is derivable from structure (clean hierarchy/convention), that's positive navigability; docs floating disconnected from the code they describe is a gap.
-- **Modular base docs, size-weighted.** `doc_staleness.modularity`: a module owning a *maintained* base doc is what makes a large codebase navigable to humans and deterministically mappable for an agent. **The headline metric is `base_doc_dir_ratio`** — the fraction of code-containing directories that actually hold a base doc. Do **not** lead with `base_doc_coverage_when_present`: it reaches `1.0` whenever a single root-level README is an ancestor of every file, which reads as "fully documented" even when only a handful of module dirs have docs (the two fields diverge sharply, e.g. ratio `0.04` vs when-present `1.0`). **Weight by size** — do not penalise a small/single-purpose repo (`large_repo: false`); for a `large_repo: true` with low `base_doc_dir_ratio`, flag the Layer 0 gap with remediation "decompose into modules; add a maintained base doc per module." The per-module docs are held to the same maintenance standard — the target is *modular + maintained*, never just "more docs."
+- **Modular base docs, size-weighted.** `doc_staleness.modularity`: a module owning a *maintained* base doc is what makes a large codebase navigable to humans and deterministically mappable for an agent. **The headline metric is `base_doc_dir_ratio`** - the fraction of code-containing directories that actually hold a base doc. Do **not** lead with `base_doc_coverage_when_present`: it reaches `1.0` whenever a single root-level README is an ancestor of every file, which reads as "fully documented" even when only a handful of module dirs have docs (the two fields diverge sharply, e.g. ratio `0.04` vs when-present `1.0`). **Weight by size** - do not penalise a small/single-purpose repo (`large_repo: false`); for a `large_repo: true` with low `base_doc_dir_ratio`, flag the Layer 0 gap with remediation "decompose into modules; add a maintained base doc per module." The per-module docs are held to the same maintenance standard - the target is *modular + maintained*, never just "more docs."
 
 **Truth-pressure ordering of navigation aids** (weight maintained/executable aids higher): executable aids that run in CI (skills, doctests) **>** tests **>** linked-doc graph / MOC **>** prose. Executable aids fail loudly when they rot; prose rots silently.
 
-**Scoring rule (mirror the null-vs-F split):** a wiki/MOC/`AGENTS.md` scores **Present** only when *maintained* — its churn tracks the code's churn (low `stale_hubs` ratios, `island_count` ≈ 1, reachability high). Score **Partial/Missing** when stale relative to code churn or fragmented, and flag stale-but-present as **actively misleading** — score it at or below absent. Combine with 0a: strong instruction files **and** a maintained, navigable doc graph → Present; good instructions but a stale or fragmented doc set → Partial; neither → Missing.
+**Scoring rule (mirror the null-vs-F split):** a wiki/MOC/`AGENTS.md` scores **Present** only when *maintained* - its churn tracks the code's churn (low `stale_hubs` ratios, `island_count` ≈ 1, reachability high). Score **Partial/Missing** when stale relative to code churn or fragmented, and flag stale-but-present as **actively misleading** - score it at or below absent. Combine with 0a: strong instruction files **and** a maintained, navigable doc graph → Present; good instructions but a stale or fragmented doc set → Partial; neither → Missing.
 
 ### Layer 1: Runtime Legibility / Liveness (Read-Side Foundation)
 
-Layer 1 answers: *is this code actually live, and can the agent find out?* A subsystem can pass every write-side layer — compiles, typed, linted, tested, reviewed — and still be **dead**: the data feeding it stopped, the consumer was re-pointed, but the code remains. Finding the code does not mean it is still used. This layer gates the entire write side: enforcing types/lint/coverage on dead code is wasted at best, misleading at worst.
+Layer 1 answers: *is this code actually live, and can the agent find out?* A subsystem can pass every write-side layer - compiles, typed, linted, tested, reviewed - and still be **dead**: the data feeding it stopped, the consumer was re-pointed, but the code remains. Finding the code does not mean it is still used. This layer gates the entire write side: enforcing types/lint/coverage on dead code is wasted at best, misleading at worst.
 
 Read both tiers from `run-context.json`:
 
@@ -334,26 +334,26 @@ Read both tiers from `run-context.json`:
 jq '.dead_code, .observability' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-**Deterministic tier — intra-repo dead code (`dead_code`).** A best-effort scan (`vulture`/`ts-prune`/`knip`/`staticcheck`/`deadcode`) flags unused exports / unreferenced symbols. `dead_code.tools` reports per-language status; `candidate_count` and `candidates` list the findings (already filtered to *this* repo — vendored/build dirs are excluded). Surface them in the report **with the explicit caveat** from `dead_code.caveat`: static reachability proves "nothing in *this* repo calls it," never "no external consumer calls it." Cross-boundary liveness needs the next tier. When `available: false`, report "intra-repo dead-code scan not run (no language tool present)" — degrade, don't penalise.
+**Deterministic tier - intra-repo dead code (`dead_code`).** A best-effort scan (`vulture`/`ts-prune`/`knip`/`staticcheck`/`deadcode`) flags unused exports / unreferenced symbols. `dead_code.tools` reports per-language status; `candidate_count` and `candidates` list the findings (already filtered to *this* repo - vendored/build dirs are excluded). Surface them in the report **with the explicit caveat** from `dead_code.caveat`: static reachability proves "nothing in *this* repo calls it," never "no external consumer calls it." Cross-boundary liveness needs the next tier. When `available: false`, report "intra-repo dead-code scan not run (no language tool present)" - degrade, don't penalise.
 
-Two `tools[].status` values need handling in the report: `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it — surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `timeout` / `tool_absent` likewise degrade, not penalise.
+Two `tools[].status` values need handling in the report: `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it - surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `timeout` / `tool_absent` likewise degrade, not penalise.
 
-**Observability tier (the decisive one) — three rungs (`observability.rung`, 0–3):**
+**Observability tier (the decisive one) - three rungs (`observability.rung`, 0-3):**
 
-1. **Instrumented** — telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging). Necessary, not sufficient.
-2. **Discoverable** — an `OBSERVABILITY.md` / runbook tells the agent *where* runtime truth lives. Orients, but grants no access.
-3. **Reachable** — the agent has an *invokable* path to runtime state: an MCP server over logs/metrics/traces (`.mcp.json`), a repo skill that tails logs / queries metrics, or a runbook with runnable query commands. **This is the rung that decides the score** — without it the agent *knows* telemetry exists but cannot *use* it, so liveness stays unverifiable in practice. A Grafana no agent can query from stops at rung 1. **Boundary:** this scores what the *repo provides* toward agent-reachability; it cannot know the agent's live environment — say so in the report.
+1. **Instrumented** - telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging). Necessary, not sufficient.
+2. **Discoverable** - an `OBSERVABILITY.md` / runbook tells the agent *where* runtime truth lives. Orients, but grants no access.
+3. **Reachable** - the agent has an *invokable* path to runtime state: an MCP server over logs/metrics/traces (`.mcp.json`), a repo skill that tails logs / queries metrics, or a runbook with runnable query commands. **This is the rung that decides the score** - without it the agent *knows* telemetry exists but cannot *use* it, so liveness stays unverifiable in practice. A Grafana no agent can query from stops at rung 1. **Boundary:** this scores what the *repo provides* toward agent-reachability; it cannot know the agent's live environment - say so in the report.
 
 **Scoring (by the rungs):**
-- **Present** — reaches **rung 3** (agent can read logs/metrics/traces via an invokable tool/skill/MCP) and dead code is removed or flagged.
-- **Partial** — instrumented, maybe discoverable, but **not agent-reachable** (rung 1–2 — the `meridian` case: telemetry exists, the agent can't use it), or candidate-dead code present and unflagged.
-- **Missing** — no runtime instrumentation (rung 0); liveness unknowable from the repo.
+- **Present** - reaches **rung 3** (agent can read logs/metrics/traces via an invokable tool/skill/MCP) and dead code is removed or flagged.
+- **Partial** - instrumented, maybe discoverable, but **not agent-reachable** (rung 1-2 - the `meridian` case: telemetry exists, the agent can't use it), or candidate-dead code present and unflagged.
+- **Missing** - no runtime instrumentation (rung 0); liveness unknowable from the repo.
 
-If `observability.available` is `false` (rung `null`), the scan itself failed — report "liveness not assessed" and degrade, don't score it Missing (that's a real "rung 0", a different finding).
+If `observability.available` is `false` (rung `null`), the scan itself failed - report "liveness not assessed" and degrade, don't score it Missing (that's a real "rung 0", a different finding).
 
 **Encode the liveness asymmetry** in the report: *no traffic is strong evidence of dead; some traffic is weak evidence of live* (could be a healthcheck, a zombie client, or a once-a-year batch).
 
-**Encode the honest limit:** some liveness facts live only in people's heads ("kept for Legal, not wired up") — unreachable by code *or* telemetry. So treat **code-presence as a hypothesis, not a fact**: write "`X` is PRESENT; liveness NOT confirmed; needs telemetry or a named human," never assert liveness.
+**Encode the honest limit:** some liveness facts live only in people's heads ("kept for Legal, not wired up") - unreachable by code *or* telemetry. So treat **code-presence as a hypothesis, not a fact**: write "`X` is PRESENT; liveness NOT confirmed; needs telemetry or a named human," never assert liveness.
 
 ### Layer 2: Code Design (Compile-Time Correctness)
 
@@ -426,7 +426,7 @@ ls "$REPO_ROOT"/.swiftlint.yml 2>/dev/null
 - Exhaustive matching? (exhaustive, strict unions)
 - Import boundary rules? (depguard, no-restricted-imports)
 
-**Cross-reference treemap evidence.** Read the stats sidecar to see what the linter actually catches in the wild — but only if Step 2 produced it. The sidecar is missing whenever the treemap script failed (no `uv`, non-git path, no scoreable files, etc.).
+**Cross-reference treemap evidence.** Read the stats sidecar to see what the linter actually catches in the wild - but only if Step 2 produced it. The sidecar is missing whenever the treemap script failed (no `uv`, non-git path, no scoreable files, etc.).
 
 ```bash
 STATS="$REPO_ROOT/.assess/complexity-stats.json"
@@ -444,7 +444,7 @@ fi
 
 If the sidecar is missing, skip the combined-scoring matrix below and fall back to the original Layer 3 rule: Present if linter config includes AI-relevant rules (including complexity/length), Partial if linter exists without them, Missing if no linter at all. Record "treemap unavailable" in the Evidence column so the gap is auditable.
 
-Thresholds for "high" (based on industry conventions — adjust for context):
+Thresholds for "high" (based on industry conventions - adjust for context):
 
 | Signal | Watch | High |
 |---|---|---|
@@ -457,10 +457,10 @@ Thresholds for "high" (based on industry conventions — adjust for context):
 
 | Linter has complexity/length rules? | Treemap p95 / max in "High" range? | Score |
 |---|---|---|
-| Yes, enforced (CI blocks) | Either way — rules ratchet the legacy | **Present** |
-| Yes but lenient / excludes legacy | High | **Partial** — rules exist, legacy unfenced |
-| Linter exists, no complexity/length rules | Not high | **Partial** — gap but no evidence yet |
-| Linter exists, no complexity/length rules | High | **Missing** — concrete evidence of the gap |
+| Yes, enforced (CI blocks) | Either way - rules ratchet the legacy | **Present** |
+| Yes but lenient / excludes legacy | High | **Partial** - rules exist, legacy unfenced |
+| Linter exists, no complexity/length rules | Not high | **Partial** - gap but no evidence yet |
+| Linter exists, no complexity/length rules | High | **Missing** - concrete evidence of the gap |
 | No linter at all | Either | **Missing** |
 
 When scoring Partial or Missing on this combined check, name the top 3 worst offenders from `top_complex` / `top_large` in the report's Evidence/Gap columns. Those are the files the missing rule would have flagged.
@@ -593,7 +593,7 @@ done
 - Partial: Bot configured but not active, or only running basic checks
 - Missing: No automated code review
 
-### Layer 8: AI Project Management (Orchestration and Feedback) — Capstone
+### Layer 8: AI Project Management (Orchestration and Feedback) - Capstone
 
 Does the project treat AI agents as contributors to plan around - with structured task management, workflow orchestration, and a feedback loop that improves the system over time?
 
@@ -795,9 +795,9 @@ _Report generated by [`/ai-native-toolkit:assess`](https://github.com/bjcoombs/a
 
 Complete the full assessment in under 2 minutes. Scan, don't deep-read.
 
-Both SVGs are embedded as **clickable, relative links** — `[![alt](./complexity-heatmap.svg)](./complexity-heatmap.svg)` and the same for `./doc-graph.svg`. The `viewBox` lets GitHub scale them to the content column; the link lets a reader open the SVG on its own (the doc graph's hover tooltips only work when the raw SVG is opened directly — GitHub renders the inline copy as a static image). Keep the link relative, never a `raw.githubusercontent.com` URL (those are branch-specific and rot on rename). Omit a section only if its script could not generate the SVG (record the reason instead).
+Both SVGs are embedded as **clickable, relative links** - `[![alt](./complexity-heatmap.svg)](./complexity-heatmap.svg)` and the same for `./doc-graph.svg`. The `viewBox` lets GitHub scale them to the content column; the link lets a reader open the SVG on its own (the doc graph's hover tooltips only work when the raw SVG is opened directly - GitHub renders the inline copy as a static image). Keep the link relative, never a `raw.githubusercontent.com` URL (those are branch-specific and rot on rename). Omit a section only if its script could not generate the SVG (record the reason instead).
 
-The plugin footer is important — it's how other engineers viewing the report in a PR discover the tool that produced it. Do not omit it.
+The plugin footer is important - it's how other engineers viewing the report in a PR discover the tool that produced it. Do not omit it.
 
 ## Step 5: Ask Whether to Open a PR
 
@@ -840,7 +840,7 @@ Read-only target (viewerPermission `READ` / `TRIAGE`):
 If the user says **yes / PR** (direct flow, `CAN_PUSH=1`):
 1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
 2. Stage and commit the report, the complexity heatmap, and the doc graph. Commit message: `docs: Add AI-readiness assessment + complexity and doc-navigability snapshots`.
-3. Push the branch and open a PR. Title: `docs: Codebase assessment — <YYYY-MM-DD>`.
+3. Push the branch and open a PR. Title: `docs: Codebase assessment - <YYYY-MM-DD>`.
 
 If the user says **yes / PR** (fork flow, `CAN_PUSH=0` on the upstream):
 1. `gh repo fork <owner>/<repo> --clone=false --remote=true` (creates the fork under the user's account and adds it as a remote named `origin` or similar; the upstream becomes `upstream` if the original was already `origin`).
@@ -869,7 +869,7 @@ If the user says **yes / PR** (fork flow, `CAN_PUSH=0` on the upstream):
    _Generated by [`/ai-native-toolkit:assess`](https://github.com/bjcoombs/ai-native-toolkit) — a Claude Code plugin for codebase readiness assessment with complexity hotspot heatmaps. Install in any Claude Code session: `/plugin marketplace add https://github.com/bjcoombs/ai-native-toolkit` then `/plugin install ai-native-toolkit@ai-native-toolkit`._
    ```
 
-If the user says **no / leave it**: stop. Files stay in `.assess/` for them to review — the plugin footer in the MD already advertises the tool when anyone opens the file.
+If the user says **no / leave it**: stop. Files stay in `.assess/` for them to review - the plugin footer in the MD already advertises the tool when anyone opens the file.
 
 **Gitignore hint:** suggest the user add `.assess/complexity-stats.prior.json` to their `.gitignore`. It's a transient rotation file that the next run overwrites; keeping it tracked creates noisy diffs. The current stats (`complexity-stats.json`) should still be committed - it's the baseline for the next run's diff.
 

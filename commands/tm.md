@@ -9,7 +9,7 @@ argument-hint: [tag [task-id] | feature description] (optional - derives context
 
 > Thin orchestrator. Delegates to subagents for implementation and review loops.
 >
-> **Planning Mode** (`/tm use stripe as kyc provider`): When args don't match an existing tag, explores the codebase, writes a PRD, creates a tag, generates tasks, runs complexity analysis, and expands. Stops after planning — run `/tm <tag>` to start work.
+> **Planning Mode** (`/tm use stripe as kyc provider`): When args don't match an existing tag, explores the codebase, writes a PRD, creates a tag, generates tasks, runs complexity analysis, and expands. Stops after planning - run `/tm <tag>` to start work.
 >
 > **Marathon Mode** (`/tm <tag>`): When only a tag is given (no task-id), automatically progress through all ready tasks.
 > When Agent Teams are available, each task gets its own teammate with shared task list.
@@ -62,7 +62,7 @@ Defaults apply for non-marathon use (single task mode, planning mode) without pr
 - Two arguments (tag + task-id) → Single task mode
 - **Arguments that don't match any existing tag** → Planning mode (`$PLANNING_MODE = true`)
 
-**Tag match check** (use tasks.json directly — CLI output has formatting that breaks grep):
+**Tag match check** (use tasks.json directly - CLI output has formatting that breaks grep):
 ```bash
 cd ~/dev/github.com/<org>/<repo>
 FIRST_ARG="<first-argument>"
@@ -133,8 +133,8 @@ gh pr view --json number,state,mergedAt 2>/dev/null
 
 ## Planning Mode
 
-**If `$PRD_EXISTS`**: Fast path — PRD already written, go straight to task generation.
-**If not**: Slow path — explore codebase and write the PRD first.
+**If `$PRD_EXISTS`**: Fast path - PRD already written, go straight to task generation.
+**If not**: Slow path - explore codebase and write the PRD first.
 
 ### Fast Path (PRD exists)
 
@@ -145,7 +145,7 @@ TAG_NAME="$FIRST_ARG"
 # $PRD_FILE set during Phase 1 detection
 ```
 
-Read the PRD. Estimate how many top-level tasks it should produce, optimizing for **maximum concurrency** — prefer many independent tasks over fewer sequential ones. Consider:
+Read the PRD. Estimate how many top-level tasks it should produce, optimizing for **maximum concurrency** - prefer many independent tasks over fewer sequential ones. Consider:
 - Each distinct module/component/endpoint = separate task
 - Shared infrastructure (types, config, migrations) = early task others depend on
 - Tests that can run independently = separate tasks
@@ -184,7 +184,7 @@ done
 #### Step 5: Validate Dependency Graph
 
 Review the generated dependency tree and optimize for concurrency:
-1. Challenge sequential dependencies — are they genuinely blocking or just ordered by convention?
+1. Challenge sequential dependencies - are they genuinely blocking or just ordered by convention?
 2. Identify tasks that could run in parallel but are chained
 3. Apply fixes:
    ```bash
@@ -194,11 +194,11 @@ Review the generated dependency tree and optimize for concurrency:
 
 ### Slow Path (New idea, no PRD)
 
-**Input**: `$ARGUMENTS` — natural language description (e.g., "use stripe as another kyc provider")
+**Input**: `$ARGUMENTS` - natural language description (e.g., "use stripe as another kyc provider")
 
 #### Step 1: Explore the Codebase
 
-Use Glob, Grep, Read — or spawn an Explore agent for deeper investigation. Focus on:
+Use Glob, Grep, Read - or spawn an Explore agent for deeper investigation. Focus on:
 - Existing patterns the feature should follow
 - Files and modules that would be touched
 - Integration points and dependencies
@@ -276,7 +276,7 @@ cd ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug>
 task-master show <task-id> --json
 ```
 
-**Step 3: Implement** — See [Implement Mode](#mode-implement-or-create_pr) below.
+**Step 3: Implement** - See [Implement Mode](#mode-implement-or-create_pr) below.
 
 ---
 
@@ -315,9 +315,9 @@ task-master tags use "<tag>" && task-master list --ready --json
 
 #### Ready Criteria (ALL must be true)
 
-1. **Branch in sync** — no merge conflicts with `$BASE_BRANCH`
-2. **CI passing** — ALL checks succeed, including coverage status checks (codecov, coveralls, etc.) — not just build and test
-3. **All inline comments addressed** — see thread resolution rules
+1. **Branch in sync** - no merge conflicts with `$BASE_BRANCH`
+2. **CI passing** - ALL checks succeed, including coverage status checks (codecov, coveralls, etc.) - not just build and test
+3. **All inline comments addressed** - see thread resolution rules
 4. **No unaddressed conversation comments**
 5. **All review threads resolved**
 
@@ -327,7 +327,7 @@ Follow bot reviewer rules from the project's CLAUDE.md Marathon Configuration. G
   ```bash
   jq -n --arg tid "$THREAD_ID" '{"query": "mutation { resolveReviewThread(input: {threadId: \"\($tid)\"}) { thread { isResolved } } }"}' | gh api graphql --input -
   ```
-- **Human**: Fix code, reply inline, @mention reviewer. Do NOT resolve — let them confirm.
+- **Human**: Fix code, reply inline, @mention reviewer. Do NOT resolve - let them confirm.
 
 #### Each Iteration
 
@@ -404,7 +404,7 @@ Agent(
 **Prerequisite:** `$MARATHON_MODE` AND `$TEAMS_AVAILABLE`.
 
 **CRITICAL: Task Master Global Tag State Rule**
-Never run `task-master add-task`, `set-status`, or `update-task` as parallel background jobs. Each command internally switches the global tag, and concurrent invocations race — tasks silently land on wrong tags. Always run TM write commands **sequentially inline**. This was validated in the 047-security-audit marathon where 10 background `add-task` calls created tasks on wrong tags.
+Never run `task-master add-task`, `set-status`, or `update-task` as parallel background jobs. Each command internally switches the global tag, and concurrent invocations race - tasks silently land on wrong tags. Always run TM write commands **sequentially inline**. This was validated in the 047-security-audit marathon where 10 background `add-task` calls created tasks on wrong tags.
 
 ### Step 1: Identify Tag and Ready Tasks
 
@@ -418,19 +418,19 @@ jq '."<tag>".tasks[] | {id, title: .title[0:50], status, dependencies, complexit
 
 **Analyze dependency tree for maximum concurrency:**
 
-1. Map the dependency tree — which tasks block which?
+1. Map the dependency tree - which tasks block which?
 2. Identify the critical path (longest sequential chain)
-3. **Challenge unnecessary dependencies** — different files/modules may not need sequencing
+3. **Challenge unnecessary dependencies** - different files/modules may not need sequencing
 4. Look for tasks chained sequentially that could run in parallel
-5. **Identify hot files** — files touched by multiple tasks. Record as `$HOT_FILES`.
+5. **Identify hot files** - files touched by multiple tasks. Record as `$HOT_FILES`.
 6. **Primary mitigation: combine tasks that share hot files** into one teammate. This eliminates merge conflicts entirely (proven across 3 marathons: 0 conflicts when combining). Combine when:
-   - Tasks share hot files (strongest signal — always prefer combining over dependency management)
+   - Tasks share hot files (strongest signal - always prefer combining over dependency management)
    - Tightly coupled output (e.g., "add resources" + "add docs for resources")
    - Content-only tasks touching non-overlapping directories (e.g., adding 3 independent pattern dirs)
    - One is docs/config for the other, or one is meaningless without the other
-   - Small tasks (complexity 1-2) that share a theme — PR-per-task overhead exceeds the work itself
-7. **Fallback: TM dependencies** — when combining isn't feasible (both tasks complexity 8+, fundamentally different concerns despite shared file, or 5+ tasks on one file):
-   - **Add explicit TM dependencies** — merge the simpler/faster task first, then the other depends on it.
+   - Small tasks (complexity 1-2) that share a theme - PR-per-task overhead exceeds the work itself
+7. **Fallback: TM dependencies** - when combining isn't feasible (both tasks complexity 8+, fundamentally different concerns despite shared file, or 5+ tasks on one file):
+   - **Add explicit TM dependencies** - merge the simpler/faster task first, then the other depends on it.
      ```bash
      task-master add-dependency --id=<later-task> --depends-on=<earlier-task>
      ```
@@ -466,7 +466,7 @@ TeamCreate(
 )
 ```
 
-**PR tracking** — persisted in worktree dir (survives crashes and team cleanup):
+**PR tracking** - persisted in worktree dir (survives crashes and team cleanup):
 
 ```bash
 TRACK_FILE=~/dev/github.com/<org>/<repo>/worktree/<tag>/pr-tracking.json
@@ -545,9 +545,9 @@ Cross-reference with pending tasks. If a task's work was already merged (e.g., f
 - **Opus** (default for reliability): Multi-file PRs, review-heavy tasks, tasks touching shared files (barrel exports, routing, config), complexity 5+
 - **Sonnet** (cost-efficient for simple work): Single-file changes, isolated modules, complexity 1-4 with no shared-file risk, docs/config-only tasks
 
-Sonnet is cost-effective but has a recurring false REVIEW_CLEAR problem — reports review-clear without verifying all criteria (~15 min waste per marathon when it happens). Opus has 0 false signals across all marathons. When in doubt, use opus — the cost delta is cheaper than intervention time.
+Sonnet is cost-effective but has a recurring false REVIEW_CLEAR problem - reports review-clear without verifying all criteria (~15 min waste per marathon when it happens). Opus has 0 false signals across all marathons. When in doubt, use opus - the cost delta is cheaper than intervention time.
 
-Haiku cannot reliably handle review loops — never use for teammates.
+Haiku cannot reliably handle review loops - never use for teammates.
 
 **Teammate prompt template:**
 ```
@@ -629,7 +629,7 @@ Report team status after spawning:
 | Message | Lead Action |
 |---------|-------------|
 | PR_CREATED | Update tracking, report to user |
-| REVIEW_CLEAR | Run [Smart Merge](#smart-merge) — teammate is idle, merge directly |
+| REVIEW_CLEAR | Run [Smart Merge](#smart-merge) - teammate is idle, merge directly |
 | CLARIFICATION_NEEDED | Answer from task context, or relay to user if genuinely ambiguous |
 | BLOCKED (merge conflicts) | Push back: "Resolve conflicts yourself" |
 | BLOCKED (genuine) | Report to user, ask for guidance |
@@ -642,7 +642,7 @@ Report team status after spawning:
 
 **Lead conflict resolution**: When a teammate is idle and their PR is DIRTY (merge conflict), resolve it directly instead of nudging the teammate. Pull `$BASE_BRANCH`, resolve the conflict, push. Faster than round-tripping to an idle teammate (~10 min saved per conflict).
 
-**Non-responsive teammate escalation**: If a teammate ignores a direct instruction (nudge to fix CI, address review feedback, follow lead guidance) or sends a false REVIEW_CLEAR (claims ready but criteria aren't met), don't keep nudging. Shut it down and respawn the same task on opus. One strike — don't give sonnet a second chance on the same task.
+**Non-responsive teammate escalation**: If a teammate ignores a direct instruction (nudge to fix CI, address review feedback, follow lead guidance) or sends a false REVIEW_CLEAR (claims ready but criteria aren't met), don't keep nudging. Shut it down and respawn the same task on opus. One strike - don't give sonnet a second chance on the same task.
 
 **Idle teammate ≠ dead teammate**: Before killing an idle teammate, check if their worktree has subagent activity. Subagents run as child processes and cause idle notifications on the parent. Check for recent file modifications or running processes in the worktree before assuming the teammate is stalled:
 ```bash
@@ -652,7 +652,7 @@ find ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug> -mmin -5 -ty
 
 **Unreliable REVIEW_CLEAR**: Don't rely solely on messages. **Proactively poll ALL tracked PRs** on two triggers:
 1. When any teammate goes idle or sends a message
-2. **Periodically** — every ~30 minutes during long marathons to catch stalled teammates early
+2. **Periodically** - every ~30 minutes during long marathons to catch stalled teammates early
 
 ```bash
 for PR in $(jq -r '.tasks | to_entries[] | select(.value.status == "working") | .value.pr' "$TRACK_FILE"); do
@@ -698,22 +698,22 @@ gh pr view $PR --json mergeStateStatus,mergedAt,reviews \
 ```
 
 **Auto-Merge Criteria (ALL must be true):**
-1. `mergeStateStatus` is `"CLEAN"` — OR `"UNSTABLE"` with only non-required checks failing
-2. At least `$REQUIRED_APPROVALS` approvals — OR `$MARKDOWN_APPROVALS` for markdown-only PRs (some bot reviewers skip them)
+1. `mergeStateStatus` is `"CLEAN"` - OR `"UNSTABLE"` with only non-required checks failing
+2. At least `$REQUIRED_APPROVALS` approvals - OR `$MARKDOWN_APPROVALS` for markdown-only PRs (some bot reviewers skip them)
 3. Zero non-dismissed changes-requested reviews
-4. **Base branch is healthy** — if the PR's CI failures exist on `$BASE_BRANCH` too (pre-existing), do NOT merge and compound the problem. Instead, spawn a separate worktree/PR to fix the failing tests on `$BASE_BRANCH` first, then rebase and merge the original PR.
+4. **Base branch is healthy** - if the PR's CI failures exist on `$BASE_BRANCH` too (pre-existing), do NOT merge and compound the problem. Instead, spawn a separate worktree/PR to fix the failing tests on `$BASE_BRANCH` first, then rebase and merge the original PR.
 
-**UNSTABLE handling:** If `mergeStateStatus == "UNSTABLE"`, check failing checks against `meta.flaky_checks` and any CI patterns from the project's Marathon Configuration. If ALL failing checks are non-required AND not pre-existing on `$BASE_BRANCH`, treat as merge-eligible. Report: "Merging with UNSTABLE — only non-required checks failing: <names>". If failures ARE pre-existing on `$BASE_BRANCH`, fix it first (criterion 4).
+**UNSTABLE handling:** If `mergeStateStatus == "UNSTABLE"`, check failing checks against `meta.flaky_checks` and any CI patterns from the project's Marathon Configuration. If ALL failing checks are non-required AND not pre-existing on `$BASE_BRANCH`, treat as merge-eligible. Report: "Merging with UNSTABLE - only non-required checks failing: <names>". If failures ARE pre-existing on `$BASE_BRANCH`, fix it first (criterion 4).
 
 **UNKNOWN handling:** GitHub sometimes returns `mergeStateStatus: "UNKNOWN"` even when all checks pass. If UNKNOWN but CI all green and 0 unresolved threads, retry up to 3 times with 30s backoff. If still UNKNOWN after retries, treat as CLEAN and proceed (log the override).
 
-**Verify before merging** — never trust teammate claims:
+**Verify before merging** - never trust teammate claims:
 ```bash
 gh pr view $PR --json state,mergedAt,mergeStateStatus | jq '{state, mergedAt, mergeStateStatus}'
 ```
 Trust the API, not the message.
 
-**Merge directly when teammate is idle.** After REVIEW_CLEAR, teammates go idle automatically. No handshake needed — just verify the PR via API and merge. The lead overlap rule means you're already processing other work while teammates finish.
+**Merge directly when teammate is idle.** After REVIEW_CLEAR, teammates go idle automatically. No handshake needed - just verify the PR via API and merge. The lead overlap rule means you're already processing other work while teammates finish.
 
 **After merge:**
 ```bash
@@ -729,7 +729,7 @@ Then:
 3. Mark internal task completed
 4. Check for newly unblocked tasks
 5. **Wave transition**: Batch-dismiss stale CRs across all eligible PRs before spawning next wave. Review signals from completed wave, adapt next prompts with learnings.
-6. Check ready tasks with `task-master list --json` filtered to `pending` status (**not** `task-master next` — `next` can suggest subtask IDs of done parents). Spawn fresh teammates for ready tasks.
+6. Check ready tasks with `task-master list --json` filtered to `pending` status (**not** `task-master next` - `next` can suggest subtask IDs of done parents). Spawn fresh teammates for ready tasks.
 7. If all done → [Completion](#step-6-completion-and-retrospective)
 
 **If not merge-ready:**
@@ -752,7 +752,7 @@ Then:
    ```
 2. **Sort by hot-file impact**: Fewer hot files first. Hot-file PRs merge LAST.
 3. **Merge sequentially**: One at a time. 10-20s between for conflict detection.
-4. **Re-check merge state** after each — CLEAN can flip to DIRTY from cascade.
+4. **Re-check merge state** after each - CLEAN can flip to DIRTY from cascade.
 
 ### Ephemeral Teammates
 
@@ -767,7 +767,7 @@ Never reuse a teammate for a different task. Shutdown + spawn fresh.
 
 ### Lead Authority
 
-The lead operates as a **tech lead running a sprint** — not a task router.
+The lead operates as a **tech lead running a sprint** - not a task router.
 
 **The lead delegates, never executes.** During a marathon, the lead's job is to coordinate: merge PRs, spawn teammates, monitor status. Any work that takes more than ~30 seconds (tests, coverage, code exploration, implementation, thread resolution) must be delegated to a teammate or subagent. The lead must stay responsive to teammate messages at all times. The moment the lead starts executing, messages queue up and momentum stalls.
 
@@ -811,7 +811,7 @@ Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`.
 1. Send `shutdown_request` to each remaining teammate
 2. Wait for all shutdown approvals
 3. Call `TeamDelete()` - if it fails with "active members", verify panes are dead and retry. **TeamDelete is mandatory** - without it, teamContext persists and blocks future team creation in this session.
-4. **PRD delivery check** — re-read the original PRD/issue and its success criteria. Cross-reference against merged PRs. Report:
+4. **PRD delivery check** - re-read the original PRD/issue and its success criteria. Cross-reference against merged PRs. Report:
    - Criteria met (with PR evidence)
    - Criteria not met or partially met (flag for user)
    - Scope that was delivered beyond the original PRD (emergent work)

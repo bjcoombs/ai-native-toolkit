@@ -26,7 +26,7 @@ Both SVGs are colour-blind-safe (OrRd ramp, no red-green).
 
 Once a codebase outgrows any single LLM context window and AI agents become regular contributors, code quality stops being a function of *who knows what* and starts being a function of *what the system enforces*. Norms ("we prefer X") fail because new contributors - especially AI agents starting each session fresh - never read them. Contracts ("the build fails if you don't do X") work because they're enforced regardless of who's reading.
 
-`/assess` gives you paired views to act on that. The doc-navigability graph shows **whether an agent can even find its way** - how much of the docs is reachable, and which are stale maps of churning code. The complexity SVG shows **where the codebase is today** - which files will bite next week. The accompanying `assess-report.md` shows **what scaffolding is in place to stop it getting worse** - a score across the layers below, each marked Present / Partial / Missing with concrete evidence:
+`/assess` gives you paired views to act on that. The doc-navigability graph shows whether an agent can even find its way - how much of the docs is reachable, and which are stale maps of churning code. The complexity SVG shows where the codebase is today - which files will bite next week. The accompanying `assess-report.md` shows what scaffolding is in place to stop it getting worse - a score across the layers below, each marked Present / Partial / Missing with concrete evidence:
 
 The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can the agent form a true picture?), **write-side** (can it be trusted to produce good output?), and **meta** (does the system keep itself honest?).
 
