@@ -258,10 +258,193 @@ Spawn all independent teammates in a single message (parallel Task calls).
 
 ## Step 4: Lead Monitoring
 
+Report team status after spawning:
+```
+## Marathon Started: <tag>
+
+| Task | Teammate | Model | Status |
+|------|----------|-------|--------|
+| <task-id> - <title> | task-<task-id> | sonnet | Spawned |
+```
+
+#### Teammate Messages (reactive)
+
+| Message | Lead Action |
+|---------|-------------|
+| PR_CREATED | Update tracking, report to user |
+| REVIEW_CLEAR | Run [Smart Merge](#smart-merge) — teammate is idle, merge directly |
+| CLARIFICATION_NEEDED | Answer from task context, or relay to user if genuinely ambiguous |
+| BLOCKED (merge conflicts) | Push back: "Resolve conflicts yourself" |
+| BLOCKED (genuine) | Report to user, ask for guidance |
+| TOO_COMPLEX | Shutdown teammate, decompose task, spawn fresh |
+
+**On TOO_COMPLEX:**
+1. Shutdown teammate, clean up failed worktree/branch
+2. Decompose: expand the task into subtasks (or cancel + create new peer tasks for sibling split)
+3. Spawn fresh teammates for resulting tasks
+
+**Lead conflict resolution**: When a teammate is idle and their PR is DIRTY (merge conflict), resolve it directly instead of nudging the teammate. Pull `$BASE_BRANCH`, resolve the conflict, push. Faster than round-tripping to an idle teammate (~10 min saved per conflict).
+
+**Non-responsive teammate escalation**: If a teammate ignores a direct instruction (nudge to fix CI, address review feedback, follow lead guidance) or sends a false REVIEW_CLEAR (claims ready but criteria aren't met), don't keep nudging. Shut it down and respawn the same task on opus. One strike — don't give sonnet a second chance on the same task.
+
+**Idle teammate ≠ dead teammate**: Before killing an idle teammate, check if their worktree has subagent activity. Subagents run as child processes and cause idle notifications on the parent. Check for recent file modifications or running processes in the worktree before assuming the teammate is stalled:
+```bash
+# Check for recent activity in teammate's worktree (files modified in last 5 min)
+find ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug> -mmin -5 -type f | head -3
+```
+
+**Unreliable REVIEW_CLEAR**: Don't rely solely on messages. **Proactively poll ALL tracked PRs** on two triggers:
+1. When any teammate goes idle or sends a message
+2. **Periodically** — every ~30 minutes during long marathons to catch stalled teammates early
+
+```bash
+for PR in $(jq -r '.tasks | to_entries[] | select(.value.status == "working") | .value.pr' "$TRACK_FILE"); do
+  THREADS=$(gh api graphql -f query="query { repository(owner: \"<owner>\", name: \"<repo>\") {
+    pullRequest(number: $PR) { reviewThreads(first: 100) { nodes { isResolved } } }
+  }}" | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')
+  MERGE=$(gh pr view $PR --json mergeStateStatus,mergedAt,statusCheckRollup \
+    | jq '{mergeStateStatus, mergedAt, checks: [.statusCheckRollup[] | select(.conclusion == "FAILURE" or .conclusion == "CANCELLED")] | length}')
+  echo "PR #$PR: threads=$THREADS merge=$MERGE"
+done
+```
+If green with 0 unresolved threads, run smart-merge regardless of teammate message. If stalled (teammate idle but PR not green), message teammate to continue.
+
+**Lead overlap rule:** Never block on a single PR's CI. While waiting for CI on one PR, process other actionable items: teammate shutdowns, tracking updates, next-wave setup, cleanup of merged PRs, spawning newly unblocked tasks. The lead loop is event-driven, not sequential.
+
+**Accidental input guard:** Empty messages, single characters, or auto-suggested prompt text → brief status summary only, no expensive operations.
+
 ## Smart Merge
+
+The lead runs smart-merge via the pr-review-merge skill (Smart Merge section): dismiss stale
+bot CRs, verify the four auto-merge criteria, handle UNSTABLE/UNKNOWN, merge in hot-file order.
+After a merge, close the unit via the adapter's **close on merge** operation, then proceed to
+the wave transition below.
+
+**After merge:**
+1. Report to user
+2. Shutdown teammate
+3. Mark internal task completed
+4. Check for newly unblocked tasks
+5. **Wave transition**: Batch-dismiss stale CRs across all eligible PRs before spawning next wave. Review signals from completed wave, adapt next prompts with learnings.
+6. Check ready tasks via the adapter's enumerate operation filtered to `pending` status. Spawn fresh teammates for ready tasks.
+7. If all done → [Completion](#completion--retrospective)
+
+**If not merge-ready:**
+- BLOCKED → report to user, message teammate
+- DIRTY → message teammate: "resolve merge conflicts"
+- Human changes requested → report to user
 
 ## Crash Recovery
 
+If the session crashes, teammates linger as "active members" preventing `TeamDelete()`.
+
+```bash
+# 1. Force-remove stale team
+rm -rf ~/.claude/teams/<tag>
+rm -rf ~/.claude/tasks/<tag>
+
+# 2. Check worktrees for uncommitted work
+git worktree list | grep "<tag>"
+
+# 3. Resume: /tm <tag>
+# Reconciliation handles stale tracking entries automatically.
+```
+
+Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`.
+
+### Ephemeral Teammates
+
+One task, one session. The work source is the coordination brain.
+
+```
+Spawn → Setup worktree → Implement → Create PR → Review loop → REVIEW_CLEAR → Idle
+  → Lead: smart-merge + cleanup → Shutdown teammate
+```
+
+Never reuse a teammate for a different task. Shutdown + spawn fresh.
+
+### Lead Authority
+
+The lead operates as a **tech lead running a sprint** — not a task router.
+
+**The lead delegates, never executes.** During a marathon, the lead's job is to coordinate: merge PRs, spawn teammates, monitor status. Any work that takes more than ~30 seconds (tests, coverage, code exploration, implementation, thread resolution) must be delegated to a teammate or subagent. The lead must stay responsive to teammate messages at all times. The moment the lead starts executing, messages queue up and momentum stalls.
+
+**Trusted decisions (no human approval needed):**
+- Defer or cancel tasks that become irrelevant
+- Combine related tasks into one PR
+- Create new/follow-up tasks in the work source
+- Fix minor style nits across PRs directly
+- Escalate model tier (shutdown + respawn on opus)
+- Limit concurrency to prevent merge conflicts
+- Reprioritize based on learnings
+
+**Always escalate to human:**
+- Architectural changes not in original task descriptions
+- Public API surface modifications
+- Deferring more than 30% of tasks
+- Ambiguous reviewer feedback
+
+**Report judgment calls in status updates.**
+
 ## Completion + Retrospective
 
+1. Send `shutdown_request` to each remaining teammate
+2. Wait for all shutdown approvals
+3. Call `TeamDelete()` - if it fails with "active members", verify panes are dead and retry. **TeamDelete is mandatory** - without it, teamContext persists and blocks future team creation in this session.
+4. **PRD delivery check** — Re-read the original work units' acceptance criteria (PRD, issue bodies, or task details) and cross-reference against merged PRs. Report:
+   - Criteria met (with PR evidence)
+   - Criteria not met or partially met (flag for user)
+   - Scope that was delivered beyond the original acceptance criteria (emergent work)
+4. Read the retro log (path from Marathon Configuration `$RETRO_LOG`, or skip if not configured)
+5. Run retrospective using the structured format below
+6. Append this marathon to the retro log (Marathon History + update Template Changes validation)
+
+```
+## Marathon Complete: <tag>
+
+All <N> tasks done. <N> PRs merged.
+
+<PR table: Wave | PR | Tasks | Title | Merged time>
+
+### PRD Delivery
+
+| Criterion | Status | Evidence |
+|-----------|--------|----------|
+| <success criterion from PRD> | Met / Partial / Not met | PR #<N>, ... |
+
+<If any not met, explain what's remaining and whether follow-up tasks are needed.>
+
+### Retrospective
+
+**Template changes tested this run**
+<Check marathon-retros.md Template Changes table for "Pending" items.
+For each that was exercised: did it help, hurt, or not apply? Mark validated.>
+
+**What worked well**
+- <specific patterns, tools, or approaches — with evidence>
+
+**What didn't work — with waste estimate**
+- <friction point>: ~<N> min lost. Root cause: <X>
+- <friction point>: ~<N> min lost. Root cause: <X>
+
+**Lead decisions log**
+- <decision>: <alternatives considered> -> <chosen> because <reason>
+(task combinations, dependency changes, merge ordering, model upgrades, interventions)
+
+**Where does this learning belong?** (specific command / cross-cutting rule / README / don't capture)
+- <target file or section>: <concrete change with rationale>
+
+**What clause is no longer earning its place?**
+- <existing rule or block>: <reason it can be removed or demoted>
+
+**Stats**
+- Tasks: <N> completed, <N> cancelled/deferred
+- PRs: <N> merged, <N> avg review iterations
+- Teammates: <N> spawned (<N> sonnet, <N> opus), <N> needed intervention
+- Wall clock: ~<N> min spawn to final merge
+- Estimated waste: ~<N> min (CI waits, conflict resolution, stalled teammates)
+```
+
 ## Subagent Fallback (no teams)
+
+When `$MARATHON_MODE` but `$TEAMS_AVAILABLE` is `false`, use parallel subagents after each cleanup cycle: enumerate next-ready units via the adapter's enumerate operation and spawn parallel subagents for each.
