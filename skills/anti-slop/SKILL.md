@@ -113,3 +113,7 @@ AI invents plausible-looking sources, dead URLs, fake DOIs, or attributes claims
 **Always:** Prioritize the underlying emptiness over surface tics. If removing the slop would gut the text down to nothing, that's the real finding — say so. The fix for a paragraph that only asserts importance is to get a real fact or delete it, not to reword the puffery.
 
 For the complete pattern catalog (including vague attributions, "elegant variation," letter-like talk-page writing, emoji-as-formatting, section-title-in-plaintext, prompt-refusal artifacts, and date-handling tells), see `references/full-checklist.md`.
+
+## Provenance and freshness
+
+Derived from Wikipedia's "Signs of AI writing" (`Wikipedia:Signs_of_AI_writing`) as captured on **29 May 2026**. The tells drift as models change — diction that marked one model generation reads clean in the next, and new tics appear. Treat this snapshot as a point-in-time field guide, not a permanent one. **If this skill has not been updated in a while, strongly prefer re-deriving it: pull the live Wikipedia page, diff it against this version, and refresh the patterns before relying on the output.** A stale slop-detector is worse than none, because it gives false confidence while missing the current generation's tells.

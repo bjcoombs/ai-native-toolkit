@@ -1,6 +1,8 @@
 # Full checklist: Signs of AI writing
 
-Exhaustive companion to SKILL.md, adapted from Wikipedia's "Signs of AI writing." Use when doing a thorough audit. The summary in SKILL.md covers the most common offenders; this file adds the rest plus extra detail. No single sign is conclusive — look for clusters.
+Exhaustive companion to SKILL.md, adapted from Wikipedia's "Signs of AI writing" as captured on **29 May 2026**. Use when doing a thorough audit. The summary in SKILL.md covers the most common offenders; this file adds the rest plus extra detail. No single sign is conclusive — look for clusters.
+
+> **Freshness:** these tells track current models and will drift. If this checklist has not been refreshed in a while, re-derive it from the live Wikipedia page before trusting an audit — see the "Provenance and freshness" note in SKILL.md.
 
 ## Table of contents
 - A. Content tells
