@@ -57,7 +57,7 @@ If no Marathon Configuration section exists, **prompt the user to set one up bef
 No Marathon Configuration found in this project's CLAUDE.md.
 
 For best results, add a ## Marathon Configuration section to your project's CLAUDE.md.
-Run `/tm-marathon-config-example` to see the template, then copy and customize it.
+Run `/tm-marathon-config-example` to see the configuration template (it covers both /tm and /issues), then copy and customize it for your project.
 
 Proceeding with defaults: base branch=main, 1 approval, no bot reviewer rules.
 ```
@@ -122,7 +122,7 @@ TRACK_FILE=~/dev/github.com/<org>/<repo>/worktree/<tag>/pr-tracking.json
 mkdir -p "$(dirname "$TRACK_FILE")"
 
 if [ -f "$TRACK_FILE" ]; then
-  echo "EXISTING_TRACKING: reconciling against TM and GitHub"
+  echo "EXISTING_TRACKING: reconciling against source of truth and GitHub"
 else
   echo '{"meta":{"tag":"<tag>","wave":1,"repo":"<owner>/<repo>","flaky_checks":[]},"tasks":{}}' | jq . > "$TRACK_FILE"
 fi
@@ -212,7 +212,7 @@ Task(
 Set the unit in-progress via the adapter; create the worktree using the adapter's branch/worktree convention.
 
 ## Requirements
-<task-description-and-subtasks from task-master show>
+<work unit requirements and subtasks — fetched via the adapter's enumerate operation for this unit id>
 
 ## Architectural Direction
 <Include architectural guidance, design decisions, or constraints from the lead HERE in the
@@ -346,8 +346,7 @@ rm -rf ~/.claude/tasks/<tag>
 # 2. Check worktrees for uncommitted work
 git worktree list | grep "<tag>"
 
-# 3. Resume: /tm <tag>
-# Reconciliation handles stale tracking entries automatically.
+# 3. Re-invoke the calling command (e.g. /tm <tag> or /issues <label>) — reconciliation handles stale tracking entries automatically.
 ```
 
 Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`.
