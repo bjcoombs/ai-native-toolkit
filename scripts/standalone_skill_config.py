@@ -135,4 +135,24 @@ SKILLS: dict[str, dict] = {
             "hats/blue-hat.md": "agents/blue-hat.md",
         },
     },
+    "deslop": {
+        "standalone_name": "deslop",
+        "standalone_description": (
+            "Detect and remove the telltale signs of AI-generated 'slop' from any written "
+            "text — articles, reports, emails, essays, bios, marketing copy, documentation, "
+            "or anything meant to read as if a thoughtful human wrote it. TRIGGER when asked "
+            "to 'make this sound less like AI', 'remove the AI tells', 'de-slop this', 'check "
+            "if this reads as AI-written', 'make it sound human', 'edit out the ChatGPT voice', "
+            "or when a draft is critiqued as generic, puffy, or robotic. Also apply as a silent "
+            "quality gate before finalizing substantial prose. Based on Wikipedia's 'Signs of "
+            "AI writing' field guide."
+            + VERSION_SUFFIX
+        ),
+        "source_dir": "skills/deslop",
+        # Pure-markdown skill, portable as-is: no plugin path resolution,
+        # $ARGUMENTS, namespaced slash commands, or Claude-Code-only tools to
+        # strip, so no chat-skip/chat-replace markers and no replacements.
+        "exclude_dirs": set(),
+        "replacements": {},
+    },
 }
