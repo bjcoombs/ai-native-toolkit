@@ -460,3 +460,46 @@ def test_scan_test_pressure_never_raises_on_empty(tmp_path: Path) -> None:
     assert block["mutation_config_present"] is False
     assert block["per_file"] == []
     assert block["survivor_clusters"] == []
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Thesis integration test - hollow vs honest fixture repos
+#
+# The two fixture repos under tests/fixtures/ carry an IDENTICAL source file
+# (src/processor.py) and differ ONLY in what their test asserts on: the hollow
+# repo pins the private `_last_processed_line` cursor; the honest repo pins the
+# public `process` return value. This is the load-bearing claim of the whole
+# module - a suite can have full line coverage yet pin the implementation, and
+# the assertion-on-internal heuristic is what tells those two apart.
+# ════════════════════════════════════════════════════════════════════════════
+
+def test_thesis_hollow_repo_flags_internal_assertion(fixtures_dir: Path) -> None:
+    """The hollow fixture asserts only on a private field -> flagged."""
+    findings = detect_assertion_on_internal(fixtures_dir / "hollow_test_repo")
+    assert len(findings) == 1
+    assert findings[0]["internal_field"] == "_last_processed_line"
+    assert findings[0]["test_file"] == "tests/test_processor.py"
+    assert findings[0]["confidence"] == "medium"
+
+
+def test_thesis_honest_repo_yields_no_findings(fixtures_dir: Path) -> None:
+    """The honest fixture asserts on the public return value -> not flagged.
+
+    Same source, same coverage as the hollow repo. The only variable is what the
+    test pins, so a finding here would mean the heuristic flags honest tests."""
+    assert detect_assertion_on_internal(fixtures_dir / "honest_test_repo") == []
+
+
+def test_thesis_full_scan_separates_hollow_from_honest(fixtures_dir: Path) -> None:
+    """End-to-end via the public scan_test_pressure entry point: the hollow repo
+    surfaces an assertion_on_internal candidate in its test_pressure block; the
+    honest repo's identical-source block carries none. This is the signal the
+    LLM consumes from run-context.json."""
+    hollow = scan_test_pressure(fixtures_dir / "hollow_test_repo")
+    honest = scan_test_pressure(fixtures_dir / "honest_test_repo")
+    assert hollow["cheap_heuristics"]["assertion_on_internal"]
+    assert honest["cheap_heuristics"]["assertion_on_internal"] == []
+    # The thesis is about test-pinning, not mutation setup: neither fixture
+    # configures mutation testing, so that signal stays identical across both.
+    assert hollow["mutation_config_present"] is False
+    assert honest["mutation_config_present"] is False
