@@ -6,7 +6,7 @@
 
 **Architecture:** Extract two new skills — `marathon` (team orchestration engine) and `pr-review-merge` (review-to-green loop + smart-merge) — from `commands/tm.md`. `marathon` composes `pr-review-merge`. Each command supplies a thin **work-source adapter** (TM tasks vs GitHub issues) and delegates execution to the skills. Extraction is **verbatim text-move** to preserve `/tm`'s battle-tested behaviour; the acceptance gate is a diff-review proving the assembled instructions a consumer sees match the original.
 
-**Tech Stack:** Markdown skills/commands for Claude Code; `gh` CLI + GraphQL; `jq`; Task Master CLI; Agent Teams (`TeamCreate`/`SendMessage`/`TeamDelete`), `Agent` subagents. No application runtime — verification is structural (frontmatter, plugin invariants, reference resolution, standalone-build untouched) plus the diff-review gate.
+**Tech Stack:** Markdown skills/commands for Claude Code; `gh` CLI + GraphQL; `jq`; Task Master CLI; Agent Teams (`TeamCreate`/`SendMessage`/`TeamDelete`), `Agent` subagents. Verification is a **deterministic pytest contract-test harness** (`tests/test_plugin_contract.py`, wired into `tests.yml` — no AI, no new language) checking frontmatter, reference resolution, placeholders, and plugin invariants, plus the verbatim-extraction diff-review and the human-run validation marathon (behaviour can't be asserted without an LLM, so it stays out of CI).
 
 **Spec:** `docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md`
 
@@ -15,11 +15,13 @@
 ## File Structure
 
 **Created:**
+- `tests/test_plugin_contract.py` — deterministic contract + reference harness for all skills/commands
 - `skills/marathon/SKILL.md` — source-agnostic orchestration engine + adapter contract
 - `skills/pr-review-merge/SKILL.md` — review-to-green loop + smart-merge
 - `commands/issues.md` — GitHub-issue triage + GitHub adapter; delegates to `marathon`
 
 **Modified:**
+- `.github/workflows/tests.yml` — add a third pytest job running the contract harness from repo root
 - `commands/tm.md` — keeps Planning Mode + TM adapter; marathon/review/merge sections replaced by Skill invocations
 - `commands/fix-pr.md` — thin caller of `pr-review-merge`
 - `commands/fix-develop.md` — keeps default-branch diagnosis; review loop delegated to `pr-review-merge`
@@ -27,7 +29,7 @@
 - `.claude-plugin/plugin.json` — MINOR version bump
 - `README.md` — document `/issues` and the two shared skills
 
-**Ordering rationale:** `pr-review-merge` first (no dependencies), then `marathon` (depends on it), then the command rewires (depend on both), then `/issues` (new front-end), then config/version/docs, then the validation gate.
+**Ordering rationale:** the contract harness first (Task 0) so it goes green against the current repo and then guards every file added after it; `pr-review-merge` next (no skill dependencies), then `marathon` (depends on it), then the command rewires (depend on both), then `/issues` (new front-end), then config/version/docs, then the validation gate.
 
 ---
 
@@ -37,7 +39,203 @@
 
 **Skill invocation from a command/teammate:** a consumer triggers a shared skill by including a line the model acts on, e.g. `Use the pr-review-merge skill to drive PR #<n> to green.` Subagents and teammates can invoke skills the same way (the Skill tool works inside subagents). Where a teammate prompt previously embedded the review loop inline, it now says: `Use the pr-review-merge skill for the review loop (5 criteria, thread rules, background CI watcher).`
 
-**Verification without a test harness:** each task ends with structural checks and a commit. The repo's only automated test (`skills/assess/`) is untouched by this work; do **not** expect it to cover these files.
+**Verification via the contract harness:** once Task 0 lands, every later task ends with `uv run --with pytest pytest -v tests/` (run from repo root) in addition to its targeted grep checks. The harness is the deterministic guard; the greps are quick local confirmations. The repo's existing suites (`skills/assess/`, `scripts/`) are untouched by this work.
+
+---
+
+## Task 0: Build the deterministic contract-test harness and wire it into CI (do first)
+
+**Files:**
+- Create: `tests/test_plugin_contract.py`
+- Modify: `.github/workflows/tests.yml`
+
+- [ ] **Step 1: Write the contract harness**
+
+Create `tests/test_plugin_contract.py` with exactly this content:
+
+```python
+"""Deterministic contract + reference checks for the plugin's skills and commands.
+
+No AI, no network. Encodes the invariants documented in CLAUDE.md as executable
+assertions so a broken reference or dropped frontmatter fails the PR.
+"""
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parent.parent
+SKILLS = REPO / "skills"
+COMMANDS = REPO / "commands"
+AGENTS = REPO / "agents"
+PLUGIN = REPO / ".claude-plugin"
+
+# Skills referenced by name that live outside this plugin (superpowers, etc.).
+EXTERNAL_SKILLS = {
+    "brainstorming", "writing-plans", "executing-plans",
+    "subagent-driven-development", "using-superpowers",
+}
+# subagent_type values that are built into Claude Code, not agents/*.md.
+BUILTIN_AGENTS = {"general-purpose", "Explore", "Plan", "statusline-setup"}
+
+PLACEHOLDER_RE = re.compile(r"\b(TODO|TBD|FIXME)\b")
+FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+USE_SKILL_RE = re.compile(r"[Uu]se the ([a-z0-9][a-z0-9-]*) skill")
+SUBAGENT_RE = re.compile(r'subagent_type:\s*"([^"]+)"')
+
+
+def _split_frontmatter(path: Path):
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---"):
+        return None, text
+    end = text.find("\n---", 3)
+    if end == -1:
+        return None, text
+    return text[3:end], text[end + 4:]
+
+
+def _fm_scalar(fm: str, key: str):
+    m = re.search(rf"(?m)^\s*{re.escape(key)}\s*:\s*(.*)$", fm)
+    return m.group(1).strip() if m else None
+
+
+def skill_dirs():
+    if not SKILLS.is_dir():
+        return []
+    return sorted(d for d in SKILLS.iterdir() if (d / "SKILL.md").is_file())
+
+
+def command_files():
+    return sorted(COMMANDS.glob("*.md")) if COMMANDS.is_dir() else []
+
+
+def shipped_md():
+    return [d / "SKILL.md" for d in skill_dirs()] + command_files()
+
+
+def known_skill_names():
+    return {d.name for d in skill_dirs()} | EXTERNAL_SKILLS
+
+
+def known_agent_names():
+    names = {p.stem for p in AGENTS.glob("*.md")} if AGENTS.is_dir() else set()
+    return names | BUILTIN_AGENTS
+
+
+@pytest.mark.parametrize("d", skill_dirs(), ids=lambda d: d.name)
+def test_skill_frontmatter(d):
+    fm, _ = _split_frontmatter(d / "SKILL.md")
+    assert fm is not None, f"{d.name}/SKILL.md missing YAML frontmatter"
+    assert _fm_scalar(fm, "name") == d.name, f"{d.name}: name: must match directory"
+    desc = fm[fm.find("description:"):] if "description:" in fm else ""
+    assert "description:" in fm and desc.strip(), f"{d.name}: description required"
+
+
+@pytest.mark.parametrize("d", skill_dirs(), ids=lambda d: d.name)
+def test_skill_has_trigger_clause(d):
+    fm, _ = _split_frontmatter(d / "SKILL.md")
+    assert fm and "TRIGGER" in fm, f"{d.name}: description must include a TRIGGER clause"
+
+
+@pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
+def test_no_placeholder_tokens(p):
+    body = FENCE_RE.sub("", p.read_text(encoding="utf-8"))
+    assert not PLACEHOLDER_RE.search(body), f"{p.relative_to(REPO)}: placeholder token outside code fence"
+
+
+@pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
+def test_internal_links_resolve(p):
+    for target in LINK_RE.findall(p.read_text(encoding="utf-8")):
+        if target.startswith(("http://", "https://", "#", "mailto:")) or "$" in target or "<" in target:
+            continue
+        rel = target.split("#", 1)[0]
+        if not rel:
+            continue
+        assert (p.parent / rel).resolve().exists(), f"{p.relative_to(REPO)}: dead link -> {target}"
+
+
+@pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
+def test_use_the_skill_references_resolve(p):
+    known = known_skill_names()
+    for name in USE_SKILL_RE.findall(p.read_text(encoding="utf-8")):
+        assert name in known, f"{p.relative_to(REPO)}: 'Use the {name} skill' references unknown skill"
+
+
+@pytest.mark.parametrize("p", command_files(), ids=lambda p: p.name)
+def test_subagent_types_resolve(p):
+    known = known_agent_names()
+    for name in SUBAGENT_RE.findall(p.read_text(encoding="utf-8")):
+        if "<" in name:  # template placeholder like task-<task-id>
+            continue
+        assert name in known, f"{p.name}: subagent_type \"{name}\" has no agents/{name}.md"
+
+
+def test_plugin_json_valid():
+    data = json.loads((PLUGIN / "plugin.json").read_text(encoding="utf-8"))
+    assert data.get("version"), "plugin.json missing version"
+
+
+def test_marketplace_entries_exist():
+    mk = PLUGIN / "marketplace.json"
+    if not mk.is_file():
+        pytest.skip("no marketplace.json")
+    data = json.loads(mk.read_text(encoding="utf-8"))
+    plugins = data.get("plugins", data) if isinstance(data, dict) else data
+    for entry in plugins if isinstance(plugins, list) else []:
+        src = entry.get("source") or entry.get("path") if isinstance(entry, dict) else None
+        if src and not str(src).startswith(("http", "git")):
+            assert (REPO / src).exists(), f"marketplace.json entry missing on disk: {src}"
+
+
+def test_team_skills_excluded_from_standalone():
+    cfg = REPO / "scripts" / "standalone_skill_config.py"
+    builder = REPO / "scripts" / "build-standalone-skills.sh"
+    for f in (cfg, builder):
+        if f.is_file():
+            text = f.read_text(encoding="utf-8")
+            for s in ("marathon", "pr-review-merge"):
+                assert s not in text, f"{f.name}: team-only skill '{s}' must not be in the standalone build"
+```
+
+- [ ] **Step 2: Run the harness against the current repo — it must pass before any new files are added**
+
+Run:
+```bash
+WT=$(git rev-parse --show-toplevel)
+cd "$WT" && uv run --with pytest pytest -v tests/
+```
+Expected: all tests PASS. If an existing file trips a check, classify it first:
+- **Genuine defect** (real dead link, stray `TODO` outside a code fence) → fix the file, not the test, and note it in the commit message.
+- **Legitimate reference the allowlists don't know yet** (a real external skill name, or a built-in `subagent_type`) → add it to `EXTERNAL_SKILLS` or `BUILTIN_AGENTS` in the harness. These allowlists are part of the contract; widening them for a real external name is correct, suppressing a real defect is not.
+
+- [ ] **Step 3: Add a third job to `.github/workflows/tests.yml`**
+
+Append this job under `jobs:` (sibling of `pytest` and `pipeline-tests`):
+
+```yaml
+  contract-tests:
+    name: plugin contract pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4
+
+      - name: Run pytest
+        run: uv run --with pytest pytest -v tests/
+```
+(No `working-directory` — the harness resolves the repo root from its own path and walks the tree.)
+
+- [ ] **Step 4: Commit**
+
+```bash
+WT=$(git rev-parse --show-toplevel)
+git -C "$WT" add tests/test_plugin_contract.py .github/workflows/tests.yml
+git -C "$WT" commit -m "test: add deterministic plugin contract harness and CI job"
+```
 
 ---
 
@@ -841,15 +1039,16 @@ git -C "$WT" commit -m "feat: bump version and document /issues + shared maratho
 **Files:**
 - None modified (verification + PR)
 
-- [ ] **Step 1: Confirm the existing test suite is unaffected**
+- [ ] **Step 1: Run all three pytest suites green**
 
 Run:
 ```bash
 WT=$(git rev-parse --show-toplevel)
-cd "$WT/skills/assess" && uv run --with pytest pytest -q
-cd "$WT/scripts" && uv run --with pytest pytest -q
+cd "$WT" && uv run --with pytest pytest -v tests/          # contract harness (this feature)
+cd "$WT/skills/assess" && uv run --with pytest pytest -q   # untouched by this work
+cd "$WT/scripts" && uv run --with pytest pytest -q         # untouched by this work
 ```
-Expected: both green. This work touches no Python, so any red here is unrelated — investigate before proceeding. (Per the assess-tests memory, neutralize global git hooks if phantom git-commit failures appear.)
+Expected: all green. The contract harness is the deterministic acceptance check for the new skills/commands (frontmatter, references, placeholders, standalone-exclusion). The assess/scripts suites touch no Python here, so any red there is unrelated — investigate before proceeding. (Per the assess-tests memory, neutralize global git hooks if phantom git-commit failures appear.)
 
 - [ ] **Step 2: Dry behavioural check of `/tm` delegation**
 
@@ -876,4 +1075,5 @@ The spec's acceptance gate is a **live validation marathon**: run `/tm <tag>` on
 - **Spec coverage:** two shared skills (Tasks 1–8), `/tm` refactor (9–10), `/fix-pr` + `/fix-develop` (11–12), `/issues` triage+marathon+adapter+DAG+combined-PRs (13), config (14), version/standalone-exclusion/README (15), validation gate incl. live marathon (16). All spec sections mapped.
 - **Adapter consistency:** the four operations (enumerate / mark in-progress / close on merge / branch+worktree) are named identically in the marathon contract (Task 5), the TM adapter (Task 9), and the GitHub adapter (Task 13).
 - **Skill-name consistency:** `marathon` and `pr-review-merge` referenced by those exact slugs throughout; directory names match frontmatter `name:` (Tasks 1, 5, 15).
-- **No silent loss:** Task 10 anchor-grep gate guards the verbatim extraction against dropped content.
+- **No silent loss:** Task 10 anchor-grep gate guards the verbatim extraction against dropped content; the Task 0 contract harness guards frontmatter/references/standalone-exclusion on every PR thereafter.
+- **Harness ordering:** Task 0 builds the harness and goes green against the current repo before any new file exists; the `Use the X skill` and standalone-exclusion checks then fail-closed as Tasks 2–8 add the new skills and Tasks 9–13 add the references.
