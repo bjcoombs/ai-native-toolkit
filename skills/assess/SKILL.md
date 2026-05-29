@@ -805,34 +805,44 @@ After writing the files, first **check whether a direct PR is even possible** be
 
 ```bash
 # Detect push capability. `gh` returns viewer fields for the current user.
-PUSH_INFO=$(gh repo view --json viewerPermission,viewerCanPush,viewerCanAdminister,nameWithOwner 2>/dev/null || true)
+# Push capability is derived from `viewerPermission` (one of ADMIN |
+# MAINTAIN | WRITE | TRIAGE | READ | NONE) - GitHub's GraphQL Repository
+# type has no `viewerCanPush` field, so don't request it (the CLI errors
+# and the whole call returns empty, silently degrading every write-
+# accessible repo to the "leave local" branch).
+PUSH_INFO=$(gh repo view --json viewerPermission,viewerCanAdminister,nameWithOwner 2>/dev/null || true)
+PERM=$(echo "$PUSH_INFO" | jq -r '.viewerPermission // empty')
+case "$PERM" in
+  ADMIN|MAINTAIN|WRITE) CAN_PUSH=1 ;;
+  *)                    CAN_PUSH=0 ;;
+esac
 # If the command failed (no remote, no gh, not a GitHub repo, unauthenticated),
-# fall back to the local-branch flow with the reason - never silently assume
-# push works.
+# $PUSH_INFO is empty and $PERM stays empty - fall back to the local-branch
+# flow with the reason. Never silently assume push works.
 ```
 
 Interpret the result:
 
-- `viewerCanPush: true` (any of `WRITE` / `MAINTAIN` / `ADMIN` viewerPermission, or push-eligible fork access): offer the direct PR flow below.
-- `viewerCanPush: false` and `viewerPermission` is `READ` / `TRIAGE`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
-- `gh` unavailable / not a GitHub remote / not authenticated: skip both PR offers entirely and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
+- `CAN_PUSH=1` (viewerPermission is `WRITE` / `MAINTAIN` / `ADMIN`, or the remote is a push-eligible fork): offer the direct PR flow below.
+- `CAN_PUSH=0` and viewerPermission is `READ` / `TRIAGE`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
+- `gh` unavailable / not a GitHub remote / not authenticated (`$PUSH_INFO` empty): skip both PR offers entirely and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
 
 Then surface the question - verbatim, picking the shape that matches the access tier.
 
-Push-capable target (`viewerCanPush: true`):
+Push-capable target (`CAN_PUSH=1`):
 
 > Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Want me to open a PR in this repo with these files, or leave them local for you to review first?
 
-Read-only target (`READ` / `TRIAGE`):
+Read-only target (viewerPermission `READ` / `TRIAGE`):
 
 > Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. You have `READ` access to `<owner/repo>`, so a direct PR isn't possible. I can fork `<owner/repo>` to your account and open the PR from there, or leave the files local for you to review.
 
-If the user says **yes / PR** (direct flow, `viewerCanPush: true`):
+If the user says **yes / PR** (direct flow, `CAN_PUSH=1`):
 1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
 2. Stage and commit the report, the complexity heatmap, and the doc graph. Commit message: `docs: Add AI-readiness assessment + complexity and doc-navigability snapshots`.
 3. Push the branch and open a PR. Title: `docs: Codebase assessment — <YYYY-MM-DD>`.
 
-If the user says **yes / PR** (fork flow, `viewerCanPush: false` on the upstream):
+If the user says **yes / PR** (fork flow, `CAN_PUSH=0` on the upstream):
 1. `gh repo fork <owner>/<repo> --clone=false --remote=true` (creates the fork under the user's account and adds it as a remote named `origin` or similar; the upstream becomes `upstream` if the original was already `origin`).
 2. Create the branch as above, push to the **fork** (`git push -u <fork-remote> <branch>`), and open the PR via `gh pr create --repo <owner>/<repo>` (head defaults to the fork).
 3. Commit message, PR title, and body are unchanged from the direct flow.
