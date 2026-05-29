@@ -656,6 +656,25 @@ rg -i 'retrospective|retro|feedback loop|learnings|post.?mortem' "$REPO_ROOT"/{C
 - Partial: Some orchestration tooling exists but no systematic feedback loop, or ad-hoc retro notes without structured process
 - Missing: No AI-aware project management
 
+### Cross-layer derived findings (keyhole readiness)
+
+The layers above each measure one axis. The deterministic core also crosses those axes against each other and emits six named findings - the "where to look" signals no single layer surfaces. Read them once, after the per-layer scans:
+
+```bash
+jq '.derived_findings, .attention' "$REPO_ROOT/.assess/run-context.json"
+```
+
+`derived_findings` is a fixed-order list of six `{name, paths, action}` objects - all six always present, `paths` may be empty. Omit a finding from the report when its `paths` is empty. Each pairs an axis-crossing with the action it implies:
+
+- **`hidden_coupling`** - modular statically but bleeds across boundaries historically (files that keep changing together). The static map says "isolated"; git says "coupled." Action: investigate the seam before trusting the boundary.
+- **`lying_map`** - high complexity under a stale doc: the map exists but no longer matches the territory. Action: fix or delete the doc - a wrong map is worse than none.
+- **`unexplained_complexity`** - high complexity with no doc and no recorded intent. Action: write the missing contract. Do **not** auto-generate it - a guessed contract is just another lying map.
+- **`orphaned_understanding`** - high complexity with no human anchor and no intent: nobody owns the knowledge. Action: assign a human anchor before further change.
+- **`candidate_dead_weight`** - high complexity with no runtime evidence it is live. The bias is to **keep** (static reachability can't see external callers - Layer 1's caveat applies). Action: verify liveness, then delete only if confirmed dead.
+- **`refactor_boundary`** (positive) - high containment: edits stay local. A safe zone, never an attention row. Action: safe to hand an agent in isolation; cite these paths in Strengths.
+
+`attention` ranks the few units landing in the most *negative* findings (`refactor_boundary` never counts) - the "look here first" list, each row carrying its `findings` and `score`. Lead the report's findings with the top of this list.
+
 ## Step 3.5: Read Cross-Run Context
 
 Before scoring, check what changed since the last run:
