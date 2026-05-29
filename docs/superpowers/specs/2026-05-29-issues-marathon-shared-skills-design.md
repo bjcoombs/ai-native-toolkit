@@ -170,6 +170,35 @@ PR (per repo CLAUDE.md).
 (`scripts/build-standalone-skills.sh`). They depend on Claude-Code-only tools (Agent
 Teams, subagents) and have no meaning in Claude Desktop chat. No chat-skip markers needed.
 
+## Testing
+
+Markdown skills/commands have two testable halves, and they belong in different places:
+
+- **Behaviour** (does `/tm` actually run a marathon?) requires executing an LLM. There is no
+  deterministic way to assert it, so it stays **out of CI** and is covered by the human-run
+  validation marathon (acceptance gate below). No AI is added to the CI workflow.
+- **Contract / structure** is fully deterministic and goes in CI. Today the repo's CLAUDE.md
+  *documents* invariants as prose but nothing enforces them. This work adds a **pytest
+  contract-test harness** that encodes them as executable assertions, wired into the existing
+  `.github/workflows/tests.yml` as a third job (same `uv run --with pytest pytest` pattern as
+  `skills/assess/` and `scripts/`). No new language or toolchain.
+
+The harness lives in a new root `tests/` dir (`tests/test_plugin_contract.py`) and walks
+`skills/`, `commands/`, `agents/`, and `.claude-plugin/`. Scope: **contract + references**.
+It asserts, for every skill and command:
+
+- frontmatter parses; skill `name:` matches its directory; `description` present; a `TRIGGER`
+  clause present where CLAUDE.md requires one (skills);
+- no placeholder tokens (`TODO`/`TBD`/`FIXME`) in shipped `.md` files;
+- every internal `[text](relative/path)` link resolves to a real file;
+- every `Use the <name> skill` reference resolves to an existing `skills/<name>/SKILL.md`;
+- every command that names an agent points at an existing `agents/<name>.md`;
+- `plugin.json` is valid JSON; every `marketplace.json` entry exists on disk;
+- `marathon` and `pr-review-merge` are absent from the standalone build list.
+
+This converts the one-off anchor-greps the extraction would otherwise rely on into permanent
+CI guards: any future edit that breaks a reference or drops required frontmatter fails the PR.
+
 ## Risk and acceptance gate
 
 The blast radius is the `/tm` refactor: it is battle-tested and the extraction must not
