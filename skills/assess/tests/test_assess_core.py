@@ -533,3 +533,151 @@ def test_briefing_includes_loc_ccn_commits_and_status(tmp_path: Path) -> None:
     assert "15 commits" in content
     # has_tests should be "unknown" now, not "no"
     assert "Has test file | unknown" in content
+
+
+def test_has_sibling_test_detects_colocated_and_adjacent(tmp_path: Path) -> None:
+    """Co-located and adjacent-dir test files lift has_tests from unknown to
+    yes/no cheaply (issue #47, observation 6)."""
+    repo = tmp_path / "repo"
+    (repo / "go").mkdir(parents=True)
+    (repo / "go" / "foo.go").write_text("package foo")
+    (repo / "go" / "foo_test.go").write_text("package foo")  # co-located
+    (repo / "ts").mkdir()
+    (repo / "ts" / "bar.ts").write_text("export const x = 1")
+    (repo / "ts" / "bar.test.ts").write_text("test")          # co-located .test.
+    (repo / "py").mkdir()
+    (repo / "py" / "baz.py").write_text("x = 1")              # no test
+    (repo / "svc").mkdir()
+    (repo / "svc" / "api.py").write_text("x = 1")
+    (repo / "svc" / "__tests__").mkdir()
+    (repo / "svc" / "__tests__" / "test_api.py").write_text("t")  # adjacent dir
+
+    assert assess_core._has_sibling_test(repo, "go/foo.go") is True
+    assert assess_core._has_sibling_test(repo, "ts/bar.ts") is True
+    assert assess_core._has_sibling_test(repo, "py/baz.py") is False
+    assert assess_core._has_sibling_test(repo, "svc/api.py") is True
+    # The file is itself a test -> counts as covered.
+    assert assess_core._has_sibling_test(repo, "go/foo_test.go") is True
+    # Not on disk (e.g. a since-deleted path in a stats snapshot) -> unknown.
+    assert assess_core._has_sibling_test(repo, "go/gone.go") is None
+
+
+def test_hotspot_page_shows_yes_when_sibling_test_exists(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "src").mkdir(parents=True)
+    (repo / "src" / "foo.go").write_text("package foo")
+    (repo / "src" / "foo_test.go").write_text("package foo")
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 10, "loc": {"p50": 10, "p95": 30, "max": 50},
+        "ccn": {"p50": 1, "p95": 3, "max": 5},
+        "top_hotspots": [{"path": "src/foo.go", "loc": 500, "ccn": 20, "commits": 5}],
+        "top_complex": [], "top_large": [],
+    }))
+    build_run_context(repo_root=repo, run_date="2026-05-22")
+    content = next((assess_dir / "hotspots").iterdir()).read_text(encoding="utf-8")
+    assert "Has test file | yes" in content
+
+
+def test_commits_read_from_legacy_churn_field(tmp_path: Path) -> None:
+    """A stats snapshot using the legacy `churn` key still shows real commits in
+    the hotspot page, not 0 (issue #47, observation 5)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 10, "loc": {"p50": 10, "p95": 30, "max": 50},
+        "ccn": {"p50": 1, "p95": 3, "max": 5},
+        "top_hotspots": [{"path": "src/foo.go", "loc": 500, "ccn": 20, "churn": 33}],
+        "top_complex": [], "top_large": [],
+    }))
+    build_run_context(repo_root=repo, run_date="2026-05-22")
+    content = next((assess_dir / "hotspots").iterdir()).read_text(encoding="utf-8")
+    assert "33 commits" in content
+    assert "Commits in churn window | 33" in content
+
+
+def test_diff_unreliable_when_prior_plugin_version_mismatches(tmp_path: Path) -> None:
+    """A prior snapshot from a different (or unstamped) plugin version flags the
+    diff as unreliable so the report can suppress phantom transitions
+    (issue #47, observation 4)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps({
+        # No plugin_version: seeded by hand / written by an older plugin.
+        "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/old.go", "loc": 500, "ccn": 20, "commits": 5}],
+    }))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "plugin_version": "1.12.0",
+        "files_scored": 55, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/new.go", "loc": 400, "ccn": 18, "commits": 4}],
+    }))
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert ctx["diff_reliable"] is False
+    assert ctx["diff_version_note"] is not None
+    assert "1.12.0" in ctx["diff_version_note"]
+
+
+def test_diff_reliable_when_plugin_versions_match(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    stats = {
+        "plugin_version": "1.12.0", "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/a.go", "loc": 500, "ccn": 20, "commits": 5}],
+    }
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(stats))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(stats))
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    assert ctx["diff_reliable"] is True
+    assert ctx["diff_version_note"] is None
+
+
+def test_first_flagged_unknown_when_prior_seeded_without_history(tmp_path: Path) -> None:
+    """When prior stats are seeded but first-flagged.json isn't, a hotspot that
+    predates this run must read 'unknown', not today's date
+    (issue #47, observation 7)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    # Same hotspot in prior and current -> persistent, predates this run.
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps({
+        "plugin_version": "1.12.0", "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/old.go", "loc": 500, "ccn": 20, "commits": 5}],
+    }))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "plugin_version": "1.12.0", "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/old.go", "loc": 510, "ccn": 21, "commits": 6}],
+    }))
+    # No first-flagged.json on disk.
+    build_run_context(repo_root=repo, run_date="2026-05-22")
+    page = next((assess_dir / "hotspots").iterdir()).read_text(encoding="utf-8")
+    assert "First flagged: unknown" in page
+    assert "First flagged: 2026-05-22" not in page
+
+
+def test_first_flagged_stamps_today_for_genuinely_new_hotspot(tmp_path: Path) -> None:
+    """A hotspot absent from the prior snapshot is genuinely new -> today."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps({
+        "plugin_version": "1.12.0", "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/old.go", "loc": 500, "ccn": 20, "commits": 5}],
+    }))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "plugin_version": "1.12.0", "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/fresh.go", "loc": 400, "ccn": 18, "commits": 4}],
+    }))
+    build_run_context(repo_root=repo, run_date="2026-05-22")
+    fresh_page = next(p for p in (assess_dir / "hotspots").iterdir()
+                      if p.name.startswith("src-fresh-go-"))
+    assert "First flagged: 2026-05-22" in fresh_page.read_text(encoding="utf-8")

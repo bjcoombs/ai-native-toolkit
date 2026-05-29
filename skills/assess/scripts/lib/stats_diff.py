@@ -46,6 +46,18 @@ def load_stats(path: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def hotspot_commits(h: dict) -> int:
+    """Commit count for a hotspot entry.
+
+    Reads `commits` (current field name), falling back to the legacy `churn`
+    key so a prior snapshot written by an older plugin still compares cleanly.
+    """
+    val = h.get("commits")
+    if val is None:
+        val = h.get("churn", 0)
+    return int(val or 0)
+
+
 def diff_stats(*, prior: dict | None, current: dict) -> StatsDiff:
     """Compute hotspot transitions between two stats snapshots."""
     diff = StatsDiff()
@@ -69,7 +81,7 @@ def diff_stats(*, prior: dict | None, current: dict) -> StatsDiff:
 
         prior_h = prior_hotspots[path]
         ccn_delta = current_h.get("ccn", 0) - prior_h.get("ccn", 0)
-        commits_delta = current_h.get("commits", 0) - prior_h.get("commits", 0)
+        commits_delta = hotspot_commits(current_h) - hotspot_commits(prior_h)
         loc_delta = current_h.get("loc", 0) - prior_h.get("loc", 0)
 
         transition = HotspotTransition(

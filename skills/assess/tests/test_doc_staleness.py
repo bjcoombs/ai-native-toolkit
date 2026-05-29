@@ -68,7 +68,7 @@ def test_modularity_large_repo_flag(tmp_path: Path) -> None:
         _write(tmp_path, f"mod{i}/f.py", "x")
     r = analyze_doc_staleness(tmp_path)
     assert r["modularity"]["large_repo"] is True
-    assert r["modularity"]["base_doc_coverage"] == 0.0  # no base docs anywhere
+    assert r["modularity"]["base_doc_coverage_when_present"] == 0.0  # no base docs anywhere
     assert r["modularity"]["base_doc_dir_ratio"] == 0.0
 
 
@@ -90,9 +90,9 @@ def test_base_doc_coverage_is_size_weighted(tmp_path: Path) -> None:
     # Un-weighted dir ratio is low (1 doc'd dir out of 11), but the size-weighted
     # coverage reflects that ~75% of code sits under a maintained base doc.
     assert r["modularity"]["base_doc_dir_ratio"] < 0.2
-    assert r["modularity"]["base_doc_coverage"] >= 0.7
-    # Sanity: the headline matches the same number the association block reports.
-    assert r["modularity"]["base_doc_coverage"] == r["association"]["pct_code_under_base_doc"]
+    assert r["modularity"]["base_doc_coverage_when_present"] >= 0.7
+    # Sanity: the when-present number matches what the association block reports.
+    assert r["modularity"]["base_doc_coverage_when_present"] == r["association"]["pct_code_under_base_doc"]
 
 
 def test_no_git_degrades_to_zero_churn(tmp_path: Path) -> None:

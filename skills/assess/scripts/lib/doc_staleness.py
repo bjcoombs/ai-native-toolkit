@@ -287,7 +287,12 @@ def analyze_doc_staleness(
     module_dirs_with_base = len(base_doc_dirs)
     module_dir_count = len(code_dirs)
     base_doc_dir_ratio = module_dirs_with_base / module_dir_count if module_dir_count else 0.0
-    base_doc_coverage = pct_code_under_base
+    # `pct_code_under_base` reaches 1.0 whenever a single root-level base doc
+    # (a top README) is an ancestor of every code file - it does NOT mean every
+    # module is documented. Reported as `base_doc_coverage_when_present` so it
+    # is never misread as headline coverage; `base_doc_dir_ratio` (fraction of
+    # code-containing dirs that actually hold a base doc) is the headline.
+    base_doc_coverage_when_present = pct_code_under_base
 
     return {
         "available": True,
@@ -305,8 +310,9 @@ def analyze_doc_staleness(
         "modularity": {
             "module_dir_count": module_dir_count,
             "module_dirs_with_base_doc": module_dirs_with_base,
-            "base_doc_coverage": round(base_doc_coverage, 3),
+            # Headline first: fraction of code-containing dirs with a base doc.
             "base_doc_dir_ratio": round(base_doc_dir_ratio, 3),
+            "base_doc_coverage_when_present": round(base_doc_coverage_when_present, 3),
             "code_file_count": len(code_files),
             "large_repo": len(code_files) >= LARGE_REPO_CODE_FILES,
         },

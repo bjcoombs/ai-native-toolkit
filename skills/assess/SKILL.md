@@ -58,6 +58,8 @@ Artefacts will land at:
 - `$REPO_ROOT/.assess/doc-graph.svg`
 - `$REPO_ROOT/.assess/assess-report.md`
 
+> **Write-protected repo root?** `/assess` writes `.assess/` into `$REPO_ROOT`, and the treemap/core run as `uv` subprocesses that write there too. If your workflow keeps the repo root pristine and read-only (e.g. a `<repo>-main` clone that teammates branch from, with a hook blocking direct edits), a guard on *your* writes won't stop the subprocess - it just makes the run write into the directory you meant to protect. **Create a worktree first and run `/assess` from there.**
+
 ## Step 2: Generate the Code Heatmap + Doc Graph
 
 This step produces **two** views of the codebase, both colour-blind-safe (OrRd ramp, no red-green):
@@ -180,7 +182,7 @@ The script prints a one-line summary (file count, lizard vs scc coverage, churn 
 
 **Build artifacts and generated code are filtered by default.** The script excludes two classes of files:
 
-- **Build artifacts**: `main.dart.js`, `*.min.js`, `*.bundle.js`, `*.chunk.js`, `*.map`, sourcemaps, service workers, and files under `node_modules/`, `dist/`, `build/`, `.next/`, `.nuxt/`, `.output/`, `coverage/`, etc.
+- **Build artifacts**: `main.dart.js`, Flutter canvaskit/skwasm runtime bundles (`canvaskit.js`, `skwasm*.js`), `*.min.js`, `*.bundle.js`, `*.chunk.js`, `*.map`, sourcemaps, service workers, and files under `node_modules/`, `dist/`, `build/`, `.next/`, `.nuxt/`, `.output/`, `coverage/`, etc.
 - **Generated code**: protobuf bindings (`*.pb.go`, `*_grpc.pb.go`, `*.pb.gw.go`, `*.connect.go`, `*_pb.ts`, `*_pb.d.ts`, `*_pb2.py`, `*.pb.cc`, `*.pb.h`), Go generators (`*.gen.go`, `wire_gen.go`, `zz_generated_*.go`, `bindata.go`), .NET source generators (`*.designer.cs`, `*.g.cs`), Dart/Flutter codegen (`*.freezed.dart`, `*.g.dart`, `*.gr.dart`).
 
 Full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS`. If you specifically want to score these (e.g., to visualise how much of the repo is generated), pass `--include-artifacts`.
@@ -296,7 +298,7 @@ Score navigability from these signals:
 - **Contradictions are out of deterministic scope — hand them to an LLM.** The remaining lint check — contradictions between pages — can't be detected structurally. When the doc set is non-trivial, add a Top-3 / Additional action telling the user to have *their* agent read the doc set for contradictions and stale claims (e.g. "run your LLM over `docs/` to flag pages that contradict each other or the code"). State plainly that `/assess` does not check this.
 - **Centrality × staleness (the priority signal).** `stale_hubs` is ranked by `pagerank × staleness ratio`. The top entry — a central doc whose subject code is churning while the doc sits frozen — is a top finding. This feeds both the docs heatmap and this score.
 - **Doc→code association as a maturity signal.** `doc_staleness.association.pct_code_under_base_doc` and `pct_docs_mapping_to_code`: if the doc→code map is derivable from structure (clean hierarchy/convention), that's positive navigability; docs floating disconnected from the code they describe is a gap.
-- **Modular base docs, size-weighted.** `doc_staleness.modularity`: a module owning a *maintained* base doc is what makes a large codebase navigable to humans and deterministically mappable for an agent. **Weight by size** — do not penalise a small/single-purpose repo (`large_repo: false`); for a `large_repo: true` with low `base_doc_coverage`, flag the Layer 0 gap with remediation "decompose into modules; add a maintained base doc per module." The per-module docs are held to the same maintenance standard — the target is *modular + maintained*, never just "more docs."
+- **Modular base docs, size-weighted.** `doc_staleness.modularity`: a module owning a *maintained* base doc is what makes a large codebase navigable to humans and deterministically mappable for an agent. **The headline metric is `base_doc_dir_ratio`** — the fraction of code-containing directories that actually hold a base doc. Do **not** lead with `base_doc_coverage_when_present`: it reaches `1.0` whenever a single root-level README is an ancestor of every file, which reads as "fully documented" even when only a handful of module dirs have docs (the two fields diverge sharply, e.g. ratio `0.04` vs when-present `1.0`). **Weight by size** — do not penalise a small/single-purpose repo (`large_repo: false`); for a `large_repo: true` with low `base_doc_dir_ratio`, flag the Layer 0 gap with remediation "decompose into modules; add a maintained base doc per module." The per-module docs are held to the same maintenance standard — the target is *modular + maintained*, never just "more docs."
 
 **Truth-pressure ordering of navigation aids** (weight maintained/executable aids higher): executable aids that run in CI (skills, doctests) **>** tests **>** linked-doc graph / MOC **>** prose. Executable aids fail loudly when they rot; prose rots silently.
 
@@ -615,7 +617,9 @@ Before scoring, check what changed since the last run:
 jq '.diff, .diff_detail' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-If `prior` was None (first run), skip this section in the report. Otherwise, populate a "What Changed Since Last Run" section in the report:
+If `prior` was None (first run), skip this section in the report.
+
+**Check `diff_reliable` first.** When `run-context.json` has `diff_reliable: false`, the prior snapshot came from a different (or unstamped) plugin version (`diff_version_note` explains it) - file-filter differences across versions surface phantom "graduated"/"new" transitions that didn't really happen. **Suppress the "What Changed Since Last Run" section** in that case and instead note one line: _"Diff suppressed - prior snapshot predates version stamping or used a different file filter; comparison resumes once two runs share a plugin version."_ Otherwise, populate the section:
 
 - **Graduated** (good): list paths from `diff_detail.graduated` - hotspots that left the top list
 - **Regressed** (bad): list paths from `diff_detail.regressed` with their `ccn_delta` / `commits_delta`
@@ -658,7 +662,7 @@ The "Top 3 Actions" table at the bottom names specific files. Start there.
 - **Files scored:** <N>
 - **Churn window chosen:** <last 12mo | last 24mo | last 5y | all-time>
 - **Complexity profile:** p95 ccn <N> (max <M>); p95 LOC <N> (max <M>)
-- **Top hotspots** (composite: complexity × recent churn):
+- **Top hotspots** (composite `sqrt(ccn) × sqrt(1 + commits)` - a sub-linear blend of complexity and recent churn, so a complex-AND-active file leads, a frozen-but-complex file ranks below it, and a churny-but-trivial file can't top the list on churn alone):
   1. `<path>` — <loc> LOC, ccn <N>, <M> commits in window
   2. ...
   3. ...

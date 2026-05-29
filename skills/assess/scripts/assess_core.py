@@ -26,6 +26,7 @@ The LLM reads run-context.json to ground that prose in deterministic data.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -40,7 +41,7 @@ from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.doc_staleness import analyze_doc_staleness
 from lib.git_churn import tracked_files
 from lib.liveness_scan import scan_liveness
-from lib.stats_diff import diff_stats, load_stats
+from lib.stats_diff import diff_stats, hotspot_commits, load_stats
 from lib.wiki_writer import (
     HotspotEntry,
     LogEntry,
@@ -182,6 +183,58 @@ def _read_plugin_version() -> str:
         return "unknown"
 
 
+# Co-location test conventions, keyed off a source file's stem + suffix.
+# Each entry is a (filename-builder) applied in the file's own directory; the
+# first existing match wins. Covers the dominant per-language idioms - it is a
+# cheap precision heuristic, not a build-graph analysis, so a project that keeps
+# all tests in a far-away mirror tree still degrades to "unknown" rather than a
+# false "no".
+_TEST_SIBLING_BUILDERS = [
+    lambda stem, ext: f"{stem}_test{ext}",    # Go, Python (pytest co-located)
+    lambda stem, ext: f"{stem}.test{ext}",    # JS/TS (jest)
+    lambda stem, ext: f"{stem}.spec{ext}",    # JS/TS/Angular (jasmine/jest)
+    lambda stem, ext: f"{stem}_spec{ext}",    # Ruby (rspec), some JS
+    lambda stem, ext: f"test_{stem}{ext}",    # Python (unittest)
+    lambda stem, ext: f"{stem}Test{ext}",     # Java/Kotlin/C# (JUnit)
+    lambda stem, ext: f"{stem}Tests{ext}",    # C#/Swift (XCTest)
+]
+# Adjacent directories that conventionally hold co-located tests for the
+# files beside them. Checked for any of the sibling-name patterns above.
+_ADJACENT_TEST_DIRS = ["__tests__", "tests", "test", "spec"]
+# Suffixes/stem markers that mean the file IS itself a test - it doesn't need a
+# separate test file, so it counts as covered.
+_IS_TEST_RE = re.compile(r"(^test_|_test$|\.test$|\.spec$|_spec$|Tests?$)")
+
+
+def _has_sibling_test(repo_root: Path, rel_path: str) -> bool | None:
+    """Best-effort: does this source file have a co-located test file?
+
+    Returns True/False from a filesystem check of common co-location idioms
+    (`foo.ts` next to `foo.test.ts`, `foo_test.go`, an adjacent `__tests__/`,
+    etc.). Returns None only when the file isn't on disk (e.g. scanning a stats
+    snapshot for a since-deleted path), which honestly maps to "unknown".
+    """
+    src = (repo_root / rel_path)
+    if not src.is_file():
+        return None
+    stem, ext = src.stem, src.suffix
+    if _IS_TEST_RE.search(stem):
+        return True  # the file is itself a test
+    directory = src.parent
+    candidate_names = [build(stem, ext) for build in _TEST_SIBLING_BUILDERS]
+    for name in candidate_names:
+        if (directory / name).is_file():
+            return True
+    for sub in _ADJACENT_TEST_DIRS:
+        test_dir = directory / sub
+        if not test_dir.is_dir():
+            continue
+        for name in candidate_names + [f"{stem}{ext}"]:
+            if (test_dir / name).is_file():
+                return True
+    return False
+
+
 def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
     """Load the first-flagged date map from .assess/first-flagged.json.
 
@@ -266,6 +319,24 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     prior = load_stats(assess_dir / "complexity-stats.prior.json")
     prior_exists = prior is not None
 
+    # A diff is only trustworthy when both snapshots came from the same plugin
+    # filter. When the prior snapshot predates version stamping (seeded by hand,
+    # or written by an older plugin with a looser file filter), "graduated"
+    # entries can be files the new filter simply excludes - phantom transitions,
+    # not real improvement. Detect the mismatch and flag the diff as unreliable
+    # so the report suppresses or caveats it (see SKILL.md).
+    current_version = current.get("plugin_version")
+    prior_version = prior.get("plugin_version") if prior else None
+    diff_reliable = True
+    diff_version_note = None
+    if prior_exists and prior_version != current_version:
+        diff_reliable = False
+        diff_version_note = (
+            f"prior stats from plugin {prior_version or 'unknown'}, current "
+            f"{current_version or 'unknown'}; file-filter differences across "
+            "versions may surface phantom graduated/new transitions"
+        )
+
     diff = diff_stats(prior=prior, current=current)
     instruction_files, instructions_grade, untracked_instr, dangling_instr = \
         _grade_instruction_files(repo_root)
@@ -287,35 +358,45 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # Wiki: hotspot pages for current top hotspots
     hotspot_entries: list[HotspotEntry] = []
     for h in current.get("top_hotspots", []):
-        # Preserve the original first_flagged date; only set it to run_date on first appearance.
-        if h["path"] not in first_flagged_map:
-            first_flagged_map[h["path"]] = run_date
-        first_flagged = first_flagged_map[h["path"]]
-        status = status_map.get(h["path"], "active")
+        path = h["path"]
+        # Preserve the original first_flagged date across runs. A path missing
+        # from the map is either genuinely new this run (stamp today) or it was
+        # present in the prior snapshot but we have no recorded date - e.g. the
+        # prior stats were seeded without first-flagged.json. In the latter case
+        # it predates this run, so an honest "unknown" beats a wrong today.
+        if path not in first_flagged_map:
+            first_flagged_map[path] = (
+                run_date if status_map.get(path) == "new" else "unknown"
+            )
+        first_flagged = first_flagged_map[path]
+        status = status_map.get(path, "active")
+        commits = hotspot_commits(h)
+        loc = h.get("loc", 0)
+        ccn = h.get("ccn", 0)
         hotspot_entries.append(HotspotEntry(
-            path=h["path"],
+            path=path,
             first_flagged=first_flagged,
             last_seen=run_date,
             status=status,
-            ccn=h.get("ccn", 0),
-            loc=h.get("loc", 0),
+            ccn=ccn,
+            loc=loc,
         ))
         write_hotspot_page(
             assess_dir,
-            path=h["path"],
+            path=path,
             first_flagged=first_flagged,
             last_seen=run_date,
             status=status,
-            loc=h.get("loc", 0),
-            ccn=h.get("ccn", 0),
-            commits=h.get("commits", 0),
-            has_tests=None,  # unknown until test pairing feature lands (deferred)
-            history_rows=f"| {run_date} | {h.get('loc', 0)} | {h.get('ccn', 0)} | {h.get('commits', 0)} | {status} |",
+            loc=loc,
+            ccn=ccn,
+            commits=commits,
+            has_tests=_has_sibling_test(repo_root, path),
+            history_rows=f"| {run_date} | {loc} | {ccn} | {commits} | {status} |",
             briefing=(
                 f"Hotspot ({status}). "
-                f"{h.get('loc', 0)} LOC, "
-                f"max cyclomatic complexity {h.get('ccn', 0)}, "
-                f"{h.get('commits', 0)} commits in churn window. "
+                f"{loc} LOC, "
+                f"max cyclomatic complexity {ccn}, "
+                f"{commits} commits in churn window. "
                 "(Briefing refined by LLM via assess_finalize - see Suggested actions below.)"
             ),
             actions="- Pending LLM-generated suggestions",
@@ -325,7 +406,9 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     for h in diff.graduated:
         hotspot_entries.append(HotspotEntry(
             path=h.path,
-            first_flagged=first_flagged_map.get(h.path, run_date),
+            # Graduated means it was a prior hotspot; if we have no recorded
+            # first-flagged date, it predates this run - "unknown", not today.
+            first_flagged=first_flagged_map.get(h.path, "unknown"),
             last_seen=run_date,
             status="graduated",
             ccn=0,
@@ -364,6 +447,9 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         "instruction_files": instruction_files,
         "instructions_grade": instructions_grade,
         "diff": diff.summary(),
+        "diff_reliable": diff_reliable,
+        "diff_version_note": diff_version_note,
+        "prior_plugin_version": prior_version,
         "diff_detail": {
             "graduated": [h.__dict__ for h in diff.graduated],
             "regressed": [h.__dict__ for h in diff.regressed],
