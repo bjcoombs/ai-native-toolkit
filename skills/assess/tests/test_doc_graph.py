@@ -92,6 +92,65 @@ def test_dangling_wikilink_counted(tmp_path: Path) -> None:
     assert r.dangling_links >= 1
 
 
+def test_wikilink_inside_fenced_code_block_is_not_counted(tmp_path: Path) -> None:
+    """A FORMAT spec or Obsidian-syntax tutorial that *shows* `[[foo]]` as a
+    sample inside a fenced code block must not contribute a phantom edge or
+    a dangling link. The writer formatted it as code on purpose.
+    """
+    _write(
+        tmp_path,
+        "obsidian-skill.md",
+        "How to write wikilinks:\n\n```markdown\n[[Note Title]]\n[[wikilinks]]\n```\n",
+    )
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert "Note Title" not in targets
+    assert "wikilinks" not in targets
+
+
+def test_mdlink_inside_fenced_code_block_is_not_counted(tmp_path: Path) -> None:
+    """FORMAT specs commonly show `[Ordering](./src/ordering/CONTEXT.md)` as a
+    sample of the format they teach. Inside a fence, that's documentation
+    syntax, not navigation - it must not show up in broken_links.
+    """
+    _write(
+        tmp_path,
+        "context-FORMAT.md",
+        "Example layout:\n\n```markdown\n[Ordering](./src/ordering/CONTEXT.md)\n```\n",
+    )
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert "./src/ordering/CONTEXT.md" not in targets
+
+
+def test_link_inside_inline_code_span_is_not_counted(tmp_path: Path) -> None:
+    """Inline-code spans (single backticks) are equally code: `[[wikilinks]]`
+    in a sentence is teaching syntax, not navigating.
+    """
+    _write(
+        tmp_path,
+        "guide.md",
+        "Use the `[[Note Title]]` syntax to link notes. "
+        "Markdown form looks like `[label](./file.md)`.\n",
+    )
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+
+
+def test_real_links_outside_code_still_extracted(tmp_path: Path) -> None:
+    """Prose-form links to real docs must still build edges. Stripping code
+    spans is meant to reduce false positives, not break navigation."""
+    _write(tmp_path, "README.md", "see [the guide](./guide.md)\n")
+    _write(tmp_path, "guide.md", "real doc")
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    # Edge must be present.
+    edges = {(h["path"], h.get("pagerank", 0)) for h in r.hubs}
+    assert any(p == "guide.md" for p, _ in edges) or r.edge_count >= 1
+
+
 def test_excludes_assess_and_vendor_dirs(tmp_path: Path) -> None:
     _write(tmp_path, "README.md", "real doc")
     _write(tmp_path, ".assess/log.md", "our own output")
