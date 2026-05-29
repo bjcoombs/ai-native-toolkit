@@ -35,7 +35,7 @@ from pathlib import Path
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.agent_instructions_grader import grade_instructions
+from lib.agent_instructions_grader import detect_skills_dir, grade_instructions
 from lib.anomaly_detector import detect_anomalies
 from lib.assess_config import load_excludes
 from lib.doc_graph import build_doc_graph, is_repo_file
@@ -95,10 +95,10 @@ def _file_freshness_days(file_path: Path) -> int:
 
 def _grade_instruction_files(
     repo_root: Path,
-) -> tuple[dict[str, dict], str | None, list[str], list[dict]]:
+) -> tuple[dict[str, dict], str | None, list[str], list[dict], dict]:
     """Scan all known instruction file locations and grade each one found.
 
-    Returns: (files_dict, best_grade, untracked, dangling_refs)
+    Returns: (files_dict, best_grade, untracked, dangling_refs, skills_info)
         files_dict: keyed by filename, e.g. {"CLAUDE.md": {grade, score, ...}}.
         best_grade: best letter grade across all *tracked, present* files; None
             if none found. None is distinct from "F": None means no committed
@@ -114,6 +114,11 @@ def _grade_instruction_files(
     """
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
+    # Detect skills directories once, before grading any file. A repo that
+    # factors guidance into on-demand skills uses progressive disclosure, so a
+    # large instruction file is not penalized as bloat (see compute_bloat_penalty).
+    skills_info = detect_skills_dir(repo_root)
+    skills_present = skills_info["skills_dirs_present"]
     found: dict[str, dict] = {}
     untracked: list[str] = []
     dangling_refs: list[dict] = []
@@ -135,7 +140,9 @@ def _grade_instruction_files(
             continue
         text = candidate.read_text(encoding="utf-8")
         freshness = _file_freshness_days(candidate)
-        grade = grade_instructions(text, freshness_days=freshness)
+        grade = grade_instructions(
+            text, freshness_days=freshness, skills_present=skills_present
+        )
         found[rel_path] = {
             "grade": grade.grade,
             "score": grade.score,
@@ -147,7 +154,7 @@ def _grade_instruction_files(
 
     best = (max(found.values(), key=lambda v: GRADE_RANK.get(v["grade"], 0))["grade"]
             if found else None)
-    return found, best, untracked, dangling_refs
+    return found, best, untracked, dangling_refs, skills_info
 
 
 # Basenames (lowercased) of the known instruction files, for cross-referencing
@@ -340,7 +347,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         )
 
     diff = diff_stats(prior=prior, current=current)
-    instruction_files, instructions_grade, untracked_instr, dangling_instr = \
+    instruction_files, instructions_grade, untracked_instr, dangling_instr, skills_info = \
         _grade_instruction_files(repo_root)
 
     # Load (and later update) the persistent first-flagged date map
@@ -525,6 +532,22 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # well - see the Layer 0 scoring rule in SKILL.md.
     ctx["untracked_instruction_files"] = untracked_instr
     ctx["broken_instruction_refs"] = _broken_instruction_refs(doc_graph, dangling_instr)
+    # Progressive-disclosure signals (Layer 0): does the repo factor guidance
+    # into on-demand skills, and is any instruction file an oversized monolith?
+    # An oversized instruction file with no skills factoring carries a bloat
+    # penalty (instruction_file_size[path].bloat_penalty > 0) that LOWERS its
+    # grade - it scores strictly below an equivalent lean-file-plus-skills repo.
+    ctx["skills_present"] = skills_info["skills_dirs_present"]
+    ctx["skills_count"] = skills_info["skills_count"]
+    ctx["skill_files"] = skills_info["skill_files"]
+    ctx["instruction_file_size"] = {
+        path: {
+            "line_count": meta["subscores"].get("line_count", 0),
+            "word_count": meta["subscores"].get("word_count", 0),
+            "bloat_penalty": meta["subscores"].get("bloat_penalty", 0),
+        }
+        for path, meta in instruction_files.items()
+    }
     # When the scan failed, preserve failure semantics: a failed scan must not be
     # read as "no observability" (rung 0) - that would mis-score Layer 1 Missing
     # when the truth is "not assessed". Carry the reason instead.
