@@ -77,8 +77,8 @@ Where they disagree is the most interesting output: a directory that looks modul
 
 ### A. Comprehensibility / keyhole-fit (static lens — language-specific)
 
-- **A1. Comprehension footprint** (anchor metric). For a unit X: `size(X) + public_surface(deps of X) + surface(X exposes to dependents)`. Compare to a **keyhole budget** (a fraction of a reference window). Units over budget are the ones no agent can change completely from inside the window. Build/import a dependency graph (`grimp`/`pydeps` for Python; `madge`, `go list`, jdepend later).
-- **A2. Blob vs modular.** Strongly-connected components in the package graph (cycles = definitional blob); graph **modularity score** (intra- vs inter-cluster edges).
+- **A1. Comprehension footprint** (anchor metric). For a unit X: `size(X) + public_surface(direct_deps of X) + surface(X exposes to dependents)`. **Direct dependencies only** — transitive closure would explode the metric for anything depending on common utilities and flag the whole repo; if direct proves insufficient, calibrate a depth-2 cap with per-hop decay rather than full transitivity. Compare to a **keyhole budget** (a fraction of a reference window). Units over budget are the ones no agent can change completely from inside the window. Build/import a dependency graph (`grimp`/`pydeps` for Python; `madge`, `go list`, jdepend later).
+- **A2. Blob vs modular.** Strongly-connected components in the package graph (cycles = definitional blob); a graph **modularity score** — candidates are Newman's *Q* (cheap, good for small package graphs) or Louvain community detection (scales, needs a resolution parameter); pick one during the static-structure phase against the dogfood graph and store it under a named key (e.g. `modularity_q`).
 - **A3. Contracts.** Fraction of inbound edges that land on a package's *front door* (`__init__` / public API) vs **burrow into internals**. Deep-reaching imports mean there is no real contract and refactors leak.
 - **A4. Breakup candidates.** Internal sub-clusters + low internal cohesion → the package is several packages wearing one coat. The sub-clusters *are* the proposed cut-lines.
 
@@ -97,12 +97,12 @@ A matrix per unit over {no doc, fresh doc, stale doc} × complexity:
 - complex + **no doc** → flag: high load, no summary an agent can read first.
 - complex + **stale doc** → **top priority**: a lying map over dangerous territory. Worse than no doc.
 
-Doc value function: `≈ complexity_summarised × freshness`. Trivial-code docs ≈ 0; stale-complex-code docs **< 0** → recommend *delete or fix*, not preserve. Doc→code mapping stays fuzzy (path proximity, doc links/symbol mentions, module docstring) because it's a candidate signal.
+Doc value function: `value = complexity_summarised × freshness`, where **freshness is signed** in `[-1, +1]` — positive for a doc fresher than the code it covers, crossing to **negative** once the doc lags the code's churn past a staleness threshold. So trivial-code docs ≈ 0 (low `complexity_summarised`), and stale-complex-code docs go **< 0** → recommend *delete or fix*, not preserve. (Equivalently, a piecewise rule: fresh → `complexity × freshness`; stale → `−penalty(complexity, staleness)`; missing → 0.) Doc→code mapping stays fuzzy (path proximity, doc links/symbol mentions, module docstring) because it's a candidate signal.
 
 ### D. Value / liveness (the third axis)
 
 - **D1. Evidence ladder.** static reachability (have it, Layer 1; lies safe-ward via reflection/DI/entrypoints) → **runtime liveness** via observability the agent can reach (strong; needs the repo to expose it — that *is* the Layer 1 test) → value attribution (human judgement; out of deterministic scope).
-- **D2. The velocity clock.** Calendar age is dead as a metric — under AI velocity, "legacy" means **orphaned understanding**, which can happen on day one. Measure age in *comprehension-events*, not days. The real legacy flag is the **intersection**: high complexity ∧ owned by automation / no human anchor (B4, via blame + agent-authorship detection) ∧ no externalised intent (no spec doc) ∧ unknown/absent runtime liveness. None of the single existing metrics catch it; the intersection does.
+- **D2. The velocity clock.** Calendar age is dead as a metric — under AI velocity, "legacy" means **orphaned understanding**, which can happen on day one. Measure age in *comprehension-events*, not days. A **comprehension-event** is a human-originated act that demonstrates understanding: a human-authored commit (not a bot/agent commit), a PR review/approval, a non-trivial doc/spec update, or a test addition. Fully automated commits don't count unless a human reviewed them. The clock is "events since the last comprehension-event." The real legacy flag is the **intersection**: high complexity ∧ owned by automation / no human anchor (B4, via blame + agent-authorship detection) ∧ no externalised intent (no spec doc) ∧ unknown/absent runtime liveness. None of the single existing metrics catch it; the intersection does.
 
 ## Derived findings (the primary output)
 
@@ -164,6 +164,8 @@ This sits squarely in **behavioral code analysis** (Adam Tornhill). We are alrea
 6. static dependency analysis (A) → comprehension footprint
 
 Static dependency analysis is **last**: it's the only language-specific, higher-cost piece, and containment (B2) already carries the keyhole-fit question in v1 as a language-agnostic proxy. The static footprint is the richer refinement, not the v1 gate.
+
+**New dependencies:** the static-structure phase adds `grimp` (Python import-graph analysis) to `skills/assess/pyproject.toml` (alongside the existing `networkx`). The historical axis and the doc join add none — they run on `git log` and existing signals. The `pyproject.toml` edit lands in the implementing PR, not this planning PR.
 
 **Out of scope (v1):** automated value attribution (stays human); multi-language static dep-graphs; any auto-generation of docs; any automatic deletion (recommendations only); any graph rendering (deferred to optional Phase 5).
 
