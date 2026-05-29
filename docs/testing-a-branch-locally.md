@@ -4,8 +4,8 @@
 unmerged branch's `SKILL.md` + bundled scripts the way a real user would, install
 from a local checkout. There are two surfaces worth testing:
 
-1. **The deterministic scripts** — fast, no install, catches logic regressions.
-2. **The full plugin install** — exercises skill routing, the `$CLAUDE_PLUGIN_ROOT`
+1. **The deterministic scripts** - fast, no install, catches logic regressions.
+2. **The full plugin install** - exercises skill routing, the `$CLAUDE_PLUGIN_ROOT`
    script-path resolution, and the LLM following `SKILL.md`.
 
 ## 1. Run the scripts directly (no install)
@@ -37,7 +37,7 @@ cd "$WT/scripts"       && uv run --with pytest pytest -q   # standalone-build pi
 This keeps the released `ai-native-toolkit@ai-native-toolkit` install (from the git
 marketplace) completely untouched, so revert is trivial.
 
-A local directory **is** a valid marketplace source — `/plugin marketplace add <path>`
+A local directory **is** a valid marketplace source - `/plugin marketplace add <path>`
 reads `.claude-plugin/marketplace.json` in place (no clone), so it reflects whatever is
 checked out in the worktree. The one catch: marketplaces are keyed by their manifest
 `name`, and the branch's `name` ("ai-native-toolkit") collides with the already-registered
@@ -57,7 +57,7 @@ git marketplace. So give the local copy a throwaway distinct name first.
 /plugin install ai-native-toolkit@ai-native-toolkit-dev
 ```
 
-Then **restart Claude Code** — skills, commands and agents are discovered at session
+Then **restart Claude Code** - skills, commands and agents are discovered at session
 start, so the new `SKILL.md` + scripts only load after a relaunch. Run `/assess` against
 a target repo and confirm it completes end-to-end (this is where a broken script path
 would surface).
@@ -74,12 +74,12 @@ git checkout -- .claude-plugin/marketplace.json   # discard the throwaway rename
 
 Restart once more. The released install was never modified. (Optionally
 `rm -rf ~/.claude/plugins/cache/ai-native-toolkit/ai-native-toolkit/<new-version>` to drop
-the staged cache dir — harmless to leave.)
+the staged cache dir - harmless to leave.)
 
 ## How a plugin skill finds its bundled scripts
 
-A plugin skill loads from the **version cache** —
-`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<name>/SKILL.md` — **not**
+A plugin skill loads from the **version cache** -
+`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<name>/SKILL.md` - **not**
 from `~/.claude/skills/`. So a skill must resolve its own scripts via
 `$CLAUDE_PLUGIN_ROOT` (Claude Code sets it to the plugin root for Bash run in a plugin
 context). `SKILL.md` does this with a fallback to a hand-placed `~/.claude/skills/assess/`
@@ -96,10 +96,10 @@ neither `SKILL_DIR` nor `CLAUDE_PLUGIN_ROOT` leaks into a standalone build.)
 
 ## Gotchas
 
-- **Restart after every install/version change** — definitions load at session start.
+- **Restart after every install/version change** - definitions load at session start.
 - **Don't `/plugin marketplace update` the canonical clone** (`~/.claude/plugins/marketplaces/ai-native-toolkit`)
-  while testing a branch checked out inside it — that command `git reset`s to `origin/main`
+  while testing a branch checked out inside it - that command `git reset`s to `origin/main`
   and discards the checkout (and any local-ahead commits).
-- **The `-dev` rename is what makes this non-destructive** — skipping it risks overwriting
+- **The `-dev` rename is what makes this non-destructive** - skipping it risks overwriting
   the released marketplace's source entry.
 - **`uv` must be on PATH** for the scripts to resolve their PEP 723 dependencies.

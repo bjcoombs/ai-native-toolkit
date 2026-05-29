@@ -1,16 +1,16 @@
 # Fix PR Autonomously
 
-Enter autonomous PR review loop for the current branch's PR. Loops until the PR is merge-ready across ALL criteria — not just CI.
+Enter autonomous PR review loop for the current branch's PR. Loops until the PR is merge-ready across ALL criteria, not just CI.
 
 ---
 
 ## Ready Criteria (ALL must be true)
 
-1. **Branch in sync** — no merge conflicts with base branch
-2. **CI passing** — all checks succeed (or skipped)
-3. **All inline comments addressed** — see thread resolution rules
-4. **No unaddressed conversation comments** — actionable feedback responded to
-5. **All review threads resolved** — no unresolved threads remain
+1. **Branch in sync** - no merge conflicts with base branch
+2. **CI passing** - all checks succeed (or skipped)
+3. **All inline comments addressed** - see thread resolution rules
+4. **No unaddressed conversation comments** - actionable feedback responded to
+5. **All review threads resolved** - no unresolved threads remain
 
 **Thread resolution rules:**
 Follow bot reviewer rules from the project's CLAUDE.md Marathon Configuration. Generic defaults:
@@ -18,7 +18,7 @@ Follow bot reviewer rules from the project's CLAUDE.md Marathon Configuration. G
   ```bash
   jq -n --arg tid "$THREAD_ID" '{"query": "mutation { resolveReviewThread(input: {threadId: \"\($tid)\"}) { thread { isResolved } } }"}' | gh api graphql --input -
   ```
-- **Human threads**: Fix the code, reply inline explaining the fix, `@mention` the reviewer. Do NOT resolve human threads — let the reviewer confirm.
+- **Human threads**: Fix the code, reply inline explaining the fix, `@mention` the reviewer. Do NOT resolve human threads - let the reviewer confirm.
 
 ---
 
@@ -45,8 +45,8 @@ git fetch origin $BASE && git merge origin/$BASE --no-edit
 ```
 
 **Conflict resolution patterns:**
-- **Import/route files** (e.g., App.tsx, index.ts): Accept BOTH sides — additions are additive
-- **Barrel exports** (e.g., shared/index.ts): Accept both sides — each adds its own export
+- **Import/route files** (e.g., App.tsx, index.ts): Accept BOTH sides - additions are additive
+- **Barrel exports** (e.g., shared/index.ts): Accept both sides - each adds its own export
 - **Config/manifest files**: Accept both sides unless the same key is modified differently (then ask)
 
 ### Step 2: Check all criteria - delegate CI to background agent
@@ -104,7 +104,7 @@ gh pr view $PR --comments
 - CI failed: fix CI issues too, then push everything together, spawn new background watcher
 - **ALL 5 criteria met** - Report ready, STOP
 
-**This keeps you responsive.** While CI runs, you process threads and comments. When CI settles, you act on the full report. No blocking waits.
+While CI runs, you process threads and comments. When CI settles, you act on the full report. No blocking waits.
 
 ---
 
@@ -185,7 +185,7 @@ jq -n --arg tid "$THREAD_ID" '{"query": "mutation { resolveReviewThread(input: {
 
 ## Important
 
-- **NO permission needed** between iterations — keep looping autonomously
-- **Sync base branch FIRST** every iteration — prevents cascade conflicts
+- **NO permission needed** between iterations - keep looping autonomously
+- **Sync base branch FIRST** every iteration - prevents cascade conflicts
 - **Stop criteria**: ALL 5 criteria green (not just CI + comments)
 - **Max iterations**: 10 (ask for help after that)
