@@ -106,6 +106,35 @@ def _string_list(config: dict, key: str) -> list[str]:
     return [str(x) for x in value if isinstance(x, str)]
 
 
+# Default comprehension-footprint budget (A1). A unit whose footprint --
+# size + the public surface of its direct deps + its own exposed surface --
+# exceeds this is one no agent can change completely from inside a single
+# context window. The number is a tunable proxy for "a fraction of a reference
+# window"; repos calibrate it via `.assess/config.toml` `[structure]`.
+DEFAULT_KEYHOLE_BUDGET = 2000
+
+
+def load_structure_config(repo_root: Path) -> dict:
+    """Return the `[structure]` settings from `.assess/config.toml`.
+
+    Currently a single key, `keyhole_budget` (the A1 comprehension-footprint
+    budget), defaulting to `DEFAULT_KEYHOLE_BUDGET`. Honours the same
+    "degrade silently" contract as the exclude loaders: a missing file,
+    missing section, or malformed value falls back to the default rather
+    than blocking the assessment.
+    """
+    cfg = load_config(repo_root)
+    section = cfg.get("structure", {})
+    budget = DEFAULT_KEYHOLE_BUDGET
+    if isinstance(section, dict):
+        value = section.get("keyhole_budget")
+        # bool is an int subclass; reject it so `keyhole_budget = true` doesn't
+        # silently become a budget of 1. Only a positive int is a valid budget.
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            budget = value
+    return {"keyhole_budget": budget}
+
+
 def load_excludes(repo_root: Path) -> tuple[set[str], list[str]]:
     """Return `(extra_exclude_dirs, extra_exclude_patterns)` from the config.
 
