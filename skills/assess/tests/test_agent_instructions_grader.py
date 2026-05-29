@@ -11,10 +11,12 @@ from pathlib import Path
 import pytest
 
 from lib.agent_instructions_grader import (
+    compute_size_metrics,
     count_positive_directives,
     count_tradeoff_phrases,
     count_path_references,
     count_verifiable_outcomes,
+    detect_skills_delegation,
     grade_instructions,
 )
 
@@ -81,3 +83,41 @@ def test_subscores_in_result(good_text: str) -> None:
     assert result.subscores["path_references"] >= 4
     assert "tradeoff_phrases" in result.subscores
     assert "verifiable_outcomes" in result.subscores
+
+
+def test_size_metrics_accurate() -> None:
+    text = "line1\nline2\nline3"
+    m = compute_size_metrics(text)
+    assert m["line_count"] == 3
+    assert m["word_count"] == 3
+    assert m["exceeds_line_threshold"] is False
+    assert m["exceeds_word_threshold"] is False
+
+
+def test_skills_delegation_detection() -> None:
+    text = "Load Java conventions via the `java-conventions` skill."
+    d = detect_skills_delegation(text)
+    assert d["delegates_to_skills"] is True
+    assert d["delegation_pointers"] >= 1
+    assert len(d["delegation_samples"]) >= 1
+
+
+def test_skills_delegation_detection_dir_pointer() -> None:
+    text = "Topic guidance lives under .claude/skills/ and loads on demand."
+    d = detect_skills_delegation(text)
+    assert d["delegates_to_skills"] is True
+
+
+def test_no_skills_delegation_in_generic_text() -> None:
+    text = "Write clean code. Follow best practices."
+    d = detect_skills_delegation(text)
+    assert d["delegates_to_skills"] is False
+    assert d["delegation_pointers"] == 0
+
+
+def test_size_subscores_in_grade(good_text: str) -> None:
+    result = grade_instructions(good_text, freshness_days=10)
+    assert "line_count" in result.subscores
+    assert "word_count" in result.subscores
+    assert "bloat_penalty" in result.subscores
+    assert result.subscores["bloat_penalty"] == 0  # good_instructions is small

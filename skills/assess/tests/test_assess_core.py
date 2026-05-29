@@ -806,3 +806,101 @@ def test_config_excludes_apply_to_all_scans(tmp_path: Path) -> None:
     # via --exclude or get post-filtered).
     for c in ctx["dead_code"].get("candidates", []):
         assert "regulatory-raw" not in c.get("path", "")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Task 4 - test_pressure wiring into build_run_context / run-context.json
+# ════════════════════════════════════════════════════════════════════════════
+
+def test_test_pressure_block_present_in_ctx(tmp_path: Path) -> None:
+    """run-context.json carries a test_pressure block with the required fields.
+
+    A hollow test (asserts on a private field, no public assertion) must surface
+    as an assertion_on_internal candidate so the LLM can fold it into Layer 1."""
+    repo = _minimal_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "guard.py").write_text("class Guard:\n    pass\n", encoding="utf-8")
+    (repo / "test_guard.py").write_text(
+        "def test_resume():\n"
+        "    g = Guard()\n"
+        "    assert g._resume_count == 1\n",
+        encoding="utf-8",
+    )
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    assert "test_pressure" in ctx
+    tp = ctx["test_pressure"]
+    assert "mutation_config_present" in tp
+    assert "cheap_heuristics" in tp
+    # opt_in defaults off: /assess stays read-only, no mutation run.
+    assert tp["mutation_run"] is False
+    assert tp["cheap_heuristics"]["assertion_on_internal"]
+
+
+def test_test_pressure_mutation_not_run_by_default(tmp_path: Path) -> None:
+    """The bounded mutation pass is opt-in - a default run must never invoke it.
+
+    scan_test_pressure is called with opt_in=False, so even a repo whose language
+    is present and whose tool is on PATH does not get mutated by /assess."""
+    repo = _minimal_repo(tmp_path)
+    (repo / "app.py").write_text("def f(): return 1\n", encoding="utf-8")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    tp = ctx["test_pressure"]
+    assert tp["mutation_run"] is False
+    assert tp["per_file"] == []
+
+
+def test_test_pressure_passes_hotspots_as_hot_files(tmp_path: Path, monkeypatch) -> None:
+    """The wiring threads the current top-hotspot paths into scan_test_pressure
+    as hot_files, so an opt-in mutation run would target the files that matter."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 10, "loc": {"p50": 10, "p95": 30, "max": 50},
+        "ccn": {"p50": 1, "p95": 3, "max": 5},
+        "top_hotspots": [
+            {"path": "src/hot.py", "loc": 500, "ccn": 20, "commits": 5},
+        ],
+        "top_complex": [{"path": "src/hot.py", "ccn": 20}],
+        "top_large": [{"path": "src/hot.py", "loc": 500}],
+    }))
+    captured = {}
+
+    def fake_scan(repo_root, hot_files=None, opt_in=False, coverage_data=None):
+        captured["hot_files"] = hot_files
+        captured["opt_in"] = opt_in
+        return {"mutation_config_present": False, "cheap_heuristics": {}}
+
+    monkeypatch.setattr(assess_core, "scan_test_pressure", fake_scan)
+    build_run_context(repo_root=repo, run_date="2026-05-29")
+    assert captured["hot_files"] == ["src/hot.py"]
+    assert captured["opt_in"] is False  # read-only by default
+
+
+def test_test_pressure_scan_failure_degrades_not_crashes(tmp_path: Path, monkeypatch) -> None:
+    """A raising test_pressure scan must degrade to an unavailable marker that
+    preserves failure semantics: mutation_config_present is None (not False) so
+    the LLM never reads a failed scan as 'no mutation setup', and the cheap
+    heuristic buckets are present-but-empty so the consumer's shape is stable."""
+    repo = _minimal_repo(tmp_path)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("simulated test_pressure failure")
+
+    monkeypatch.setattr(assess_core, "scan_test_pressure", boom)
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    tp = ctx["test_pressure"]
+    assert tp["available"] is False
+    assert "reason" in tp
+    assert tp["mutation_config_present"] is None  # NOT False - "not assessed"
+    assert tp["cheap_heuristics"] == {
+        "assertion_on_internal": [],
+        "untested_boundaries": [],
+        "duplicate_truth": [],
+    }
+    # downstream blocks still present - one failed scan never blocks the run.
+    assert "anomalies" in ctx
+    assert "plugin_version" in ctx

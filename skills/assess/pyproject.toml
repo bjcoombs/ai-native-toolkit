@@ -17,3 +17,8 @@ dev = [
 testpaths = ["tests"]
 pythonpath = ["scripts"]
 addopts = "-v --tb=short"
+# Fixture repos under tests/fixtures/ contain test_*.py files that are scanned
+# as *data* by the test_pressure heuristics, not run as pytest tests. They
+# import from their own `src/` package which isn't on the path, so collecting
+# them errors. Exclude the whole fixtures tree from collection.
+norecursedirs = ["tests/fixtures"]

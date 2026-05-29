@@ -31,3 +31,9 @@ dist/standalone-skills/
 .claude/
 **/CLAUDE.md
 !/CLAUDE.md
+
+# Test fixtures intentionally named CLAUDE.md / .claude/skills to exercise the
+# instruction-bloat penalty and skills-delegation detection. Re-include them so
+# the grader tests have committed inputs on CI.
+!/skills/assess/tests/fixtures/lean_with_skills/CLAUDE.md
+!/skills/assess/tests/fixtures/lean_with_skills/.claude/

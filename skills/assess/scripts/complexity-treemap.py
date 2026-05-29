@@ -343,12 +343,51 @@ def _warn_if_dominated_by_one_file(
     )
 
 
+# Survivor-density overlay thresholds. A file whose mutation survivor density
+# (survivors / mutants, from the test_pressure block) clears these stops
+# rendering as safe green: >30% gets a diagonal hatch, >50% a cross-hatch.
+SURVIVOR_DIAG_THRESHOLD = 0.30
+SURVIVOR_CROSS_THRESHOLD = 0.50
+
+
+def _hatch_for_density(density: float | None) -> str:
+    """Map a survivor density to a hatch level. "" when below threshold or
+    unknown - so absent/empty data silently renders no overlay."""
+    if density is None:
+        return ""
+    if density > SURVIVOR_CROSS_THRESHOLD:
+        return "cross"
+    if density > SURVIVOR_DIAG_THRESHOLD:
+        return "diag"
+    return ""
+
+
+def _survivor_overrides(
+    files: list[tuple[Path, int, float, str]],
+    survivor_density: dict[Path, float] | None,
+) -> dict[Path, dict]:
+    """Build the per-file Node overrides (``{path: {"hatch": ...}}``) for the
+    survivor-density overlay. Keys in ``survivor_density`` are matched against
+    each file's resolved path (``files[i][0]``). Returns an empty dict when no
+    data is supplied or nothing clears the threshold - the caller treats that
+    as "no overlay"."""
+    if not survivor_density:
+        return {}
+    overrides: dict[Path, dict] = {}
+    for f in files:
+        hatch = _hatch_for_density(survivor_density.get(f[0]))
+        if hatch:
+            overrides[f[0]] = {"hatch": hatch}
+    return overrides
+
+
 def render(files: list[tuple[Path, int, float, str]],
            root: Path, out_path: Path, title: str,
            show_labels: bool = False,
            by: str = "complexity",
            aux_data: dict[Path, int] | None = None,
-           aux_label: str | None = None) -> None:
+           aux_label: str | None = None,
+           survivor_density: dict[Path, float] | None = None) -> None:
     metric_label = "commits" if by == "churn" else "ccn"
     metrics = [f[2] for f in files]
     cap, cap_kind = adaptive_cap(metrics)
@@ -374,12 +413,15 @@ def render(files: list[tuple[Path, int, float, str]],
             color = base
         files_colored.append((f[0], f[1], f[2], f[3], color))
 
-    tree = build_tree(files_colored, root, aux_data, aux_label or "")
+    overrides = _survivor_overrides(files, survivor_density)
+    tree = build_tree(files_colored, root, aux_data, aux_label or "",
+                      node_overrides=overrides or None)
     W, H = 1600.0, 1000.0
     rects: list = []
     layout(tree, 0, 0, W, H, rects)
 
-    write_svg(rects, root, W, H, out_path, show_labels, metric_label)
+    write_svg(rects, root, W, H, out_path, show_labels, metric_label,
+              show_survivor_legend=bool(overrides))
 
     print(f"wrote {out_path}  ({len(files)} files, "
           f"{sum(1 for f in files if f[3] == 'lizard')} lizard, "
@@ -507,6 +549,48 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     print(f"wrote {out_path}")
 
 
+def load_survivor_density(run_context_path: Path,
+                          root: Path) -> dict[Path, float]:
+    """Build a ``{resolved_path: density}`` map from a run-context.json's
+    ``test_pressure`` block, for the survivor-density overlay.
+
+    Per-file density is ``survived / total`` taken from ``test_pressure.per_file``
+    (the only source carrying per-file totals; ``survivor_density.by_file`` holds
+    raw survivor *counts*). Entries without a total (e.g. mutmut, which lists
+    only survivors) are skipped - we hatch on a real density or not at all.
+
+    File paths reported by mutation tools are resolved against ``root`` so they
+    match the treemap's resolved file paths. Degrades silently to ``{}`` on any
+    error or when no ``test_pressure`` data is present - an absent or empty block
+    means no overlay, no warning.
+    """
+    try:
+        ctx = json.loads(run_context_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(ctx, dict):
+        return {}
+    tp = ctx.get("test_pressure")
+    if not isinstance(tp, dict):
+        return {}
+    per_file = tp.get("per_file") or []
+    density: dict[Path, float] = {}
+    for entry in per_file:
+        if not isinstance(entry, dict):
+            continue
+        total = entry.get("total")
+        survived = entry.get("survived")
+        file_str = entry.get("file")
+        if not file_str or not total:  # None or 0 total -> no derivable density
+            continue
+        try:
+            resolved = (root / file_str).resolve()
+            density[resolved] = (survived or 0) / total
+        except (TypeError, ValueError, OSError):
+            continue
+    return density
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=(
@@ -535,6 +619,14 @@ def main() -> int:
               "(main.dart.js, *.min.js, *.bundle.js, *.map, etc.). "
               "Use this only when you specifically want to visualise "
               "the build output - typically you'd .gitignore these instead."),
+    )
+    ap.add_argument(
+        "--test-pressure", type=Path, metavar="RUN_CONTEXT_JSON",
+        help=("Path to a run-context.json. When its `test_pressure` block "
+              "carries per-file mutation results, files with high survivor "
+              "density are hatched (>30% diagonal, >50% cross-hatch) so "
+              "covered-but-unpinned code stops rendering as safe green. "
+              "Absent or empty test_pressure data -> no overlay (silent)."),
     )
     ap.add_argument(
         "--exclude", action="append", default=[], metavar="PATTERN",
@@ -580,11 +672,16 @@ def main() -> int:
         return 1
 
     _warn_if_dominated_by_one_file(files)
+    survivor_density = (
+        load_survivor_density(args.test_pressure, root)
+        if args.test_pressure else {}
+    )
     default_name = f"hotspot-{root.name}.svg"
     out = args.out or Path(default_name)
     render(files, root, out, f"Hotspot: {root.name}",
            show_labels=args.labels, by=effective_by,
-           aux_data=aux_data, aux_label=aux_label)
+           aux_data=aux_data, aux_label=aux_label,
+           survivor_density=survivor_density)
     if args.stats:
         write_stats(files, aux_data, aux_label, root, args.stats)
     return 0
