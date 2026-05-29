@@ -21,6 +21,7 @@ The LLM reads run-context.json to ground that prose in deterministic data.
 # requires-python = ">=3.11"
 # dependencies = [
 #     "networkx",
+#     "grimp",
 # ]
 # ///
 from __future__ import annotations
@@ -37,11 +38,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.agent_instructions_grader import grade_instructions
 from lib.anomaly_detector import detect_anomalies
-from lib.assess_config import load_excludes
+from lib.assess_config import load_excludes, load_structure_config
 from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.doc_staleness import analyze_doc_staleness
 from lib.git_churn import tracked_files
+from lib.keyhole_signals import integrate as integrate_keyhole_signals
 from lib.liveness_scan import scan_liveness
+from lib.structure_graph import analyze_structure
 from lib.stats_diff import diff_stats, hotspot_commits, load_stats
 from lib.wiki_writer import (
     HotspotEntry,
@@ -542,6 +545,39 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
               "discoverable": {"present": False, "signals": []},
               "reachable": {"present": False, "signals": []}}
     )
+
+    # Keyhole-readiness signals (PRD 2026-05-29): the static-structure,
+    # behaviour (change-coupling / containment / static-vs-historical),
+    # documentation (complexity x doc-state join), understanding (human anchor /
+    # intent source / authorship class), and runtime (static reachability)
+    # blocks, plus the deterministic derived findings + ranked attention list.
+    # Every piece degrades independently (integrate() wraps each block in a
+    # catch-all), so a git-log or grimp failure in one signal emits an
+    # available:false block rather than crashing the run. The commit file-sets
+    # are parsed once and shared across coupling + containment.
+    structure = _safe(
+        "structure",
+        lambda: analyze_structure(
+            repo_root,
+            keyhole_budget=load_structure_config(repo_root)["keyhole_budget"],
+            extra_exclude_dirs=extra_exclude_dirs,
+        ).as_dict(),
+    )
+    keyhole = integrate_keyhole_signals(
+        repo_root=repo_root,
+        complexity_stats=current,
+        doc_staleness=doc_staleness if isinstance(doc_staleness, dict) else {},
+        dead_code=ctx["dead_code"],
+        observability=ctx["observability"],
+        structure=structure,
+    )
+    ctx["structure"] = keyhole["structure"]
+    ctx["behaviour"] = keyhole["behaviour"]
+    ctx["documentation"] = keyhole["documentation"]
+    ctx["understanding"] = keyhole["understanding"]
+    ctx["runtime"] = keyhole["runtime"]
+    ctx["derived_findings"] = keyhole["derived_findings"]
+    ctx["attention"] = keyhole["attention"]
 
     ctx["plugin_version"] = _read_plugin_version()
     ctx["anomalies"] = [
