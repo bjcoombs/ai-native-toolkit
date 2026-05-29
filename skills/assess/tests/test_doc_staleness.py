@@ -152,3 +152,27 @@ def test_untracked_files_excluded_from_staleness(git_repo) -> None:
     assert "README.md" in doc_paths
     assert "personal.md" not in doc_paths
     assert r["association"]["doc_count"] == 1  # only the tracked doc counted
+
+
+def test_doc_staleness_honors_user_excludes(tmp_path: Path) -> None:
+    """User-supplied excludes drop docs AND code under the named dir from
+    every staleness calculation - so a `regulatory-raw/` directory full of
+    CSV-driven Python loaders doesn't inflate the code-churn denominator
+    or surface as a stale-hub candidate."""
+    _write(tmp_path, "README.md", "main doc")
+    _write(tmp_path, "src/app.py", "x = 1")
+    _write(tmp_path, "regulatory-raw/loader.py", "y = 2")
+    _write(tmp_path, "regulatory-raw/notes.md", "ref data")
+
+    # Baseline: regulatory-raw files are counted.
+    r = analyze_doc_staleness(tmp_path)
+    assert r["association"]["doc_count"] == 2
+    assert r["association"]["code_file_count"] == 2
+
+    # With the exclude: regulatory-raw drops out of both code and docs.
+    r = analyze_doc_staleness(
+        tmp_path, extra_exclude_dirs={"regulatory-raw"},
+    )
+    assert r["association"]["doc_count"] == 1
+    assert r["association"]["code_file_count"] == 1
+    assert all("regulatory-raw" not in d["path"] for d in r["docs"])

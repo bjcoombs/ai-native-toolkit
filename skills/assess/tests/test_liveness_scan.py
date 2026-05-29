@@ -97,6 +97,59 @@ def test_dead_code_no_languages(tmp_path: Path) -> None:
     assert r["candidate_count"] == 0
 
 
+def test_dead_code_skips_user_excluded_dirs_at_probe(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """User excludes apply at the language-presence probe too. A repo whose
+    only Python lives in `regulatory-raw/` reports `tool_absent` (vulture
+    never runs) when that dir is excluded - same as if no Python existed
+    in scope at all."""
+    _write(tmp_path, "regulatory-raw/loader.py", "x = 1")
+    monkeypatch.setattr(liveness.shutil, "which", lambda _tool: "/usr/bin/" + _tool)
+    ran = []
+
+    def fake_run(cmd, **kwargs):
+        ran.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(liveness.subprocess, "run", fake_run)
+    r = scan_dead_code(
+        tmp_path, extra_exclude_dirs={"regulatory-raw"},
+    ).as_dict()
+    # vulture must not have been invoked - no Python in scope.
+    assert ran == []
+    assert r["available"] is False
+
+
+def test_dead_code_filters_user_excluded_candidates_post_scan(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """When vulture runs and emits candidates from a user-excluded dir,
+    the post-scan filter drops them so they never reach the report."""
+    _write(tmp_path, "app.py", "def used(): pass")
+    _write(tmp_path, "regulatory-raw/loader.py", "def unused(): pass")
+    monkeypatch.setattr(liveness.shutil, "which", lambda _tool: "/usr/bin/" + _tool)
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 3,
+            stdout=(
+                "app.py:1: unused function 'foo' (60% confidence)\n"
+                "regulatory-raw/loader.py:1: unused function 'unused' (60% confidence)\n"
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(liveness.subprocess, "run", fake_run)
+    r = scan_dead_code(
+        tmp_path, extra_exclude_dirs={"regulatory-raw"},
+    ).as_dict()
+    assert r["available"] is True
+    paths = {c["path"] for c in r["candidates"]}
+    assert "app.py" in paths
+    assert all("regulatory-raw" not in p for p in paths)
+
+
 # ── observability rungs ────────────────────────────────────────────────────
 
 def test_observability_none(tmp_path: Path) -> None:

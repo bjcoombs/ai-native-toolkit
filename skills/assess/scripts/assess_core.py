@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.agent_instructions_grader import grade_instructions
 from lib.anomaly_detector import detect_anomalies
+from lib.assess_config import load_excludes
 from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.doc_staleness import analyze_doc_staleness
 from lib.git_churn import tracked_files
@@ -458,16 +459,36 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         },
     }
 
+    # User-supplied excludes (`.assess/config.toml`) are loaded once and
+    # threaded into every read-side scan so a `regulatory-raw/` directory
+    # disappears uniformly from the heatmap, the doc-navigability graph,
+    # the doc-staleness pass, and the liveness scan. The treemap CLI also
+    # honours `--exclude` on top of these; the read-side scans are driven
+    # by the orchestrator and pick up the config-only path.
+    extra_exclude_dirs, extra_exclude_patterns = load_excludes(repo_root)
+
     # Read-side foundation signals (Layer 0 navigability + Layer 1 liveness).
     # Each is best-effort and degrades rather than blocking the assessment.
-    doc_graph = _safe("doc_graph", lambda: build_doc_graph(repo_root).as_dict())
+    doc_graph = _safe("doc_graph", lambda: build_doc_graph(
+        repo_root,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    ).as_dict())
     doc_to_code = (doc_graph.get("doc_to_code_edges", [])
                    if doc_graph.get("available") else [])
     doc_staleness = _safe(
         "doc_staleness",
-        lambda: analyze_doc_staleness(repo_root, doc_to_code_edges=doc_to_code),
+        lambda: analyze_doc_staleness(
+            repo_root, doc_to_code_edges=doc_to_code,
+            extra_exclude_dirs=extra_exclude_dirs,
+            extra_exclude_patterns=extra_exclude_patterns,
+        ),
     )
-    liveness = _safe("liveness", lambda: scan_liveness(repo_root))
+    liveness = _safe("liveness", lambda: scan_liveness(
+        repo_root,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    ))
     ctx["doc_graph"] = doc_graph
     ctx["doc_staleness"] = doc_staleness
     ctx["stale_hubs"] = _build_stale_hubs(doc_graph, doc_staleness)

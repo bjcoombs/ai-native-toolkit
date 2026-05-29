@@ -187,11 +187,31 @@ The script prints a one-line summary (file count, lizard vs scc coverage, churn 
 
 Full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS`. If you specifically want to score these (e.g., to visualise how much of the repo is generated), pass `--include-artifacts`.
 
-**Dominance warning.** If a single file still holds >30% of total scoreable LOC after filtering (the threshold compiled bundles typically cross), the script prints a warning to stderr identifying the file. When you see this:
+**Dominance warning.** If a single file still holds >30% of total scoreable LOC after filtering (the threshold compiled bundles typically cross), the script prints a warning to stderr identifying the file. When you see this, the right next step depends on *why* the file is large:
 
-- Surface it in the report's "Hotspot snapshot" section as a finding: "`<file>` holds X% of LOC and is likely a build artifact - recommend adding to `.gitignore` and re-running."
-- Add a Top 3 Action: "Add `<file>` (and similar compiled outputs) to `.gitignore` and remove from tracking. Re-run `/assess` to get a meaningful treemap."
-- Do NOT skip the rest of the assessment - the layered scan still produces useful signal.
+- **Compiled bundle or committed build output** (`main.dart.js`, a bundled JS file, etc.): surface in the report's "Hotspot snapshot" section as "`<file>` holds X% of LOC and is likely a build artifact - recommend adding to `.gitignore` and re-running." Add a Top 3 Action of the same shape.
+- **Intentionally-tracked reference data** (regulatory raw exports, vetted-context corpora, seed datasets, large CSV/JSON reference tables): the file is *meant* to be in git but isn't source code. The fix is `--exclude`, not `.gitignore`. Recommend the user persist the rule in `.assess/config.toml` so subsequent runs apply it automatically (see "Custom excludes" below). Do not push toward `.gitignore` in this case.
+- Either way, do NOT skip the rest of the assessment - the layered scan still produces useful signal.
+
+**Custom excludes for vetted-context / reference data.** When the repo intentionally tracks large non-source files, two mechanisms extend the built-in defaults (the built-ins always apply; both layers are additive). **The same excludes apply across every scan** - the heatmap, the doc-navigability graph, the doc-staleness pass, and the liveness scan all honour the same list, so "this is reference data, not source" is a single statement, not a per-layer toggle:
+
+1. **CLI flag** `--exclude PATTERN` (repeatable, ad-hoc). A plain string is matched as a directory name; a glob is matched against the basename. The flag exists on the treemap script for one-off runs:
+
+   ```bash
+   <!-- chat-replace:treemap-exclude-example -->
+   uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" --exclude regulatory-raw --exclude vetted-context --exclude '*.csv'
+   ```
+
+2. **Per-repo config** `.assess/config.toml` (durable, version-controllable, applies to **every** scan via the orchestrator). Recommended for any exclude the user will want to apply every run:
+
+   ```toml
+   exclude_dirs = ["regulatory-raw", "vetted-context", "seed-data"]
+   exclude_patterns = ["*.csv", "*.parquet"]
+   ```
+
+   No section header is needed - the file is already namespaced by living under `.assess/`. Missing or malformed files degrade silently to no extra excludes; the assessment never blocks on a broken config.
+
+The script's own output directory `.assess/` is excluded automatically - prior runs' `run-context.json` and SVGs never feed the next run's heatmap, the doc graph, or the dead-code scan.
 
 **If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated — <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
 

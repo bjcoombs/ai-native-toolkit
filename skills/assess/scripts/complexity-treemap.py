@@ -73,6 +73,7 @@ import numpy as np
 # heatmap, the docs heatmap, and the Layer 0 staleness metric reuse one
 # implementation. Only the colour mapping differs per heatmap and stays local.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib.assess_config import load_excludes  # noqa: E402
 from lib.git_churn import git_churn_scores, pick_churn_window  # noqa: E402
 from lib.treemap_render import (  # noqa: E402
     adaptive_cap,
@@ -87,6 +88,10 @@ EXCLUDE_DIRS = {".git", "node_modules", "dist", "build", "target", "vendor",
                 ".venv", "venv", "__pycache__", ".gradle", ".idea", ".mvn",
                 "worktree", ".understand-anything", ".obsidian",
                 ".taskmaster", ".claude",
+                # /assess's own output directory. Without this the prior
+                # run's run-context.json (often 2,000+ LOC) gets picked up
+                # as a top-large file on every re-run - circular pollution.
+                ".assess",
                 # modern web framework build outputs
                 ".next", ".nuxt", ".output", ".svelte-kit", ".astro",
                 "out", "coverage", "htmlcov",
@@ -150,9 +155,31 @@ def _is_build_artifact(rel: Path) -> bool:
     return any(fnmatch.fnmatch(name, pat) for pat in EXCLUDE_FILE_PATTERNS)
 
 
+def _is_user_excluded(rel: Path, extra_dirs: set[str],
+                      extra_patterns: list[str]) -> bool:
+    """True if `rel` matches a user-supplied exclude (CLI `--exclude` or
+    `.assess/config.toml`).
+
+    `extra_dirs` is matched exactly against any path component (mirrors how
+    `EXCLUDE_DIRS` works). `extra_patterns` is matched as a basename glob
+    (mirrors `EXCLUDE_FILE_PATTERNS`).
+    """
+    if extra_dirs and any(part in extra_dirs for part in rel.parts):
+        return True
+    if extra_patterns and any(
+        fnmatch.fnmatch(rel.name, pat) for pat in extra_patterns
+    ):
+        return True
+    return False
+
+
 def lizard_scores(
     root: Path, include_artifacts: bool = False,
+    extra_exclude_dirs: set[str] | None = None,
+    extra_exclude_patterns: list[str] | None = None,
 ) -> dict[Path, tuple[int, float]]:
+    extra_dirs = extra_exclude_dirs or set()
+    extra_pats = extra_exclude_patterns or []
     scores: dict[Path, tuple[int, float]] = {}
     for f in lizard.analyze(paths=[str(root)], exclude_pattern=[]):
         path = Path(f.filename).resolve()
@@ -164,6 +191,8 @@ def lizard_scores(
             continue
         if not include_artifacts and _is_build_artifact(rel):
             continue
+        if _is_user_excluded(rel, extra_dirs, extra_pats):
+            continue
         ccn = sum(fn.cyclomatic_complexity for fn in f.function_list) or 1
         scores[path] = (f.nloc, float(ccn))
     return scores
@@ -171,10 +200,17 @@ def lizard_scores(
 
 def scc_scores(
     root: Path, include_artifacts: bool = False,
+    extra_exclude_dirs: set[str] | None = None,
+    extra_exclude_patterns: list[str] | None = None,
 ) -> dict[Path, tuple[int, float]]:
     if shutil.which("scc") is None:
         return {}
-    excludes = ",".join(EXCLUDE_DIRS)
+    extra_dirs = extra_exclude_dirs or set()
+    extra_pats = extra_exclude_patterns or []
+    # scc's --exclude-dir wants a comma-separated list. Merge defaults with
+    # user-supplied dirs so scc skips them at scan time (cheaper than
+    # filtering in Python after the fact).
+    excludes = ",".join(sorted(EXCLUDE_DIRS | extra_dirs))
     try:
         raw = subprocess.run(
             ["scc", "--by-file", "--format", "json",
@@ -201,6 +237,10 @@ def scc_scores(
                 continue
             if not include_artifacts and _is_build_artifact(rel):
                 continue
+            # scc honoured extra_dirs at the --exclude-dir level, but
+            # exclude_patterns are basename-only so we filter them here.
+            if _is_user_excluded(rel, set(), extra_pats):
+                continue
             scores[path] = (int(f["Code"]), float(f["Complexity"]))
     return scores
 
@@ -220,6 +260,8 @@ def _git_not_found_warning(root: Path) -> None:
 
 def collect(root: Path, by: str = "complexity",
             include_artifacts: bool = False,
+            extra_exclude_dirs: set[str] | None = None,
+            extra_exclude_patterns: list[str] | None = None,
             ) -> tuple[list[tuple[Path, int, float, str]], str,
                        dict[Path, int] | None, str | None]:
     """Returns (files, effective_by, aux_data, aux_label).
@@ -229,8 +271,16 @@ def collect(root: Path, by: str = "complexity",
     - aux_data: secondary per-file signal (hotspot mode only); None otherwise
     - aux_label: human label for aux signal in tooltips
     """
-    lz = lizard_scores(root, include_artifacts=include_artifacts)
-    sc = scc_scores(root, include_artifacts=include_artifacts)
+    lz = lizard_scores(
+        root, include_artifacts=include_artifacts,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    )
+    sc = scc_scores(
+        root, include_artifacts=include_artifacts,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    )
     files: list[tuple[Path, int, float, str]] = []
     for path, (loc, ccn) in lz.items():
         files.append((path, loc, ccn, "lizard"))
@@ -486,6 +536,16 @@ def main() -> int:
               "Use this only when you specifically want to visualise "
               "the build output - typically you'd .gitignore these instead."),
     )
+    ap.add_argument(
+        "--exclude", action="append", default=[], metavar="PATTERN",
+        help=("Skip files / directories that match PATTERN. Repeatable. "
+              "A plain string (`regulatory-raw`) is treated as a directory "
+              "name; a glob (`*.csv`) is matched against the basename. "
+              "Extends the built-in defaults rather than replacing them. "
+              "For a durable per-repo exclude list, use "
+              "`.assess/config.toml` (top-level `exclude_dirs` / "
+              "`exclude_patterns`)."),
+    )
     args = ap.parse_args()
 
     root = args.path.resolve()
@@ -493,8 +553,27 @@ def main() -> int:
         print(f"error: {root} is not a directory", file=sys.stderr)
         return 1
 
+    # Resolve user excludes from `.assess/config.toml` first, then layer the
+    # CLI `--exclude` on top. Both extend the built-in defaults; the CLI is
+    # not "ad-hoc only" - it just doesn't need to be remembered between runs
+    # the way the config does. A CLI pattern containing a glob char goes to
+    # exclude_patterns; everything else goes to exclude_dirs (so the same
+    # `--exclude regulatory-raw` shape works as a dir match without needing
+    # the user to pick the right list). The same lists feed every other
+    # /assess scan via the orchestrator - see `assess_core.build_run_context`.
+    cfg_dirs, cfg_patterns = load_excludes(root)
+    extra_dirs: set[str] = set(cfg_dirs)
+    extra_patterns: list[str] = list(cfg_patterns)
+    for pat in args.exclude:
+        if any(c in pat for c in "*?["):
+            extra_patterns.append(pat)
+        else:
+            extra_dirs.add(pat)
+
     files, effective_by, aux_data, aux_label = collect(
         root, by="hotspot", include_artifacts=args.include_artifacts,
+        extra_exclude_dirs=extra_dirs,
+        extra_exclude_patterns=extra_patterns,
     )
     if not files:
         print("error: no scoreable files found", file=sys.stderr)

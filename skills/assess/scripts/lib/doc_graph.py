@@ -201,10 +201,17 @@ def is_repo_file(path: Path, repo_root: Path, tracked: set[Path] | None) -> bool
     return True
 
 
-def discover_doc_files(repo_root: Path) -> list[Path]:
+def discover_doc_files(
+    repo_root: Path,
+    extra_exclude_dirs: set[str] | None = None,
+    extra_exclude_patterns: list[str] | None = None,
+) -> list[Path]:
     """Return all in-repo markdown docs under repo_root, skipping excluded dirs."""
+    from lib.assess_config import is_user_excluded
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
+    extra_dirs = extra_exclude_dirs or set()
+    extra_pats = extra_exclude_patterns or []
     docs: list[Path] = []
     for path in repo_root.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in DOC_EXTENSIONS:
@@ -214,6 +221,8 @@ def discover_doc_files(repo_root: Path) -> list[Path]:
         except ValueError:
             continue
         if any(part in EXCLUDE_DIRS for part in rel.parts):
+            continue
+        if is_user_excluded(rel, extra_dirs, extra_pats):
             continue
         if not is_repo_file(path, repo_root, tracked):
             continue
@@ -428,6 +437,8 @@ def classify_node(node: str, entries: set, unreachable: set, orphans: set) -> st
 
 def build_doc_graph(
     repo_root: Path, doc_files: list[Path] | None = None,
+    extra_exclude_dirs: set[str] | None = None,
+    extra_exclude_patterns: list[str] | None = None,
 ) -> DocGraphResult:
     """Parse docs, build the link graph, and derive navigability signals."""
     repo_root = repo_root.resolve()
@@ -442,7 +453,14 @@ def build_doc_graph(
             obsidiantools_available=obs,
         )
 
-    docs = doc_files if doc_files is not None else discover_doc_files(repo_root)
+    docs = (
+        doc_files if doc_files is not None
+        else discover_doc_files(
+            repo_root,
+            extra_exclude_dirs=extra_exclude_dirs,
+            extra_exclude_patterns=extra_exclude_patterns,
+        )
+    )
     docs = [d.resolve() for d in docs]
     if not docs:
         return DocGraphResult(
