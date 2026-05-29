@@ -5,6 +5,7 @@ description = "Deterministic core for /assess skill"
 requires-python = ">=3.11"
 dependencies = [
     "networkx>=3.0",
+    "grimp>=3.0",
 ]
 
 [dependency-groups]
