@@ -1,9 +1,9 @@
 ---
-name: anti-slop
+name: deslop
 description: "Detect and remove the telltale signs of AI-generated 'slop' from any written text — articles, reports, emails, essays, bios, marketing copy, documentation, encyclopedia entries, or anything meant to read as if a thoughtful human wrote it. Apply silently as a quality gate before finalizing substantial prose, and explicitly when asked to clean a draft. TRIGGER when the user says 'make this sound less like AI', 'remove the AI tells', 'de-slop this', 'check if this reads as AI-written', 'make it sound human', 'edit out the ChatGPT voice', or critiques a draft as generic, puffy, or robotic. Based on Wikipedia's 'Signs of AI writing' field guide."
 ---
 
-# Anti-Slop: Removing the Signs of AI Writing
+# Deslop: removing the signs of AI writing
 
 LLMs have an identifiable writing style. Left unchecked, AI prose regresses toward the statistical mean: it smooths specific, unusual, verifiable facts into generic, positive, important-sounding filler. The result reads fluent but hollow — "slop." This skill is a field guide to catching and fixing those tells.
 

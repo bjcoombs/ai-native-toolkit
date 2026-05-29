@@ -135,8 +135,8 @@ SKILLS: dict[str, dict] = {
             "hats/blue-hat.md": "agents/blue-hat.md",
         },
     },
-    "anti-slop": {
-        "standalone_name": "anti-slop",
+    "deslop": {
+        "standalone_name": "deslop",
         "standalone_description": (
             "Detect and remove the telltale signs of AI-generated 'slop' from any written "
             "text — articles, reports, emails, essays, bios, marketing copy, documentation, "
@@ -148,7 +148,7 @@ SKILLS: dict[str, dict] = {
             "AI writing' field guide."
             + VERSION_SUFFIX
         ),
-        "source_dir": "skills/anti-slop",
+        "source_dir": "skills/deslop",
         # Pure-markdown skill, portable as-is: no plugin path resolution,
         # $ARGUMENTS, namespaced slash commands, or Claude-Code-only tools to
         # strip, so no chat-skip/chat-replace markers and no replacements.

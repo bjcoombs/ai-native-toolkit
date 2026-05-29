@@ -6,7 +6,7 @@ The headline pieces are three **skills**:
 
 - **`/assess`** - score any codebase's readiness for AI agent contributors against an 8-layer contract model (navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Generates a report + the two SVGs and opens a PR in the target repo.
 - **`/huddle`** - structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board).
-- **`/anti-slop`** - detect and remove the telltale signs of AI writing (puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations). Runs as a silent quality gate while writing, or as an explicit audit/edit pass. Derived from Wikipedia's "Signs of AI writing".
+- **`/deslop`** - detect and remove the telltale signs of AI writing (puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations). Runs as a silent quality gate while writing, or as an explicit audit/edit pass. Derived from Wikipedia's "Signs of AI writing".
 
 ## What `/assess` produces
 
@@ -58,7 +58,7 @@ A single `main.dart.js` or thousands of lines of `.pb.go` shouldn't dominate the
 
 The skill runs locally - lizard, optional scc, and git log do the analysis in your Claude Code session. No data leaves the machine.
 
-> **Portability split.** The framework pieces (`/assess`, `/huddle`, `/anti-slop`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session. The workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
+> **Portability split.** The framework pieces (`/assess`, `/huddle`, `/deslop`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session. The workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
 
 ## Install
 
@@ -69,11 +69,11 @@ From inside a Claude Code session (not a shell - `/plugin` is a Claude Code comm
 /plugin install ai-native-toolkit@ai-native-toolkit
 ```
 
-Skills appear namespaced: `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`, `/ai-native-toolkit:anti-slop`. Update with `/plugin update ai-native-toolkit`. Remove with `/plugin remove ai-native-toolkit`. The plugin doesn't touch your existing `~/.claude/` files.
+Skills appear namespaced: `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`, `/ai-native-toolkit:deslop`. Update with `/plugin update ai-native-toolkit`. Remove with `/plugin remove ai-native-toolkit`. The plugin doesn't touch your existing `~/.claude/` files.
 
 ## Also available in Claude Desktop and claude.ai web
 
-`/assess`, `/huddle`, and `/anti-slop` are installable as standalone skill ZIPs - no Claude Code required. Verified working in claude.ai web and Claude Desktop.
+`/assess`, `/huddle`, and `/deslop` are installable as standalone skill ZIPs - no Claude Code required. Verified working in claude.ai web and Claude Desktop.
 
 ### Two install paths - pick by where you use Claude
 
@@ -88,11 +88,11 @@ The ZIPs are rebuilt automatically from the same source on every plugin version 
 
 - A paid plan (Pro, Max, Team, or Enterprise) - Skills upload is not on the Free tier.
 - For `/assess`: **Settings → Capabilities → Code execution and file creation** must be on (required for the Python scripts). Enable **Allow network egress** too if your repo's `pyproject.toml` pulls dependencies.
-- `/huddle` and `/anti-slop` need neither - they're pure reasoning.
+- `/huddle` and `/deslop` need neither - they're pure reasoning.
 
 ### Install (claude.ai web - verified path)
 
-1. Download `assess.zip`, `huddle.zip`, and `anti-slop.zip` from the [standalone-skills-latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/tag/standalone-skills-latest).
+1. Download `assess.zip`, `huddle.zip`, and `deslop.zip` from the [standalone-skills-latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/tag/standalone-skills-latest).
 2. Open https://claude.ai/customize/skills (or sidebar → Customize → Skills).
 3. Click the **+** at the top right of the Skills column.
 4. Hover **Create skill →** then click **Upload a skill**.
@@ -105,7 +105,7 @@ Claude Desktop has the same Skills uploader under Settings; the flow is analogou
 
 The Skills UI has a built-in **Replace** option - use it instead of uninstalling and re-uploading (Replace preserves any in-progress chats that reference the skill).
 
-1. Download the new `assess.zip` / `huddle.zip` / `anti-slop.zip` from [standalone-skills-latest](https://github.com/bjcoombs/ai-native-toolkit/releases/tag/standalone-skills-latest).
+1. Download the new `assess.zip` / `huddle.zip` / `deslop.zip` from [standalone-skills-latest](https://github.com/bjcoombs/ai-native-toolkit/releases/tag/standalone-skills-latest).
 2. In Customize → Skills, click the skill you want to upgrade.
 3. Open the three-dot menu (⋮) in the top right of the detail pane.
 4. Click **Replace** and select the new `.zip`.
@@ -128,7 +128,7 @@ In a fresh chat, try:
 
 - **assess**: "How AI-ready is this codebase?" / "Give me a complexity heatmap"
 - **huddle**: "Run a huddle on [decision]" / "Give me red-team/blue-team analysis of [question]"
-- **anti-slop**: "Make this sound less like AI" / "De-slop this draft" / "Does this read as AI-written?"
+- **deslop**: "Make this sound less like AI" / "De-slop this draft" / "Does this read as AI-written?"
 
 If a skill only fires on `/skill-name` and not on natural language, the frontmatter description is missing trigger phrasing - edit `standalone_description` in `scripts/standalone_skill_config.py` and rebuild.
 
@@ -170,7 +170,7 @@ Spawns a Fibonacci-sized team (default 3) that cycles through De Bono's six hats
 |-------|-------------|
 | `/assess` | Layered AI-readiness assessment (0-8 contract model) plus a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) and [`doc-graph-svg.py`](skills/assess/scripts/doc-graph-svg.py) so the agent runs them with no external setup. Filters build artifacts and generated code by default (opt-out with `--include-artifacts`); warns when one file dominates LOC. Offers to install optional `scc` for repos heavy in markdown/JSON/YAML. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
 | `/huddle` | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board). Three execution modes: solo flat-parallel, phased sub-agent (default fallback), and team mode (needs Agent Teams capability flag). |
-| `/anti-slop` | Detect and remove the telltale signs of AI writing - puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations. Two modes: a silent quality gate while writing prose, or an explicit de-slop/audit pass. Ships a [`references/full-checklist.md`](skills/anti-slop/references/full-checklist.md) A-F catalog derived from Wikipedia's "Signs of AI writing" (29 May 2026) - the skill flags itself for re-derivation if it goes stale, since the tells drift with model generations. |
+| `/deslop` | Detect and remove the telltale signs of AI writing - puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations. Two modes: a silent quality gate while writing prose, or an explicit de-slop/audit pass. Ships a [`references/full-checklist.md`](skills/deslop/references/full-checklist.md) A-F catalog derived from Wikipedia's "Signs of AI writing" (29 May 2026) - the skill flags itself for re-derivation if it goes stale, since the tells drift with model generations. |
 
 ### Commands (slash-only, no bundled assets)
 
@@ -271,7 +271,7 @@ ai-native-toolkit/
 │   │       └── complexity-treemap.py  # Codecov-style hotspot SVG generator
 │   ├── huddle/
 │   │   └── SKILL.md                   # Multi-lens Six Hats deliberation
-│   └── anti-slop/
+│   └── deslop/
 │       ├── SKILL.md                   # Remove the signs of AI writing (12 high-frequency tells)
 │       └── references/
 │           └── full-checklist.md      # Exhaustive A-F catalog (Wikipedia-derived)

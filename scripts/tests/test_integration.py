@@ -130,35 +130,35 @@ class TestHuddleBuild:
         assert "name: huddle" in skill_md
 
 
-# ── anti-slop ──────────────────────────────────────────────────────────────────
+# ── deslop ──────────────────────────────────────────────────────────────────
 
-class TestAntiSlopBuild:
+class TestDeslopBuild:
     @pytest.fixture(scope="class")
-    def anti_slop_zip(self, tmp_path_factory):
-        return _build("anti-slop", tmp_path_factory.mktemp("anti-slop"))
+    def deslop_zip(self, tmp_path_factory):
+        return _build("deslop", tmp_path_factory.mktemp("deslop"))
 
-    def test_skill_md_present(self, anti_slop_zip):
-        assert "anti-slop/SKILL.md" in anti_slop_zip.namelist()
+    def test_skill_md_present(self, deslop_zip):
+        assert "deslop/SKILL.md" in deslop_zip.namelist()
 
-    def test_reference_checklist_present(self, anti_slop_zip):
-        assert "anti-slop/references/full-checklist.md" in anti_slop_zip.namelist()
+    def test_reference_checklist_present(self, deslop_zip):
+        assert "deslop/references/full-checklist.md" in deslop_zip.namelist()
 
-    def test_frontmatter_name_correct(self, anti_slop_zip):
-        skill_md = anti_slop_zip.read("anti-slop/SKILL.md").decode("utf-8")
-        assert "name: anti-slop" in skill_md
+    def test_frontmatter_name_correct(self, deslop_zip):
+        skill_md = deslop_zip.read("deslop/SKILL.md").decode("utf-8")
+        assert "name: deslop" in skill_md
 
-    def test_standalone_description_applied(self, anti_slop_zip):
+    def test_standalone_description_applied(self, deslop_zip):
         # The build replaces the source description (with its plugin TRIGGER
         # phrasing) with the standalone one carrying the version suffix.
-        skill_md = anti_slop_zip.read("anti-slop/SKILL.md").decode("utf-8")
+        skill_md = deslop_zip.read("deslop/SKILL.md").decode("utf-8")
         assert "Standalone build v" in skill_md
 
-    def test_no_orphan_markers(self, anti_slop_zip):
-        for name, content in _md_contents(anti_slop_zip).items():
+    def test_no_orphan_markers(self, deslop_zip):
+        for name, content in _md_contents(deslop_zip).items():
             assert "chat-skip" not in content, f"{name}: chat-skip marker leaked"
             assert "chat-replace" not in content, f"{name}: chat-replace marker leaked"
 
     def test_zip_is_deterministic(self, tmp_path):
-        zf1 = _build("anti-slop", tmp_path / "run1")
-        zf2 = _build("anti-slop", tmp_path / "run2")
+        zf1 = _build("deslop", tmp_path / "run1")
+        zf2 = _build("deslop", tmp_path / "run2")
         assert Path(zf1.filename).read_bytes() == Path(zf2.filename).read_bytes()
