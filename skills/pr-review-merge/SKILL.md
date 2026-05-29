@@ -120,7 +120,7 @@ gh pr view $PR --comments
 
 ## Smart Merge
 
-Triggered by REVIEW_CLEAR, idle teammate with green PR, or human typing "check".
+Invoked to merge a PR that has been reported merge-ready. Always verify via the API before merging — never trust the report.
 
 **Known: Stale bot CHANGES_REQUESTED.** Some bot reviewers submit CR reviews that GitHub does not auto-dismiss on re-review. Check the project's Marathon Configuration for bot-specific patterns. Default: dismiss any stale bot CHANGES_REQUESTED before merging.
 
@@ -161,29 +161,21 @@ gh pr view $PR --json state,mergedAt,mergeStateStatus | jq '{state, mergedAt, me
 ```
 Trust the API, not the message.
 
-**Merge directly when teammate is idle.** After REVIEW_CLEAR, teammates go idle automatically. No handshake needed — just verify the PR via API and merge. The lead overlap rule means you're already processing other work while teammates finish.
-
 **After merge:**
+
+Close the work unit via the consumer's **close on merge** adapter operation, then remove its worktree and delete its branch using the consumer's branch/worktree convention:
+
 ```bash
-cd ~/dev/github.com/<org>/<repo>
-Mark the work unit done via the consumer's close operation (see the calling command's adapter).
-cd <repo>-main && git worktree remove --force ../worktree/<tag>/<task-id>--<slug>
-git branch -D <tag>--<task-id>--<slug>
+git worktree remove --force <worktree-path-for-this-unit>
+git branch -D <branch-for-this-unit>
 ```
 
-Then:
-1. Report to user
-2. Shutdown teammate
-3. Mark internal task completed
-4. Check for newly unblocked tasks
-5. **Wave transition**: Batch-dismiss stale CRs across all eligible PRs before spawning next wave. Review signals from completed wave, adapt next prompts with learnings.
-6. Check ready tasks with `task-master list --json` filtered to `pending` status (**not** `task-master next` — `next` can suggest subtask IDs of done parents). Spawn fresh teammates for ready tasks.
-7. If all done → [Completion](#step-6-completion-and-retrospective)
+Report the merge to the user. Any wave/next-task orchestration after a merge is the caller's responsibility (the marathon engine handles waves and teammate lifecycle) — this skill's job ends at a clean merge + cleanup.
 
 **If not merge-ready:**
-- BLOCKED → report to user, message teammate
-- DIRTY → message teammate: "resolve merge conflicts"
-- Human changes requested → report to user
+- BLOCKED → report blocked to the caller
+- DIRTY (merge conflict) → resolve using the Review Loop conflict-resolution patterns, or report blocked if genuinely ambiguous
+- Human changes requested → report to the caller; do not merge
 
 #### Merge Order (multiple PRs)
 
