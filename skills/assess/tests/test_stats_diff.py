@@ -9,8 +9,19 @@ import pytest
 from lib.stats_diff import (
     HotspotTransition,
     diff_stats,
+    hotspot_commits,
     load_stats,
 )
+
+
+def test_hotspot_commits_reads_commits_then_legacy_churn() -> None:
+    """`commits` is the current field; `churn` is the legacy producer name a
+    seeded/older prior snapshot may still carry (issue #47, observation 5)."""
+    assert hotspot_commits({"commits": 12}) == 12
+    assert hotspot_commits({"churn": 7}) == 7        # legacy fallback
+    assert hotspot_commits({"commits": 3, "churn": 99}) == 3  # commits wins
+    assert hotspot_commits({}) == 0
+    assert hotspot_commits({"commits": None, "churn": None}) == 0
 
 
 @pytest.fixture

@@ -113,8 +113,12 @@ EXCLUDE_FILE_PATTERNS = [
     "*-bundle.js", "*-min.js",
     # Sourcemaps and build metadata
     "*.map", "*.tsbuildinfo",
-    # Flutter web outputs
+    # Flutter web outputs. `--web-renderer canvaskit` always emits the
+    # canvaskit/skwasm runtime bundles (framework code, churn=1, not source);
+    # basename globs catch them wherever the build nests them
+    # (e.g. canvaskit/chromium/canvaskit.js).
     "main.dart.js", "flutter_service_worker.js", "flutter.js",
+    "canvaskit.js", "skwasm*.js",
     # PWA / service worker stubs
     "service-worker.js", "sw.js", "workbox-*.js",
 
@@ -354,6 +358,23 @@ def render(files: list[tuple[Path, int, float, str]],
                   f"[{src:6}]  {rel}")
 
 
+def _read_plugin_version() -> str:
+    """Read the plugin version from .claude-plugin/plugin.json.
+
+    plugin.json lives three directories up from this script:
+        scripts/complexity-treemap.py -> scripts/ -> skills/assess/ -> skills/ -> repo root
+    Stamped into the stats sidecar so a later run can detect when its prior
+    snapshot came from a differently-filtered plugin and suppress a misleading
+    diff (filter-mismatched "graduated" ghosts). Returns "unknown" if absent.
+    """
+    plugin_json = Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json"
+    try:
+        data = json.loads(plugin_json.read_text(encoding="utf-8"))
+        return str(data.get("version", "unknown"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return "unknown"
+
+
 def write_stats(files: list[tuple[Path, int, float, str]],
                 aux_data: dict[Path, int] | None,
                 aux_label: str | None,
@@ -362,8 +383,10 @@ def write_stats(files: list[tuple[Path, int, float, str]],
 
     Consumed by the /assess skill: percentiles drive Layer 3 (linter) scoring,
     top hotspot lists become the named files in the actions table.
-    Composite hotspot score = ccn * (1 + log1p(churn)), so a vivid
-    red block (complex AND active) outranks a frozen complex file.
+    Composite hotspot score = sqrt(ccn) * sqrt(1 + commits): a sub-linear
+    geometric mean of complexity and recent churn. Both axes are damped, so a
+    complex-AND-active file leads, a frozen-but-complex file ranks below it, and
+    a trivially-simple-but-churny file can't top the list on churn alone.
     """
     locs = [f[1] for f in files]
     ccns = [f[2] for f in files]
@@ -386,9 +409,12 @@ def write_stats(files: list[tuple[Path, int, float, str]],
             "path": rel(path),
             "loc": int(loc),
             "ccn": float(ccn),
-            "churn": int(churn) if aux_data else None,
+            # Named `commits` to match what every consumer reads (stats_diff,
+            # assess_core, the hotspot template). None when churn is unavailable
+            # (no git), so a missing value is distinct from a real 0.
+            "commits": int(churn) if aux_data else None,
             "source": src,
-            "_score": ccn * (1.0 + math.log1p(churn)),
+            "_score": math.sqrt(ccn) * math.sqrt(1.0 + churn),
         })
 
     def strip(rows: list[dict]) -> list[dict]:
@@ -399,6 +425,7 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     by_loc = sorted(enriched, key=lambda f: -f["loc"])
 
     stats: dict = {
+        "plugin_version": _read_plugin_version(),
         "files_scored": len(files),
         "scoring_coverage": {
             "lizard": sum(1 for f in files if f[3] == "lizard"),
