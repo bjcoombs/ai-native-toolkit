@@ -119,3 +119,85 @@ gh pr view $PR --comments
 **This keeps you responsive.** While CI runs, you process threads and comments. When CI settles, you act on the full report. No blocking waits.
 
 ## Smart Merge
+
+Triggered by REVIEW_CLEAR, idle teammate with green PR, or human typing "check".
+
+**Known: Stale bot CHANGES_REQUESTED.** Some bot reviewers submit CR reviews that GitHub does not auto-dismiss on re-review. Check the project's Marathon Configuration for bot-specific patterns. Default: dismiss any stale bot CHANGES_REQUESTED before merging.
+
+```bash
+PR=<number>
+
+# Step 1: Dismiss stale bot CRs
+STALE_REVIEWS=$(gh api repos/<owner>/<repo>/pulls/$PR/reviews \
+  --jq '[.[] | select(.state == "CHANGES_REQUESTED" and (.user.login | endswith("[bot]")))]')
+echo "$STALE_REVIEWS" | jq -r '.[].id' | while read REVIEW_ID; do
+  gh api repos/<owner>/<repo>/pulls/$PR/reviews/$REVIEW_ID/dismissals \
+    --method PUT -f message="Stale bot review — verified findings addressed" -f event="DISMISS"
+done
+
+# Step 2: Check merge state
+gh pr view $PR --json mergeStateStatus,mergedAt,reviews \
+  | jq '{
+    mergeStateStatus,
+    mergedAt,
+    approvals: [.reviews[] | select(.state == "APPROVED")] | length,
+    changesRequested: [.reviews[] | select(.state == "CHANGES_REQUESTED")] | length
+  }'
+```
+
+**Auto-Merge Criteria (ALL must be true):**
+1. `mergeStateStatus` is `"CLEAN"` — OR `"UNSTABLE"` with only non-required checks failing
+2. At least `$REQUIRED_APPROVALS` approvals — OR `$MARKDOWN_APPROVALS` for markdown-only PRs (some bot reviewers skip them)
+3. Zero non-dismissed changes-requested reviews
+4. **Base branch is healthy** — if the PR's CI failures exist on `$BASE_BRANCH` too (pre-existing), do NOT merge and compound the problem. Instead, spawn a separate worktree/PR to fix the failing tests on `$BASE_BRANCH` first, then rebase and merge the original PR.
+
+**UNSTABLE handling:** If `mergeStateStatus == "UNSTABLE"`, check failing checks against `meta.flaky_checks` and any CI patterns from the project's Marathon Configuration. If ALL failing checks are non-required AND not pre-existing on `$BASE_BRANCH`, treat as merge-eligible. Report: "Merging with UNSTABLE — only non-required checks failing: <names>". If failures ARE pre-existing on `$BASE_BRANCH`, fix it first (criterion 4).
+
+**UNKNOWN handling:** GitHub sometimes returns `mergeStateStatus: "UNKNOWN"` even when all checks pass. If UNKNOWN but CI all green and 0 unresolved threads, retry up to 3 times with 30s backoff. If still UNKNOWN after retries, treat as CLEAN and proceed (log the override).
+
+**Verify before merging** — never trust teammate claims:
+```bash
+gh pr view $PR --json state,mergedAt,mergeStateStatus | jq '{state, mergedAt, mergeStateStatus}'
+```
+Trust the API, not the message.
+
+**Merge directly when teammate is idle.** After REVIEW_CLEAR, teammates go idle automatically. No handshake needed — just verify the PR via API and merge. The lead overlap rule means you're already processing other work while teammates finish.
+
+**After merge:**
+```bash
+cd ~/dev/github.com/<org>/<repo>
+Mark the work unit done via the consumer's close operation (see the calling command's adapter).
+cd <repo>-main && git worktree remove --force ../worktree/<tag>/<task-id>--<slug>
+git branch -D <tag>--<task-id>--<slug>
+```
+
+Then:
+1. Report to user
+2. Shutdown teammate
+3. Mark internal task completed
+4. Check for newly unblocked tasks
+5. **Wave transition**: Batch-dismiss stale CRs across all eligible PRs before spawning next wave. Review signals from completed wave, adapt next prompts with learnings.
+6. Check ready tasks with `task-master list --json` filtered to `pending` status (**not** `task-master next` — `next` can suggest subtask IDs of done parents). Spawn fresh teammates for ready tasks.
+7. If all done → [Completion](#step-6-completion-and-retrospective)
+
+**If not merge-ready:**
+- BLOCKED → report to user, message teammate
+- DIRTY → message teammate: "resolve merge conflicts"
+- Human changes requested → report to user
+
+#### Merge Order (multiple PRs)
+
+1. **Batch-dismiss stale CRs** across ALL eligible PRs first:
+   ```bash
+   for PR in <all-eligible-pr-numbers>; do
+     gh api repos/<owner>/<repo>/pulls/$PR/reviews \
+       --jq '.[] | select(.state == "CHANGES_REQUESTED" and (.user.login | endswith("[bot]"))) | .id' \
+     | while read REVIEW_ID; do
+       gh api repos/<owner>/<repo>/pulls/$PR/reviews/$REVIEW_ID/dismissals \
+         --method PUT -f message="Stale bot review — batch dismissed" -f event="DISMISS"
+     done
+   done
+   ```
+2. **Sort by hot-file impact**: Fewer hot files first. Hot-file PRs merge LAST.
+3. **Merge sequentially**: One at a time. 10-20s between for conflict detection.
+4. **Re-check merge state** after each — CLEAN can flip to DIRTY from cascade.
