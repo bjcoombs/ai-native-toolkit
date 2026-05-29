@@ -1,4 +1,4 @@
-## {run_date}
+{heading}
 
 - **Files scored:** {files_scored}
 - **AI Readiness:** {readiness_score} / 8 ({maturity_label})

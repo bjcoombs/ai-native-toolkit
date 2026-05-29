@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 
@@ -20,8 +21,15 @@ class HotspotEntry:
     first_flagged: str
     last_seen: str
     status: str   # active | graduated | regressed | persistent
-    ccn: int
-    loc: int
+    # `ccn` and `loc` are `None` when the file's current metrics are not
+    # carried in the latest stats sidecar (e.g. a graduated file that fell
+    # off every top-N list). The wiki renders `None` as "-" - the file
+    # may still be sized, we just don't have current numbers. Zero is
+    # reserved for "actually zero LOC" and must never stand in for
+    # "unknown" - that misleads reviewers into thinking the file was
+    # emptied (issue #52 Bug 1).
+    ccn: int | None
+    loc: int | None
 
 
 @dataclass(frozen=True)
@@ -36,6 +44,12 @@ class LogEntry:
     new_count: int
     persistent_count: int
     top_action: str
+    # Plugin version that produced this entry. Always rendered in the
+    # heading so the log doubles as a version history and two runs on the
+    # same calendar day stay distinguishable. Optional only for
+    # backwards-compat with callers that don't pass it yet; new code
+    # should always set it (issue #52 Bug 2).
+    plugin_version: str | None = None
     report_link: str = "./assess-report.md"
 
 
@@ -60,8 +74,13 @@ def write_index(assess_dir: Path, entries: list[HotspotEntry], *, last_updated: 
     """(Re)write index.md from the current set of hotspot entries."""
     rows = []
     for e in entries:
+        # `None` -> "-" so an unknown metric never reads as "the file was
+        # emptied." Real zeros (rare for tracked source code) still render
+        # as `0`.
+        ccn_cell = "-" if e.ccn is None else str(e.ccn)
+        loc_cell = "-" if e.loc is None else str(e.loc)
         rows.append(
-            f"| `{e.path}` | {e.first_flagged} | {e.last_seen} | {e.status} | {e.ccn} | {e.loc} |"
+            f"| `{e.path}` | {e.first_flagged} | {e.last_seen} | {e.status} | {ccn_cell} | {loc_cell} |"
         )
     content = _load_template("index.md.template").format(
         last_updated=last_updated,
@@ -70,11 +89,44 @@ def write_index(assess_dir: Path, entries: list[HotspotEntry], *, last_updated: 
     (assess_dir / "index.md").write_text(content, encoding="utf-8")
 
 
+def _build_log_heading(
+    *, run_date: str, plugin_version: str | None, existing: str,
+) -> str:
+    """Build a unique `## ...` heading for a new log.md entry.
+
+    Two collisions to defend against (issue #52 Bug 2):
+
+    1. The plugin version is always rendered when present (so the log
+       doubles as a version history). Two same-day runs at different
+       versions are naturally distinguished.
+    2. If the same `## YYYY-MM-DD (vX.Y.Z)` heading already exists in
+       the file, append the current local time `HH:MM` so anchor links
+       don't collide and markdownlint MD024 stays quiet. Using local
+       time matches `run_date` (which is also local), so a reader
+       doesn't see a timezone mismatch.
+    """
+    if plugin_version:
+        base = f"## {run_date} (v{plugin_version})"
+    else:
+        base = f"## {run_date}"
+    if base not in existing:
+        return base
+    # Already an entry with this exact heading - disambiguate with time.
+    stamp = datetime.now().strftime("%H:%M")
+    return f"{base[:-1]} {stamp})" if plugin_version else f"{base} {stamp}"
+
+
 def append_log_entry(assess_dir: Path, entry: LogEntry) -> None:
     """Append a dated entry to log.md (create the file if absent)."""
     log_path = assess_dir / "log.md"
-    snippet = _load_template("log_entry.md.template").format(
+    existing = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
+    heading = _build_log_heading(
         run_date=entry.run_date,
+        plugin_version=entry.plugin_version,
+        existing=existing,
+    )
+    snippet = _load_template("log_entry.md.template").format(
+        heading=heading,
         files_scored=entry.files_scored,
         readiness_score=entry.readiness_score,
         maturity_label=entry.maturity_label,
@@ -86,8 +138,8 @@ def append_log_entry(assess_dir: Path, entry: LogEntry) -> None:
         top_action=entry.top_action,
         report_link=entry.report_link,
     )
-    if log_path.exists():
-        log_path.write_text(log_path.read_text(encoding="utf-8") + snippet, encoding="utf-8")
+    if existing:
+        log_path.write_text(existing + snippet, encoding="utf-8")
     else:
         log_path.write_text("# Assess Log\n\n" + snippet, encoding="utf-8")
 
