@@ -155,7 +155,7 @@ gh pr view $PR --json mergeStateStatus,mergedAt,reviews \
 
 **UNKNOWN handling:** GitHub sometimes returns `mergeStateStatus: "UNKNOWN"` even when all checks pass. If UNKNOWN but CI all green and 0 unresolved threads, retry up to 3 times with 30s backoff. If still UNKNOWN after retries, treat as CLEAN and proceed (log the override).
 
-**Verify before merging** — never trust teammate claims:
+**Verify before merging** — never trust the caller's claim that a PR is ready:
 ```bash
 gh pr view $PR --json state,mergedAt,mergeStateStatus | jq '{state, mergedAt, mergeStateStatus}'
 ```
