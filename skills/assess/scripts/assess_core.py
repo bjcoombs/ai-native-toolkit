@@ -43,6 +43,7 @@ from lib.doc_staleness import analyze_doc_staleness
 from lib.git_churn import tracked_files
 from lib.liveness_scan import scan_liveness
 from lib.stats_diff import diff_stats, hotspot_commits, load_stats
+from lib.test_pressure import scan_test_pressure
 from lib.wiki_writer import (
     HotspotEntry,
     LogEntry,
@@ -542,6 +543,41 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
               "discoverable": {"present": False, "signals": []},
               "reachable": {"present": False, "signals": []}}
     )
+
+    # Layer 1 write-side truth pressure: does the suite pin behaviour down, or
+    # merely visit it? Best-effort like every other read-side scan. opt_in=False
+    # keeps the (mutating, code-running) bounded mutation pass OFF by default, so
+    # /assess stays read-only and fast - the cheap hollow-test heuristics and
+    # mutation-config detection still run. hot_files come from the current top
+    # hotspots so an opt-in mutation run would target the files that matter most.
+    hot_files = [h.get("path") for h in current.get("top_hotspots", [])
+                 if h.get("path")]
+    test_pressure = _safe(
+        "test_pressure",
+        lambda: scan_test_pressure(repo_root, hot_files=hot_files, opt_in=False),
+    )
+    # A failed (or malformed) scan must not read as "no mutation setup": that
+    # would mis-score Layer 1 just as a failed liveness scan would mis-score
+    # observability. Carry an explicit unavailable marker with a null
+    # mutation_config_present and empty heuristic buckets so the LLM sees
+    # "not assessed", never a false negative. Keys mirror the real block's
+    # `cheap_heuristics` schema (assertion_on_internal / untested_boundaries /
+    # duplicate_truth) so the consumer's shape doesn't change on the failure path.
+    tp_ok = (isinstance(test_pressure, dict)
+             and "mutation_config_present" in test_pressure
+             and "cheap_heuristics" in test_pressure)
+    ctx["test_pressure"] = test_pressure if tp_ok else {
+        "available": False,
+        "reason": (test_pressure.get("reason")
+                   if isinstance(test_pressure, dict)
+                   else "test_pressure scan unavailable"),
+        "mutation_config_present": None,
+        "cheap_heuristics": {
+            "assertion_on_internal": [],
+            "untested_boundaries": [],
+            "duplicate_truth": [],
+        },
+    }
 
     ctx["plugin_version"] = _read_plugin_version()
     ctx["anomalies"] = [
