@@ -34,6 +34,8 @@ Exhaustive companion to SKILL.md, adapted from Wikipedia's "Signs of AI writing.
 
 **A10. Leads that read like a definition/essay prompt.** Opening that treats the topic as an abstract concept to be explored rather than a subject to be described. **Fix:** lead with who/what/when/where.
 
+**A11. Date-handling tells.** Vague or self-dating temporal references that will rot or that hide a missing fact: "in recent years," "currently," "to date," "as of this writing," "the latest," present-tense claims about things that change, round-number estimates with false precision. Also inconsistent or silently US-default date formats (Month DD, YYYY) where the document otherwise uses DMY/ISO. Distinct from D3 (chatbot knowledge-cutoff disclaimers): this is the prose itself failing to anchor a time-bound fact. **Fix:** anchor to a specific, sourced, dated fact ("as of the 2021 census"), or remove the claim; match the document's established date format.
+
 ---
 
 ## B. Language and grammar tells
