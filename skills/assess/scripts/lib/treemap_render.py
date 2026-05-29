@@ -40,6 +40,11 @@ class Node:
     tooltip2: str = ""
     label_size_text: str = ""
     label_metric_text: str = ""
+    # Survivor-density overlay (code heatmap only). "" = no overlay, "diag" =
+    # diagonal hatch (>30% mutants survive), "cross" = cross-hatch (>50%).
+    # A hatched block reads as "covered but unpinned" so it stops rendering as
+    # safe green. Unset everywhere else, so other heatmaps are unchanged.
+    hatch: str = ""
 
 
 def build_tree(files_with_color, root: Path,
@@ -131,15 +136,77 @@ def adaptive_cap(values: list[float]) -> tuple[float, str]:
     return mx, "max"
 
 
+# Extra band drawn below the treemap to key the survivor-density overlay.
+SURVIVOR_LEGEND_H = 84.0
+
+# SVG <pattern> defs for the survivor-density overlay. Dark, semi-transparent
+# strokes read on any OrRd fill without relying on hue, so the hatch is
+# distinguishable by texture alone (colour-blind safe). "diag" = single
+# diagonal hatch (>30% survivors), "cross" = cross-hatch (>50%, severe).
+_SURVIVOR_DEFS = (
+    '<defs>'
+    '<pattern id="survivor-diag" patternUnits="userSpaceOnUse" '
+    'width="7" height="7" patternTransform="rotate(45)">'
+    '<line x1="0" y1="0" x2="0" y2="7" stroke="#1a1a1a" '
+    'stroke-width="1" stroke-opacity="0.55"/></pattern>'
+    '<pattern id="survivor-cross" patternUnits="userSpaceOnUse" '
+    'width="6" height="6">'
+    '<path d="M0,0 l6,6 M6,0 l-6,6" stroke="#1a1a1a" '
+    'stroke-width="1" stroke-opacity="0.6"/></pattern>'
+    '</defs>'
+)
+
+
+def _survivor_legend_parts(W: float, H: float) -> list[str]:
+    """Legend band keyed under the treemap, explaining the hatch overlay.
+    Drawn only when the overlay is active, so a run with no survivor data
+    keeps the original full-canvas treemap untouched."""
+    rows = [
+        ("survivor-diag",
+         "&gt;30% survivor density - covered but unpinned "
+         "(tests run this code without constraining it)"),
+        ("survivor-cross",
+         "&gt;50% survivor density - severe; most mutations survive the suite"),
+    ]
+    sw = 16.0
+    parts = [
+        f'<line x1="0" y1="{H:.1f}" x2="{W:.1f}" y2="{H:.1f}" '
+        f'stroke="#cccccc" stroke-width="1"/>',
+        f'<text x="14" y="{H + 18:.1f}" font-size="13" text-anchor="start" '
+        f'font-weight="bold">Survivor-density overlay (hatched = covered but '
+        f'unpinned)</text>',
+    ]
+    row_y = H + 34.0
+    for pid, label in rows:
+        cy = row_y + sw / 2
+        parts.append(
+            f'<rect x="14" y="{row_y:.1f}" width="{sw:.0f}" height="{sw:.0f}" '
+            f'fill="#f2f2f2" stroke="#888888" stroke-width="0.5"/>'
+        )
+        parts.append(
+            f'<rect x="14" y="{row_y:.1f}" width="{sw:.0f}" height="{sw:.0f}" '
+            f'fill="url(#{pid})" stroke="none" pointer-events="none"/>'
+        )
+        parts.append(
+            f'<text x="{14 + sw + 10:.0f}" y="{cy:.1f}" font-size="12" '
+            f'text-anchor="start">{label}</text>'
+        )
+        row_y += sw + 6.0
+    return parts
+
+
 def write_svg(rects: list, root: Path, W: float, H: float,
               out_path: Path, show_labels: bool,
-              metric_label: str) -> None:
+              metric_label: str,
+              show_survivor_legend: bool = False) -> None:
     label_threshold = (W * H) / 200
+    has_hatch = any(node.hatch for _x, _y, _w, _h, node in rects)
+    total_h = H + (SURVIVOR_LEGEND_H if show_survivor_legend else 0.0)
     parts: list[str] = [
         '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
         f'<svg xmlns="http://www.w3.org/2000/svg" '
-        f'viewBox="0 0 {W:.0f} {H:.0f}" '
-        f'width="{W:.0f}" height="{H:.0f}" '
+        f'viewBox="0 0 {W:.0f} {total_h:.0f}" '
+        f'width="{W:.0f}" height="{total_h:.0f}" '
         f'preserveAspectRatio="xMidYMid meet">',
         '<style>',
         '  rect:hover { stroke: #000; stroke-width: 1.5; }',
@@ -149,6 +216,8 @@ def write_svg(rects: list, root: Path, W: float, H: float,
         'dominant-baseline: middle; }',
         '</style>',
     ]
+    if has_hatch or show_survivor_legend:
+        parts.append(_SURVIVOR_DEFS)
 
     for x, y, w, h, node in rects:
         rel = node.rel_path or node.name
@@ -165,6 +234,18 @@ def write_svg(rects: list, root: Path, W: float, H: float,
             f'fill="{rgba_to_hex(node.color)}" '
             f'stroke="white" stroke-width="0.5">'
             f'<title>{tooltip}</title></rect>'
+        )
+
+    # Hatch overlays sit on top of every base rect. pointer-events="none" keeps
+    # the underlying block's hover tooltip working through the overlay.
+    for x, y, w, h, node in rects:
+        if not node.hatch:
+            continue
+        parts.append(
+            f'<rect x="{x:.2f}" y="{y:.2f}" '
+            f'width="{w:.2f}" height="{h:.2f}" '
+            f'fill="url(#survivor-{node.hatch})" stroke="none" '
+            f'pointer-events="none"/>'
         )
 
     if show_labels:
@@ -186,6 +267,9 @@ def write_svg(rects: list, root: Path, W: float, H: float,
                 f'font-size="{max(6, fs - 2)}" fill="#444">'
                 f'{html.escape(metric_text)}</text>'
             )
+
+    if show_survivor_legend:
+        parts.extend(_survivor_legend_parts(W, H))
 
     parts.append('</svg>')
     out_path.write_text("\n".join(parts), encoding="utf-8")
