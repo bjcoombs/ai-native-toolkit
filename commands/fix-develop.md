@@ -105,34 +105,9 @@ EOF
 
 ## Step 4: Loop Until Green
 
-### Each Iteration
-
-```bash
-PR=$(gh pr view --json number --jq '.number')
-
-# CI status — use positive filters (zsh escapes != to \!=)
-gh pr checks $PR --json name,state | jq '.[] | select(.state == "FAILURE" or .state == "CANCELLED")'
-
-# Unresolved review threads
-gh api graphql -f query='query { repository(owner: "'$ORG'", name: "'$REPO'") {
-  pullRequest(number: '$PR') { reviewThreads(first: 50) { nodes {
-    id isResolved path line comments(first: 1) { nodes { author { login } body } }
-  }}}}}' | jq '.data.repository.pullRequest.reviewThreads.nodes[]
-  | select(.isResolved == false)
-  | {id, author: .comments.nodes[0].author.login, path, line, body: .comments.nodes[0].body[0:200]}'
-
-# Conversation comments
-gh pr view $PR --comments
-```
-
-**Decision tree:**
-- CI failing → Fix code, commit, push
-- CodeRabbit threads → Fix code, push (CodeRabbit re-reviews and resolves automatically. **Never reply in CodeRabbit threads.**)
-- claude[bot] threads → Check if already fixed locally, resolve via GraphQL if so
-- Human threads → Fix code, reply inline, @mention reviewer
-- **ALL green** → Report ready, STOP
-
-Wait 60s between iterations for CI to start.
+Use the pr-review-merge skill to drive the fix PR to merge-ready, passing `$PR` and
+`$DEFAULT_BRANCH` and the project's bot rules. It owns the CI/threads/conversation checks
+and the positive-jq-filter pitfalls.
 
 ---
 
