@@ -5,7 +5,7 @@ description: "Example Marathon Configuration for CLAUDE.md - copy the section be
 # Marathon Configuration Example
 
 Copy the `## Marathon Configuration` section below into your project's CLAUDE.md file.
-The `/tm` command reads this section to configure marathon mode for your specific codebase.
+The `/tm` and `/issues` commands read this section to configure marathon mode for your specific codebase.
 
 **If this section is missing**, `/tm` uses these defaults:
 - Base branch: `main`
@@ -49,6 +49,15 @@ Project-specific settings for `/tm` marathon mode.
 - **Non-blocking checks**: (list checks that are informational only, not merge gates - e.g., codecov/patch, Trivy scans)
 - **Pre-existing failures**: (list any tests that are currently broken on the base branch)
 - **Slow checks**: (list checks that routinely take 10+ min so teammates know to expect delays)
+
+### GitHub Issues (for `/issues`)
+
+<!-- Defaults shown. Adjust label names to match your repo's conventions. -->
+
+- **Agent-ready label**: `agent-ready` (opt-in label that makes an issue marathon-eligible)
+- **Needs-triage label**: `needs-triage` (applied with a clarifying-question comment)
+- **In-progress label**: `in-progress` (applied when a teammate starts an issue)
+- **Issue exclude labels**: (none — e.g. `discussion`, `wontfix`, `question` to skip during triage)
 
 ### Retrospective
 

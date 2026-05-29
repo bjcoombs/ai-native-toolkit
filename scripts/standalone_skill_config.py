@@ -64,6 +64,12 @@ SKILLS: dict[str, dict] = {
                 'uv run scripts/doc-graph-svg.py "$REPO_ROOT" '
                 '-o "$REPO_ROOT/.assess/doc-graph.svg"'
             ),
+            "uv-treemap-overlay": (
+                'uv run scripts/complexity-treemap.py "$REPO_ROOT" '
+                '-o "$REPO_ROOT/.assess/complexity-heatmap.svg" '
+                '--stats "$REPO_ROOT/.assess/complexity-stats.json" '
+                '--test-pressure "$REPO_ROOT/.assess/run-context.json"'
+            ),
             "uv-core": 'uv run scripts/assess_core.py "$REPO_ROOT"',
             "uv-finalize": 'uv run scripts/assess_finalize.py "$REPO_ROOT"',
             "treemap-exclude-example": (
