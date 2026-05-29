@@ -18,6 +18,16 @@ argument-hint: [tag [task-id] | feature description] (optional - derives context
 
 ---
 
+## TM Work-Source Adapter
+
+This command supplies the marathon skill's adapter as:
+- **enumerate** — `task-master tags use "<tag>" && task-master list --json`; use `jq` on `tasks.json` for reliable status filtering (`task-master next` can suggest subtask IDs of done parents).
+- **mark in-progress** — `task-master set-status --id=<id> --status=in-progress` (run sequentially inline — never as a parallel background job; concurrent TM writes race the global tag).
+- **close on merge** — `task-master tags use "<tag>" && task-master set-status --id=<id> --status=done`.
+- **branch / worktree** — branch `<tag>--<task-id>--<slug>`; worktree `worktree/<tag>/<task-id>--<slug>`.
+
+---
+
 ## Phase 0: Detect Capabilities
 
 ```bash
@@ -276,7 +286,11 @@ cd ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug>
 task-master show <task-id> --json
 ```
 
+<<<<<<< HEAD
+**Step 3: Implement** — See [Implement Mode](#mode-implement-or-create-pr) below.
+=======
 **Step 3: Implement** - See [Implement Mode](#mode-implement-or-create_pr) below.
+>>>>>>> origin/main
 
 ---
 
@@ -313,6 +327,10 @@ task-master tags use "<tag>" && task-master list --ready --json
 
 ### Mode: Review (PR open)
 
+<<<<<<< HEAD
+Use the pr-review-merge skill to drive PR #<number> to merge-ready (5 criteria, thread
+rules, background CI watcher). When all criteria are met, output `<promise>PR_READY</promise>`.
+=======
 #### Ready Criteria (ALL must be true)
 
 1. **Branch in sync** - no merge conflicts with `$BASE_BRANCH`
@@ -384,6 +402,7 @@ Report: ready, waiting, or blocked.
 """
 )
 ```
+>>>>>>> origin/main
 
 ---
 
@@ -393,7 +412,7 @@ Report: ready, waiting, or blocked.
 Agent(
   subagent_type: "general-purpose",
   model: "sonnet",
-  prompt: "Implement <tag>.<task-id>: <task-title> in <worktree-path>. Requirements: <task-description-and-subtasks>. TDD, push, create PR, review loop (5 criteria: no conflicts, CI green, no unresolved threads/comments), background CI watcher. Report: ready, waiting, or blocked."
+  prompt: "Implement <tag>.<task-id>: <task-title> in <worktree-path>. Requirements: <task-description-and-subtasks>. TDD, push, create PR, use the pr-review-merge skill for the review loop. Report: ready, waiting, or blocked."
 )
 ```
 
@@ -401,8 +420,13 @@ Agent(
 
 ## Marathon Mode: Agent Teams
 
-**Prerequisite:** `$MARATHON_MODE` AND `$TEAMS_AVAILABLE`.
+Prerequisite: `$MARATHON_MODE` AND `$TEAMS_AVAILABLE`.
 
+<<<<<<< HEAD
+Use the marathon skill, supplying the TM Work-Source Adapter above and the Marathon
+Configuration values from Phase 0. The skill owns DAG/hot-file analysis, team lifecycle,
+waves, crash recovery, and the retrospective; it drives each PR via pr-review-merge.
+=======
 **CRITICAL: Task Master Global Tag State Rule**
 Never run `task-master add-task`, `set-status`, or `update-task` as parallel background jobs. Each command internally switches the global tag, and concurrent invocations race - tasks silently land on wrong tags. Always run TM write commands **sequentially inline**. This was validated in the 047-security-audit marathon where 10 background `add-task` calls created tasks on wrong tags.
 
@@ -864,12 +888,14 @@ For each that was exercised: did it help, hurt, or not apply? Mark validated.>
 - Wall clock: ~<N> min spawn to final merge
 - Estimated waste: ~<N> min (CI waits, conflict resolution, stalled teammates)
 ```
+>>>>>>> origin/main
 
 ---
 
 ## Marathon Mode: Subagent Fallback
 
-When `$MARATHON_MODE` but `$TEAMS_AVAILABLE` is `false`, use parallel subagents after each cleanup cycle (see Post-Cleanup in Cleanup mode).
+When `$MARATHON_MODE` but `$TEAMS_AVAILABLE` is `false`, the marathon skill's Subagent
+Fallback runs parallel subagents after each cleanup cycle using the TM adapter.
 
 ---
 

@@ -10,6 +10,7 @@
 !/LICENSE
 !/docs/
 !/scripts/
+!/tests/
 !/dist/
 dist/standalone-skills/
 !/.github/

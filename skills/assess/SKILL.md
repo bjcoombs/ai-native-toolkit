@@ -436,7 +436,7 @@ ls "$REPO_ROOT"/.swiftlint.yml 2>/dev/null
 
 **If found, assess AI-relevant rules** by reading the config:
 - Unexplained lint suppression rules? (nolintlint, no-restricted-syntax)
-- TODO/FIXME detection? (godox, no-warning-comments)
+- `TODO`/`FIXME` detection? (godox, no-warning-comments)
 - **Function length limits?** (`funlen`, `max-lines-per-function`, `MethodLength`, `function-max-lines`)
 - **Cyclomatic complexity limits?** (`cyclop`, `gocognit`, `complexity`, `CyclomaticComplexity`, `too-many-statements`, `cognitive-complexity`, `cognitive_complexity`)
 - **File size limits?** (`max-lines`, `FileLength`, `file-max-lines`, `lines-per-file`)

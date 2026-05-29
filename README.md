@@ -186,9 +186,12 @@ Workflow (personal setup, opt-in - see [Adapting](#adapting-for-your-workflow)):
 | Command | Description |
 |---------|-------------|
 | `/tm` | Task Master orchestration - context-aware: starts, reviews, or cleans up tasks based on current state |
-| `/tm-marathon-config-example` | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` |
+| `/issues` | GitHub-issue marathon - triage open issues (tag `agent-ready` or post clarifying questions), then run agent-ready ones to merge with Agent Teams; mirrors `/tm`'s plan-then-marathon flow |
+| `/tm-marathon-config-example` | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` and `/issues` |
 | `/fix-pr` | Autonomous PR fixing loop - iterates on CI failures and review comments until green |
 | `/fix-develop` | Autonomous fix loop for failing CI on the repo's default branch |
+
+`/tm`, `/issues`, `/fix-pr`, and `/fix-develop` share the `marathon` skill (team orchestration engine: DAG analysis, waves, crash recovery, retrospective) and the `pr-review-merge` skill (review-to-green loop + smart merge) as a single source of truth. Each command supplies a thin work-source adapter; the skills own the execution.
 
 ### Agents (invoked by skills, or directly via `Task(subagent_type=...)`)
 
@@ -271,17 +274,22 @@ ai-native-toolkit/
 │   │       └── complexity-treemap.py  # Codecov-style hotspot SVG generator
 │   ├── huddle/
 │   │   └── SKILL.md                   # Multi-lens Six Hats deliberation
-│   └── deslop/
-│       ├── SKILL.md                   # Remove the signs of AI writing (12 high-frequency tells)
-│       └── references/
-│           └── full-checklist.md      # Exhaustive A-F catalog (Wikipedia-derived)
+│   ├── deslop/
+│   │   ├── SKILL.md                   # Remove the signs of AI writing (12 high-frequency tells)
+│   │   └── references/
+│   │       └── full-checklist.md      # Exhaustive A-F catalog (Wikipedia-derived)
+│   ├── marathon/
+│   │   └── SKILL.md                   # Parallel agent marathon orchestration
+│   └── pr-review-merge/
+│       └── SKILL.md                   # PR review, iteration, and merge lifecycle
 ├── commands/
 │   ├── tm.md
 │   ├── tm-marathon-config-example.md
 │   ├── 6hats.md
 │   ├── understand.md
 │   ├── fix-pr.md
-│   └── fix-develop.md
+│   ├── fix-develop.md
+│   └── issues.md
 ├── agents/
 │   ├── white-hat.md
 │   ├── red-hat.md
