@@ -81,9 +81,12 @@ command -v scc >/dev/null 2>&1 && SCC_PRESENT=1 || SCC_PRESENT=0
 [ -f "$REPO_ROOT/.assess/.no-scc" ] && SCC_DECLINED=1 || SCC_DECLINED=0
 
 # 3. Is the repo mostly markdown/data/config (where lizard alone will be sparse)?
-#    Cheap heuristic: count non-code files vs code files.
-CODE_FILES=$(fd -t f -e py -e js -e ts -e tsx -e jsx -e go -e java -e kt -e rs -e rb -e cs -e swift -e dart -e cpp -e c -e h -e php "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
-NONCODE_FILES=$(fd -t f -e md -e json -e yaml -e yml -e toml -e sh -e sql "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
+#    Cheap heuristic: count non-code files vs code files. The `.` argument is
+#    the regex pattern (matches every path) and "$REPO_ROOT" is the search
+#    path - without `.`, fd treats $REPO_ROOT as the pattern itself, matches
+#    nothing, and silently returns 0.
+CODE_FILES=$(fd -t f -e py -e js -e ts -e tsx -e jsx -e go -e java -e kt -e rs -e rb -e cs -e swift -e dart -e cpp -e c -e h -e php . "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
+NONCODE_FILES=$(fd -t f -e md -e json -e yaml -e yml -e toml -e sh -e sql . "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
 ```
 
 **Offer the install only if all three are true:** `SCC_PRESENT=0`, `SCC_DECLINED=0`, and the repo looks lizard-sparse (`CODE_FILES < NONCODE_FILES` or `CODE_FILES < 10`). Otherwise skip straight to 2b (or 2c if 2b has nothing to offer).
@@ -122,9 +125,9 @@ Layer 1's intra-repo dead-code scan calls a per-language tool (`vulture` for Pyt
 Detect languages with cheap `fd` counts (mirroring Step 2a's heuristic - the treemap script's own classification isn't exposed in the stats sidecar, and shelling out is fine here):
 
 ```bash
-PY_FILES=$(fd -t f -e py "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
-TS_FILES=$(fd -t f -e ts -e tsx "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
-GO_FILES=$(fd -t f -e go "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
+PY_FILES=$(fd -t f -e py . "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
+TS_FILES=$(fd -t f -e ts -e tsx . "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
+GO_FILES=$(fd -t f -e go . "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
 
 # Per-language candidate tool. Prefer the read-only tool first - `ts-prune` over
 # `knip` for TS, `staticcheck` over `deadcode` for Go - so the user isn't asked
@@ -774,14 +777,37 @@ The plugin footer is important — it's how other engineers viewing the report i
 
 ## Step 5: Ask Whether to Open a PR
 
-After writing the files, surface them and ask the user — verbatim — something like:
+After writing the files, first **check whether a direct PR is even possible** before offering one. A user on `READ` or `TRIAGE` access can't push a branch to the target repo, so an unconditional "open a PR?" offer is infeasible and wastes a turn.
+
+```bash
+# Detect push capability. `gh` returns viewer fields for the current user.
+PUSH_INFO=$(gh repo view --json viewerPermission,viewerCanPush,viewerCanAdminister,nameWithOwner 2>/dev/null || true)
+# If the command failed (no remote, no gh, not a GitHub repo, unauthenticated),
+# fall back to the local-branch flow with the reason - never silently assume
+# push works.
+```
+
+Interpret the result:
+
+- `viewerCanPush: true` (any of `WRITE` / `MAINTAIN` / `ADMIN` viewerPermission, or push-eligible fork access): offer the direct PR flow below.
+- `viewerCanPush: false` and `viewerPermission` is `READ` / `TRIAGE`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
+- `gh` unavailable / not a GitHub remote / not authenticated: skip both PR offers entirely and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
+
+Then surface the question - verbatim, picking the shape that matches the access tier:
 
 > Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Want me to open a PR in this repo with these files, or leave them local for you to review first?
 
-If the user says **yes / PR**:
+> Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. You have `READ` access to `<owner/repo>`, so a direct PR isn't possible. I can fork `<owner/repo>` to your account and open the PR from there, or leave the files local for you to review.
+
+If the user says **yes / PR** (direct flow, `viewerCanPush: true`):
 1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
 2. Stage and commit the report, the complexity heatmap, and the doc graph. Commit message: `docs: Add AI-readiness assessment + complexity and doc-navigability snapshots`.
 3. Push the branch and open a PR. Title: `docs: Codebase assessment — <YYYY-MM-DD>`.
+
+If the user says **yes / PR** (fork flow, `viewerCanPush: false` on the upstream):
+1. `gh repo fork <owner>/<repo> --clone=false --remote=true` (creates the fork under the user's account and adds it as a remote named `origin` or similar; the upstream becomes `upstream` if the original was already `origin`).
+2. Create the branch as above, push to the **fork** (`git push -u <fork-remote> <branch>`), and open the PR via `gh pr create --repo <owner>/<repo>` (head defaults to the fork).
+3. Commit message, PR title, and body are unchanged from the direct flow.
 4. **PR body must include the plugin reference at the bottom** so reviewers can install the tool that generated the report. Use this body template:
 
    ```markdown
@@ -821,22 +847,39 @@ If the user says **yes**, proceed agnostically - **don't assume GitHub** (or any
 
 ### 6a: Identify the user's issue tracker
 
-Look at every signal available and pick the one the user actually uses. Examples of signals (not an exhaustive list):
+**Start with the deterministic git-remote signal before anything else.** A GitHub / GitLab remote with issues enabled is the cheapest, most reliable tracker signal in front of you - skipping it forces the model into judgment-mode on a question that has a clear answer.
+
+```bash
+# Cheapest tracker signal: a git remote that hosts issues.
+GIT_REMOTE=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)
+if [ -n "$GIT_REMOTE" ]; then
+  # `gh` works against any git remote pointing at github.com (including forks);
+  # hasIssuesEnabled distinguishes a code-only mirror from a real tracker.
+  GH_TRACKER=$(gh repo view --json hasIssuesEnabled,nameWithOwner 2>/dev/null || true)
+fi
+```
+
+Treat a non-empty `GH_TRACKER` with `hasIssuesEnabled: true` as a **detected tracker** (subject to the same write-access check as Step 5 - read-only repos still get tracking items via the user's fork or their personal tracker, not the upstream issues list). Same logic for `glab repo view --output json` on GitLab remotes.
+
+When the deterministic signal is clear and unambiguous, use it without asking. Only fall back to judgment / multiple-signal disambiguation when the remote check is empty, ambiguous, or contradicted by something the user has told you.
+
+Other signals - examples, not an exhaustive list, used only as fallback or to choose between equally-plausible options:
 
 - **The user's global instructions** (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`) often state the tracker explicitly: "issues live in Linear project FOO", "we use Task Master", "Jira project ABC", etc.
 - **Project-level instructions** in the target repo's `CLAUDE.md` / `AGENTS.md` / contribution docs.
-- **Project files**: `.taskmaster/` directory, `.acli/` config, `.linear/` dotfiles, GitHub/GitLab remote, a Notion link in the README, etc.
+- **Project files**: `.taskmaster/` directory, `.acli/` config, `.linear/` dotfiles, a Notion link in the README, etc.
 - **Authenticated CLIs**: `gh auth status`, `glab auth status`, `acli` configuration, `linear` CLI tokens, anything similar.
 - **Conversation history**: if the user just used a tracker, prefer that one.
 
-This is not a fixed list. The user might track work in Omnifocus, Apple Notes, a Google Doc, a Notion database, a Slack channel, or anything else. **Use judgment**, don't enumerate.
+The user might track work in Omnifocus, Apple Notes, a Google Doc, a Notion database, a Slack channel, or anything else. **Use judgment** on these soft signals; do not let them override a clear deterministic git-remote hit.
 
 **Decision rules:**
 
-1. **One clear signal** (e.g. only `.taskmaster/` present, or global CLAUDE.md says "use Linear") - use that tracker without asking.
-2. **Multiple plausible signals** (e.g. GitHub remote + `.taskmaster/` + Jira project mentioned) - **ask the user**. List what you saw and let them pick:
-   > I see signals for both Task Master (`.taskmaster/` directory) and GitHub Issues (GitHub remote, `gh` authenticated). Which should I create the tracking items in?
-3. **No clear signal** - ask:
+1. **Deterministic GitHub/GitLab remote with issues enabled** - use that tracker without asking (subject to write-access check). This is the common case for OSS work and most personal repos.
+2. **One clear soft signal** (e.g. only `.taskmaster/` present, or global CLAUDE.md says "use Linear") and no contradicting remote - use that tracker without asking.
+3. **Conflicting signals** (e.g. GitHub remote + `.taskmaster/` directory + global says "use Linear") - **ask the user**. List what you saw and let them pick:
+   > I see signals for Task Master (`.taskmaster/`), GitHub Issues (remote points at `<owner/repo>` with issues enabled), and Linear (your global CLAUDE.md mentions it). Which should I create the tracking items in?
+4. **No clear signal** - ask:
    > I couldn't tell which tracker you use. Where should I create the tracking items? (e.g. GitHub Issues, Task Master, Jira, Linear, somewhere else - or skip)
 
 When asking, use **AskUserQuestion** with the detected options plus a "something else" / "skip" escape hatch.

@@ -88,6 +88,25 @@ _MDLINK_RE = re.compile(r"(?<!\!)\[(?:[^\]]*)\]\(([^)]+)\)")
 # Schemes / forms that are not intra-repo file links.
 _EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*://|^mailto:|^tel:", re.IGNORECASE)
 _FENCE_RE = re.compile(r"```.*?\n.*?```", re.DOTALL)  # fenced code blocks
+# Inline-code spans: backtick-delimited segments on a single logical line. A
+# link target inside `[[foo]]` or `[text](./foo.md)` is documentation syntax
+# (an Obsidian skill teaching wikilinks, a FORMAT-spec showing a sample), not
+# a real navigation edge - the writer formatted it as code on purpose. Caps
+# match-length to avoid spanning paragraphs when stray backticks appear.
+_INLINE_CODE_RE = re.compile(r"`[^`\n]{1,200}`")
+
+
+def _strip_code_spans(text: str) -> str:
+    """Remove fenced code blocks and inline-code spans before link extraction.
+
+    Without this, a markdown doc that *teaches* link syntax (a FORMAT spec, an
+    Obsidian-skill how-to) contributes phantom edges to the navigation graph
+    and inflates `dangling_links`. The writer formatted those targets as code
+    precisely because they are samples, not navigation.
+    """
+    # Strip fenced blocks first so an inline-code regex can't snag content
+    # inside a fence that legitimately contains backticks of its own.
+    return _INLINE_CODE_RE.sub("", _FENCE_RE.sub("", text))
 
 # Caps so a pathological repo can't bloat run-context.json.
 MAX_BROKEN_LINKS = 60
@@ -461,8 +480,12 @@ def build_doc_graph(
             # whole graph build (Layer 0 stays best-effort).
             continue
         texts[d] = text
+        # Strip code spans before harvesting links: a link target inside a
+        # fence or backtick span is a documentation sample (FORMAT specs,
+        # wikilink-syntax demos), not a navigation edge.
+        link_text = _strip_code_spans(text)
         # Wikilinks resolve by note name across the vault.
-        for m in _WIKILINK_RE.finditer(text):
+        for m in _WIKILINK_RE.finditer(link_text):
             tgt, amb = _resolve_wikilink(
                 m.group(1), d, repo_root, by_relpath, by_name, by_stem,
             )
@@ -474,7 +497,7 @@ def build_doc_graph(
             if tgt in doc_set and tgt != d:
                 graph.add_edge(rel(d), rel(tgt))
         # CommonMark links resolve relative to the doc's directory.
-        for m in _MDLINK_RE.finditer(text):
+        for m in _MDLINK_RE.finditer(link_text):
             raw = m.group(1)
             tgt = _resolve_mdlink(raw, d, repo_root)
             if tgt is None:
