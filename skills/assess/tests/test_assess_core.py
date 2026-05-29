@@ -394,6 +394,80 @@ def test_readside_blocks_present_in_ctx(tmp_path: Path) -> None:
     assert "candidate_count" in ctx["dead_code"]
 
 
+def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
+    """Task #5 integration barrier: build_run_context emits the five new keyhole
+    blocks + derived findings while leaving every existing block intact."""
+    repo, commit = git_repo
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    # A small history so the change-coupling / containment / authorship signals
+    # have real git data to chew on.
+    (repo / "README.md").write_text("# Project\nsee [code](src/app.py)\n")
+    (repo / "src").mkdir()
+    (repo / "src" / "app.py").write_text("def f():\n    return 1\n")
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 1, "loc": {"p50": 2, "p95": 2, "max": 2},
+        "ccn": {"p50": 1, "p95": 1, "max": 1},
+        "top_hotspots": [{"path": "src/app.py", "loc": 2, "ccn": 1, "commits": 2}],
+        "top_complex": [{"path": "src/app.py", "ccn": 1}],
+        "top_large": [{"path": "src/app.py", "loc": 2}],
+    }))
+    commit("init")
+    (repo / "src" / "app.py").write_text("def f():\n    return 2\n")
+    commit("change")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+
+    # (1) All five new blocks present.
+    for key in ("structure", "behaviour", "documentation", "understanding", "runtime"):
+        assert key in ctx, f"missing keyhole block: {key}"
+    # structure carries available/reason so the report can say "grimp absent".
+    assert "available" in ctx["structure"]
+    assert "containment_by_dir" in ctx["behaviour"]
+    assert "freshness_by_doc" in ctx["documentation"]
+    assert "authorship_class_by_path" in ctx["understanding"]
+    assert "static_reachability" in ctx["runtime"]
+
+    # (2) derived_findings populated; every finding has name/paths/action.
+    assert "derived_findings" in ctx
+    findings = ctx["derived_findings"]
+    assert findings, "derived_findings must not be empty"
+    expected = {"hidden_coupling", "lying_map", "unexplained_complexity",
+                "orphaned_understanding", "candidate_dead_weight", "refactor_boundary"}
+    assert {f["name"] for f in findings} == expected
+    for f in findings:
+        assert set(f) == {"name", "paths", "action"}
+        assert isinstance(f["paths"], list)
+        assert isinstance(f["action"], str) and f["action"]
+    assert "attention" in ctx
+    assert isinstance(ctx["attention"], list)
+
+    # (3) Existing blocks unchanged (backward-compat): the pre-existing shape
+    # is all still there alongside the additions.
+    for key in ("run_date", "stats_summary", "instruction_files", "diff",
+                "doc_graph", "doc_staleness", "stale_hubs", "dead_code",
+                "observability", "anomalies", "plugin_version"):
+        assert key in ctx, f"existing block dropped: {key}"
+
+
+def test_keyhole_signal_failure_degrades_not_crashes(tmp_path: Path, monkeypatch) -> None:
+    """A raising keyhole signal must degrade to available:false, not crash the
+    run or disturb the existing blocks (defensive-wiring constraint)."""
+    repo = _minimal_repo(tmp_path)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("simulated structure failure")
+
+    monkeypatch.setattr(assess_core, "analyze_structure", boom)
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    assert ctx["structure"]["available"] is False
+    assert "failed" in ctx["structure"]["reason"]
+    # The rest of the run is intact, including the other keyhole blocks.
+    assert "behaviour" in ctx
+    assert "derived_findings" in ctx
+    assert "observability" in ctx
+
+
 def test_stale_hubs_join_centrality_and_staleness(tmp_path: Path) -> None:
     """stale_hubs ranks central docs by pagerank x staleness ratio."""
     repo = _minimal_repo(tmp_path)
