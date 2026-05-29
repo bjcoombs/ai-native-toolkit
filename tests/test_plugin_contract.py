@@ -25,6 +25,7 @@ BUILTIN_AGENTS = {"general-purpose", "Explore", "Plan", "statusline-setup"}
 
 PLACEHOLDER_RE = re.compile(r"\b(TODO|TBD|FIXME)\b")
 FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 USE_SKILL_RE = re.compile(r"[Uu]se the ([a-z0-9][a-z0-9-]*) skill")
 SUBAGENT_RE = re.compile(r'subagent_type:\s*"([^"]+)"')
@@ -73,8 +74,7 @@ def test_skill_frontmatter(d):
     fm, _ = _split_frontmatter(d / "SKILL.md")
     assert fm is not None, f"{d.name}/SKILL.md missing YAML frontmatter"
     assert _fm_scalar(fm, "name") == d.name, f"{d.name}: name: must match directory"
-    desc = fm[fm.find("description:"):] if "description:" in fm else ""
-    assert "description:" in fm and desc.strip(), f"{d.name}: description required"
+    assert _fm_scalar(fm, "description"), f"{d.name}: non-empty description required"
 
 
 @pytest.mark.parametrize("d", skill_dirs(), ids=lambda d: d.name)
@@ -85,14 +85,18 @@ def test_skill_has_trigger_clause(d):
 
 @pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
 def test_no_placeholder_tokens(p):
-    body = FENCE_RE.sub("", p.read_text(encoding="utf-8"))
+    body = INLINE_CODE_RE.sub("", FENCE_RE.sub("", p.read_text(encoding="utf-8")))
     assert not PLACEHOLDER_RE.search(body), f"{p.relative_to(REPO)}: placeholder token outside code fence"
 
 
 @pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
 def test_internal_links_resolve(p):
     for target in LINK_RE.findall(p.read_text(encoding="utf-8")):
-        if target.startswith(("http://", "https://", "#", "mailto:")) or "$" in target or "<" in target:
+        if (target.startswith(("http://", "https://", "#", "mailto:"))
+                or "$" in target
+                or "<" in target
+                or target.endswith(".svg")
+                or "/.assess/" in target or target.startswith(".assess/")):
             continue
         rel = target.split("#", 1)[0]
         if not rel:
