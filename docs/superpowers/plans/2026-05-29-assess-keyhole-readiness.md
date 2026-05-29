@@ -131,7 +131,7 @@ Individual metrics are inputs; the **joins** are the product. These named findin
 
 From these the core emits the **derived findings** above plus a ranked **"where to look" list** — the few units worst across axes, each with a proposed action (split / document / anchor / verify-or-delete). The LLM fills judgement into placeholders (existing write-back pattern). Keep the report concise — no new sections that dilute attention.
 
-**Visualization is deferred and optional — not part of v1.** A combined multi-encoding graph was explored (`docs/keyhole-readiness-mockup.svg`) and rejected for v1: cramming structure, coupling, docs, understanding and runtime into one view is itself a smell, and unlike the treemap (one variable — complexity) and doc-graph (one variable — reachability), this data is genuinely *findings-shaped, not map-shaped*. Any later visual should be a **single-variable** cut — most likely the containment/island view alone — reusing the existing doc-graph renderer, never a bespoke edge-bundling engine, and never gating the deterministic value.
+**Visualization is deferred and optional — not part of v1.** A combined multi-encoding graph (hierarchy + size + coupling edges + doc-state + ownership + liveness in one view) was considered and rejected: cramming that many encodings into one picture is itself a smell, and unlike the treemap (one variable — complexity) and doc-graph (one variable — reachability), this data is genuinely *findings-shaped, not map-shaped*. Any later visual should be a **single-variable** cut — most likely the containment/island view alone — reusing the existing doc-graph renderer, never a bespoke edge-bundling engine, and never gating the deterministic value.
 
 ## Prior Art / Build-vs-Leverage
 
