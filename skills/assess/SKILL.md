@@ -793,9 +793,13 @@ Interpret the result:
 - `viewerCanPush: false` and `viewerPermission` is `READ` / `TRIAGE`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
 - `gh` unavailable / not a GitHub remote / not authenticated: skip both PR offers entirely and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
 
-Then surface the question - verbatim, picking the shape that matches the access tier:
+Then surface the question - verbatim, picking the shape that matches the access tier.
+
+Push-capable target (`viewerCanPush: true`):
 
 > Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Want me to open a PR in this repo with these files, or leave them local for you to review first?
+
+Read-only target (`READ` / `TRIAGE`):
 
 > Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. You have `READ` access to `<owner/repo>`, so a direct PR isn't possible. I can fork `<owner/repo>` to your account and open the PR from there, or leave the files local for you to review.
 
