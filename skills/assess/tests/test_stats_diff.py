@@ -1,13 +1,11 @@
 """Tests for stats sidecar diff."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
 from lib.stats_diff import (
-    HotspotTransition,
     diff_stats,
     hotspot_commits,
     load_stats,

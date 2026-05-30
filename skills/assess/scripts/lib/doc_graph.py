@@ -213,7 +213,7 @@ class DocGraphResult:
         }
 
 
-def is_repo_file(path: Path, repo_root: Path, tracked: set[Path] | None) -> bool:
+def is_repo_file(path: Path, repo_root: Path, tracked: set[Path] | frozenset[Path] | None) -> bool:
     """True if `path` is genuinely part of the repo.
 
     Excludes two classes of non-repo file the scan must ignore:
@@ -468,7 +468,7 @@ def classify_node(node: str, entries: set, unreachable: set, orphans: set) -> st
     return "island"
 
 
-def build_doc_graph(
+def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, ratchet target
     repo_root: Path, doc_files: list[Path] | None = None,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,

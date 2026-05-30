@@ -370,7 +370,9 @@ def build_attention_list(
         {"path": path, "findings": sorted(set(names)), "score": len(set(names))}
         for path, names in reasons.items()
     ]
-    units.sort(key=lambda u: (-u["score"], u["path"]))
+    # dict values are heterogeneous (str | list | int), so mypy types the
+    # lookup as ``object``; the negation is valid at runtime (score is int).
+    units.sort(key=lambda u: (-u["score"], u["path"]))  # type: ignore[operator]
     return units[:max_units]
 
 

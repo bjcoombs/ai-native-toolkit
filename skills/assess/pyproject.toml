@@ -22,3 +22,51 @@ addopts = "-v --tb=short"
 # import from their own `src/` package which isn't on the path, so collecting
 # them errors. Exclude the whole fixtures tree from collection.
 norecursedirs = ["tests/fixtures"]
+
+[tool.ruff]
+target-version = "py311"
+# Test fixtures are deliberately messy sample repos consumed as *data*, not
+# code we own. The doc-graph and test-pressure scans already exclude them; the
+# linter must too, or it grades the fixtures instead of the core.
+extend-exclude = ["tests/fixtures"]
+
+[tool.ruff.lint]
+# Ruff's default rule set (E4/E7/E9 pycodestyle + F pyflakes) plus the mccabe
+# cyclomatic-complexity gate (C901). This is the Layer 3 "no linter" fix from
+# issue #77: a load-bearing complexity ratchet, not a style overhaul.
+select = ["E4", "E7", "E9", "F", "C901"]
+
+[tool.ruff.lint.per-file-ignores]
+# Package __init__.py files deliberately re-export names (some private, e.g.
+# test_pressure's shutil/subprocess/_parse_* surfaced for test monkeypatching);
+# F401 "imported but unused" is the wrong signal there.
+"**/__init__.py" = ["F401"]
+
+[tool.ruff.lint.mccabe]
+# Per-function cyclomatic complexity. 15 fences current reality: every function
+# already sits at or below it except four genuine offenders (ccn 17-19), which
+# carry an explicit ``# noqa: C901`` with a note - build_doc_graph and
+# authorship_analysis here, render in doc-graph-svg.py, and
+# build_standalone_skill_zip in scripts/. The gate fails the moment any other
+# function regresses past 15; ratchet down as the four are decomposed.
+max-complexity = 15
+
+[tool.mypy]
+# Issue #79: type hints existed but were unenforced. This gate makes them a
+# contract. Scoped to the deterministic core (lib/) where the annotations are
+# densest and most load-bearing; the top-level orchestrator scripts
+# (assess_core.py, assess_finalize.py, complexity-treemap.py) and the build
+# pipeline are the next ratchet step.
+files = ["scripts/lib"]
+# lib/ is a package; treat scripts/ as the import base so lib.<mod> resolves and
+# the back-compat shims (scripts/stats_diff.py, lib/assess_core.py) don't collide
+# as duplicate top-level modules.
+mypy_path = "scripts"
+explicit_package_bases = true
+namespace_packages = true
+# networkx and grimp ship no type stubs; their absence is not a code defect.
+# The lib modules carry defensive ``# type: ignore[assignment]`` on their
+# degrade-gracefully ``nx = None`` fallbacks so they also type-check when stubs
+# ARE installed; ``warn_unused_ignores`` is left off so those stay put.
+ignore_missing_imports = true
+warn_redundant_casts = true
