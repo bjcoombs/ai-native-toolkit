@@ -10,17 +10,34 @@ The headline pieces are three **skills**:
 
 ## What `/assess` produces
 
-Two paired views from a single run, on a real ~650k-LOC private monorepo (file paths sanitized). The first asks _can an agent find its way?_ The second asks _what's risky to change?_
+Two paired SVG views from a single run, on a real ~650k-LOC monorepo (file paths sanitized). The first asks _can an agent find its way?_ The second asks _what's risky to change?_
 
-[![Example doc navigability map from a real codebase](docs/example-doc-graph.svg)](docs/example-doc-graph.svg)
+Here is the same repo twice: an already-good AI-native codebase **before**, then the **same repo after** its maintainers worked through the Top 3 Actions from the `/assess` report. The story is that it gets measurably cleaner. Click any image for the full interactive SVG; hover any node or block for its underlying numbers.
 
-> Doc-navigability graph: 254 docs, 622 links, 43 islands, 30% reachable from the entry point. Structure encodes reachability (centre = entry, rings = link-distance from entry, rim = unreachable, dashed ring = orphan); colour encodes staleness (vivid red = a frozen doc beside churning code = a *lying map*); size encodes file length. The rim of orphans, the disconnected islands, the vivid-red hubs all become visible at a glance - this is the docs an agent would consult before changing anything, and whether they're still true. Hover any node for its in/out degree, reachability state, and staleness.
+<table>
+  <tr>
+    <th width="50%">Before</th>
+    <th width="50%">After applying the Top 3 Actions</th>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><b>Doc-navigability graph</b> - can an agent traverse the docs to the right place, and is what it finds still true?</td>
+  </tr>
+  <tr>
+    <td><a href="docs/example-doc-graph.svg"><img alt="Doc-navigability graph before the action sweep: 254 docs, 30% reachable from the entry point, 43 islands, 15 broken links" title="Before: 30% reachable, 24% orphaned, 43 islands, 15 broken links" src="docs/example-doc-graph.svg"></a></td>
+    <td><a href="docs/example-doc-graph-after.svg"><img alt="Doc-navigability graph after the action sweep: 247 docs, 89% reachable from the entry point, 20 islands, 0 broken links" title="After: 89% reachable, 11% orphaned, 20 islands, 0 broken links" src="docs/example-doc-graph-after.svg"></a></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><b>Complexity hotspot heatmap</b> - which files are riskiest to change next week?</td>
+  </tr>
+  <tr>
+    <td><a href="docs/example-heatmap.svg"><img alt="Complexity hotspot heatmap before the action sweep" title="Before: complexity hotspots, size = LOC, hue = complexity, saturation = churn" src="docs/example-heatmap.svg"></a></td>
+    <td><a href="docs/example-heatmap-after.svg"><img alt="Complexity hotspot heatmap for the same repo after the action sweep" title="After: same repo, complexity hotspots, size = LOC, hue = complexity, saturation = churn" src="docs/example-heatmap-after.svg"></a></td>
+  </tr>
+</table>
 
-[![Example complexity hotspot from the same codebase](docs/example-heatmap.svg)](docs/example-heatmap.svg)
+> **The measurable win.** In the doc-navigability graph, reachability from the entry point climbs from **30% to 89%**, orphaned docs fall from **24% to 11%**, disconnected islands drop from **43 to 20**, and the **15 broken links are gone**. The rim of orphans thins, the islands reconnect, and the lying-map reds cool - the map an agent consults before changing anything becomes honest. The heatmap stays the same repo's complexity profile throughout: it tells you which territory is dangerous, while the graph tells you whether the map is honest.
 
-> Codecov-style complexity heatmap from the same run. Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk an agent (or human) is most likely to break next week. Hover any block for its LOC, CCN, and recent commit count. Read alongside the graph above: the graph tells you whether the map is honest; the heatmap tells you which territory is dangerous.
-
-Both SVGs are colour-blind-safe (OrRd ramp, no red-green).
+> **How to read them.** *Doc graph* - structure encodes reachability (centre = entry, rings = link-distance from entry, rim = unreachable, dashed ring = orphan); colour encodes staleness (vivid red = a frozen doc beside churning code, a *lying map*); size encodes file length. *Heatmap* - size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active); the vivid-red blocks are the migration risk an agent (or human) is most likely to break next week. Both SVGs are colour-blind-safe (OrRd ramp, no red-green).
 
 ### Why this matters for an AI-driven codebase
 
@@ -308,7 +325,10 @@ ai-native-toolkit/
 │       └── test_integration.py        # Full-build ZIP content validation
 ├── dist/                              # Generated ZIPs (gitignored; published via CI)
 └── docs/
-    └── example-heatmap.svg            # Sanitized real-world /assess output (README hero)
+    ├── example-doc-graph.svg          # Real /assess doc-navigability SVG, before the action sweep (README hero)
+    ├── example-doc-graph-after.svg    # Same repo, doc-navigability after the action sweep
+    ├── example-heatmap.svg            # Real /assess complexity heatmap, before the action sweep (README hero)
+    └── example-heatmap-after.svg      # Same repo, complexity heatmap after the action sweep
 ```
 
 ## Contributors
