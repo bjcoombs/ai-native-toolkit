@@ -330,6 +330,48 @@ def test_assertion_on_internal_degrades_on_syntax_error(tmp_path: Path) -> None:
     assert detect_assertion_on_internal(tmp_path) == []  # no crash
 
 
+# ── #81: testing a private helper *as the subject under test* is legitimate ────
+
+def test_assertion_on_internal_private_helper_called_not_flagged(tmp_path: Path) -> None:
+    """A direct unit test of a module-private helper function calls the helper as
+    the subject under test - it is not the meridian "assert on internal state"
+    anti-pattern. The private name is in call position (`mod._helper(...)`), not
+    a field read, so it must NOT be flagged. Reproduces the 8 false positives
+    from the v1.14.0 self-check (e.g. `_is_build_artifact`, `_has_sibling_test`)."""
+    _write(tmp_path, "test_treemap.py",
+           "import treemap\n"
+           "def test_is_build_artifact():\n"
+           "    assert treemap._is_build_artifact(Path('x')) is True\n"
+           "def test_has_sibling_test():\n"
+           "    assert treemap._has_sibling_test(repo, 'go/foo.go') is True\n")
+    assert detect_assertion_on_internal(tmp_path) == []
+
+
+def test_assertion_on_internal_private_field_read_still_flagged(tmp_path: Path) -> None:
+    """The #81 refinement must not weaken the true positive: a private field
+    *read as a value* (not called) with no public assertion is still hollow."""
+    _write(tmp_path, "test_guard.py",
+           "def test_cursor():\n"
+           "    p = Processor()\n"
+           "    p.process(['a', 'b'])\n"
+           "    assert p._last_processed_line == 2\n")
+    findings = detect_assertion_on_internal(tmp_path)
+    assert len(findings) == 1
+    assert findings[0]["internal_field"] == "_last_processed_line"
+
+
+def test_assertion_on_internal_public_method_call_keeps_test_honest(tmp_path: Path) -> None:
+    """A test that calls a public method (observable behaviour) alongside a
+    private-field read is honest - the public call must still count as a public
+    assertion so the test is not flagged."""
+    _write(tmp_path, "test_guard.py",
+           "def test_mix():\n"
+           "    g = Guard()\n"
+           "    assert g._resume_count == 1\n"
+           "    assert g.public_status() == 'ok'\n")
+    assert detect_assertion_on_internal(tmp_path) == []
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # TASK 3 - untested boundaries
 # ════════════════════════════════════════════════════════════════════════════
@@ -419,6 +461,46 @@ def test_duplicate_truth_ts(tmp_path: Path) -> None:
 def test_duplicate_truth_degrades_on_syntax_error(tmp_path: Path) -> None:
     _write(tmp_path, "broken.py", "class M(:\n  x =\n")
     assert detect_duplicate_truth(tmp_path) == []  # no crash
+
+
+# ── #82: function-local aliasing is a transient binding, not a duplicate field ─
+
+def test_duplicate_truth_ignores_function_local_aliasing(tmp_path: Path) -> None:
+    """Ordinary local-variable aliasing inside a function body is a transient
+    binding, not a duplicate source-of-truth *field*. Reproduces the 14 false
+    positives from the v1.14.0 self-check (`raw = result.stdout`,
+    `current = node.parent`, SVG coordinate locals `gx = mid`)."""
+    _write(tmp_path, "app.py",
+           "def run(result, node, mid):\n"
+           "    raw = result.stdout\n"
+           "    current = node.parent\n"
+           "    gx = mid\n"
+           "    return raw, current, gx\n")
+    assert detect_duplicate_truth(tmp_path) == []
+
+
+def test_duplicate_truth_instance_attribute_inside_method_still_flagged(tmp_path: Path) -> None:
+    """A `self.x = self.y` copy inside a method is an instance *field*, not a
+    local, and must still be flagged even though it is lexically inside a
+    function."""
+    _write(tmp_path, "model.py",
+           "class M:\n"
+           "    def sync(self):\n"
+           "        self.mirror = self.source\n")
+    findings = detect_duplicate_truth(tmp_path)
+    assert any(f["field_name"] == "mirror" and f["derives_from"] == "source"
+               for f in findings)
+
+
+def test_duplicate_truth_module_level_field_still_flagged(tmp_path: Path) -> None:
+    """A module-level name that only ever copies another name is a duplicate
+    source of truth and stays in scope."""
+    _write(tmp_path, "config.py",
+           "PRIMARY = compute_primary()\n"
+           "ALIAS = PRIMARY\n")
+    findings = detect_duplicate_truth(tmp_path)
+    assert any(f["field_name"] == "ALIAS" and f["derives_from"] == "PRIMARY"
+               for f in findings)
 
 
 # ════════════════════════════════════════════════════════════════════════════
