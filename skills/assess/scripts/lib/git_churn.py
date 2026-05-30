@@ -67,6 +67,71 @@ def git_churn_scores(root: Path, since: str | None = None) -> dict[Path, int]:
     return counts
 
 
+def git_commit_info(root: Path) -> dict:
+    """Capture the commit the scan measured, so the report can pin its absolute
+    LOC/CCN figures to a snapshot and warn when that snapshot is stale.
+
+    Issue #59 observed figures drifting 15-25% low because a run measured an
+    older commit than the one a reader later compared against. Absolute numbers
+    are only trustworthy against a named commit; this surfaces that commit plus
+    two staleness signals.
+
+    Returns a dict:
+      - ``available``: False (with ``reason``) when ``root`` isn't a git repo or
+        git is unreachable; the report then omits the snapshot line.
+      - ``head_sha`` / ``head_short``: the commit HEAD pointed at during the scan.
+      - ``committed_date``: ISO-8601 author date of HEAD.
+      - ``subject``: HEAD's commit subject line.
+      - ``dirty``: True when tracked files have uncommitted changes, so the
+        measured numbers reflect the working tree, not any single commit.
+      - ``upstream``: the upstream tracking ref (e.g. ``origin/main``) or None.
+      - ``behind``: commits HEAD is behind ``upstream`` (0 = up to date,
+        None = no upstream configured), i.e. how stale the snapshot is vs remote.
+    """
+    def _git(*args: str) -> str | None:
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(root), *args],
+                capture_output=True, text=True, check=True,
+                timeout=GIT_TIMEOUT_SECONDS,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError,
+                subprocess.TimeoutExpired):
+            return None
+        return out.stdout.strip()
+
+    head_sha = _git("rev-parse", "HEAD")
+    if not head_sha:
+        return {"available": False,
+                "reason": "not a git repo or no commits on HEAD"}
+
+    info: dict = {
+        "available": True,
+        "head_sha": head_sha,
+        "head_short": head_sha[:12],
+        "committed_date": _git("show", "-s", "--format=%cd", "--date=short",
+                               "HEAD"),
+        "subject": _git("show", "-s", "--format=%s", "HEAD"),
+        # `--porcelain` with untracked excluded: a non-empty result means the
+        # scan saw uncommitted edits to tracked files, so its numbers don't
+        # match the HEAD commit exactly.
+        "dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
+        "upstream": None,
+        "behind": None,
+    }
+
+    upstream = _git("rev-parse", "--abbrev-ref", "--symbolic-full-name",
+                    "@{upstream}")
+    if upstream:
+        info["upstream"] = upstream
+        behind = _git("rev-list", "--count", "HEAD..@{upstream}")
+        try:
+            info["behind"] = int(behind) if behind is not None else None
+        except ValueError:
+            info["behind"] = None
+    return info
+
+
 def file_last_commit_days(path: Path) -> int | None:
     """Days since `path` was last committed in git. None if not tracked.
 

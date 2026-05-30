@@ -443,6 +443,22 @@ ls "$REPO_ROOT"/.swiftlint.yml 2>/dev/null
 - Exhaustive matching? (exhaustive, strict unions)
 - Import boundary rules? (depguard, no-restricted-imports)
 
+**Per-language complexity-tool pointers** (name the *current canonical* tool when recommending a complexity/length rule, so the action doesn't pattern-match a discontinued package off training data - issue #62):
+
+| Language | Complexity / size rule source |
+|---|---|
+| Go | `golangci-lint`: `cyclop`, `gocognit`, `funlen`, `lll` |
+| JS/TS | ESLint `complexity`, `max-lines`, `max-lines-per-function`; or Biome equivalents |
+| Python | Ruff `C901` (mccabe), `PLR0915`; or `radon` for ad-hoc reports |
+| Java/Kotlin | `checkstyle` / `pmd` (Java), `detekt` (Kotlin) complexity rules |
+| C# | Roslyn analyzers (`EnableNETAnalyzers`), `CA1502`/`CA1505` maintainability rules |
+| Ruby | RuboCop `Metrics/*` (CyclomaticComplexity, MethodLength, ClassLength) |
+| Rust | Clippy `cognitive_complexity`, `too_many_lines` |
+| **Dart** | `custom_lint` + a community ruleset such as `solid_lints` (cyclomatic complexity / source-lines-of-code / number-of-parameters). The older `dart_code_metrics` is effectively discontinued for Dart 3 - do **not** recommend it; prefer `custom_lint`-based rulesets or point at <https://pub.dev> for the current option. |
+| Swift | SwiftLint `cyclomatic_complexity`, `function_body_length`, `file_length` |
+
+This list is a starting pointer, not a guarantee of currency - apply the currency-check in "Write the report" before naming any specific package version.
+
 **Cross-reference treemap evidence.** Read the stats sidecar to see what the linter actually catches in the wild - but only if Step 2 produced it. The sidecar is missing whenever the treemap script failed (no `uv`, non-git path, no scoreable files, etc.).
 
 ```bash
@@ -450,8 +466,17 @@ STATS="$REPO_ROOT/.assess/complexity-stats.json"
 if [ -f "$STATS" ]; then
   jq '{
     loc_p95: .loc.p95, loc_max: .loc.max,
-    ccn_p95: .ccn.p95, ccn_max: .ccn.max,
-    worst_complex: .top_complex[:3] | map(.path),
+    # Per-function ccn (`fn_ccn`) is the unit a linter threshold gates - compare
+    # THIS against cyclop:15 etc., never the file-aggregate `.ccn` block.
+    fn_ccn_p95: .fn_ccn.p95, fn_ccn_max: .fn_ccn.max,
+    fn_count: .fn_ccn.function_count,
+    # File-aggregate ccn (sum per file): drives the treemap hue / hotspot rank.
+    # NOT a per-function violation - label it as an aggregate in the report.
+    file_aggregate_ccn_p95: .ccn.p95, file_aggregate_ccn_max: .ccn.max,
+    # Each worst-complex row carries both: `ccn` is the file aggregate,
+    # `max_fn_ccn` is that file's worst single function (null = scc-scored, no
+    # function breakdown), which is what the threshold actually flags.
+    worst_complex: .top_complex[:3] | map({path, ccn, max_fn_ccn}),
     worst_large: .top_large[:3] | map(.path)
   }' "$STATS"
 else
@@ -461,12 +486,21 @@ fi
 
 If the sidecar is missing, skip the combined-scoring matrix below and fall back to the original Layer 3 rule: Present if linter config includes AI-relevant rules (including complexity/length), Partial if linter exists without them, Missing if no linter at all. Record "treemap unavailable" in the Evidence column so the gap is auditable.
 
-Thresholds for "high" (based on industry conventions - adjust for context):
+**Per-function vs file-aggregate complexity - do not conflate them (issue #58).** The sidecar carries two complexity signals:
+
+- **`fn_ccn` / a row's `max_fn_ccn`** - *per-function* cyclomatic complexity. A linter rule (`cyclop: 15`, `gocognit`, `complexity`) gates this. Compare it against the thresholds below.
+- **`ccn` / a row's `ccn`** - the *file-level aggregate* (sum of every function's complexity). It drives the treemap hue and the hotspot rank, but it is **not** a per-function value and a per-function threshold does not apply to it. A file of a dozen simple functions can sum past 100 with no single function violating anything.
+
+When you name a complexity hotspot, lead with the per-function fact against the threshold and label the aggregate as an aggregate. E.g. _"`service_modules.go` - file-aggregate ccn 136 across 13 functions; worst single function ccn 13, under the cyclop:15 threshold (no per-function violation)."_ Never report the aggregate as if it were one function's complexity. When `max_fn_ccn` is `null` (scc-scored file, no function breakdown), say so - don't invent a per-function number.
+
+**Verify any structural mechanism against the source before narrating it.** Do not write "a large switch dispatching by module name" (or any other concrete structure) inferred from a metric - the number tells you nothing about whether the code is a switch, a dispatch table, or a recursive walk. If you describe a mechanism, you must have read the file and confirmed it; otherwise describe only what the metric shows ("high aggregate complexity concentrated in N functions") and leave the mechanism to whoever opens the file.
+
+Thresholds for "high" (per-function `fn_ccn` for the complexity rows; `loc` is per-file - based on industry conventions, adjust for context):
 
 | Signal | Watch | High |
 |---|---|---|
-| p95 cyclomatic complexity | ≥ 10 | ≥ 15 |
-| max cyclomatic complexity | ≥ 30 | ≥ 50 |
+| p95 per-function cyclomatic complexity (`fn_ccn.p95`) | ≥ 10 | ≥ 15 |
+| max per-function cyclomatic complexity (`fn_ccn.max`) | ≥ 30 | ≥ 50 |
 | p95 file size (LOC) | ≥ 500 | ≥ 800 |
 | max file size (LOC) | ≥ 1500 | ≥ 2000 |
 
@@ -480,7 +514,9 @@ Thresholds for "high" (based on industry conventions - adjust for context):
 | Linter exists, no complexity/length rules | High | **Missing** - concrete evidence of the gap |
 | No linter at all | Either | **Missing** |
 
-When scoring Partial or Missing on this combined check, name the top 3 worst offenders from `top_complex` / `top_large` in the report's Evidence/Gap columns. Those are the files the missing rule would have flagged.
+In the matrix, "complexity in the High range" means **per-function** `fn_ccn` clears the threshold (a real per-function violation the linter rule would block) - not the file-aggregate `ccn`. A high aggregate with every function under the threshold is a *large file*, scored on the LOC rows, not a complexity violation.
+
+When scoring Partial or Missing on this combined check, name the top 3 worst offenders from `top_complex` / `top_large` in the report's Evidence/Gap columns. Those are the files the missing rule would have flagged. For each `top_complex` offender, cite its `max_fn_ccn` (the per-function value the threshold gates), not just the aggregate `ccn` - and if `max_fn_ccn` is under the threshold, it is not actually a per-function offender even though its aggregate is high.
 
 ### Layer 4: Architecture Tests (Conventions as Contracts)
 
@@ -725,13 +761,26 @@ The "Top 3 Actions" table at the bottom names specific files. Start there.
 
 [![Complexity hotspot](./complexity-heatmap.svg)](./complexity-heatmap.svg)
 
+- **Measured at commit:** `<head_short>` (<committed_date>)<staleness-suffix>
 - **Files scored:** <N>
 - **Churn window chosen:** <last 12mo | last 24mo | last 5y | all-time>
-- **Complexity profile:** p95 ccn <N> (max <M>); p95 LOC <N> (max <M>)
-- **Top hotspots** (composite `sqrt(ccn) × sqrt(1 + commits)` - a sub-linear blend of complexity and recent churn, so a complex-AND-active file leads, a frozen-but-complex file ranks below it, and a churny-but-trivial file can't top the list on churn alone):
-  1. `<path>` — <loc> LOC, ccn <N>, <M> commits in window
+- **Complexity profile:** per-function ccn p95 <N> (max <M>); file-aggregate ccn p95 <N> (max <M>); p95 LOC <N> (max <M>)
+- **Top hotspots** (composite `sqrt(ccn) × sqrt(1 + commits)` - a sub-linear blend of complexity and recent churn, so a complex-AND-active file leads, a frozen-but-complex file ranks below it, and a churny-but-trivial file can't top the list on churn alone). `ccn` here is the **file aggregate**; the worst single function per file is in parentheses:
+  1. `<path>` — <loc> LOC, aggregate ccn <N> (worst function <max_fn_ccn>), <M> commits in window
   2. ...
   3. ...
+
+**Pin the snapshot to its commit (issue #59).** Read `measured_commit` from `run-context.json` and fill the "Measured at commit" line so every absolute LOC/CCN figure in this report reads as a snapshot of one commit, not a current truth:
+
+```bash
+jq '.measured_commit' "$REPO_ROOT/.assess/run-context.json"
+```
+
+- When `available: false`, omit the "Measured at commit" line (no git history to pin to).
+- Render `head_short` and `committed_date`. Add a `<staleness-suffix>` warning when the snapshot is stale, so a reader knows the numbers may have drifted:
+  - `dirty: true` → append " - **working tree had uncommitted changes; figures include un-committed edits**".
+  - `behind` is a positive integer → append " - **HEAD was <behind> commit(s) behind `<upstream>`; absolute figures are a snapshot and may read low against current code**".
+  - Clean and up to date (`dirty: false`, `behind` 0 or null) → no suffix.
 
 Size encodes lines of code, colour encodes cyclomatic complexity (dark red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk. When the treemap carries a **hatched** overlay (only when opt-in mutation results exist), those blocks are covered-but-unpinned code - tests run them without constraining them - so they stop reading as safe green; the heatmap's own legend keys the diagonal (>30% survivor density) and cross-hatch (>50%, severe).
 
@@ -821,9 +870,13 @@ The `Issue` column is filled in by Step 6 if the user opts to create tracking is
 
 **Use repo-relative paths only.** Never write absolute paths from your environment (e.g. `/Users/.../repo/src/foo.go`) into the report. They leak the author's directory layout, break shell commands for other contributors, and look unprofessional in committed artifacts. Repo-relative paths (`src/foo.go`, `.golangci.yml`) work everywhere.
 
+**Currency-check any package you name (issue #62).** Before naming a specific package *version* in an action (`dart_code_metrics: ^5.7.6`, `some-linter@2.1.0`), prefer naming the **rule/concept plus a pointer to the language's package registry** (pub.dev, npm, crates.io, PyPI, RubyGems) over a hardcoded version - registries stay current; your training data doesn't. If you do name a specific package, verify it's still actively maintained for the repo's language/runtime version rather than trusting recall. This protects every language symmetrically: any canonical tool can be deprecated after the model's training cutoff (the `dart_code_metrics` case), so "name the rule + registry" is the safe default.
+
 Good actions look like:
 
-> _"Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67), `internal/sync/reconciler.go` (ccn 54)."_
+> _"Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current per-function p95 is 23; immediate offenders by worst function: `internal/import/parser.go` (function ccn 67), `internal/sync/reconciler.go` (function ccn 54)."_
+
+Cite the **per-function** value (`fn_ccn` / `max_fn_ccn`) against a per-function rule, not the file aggregate - a `cyclop:15` rule flags functions, so a file whose worst function is 12 is not an offender no matter how high its aggregate sums (issue #58).
 
 Generic actions to avoid:
 
@@ -836,6 +889,16 @@ Generic actions to avoid:
 - **Layer 0 Partial because a hub doc is stale:** name the specific stale hub from `stale_hubs` and its churning subject — _"refresh `docs/architecture.md` (251d stale; subject `src/api/` had 47 commits in window)"_ — not "improve the docs".
 - **Layer 0 Partial because the doc set is fragmented:** name the orphans / islands — _"link the 6 orphan docs into the MOC; `index.md` is named but not wired (out-degree 0)"_.
 - **Layer 6 Partial because coverage is enforced but truth-pressure is unverified:** the actions are _"strengthen assertions to pin observable behaviour at the named survivors"_ and _"add mutation testing to CI (e.g. `mutmut`, Stryker, PITest)"_ — **not** "raise the coverage threshold" (higher line-coverage numbers manufacture more lying signal without improving behavioural constraint).
+
+**Cross-check offenders against the recommendation's own scope (issue #59a).** When an action names a *scope* ("un-exclude `services/*/service/*.go`", "enforce the rule under `src/core/`"), every offender you list in that action's evidence must actually fall within that scope. Before writing the offender list, verify each path against the named pattern - a `service_modules.go` under `shared/pkg/saga/schema/` is **not** under `services/*/service/`, so it can't be cited as evidence for un-excluding `services/*/service/`. If the worst offenders sit outside the scope you're recommending, either widen the recommended scope to cover them or move them to a separate action with the right scope. The offender list and the recommended change must describe the same set of files.
+
+**Apply the same truth-pressure to `/assess`'s own structural findings (issue #59c).** `/assess` grades other docs for being honest; its own topology/count claims are held to the same bar. Before stating any count-based finding - "the README lists 15 services but there are 19", "N modules lack a base doc" - **count the actual entries**, don't estimate or trust a single signal. For a service/component-count claim, enumerate both sides (what the doc lists vs what exists on disk) and report the real delta and the specific missing names, not a round-number guess. A wrong count ("missing 2" when it's actually missing 4, including specific named services) erodes trust exactly as a stale doc does. If you can't enumerate precisely, say "approximately" and name what you couldn't verify rather than asserting a false-precise number.
+
+**Sub-threshold "approaching the cap" findings are not refactor tasks (issue #60).** Files in the *Watch* band but under the *High* threshold (e.g. 600-800 LOC against an 800 cap, or per-function ccn 10-14 against a 15 rule) are **not violations**. Do not default them into refactor tasks - pre-emptively decomposing files that currently work fine is churn-for-churn (review cost, merge conflicts, behaviour risk on working code). Instead:
+
+- Keep actual violations (over the High threshold) as the standard remediation tasks.
+- Surface "approaching the cap" files as an **optional, low-priority** item in *Additional Opportunities*, never the Top 3 - and frame it **annotate-first**: the recommendation is to add an acknowledgement marker (e.g. a `// large-file: tracked` comment or a lint allow-entry) so the file is consciously owned, leaving the decompose-or-not decision to the maintainer. Only escalate to a refactor task when the file is over the cap or the maintainer asks.
+- Label the band explicitly in the report so a reader sees "under the cap, watch" - never present a sub-threshold file as if it failed a gate.
 
 ### Why these three?
 <2-3 sentences explaining why these are highest leverage. Connect to specific gaps from the table above and to hotspot files where relevant. Be concrete about what each action prevents.>
