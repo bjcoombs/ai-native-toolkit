@@ -12,7 +12,6 @@ from pathlib import Path
 
 from lib.agent_instructions_grader import (
     SIZE_THRESHOLD_LINES,
-    SIZE_THRESHOLD_WORDS,
     compute_bloat_penalty,
     compute_size_metrics,
     detect_skills_delegation,

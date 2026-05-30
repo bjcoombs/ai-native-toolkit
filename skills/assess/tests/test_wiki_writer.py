@@ -1,10 +1,8 @@
 """Tests for wiki writer module."""
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
-import pytest
 
 from lib.wiki_writer import (
     HotspotEntry,

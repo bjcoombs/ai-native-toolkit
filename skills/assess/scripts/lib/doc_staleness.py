@@ -33,7 +33,6 @@ from lib.doc_graph import (
 )
 from lib.git_churn import (
     file_last_commit_days,
-    git_churn_scores,
     pick_churn_window,
     tracked_files,
 )

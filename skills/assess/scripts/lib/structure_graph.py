@@ -460,8 +460,8 @@ def analyze_structure(
 
     modules = sorted(import_graph.modules)
     package_set = set(package_names) | {
-        m for m in modules if _module_file(m, roots) and
-        _module_file(m, roots).name == "__init__.py"
+        m for m in modules
+        if (mf := _module_file(m, roots)) is not None and mf.name == "__init__.py"
     }
 
     # Measure each module's size and public surface once.

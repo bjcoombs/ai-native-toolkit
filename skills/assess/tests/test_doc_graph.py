@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 
 import lib.doc_graph as doc_graph
 from lib.doc_graph import build_doc_graph, group_broken_links

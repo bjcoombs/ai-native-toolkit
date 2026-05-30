@@ -148,7 +148,9 @@ def change_coupling_pairs(
         for (a, b), count in counts.items()
         if count >= min_support
     ]
-    pairs.sort(key=lambda d: (-d["co_change_count"], d["file_a"], d["file_b"]))
+    # dict values are heterogeneous (str | int | float), so mypy types the
+    # lookup as ``object``; the negation is valid at runtime (count is int).
+    pairs.sort(key=lambda d: (-d["co_change_count"], d["file_a"], d["file_b"]))  # type: ignore[operator]
     return pairs
 
 
@@ -241,7 +243,7 @@ def _coauthors_have_agent(coauthor_field: str) -> bool:
     return False
 
 
-def authorship_analysis(repo_root: Path, path: Path | str) -> dict:
+def authorship_analysis(repo_root: Path, path: Path | str) -> dict:  # noqa: C901  # multi-signal B4 heuristic; ccn 19, ratchet target
     """B4: human-anchor / intent-source signals and a conservative class for ``path``.
 
     Returns ``{human_anchor, authorship_class, intent_source, contributors}``:
