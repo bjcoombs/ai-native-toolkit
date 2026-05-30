@@ -274,7 +274,7 @@ Layer 0 answers: *can the agent form a true picture before it acts?* It has two 
 Read the agent instruction file grades and surface integrity from `run-context.json`:
 
 ```bash
-jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .broken_instruction_refs, .skills_present, .skills_count, .skill_files, .instruction_file_size' "$REPO_ROOT/.assess/run-context.json"
+jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .broken_instruction_refs, .sensitive_instruction_content, .ancestor_instruction_files, .skills_present, .skills_count, .skill_files, .instruction_file_size' "$REPO_ROOT/.assess/run-context.json"
 ```
 
 `.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). Only **git-tracked** files are graded - a file present on disk but uncommitted is *not* credited (it isn't part of what the repo ships). The same heuristic grader scores each tracked file. For each:
@@ -285,8 +285,11 @@ jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .brok
 - `subscores.line_count` / `subscores.word_count` - file size (feeds the bloat penalty below)
 - `subscores.bloat_penalty` - points subtracted for an oversized monolith with no skills factoring (0 when lean or when the repo delegates to skills)
 - `freshness_days` - days since last edit
+- `is_alias: true` / `alias_target` - this file is a thin alias (symlink or stub) to a canonical instruction file; it has **inherited** that file's grade. Report it as an alias to `<alias_target>`, not as a standalone doc to rewrite (see "AGENTS.md as an alias" below).
 
 `.skills_present` / `.skills_count` / `.skill_files` describe whether the repo factors guidance into on-demand skills (`.claude/skills/`, `skills/`). `.instruction_file_size` mirrors the per-file `line_count` / `word_count` / `bloat_penalty` for quick reference.
+
+`.sensitive_instruction_content` is a map (path → redacted findings) of content unsafe to publish that was found in a candidate instruction file - see "Scan before recommending a commit" below. `.ancestor_instruction_files` lists instruction files that cascade in from an ancestor directory or the global user config - see "Ancestor cascade" below.
 
 `.instructions_grade` is the best grade across all tracked files - the starting point for the layer scoring.
 
@@ -310,6 +313,14 @@ jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .brok
 Important: a null grade and an F grade map to different remediation. Null means "create a CLAUDE.md / AGENTS.md (whichever the team uses)." F means "the file is there but needs rewriting." A broken/dangling reference means "the file you point at isn't reachable - fix the link or remove the claim." Don't conflate them.
 
 For a dangling reference, the right verb depends on the target's actual state - **don't default to `git add`**, since the file may never have been written. Check `untracked_instruction_files`: if the target appears there it exists on disk, so the action is *commit it* (`git add <file>`); if it appears nowhere, it was never created, so the action is *write it* (then commit) - or *remove the dangling claim*. "`git add CLAUDE.md`" is only correct when `CLAUDE.md` is actually present-but-untracked.
+
+**Scan before recommending a commit (never publish secrets or infra recon).** When `instructions_grade` is `null` or low, the remediation often ends in "commit a `CLAUDE.md`/`AGENTS.md`". Before recommending that **any** file be committed - acutely if the repo's remote is public - check `sensitive_instruction_content[path]`. A non-empty list means the candidate file carries content that should not enter public git history: `ip_address`, `ssh_or_host`, `private_key`, `cloud_key`, `credential`, or `home_path` (a personal home-directory path). When present, **do not recommend committing the file as-is.** Instead: name the categories found (the evidence is already redacted - quote it verbatim, never re-derive the raw secret), and make the action "redact the flagged content (demo IPs, SSH/host details, credentials, home-dir paths), then commit." The deterministic scan is conservative and high-precision; an empty list is "nothing obvious found", not a clearance, so for a public repo still advise a human glance. This is a hard gate: a published infrastructure detail or credential is expensive to reverse.
+
+**Scope the create-a-file remediation to a root instruction file - nothing else.** A `null`/F grade means "add a committed root `CLAUDE.md` (or `AGENTS.md` aliasing it)" - it does **not** license vendoring runtime state. Specifically, never recommend committing `.taskmaster/` (`tasks.json`, `prd/`, `config.json`), `.assess/` working files, or other churning machine-generated state as a "source of truth": that is not instruction/breadcrumb content, it bloats git history, and it duplicates the live working directory. The remediation is one lean instruction file, not a vendoring exercise.
+
+**AGENTS.md as an alias, not a duplicate.** Claude Code reads one canonical `CLAUDE.md`; Codex reads `AGENTS.md` and Gemini CLI reads `GEMINI.md`. A repo that wants all three should point the others **at** the canonical file - a symlink or a thin stub (e.g. an `AGENTS.md` whose body is just "see `CLAUDE.md`") - so there is a single source of truth and no dual-maintenance. The grader detects this: a thin alias carries `is_alias: true` / `alias_target` and **inherits** the canonical file's grade. Treat that as the ideal shape - report it as "aliases `CLAUDE.md`", not as a weak standalone doc. When recommending a second-tool instruction file for a repo that already has a good `CLAUDE.md`, suggest an **alias** (`ln -s CLAUDE.md AGENTS.md`, or a one-line stub pointing to it), never a freshly-authored routing document that duplicates the canonical content.
+
+**Ancestor cascade - distinguish "none anywhere" from "not committed here".** Claude Code composes `CLAUDE.md` from every ancestor directory plus the global `~/.claude/CLAUDE.md`, so a maintainer working in-tree may have rich instructions that **a fresh clone never receives**. When `instructions_grade` is `null` but `ancestor_instruction_files` is non-empty, say so: "no committed instruction file at the repo root; an ancestor/global `CLAUDE.md` cascades locally but reaches no clone - add a committed root file (or an alias) so contributors get it." That is a different, gentler finding than genuine absence (`null` **and** empty `ancestor_instruction_files`), where nothing exists at any level. Don't claim "no instructions exist" when the maintainer is clearly working against cascaded ones.
 
 When multiple instruction files are present (e.g. CLAUDE.md and AGENTS.md as symlinks of the same content), list each in the report.
 

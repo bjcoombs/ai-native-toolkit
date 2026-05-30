@@ -68,6 +68,148 @@ SKILL_DELEGATION_PATTERNS = [
     r"progressive\s+disclosure",
 ]
 
+# --- Sensitive-content scan (issue #56) -----------------------------------
+# Before /assess recommends committing ANY instruction file - especially to a
+# public repo - it must scan the candidate text for content that should not be
+# published: infrastructure recon (IPs, SSH/host details), credentials, and
+# home-directory / PII paths. Conservative by design: high-precision signals so
+# a legitimate instruction file is not flagged. Every finding's evidence is
+# REDACTED before it leaves this module - the scan must not itself copy the
+# secret it is warning about into run-context.json (which ships in the wiki).
+
+# Placeholder values that mean "fill this in", not a real secret. A credential
+# assignment whose value matches one of these is not flagged.
+_CREDENTIAL_PLACEHOLDERS = re.compile(
+    r"^(?:x{2,}|\*{2,}|\.{3,}|-{2,}|_+|"
+    r"your[_-]?\w*|my[_-]?\w*|some[_-]?\w*|example\w*|placeholder\w*|"
+    r"change[_-]?me|todo|tbd|none|null|env|secret|password|token|"
+    r"\$\{?\w+\}?|<[^>]+>|\{\{[^}]+\}\})$",
+    re.IGNORECASE,
+)
+
+
+def _redact(token: str, *, keep: int = 0) -> str:
+    """Mask the bulk of a token so the warning never republishes the secret."""
+    token = token.strip()
+    if keep <= 0 or len(token) <= keep:
+        return "***"
+    return f"{token[:keep]}***"
+
+
+def _scan_ip_addresses(text: str) -> list[str]:
+    findings: list[str] = []
+    for m in re.finditer(r"(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![\w.])", text):
+        octets = [int(g) for g in m.groups()]
+        if any(o > 255 for o in octets):
+            continue  # not a valid IPv4 - likely a version string
+        # Loopback / unspecified are harmless and noisy; skip them.
+        if octets[0] == 127 or octets == [0, 0, 0, 0]:
+            continue
+        findings.append(f"{octets[0]}.x.x.x")
+    return findings
+
+
+def scan_sensitive_content(text: str) -> list[dict]:
+    """Scan an instruction file for content unsafe to commit (issue #56).
+
+    Returns a list of ``{"category": str, "evidence": str}`` findings with the
+    evidence REDACTED. Categories:
+
+        private_key   - an embedded PEM private key block
+        cloud_key     - an AWS-style access key id
+        credential    - a ``password=``/``token=``/``api_key=`` assignment with
+                        a concrete (non-placeholder) value
+        ssh_or_host   - root@host / ssh user@host login details
+        ip_address    - a routable/private IPv4 literal (loopback excluded)
+        home_path     - a personal home-directory path (/Users/<name>/, ...)
+
+    Conservative: high-precision signals only. An empty list means "nothing
+    obviously sensitive found" - not a guarantee, so the prose still advises a
+    human glance before committing to a public repo.
+    """
+    findings: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(category: str, evidence: str) -> None:
+        key = (category, evidence)
+        if key not in seen:
+            seen.add(key)
+            findings.append({"category": category, "evidence": evidence})
+
+    if re.search(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----", text):
+        add("private_key", "-----BEGIN PRIVATE KEY-----")
+
+    for m in re.finditer(r"\b(AKIA[0-9A-Z]{16})\b", text):
+        add("cloud_key", _redact(m.group(1), keep=4))
+
+    cred = re.compile(
+        r"\b(password|passwd|secret|api[_-]?key|access[_-]?key|auth[_-]?token|token)\b"
+        r"\s*[:=]\s*(\"[^\"]+\"|'[^']+'|\S+)",
+        re.IGNORECASE,
+    )
+    for m in cred.finditer(text):
+        value = m.group(2).strip("\"'")
+        if not value or _CREDENTIAL_PLACEHOLDERS.match(value):
+            continue
+        add("credential", f"{m.group(1).lower()}=***")
+
+    for m in re.finditer(r"\broot@[A-Za-z0-9._-]+", text):
+        add("ssh_or_host", "root@***")
+    for m in re.finditer(r"\bssh\s+[A-Za-z0-9._-]+@[A-Za-z0-9._-]+", text):
+        add("ssh_or_host", "ssh ***@***")
+
+    for ip in _scan_ip_addresses(text):
+        add("ip_address", ip)
+
+    for m in re.finditer(r"(?:/Users/|/home/)([A-Za-z0-9._-]+)/", text):
+        name = m.group(1)
+        if name.lower() in {"user", "username", "you", "name", "shared", "public"}:
+            continue  # generic placeholder, not a person's home dir
+        add("home_path", "/Users/***/" if "/Users/" in m.group(0) else "/home/***/")
+    for m in re.finditer(r"[A-Za-z]:\\Users\\([^\\/]+)\\", text):
+        if m.group(1).lower() not in {"user", "username", "public", "default"}:
+            add("home_path", "C:\\Users\\***\\")
+
+    return findings
+
+
+# --- Alias detection (issue #57) ------------------------------------------
+# Claude Code reads a single canonical CLAUDE.md. A repo that also wants an
+# AGENTS.md (for Codex) or GEMINI.md (for Gemini CLI) should point it AT the
+# canonical file - a thin stub or symlink - not maintain a second standalone
+# document. Detect that thin-stub shape so the grader can treat it as an alias
+# (inheriting the canonical grade) rather than a low-scoring standalone doc.
+
+# Canonical instruction filenames an alias might point at.
+_CANONICAL_BASENAMES = ("CLAUDE.md", "AGENTS.md", "GEMINI.md")
+
+# A stub is "thin" when it carries essentially no instruction content of its own.
+ALIAS_MAX_NONBLANK_LINES = 12
+ALIAS_MAX_WORDS = 80
+
+
+def detect_alias(text: str) -> dict:
+    """Detect a thin alias/stub that points at a canonical instruction file.
+
+    A thin alias is a short file whose only real content is a reference to a
+    canonical instruction file (e.g. an ``AGENTS.md`` that says "see CLAUDE.md").
+    Treating it as an alias avoids grading it as a bespoke standalone doc and
+    avoids recommending it be rewritten into a duplicate routing document.
+
+    Returns ``{"is_alias": bool, "alias_target": str | None}`` where
+    ``alias_target`` is the referenced canonical basename (e.g. ``CLAUDE.md``).
+    """
+    stripped = text.strip()
+    nonblank = [ln for ln in stripped.splitlines() if ln.strip()]
+    words = len(stripped.split())
+    if not nonblank or len(nonblank) > ALIAS_MAX_NONBLANK_LINES or words > ALIAS_MAX_WORDS:
+        return {"is_alias": False, "alias_target": None}
+
+    for basename in _CANONICAL_BASENAMES:
+        if re.search(rf"\b{re.escape(basename)}\b", stripped):
+            return {"is_alias": True, "alias_target": basename}
+    return {"is_alias": False, "alias_target": None}
+
 
 @dataclass(frozen=True)
 class Grade:

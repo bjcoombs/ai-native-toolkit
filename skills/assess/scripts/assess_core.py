@@ -36,7 +36,12 @@ from pathlib import Path
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.agent_instructions_grader import detect_skills_dir, grade_instructions
+from lib.agent_instructions_grader import (
+    detect_alias,
+    detect_skills_dir,
+    grade_instructions,
+    scan_sensitive_content,
+)
 from lib.anomaly_detector import detect_anomalies
 from lib.assess_config import load_excludes, load_structure_config
 from lib.doc_graph import build_doc_graph, is_repo_file
@@ -98,10 +103,10 @@ def _file_freshness_days(file_path: Path) -> int:
 
 def _grade_instruction_files(
     repo_root: Path,
-) -> tuple[dict[str, dict], str | None, list[str], list[dict], dict]:
+) -> tuple[dict[str, dict], str | None, list[str], list[dict], dict, dict]:
     """Scan all known instruction file locations and grade each one found.
 
-    Returns: (files_dict, best_grade, untracked, dangling_refs, skills_info)
+    Returns: (files_dict, best_grade, untracked, dangling_refs, skills_info, sensitive)
         files_dict: keyed by filename, e.g. {"CLAUDE.md": {grade, score, ...}}.
         best_grade: best letter grade across all *tracked, present* files; None
             if none found. None is distinct from "F": None means no committed
@@ -114,6 +119,11 @@ def _grade_instruction_files(
         dangling_refs: instruction files that are dangling symlinks (committed
             `.cursorrules -> missing-target`) - an advertised-but-broken
             instruction surface.
+        sensitive: per-path list of REDACTED sensitive-content findings (IPs,
+            SSH/host details, credentials, home-dir/PII paths) for any candidate
+            on disk - tracked or untracked. Surfaced so the remediation warns
+            before recommending a file be committed, especially to a public repo
+            (issue #56).
     """
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
@@ -125,6 +135,7 @@ def _grade_instruction_files(
     found: dict[str, dict] = {}
     untracked: list[str] = []
     dangling_refs: list[dict] = []
+    sensitive: dict[str, list] = {}
     for rel_path in INSTRUCTION_FILE_PATHS:
         candidate = repo_root / rel_path
         # A dangling symlink (an instruction file pointing at a missing target)
@@ -135,18 +146,28 @@ def _grade_instruction_files(
             continue
         if not candidate.exists():
             continue
+        # Scan every candidate on disk for content unsafe to publish - tracked
+        # OR untracked. An untracked file is exactly the one the remediation
+        # might tell the user to commit, so it must be scanned before that.
+        try:
+            disk_text = candidate.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            disk_text = ""
+        flags = scan_sensitive_content(disk_text) if disk_text else []
+        if flags:
+            sensitive[rel_path] = flags
         # Only grade genuine repo files. An on-disk-but-untracked instruction
         # file (a contributor's personal CLAUDE.md, or one symlinked in from
         # outside) is recorded as a finding rather than credited to the score.
         if not is_repo_file(candidate, repo_root, tracked):
             untracked.append(rel_path)
             continue
-        text = candidate.read_text(encoding="utf-8")
+        text = disk_text
         freshness = _file_freshness_days(candidate)
         grade = grade_instructions(
             text, freshness_days=freshness, skills_present=skills_present
         )
-        found[rel_path] = {
+        entry = {
             "grade": grade.grade,
             "score": grade.score,
             "subscores": grade.subscores,
@@ -154,15 +175,109 @@ def _grade_instruction_files(
             "line_count": len(text.splitlines()),
             "present": True,
         }
+        # Alias detection (issue #57): a committed AGENTS.md/GEMINI.md that is a
+        # symlink to - or a thin stub pointing at - a canonical instruction file
+        # is the desired single-source-of-truth shape, not a low-scoring bespoke
+        # doc. Record the target so the second pass can inherit its grade.
+        alias_target = _alias_target(candidate, text, repo_root)
+        if alias_target:
+            entry["alias_target_basename"] = alias_target
+        found[rel_path] = entry
+
+    _resolve_alias_grades(found)
 
     best = (max(found.values(), key=lambda v: GRADE_RANK.get(v["grade"], 0))["grade"]
             if found else None)
-    return found, best, untracked, dangling_refs, skills_info
+    return found, best, untracked, dangling_refs, skills_info, sensitive
 
 
 # Basenames (lowercased) of the known instruction files, for cross-referencing
 # broken doc links against the instruction surface.
 _INSTRUCTION_BASENAMES = {Path(p).name.lower() for p in INSTRUCTION_FILE_PATHS}
+
+# Canonical files an alias would point at (a single source of truth).
+_CANONICAL_ALIAS_TARGETS = {"claude.md", "agents.md", "gemini.md"}
+
+
+def _alias_target(candidate: Path, text: str, repo_root: Path) -> str | None:
+    """Return the canonical basename this file aliases, or None.
+
+    Two shapes count as an alias (issue #57):
+      * a symlink whose target is a canonical instruction file, or
+      * a thin stub whose only real content references a canonical file.
+    The alias's own basename is excluded, so CLAUDE.md never aliases itself.
+    """
+    self_name = candidate.name.lower()
+    # Symlink alias - the target is whatever the link resolves to.
+    if candidate.is_symlink():
+        try:
+            target_name = candidate.resolve().name.lower()
+        except OSError:
+            target_name = ""
+        if target_name in _CANONICAL_ALIAS_TARGETS and target_name != self_name:
+            return candidate.resolve().name
+    # Thin-stub alias - short file that just points at a canonical doc.
+    alias = detect_alias(text)
+    if alias["is_alias"] and alias["alias_target"]:
+        if alias["alias_target"].lower() != self_name:
+            return alias["alias_target"]
+    return None
+
+
+def _resolve_alias_grades(found: dict[str, dict]) -> None:
+    """Let an alias inherit the grade of the canonical file it points at.
+
+    A thin alias/symlink should grade as the single-source-of-truth it routes
+    to, not as a low-scoring standalone doc that the remediation would tell the
+    user to rewrite. Mutates ``found`` in place: marks ``is_alias`` and copies
+    the target's grade/score when the target is itself graded.
+    """
+    by_basename = {Path(rel).name.lower(): meta for rel, meta in found.items()}
+    for meta in found.values():
+        target = meta.pop("alias_target_basename", None)
+        if not target:
+            continue
+        target_meta = by_basename.get(target.lower())
+        meta["is_alias"] = True
+        meta["alias_target"] = target
+        if target_meta is not None and target_meta is not meta:
+            # Inherit the canonical grade - the alias is as good as what it
+            # points at, and carries no maintenance burden of its own.
+            meta["grade"] = target_meta["grade"]
+            meta["score"] = target_meta["score"]
+
+
+def detect_ancestor_instructions(repo_root: Path) -> list[str]:
+    """Detect committed-elsewhere instruction files that cascade into this repo.
+
+    Claude Code composes ``CLAUDE.md`` from every ancestor directory plus the
+    global ``~/.claude/CLAUDE.md``. So "no instruction file at the repo root" is
+    not the same as "no instructions anywhere" - a clone gets none of the
+    ancestor cascade, but the maintainer working in-tree does (issue #57).
+
+    Returns REDACTED, repo-relative / ``~``-relative descriptors (never absolute
+    paths - those would leak a home directory into the committed wiki). Best
+    effort: any filesystem error yields an empty list.
+    """
+    found: list[str] = []
+    try:
+        repo_root = repo_root.resolve()
+        # Walk parent directories above the repo root (bounded depth).
+        parent = repo_root.parent
+        depth = 1
+        while parent != parent.parent and depth <= 6:
+            for name in ("CLAUDE.md", "AGENTS.md", "GEMINI.md"):
+                if (parent / name).is_file():
+                    found.append(f"{name} ({depth} level(s) above repo root)")
+            parent = parent.parent
+            depth += 1
+        # The global user instructions, if present.
+        for rel in (".claude/CLAUDE.md", ".codex/AGENTS.md", ".gemini/GEMINI.md"):
+            if (Path.home() / rel).is_file():
+                found.append(f"~/{rel} (global user instructions)")
+    except OSError:
+        return []
+    return found
 
 
 def _broken_instruction_refs(doc_graph: dict, dangling_refs: list[dict]) -> list[dict]:
@@ -350,8 +465,8 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         )
 
     diff = diff_stats(prior=prior, current=current)
-    instruction_files, instructions_grade, untracked_instr, dangling_instr, skills_info = \
-        _grade_instruction_files(repo_root)
+    instruction_files, instructions_grade, untracked_instr, dangling_instr, skills_info, \
+        sensitive_instr = _grade_instruction_files(repo_root)
 
     # Load (and later update) the persistent first-flagged date map
     first_flagged_map = _load_first_flagged(assess_dir)
@@ -535,6 +650,16 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # well - see the Layer 0 scoring rule in SKILL.md.
     ctx["untracked_instruction_files"] = untracked_instr
     ctx["broken_instruction_refs"] = _broken_instruction_refs(doc_graph, dangling_instr)
+    # Sensitive content found in a candidate instruction file (issue #56). A
+    # non-empty map means the remediation must warn + suggest redaction BEFORE
+    # recommending the file be committed - acutely so for a public repo. All
+    # evidence is redacted at the source (scan_sensitive_content).
+    ctx["sensitive_instruction_content"] = sensitive_instr
+    # Ancestor-cascade acknowledgement (issue #57): instruction files that live
+    # above the repo root (or in the global user config) and cascade into the
+    # working tree locally, but reach no fresh clone. Distinguishes "no
+    # instructions anywhere" from "instructions exist but aren't committed here".
+    ctx["ancestor_instruction_files"] = detect_ancestor_instructions(repo_root)
     # Progressive-disclosure signals (Layer 0): does the repo factor guidance
     # into on-demand skills, and is any instruction file an oversized monolith?
     # An oversized instruction file with no skills factoring carries a bloat

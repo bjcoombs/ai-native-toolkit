@@ -81,6 +81,93 @@ def test_broken_link_to_instruction_file_is_broken_ref(git_repo) -> None:
     assert any(Path(r.get("target", "")).name == "AGENTS.md" for r in refs)
 
 
+def test_sensitive_content_surfaced_for_committed_file(git_repo, fixtures_dir: Path) -> None:
+    """Issue #56: a committed instruction file carrying an IP / home path is
+    surfaced (redacted) so the remediation can warn before any further commit."""
+    repo, commit = git_repo
+    good = (fixtures_dir / "good_instructions.md").read_text()
+    _seed_assess(repo)
+    (repo / "CLAUDE.md").write_text(
+        good + "\n\n## Demo\nServer 203.0.113.7, ssh root@demo.example.com\n"
+        "Config at /Users/ben/.config/app.yaml\n",
+        encoding="utf-8",
+    )
+    commit("instructions with infra detail")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    flagged = ctx["sensitive_instruction_content"]
+    assert "CLAUDE.md" in flagged
+    cats = {f["category"] for f in flagged["CLAUDE.md"]}
+    assert {"ip_address", "ssh_or_host", "home_path"} <= cats
+    # Evidence must be redacted - no raw secret survives into run-context.
+    blob = json.dumps(flagged)
+    assert "203.0.113.7" not in blob and "/Users/ben" not in blob
+
+
+def test_sensitive_content_surfaced_for_untracked_file(git_repo, fixtures_dir: Path) -> None:
+    """Issue #56: the file the remediation might tell you to commit (an
+    untracked CLAUDE.md) is scanned even though it isn't graded."""
+    repo, commit = git_repo
+    good = (fixtures_dir / "good_instructions.md").read_text()
+    _seed_assess(repo)
+    (repo / "README.md").write_text("# Repo", encoding="utf-8")
+    commit("init")
+    (repo / "CLAUDE.md").write_text(  # untracked
+        good + "\nAWS key AKIAIOSFODNN7EXAMPLE\n", encoding="utf-8"
+    )
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    assert "CLAUDE.md" in ctx["untracked_instruction_files"]   # not graded
+    assert "CLAUDE.md" in ctx["sensitive_instruction_content"]  # but scanned
+    assert any(f["category"] == "cloud_key"
+               for f in ctx["sensitive_instruction_content"]["CLAUDE.md"])
+
+
+def test_agents_md_symlink_alias_inherits_claude_grade(git_repo, fixtures_dir: Path) -> None:
+    """Issue #57: AGENTS.md as a symlink to CLAUDE.md is the single-source-of-
+    truth shape - it inherits CLAUDE.md's grade, not a standalone score."""
+    import os
+    repo, commit = git_repo
+    good = (fixtures_dir / "good_instructions.md").read_text()
+    _seed_assess(repo)
+    (repo / "CLAUDE.md").write_text(good, encoding="utf-8")
+    os.symlink("CLAUDE.md", repo / "AGENTS.md")
+    commit("CLAUDE.md + AGENTS.md alias")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    files = ctx["instruction_files"]
+    assert files["AGENTS.md"]["is_alias"] is True
+    assert files["AGENTS.md"]["alias_target"] == "CLAUDE.md"
+    assert files["AGENTS.md"]["grade"] == files["CLAUDE.md"]["grade"]
+
+
+def test_agents_md_thin_stub_alias_inherits_grade(git_repo, fixtures_dir: Path) -> None:
+    """Issue #57: a thin AGENTS.md stub pointing at CLAUDE.md inherits its grade
+    instead of scoring low as a bespoke doc the remediation would rewrite."""
+    repo, commit = git_repo
+    good = (fixtures_dir / "good_instructions.md").read_text()
+    _seed_assess(repo)
+    (repo / "CLAUDE.md").write_text(good, encoding="utf-8")
+    (repo / "AGENTS.md").write_text(
+        "# AGENTS.md\n\nSee [CLAUDE.md](./CLAUDE.md) for all instructions.\n",
+        encoding="utf-8",
+    )
+    commit("CLAUDE.md + thin AGENTS.md stub")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    files = ctx["instruction_files"]
+    assert files["AGENTS.md"]["is_alias"] is True
+    assert files["AGENTS.md"]["alias_target"] == "CLAUDE.md"
+    assert files["AGENTS.md"]["grade"] == files["CLAUDE.md"]["grade"]
+
+
+def test_ancestor_instruction_files_key_present(tmp_path: Path) -> None:
+    """Issue #57: the ancestor-cascade signal is always surfaced as a list."""
+    repo = _minimal_repo(tmp_path)
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    assert isinstance(ctx["ancestor_instruction_files"], list)
+
+
 def test_build_run_context_first_run(tmp_path: Path) -> None:
     """No prior .assess/, no instruction files - 'new' diff, empty instructions."""
     repo = tmp_path / "repo"
