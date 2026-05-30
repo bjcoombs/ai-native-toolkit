@@ -28,13 +28,7 @@ target-version = "py311"
 # Test fixtures are deliberately messy sample repos consumed as *data*, not
 # code we own. The doc-graph and test-pressure scans already exclude them; the
 # linter must too, or it grades the fixtures instead of the core.
-#
-# doc-graph-svg.py is an auxiliary Matplotlib renderer (not part of the
-# deterministic assess core that issue #77 targets) and carries pre-existing
-# defects the new linter surfaces - an undefined ``_classify`` in the
-# ``colour="status"`` branch (F821) and an unused ``pr_max`` (F841). Excluded
-# here and flagged for a separate fix rather than papered over with inline noqa.
-extend-exclude = ["tests/fixtures", "scripts/doc-graph-svg.py"]
+extend-exclude = ["tests/fixtures"]
 
 [tool.ruff.lint]
 # Ruff's default rule set (E4/E7/E9 pycodestyle + F pyflakes) plus the mccabe
@@ -49,12 +43,12 @@ select = ["E4", "E7", "E9", "F", "C901"]
 "**/__init__.py" = ["F401"]
 
 [tool.ruff.lint.mccabe]
-# Per-function cyclomatic complexity. 15 fences current reality: every linted
-# function already sits at or below it except the genuine offenders (ccn 17-19),
-# which carry an explicit ``# noqa: C901`` with a note - build_doc_graph and
-# authorship_analysis here, and build_standalone_skill_zip in scripts/. The gate
-# fails the moment any other function regresses past 15; ratchet down as the
-# offenders are decomposed.
+# Per-function cyclomatic complexity. 15 fences current reality: every function
+# already sits at or below it except four genuine offenders (ccn 17-19), which
+# carry an explicit ``# noqa: C901`` with a note - build_doc_graph and
+# authorship_analysis here, render in doc-graph-svg.py, and
+# build_standalone_skill_zip in scripts/. The gate fails the moment any other
+# function regresses past 15; ratchet down as the four are decomposed.
 max-complexity = 15
 
 [tool.mypy]
