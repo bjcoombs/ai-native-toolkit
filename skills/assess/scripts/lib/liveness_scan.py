@@ -34,7 +34,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from lib.doc_graph import EXCLUDE_DIRS
+from lib.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_excluded_path
 
 DEAD_CODE_TIMEOUT = 60  # seconds; a slow tool degrades rather than hangs the run
 MAX_CANDIDATES = 50     # cap so a pathological repo can't bloat run-context.json
@@ -58,7 +58,7 @@ def _has_ext(repo_root: Path, exts: set[str],
         if not path.is_file() or path.suffix.lower() not in exts:
             continue
         rel = path.relative_to(repo_root)
-        if any(part in EXCLUDE_DIRS for part in rel.parts):
+        if is_excluded_path(rel):
             continue
         if is_user_excluded(rel, extra_dirs, extra_pats):
             continue
@@ -141,7 +141,9 @@ def _vulture_excludes(extra_exclude_dirs: set[str] | None = None) -> str:
     skipped at scan time, not just filtered after.
     """
     extras = extra_exclude_dirs or set()
-    return ",".join(f"*/{d}/*" for d in sorted(EXCLUDE_DIRS | extras))
+    dir_globs = [f"*/{d}/*" for d in sorted(EXCLUDE_DIRS | extras)]
+    seq_globs = ["*/" + "/".join(seq) + "/*" for seq in EXCLUDE_PATH_SEQUENCES]
+    return ",".join(dir_globs + seq_globs)
 
 
 # language -> ordered tool preference. Each tool: cmd builder, parser, and a
@@ -185,8 +187,7 @@ def _under_excluded(path_str: str,
     matches a user-supplied exclude. Used to filter dead-code-tool output
     so candidates from `regulatory-raw/` reference data don't surface."""
     from lib.assess_config import is_user_excluded
-    parts = Path(path_str).parts
-    if any(part in EXCLUDE_DIRS for part in parts):
+    if is_excluded_path(Path(path_str)):
         return True
     if extra_exclude_dirs or extra_exclude_patterns:
         return is_user_excluded(
@@ -375,7 +376,7 @@ def _iter_files(repo_root: Path, exts: set[str] | None = None,
         if not path.is_file():
             continue
         rel = path.relative_to(repo_root)
-        if any(part in EXCLUDE_DIRS for part in rel.parts):
+        if is_excluded_path(rel):
             continue
         if is_user_excluded(rel, extra_dirs, extra_pats):
             continue
