@@ -122,6 +122,53 @@ def test_write_stats_commits_none_without_git(treemap, tmp_path):
     assert stats["top_hotspots"][0]["commits"] is None
 
 
+def test_write_stats_separates_aggregate_from_per_function_ccn(treemap, tmp_path):
+    """Issue #58: the file-level aggregate ccn (sum of per-function complexity)
+    must be labelled as an aggregate and never conflated with the per-function
+    value a linter threshold gates. A file summing to ccn 136 whose worst
+    single function is only 13 is NOT a per-function violation."""
+    root = tmp_path
+    f = root / "service_modules.go"   # the issue's actual offender shape
+    out = root / "stats.json"
+    # 13 functions whose complexities sum to 136 (the reported aggregate),
+    # worst single function = 13 (under a cyclop:15 threshold).
+    fn_ccns = [13.0, 13.0, 12.0, 12.0, 11.0, 11.0, 10.0, 10.0,
+               9.0, 9.0, 8.0, 8.0, 10.0]
+    assert sum(fn_ccns) == 136.0
+    treemap.write_stats(
+        [(f, 800, 136.0, "lizard")], {f: 3}, "commits (last 12mo)", root, out,
+        fn_ccn_by_path={f: fn_ccns},
+    )
+    stats = json.loads(out.read_text())
+
+    # The aggregate block self-labels and the per-function block is separate.
+    assert stats["ccn"]["basis"] == "file-aggregate"
+    assert stats["ccn"]["max"] == 136.0
+    assert stats["fn_ccn"]["basis"] == "per-function"
+    assert stats["fn_ccn"]["function_count"] == 13
+    assert stats["fn_ccn"]["max"] == 13.0   # worst function, not the sum
+
+    row = stats["top_complex"][0]
+    assert row["ccn"] == 136.0              # aggregate preserved for the hue
+    assert row["ccn_basis"] == "file-aggregate"
+    assert row["max_fn_ccn"] == 13.0        # the per-function truth for Layer 3
+
+
+def test_write_stats_scc_file_has_null_max_fn_ccn(treemap, tmp_path):
+    """scc reports file-level complexity with no function breakdown, so a
+    scc-scored file carries max_fn_ccn=null - the report must not invent a
+    per-function value it never measured."""
+    root = tmp_path
+    f = root / "report.sql"
+    out = root / "stats.json"
+    # No fn_ccn_by_path entry for this path -> scc-style, per-function unknown.
+    treemap.write_stats([(f, 400, 50.0, "scc")], None, None, root, out,
+                        fn_ccn_by_path={})
+    stats = json.loads(out.read_text())
+    assert stats["top_complex"][0]["max_fn_ccn"] is None
+    assert stats["fn_ccn"]["function_count"] == 0
+
+
 def test_assess_dir_is_self_excluded_by_default(treemap):
     """A prior run's run-context.json must not be scored on the next run -
     the script's own output directory is in EXCLUDE_DIRS. Otherwise re-runs
@@ -187,7 +234,7 @@ def test_cli_exclude_classifies_glob_vs_dir(treemap, monkeypatch, tmp_path):
         captured["extra_dirs"] = kwargs.get("extra_exclude_dirs")
         captured["extra_patterns"] = kwargs.get("extra_exclude_patterns")
         # Return an empty result so main bails out early but cleanly.
-        return [], "complexity", None, None
+        return [], "complexity", None, None, {}
 
     monkeypatch.setattr(treemap, "collect", fake_collect)
     monkeypatch.setattr(
@@ -219,7 +266,7 @@ def test_cli_exclude_merges_with_config_toml(treemap, monkeypatch, tmp_path):
     def fake_collect(*args, **kwargs):
         captured["extra_dirs"] = kwargs.get("extra_exclude_dirs")
         captured["extra_patterns"] = kwargs.get("extra_exclude_patterns")
-        return [], "complexity", None, None
+        return [], "complexity", None, None, {}
 
     monkeypatch.setattr(treemap, "collect", fake_collect)
     monkeypatch.setattr(

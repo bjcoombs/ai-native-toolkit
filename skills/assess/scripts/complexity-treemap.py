@@ -177,10 +177,26 @@ def lizard_scores(
     root: Path, include_artifacts: bool = False,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
-) -> dict[Path, tuple[int, float]]:
+) -> dict[Path, tuple[int, float, list[float]]]:
+    """Return ``{abs_path: (loc, ccn_sum, fn_ccns)}`` for scoreable files.
+
+    Two distinct complexity signals come out of lizard, and conflating them is
+    exactly the failure mode issue #58 reported:
+
+    - ``ccn_sum`` - the **file-level aggregate** (sum of every function's
+      cyclomatic complexity). This is the treemap's hue and the composite
+      hotspot score's complexity axis. It is NOT comparable to a per-function
+      linter threshold like ``cyclop: 15``; a file of twelve simple functions
+      can sum past 100 without any single function violating anything.
+    - ``fn_ccns`` - the **per-function** values. ``max(fn_ccns)`` is the worst
+      single function and is what a per-function linter threshold actually
+      gates. ``write_stats`` carries both so the report can say "ccn 136
+      aggregate; worst function 13, under the 15 threshold" instead of
+      mislabelling the aggregate as a per-function violation.
+    """
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
-    scores: dict[Path, tuple[int, float]] = {}
+    scores: dict[Path, tuple[int, float, list[float]]] = {}
     for f in lizard.analyze(paths=[str(root)], exclude_pattern=[]):
         path = Path(f.filename).resolve()
         try:
@@ -193,8 +209,9 @@ def lizard_scores(
             continue
         if _is_user_excluded(rel, extra_dirs, extra_pats):
             continue
-        ccn = sum(fn.cyclomatic_complexity for fn in f.function_list) or 1
-        scores[path] = (f.nloc, float(ccn))
+        fn_ccns = [float(fn.cyclomatic_complexity) for fn in f.function_list]
+        ccn_sum = sum(fn_ccns) or 1.0
+        scores[path] = (f.nloc, float(ccn_sum), fn_ccns)
     return scores
 
 
@@ -263,13 +280,18 @@ def collect(root: Path, by: str = "complexity",
             extra_exclude_dirs: set[str] | None = None,
             extra_exclude_patterns: list[str] | None = None,
             ) -> tuple[list[tuple[Path, int, float, str]], str,
-                       dict[Path, int] | None, str | None]:
-    """Returns (files, effective_by, aux_data, aux_label).
+                       dict[Path, int] | None, str | None,
+                       dict[Path, list[float]]]:
+    """Returns (files, effective_by, aux_data, aux_label, fn_ccn_by_path).
 
     - files: [(path, loc, metric, source)] - metric depends on mode
     - effective_by: may differ from `by` if we fell back (e.g. no git)
     - aux_data: secondary per-file signal (hotspot mode only); None otherwise
     - aux_label: human label for aux signal in tooltips
+    - fn_ccn_by_path: per-function cyclomatic-complexity lists, lizard files
+      only (scc reports file-level complexity with no function breakdown, so
+      its paths are absent here). Threaded to `write_stats` so the report can
+      separate per-function violations from file-level aggregates (issue #58).
     """
     lz = lizard_scores(
         root, include_artifacts=include_artifacts,
@@ -282,8 +304,10 @@ def collect(root: Path, by: str = "complexity",
         extra_exclude_patterns=extra_exclude_patterns,
     )
     files: list[tuple[Path, int, float, str]] = []
-    for path, (loc, ccn) in lz.items():
+    fn_ccn_by_path: dict[Path, list[float]] = {}
+    for path, (loc, ccn, fn_ccns) in lz.items():
         files.append((path, loc, ccn, "lizard"))
+        fn_ccn_by_path[path] = fn_ccns
     for path, (loc, cx) in sc.items():
         if path not in lz:
             files.append((path, loc, cx, "scc"))
@@ -307,7 +331,7 @@ def collect(root: Path, by: str = "complexity",
             _git_not_found_warning(root)
             effective_by = "complexity"
 
-    return files, effective_by, aux_data, aux_label
+    return files, effective_by, aux_data, aux_label, fn_ccn_by_path
 
 
 DOMINANCE_WARN_THRESHOLD = 0.30  # one file >30% of total LOC = suspicious
@@ -470,7 +494,8 @@ def _read_plugin_version() -> str:
 def write_stats(files: list[tuple[Path, int, float, str]],
                 aux_data: dict[Path, int] | None,
                 aux_label: str | None,
-                root: Path, out_path: Path) -> None:
+                root: Path, out_path: Path,
+                fn_ccn_by_path: dict[Path, list[float]] | None = None) -> None:
     """Write a JSON stats sidecar summarising the treemap data.
 
     Consumed by the /assess skill: percentiles drive Layer 3 (linter) scoring,
@@ -479,11 +504,26 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     geometric mean of complexity and recent churn. Both axes are damped, so a
     complex-AND-active file leads, a frozen-but-complex file ranks below it, and
     a trivially-simple-but-churny file can't top the list on churn alone.
+
+    The ``ccn`` block and every row's ``ccn`` field are **file-level aggregates**
+    (sum of per-function complexity). A per-function linter threshold (cyclop 15,
+    gocognit, etc.) is NOT comparable to those - so each row also carries
+    ``max_fn_ccn`` (the file's worst single function, or null for scc-scored
+    files with no function breakdown), and the top-level ``fn_ccn`` block reports
+    the per-function distribution. Layer 3 compares the linter threshold against
+    ``fn_ccn`` / ``max_fn_ccn``, never the aggregate (issue #58).
     """
+    fn_ccn_by_path = fn_ccn_by_path or {}
     locs = [f[1] for f in files]
     ccns = [f[2] for f in files]
     churns = ([float(aux_data.get(f[0], 0)) for f in files]
               if aux_data is not None else [])
+    # Per-function population, lizard files only. scc paths are absent from
+    # fn_ccn_by_path, so they simply don't contribute - the block self-labels
+    # its source so a reader knows it omits scc-scored files.
+    fn_population: list[float] = []
+    for vals in fn_ccn_by_path.values():
+        fn_population.extend(vals)
 
     def pct(values: list[float], q: float) -> float:
         return float(np.percentile(values, q)) if values else 0.0
@@ -494,13 +534,21 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         except ValueError:
             return str(p)
 
+    def max_fn(path: Path) -> float | None:
+        vals = fn_ccn_by_path.get(path)
+        return float(max(vals)) if vals else None
+
     enriched = []
     for path, loc, ccn, src in files:
         churn = float(aux_data.get(path, 0)) if aux_data else 0.0
         enriched.append({
             "path": rel(path),
             "loc": int(loc),
+            # File-level aggregate (sum of per-function ccn). See `max_fn_ccn`
+            # for the per-function worst case the linter threshold gates.
             "ccn": float(ccn),
+            "ccn_basis": "file-aggregate",
+            "max_fn_ccn": max_fn(path),
             # Named `commits` to match what every consumer reads (stats_diff,
             # assess_core, the hotspot template). None when churn is unavailable
             # (no git), so a missing value is distinct from a real 0.
@@ -530,10 +578,25 @@ def write_stats(files: list[tuple[Path, int, float, str]],
             "max": float(max(locs)) if locs else 0.0,
             "total": sum(locs),
         },
+        # File-level aggregate complexity (sum per file). Drives the treemap hue
+        # and the hotspot composite - NOT comparable to a per-function linter
+        # threshold. Use `fn_ccn` for that comparison.
         "ccn": {
+            "basis": "file-aggregate",
             "p50": pct(ccns, 50),
             "p95": pct(ccns, 95),
             "max": float(max(ccns)) if ccns else 0.0,
+        },
+        # Per-function complexity distribution (the unit a linter threshold like
+        # cyclop:15 actually gates). lizard files only; scc files contribute no
+        # function breakdown. `function_count` is 0 when only scc scored the repo.
+        "fn_ccn": {
+            "basis": "per-function",
+            "source": "lizard-only",
+            "function_count": len(fn_population),
+            "p50": pct(fn_population, 50),
+            "p95": pct(fn_population, 95),
+            "max": float(max(fn_population)) if fn_population else 0.0,
         },
         "churn": ({
             "p50": pct(churns, 50),
@@ -662,7 +725,7 @@ def main() -> int:
         else:
             extra_dirs.add(pat)
 
-    files, effective_by, aux_data, aux_label = collect(
+    files, effective_by, aux_data, aux_label, fn_ccn_by_path = collect(
         root, by="hotspot", include_artifacts=args.include_artifacts,
         extra_exclude_dirs=extra_dirs,
         extra_exclude_patterns=extra_patterns,
@@ -683,7 +746,8 @@ def main() -> int:
            aux_data=aux_data, aux_label=aux_label,
            survivor_density=survivor_density)
     if args.stats:
-        write_stats(files, aux_data, aux_label, root, args.stats)
+        write_stats(files, aux_data, aux_label, root, args.stats,
+                    fn_ccn_by_path=fn_ccn_by_path)
     return 0
 
 

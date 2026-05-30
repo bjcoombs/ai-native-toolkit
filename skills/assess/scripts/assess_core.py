@@ -46,7 +46,7 @@ from lib.anomaly_detector import detect_anomalies
 from lib.assess_config import load_excludes, load_structure_config
 from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.doc_staleness import analyze_doc_staleness
-from lib.git_churn import tracked_files
+from lib.git_churn import git_commit_info, tracked_files
 from lib.keyhole_signals import integrate as integrate_keyhole_signals
 from lib.liveness_scan import scan_liveness
 from lib.structure_graph import analyze_structure
@@ -589,6 +589,10 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
 
     ctx = {
         "run_date": run_date,
+        # The commit the scan measured. Absolute LOC/CCN figures are a snapshot
+        # of this commit; the report pins the SHA and warns when HEAD is dirty
+        # or behind its upstream so the numbers aren't read as current (#59).
+        "measured_commit": git_commit_info(repo_root),
         "prior_stats_exists": prior_exists,
         "stats_summary": {
             "files_scored": current.get("files_scored", 0),
