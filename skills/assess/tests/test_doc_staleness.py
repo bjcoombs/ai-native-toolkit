@@ -176,3 +176,18 @@ def test_doc_staleness_honors_user_excludes(tmp_path: Path) -> None:
     assert r["association"]["doc_count"] == 1
     assert r["association"]["code_file_count"] == 1
     assert all("regulatory-raw" not in d["path"] for d in r["docs"])
+
+
+def test_doc_staleness_excludes_test_fixtures(tmp_path: Path) -> None:
+    """Markdown and code under `**/tests/fixtures/**` are scanner inputs, not
+    repo content, so they must not count toward the staleness association
+    (issue #83)."""
+    _write(tmp_path, "README.md", "main doc")
+    _write(tmp_path, "src/app.py", "x = 1")
+    _write(tmp_path, "tests/fixtures/sample/CLAUDE.md", "fixture")
+    _write(tmp_path, "tests/fixtures/sample/loader.py", "y = 2")
+
+    r = analyze_doc_staleness(tmp_path)
+    assert r["association"]["doc_count"] == 1
+    assert r["association"]["code_file_count"] == 1
+    assert all("fixtures" not in d["path"] for d in r["docs"])

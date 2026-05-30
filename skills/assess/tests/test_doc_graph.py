@@ -187,6 +187,44 @@ def test_excludes_assess_and_vendor_dirs(tmp_path: Path) -> None:
     assert r.doc_count == 1
 
 
+def test_excludes_test_fixtures_and_orphan_rate_reflects_it(tmp_path: Path) -> None:
+    """Markdown under `**/tests/fixtures/**` is a scanner input, not a repo
+    doc, so it must not count toward the doc graph or inflate the orphan rate
+    (issue #83). One linked entry doc -> 0% orphans; without the exclusion the
+    fixture files would be unreachable orphans and the rate would spike."""
+    _write(tmp_path, "README.md", "see [guide](./guide.md)\n")
+    _write(tmp_path, "guide.md", "the guide\n")
+    # Fixtures that exist only to exercise the detectors - never navigation.
+    _write(tmp_path, "skills/assess/tests/fixtures/lean/CLAUDE.md", "fixture")
+    _write(tmp_path, "tests/fixtures/monolithic_instructions.md", "fixture")
+
+    r = build_doc_graph(tmp_path)
+    assert r.doc_count == 2
+    assert not any("fixtures" in o for o in r.orphans)
+    assert r.orphan_rate == 0.0
+
+
+def test_unrelated_top_level_fixtures_dir_not_excluded(tmp_path: Path) -> None:
+    """Only the `tests/fixtures` *sequence* is excluded - a top-level
+    `fixtures/` of real content (not preceded by `tests`) still counts."""
+    _write(tmp_path, "README.md", "real doc")
+    _write(tmp_path, "fixtures/data-model.md", "real architecture doc")
+    r = build_doc_graph(tmp_path)
+    assert r.doc_count == 2
+
+
+def test_is_excluded_path_helper() -> None:
+    from lib.doc_graph import is_excluded_path
+
+    assert is_excluded_path(Path("a/tests/fixtures/x.md"))
+    assert is_excluded_path(Path("tests/fixtures/x.md"))
+    assert is_excluded_path(Path(".assess/log.md"))
+    # `fixtures` not preceded by `tests`, and `tests` not followed by `fixtures`.
+    assert not is_excluded_path(Path("src/fixtures/x.md"))
+    assert not is_excluded_path(Path("tests/unit/x.md"))
+    assert not is_excluded_path(Path("tests/x/fixtures/y.md"))
+
+
 def test_graph_object_exposed_for_renderer(tmp_path: Path) -> None:
     """DocGraphResult.graph carries the networkx graph (the SVG renderer needs
     the full edge list, which as_dict doesn't serialise)."""

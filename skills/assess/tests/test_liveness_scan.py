@@ -150,6 +150,17 @@ def test_dead_code_filters_user_excluded_candidates_post_scan(
     assert all("regulatory-raw" not in p for p in paths)
 
 
+def test_dead_code_excludes_test_fixtures(tmp_path: Path, monkeypatch) -> None:
+    """Vulture is told to skip `**/tests/fixtures/**` at scan time, and the
+    post-scan filter drops any fixture candidate that slips through, so a
+    deliberately-dead fixture file never surfaces as repo dead code (#83)."""
+    from lib.liveness_scan import _under_excluded, _vulture_excludes
+
+    assert "*/tests/fixtures/*" in _vulture_excludes().split(",")
+    assert _under_excluded("a/tests/fixtures/sample.py") is True
+    assert _under_excluded("src/app.py") is False
+
+
 # ── observability rungs ────────────────────────────────────────────────────
 
 def test_observability_none(tmp_path: Path) -> None:
