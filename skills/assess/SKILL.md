@@ -762,6 +762,17 @@ This is an improvement roadmap, not a verdict. It measures one thing: **is the c
 
 A codebase can be 8/8 and still on fire (great scaffolding, legacy debt) — or 2/8 with a calm treemap (small codebase, no enforcement needed yet). The views matter together.
 
+**Each layer is a sense the agent needs, not a box to tick — and this report is written to be understood without prior knowledge of the framework.** Every row in the scorecard below names one thing an agent (or a newly-arrived human) must be able to *see or trust* before working safely here; it's phrased as the question that row answers. A **Missing** or **Partial** is not a mark against the codebase — it locates where someone working here is partly blind, and the Gap column says what would restore the view. One row matters most for cold readers, because it's the one most often misread: **Layer 1 (Runtime Legibility) is the agent's attention-sense — "which parts are actually live, which need attention, which are dead weight creating support burden?"** A running service answers that through telemetry (latency, errors, traffic); a repo with no deployed runtime answers it through complexity, churn, and reachability — so the complexity heatmap and the dead-code scan *are* its observability. A low telemetry score on such a repo means *look through those instruments instead*, *not* "the agent is flying blind." Observability, in this report, is whatever lets the agent see where to point effort — by whichever instrument fits the codebase.
+
+**The legacy-transition lens — this is not a new problem.** The hard part of AI-assisted coding is the same one the industry has faced for 25 years: *what happens when the people who understood the code are gone, or the code outruns anyone's ability to understand it?* AI only changes the **velocity** — a codebase can now slide from modern to legacy in months rather than years, because agents can generate change faster than a team can keep comprehending it. So read this report through the accumulated discipline of legacy-code engineering, not as a novel AI concern. The grounded references below are deliberate: a reading agent already knows them, and they carry weight that "we think you should add tests" does not.
+
+- **"Legacy code is code without tests."** — Michael Feathers, *Working Effectively with Legacy Code* (2004). A file that is **complex, churning, and untested is already legacy**, regardless of its age. The correct response is to write **characterization tests** (pin the code's *actual current behaviour*, since that is what callers depend on — not its intended spec) and find a **seam** (a place to change behaviour without editing the code) to get it under test, *then* refactor.
+- **Don't rewrite — strangle.** The instinct under AI velocity is to throw a confusing module away and regenerate it. That is the oldest trap in the book (Joel Spolsky, *Things You Should Never Do*, 2000): a rewrite discards the undocumented behaviour and bug-fixes a working system has accreted. Prefer Martin Fowler's **Strangler Fig** — replace incrementally around the edges, behind tests. An agent's default ("regenerate from intent") is precisely the wrong move; say so where a hotspot invites it.
+- **Hotspots and change-coupling are the map.** The complexity-×-churn heatmap and the coupling findings in this report *are* Adam Tornhill's (CodeScene) hotspot and change-coupling analyses — the modern, version-control-aware form of legacy comprehension. Treat the vivid-red hotspots and the `hidden_coupling` seams as the prioritized worklist, not trivia.
+- **Decide per component (the 7 Rs).** Not every flagged unit should be refactored: retain, retire, rehost, replatform, refactor, re-architect, or rebuild. Dead weight → *retire*; complex-and-live → *characterize then refactor*; safe `refactor_boundary` zones → hand to an agent in isolation.
+
+When you write the findings and Top 3 Actions below, name these anchors where they apply — they tell a reading agent *how to think* about the situation, not just what the metric says.
+
 **How it's measured.** This is an AI-readiness review run almost entirely on *traditional* tooling — static analysis, git history, and graph metrics over the docs and code. The model only writes the prose around those numbers; it does no scanning itself. That keeps a full run fast and close to zero in model tokens, and makes the structural findings reproducible run-to-run.
 
 The "Top 3 Actions" table at the bottom names specific files. Start there.
@@ -811,17 +822,19 @@ Colour = staleness (vivid red = a frozen doc beside churning code = a lying map)
 
 **Score: X / 8** — <maturity-label>
 
-| Layer | Band | Status | Evidence | Gap |
-|-------|------|--------|----------|-----|
-| 0: Agent Instructions & Navigability | read | Present/Partial/Missing | <what was found> | <what's missing> |
-| 1: Runtime Legibility / Liveness | read | Present/Partial/Missing | <what was found - if rung 3, append: "Reachable *if* the agent has `<tools cited in runbooks>` in its execution environment"> | <what's missing> |
-| 2: Code Design | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 3: Linters | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 4: Architecture Tests | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 5: CI Pipeline | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 6: Coverage Gates | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 7: Code Review Bots | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 8: AI Project Mgmt (capstone) | meta | Present/Partial/Missing | <what was found> | <what's missing> |
+The **What it asks** column is the question that layer answers for an agent working here — read it first; the framework name is secondary. The **Band** orders them by dependency: a read-side blind spot makes the write-side scores mean less (you can't trust enforcement of a picture you can't see), and the meta band only matters once the rest works.
+
+| Layer | What it asks | Band | Status | Evidence | Gap |
+|-------|--------------|------|--------|----------|-----|
+| 0: Agent Instructions & Navigability | Can I build a true map of this codebase before I touch it? | read | Present/Partial/Missing | <what was found> | <what's missing> |
+| 1: Runtime Legibility / Liveness | Can I see which parts are live, which need attention, and which are dead weight? | read | Present/Partial/Missing | <what was found - if rung 3, append: "Reachable *if* the agent has `<tools cited in runbooks>` in its execution environment"; if no deployed runtime, note that liveness is read through complexity + churn + reachability, not telemetry> | <what's missing> |
+| 2: Code Design | Will the type-checker catch my mistakes? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 3: Linters | Are complexity and style bounds enforced, or will my code drift? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 4: Architecture Tests | Are the structural conventions executable, or just folklore? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 5: CI Pipeline | Does something automatically catch a bad change before it merges? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 6: Coverage Gates | Do the tests constrain behaviour, or just execute lines? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 7: Code Review Bots | Is there design-level feedback on every change? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 8: AI Project Mgmt (capstone) | Do learnings feed back into the contracts, or evaporate? | meta | Present/Partial/Missing | <what was found> | <what's missing> |
 
 **Layer 1 evidence carries an explicit caveat by default.** The Layer 1 spec is honest about its boundary: this scores what the *repo* makes agent-reachable, not what the agent has installed at runtime. So when Layer 1 is **Present** (rung 3), the Evidence cell should not read "Reachable, full stop" - it should name the cited tools and conditionalise on their availability. Example: _"Runbook fences `kubectl logs`, `stern`, `logcli`; reachable *if* the agent has these in its execution context."_ When Partial or Missing, the caveat is moot - no rung-3 claim is being made.
 
@@ -877,6 +890,8 @@ Prioritize by leverage: agent instructions and CI first, then linters and covera
 
 The `Issue` column is filled in by Step 6 if the user opts to create tracking issues. Leave as `—` initially.
 
+**Ground actions in the legacy-code precedent where it applies.** For a complex, churning, *untested* hotspot, the right first action is almost never "rewrite it" and rarely a bare "add tests" — it is **"add characterization tests for `<file>` to pin current behaviour, then refactor behind them"** (Feathers). For a tangled `hidden_coupling` seam, frame it as a **strangler-fig boundary** to replace incrementally, not a big-bang rewrite. For `candidate_dead_weight`, the action is **retire** (confirm liveness, then delete) — one of the 7 Rs. Naming the precedent (characterization test, seam, strangler fig, the 7 Rs) gives the action authority a reading agent recognizes and steers it away from the throw-it-away-and-regenerate instinct that AI velocity makes tempting and usually wrong.
+
 **Frame actions positively.** "Add `cyclop` rule (threshold 15) to `.golangci.yml`" beats "Stop letting complex code through CI." Positive directives are easier for the next contributor (human or LLM) to act on - they say what to do, not what to avoid. If you find yourself writing "Don't X" or "Never Y", convert to "Use X (because Z)" instead.
 
 **Use repo-relative paths only.** Never write absolute paths from your environment (e.g. `/Users/.../repo/src/foo.go`) into the report. They leak the author's directory layout, break shell commands for other contributors, and look unprofessional in committed artifacts. Repo-relative paths (`src/foo.go`, `.golangci.yml`) work everywhere.
@@ -922,7 +937,14 @@ Generic actions to avoid:
 
 <3-5 bullet points. What this repo already does well. Be specific — name files, tools, and patterns. Acknowledge existing infrastructure.>
 
-**Wiki:** see `.assess/index.md` for the full hotspot catalog across all runs, `.assess/log.md` for run history, and `.assess/hotspots/<file>.md` for per-file briefings.
+**If you are an agent working in this repo, read the `.assess/` directory — it is actionable feedback written for you, not just a report you skim once.** It is a compounding, AI-readable record that grows with every run:
+
+- `.assess/assess-report.md` — this report: the scorecard, the lying signals, and the Top 3 Actions with exact commands and file paths.
+- `.assess/hotspots/<file>.md` — a per-file briefing for each hotspot, including a **Suggested actions** section. Before you change a file that appears here, read its briefing first: it tells you why the file is risky and what to do about it.
+- `.assess/index.md` — the catalog of every hotspot ever flagged (current and graduated), so you can see what has and hasn't been addressed.
+- `.assess/log.md` — run history, so you can see whether a hotspot is regressing, persistent, or improving over time.
+
+Treat it as the first place to look when deciding where to point effort in this codebase — it is the durable form of "what needs attention here."
 
 ---
 
