@@ -45,6 +45,20 @@ Once a codebase outgrows any single LLM context window and AI agents become regu
 
 `/assess` gives you paired views to act on that. The doc-navigability graph shows whether an agent can even find its way - how much of the docs is reachable, and which are stale maps of churning code. The complexity SVG shows where the codebase is today - which files will bite next week. The accompanying `assess-report.md` shows what scaffolding is in place to stop it getting worse - a score across the layers below, each marked Present / Partial / Missing with concrete evidence:
 
+### The intent: keep codebases comprehensible as AI accelerates them
+
+The deeper problem `/assess` exists to address is not new — it is the oldest one in software maintenance: *what happens when the people who understood the code leave, or the code outruns anyone's ability to understand it?* The instinct when a system becomes incomprehensible is to throw it away and start again. That instinct was wrong in 2000 ([Joel Spolsky, *Things You Should Never Do*](https://www.joelonsoftware.com/2000/04/06/things-you-should-never-do-part-i/)) and it is wrong now, because a rewrite discards the undocumented behaviour and accumulated bug-fixes a working system has earned.
+
+What AI changes is **velocity**. An agent can generate change faster than a team can keep comprehending it, so a codebase can slide from modern to legacy in *months* rather than years. The transition is the same; the clock is faster. That makes the discipline more important, not less.
+
+So `/assess` is grounded in the accumulated practice of legacy-code engineering, and its reports name those anchors on purpose — they carry weight a reading agent recognizes:
+
+- **"Legacy code is code without tests"** (Michael Feathers, *Working Effectively with Legacy Code*). A complex, churning, untested file is already legacy. The answer is **characterization tests** (pin actual behaviour) and **seams**, then incremental refactoring — Martin Fowler's **strangler fig**, never a big-bang rewrite.
+- **Hotspots and change-coupling** (Adam Tornhill / CodeScene). The complexity-×-churn heatmap and coupling findings *are* the version-control-aware form of legacy comprehension — they tell an agent where the danger and the hidden seams actually are.
+- **Decide per component** (the 7 Rs: retain, retire, rehost, replatform, refactor, re-architect, rebuild) rather than treating every flag as a refactor.
+
+The goal is a codebase that stays legible to whoever — or whatever — works on it next: that its self-descriptions (docs, tests, types, instructions) are kept *honest under pressure*, not merely present. That honesty is what lets an agent (or a new hire) act without first having to rediscover the whole system.
+
 The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can the agent form a true picture?), **write-side** (can it be trusted to produce good output?), and **meta** (does the system keep itself honest?).
 
 | Layer | Band | What it enforces |
