@@ -188,6 +188,7 @@ Spawns a Fibonacci-sized team (default 3) that cycles through De Bono's six hats
 | `/assess` | Layered AI-readiness assessment (0-8 contract model) plus a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) and [`doc-graph-svg.py`](skills/assess/scripts/doc-graph-svg.py) so the agent runs them with no external setup. Filters build artifacts and generated code by default (opt-out with `--include-artifacts`); warns when one file dominates LOC. Offers to install optional `scc` for repos heavy in markdown/JSON/YAML. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
 | `/huddle` | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board). Three execution modes: solo flat-parallel, phased sub-agent (default fallback), and team mode (needs Agent Teams capability flag). |
 | `/deslop` | Detect and remove the telltale signs of AI writing - puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations. Two modes: a silent quality gate while writing prose, or an explicit de-slop/audit pass. Ships a [`references/full-checklist.md`](skills/deslop/references/full-checklist.md) A-F catalog derived from Wikipedia's "Signs of AI writing" (29 May 2026) - the skill flags itself for re-derivation if it goes stale, since the tells drift with model generations. |
+| `/ghsync` | Bulk clone and keep in sync every GitHub repo you can access across an org - built for onboarding into a new enterprise. Discovers repos through the teams you belong to, deduplicates, then clones new ones and fast-forward syncs existing checkouts and their worktrees into a `<repo>/<repo>-main` + `<repo>/worktree` layout. Org defaults to the directory you run from. Never clobbers local work (uncommitted or off-default-branch repos are fetched, not pulled) and reports every exception in a summary. Ships [`ghsync.sh`](skills/ghsync/scripts/ghsync.sh); needs `gh` + `jq`, supports GitHub Enterprise via `GH_HOST`. |
 
 ### Commands (slash-only, no bundled assets)
 
@@ -295,6 +296,10 @@ ai-native-toolkit/
 │   │   ├── SKILL.md                   # Remove the signs of AI writing (12 high-frequency tells)
 │   │   └── references/
 │   │       └── full-checklist.md      # Exhaustive A-F catalog (Wikipedia-derived)
+│   ├── ghsync/
+│   │   ├── SKILL.md                   # Bulk clone + sync every org repo you can access
+│   │   └── scripts/
+│   │       └── ghsync.sh              # Org-wide clone + fast-forward sync into worktree layout
 │   ├── marathon/
 │   │   └── SKILL.md                   # Parallel agent marathon orchestration
 │   └── pr-review-merge/
