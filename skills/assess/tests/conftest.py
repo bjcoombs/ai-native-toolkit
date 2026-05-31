@@ -1,4 +1,17 @@
-"""Shared pytest fixtures."""
+"""Shared pytest fixtures.
+
+Hermetic git. The fixtures below build throwaway git repos and assert on
+commit *metadata* (authorship, dates, coupling), never on signatures. A git
+subprocess inherits the ambient global/system config, and some environments
+enable commit signing there (``commit.gpgsign=true`` with an SSH/GPG signing
+program, e.g. Claude Code's web sandbox). Signing then fails inside the
+disposable test repos and ``git commit`` exits 128 — breaking the whole
+git-backed suite in any signing environment while CI (which doesn't sign)
+stays green. We neutralise ambient git config for the whole test process at
+import time (before any fixture builds a repo) by pointing GIT_CONFIG_GLOBAL
+/ GIT_CONFIG_SYSTEM at the null device. Each repo still sets its own local
+identity, so commits resolve an author/committer with no global config.
+"""
 from __future__ import annotations
 
 import datetime as _dt
@@ -7,6 +20,12 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
+# Applied at import time so it is in effect before any module/session-scoped
+# fixture creates a repo. See the module docstring for the why.
+os.environ["GIT_CONFIG_GLOBAL"] = os.devnull
+os.environ["GIT_CONFIG_SYSTEM"] = os.devnull
+os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 
 
 @pytest.fixture
