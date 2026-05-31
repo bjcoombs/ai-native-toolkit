@@ -15,6 +15,15 @@
 dist/standalone-skills/
 !/.github/
 
+# /assess output: we dogfood /assess on this repo, so its compounding wiki and
+# latest report ARE tracked (the report, both SVGs, the stats baseline for the
+# next run's diff, and the index/log/hotspots wiki). The transient sidecars are
+# regenerated every run, so they stay ignored to keep diffs clean.
+!/.assess/
+/.assess/run-context.json
+/.assess/complexity-stats.prior.json
+/.assess/.cache/
+
 # Still ignore .DS_Store files everywhere
 **/.DS_Store
 
