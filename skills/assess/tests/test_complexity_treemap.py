@@ -251,6 +251,19 @@ def test_cli_exclude_classifies_glob_vs_dir(treemap, monkeypatch, tmp_path):
     assert sorted(captured["extra_patterns"]) == ["*.csv", "data-*.json"]
 
 
+def test_argparse_help_builds_on_current_python(treemap, monkeypatch, capsys):
+    """Regression for the Python 3.14 crash: argparse now eagerly validates help
+    strings and rejects a bare ``%`` (it must be escaped ``%%``). Building the
+    parser via ``--help`` must raise SystemExit (help printed), never ValueError
+    ('badly formed help string'). Runs under whatever Python the suite is on, so
+    a 3.14 CI job catches a reintroduced bare ``%`` in any help text."""
+    monkeypatch.setattr(sys, "argv", ["complexity-treemap.py", "--help"])
+    with pytest.raises(SystemExit) as exc:
+        treemap.main()
+    assert exc.value.code == 0
+    assert "--test-pressure" in capsys.readouterr().out
+
+
 def test_cli_exclude_merges_with_config_toml(treemap, monkeypatch, tmp_path):
     """`.assess/config.toml` and `--exclude` both layer onto the defaults;
     neither replaces the other. Config-supplied dirs join CLI dirs, and

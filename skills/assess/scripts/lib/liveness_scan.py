@@ -497,7 +497,23 @@ def scan_observability(repo_root: Path,
     instrumented = _detect_instrumented(repo_root, files)
     discoverable, runbooks = _detect_discoverable(repo_root, files)
     reachable = _detect_reachable(repo_root, files, runbooks)
-    rung = 3 if reachable else 2 if discoverable else 1 if instrumented else 0
+    # Instrumentation is *necessary* for the doc-based ladder (see the rung model
+    # above: rung 0 == "no runtime instrumentation; liveness unknowable"). A repo
+    # that only *documents* observability - an SRE how-to, or this toolkit's own
+    # SKILL.md describing what a runbook looks like - trips the discoverable /
+    # runbook-prose detectors without emitting any telemetry, which previously
+    # inflated such a repo straight to rung 3. So prose evidence only elevates
+    # the rung when the repo is actually instrumented. Genuinely *invokable*
+    # tooling (an .mcp.json telemetry server, a logs/metrics repo skill) is real
+    # agent-reachability on its own and still scores rung 3 without a manifest.
+    tool_reachable = [s for s in reachable
+                      if s.startswith(("MCP server", "repo skill"))]
+    if tool_reachable:
+        rung = 3
+    elif instrumented:
+        rung = 3 if reachable else 2 if discoverable else 1
+    else:
+        rung = 0
     return ObservabilityResult(
         instrumented=instrumented, discoverable=discoverable,
         reachable=reachable, rung=rung,
