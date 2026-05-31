@@ -687,7 +687,7 @@ def main() -> int:
         "--test-pressure", type=Path, metavar="RUN_CONTEXT_JSON",
         help=("Path to a run-context.json. When its `test_pressure` block "
               "carries per-file mutation results, files with high survivor "
-              "density are hatched (>30% diagonal, >50% cross-hatch) so "
+              "density are hatched (>30%% diagonal, >50%% cross-hatch) so "
               "covered-but-unpinned code stops rendering as safe green. "
               "Absent or empty test_pressure data -> no overlay (silent)."),
     )

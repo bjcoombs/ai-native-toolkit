@@ -238,11 +238,44 @@ def test_single_body_token_does_not_reach_discoverable(tmp_path: Path) -> None:
 
 
 def test_two_body_tokens_reach_discoverable(tmp_path: Path) -> None:
+    # Instrumentation present so the discoverable doc can elevate the rung -
+    # this test isolates the 2-distinct-token threshold for *discoverable*
+    # detection, not the rung floor (see test_docs_only_without_instrumentation).
+    _write(tmp_path, "requirements.txt", "structlog\n")
     _write(tmp_path, "ops.md",
            "We watch SLOs in Grafana and page via alerting when budgets burn.")
     r = scan_observability(tmp_path)
     assert r.rung == 2
     assert r.discoverable
+
+
+def test_docs_only_without_instrumentation_is_rung_0(tmp_path: Path) -> None:
+    """A repo that only *documents* observability - no telemetry emitted - must
+    not inflate past rung 0. Regression for the self-referential false positive
+    where this toolkit's own SKILL.md (prose describing runbooks/runnable
+    queries) scored rung 3 with `instrumented: false`."""
+    _write(tmp_path, "runbooks/oncall.md",
+           "We watch SLOs in Grafana and Datadog.\n"
+           "Query logs:\n```bash\nkubectl logs deploy/api\n```\n")
+    r = scan_observability(tmp_path).as_dict()
+    assert r["instrumented"]["present"] is False
+    # the doc still registers as discoverable/reachable evidence...
+    assert r["discoverable"]["present"] is True
+    assert r["reachable"]["present"] is True
+    # ...but with nothing instrumented there is no telemetry to reach: rung 0.
+    assert r["rung"] == 0
+
+
+def test_mcp_tooling_reaches_rung_3_without_instrumentation(tmp_path: Path) -> None:
+    """An invokable telemetry tool (.mcp.json log/metric server) is real
+    agent-reachability on its own - it stands at rung 3 even with no in-repo
+    instrumentation manifest (the telemetry lives in deployed infra)."""
+    _write(tmp_path, ".mcp.json",
+           '{"mcpServers":{"loki-logs":{"command":"loki-mcp"}}}')
+    r = scan_observability(tmp_path).as_dict()
+    assert r["instrumented"]["present"] is False
+    assert r["rung"] == 3
+    assert any("MCP server" in s for s in r["reachable"]["signals"])
 
 
 # ── read-only: build-mutating dead-code tools are gated ────────────────────

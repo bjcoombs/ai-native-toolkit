@@ -90,6 +90,25 @@ def test_complex_plus_stale_is_lying_map_negative_value() -> None:
     assert "do not auto-generate" in rec
 
 
+def test_low_confidence_stale_doc_is_not_a_lying_map() -> None:
+    """A stale-by-ratio doc whose staleness is low-confidence (subject_method ==
+    'repo-baseline') must NOT be classified a lying_map: the ratio is measured
+    against repo-wide churn, not the code the doc describes, so a doc edited
+    today reads as 'stale' purely because the repo is busy. Mirrors the Layer 0
+    stale-hub confidence guard. Same ratio as the lying_map case above, only the
+    confidence differs."""
+    staleness = _staleness(
+        [_doc("pkg/engine/README.md", ratio=6.0, confidence="low")])
+    result = analyze_doc_complexity_join(COMPLEXITY_STATS, staleness, Path("/repo"))
+
+    doc = _by_path(result)["pkg/engine/README.md"]
+    # freshness still computes negative from the coarse ratio...
+    assert doc["freshness"] == -1.0
+    # ...but the low-confidence signal is too coarse to call a lie.
+    assert doc["finding"] is None
+    assert result["findings"]["lying_maps"] == []
+
+
 def test_complex_plus_no_doc_is_unexplained_complexity() -> None:
     """CCN-30 code with no doc covering it -> unexplained_complexity, value 0."""
     # Only a doc far away that covers nothing complex.

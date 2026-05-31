@@ -233,7 +233,14 @@ def analyze_doc_complexity_join(
         # high bar means doc_value is already near zero, so the doc's state is
         # noise either way.
         if complexity_summarised >= threshold:
-            if freshness < 0:
+            # A low-confidence staleness signal (subject_method ==
+            # "repo-baseline") measures the doc against repo-wide churn, not the
+            # specific code it describes, so a doc edited today can still read as
+            # "stale" purely because the repo is busy elsewhere. That is too
+            # coarse to call a lying map - the same confidence guard the Layer 0
+            # stale-hub reporting applies. Leave such a doc unclassified.
+            low_confidence = doc.get("confidence") == "low"
+            if freshness < 0 and not low_confidence:
                 finding = "lying_map"
             elif freshness > 0:
                 finding = "good_contract"
