@@ -66,6 +66,39 @@ EXCLUDE_DIRS = {
     ".assess",
 }
 
+# Path-segment *sequences* (not single dir names) that mark non-navigational
+# trees. Test fixtures live at `**/tests/fixtures/**`: they are inputs to the
+# scanners (sample CLAUDE.md / monolithic-instruction files that exist only to
+# exercise the detectors), never repo docs. Counting them inflates the orphan
+# rate and depresses the Layer 0 navigability read (issue #83). Matching the
+# consecutive sequence - rather than the bare `fixtures` dir name - avoids
+# over-excluding an unrelated top-level `fixtures/` of real content.
+EXCLUDE_PATH_SEQUENCES: tuple[tuple[str, ...], ...] = (
+    ("tests", "fixtures"),
+)
+
+
+def _contains_sequence(parts: tuple[str, ...], seq: tuple[str, ...]) -> bool:
+    """True if `seq` appears as consecutive elements anywhere in `parts`."""
+    n = len(seq)
+    if n == 0 or n > len(parts):
+        return False
+    return any(parts[i:i + n] == seq for i in range(len(parts) - n + 1))
+
+
+def is_excluded_path(rel: Path) -> bool:
+    """True if `rel` lies under a built-in non-navigational tree.
+
+    Combines the single-segment `EXCLUDE_DIRS` match (`.assess`, `node_modules`,
+    ...) with the multi-segment `EXCLUDE_PATH_SEQUENCES` match (`tests/fixtures`).
+    This is the built-in default, applied by every scan; user-supplied
+    `config.toml` / `--exclude` excludes layer on top via `is_user_excluded`.
+    """
+    parts = rel.parts
+    if any(part in EXCLUDE_DIRS for part in parts):
+        return True
+    return any(_contains_sequence(parts, seq) for seq in EXCLUDE_PATH_SEQUENCES)
+
 # Entry-doc basenames: legitimately have no inbound links (they are where a
 # reader starts), so they are excluded from the orphan count and used as the
 # roots for reachability.
@@ -180,7 +213,7 @@ class DocGraphResult:
         }
 
 
-def is_repo_file(path: Path, repo_root: Path, tracked: set[Path] | None) -> bool:
+def is_repo_file(path: Path, repo_root: Path, tracked: set[Path] | frozenset[Path] | None) -> bool:
     """True if `path` is genuinely part of the repo.
 
     Excludes two classes of non-repo file the scan must ignore:
@@ -220,7 +253,7 @@ def discover_doc_files(
             rel = path.relative_to(repo_root)
         except ValueError:
             continue
-        if any(part in EXCLUDE_DIRS for part in rel.parts):
+        if is_excluded_path(rel):
             continue
         if is_user_excluded(rel, extra_dirs, extra_pats):
             continue
@@ -435,7 +468,7 @@ def classify_node(node: str, entries: set, unreachable: set, orphans: set) -> st
     return "island"
 
 
-def build_doc_graph(
+def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, ratchet target
     repo_root: Path, doc_files: list[Path] | None = None,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,

@@ -104,7 +104,7 @@ def strip_frontmatter(text: str) -> str:
     return text[m.end():].lstrip("\n")
 
 
-def build_standalone_skill_zip(
+def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly; ccn 17, ratchet target
     skill_source_dir: Path,
     out_zip: Path,
     standalone_name: str,

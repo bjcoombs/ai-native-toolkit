@@ -10,23 +10,54 @@ The headline pieces are three **skills**:
 
 ## What `/assess` produces
 
-Two paired views from a single run, on a real ~650k-LOC private monorepo (file paths sanitized). The first asks _can an agent find its way?_ The second asks _what's risky to change?_
+Two paired SVG views from a single run, on a real ~650k-LOC monorepo (file paths sanitized). The first asks _can an agent find its way?_ The second asks _what's risky to change?_
 
-[![Example doc navigability map from a real codebase](docs/example-doc-graph.svg)](docs/example-doc-graph.svg)
+Here is the same repo twice: an already-good AI-native codebase **before**, then the **same repo after** its maintainers worked through the Top 3 Actions from the `/assess` report. The story is that it gets measurably cleaner. Click any image for the full interactive SVG; hover any node or block for its underlying numbers.
 
-> Doc-navigability graph: 254 docs, 622 links, 43 islands, 30% reachable from the entry point. Structure encodes reachability (centre = entry, rings = link-distance from entry, rim = unreachable, dashed ring = orphan); colour encodes staleness (vivid red = a frozen doc beside churning code = a *lying map*); size encodes file length. The rim of orphans, the disconnected islands, the vivid-red hubs all become visible at a glance - this is the docs an agent would consult before changing anything, and whether they're still true. Hover any node for its in/out degree, reachability state, and staleness.
+<table>
+  <tr>
+    <th width="50%">Before</th>
+    <th width="50%">After applying the Top 3 Actions</th>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><b>Doc-navigability graph</b> - can an agent traverse the docs to the right place, and is what it finds still true?</td>
+  </tr>
+  <tr>
+    <td><a href="docs/example-doc-graph.svg"><img alt="Doc-navigability graph before the action sweep: 254 docs, 30% reachable from the entry point, 43 islands, 15 broken links" title="Before: 30% reachable, 24% orphaned, 43 islands, 15 broken links" src="docs/example-doc-graph.svg"></a></td>
+    <td><a href="docs/example-doc-graph-after.svg"><img alt="Doc-navigability graph after the action sweep: 247 docs, 89% reachable from the entry point, 20 islands, 0 broken links" title="After: 89% reachable, 11% orphaned, 20 islands, 0 broken links" src="docs/example-doc-graph-after.svg"></a></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><b>Complexity hotspot heatmap</b> - which files are riskiest to change next week?</td>
+  </tr>
+  <tr>
+    <td><a href="docs/example-heatmap.svg"><img alt="Complexity hotspot heatmap before the action sweep" title="Before: complexity hotspots, size = LOC, hue = complexity, saturation = churn" src="docs/example-heatmap.svg"></a></td>
+    <td><a href="docs/example-heatmap-after.svg"><img alt="Complexity hotspot heatmap for the same repo after the action sweep" title="After: same repo, complexity hotspots, size = LOC, hue = complexity, saturation = churn" src="docs/example-heatmap-after.svg"></a></td>
+  </tr>
+</table>
 
-[![Example complexity hotspot from the same codebase](docs/example-heatmap.svg)](docs/example-heatmap.svg)
+> **The measurable win.** In the doc-navigability graph, reachability from the entry point climbs from **30% to 89%**, orphaned docs fall from **24% to 11%**, disconnected islands drop from **43 to 20**, and the **15 broken links are gone**. The rim of orphans thins, the islands reconnect, and the lying-map reds cool - the map an agent consults before changing anything becomes honest. The heatmap stays the same repo's complexity profile throughout: it tells you which territory is dangerous, while the graph tells you whether the map is honest.
 
-> Codecov-style complexity heatmap from the same run. Size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk an agent (or human) is most likely to break next week. Hover any block for its LOC, CCN, and recent commit count. Read alongside the graph above: the graph tells you whether the map is honest; the heatmap tells you which territory is dangerous.
-
-Both SVGs are colour-blind-safe (OrRd ramp, no red-green).
+> **How to read them.** *Doc graph* - structure encodes reachability (centre = entry, rings = link-distance from entry, rim = unreachable, dashed ring = orphan); colour encodes staleness (vivid red = a frozen doc beside churning code, a *lying map*); size encodes file length. *Heatmap* - size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active); the vivid-red blocks are the migration risk an agent (or human) is most likely to break next week. Both SVGs are colour-blind-safe (OrRd ramp, no red-green).
 
 ### Why this matters for an AI-driven codebase
 
 Once a codebase outgrows any single LLM context window and AI agents become regular contributors, code quality stops being a function of *who knows what* and starts being a function of *what the system enforces*. Norms ("we prefer X") fail because new contributors - especially AI agents starting each session fresh - never read them. Contracts ("the build fails if you don't do X") work because they're enforced regardless of who's reading.
 
-`/assess` gives you paired views to act on that. The doc-navigability graph shows **whether an agent can even find its way** - how much of the docs is reachable, and which are stale maps of churning code. The complexity SVG shows **where the codebase is today** - which files will bite next week. The accompanying `assess-report.md` shows **what scaffolding is in place to stop it getting worse** - a score across the layers below, each marked Present / Partial / Missing with concrete evidence:
+`/assess` gives you paired views to act on that. The doc-navigability graph shows whether an agent can even find its way - how much of the docs is reachable, and which are stale maps of churning code. The complexity SVG shows where the codebase is today - which files will bite next week. The accompanying `assess-report.md` shows what scaffolding is in place to stop it getting worse - a score across the layers below, each marked Present / Partial / Missing with concrete evidence:
+
+### The intent: keep codebases comprehensible as AI accelerates them
+
+The deeper problem `/assess` exists to address is not new — it is the oldest one in software maintenance: *what happens when the people who understood the code leave, or the code outruns anyone's ability to understand it?* The instinct when a system becomes incomprehensible is to throw it away and start again. That instinct was wrong in 2000 ([Joel Spolsky, *Things You Should Never Do*](https://www.joelonsoftware.com/2000/04/06/things-you-should-never-do-part-i/)) and it is wrong now, because a rewrite discards the undocumented behaviour and accumulated bug-fixes a working system has earned.
+
+What AI changes is **velocity**. An agent can generate change faster than a team can keep comprehending it, so a codebase can slide from modern to legacy in *months* rather than years. The transition is the same; the clock is faster. That makes the discipline more important, not less.
+
+So `/assess` is grounded in the accumulated practice of legacy-code engineering, and its reports name those anchors on purpose — they carry weight a reading agent recognizes:
+
+- **"Legacy code is code without tests"** (Michael Feathers, *Working Effectively with Legacy Code*). A complex, churning, untested file is already legacy. The answer is **characterization tests** (pin actual behaviour) and **seams**, then incremental refactoring — Martin Fowler's **strangler fig**, never a big-bang rewrite.
+- **Hotspots and change-coupling** (Adam Tornhill / CodeScene). The complexity-×-churn heatmap and coupling findings *are* the version-control-aware form of legacy comprehension — they tell an agent where the danger and the hidden seams actually are.
+- **Decide per component** (the 7 Rs: retain, retire, rehost, replatform, refactor, re-architect, rebuild) rather than treating every flag as a refactor.
+
+The goal is a codebase that stays legible to whoever — or whatever — works on it next: that its self-descriptions (docs, tests, types, instructions) are kept *honest under pressure*, not merely present. That honesty is what lets an agent (or a new hire) act without first having to rediscover the whole system.
 
 The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can the agent form a true picture?), **write-side** (can it be trusted to produce good output?), and **meta** (does the system keep itself honest?).
 
@@ -42,9 +73,9 @@ The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can 
 | 7: Review Bots | write | Design-level feedback (CodeRabbit, claude[bot]) catching what linters can't |
 | 8: AI Project Management | meta | Retros, task tracking, the feedback loop that keeps the contracts above current |
 
-The Layer 0 navigability model — treating the docs as a link graph an agent must traverse — adapts the **"Lint"** health-check from [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (hubs, orphans, connectivity, an `index.md` catalog and `log.md`), making its *structural* checks deterministic. The semantic ones it also lists — contradictions between pages, concepts lacking a page — stay out of scope (an LLM/Phase-2 job).
+The Layer 0 navigability model - treating the docs as a link graph an agent must traverse - adapts the **"Lint"** health-check from [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (hubs, orphans, connectivity, an `index.md` catalog and `log.md`), making its *structural* checks deterministic. The semantic ones it also lists - contradictions between pages, concepts lacking a page - stay out of scope (an LLM/Phase-2 job).
 
-**Traditional tooling, applied to an AI-era question.** The assessment itself runs on conventional static analysis — `lizard`/`scc`, git history, and graph metrics over the docs and code — not the model. The LLM only writes the prose around the numbers. So a full run is fast and spends almost no model tokens, and the structural findings are reproducible run-to-run.
+**Traditional tooling, applied to an AI-era question.** The assessment itself runs on conventional static analysis - `lizard`/`scc`, git history, and graph metrics over the docs and code - not the model. The LLM only writes the prose around the numbers. So a full run is fast and spends almost no model tokens, and the structural findings are reproducible run-to-run.
 
 A codebase can be 8/8 and still on fire (great scaffolding, legacy debt) or 2/8 with a calm treemap (small codebase, no enforcement needed yet). The score tells you whether the system will catch the next class of pain before it lands; the SVG tells you where today's pain already is. The report's **Top 3 Actions** table names specific files, always - "improve code quality" is the failure mode `/assess` exists to prevent; "Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67)" is what makes the report actionable.
 
@@ -171,6 +202,7 @@ Spawns a Fibonacci-sized team (default 3) that cycles through De Bono's six hats
 | `/assess` | Layered AI-readiness assessment (0-8 contract model) plus a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) and [`doc-graph-svg.py`](skills/assess/scripts/doc-graph-svg.py) so the agent runs them with no external setup. Filters build artifacts and generated code by default (opt-out with `--include-artifacts`); warns when one file dominates LOC. Offers to install optional `scc` for repos heavy in markdown/JSON/YAML. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
 | `/huddle` | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board). Three execution modes: solo flat-parallel, phased sub-agent (default fallback), and team mode (needs Agent Teams capability flag). |
 | `/deslop` | Detect and remove the telltale signs of AI writing - puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations. Two modes: a silent quality gate while writing prose, or an explicit de-slop/audit pass. Ships a [`references/full-checklist.md`](skills/deslop/references/full-checklist.md) A-F catalog derived from Wikipedia's "Signs of AI writing" (29 May 2026) - the skill flags itself for re-derivation if it goes stale, since the tells drift with model generations. |
+| `/ghsync` | Bulk clone and keep in sync every GitHub repo you can access across an org - built for onboarding into a new enterprise. Discovers repos through the teams you belong to, deduplicates, then clones new ones and fast-forward syncs existing checkouts and their worktrees into a `<repo>/<repo>-main` + `<repo>/worktree` layout. Org defaults to the directory you run from. Never clobbers local work (uncommitted or off-default-branch repos are fetched, not pulled) and reports every exception in a summary. Ships [`ghsync.sh`](skills/ghsync/scripts/ghsync.sh); needs `gh` + `jq`, supports GitHub Enterprise via `GH_HOST`. |
 
 ### Commands (slash-only, no bundled assets)
 
@@ -186,9 +218,12 @@ Workflow (personal setup, opt-in - see [Adapting](#adapting-for-your-workflow)):
 | Command | Description |
 |---------|-------------|
 | `/tm` | Task Master orchestration - context-aware: starts, reviews, or cleans up tasks based on current state |
-| `/tm-marathon-config-example` | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` |
+| `/issues` | GitHub-issue marathon - triage open issues (tag `agent-ready` or post clarifying questions), then run agent-ready ones to merge with Agent Teams; mirrors `/tm`'s plan-then-marathon flow |
+| `/tm-marathon-config-example` | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` and `/issues` |
 | `/fix-pr` | Autonomous PR fixing loop - iterates on CI failures and review comments until green |
 | `/fix-develop` | Autonomous fix loop for failing CI on the repo's default branch |
+
+`/tm`, `/issues`, `/fix-pr`, and `/fix-develop` share the `marathon` skill (team orchestration engine: DAG analysis, waves, crash recovery, retrospective) and the `pr-review-merge` skill (review-to-green loop + smart merge) as a single source of truth. Each command supplies a thin work-source adapter; the skills own the execution.
 
 ### Agents (invoked by skills, or directly via `Task(subagent_type=...)`)
 
@@ -271,17 +306,26 @@ ai-native-toolkit/
 │   │       └── complexity-treemap.py  # Codecov-style hotspot SVG generator
 │   ├── huddle/
 │   │   └── SKILL.md                   # Multi-lens Six Hats deliberation
-│   └── deslop/
-│       ├── SKILL.md                   # Remove the signs of AI writing (12 high-frequency tells)
-│       └── references/
-│           └── full-checklist.md      # Exhaustive A-F catalog (Wikipedia-derived)
+│   ├── deslop/
+│   │   ├── SKILL.md                   # Remove the signs of AI writing (12 high-frequency tells)
+│   │   └── references/
+│   │       └── full-checklist.md      # Exhaustive A-F catalog (Wikipedia-derived)
+│   ├── ghsync/
+│   │   ├── SKILL.md                   # Bulk clone + sync every org repo you can access
+│   │   └── scripts/
+│   │       └── ghsync.sh              # Org-wide clone + fast-forward sync into worktree layout
+│   ├── marathon/
+│   │   └── SKILL.md                   # Parallel agent marathon orchestration
+│   └── pr-review-merge/
+│       └── SKILL.md                   # PR review, iteration, and merge lifecycle
 ├── commands/
 │   ├── tm.md
 │   ├── tm-marathon-config-example.md
 │   ├── 6hats.md
 │   ├── understand.md
 │   ├── fix-pr.md
-│   └── fix-develop.md
+│   ├── fix-develop.md
+│   └── issues.md
 ├── agents/
 │   ├── white-hat.md
 │   ├── red-hat.md
@@ -300,7 +344,10 @@ ai-native-toolkit/
 │       └── test_integration.py        # Full-build ZIP content validation
 ├── dist/                              # Generated ZIPs (gitignored; published via CI)
 └── docs/
-    └── example-heatmap.svg            # Sanitized real-world /assess output (README hero)
+    ├── example-doc-graph.svg          # Real /assess doc-navigability SVG, before the action sweep (README hero)
+    ├── example-doc-graph-after.svg    # Same repo, doc-navigability after the action sweep
+    ├── example-heatmap.svg            # Real /assess complexity heatmap, before the action sweep (README hero)
+    └── example-heatmap-after.svg      # Same repo, complexity heatmap after the action sweep
 ```
 
 ## Contributors

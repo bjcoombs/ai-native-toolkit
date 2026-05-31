@@ -1,0 +1,12 @@
+{
+  "skills/assess/scripts/assess_core.py": "2026-05-31",
+  "skills/assess/scripts/lib/doc_graph.py": "2026-05-31",
+  "skills/assess/scripts/complexity-treemap.py": "2026-05-31",
+  "skills/assess/tests/test_assess_core.py": "2026-05-31",
+  "skills/assess/scripts/lib/doc_staleness.py": "2026-05-31",
+  "skills/assess/tests/test_doc_graph.py": "2026-05-31",
+  "skills/assess/scripts/lib/liveness_scan.py": "2026-05-31",
+  "skills/assess/scripts/doc-graph-svg.py": "2026-05-31",
+  "skills/assess/tests/test_test_pressure.py": "2026-05-31",
+  "skills/assess/scripts/lib/agent_instructions_grader.py": "2026-05-31"
+}

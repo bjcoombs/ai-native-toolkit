@@ -177,10 +177,26 @@ def lizard_scores(
     root: Path, include_artifacts: bool = False,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
-) -> dict[Path, tuple[int, float]]:
+) -> dict[Path, tuple[int, float, list[float]]]:
+    """Return ``{abs_path: (loc, ccn_sum, fn_ccns)}`` for scoreable files.
+
+    Two distinct complexity signals come out of lizard, and conflating them is
+    exactly the failure mode issue #58 reported:
+
+    - ``ccn_sum`` - the **file-level aggregate** (sum of every function's
+      cyclomatic complexity). This is the treemap's hue and the composite
+      hotspot score's complexity axis. It is NOT comparable to a per-function
+      linter threshold like ``cyclop: 15``; a file of twelve simple functions
+      can sum past 100 without any single function violating anything.
+    - ``fn_ccns`` - the **per-function** values. ``max(fn_ccns)`` is the worst
+      single function and is what a per-function linter threshold actually
+      gates. ``write_stats`` carries both so the report can say "ccn 136
+      aggregate; worst function 13, under the 15 threshold" instead of
+      mislabelling the aggregate as a per-function violation.
+    """
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
-    scores: dict[Path, tuple[int, float]] = {}
+    scores: dict[Path, tuple[int, float, list[float]]] = {}
     for f in lizard.analyze(paths=[str(root)], exclude_pattern=[]):
         path = Path(f.filename).resolve()
         try:
@@ -193,8 +209,9 @@ def lizard_scores(
             continue
         if _is_user_excluded(rel, extra_dirs, extra_pats):
             continue
-        ccn = sum(fn.cyclomatic_complexity for fn in f.function_list) or 1
-        scores[path] = (f.nloc, float(ccn))
+        fn_ccns = [float(fn.cyclomatic_complexity) for fn in f.function_list]
+        ccn_sum = sum(fn_ccns) or 1.0
+        scores[path] = (f.nloc, float(ccn_sum), fn_ccns)
     return scores
 
 
@@ -263,13 +280,18 @@ def collect(root: Path, by: str = "complexity",
             extra_exclude_dirs: set[str] | None = None,
             extra_exclude_patterns: list[str] | None = None,
             ) -> tuple[list[tuple[Path, int, float, str]], str,
-                       dict[Path, int] | None, str | None]:
-    """Returns (files, effective_by, aux_data, aux_label).
+                       dict[Path, int] | None, str | None,
+                       dict[Path, list[float]]]:
+    """Returns (files, effective_by, aux_data, aux_label, fn_ccn_by_path).
 
     - files: [(path, loc, metric, source)] - metric depends on mode
     - effective_by: may differ from `by` if we fell back (e.g. no git)
     - aux_data: secondary per-file signal (hotspot mode only); None otherwise
     - aux_label: human label for aux signal in tooltips
+    - fn_ccn_by_path: per-function cyclomatic-complexity lists, lizard files
+      only (scc reports file-level complexity with no function breakdown, so
+      its paths are absent here). Threaded to `write_stats` so the report can
+      separate per-function violations from file-level aggregates (issue #58).
     """
     lz = lizard_scores(
         root, include_artifacts=include_artifacts,
@@ -282,8 +304,10 @@ def collect(root: Path, by: str = "complexity",
         extra_exclude_patterns=extra_exclude_patterns,
     )
     files: list[tuple[Path, int, float, str]] = []
-    for path, (loc, ccn) in lz.items():
+    fn_ccn_by_path: dict[Path, list[float]] = {}
+    for path, (loc, ccn, fn_ccns) in lz.items():
         files.append((path, loc, ccn, "lizard"))
+        fn_ccn_by_path[path] = fn_ccns
     for path, (loc, cx) in sc.items():
         if path not in lz:
             files.append((path, loc, cx, "scc"))
@@ -307,7 +331,7 @@ def collect(root: Path, by: str = "complexity",
             _git_not_found_warning(root)
             effective_by = "complexity"
 
-    return files, effective_by, aux_data, aux_label
+    return files, effective_by, aux_data, aux_label, fn_ccn_by_path
 
 
 DOMINANCE_WARN_THRESHOLD = 0.30  # one file >30% of total LOC = suspicious
@@ -343,12 +367,51 @@ def _warn_if_dominated_by_one_file(
     )
 
 
+# Survivor-density overlay thresholds. A file whose mutation survivor density
+# (survivors / mutants, from the test_pressure block) clears these stops
+# rendering as safe green: >30% gets a diagonal hatch, >50% a cross-hatch.
+SURVIVOR_DIAG_THRESHOLD = 0.30
+SURVIVOR_CROSS_THRESHOLD = 0.50
+
+
+def _hatch_for_density(density: float | None) -> str:
+    """Map a survivor density to a hatch level. "" when below threshold or
+    unknown - so absent/empty data silently renders no overlay."""
+    if density is None:
+        return ""
+    if density > SURVIVOR_CROSS_THRESHOLD:
+        return "cross"
+    if density > SURVIVOR_DIAG_THRESHOLD:
+        return "diag"
+    return ""
+
+
+def _survivor_overrides(
+    files: list[tuple[Path, int, float, str]],
+    survivor_density: dict[Path, float] | None,
+) -> dict[Path, dict]:
+    """Build the per-file Node overrides (``{path: {"hatch": ...}}``) for the
+    survivor-density overlay. Keys in ``survivor_density`` are matched against
+    each file's resolved path (``files[i][0]``). Returns an empty dict when no
+    data is supplied or nothing clears the threshold - the caller treats that
+    as "no overlay"."""
+    if not survivor_density:
+        return {}
+    overrides: dict[Path, dict] = {}
+    for f in files:
+        hatch = _hatch_for_density(survivor_density.get(f[0]))
+        if hatch:
+            overrides[f[0]] = {"hatch": hatch}
+    return overrides
+
+
 def render(files: list[tuple[Path, int, float, str]],
            root: Path, out_path: Path, title: str,
            show_labels: bool = False,
            by: str = "complexity",
            aux_data: dict[Path, int] | None = None,
-           aux_label: str | None = None) -> None:
+           aux_label: str | None = None,
+           survivor_density: dict[Path, float] | None = None) -> None:
     metric_label = "commits" if by == "churn" else "ccn"
     metrics = [f[2] for f in files]
     cap, cap_kind = adaptive_cap(metrics)
@@ -374,12 +437,15 @@ def render(files: list[tuple[Path, int, float, str]],
             color = base
         files_colored.append((f[0], f[1], f[2], f[3], color))
 
-    tree = build_tree(files_colored, root, aux_data, aux_label or "")
+    overrides = _survivor_overrides(files, survivor_density)
+    tree = build_tree(files_colored, root, aux_data, aux_label or "",
+                      node_overrides=overrides or None)
     W, H = 1600.0, 1000.0
     rects: list = []
     layout(tree, 0, 0, W, H, rects)
 
-    write_svg(rects, root, W, H, out_path, show_labels, metric_label)
+    write_svg(rects, root, W, H, out_path, show_labels, metric_label,
+              show_survivor_legend=bool(overrides))
 
     print(f"wrote {out_path}  ({len(files)} files, "
           f"{sum(1 for f in files if f[3] == 'lizard')} lizard, "
@@ -428,7 +494,8 @@ def _read_plugin_version() -> str:
 def write_stats(files: list[tuple[Path, int, float, str]],
                 aux_data: dict[Path, int] | None,
                 aux_label: str | None,
-                root: Path, out_path: Path) -> None:
+                root: Path, out_path: Path,
+                fn_ccn_by_path: dict[Path, list[float]] | None = None) -> None:
     """Write a JSON stats sidecar summarising the treemap data.
 
     Consumed by the /assess skill: percentiles drive Layer 3 (linter) scoring,
@@ -437,11 +504,26 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     geometric mean of complexity and recent churn. Both axes are damped, so a
     complex-AND-active file leads, a frozen-but-complex file ranks below it, and
     a trivially-simple-but-churny file can't top the list on churn alone.
+
+    The ``ccn`` block and every row's ``ccn`` field are **file-level aggregates**
+    (sum of per-function complexity). A per-function linter threshold (cyclop 15,
+    gocognit, etc.) is NOT comparable to those - so each row also carries
+    ``max_fn_ccn`` (the file's worst single function, or null for scc-scored
+    files with no function breakdown), and the top-level ``fn_ccn`` block reports
+    the per-function distribution. Layer 3 compares the linter threshold against
+    ``fn_ccn`` / ``max_fn_ccn``, never the aggregate (issue #58).
     """
+    fn_ccn_by_path = fn_ccn_by_path or {}
     locs = [f[1] for f in files]
     ccns = [f[2] for f in files]
     churns = ([float(aux_data.get(f[0], 0)) for f in files]
               if aux_data is not None else [])
+    # Per-function population, lizard files only. scc paths are absent from
+    # fn_ccn_by_path, so they simply don't contribute - the block self-labels
+    # its source so a reader knows it omits scc-scored files.
+    fn_population: list[float] = []
+    for vals in fn_ccn_by_path.values():
+        fn_population.extend(vals)
 
     def pct(values: list[float], q: float) -> float:
         return float(np.percentile(values, q)) if values else 0.0
@@ -452,13 +534,21 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         except ValueError:
             return str(p)
 
+    def max_fn(path: Path) -> float | None:
+        vals = fn_ccn_by_path.get(path)
+        return float(max(vals)) if vals else None
+
     enriched = []
     for path, loc, ccn, src in files:
         churn = float(aux_data.get(path, 0)) if aux_data else 0.0
         enriched.append({
             "path": rel(path),
             "loc": int(loc),
+            # File-level aggregate (sum of per-function ccn). See `max_fn_ccn`
+            # for the per-function worst case the linter threshold gates.
             "ccn": float(ccn),
+            "ccn_basis": "file-aggregate",
+            "max_fn_ccn": max_fn(path),
             # Named `commits` to match what every consumer reads (stats_diff,
             # assess_core, the hotspot template). None when churn is unavailable
             # (no git), so a missing value is distinct from a real 0.
@@ -488,10 +578,25 @@ def write_stats(files: list[tuple[Path, int, float, str]],
             "max": float(max(locs)) if locs else 0.0,
             "total": sum(locs),
         },
+        # File-level aggregate complexity (sum per file). Drives the treemap hue
+        # and the hotspot composite - NOT comparable to a per-function linter
+        # threshold. Use `fn_ccn` for that comparison.
         "ccn": {
+            "basis": "file-aggregate",
             "p50": pct(ccns, 50),
             "p95": pct(ccns, 95),
             "max": float(max(ccns)) if ccns else 0.0,
+        },
+        # Per-function complexity distribution (the unit a linter threshold like
+        # cyclop:15 actually gates). lizard files only; scc files contribute no
+        # function breakdown. `function_count` is 0 when only scc scored the repo.
+        "fn_ccn": {
+            "basis": "per-function",
+            "source": "lizard-only",
+            "function_count": len(fn_population),
+            "p50": pct(fn_population, 50),
+            "p95": pct(fn_population, 95),
+            "max": float(max(fn_population)) if fn_population else 0.0,
         },
         "churn": ({
             "p50": pct(churns, 50),
@@ -505,6 +610,48 @@ def write_stats(files: list[tuple[Path, int, float, str]],
 
     out_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
     print(f"wrote {out_path}")
+
+
+def load_survivor_density(run_context_path: Path,
+                          root: Path) -> dict[Path, float]:
+    """Build a ``{resolved_path: density}`` map from a run-context.json's
+    ``test_pressure`` block, for the survivor-density overlay.
+
+    Per-file density is ``survived / total`` taken from ``test_pressure.per_file``
+    (the only source carrying per-file totals; ``survivor_density.by_file`` holds
+    raw survivor *counts*). Entries without a total (e.g. mutmut, which lists
+    only survivors) are skipped - we hatch on a real density or not at all.
+
+    File paths reported by mutation tools are resolved against ``root`` so they
+    match the treemap's resolved file paths. Degrades silently to ``{}`` on any
+    error or when no ``test_pressure`` data is present - an absent or empty block
+    means no overlay, no warning.
+    """
+    try:
+        ctx = json.loads(run_context_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(ctx, dict):
+        return {}
+    tp = ctx.get("test_pressure")
+    if not isinstance(tp, dict):
+        return {}
+    per_file = tp.get("per_file") or []
+    density: dict[Path, float] = {}
+    for entry in per_file:
+        if not isinstance(entry, dict):
+            continue
+        total = entry.get("total")
+        survived = entry.get("survived")
+        file_str = entry.get("file")
+        if not file_str or not total:  # None or 0 total -> no derivable density
+            continue
+        try:
+            resolved = (root / file_str).resolve()
+            density[resolved] = (survived or 0) / total
+        except (TypeError, ValueError, OSError):
+            continue
+    return density
 
 
 def main() -> int:
@@ -535,6 +682,14 @@ def main() -> int:
               "(main.dart.js, *.min.js, *.bundle.js, *.map, etc.). "
               "Use this only when you specifically want to visualise "
               "the build output - typically you'd .gitignore these instead."),
+    )
+    ap.add_argument(
+        "--test-pressure", type=Path, metavar="RUN_CONTEXT_JSON",
+        help=("Path to a run-context.json. When its `test_pressure` block "
+              "carries per-file mutation results, files with high survivor "
+              "density are hatched (>30%% diagonal, >50%% cross-hatch) so "
+              "covered-but-unpinned code stops rendering as safe green. "
+              "Absent or empty test_pressure data -> no overlay (silent)."),
     )
     ap.add_argument(
         "--exclude", action="append", default=[], metavar="PATTERN",
@@ -570,7 +725,7 @@ def main() -> int:
         else:
             extra_dirs.add(pat)
 
-    files, effective_by, aux_data, aux_label = collect(
+    files, effective_by, aux_data, aux_label, fn_ccn_by_path = collect(
         root, by="hotspot", include_artifacts=args.include_artifacts,
         extra_exclude_dirs=extra_dirs,
         extra_exclude_patterns=extra_patterns,
@@ -580,13 +735,19 @@ def main() -> int:
         return 1
 
     _warn_if_dominated_by_one_file(files)
+    survivor_density = (
+        load_survivor_density(args.test_pressure, root)
+        if args.test_pressure else {}
+    )
     default_name = f"hotspot-{root.name}.svg"
     out = args.out or Path(default_name)
     render(files, root, out, f"Hotspot: {root.name}",
            show_labels=args.labels, by=effective_by,
-           aux_data=aux_data, aux_label=aux_label)
+           aux_data=aux_data, aux_label=aux_label,
+           survivor_density=survivor_density)
     if args.stats:
-        write_stats(files, aux_data, aux_label, root, args.stats)
+        write_stats(files, aux_data, aux_label, root, args.stats,
+                    fn_ccn_by_path=fn_ccn_by_path)
     return 0
 
 

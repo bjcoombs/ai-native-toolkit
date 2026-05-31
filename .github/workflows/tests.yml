@@ -39,3 +39,46 @@ jobs:
       - name: Run pytest
         run: uv run --with pytest pytest -v
         working-directory: scripts
+
+  contract-tests:
+    name: plugin contract pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4
+
+      - name: Run pytest
+        run: uv run --with pytest pytest -v tests/
+
+  lint:
+    name: ruff + mypy gates
+    runs-on: ubuntu-latest
+    steps:
+      # Read-only job: don't persist the checkout token for later steps
+      # (defense-in-depth; the workflow already restricts permissions to
+      # contents: read).
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4
+
+      # Layer 3 complexity ratchet + pyflakes/pycodestyle gate (issue #77).
+      # Config (threshold, exclusions, per-function noqa) lives in each
+      # pyproject.toml so the gate is identical locally and in CI.
+      - name: Ruff lint + complexity gate (skills/assess)
+        run: uv run --with ruff ruff check .
+        working-directory: skills/assess
+
+      - name: Ruff lint + complexity gate (scripts)
+        run: uv run --with ruff ruff check .
+        working-directory: scripts
+
+      # Layer 2 type gate (issue #79). Scoped to the deterministic core (lib/);
+      # config in skills/assess/pyproject.toml selects the files and checks.
+      - name: Mypy type gate (skills/assess deterministic core)
+        run: uv run --with mypy mypy
+        working-directory: skills/assess

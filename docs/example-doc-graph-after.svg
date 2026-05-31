@@ -1,0 +1,1176 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 1230" width="1180" height="1230" preserveAspectRatio="xMidYMid meet">
+<style>
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #1a1a1a; }
+  circle:hover { stroke: #000; stroke-width: 2; }
+</style>
+<rect x="0" y="0" width="1180" height="1230" fill="#ffffff"/>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9aa0a6"/></marker></defs>
+<line x1="655.9" y1="629.4" x2="554.2" y2="652.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="307.0" y1="911.1" x2="314.7" y2="649.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="307.0" y1="911.1" x2="391.2" y2="697.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="307.0" y1="911.1" x2="764.5" y2="812.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="307.0" y1="911.1" x2="415.6" y2="842.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="539.4" y1="655.9" x2="480.2" y2="666.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="539.4" y1="655.9" x2="512.1" y2="510.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="539.4" y1="655.9" x2="466.2" y2="584.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="539.4" y1="655.9" x2="596.9" y2="482.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="539.4" y1="655.9" x2="678.1" y2="518.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="539.4" y1="655.9" x2="620.8" y2="735.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="238.4" y1="827.6" x2="602.7" y2="949.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="703.9" y1="686.9" x2="717.2" y2="763.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="703.9" y1="686.9" x2="461.4" y2="462.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="703.9" y1="686.9" x2="643.6" y2="798.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="574.7" y1="541.7" x2="709.9" y2="589.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="574.7" y1="541.7" x2="535.2" y2="724.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="574.7" y1="541.7" x2="691.8" y2="673.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="614.4" y1="953.1" x2="614.7" y2="830.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="614.4" y1="953.1" x2="569.3" y2="893.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="614.4" y1="953.1" x2="524.6" y2="882.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="700.1" y1="784.3" x2="675.0" y2="796.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="176.2" y1="622.5" x2="309.6" y2="547.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="176.2" y1="622.5" x2="349.1" y2="465.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="572.3" y2="553.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="476.2" y2="679.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="511.0" y2="510.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="462.3" y2="587.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="679.8" y2="520.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="483.4" y2="762.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="457.5" y2="755.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="448.8" y2="740.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="436.9" y2="725.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="421.6" y2="707.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="411.3" y2="688.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="585.1" y2="806.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="398.2" y2="557.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="526.6" y2="789.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="511.5" y2="780.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="496.9" y2="772.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="731.2" y2="479.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="597.6" y2="482.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="659.8" y2="431.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="425.9" y2="496.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="416.6" y2="519.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="393.2" y2="578.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="455.9" y2="465.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="640.8" y2="419.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="491.5" y2="440.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="680.9" y2="438.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="770.0" y2="531.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="472.7" y2="450.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="440.8" y2="482.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="717.2" y2="462.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="544.4" y2="798.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="511.3" y2="431.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="617.9" y2="420.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="531.9" y2="424.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="553.3" y2="417.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="574.8" y2="416.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="597.2" y2="413.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="395.1" y2="645.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="391.2" y2="623.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="393.4" y2="603.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="701.0" y2="447.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="564.1" y2="803.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="746.7" y2="494.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="758.9" y2="513.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="406.5" y2="538.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="533.0" y1="734.7" x2="397.9" y2="665.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="680.1" y1="795.4" x2="583.3" y2="876.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="680.1" y1="795.4" x2="679.1" y2="855.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="680.1" y1="795.4" x2="446.5" y2="831.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="680.1" y1="795.4" x2="486.1" y2="775.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="680.1" y1="795.4" x2="541.1" y2="804.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="680.1" y1="795.4" x2="436.3" y2="728.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="680.1" y1="795.4" x2="457.7" y2="760.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="680.1" y1="795.4" x2="421.2" y2="709.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="680.1" y1="795.4" x2="448.5" y2="745.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="680.1" y1="795.4" x2="339.7" y2="696.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="678.9" y1="870.3" x2="682.6" y2="869.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="678.9" y1="870.3" x2="446.9" y2="750.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="678.9" y1="870.3" x2="664.1" y2="821.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="678.9" y1="870.3" x2="536.2" y2="424.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="678.9" y1="870.3" x2="568.0" y2="880.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="659.1" y1="804.1" x2="665.6" y2="858.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="659.1" y1="804.1" x2="436.0" y2="729.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="659.1" y1="804.1" x2="665.6" y2="801.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="659.1" y1="804.1" x2="541.1" y2="805.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="667.5" y1="873.9" x2="661.2" y2="821.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="667.5" y1="873.9" x2="665.2" y2="874.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="656.1" y1="877.0" x2="699.4" y2="704.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="656.1" y1="877.0" x2="681.1" y2="869.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="614.7" y1="814.5" x2="668.0" y2="860.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="621.0" y1="883.3" x2="651.4" y2="820.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="621.0" y1="883.3" x2="652.0" y2="877.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="609.2" y1="884.3" x2="446.0" y2="838.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="609.2" y1="884.3" x2="651.9" y2="876.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="597.3" y1="884.9" x2="601.7" y2="884.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="597.3" y1="884.9" x2="664.7" y2="872.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="597.3" y1="884.9" x2="651.9" y2="876.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="585.4" y1="885.0" x2="581.2" y2="885.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="585.4" y1="885.0" x2="664.7" y2="872.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="585.4" y1="885.0" x2="651.8" y2="876.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="573.6" y1="884.5" x2="668.1" y2="805.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="573.6" y1="884.5" x2="651.8" y2="875.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="549.9" y1="882.1" x2="581.2" y2="883.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="549.9" y1="882.1" x2="569.3" y2="883.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="549.9" y1="882.1" x2="549.3" y2="882.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="549.9" y1="882.1" x2="555.3" y2="883.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="538.2" y1="880.1" x2="644.0" y2="813.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="538.2" y1="880.1" x2="581.3" y2="883.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="538.2" y1="880.1" x2="569.3" y2="883.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="538.2" y1="880.1" x2="549.3" y2="881.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="538.2" y1="880.1" x2="532.0" y2="879.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="526.6" y1="877.6" x2="666.3" y2="802.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="526.6" y1="877.6" x2="619.9" y2="881.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="515.1" y1="874.6" x2="666.0" y2="802.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="515.1" y1="874.6" x2="600.9" y2="822.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="515.1" y1="874.6" x2="414.7" y2="717.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="503.8" y1="871.2" x2="665.7" y2="801.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="503.8" y1="871.2" x2="642.8" y2="811.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="503.8" y1="871.2" x2="651.7" y2="873.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="503.8" y1="871.2" x2="600.3" y2="821.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="503.8" y1="871.2" x2="514.1" y2="874.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="492.6" y1="867.2" x2="569.5" y2="881.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="492.6" y1="867.2" x2="549.5" y2="880.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="492.6" y1="867.2" x2="532.4" y2="877.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="481.5" y1="862.8" x2="665.2" y2="800.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="481.5" y1="862.8" x2="514.2" y2="873.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="481.5" y1="862.8" x2="468.5" y2="795.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="481.5" y1="862.8" x2="710.6" y2="851.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="481.5" y1="862.8" x2="750.0" y2="826.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="470.7" y1="857.9" x2="665.1" y2="799.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="470.7" y1="857.9" x2="581.6" y2="881.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="470.7" y1="857.9" x2="471.1" y2="858.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="460.1" y1="852.5" x2="459.4" y2="852.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="460.1" y1="852.5" x2="774.0" y2="685.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="449.8" y1="846.7" x2="651.8" y2="871.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="449.8" y1="846.7" x2="428.6" y2="406.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="439.7" y1="840.5" x2="664.7" y2="798.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="439.7" y1="840.5" x2="439.3" y2="840.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="429.9" y1="833.8" x2="664.6" y2="797.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="429.9" y1="833.8" x2="596.2" y2="880.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="429.9" y1="833.8" x2="570.0" y2="879.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="429.9" y1="833.8" x2="446.6" y2="394.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="429.9" y1="833.8" x2="466.7" y2="380.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="429.9" y1="833.8" x2="437.0" y2="398.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="429.9" y1="833.8" x2="322.7" y2="647.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="429.9" y1="833.8" x2="400.2" y2="698.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="429.9" y1="833.8" x2="581.9" y2="880.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="420.3" y1="826.7" x2="522.5" y2="873.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="411.1" y1="819.2" x2="489.2" y2="863.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="411.1" y1="819.2" x2="652.0" y2="870.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="411.1" y1="819.2" x2="515.0" y2="871.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="402.2" y1="811.3" x2="472.0" y2="856.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="402.2" y1="811.3" x2="460.2" y2="850.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="393.7" y1="803.0" x2="664.4" y2="795.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="393.7" y1="803.0" x2="620.6" y2="877.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="385.6" y1="794.4" x2="417.3" y2="822.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="385.6" y1="794.4" x2="570.7" y2="878.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="385.6" y1="794.4" x2="786.2" y2="594.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="385.6" y1="794.4" x2="641.3" y2="803.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="385.6" y1="794.4" x2="326.4" y2="554.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="385.6" y1="794.4" x2="363.0" y2="470.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="377.8" y1="785.4" x2="398.6" y2="435.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="360.4" y2="749.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="681.7" y2="862.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="664.8" y2="798.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="666.7" y2="862.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="641.6" y2="807.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="654.9" y2="864.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="644.3" y2="865.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="637.0" y2="870.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="623.8" y2="812.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="598.6" y2="815.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="626.0" y2="870.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="615.8" y2="871.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="605.9" y2="871.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="596.1" y2="868.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="587.0" y2="868.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="576.8" y2="872.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="566.8" y2="872.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="559.7" y2="866.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="549.4" y2="866.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="536.1" y2="868.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="524.7" y2="867.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="517.9" y2="862.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="505.3" y2="860.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="492.1" y2="858.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="482.7" y2="853.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="471.4" y2="849.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="461.8" y2="844.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="452.9" y2="838.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="446.6" y2="832.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="431.0" y2="826.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="422.2" y2="819.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="412.3" y2="811.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="405.4" y2="803.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="398.5" y2="795.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="388.9" y2="787.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="381.0" y2="778.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="374.3" y2="768.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="591.9" y1="816.0" x2="368.5" y2="759.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="524.6" y1="805.4" x2="483.7" y2="783.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="524.6" y1="805.4" x2="418.2" y2="714.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="524.6" y1="805.4" x2="488.4" y2="853.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="524.6" y1="805.4" x2="749.9" y2="824.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="524.6" y1="805.4" x2="501.2" y2="794.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="524.6" y1="805.4" x2="520.9" y2="803.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="503.4" y1="797.0" x2="483.1" y2="784.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="503.4" y1="797.0" x2="417.7" y2="715.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="503.4" y1="797.0" x2="509.3" y2="799.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="503.4" y1="797.0" x2="500.7" y2="795.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="483.3" y1="786.4" x2="482.5" y2="785.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="483.3" y1="786.4" x2="417.0" y2="715.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="483.3" y1="786.4" x2="481.8" y2="851.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="483.3" y1="786.4" x2="509.7" y2="798.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="483.3" y1="786.4" x2="486.8" y2="788.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="464.4" y1="773.5" x2="664.5" y2="793.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="464.4" y1="773.5" x2="416.4" y2="716.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="464.4" y1="773.5" x2="479.4" y2="851.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="464.4" y1="773.5" x2="641.5" y2="801.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="464.4" y1="773.5" x2="653.3" y2="866.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="447.1" y1="758.7" x2="415.7" y2="716.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="447.1" y1="758.7" x2="447.8" y2="759.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="447.1" y1="758.7" x2="430.1" y2="738.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="447.1" y1="758.7" x2="664.6" y2="792.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="742.1" x2="664.8" y2="792.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="742.1" x2="666.1" y2="863.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="742.1" x2="553.2" y2="874.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="742.1" x2="448.6" y2="758.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="742.1" x2="527.6" y2="424.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="742.1" x2="538.2" y2="868.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="742.1" x2="387.7" y2="606.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="417.8" y1="723.8" x2="642.2" y2="798.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="417.8" y1="723.8" x2="449.5" y2="757.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="417.8" y1="723.8" x2="653.9" y2="865.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="417.8" y1="723.8" x2="414.2" y2="717.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="406.2" y1="704.2" x2="665.2" y2="790.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="406.2" y1="704.2" x2="642.6" y2="797.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="406.2" y1="704.2" x2="654.2" y2="865.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="406.2" y1="704.2" x2="622.7" y2="873.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="396.8" y1="683.4" x2="727.5" y2="475.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="396.8" y1="683.4" x2="328.2" y2="642.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="396.8" y1="683.4" x2="426.2" y2="817.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="396.8" y1="683.4" x2="764.9" y2="804.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="465.6" y1="668.7" x2="419.8" y2="696.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="465.6" y1="668.7" x2="709.5" y2="600.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="465.6" y1="668.7" x2="464.6" y2="751.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="465.6" y1="668.7" x2="430.4" y2="709.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="465.6" y1="668.7" x2="412.0" y2="680.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="389.8" y1="661.7" x2="327.1" y2="648.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="389.8" y1="661.7" x2="336.0" y2="677.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="389.8" y1="661.7" x2="330.4" y2="658.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="389.8" y1="661.7" x2="344.1" y2="705.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="389.8" y1="661.7" x2="334.6" y2="667.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="389.8" y1="661.7" x2="338.9" y2="686.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="389.8" y1="661.7" x2="351.8" y2="724.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="389.8" y1="661.7" x2="346.8" y2="716.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="389.8" y1="661.7" x2="343.0" y2="694.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="330.7" y1="703.5" x2="605.1" y2="945.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="326.8" y1="692.2" x2="665.0" y2="791.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="326.8" y1="692.2" x2="666.0" y2="863.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="326.8" y1="692.2" x2="817.4" y2="742.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="326.8" y1="692.2" x2="831.3" y2="711.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="456.2" y2="657.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="498.0" y2="503.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="442.5" y2="574.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="589.9" y2="476.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="674.9" y2="512.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="619.9" y2="736.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="584.4" y2="807.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="751.9" y2="818.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="742.9" y2="825.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="732.8" y2="831.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="723.7" y2="838.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="713.3" y2="843.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="386.5" y1="571.2" x2="702.9" y2="849.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="391.9" y1="549.1" x2="761.2" y2="810.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="391.9" y1="549.1" x2="668.2" y2="785.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="399.7" y1="527.6" x2="646.5" y2="863.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="399.7" y1="527.6" x2="348.3" y2="723.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="399.7" y1="527.6" x2="343.1" y2="714.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="409.8" y1="507.2" x2="480.7" y2="436.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="409.8" y1="507.2" x2="605.7" y2="801.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="409.8" y1="507.2" x2="692.8" y2="851.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="409.8" y1="507.2" x2="670.3" y2="858.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="323.1" y2="579.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="322.0" y2="601.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="340.3" y2="522.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="349.4" y2="510.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="322.5" y2="590.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="378.4" y2="452.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="330.6" y2="544.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="325.1" y2="567.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="344.2" y2="503.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="356.4" y2="485.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="376.7" y2="462.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="369.6" y2="468.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="360.3" y2="476.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="323.5" y2="610.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="324.1" y2="621.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="327.6" y2="556.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="336.2" y2="532.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="351.6" y2="494.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="384.4" y2="444.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="569.1" y2="872.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="422.1" y1="488.0" x2="691.4" y2="775.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="315.1" y1="634.1" x2="383.6" y2="675.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="315.1" y1="634.1" x2="421.5" y2="819.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="315.1" y1="634.1" x2="765.1" y2="803.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="314.3" y1="622.3" x2="564.7" y2="875.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="314.3" y1="622.3" x2="366.7" y2="766.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="314.0" y1="610.4" x2="255.9" y2="630.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="314.0" y1="610.4" x2="389.2" y2="792.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="314.0" y1="610.4" x2="773.6" y2="547.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="314.0" y1="610.4" x2="688.5" y2="779.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="314.9" y1="586.6" x2="789.2" y2="777.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="314.9" y1="586.6" x2="444.1" y2="835.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="314.9" y1="586.6" x2="340.3" y2="496.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="314.9" y1="586.6" x2="356.1" y2="469.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="320.1" y1="551.4" x2="644.8" y2="793.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="320.1" y1="551.4" x2="655.9" y2="863.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="322.8" y1="539.9" x2="354.7" y2="469.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="322.8" y1="539.9" x2="339.3" y2="496.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="322.8" y1="539.9" x2="922.7" y2="583.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="322.8" y1="539.9" x2="382.4" y2="781.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="326.0" y1="528.4" x2="587.6" y2="872.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="326.0" y1="528.4" x2="575.9" y2="871.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="326.0" y1="528.4" x2="725.0" y2="750.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="326.0" y1="528.4" x2="713.2" y2="843.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="326.0" y1="528.4" x2="742.9" y2="825.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="326.0" y1="528.4" x2="751.9" y2="818.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="566.6" y2="874.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="320.9" y2="551.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="333.7" y2="507.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="369.8" y2="445.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="424.3" y2="726.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="645.7" y2="792.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="603.5" y2="802.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="667.8" y2="785.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="668.7" y2="860.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="656.6" y2="862.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="645.2" y2="865.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="317.0" y2="619.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="316.4" y2="586.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="329.7" y1="517.1" x2="362.8" y2="455.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="338.6" y1="495.1" x2="567.0" y2="873.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="338.6" y1="495.1" x2="362.3" y2="454.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="343.7" y1="484.4" x2="784.3" y2="784.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="343.7" y1="484.4" x2="353.1" y2="468.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="343.7" y1="484.4" x2="347.9" y2="476.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="343.7" y1="484.4" x2="778.3" y2="794.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="349.3" y1="473.9" x2="567.5" y2="873.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="349.3" y1="473.9" x2="338.2" y2="498.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="355.4" y1="463.7" x2="352.5" y2="468.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="355.4" y1="463.7" x2="328.8" y2="525.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="355.4" y1="463.7" x2="650.0" y2="418.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="361.8" y1="453.7" x2="350.2" y2="473.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="361.8" y1="453.7" x2="650.0" y2="418.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="361.8" y1="453.7" x2="426.9" y2="817.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="376.0" y1="434.7" x2="590.2" y2="870.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="470.5" y1="440.0" x2="394.8" y2="427.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="470.5" y1="440.0" x2="401.8" y2="419.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="489.8" y1="427.9" x2="609.7" y2="799.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="489.8" y1="427.9" x2="514.4" y2="862.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="489.8" y1="427.9" x2="695.3" y2="850.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="489.8" y1="427.9" x2="820.9" y2="735.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="400.2" y1="408.6" x2="591.2" y2="870.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="400.2" y1="408.6" x2="579.6" y2="869.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="409.0" y1="400.6" x2="671.2" y2="782.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="409.0" y1="400.6" x2="591.5" y2="869.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="409.0" y1="400.6" x2="579.9" y2="869.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="409.0" y1="400.6" x2="569.5" y2="872.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="409.0" y1="400.6" x2="558.0" y2="871.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="418.2" y1="393.0" x2="671.5" y2="782.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="418.2" y1="393.0" x2="660.2" y2="859.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="418.2" y1="393.0" x2="420.6" y2="390.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="427.6" y1="385.8" x2="671.9" y2="782.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="427.6" y1="385.8" x2="660.5" y2="859.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="427.6" y1="385.8" x2="592.1" y2="869.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="427.6" y1="385.8" x2="580.6" y2="869.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="427.6" y1="385.8" x2="570.0" y2="872.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="427.6" y1="385.8" x2="558.5" y2="871.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="427.6" y1="385.8" x2="545.6" y2="864.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="427.6" y1="385.8" x2="449.2" y2="834.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="437.4" y1="379.0" x2="429.0" y2="384.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="437.4" y1="379.0" x2="430.1" y2="817.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="437.4" y1="379.0" x2="580.9" y2="869.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="447.4" y1="372.7" x2="430.5" y2="817.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="447.4" y1="372.7" x2="454.0" y2="368.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="447.4" y1="372.7" x2="581.2" y2="869.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="468.2" y1="361.3" x2="473.1" y2="358.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="468.2" y1="361.3" x2="322.6" y2="620.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="468.2" y1="361.3" x2="400.2" y2="668.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="468.2" y1="361.3" x2="770.8" y2="796.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="468.2" y1="361.3" x2="431.2" y2="817.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="468.2" y1="361.3" x2="525.2" y2="864.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="479.0" y1="356.3" x2="485.7" y2="353.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="479.0" y1="356.3" x2="431.6" y2="817.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.1" y1="347.7" x2="432.3" y2="817.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.1" y1="347.7" x2="594.5" y2="869.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.1" y1="347.7" x2="582.9" y2="868.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.1" y1="347.7" x2="423.4" y2="394.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.1" y1="347.7" x2="446.0" y2="376.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.1" y1="347.7" x2="467.1" y2="363.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="523.9" y1="341.0" x2="549.1" y2="863.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="523.9" y1="341.0" x2="537.8" y2="862.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="535.5" y1="338.4" x2="455.5" y2="371.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="535.5" y1="338.4" x2="467.7" y2="364.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="535.5" y1="338.4" x2="486.5" y2="355.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="547.2" y1="336.3" x2="553.7" y2="335.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="547.2" y1="336.3" x2="542.3" y2="337.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="547.2" y1="336.3" x2="542.4" y2="337.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="547.2" y1="336.3" x2="664.1" y2="858.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="547.2" y1="336.3" x2="573.0" y2="871.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="582.7" y1="333.1" x2="676.9" y2="780.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="582.7" y1="333.1" x2="573.8" y2="871.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="582.7" y1="333.1" x2="585.5" y2="333.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="594.6" y1="333.0" x2="677.2" y2="779.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="594.6" y1="333.0" x2="574.1" y2="871.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="594.6" y1="333.0" x2="425.3" y2="394.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="594.6" y1="333.0" x2="585.5" y2="333.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="606.4" y1="333.5" x2="677.6" y2="779.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="606.4" y1="333.5" x2="574.3" y2="871.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="606.4" y1="333.5" x2="585.5" y2="333.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="630.1" y1="335.9" x2="678.4" y2="779.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="630.1" y1="335.9" x2="598.3" y2="868.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="630.1" y1="335.9" x2="436.1" y2="818.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="630.1" y1="335.9" x2="425.6" y2="395.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="630.1" y1="335.9" x2="468.7" y2="368.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="687.4" y1="350.8" x2="553.9" y2="339.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="687.4" y1="350.8" x2="469.1" y2="370.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="687.4" y1="350.8" x2="437.8" y2="818.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="698.5" y1="355.2" x2="426.1" y2="397.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="698.5" y1="355.2" x2="426.8" y2="403.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="698.5" y1="355.2" x2="659.5" y2="343.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="719.9" y1="365.5" x2="661.5" y2="786.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="719.9" y1="365.5" x2="669.1" y2="858.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="719.9" y1="365.5" x2="680.5" y2="349.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="730.2" y1="371.3" x2="681.9" y2="779.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="730.2" y1="371.3" x2="577.3" y2="872.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="730.2" y1="371.3" x2="619.4" y2="337.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="730.2" y1="371.3" x2="349.1" y2="510.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="740.3" y1="377.5" x2="734.1" y2="373.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="740.3" y1="377.5" x2="469.1" y2="373.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="740.3" y1="377.5" x2="525.7" y2="350.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="740.3" y1="377.5" x2="662.4" y2="786.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="740.3" y1="377.5" x2="456.3" y2="836.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="786.3" y1="415.0" x2="427.2" y2="409.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="786.3" y1="415.0" x2="603.3" y2="869.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="786.3" y1="415.0" x2="591.8" y2="870.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="794.4" y1="423.6" x2="788.8" y2="417.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="794.4" y1="423.6" x2="553.1" y2="344.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="794.4" y1="423.6" x2="780.2" y2="409.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="835.0" y1="481.9" x2="741.0" y2="382.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="835.0" y1="481.9" x2="701.2" y2="363.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="835.0" y1="481.9" x2="759.0" y2="394.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="849.3" y1="514.5" x2="848.9" y2="513.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="853.2" y1="525.8" x2="840.3" y2="494.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="853.2" y1="525.8" x2="834.8" y2="484.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="865.1" y1="631.4" x2="864.9" y2="599.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="865.1" y1="631.4" x2="865.5" y2="607.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="865.1" y1="631.4" x2="691.8" y2="785.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="850.3" y1="700.9" x2="836.0" y2="495.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="850.3" y1="700.9" x2="864.0" y2="607.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="850.3" y1="700.9" x2="860.8" y2="571.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="512.1" y2="358.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="454.7" y2="388.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="426.1" y2="403.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="446.9" y2="393.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="550.5" y2="349.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="487.1" y2="372.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="520.7" y2="359.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="562.2" y2="345.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="465.1" y2="385.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="470.1" y2="378.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="539.6" y2="353.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="427.1" y2="410.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="479.7" y2="376.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="494.4" y2="366.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="638.0" y2="348.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="504.4" y2="372.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="607.0" y2="343.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="574.7" y2="342.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="586.0" y2="341.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="596.2" y2="342.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="670.2" y2="357.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="689.4" y2="365.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="530.0" y2="356.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="846.0" y2="533.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="831.3" y2="500.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="840.4" y2="521.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="838.0" y2="511.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="844.8" y2="543.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="686.5" y2="359.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="714.9" y2="374.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="431.5" y2="396.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="703.8" y2="369.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="723.0" y2="380.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="736.8" y2="386.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="744.1" y2="393.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="753.1" y2="400.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="762.1" y2="407.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="774.3" y2="415.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="779.5" y2="423.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="781.8" y2="431.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="617.1" y2="344.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="626.0" y2="347.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="654.7" y2="356.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="795.5" y2="440.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="802.2" y2="449.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="807.9" y2="459.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="815.9" y2="469.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="821.4" y2="479.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="824.0" y2="488.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="851.4" y2="566.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="851.2" y2="556.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="851.0" y2="577.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="855.1" y2="590.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="855.6" y2="602.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="856.0" y2="614.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="853.1" y2="624.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="852.7" y2="636.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="851.3" y2="647.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="849.2" y2="659.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="846.5" y2="670.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="843.8" y2="681.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="840.3" y2="692.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="649.7" y2="350.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="589.6" y2="804.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="510.3" y1="418.0" x2="392.8" y2="563.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="797.7" y2="768.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="824.2" y2="732.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="837.9" y2="699.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="791.0" y2="778.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="784.0" y2="789.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="817.2" y2="740.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="812.0" y2="751.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="774.8" y2="794.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="829.2" y2="721.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="835.6" y2="713.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="805.8" y2="761.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="593.4" y2="804.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="644.4" y1="409.3" x2="523.7" y2="417.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="836.3" y1="733.6" x2="398.5" y2="792.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="836.3" y1="733.6" x2="804.4" y2="780.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="836.3" y1="733.6" x2="799.1" y2="600.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="836.3" y1="733.6" x2="376.6" y2="462.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="824.7" y1="754.3" x2="823.9" y2="755.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="824.7" y1="754.3" x2="839.4" y2="725.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="824.7" y1="754.3" x2="805.0" y2="780.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="824.7" y1="754.3" x2="448.9" y2="742.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="818.2" y1="764.3" x2="452.8" y2="837.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="804.0" y1="783.3" x2="838.6" y2="724.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="804.0" y1="783.3" x2="823.2" y2="755.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="804.0" y1="783.3" x2="805.7" y2="781.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="804.0" y1="783.3" x2="734.3" y2="612.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="796.3" y1="792.4" x2="680.9" y2="865.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="788.2" y1="801.1" x2="354.0" y2="491.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="788.2" y1="801.1" x2="375.1" y2="464.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="788.2" y1="801.1" x2="786.4" y2="803.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="779.8" y1="809.4" x2="329.4" y2="639.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="779.8" y1="809.4" x2="411.5" y2="688.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="779.8" y1="809.4" x2="786.2" y2="802.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="779.8" y1="809.4" x2="446.6" y2="832.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="686.5" y1="510.4" x2="477.6" y2="660.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="741.0" y1="467.4" x2="409.9" y2="675.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="778.8" y1="524.1" x2="661.4" y2="861.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="245.9" y1="633.4" x2="302.5" y2="614.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="245.9" y1="633.4" x2="773.6" y2="547.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="771.0" y1="817.4" x2="695.4" y2="799.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="771.0" y1="817.4" x2="681.4" y2="866.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="873.0" y1="306.9" x2="661.8" y2="861.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="873.0" y1="306.9" x2="348.8" y2="718.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="873.0" y1="306.9" x2="711.3" y2="670.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="622.1" y2="800.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="776.6" y2="554.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="735.1" y2="743.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="785.0" y2="590.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="785.9" y2="610.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="761.0" y2="709.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="782.5" y2="649.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="770.0" y2="688.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="777.8" y2="669.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="749.2" y2="727.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="785.7" y2="629.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="782.0" y2="572.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="701.9" y2="771.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="683.7" y2="780.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="727.3" y1="595.5" x2="664.6" y2="787.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="787.0" y1="545.4" x2="479.4" y2="663.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="787.0" y1="545.4" x2="403.5" y2="796.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="787.0" y1="545.4" x2="523.1" y2="499.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="787.0" y1="545.4" x2="697.7" y2="514.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="787.0" y1="545.4" x2="741.5" y2="583.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="565.6" y1="264.9" x2="469.1" y2="654.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="565.6" y1="264.9" x2="460.9" y2="561.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="565.6" y1="264.9" x2="613.3" y2="798.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="565.6" y1="264.9" x2="516.1" y2="862.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="565.6" y1="264.9" x2="698.1" y2="849.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="565.6" y1="264.9" x2="512.8" y2="483.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="792.8" y1="567.4" x2="479.7" y2="664.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="792.8" y1="567.4" x2="411.7" y2="679.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="761.8" y1="825.0" x2="478.7" y2="675.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="761.8" y1="825.0" x2="492.9" y2="861.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="761.8" y1="825.0" x2="381.1" y2="777.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="761.8" y1="825.0" x2="421.2" y2="709.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="796.1" y1="590.0" x2="480.0" y2="665.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="796.1" y1="590.0" x2="435.9" y2="717.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="752.4" y1="832.2" x2="478.4" y2="676.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="752.4" y1="832.2" x2="492.9" y2="861.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="752.4" y1="832.2" x2="381.1" y2="777.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="752.4" y1="832.2" x2="421.1" y2="709.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="797.0" y1="612.8" x2="480.2" y2="666.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="797.0" y1="612.8" x2="522.3" y2="501.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="797.0" y1="612.8" x2="470.0" y2="576.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="797.0" y1="612.8" x2="695.2" y2="518.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="797.0" y1="612.8" x2="745.3" y2="599.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="795.3" y1="635.5" x2="480.3" y2="667.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="795.3" y1="635.5" x2="521.9" y2="502.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="791.1" y1="657.9" x2="480.4" y2="668.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="784.5" y1="679.8" x2="480.4" y2="669.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="784.5" y1="679.8" x2="491.3" y2="856.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="784.5" y1="679.8" x2="380.9" y2="773.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="784.5" y1="679.8" x2="422.0" y2="703.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="993.2" y1="703.1" x2="480.4" y2="669.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="775.6" y1="700.7" x2="480.3" y2="670.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="775.6" y1="700.7" x2="520.4" y2="505.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="775.6" y1="700.7" x2="691.5" y2="521.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="775.6" y1="700.7" x2="791.3" y2="579.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="775.6" y1="700.7" x2="735.0" y2="612.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="764.4" y1="720.6" x2="480.2" y2="671.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="764.4" y1="720.6" x2="519.9" y2="505.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="764.4" y1="720.6" x2="690.6" y2="521.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="764.4" y1="720.6" x2="732.6" y2="613.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="742.6" y1="839.0" x2="478.2" y2="676.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="732.6" y1="845.3" x2="466.2" y2="584.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="732.6" y1="845.3" x2="517.0" y2="508.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="722.3" y1="851.2" x2="477.7" y2="677.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="722.3" y1="851.2" x2="493.0" y2="862.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="722.3" y1="851.2" x2="485.3" y2="779.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="722.3" y1="851.2" x2="420.6" y2="710.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="751.0" y1="739.1" x2="480.0" y2="672.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="751.0" y1="739.1" x2="486.1" y2="770.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="751.0" y1="739.1" x2="519.2" y2="506.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="735.7" y1="756.0" x2="479.7" y2="673.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="711.8" y1="856.7" x2="477.4" y2="677.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="603.5" y1="1022.8" x2="598.0" y2="901.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="701.0" y1="861.7" x2="628.9" y2="822.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="701.0" y1="861.7" x2="568.1" y2="276.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="701.0" y1="861.7" x2="527.1" y2="873.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="701.0" y1="861.7" x2="495.3" y2="439.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="701.0" y1="861.7" x2="418.8" y2="518.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="346.2" y1="1025.9" x2="176.0" y2="376.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="1006.9" y1="852.8" x2="695.6" y2="798.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="1006.9" y1="852.8" x2="527.2" y2="874.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="1006.9" y1="852.8" x2="477.3" y2="221.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<circle cx="495.9" cy="1012.2" r="7.3" fill="#d1d1d6" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>.githooks/README.md
+108 lines · in 0 · out 0 · orphan · 0d stale, subject churn 2</title></circle>
+<circle cx="394.8" cy="974.1" r="13.1" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>.github/claude-review-instructions.md
+800 lines · in 0 · out 0 · orphan · 0d stale, subject churn 8647</title></circle>
+<circle cx="655.9" cy="629.4" r="5.0" fill="#fff7ec" stroke="#0072B2" stroke-width="3.5"><title>AGENTS.md
+10 lines · in 0 · out 1 · entry · 0d stale, subject churn 8647</title></circle>
+<circle cx="307.0" cy="911.1" r="7.8" fill="#f26e4b" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>CHANGELOG.md
+141 lines · in 0 · out 4 · orphan · 114d stale, subject churn 8647</title></circle>
+<circle cx="718.7" cy="771.1" r="5.2" fill="#f67a51" stroke="#b8b8b8" stroke-width="1.0"><title>CLA.md
+15 lines · in 1 · out 0 · reachable · 106d stale, subject churn 8647</title></circle>
+<circle cx="539.4" cy="655.9" r="12.2" fill="#fff7ec" stroke="#0072B2" stroke-width="3.5"><title>CLAUDE.md
+648 lines · in 1 · out 6 · entry · 0d stale, subject churn 8647</title></circle>
+<circle cx="238.4" cy="827.6" r="6.9" fill="#800000" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>CODE_OF_CONDUCT.md
+81 lines · in 0 · out 1 · orphan · 190d stale, subject churn 8647</title></circle>
+<circle cx="703.9" cy="686.9" r="15.3" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>CONTRIBUTING.md
+1225 lines · in 3 · out 3 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="574.7" cy="541.7" r="8.6" fill="#d3d3d7" stroke="#0072B2" stroke-width="3.5"><title>README.md
+204 lines · in 1 · out 3 · entry · 0d stale, subject churn 525</title></circle>
+<circle cx="614.4" cy="953.1" r="9.4" fill="#f2704c" stroke="#b8b8b8" stroke-width="1.0"><title>SECURITY.md
+280 lines · in 2 · out 3 · reachable · 112d stale, subject churn 8647</title></circle>
+<circle cx="700.1" cy="784.3" r="9.6" fill="#d0cdd2" stroke="#b8b8b8" stroke-width="1.0"><title>api/proto/README.md
+307 lines · in 3 · out 1 · reachable · 168d stale, subject churn 157</title></circle>
+<circle cx="627.2" cy="741.9" r="6.0" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>cookbook/README.md
+37 lines · in 2 · out 0 · reachable · 18d stale, subject churn 14</title></circle>
+<circle cx="193.8" cy="729.1" r="9.5" fill="#fca16c" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>cookbook/docs/authoring-components.md
+288 lines · in 0 · out 0 · orphan · 85d stale, subject churn 8647</title></circle>
+<circle cx="176.2" cy="622.5" r="11.2" fill="#fcae78" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>cookbook/docs/authoring-patterns.md
+495 lines · in 0 · out 2 · orphan · 78d stale, subject churn 8647</title></circle>
+<circle cx="186.8" cy="514.9" r="9.5" fill="#d1d1d6" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>deploy/demo/README.md
+290 lines · in 0 · out 0 · orphan · 73d stale, subject churn 10</title></circle>
+<circle cx="224.9" cy="413.8" r="9.6" fill="#fc905c" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>deploy/demo/cloudflare-setup-checklist.md
+300 lines · in 0 · out 0 · orphan · 94d stale, subject churn 8647</title></circle>
+<circle cx="287.9" cy="326.0" r="7.2" fill="#fca973" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>deploy/demo/dex-identity-migration-plan.md
+97 lines · in 0 · out 0 · orphan · 81d stale, subject churn 8647</title></circle>
+<circle cx="371.4" cy="257.4" r="9.5" fill="#fc935f" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>deploy/demo/pg-migration-compatibility-report.md
+290 lines · in 0 · out 0 · orphan · 92d stale, subject churn 8647</title></circle>
+<circle cx="469.9" cy="212.8" r="8.5" fill="#c1130c" stroke="#b8b8b8" stroke-width="1.0"><title>deployments/k8s/audit-consumer/README.md
+197 lines · in 1 · out 0 · island · 157d stale, subject churn 8647</title></circle>
+<circle cx="576.5" cy="195.2" r="8.2" fill="#d1d1d6" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>deployments/k8s/policies/tests/README.md
+174 lines · in 0 · out 0 · orphan · 149d stale, subject churn 1</title></circle>
+<circle cx="533.0" cy="734.7" r="7.1" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/README.md
+93 lines · in 1 · out 46 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="690.0" cy="866.2" r="6.4" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0001-record-architecture-decisions.md
+54 lines · in 2 · out 0 · reachable · 191d stale, subject churn 8647</title></circle>
+<circle cx="680.1" cy="795.4" r="12.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0002-microservices-per-bian-domain.md
+731 lines · in 30 · out 10 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="678.9" cy="870.3" r="11.4" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0003-database-schema-migrations.md
+525 lines · in 10 · out 5 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="659.1" cy="804.1" r="14.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0004-event-schema-evolution.md
+1115 lines · in 16 · out 4 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="667.5" cy="873.9" r="12.8" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0005-adapter-pattern-layer-translation.md
+757 lines · in 22 · out 2 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="656.1" cy="877.0" r="13.2" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0006-tilt-local-development.md
+812 lines · in 5 · out 2 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="644.5" cy="879.6" r="8.7" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0007-raw-yaml-over-helm-for-initial-development.md
+216 lines · in 1 · out 0 · reachable · 191d stale, subject churn 8647</title></circle>
+<circle cx="637.2" cy="810.6" r="10.4" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0008-defensive-testing-standards.md
+402 lines · in 2 · out 0 · reachable · 191d stale, subject churn 8647</title></circle>
+<circle cx="614.7" cy="814.5" r="13.2" fill="#c2150d" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0009-application-level-audit-logging.md
+813 lines · in 10 · out 1 · reachable · 156d stale, subject churn 8647</title></circle>
+<circle cx="632.8" cy="881.7" r="9.9" fill="#bc0c07" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0010-grpc-client-side-load-balancing.md
+331 lines · in 4 · out 0 · reachable · 161d stale, subject churn 8647</title></circle>
+<circle cx="621.0" cy="883.3" r="10.2" fill="#fca36d" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0011-iso-20022-compliance-via-adapter-layer.md
+368 lines · in 1 · out 2 · reachable · 84d stale, subject churn 8647</title></circle>
+<circle cx="609.2" cy="884.3" r="10.5" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0012-lien-based-fund-reservation.md
+411 lines · in 2 · out 2 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="597.3" cy="884.9" r="13.1" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0013-generic-asset-quantity-types.md
+804 lines · in 15 · out 3 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="585.4" cy="885.0" r="13.2" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0014-financial-instrument-reference-data.md
+821 lines · in 15 · out 3 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="573.6" cy="884.5" r="9.6" fill="#d02719" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0015-standard-service-directory-structure.md
+306 lines · in 14 · out 2 · reachable · 147d stale, subject churn 8647</title></circle>
+<circle cx="561.7" cy="883.5" r="9.5" fill="#b40101" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0016-tenant-id-naming-strategy.md
+295 lines · in 8 · out 0 · reachable · 166d stale, subject churn 8647</title></circle>
+<circle cx="549.9" cy="882.1" r="15.2" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0017-temporal-quality-ladder.md
+1203 lines · in 7 · out 4 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="538.2" cy="880.1" r="14.3" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0018-settlement-reconciliation.md
+1027 lines · in 4 · out 5 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="526.6" cy="877.6" r="10.1" fill="#d1d0d5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0019-resilient-client-patterns.md
+355 lines · in 5 · out 2 · reachable · 163d stale, subject churn 10</title></circle>
+<circle cx="515.1" cy="874.6" r="9.0" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0020-per-service-audit-workers.md
+246 lines · in 6 · out 3 · reachable · 0d stale, subject churn 6</title></circle>
+<circle cx="503.8" cy="871.2" r="13.7" fill="#cf2518" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0021-kyc-aml-verification-provider-architecture.md
+906 lines · in 2 · out 5 · reachable · 148d stale, subject churn 8647</title></circle>
+<circle cx="492.6" cy="867.2" r="11.3" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0022-instrument-successor-lineage.md
+520 lines · in 1 · out 3 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="481.5" cy="862.8" r="8.4" fill="#da3724" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0023-balance-delegation-to-position-keeping.md
+190 lines · in 10 · out 5 · reachable · 140d stale, subject churn 8647</title></circle>
+<circle cx="470.7" cy="857.9" r="9.7" fill="#fc935f" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0024-internal-bank-account-service.md
+315 lines · in 3 · out 3 · reachable · 92d stale, subject churn 8647</title></circle>
+<circle cx="460.1" cy="852.5" r="8.7" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0025-clearing-purpose-specialization.md
+212 lines · in 1 · out 2 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="449.8" cy="846.7" r="9.3" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0026-canonical-ingestion-contract.md
+275 lines · in 5 · out 2 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="439.7" cy="840.5" r="10.4" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0027-market-information-management.md
+401 lines · in 2 · out 2 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="429.9" cy="833.8" r="13.8" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0028-starlark-saga-cel-valuation.md
+932 lines · in 16 · out 9 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="420.3" cy="826.7" r="7.7" fill="#f57850" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0029-settlement-scheduler-architecture.md
+129 lines · in 1 · out 1 · reachable · 108d stale, subject churn 8647</title></circle>
+<circle cx="411.1" cy="819.2" r="8.1" fill="#f67d52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0030-kyc-aml-provider-selection.md
+162 lines · in 1 · out 3 · reachable · 105d stale, subject churn 8647</title></circle>
+<circle cx="402.2" cy="811.3" r="7.1" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0031-getbalance-nil-guard-retention.md
+91 lines · in 1 · out 2 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="393.7" cy="803.0" r="8.7" fill="#fc9f69" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0032-vanguard-json-transcoding-gateway.md
+217 lines · in 3 · out 2 · reachable · 86d stale, subject churn 8647</title></circle>
+<circle cx="385.6" cy="794.4" r="10.1" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0033-event-triggered-sagas.md
+355 lines · in 3 · out 6 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="377.8" cy="785.4" r="8.2" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0034-position-compaction-strategy.md
+174 lines · in 1 · out 1 · reachable · 84d stale, subject churn 7</title></circle>
+<circle cx="370.4" cy="776.1" r="7.8" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0035-multi-asset-purity.md
+140 lines · in 5 · out 0 · reachable · 83d stale, subject churn 2</title></circle>
+<circle cx="363.4" cy="766.5" r="8.2" fill="#fcb37c" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0036-embedded-dex-identity.md
+171 lines · in 1 · out 0 · reachable · 76d stale, subject churn 8647</title></circle>
+<circle cx="356.8" cy="756.6" r="9.1" fill="#fdcf99" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/0037-scheduler-attribution-design.md
+250 lines · in 1 · out 0 · reachable · 52d stale, subject churn 8647</title></circle>
+<circle cx="591.9" cy="816.0" r="8.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/README.md
+211 lines · in 4 · out 38 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="350.7" cy="746.5" r="7.1" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/adr/template.md
+92 lines · in 1 · out 0 · reachable · 191d stale, subject churn 8647</title></circle>
+<circle cx="569.2" cy="814.9" r="9.3" fill="#fcba83" stroke="#b8b8b8" stroke-width="1.0"><title>docs/analysis/cmd-coverage-assessment.md
+267 lines · in 1 · out 0 · reachable · 72d stale, subject churn 8647</title></circle>
+<circle cx="546.6" cy="811.4" r="9.7" fill="#d1d0d5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/api/saga-validation.md
+314 lines · in 1 · out 0 · reachable · 60d stale, subject churn 104</title></circle>
+<circle cx="524.6" cy="805.4" r="13.5" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/architecture/api-contracts/current-account-contract.md
+864 lines · in 5 · out 6 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="503.4" cy="797.0" r="15.8" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/architecture/api-contracts/financial-accounting-contract.md
+1341 lines · in 3 · out 4 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="483.3" cy="786.4" r="16.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/architecture/api-contracts/position-keeping-contract.md
+1563 lines · in 3 · out 5 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="464.4" cy="773.5" r="18.8" fill="#d1d0d5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/architecture/bian-service-boundaries.md
+2132 lines · in 12 · out 5 · reachable · 89d stale, subject churn 44</title></circle>
+<circle cx="447.1" cy="758.7" r="7.8" fill="#d0d0d5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/architecture/boundary-migration-plan.md
+139 lines · in 2 · out 4 · reachable · 164d stale, subject churn 44</title></circle>
+<circle cx="431.5" cy="742.1" r="14.4" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/architecture/data-model.md
+1048 lines · in 5 · out 7 · reachable · 0d stale, subject churn 44</title></circle>
+<circle cx="417.8" cy="723.8" r="16.2" fill="#d1d0d5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/architecture/event-driven-architecture.md
+1444 lines · in 6 · out 4 · reachable · 89d stale, subject churn 44</title></circle>
+<circle cx="406.2" cy="704.2" r="12.8" fill="#d1d0d5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/architecture/service-coupling-analysis.md
+757 lines · in 14 · out 4 · reachable · 147d stale, subject churn 44</title></circle>
+<circle cx="396.8" cy="683.4" r="12.5" fill="#d1d1d5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/architecture/starlark-saga-architecture.md
+695 lines · in 9 · out 4 · reachable · 59d stale, subject churn 44</title></circle>
+<circle cx="465.6" cy="668.7" r="11.8" fill="#feebd0" stroke="#b8b8b8" stroke-width="1.0"><title>docs/architecture-layers.md
+592 lines · in 22 · out 5 · reachable · 18d stale, subject churn 8647</title></circle>
+<circle cx="345.0" cy="736.1" r="10.2" fill="#d1d0d5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/archive/ARCHITECTURE.md
+371 lines · in 2 · out 0 · reachable · 85d stale, subject churn 44</title></circle>
+<circle cx="339.7" cy="725.4" r="8.5" fill="#fca16c" stroke="#b8b8b8" stroke-width="1.0"><title>docs/archive/DEMO_GUIDE.md
+195 lines · in 3 · out 0 · reachable · 85d stale, subject churn 8647</title></circle>
+<circle cx="389.8" cy="661.7" r="6.0" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/archive/README.md
+40 lines · in 1 · out 9 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="335.0" cy="714.5" r="9.7" fill="#fca16c" stroke="#b8b8b8" stroke-width="1.0"><title>docs/archive/audit-analysis-findings.md
+315 lines · in 1 · out 0 · reachable · 85d stale, subject churn 8647</title></circle>
+<circle cx="330.7" cy="703.5" r="12.1" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/archive/authentication-integration.md
+636 lines · in 1 · out 1 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="326.8" cy="692.2" r="10.4" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/archive/database-per-service-migration.md
+395 lines · in 2 · out 4 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="323.5" cy="680.8" r="10.0" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/archive/immutability-audit.md
+352 lines · in 1 · out 0 · reachable · 191d stale, subject churn 8647</title></circle>
+<circle cx="320.7" cy="669.3" r="11.1" fill="#fca16c" stroke="#b8b8b8" stroke-width="1.0"><title>docs/archive/panic-audit-inventory.md
+481 lines · in 1 · out 0 · reachable · 85d stale, subject churn 8647</title></circle>
+<circle cx="318.3" cy="657.6" r="9.1" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/archive/rbac-testing-guide.md
+254 lines · in 1 · out 0 · reachable · 191d stale, subject churn 8647</title></circle>
+<circle cx="316.5" cy="645.9" r="7.9" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/archive/task-8-service-integration.md
+147 lines · in 1 · out 0 · reachable · 191d stale, subject churn 8647</title></circle>
+<circle cx="385.2" cy="639.4" r="8.8" fill="#d1d0d5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/audit/frontend-backend-gaps.md
+222 lines · in 1 · out 0 · reachable · 92d stale, subject churn 55</title></circle>
+<circle cx="383.1" cy="616.7" r="7.2" fill="#d1d0d5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/audit/multi-asset-purity.md
+101 lines · in 1 · out 0 · reachable · 84d stale, subject churn 55</title></circle>
+<circle cx="383.6" cy="593.8" r="10.5" fill="#fdcc96" stroke="#b8b8b8" stroke-width="1.0"><title>docs/audits/tenant-isolation-audit-2026-04-04.md
+405 lines · in 2 · out 0 · reachable · 55d stale, subject churn 8647</title></circle>
+<circle cx="386.5" cy="571.2" r="7.1" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/claude-code-skills.md
+92 lines · in 2 · out 13 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="391.9" cy="549.1" r="7.5" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/coupling-visualization-example.md
+116 lines · in 1 · out 2 · reachable · 191d stale, subject churn 8647</title></circle>
+<circle cx="456.3" cy="574.7" r="10.8" fill="#feebd0" stroke="#b8b8b8" stroke-width="1.0"><title>docs/data-flows.md
+448 lines · in 6 · out 0 · reachable · 18d stale, subject churn 8647</title></circle>
+<circle cx="399.7" cy="527.6" r="9.7" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/demos/multi-organization-settlement.md
+313 lines · in 1 · out 3 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="409.8" cy="507.2" r="11.2" fill="#c5180f" stroke="#b8b8b8" stroke-width="1.0"><title>docs/development/audit-adding-new-service.md
+508 lines · in 2 · out 4 · reachable · 155d stale, subject churn 8647</title></circle>
+<circle cx="422.1" cy="488.0" r="6.5" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/README.md
+59 lines · in 1 · out 21 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="315.1" cy="634.1" r="12.2" fill="#f26e4b" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/adding-starlark-service-bindings.md
+653 lines · in 7 · out 3 · reachable · 114d stale, subject churn 8647</title></circle>
+<circle cx="314.3" cy="622.3" r="11.6" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/ai-native-codebase-architecture.md
+559 lines · in 1 · out 2 · reachable · 70d stale, subject churn 4</title></circle>
+<circle cx="314.0" cy="610.4" r="9.1" fill="#fc9f69" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/calling-meridian-apis.md
+256 lines · in 2 · out 4 · reachable · 86d stale, subject churn 8647</title></circle>
+<circle cx="314.2" cy="598.5" r="8.9" fill="#d02719" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/circuit-breaker-usage.md
+230 lines · in 2 · out 0 · reachable · 147d stale, subject churn 8647</title></circle>
+<circle cx="314.9" cy="586.6" r="8.2" fill="#fc935f" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/cli-tools.md
+171 lines · in 1 · out 4 · reachable · 92d stale, subject churn 8647</title></circle>
+<circle cx="316.1" cy="574.8" r="8.6" fill="#a70000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/coupling-analysis.md
+201 lines · in 1 · out 0 · reachable · 172d stale, subject churn 8647</title></circle>
+<circle cx="317.8" cy="563.1" r="9.0" fill="#fdbb84" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/error-conventions.md
+245 lines · in 2 · out 0 · reachable · 71d stale, subject churn 8647</title></circle>
+<circle cx="320.1" cy="551.4" r="9.4" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/financial-accounting-proto.md
+285 lines · in 1 · out 2 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="322.8" cy="539.9" r="12.1" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/manifest-design-patterns.md
+641 lines · in 4 · out 4 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="326.0" cy="528.4" r="12.5" fill="#d52d1d" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/multi-asset-integration.md
+696 lines · in 1 · out 6 · reachable · 144d stale, subject churn 8647</title></circle>
+<circle cx="329.7" cy="517.1" r="17.6" fill="#fdd09a" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/new-bian-service-checklist.md
+1790 lines · in 3 · out 14 · reachable · 51d stale, subject churn 8647</title></circle>
+<circle cx="333.9" cy="506.0" r="7.5" fill="#fdbb84" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/proto-conventions.md
+117 lines · in 1 · out 0 · reachable · 71d stale, subject churn 8647</title></circle>
+<circle cx="338.6" cy="495.1" r="10.1" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/repository-conventions.md
+359 lines · in 2 · out 2 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="343.7" cy="484.4" r="9.7" fill="#f3734e" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/saga-validation.md
+309 lines · in 5 · out 4 · reachable · 111d stale, subject churn 8647</title></circle>
+<circle cx="349.3" cy="473.9" r="8.1" fill="#fdbb84" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/service-file-conventions.md
+166 lines · in 1 · out 2 · reachable · 71d stale, subject churn 8647</title></circle>
+<circle cx="355.4" cy="463.7" r="12.1" fill="#fca16c" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/starlark-built-ins-reference.md
+642 lines · in 2 · out 3 · reachable · 85d stale, subject churn 8647</title></circle>
+<circle cx="361.8" cy="453.7" r="14.2" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/starlark-style-guide.md
+999 lines · in 9 · out 3 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="368.7" cy="444.1" r="9.5" fill="#fca36d" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/testcontainers-usage.md
+297 lines · in 3 · out 0 · reachable · 84d stale, subject churn 8647</title></circle>
+<circle cx="376.0" cy="434.7" r="9.8" fill="#fdbb84" stroke="#b8b8b8" stroke-width="1.0"><title>docs/guides/value-types.md
+321 lines · in 2 · out 1 · reachable · 71d stale, subject churn 8647</title></circle>
+<circle cx="436.4" cy="470.2" r="9.7" fill="#cf2518" stroke="#b8b8b8" stroke-width="1.0"><title>docs/integrations/kyc-aml-providers.md
+315 lines · in 1 · out 0 · reachable · 148d stale, subject churn 8647</title></circle>
+<circle cx="452.6" cy="454.2" r="9.1" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/local-documentation.md
+249 lines · in 2 · out 0 · reachable · 191d stale, subject churn 8647</title></circle>
+<circle cx="470.5" cy="440.0" r="8.0" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/mapping-layer/README.md
+151 lines · in 1 · out 2 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="383.7" cy="425.6" r="8.3" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/mapping-layer/examples.md
+177 lines · in 1 · out 0 · reachable · 96d stale, subject churn 8</title></circle>
+<circle cx="391.8" cy="416.9" r="7.4" fill="#fb8c58" stroke="#b8b8b8" stroke-width="1.0"><title>docs/mapping-layer/troubleshooting.md
+114 lines · in 1 · out 0 · reachable · 96d stale, subject churn 8647</title></circle>
+<circle cx="489.8" cy="427.9" r="9.7" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/operations/audit-monitoring.md
+315 lines · in 3 · out 4 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="509.6" cy="496.8" r="10.6" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/patterns.md
+426 lines · in 11 · out 0 · reachable · 18d stale, subject churn 8</title></circle>
+<circle cx="400.2" cy="408.6" r="24.0" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/001-universal-asset-system.md
+3868 lines · in 6 · out 2 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="409.0" cy="400.6" r="14.3" fill="#fc9964" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/002-internal-bank-account.md
+1025 lines · in 4 · out 5 · reachable · 89d stale, subject churn 8647</title></circle>
+<circle cx="418.2" cy="393.0" r="10.9" fill="#fc9f69" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/003-meridian-edge.md
+455 lines · in 1 · out 3 · reachable · 86d stale, subject churn 8647</title></circle>
+<circle cx="427.6" cy="385.8" r="17.7" fill="#fc9964" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/004-market-information-management.md
+1824 lines · in 3 · out 8 · reachable · 89d stale, subject churn 8647</title></circle>
+<circle cx="437.4" cy="379.0" r="16.6" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/005-durable-execution-engine.md
+1542 lines · in 4 · out 3 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="447.4" cy="372.7" r="18.7" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/006-starlark-saga-orchestration-core.md
+2103 lines · in 8 · out 3 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="457.7" cy="366.8" r="14.3" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/007-starlark-typed-service-clients.md
+1031 lines · in 2 · out 0 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="468.2" cy="361.3" r="16.3" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/008-starlark-service-bindings.md
+1462 lines · in 4 · out 6 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="479.0" cy="356.3" r="14.8" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/009-production-readiness-review.md
+1122 lines · in 1 · out 2 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="490.0" cy="351.8" r="11.9" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/010-starlark-testing-framework.md
+610 lines · in 1 · out 0 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="501.1" cy="347.7" r="21.8" fill="#fc935f" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/011-valuation-service.md
+3060 lines · in 2 · out 6 · reachable · 92d stale, subject churn 8647</title></circle>
+<circle cx="512.5" cy="344.1" r="11.2" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/012-codebase-health-audit.md
+503 lines · in 1 · out 0 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="523.9" cy="341.0" r="15.8" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/013-reconciliation-service.md
+1341 lines · in 2 · out 2 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="535.5" cy="338.4" r="15.5" fill="#fc9f69" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/014-control-plane.md
+1269 lines · in 4 · out 3 · reachable · 86d stale, subject churn 8647</title></circle>
+<circle cx="547.2" cy="336.3" r="15.5" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/015-stripe-connect.md
+1281 lines · in 1 · out 5 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="559.0" cy="334.7" r="13.7" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/016-market-data-dynamic-pricing.md
+916 lines · in 2 · out 0 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="570.8" cy="333.7" r="11.7" fill="#fc935f" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/017-reconciliation-grpc-wiring.md
+575 lines · in 4 · out 0 · reachable · 92d stale, subject churn 8647</title></circle>
+<circle cx="582.7" cy="333.1" r="9.2" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/018-current-account-withdrawal-persistence.md
+266 lines · in 1 · out 3 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="594.6" cy="333.0" r="9.1" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/019-internal-bank-account-position-keeping-client.md
+254 lines · in 1 · out 4 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="606.4" cy="333.5" r="10.6" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/020-party-kyc-aml-provider-integration.md
+417 lines · in 2 · out 3 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="618.3" cy="334.5" r="11.2" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/021-platform-scheduler.md
+508 lines · in 1 · out 0 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="630.1" cy="335.9" r="12.7" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/022-org-scoped-accounts.md
+740 lines · in 1 · out 5 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="641.8" cy="337.9" r="15.5" fill="#fc9964" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/023-product-directory.md
+1279 lines · in 2 · out 0 · reachable · 89d stale, subject churn 8647</title></circle>
+<circle cx="653.4" cy="340.4" r="14.4" fill="#fc9f69" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/024-structured-inbound-mapping.md
+1055 lines · in 1 · out 0 · reachable · 86d stale, subject churn 8647</title></circle>
+<circle cx="664.9" cy="343.4" r="13.8" fill="#fc9f69" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/025-real-time-event-streaming.md
+929 lines · in 2 · out 0 · reachable · 86d stale, subject churn 8647</title></circle>
+<circle cx="676.2" cy="346.8" r="20.5" fill="#fc935f" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/026-operations-console-ui.md
+2621 lines · in 1 · out 0 · reachable · 92d stale, subject churn 8647</title></circle>
+<circle cx="687.4" cy="350.8" r="15.4" fill="#fc925d" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/027-mcp-server.md
+1258 lines · in 2 · out 3 · reachable · 93d stale, subject churn 8647</title></circle>
+<circle cx="698.5" cy="355.2" r="9.6" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/028-asset-agnostic-accounts.md
+298 lines · in 1 · out 3 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="709.3" cy="360.1" r="17.7" fill="#fc9964" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/029-operational-gateway.md
+1826 lines · in 1 · out 0 · reachable · 89d stale, subject churn 8647</title></circle>
+<circle cx="719.9" cy="365.5" r="13.6" fill="#fc9964" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/030-asyncapi-specification.md
+883 lines · in 2 · out 3 · reachable · 89d stale, subject churn 8647</title></circle>
+<circle cx="730.2" cy="371.3" r="12.6" fill="#fc9f69" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/031-identity-access-management.md
+719 lines · in 2 · out 4 · reachable · 86d stale, subject churn 8647</title></circle>
+<circle cx="740.3" cy="377.5" r="14.6" fill="#fc9d68" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/032-event-driven-valuation-saga.md
+1089 lines · in 1 · out 5 · reachable · 87d stale, subject churn 8647</title></circle>
+<circle cx="750.1" cy="384.2" r="10.5" fill="#fc9d68" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/033-gateway-architecture.md
+412 lines · in 2 · out 0 · reachable · 87d stale, subject churn 8647</title></circle>
+<circle cx="759.7" cy="391.3" r="12.6" fill="#fc9f69" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/034-frontend-service-alignment.md
+720 lines · in 1 · out 0 · reachable · 86d stale, subject churn 8647</title></circle>
+<circle cx="768.9" cy="398.8" r="12.8" fill="#fc9f69" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/035-economy-cookbook.md
+747 lines · in 2 · out 0 · reachable · 86d stale, subject churn 8647</title></circle>
+<circle cx="777.8" cy="406.7" r="12.7" fill="#fca36d" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/036-cookbook-browser.md
+733 lines · in 2 · out 0 · reachable · 84d stale, subject churn 8647</title></circle>
+<circle cx="786.3" cy="415.0" r="8.9" fill="#fca36d" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/037-multi-asset-purity.md
+236 lines · in 1 · out 3 · reachable · 84d stale, subject churn 8647</title></circle>
+<circle cx="794.4" cy="423.6" r="12.0" fill="#fca46f" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/038-manifest-business-model-visualization.md
+618 lines · in 1 · out 3 · reachable · 83d stale, subject churn 8647</title></circle>
+<circle cx="802.2" cy="432.6" r="17.5" fill="#fca771" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/039-meridian-vm.md
+1755 lines · in 1 · out 0 · reachable · 82d stale, subject churn 8647</title></circle>
+<circle cx="809.6" cy="441.9" r="11.2" fill="#fca973" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/040-handler-schema-alignment.md
+498 lines · in 1 · out 0 · reachable · 81d stale, subject churn 8647</title></circle>
+<circle cx="816.6" cy="451.5" r="11.5" fill="#fcaa74" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/041-economy-generator.md
+544 lines · in 1 · out 0 · reachable · 80d stale, subject churn 8647</title></circle>
+<circle cx="823.2" cy="461.4" r="12.4" fill="#fcaa74" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/042-economy-ide.md
+684 lines · in 1 · out 0 · reachable · 80d stale, subject churn 8647</title></circle>
+<circle cx="829.3" cy="471.5" r="10.6" fill="#fcae78" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/043-mcp-manifest-tenant-isolation.md
+425 lines · in 2 · out 0 · reachable · 78d stale, subject churn 8647</title></circle>
+<circle cx="835.0" cy="481.9" r="10.9" fill="#fcb47e" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/044-auth-flow-architecture.md
+463 lines · in 3 · out 3 · reachable · 75d stale, subject churn 8647</title></circle>
+<circle cx="840.3" cy="492.6" r="13.6" fill="#fcb67f" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/045-manifest-as-sole-source-of-truth.md
+894 lines · in 1 · out 0 · reachable · 74d stale, subject churn 8647</title></circle>
+<circle cx="845.0" cy="503.5" r="11.1" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/046-economy-visualization-completeness.md
+493 lines · in 1 · out 0 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="849.3" cy="514.5" r="8.8" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/047-security-audit-status.md
+220 lines · in 1 · out 1 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="853.2" cy="525.8" r="10.4" fill="#fcb982" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/047-security-audit.md
+391 lines · in 2 · out 2 · reachable · 73d stale, subject churn 8647</title></circle>
+<circle cx="856.5" cy="537.2" r="8.1" fill="#fcba83" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/048-test-coverage-80.md
+164 lines · in 1 · out 0 · reachable · 72d stale, subject churn 8647</title></circle>
+<circle cx="859.3" cy="548.7" r="12.5" fill="#fdbb84" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/049-codebase-consistency.md
+700 lines · in 1 · out 0 · reachable · 71d stale, subject churn 8647</title></circle>
+<circle cx="861.7" cy="560.4" r="8.4" fill="#fdc089" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/050-demo-sandbox.md
+184 lines · in 2 · out 0 · reachable · 67d stale, subject churn 8647</title></circle>
+<circle cx="863.5" cy="572.1" r="10.2" fill="#fdc089" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/051-party-navigation.md
+371 lines · in 1 · out 0 · reachable · 67d stale, subject churn 8647</title></circle>
+<circle cx="864.9" cy="583.9" r="12.3" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/052-email-platform.md
+672 lines · in 2 · out 0 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="865.7" cy="595.7" r="8.8" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/053-auth-email-flows.md
+226 lines · in 3 · out 0 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="866.0" cy="607.6" r="8.8" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/054-billing-ui.md
+220 lines · in 1 · out 0 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="865.8" cy="619.5" r="8.2" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/055-tenant-branding.md
+172 lines · in 1 · out 0 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="865.1" cy="631.4" r="11.1" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/056-correspondence-service.md
+481 lines · in 1 · out 3 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="863.9" cy="643.2" r="10.2" fill="#fdc993" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/057-convergent-manifest-apply.md
+371 lines · in 1 · out 0 · reachable · 58d stale, subject churn 8647</title></circle>
+<circle cx="862.2" cy="654.9" r="10.1" fill="#fdc993" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/058-full-economy-visibility.md
+357 lines · in 1 · out 0 · reachable · 58d stale, subject churn 8647</title></circle>
+<circle cx="859.9" cy="666.6" r="10.1" fill="#fdcb94" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/059-asset-agnostic-posting-layer.md
+360 lines · in 1 · out 0 · reachable · 56d stale, subject churn 8647</title></circle>
+<circle cx="857.2" cy="678.1" r="10.4" fill="#fdce98" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/060-per-tenant-scheduled-execution.md
+399 lines · in 1 · out 0 · reachable · 53d stale, subject churn 8647</title></circle>
+<circle cx="854.0" cy="689.6" r="10.0" fill="#fdce98" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/061-mcp-auth-session-unification.md
+350 lines · in 1 · out 0 · reachable · 53d stale, subject churn 8647</title></circle>
+<circle cx="850.3" cy="700.9" r="9.9" fill="#fddfb6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/062-self-service-onboarding-readiness.md
+339 lines · in 1 · out 3 · reachable · 34d stale, subject churn 8647</title></circle>
+<circle cx="510.3" cy="418.0" r="10.4" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/prd/README.md
+393 lines · in 2 · out 65 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="531.8" cy="410.3" r="11.3" fill="#fc905c" stroke="#b8b8b8" stroke-width="1.0"><title>docs/reports/cockroachdb-migration-audit.md
+522 lines · in 3 · out 0 · reachable · 94d stale, subject churn 8647</title></circle>
+<circle cx="554.0" cy="405.2" r="8.8" fill="#e65139" stroke="#b8b8b8" stroke-width="1.0"><title>docs/reports/market-information-go-live-readiness.md
+226 lines · in 1 · out 0 · reachable · 128d stale, subject churn 8647</title></circle>
+<circle cx="576.7" cy="402.4" r="11.5" fill="#e65139" stroke="#b8b8b8" stroke-width="1.0"><title>docs/reports/market-information-integration.md
+539 lines · in 1 · out 0 · reachable · 128d stale, subject churn 8647</title></circle>
+<circle cx="599.5" cy="402.2" r="8.6" fill="#fc935f" stroke="#b8b8b8" stroke-width="1.0"><title>docs/reports/market-information-traceability.md
+206 lines · in 1 · out 0 · reachable · 92d stale, subject churn 8647</title></circle>
+<circle cx="622.1" cy="404.5" r="13.2" fill="#fc935f" stroke="#b8b8b8" stroke-width="1.0"><title>docs/reports/saga-handler-audit.md
+817 lines · in 1 · out 0 · reachable · 92d stale, subject churn 8647</title></circle>
+<circle cx="644.4" cy="409.3" r="8.2" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/README.md
+171 lines · in 1 · out 13 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="846.1" cy="712.0" r="11.7" fill="#bc0c07" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/disaster-recovery.md
+579 lines · in 4 · out 0 · reachable · 161d stale, subject churn 8647</title></circle>
+<circle cx="841.4" cy="722.9" r="7.9" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/email-infrastructure.md
+146 lines · in 1 · out 0 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="836.3" cy="733.6" r="11.0" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/event-router.md
+470 lines · in 1 · out 4 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="830.7" cy="744.1" r="10.4" fill="#800000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/incident-response.md
+390 lines · in 5 · out 0 · reachable · 190d stale, subject churn 8647</title></circle>
+<circle cx="824.7" cy="754.3" r="13.1" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/internal-account-operations.md
+806 lines · in 1 · out 4 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="818.2" cy="764.3" r="11.1" fill="#e55037" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/market-information-operations.md
+492 lines · in 1 · out 1 · reachable · 129d stale, subject churn 8647</title></circle>
+<circle cx="811.3" cy="773.9" r="10.2" fill="#f77e52" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/party-kyc-verification.md
+377 lines · in 1 · out 0 · reachable · 104d stale, subject churn 8647</title></circle>
+<circle cx="804.0" cy="783.3" r="12.9" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/production-deployment.md
+772 lines · in 2 · out 4 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="796.3" cy="792.4" r="11.5" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/saga-failure-recovery.md
+543 lines · in 7 · out 1 · reachable · 0d stale, subject churn 33</title></circle>
+<circle cx="788.2" cy="801.1" r="9.2" fill="#fca16c" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/saga-validation-failure.md
+264 lines · in 2 · out 3 · reachable · 85d stale, subject churn 8647</title></circle>
+<circle cx="779.8" cy="809.4" r="12.6" fill="#f26e4b" stroke="#b8b8b8" stroke-width="1.0"><title>docs/runbooks/troubleshooting-saga-handlers.md
+721 lines · in 5 · out 4 · reachable · 114d stale, subject churn 8647</title></circle>
+<circle cx="600.5" cy="471.4" r="8.7" fill="#feebd0" stroke="#b8b8b8" stroke-width="1.0"><title>docs/saga-handler-loading.md
+213 lines · in 3 · out 0 · reachable · 18d stale, subject churn 8647</title></circle>
+<circle cx="666.1" cy="416.5" r="13.2" fill="#fdcd97" stroke="#b8b8b8" stroke-width="1.0"><title>docs/saga-service-catalog.md
+823 lines · in 3 · out 0 · reachable · 54d stale, subject churn 8647</title></circle>
+<circle cx="686.8" cy="426.0" r="10.3" fill="#b80704" stroke="#b8b8b8" stroke-width="1.0"><title>docs/secrets-management.md
+388 lines · in 1 · out 0 · reachable · 163d stale, subject churn 8647</title></circle>
+<circle cx="706.3" cy="437.8" r="7.6" fill="#fcb982" stroke="#b8b8b8" stroke-width="1.0"><title>docs/security/pgx-tenant-audit.md
+126 lines · in 1 · out 0 · reachable · 73d stale, subject churn 8647</title></circle>
+<circle cx="686.5" cy="510.4" r="8.9" fill="#feebd0" stroke="#b8b8b8" stroke-width="1.0"><title>docs/service-readme-template.md
+230 lines · in 7 · out 1 · reachable · 18d stale, subject churn 8647</title></circle>
+<circle cx="724.5" cy="451.6" r="9.9" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/services/party/verification-guide.md
+339 lines · in 1 · out 0 · reachable · 104d stale, subject churn 1</title></circle>
+<circle cx="741.0" cy="467.4" r="12.9" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/spec/saga-contract.md
+767 lines · in 2 · out 1 · reachable · 0d stale, subject churn 8647</title></circle>
+<circle cx="755.6" cy="484.8" r="10.4" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/testing/CHAOS_TESTING.md
+399 lines · in 1 · out 0 · reachable · 191d stale, subject churn 8647</title></circle>
+<circle cx="768.3" cy="503.8" r="10.2" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>docs/testing/COVERAGE_ANALYSIS.md
+373 lines · in 1 · out 0 · reachable · 191d stale, subject churn 8647</title></circle>
+<circle cx="778.8" cy="524.1" r="8.5" fill="#fdc790" stroke="#b8b8b8" stroke-width="1.0"><title>docs/tilt-fast-startup.md
+198 lines · in 1 · out 1 · reachable · 60d stale, subject churn 8647</title></circle>
+<circle cx="684.1" cy="205.8" r="5.8" fill="#d8c5c0" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>frontend/README.md
+31 lines · in 0 · out 0 · orphan · 96d stale, subject churn 1478</title></circle>
+<circle cx="785.2" cy="243.9" r="8.8" fill="#fcaa74" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>frontend/docs/tenant-subdomain-routing.md
+227 lines · in 0 · out 0 · orphan · 80d stale, subject churn 8647</title></circle>
+<circle cx="245.9" cy="633.4" r="7.6" fill="#fc9f69" stroke="#b8b8b8" stroke-width="1.0"><title>http/README.md
+124 lines · in 1 · out 2 · reachable · 86d stale, subject churn 8647</title></circle>
+<circle cx="771.0" cy="817.4" r="9.0" fill="#d0ced3" stroke="#b8b8b8" stroke-width="1.0"><title>scripts/README.md
+244 lines · in 1 · out 2 · reachable · 191d stale, subject churn 94</title></circle>
+<circle cx="873.0" cy="306.9" r="8.4" fill="#d1d1d6" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>scripts/kafka-tests/README.md
+189 lines · in 0 · out 3 · orphan · 60d stale, subject churn 3</title></circle>
+<circle cx="727.3" cy="595.5" r="15.5" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/README.md
+1276 lines · in 7 · out 15 · reachable · 0d stale, subject churn 1</title></circle>
+<circle cx="787.0" cy="545.4" r="10.5" fill="#d2d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/api-gateway/README.md
+413 lines · in 3 · out 5 · reachable · 18d stale, subject churn 225</title></circle>
+<circle cx="565.6" cy="264.9" r="8.4" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/audit-worker/README.md
+188 lines · in 1 · out 6 · reachable · 17d stale, subject churn 50</title></circle>
+<circle cx="792.8" cy="567.4" r="8.7" fill="#d3d2d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/control-plane/README.md
+217 lines · in 2 · out 2 · reachable · 15d stale, subject churn 546</title></circle>
+<circle cx="934.1" cy="584.6" r="8.5" fill="#fc9f69" stroke="#b8b8b8" stroke-width="1.0"><title>services/control-plane/internal/applier/testdata/tenant-saga-examples/README.md
+197 lines · in 1 · out 0 · reachable · 86d stale, subject churn 8647</title></circle>
+<circle cx="761.8" cy="825.0" r="9.0" fill="#d4d3d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/current-account/README.md
+239 lines · in 4 · out 4 · reachable · 15d stale, subject churn 706</title></circle>
+<circle cx="796.1" cy="590.0" r="8.1" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/event-router/README.md
+164 lines · in 3 · out 2 · reachable · 17d stale, subject churn 69</title></circle>
+<circle cx="941.6" cy="390.4" r="7.1" fill="#fca16c" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>services/event-router/k8s/README.md
+91 lines · in 0 · out 0 · orphan · 85d stale, subject churn 8647</title></circle>
+<circle cx="752.4" cy="832.2" r="8.6" fill="#d3d2d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/financial-accounting/README.md
+207 lines · in 2 · out 4 · reachable · 15d stale, subject churn 365</title></circle>
+<circle cx="797.0" cy="612.8" r="8.4" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/financial-gateway/README.md
+189 lines · in 1 · out 5 · reachable · 18d stale, subject churn 74</title></circle>
+<circle cx="795.3" cy="635.5" r="8.1" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/forecasting/README.md
+166 lines · in 1 · out 2 · reachable · 17d stale, subject churn 72</title></circle>
+<circle cx="791.1" cy="657.9" r="9.1" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/identity/README.md
+250 lines · in 1 · out 1 · reachable · 17d stale, subject churn 156</title></circle>
+<circle cx="784.5" cy="679.8" r="8.9" fill="#d2d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/internal-account/README.md
+235 lines · in 2 · out 4 · reachable · 15d stale, subject churn 192</title></circle>
+<circle cx="986.2" cy="488.9" r="8.1" fill="#d1d1d6" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>services/internal-account/benchmarks/README.md
+165 lines · in 0 · out 0 · orphan · 92d stale, subject churn 10</title></circle>
+<circle cx="1003.8" cy="595.5" r="8.7" fill="#d1d1d6" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>services/internal-account/examples/README.md
+212 lines · in 0 · out 0 · orphan · 92d stale, subject churn 8</title></circle>
+<circle cx="993.2" cy="703.1" r="8.9" fill="#d2d1d6" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>services/market-information/README.md
+234 lines · in 0 · out 1 · orphan · 17d stale, subject churn 204</title></circle>
+<circle cx="775.6" cy="700.7" r="10.3" fill="#d2d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/mcp-server/README.md
+384 lines · in 1 · out 5 · reachable · 18d stale, subject churn 222</title></circle>
+<circle cx="955.1" cy="804.2" r="7.8" fill="#fc925d" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>services/mcp-server/internal/resources/docs/cel-reference.md
+139 lines · in 0 · out 0 · orphan · 93d stale, subject churn 8647</title></circle>
+<circle cx="892.1" cy="892.0" r="7.3" fill="#fc925d" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>services/mcp-server/internal/resources/docs/starlark-guide.md
+104 lines · in 0 · out 0 · orphan · 93d stale, subject churn 8647</title></circle>
+<circle cx="764.4" cy="720.6" r="8.9" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/operational-gateway/README.md
+235 lines · in 1 · out 4 · reachable · 18d stale, subject churn 125</title></circle>
+<circle cx="742.6" cy="839.0" r="9.3" fill="#d2d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/party/README.md
+272 lines · in 1 · out 1 · reachable · 17d stale, subject churn 280</title></circle>
+<circle cx="732.6" cy="845.3" r="8.4" fill="#d3d2d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/payment-order/README.md
+184 lines · in 1 · out 2 · reachable · 15d stale, subject churn 429</title></circle>
+<circle cx="808.6" cy="960.6" r="7.1" fill="#ee6347" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>services/payment-order/service/HANDLER_ARCHITECTURE.md
+90 lines · in 0 · out 0 · orphan · 120d stale, subject churn 8647</title></circle>
+<circle cx="722.3" cy="851.2" r="8.7" fill="#d3d2d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/position-keeping/README.md
+213 lines · in 3 · out 4 · reachable · 17d stale, subject churn 428</title></circle>
+<circle cx="751.0" cy="739.1" r="8.4" fill="#d2d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/reconciliation/README.md
+186 lines · in 1 · out 3 · reachable · 17d stale, subject churn 280</title></circle>
+<circle cx="735.7" cy="756.0" r="9.3" fill="#d3d2d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/reference-data/README.md
+268 lines · in 2 · out 1 · reachable · 17d stale, subject churn 368</title></circle>
+<circle cx="711.8" cy="856.7" r="8.7" fill="#d2d2d6" stroke="#b8b8b8" stroke-width="1.0"><title>services/tenant/README.md
+215 lines · in 1 · out 1 · reachable · 15d stale, subject churn 295</title></circle>
+<circle cx="710.1" cy="1005.2" r="7.0" fill="#d6d0ce" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>shared/README.md
+87 lines · in 0 · out 0 · orphan · 54d stale, subject churn 1123</title></circle>
+<circle cx="603.5" cy="1022.8" r="12.2" fill="#fdc790" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>shared/domain/money/PRECISION_GUARANTEES.md
+647 lines · in 0 · out 1 · orphan · 60d stale, subject churn 8647</title></circle>
+<circle cx="701.0" cy="861.7" r="10.0" fill="#d1d0d5" stroke="#b8b8b8" stroke-width="1.0"><title>shared/platform/audit/README.md
+344 lines · in 3 · out 5 · reachable · 130d stale, subject churn 55</title></circle>
+<circle cx="346.2" cy="1025.9" r="6.6" fill="#d1d0d5" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>shared/platform/bootstrap/README.md
+65 lines · in 0 · out 1 · orphan · 130d stale, subject churn 33</title></circle>
+<circle cx="173.1" cy="365.2" r="8.6" fill="#cf2518" stroke="#b8b8b8" stroke-width="1.0"><title>shared/platform/bootstrap/SHUTDOWN_USAGE.md
+205 lines · in 1 · out 0 · island · 148d stale, subject churn 8647</title></circle>
+<circle cx="833.8" cy="192.1" r="9.7" fill="#d1d0d5" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>shared/platform/observability/README.md
+318 lines · in 0 · out 0 · orphan · 130d stale, subject churn 43</title></circle>
+<circle cx="1006.9" cy="852.8" r="9.1" fill="#d1d1d6" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>tests/audit-e2e/README.md
+255 lines · in 0 · out 3 · orphan · 92d stale, subject churn 4</title></circle>
+
+<text x="590" y="40" font-size="24" font-weight="600" text-anchor="middle">Doc map — 247 docs, 659 links, 20 islands</text>
+<text x="590" y="66" font-size="14" fill="#555" text-anchor="middle">11% orphaned · 89% reachable from the entry point</text>
+<defs><linearGradient id="stalegrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff7ec"/><stop offset="0.5" stop-color="#fc8d59"/><stop offset="1" stop-color="#7f0000"/></linearGradient></defs>
+<text x="334" y="1162" font-size="12" fill="#555" text-anchor="end">stable</text>
+<rect x="340" y="1151" width="110" height="12" rx="3" fill="url(#stalegrad)"/>
+<text x="456" y="1162" font-size="12" fill="#555">lying map</text>
+<circle cx="600" cy="1158" r="8" fill="#dddddd" stroke="#0072B2" stroke-width="3"/>
+<text x="614" y="1162" font-size="13">entry</text>
+<circle cx="695" cy="1158" r="8" fill="#dddddd" stroke="#1a1a1a" stroke-width="2" stroke-dasharray="3,2"/>
+<text x="709" y="1162" font-size="13">orphan</text>
+<circle cx="795" cy="1158" r="8" fill="#ffffff" stroke="#CC79A7" stroke-width="1.8" stroke-dasharray="3,2"/>
+<text x="809" y="1162" font-size="13">ghost (broken link)</text>
+<text x="590" y="1198" font-size="12" fill="#555" text-anchor="middle">colour = staleness · size = file length (lines) · rings = link-distance from entry · rim = unreachable</text>
+</svg>

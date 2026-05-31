@@ -1,0 +1,84 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# One review per PR: cancel an in-progress review when new commits land.
+concurrency:
+  group: claude-code-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    # Skip Dependabot PRs (automated dependency bumps don't need a prose review).
+    if: github.actor != 'dependabot[bot]'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+      checks: read
+      statuses: read
+
+    steps:
+      # SECURITY: check out the DEFAULT branch, never the PR's head SHA, so a
+      # malicious PR cannot run untrusted code in this privileged (write) job.
+      # Claude reviews the PR diff read-only through the gh CLI.
+      - name: Checkout repository (default branch)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Get current date
+        id: date
+        run: echo "current_date=$(date -u '+%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code Review
+        id: claude-review
+        continue-on-error: true  # advisory: a failed/absent review never blocks the PR
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Read `.github/claude-review-instructions.md` for your complete review
+            guidelines, then review this pull request.
+
+            Substitute these values wherever the instructions reference {PLACEHOLDER}:
+            - REPO: ${{ github.repository }}
+            - PR_NUMBER: ${{ github.event.pull_request.number }}
+            - HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+            - REPO_OWNER: ${{ github.repository_owner }}
+            - REPO_NAME: ${{ github.event.repository.name }}
+            - CURRENT_DATE: ${{ steps.date.outputs.current_date }}
+
+            Context:
+            - This is a Claude Code plugin repo. The deliverable is markdown
+              (skills/commands/agents); the only runtime code is the Python
+              `/assess` deterministic core under `skills/assess/`. It is a PUBLIC repo.
+            - The latest Claude models are the 4.x family (Opus 4.x / Sonnet 4.x /
+              Haiku 4.x) - do not flag these as invalid versions.
+            - CI may still be running - check with `gh pr checks ${{ github.event.pull_request.number }}`.
+
+          # Opus for review quality. Read-only gh surface plus comment/review posting.
+          claude_args: '--model opus --allowed-tools "Bash(gh api:*),Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr checks:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
+
+      - name: Report final status
+        if: always()
+        run: |
+          {
+            echo "## Claude Code Review Summary"
+            echo ""
+            echo "- **PR:** #${{ github.event.pull_request.number }}"
+            echo "- **Result:** ${{ steps.claude-review.outcome }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.claude-review.outcome }}" = "failure" ]; then
+            echo "::warning::Claude Code review failed for PR #${{ github.event.pull_request.number }} - non-blocking (commonly a missing CLAUDE_CODE_OAUTH_TOKEN secret)."
+          fi
+          exit 0

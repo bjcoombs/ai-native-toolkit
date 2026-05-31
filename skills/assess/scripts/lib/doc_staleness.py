@@ -25,10 +25,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from lib.doc_graph import CODE_EXTENSIONS, DOC_EXTENSIONS, EXCLUDE_DIRS, is_repo_file
+from lib.doc_graph import (
+    CODE_EXTENSIONS,
+    DOC_EXTENSIONS,
+    is_excluded_path,
+    is_repo_file,
+)
 from lib.git_churn import (
     file_last_commit_days,
-    git_churn_scores,
     pick_churn_window,
     tracked_files,
 )
@@ -94,7 +98,7 @@ def _discover(repo_root: Path, exts: set[str],
             rel = path.relative_to(repo_root)
         except ValueError:
             continue
-        if any(part in EXCLUDE_DIRS for part in rel.parts):
+        if is_excluded_path(rel):
             continue
         if is_user_excluded(rel, extra_dirs, extra_pats):
             continue

@@ -1,7 +1,7 @@
 """Tests for anomaly detection on /assess run output."""
 from __future__ import annotations
 
-from lib.anomaly_detector import Anomaly, detect_anomalies
+from lib.anomaly_detector import detect_anomalies
 
 
 def _ctx(**overrides) -> dict:

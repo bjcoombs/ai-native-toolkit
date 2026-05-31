@@ -7,9 +7,9 @@ description: "Assess a codebase's readiness for AI agent contributors using the 
 
 Three artefacts in one pass against a target repo:
 
-1. **Layered contract assessment** — 0–8 score across navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, and AI project management.
-2. **Complexity hotspot SVG** — Codecov-style treemap of the code. Size = LOC. Colour = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = riskiest to change.
-3. **Doc navigability SVG** — a node-graph of the docs. Structure = connectivity (centre = entry, rim = unreachable, dashed ring = orphan); colour = staleness (vivid red = a frozen doc beside churning code = a *lying map*); size = file length. Folds navigability and the decaying-map signal into one artifact.
+1. **Layered contract assessment** - 0-8 score across navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, and AI project management.
+2. **Complexity hotspot SVG** - Codecov-style treemap of the code. Size = LOC. Colour = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = riskiest to change.
+3. **Doc navigability SVG** - a node-graph of the docs. Structure = connectivity (centre = entry, rim = unreachable, dashed ring = orphan); colour = staleness (vivid red = a frozen doc beside churning code = a *lying map*); size = file length. Folds navigability and the decaying-map signal into one artifact.
 
 Both SVGs are colour-blind-safe by default (OrRd ramp, no red-green).
 
@@ -17,7 +17,7 @@ All land as files inside the target repo. The skill always writes them locally; 
 
 ## The model: truth-pressure, not presence
 
-Read this before scoring — it changes how you score. Across every layer, the real signal is never **presence**. It is whether a thing is under **active pressure to stay true**:
+Read this before scoring - it changes how you score. Across every layer, the real signal is never **presence**. It is whether a thing is under **active pressure to stay true**:
 
 - Tests keep **behaviour** honest (CI fails when it's wrong).
 - Retros / feedback loops keep the **process** honest (Layer 8 scores whether retros are *carried out*, not merely present).
@@ -26,11 +26,11 @@ Read this before scoring — it changes how you score. Across every layer, the r
 
 So **AI-readiness is the degree to which a codebase's self-descriptions are kept honest, not the degree to which scaffolding exists.** Score artefacts on *maintenance pressure*, not existence. A stale-but-present doc scores **at or below absent**: missing makes the agent go look; confidently-stale makes it navigate fast to a wrong, current-looking conclusion.
 
-The 9 layers (0–8) fall into three bands, ordered by dependency — what must hold for the next band to mean anything:
+The 9 layers (0-8) fall into three bands, ordered by dependency - what must hold for the next band to mean anything:
 
-- **Read-side foundation** (L0 navigability, L1 liveness) — can the agent form a *true picture* before it acts?
-- **Write-side enforcement** (L2–L7) — can the agent be trusted to produce good output? Only means something once you can trust that what you're reading is real and current.
-- **Meta** (L8 feedback) — does the system keep itself honest over time? Depends on a working enforced system to improve, so it stays last.
+- **Read-side foundation** (L0 navigability, L1 liveness) - can the agent form a *true picture* before it acts?
+- **Write-side enforcement** (L2-L7) - can the agent be trusted to produce good output? Only means something once you can trust that what you're reading is real and current.
+- **Meta** (L8 feedback) - does the system keep itself honest over time? Depends on a working enforced system to improve, so it stays last.
 
 <!-- chat-skip:start -->
 **$ARGUMENTS**
@@ -64,14 +64,14 @@ Artefacts will land at:
 
 This step produces **two** views of the codebase, both colour-blind-safe (OrRd ramp, no red-green):
 
-- **Complexity heatmap** (`complexity-heatmap.svg`) — a treemap of the *code*. Size = LOC, colour = cyclomatic complexity, saturation = recent churn. Vivid red = complex AND active = "hard to change safely".
-- **Doc navigability graph** (`doc-graph.svg`) — a node-graph of the *docs*. Structure shows connectivity (centre = entry point, rings = link-distance, rim = unreachable; orphans carry a dashed ring); colour shows staleness in the same grammar as the code heatmap (vivid red = a frozen doc beside churning code = a lying map); size = file length. It folds both Layer 0 doc signals — navigability and the decaying-map — into one artifact.
+- **Complexity heatmap** (`complexity-heatmap.svg`) - a treemap of the *code*. Size = LOC, colour = cyclomatic complexity, saturation = recent churn. Vivid red = complex AND active = "hard to change safely".
+- **Doc navigability graph** (`doc-graph.svg`) - a node-graph of the *docs*. Structure shows connectivity (centre = entry point, rings = link-distance, rim = unreachable; orphans carry a dashed ring); colour shows staleness in the same grammar as the code heatmap (vivid red = a frozen doc beside churning code = a lying map); size = file length. It folds both Layer 0 doc signals - navigability and the decaying-map - into one artifact.
 
 Feed the complexity stats into the linter/complexity layer (Layer 3) and the `doc_graph` / `doc_staleness` blocks of `run-context.json` into **Layer 0** (the graph SVG is the visual; the score reads the structured blocks).
 
 ### 2a: Offer to install `scc` (one-time per repo)
 
-The bundled treemap uses [`lizard`](https://github.com/terryyin/lizard) (Python, Go, JS, Java, C/C++, etc.) by default. Optional `scc` extends coverage to 200+ languages including markdown, JSON, YAML, SQL, and shell — useful when the repo's surface is more than just traditional source code.
+The bundled treemap uses [`lizard`](https://github.com/terryyin/lizard) (Python, Go, JS, Java, C/C++, etc.) by default. Optional `scc` extends coverage to 200+ languages including markdown, JSON, YAML, SQL, and shell - useful when the repo's surface is more than just traditional source code.
 
 Before scanning, check three signals:
 
@@ -93,11 +93,11 @@ NONCODE_FILES=$(fd -t f -e md -e json -e yaml -e yml -e toml -e sh -e sql . "$RE
 
 **Offer the install only if all three are true:** `SCC_PRESENT=0`, `SCC_DECLINED=0`, and the repo looks lizard-sparse (`CODE_FILES < NONCODE_FILES` or `CODE_FILES < 10`). Otherwise skip straight to 2b (or 2c if 2b has nothing to offer).
 
-When offering, use **AskUserQuestion** with three options (do **not** auto-install — `brew install` is a system mutation):
+When offering, use **AskUserQuestion** with three options (do **not** auto-install - `brew install` is a system mutation):
 
-- **Install scc** — run the appropriate installer for the platform and continue.
-- **Skip for now** — proceed with lizard only. Don't write the marker; ask again next run.
-- **Skip permanently for this repo** — write `$REPO_ROOT/.assess/.no-scc` so future runs don't ask. Recommended for prompt repos or pure-docs repos where lizard-only is genuinely fine.
+- **Install scc** - run the appropriate installer for the platform and continue.
+- **Skip for now** - proceed with lizard only. Don't write the marker; ask again next run.
+- **Skip permanently for this repo** - write `$REPO_ROOT/.assess/.no-scc` so future runs don't ask. Recommended for prompt repos or pure-docs repos where lizard-only is genuinely fine.
 
 Phrase the question so the user understands the trade-off, e.g.:
 
@@ -118,7 +118,7 @@ If the user picks **Install scc**, run the platform-appropriate command:
 }
 ```
 
-If the install fails or the platform isn't covered, fall back to lizard-only and continue — don't block the assessment.
+If the install fails or the platform isn't covered, fall back to lizard-only and continue - don't block the assessment.
 
 ### 2b: Offer to install per-language dead-code tools (one-time per tool)
 
@@ -151,11 +151,11 @@ needs_offer staticcheck "$GO_FILES"  && OFFERS+=("go|staticcheck|go install honn
 
 If `OFFERS` is empty (no language hits the threshold, or every tool is already installed/declined), skip straight to 2c.
 
-Otherwise, batch the questions into **a single AskUserQuestion call** — one question per language in `OFFERS`, three options per question:
+Otherwise, batch the questions into **a single AskUserQuestion call** - one question per language in `OFFERS`, three options per question:
 
-- **Install <tool>** — run the cited install command and continue.
-- **Skip for now** — proceed without the tool. Don't write a marker; ask again next run.
-- **Skip permanently for this repo** — write `$REPO_ROOT/.assess/.no-<tool>` so future runs don't ask. Recommended when the language only appears in scripts/configs that don't warrant symbol-level reachability.
+- **Install <tool>** - run the cited install command and continue.
+- **Skip for now** - proceed without the tool. Don't write a marker; ask again next run.
+- **Skip permanently for this repo** - write `$REPO_ROOT/.assess/.no-<tool>` so future runs don't ask. Recommended when the language only appears in scripts/configs that don't warrant symbol-level reachability.
 
 Phrase each question so the gain is concrete, e.g.:
 
@@ -211,9 +211,9 @@ Full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS
 
    No section header is needed - the file is already namespaced by living under `.assess/`. Missing or malformed files degrade silently to no extra excludes; the assessment never blocks on a broken config.
 
-The script's own output directory `.assess/` is excluded automatically - prior runs' `run-context.json` and SVGs never feed the next run's heatmap, the doc graph, or the dead-code scan.
+The script's own output directory `.assess/` is excluded automatically - prior runs' `run-context.json` and SVGs never feed the next run's heatmap, the doc graph, or the dead-code scan. Test fixtures under `**/tests/fixtures/**` are likewise excluded automatically - they are inputs that exercise the scanners (sample `CLAUDE.md` / monolithic-instruction files), not navigational docs or live code, so counting them would inflate the orphan rate and depress the Layer 0 navigability read.
 
-**If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated — <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
+**If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated - <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
 
 Run the full sequence - rotate the prior sidecar first, then the treemap, then the deterministic core:
 
@@ -248,9 +248,16 @@ uv run "$SKILL_DIR/scripts/doc-graph-svg.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess
 uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT"
 ```
 
-Either SVG is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated — <reason>" in the report and continue. The doc graph shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
+Either SVG is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated - <reason>" in the report and continue. The doc graph shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
 
 Now `$REPO_ROOT/.assess/run-context.json` contains the structured data you need for the prose sections. Read it before writing the report.
+
+**Survivor-density overlay (opt-in mutation runs only).** The treemap above runs before `run-context.json` exists, so its first pass has no mutation data. If an opt-in mutation pass populated `test_pressure.per_file`, regenerate the heatmap with the overlay so covered-but-unpinned files get hatched and stop reading as safe green. With no mutation data the `--test-pressure` flag is a silent no-op, so this is harmless to skip when mutation wasn't run:
+
+```bash
+<!-- chat-replace:uv-treemap-overlay -->
+uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/complexity-heatmap.svg" --stats "$REPO_ROOT/.assess/complexity-stats.json" --test-pressure "$REPO_ROOT/.assess/run-context.json"
+```
 
 The `plugin_version` field in `run-context.json` tells you which plugin version produced this run. Surface it at the top of the report (e.g., "Generated by `/assess` v1.8.0") so readers can spot it if a stale cached version of the plugin produced unexpected output.
 
@@ -260,22 +267,29 @@ Run these checks in parallel where possible. For each layer, collect evidence an
 
 ### Layer 0: Agent Instructions & Navigability (Read-Side Foundation)
 
-Layer 0 answers: *can the agent form a true picture before it acts?* It has two halves — the agent instruction files (static intent) and the **navigability of the docs** (can the agent traverse to the right place, and is what it finds still true). Score both on maintenance pressure, not presence.
+Layer 0 answers: *can the agent form a true picture before it acts?* It has two halves - the agent instruction files (static intent) and the **navigability of the docs** (can the agent traverse to the right place, and is what it finds still true). Score both on maintenance pressure, not presence.
 
-#### 0a — Agent instruction files
+#### 0a - Agent instruction files
 
 Read the agent instruction file grades and surface integrity from `run-context.json`:
 
 ```bash
-jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .broken_instruction_refs' "$REPO_ROOT/.assess/run-context.json"
+jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .broken_instruction_refs, .sensitive_instruction_content, .ancestor_instruction_files, .skills_present, .skills_count, .skill_files, .instruction_file_size' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-`.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). Only **git-tracked** files are graded — a file present on disk but uncommitted is *not* credited (it isn't part of what the repo ships). The same heuristic grader scores each tracked file. For each:
+`.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). Only **git-tracked** files are graded - a file present on disk but uncommitted is *not* credited (it isn't part of what the repo ships). The same heuristic grader scores each tracked file. For each:
 - `grade: "A" | "B+" | ...` - report verbatim per file
 - `subscores.positive_directives` - count of positive directives found
 - `subscores.tradeoff_phrases` - count of reasoning phrases
 - `subscores.path_references` - count of file path references
+- `subscores.line_count` / `subscores.word_count` - file size (feeds the bloat penalty below)
+- `subscores.bloat_penalty` - points subtracted for an oversized monolith with no skills factoring (0 when lean or when the repo delegates to skills)
 - `freshness_days` - days since last edit
+- `is_alias: true` / `alias_target` - this file is a thin alias (symlink or stub) to a canonical instruction file; it has **inherited** that file's grade. Report it as an alias to `<alias_target>`, not as a standalone doc to rewrite (see "AGENTS.md as an alias" below).
+
+`.skills_present` / `.skills_count` / `.skill_files` describe whether the repo factors guidance into on-demand skills (`.claude/skills/`, `skills/`). `.instruction_file_size` mirrors the per-file `line_count` / `word_count` / `bloat_penalty` for quick reference.
+
+`.sensitive_instruction_content` is a map (path → redacted findings) of content unsafe to publish that was found in a candidate instruction file - see "Scan before recommending a commit" below. `.ancestor_instruction_files` lists instruction files that cascade in from an ancestor directory or the global user config - see "Ancestor cascade" below.
 
 `.instructions_grade` is the best grade across all tracked files - the starting point for the layer scoring.
 
@@ -285,48 +299,62 @@ jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .brok
 - B/C → **Partial**
 - D/F → **Partial** if at least one file exists but scores low - note the grade and recommend rewriting
 
-**Integrity overrides (these can pull the half *below* the grade — a single good file does not rescue a broken instruction surface):**
-- **`broken_instruction_refs` is non-empty → cap the instruction half at Partial, or Missing if it's the *primary* instruction surface that's broken.** These are advertised-but-broken instruction references: a committed `.cursorrules`/`AGENTS.md`/`CLAUDE.md` that is a **dangling symlink** (`reason: symlink target missing`), or an entry doc that **links to a missing instruction file** (`reason: link to missing instruction file`). The truth-pressure model says a broken map scores at or below absent — a repo that *advertises* `.cursorrules` but the symlink dangles is worse than one that never claimed to have it. Name each broken ref and make "fix or remove the broken instruction reference" a Top-3 action. Do **not** let an unrelated file that happens to grade B+ keep the half at Present. **But don't let the score mislead either:** if a committed instruction file still grades passing while the *advertised* surface dangles (e.g. a B+ `.github/copilot-instructions.md` while a referenced `CLAUDE.md` is missing), prefer **Partial** over Missing, and in the Evidence cell name that committed file and its grade. A human reviewer would call this Partial; reserve **Missing** for genuine absence. Either way the report must read as *the advertised surface is broken*, never *no instructions exist*.
-- **`untracked_instruction_files` is non-empty → note it, don't score it.** An instruction file exists on disk but isn't committed, so nobody who clones gets it. Report "`<file>` present locally but untracked — commit it or it won't reach contributors (human or agent)"; never let it raise the grade.
-- **Surface within-band regression.** The Present/Partial/Missing bucket is coarse — "lost the primary instruction file and gained 40 dangling links" may not move the bucket. When `broken_instruction_refs` or a large `doc_graph.dangling_links` count appears, call out the regression explicitly in the report even if the band label is unchanged.
+**Size vs progressive disclosure (deterministic penalty - this LOWERS the grade, not just a flag):**
+- `skills_present: true` and/or the instruction text contains progressive-disclosure pointers → **no penalty**; the repo factors guidance into on-demand skills (loaded when relevant), which is scored positively - a lean pointer file beats a wall of text the agent must hold in full context.
+- `instruction_file_size[path].bloat_penalty > 0` → an oversized monolithic instruction file with no skills factoring. The bloat penalty **LOWERS the grade** (5-15 points by overage: 500/750/1000 lines or 3000/4500/6000 words). **This is a scoring negative, not just a flag** - the file scores **strictly below** an equivalent lean-file-plus-skills repo. Name it in the Evidence column and add the remediation action "factor guidance into `.claude/skills/` for progressive disclosure".
+- A lean instruction file that delegates to maintained skills scores **strictly above** an oversized monolith with equivalent content - the monolith is penalized, not merely annotated.
+- Conservative thresholds (500 lines / 3000 words) ensure small/legitimate instruction files are **never** penalized. This is the write-side mirror of the "modular base docs" principle in 0b: *modular + maintained, never just "more"* - an instruction file earns its grade by being navigable, not by being large.
 
-Important: a null grade and an F grade map to different remediation. Null means "create a CLAUDE.md / AGENTS.md (whichever the team uses)." F means "the file is there but needs rewriting." A broken/dangling reference means "the file you point at isn't reachable — fix the link or remove the claim." Don't conflate them.
+**Integrity overrides (these can pull the half *below* the grade - a single good file does not rescue a broken instruction surface):**
+- **`broken_instruction_refs` is non-empty → cap the instruction half at Partial, or Missing if it's the *primary* instruction surface that's broken.** These are advertised-but-broken instruction references: a committed `.cursorrules`/`AGENTS.md`/`CLAUDE.md` that is a **dangling symlink** (`reason: symlink target missing`), or an entry doc that **links to a missing instruction file** (`reason: link to missing instruction file`). The truth-pressure model says a broken map scores at or below absent - a repo that *advertises* `.cursorrules` but the symlink dangles is worse than one that never claimed to have it. Name each broken ref and make "fix or remove the broken instruction reference" a Top-3 action. Do **not** let an unrelated file that happens to grade B+ keep the half at Present. **But don't let the score mislead either:** if a committed instruction file still grades passing while the *advertised* surface dangles (e.g. a B+ `.github/copilot-instructions.md` while a referenced `CLAUDE.md` is missing), prefer **Partial** over Missing, and in the Evidence cell name that committed file and its grade. A human reviewer would call this Partial; reserve **Missing** for genuine absence. Either way the report must read as *the advertised surface is broken*, never *no instructions exist*.
+- **`untracked_instruction_files` is non-empty → note it, don't score it.** An instruction file exists on disk but isn't committed, so nobody who clones gets it. Report "`<file>` present locally but untracked - commit it or it won't reach contributors (human or agent)"; never let it raise the grade.
+- **Surface within-band regression.** The Present/Partial/Missing bucket is coarse - "lost the primary instruction file and gained 40 dangling links" may not move the bucket. When `broken_instruction_refs` or a large `doc_graph.dangling_links` count appears, call out the regression explicitly in the report even if the band label is unchanged.
 
-For a dangling reference, the right verb depends on the target's actual state — **don't default to `git add`**, since the file may never have been written. Check `untracked_instruction_files`: if the target appears there it exists on disk, so the action is *commit it* (`git add <file>`); if it appears nowhere, it was never created, so the action is *write it* (then commit) — or *remove the dangling claim*. "`git add CLAUDE.md`" is only correct when `CLAUDE.md` is actually present-but-untracked.
+Important: a null grade and an F grade map to different remediation. Null means "create a CLAUDE.md / AGENTS.md (whichever the team uses)." F means "the file is there but needs rewriting." A broken/dangling reference means "the file you point at isn't reachable - fix the link or remove the claim." Don't conflate them.
+
+For a dangling reference, the right verb depends on the target's actual state - **don't default to `git add`**, since the file may never have been written. Check `untracked_instruction_files`: if the target appears there it exists on disk, so the action is *commit it* (`git add <file>`); if it appears nowhere, it was never created, so the action is *write it* (then commit) - or *remove the dangling claim*. "`git add CLAUDE.md`" is only correct when `CLAUDE.md` is actually present-but-untracked.
+
+**Scan before recommending a commit (never publish secrets or infra recon).** When `instructions_grade` is `null` or low, the remediation often ends in "commit a `CLAUDE.md`/`AGENTS.md`". Before recommending that **any** file be committed - acutely if the repo's remote is public - check `sensitive_instruction_content[path]`. A non-empty list means the candidate file carries content that should not enter public git history: `ip_address`, `ssh_or_host`, `private_key`, `cloud_key`, `credential`, or `home_path` (a personal home-directory path). When present, **do not recommend committing the file as-is.** Instead: name the categories found (the evidence is already redacted - quote it verbatim, never re-derive the raw secret), and make the action "redact the flagged content (demo IPs, SSH/host details, credentials, home-dir paths), then commit." The deterministic scan is conservative and high-precision; an empty list is "nothing obvious found", not a clearance, so for a public repo still advise a human glance. This is a hard gate: a published infrastructure detail or credential is expensive to reverse.
+
+**Scope the create-a-file remediation to a root instruction file - nothing else.** A `null`/F grade means "add a committed root `CLAUDE.md` (or `AGENTS.md` aliasing it)" - it does **not** license vendoring runtime state. Specifically, never recommend committing `.taskmaster/` (`tasks.json`, `prd/`, `config.json`), `.assess/` working files, or other churning machine-generated state as a "source of truth": that is not instruction/breadcrumb content, it bloats git history, and it duplicates the live working directory. The remediation is one lean instruction file, not a vendoring exercise.
+
+**AGENTS.md as an alias, not a duplicate.** Claude Code reads one canonical `CLAUDE.md`; Codex reads `AGENTS.md` and Gemini CLI reads `GEMINI.md`. A repo that wants all three should point the others **at** the canonical file - a symlink or a thin stub (e.g. an `AGENTS.md` whose body is just "see `CLAUDE.md`") - so there is a single source of truth and no dual-maintenance. The grader detects this: a thin alias carries `is_alias: true` / `alias_target` and **inherits** the canonical file's grade. Treat that as the ideal shape - report it as "aliases `CLAUDE.md`", not as a weak standalone doc. When recommending a second-tool instruction file for a repo that already has a good `CLAUDE.md`, suggest an **alias** (`ln -s CLAUDE.md AGENTS.md`, or a one-line stub pointing to it), never a freshly-authored routing document that duplicates the canonical content.
+
+**Ancestor cascade - distinguish "none anywhere" from "not committed here".** Claude Code composes `CLAUDE.md` from every ancestor directory plus the global `~/.claude/CLAUDE.md`, so a maintainer working in-tree may have rich instructions that **a fresh clone never receives**. When `instructions_grade` is `null` but `ancestor_instruction_files` is non-empty, say so: "no committed instruction file at the repo root; an ancestor/global `CLAUDE.md` cascades locally but reaches no clone - add a committed root file (or an alias) so contributors get it." That is a different, gentler finding than genuine absence (`null` **and** empty `ancestor_instruction_files`), where nothing exists at any level. Don't claim "no instructions exist" when the maintainer is clearly working against cascaded ones.
 
 When multiple instruction files are present (e.g. CLAUDE.md and AGENTS.md as symlinks of the same content), list each in the report.
 
 This replaces the prior subjective "is it generic?" check. The grader rewards positive directives and tradeoff reasoning; it penalizes pure-negative framing and staleness.
 
-#### 0b — Navigability (measured as a graph, not a presence check)
+#### 0b - Navigability (measured as a graph, not a presence check)
 
-Navigability is a graph property, so the deterministic core measures it as one. Read the doc link-graph, staleness, and association signals from `run-context.json` — **do not re-scan for files by name**; the graph already identifies hubs by centrality without filename guessing:
+Navigability is a graph property, so the deterministic core measures it as one. Read the doc link-graph, staleness, and association signals from `run-context.json` - **do not re-scan for files by name**; the graph already identifies hubs by centrality without filename guessing:
 
 ```bash
 jq '.doc_graph, .doc_staleness.association, .doc_staleness.modularity, .stale_hubs[:5]' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-Recognise the full range of navigability artefacts (not just README/ADR/API specs): a Map-of-Content (MOC) / index note, a linked-doc graph (cross-referenced markdown — the [Karpathy-pattern LLM wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)), `AGENTS.md`, and **repo skills** (`.claude/skills/`, `skills/`). The graph already accounts for all of these. The signals below are the deterministic subset of Karpathy's wiki "Lint" health-check — hubs, orphans, connectivity, dangling references — applied to a code repo's docs.
+Recognise the full range of navigability artefacts (not just README/ADR/API specs): a Map-of-Content (MOC) / index note, a linked-doc graph (cross-referenced markdown - the [Karpathy-pattern LLM wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)), `AGENTS.md`, and **repo skills** (`.claude/skills/`, `skills/`). The graph already accounts for all of these. The signals below are the deterministic subset of Karpathy's wiki "Lint" health-check - hubs, orphans, connectivity, dangling references - applied to a code repo's docs.
 
 Score navigability from these signals:
 
-- **Connectivity / reachability (a wayfinding signal — read it as *curation*, not *access*).** A *good* doc set is one connected island, fully reachable from the entry points (README / `AGENTS.md` / top MOC). `doc_graph.island_count == 1` and `reachability_pct` near 1.0 is navigable; a high `orphan_rate` or many islands weakens wayfinding for both humans and agents. **Keep the claim honest:** link-reachability measures whether the docs are *curated into a navigable map*, not whether content is *reachable at all* — an agent can always `ls docs/` and open any file by path. So low reachability means **uncurated** (poor signal-vs-noise / weak wayfinding), not **inaccessible**. Weight it accordingly — an index/MOC is worth adding, but a directory-organised docs tree with low link-reachability is not the emergency "an agent can only discover 9%" makes it sound. Name the orphan docs.
-- **Hubs / MOCs by centrality.** `doc_graph.hubs` are the load-bearing docs (highest PageRank). A stale hub is the most dangerous lying map — everything routes through it.
-- **MOC validation (declared vs structural).** `doc_graph.moc_named_but_not_wired` lists docs *named* like a map (`index.md`, "MOC") that aren't structural hubs — named but not wired. Flag each as a finding: the graph shows the map isn't actually built.
-- **Broken links / ghost files.** `doc_graph.broken_links` lists links whose target file doesn't exist — `{from, target, kind}`. The doc graph draws each as a labelled "ghost" node, and the missing name *is* the suggested fix (create the file or correct the link). Name a few and recommend the fix; `dangling_links` is the count. `ambiguous_wikilinks` (a bare `[[name]]` matching several files) is a milder smell worth noting.
-- **Missing cross-references.** `doc_graph.missing_xrefs` lists `{from, to}` pairs where a doc *names another doc's filename in prose but never links to it* — "concepts mentioned but lacking the connection". Suggest adding the links so traversal (human or agent) actually reaches them.
-- **Contradictions are out of deterministic scope — hand them to an LLM.** The remaining lint check — contradictions between pages — can't be detected structurally. When the doc set is non-trivial, add a Top-3 / Additional action telling the user to have *their* agent read the doc set for contradictions and stale claims (e.g. "run your LLM over `docs/` to flag pages that contradict each other or the code"). State plainly that `/assess` does not check this.
-- **Centrality × staleness (the priority signal).** `stale_hubs` is ranked by `pagerank × staleness ratio`. The top entry — a central doc whose subject code is churning while the doc sits frozen — is a top finding. This feeds both the docs heatmap and this score.
+- **Connectivity / reachability (a wayfinding signal - read it as *curation*, not *access*).** A *good* doc set is one connected island, fully reachable from the entry points (README / `AGENTS.md` / top MOC). `doc_graph.island_count == 1` and `reachability_pct` near 1.0 is navigable; a high `orphan_rate` or many islands weakens wayfinding for both humans and agents. **Keep the claim honest:** link-reachability measures whether the docs are *curated into a navigable map*, not whether content is *reachable at all* - an agent can always `ls docs/` and open any file by path. So low reachability means **uncurated** (poor signal-vs-noise / weak wayfinding), not **inaccessible**. Weight it accordingly - an index/MOC is worth adding, but a directory-organised docs tree with low link-reachability is not the emergency "an agent can only discover 9%" makes it sound. Name the orphan docs.
+- **Hubs / MOCs by centrality.** `doc_graph.hubs` are the load-bearing docs (highest PageRank). A stale hub is the most dangerous lying map - everything routes through it.
+- **MOC validation (declared vs structural).** `doc_graph.moc_named_but_not_wired` lists docs *named* like a map (`index.md`, "MOC") that aren't structural hubs - named but not wired. Flag each as a finding: the graph shows the map isn't actually built.
+- **Broken links / ghost files.** `doc_graph.broken_links` lists links whose target file doesn't exist - `{from, target, kind}`. The doc graph draws each as a labelled "ghost" node, and the missing name *is* the suggested fix (create the file or correct the link). Name a few and recommend the fix; `dangling_links` is the count. `ambiguous_wikilinks` (a bare `[[name]]` matching several files) is a milder smell worth noting.
+- **Missing cross-references.** `doc_graph.missing_xrefs` lists `{from, to}` pairs where a doc *names another doc's filename in prose but never links to it* - "concepts mentioned but lacking the connection". Suggest adding the links so traversal (human or agent) actually reaches them.
+- **Contradictions are out of deterministic scope - hand them to an LLM.** The remaining lint check - contradictions between pages - can't be detected structurally. When the doc set is non-trivial, add a Top-3 / Additional action telling the user to have *their* agent read the doc set for contradictions and stale claims (e.g. "run your LLM over `docs/` to flag pages that contradict each other or the code"). State plainly that `/assess` does not check this.
+- **Centrality × staleness (the priority signal).** `stale_hubs` is ranked by `pagerank × staleness ratio`. The top entry - a central doc whose subject code is churning while the doc sits frozen - is a top finding. This feeds both the docs heatmap and this score.
 - **Doc→code association as a maturity signal.** `doc_staleness.association.pct_code_under_base_doc` and `pct_docs_mapping_to_code`: if the doc→code map is derivable from structure (clean hierarchy/convention), that's positive navigability; docs floating disconnected from the code they describe is a gap.
-- **Modular base docs, size-weighted.** `doc_staleness.modularity`: a module owning a *maintained* base doc is what makes a large codebase navigable to humans and deterministically mappable for an agent. **The headline metric is `base_doc_dir_ratio`** — the fraction of code-containing directories that actually hold a base doc. Do **not** lead with `base_doc_coverage_when_present`: it reaches `1.0` whenever a single root-level README is an ancestor of every file, which reads as "fully documented" even when only a handful of module dirs have docs (the two fields diverge sharply, e.g. ratio `0.04` vs when-present `1.0`). **Weight by size** — do not penalise a small/single-purpose repo (`large_repo: false`); for a `large_repo: true` with low `base_doc_dir_ratio`, flag the Layer 0 gap with remediation "decompose into modules; add a maintained base doc per module." The per-module docs are held to the same maintenance standard — the target is *modular + maintained*, never just "more docs."
+- **Modular base docs, size-weighted.** `doc_staleness.modularity`: a module owning a *maintained* base doc is what makes a large codebase navigable to humans and deterministically mappable for an agent. **The headline metric is `base_doc_dir_ratio`** - the fraction of code-containing directories that actually hold a base doc. Do **not** lead with `base_doc_coverage_when_present`: it reaches `1.0` whenever a single root-level README is an ancestor of every file, which reads as "fully documented" even when only a handful of module dirs have docs (the two fields diverge sharply, e.g. ratio `0.04` vs when-present `1.0`). **Weight by size** - do not penalise a small/single-purpose repo (`large_repo: false`); for a `large_repo: true` with low `base_doc_dir_ratio`, flag the Layer 0 gap with remediation "decompose into modules; add a maintained base doc per module." The per-module docs are held to the same maintenance standard - the target is *modular + maintained*, never just "more docs."
 
 **Truth-pressure ordering of navigation aids** (weight maintained/executable aids higher): executable aids that run in CI (skills, doctests) **>** tests **>** linked-doc graph / MOC **>** prose. Executable aids fail loudly when they rot; prose rots silently.
 
-**Scoring rule (mirror the null-vs-F split):** a wiki/MOC/`AGENTS.md` scores **Present** only when *maintained* — its churn tracks the code's churn (low `stale_hubs` ratios, `island_count` ≈ 1, reachability high). Score **Partial/Missing** when stale relative to code churn or fragmented, and flag stale-but-present as **actively misleading** — score it at or below absent. Combine with 0a: strong instruction files **and** a maintained, navigable doc graph → Present; good instructions but a stale or fragmented doc set → Partial; neither → Missing.
+**Scoring rule (mirror the null-vs-F split):** a wiki/MOC/`AGENTS.md` scores **Present** only when *maintained* - its churn tracks the code's churn (low `stale_hubs` ratios, `island_count` ≈ 1, reachability high). Score **Partial/Missing** when stale relative to code churn or fragmented, and flag stale-but-present as **actively misleading** - score it at or below absent. Combine with 0a: strong instruction files **and** a maintained, navigable doc graph → Present; good instructions but a stale or fragmented doc set → Partial; neither → Missing.
 
 ### Layer 1: Runtime Legibility / Liveness (Read-Side Foundation)
 
-Layer 1 answers: *is this code actually live, and can the agent find out?* A subsystem can pass every write-side layer — compiles, typed, linted, tested, reviewed — and still be **dead**: the data feeding it stopped, the consumer was re-pointed, but the code remains. Finding the code does not mean it is still used. This layer gates the entire write side: enforcing types/lint/coverage on dead code is wasted at best, misleading at worst.
+Layer 1 answers: *is this code actually live, and can the agent find out?* A subsystem can pass every write-side layer - compiles, typed, linted, tested, reviewed - and still be **dead**: the data feeding it stopped, the consumer was re-pointed, but the code remains. Finding the code does not mean it is still used. This layer gates the entire write side: enforcing types/lint/coverage on dead code is wasted at best, misleading at worst.
 
 Read both tiers from `run-context.json`:
 
@@ -334,26 +362,26 @@ Read both tiers from `run-context.json`:
 jq '.dead_code, .observability' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-**Deterministic tier — intra-repo dead code (`dead_code`).** A best-effort scan (`vulture`/`ts-prune`/`knip`/`staticcheck`/`deadcode`) flags unused exports / unreferenced symbols. `dead_code.tools` reports per-language status; `candidate_count` and `candidates` list the findings (already filtered to *this* repo — vendored/build dirs are excluded). Surface them in the report **with the explicit caveat** from `dead_code.caveat`: static reachability proves "nothing in *this* repo calls it," never "no external consumer calls it." Cross-boundary liveness needs the next tier. When `available: false`, report "intra-repo dead-code scan not run (no language tool present)" — degrade, don't penalise.
+**Deterministic tier - intra-repo dead code (`dead_code`).** A best-effort scan (`vulture`/`ts-prune`/`knip`/`staticcheck`/`deadcode`) flags unused exports / unreferenced symbols. `dead_code.tools` reports per-language status; `candidate_count` and `candidates` list the findings (already filtered to *this* repo - vendored/build dirs are excluded). Surface them in the report **with the explicit caveat** from `dead_code.caveat`: static reachability proves "nothing in *this* repo calls it," never "no external consumer calls it." Cross-boundary liveness needs the next tier. When `available: false`, report "intra-repo dead-code scan not run (no language tool present)" - degrade, don't penalise.
 
-Two `tools[].status` values need handling in the report: `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it — surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `timeout` / `tool_absent` likewise degrade, not penalise.
+Two `tools[].status` values need handling in the report: `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it - surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `timeout` / `tool_absent` likewise degrade, not penalise.
 
-**Observability tier (the decisive one) — three rungs (`observability.rung`, 0–3):**
+**Observability tier (the decisive one) - three rungs (`observability.rung`, 0-3):**
 
-1. **Instrumented** — telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging). Necessary, not sufficient.
-2. **Discoverable** — an `OBSERVABILITY.md` / runbook tells the agent *where* runtime truth lives. Orients, but grants no access.
-3. **Reachable** — the agent has an *invokable* path to runtime state: an MCP server over logs/metrics/traces (`.mcp.json`), a repo skill that tails logs / queries metrics, or a runbook with runnable query commands. **This is the rung that decides the score** — without it the agent *knows* telemetry exists but cannot *use* it, so liveness stays unverifiable in practice. A Grafana no agent can query from stops at rung 1. **Boundary:** this scores what the *repo provides* toward agent-reachability; it cannot know the agent's live environment — say so in the report.
+1. **Instrumented** - telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging). Necessary, not sufficient.
+2. **Discoverable** - an `OBSERVABILITY.md` / runbook tells the agent *where* runtime truth lives. Orients, but grants no access.
+3. **Reachable** - the agent has an *invokable* path to runtime state: an MCP server over logs/metrics/traces (`.mcp.json`), a repo skill that tails logs / queries metrics, or a runbook with runnable query commands. **This is the rung that decides the score** - without it the agent *knows* telemetry exists but cannot *use* it, so liveness stays unverifiable in practice. A Grafana no agent can query from stops at rung 1. **Boundary:** this scores what the *repo provides* toward agent-reachability; it cannot know the agent's live environment - say so in the report.
 
 **Scoring (by the rungs):**
-- **Present** — reaches **rung 3** (agent can read logs/metrics/traces via an invokable tool/skill/MCP) and dead code is removed or flagged.
-- **Partial** — instrumented, maybe discoverable, but **not agent-reachable** (rung 1–2 — the `meridian` case: telemetry exists, the agent can't use it), or candidate-dead code present and unflagged.
-- **Missing** — no runtime instrumentation (rung 0); liveness unknowable from the repo.
+- **Present** - reaches **rung 3** (agent can read logs/metrics/traces via an invokable tool/skill/MCP) and dead code is removed or flagged.
+- **Partial** - instrumented, maybe discoverable, but **not agent-reachable** (rung 1-2 - the `meridian` case: telemetry exists, the agent can't use it), or candidate-dead code present and unflagged.
+- **Missing** - no runtime instrumentation (rung 0); liveness unknowable from the repo.
 
-If `observability.available` is `false` (rung `null`), the scan itself failed — report "liveness not assessed" and degrade, don't score it Missing (that's a real "rung 0", a different finding).
+If `observability.available` is `false` (rung `null`), the scan itself failed - report "liveness not assessed" and degrade, don't score it Missing (that's a real "rung 0", a different finding).
 
 **Encode the liveness asymmetry** in the report: *no traffic is strong evidence of dead; some traffic is weak evidence of live* (could be a healthcheck, a zombie client, or a once-a-year batch).
 
-**Encode the honest limit:** some liveness facts live only in people's heads ("kept for Legal, not wired up") — unreachable by code *or* telemetry. So treat **code-presence as a hypothesis, not a fact**: write "`X` is PRESENT; liveness NOT confirmed; needs telemetry or a named human," never assert liveness.
+**Encode the honest limit:** some liveness facts live only in people's heads ("kept for Legal, not wired up") - unreachable by code *or* telemetry. So treat **code-presence as a hypothesis, not a fact**: write "`X` is PRESENT; liveness NOT confirmed; needs telemetry or a named human," never assert liveness.
 
 ### Layer 2: Code Design (Compile-Time Correctness)
 
@@ -419,22 +447,47 @@ ls "$REPO_ROOT"/.swiftlint.yml 2>/dev/null
 
 **If found, assess AI-relevant rules** by reading the config:
 - Unexplained lint suppression rules? (nolintlint, no-restricted-syntax)
-- TODO/FIXME detection? (godox, no-warning-comments)
+- `TODO`/`FIXME` detection? (godox, no-warning-comments)
 - **Function length limits?** (`funlen`, `max-lines-per-function`, `MethodLength`, `function-max-lines`)
 - **Cyclomatic complexity limits?** (`cyclop`, `gocognit`, `complexity`, `CyclomaticComplexity`, `too-many-statements`, `cognitive-complexity`, `cognitive_complexity`)
 - **File size limits?** (`max-lines`, `FileLength`, `file-max-lines`, `lines-per-file`)
 - Exhaustive matching? (exhaustive, strict unions)
 - Import boundary rules? (depguard, no-restricted-imports)
 
-**Cross-reference treemap evidence.** Read the stats sidecar to see what the linter actually catches in the wild — but only if Step 2 produced it. The sidecar is missing whenever the treemap script failed (no `uv`, non-git path, no scoreable files, etc.).
+**Per-language complexity-tool pointers** (name the *current canonical* tool when recommending a complexity/length rule, so the action doesn't pattern-match a discontinued package off training data - issue #62):
+
+| Language | Complexity / size rule source |
+|---|---|
+| Go | `golangci-lint`: `cyclop`, `gocognit`, `funlen`, `lll` |
+| JS/TS | ESLint `complexity`, `max-lines`, `max-lines-per-function`; or Biome equivalents |
+| Python | Ruff `C901` (mccabe), `PLR0915`; or `radon` for ad-hoc reports |
+| Java/Kotlin | `checkstyle` / `pmd` (Java), `detekt` (Kotlin) complexity rules |
+| C# | Roslyn analyzers (`EnableNETAnalyzers`), `CA1502`/`CA1505` maintainability rules |
+| Ruby | RuboCop `Metrics/*` (CyclomaticComplexity, MethodLength, ClassLength) |
+| Rust | Clippy `cognitive_complexity`, `too_many_lines` |
+| **Dart** | `custom_lint` + a community ruleset such as `solid_lints` (cyclomatic complexity / source-lines-of-code / number-of-parameters). The older `dart_code_metrics` is effectively discontinued for Dart 3 - do **not** recommend it; prefer `custom_lint`-based rulesets or point at <https://pub.dev> for the current option. |
+| Swift | SwiftLint `cyclomatic_complexity`, `function_body_length`, `file_length` |
+
+This list is a starting pointer, not a guarantee of currency - apply the currency-check in "Write the report" before naming any specific package version.
+
+**Cross-reference treemap evidence.** Read the stats sidecar to see what the linter actually catches in the wild - but only if Step 2 produced it. The sidecar is missing whenever the treemap script failed (no `uv`, non-git path, no scoreable files, etc.).
 
 ```bash
 STATS="$REPO_ROOT/.assess/complexity-stats.json"
 if [ -f "$STATS" ]; then
   jq '{
     loc_p95: .loc.p95, loc_max: .loc.max,
-    ccn_p95: .ccn.p95, ccn_max: .ccn.max,
-    worst_complex: .top_complex[:3] | map(.path),
+    # Per-function ccn (`fn_ccn`) is the unit a linter threshold gates - compare
+    # THIS against cyclop:15 etc., never the file-aggregate `.ccn` block.
+    fn_ccn_p95: .fn_ccn.p95, fn_ccn_max: .fn_ccn.max,
+    fn_count: .fn_ccn.function_count,
+    # File-aggregate ccn (sum per file): drives the treemap hue / hotspot rank.
+    # NOT a per-function violation - label it as an aggregate in the report.
+    file_aggregate_ccn_p95: .ccn.p95, file_aggregate_ccn_max: .ccn.max,
+    # Each worst-complex row carries both: `ccn` is the file aggregate,
+    # `max_fn_ccn` is that file's worst single function (null = scc-scored, no
+    # function breakdown), which is what the threshold actually flags.
+    worst_complex: .top_complex[:3] | map({path, ccn, max_fn_ccn}),
     worst_large: .top_large[:3] | map(.path)
   }' "$STATS"
 else
@@ -444,12 +497,21 @@ fi
 
 If the sidecar is missing, skip the combined-scoring matrix below and fall back to the original Layer 3 rule: Present if linter config includes AI-relevant rules (including complexity/length), Partial if linter exists without them, Missing if no linter at all. Record "treemap unavailable" in the Evidence column so the gap is auditable.
 
-Thresholds for "high" (based on industry conventions — adjust for context):
+**Per-function vs file-aggregate complexity - do not conflate them (issue #58).** The sidecar carries two complexity signals:
+
+- **`fn_ccn` / a row's `max_fn_ccn`** - *per-function* cyclomatic complexity. A linter rule (`cyclop: 15`, `gocognit`, `complexity`) gates this. Compare it against the thresholds below.
+- **`ccn` / a row's `ccn`** - the *file-level aggregate* (sum of every function's complexity). It drives the treemap hue and the hotspot rank, but it is **not** a per-function value and a per-function threshold does not apply to it. A file of a dozen simple functions can sum past 100 with no single function violating anything.
+
+When you name a complexity hotspot, lead with the per-function fact against the threshold and label the aggregate as an aggregate. E.g. _"`service_modules.go` - file-aggregate ccn 136 across 13 functions; worst single function ccn 13, under the cyclop:15 threshold (no per-function violation)."_ Never report the aggregate as if it were one function's complexity. When `max_fn_ccn` is `null` (scc-scored file, no function breakdown), say so - don't invent a per-function number.
+
+**Verify any structural mechanism against the source before narrating it.** Do not write "a large switch dispatching by module name" (or any other concrete structure) inferred from a metric - the number tells you nothing about whether the code is a switch, a dispatch table, or a recursive walk. If you describe a mechanism, you must have read the file and confirmed it; otherwise describe only what the metric shows ("high aggregate complexity concentrated in N functions") and leave the mechanism to whoever opens the file.
+
+Thresholds for "high" (per-function `fn_ccn` for the complexity rows; `loc` is per-file - based on industry conventions, adjust for context):
 
 | Signal | Watch | High |
 |---|---|---|
-| p95 cyclomatic complexity | ≥ 10 | ≥ 15 |
-| max cyclomatic complexity | ≥ 30 | ≥ 50 |
+| p95 per-function cyclomatic complexity (`fn_ccn.p95`) | ≥ 10 | ≥ 15 |
+| max per-function cyclomatic complexity (`fn_ccn.max`) | ≥ 30 | ≥ 50 |
 | p95 file size (LOC) | ≥ 500 | ≥ 800 |
 | max file size (LOC) | ≥ 1500 | ≥ 2000 |
 
@@ -457,13 +519,15 @@ Thresholds for "high" (based on industry conventions — adjust for context):
 
 | Linter has complexity/length rules? | Treemap p95 / max in "High" range? | Score |
 |---|---|---|
-| Yes, enforced (CI blocks) | Either way — rules ratchet the legacy | **Present** |
-| Yes but lenient / excludes legacy | High | **Partial** — rules exist, legacy unfenced |
-| Linter exists, no complexity/length rules | Not high | **Partial** — gap but no evidence yet |
-| Linter exists, no complexity/length rules | High | **Missing** — concrete evidence of the gap |
+| Yes, enforced (CI blocks) | Either way - rules ratchet the legacy | **Present** |
+| Yes but lenient / excludes legacy | High | **Partial** - rules exist, legacy unfenced |
+| Linter exists, no complexity/length rules | Not high | **Partial** - gap but no evidence yet |
+| Linter exists, no complexity/length rules | High | **Missing** - concrete evidence of the gap |
 | No linter at all | Either | **Missing** |
 
-When scoring Partial or Missing on this combined check, name the top 3 worst offenders from `top_complex` / `top_large` in the report's Evidence/Gap columns. Those are the files the missing rule would have flagged.
+In the matrix, "complexity in the High range" means **per-function** `fn_ccn` clears the threshold (a real per-function violation the linter rule would block) - not the file-aggregate `ccn`. A high aggregate with every function under the threshold is a *large file*, scored on the LOC rows, not a complexity violation.
+
+When scoring Partial or Missing on this combined check, name the top 3 worst offenders from `top_complex` / `top_large` in the report's Evidence/Gap columns. Those are the files the missing rule would have flagged. For each `top_complex` offender, cite its `max_fn_ccn` (the per-function value the threshold gates), not just the aggregate `ccn` - and if `max_fn_ccn` is under the threshold, it is not actually a per-function offender even though its aggregate is high.
 
 ### Layer 4: Architecture Tests (Conventions as Contracts)
 
@@ -564,16 +628,26 @@ rg 'threshold|min_coverage|coverageThreshold|branches.*[0-9]' "$REPO_ROOT"/{code
 rg 'coverage|codecov|coveralls' "$REPO_ROOT"/.github/workflows/*.yml 2>/dev/null | head -5
 ```
 
-**Assess gate strictness:**
-- Project-wide minimum threshold?
-- Per-PR patch coverage requirement?
-- Per-component thresholds?
+**Scan for mutation testing:**
+```bash
+# Mutation testing tools (mutmut, Stryker, PITest, cargo-mutants, etc.)
+rg 'mutmut|stryker|pitest|cargo-mutants|mutation' "$REPO_ROOT"/{Makefile,pyproject.toml,package.json,build.gradle,pom.xml,.github/workflows/*.yml} 2>/dev/null | head -5
+# Check for mutation reports or survivor logs
+fd -t f '(mutation|survivor|mutant)' "$REPO_ROOT" --extension json --extension xml --extension html 2>/dev/null | head -3
+```
+
+**Assess behaviour-constraint signal:**
+- Are coverage gates enforced (CI fails below threshold, patch coverage required)?
+- Is there mutation testing in CI — and what is the reported mutation/survivor score?
+- If no mutation testing: are there proxy signals for hollow tests — low assertion-per-test ratio, assertion clusters on internal state rather than observable behaviour, or `assert True`-style stubs?
 - Does CI fail on coverage regression?
 
 **Scoring:**
-- Present: Coverage gates block PRs below threshold, patch coverage enforced
-- Partial: Coverage reported but not enforced, or thresholds too low
-- Missing: No coverage configuration or gates
+- Present: Coverage gates enforced with patch-level requirements, AND tests carry truth-pressure — mutation score or survivor-density analysis shows tests pin observable behaviour; or cheap heuristics (assertion-per-test ratio, no hollow-assertion clusters) confirm no gap between lines executed and lines constrained.
+- Partial: Coverage gates enforced but truth-pressure unverified or weak — high line coverage with unknown/low mutation score, known survivor clusters, or assertion-on-internal-state patterns (the "meridian resume" case: 80%+ line coverage, near-zero mutation score). See the **Lying Signals** section of the report for the hollow-gate pattern (the L6 green-but-hollow row).
+- Missing: No coverage configuration or gates.
+
+**Asymmetry rule:** A high-coverage repo whose tests do not constrain behaviour scores **at or below** a repo with honest lower coverage. A confident-but-hollow gate is actively misleading; honest low coverage is merely incomplete.
 
 ### Layer 7: Automated Code Review (Design-Level Feedback)
 
@@ -593,7 +667,7 @@ done
 - Partial: Bot configured but not active, or only running basic checks
 - Missing: No automated code review
 
-### Layer 8: AI Project Management (Orchestration and Feedback) — Capstone
+### Layer 8: AI Project Management (Orchestration and Feedback) - Capstone
 
 Does the project treat AI agents as contributors to plan around - with structured task management, workflow orchestration, and a feedback loop that improves the system over time?
 
@@ -628,6 +702,25 @@ rg -i 'retrospective|retro|feedback loop|learnings|post.?mortem' "$REPO_ROOT"/{C
 - Present: Structured AI task management with feedback loop that updates contracts
 - Partial: Some orchestration tooling exists but no systematic feedback loop, or ad-hoc retro notes without structured process
 - Missing: No AI-aware project management
+
+### Cross-layer derived findings (keyhole readiness)
+
+The layers above each measure one axis. The deterministic core also crosses those axes against each other and emits six named findings - the "where to look" signals no single layer surfaces. Read them once, after the per-layer scans:
+
+```bash
+jq '.derived_findings, .attention' "$REPO_ROOT/.assess/run-context.json"
+```
+
+`derived_findings` is a fixed-order list of six `{name, paths, action}` objects - all six always present, `paths` may be empty. Omit a finding from the report when its `paths` is empty. Each pairs an axis-crossing with the action it implies:
+
+- **`hidden_coupling`** - modular statically but bleeds across boundaries historically (files that keep changing together). The static map says "isolated"; git says "coupled." Action: investigate the seam before trusting the boundary.
+- **`lying_map`** - high complexity under a stale doc: the map exists but no longer matches the territory. Action: fix or delete the doc - a wrong map is worse than none.
+- **`unexplained_complexity`** - high complexity with no doc and no recorded intent. Action: write the missing contract. Do **not** auto-generate it - a guessed contract is just another lying map.
+- **`orphaned_understanding`** - high complexity with no human anchor and no intent: nobody owns the knowledge. Action: assign a human anchor before further change.
+- **`candidate_dead_weight`** - high complexity with no runtime evidence it is live. The bias is to **keep** (static reachability can't see external callers - Layer 1's caveat applies). Action: verify liveness, then delete only if confirmed dead.
+- **`refactor_boundary`** (positive) - high containment: edits stay local. A safe zone, never an attention row. Action: safe to hand an agent in isolation; cite these paths in Strengths.
+
+`attention` ranks the few units landing in the most *negative* findings (`refactor_boundary` never counts) - the "look here first" list, each row carrying its `findings` and `score`. Lead the report's findings with the top of this list.
 
 ## Step 3.5: Read Cross-Run Context
 
@@ -669,6 +762,17 @@ This is an improvement roadmap, not a verdict. It measures one thing: **is the c
 
 A codebase can be 8/8 and still on fire (great scaffolding, legacy debt) — or 2/8 with a calm treemap (small codebase, no enforcement needed yet). The views matter together.
 
+**Each layer is a sense the agent needs, not a box to tick — and this report is written to be understood without prior knowledge of the framework.** Every row in the scorecard below names one thing an agent (or a newly-arrived human) must be able to *see or trust* before working safely here; it's phrased as the question that row answers. A **Missing** or **Partial** is not a mark against the codebase — it locates where someone working here is partly blind, and the Gap column says what would restore the view. One row matters most for cold readers, because it's the one most often misread: **Layer 1 (Runtime Legibility) is the agent's attention-sense — "which parts are actually live, which need attention, which are dead weight creating support burden?"** A running service answers that through telemetry (latency, errors, traffic); a repo with no deployed runtime answers it through complexity, churn, and reachability — so the complexity heatmap and the dead-code scan *are* its observability. A low telemetry score on such a repo means *look through those instruments instead*, *not* "the agent is flying blind." Observability, in this report, is whatever lets the agent see where to point effort — by whichever instrument fits the codebase.
+
+**The legacy-transition lens — this is not a new problem.** The hard part of AI-assisted coding is the same one the industry has faced for 25 years: *what happens when the people who understood the code are gone, or the code outruns anyone's ability to understand it?* AI only changes the **velocity** — a codebase can now slide from modern to legacy in months rather than years, because agents can generate change faster than a team can keep comprehending it. So read this report through the accumulated discipline of legacy-code engineering, not as a novel AI concern. The grounded references below are deliberate: a reading agent already knows them, and they carry weight that "we think you should add tests" does not.
+
+- **"Legacy code is code without tests."** — Michael Feathers, *Working Effectively with Legacy Code* (2004). A file that is **complex, churning, and untested is already legacy**, regardless of its age. The correct response is to write **characterization tests** (pin the code's *actual current behaviour*, since that is what callers depend on — not its intended spec) and find a **seam** (a place to change behaviour without editing the code) to get it under test, *then* refactor.
+- **Don't rewrite — strangle.** The instinct under AI velocity is to throw a confusing module away and regenerate it. That is the oldest trap in the book (Joel Spolsky, *Things You Should Never Do*, 2000): a rewrite discards the undocumented behaviour and bug-fixes a working system has accreted. Prefer Martin Fowler's **Strangler Fig** — replace incrementally around the edges, behind tests. An agent's default ("regenerate from intent") is precisely the wrong move; say so where a hotspot invites it.
+- **Hotspots and change-coupling are the map.** The complexity-×-churn heatmap and the coupling findings in this report *are* Adam Tornhill's (CodeScene) hotspot and change-coupling analyses — the modern, version-control-aware form of legacy comprehension. Treat the vivid-red hotspots and the `hidden_coupling` seams as the prioritized worklist, not trivia.
+- **Decide per component (the 7 Rs).** Not every flagged unit should be refactored: retain, retire, rehost, replatform, refactor, re-architect, or rebuild. Dead weight → *retire*; complex-and-live → *characterize then refactor*; safe `refactor_boundary` zones → hand to an agent in isolation.
+
+When you write the findings and Top 3 Actions below, name these anchors where they apply — they tell a reading agent *how to think* about the situation, not just what the metric says.
+
 **How it's measured.** This is an AI-readiness review run almost entirely on *traditional* tooling — static analysis, git history, and graph metrics over the docs and code. The model only writes the prose around those numbers; it does no scanning itself. That keeps a full run fast and close to zero in model tokens, and makes the structural findings reproducible run-to-run.
 
 The "Top 3 Actions" table at the bottom names specific files. Start there.
@@ -679,15 +783,28 @@ The "Top 3 Actions" table at the bottom names specific files. Start there.
 
 [![Complexity hotspot](./complexity-heatmap.svg)](./complexity-heatmap.svg)
 
+- **Measured at commit:** `<head_short>` (<committed_date>)<staleness-suffix>
 - **Files scored:** <N>
 - **Churn window chosen:** <last 12mo | last 24mo | last 5y | all-time>
-- **Complexity profile:** p95 ccn <N> (max <M>); p95 LOC <N> (max <M>)
-- **Top hotspots** (composite `sqrt(ccn) × sqrt(1 + commits)` - a sub-linear blend of complexity and recent churn, so a complex-AND-active file leads, a frozen-but-complex file ranks below it, and a churny-but-trivial file can't top the list on churn alone):
-  1. `<path>` — <loc> LOC, ccn <N>, <M> commits in window
+- **Complexity profile:** per-function ccn p95 <N> (max <M>); file-aggregate ccn p95 <N> (max <M>); p95 LOC <N> (max <M>)
+- **Top hotspots** (composite `sqrt(ccn) × sqrt(1 + commits)` - a sub-linear blend of complexity and recent churn, so a complex-AND-active file leads, a frozen-but-complex file ranks below it, and a churny-but-trivial file can't top the list on churn alone). `ccn` here is the **file aggregate**; the worst single function per file is in parentheses:
+  1. `<path>` — <loc> LOC, aggregate ccn <N> (worst function <max_fn_ccn>), <M> commits in window
   2. ...
   3. ...
 
-Size encodes lines of code, colour encodes cyclomatic complexity (dark red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk.
+**Pin the snapshot to its commit (issue #59).** Read `measured_commit` from `run-context.json` and fill the "Measured at commit" line so every absolute LOC/CCN figure in this report reads as a snapshot of one commit, not a current truth:
+
+```bash
+jq '.measured_commit' "$REPO_ROOT/.assess/run-context.json"
+```
+
+- When `available: false`, omit the "Measured at commit" line (no git history to pin to).
+- Render `head_short` and `committed_date`. Add a `<staleness-suffix>` warning when the snapshot is stale, so a reader knows the numbers may have drifted:
+  - `dirty: true` → append " - **working tree had uncommitted changes; figures include un-committed edits**".
+  - `behind` is a positive integer → append " - **HEAD was <behind> commit(s) behind `<upstream>`; absolute figures are a snapshot and may read low against current code**".
+  - Clean and up to date (`dirty: false`, `behind` 0 or null) → no suffix.
+
+Size encodes lines of code, colour encodes cyclomatic complexity (dark red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk. When the treemap carries a **hatched** overlay (only when opt-in mutation results exist), those blocks are covered-but-unpinned code - tests run them without constraining them - so they stop reading as safe green; the heatmap's own legend keys the diagonal (>30% survivor density) and cross-hatch (>50%, severe).
 
 ### Doc navigability — can an agent find its way?
 
@@ -705,17 +822,19 @@ Colour = staleness (vivid red = a frozen doc beside churning code = a lying map)
 
 **Score: X / 8** — <maturity-label>
 
-| Layer | Band | Status | Evidence | Gap |
-|-------|------|--------|----------|-----|
-| 0: Agent Instructions & Navigability | read | Present/Partial/Missing | <what was found> | <what's missing> |
-| 1: Runtime Legibility / Liveness | read | Present/Partial/Missing | <what was found - if rung 3, append: "Reachable *if* the agent has `<tools cited in runbooks>` in its execution environment"> | <what's missing> |
-| 2: Code Design | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 3: Linters | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 4: Architecture Tests | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 5: CI Pipeline | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 6: Coverage Gates | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 7: Code Review Bots | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 8: AI Project Mgmt (capstone) | meta | Present/Partial/Missing | <what was found> | <what's missing> |
+The **What it asks** column is the question that layer answers for an agent working here — read it first; the framework name is secondary. The **Band** orders them by dependency: a read-side blind spot makes the write-side scores mean less (you can't trust enforcement of a picture you can't see), and the meta band only matters once the rest works.
+
+| Layer | What it asks | Band | Status | Evidence | Gap |
+|-------|--------------|------|--------|----------|-----|
+| 0: Agent Instructions & Navigability | Can I build a true map of this codebase before I touch it? | read | Present/Partial/Missing | <what was found> | <what's missing> |
+| 1: Runtime Legibility / Liveness | Can I see which parts are live, which need attention, and which are dead weight? | read | Present/Partial/Missing | <what was found - if rung 3, append: "Reachable *if* the agent has `<tools cited in runbooks>` in its execution environment"; if no deployed runtime, note that liveness is read through complexity + churn + reachability, not telemetry> | <what's missing> |
+| 2: Code Design | Will the type-checker catch my mistakes? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 3: Linters | Are complexity and style bounds enforced, or will my code drift? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 4: Architecture Tests | Are the structural conventions executable, or just folklore? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 5: CI Pipeline | Does something automatically catch a bad change before it merges? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 6: Coverage Gates | Do the tests constrain behaviour, or just execute lines? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 7: Code Review Bots | Is there design-level feedback on every change? | write | Present/Partial/Missing | <what was found> | <what's missing> |
+| 8: AI Project Mgmt (capstone) | Do learnings feed back into the contracts, or evaporate? | meta | Present/Partial/Missing | <what was found> | <what's missing> |
 
 **Layer 1 evidence carries an explicit caveat by default.** The Layer 1 spec is honest about its boundary: this scores what the *repo* makes agent-reachable, not what the agent has installed at runtime. So when Layer 1 is **Present** (rung 3), the Evidence cell should not read "Reachable, full stop" - it should name the cited tools and conditionalise on their availability. Example: _"Runbook fences `kubectl logs`, `stern`, `logcli`; reachable *if* the agent has these in its execution context."_ When Partial or Missing, the caveat is moot - no rung-3 claim is being made.
 
@@ -743,6 +862,22 @@ Other examples:
 | 5-6 | Solid | Contracts catch most issues. Agent is productive |
 | 7-8 | AI-Native | System self-improves. Agents work reliably at scale |
 
+## Lying Signals
+
+These artefacts look true but aren't - the most dangerous failure mode for an agent navigating the codebase. Each row is something the repo presents as trustworthy that a scan flagged as hollow: a map of a place that moved, code that reads as live but is never called, a gate that reports "tested" without pinning behaviour.
+
+| Layer | Signal Type | Instance | Why it lies |
+|-------|-------------|----------|-------------|
+| 0 | Stale hub doc | `<path>` (<N>d stale; subject churned <M> commits in window) | A central doc agents anchor on, frozen while its subject code moves - reads as the map, describes terrain that no longer exists |
+| 1 | Dead-but-present | `<path>` - `<symbol>` (<kind>) | Compiles and reads as live, but nothing in *this* repo calls it - an agent extends or trusts a path that is never exercised |
+| 6 | Green-but-hollow | `<path>` (coverage <C>% vs mutation <K>%) | Tests execute the file (green coverage) but don't constrain it (mutants survive) - the gate says "tested" while behaviour is unpinned |
+
+**Populate each row from `run-context.json`; omit any row whose signal is absent or below threshold, and omit the entire section if all three are empty:**
+
+- **L0 — stale hub doc:** take `stale_hubs[0]` only when its `ratio > 2.0` **and** `confidence != "low"` (a `repo-baseline` subject is `confidence: low` - its "subject churn" is the whole repo's churn, too coarse to call a lie). Fill from `path`, `last_commit_days`, `code_churn_in_window`.
+- **L1 — dead-but-present:** take `dead_code.candidates[0]`; fill from `path`, `symbol`, `kind`. Keep the `dead_code.caveat` in mind - static reachability proves "nothing in this repo calls it," never "no external consumer calls it" - so frame it as a candidate, not a verdict.
+- **L6 — green-but-hollow:** take `test_pressure.survivor_clusters[0]` only when `test_pressure.survivor_density.overall > 0.3`; fill the file from the cluster's `file`. State the mutation score as `1 - survivor_density.overall` and pair it with the file's line coverage when you have it. This is the hollow-gate pattern Layer 6 scores Partial for.
+
 ## Top 3 Actions
 
 Prioritize by leverage: agent instructions and CI first, then linters and coverage, then architecture tests and retro loops. Each action should be completable in a single session and reference **specific files** from the hotspot snapshot wherever possible — generic advice is the failure mode this report exists to prevent.
@@ -755,13 +890,19 @@ Prioritize by leverage: agent instructions and CI first, then linters and covera
 
 The `Issue` column is filled in by Step 6 if the user opts to create tracking issues. Leave as `—` initially.
 
+**Ground actions in the legacy-code precedent where it applies.** For a complex, churning, *untested* hotspot, the right first action is almost never "rewrite it" and rarely a bare "add tests" — it is **"add characterization tests for `<file>` to pin current behaviour, then refactor behind them"** (Feathers). For a tangled `hidden_coupling` seam, frame it as a **strangler-fig boundary** to replace incrementally, not a big-bang rewrite. For `candidate_dead_weight`, the action is **retire** (confirm liveness, then delete) — one of the 7 Rs. Naming the precedent (characterization test, seam, strangler fig, the 7 Rs) gives the action authority a reading agent recognizes and steers it away from the throw-it-away-and-regenerate instinct that AI velocity makes tempting and usually wrong.
+
 **Frame actions positively.** "Add `cyclop` rule (threshold 15) to `.golangci.yml`" beats "Stop letting complex code through CI." Positive directives are easier for the next contributor (human or LLM) to act on - they say what to do, not what to avoid. If you find yourself writing "Don't X" or "Never Y", convert to "Use X (because Z)" instead.
 
 **Use repo-relative paths only.** Never write absolute paths from your environment (e.g. `/Users/.../repo/src/foo.go`) into the report. They leak the author's directory layout, break shell commands for other contributors, and look unprofessional in committed artifacts. Repo-relative paths (`src/foo.go`, `.golangci.yml`) work everywhere.
 
+**Currency-check any package you name (issue #62).** Before naming a specific package *version* in an action (`dart_code_metrics: ^5.7.6`, `some-linter@2.1.0`), prefer naming the **rule/concept plus a pointer to the language's package registry** (pub.dev, npm, crates.io, PyPI, RubyGems) over a hardcoded version - registries stay current; your training data doesn't. If you do name a specific package, verify it's still actively maintained for the repo's language/runtime version rather than trusting recall. This protects every language symmetrically: any canonical tool can be deprecated after the model's training cutoff (the `dart_code_metrics` case), so "name the rule + registry" is the safe default.
+
 Good actions look like:
 
-> _"Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67), `internal/sync/reconciler.go` (ccn 54)."_
+> _"Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current per-function p95 is 23; immediate offenders by worst function: `internal/import/parser.go` (function ccn 67), `internal/sync/reconciler.go` (function ccn 54)."_
+
+Cite the **per-function** value (`fn_ccn` / `max_fn_ccn`) against a per-function rule, not the file aggregate - a `cyclop:15` rule flags functions, so a file whose worst function is 12 is not an offender no matter how high its aggregate sums (issue #58).
 
 Generic actions to avoid:
 
@@ -773,6 +914,17 @@ Generic actions to avoid:
 - **Layer 1 Partial because observability is instrumented but not agent-reachable** (rung 1–2 — the `meridian` case): the action is _"make existing observability agent-queryable"_ — e.g. "add a `.mcp.json` log/metrics server" or "add a `view-logs` repo skill wrapping `logcli`" — **not** "add observability" (it's already there; the gap is reachability).
 - **Layer 0 Partial because a hub doc is stale:** name the specific stale hub from `stale_hubs` and its churning subject — _"refresh `docs/architecture.md` (251d stale; subject `src/api/` had 47 commits in window)"_ — not "improve the docs".
 - **Layer 0 Partial because the doc set is fragmented:** name the orphans / islands — _"link the 6 orphan docs into the MOC; `index.md` is named but not wired (out-degree 0)"_.
+- **Layer 6 Partial because coverage is enforced but truth-pressure is unverified:** the actions are _"strengthen assertions to pin observable behaviour at the named survivors"_ and _"add mutation testing to CI (e.g. `mutmut`, Stryker, PITest)"_ — **not** "raise the coverage threshold" (higher line-coverage numbers manufacture more lying signal without improving behavioural constraint).
+
+**Cross-check offenders against the recommendation's own scope (issue #59a).** When an action names a *scope* ("un-exclude `services/*/service/*.go`", "enforce the rule under `src/core/`"), every offender you list in that action's evidence must actually fall within that scope. Before writing the offender list, verify each path against the named pattern - a `service_modules.go` under `shared/pkg/saga/schema/` is **not** under `services/*/service/`, so it can't be cited as evidence for un-excluding `services/*/service/`. If the worst offenders sit outside the scope you're recommending, either widen the recommended scope to cover them or move them to a separate action with the right scope. The offender list and the recommended change must describe the same set of files.
+
+**Apply the same truth-pressure to `/assess`'s own structural findings (issue #59c).** `/assess` grades other docs for being honest; its own topology/count claims are held to the same bar. Before stating any count-based finding - "the README lists 15 services but there are 19", "N modules lack a base doc" - **count the actual entries**, don't estimate or trust a single signal. For a service/component-count claim, enumerate both sides (what the doc lists vs what exists on disk) and report the real delta and the specific missing names, not a round-number guess. A wrong count ("missing 2" when it's actually missing 4, including specific named services) erodes trust exactly as a stale doc does. If you can't enumerate precisely, say "approximately" and name what you couldn't verify rather than asserting a false-precise number.
+
+**Sub-threshold "approaching the cap" findings are not refactor tasks (issue #60).** Files in the *Watch* band but under the *High* threshold (e.g. 600-800 LOC against an 800 cap, or per-function ccn 10-14 against a 15 rule) are **not violations**. Do not default them into refactor tasks - pre-emptively decomposing files that currently work fine is churn-for-churn (review cost, merge conflicts, behaviour risk on working code). Instead:
+
+- Keep actual violations (over the High threshold) as the standard remediation tasks.
+- Surface "approaching the cap" files as an **optional, low-priority** item in *Additional Opportunities*, never the Top 3 - and frame it **annotate-first**: the recommendation is to add an acknowledgement marker (e.g. a `// large-file: tracked` comment or a lint allow-entry) so the file is consciously owned, leaving the decompose-or-not decision to the maintainer. Only escalate to a refactor task when the file is over the cap or the maintainer asks.
+- Label the band explicitly in the report so a reader sees "under the cap, watch" - never present a sub-threshold file as if it failed a gate.
 
 ### Why these three?
 <2-3 sentences explaining why these are highest leverage. Connect to specific gaps from the table above and to hotspot files where relevant. Be concrete about what each action prevents.>
@@ -785,7 +937,14 @@ Generic actions to avoid:
 
 <3-5 bullet points. What this repo already does well. Be specific — name files, tools, and patterns. Acknowledge existing infrastructure.>
 
-**Wiki:** see `.assess/index.md` for the full hotspot catalog across all runs, `.assess/log.md` for run history, and `.assess/hotspots/<file>.md` for per-file briefings.
+**If you are an agent working in this repo, read the `.assess/` directory — it is actionable feedback written for you, not just a report you skim once.** It is a compounding, AI-readable record that grows with every run:
+
+- `.assess/assess-report.md` — this report: the scorecard, the lying signals, and the Top 3 Actions with exact commands and file paths.
+- `.assess/hotspots/<file>.md` — a per-file briefing for each hotspot, including a **Suggested actions** section. Before you change a file that appears here, read its briefing first: it tells you why the file is risky and what to do about it.
+- `.assess/index.md` — the catalog of every hotspot ever flagged (current and graduated), so you can see what has and hasn't been addressed.
+- `.assess/log.md` — run history, so you can see whether a hotspot is regressing, persistent, or improving over time.
+
+Treat it as the first place to look when deciding where to point effort in this codebase — it is the durable form of "what needs attention here."
 
 ---
 
@@ -795,9 +954,9 @@ _Report generated by [`/ai-native-toolkit:assess`](https://github.com/bjcoombs/a
 
 Complete the full assessment in under 2 minutes. Scan, don't deep-read.
 
-Both SVGs are embedded as **clickable, relative links** — `[![alt](./complexity-heatmap.svg)](./complexity-heatmap.svg)` and the same for `./doc-graph.svg`. The `viewBox` lets GitHub scale them to the content column; the link lets a reader open the SVG on its own (the doc graph's hover tooltips only work when the raw SVG is opened directly — GitHub renders the inline copy as a static image). Keep the link relative, never a `raw.githubusercontent.com` URL (those are branch-specific and rot on rename). Omit a section only if its script could not generate the SVG (record the reason instead).
+Both SVGs are embedded as **clickable, relative links** - `[![alt](./complexity-heatmap.svg)](./complexity-heatmap.svg)` and the same for `./doc-graph.svg`. The `viewBox` lets GitHub scale them to the content column; the link lets a reader open the SVG on its own (the doc graph's hover tooltips only work when the raw SVG is opened directly - GitHub renders the inline copy as a static image). Keep the link relative, never a `raw.githubusercontent.com` URL (those are branch-specific and rot on rename). Omit a section only if its script could not generate the SVG (record the reason instead).
 
-The plugin footer is important — it's how other engineers viewing the report in a PR discover the tool that produced it. Do not omit it.
+The plugin footer is important - it's how other engineers viewing the report in a PR discover the tool that produced it. Do not omit it.
 
 ## Step 5: Ask Whether to Open a PR
 
@@ -805,34 +964,44 @@ After writing the files, first **check whether a direct PR is even possible** be
 
 ```bash
 # Detect push capability. `gh` returns viewer fields for the current user.
-PUSH_INFO=$(gh repo view --json viewerPermission,viewerCanPush,viewerCanAdminister,nameWithOwner 2>/dev/null || true)
+# Push capability is derived from `viewerPermission` (one of ADMIN |
+# MAINTAIN | WRITE | TRIAGE | READ | NONE) - GitHub's GraphQL Repository
+# type has no `viewerCanPush` field, so don't request it (the CLI errors
+# and the whole call returns empty, silently degrading every write-
+# accessible repo to the "leave local" branch).
+PUSH_INFO=$(gh repo view --json viewerPermission,viewerCanAdminister,nameWithOwner 2>/dev/null || true)
+PERM=$(echo "$PUSH_INFO" | jq -r '.viewerPermission // empty')
+case "$PERM" in
+  ADMIN|MAINTAIN|WRITE) CAN_PUSH=1 ;;
+  *)                    CAN_PUSH=0 ;;
+esac
 # If the command failed (no remote, no gh, not a GitHub repo, unauthenticated),
-# fall back to the local-branch flow with the reason - never silently assume
-# push works.
+# $PUSH_INFO is empty and $PERM stays empty - fall back to the local-branch
+# flow with the reason. Never silently assume push works.
 ```
 
 Interpret the result:
 
-- `viewerCanPush: true` (any of `WRITE` / `MAINTAIN` / `ADMIN` viewerPermission, or push-eligible fork access): offer the direct PR flow below.
-- `viewerCanPush: false` and `viewerPermission` is `READ` / `TRIAGE`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
-- `gh` unavailable / not a GitHub remote / not authenticated: skip both PR offers entirely and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
+- `CAN_PUSH=1` (viewerPermission is `WRITE` / `MAINTAIN` / `ADMIN`, or the remote is a push-eligible fork): offer the direct PR flow below.
+- `CAN_PUSH=0` and viewerPermission is `READ` / `TRIAGE`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
+- `gh` unavailable / not a GitHub remote / not authenticated (`$PUSH_INFO` empty): skip both PR offers entirely and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
 
 Then surface the question - verbatim, picking the shape that matches the access tier.
 
-Push-capable target (`viewerCanPush: true`):
+Push-capable target (`CAN_PUSH=1`):
 
 > Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Want me to open a PR in this repo with these files, or leave them local for you to review first?
 
-Read-only target (`READ` / `TRIAGE`):
+Read-only target (viewerPermission `READ` / `TRIAGE`):
 
 > Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. You have `READ` access to `<owner/repo>`, so a direct PR isn't possible. I can fork `<owner/repo>` to your account and open the PR from there, or leave the files local for you to review.
 
-If the user says **yes / PR** (direct flow, `viewerCanPush: true`):
+If the user says **yes / PR** (direct flow, `CAN_PUSH=1`):
 1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
 2. Stage and commit the report, the complexity heatmap, and the doc graph. Commit message: `docs: Add AI-readiness assessment + complexity and doc-navigability snapshots`.
-3. Push the branch and open a PR. Title: `docs: Codebase assessment — <YYYY-MM-DD>`.
+3. Push the branch and open a PR. Title: `docs: Codebase assessment - <YYYY-MM-DD>`.
 
-If the user says **yes / PR** (fork flow, `viewerCanPush: false` on the upstream):
+If the user says **yes / PR** (fork flow, `CAN_PUSH=0` on the upstream):
 1. `gh repo fork <owner>/<repo> --clone=false --remote=true` (creates the fork under the user's account and adds it as a remote named `origin` or similar; the upstream becomes `upstream` if the original was already `origin`).
 2. Create the branch as above, push to the **fork** (`git push -u <fork-remote> <branch>`), and open the PR via `gh pr create --repo <owner>/<repo>` (head defaults to the fork).
 3. Commit message, PR title, and body are unchanged from the direct flow.
@@ -859,7 +1028,7 @@ If the user says **yes / PR** (fork flow, `viewerCanPush: false` on the upstream
    _Generated by [`/ai-native-toolkit:assess`](https://github.com/bjcoombs/ai-native-toolkit) — a Claude Code plugin for codebase readiness assessment with complexity hotspot heatmaps. Install in any Claude Code session: `/plugin marketplace add https://github.com/bjcoombs/ai-native-toolkit` then `/plugin install ai-native-toolkit@ai-native-toolkit`._
    ```
 
-If the user says **no / leave it**: stop. Files stay in `.assess/` for them to review — the plugin footer in the MD already advertises the tool when anyone opens the file.
+If the user says **no / leave it**: stop. Files stay in `.assess/` for them to review - the plugin footer in the MD already advertises the tool when anyone opens the file.
 
 **Gitignore hint:** suggest the user add `.assess/complexity-stats.prior.json` to their `.gitignore`. It's a transient rotation file that the next run overwrites; keeping it tracked creates noisy diffs. The current stats (`complexity-stats.json`) should still be committed - it's the baseline for the next run's diff.
 

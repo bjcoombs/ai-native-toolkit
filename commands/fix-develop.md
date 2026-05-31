@@ -2,7 +2,7 @@
 
 Assess failing CI on the repo's default branch (main / develop / etc., or nightly build), create a worktree with a fix, push a PR, and loop until CI passes and review comments are addressed.
 
-**Usage**: `/fix-develop [repo-path]` — defaults to current repo context. (Command name is historical; works on whichever branch the repo treats as default.)
+**Usage**: `/fix-develop [repo-path]` - defaults to current repo context. (Command name is historical; works on whichever branch the repo treats as default.)
 
 ---
 
@@ -44,10 +44,10 @@ gh run view $RUN_ID --log-failed 2>&1 | tail -100
 ```
 
 **Categorize failures:**
-- **Test failures** — read the failing test + source code to understand root cause
-- **Lint/build errors** — read the offending file at the reported line
-- **Flaky/infrastructure** — check if the same test passed on a recent re-run. If so, report as flaky (not actionable) and STOP
-- **Dependency issues** — check if a dependency update broke something
+- **Test failures** - read the failing test + source code to understand root cause
+- **Lint/build errors** - read the offending file at the reported line
+- **Flaky/infrastructure** - check if the same test passed on a recent re-run. If so, report as flaky (not actionable) and STOP
+- **Dependency issues** - check if a dependency update broke something
 
 Report diagnosis to user before proceeding:
 ```
@@ -81,7 +81,7 @@ git worktree add ../worktree/$BRANCH_NAME $BRANCH_NAME
 cd ../worktree/$BRANCH_NAME
 ```
 
-Implement the fix. Keep changes minimal — fix the failing tests/build only. Do not refactor, do not improve, do not clean up.
+Implement the fix. Keep changes minimal - fix the failing tests/build only. Do not refactor, do not improve, do not clean up.
 
 ```bash
 # Commit and push
@@ -105,40 +105,15 @@ EOF
 
 ## Step 4: Loop Until Green
 
-### Each Iteration
-
-```bash
-PR=$(gh pr view --json number --jq '.number')
-
-# CI status — use positive filters (zsh escapes != to \!=)
-gh pr checks $PR --json name,state | jq '.[] | select(.state == "FAILURE" or .state == "CANCELLED")'
-
-# Unresolved review threads
-gh api graphql -f query='query { repository(owner: "'$ORG'", name: "'$REPO'") {
-  pullRequest(number: '$PR') { reviewThreads(first: 50) { nodes {
-    id isResolved path line comments(first: 1) { nodes { author { login } body } }
-  }}}}}' | jq '.data.repository.pullRequest.reviewThreads.nodes[]
-  | select(.isResolved == false)
-  | {id, author: .comments.nodes[0].author.login, path, line, body: .comments.nodes[0].body[0:200]}'
-
-# Conversation comments
-gh pr view $PR --comments
-```
-
-**Decision tree:**
-- CI failing → Fix code, commit, push
-- CodeRabbit threads → Fix code, push (CodeRabbit re-reviews and resolves automatically. **Never reply in CodeRabbit threads.**)
-- claude[bot] threads → Check if already fixed locally, resolve via GraphQL if so
-- Human threads → Fix code, reply inline, @mention reviewer
-- **ALL green** → Report ready, STOP
-
-Wait 60s between iterations for CI to start.
+Use the pr-review-merge skill to drive the fix PR to merge-ready, passing `$PR` and
+`$DEFAULT_BRANCH` and the project's bot rules. It owns the CI/threads/conversation checks
+and the positive-jq-filter pitfalls.
 
 ---
 
 ## Protocol
 
-1. **Autonomous Loop** — no permission needed between iterations:
+1. **Autonomous Loop** - no permission needed between iterations:
    - Check CI + comments, fix, push
    - Report: "Iteration N: Fixed X issues" or "Iteration N: Waiting for CI"
 
@@ -175,8 +150,8 @@ Wait 60s between iterations for CI to start.
 
 ## Important
 
-- **Minimal fixes only** — fix what's broken, nothing else
-- **Use positive jq filters** — `select(.state == "FAILURE")` not `select(.state != "SUCCESS")`
-- **Never work in repo-main** — always create a worktree
+- **Minimal fixes only** - fix what's broken, nothing else
+- **Use positive jq filters** - `select(.state == "FAILURE")` not `select(.state != "SUCCESS")`
+- **Never work in repo-main** - always create a worktree
 - **Max iterations**: 10 (ask for help after that)
-- **If flaky/infrastructure**: Report and STOP — don't create a PR for transient failures
+- **If flaky/infrastructure**: Report and STOP - don't create a PR for transient failures

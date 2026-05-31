@@ -1,10 +1,8 @@
 """Tests for wiki writer module."""
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
-import pytest
 
 from lib.wiki_writer import (
     HotspotEntry,
@@ -62,6 +60,32 @@ def test_write_index_overwrites(tmp_assess_dir: Path) -> None:
     assert "src/new.go" in content
 
 
+def test_write_index_renders_none_metrics_as_dash(tmp_assess_dir: Path) -> None:
+    """A graduated file that fell off every top-N list has unknown current
+    metrics. The wiki must render those as `-`, never as `0` - zero in this
+    column reads as "the file was emptied" and contradicts the report
+    (issue #52 Bug 1)."""
+    entries = [HotspotEntry(
+        path="src/grad.go", first_flagged="2026-01-01", last_seen="2026-05-29",
+        status="graduated", ccn=None, loc=None,
+    )]
+    write_index(tmp_assess_dir, entries, last_updated="2026-05-29")
+    content = (tmp_assess_dir / "index.md").read_text()
+    # `-` appears in the row's metric cells; `0` must not.
+    row = [line for line in content.splitlines() if "src/grad.go" in line][0]
+    assert "| - | - |" in row
+    # Real zeros remain zeros (rare for tracked source, but the renderer
+    # must distinguish them from unknown values).
+    entries = [HotspotEntry(
+        path="src/empty.go", first_flagged="2026-01-01", last_seen="2026-05-29",
+        status="graduated", ccn=0, loc=0,
+    )]
+    write_index(tmp_assess_dir, entries, last_updated="2026-05-29")
+    content = (tmp_assess_dir / "index.md").read_text()
+    row = [line for line in content.splitlines() if "src/empty.go" in line][0]
+    assert "| 0 | 0 |" in row
+
+
 def test_append_log_entry_creates_file_if_missing(tmp_assess_dir: Path) -> None:
     entry = LogEntry(
         run_date="2026-05-22", files_scored=100, readiness_score=4.5,
@@ -88,6 +112,77 @@ def test_append_log_entry_appends(tmp_assess_dir: Path) -> None:
     assert "2026-05-01" in content  # old entry preserved
     assert "2026-05-22" in content  # new entry appended
     assert content.index("2026-05-01") < content.index("2026-05-22")
+
+
+def test_log_heading_includes_plugin_version(tmp_assess_dir: Path) -> None:
+    """The log heading always carries the plugin version when known. This
+    makes the log a version history at a glance and naturally disambiguates
+    same-day runs across versions (issue #52 Bug 2)."""
+    entry = LogEntry(
+        run_date="2026-05-29", files_scored=100, readiness_score=4.5,
+        maturity_label="Solid", instructions_grade="B+",
+        graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
+        top_action="X", plugin_version="1.13.0",
+    )
+    append_log_entry(tmp_assess_dir, entry)
+    content = (tmp_assess_dir / "log.md").read_text()
+    assert "## 2026-05-29 (v1.13.0)" in content
+
+
+def test_log_heading_disambiguates_same_date_same_version(tmp_assess_dir: Path) -> None:
+    """Two runs on the same date AT THE SAME version must produce distinct
+    headings - otherwise GitHub anchors collide and markdownlint MD024
+    fires. Second run appends a HH:MM timestamp inside the parentheses."""
+    base = dict(
+        run_date="2026-05-29", files_scored=100, readiness_score=4.5,
+        maturity_label="Solid", instructions_grade="B+",
+        graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
+        top_action="X", plugin_version="1.13.0",
+    )
+    append_log_entry(tmp_assess_dir, LogEntry(**base))
+    append_log_entry(tmp_assess_dir, LogEntry(**base))
+
+    content = (tmp_assess_dir / "log.md").read_text()
+    headings = [line for line in content.splitlines() if line.startswith("## ")]
+    assert len(headings) == 2
+    # First heading has no time; second has a HH:MM stamp inside the parens.
+    assert headings[0] == "## 2026-05-29 (v1.13.0)"
+    assert headings[1].startswith("## 2026-05-29 (v1.13.0 ")
+    assert headings[1].endswith(")")
+    # No two identical headings (the bug condition).
+    assert headings[0] != headings[1]
+
+
+def test_log_heading_same_date_different_versions_each_unique(tmp_assess_dir: Path) -> None:
+    """Same-day runs at different plugin versions distinguish themselves
+    via the version in the heading - no time stamp needed."""
+    base = dict(
+        run_date="2026-05-29", files_scored=100, readiness_score=4.5,
+        maturity_label="Solid", instructions_grade="B+",
+        graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
+        top_action="X",
+    )
+    append_log_entry(tmp_assess_dir, LogEntry(**base, plugin_version="1.12.0"))
+    append_log_entry(tmp_assess_dir, LogEntry(**base, plugin_version="1.13.0"))
+
+    content = (tmp_assess_dir / "log.md").read_text()
+    assert "## 2026-05-29 (v1.12.0)" in content
+    assert "## 2026-05-29 (v1.13.0)" in content
+
+
+def test_log_heading_omits_version_when_none(tmp_assess_dir: Path) -> None:
+    """A caller that doesn't pass plugin_version (older code path) still
+    works - the heading falls back to the bare date format."""
+    entry = LogEntry(
+        run_date="2026-05-29", files_scored=100, readiness_score=4.5,
+        maturity_label="Solid", instructions_grade="B+",
+        graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
+        top_action="X",
+    )
+    append_log_entry(tmp_assess_dir, entry)
+    content = (tmp_assess_dir / "log.md").read_text()
+    assert "## 2026-05-29" in content
+    assert "(v" not in content
 
 
 def test_write_hotspot_page_creates_file(tmp_assess_dir: Path) -> None:

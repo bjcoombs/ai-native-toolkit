@@ -190,14 +190,13 @@ def _render_ghosts(broken_links: list[dict], pos: dict, radius,
     return "\n".join(out)
 
 
-def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
+def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  # noqa: C901  # SVG layout + colour-mode branching; ccn 18, ratchet target
            size_mode: str = "lines", colour: str = "staleness",
            staleness: dict | None = None, show_labels: bool = False) -> None:
     graph = result.graph
     nodes = list(graph.nodes())
     n = len(nodes)
     pr = result.pagerank or {x: 1.0 / max(n, 1) for x in nodes}
-    pr_max = max(pr.values()) if pr else 1.0
     in_deg = dict(graph.in_degree())
     out_deg = dict(graph.out_degree())
 
@@ -227,7 +226,7 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
 
     def fill(node: str) -> str:
         if colour == "status":
-            return _STATUS_COLOR[_classify(node, entries, unreachable, orphans)]
+            return _STATUS_COLOR[classify_node(node, entries, unreachable, orphans)]
         base = cmap(min(days[node] / day_cap, 1.0) if day_cap else 0.0)
         sat = (churn[node] / churn_cap) if churn_cap else 0.0
         return rgba_to_hex(blend_to_grey(base, sat))

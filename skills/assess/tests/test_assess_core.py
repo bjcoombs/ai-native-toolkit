@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 import assess_core
 from assess_core import build_run_context
@@ -79,6 +78,93 @@ def test_broken_link_to_instruction_file_is_broken_ref(git_repo) -> None:
     ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
     refs = ctx["broken_instruction_refs"]
     assert any(Path(r.get("target", "")).name == "AGENTS.md" for r in refs)
+
+
+def test_sensitive_content_surfaced_for_committed_file(git_repo, fixtures_dir: Path) -> None:
+    """Issue #56: a committed instruction file carrying an IP / home path is
+    surfaced (redacted) so the remediation can warn before any further commit."""
+    repo, commit = git_repo
+    good = (fixtures_dir / "good_instructions.md").read_text()
+    _seed_assess(repo)
+    (repo / "CLAUDE.md").write_text(
+        good + "\n\n## Demo\nServer 203.0.113.7, ssh root@demo.example.com\n"
+        "Config at /Users/ben/.config/app.yaml\n",
+        encoding="utf-8",
+    )
+    commit("instructions with infra detail")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    flagged = ctx["sensitive_instruction_content"]
+    assert "CLAUDE.md" in flagged
+    cats = {f["category"] for f in flagged["CLAUDE.md"]}
+    assert {"ip_address", "ssh_or_host", "home_path"} <= cats
+    # Evidence must be redacted - no raw secret survives into run-context.
+    blob = json.dumps(flagged)
+    assert "203.0.113.7" not in blob and "/Users/ben" not in blob
+
+
+def test_sensitive_content_surfaced_for_untracked_file(git_repo, fixtures_dir: Path) -> None:
+    """Issue #56: the file the remediation might tell you to commit (an
+    untracked CLAUDE.md) is scanned even though it isn't graded."""
+    repo, commit = git_repo
+    good = (fixtures_dir / "good_instructions.md").read_text()
+    _seed_assess(repo)
+    (repo / "README.md").write_text("# Repo", encoding="utf-8")
+    commit("init")
+    (repo / "CLAUDE.md").write_text(  # untracked
+        good + "\nAWS key AKIAIOSFODNN7EXAMPLE\n", encoding="utf-8"
+    )
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    assert "CLAUDE.md" in ctx["untracked_instruction_files"]   # not graded
+    assert "CLAUDE.md" in ctx["sensitive_instruction_content"]  # but scanned
+    assert any(f["category"] == "cloud_key"
+               for f in ctx["sensitive_instruction_content"]["CLAUDE.md"])
+
+
+def test_agents_md_symlink_alias_inherits_claude_grade(git_repo, fixtures_dir: Path) -> None:
+    """Issue #57: AGENTS.md as a symlink to CLAUDE.md is the single-source-of-
+    truth shape - it inherits CLAUDE.md's grade, not a standalone score."""
+    import os
+    repo, commit = git_repo
+    good = (fixtures_dir / "good_instructions.md").read_text()
+    _seed_assess(repo)
+    (repo / "CLAUDE.md").write_text(good, encoding="utf-8")
+    os.symlink("CLAUDE.md", repo / "AGENTS.md")
+    commit("CLAUDE.md + AGENTS.md alias")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    files = ctx["instruction_files"]
+    assert files["AGENTS.md"]["is_alias"] is True
+    assert files["AGENTS.md"]["alias_target"] == "CLAUDE.md"
+    assert files["AGENTS.md"]["grade"] == files["CLAUDE.md"]["grade"]
+
+
+def test_agents_md_thin_stub_alias_inherits_grade(git_repo, fixtures_dir: Path) -> None:
+    """Issue #57: a thin AGENTS.md stub pointing at CLAUDE.md inherits its grade
+    instead of scoring low as a bespoke doc the remediation would rewrite."""
+    repo, commit = git_repo
+    good = (fixtures_dir / "good_instructions.md").read_text()
+    _seed_assess(repo)
+    (repo / "CLAUDE.md").write_text(good, encoding="utf-8")
+    (repo / "AGENTS.md").write_text(
+        "# AGENTS.md\n\nSee [CLAUDE.md](./CLAUDE.md) for all instructions.\n",
+        encoding="utf-8",
+    )
+    commit("CLAUDE.md + thin AGENTS.md stub")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    files = ctx["instruction_files"]
+    assert files["AGENTS.md"]["is_alias"] is True
+    assert files["AGENTS.md"]["alias_target"] == "CLAUDE.md"
+    assert files["AGENTS.md"]["grade"] == files["CLAUDE.md"]["grade"]
+
+
+def test_ancestor_instruction_files_key_present(tmp_path: Path) -> None:
+    """Issue #57: the ancestor-cascade signal is always surfaced as a list."""
+    repo = _minimal_repo(tmp_path)
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    assert isinstance(ctx["ancestor_instruction_files"], list)
 
 
 def test_build_run_context_first_run(tmp_path: Path) -> None:
@@ -208,6 +294,96 @@ def test_build_run_context_second_run_sees_diff(tmp_path: Path) -> None:
     assert ctx["diff"]["new"] == 1
 
 
+def test_graduated_index_row_carries_current_metrics(tmp_path: Path) -> None:
+    """Issue #52 Bug 1: when a file graduates off top_hotspots[:10] but is
+    still present in top_complex or top_large, the index row must show its
+    *current* CCN and LOC, not 0. Zero in those columns reads as "the file
+    was emptied," contradicts assess-report.md, and misleads reviewers."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+
+    # Prior run: src/legacy.go was a top hotspot.
+    prior_stats = {
+        "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "src/legacy.go", "loc": 1096, "ccn": 172, "commits": 5},
+        ],
+        "top_complex": [{"path": "src/legacy.go", "ccn": 172}],
+        "top_large": [{"path": "src/legacy.go", "loc": 1096}],
+    }
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+
+    # Current run: src/legacy.go dropped off top_hotspots (a bigger file
+    # took its slot) but still appears in top_complex and top_large at its
+    # actual current metrics. This is the case CodeRabbit caught.
+    current_stats = {
+        "files_scored": 55, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "src/giant.go", "loc": 2500, "ccn": 200, "commits": 8},
+        ],
+        "top_complex": [
+            {"path": "src/giant.go", "ccn": 200},
+            {"path": "src/legacy.go", "ccn": 172},
+        ],
+        "top_large": [
+            {"path": "src/giant.go", "loc": 2500},
+            {"path": "src/legacy.go", "loc": 1096},
+        ],
+    }
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+
+    build_run_context(repo_root=repo, run_date="2026-05-29")
+    index = (assess_dir / "index.md").read_text(encoding="utf-8")
+
+    # The graduated row must reflect reality: 1,096 LOC, ccn 172. NEVER 0.
+    legacy_row = next(line for line in index.splitlines() if "src/legacy.go" in line)
+    assert "graduated" in legacy_row
+    assert "| 172 | 1096 |" in legacy_row, (
+        f"expected current ccn/loc, got: {legacy_row}"
+    )
+    # The active row stays intact.
+    assert "src/giant.go" in index
+
+
+def test_graduated_index_row_uses_dash_when_metrics_unknown(tmp_path: Path) -> None:
+    """When a graduated file fell off every top-N list (no current metrics
+    available anywhere), the row renders `-` rather than misleading zeros."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+
+    # Prior: src/legacy.go was a hotspot.
+    prior_stats = {
+        "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "src/legacy.go", "loc": 800, "ccn": 90, "commits": 3},
+        ],
+        "top_complex": [{"path": "src/legacy.go", "ccn": 90}],
+        "top_large": [{"path": "src/legacy.go", "loc": 800}],
+    }
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+
+    # Current: src/legacy.go fell off ALL top-N lists (none of them mention it).
+    current_stats = {
+        "files_scored": 55, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "src/new.go", "loc": 600, "ccn": 80, "commits": 4},
+        ],
+        "top_complex": [{"path": "src/new.go", "ccn": 80}],
+        "top_large": [{"path": "src/new.go", "loc": 600}],
+    }
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+
+    build_run_context(repo_root=repo, run_date="2026-05-29")
+    index = (assess_dir / "index.md").read_text(encoding="utf-8")
+    legacy_row = next(line for line in index.splitlines() if "src/legacy.go" in line)
+    # Sentinel "-" not "0" - never lie about the size.
+    assert "| - | - |" in legacy_row
+
+
 def test_build_run_context_writes_hotspot_pages(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -302,6 +478,80 @@ def test_readside_blocks_present_in_ctx(tmp_path: Path) -> None:
     assert isinstance(ctx["stale_hubs"], list)
     assert "rung" in ctx["observability"]
     assert "candidate_count" in ctx["dead_code"]
+
+
+def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
+    """Task #5 integration barrier: build_run_context emits the five new keyhole
+    blocks + derived findings while leaving every existing block intact."""
+    repo, commit = git_repo
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    # A small history so the change-coupling / containment / authorship signals
+    # have real git data to chew on.
+    (repo / "README.md").write_text("# Project\nsee [code](src/app.py)\n")
+    (repo / "src").mkdir()
+    (repo / "src" / "app.py").write_text("def f():\n    return 1\n")
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 1, "loc": {"p50": 2, "p95": 2, "max": 2},
+        "ccn": {"p50": 1, "p95": 1, "max": 1},
+        "top_hotspots": [{"path": "src/app.py", "loc": 2, "ccn": 1, "commits": 2}],
+        "top_complex": [{"path": "src/app.py", "ccn": 1}],
+        "top_large": [{"path": "src/app.py", "loc": 2}],
+    }))
+    commit("init")
+    (repo / "src" / "app.py").write_text("def f():\n    return 2\n")
+    commit("change")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+
+    # (1) All five new blocks present.
+    for key in ("structure", "behaviour", "documentation", "understanding", "runtime"):
+        assert key in ctx, f"missing keyhole block: {key}"
+    # structure carries available/reason so the report can say "grimp absent".
+    assert "available" in ctx["structure"]
+    assert "containment_by_dir" in ctx["behaviour"]
+    assert "freshness_by_doc" in ctx["documentation"]
+    assert "authorship_class_by_path" in ctx["understanding"]
+    assert "static_reachability" in ctx["runtime"]
+
+    # (2) derived_findings populated; every finding has name/paths/action.
+    assert "derived_findings" in ctx
+    findings = ctx["derived_findings"]
+    assert findings, "derived_findings must not be empty"
+    expected = {"hidden_coupling", "lying_map", "unexplained_complexity",
+                "orphaned_understanding", "candidate_dead_weight", "refactor_boundary"}
+    assert {f["name"] for f in findings} == expected
+    for f in findings:
+        assert set(f) == {"name", "paths", "action"}
+        assert isinstance(f["paths"], list)
+        assert isinstance(f["action"], str) and f["action"]
+    assert "attention" in ctx
+    assert isinstance(ctx["attention"], list)
+
+    # (3) Existing blocks unchanged (backward-compat): the pre-existing shape
+    # is all still there alongside the additions.
+    for key in ("run_date", "stats_summary", "instruction_files", "diff",
+                "doc_graph", "doc_staleness", "stale_hubs", "dead_code",
+                "observability", "anomalies", "plugin_version"):
+        assert key in ctx, f"existing block dropped: {key}"
+
+
+def test_keyhole_signal_failure_degrades_not_crashes(tmp_path: Path, monkeypatch) -> None:
+    """A raising keyhole signal must degrade to available:false, not crash the
+    run or disturb the existing blocks (defensive-wiring constraint)."""
+    repo = _minimal_repo(tmp_path)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("simulated structure failure")
+
+    monkeypatch.setattr(assess_core, "analyze_structure", boom)
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    assert ctx["structure"]["available"] is False
+    assert "failed" in ctx["structure"]["reason"]
+    # The rest of the run is intact, including the other keyhole blocks.
+    assert "behaviour" in ctx
+    assert "derived_findings" in ctx
+    assert "observability" in ctx
 
 
 def test_stale_hubs_join_centrality_and_staleness(tmp_path: Path) -> None:
@@ -716,3 +966,101 @@ def test_config_excludes_apply_to_all_scans(tmp_path: Path) -> None:
     # via --exclude or get post-filtered).
     for c in ctx["dead_code"].get("candidates", []):
         assert "regulatory-raw" not in c.get("path", "")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Task 4 - test_pressure wiring into build_run_context / run-context.json
+# ════════════════════════════════════════════════════════════════════════════
+
+def test_test_pressure_block_present_in_ctx(tmp_path: Path) -> None:
+    """run-context.json carries a test_pressure block with the required fields.
+
+    A hollow test (asserts on a private field, no public assertion) must surface
+    as an assertion_on_internal candidate so the LLM can fold it into Layer 1."""
+    repo = _minimal_repo(tmp_path)
+    (repo / "src").mkdir()
+    (repo / "src" / "guard.py").write_text("class Guard:\n    pass\n", encoding="utf-8")
+    (repo / "test_guard.py").write_text(
+        "def test_resume():\n"
+        "    g = Guard()\n"
+        "    assert g._resume_count == 1\n",
+        encoding="utf-8",
+    )
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    assert "test_pressure" in ctx
+    tp = ctx["test_pressure"]
+    assert "mutation_config_present" in tp
+    assert "cheap_heuristics" in tp
+    # opt_in defaults off: /assess stays read-only, no mutation run.
+    assert tp["mutation_run"] is False
+    assert tp["cheap_heuristics"]["assertion_on_internal"]
+
+
+def test_test_pressure_mutation_not_run_by_default(tmp_path: Path) -> None:
+    """The bounded mutation pass is opt-in - a default run must never invoke it.
+
+    scan_test_pressure is called with opt_in=False, so even a repo whose language
+    is present and whose tool is on PATH does not get mutated by /assess."""
+    repo = _minimal_repo(tmp_path)
+    (repo / "app.py").write_text("def f(): return 1\n", encoding="utf-8")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    tp = ctx["test_pressure"]
+    assert tp["mutation_run"] is False
+    assert tp["per_file"] == []
+
+
+def test_test_pressure_passes_hotspots_as_hot_files(tmp_path: Path, monkeypatch) -> None:
+    """The wiring threads the current top-hotspot paths into scan_test_pressure
+    as hot_files, so an opt-in mutation run would target the files that matter."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 10, "loc": {"p50": 10, "p95": 30, "max": 50},
+        "ccn": {"p50": 1, "p95": 3, "max": 5},
+        "top_hotspots": [
+            {"path": "src/hot.py", "loc": 500, "ccn": 20, "commits": 5},
+        ],
+        "top_complex": [{"path": "src/hot.py", "ccn": 20}],
+        "top_large": [{"path": "src/hot.py", "loc": 500}],
+    }))
+    captured = {}
+
+    def fake_scan(repo_root, hot_files=None, opt_in=False, coverage_data=None):
+        captured["hot_files"] = hot_files
+        captured["opt_in"] = opt_in
+        return {"mutation_config_present": False, "cheap_heuristics": {}}
+
+    monkeypatch.setattr(assess_core, "scan_test_pressure", fake_scan)
+    build_run_context(repo_root=repo, run_date="2026-05-29")
+    assert captured["hot_files"] == ["src/hot.py"]
+    assert captured["opt_in"] is False  # read-only by default
+
+
+def test_test_pressure_scan_failure_degrades_not_crashes(tmp_path: Path, monkeypatch) -> None:
+    """A raising test_pressure scan must degrade to an unavailable marker that
+    preserves failure semantics: mutation_config_present is None (not False) so
+    the LLM never reads a failed scan as 'no mutation setup', and the cheap
+    heuristic buckets are present-but-empty so the consumer's shape is stable."""
+    repo = _minimal_repo(tmp_path)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("simulated test_pressure failure")
+
+    monkeypatch.setattr(assess_core, "scan_test_pressure", boom)
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    tp = ctx["test_pressure"]
+    assert tp["available"] is False
+    assert "reason" in tp
+    assert tp["mutation_config_present"] is None  # NOT False - "not assessed"
+    assert tp["cheap_heuristics"] == {
+        "assertion_on_internal": [],
+        "untested_boundaries": [],
+        "duplicate_truth": [],
+    }
+    # downstream blocks still present - one failed scan never blocks the run.
+    assert "anomalies" in ctx
+    assert "plugin_version" in ctx
