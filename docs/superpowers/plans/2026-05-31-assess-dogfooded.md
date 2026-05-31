@@ -12,7 +12,7 @@
 
 `/assess` exists to catch three failure modes. It currently exhibits all three itself. This PRD is the tool dogfooded against its own rubric.
 
-1. **It's a blob.** `SKILL.md` is **1267 lines** — a single monolithic procedure (Step 0 → Step 8+). By the tool's own keyhole-fit metric (comprehension footprint vs a keyhole budget), it is over budget: no agent can load and safely change one part without the whole. The tool flags exactly this in other repos.
+1. **It's a blob.** `SKILL.md` is **1233 lines** — a single monolithic procedure (Step 0 → Step 8+). By the tool's own keyhole-fit metric (comprehension footprint vs a keyhole budget), it is over budget: no agent can load and safely change one part without the whole. The tool flags exactly this in other repos.
 2. **Its richest signals are computed-but-unused.** The keyhole core emits six derived findings (`hidden_coupling`, `lying_map`, `unexplained_complexity`, `orphaned_understanding`, `candidate_dead_weight`, `refactor_boundary`) + an `attention` list into `run-context.json`. None of them move the 0–8 score, and none are *deterministically* surfaced — they reach the report only if the LLM follows a prose instruction (`SKILL.md` line ~723). This is the tool's own "dead weight / lying map" anti-pattern: metadata that carries cost and delivers no enforced value.
 3. **It's a norm, not a contract.** The README's core argument is that norms fail and contracts work because contracts are *enforced regardless of who's reading*. Yet `/assess` is a norm — a periodic manual run a human must remember. Nothing makes it run on every PR.
 
@@ -72,7 +72,7 @@ A `[gate]` section in `.assess/config.toml` (the config file already exists): wh
 
 ## Part 3 — Decompose the monolith (dogfood keyhole-fit)
 
-`SKILL.md` at 1267 lines is the blob the tool warns about. Break it into cohesive units that still produce today's exact report. Two candidate mechanisms — the repo already has precedent for both:
+`SKILL.md` at 1233 lines is the blob the tool warns about. Break it into cohesive units that still produce today's exact report. Two candidate mechanisms — the repo already has precedent for both:
 
 - **Sub-skills** (precedent: `marathon`, `pr-review-merge` — shared skills invoked by `/tm`, `/issues`, `/fix-pr`).
 - **Agents** (precedent: `/huddle` → six hat agents, each reading its own methodology file, spawned by a Blue-Hat orchestrator).
