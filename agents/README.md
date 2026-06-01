@@ -21,4 +21,3 @@ Orchestrated by [`/huddle`](../skills/huddle/SKILL.md) and [`/6hats`](../command
 | Agent | Role |
 |-------|------|
 | [`assess-layer-scorer`](./assess-layer-scorer.md) | Scores a codebase against the [`/assess`](../skills/assess/SKILL.md) 0-8 layered contract model, assigning Present / Partial / Missing per layer with evidence |
-</content>

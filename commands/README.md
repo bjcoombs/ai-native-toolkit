@@ -20,4 +20,3 @@ Slash commands shipped by the plugin. Portable framework commands work in any Cl
 | [`/tm-marathon-config-example`](./tm-marathon-config-example.md) | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` and `/issues` |
 
 `/tm`, `/issues`, `/fix-pr`, and `/fix-develop` share the [`marathon`](../skills/marathon/SKILL.md) and [`pr-review-merge`](../skills/pr-review-merge/SKILL.md) library skills as their single source of truth. Each command supplies a thin work-source adapter; the skills own the execution.
-</content>
