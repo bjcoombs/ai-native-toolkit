@@ -169,6 +169,85 @@ def test_write_stats_scc_file_has_null_max_fn_ccn(treemap, tmp_path):
     assert stats["fn_ccn"]["function_count"] == 0
 
 
+def test_hotspot_rank_favours_per_function_offender(treemap, tmp_path):
+    """Issue #115: for a class-per-file language the hotspot composite must rank
+    on the worst single function, not the file aggregate, so a broad coordinator
+    class can't bury a genuinely complex single method.
+
+    Real shape from the first Java/JVM run: a coordinator at aggregate ccn 107
+    whose worst method is only 14 (not a violation) out-ranked a DAO at ccn 28
+    that is one complex method. With equal churn the DAO must now lead."""
+    root = tmp_path
+    coordinator = root / "Coordinator.java"  # broad: ccn 107, worst method 14
+    dao = root / "Dao.java"                   # one genuinely complex method
+    files = [
+        (coordinator, 600, 107.0, "lizard"),
+        (dao, 200, 28.0, "lizard"),
+    ]
+    # Many small methods summing to 107, worst single = 14.
+    coordinator_fns = [14.0, 13.0, 12.0, 11.0, 10.0, 10.0, 9.0,
+                       9.0, 8.0, 6.0, 5.0]
+    assert sum(coordinator_fns) == 107.0
+    dao_fns = [28.0]  # the single complex method is the whole file's ccn
+    aux_data = {coordinator: 5, dao: 5}  # equal churn isolates the ccn re-weight
+    out = root / "stats.json"
+    treemap.write_stats(
+        files, aux_data, "commits (last 12mo)", root, out,
+        fn_ccn_by_path={coordinator: coordinator_fns, dao: dao_fns},
+    )
+    stats = json.loads(out.read_text())
+    hotspots = stats["top_hotspots"]
+
+    # The true per-function offender ranks at or above the coordinator class.
+    assert hotspots[0]["path"] == "Dao.java"
+    # The aggregate is still reported faithfully - only the ranking changed.
+    by_path = {h["path"]: h for h in hotspots}
+    assert by_path["Coordinator.java"]["ccn"] == 107.0
+    assert by_path["Coordinator.java"]["max_fn_ccn"] == 14.0
+    # The complexity-only rank (treemap hue) stays aggregate-driven.
+    assert stats["top_complex"][0]["path"] == "Coordinator.java"
+
+
+def test_hotspot_rank_unchanged_for_single_function_per_file(treemap, tmp_path):
+    """Must-not-regress guard (issue #115): for single-function-per-file
+    languages (Python/Go) the aggregate is the worst function, so the
+    per-function re-weight is a no-op and the existing ranking is preserved -
+    the more-complex-and-equally-churned file still leads."""
+    root = tmp_path
+    complex_go = root / "complex.go"   # one big function, ccn 40
+    simple_go = root / "simple.go"     # one small function, ccn 8
+    files = [
+        (complex_go, 300, 40.0, "lizard"),
+        (simple_go, 120, 8.0, "lizard"),
+    ]
+    # aggregate == worst function: the per-function weight collapses to aggregate.
+    aux_data = {complex_go: 10, simple_go: 10}
+    out = root / "stats.json"
+    treemap.write_stats(
+        files, aux_data, "commits (last 12mo)", root, out,
+        fn_ccn_by_path={complex_go: [40.0], simple_go: [8.0]},
+    )
+    stats = json.loads(out.read_text())
+    hotspots = stats["top_hotspots"]
+
+    # Ranking is unchanged: the genuinely complex file still leads.
+    assert hotspots[0]["path"] == "complex.go"
+    # And it matches the aggregate-only rank - no per-function divergence here.
+    assert stats["top_complex"][0]["path"] == "complex.go"
+
+
+def test_effective_ccn_collapses_to_aggregate_without_per_function_data(treemap):
+    """`_effective_ccn` returns the raw aggregate when there is no per-function
+    signal (scc files: max_fn_ccn is None), and when the worst function already
+    equals the aggregate (single-function file) - the two no-regression paths."""
+    assert treemap._effective_ccn(50.0, None) == 50.0   # scc: no breakdown
+    assert abs(treemap._effective_ccn(40.0, 40.0) - 40.0) < 1e-9  # single fn
+    # A coordinator (aggregate >> worst fn) is pulled below its aggregate but
+    # never below the worst function itself.
+    eff = treemap._effective_ccn(107.0, 14.0)
+    assert 14.0 < eff < 107.0
+
+
 def test_assess_dir_is_self_excluded_by_default(treemap):
     """A prior run's run-context.json must not be scored on the next run -
     the script's own output directory is in EXCLUDE_DIRS. Otherwise re-runs
