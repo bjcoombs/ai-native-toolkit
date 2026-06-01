@@ -72,6 +72,7 @@ SKILLS: dict[str, dict] = {
             ),
             "uv-core": 'uv run scripts/assess_core.py "$REPO_ROOT"',
             "uv-finalize": 'uv run scripts/assess_finalize.py "$REPO_ROOT"',
+            "uv-emit-workflow": 'uv run scripts/assess_emit_workflow.py "$REPO_ROOT"',
             "treemap-exclude-example": (
                 'uv run scripts/complexity-treemap.py "$REPO_ROOT" '
                 "--exclude regulatory-raw --exclude vetted-context "

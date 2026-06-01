@@ -135,6 +135,83 @@ def load_structure_config(repo_root: Path) -> dict:
     return {"keyhole_budget": budget}
 
 
+# The findings that represent a concern (everything except the one positive
+# finding, ``refactor_boundary``). The canonical order + the positive finding
+# live in ``keyhole_signals.FINDING_ORDER``; the gate only needs the concern set
+# and must not import back up into a sibling lib module, so the list is repeated
+# here deliberately. ``test_gate_concerns_match_keyhole_signals`` pins the two in
+# sync so a new finding can't silently escape the default warn set.
+GATE_CONCERN_FINDINGS = [
+    "hidden_coupling",
+    "lying_map",
+    "unexplained_complexity",
+    "untrusted_hotspot",
+    "self_referential_tests",
+    "orphaned_understanding",
+    "candidate_dead_weight",
+]
+
+
+def _positive_number(section: dict, key: str) -> float | None:
+    """Return ``section[key]`` as a float when it is a positive real, else None.
+
+    A threshold of zero or below is meaningless (every run would trip it), and a
+    non-numeric value is malformed config - both degrade to "no threshold" rather
+    than blocking the gate. ``bool`` is rejected (it is an ``int`` subclass) so
+    ``ccn_p95_max = true`` doesn't silently become a threshold of 1.
+    """
+    value = section.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value) if value > 0 else None
+
+
+def load_gate_config(repo_root: Path) -> dict:
+    """Return the ``[gate]`` settings from ``.assess/config.toml``.
+
+    The gate is the CI regression check (``assess_gate.py``). Its defaults are
+    deliberately **warn-only**: a repo that adopts the emitted workflow without
+    writing any config never has a pipeline blocked by surprise. Failing is
+    strictly opt-in via ``fail_on``.
+
+    Returned keys:
+
+    - ``enabled`` (bool, default ``True``): master switch. ``false`` makes the
+      gate always pass while still reporting, so a repo can mute it without
+      deleting the workflow.
+    - ``fail_on`` (list[str], default ``[]``): finding names whose presence (a
+      non-empty ``paths`` list) fails the gate. Empty means warn-only.
+    - ``warn_on`` (list[str], default = every concern finding): finding names
+      reported but non-blocking. An explicit empty list silences warnings.
+    - ``ccn_p95_max`` (float | None): fail when the p95 file CCN exceeds this.
+    - ``containment_min`` (float | None): fail when the safe-zone containment
+      ratio drops below this (0-1).
+
+    Honours the same "degrade silently" contract as the other loaders: a missing
+    file, missing section, or malformed value falls back to the default rather
+    than blocking the assessment.
+    """
+    cfg = load_config(repo_root)
+    gate = cfg.get("gate", {})
+    if not isinstance(gate, dict):
+        gate = {}
+    # Distinguish "missing" (use the default warn set) from an explicit empty
+    # list (warn on nothing) - ``_string_list`` alone can't tell them apart.
+    warn_on = (
+        _string_list(gate, "warn_on")
+        if "warn_on" in gate
+        else list(GATE_CONCERN_FINDINGS)
+    )
+    enabled = gate.get("enabled", True)
+    return {
+        "enabled": enabled if isinstance(enabled, bool) else True,
+        "fail_on": _string_list(gate, "fail_on"),
+        "warn_on": warn_on,
+        "ccn_p95_max": _positive_number(gate, "ccn_p95_max"),
+        "containment_min": _positive_number(gate, "containment_min"),
+    }
+
+
 def load_excludes(repo_root: Path) -> tuple[set[str], list[str]]:
     """Return `(extra_exclude_dirs, extra_exclude_patterns)` from the config.
 

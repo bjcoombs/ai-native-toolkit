@@ -1166,6 +1166,51 @@ End with a short, tracker-specific summary. Examples:
 
 > Action 1 already tracked in PROJ-1024 (in progress) - linked. Created PROJ-1198 (Action 2) and PROJ-1199 (Action 3) in Jira.
 
+## Step 6.5: Offer to Freeze the Assessment into a CI Check
+
+After the PR and issue offers, surface a third - the one that converts `/assess` from a norm into a contract:
+
+> **Freeze this into a repeatable check?** I can emit a GitHub Action that:
+> - Runs the deterministic toolchain on every PR (the exact tools this run found),
+> - Renders the metrics report via `assess_report.py`,
+> - Gates on regression (a new lying map, a containment drop, p95 complexity rising past a threshold).
+>
+> This turns `/assess` from a thing-you-run into a thing-that-runs. No AI in the loop - it is the frozen, contract version of the assessment you just ran by hand.
+
+This offer only makes sense when the repo can actually run the workflow. Apply the **same write-access check as Step 5** (`CAN_PUSH`): on a read-only target, the file can still be written locally for the user to commit via their fork, but don't promise to open the gating PR. If `gh` / the remote is unavailable, write the file locally and say so.
+
+If the user says **no**: stop. The deterministic report and findings already shipped in `.assess/`.
+
+If the user says **yes**, emit the workflow. The generator bakes in the plugin version this run used (read from `run-context.json`) and the discovered toolchain, so the frozen core matches the snapshot you just produced:
+
+````bash
+<!-- chat-skip:start -->
+# Re-resolve the skill dir in case this runs in a fresh shell (the env var
+# $CLAUDE_PLUGIN_ROOT survives; Step 2's shell var won't have).
+SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"
+SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"
+<!-- chat-skip:end -->
+<!-- chat-replace:uv-emit-workflow -->
+uv run "$SKILL_DIR/scripts/assess_emit_workflow.py" "$REPO_ROOT"
+````
+
+This writes `.github/workflows/assess-gate.yml` (relative to the repo root). The script auto-detects the default branch and the discovered tools; override with `--branch <name>` or `--tools lizard,scc,...` when the run found a different toolchain (e.g. a per-language dead-code tool).
+
+**Tell the user about the gate config.** The emitted workflow runs `assess_gate.py`, which reads the optional `[gate]` section of `.assess/config.toml` (relative to the repo root) and is **warn-only by default** - it reports every finding but fails nothing until the repo opts in. Point them at the knobs:
+
+```toml
+[gate]
+# Findings whose presence (non-empty paths) fails the PR. Empty = warn-only.
+fail_on = ["lying_map", "orphaned_understanding"]
+# Findings reported but non-blocking. Omit to warn on every concern; [] silences all.
+warn_on = ["hidden_coupling", "candidate_dead_weight"]
+ccn_p95_max = 120      # fail when the p95 file complexity rises past this
+containment_min = 0.3  # fail when the safe-zone share drops below this (0-1)
+enabled = true         # set false to mute the gate without deleting the workflow
+```
+
+`fail_on` finding names are the cross-layer findings (`hidden_coupling`, `lying_map`, `unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`, `orphaned_understanding`, `candidate_dead_weight`). The asymmetric-caution default - never block a pipeline by surprise - means a repo that adopts the workflow without writing config gets reports, not red builds.
+
 ## Step 7.5: Finalize the wiki (required)
 
 After writing `assess-report.md`, write `finalize-input.json` to the transient cache and invoke `assess_finalize.py` so the wiki files reflect the score and actions you chose.
