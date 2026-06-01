@@ -1,6 +1,6 @@
 # Hotspot: `skills/assess/scripts/lib/liveness_scan.py`
 
-_First flagged: 2026-05-31. Last seen: 2026-06-01. Status: regressed._
+_First flagged: 2026-05-31. Last seen: 2026-06-01. Status: persistent._
 
 ## Current metrics
 
@@ -15,13 +15,13 @@ _First flagged: 2026-05-31. Last seen: 2026-06-01. Status: regressed._
 
 | Run date | LOC | CCN | Commits | Status |
 |----------|-----|-----|---------|--------|
-| 2026-06-01 | 371 | 100.0 | 4 | regressed |
+| 2026-06-01 | 371 | 100.0 | 4 | persistent |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/scripts/lib/liveness_scan.py`:
 
-Hotspot (regressed). 371 LOC, max cyclomatic complexity 100.0, 4 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
+Hotspot (persistent). 371 LOC, max cyclomatic complexity 100.0, 4 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
 
 ## Suggested actions
 
