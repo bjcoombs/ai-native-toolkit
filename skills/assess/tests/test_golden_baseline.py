@@ -44,18 +44,37 @@ def test_golden_run_context_volatile_fields_are_normalized() -> None:
 
 
 def test_golden_run_context_keeps_derived_findings_shape() -> None:
-    """All six keyhole findings present in fixed order - the contract the
-    report's findings section and Part 1's deterministic surfacing rely on."""
+    """All eight keyhole findings present in fixed order - the contract the
+    report's findings section and Part 1's deterministic surfacing rely on. The
+    E1/E2 trust-axis findings (untrusted_hotspot, self_referential_tests) join
+    the original six between unexplained_complexity and orphaned_understanding."""
     ctx = golden.load_golden_run_context()
     names = [f["name"] for f in ctx["derived_findings"]]
     assert names == [
         "hidden_coupling",
         "lying_map",
         "unexplained_complexity",
+        "untrusted_hotspot",
+        "self_referential_tests",
         "orphaned_understanding",
         "candidate_dead_weight",
         "refactor_boundary",
     ]
+
+
+def test_golden_run_context_has_deterministic_keyhole_products() -> None:
+    """Part 1 adds three deterministic report-skeleton products to the bus: the
+    pre-rendered findings markdown, the keyhole readiness summary (reported
+    alongside the 0-8 score), and the mandatory attention-derived Top-3
+    actions."""
+    ctx = golden.load_golden_run_context()
+    assert ctx["findings_markdown"].startswith(
+        "## Cross-Layer Findings (Keyhole Readiness)"
+    )
+    assert set(ctx["keyhole_summary"]) == {
+        "concerns", "safe_zones", "total_concerns", "summary_text"
+    }
+    assert isinstance(ctx["prescribed_actions"], list)
 
 
 def test_normalize_run_context_is_idempotent() -> None:

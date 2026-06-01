@@ -41,6 +41,44 @@
       "score": 1
     }
   ],
+  "findings_markdown": "## Cross-Layer Findings (Keyhole Readiness)\n\n### hidden_coupling\n\nAction: investigate the seam\n\nPaths:\n- scripts\n- scripts/tests\n- skills/assess/scripts\n- skills/assess/scripts/lib\n- skills/assess/tests\n\n### refactor_boundary\n\nAction: safe to hand an agent in isolation\n\nPaths:\n- commands\n\n### Attention List (Priority Order)\n\n- scripts (score 1): hidden_coupling\n- scripts/tests (score 1): hidden_coupling\n- skills/assess/scripts (score 1): hidden_coupling\n- skills/assess/scripts/lib (score 1): hidden_coupling\n- skills/assess/tests (score 1): hidden_coupling\n",
+  "keyhole_summary": {
+    "concerns": [
+      {
+        "name": "hidden_coupling",
+        "count": 5
+      }
+    ],
+    "safe_zones": 1,
+    "total_concerns": 5,
+    "summary_text": "5 structural concerns (5 hidden coupling), 1 safe zone."
+  },
+  "prescribed_actions": [
+    {
+      "path": "scripts",
+      "action": "investigate the seam",
+      "findings": [
+        "hidden_coupling"
+      ],
+      "rank": 1
+    },
+    {
+      "path": "scripts/tests",
+      "action": "investigate the seam",
+      "findings": [
+        "hidden_coupling"
+      ],
+      "rank": 2
+    },
+    {
+      "path": "skills/assess/scripts",
+      "action": "investigate the seam",
+      "findings": [
+        "hidden_coupling"
+      ],
+      "rank": 3
+    }
+  ],
   "behaviour": {
     "available": true,
     "change_coupling_pairs": [
@@ -784,7 +822,6 @@
   },
   "derived_findings": [
     {
-      "action": "investigate the seam",
       "name": "hidden_coupling",
       "paths": [
         "scripts",
@@ -792,34 +829,45 @@
         "skills/assess/scripts",
         "skills/assess/scripts/lib",
         "skills/assess/tests"
-      ]
+      ],
+      "action": "investigate the seam"
     },
     {
-      "action": "fix or delete the doc",
       "name": "lying_map",
-      "paths": []
+      "paths": [],
+      "action": "fix or delete the doc"
     },
     {
-      "action": "write the missing contract (do NOT auto-generate)",
       "name": "unexplained_complexity",
-      "paths": []
+      "paths": [],
+      "action": "write the missing contract (do NOT auto-generate)"
     },
     {
-      "action": "assign a human anchor before further change",
+      "name": "untrusted_hotspot",
+      "paths": [],
+      "action": "strengthen tests to pin observable behaviour (not internal state)"
+    },
+    {
+      "name": "self_referential_tests",
+      "paths": [],
+      "action": "request human review - tests verify internal consistency, not truth"
+    },
+    {
       "name": "orphaned_understanding",
-      "paths": []
+      "paths": [],
+      "action": "assign a human anchor before further change"
     },
     {
-      "action": "verify liveness, then delete if dead",
       "name": "candidate_dead_weight",
-      "paths": []
+      "paths": [],
+      "action": "verify liveness, then delete if dead"
     },
     {
-      "action": "safe to hand an agent in isolation",
       "name": "refactor_boundary",
       "paths": [
         "commands"
-      ]
+      ],
+      "action": "safe to hand an agent in isolation"
     }
   ],
   "diff": "<<normalized>>",

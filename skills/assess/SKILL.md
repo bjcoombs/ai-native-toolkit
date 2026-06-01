@@ -705,22 +705,28 @@ rg -i 'retrospective|retro|feedback loop|learnings|post.?mortem' "$REPO_ROOT"/{C
 
 ### Cross-layer derived findings (keyhole readiness)
 
-The layers above each measure one axis. The deterministic core also crosses those axes against each other and emits six named findings - the "where to look" signals no single layer surfaces. Read them once, after the per-layer scans:
+The layers above each measure one axis. The deterministic core also crosses those axes against each other and emits eight named findings - the "where to look" signals no single layer surfaces. Read them once, after the per-layer scans:
 
 ```bash
-jq '.derived_findings, .attention' "$REPO_ROOT/.assess/run-context.json"
+jq '.derived_findings, .attention, .keyhole_summary, .prescribed_actions' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-`derived_findings` is a fixed-order list of six `{name, paths, action}` objects - all six always present, `paths` may be empty. Omit a finding from the report when its `paths` is empty. Each pairs an axis-crossing with the action it implies:
+`derived_findings` is a fixed-order list of eight `{name, paths, action}` objects - all eight always present, `paths` may be empty. Omit a finding from the report when its `paths` is empty. Each pairs an axis-crossing with the action it implies:
 
 - **`hidden_coupling`** - modular statically but bleeds across boundaries historically (files that keep changing together). The static map says "isolated"; git says "coupled." Action: investigate the seam before trusting the boundary.
 - **`lying_map`** - high complexity under a stale doc: the map exists but no longer matches the territory. Action: fix or delete the doc - a wrong map is worse than none.
 - **`unexplained_complexity`** - high complexity with no doc and no recorded intent. Action: write the missing contract. Do **not** auto-generate it - a guessed contract is just another lying map.
+- **`untrusted_hotspot`** (E1 trust axis) - a complexity hotspot whose tests are hollow: an opt-in mutation pass let a high fraction of mutants survive, so the suite *runs* the code but doesn't *pin* it. Silent without mutation data (the default read-only run never fires it). Action: strengthen tests to pin observable behaviour, not internal state.
+- **`self_referential_tests`** (E2 trust axis) - the code and its co-located tests were introduced in the same commit, so the suite may verify the author's mental model rather than independently-specified behaviour. Action: request human review - the tests verify internal consistency, not truth.
 - **`orphaned_understanding`** - high complexity with no human anchor and no intent: nobody owns the knowledge. Action: assign a human anchor before further change.
 - **`candidate_dead_weight`** - high complexity with no runtime evidence it is live. The bias is to **keep** (static reachability can't see external callers - Layer 1's caveat applies). Action: verify liveness, then delete only if confirmed dead.
 - **`refactor_boundary`** (positive) - high containment: edits stay local. A safe zone, never an attention row. Action: safe to hand an agent in isolation; cite these paths in Strengths.
 
 `attention` ranks the few units landing in the most *negative* findings (`refactor_boundary` never counts) - the "look here first" list, each row carrying its `findings` and `score`. Lead the report's findings with the top of this list.
+
+**Copy `findings_markdown` verbatim.** `run-context.json` carries a pre-rendered `findings_markdown` string - the deterministic findings section (the eight findings with their paths and actions, then the attention list). Paste it into the report **verbatim, in the `## Cross-Layer Findings (Keyhole Readiness)` section below the Scorecard** - do not paraphrase, summarise, reorder, or drop findings. You write prose *around* it (the "why these matter here" framing), but the section itself is the deterministic core's product, not yours. This is what makes the findings impossible to omit regardless of which LLM drives the run.
+
+`keyhole_summary` rolls the same findings into a one-line readiness summary (`summary_text`), reported alongside the 0-8 score in Step 4 - see the **Keyhole Readiness** line in the report template. `prescribed_actions` lists the attention-derived Top-3 actions the report MUST include - see the **Mandatory attention rule** in Step 4's Top 3 Actions.
 
 ## Step 3.5: Read Cross-Run Context
 
@@ -821,6 +827,9 @@ Colour = staleness (vivid red = a frozen doc beside churning code = a lying map)
 ## AI Readiness
 
 **Score: X / 8** — <maturity-label>
+**Keyhole Readiness:** <paste `keyhole_summary.summary_text` from run-context.json verbatim>
+
+The two headline metrics measure **different things and are never combined.** The 0-8 score answers _"is the scaffolding in place to catch problems?"_ (a property of the contracts and enforcement layers). The Keyhole Readiness summary answers _"where is today's structural pain?"_ - a pure count of structural concerns and safe zones rolled up from the eight cross-layer findings. A repo can score 7/8 and still carry many structural concerns (great scaffolding over churning legacy), or 3/8 with zero concerns (small, calm codebase). Report both side by side; never average, rescale, or fold one into the other.
 
 The **What it asks** column is the question that layer answers for an agent working here — read it first; the framework name is secondary. The **Band** orders them by dependency: a read-side blind spot makes the write-side scores mean less (you can't trust enforcement of a picture you can't see), and the meta band only matters once the rest works.
 
@@ -878,15 +887,19 @@ These artefacts look true but aren't - the most dangerous failure mode for an ag
 - **L1 — dead-but-present:** take `dead_code.candidates[0]`; fill from `path`, `symbol`, `kind`. Keep the `dead_code.caveat` in mind - static reachability proves "nothing in this repo calls it," never "no external consumer calls it" - so frame it as a candidate, not a verdict.
 - **L6 — green-but-hollow:** take `test_pressure.survivor_clusters[0]` only when `test_pressure.survivor_density.overall > 0.3`; fill the file from the cluster's `file`. State the mutation score as `1 - survivor_density.overall` and pair it with the file's line coverage when you have it. This is the hollow-gate pattern Layer 6 scores Partial for.
 
+<paste the `findings_markdown` string from run-context.json verbatim here — it renders as a `## Cross-Layer Findings (Keyhole Readiness)` section with the eight findings, their paths, their deterministic actions, and the attention list. Do not paraphrase, summarise, reorder, or drop any finding. Add a sentence of framing before or after if it helps a reader, but the section itself is copied, not rewritten.>
+
 ## Top 3 Actions
 
 Prioritize by leverage: agent instructions and CI first, then linters and coverage, then architecture tests and retro loops. Each action should be completable in a single session and reference **specific files** from the hotspot snapshot wherever possible — generic advice is the failure mode this report exists to prevent.
 
+**Mandatory attention rule (hard, not a suggestion).** If `attention` in run-context.json is non-empty, its top entries MUST appear in this Top 3 Actions table. The `prescribed_actions` array lists them with their finding-derived action text, their `rank`, and their `path` (pre-rendered as table rows you can paste - see `prescribed_actions` and `render_prescribed_actions`). You MAY add context, combine an attention path with a related gap, or fill the deterministic `?` cells (layer, effort, command) with judgement - but you may NOT omit an attention-list path from the Top 3 unless that path has already been addressed in this repo. When `attention` is empty, prioritise by leverage as above. This rule exists because the attention list is the deterministic core's "look here first" ranking; letting the LLM silently drop it would reintroduce exactly the non-determinism Part 1 removes.
+
 | # | Action | Layer | Effort | Command / First Step | Hotspot files this addresses | Issue |
 |---|--------|-------|--------|---------------------|------------------------------|-------|
-| 1 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths from top_hotspots / top_complex / top_large, or "—" if not file-specific> | — |
-| 2 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths or —> | — |
-| 3 | <one-line action> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths or —> | — |
+| 1 | <one-line action - if `prescribed_actions` is non-empty, rank 1's action and path go here> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths from top_hotspots / top_complex / top_large, or "—" if not file-specific> | — |
+| 2 | <one-line action - rank 2 from `prescribed_actions` if present> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths or —> | — |
+| 3 | <one-line action - rank 3 from `prescribed_actions` if present> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <paths or —> | — |
 
 The `Issue` column is filled in by Step 6 if the user opts to create tracking issues. Leave as `—` initially.
 
