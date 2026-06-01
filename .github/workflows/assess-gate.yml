@@ -43,7 +43,7 @@ jobs:
             https://github.com/bjcoombs/ai-native-toolkit.git "${RUNNER_TEMP}/ai-native-toolkit"
 
       - name: Render the deterministic snapshot
-        working-directory: ${RUNNER_TEMP}/ai-native-toolkit/skills/assess
+        working-directory: ${{ runner.temp }}/ai-native-toolkit/skills/assess
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/.assess"
           uv run scripts/complexity-treemap.py "${GITHUB_WORKSPACE}" \
@@ -53,7 +53,7 @@ jobs:
           uv run scripts/assess_report.py "${GITHUB_WORKSPACE}"
 
       - name: Gate on regressions
-        working-directory: ${RUNNER_TEMP}/ai-native-toolkit/skills/assess
+        working-directory: ${{ runner.temp }}/ai-native-toolkit/skills/assess
         run: |
           uv run scripts/assess_gate.py "${GITHUB_WORKSPACE}" \
             --config "${GITHUB_WORKSPACE}/.assess/config.toml"
