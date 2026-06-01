@@ -70,5 +70,3 @@ The Six Thinking Hats team, indexed in [`agents/README.md`](../agents/README.md)
 - [Code review instructions](../.github/claude-review-instructions.md) - the guidelines the automated reviewer follows on pull requests.
 
 The rendered example SVGs used in the README hero (the doc-navigability graph and the complexity heatmap, before and after the action sweep) live alongside this file in `docs/`.
-</content>
-</invoke>

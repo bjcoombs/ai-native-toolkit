@@ -24,4 +24,3 @@ The plans and specs behind the skills, captured as they were built. These are hi
 | Spec | Subject |
 |------|---------|
 | [Issues marathon shared-skills design](./specs/2026-05-29-issues-marathon-shared-skills-design.md) | Design for `/issues` via shared marathon skills |
-</content>
