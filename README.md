@@ -2,6 +2,8 @@
 
 A Claude Code plugin: skills, agents, and commands for AI-native development. Runs locally in your Claude Code session, against your own codebase, using whichever model you're already paying for - nothing leaves your machine beyond what Claude Code itself sends.
 
+> **New here?** The [Map of Content](docs/index.md) is the navigation index - one trail to every skill, command, agent, and design doc in this repo. The [`CLAUDE.md`](CLAUDE.md) contract holds the rules for editing it.
+
 The headline pieces are three **skills**:
 
 - **`/assess`** - score any codebase's readiness for AI agent contributors against an 8-layer contract model (navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Generates a report + the two SVGs and opens a PR in the target repo.
@@ -197,6 +199,8 @@ Spawns a Fibonacci-sized team (default 3) that cycles through De Bono's six hats
 
 ### Skills (auto-discovered by Claude Code)
 
+Full catalog and per-skill base docs: [`skills/README.md`](skills/README.md).
+
 | Skill | Description |
 |-------|-------------|
 | `/assess` | Layered AI-readiness assessment (0-8 contract model) plus a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) and [`doc-graph-svg.py`](skills/assess/scripts/doc-graph-svg.py) so the agent runs them with no external setup. Filters build artifacts and generated code by default (opt-out with `--include-artifacts`); warns when one file dominates LOC. Offers to install optional `scc` for repos heavy in markdown/JSON/YAML. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
@@ -205,6 +209,8 @@ Spawns a Fibonacci-sized team (default 3) that cycles through De Bono's six hats
 | `/ghsync` | Bulk clone and keep in sync every GitHub repo you can access across an org - built for onboarding into a new enterprise. Discovers repos through the teams you belong to, deduplicates, then clones new ones and fast-forward syncs existing checkouts and their worktrees into a `<repo>/<repo>-main` + `<repo>/worktree` layout. Org defaults to the directory you run from. Never clobbers local work (uncommitted or off-default-branch repos are fetched, not pulled) and reports every exception in a summary. Ships [`ghsync.sh`](skills/ghsync/scripts/ghsync.sh); needs `gh` + `jq`, supports GitHub Enterprise via `GH_HOST`. |
 
 ### Commands (slash-only, no bundled assets)
+
+Full catalog: [`commands/README.md`](commands/README.md).
 
 Portable:
 
@@ -226,6 +232,8 @@ Workflow (personal setup, opt-in - see [Adapting](#adapting-for-your-workflow)):
 `/tm`, `/issues`, `/fix-pr`, and `/fix-develop` share the `marathon` skill (team orchestration engine: DAG analysis, waves, crash recovery, retrospective) and the `pr-review-merge` skill (review-to-green loop + smart merge) as a single source of truth. Each command supplies a thin work-source adapter; the skills own the execution.
 
 ### Agents (invoked by skills, or directly via `Task(subagent_type=...)`)
+
+Full catalog: [`agents/README.md`](agents/README.md).
 
 The Six Hats team that `/huddle` and `/6hats` orchestrate:
 
@@ -344,11 +352,17 @@ ai-native-toolkit/
 │       └── test_integration.py        # Full-build ZIP content validation
 ├── dist/                              # Generated ZIPs (gitignored; published via CI)
 └── docs/
+    ├── index.md                       # Map of Content - navigation index for the whole repo
+    ├── testing-a-branch-locally.md    # Runbook: test an unmerged branch as a real plugin
+    ├── superpowers/
+    │   └── README.md                  # Design history: plans + specs behind the skills
     ├── example-doc-graph.svg          # Real /assess doc-navigability SVG, before the action sweep (README hero)
     ├── example-doc-graph-after.svg    # Same repo, doc-navigability after the action sweep
     ├── example-heatmap.svg            # Real /assess complexity heatmap, before the action sweep (README hero)
     └── example-heatmap-after.svg      # Same repo, complexity heatmap after the action sweep
 ```
+
+Each subtree has a base doc that the [Map of Content](docs/index.md) links to: [`agents/README.md`](agents/README.md), [`commands/README.md`](commands/README.md), and [`skills/README.md`](skills/README.md).
 
 ## Contributors
 
