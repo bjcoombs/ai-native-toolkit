@@ -1,0 +1,2506 @@
+{
+  "ancestor_instruction_files": [
+    "CLAUDE.md (5 level(s) above repo root)",
+    "~/.claude/CLAUDE.md (global user instructions)"
+  ],
+  "anomalies": [],
+  "attention": [
+    {
+      "findings": [
+        "hidden_coupling"
+      ],
+      "path": "scripts",
+      "score": 1
+    },
+    {
+      "findings": [
+        "hidden_coupling"
+      ],
+      "path": "scripts/tests",
+      "score": 1
+    },
+    {
+      "findings": [
+        "hidden_coupling"
+      ],
+      "path": "skills/assess/scripts",
+      "score": 1
+    },
+    {
+      "findings": [
+        "hidden_coupling"
+      ],
+      "path": "skills/assess/scripts/lib",
+      "score": 1
+    },
+    {
+      "findings": [
+        "hidden_coupling"
+      ],
+      "path": "skills/assess/tests",
+      "score": 1
+    }
+  ],
+  "behaviour": {
+    "available": true,
+    "change_coupling_pairs": [
+      {
+        "co_change_count": 17,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/SKILL.md",
+        "support_pct": 7.91
+      },
+      {
+        "co_change_count": 14,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "README.md",
+        "support_pct": 6.51
+      },
+      {
+        "co_change_count": 12,
+        "file_a": "black-hat.md",
+        "file_b": "blue-hat.md",
+        "support_pct": 5.58
+      },
+      {
+        "co_change_count": 12,
+        "file_a": "black-hat.md",
+        "file_b": "green-hat.md",
+        "support_pct": 5.58
+      },
+      {
+        "co_change_count": 12,
+        "file_a": "black-hat.md",
+        "file_b": "white-hat.md",
+        "support_pct": 5.58
+      },
+      {
+        "co_change_count": 12,
+        "file_a": "blue-hat.md",
+        "file_b": "green-hat.md",
+        "support_pct": 5.58
+      },
+      {
+        "co_change_count": 12,
+        "file_a": "blue-hat.md",
+        "file_b": "white-hat.md",
+        "support_pct": 5.58
+      },
+      {
+        "co_change_count": 12,
+        "file_a": "green-hat.md",
+        "file_b": "white-hat.md",
+        "support_pct": 5.58
+      },
+      {
+        "co_change_count": 11,
+        "file_a": "README.md",
+        "file_b": "skills/assess/SKILL.md",
+        "support_pct": 5.12
+      },
+      {
+        "co_change_count": 11,
+        "file_a": "blue-hat.md",
+        "file_b": "red-hat.md",
+        "support_pct": 5.12
+      },
+      {
+        "co_change_count": 11,
+        "file_a": "skills/assess/SKILL.md",
+        "file_b": "skills/assess/scripts/assess_core.py",
+        "support_pct": 5.12
+      },
+      {
+        "co_change_count": 11,
+        "file_a": "skills/assess/scripts/assess_core.py",
+        "file_b": "skills/assess/tests/test_assess_core.py",
+        "support_pct": 5.12
+      },
+      {
+        "co_change_count": 10,
+        "file_a": "blue-hat.md",
+        "file_b": "yellow-hat.md",
+        "support_pct": 4.65
+      },
+      {
+        "co_change_count": 10,
+        "file_a": "red-hat.md",
+        "file_b": "yellow-hat.md",
+        "support_pct": 4.65
+      },
+      {
+        "co_change_count": 9,
+        "file_a": "black-hat.md",
+        "file_b": "red-hat.md",
+        "support_pct": 4.19
+      },
+      {
+        "co_change_count": 9,
+        "file_a": "black-hat.md",
+        "file_b": "yellow-hat.md",
+        "support_pct": 4.19
+      },
+      {
+        "co_change_count": 9,
+        "file_a": "commands/fix-pr.md",
+        "file_b": "commands/tm.md",
+        "support_pct": 4.19
+      },
+      {
+        "co_change_count": 9,
+        "file_a": "green-hat.md",
+        "file_b": "red-hat.md",
+        "support_pct": 4.19
+      },
+      {
+        "co_change_count": 9,
+        "file_a": "green-hat.md",
+        "file_b": "yellow-hat.md",
+        "support_pct": 4.19
+      },
+      {
+        "co_change_count": 9,
+        "file_a": "red-hat.md",
+        "file_b": "white-hat.md",
+        "support_pct": 4.19
+      },
+      {
+        "co_change_count": 9,
+        "file_a": "skills/assess/SKILL.md",
+        "file_b": "skills/assess/scripts/complexity-treemap.py",
+        "support_pct": 4.19
+      },
+      {
+        "co_change_count": 9,
+        "file_a": "white-hat.md",
+        "file_b": "yellow-hat.md",
+        "support_pct": 4.19
+      },
+      {
+        "co_change_count": 8,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "CLAUDE.md",
+        "support_pct": 3.72
+      },
+      {
+        "co_change_count": 8,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "scripts/standalone_skill_config.py",
+        "support_pct": 3.72
+      },
+      {
+        "co_change_count": 8,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/scripts/assess_core.py",
+        "support_pct": 3.72
+      },
+      {
+        "co_change_count": 8,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/tests/test_assess_core.py",
+        "support_pct": 3.72
+      },
+      {
+        "co_change_count": 8,
+        "file_a": "skills/assess/SKILL.md",
+        "file_b": "skills/assess/tests/test_assess_core.py",
+        "support_pct": 3.72
+      },
+      {
+        "co_change_count": 7,
+        "file_a": "skills/assess/scripts/lib/doc_graph.py",
+        "file_b": "skills/assess/tests/test_doc_graph.py",
+        "support_pct": 3.26
+      },
+      {
+        "co_change_count": 6,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/scripts/lib/doc_staleness.py",
+        "support_pct": 2.79
+      },
+      {
+        "co_change_count": 6,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/huddle/SKILL.md",
+        "support_pct": 2.79
+      },
+      {
+        "co_change_count": 6,
+        "file_a": ".gitignore",
+        "file_b": "README.md",
+        "support_pct": 2.79
+      },
+      {
+        "co_change_count": 6,
+        "file_a": "skills/assess/SKILL.md",
+        "file_b": "skills/assess/scripts/lib/doc_staleness.py",
+        "support_pct": 2.79
+      },
+      {
+        "co_change_count": 6,
+        "file_a": "skills/assess/SKILL.md",
+        "file_b": "skills/assess/tests/test_doc_staleness.py",
+        "support_pct": 2.79
+      },
+      {
+        "co_change_count": 6,
+        "file_a": "skills/assess/scripts/lib/doc_staleness.py",
+        "file_b": "skills/assess/tests/test_doc_staleness.py",
+        "support_pct": 2.79
+      },
+      {
+        "co_change_count": 5,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": ".github/workflows/tests.yml",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": ".gitignore",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/scripts/lib/doc_graph.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/tests/test_doc_graph.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/tests/test_doc_staleness.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": ".gitignore",
+        "file_b": "skills/assess/SKILL.md",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "CLAUDE.md",
+        "file_b": "skills/assess/SKILL.md",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "blue-hat.md",
+        "file_b": "purple-hat.md",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "purple-hat.md",
+        "file_b": "red-hat.md",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "purple-hat.md",
+        "file_b": "yellow-hat.md",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "scripts/standalone_skill_config.py",
+        "file_b": "skills/assess/SKILL.md",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "skills/assess/SKILL.md",
+        "file_b": "skills/assess/scripts/lib/doc_graph.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "skills/assess/SKILL.md",
+        "file_b": "skills/assess/tests/test_doc_graph.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "skills/assess/scripts/assess_core.py",
+        "file_b": "skills/assess/scripts/complexity-treemap.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "skills/assess/scripts/assess_core.py",
+        "file_b": "skills/assess/scripts/lib/doc_staleness.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "skills/assess/scripts/assess_core.py",
+        "file_b": "skills/assess/tests/test_doc_staleness.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "skills/assess/scripts/complexity-treemap.py",
+        "file_b": "skills/assess/tests/test_complexity_treemap.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "skills/assess/scripts/lib/doc_graph.py",
+        "file_b": "skills/assess/scripts/lib/doc_staleness.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "skills/assess/scripts/lib/doc_staleness.py",
+        "file_b": "skills/assess/tests/test_assess_core.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 5,
+        "file_a": "skills/assess/scripts/lib/doc_staleness.py",
+        "file_b": "skills/assess/tests/test_doc_graph.py",
+        "support_pct": 2.33
+      },
+      {
+        "co_change_count": 4,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "scripts/tests/test_transform.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "scripts/transform_skill.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/scripts/complexity-treemap.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/scripts/lib/liveness_scan.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/tests/test_liveness_scan.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/tests/test_wiki_writer.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": ".gitignore",
+        "file_b": "skills/huddle/SKILL.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "README.md",
+        "file_b": "commands/tm.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "README.md",
+        "file_b": "scripts/standalone_skill_config.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "README.md",
+        "file_b": "skills/huddle/SKILL.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "agents/black-hat.md",
+        "file_b": "agents/red-hat.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "agents/black-hat.md",
+        "file_b": "agents/white-hat.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "agents/blue-hat.md",
+        "file_b": "agents/white-hat.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "agents/red-hat.md",
+        "file_b": "agents/white-hat.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "agents/white-hat.md",
+        "file_b": "agents/yellow-hat.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "black-hat.md",
+        "file_b": "purple-hat.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "commands/fix-develop.md",
+        "file_b": "commands/tm.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "green-hat.md",
+        "file_b": "purple-hat.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "purple-hat.md",
+        "file_b": "white-hat.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "scripts/standalone_skill_config.py",
+        "file_b": "skills/assess/scripts/complexity-treemap.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "skills/assess/SKILL.md",
+        "file_b": "skills/assess/tests/test_complexity_treemap.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "skills/assess/SKILL.md",
+        "file_b": "skills/huddle/SKILL.md",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "skills/assess/pyproject.toml",
+        "file_b": "skills/assess/tests/test_assess_core.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "skills/assess/scripts/complexity-treemap.py",
+        "file_b": "skills/assess/scripts/lib/doc_staleness.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "skills/assess/scripts/complexity-treemap.py",
+        "file_b": "skills/assess/tests/test_doc_staleness.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "skills/assess/scripts/lib/doc_graph.py",
+        "file_b": "skills/assess/tests/test_doc_staleness.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "skills/assess/scripts/lib/liveness_scan.py",
+        "file_b": "skills/assess/tests/test_liveness_scan.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "skills/assess/tests/test_assess_core.py",
+        "file_b": "skills/assess/tests/test_doc_staleness.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "skills/assess/tests/test_assess_core.py",
+        "file_b": "skills/assess/tests/test_wiki_writer.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 4,
+        "file_a": "skills/assess/tests/test_doc_graph.py",
+        "file_b": "skills/assess/tests/test_doc_staleness.py",
+        "support_pct": 1.86
+      },
+      {
+        "co_change_count": 3,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "scripts/build-standalone-skills.sh",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "scripts/tests/test_integration.py",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/pyproject.toml",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/scripts/assess_finalize.py",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/scripts/lib/wiki_writer.py",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/templates/log_entry.md.template",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/tests/test_anomaly_detector.py",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": ".claude-plugin/plugin.json",
+        "file_b": "skills/assess/tests/test_assess_finalize.py",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": ".github/workflows/tests.yml",
+        "file_b": "CLAUDE.md",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": ".github/workflows/tests.yml",
+        "file_b": "skills/assess/SKILL.md",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": "CLAUDE.md",
+        "file_b": "README.md",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": "CLAUDE.md",
+        "file_b": "skills/assess/scripts/assess_core.py",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": "CLAUDE.md",
+        "file_b": "skills/assess/tests/test_assess_core.py",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": "README.md",
+        "file_b": "commands/fix-develop.md",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": "README.md",
+        "file_b": "scripts/tests/test_transform.py",
+        "support_pct": 1.4
+      },
+      {
+        "co_change_count": 3,
+        "file_a": "agents/black-hat.md",
+        "file_b": "agents/blue-hat.md",
+        "support_pct": 1.4
+      }
+    ],
+    "containment_by_dir": {
+      ".claude-plugin": 0.1053,
+      ".github": 0.1111,
+      ".github/workflows": 0.0,
+      "agents": 0.4286,
+      "commands": 0.9245,
+      "docs": 0.2667,
+      "docs/superpowers": 0.3636,
+      "docs/superpowers/plans": 0.3636,
+      "scripts": 0.0,
+      "scripts/tests": 0.0,
+      "skills": 0.38,
+      "skills/assess": 0.4222,
+      "skills/assess/scripts": 0.0,
+      "skills/assess/scripts/lib": 0.0,
+      "skills/assess/tests": 0.0357,
+      "skills/huddle": 0.0
+    },
+    "hidden_coupling_findings": [
+      {
+        "containment_ratio": 0.0,
+        "finding": "hidden_coupling",
+        "path": "scripts",
+        "recommendation": "investigate the seam - the static boundary looks modular but its commits bleed outside it; the boundary is lying"
+      },
+      {
+        "containment_ratio": 0.0,
+        "finding": "hidden_coupling",
+        "path": "scripts/tests",
+        "recommendation": "investigate the seam - the static boundary looks modular but its commits bleed outside it; the boundary is lying"
+      },
+      {
+        "containment_ratio": 0.0,
+        "finding": "hidden_coupling",
+        "path": "skills/assess/scripts",
+        "recommendation": "investigate the seam - the static boundary looks modular but its commits bleed outside it; the boundary is lying"
+      },
+      {
+        "containment_ratio": 0.0,
+        "finding": "hidden_coupling",
+        "path": "skills/assess/scripts/lib",
+        "recommendation": "investigate the seam - the static boundary looks modular but its commits bleed outside it; the boundary is lying"
+      },
+      {
+        "containment_ratio": 0.0357,
+        "finding": "hidden_coupling",
+        "path": "skills/assess/tests",
+        "recommendation": "investigate the seam - the static boundary looks modular but its commits bleed outside it; the boundary is lying"
+      }
+    ],
+    "refactor_boundaries": [
+      {
+        "containment_ratio": 0.9245,
+        "finding": "refactor_boundary",
+        "path": "commands",
+        "recommendation": "safe to hand an agent in isolation - edits here stay contained (high containment)"
+      }
+    ],
+    "static_history_disagreement": [
+      {
+        "containment_ratio": 0.0,
+        "finding": "bleeding_module",
+        "path": ".github/workflows",
+        "recommendation": "edits here bleed outside the directory (low containment); no static import graph available to cross-check the boundary"
+      },
+      {
+        "containment_ratio": 0.0,
+        "finding": "hidden_coupling",
+        "path": "scripts",
+        "recommendation": "investigate the seam - the static boundary looks modular but its commits bleed outside it; the boundary is lying"
+      },
+      {
+        "containment_ratio": 0.0,
+        "finding": "hidden_coupling",
+        "path": "scripts/tests",
+        "recommendation": "investigate the seam - the static boundary looks modular but its commits bleed outside it; the boundary is lying"
+      },
+      {
+        "containment_ratio": 0.0,
+        "finding": "hidden_coupling",
+        "path": "skills/assess/scripts",
+        "recommendation": "investigate the seam - the static boundary looks modular but its commits bleed outside it; the boundary is lying"
+      },
+      {
+        "containment_ratio": 0.0,
+        "finding": "hidden_coupling",
+        "path": "skills/assess/scripts/lib",
+        "recommendation": "investigate the seam - the static boundary looks modular but its commits bleed outside it; the boundary is lying"
+      },
+      {
+        "containment_ratio": 0.0,
+        "finding": "bleeding_module",
+        "path": "skills/huddle",
+        "recommendation": "edits here bleed outside the directory (low containment); no static import graph available to cross-check the boundary"
+      },
+      {
+        "containment_ratio": 0.0357,
+        "finding": "hidden_coupling",
+        "path": "skills/assess/tests",
+        "recommendation": "investigate the seam - the static boundary looks modular but its commits bleed outside it; the boundary is lying"
+      },
+      {
+        "containment_ratio": 0.1053,
+        "finding": "bleeding_module",
+        "path": ".claude-plugin",
+        "recommendation": "edits here bleed outside the directory (low containment); no static import graph available to cross-check the boundary"
+      },
+      {
+        "containment_ratio": 0.1111,
+        "finding": "bleeding_module",
+        "path": ".github",
+        "recommendation": "edits here bleed outside the directory (low containment); no static import graph available to cross-check the boundary"
+      },
+      {
+        "containment_ratio": 0.2667,
+        "finding": "bleeding_module",
+        "path": "docs",
+        "recommendation": "edits here bleed outside the directory (low containment); no static import graph available to cross-check the boundary"
+      }
+    ],
+    "static_modularity_projection": "repo-level (coarse)"
+  },
+  "broken_instruction_refs": [],
+  "dead_code": {
+    "available": false,
+    "candidate_count": 0,
+    "candidates": [],
+    "caveat": "Static reachability proves nothing in THIS repo references the symbol; it cannot prove no external consumer (a mobile app, another service) calls it. Cross-boundary liveness needs telemetry or a named human.",
+    "tools": [
+      {
+        "language": "python",
+        "reason": "vulture not on PATH",
+        "status": "tool_absent",
+        "tool": "vulture"
+      }
+    ]
+  },
+  "derived_findings": [
+    {
+      "action": "investigate the seam",
+      "name": "hidden_coupling",
+      "paths": [
+        "scripts",
+        "scripts/tests",
+        "skills/assess/scripts",
+        "skills/assess/scripts/lib",
+        "skills/assess/tests"
+      ]
+    },
+    {
+      "action": "fix or delete the doc",
+      "name": "lying_map",
+      "paths": []
+    },
+    {
+      "action": "write the missing contract (do NOT auto-generate)",
+      "name": "unexplained_complexity",
+      "paths": []
+    },
+    {
+      "action": "assign a human anchor before further change",
+      "name": "orphaned_understanding",
+      "paths": []
+    },
+    {
+      "action": "verify liveness, then delete if dead",
+      "name": "candidate_dead_weight",
+      "paths": []
+    },
+    {
+      "action": "safe to hand an agent in isolation",
+      "name": "refactor_boundary",
+      "paths": [
+        "commands"
+      ]
+    }
+  ],
+  "diff": "<<normalized>>",
+  "diff_detail": "<<normalized>>",
+  "diff_reliable": "<<normalized>>",
+  "diff_version_note": "<<normalized>>",
+  "doc_graph": {
+    "ambiguous_wikilinks": 0,
+    "available": true,
+    "broken_links": [],
+    "dangling_links": 0,
+    "declared_mocs": [],
+    "doc_count": 37,
+    "doc_to_code_edges": [
+      {
+        "code": "skills/assess/scripts/complexity-treemap.py",
+        "doc": "README.md"
+      },
+      {
+        "code": "skills/assess/scripts/doc-graph-svg.py",
+        "doc": "README.md"
+      },
+      {
+        "code": "skills/ghsync/scripts/ghsync.sh",
+        "doc": "README.md"
+      }
+    ],
+    "edge_count": 2,
+    "entry_points": [
+      "CLAUDE.md",
+      "README.md"
+    ],
+    "hubs": [
+      {
+        "in_degree": 1,
+        "out_degree": 0,
+        "pagerank": 0.0478,
+        "path": "docs/testing-a-branch-locally.md"
+      },
+      {
+        "in_degree": 1,
+        "out_degree": 0,
+        "pagerank": 0.0478,
+        "path": "skills/deslop/references/full-checklist.md"
+      },
+      {
+        "in_degree": 0,
+        "out_degree": 1,
+        "pagerank": 0.0258,
+        "path": "CLAUDE.md"
+      },
+      {
+        "in_degree": 0,
+        "out_degree": 1,
+        "pagerank": 0.0258,
+        "path": "README.md"
+      },
+      {
+        "in_degree": 0,
+        "out_degree": 0,
+        "pagerank": 0.0258,
+        "path": ".github/claude-review-instructions.md"
+      },
+      {
+        "in_degree": 0,
+        "out_degree": 0,
+        "pagerank": 0.0258,
+        "path": "agents/black-hat.md"
+      },
+      {
+        "in_degree": 0,
+        "out_degree": 0,
+        "pagerank": 0.0258,
+        "path": "agents/blue-hat.md"
+      },
+      {
+        "in_degree": 0,
+        "out_degree": 0,
+        "pagerank": 0.0258,
+        "path": "agents/green-hat.md"
+      },
+      {
+        "in_degree": 0,
+        "out_degree": 0,
+        "pagerank": 0.0258,
+        "path": "agents/red-hat.md"
+      },
+      {
+        "in_degree": 0,
+        "out_degree": 0,
+        "pagerank": 0.0258,
+        "path": "agents/scribe.md"
+      }
+    ],
+    "island_count": 35,
+    "missing_xrefs": [
+      {
+        "from": ".github/claude-review-instructions.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "CLAUDE.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-22-assess-deterministic-wiki.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-22-assess-v1.5-real-use-fixes.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-23-standalone-skill-pipeline.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-27-huddle-cli-team-mode-regression.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md",
+        "to": "docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md",
+        "to": "docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md",
+        "to": "commands/fix-pr.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md",
+        "to": "commands/tm.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "docs/superpowers/plans/2026-05-31-assess-dogfooded.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md",
+        "to": "commands/tm.md"
+      },
+      {
+        "from": "docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md",
+        "to": "commands/fix-pr.md"
+      },
+      {
+        "from": "docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md",
+        "to": "commands/fix-develop.md"
+      },
+      {
+        "from": "docs/testing-a-branch-locally.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      },
+      {
+        "from": "skills/deslop/references/full-checklist.md",
+        "to": "skills/pr-review-merge/SKILL.md"
+      }
+    ],
+    "moc_named_but_not_wired": [],
+    "obsidiantools_available": false,
+    "orphan_rate": 0.892,
+    "orphans": [
+      ".github/claude-review-instructions.md",
+      "agents/black-hat.md",
+      "agents/blue-hat.md",
+      "agents/green-hat.md",
+      "agents/red-hat.md",
+      "agents/scribe.md",
+      "agents/white-hat.md",
+      "agents/yellow-hat.md",
+      "commands/6hats.md",
+      "commands/fix-develop.md",
+      "commands/fix-pr.md",
+      "commands/issues.md",
+      "commands/tm-marathon-config-example.md",
+      "commands/tm.md",
+      "commands/understand.md",
+      "docs/superpowers/plans/2026-05-22-assess-deterministic-wiki.md",
+      "docs/superpowers/plans/2026-05-22-assess-v1.5-real-use-fixes.md",
+      "docs/superpowers/plans/2026-05-23-standalone-skill-pipeline.md",
+      "docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md",
+      "docs/superpowers/plans/2026-05-27-huddle-broadcast-per-recipient.md",
+      "docs/superpowers/plans/2026-05-27-huddle-cli-team-mode-regression.md",
+      "docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md",
+      "docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md",
+      "docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md",
+      "docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md",
+      "docs/superpowers/plans/2026-05-31-assess-dogfooded.md",
+      "docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md",
+      "skills/assess/SKILL.md",
+      "skills/deslop/SKILL.md",
+      "skills/ghsync/SKILL.md",
+      "skills/huddle/SKILL.md",
+      "skills/marathon/SKILL.md",
+      "skills/pr-review-merge/SKILL.md"
+    ],
+    "reachability_pct": 0.108,
+    "reason": "",
+    "unreachable": [
+      ".github/claude-review-instructions.md",
+      "agents/black-hat.md",
+      "agents/blue-hat.md",
+      "agents/green-hat.md",
+      "agents/red-hat.md",
+      "agents/scribe.md",
+      "agents/white-hat.md",
+      "agents/yellow-hat.md",
+      "commands/6hats.md",
+      "commands/fix-develop.md",
+      "commands/fix-pr.md",
+      "commands/issues.md",
+      "commands/tm-marathon-config-example.md",
+      "commands/tm.md",
+      "commands/understand.md",
+      "docs/superpowers/plans/2026-05-22-assess-deterministic-wiki.md",
+      "docs/superpowers/plans/2026-05-22-assess-v1.5-real-use-fixes.md",
+      "docs/superpowers/plans/2026-05-23-standalone-skill-pipeline.md",
+      "docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md",
+      "docs/superpowers/plans/2026-05-27-huddle-broadcast-per-recipient.md",
+      "docs/superpowers/plans/2026-05-27-huddle-cli-team-mode-regression.md",
+      "docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md",
+      "docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md",
+      "docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md",
+      "docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md",
+      "docs/superpowers/plans/2026-05-31-assess-dogfooded.md",
+      "docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md",
+      "skills/assess/SKILL.md",
+      "skills/deslop/SKILL.md",
+      "skills/ghsync/SKILL.md",
+      "skills/huddle/SKILL.md",
+      "skills/marathon/SKILL.md",
+      "skills/pr-review-merge/SKILL.md"
+    ],
+    "vault_detected": false
+  },
+  "doc_staleness": {
+    "association": {
+      "code_file_count": 57,
+      "code_under_base_doc": 57,
+      "doc_count": 37,
+      "docs_mapping_to_code": 1,
+      "methods": {
+        "nearest-ancestor": 1,
+        "repo-baseline": 36
+      },
+      "pct_code_under_base_doc": 1.0,
+      "pct_docs_mapping_to_code": 0.027
+    },
+    "available": true,
+    "churn_window": "commits (last 12mo)",
+    "docs": [
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 1,
+        "path": ".github/claude-review-instructions.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 2,
+        "path": "commands/issues.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 265,
+        "path": "commands/understand.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 10,
+        "path": "docs/superpowers/plans/2026-05-22-assess-deterministic-wiki.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 9,
+        "path": "docs/superpowers/plans/2026-05-22-assess-v1.5-real-use-fixes.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 8,
+        "path": "docs/superpowers/plans/2026-05-23-standalone-skill-pipeline.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 4,
+        "path": "docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 4,
+        "path": "docs/superpowers/plans/2026-05-27-huddle-broadcast-per-recipient.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 4,
+        "path": "docs/superpowers/plans/2026-05-27-huddle-cli-team-mode-regression.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 3,
+        "path": "docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 3,
+        "path": "docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 3,
+        "path": "docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 2,
+        "path": "docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 0,
+        "path": "docs/superpowers/plans/2026-05-31-assess-dogfooded.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 2,
+        "path": "docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 3,
+        "path": "skills/deslop/references/full-checklist.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 0,
+        "path": "skills/ghsync/SKILL.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 2,
+        "path": "skills/marathon/SKILL.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 1,
+        "last_commit_days": 2,
+        "path": "skills/pr-review-merge/SKILL.md",
+        "ratio": 177.0,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 2,
+        "last_commit_days": 256,
+        "path": "agents/scribe.md",
+        "ratio": 88.5,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 2,
+        "last_commit_days": 2,
+        "path": "commands/tm-marathon-config-example.md",
+        "ratio": 88.5,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 2,
+        "last_commit_days": 2,
+        "path": "docs/testing-a-branch-locally.md",
+        "ratio": 88.5,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 2,
+        "last_commit_days": 2,
+        "path": "skills/deslop/SKILL.md",
+        "ratio": 88.5,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 4,
+        "last_commit_days": 59,
+        "path": "agents/black-hat.md",
+        "ratio": 44.25,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 4,
+        "last_commit_days": 59,
+        "path": "agents/green-hat.md",
+        "ratio": 44.25,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 4,
+        "last_commit_days": 59,
+        "path": "agents/red-hat.md",
+        "ratio": 44.25,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 4,
+        "last_commit_days": 59,
+        "path": "agents/yellow-hat.md",
+        "ratio": 44.25,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 5,
+        "last_commit_days": 59,
+        "path": "agents/blue-hat.md",
+        "ratio": 35.4,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 5,
+        "last_commit_days": 59,
+        "path": "agents/white-hat.md",
+        "ratio": 35.4,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 5,
+        "last_commit_days": 2,
+        "path": "commands/fix-develop.md",
+        "ratio": 35.4,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 7,
+        "last_commit_days": 2,
+        "path": "skills/huddle/SKILL.md",
+        "ratio": 25.29,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 8,
+        "last_commit_days": 1,
+        "path": "CLAUDE.md",
+        "ratio": 22.12,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 9,
+        "last_commit_days": 58,
+        "path": "commands/6hats.md",
+        "ratio": 19.67,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 13,
+        "last_commit_days": 2,
+        "path": "commands/fix-pr.md",
+        "ratio": 13.62,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 31,
+        "last_commit_days": 0,
+        "path": "skills/assess/SKILL.md",
+        "ratio": 5.71,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "high",
+        "doc_churn_in_window": 35,
+        "last_commit_days": 0,
+        "path": "README.md",
+        "ratio": 5.06,
+        "subject_code_count": 57,
+        "subject_method": "nearest-ancestor"
+      },
+      {
+        "code_churn_in_window": 177,
+        "confidence": "low",
+        "doc_churn_in_window": 78,
+        "last_commit_days": 2,
+        "path": "commands/tm.md",
+        "ratio": 2.27,
+        "subject_code_count": 57,
+        "subject_method": "repo-baseline"
+      }
+    ],
+    "modularity": {
+      "base_doc_coverage_when_present": 1.0,
+      "base_doc_dir_ratio": 0.125,
+      "code_file_count": 57,
+      "large_repo": true,
+      "module_dir_count": 8,
+      "module_dirs_with_base_doc": 1
+    }
+  },
+  "documentation": {
+    "available": true,
+    "complexity_coverage": {
+      ".github/claude-review-instructions.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "CLAUDE.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "README.md": {
+        "complexity_summarised": 51.0,
+        "doc_value": -51.0,
+        "subject_code_count": 1
+      },
+      "agents/black-hat.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "agents/blue-hat.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "agents/green-hat.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "agents/red-hat.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "agents/scribe.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "agents/white-hat.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "agents/yellow-hat.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "commands/6hats.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "commands/fix-develop.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "commands/fix-pr.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "commands/issues.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "commands/tm-marathon-config-example.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "commands/tm.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "commands/understand.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/plans/2026-05-22-assess-deterministic-wiki.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/plans/2026-05-22-assess-v1.5-real-use-fixes.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/plans/2026-05-23-standalone-skill-pipeline.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/plans/2026-05-27-huddle-broadcast-per-recipient.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/plans/2026-05-27-huddle-cli-team-mode-regression.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/plans/2026-05-31-assess-dogfooded.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "docs/testing-a-branch-locally.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "skills/assess/SKILL.md": {
+        "complexity_summarised": 169.0,
+        "doc_value": -169.0,
+        "subject_code_count": 15
+      },
+      "skills/deslop/SKILL.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "skills/deslop/references/full-checklist.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "skills/ghsync/SKILL.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "skills/huddle/SKILL.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "skills/marathon/SKILL.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      },
+      "skills/pr-review-merge/SKILL.md": {
+        "complexity_summarised": 0.0,
+        "doc_value": -0.0,
+        "subject_code_count": 0
+      }
+    },
+    "freshness_by_doc": {
+      ".github/claude-review-instructions.md": -1.0,
+      "CLAUDE.md": -1.0,
+      "README.md": -1.0,
+      "agents/black-hat.md": -1.0,
+      "agents/blue-hat.md": -1.0,
+      "agents/green-hat.md": -1.0,
+      "agents/red-hat.md": -1.0,
+      "agents/scribe.md": -1.0,
+      "agents/white-hat.md": -1.0,
+      "agents/yellow-hat.md": -1.0,
+      "commands/6hats.md": -1.0,
+      "commands/fix-develop.md": -1.0,
+      "commands/fix-pr.md": -1.0,
+      "commands/issues.md": -1.0,
+      "commands/tm-marathon-config-example.md": -1.0,
+      "commands/tm.md": -0.135,
+      "commands/understand.md": -1.0,
+      "docs/superpowers/plans/2026-05-22-assess-deterministic-wiki.md": -1.0,
+      "docs/superpowers/plans/2026-05-22-assess-v1.5-real-use-fixes.md": -1.0,
+      "docs/superpowers/plans/2026-05-23-standalone-skill-pipeline.md": -1.0,
+      "docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md": -1.0,
+      "docs/superpowers/plans/2026-05-27-huddle-broadcast-per-recipient.md": -1.0,
+      "docs/superpowers/plans/2026-05-27-huddle-cli-team-mode-regression.md": -1.0,
+      "docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md": -1.0,
+      "docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md": -1.0,
+      "docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md": -1.0,
+      "docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md": -1.0,
+      "docs/superpowers/plans/2026-05-31-assess-dogfooded.md": -1.0,
+      "docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md": -1.0,
+      "docs/testing-a-branch-locally.md": -1.0,
+      "skills/assess/SKILL.md": -1.0,
+      "skills/deslop/SKILL.md": -1.0,
+      "skills/deslop/references/full-checklist.md": -1.0,
+      "skills/ghsync/SKILL.md": -1.0,
+      "skills/huddle/SKILL.md": -1.0,
+      "skills/marathon/SKILL.md": -1.0,
+      "skills/pr-review-merge/SKILL.md": -1.0
+    },
+    "good_contracts": [],
+    "high_ccn_threshold": 107.35,
+    "stale_doc_on_complexity": [],
+    "unexplained_complexity": []
+  },
+  "instruction_file_size": {
+    ".github/claude-review-instructions.md": {
+      "bloat_penalty": 0,
+      "line_count": 237,
+      "word_count": 1532
+    },
+    "CLAUDE.md": {
+      "bloat_penalty": 0,
+      "line_count": 184,
+      "word_count": 1773
+    }
+  },
+  "instruction_files": {
+    ".github/claude-review-instructions.md": {
+      "freshness_days": 1,
+      "grade": "A",
+      "line_count": 237,
+      "present": true,
+      "score": 82,
+      "subscores": {
+        "bloat_penalty": 0,
+        "line_count": 237,
+        "path_references": 29,
+        "positive_directives": 9,
+        "tradeoff_phrases": 5,
+        "verifiable_outcomes": 0,
+        "word_count": 1532
+      }
+    },
+    "CLAUDE.md": {
+      "freshness_days": 1,
+      "grade": "A-",
+      "line_count": 184,
+      "present": true,
+      "score": 70,
+      "subscores": {
+        "bloat_penalty": 0,
+        "line_count": 184,
+        "path_references": 66,
+        "positive_directives": 26,
+        "tradeoff_phrases": 2,
+        "verifiable_outcomes": 0,
+        "word_count": 1773
+      }
+    }
+  },
+  "instructions_grade": "A",
+  "measured_commit": {
+    "available": true,
+    "behind": "<<normalized>>",
+    "committed_date": "<<normalized>>",
+    "dirty": "<<normalized>>",
+    "head_sha": "<<normalized>>",
+    "head_short": "<<normalized>>",
+    "subject": "<<normalized>>",
+    "upstream": "<<normalized>>"
+  },
+  "observability": {
+    "boundary": "Scores what the repo makes agent-reachable; cannot observe the agent's live environment.",
+    "discoverable": {
+      "present": true,
+      "signals": [
+        "observability content (data-freshness, datadog, grafana, observability, prometheus, runbook): docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md",
+        "observability content (datadog, grafana, observability, prometheus, runbook): skills/assess/SKILL.md",
+        "observability content (observability, runbook): docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md"
+      ]
+    },
+    "instrumented": {
+      "present": false,
+      "signals": []
+    },
+    "reachable": {
+      "present": true,
+      "signals": [
+        "runbook with runnable queries: skills/assess/SKILL.md"
+      ]
+    },
+    "rung": 0
+  },
+  "plugin_version": "<<normalized>>",
+  "prior_plugin_version": "<<normalized>>",
+  "prior_stats_exists": "<<normalized>>",
+  "run_date": "<<normalized>>",
+  "runtime": {
+    "available": true,
+    "observability_rung": 0,
+    "runtime_evidence_available": true,
+    "static_reachability": {
+      "available": false,
+      "candidate_count": 0,
+      "candidates": [],
+      "caveat": "Static reachability proves nothing in THIS repo references the symbol; it cannot prove no external consumer (a mobile app, another service) calls it. Cross-boundary liveness needs telemetry or a named human.",
+      "tools": [
+        {
+          "language": "python",
+          "reason": "vulture not on PATH",
+          "status": "tool_absent",
+          "tool": "vulture"
+        }
+      ]
+    }
+  },
+  "sensitive_instruction_content": {},
+  "skill_files": [
+    "skills/pr-review-merge/SKILL.md",
+    "skills/ghsync/SKILL.md",
+    "skills/marathon/SKILL.md",
+    "skills/huddle/SKILL.md",
+    "skills/assess/SKILL.md",
+    "skills/deslop/SKILL.md"
+  ],
+  "skills_count": 6,
+  "skills_present": true,
+  "stale_hubs": [
+    {
+      "code_churn_in_window": 177,
+      "confidence": "low",
+      "last_commit_days": 3,
+      "pagerank": 0.0478,
+      "path": "skills/deslop/references/full-checklist.md",
+      "priority": 8.461,
+      "ratio": 177.0,
+      "subject_method": "repo-baseline"
+    },
+    {
+      "code_churn_in_window": 177,
+      "confidence": "low",
+      "last_commit_days": 1,
+      "pagerank": 0.0258,
+      "path": ".github/claude-review-instructions.md",
+      "priority": 4.567,
+      "ratio": 177.0,
+      "subject_method": "repo-baseline"
+    },
+    {
+      "code_churn_in_window": 177,
+      "confidence": "low",
+      "last_commit_days": 2,
+      "pagerank": 0.0478,
+      "path": "docs/testing-a-branch-locally.md",
+      "priority": 4.23,
+      "ratio": 88.5,
+      "subject_method": "repo-baseline"
+    },
+    {
+      "code_churn_in_window": 177,
+      "confidence": "low",
+      "last_commit_days": 256,
+      "pagerank": 0.0258,
+      "path": "agents/scribe.md",
+      "priority": 2.283,
+      "ratio": 88.5,
+      "subject_method": "repo-baseline"
+    },
+    {
+      "code_churn_in_window": 177,
+      "confidence": "low",
+      "last_commit_days": 59,
+      "pagerank": 0.0258,
+      "path": "agents/black-hat.md",
+      "priority": 1.142,
+      "ratio": 44.25,
+      "subject_method": "repo-baseline"
+    },
+    {
+      "code_churn_in_window": 177,
+      "confidence": "low",
+      "last_commit_days": 59,
+      "pagerank": 0.0258,
+      "path": "agents/green-hat.md",
+      "priority": 1.142,
+      "ratio": 44.25,
+      "subject_method": "repo-baseline"
+    },
+    {
+      "code_churn_in_window": 177,
+      "confidence": "low",
+      "last_commit_days": 59,
+      "pagerank": 0.0258,
+      "path": "agents/red-hat.md",
+      "priority": 1.142,
+      "ratio": 44.25,
+      "subject_method": "repo-baseline"
+    },
+    {
+      "code_churn_in_window": 177,
+      "confidence": "low",
+      "last_commit_days": 59,
+      "pagerank": 0.0258,
+      "path": "agents/blue-hat.md",
+      "priority": 0.913,
+      "ratio": 35.4,
+      "subject_method": "repo-baseline"
+    },
+    {
+      "code_churn_in_window": 177,
+      "confidence": "low",
+      "last_commit_days": 1,
+      "pagerank": 0.0258,
+      "path": "CLAUDE.md",
+      "priority": 0.571,
+      "ratio": 22.12,
+      "subject_method": "repo-baseline"
+    },
+    {
+      "code_churn_in_window": 177,
+      "confidence": "high",
+      "last_commit_days": 0,
+      "pagerank": 0.0258,
+      "path": "README.md",
+      "priority": 0.131,
+      "ratio": 5.06,
+      "subject_method": "nearest-ancestor"
+    }
+  ],
+  "stats_summary": {
+    "ccn": {
+      "basis": "file-aggregate",
+      "max": 169.0,
+      "p50": 31.0,
+      "p95": 107.35
+    },
+    "files_scored": 58,
+    "loc": {
+      "max": 761.0,
+      "p50": 132.5,
+      "p95": 483.65,
+      "total": 10428
+    },
+    "top_hotspots": [
+      {
+        "ccn": 106.0,
+        "ccn_basis": "file-aggregate",
+        "commits": 14,
+        "loc": 493,
+        "max_fn_ccn": 38.0,
+        "path": "skills/assess/scripts/assess_core.py",
+        "source": "lizard"
+      },
+      {
+        "ccn": 169.0,
+        "ccn_basis": "file-aggregate",
+        "commits": 7,
+        "loc": 514,
+        "max_fn_ccn": 23.0,
+        "path": "skills/assess/scripts/lib/doc_graph.py",
+        "source": "lizard"
+      },
+      {
+        "ccn": 115.0,
+        "ccn_basis": "file-aggregate",
+        "commits": 10,
+        "loc": 482,
+        "max_fn_ccn": 19.0,
+        "path": "skills/assess/scripts/complexity-treemap.py",
+        "source": "lizard"
+      },
+      {
+        "ccn": 78.0,
+        "ccn_basis": "file-aggregate",
+        "commits": 12,
+        "loc": 761,
+        "max_fn_ccn": 6.0,
+        "path": "skills/assess/tests/test_assess_core.py",
+        "source": "lizard"
+      },
+      {
+        "ccn": 69.0,
+        "ccn_basis": "file-aggregate",
+        "commits": 7,
+        "loc": 245,
+        "max_fn_ccn": 26.0,
+        "path": "skills/assess/scripts/lib/doc_staleness.py",
+        "source": "lizard"
+      },
+      {
+        "ccn": 100.0,
+        "ccn_basis": "file-aggregate",
+        "commits": 4,
+        "loc": 371,
+        "max_fn_ccn": 14.0,
+        "path": "skills/assess/scripts/lib/liveness_scan.py",
+        "source": "lizard"
+      },
+      {
+        "ccn": 52.0,
+        "ccn_basis": "file-aggregate",
+        "commits": 7,
+        "loc": 270,
+        "max_fn_ccn": 4.0,
+        "path": "skills/assess/tests/test_doc_graph.py",
+        "source": "lizard"
+      },
+      {
+        "ccn": 88.0,
+        "ccn_basis": "file-aggregate",
+        "commits": 3,
+        "loc": 342,
+        "max_fn_ccn": 36.0,
+        "path": "skills/assess/scripts/doc-graph-svg.py",
+        "source": "lizard"
+      },
+      {
+        "ccn": 79.0,
+        "ccn_basis": "file-aggregate",
+        "commits": 3,
+        "loc": 384,
+        "max_fn_ccn": 4.0,
+        "path": "skills/assess/tests/test_test_pressure.py",
+        "source": "lizard"
+      },
+      {
+        "ccn": 70.0,
+        "ccn_basis": "file-aggregate",
+        "commits": 3,
+        "loc": 255,
+        "max_fn_ccn": 14.0,
+        "path": "skills/assess/scripts/lib/agent_instructions_grader.py",
+        "source": "lizard"
+      }
+    ]
+  },
+  "structure": {
+    "available": true,
+    "breakup_candidates": [
+      {
+        "clusters": [
+          [
+            "lib.assess_config",
+            "lib.doc_graph",
+            "lib.doc_staleness",
+            "lib.git_churn",
+            "lib.liveness_scan",
+            "lib.structure_graph"
+          ],
+          [
+            "lib.change_coupling",
+            "lib.coupling_analysis",
+            "lib.doc_complexity_join",
+            "lib.keyhole_signals",
+            "lib.understanding_analysis"
+          ],
+          [
+            "lib.test_pressure",
+            "lib.test_pressure.aggregate",
+            "lib.test_pressure.common",
+            "lib.test_pressure.heuristics",
+            "lib.test_pressure.mutation"
+          ],
+          [
+            "lib"
+          ],
+          [
+            "lib.agent_instructions_grader"
+          ],
+          [
+            "lib.anomaly_detector"
+          ],
+          [
+            "lib.stats_diff"
+          ],
+          [
+            "lib.treemap_render"
+          ],
+          [
+            "lib.wiki_writer"
+          ]
+        ],
+        "modularity_q": 0.5662,
+        "num_clusters": 9,
+        "package": "lib"
+      }
+    ],
+    "edge_count": 23,
+    "footprints": [
+      {
+        "dep_surface": 9,
+        "exposed_surface": 8,
+        "module": "lib.doc_graph",
+        "over_budget": false,
+        "size": 676,
+        "total": 693
+      },
+      {
+        "dep_surface": 12,
+        "exposed_surface": 5,
+        "module": "lib.liveness_scan",
+        "over_budget": false,
+        "size": 482,
+        "total": 499
+      },
+      {
+        "dep_surface": 13,
+        "exposed_surface": 10,
+        "module": "lib.keyhole_signals",
+        "over_budget": false,
+        "size": 441,
+        "total": 464
+      },
+      {
+        "dep_surface": 4,
+        "exposed_surface": 7,
+        "module": "lib.structure_graph",
+        "over_budget": false,
+        "size": 444,
+        "total": 455
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 4,
+        "module": "lib.test_pressure.heuristics",
+        "over_budget": false,
+        "size": 381,
+        "total": 385
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 12,
+        "module": "lib.agent_instructions_grader",
+        "over_budget": false,
+        "size": 361,
+        "total": 373
+      },
+      {
+        "dep_surface": 17,
+        "exposed_surface": 4,
+        "module": "lib.doc_staleness",
+        "over_budget": false,
+        "size": 314,
+        "total": 335
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 4,
+        "module": "lib.change_coupling",
+        "over_budget": false,
+        "size": 329,
+        "total": 333
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 5,
+        "module": "lib.test_pressure.mutation",
+        "over_budget": false,
+        "size": 289,
+        "total": 294
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "lib.doc_complexity_join",
+        "over_budget": false,
+        "size": 253,
+        "total": 254
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 7,
+        "module": "lib.treemap_render",
+        "over_budget": false,
+        "size": 243,
+        "total": 250
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 5,
+        "module": "lib.git_churn",
+        "over_budget": false,
+        "size": 230,
+        "total": 235
+      },
+      {
+        "dep_surface": 4,
+        "exposed_surface": 1,
+        "module": "lib.understanding_analysis",
+        "over_budget": false,
+        "size": 212,
+        "total": 217
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 2,
+        "module": "lib.coupling_analysis",
+        "over_budget": false,
+        "size": 195,
+        "total": 197
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 6,
+        "module": "lib.wiki_writer",
+        "over_budget": false,
+        "size": 162,
+        "total": 168
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 4,
+        "module": "lib.assess_config",
+        "over_budget": false,
+        "size": 120,
+        "total": 124
+      },
+      {
+        "dep_surface": 9,
+        "exposed_surface": 2,
+        "module": "lib.test_pressure.aggregate",
+        "over_budget": false,
+        "size": 87,
+        "total": 98
+      },
+      {
+        "dep_surface": 11,
+        "exposed_surface": 0,
+        "module": "lib.test_pressure",
+        "over_budget": false,
+        "size": 74,
+        "total": 85
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 5,
+        "module": "lib.stats_diff",
+        "over_budget": false,
+        "size": 77,
+        "total": 82
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 2,
+        "module": "lib.anomaly_detector",
+        "over_budget": false,
+        "size": 62,
+        "total": 64
+      },
+      {
+        "dep_surface": 8,
+        "exposed_surface": 0,
+        "module": "lib.test_pressure.common",
+        "over_budget": false,
+        "size": 49,
+        "total": 57
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "lib",
+        "over_budget": false,
+        "size": 9,
+        "total": 9
+      }
+    ],
+    "front_door_ratio": 1.0,
+    "internal_burrow_edges": [],
+    "keyhole_budget": 2000,
+    "modularity_q": 0.5662,
+    "module_count": 22,
+    "reason": "",
+    "sccs": []
+  },
+  "test_pressure": {
+    "cheap_heuristics": {
+      "assertion_on_internal": [
+        {
+          "confidence": "medium",
+          "internal_field": "_last_processed_line",
+          "subject_function": "test_process_advances_cursor:p",
+          "test_file": "skills/assess/tests/fixtures/hollow_test_repo/tests/test_processor.py"
+        }
+      ],
+      "confidence_note": "candidate signals for human judgement, never verdicts",
+      "duplicate_truth": [],
+      "untested_boundaries": []
+    },
+    "ci_integrated": false,
+    "gap_signal": "not assessed",
+    "mutation_config_present": false,
+    "mutation_note": "opt-in required: mutation testing mutates and runs code",
+    "mutation_run": false,
+    "mutation_scope": [],
+    "mutation_tools_detected": [],
+    "per_file": [],
+    "survivor_clusters": [],
+    "survivor_density": {
+      "by_file": {},
+      "overall": null,
+      "total_mutants": null,
+      "total_survived": 0
+    }
+  },
+  "understanding": {
+    "authorship_class_by_path": {
+      "scripts/tests/test_transform.py": "human",
+      "skills/assess/scripts/assess_core.py": "human",
+      "skills/assess/scripts/complexity-treemap.py": "human",
+      "skills/assess/scripts/doc-graph-svg.py": "human",
+      "skills/assess/scripts/lib/agent_instructions_grader.py": "human",
+      "skills/assess/scripts/lib/doc_graph.py": "human",
+      "skills/assess/scripts/lib/doc_staleness.py": "human",
+      "skills/assess/scripts/lib/keyhole_signals.py": "human",
+      "skills/assess/scripts/lib/liveness_scan.py": "human",
+      "skills/assess/scripts/lib/structure_graph.py": "human",
+      "skills/assess/scripts/lib/test_pressure/heuristics.py": "human",
+      "skills/assess/scripts/lib/test_pressure/mutation.py": "human",
+      "skills/assess/tests/test_assess_core.py": "human",
+      "skills/assess/tests/test_complexity_treemap.py": "human",
+      "skills/assess/tests/test_doc_graph.py": "human",
+      "skills/assess/tests/test_test_pressure.py": "human"
+    },
+    "available": true,
+    "high_ccn_threshold": 107.35,
+    "human_anchor_by_path": {
+      "scripts/tests/test_transform.py": true,
+      "skills/assess/scripts/assess_core.py": true,
+      "skills/assess/scripts/complexity-treemap.py": true,
+      "skills/assess/scripts/doc-graph-svg.py": true,
+      "skills/assess/scripts/lib/agent_instructions_grader.py": true,
+      "skills/assess/scripts/lib/doc_graph.py": true,
+      "skills/assess/scripts/lib/doc_staleness.py": true,
+      "skills/assess/scripts/lib/keyhole_signals.py": true,
+      "skills/assess/scripts/lib/liveness_scan.py": true,
+      "skills/assess/scripts/lib/structure_graph.py": true,
+      "skills/assess/scripts/lib/test_pressure/heuristics.py": true,
+      "skills/assess/scripts/lib/test_pressure/mutation.py": true,
+      "skills/assess/tests/test_assess_core.py": true,
+      "skills/assess/tests/test_complexity_treemap.py": true,
+      "skills/assess/tests/test_doc_graph.py": true,
+      "skills/assess/tests/test_test_pressure.py": true
+    },
+    "intent_source_by_path": {
+      "scripts/tests/test_transform.py": true,
+      "skills/assess/scripts/assess_core.py": true,
+      "skills/assess/scripts/complexity-treemap.py": true,
+      "skills/assess/scripts/doc-graph-svg.py": true,
+      "skills/assess/scripts/lib/agent_instructions_grader.py": true,
+      "skills/assess/scripts/lib/doc_graph.py": true,
+      "skills/assess/scripts/lib/doc_staleness.py": true,
+      "skills/assess/scripts/lib/keyhole_signals.py": true,
+      "skills/assess/scripts/lib/liveness_scan.py": true,
+      "skills/assess/scripts/lib/structure_graph.py": true,
+      "skills/assess/scripts/lib/test_pressure/heuristics.py": true,
+      "skills/assess/scripts/lib/test_pressure/mutation.py": true,
+      "skills/assess/tests/test_assess_core.py": true,
+      "skills/assess/tests/test_complexity_treemap.py": true,
+      "skills/assess/tests/test_doc_graph.py": true,
+      "skills/assess/tests/test_test_pressure.py": true
+    },
+    "modules": [
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 5,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "scripts/tests/test_transform.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/scripts/assess_core.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 0,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/scripts/complexity-treemap.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/scripts/doc-graph-svg.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/scripts/lib/agent_instructions_grader.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/scripts/lib/doc_graph.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/scripts/lib/doc_staleness.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/scripts/lib/keyhole_signals.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 0,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/scripts/lib/liveness_scan.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/scripts/lib/structure_graph.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/scripts/lib/test_pressure/heuristics.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/scripts/lib/test_pressure/mutation.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/tests/test_assess_core.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 0,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/tests/test_complexity_treemap.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/tests/test_doc_graph.py",
+        "recommendation": null
+      },
+      {
+        "authorship_class": "human",
+        "days_since_comprehension_event": 1,
+        "finding": null,
+        "human_anchor": true,
+        "intent_source": true,
+        "path": "skills/assess/tests/test_test_pressure.py",
+        "recommendation": null
+      }
+    ],
+    "orphaned_understanding": []
+  },
+  "untracked_instruction_files": []
+}

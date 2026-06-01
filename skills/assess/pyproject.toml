@@ -15,7 +15,9 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["scripts"]
+# scripts/ holds the modules under test; tests/ is added so test modules can
+# import shared test helpers (e.g. `golden.py`, the dogfood-baseline normalizer).
+pythonpath = ["scripts", "tests"]
 addopts = "-v --tb=short"
 # Fixture repos under tests/fixtures/ contain test_*.py files that are scanned
 # as *data* by the test_pressure heuristics, not run as pytest tests. They

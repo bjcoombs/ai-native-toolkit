@@ -11,3 +11,14 @@
 [Full report](./assess-report.md)
 
 ---
+## 2026-06-01 (v1.19.2)
+
+- **Files scored:** 58
+- **AI Readiness:** 6.0 / 8 (Solid)
+- **Instructions grade:** A
+- **Hotspot transitions:** 0 graduated, 1 regressed, 0 new, 9 persistent
+- **Top action:** Add a coverage step with a patch-coverage floor, then mutation testing on the deterministic core
+
+[Full report](./assess-report.md)
+
+---
