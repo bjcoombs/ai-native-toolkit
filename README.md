@@ -41,6 +41,25 @@ Here is the same repo twice: an already-good AI-native codebase **before**, then
 
 > **How to read them.** *Doc graph* - structure encodes reachability (centre = entry, rings = link-distance from entry, rim = unreachable, dashed ring = orphan); colour encodes staleness (vivid red = a frozen doc beside churning code, a *lying map*); size encodes file length. *Heatmap* - size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active); the vivid-red blocks are the migration risk an agent (or human) is most likely to break next week. Both SVGs are colour-blind-safe (OrRd ramp, no red-green).
 
+### The same lens, three real public repos
+
+The pair above is this toolkit assessing a private monorepo. Below is `/assess` run unmodified against three public codebases in different languages, ordered by score. It is a calibration check: the layered model should discriminate between genuinely-engineered projects, not rubber-stamp the famous ones. Click any image for the full interactive SVG; hover any block for its numbers.
+
+<table>
+  <tr>
+    <th width="33%"><a href="https://github.com/ktorio/ktor">ktor</a> (Kotlin) - 5.5/8 Solid</th>
+    <th width="33%"><a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> (C/C++) - 4.0/8 Basic</th>
+    <th width="33%"><a href="https://github.com/huggingface/candle">candle</a> (Rust) - 2.5/8 Basic</th>
+  </tr>
+  <tr>
+    <td><a href="docs/example-heatmap-ktor.svg"><img alt="Complexity hotspot heatmap of the ktor Kotlin web framework: a calm treemap, worst file cyclomatic complexity 141" title="ktor (Kotlin), 5.5/8: calm treemap, worst file ccn 141" src="docs/example-heatmap-ktor.svg"></a></td>
+    <td><a href="docs/example-heatmap-llamacpp.svg"><img alt="Complexity hotspot heatmap of the llama.cpp C/C++ inference engine: ggml-vulkan.cpp dominates as a large vivid-red block, cyclomatic complexity 4,123" title="llama.cpp (C/C++), 4.0/8: ggml-vulkan.cpp ccn 4,123 across 14k LOC, 289 commits" src="docs/example-heatmap-llamacpp.svg"></a></td>
+    <td><a href="docs/example-heatmap-candle.svg"><img alt="Complexity hotspot heatmap of the candle Rust ML framework: concentrated complexity in tensor_tests.rs and the backend modules" title="candle (Rust), 2.5/8: worst file tensor_tests.rs ccn 833" src="docs/example-heatmap-candle.svg"></a></td>
+  </tr>
+</table>
+
+> **What the spread shows.** Three real projects land three full points apart, so the model is reading enforcement, not reputation. `ktor` scores highest because it is the only one with all the write-side trust signals present - a CodeRabbit review bot, repo-wide `explicitApi()` type discipline, and a mandatory CI gate order - and its treemap stays calm (worst file ccn 141, against `llama.cpp`'s 4,123). `llama.cpp` pairs strong CI and type-checking with no coverage gates, no review bot, and no feedback loop; its `ggml-vulkan.cpp` is the textbook hotspot - cyclomatic complexity 4,123, a single function at 350, 14k LOC, 289 commits in a year - the large vivid-red block you cannot miss. `candle` is type-safe Rust with real CI but is missing both read-side layers (no committed `AGENTS.md`/`CLAUDE.md`, a fragmented doc graph), which caps how far its enforced write-side quality can carry the score. The lizard cyclomatic-complexity engine scored Rust and Kotlin directly here, not the scc keyword fallback. Point-in-time snapshot, June 2026 - these scores move as the projects do, which is the whole point.
+
 ### Why this matters for an AI-driven codebase
 
 Once a codebase outgrows any single LLM context window and AI agents become regular contributors, code quality stops being a function of *who knows what* and starts being a function of *what the system enforces*. Norms ("we prefer X") fail because new contributors - especially AI agents starting each session fresh - never read them. Contracts ("the build fails if you don't do X") work because they're enforced regardless of who's reading.
@@ -359,7 +378,10 @@ ai-native-toolkit/
     ├── example-doc-graph.svg          # Real /assess doc-navigability SVG, before the action sweep (README hero)
     ├── example-doc-graph-after.svg    # Same repo, doc-navigability after the action sweep
     ├── example-heatmap.svg            # Real /assess complexity heatmap, before the action sweep (README hero)
-    └── example-heatmap-after.svg      # Same repo, complexity heatmap after the action sweep
+    ├── example-heatmap-after.svg      # Same repo, complexity heatmap after the action sweep
+    ├── example-heatmap-ktor.svg       # /assess heatmap of ktor (Kotlin), 5.5/8 - public-repo gallery
+    ├── example-heatmap-llamacpp.svg   # /assess heatmap of llama.cpp (C/C++), 4.0/8 - public-repo gallery
+    └── example-heatmap-candle.svg     # /assess heatmap of candle (Rust), 2.5/8 - public-repo gallery
 ```
 
 Each subtree has a base doc that the [Map of Content](docs/index.md) links to: [`agents/README.md`](agents/README.md), [`commands/README.md`](commands/README.md), and [`skills/README.md`](skills/README.md).
