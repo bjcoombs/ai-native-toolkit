@@ -123,7 +123,7 @@ The ZIPs are rebuilt automatically from the same source on every plugin version 
 
 ### Install (claude.ai web - verified path)
 
-1. Download `assess.zip`, `huddle.zip`, and `deslop.zip` from the [standalone-skills-latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/tag/standalone-skills-latest).
+1. Download `assess.zip`, `huddle.zip`, and `deslop.zip` from the [newest standalone-skills release](https://github.com/bjcoombs/ai-native-toolkit/releases?q=standalone-skills&expanded=true) (a fresh `standalone-skills-vX.Y.Z` release is published on every plugin version bump; pick the one at the top).
 2. Open https://claude.ai/customize/skills (or sidebar → Customize → Skills).
 3. Click the **+** at the top right of the Skills column.
 4. Hover **Create skill →** then click **Upload a skill**.
@@ -136,7 +136,7 @@ Claude Desktop has the same Skills uploader under Settings; the flow is analogou
 
 The Skills UI has a built-in **Replace** option - use it instead of uninstalling and re-uploading (Replace preserves any in-progress chats that reference the skill).
 
-1. Download the new `assess.zip` / `huddle.zip` / `deslop.zip` from [standalone-skills-latest](https://github.com/bjcoombs/ai-native-toolkit/releases/tag/standalone-skills-latest).
+1. Download the new `assess.zip` / `huddle.zip` / `deslop.zip` from the [newest standalone-skills release](https://github.com/bjcoombs/ai-native-toolkit/releases?q=standalone-skills&expanded=true) (the top `standalone-skills-vX.Y.Z` entry).
 2. In Customize → Skills, click the skill you want to upgrade.
 3. Open the three-dot menu (⋮) in the top right of the detail pane.
 4. Click **Replace** and select the new `.zip`.
