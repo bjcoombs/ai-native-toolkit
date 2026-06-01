@@ -58,6 +58,80 @@ def test_verifiable_outcomes_only_in_good(good_text: str, bad_text: str) -> None
     assert count_verifiable_outcomes(bad_text) == 0
 
 
+# --- JVM / build-tool verifiable outcomes (issue #116) --------------------
+# The detector was calibrated for JS/Python phrasing and credited zero
+# verifiable outcomes to Maven/Gradle CLAUDE.md files that contain runnable
+# verification (mvn/gradle/gradlew test, -Dtest=, rg recipes). Recognise
+# those idioms while keeping JS/Python phrase recognition intact.
+
+MAVEN_INSTRUCTIONS = """# Project Guidelines
+
+## Verifying a change
+
+- Run the focused test: `mvn test -Dtest=PaymentServiceTest#refundsAreIdempotent`.
+- Run the full verification gate before opening a PR: `mvn verify`.
+- Confirm no stray TODOs slipped in: `rg "TODO" src/main/java`.
+"""
+
+GRADLE_INSTRUCTIONS = """# Project Guidelines
+
+## Verifying a change
+
+- Run the focused test: `./gradlew test --tests com.example.PaymentServiceTest`.
+- Build and check everything: `./gradlew build check`.
+- Confirm logging uses the wrapper: `rg "System.out" src`.
+"""
+
+
+def test_maven_instructions_score_nonzero_verifiable_outcomes() -> None:
+    # Success criterion for issue #116: a Maven CLAUDE.md with runnable
+    # mvn/rg verification must score a NON-ZERO verifiable_outcomes.
+    assert count_verifiable_outcomes(MAVEN_INSTRUCTIONS) >= 1
+    grade = grade_instructions(MAVEN_INSTRUCTIONS, freshness_days=10)
+    assert grade.subscores["verifiable_outcomes"] >= 1
+
+
+def test_gradle_instructions_score_nonzero_verifiable_outcomes() -> None:
+    assert count_verifiable_outcomes(GRADLE_INSTRUCTIONS) >= 1
+    grade = grade_instructions(GRADLE_INSTRUCTIONS, freshness_days=10)
+    assert grade.subscores["verifiable_outcomes"] >= 1
+
+
+def test_jvm_idioms_do_not_regress_js_python_recognition(good_text: str, bad_text: str) -> None:
+    # Existing phrase-based recognition stays intact: the good JS/Python
+    # fixture still credits a verifiable outcome, the bad one still none.
+    assert count_verifiable_outcomes(good_text) >= 1
+    assert count_verifiable_outcomes(bad_text) == 0
+
+
+def test_jvm_patterns_do_not_false_match_prose() -> None:
+    # High precision: prose that merely mentions Maven/Gradle without a
+    # runnable command must not be credited as a verifiable outcome.
+    prose = (
+        "# Guidelines\n\n"
+        "This is a Maven project that uses Gradle elsewhere. "
+        "We care about testing and verifying our work generally.\n"
+    )
+    assert count_verifiable_outcomes(prose) == 0
+
+
+def test_rg_prose_mention_is_not_credited() -> None:
+    # A bare reference to ripgrep without a runnable recipe (no flag, no
+    # quoted query) must not count as a verifiable outcome.
+    prose = (
+        "# Guidelines\n\n"
+        "You can use rg to find things, and rg or grep are both useful. "
+        "The rg tool is fast.\n"
+    )
+    assert count_verifiable_outcomes(prose) == 0
+
+
+def test_rg_recipe_with_flag_is_credited() -> None:
+    # A real ripgrep recipe (flag-driven, unquoted query) is verifiable.
+    text = "# Guidelines\n\nCheck for leftovers: `rg -n TODO src/main/java`.\n"
+    assert count_verifiable_outcomes(text) >= 1
+
+
 def test_grade_returns_letter_grade(good_text: str, bad_text: str) -> None:
     good = grade_instructions(good_text, freshness_days=10)
     bad = grade_instructions(bad_text, freshness_days=10)
