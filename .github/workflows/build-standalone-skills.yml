@@ -45,17 +45,29 @@ jobs:
         if: steps.version-check.outputs.build == 'true' || github.event_name == 'workflow_dispatch'
         run: bash scripts/build-standalone-skills.sh
 
-      - name: Publish to standalone-skills-latest release
+      - name: Publish per-version standalone-skills release
         if: steps.version-check.outputs.build == 'true' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           VERSION=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+          TAG="standalone-skills-v${VERSION}"
 
-          gh release delete standalone-skills-latest --yes 2>/dev/null || true
-          gh release create standalone-skills-latest \
-            --title "Standalone skill ZIPs — latest (v${VERSION})" \
-            --notes "Standalone skill ZIPs for Claude Desktop and claude.ai. Install via Settings → Customize → Skills → Upload Skill. Rebuilt automatically on every plugin version bump." \
+          # GitHub immutable releases permanently reserve a tag once it has backed a
+          # release, so the old rolling "delete standalone-skills-latest then recreate
+          # it" pattern can never succeed again (HTTP 422: tag_name was used by an
+          # immutable release). Publish a unique immutable release per version instead:
+          # one create call carrying all assets, no delete, no post-hoc asset edits
+          # (both forbidden under immutability). Idempotent on re-run: if the release
+          # already exists it is immutable, so skip rather than try to overwrite.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists (immutable) — nothing to publish."
+            exit 0
+          fi
+
+          gh release create "$TAG" \
+            --title "Standalone skill ZIPs — v${VERSION}" \
+            --notes "Standalone skill ZIPs for Claude Desktop and claude.ai, built from plugin v${VERSION}. Install via Settings → Customize → Skills → Upload Skill. A new release is published on every plugin version bump; find the newest at https://github.com/bjcoombs/ai-native-toolkit/releases?q=standalone-skills" \
             --latest=false \
             dist/standalone-skills/*.zip

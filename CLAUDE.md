@@ -134,7 +134,7 @@ bash scripts/build-standalone-skills.sh --dest ~/Desktop  # custom output dir
 - `scripts/tests/test_integration.py` - full-build ZIP content validation (forbidden strings, expected files)
 - Run: `cd scripts && uv run --with pytest pytest -v`
 
-**CI:** `.github/workflows/build-standalone-skills.yml` triggers on `plugin.json` version bumps and publishes to the `standalone-skills-latest` rolling release. `.github/workflows/tests.yml` now runs both the `skills/assess/` suite and the `scripts/` suite on every PR and push.
+**CI:** `.github/workflows/build-standalone-skills.yml` triggers on `plugin.json` version bumps and publishes a per-version immutable release tagged `standalone-skills-v<version>` (one create call, no delete - GitHub immutable releases permanently reserve a tag once it has backed a release, so the old rolling `standalone-skills-latest` delete-and-recreate pattern can never succeed again). The newest is always at `releases?q=standalone-skills`. `.github/workflows/tests.yml` now runs both the `skills/assess/` suite and the `scripts/` suite on every PR and push.
 
 **Marker rules:**
 - `<!-- chat-skip:start/end -->` - wraps content to remove entirely (plugin path resolution, `$ARGUMENTS`, agent-orchestration infrastructure, namespaced slash commands)
