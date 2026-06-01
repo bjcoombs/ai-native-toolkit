@@ -22,3 +22,14 @@
 [Full report](./assess-report.md)
 
 ---
+## 2026-06-01 (v1.23.0)
+
+- **Files scored:** 69
+- **AI Readiness:** 6.0 / 8 (Advanced / Engineered)
+- **Instructions grade:** A
+- **Hotspot transitions:** 2 graduated, 1 regressed, 2 new, 7 persistent
+- **Top action:** Document the assess_core -> scripts/lib seam (add skills/assess/scripts/lib/README.md) so the hidden-coupling cohesion is owned, not just observed
+
+[Full report](./assess-report.md)
+
+---

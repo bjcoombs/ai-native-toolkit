@@ -8,5 +8,7 @@
   "skills/assess/scripts/lib/liveness_scan.py": "2026-05-31",
   "skills/assess/scripts/doc-graph-svg.py": "2026-05-31",
   "skills/assess/tests/test_test_pressure.py": "2026-05-31",
-  "skills/assess/scripts/lib/agent_instructions_grader.py": "2026-05-31"
+  "skills/assess/scripts/lib/agent_instructions_grader.py": "2026-05-31",
+  "skills/assess/scripts/lib/keyhole_signals.py": "2026-06-01",
+  "skills/assess/scripts/lib/change_coupling.py": "2026-06-01"
 }

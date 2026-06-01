@@ -25,5 +25,6 @@ Hotspot (persistent). 482 LOC, max cyclomatic complexity 115.0, 10 commits in ch
 
 ## Suggested actions
 
-- Extend the mypy gate to cover complexity-treemap.py
+- Thin CLI wrapper around lizard/squarify; smoke-tested by design. Add a unit test only if non-trivial logic is added
+- Keep build-artifact and generated-code exclude lists in sync with the doc-graph and liveness scans
 

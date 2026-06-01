@@ -9,82 +9,90 @@
 <line x1="705.4" y1="644.7" x2="782.0" y2="736.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
 <line x1="474.6" y1="573.3" x2="398.1" y2="481.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
 <circle cx="815.2" cy="892.8" r="10.6" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>.github/claude-review-instructions.md
-238 lines · in 0 · out 0 · orphan · 1d stale, subject churn 177</title></circle>
+238 lines · in 0 · out 0 · orphan · 1d stale, subject churn 199</title></circle>
 <circle cx="705.4" cy="644.7" r="9.8" fill="#fff7ec" stroke="#0072B2" stroke-width="3.5"><title>CLAUDE.md
-185 lines · in 0 · out 1 · entry · 1d stale, subject churn 177</title></circle>
+185 lines · in 0 · out 1 · entry · 1d stale, subject churn 199</title></circle>
 <circle cx="474.6" cy="573.3" r="12.2" fill="#fff7ec" stroke="#0072B2" stroke-width="3.5"><title>README.md
-363 lines · in 0 · out 1 · entry · 0d stale, subject churn 177</title></circle>
-<circle cx="734.1" cy="941.4" r="8.2" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/black-hat.md
-97 lines · in 0 · out 0 · orphan · 59d stale, subject churn 177</title></circle>
-<circle cx="643.1" cy="967.3" r="7.3" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/blue-hat.md
-58 lines · in 0 · out 0 · orphan · 59d stale, subject churn 177</title></circle>
-<circle cx="548.6" cy="968.9" r="7.6" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/green-hat.md
-70 lines · in 0 · out 0 · orphan · 59d stale, subject churn 177</title></circle>
-<circle cx="456.8" cy="945.9" r="7.9" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/red-hat.md
-84 lines · in 0 · out 0 · orphan · 59d stale, subject churn 177</title></circle>
-<circle cx="374.2" cy="899.9" r="8.0" fill="#8c0000" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/scribe.md
-86 lines · in 0 · out 0 · orphan · 256d stale, subject churn 177</title></circle>
-<circle cx="306.2" cy="834.2" r="7.6" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/white-hat.md
-70 lines · in 0 · out 0 · orphan · 59d stale, subject churn 177</title></circle>
-<circle cx="257.6" cy="753.1" r="7.3" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/yellow-hat.md
-58 lines · in 0 · out 0 · orphan · 59d stale, subject churn 177</title></circle>
-<circle cx="231.7" cy="662.1" r="5.8" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/6hats.md
-18 lines · in 0 · out 0 · orphan · 58d stale, subject churn 177</title></circle>
-<circle cx="230.1" cy="567.6" r="9.4" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/fix-develop.md
-158 lines · in 0 · out 0 · orphan · 2d stale, subject churn 177</title></circle>
-<circle cx="253.1" cy="475.8" r="8.2" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/fix-pr.md
-97 lines · in 0 · out 0 · orphan · 2d stale, subject churn 177</title></circle>
-<circle cx="299.1" cy="393.2" r="8.5" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/issues.md
-111 lines · in 0 · out 0 · orphan · 2d stale, subject churn 177</title></circle>
-<circle cx="364.8" cy="325.2" r="7.5" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/tm-marathon-config-example.md
-68 lines · in 0 · out 0 · orphan · 2d stale, subject churn 177</title></circle>
-<circle cx="445.9" cy="276.6" r="17.0" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/tm.md
-918 lines · in 0 · out 0 · orphan · 2d stale, subject churn 177</title></circle>
-<circle cx="536.9" cy="250.7" r="8.2" fill="#7f0000" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/understand.md
-94 lines · in 0 · out 0 · orphan · 265d stale, subject churn 177</title></circle>
-<circle cx="631.4" cy="249.1" r="24.0" fill="#fef2e1" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-22-assess-deterministic-wiki.md
-2177 lines · in 0 · out 0 · orphan · 10d stale, subject churn 177</title></circle>
-<circle cx="723.2" cy="272.1" r="19.3" fill="#fef3e2" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-22-assess-v1.5-real-use-fixes.md
-1277 lines · in 0 · out 0 · orphan · 9d stale, subject churn 177</title></circle>
-<circle cx="805.8" cy="318.1" r="19.6" fill="#fef3e4" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-23-standalone-skill-pipeline.md
-1328 lines · in 0 · out 0 · orphan · 8d stale, subject churn 177</title></circle>
-<circle cx="873.8" cy="383.8" r="9.8" fill="#fef5e8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md
-186 lines · in 0 · out 0 · orphan · 4d stale, subject churn 177</title></circle>
-<circle cx="922.4" cy="464.9" r="8.6" fill="#fef5e8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-27-huddle-broadcast-per-recipient.md
-115 lines · in 0 · out 0 · orphan · 4d stale, subject churn 177</title></circle>
-<circle cx="948.3" cy="555.9" r="8.3" fill="#fef5e8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-27-huddle-cli-team-mode-regression.md
-99 lines · in 0 · out 0 · orphan · 4d stale, subject churn 177</title></circle>
-<circle cx="949.9" cy="650.4" r="10.4" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md
-220 lines · in 0 · out 0 · orphan · 3d stale, subject churn 177</title></circle>
-<circle cx="926.9" cy="742.2" r="9.9" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md
-189 lines · in 0 · out 0 · orphan · 3d stale, subject churn 177</title></circle>
-<circle cx="880.9" cy="824.8" r="9.2" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md
-145 lines · in 0 · out 0 · orphan · 3d stale, subject churn 177</title></circle>
-<circle cx="765.0" cy="1059.2" r="18.1" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md
-1080 lines · in 0 · out 0 · orphan · 2d stale, subject churn 177</title></circle>
-<circle cx="434.7" cy="1066.4" r="8.9" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-31-assess-dogfooded.md
-133 lines · in 0 · out 0 · orphan · 0d stale, subject churn 177</title></circle>
-<circle cx="177.1" cy="859.5" r="10.5" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md
-228 lines · in 0 · out 0 · orphan · 2d stale, subject churn 177</title></circle>
-<circle cx="789.3" cy="745.4" r="8.4" fill="#fef6ea" stroke="#b8b8b8" stroke-width="1.0"><title>docs/testing-a-branch-locally.md
-106 lines · in 1 · out 0 · reachable · 2d stale, subject churn 177</title></circle>
-<circle cx="112.6" cy="535.5" r="19.1" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/assess/SKILL.md
-1234 lines · in 0 · out 0 · orphan · 0d stale, subject churn 177</title></circle>
-<circle cx="271.6" cy="245.8" r="8.7" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/deslop/SKILL.md
-120 lines · in 0 · out 0 · orphan · 2d stale, subject churn 177</title></circle>
+363 lines · in 0 · out 1 · entry · 1d stale, subject churn 199</title></circle>
+<circle cx="734.1" cy="941.4" r="13.3" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/assess-layer-scorer.md
+473 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
+<circle cx="643.1" cy="967.3" r="8.2" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/black-hat.md
+97 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
+<circle cx="548.6" cy="968.9" r="7.3" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/blue-hat.md
+58 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
+<circle cx="456.8" cy="945.9" r="7.6" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/green-hat.md
+70 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
+<circle cx="374.2" cy="899.9" r="7.9" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/red-hat.md
+84 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
+<circle cx="306.2" cy="834.2" r="8.0" fill="#8a0000" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/scribe.md
+86 lines · in 0 · out 0 · orphan · 257d stale, subject churn 199</title></circle>
+<circle cx="257.6" cy="753.1" r="7.6" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/white-hat.md
+70 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
+<circle cx="231.7" cy="662.1" r="7.3" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/yellow-hat.md
+58 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
+<circle cx="230.1" cy="567.6" r="5.8" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/6hats.md
+18 lines · in 0 · out 0 · orphan · 58d stale, subject churn 199</title></circle>
+<circle cx="253.1" cy="475.8" r="9.4" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/fix-develop.md
+158 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
+<circle cx="299.1" cy="393.2" r="8.2" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/fix-pr.md
+97 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
+<circle cx="364.8" cy="325.2" r="8.5" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/issues.md
+111 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
+<circle cx="445.9" cy="276.6" r="7.5" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/tm-marathon-config-example.md
+68 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
+<circle cx="536.9" cy="250.7" r="17.0" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/tm.md
+918 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
+<circle cx="631.4" cy="249.1" r="8.2" fill="#7f0000" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/understand.md
+94 lines · in 0 · out 0 · orphan · 265d stale, subject churn 199</title></circle>
+<circle cx="723.2" cy="272.1" r="24.0" fill="#fef2e1" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-22-assess-deterministic-wiki.md
+2177 lines · in 0 · out 0 · orphan · 10d stale, subject churn 199</title></circle>
+<circle cx="805.8" cy="318.1" r="19.3" fill="#fef2e1" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-22-assess-v1.5-real-use-fixes.md
+1277 lines · in 0 · out 0 · orphan · 10d stale, subject churn 199</title></circle>
+<circle cx="873.8" cy="383.8" r="19.6" fill="#fef3e4" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-23-standalone-skill-pipeline.md
+1328 lines · in 0 · out 0 · orphan · 8d stale, subject churn 199</title></circle>
+<circle cx="922.4" cy="464.9" r="9.8" fill="#fef5e8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md
+186 lines · in 0 · out 0 · orphan · 4d stale, subject churn 199</title></circle>
+<circle cx="948.3" cy="555.9" r="8.6" fill="#fef5e7" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-27-huddle-broadcast-per-recipient.md
+115 lines · in 0 · out 0 · orphan · 5d stale, subject churn 199</title></circle>
+<circle cx="949.9" cy="650.4" r="8.3" fill="#fef5e7" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-27-huddle-cli-team-mode-regression.md
+99 lines · in 0 · out 0 · orphan · 5d stale, subject churn 199</title></circle>
+<circle cx="926.9" cy="742.2" r="10.4" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md
+220 lines · in 0 · out 0 · orphan · 3d stale, subject churn 199</title></circle>
+<circle cx="880.9" cy="824.8" r="9.9" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md
+189 lines · in 0 · out 0 · orphan · 3d stale, subject churn 199</title></circle>
+<circle cx="765.0" cy="1059.2" r="9.2" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md
+145 lines · in 0 · out 0 · orphan · 3d stale, subject churn 199</title></circle>
+<circle cx="535.8" cy="1088.9" r="18.1" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md
+1080 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
+<circle cx="318.9" cy="1008.8" r="8.0" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-31-assess-dogfooded-analysis.md
+89 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
+<circle cx="164.2" cy="837.0" r="8.9" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-31-assess-dogfooded.md
+133 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
+<circle cx="107.0" cy="613.0" r="10.5" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md
+228 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
+<circle cx="789.3" cy="745.4" r="8.4" fill="#fef6e9" stroke="#b8b8b8" stroke-width="1.0"><title>docs/testing-a-branch-locally.md
+106 lines · in 1 · out 0 · reachable · 3d stale, subject churn 199</title></circle>
+<circle cx="527.8" cy="130.0" r="12.0" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/assess/SKILL.md
+346 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
+<circle cx="160.5" cy="388.1" r="11.0" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/assess-findings/SKILL.md
+268 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
+<circle cx="312.3" cy="213.8" r="11.4" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/assess-pr/SKILL.md
+300 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
+<circle cx="757.5" cy="156.0" r="8.7" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/deslop/SKILL.md
+120 lines · in 0 · out 0 · orphan · 3d stale, subject churn 199</title></circle>
 <circle cx="390.7" cy="472.6" r="8.6" fill="#fef6e9" stroke="#b8b8b8" stroke-width="1.0"><title>skills/deslop/references/full-checklist.md
-115 lines · in 1 · out 0 · reachable · 3d stale, subject churn 177</title></circle>
-<circle cx="579.5" cy="126.1" r="8.5" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/ghsync/SKILL.md
-110 lines · in 0 · out 0 · orphan · 0d stale, subject churn 177</title></circle>
-<circle cx="892.4" cy="232.3" r="12.4" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/huddle/SKILL.md
-386 lines · in 0 · out 0 · orphan · 2d stale, subject churn 177</title></circle>
-<circle cx="1063.7" cy="514.8" r="13.1" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/marathon/SKILL.md
-450 lines · in 0 · out 0 · orphan · 2d stale, subject churn 177</title></circle>
-<circle cx="1013.4" cy="841.4" r="10.0" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/pr-review-merge/SKILL.md
-196 lines · in 0 · out 0 · orphan · 2d stale, subject churn 177</title></circle>
+115 lines · in 1 · out 0 · reachable · 3d stale, subject churn 199</title></circle>
+<circle cx="948.9" cy="285.7" r="8.5" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/ghsync/SKILL.md
+110 lines · in 0 · out 0 · orphan · 1d stale, subject churn 199</title></circle>
+<circle cx="1058.0" cy="489.5" r="12.4" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/huddle/SKILL.md
+386 lines · in 0 · out 0 · orphan · 3d stale, subject churn 199</title></circle>
+<circle cx="1059.9" cy="720.7" r="13.1" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/marathon/SKILL.md
+450 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
+<circle cx="954.2" cy="926.3" r="10.0" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/pr-review-merge/SKILL.md
+196 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
 
-<text x="590" y="40" font-size="24" font-weight="600" text-anchor="middle">Doc map — 37 docs, 2 links, 35 islands</text>
-<text x="590" y="66" font-size="14" fill="#555" text-anchor="middle">89% orphaned · 11% reachable from the entry point</text>
+<text x="590" y="40" font-size="24" font-weight="600" text-anchor="middle">Doc map — 41 docs, 2 links, 39 islands</text>
+<text x="590" y="66" font-size="14" fill="#555" text-anchor="middle">90% orphaned · 10% reachable from the entry point</text>
 <defs><linearGradient id="stalegrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff7ec"/><stop offset="0.5" stop-color="#fc8d59"/><stop offset="1" stop-color="#7f0000"/></linearGradient></defs>
 <text x="334" y="1162" font-size="12" fill="#555" text-anchor="end">stable</text>
 <rect x="340" y="1151" width="110" height="12" rx="3" fill="url(#stalegrad)"/>

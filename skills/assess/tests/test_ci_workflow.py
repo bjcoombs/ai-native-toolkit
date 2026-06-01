@@ -30,6 +30,21 @@ def test_render_escapes_shell_vars():
     assert "$default_branch" not in out
 
 
+def test_working_directory_uses_actions_expression_not_shell_var():
+    """`working-directory:` only expands `${{ }}` expressions, not shell `${VAR}`.
+
+    Regression: a `working-directory: ${RUNNER_TEMP}/...` cd's into a literal
+    `${RUNNER_TEMP}` dir and the step dies with 'No such file or directory'. The
+    runner temp dir must be referenced as the GitHub expression `${{ runner.temp }}`.
+    """
+    out = render_ci_workflow(plugin_version="1.23.0")
+    for line in out.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("working-directory:"):
+            assert "${{ runner.temp }}" in stripped, stripped
+            assert "${RUNNER_TEMP}" not in stripped, stripped
+
+
 def test_render_emits_scc_install_step():
     out = render_ci_workflow(plugin_version="1.23.0", discovered_tools=["lizard", "scc"])
     assert "Install scc" in out

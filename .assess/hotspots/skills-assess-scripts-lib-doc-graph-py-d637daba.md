@@ -25,5 +25,6 @@ Hotspot (persistent). 514 LOC, max cyclomatic complexity 169.0, 7 commits in chu
 
 ## Suggested actions
 
-- Pilot mutation testing here - high aggregate ccn (169) across many simple functions is where a survivor cluster would hide
+- High file-aggregate ccn (169) is many small functions, not a monster - worst single function is ccn 23, under the 15-gate only via # noqa. Leave as-is unless adding behaviour
+- If extended, add a characterization test pinning current graph output before refactoring
 
