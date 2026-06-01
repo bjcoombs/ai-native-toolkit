@@ -166,32 +166,12 @@ def _positive_number(section: dict, key: str) -> float | None:
     return float(value) if value > 0 else None
 
 
-def load_gate_config(repo_root: Path) -> dict:
-    """Return the ``[gate]`` settings from ``.assess/config.toml``.
+def _parse_gate_section(cfg: dict) -> dict:
+    """Build the gate settings from an already-parsed config dict.
 
-    The gate is the CI regression check (``assess_gate.py``). Its defaults are
-    deliberately **warn-only**: a repo that adopts the emitted workflow without
-    writing any config never has a pipeline blocked by surprise. Failing is
-    strictly opt-in via ``fail_on``.
-
-    Returned keys:
-
-    - ``enabled`` (bool, default ``True``): master switch. ``false`` makes the
-      gate always pass while still reporting, so a repo can mute it without
-      deleting the workflow.
-    - ``fail_on`` (list[str], default ``[]``): finding names whose presence (a
-      non-empty ``paths`` list) fails the gate. Empty means warn-only.
-    - ``warn_on`` (list[str], default = every concern finding): finding names
-      reported but non-blocking. An explicit empty list silences warnings.
-    - ``ccn_p95_max`` (float | None): fail when the p95 file CCN exceeds this.
-    - ``containment_min`` (float | None): fail when the safe-zone containment
-      ratio drops below this (0-1).
-
-    Honours the same "degrade silently" contract as the other loaders: a missing
-    file, missing section, or malformed value falls back to the default rather
-    than blocking the assessment.
+    Split from ``load_gate_config`` so the same normalization serves both the
+    convention path (``.assess/config.toml``) and an explicit ``--config`` file.
     """
-    cfg = load_config(repo_root)
     gate = cfg.get("gate", {})
     if not isinstance(gate, dict):
         gate = {}
@@ -203,13 +183,70 @@ def load_gate_config(repo_root: Path) -> dict:
         else list(GATE_CONCERN_FINDINGS)
     )
     enabled = gate.get("enabled", True)
+    fail_on_regression = gate.get("fail_on_regression", False)
     return {
         "enabled": enabled if isinstance(enabled, bool) else True,
         "fail_on": _string_list(gate, "fail_on"),
         "warn_on": warn_on,
         "ccn_p95_max": _positive_number(gate, "ccn_p95_max"),
         "containment_min": _positive_number(gate, "containment_min"),
+        "fail_on_regression": (
+            fail_on_regression if isinstance(fail_on_regression, bool) else False
+        ),
     }
+
+
+def load_gate_config(repo_root: Path) -> dict:
+    """Return the ``[gate]`` settings from ``.assess/config.toml``.
+
+    The gate is the CI check run by ``assess_gate.py``. Its defaults are
+    deliberately **warn-only**: a repo that adopts the emitted workflow without
+    writing any config never has a pipeline blocked by surprise. Every way to
+    fail is strictly opt-in.
+
+    Returned keys:
+
+    - ``enabled`` (bool, default ``True``): master switch. ``false`` makes the
+      gate always pass while still reporting, so a repo can mute it without
+      deleting the workflow.
+    - ``fail_on`` (list[str], default ``[]``): finding names whose presence (a
+      non-empty ``paths`` list) fails the gate - an AI-readiness *floor*. Empty
+      means warn-only.
+    - ``warn_on`` (list[str], default = every concern finding): finding names
+      reported but non-blocking. An explicit empty list silences warnings.
+    - ``ccn_p95_max`` (float | None): floor - fail when the p95 file CCN exceeds.
+    - ``containment_min`` (float | None): floor - fail when the safe-zone
+      containment ratio drops below this (0-1).
+    - ``fail_on_regression`` (bool, default ``False``): true *regression* check -
+      fail when the cross-run diff (computed by ``assess_core`` against the prior
+      committed snapshot) reports hotspots whose complexity/churn increased.
+
+    Honours the same "degrade silently" contract as the other loaders: a missing
+    file, missing section, or malformed value falls back to the default rather
+    than blocking the assessment.
+    """
+    return _parse_gate_section(load_config(repo_root))
+
+
+def load_gate_config_file(config_path: Path) -> dict:
+    """Return the ``[gate]`` settings from an explicit TOML file path.
+
+    Used to honour ``assess_gate.py --config <path>`` when the gate config lives
+    somewhere other than the conventional ``.assess/config.toml``. Degrades the
+    same way as ``load_config``: a missing or malformed file yields defaults.
+    """
+    config_path = config_path.resolve()
+    if not config_path.is_file():
+        return _parse_gate_section({})
+    try:
+        cfg = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, OSError) as e:
+        print(
+            f"warning: could not read {config_path} ({e}); continuing with defaults",
+            file=sys.stderr,
+        )
+        cfg = {}
+    return _parse_gate_section(cfg)
 
 
 def load_excludes(repo_root: Path) -> tuple[set[str], list[str]]:

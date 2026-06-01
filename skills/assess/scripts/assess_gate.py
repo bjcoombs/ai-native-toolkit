@@ -1,17 +1,25 @@
-"""CI regression gate for /assess - the enforcement half of the frozen harness.
+"""CI gate for /assess - the enforcement half of the frozen harness.
 
 Reads ``.assess/run-context.json`` (written by ``assess_core.py``) and the
 ``[gate]`` section of ``.assess/config.toml``, then decides whether the current
-snapshot represents a regression worth failing a pull request over.
+snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
+
+- **Readiness floors** (absolute, evaluated on the current snapshot): a finding
+  in ``fail_on`` is present, p95 complexity exceeds ``ccn_p95_max``, or the
+  safe-zone containment ratio drops below ``containment_min``.
+- **Regression** (cross-run): with ``fail_on_regression = true``, fail when the
+  diff ``assess_core`` computed against the prior committed snapshot reports
+  hotspots whose complexity/churn increased. This needs a prior snapshot and a
+  reliable diff; on a first run or an unreliable diff it is skipped, never
+  fired - a freshly-cloned repo never trips a regression gate on its first PR.
 
 The defaults are warn-only: with no config, every finding is reported but
 nothing fails, so adopting the emitted workflow never blocks a pipeline by
-surprise. Failing is strictly opt-in (``fail_on``, ``ccn_p95_max``,
-``containment_min``).
+surprise.
 
 Exit codes:
-    0  pass (no failing regression, or the gate is disabled / warn-only)
-    1  fail (a fail_on finding is present, or a threshold was breached)
+    0  pass (nothing failing, or the gate is disabled / warn-only)
+    1  fail (a floor was breached, or an opted-in regression fired)
     2  usage error (missing run-context, bad arguments)
 
 Run:
@@ -28,7 +36,7 @@ from pathlib import Path
 from typing import Any
 
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
-from lib.assess_config import load_gate_config
+from lib.assess_config import load_gate_config, load_gate_config_file
 
 
 def _findings_by_name(ctx: dict) -> dict[str, dict]:
@@ -115,6 +123,30 @@ def check_containment_threshold(ctx: dict, gate: dict) -> list[dict]:
     return []
 
 
+def check_diff_regression(ctx: dict, gate: dict) -> list[dict]:
+    """Return a regression breach when the cross-run diff reports a worsening.
+
+    Only fires when ``fail_on_regression`` is set AND there is a reliable diff
+    against a prior committed snapshot. ``assess_core`` already computed the diff
+    (graduated / new / regressed) into the run-context; "regressed" is its term
+    for hotspots whose complexity or churn increased since the prior run. On a
+    first run (no prior) or an unreliable diff (version-mismatched filter), it
+    returns nothing - a freshly-adopted repo can't trip a regression gate.
+    """
+    if not gate.get("fail_on_regression"):
+        return []
+    if not ctx.get("prior_stats_exists") or not ctx.get("diff_reliable", True):
+        return []
+    regressed = ctx.get("diff_detail", {}).get("regressed", [])
+    if not regressed:
+        return []
+    return [{
+        "metric": "regressed_hotspots",
+        "count": len(regressed),
+        "paths": [r.get("path", "?") for r in regressed[:5]],
+    }]
+
+
 def evaluate(ctx: dict, gate: dict) -> dict:
     """Run every check and return a structured verdict.
 
@@ -123,7 +155,11 @@ def evaluate(ctx: dict, gate: dict) -> dict:
     always reports ``failed = False``.
     """
     failures, warnings = check_finding_regressions(ctx, gate)
-    threshold_breaches = check_complexity_threshold(ctx, gate) + check_containment_threshold(ctx, gate)
+    threshold_breaches = (
+        check_complexity_threshold(ctx, gate)
+        + check_containment_threshold(ctx, gate)
+        + check_diff_regression(ctx, gate)
+    )
     blocking = bool(failures or threshold_breaches)
     return {
         "enabled": gate.get("enabled", True),
@@ -136,14 +172,21 @@ def evaluate(ctx: dict, gate: dict) -> dict:
 
 def format_verdict(verdict: dict) -> str:
     """Render a human-readable summary for the CI log."""
-    lines: list[str] = ["/assess regression gate"]
+    lines: list[str] = ["/assess gate"]
     if not verdict["enabled"]:
         lines.append("  gate disabled in config - reporting only, never failing")
     for breach in verdict["threshold_breaches"]:
-        lines.append(
-            f"  FAIL threshold: {breach['metric']} = {breach['value']} "
-            f"(max/min {breach['threshold']})"
-        )
+        if breach["metric"] == "regressed_hotspots":
+            sample = ", ".join(breach["paths"])
+            lines.append(
+                f"  FAIL regression: {breach['count']} hotspot(s) worsened since "
+                f"the prior snapshot ({sample})"
+            )
+        else:
+            lines.append(
+                f"  FAIL threshold: {breach['metric']} = {breach['value']} "
+                f"(max/min {breach['threshold']})"
+            )
     for f in verdict["failures"]:
         sample = ", ".join(f["paths"])
         lines.append(f"  FAIL finding: {f['finding']} x{f['count']} ({sample})")
@@ -164,16 +207,18 @@ def load_context(repo_root: Path) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    # --config is accepted for symmetry with the emitted workflow, but the gate
-    # config is read from the repo's .assess/config.toml via load_gate_config,
-    # so the flag's value is informational (it points at that same file). Consume
-    # both the flag and its value so the value isn't mistaken for the repo root.
+    # --config points the gate at a config file outside the conventional
+    # .assess/config.toml. Consume both the flag and its value so the value
+    # isn't mistaken for the positional repo root.
+    config_path: str | None = None
     positional: list[str] = []
     i = 0
     while i < len(args):
         arg = args[i]
         if arg == "--config":
-            i += 2  # skip the flag and its value
+            if i + 1 < len(args):
+                config_path = args[i + 1]
+            i += 2
             continue
         if arg.startswith("-"):
             i += 1
@@ -193,7 +238,11 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    gate = load_gate_config(repo_root)
+    gate = (
+        load_gate_config_file(Path(config_path))
+        if config_path is not None
+        else load_gate_config(repo_root)
+    )
     verdict = evaluate(ctx, gate)
     print(format_verdict(verdict))
     return 1 if verdict["failed"] else 0

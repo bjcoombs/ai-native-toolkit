@@ -13,12 +13,17 @@ from pathlib import Path
 from assess_gate import (
     check_complexity_threshold,
     check_containment_threshold,
+    check_diff_regression,
     check_finding_regressions,
     evaluate,
     format_verdict,
     main,
 )
-from lib.assess_config import GATE_CONCERN_FINDINGS, load_gate_config
+from lib.assess_config import (
+    GATE_CONCERN_FINDINGS,
+    load_gate_config,
+    load_gate_config_file,
+)
 from lib.keyhole_signals import FINDING_ORDER
 
 
@@ -34,6 +39,15 @@ def _ctx(
         "stats_summary": {"ccn": {"p95": ccn_p95}},
         "keyhole_summary": {"safe_zones": safe_zones, "total_concerns": total_concerns},
     }
+
+
+def _diff_ctx(regressed: list[dict] | None = None, prior: bool = True, reliable: bool = True) -> dict:
+    """A run-context carrying the cross-run diff the regression check reads."""
+    ctx = _ctx([])
+    ctx["prior_stats_exists"] = prior
+    ctx["diff_reliable"] = reliable
+    ctx["diff_detail"] = {"regressed": regressed or []}
+    return ctx
 
 
 def _write_config(tmp_path: Path, body: str) -> Path:
@@ -176,6 +190,70 @@ def test_containment_no_units_scored():
     ) == []
 
 
+# --- cross-run regression -------------------------------------------------
+
+
+def test_regression_not_opted_in():
+    ctx = _diff_ctx(regressed=[{"path": "a.py"}])
+    assert check_diff_regression(ctx, {"fail_on_regression": False}) == []
+
+
+def test_regression_fires_when_opted_in():
+    ctx = _diff_ctx(regressed=[{"path": "a.py"}, {"path": "b.py"}])
+    breaches = check_diff_regression(ctx, {"fail_on_regression": True})
+    assert breaches[0]["metric"] == "regressed_hotspots"
+    assert breaches[0]["count"] == 2
+    assert breaches[0]["paths"] == ["a.py", "b.py"]
+
+
+def test_regression_skipped_on_first_run():
+    """No prior snapshot -> a freshly-cloned repo can't trip the regression gate."""
+    ctx = _diff_ctx(regressed=[{"path": "a.py"}], prior=False)
+    assert check_diff_regression(ctx, {"fail_on_regression": True}) == []
+
+
+def test_regression_skipped_when_diff_unreliable():
+    ctx = _diff_ctx(regressed=[{"path": "a.py"}], reliable=False)
+    assert check_diff_regression(ctx, {"fail_on_regression": True}) == []
+
+
+def test_regression_clean_diff_no_breach():
+    ctx = _diff_ctx(regressed=[])
+    assert check_diff_regression(ctx, {"fail_on_regression": True}) == []
+
+
+def test_load_gate_config_fail_on_regression_default_false(tmp_path):
+    assert load_gate_config(tmp_path)["fail_on_regression"] is False
+
+
+def test_load_gate_config_reads_fail_on_regression(tmp_path):
+    _write_config(tmp_path, "[gate]\nfail_on_regression = true\n")
+    assert load_gate_config(tmp_path)["fail_on_regression"] is True
+
+
+def test_regression_breach_renders_in_verdict():
+    ctx = _diff_ctx(regressed=[{"path": "hot.py"}])
+    verdict = evaluate(ctx, {"enabled": True, "fail_on": [], "warn_on": [], "fail_on_regression": True})
+    assert verdict["failed"] is True
+    assert "FAIL regression" in format_verdict(verdict)
+
+
+# --- explicit --config file -----------------------------------------------
+
+
+def test_load_gate_config_file_reads_explicit_path(tmp_path):
+    cfg = tmp_path / "custom.toml"
+    cfg.write_text('[gate]\nfail_on = ["lying_map"]\n', encoding="utf-8")
+    gate = load_gate_config_file(cfg)
+    assert gate["fail_on"] == ["lying_map"]
+
+
+def test_load_gate_config_file_missing_uses_defaults(tmp_path):
+    gate = load_gate_config_file(tmp_path / "nope.toml")
+    assert gate["fail_on"] == []
+    assert gate["enabled"] is True
+
+
 # --- evaluate + verdict ---------------------------------------------------
 
 
@@ -239,6 +317,15 @@ def test_main_accepts_config_flag_without_consuming_repo_root(tmp_path):
     _write_ctx(tmp_path, _ctx([]))
     cfg = tmp_path / ".assess" / "config.toml"
     assert main([str(tmp_path), "--config", str(cfg)]) == 0
+
+
+def test_main_honors_explicit_config_path(tmp_path):
+    """--config pointing at a relocated file drives the gate, not .assess/."""
+    _write_ctx(tmp_path, _ctx([{"name": "lying_map", "paths": ["doc.md"]}]))
+    cfg = tmp_path / "elsewhere.toml"
+    cfg.write_text('[gate]\nfail_on = ["lying_map"]\n', encoding="utf-8")
+    # No .assess/config.toml exists, so this fails only if --config is honored.
+    assert main([str(tmp_path), "--config", str(cfg)]) == 1
 
 
 def test_main_missing_context_is_usage_error(tmp_path, capsys):

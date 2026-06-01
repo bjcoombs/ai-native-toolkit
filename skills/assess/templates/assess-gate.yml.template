@@ -2,10 +2,16 @@
 # Re-run /assess and choose "Freeze this into a repeatable check?" to regenerate.
 #
 # This workflow runs the deterministic /assess core on every pull request and
-# fails (or warns - see .assess/config.toml [gate]) when an AI-readiness
-# regression appears: a new lying map, a containment drop, or p95 complexity
-# rising past the configured threshold. No AI is in this loop - it is the frozen
-# contract version of the assessment you just ran by hand.
+# gates on the [gate] section of .assess/config.toml. Two kinds of check, both
+# warn-only until you opt in: AI-readiness FLOORS (a fail_on finding present, a
+# containment drop, p95 complexity past a threshold) evaluated on the current
+# snapshot, and a true REGRESSION check (fail_on_regression) against the prior
+# committed snapshot. No AI is in this loop - it is the frozen contract version
+# of the assessment you just ran by hand.
+#
+# Note: this clones ai-native-toolkit at the tag v$plugin_version, which must
+# exist upstream before the first gated PR runs (the marathon's release step
+# creates it). Running a fork of the toolkit means editing the clone URL below.
 name: Assess Gate
 
 on:

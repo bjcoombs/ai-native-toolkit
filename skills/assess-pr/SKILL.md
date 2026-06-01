@@ -218,7 +218,7 @@ After the PR and issue offers, surface a third - the one that converts `/assess`
 > **Freeze this into a repeatable check?** I can emit a GitHub Action that:
 > - Runs the deterministic toolchain on every PR (the exact tools this run found),
 > - Renders the metrics report via `assess_report.py`,
-> - Gates on regression (a new lying map, a containment drop, p95 complexity rising past a threshold).
+> - Gates on AI-readiness floors (a flagged finding present, a containment drop, p95 complexity past a threshold) and, if you opt in, on cross-run regressions against the prior committed snapshot.
 >
 > This turns `/assess` from a thing-you-run into a thing-that-runs. No AI in the loop - it is the frozen, contract version of the assessment you just ran by hand.
 
@@ -241,20 +241,23 @@ uv run "$SKILL_DIR/scripts/assess_emit_workflow.py" "$REPO_ROOT"
 
 This writes `.github/workflows/assess-gate.yml` (relative to the repo root). The script auto-detects the default branch and the discovered tools; override with `--branch <name>` or `--tools lizard,scc,...` when the run found a different toolchain (e.g. a per-language dead-code tool).
 
-**Tell the user about the gate config.** The emitted workflow runs `assess_gate.py`, which reads the optional `[gate]` section of `.assess/config.toml` (relative to the repo root) and is **warn-only by default** - it reports every finding but fails nothing until the repo opts in. Point them at the knobs:
+**Heads-up on the toolkit version pin.** The emitted workflow clones `ai-native-toolkit` at the tag `v<version>` matching this run. That tag must exist upstream before the first gated PR runs - it is published by the marathon's release step, so a workflow emitted in the same minute the version was bumped will fail to bootstrap until the release lands. A repo running a fork of the toolkit must edit the clone URL in the generated workflow.
+
+**Tell the user about the gate config.** The emitted workflow runs `assess_gate.py`, which reads the optional `[gate]` section of `.assess/config.toml` (relative to the repo root) and is **warn-only by default** - it reports every finding but fails nothing until the repo opts in. The gate has two kinds of check: **floors** (absolute, on the current snapshot) and a **regression** check (cross-run, against the prior committed snapshot). Point them at the knobs:
 
 ```toml
 [gate]
-# Findings whose presence (non-empty paths) fails the PR. Empty = warn-only.
+# FLOOR: findings whose presence (non-empty paths) fails the PR. Empty = warn-only.
 fail_on = ["lying_map", "orphaned_understanding"]
 # Findings reported but non-blocking. Omit to warn on every concern; [] silences all.
 warn_on = ["hidden_coupling", "candidate_dead_weight"]
-ccn_p95_max = 120      # fail when the p95 file complexity rises past this
-containment_min = 0.3  # fail when the safe-zone share drops below this (0-1)
-enabled = true         # set false to mute the gate without deleting the workflow
+ccn_p95_max = 120        # FLOOR: fail when the p95 file complexity rises past this
+containment_min = 0.3    # FLOOR: fail when the safe-zone share drops below this (0-1)
+fail_on_regression = true  # REGRESSION: fail when hotspots worsened vs the prior snapshot
+enabled = true           # set false to mute the gate without deleting the workflow
 ```
 
-`fail_on` finding names are the cross-layer findings (`hidden_coupling`, `lying_map`, `unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`, `orphaned_understanding`, `candidate_dead_weight`). The asymmetric-caution default - never block a pipeline by surprise - means a repo that adopts the workflow without writing config gets reports, not red builds.
+`fail_on` finding names are the cross-layer findings (`hidden_coupling`, `lying_map`, `unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`, `orphaned_understanding`, `candidate_dead_weight`). The floors evaluate the current snapshot, so they read as an AI-readiness *floor* (a clean repo never trips them; a long-standing concern trips them every run until fixed). `fail_on_regression` is the true cross-run check - it fires only when the diff against the prior committed snapshot reports a worsening, and is skipped entirely on a first run or an unreliable diff, so a freshly-cloned repo never fails its first gated PR. The asymmetric-caution default - never block a pipeline by surprise - means a repo that adopts the workflow without writing config gets reports, not red builds.
 
 
 ## Step 7: Tool Feedback (Optional)

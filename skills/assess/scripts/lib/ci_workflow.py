@@ -2,9 +2,9 @@
 
 The third end-of-run offer turns ``/assess`` from a thing-you-run into a
 thing-that-runs: it writes a GitHub Action that runs the deterministic core on
-every pull request and gates on regressions via ``assess_gate.py``. The AI
-writes the workflow once, baking in the toolchain this run discovered; from then
-on it is a contract, not a norm.
+every pull request and gates on AI-readiness floors (and, opt-in, cross-run
+regressions) via ``assess_gate.py``. The AI writes the workflow once, baking in
+the toolchain this run discovered; from then on it is a contract, not a norm.
 
 This module renders the workflow from ``templates/assess-gate.yml.template`` (a
 stdlib ``string.Template`` - no new dependency, honouring the deterministic-core
