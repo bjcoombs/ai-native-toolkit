@@ -424,6 +424,46 @@ def test_build_run_context_includes_anomalies_field(tmp_path: Path) -> None:
     assert "ZERO_FILES_SCORED" in codes
 
 
+def test_run_context_has_deterministic_keyhole_products(tmp_path: Path) -> None:
+    """assess-dogfooded Part 1: run-context.json carries the deterministic
+    report-skeleton products - the pre-rendered findings markdown, the keyhole
+    readiness summary, and the prescribed Top-3 actions - plus the eight derived
+    findings (six original + E1/E2 trust axis)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 1, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/a.py", "loc": 100, "ccn": 12, "commits": 3}],
+        "top_complex": [{"path": "src/a.py", "ccn": 12}],
+        "top_large": [{"path": "src/a.py", "loc": 100}],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+
+    # Task 2: deterministic findings markdown is present and well-formed.
+    assert "findings_markdown" in ctx
+    assert ctx["findings_markdown"].startswith(
+        "## Cross-Layer Findings (Keyhole Readiness)"
+    )
+    # Task 3: keyhole readiness summary reported alongside the 0-8 score.
+    assert "keyhole_summary" in ctx
+    assert set(ctx["keyhole_summary"]) == {
+        "concerns", "safe_zones", "total_concerns", "summary_text"
+    }
+    # Task 4: prescribed actions array exists (possibly empty for a clean repo).
+    assert "prescribed_actions" in ctx
+    assert isinstance(ctx["prescribed_actions"], list)
+    # Task 5: derived findings now carry the eight named axes in fixed order.
+    names = [f["name"] for f in ctx["derived_findings"]]
+    assert names == [
+        "hidden_coupling", "lying_map", "unexplained_complexity",
+        "untrusted_hotspot", "self_referential_tests",
+        "orphaned_understanding", "candidate_dead_weight", "refactor_boundary",
+    ]
+
+
 def test_instructions_grade_is_None_when_no_files(tmp_path: Path) -> None:
     """When no instruction file exists, instructions_grade is None (not 'F').
 
@@ -519,6 +559,7 @@ def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
     findings = ctx["derived_findings"]
     assert findings, "derived_findings must not be empty"
     expected = {"hidden_coupling", "lying_map", "unexplained_complexity",
+                "untrusted_hotspot", "self_referential_tests",
                 "orphaned_understanding", "candidate_dead_weight", "refactor_boundary"}
     assert {f["name"] for f in findings} == expected
     for f in findings:

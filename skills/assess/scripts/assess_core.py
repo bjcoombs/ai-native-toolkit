@@ -716,21 +716,6 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
             extra_exclude_dirs=extra_exclude_dirs,
         ).as_dict(),
     )
-    keyhole = integrate_keyhole_signals(
-        repo_root=repo_root,
-        complexity_stats=current,
-        doc_staleness=doc_staleness if isinstance(doc_staleness, dict) else {},
-        dead_code=ctx["dead_code"],
-        observability=ctx["observability"],
-        structure=structure,
-    )
-    ctx["structure"] = keyhole["structure"]
-    ctx["behaviour"] = keyhole["behaviour"]
-    ctx["documentation"] = keyhole["documentation"]
-    ctx["understanding"] = keyhole["understanding"]
-    ctx["runtime"] = keyhole["runtime"]
-    ctx["derived_findings"] = keyhole["derived_findings"]
-    ctx["attention"] = keyhole["attention"]
 
     # Layer 1 write-side truth pressure: does the suite pin behaviour down, or
     # merely visit it? Best-effort like every other read-side scan. opt_in=False
@@ -738,6 +723,8 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # /assess stays read-only and fast - the cheap hollow-test heuristics and
     # mutation-config detection still run. hot_files come from the current top
     # hotspots so an opt-in mutation run would target the files that matter most.
+    # Scanned before the keyhole integrate so the E1 trust axis can cross the
+    # mutation survivor density with the complexity hotspots.
     hot_files = [h.get("path") for h in current.get("top_hotspots", [])
                  if h.get("path")]
     test_pressure = _safe(
@@ -766,6 +753,30 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
             "duplicate_truth": [],
         },
     }
+
+    keyhole = integrate_keyhole_signals(
+        repo_root=repo_root,
+        complexity_stats=current,
+        doc_staleness=doc_staleness if isinstance(doc_staleness, dict) else {},
+        dead_code=ctx["dead_code"],
+        observability=ctx["observability"],
+        structure=structure,
+        test_pressure=ctx["test_pressure"],
+    )
+    ctx["structure"] = keyhole["structure"]
+    ctx["behaviour"] = keyhole["behaviour"]
+    ctx["documentation"] = keyhole["documentation"]
+    ctx["understanding"] = keyhole["understanding"]
+    ctx["runtime"] = keyhole["runtime"]
+    ctx["derived_findings"] = keyhole["derived_findings"]
+    ctx["attention"] = keyhole["attention"]
+    # Deterministic report-skeleton products (assess-dogfooded Part 1): the
+    # pre-rendered findings section the LLM copies verbatim, the keyhole
+    # readiness summary reported alongside (never merged into) the 0-8 score, and
+    # the mandatory attention-derived Top-3 actions.
+    ctx["findings_markdown"] = keyhole["findings_markdown"]
+    ctx["keyhole_summary"] = keyhole["keyhole_summary"]
+    ctx["prescribed_actions"] = keyhole["prescribed_actions"]
 
     ctx["plugin_version"] = _read_plugin_version()
     ctx["anomalies"] = [

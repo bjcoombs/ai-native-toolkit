@@ -13,6 +13,7 @@ from lib.change_coupling import (
     authorship_analysis,
     change_coupling_pairs,
     containment_ratio,
+    find_self_referential_tests,
     parse_commit_file_sets,
 )
 
@@ -286,3 +287,49 @@ def test_authorship_contributor_line_stats(tmp_path: Path) -> None:
     # First commit adds 2 lines; second adds 1 more. 3 added total, 0 removed.
     assert alice["lines_added"] == 3
     assert alice["lines_removed"] == 0
+
+
+# --- E2: find_self_referential_tests ------------------------------------------
+
+def test_self_referential_test_same_commit_flagged(tmp_path: Path) -> None:
+    """Test + code introduced in one commit -> self-referential."""
+    repo = _init_repo(tmp_path)
+    _commit(repo, {"pkg/svc.go": "package pkg",
+                   "pkg/svc_test.go": "package pkg"}, "feat: svc + test together")
+    result = find_self_referential_tests(
+        repo, {"pkg/svc_test.go": "pkg/svc.go"}
+    )
+    assert result == [{
+        "test_file": "pkg/svc_test.go",
+        "source_file": "pkg/svc.go",
+        "reason": "test added in same commit as code",
+    }]
+
+
+def test_self_referential_test_separate_commits_not_flagged(tmp_path: Path) -> None:
+    """Code first, test in a later commit -> not the same-commit signal."""
+    repo = _init_repo(tmp_path)
+    _commit(repo, {"pkg/svc.go": "package pkg"}, "feat: svc")
+    _commit(repo, {"pkg/svc_test.go": "package pkg"}, "test: svc")
+    result = find_self_referential_tests(
+        repo, {"pkg/svc_test.go": "pkg/svc.go"}
+    )
+    assert result == []
+
+
+def test_self_referential_test_empty_map_returns_empty(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _commit(repo, {"a.py": "1"}, "c1")
+    assert find_self_referential_tests(repo, {}) == []
+
+
+def test_self_referential_test_reuses_passed_commit_sets(tmp_path: Path) -> None:
+    """commit_sets passed in (the orchestrator's single git-log parse) is used
+    directly - no second git call needed."""
+    repo = _init_repo(tmp_path)
+    _commit(repo, {"m.py": "1", "test_m.py": "1"}, "feat+test")
+    commit_sets = parse_commit_file_sets(repo)
+    result = find_self_referential_tests(
+        repo, {"test_m.py": "m.py"}, commit_sets=commit_sets
+    )
+    assert [r["source_file"] for r in result] == ["m.py"]

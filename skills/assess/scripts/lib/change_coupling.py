@@ -378,3 +378,43 @@ def authorship_analysis(repo_root: Path, path: Path | str) -> dict:  # noqa: C90
         "intent_source": intent_source,
         "contributors": contributor_list,
     }
+
+
+# --- E2: self-referential test authorship -------------------------------------
+
+def find_self_referential_tests(
+    repo_root: Path,
+    test_to_code_map: dict[str, str],
+    commit_sets: list[set[Path]] | None = None,
+) -> list[dict]:
+    """E2: tests added in the same commit as the code they cover.
+
+    A test introduced alongside its subject in one commit risks verifying
+    *internal consistency* (the author's mental model at the moment of writing)
+    rather than *truth* (independently specified behaviour). This is the
+    high-precision, same-commit signal: each ``{test_file, source_file}`` pair
+    from ``test_to_code_map`` is flagged when at least one commit touches both
+    files. It deliberately does NOT chase code+tests split across two commits -
+    start with the precise signal, measure the miss rate before widening.
+
+    ``commit_sets`` is reused from the orchestrator's single ``git log`` parse
+    when supplied; otherwise it is parsed here. Returns a list of
+    ``{test_file, source_file, reason}`` dicts, sorted by ``test_file`` for
+    determinism. Empty map or no git history yields ``[]``.
+    """
+    if not test_to_code_map:
+        return []
+    if commit_sets is None:
+        commit_sets = parse_commit_file_sets(Path(repo_root))
+    commit_path_sets = [{str(f) for f in files} for files in commit_sets]
+    self_ref: list[dict] = []
+    for test_file, source_file in sorted(test_to_code_map.items()):
+        for paths in commit_path_sets:
+            if test_file in paths and source_file in paths:
+                self_ref.append({
+                    "test_file": test_file,
+                    "source_file": source_file,
+                    "reason": "test added in same commit as code",
+                })
+                break
+    return self_ref

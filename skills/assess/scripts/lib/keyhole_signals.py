@@ -22,6 +22,7 @@ structured data + the named findings; the LLM write-back fills judgement later.
 """
 from __future__ import annotations
 
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from lib.change_coupling import (
     authorship_analysis,
     change_coupling_pairs,
     containment_ratio,
+    find_self_referential_tests,
     parse_commit_file_sets,
 )
 from lib.coupling_analysis import detect_hidden_coupling, find_refactor_boundaries
@@ -59,6 +61,8 @@ FINDING_ORDER = [
     "hidden_coupling",
     "lying_map",
     "unexplained_complexity",
+    "untrusted_hotspot",  # E1: complex churning code with hollow tests
+    "self_referential_tests",  # E2: tests authored with the code they cover
     "orphaned_understanding",
     "candidate_dead_weight",
     "refactor_boundary",
@@ -67,10 +71,28 @@ FINDING_ACTIONS = {
     "hidden_coupling": "investigate the seam",
     "lying_map": "fix or delete the doc",
     "unexplained_complexity": "write the missing contract (do NOT auto-generate)",
+    "untrusted_hotspot": "strengthen tests to pin observable behaviour (not internal state)",
+    "self_referential_tests": "request human review - tests verify internal consistency, not truth",
     "orphaned_understanding": "assign a human anchor before further change",
     "candidate_dead_weight": "verify liveness, then delete if dead",
     "refactor_boundary": "safe to hand an agent in isolation",
 }
+
+# Source-file suffix/stem markers that mean a file IS itself a test (so it never
+# needs - and never maps to - a separate sibling test). Mirrors the same idiom
+# list assess_core uses for its co-location check, kept self-contained here so
+# the lib layer never imports back up into the orchestrator.
+_TEST_SIBLING_BUILDERS = [
+    lambda stem, ext: f"{stem}_test{ext}",    # Go, Python (pytest co-located)
+    lambda stem, ext: f"{stem}.test{ext}",    # JS/TS (jest)
+    lambda stem, ext: f"{stem}.spec{ext}",    # JS/TS/Angular (jasmine/jest)
+    lambda stem, ext: f"{stem}_spec{ext}",    # Ruby (rspec), some JS
+    lambda stem, ext: f"test_{stem}{ext}",    # Python (unittest)
+    lambda stem, ext: f"{stem}Test{ext}",     # Java/Kotlin/C# (JUnit)
+    lambda stem, ext: f"{stem}Tests{ext}",    # C#/Swift (XCTest)
+]
+_ADJACENT_TEST_DIRS = ["__tests__", "tests", "test", "spec"]
+_IS_TEST_RE = re.compile(r"(^test_|_test$|\.test$|\.spec$|_spec$|Tests?$)")
 
 
 # --------------------------------------------------------------------------
@@ -377,6 +399,267 @@ def build_attention_list(
 
 
 # --------------------------------------------------------------------------
+# E1 - untrusted hotspots (complexity x hollow tests)
+# --------------------------------------------------------------------------
+
+# A hotspot is "untrusted" when at least this fraction of its mutants survive -
+# the suite runs the code but doesn't pin it. Asymmetric like dead-weight: this
+# fires only on positive mutation evidence, so a read-only /assess (no opt-in
+# mutation pass) reports no untrusted hotspots rather than guessing.
+DEFAULT_SURVIVOR_DENSITY_THRESHOLD = 0.3
+
+
+def find_untrusted_hotspots(
+    complexity_stats: dict,
+    test_pressure: dict,
+    threshold_survivor_density: float = DEFAULT_SURVIVOR_DENSITY_THRESHOLD,
+) -> list[str]:
+    """E1: complexity hotspots whose tests are hollow (mutants survive).
+
+    Crosses the complexity hotspot list with the per-file mutation survivor
+    density. A hotspot whose tests let a high fraction of mutants survive is a
+    trust failure: the suite *visits* the code but doesn't *pin* it. Returns the
+    sorted hotspot paths over the density threshold.
+
+    Degrades to ``[]`` whenever there is no per-file mutation data - the default
+    read-only /assess run never mutates, so E1 stays silent rather than
+    manufacturing a finding from the always-on cheap heuristics. It speaks only
+    when an opt-in mutation pass populated ``test_pressure.per_file``.
+    """
+    if not isinstance(test_pressure, dict):
+        return []
+    per_file = test_pressure.get("per_file") or []
+    if not per_file:
+        return []
+    hotspot_paths = {
+        h.get("path")
+        for h in complexity_stats.get("top_hotspots", [])
+        if h.get("path")
+    }
+    density_by_file: dict[str, float] = {}
+    for entry in per_file:
+        total = entry.get("total")
+        survived = entry.get("survived") or 0
+        if total:
+            density_by_file[entry.get("file")] = survived / total
+    return sorted(
+        p for p in hotspot_paths
+        if density_by_file.get(p, 0.0) >= threshold_survivor_density
+    )
+
+
+# --------------------------------------------------------------------------
+# E2 - self-referential test authorship (test+code co-located AND co-committed)
+# --------------------------------------------------------------------------
+
+def _find_sibling_test(repo_root: Path, rel_path: str) -> Path | None:
+    """Return the co-located test file for a source path, or ``None``.
+
+    Mirrors assess_core's ``_has_sibling_test`` co-location idioms but returns
+    the test *path* (not a bool) so the E2 map can pair a test with its source.
+    A file that is itself a test maps to ``None`` - it is not a source needing a
+    sibling. Returns ``None`` when the source isn't on disk or no sibling is
+    found.
+    """
+    src = repo_root / rel_path
+    if not src.is_file():
+        return None
+    stem, ext = src.stem, src.suffix
+    if _IS_TEST_RE.search(stem):
+        return None  # the file IS a test, not a source needing a sibling
+    directory = src.parent
+    candidate_names = [build(stem, ext) for build in _TEST_SIBLING_BUILDERS]
+    for name in candidate_names:
+        cand = directory / name
+        if cand.is_file():
+            return cand
+    for sub in _ADJACENT_TEST_DIRS:
+        test_dir = directory / sub
+        if not test_dir.is_dir():
+            continue
+        for name in candidate_names + [f"{stem}{ext}"]:
+            cand = test_dir / name
+            if cand.is_file():
+                return cand
+    return None
+
+
+def build_test_to_code_map(
+    repo_root: Path, source_paths: list[str],
+) -> dict[str, str]:
+    """Map ``test_file -> source_file`` via co-location conventions.
+
+    Best-effort and filesystem-only: each source path that has a co-located test
+    contributes one ``{repo-relative test path: source path}`` entry. Paths the
+    co-location idioms miss (far-away mirror test trees) simply don't appear,
+    which correctly degrades E2 to "no evidence" rather than a false negative.
+    """
+    repo_root = Path(repo_root)
+    mapping: dict[str, str] = {}
+    for src in source_paths:
+        test = _find_sibling_test(repo_root, src)
+        if test is None:
+            continue
+        try:
+            rel = test.relative_to(repo_root).as_posix()
+        except ValueError:
+            rel = test.as_posix()
+        mapping[rel] = src
+    return mapping
+
+
+# --------------------------------------------------------------------------
+# Deterministic markdown / summary renderers (the report-skeleton products)
+# --------------------------------------------------------------------------
+
+# Cap on paths-per-finding and attention rows in the rendered markdown so a
+# pathological repo can't bloat the report skeleton. The structured arrays in
+# run-context.json keep the full (already-capped) lists.
+MAX_FINDING_PATHS_RENDERED = 10
+MAX_ATTENTION_ROWS_RENDERED = 5
+
+
+def render_findings_markdown(
+    findings: list[dict], attention: list[dict],
+) -> str:
+    """Render the derived findings + attention list as a markdown section.
+
+    This is the deterministic report skeleton: the LLM writes prose *around* it
+    but cannot omit, rename, or reorder the findings. Findings with no paths are
+    skipped (nothing to point at); when none have paths the section says so
+    explicitly rather than rendering an empty heading. Always ends with a single
+    trailing newline so it concatenates cleanly into the report.
+    """
+    lines = ["## Cross-Layer Findings (Keyhole Readiness)", ""]
+    rendered_any = False
+    for f in findings:
+        paths = f.get("paths") or []
+        if not paths:
+            continue
+        rendered_any = True
+        lines.append(f"### {f['name']}")
+        lines.append("")
+        lines.append(f"Action: {f['action']}")
+        lines.append("")
+        lines.append("Paths:")
+        for p in paths[:MAX_FINDING_PATHS_RENDERED]:
+            lines.append(f"- {p}")
+        lines.append("")
+    if not rendered_any:
+        lines.append(
+            "_No cross-layer findings surfaced - no path crossed an axis boundary._"
+        )
+        lines.append("")
+    if attention:
+        lines.append("### Attention List (Priority Order)")
+        lines.append("")
+        for a in attention[:MAX_ATTENTION_ROWS_RENDERED]:
+            names = ", ".join(a.get("findings", []))
+            lines.append(f"- {a['path']} (score {a['score']}): {names}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _format_summary(concerns: list[dict], safe_zones: int) -> str:
+    """One-line human-readable keyhole-readiness summary.
+
+    Pure count with a positive/negative split (PRD: never imply commensurability
+    with the 0-8 score). Singular/plural handled for the headline count and the
+    safe-zone count; the per-finding labels keep the finding name verbatim
+    (``2 hidden coupling``), matching the PRD's worked example.
+    """
+    def plural(n: int, word: str) -> str:
+        return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+    zones = plural(safe_zones, "safe zone")
+    if not concerns:
+        return f"No structural concerns, {zones}."
+    total = sum(c["count"] for c in concerns)
+    detail = ", ".join(f"{c['count']} {c['name'].replace('_', ' ')}" for c in concerns)
+    headline = plural(total, "structural concern")
+    return f"{headline} ({detail}), {zones}."
+
+
+def build_keyhole_summary(findings: list[dict]) -> dict:
+    """Roll the derived findings into a count/severity readiness summary.
+
+    Reported *alongside* the 0-8 layered score, never merged into it: the score
+    asks "is the scaffolding in place to catch problems?", this asks "where is
+    today's structural pain?". Returns ``{concerns, safe_zones, total_concerns,
+    summary_text}`` where ``concerns`` is the per-finding ``{name, count}`` for
+    every negative finding with paths and ``safe_zones`` is the
+    ``refactor_boundary`` path count (the one positive finding).
+    """
+    concerns: list[dict] = []
+    safe_zones = 0
+    for f in findings:
+        if f["name"] == "refactor_boundary":
+            safe_zones = len(f["paths"])
+        elif f["paths"]:
+            concerns.append({"name": f["name"], "count": len(f["paths"])})
+    return {
+        "concerns": concerns,
+        "safe_zones": safe_zones,
+        "total_concerns": sum(c["count"] for c in concerns),
+        "summary_text": _format_summary(concerns, safe_zones),
+    }
+
+
+# How many attention units are promoted into the mandatory prescribed-actions
+# set. The report's Top 3 Actions must include these.
+MAX_PRESCRIBED_ACTIONS = 3
+
+
+def build_prescribed_actions(
+    attention: list[dict],
+    findings: list[dict],
+    max_actions: int = MAX_PRESCRIBED_ACTIONS,
+) -> list[dict]:
+    """Map the top attention units to their finding-derived prescribed actions.
+
+    The attention list already ranks units by negative-finding count; this picks
+    the action for each unit's *worst* finding (severity = ``FINDING_ORDER``
+    minus the positive ``refactor_boundary``, so the deterministic worst-first
+    order is the single source of truth). Returns ``{path, action, findings,
+    rank}`` for up to ``max_actions`` units - the Top-3 the report MUST include.
+    """
+    finding_actions = {f["name"]: f["action"] for f in findings}
+    severity = [n for n in FINDING_ORDER if n != "refactor_boundary"]
+    prescribed: list[dict] = []
+    for i, unit in enumerate(attention[:max_actions]):
+        for name in severity:
+            if name in unit["findings"]:
+                prescribed.append({
+                    "path": unit["path"],
+                    "action": finding_actions[name],
+                    "findings": unit["findings"],
+                    "rank": i + 1,
+                })
+                break
+    return prescribed
+
+
+def render_prescribed_actions(prescribed: list[dict]) -> str:
+    """Render the mandatory attention-derived actions as Top-3 table rows.
+
+    Pre-fills the rank, action, hotspot path, and issue columns of the report's
+    Top 3 Actions table; the LLM fills the ``?`` layer/effort/command cells with
+    judgement. Returns ``""`` when there is nothing to prescribe (empty
+    attention), so the LLM falls back to its own prioritisation.
+    """
+    if not prescribed:
+        return ""
+    lines = []
+    for p in prescribed:
+        # Columns: # | Action | Layer | Effort | Command / First Step | Hotspot
+        # files this addresses | Issue
+        lines.append(
+            f"| {p['rank']} | {p['action']} | ? | ? | ? | `{p['path']}` | — |"
+        )
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------
 # Orchestration entry point
 # --------------------------------------------------------------------------
 
@@ -421,13 +704,16 @@ def integrate(
     observability: dict,
     structure: dict,
     commit_sets: list[set[Path]] | None = None,
+    test_pressure: dict | None = None,
 ) -> dict:
     """Build the five run-context blocks + derived findings + attention list.
 
     Pure orchestration over the lib signals. ``commit_sets`` may be passed in
     (the orchestrator parses git log once and reuses it for churn etc.);
-    otherwise it is parsed here. Every block is built defensively - a failure in
-    one degrades that block to ``available: False`` and leaves the rest intact.
+    otherwise it is parsed here. ``test_pressure`` is the Layer-1 write-side scan
+    (the E1 trust axis crosses it with the complexity hotspots); when absent E1
+    degrades to silent. Every block is built defensively - a failure in one
+    degrades that block to ``available: False`` and leaves the rest intact.
     """
     repo_root = Path(repo_root)
     if commit_sets is None:
@@ -481,16 +767,37 @@ def integrate(
         complexity_stats, dead_code, understanding.get("intent_source_by_path", {})
     )
 
+    # E1 trust axis: complexity hotspots whose tests are hollow. Silent without
+    # opt-in mutation data, so it degrades cleanly on the default read-only run.
+    try:
+        untrusted = find_untrusted_hotspots(complexity_stats, test_pressure or {})
+    except Exception:  # noqa: BLE001 - degrade, never crash
+        untrusted = []
+
+    # E2 trust axis: tests co-located AND co-committed with the code they cover -
+    # the suite may verify internal consistency, not truth. Filesystem + git
+    # work, wrapped so a parse failure degrades to no finding.
+    try:
+        source_paths = _paths_from_stats(complexity_stats)
+        test_to_code = build_test_to_code_map(repo_root, source_paths)
+        self_ref = find_self_referential_tests(repo_root, test_to_code, commit_sets)
+        self_ref_paths = sorted({sr["source_file"] for sr in self_ref})
+    except Exception:  # noqa: BLE001 - degrade, never crash
+        self_ref_paths = []
+
     findings = assemble_findings({
         "hidden_coupling": [h["path"] for h in behaviour.get("hidden_coupling_findings", [])],
         "lying_map": [d["path"] for d in documentation.get("stale_doc_on_complexity", [])],
         "unexplained_complexity": [
             d["path"] for d in documentation.get("unexplained_complexity", [])
         ],
+        "untrusted_hotspot": untrusted,
+        "self_referential_tests": self_ref_paths,
         "orphaned_understanding": understanding.get("orphaned_understanding", []),
         "candidate_dead_weight": dead_weight,
         "refactor_boundary": [b["path"] for b in behaviour.get("refactor_boundaries", [])],
     })
+    attention = build_attention_list(findings)
 
     return {
         "structure": structure,
@@ -499,5 +806,8 @@ def integrate(
         "understanding": understanding,
         "runtime": runtime,
         "derived_findings": findings,
-        "attention": build_attention_list(findings),
+        "attention": attention,
+        "findings_markdown": render_findings_markdown(findings, attention),
+        "keyhole_summary": build_keyhole_summary(findings),
+        "prescribed_actions": build_prescribed_actions(attention, findings),
     }

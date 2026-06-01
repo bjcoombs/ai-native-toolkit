@@ -280,3 +280,217 @@ def test_attention_list_ranks_by_cross_axis_count() -> None:
     assert all(a["path"] != "safe" for a in attention)
     paths = [a["path"] for a in attention]
     assert "single" in paths
+
+
+# --- Task 2: render_findings_markdown ----------------------------------------
+
+def _sample_findings() -> list[dict]:
+    """Two findings with paths + the positive boundary, the rest empty."""
+    return ks.assemble_findings({
+        "hidden_coupling": ["dir/a"],
+        "lying_map": ["docs/x.md", "docs/y.md"],
+        "refactor_boundary": ["island"],
+    })
+
+
+def test_render_findings_markdown_includes_paths_and_actions() -> None:
+    findings = _sample_findings()
+    attention = ks.build_attention_list(findings)
+    md = ks.render_findings_markdown(findings, attention)
+    assert md.startswith("## Cross-Layer Findings (Keyhole Readiness)")
+    # Only findings with paths render a heading.
+    assert "### hidden_coupling" in md
+    assert "### lying_map" in md
+    assert "### refactor_boundary" in md
+    # The deterministic action text appears verbatim.
+    assert f"Action: {ks.FINDING_ACTIONS['hidden_coupling']}" in md
+    # Every path is listed.
+    assert "- docs/x.md" in md
+    assert "- docs/y.md" in md
+    # Empty findings produce no heading.
+    assert "### unexplained_complexity" not in md
+    assert md.endswith("\n")
+
+
+def test_render_findings_markdown_empty_is_minimal_but_valid() -> None:
+    findings = ks.assemble_findings({})  # all six/eight empty
+    md = ks.render_findings_markdown(findings, [])
+    assert md.startswith("## Cross-Layer Findings (Keyhole Readiness)")
+    assert "No cross-layer findings surfaced" in md
+    # No finding headings when nothing has paths.
+    assert "###" not in md
+
+
+def test_render_findings_markdown_caps_paths_at_ten() -> None:
+    findings = ks.assemble_findings({
+        "lying_map": [f"docs/{i}.md" for i in range(20)],
+    })
+    md = ks.render_findings_markdown(findings, [])
+    listed = [ln for ln in md.splitlines() if ln.startswith("- docs/")]
+    assert len(listed) == ks.MAX_FINDING_PATHS_RENDERED
+
+
+def test_render_findings_markdown_attention_section_caps_at_five() -> None:
+    findings = ks.assemble_findings({
+        "hidden_coupling": [f"u{i}" for i in range(8)],
+        "lying_map": [f"u{i}" for i in range(8)],  # each unit scores 2
+    })
+    attention = ks.build_attention_list(findings)
+    md = ks.render_findings_markdown(findings, attention)
+    assert "### Attention List (Priority Order)" in md
+    # Attention rows carry the "(score N)" marker; finding path bullets do not.
+    rows = [ln for ln in md.splitlines() if ln.startswith("- u") and "(score" in ln]
+    assert len(rows) == ks.MAX_ATTENTION_ROWS_RENDERED
+
+
+# --- Task 3: build_keyhole_summary -------------------------------------------
+
+def test_build_keyhole_summary_counts_concerns_and_safe_zones() -> None:
+    findings = ks.assemble_findings({
+        "hidden_coupling": ["a", "b"],
+        "lying_map": ["c"],
+        "refactor_boundary": ["s1", "s2", "s3"],
+    })
+    summary = ks.build_keyhole_summary(findings)
+    assert summary["safe_zones"] == 3
+    assert summary["total_concerns"] == 3
+    by_name = {c["name"]: c["count"] for c in summary["concerns"]}
+    assert by_name == {"hidden_coupling": 2, "lying_map": 1}
+    # The summary text is a pure count, parallel to the 0-8 score - never a score.
+    assert summary["summary_text"] == (
+        "3 structural concerns (2 hidden coupling, 1 lying map), 3 safe zones."
+    )
+
+
+def test_build_keyhole_summary_empty_findings_neutral_message() -> None:
+    summary = ks.build_keyhole_summary(ks.assemble_findings({}))
+    assert summary["concerns"] == []
+    assert summary["total_concerns"] == 0
+    assert summary["safe_zones"] == 0
+    assert summary["summary_text"] == "No structural concerns, 0 safe zones."
+
+
+def test_build_keyhole_summary_singular_plural() -> None:
+    findings = ks.assemble_findings({
+        "hidden_coupling": ["a"],
+        "refactor_boundary": ["s1"],
+    })
+    summary = ks.build_keyhole_summary(findings)
+    assert summary["summary_text"] == (
+        "1 structural concern (1 hidden coupling), 1 safe zone."
+    )
+
+
+def test_build_keyhole_summary_no_concerns_with_safe_zones() -> None:
+    findings = ks.assemble_findings({"refactor_boundary": ["s1", "s2"]})
+    summary = ks.build_keyhole_summary(findings)
+    assert summary["summary_text"] == "No structural concerns, 2 safe zones."
+
+
+# --- Task 4: build_prescribed_actions / render_prescribed_actions ------------
+
+def test_build_prescribed_actions_picks_worst_finding_per_unit() -> None:
+    findings = ks.assemble_findings({
+        "hidden_coupling": ["worst"],
+        "lying_map": ["worst", "mid"],
+        "unexplained_complexity": ["worst", "mid"],
+    })
+    attention = ks.build_attention_list(findings)
+    prescribed = ks.build_prescribed_actions(attention, findings)
+    # 'worst' lands in 3 findings (score 3) -> ranks first.
+    assert prescribed[0]["path"] == "worst"
+    assert prescribed[0]["rank"] == 1
+    # 'worst' spans hidden_coupling + lying_map + unexplained; hidden_coupling
+    # is highest severity (earliest in FINDING_ORDER).
+    assert prescribed[0]["action"] == ks.FINDING_ACTIONS["hidden_coupling"]
+    # 'mid' lands in lying_map + unexplained_complexity; lying_map is worse.
+    mid = next(p for p in prescribed if p["path"] == "mid")
+    assert mid["action"] == ks.FINDING_ACTIONS["lying_map"]
+
+
+def test_build_prescribed_actions_caps_at_three() -> None:
+    findings = ks.assemble_findings({
+        "hidden_coupling": [f"u{i}" for i in range(5)],
+        "lying_map": [f"u{i}" for i in range(5)],
+    })
+    attention = ks.build_attention_list(findings)
+    prescribed = ks.build_prescribed_actions(attention, findings)
+    assert len(prescribed) == 3
+    assert [p["rank"] for p in prescribed] == [1, 2, 3]
+
+
+def test_build_prescribed_actions_empty_attention() -> None:
+    assert ks.build_prescribed_actions([], ks.assemble_findings({})) == []
+
+
+def test_render_prescribed_actions_rows_and_empty() -> None:
+    findings = ks.assemble_findings({
+        "hidden_coupling": ["worst"],
+        "lying_map": ["worst"],
+    })
+    attention = ks.build_attention_list(findings)
+    prescribed = ks.build_prescribed_actions(attention, findings)
+    rows = ks.render_prescribed_actions(prescribed)
+    # Seven-column table row matching the SKILL.md Top 3 Actions template.
+    assert rows.startswith("| 1 |")
+    assert rows.count("|") == 8  # 7 columns => 8 pipes
+    assert "`worst`" in rows
+    assert ks.render_prescribed_actions([]) == ""
+
+
+# --- Task 5 E1: find_untrusted_hotspots --------------------------------------
+
+def test_find_untrusted_hotspots_flags_high_survivor_density() -> None:
+    complexity_stats = {"top_hotspots": [
+        {"path": "src/hot.py"}, {"path": "src/cold.py"},
+    ]}
+    test_pressure = {"per_file": [
+        {"file": "src/hot.py", "survived": 4, "total": 10},   # 0.4 >= 0.3
+        {"file": "src/cold.py", "survived": 1, "total": 10},  # 0.1 < 0.3
+    ]}
+    assert ks.find_untrusted_hotspots(complexity_stats, test_pressure) == ["src/hot.py"]
+
+
+def test_find_untrusted_hotspots_silent_without_mutation_data() -> None:
+    complexity_stats = {"top_hotspots": [{"path": "src/hot.py"}]}
+    # No per_file -> no mutation evidence -> nothing flagged (read-only default).
+    assert ks.find_untrusted_hotspots(complexity_stats, {"per_file": []}) == []
+    assert ks.find_untrusted_hotspots(complexity_stats, {}) == []
+    assert ks.find_untrusted_hotspots(complexity_stats, None) == []
+
+
+def test_find_untrusted_hotspots_only_flags_actual_hotspots() -> None:
+    complexity_stats = {"top_hotspots": [{"path": "src/hot.py"}]}
+    test_pressure = {"per_file": [
+        {"file": "src/not_a_hotspot.py", "survived": 9, "total": 10},
+    ]}
+    assert ks.find_untrusted_hotspots(complexity_stats, test_pressure) == []
+
+
+# --- Task 5 E2: test-to-code mapping -----------------------------------------
+
+def test_build_test_to_code_map_finds_colocated_tests(tmp_path: Path) -> None:
+    repo = tmp_path
+    (repo / "pkg").mkdir()
+    (repo / "pkg" / "svc.go").write_text("package pkg")
+    (repo / "pkg" / "svc_test.go").write_text("package pkg")
+    (repo / "pkg" / "lonely.go").write_text("package pkg")  # no sibling test
+    mapping = ks.build_test_to_code_map(repo, ["pkg/svc.go", "pkg/lonely.go"])
+    assert mapping == {"pkg/svc_test.go": "pkg/svc.go"}
+
+
+def test_build_test_to_code_map_python_and_adjacent_dir(tmp_path: Path) -> None:
+    repo = tmp_path
+    (repo / "src").mkdir()
+    (repo / "src" / "mod.py").write_text("x = 1")
+    (repo / "src" / "tests").mkdir()
+    (repo / "src" / "tests" / "test_mod.py").write_text("x = 1")
+    mapping = ks.build_test_to_code_map(repo, ["src/mod.py"])
+    assert mapping == {"src/tests/test_mod.py": "src/mod.py"}
+
+
+def test_find_sibling_test_skips_test_files_themselves(tmp_path: Path) -> None:
+    repo = tmp_path
+    (repo / "foo_test.go").write_text("package x")
+    assert ks._find_sibling_test(repo, "foo_test.go") is None
+    assert ks.build_test_to_code_map(repo, ["foo_test.go"]) == {}
