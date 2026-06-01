@@ -166,7 +166,13 @@ def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly
             dest = target_root / dest_path
             dest.parent.mkdir(parents=True, exist_ok=True)
             if src_path.suffix == ".md":
-                dest.write_text(strip_frontmatter(src_path.read_text("utf-8")), "utf-8")
+                # Strip frontmatter, then apply the same marker transform the
+                # skill's own .md files get. A bundled sub-skill can carry
+                # chat-skip / chat-replace markers (e.g. the assess sub-skills'
+                # plugin-only script paths); without transforming them here they
+                # would survive into the ZIP and trip check_orphan_markers.
+                body = strip_frontmatter(src_path.read_text("utf-8"))
+                dest.write_text(_transform_md(body, replacements), "utf-8")
             else:
                 shutil.copy2(src_path, dest)
 

@@ -204,6 +204,42 @@ def test_required_excludes_applied_even_when_caller_passes_empty_set(tmp_path):
         )
 
 
+def test_bundled_markdown_is_marker_transformed(tmp_path):
+    """Bundled .md must be frontmatter-stripped AND marker-transformed.
+
+    A bundled sub-skill can carry chat-skip / chat-replace markers (the assess
+    decomposition bundles two sub-skills with plugin-only script paths). Those
+    must resolve like the main SKILL.md, not survive into the ZIP where they'd
+    trip check_orphan_markers.
+    """
+    src = _make_fake_skill(tmp_path)
+    bundled = tmp_path / "sub.md"
+    bundled.write_text(
+        "---\nname: sub\n---\n"
+        "keep me\n"
+        "<!-- chat-skip:start -->\nplugin only\n<!-- chat-skip:end -->\n"
+        "<!-- chat-replace:k -->\nplugin line\n"
+    )
+    out_zip = tmp_path / "fake.zip"
+    issues = build_standalone_skill_zip(
+        skill_source_dir=src,
+        out_zip=out_zip,
+        standalone_name="fake",
+        standalone_description="fake desc",
+        replacements={"k": "standalone line"},
+        bundle_files={"references/sub.md": bundled},
+    )
+    assert issues == []  # no orphan markers survived
+    with zipfile.ZipFile(out_zip) as zf:
+        body = zf.read("fake/references/sub.md").decode("utf-8")
+    assert "keep me" in body
+    assert "name: sub" not in body          # frontmatter stripped
+    assert "plugin only" not in body        # chat-skip removed
+    assert "plugin line" not in body        # chat-replace consumed
+    assert "standalone line" in body        # replacement applied
+    assert "chat-skip" not in body and "chat-replace" not in body
+
+
 # ── strip_frontmatter ──────────────────────────────────────────────────────
 
 def test_strip_frontmatter_removes_yaml_block():
