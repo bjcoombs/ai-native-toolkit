@@ -491,6 +491,36 @@ def _read_plugin_version() -> str:
         return "unknown"
 
 
+# Weight of the per-function worst case in the hotspot composite. The effective
+# complexity is a weighted geometric mean of the file aggregate and the file's
+# worst single function, leaning toward the per-function offender (issue #115).
+PER_FUNCTION_WEIGHT = 0.7
+
+
+def _effective_ccn(ccn: float, max_fn_ccn: float | None) -> float:
+    """Complexity used to rank hotspots, re-weighted toward the worst function.
+
+    The treemap hue and the ``ccn`` field stay file-aggregate, but the hotspot
+    composite ranks on this value instead. For class-per-file languages
+    (Java/Kotlin/C#) a broad coordinator class spreads complexity across many
+    small methods, so its aggregate over-ranks it above a genuinely complex
+    single method living in a leaner file (issue #115: an aggregate-107 / worst-
+    function-14 coordinator out-ranked a ccn-28 DAO method). Blending toward
+    ``max_fn_ccn`` corrects that.
+
+    ``max_fn_ccn <= ccn`` always (it is the largest term of the sum), so the
+    effective value never exceeds the aggregate. For single-function-dominant
+    files (Python/Go, where ``max_fn_ccn`` is at or near the aggregate) the blend
+    collapses back to the aggregate, so their ranking is unchanged. scc-scored
+    files have no function breakdown (``max_fn_ccn is None``) and keep the raw
+    aggregate.
+    """
+    if not max_fn_ccn:  # None (scc) or 0 -> no usable per-function signal
+        return ccn
+    w = PER_FUNCTION_WEIGHT
+    return float(max_fn_ccn ** w * ccn ** (1.0 - w))
+
+
 def write_stats(files: list[tuple[Path, int, float, str]],
                 aux_data: dict[Path, int] | None,
                 aux_label: str | None,
@@ -500,10 +530,13 @@ def write_stats(files: list[tuple[Path, int, float, str]],
 
     Consumed by the /assess skill: percentiles drive Layer 3 (linter) scoring,
     top hotspot lists become the named files in the actions table.
-    Composite hotspot score = sqrt(ccn) * sqrt(1 + commits): a sub-linear
-    geometric mean of complexity and recent churn. Both axes are damped, so a
-    complex-AND-active file leads, a frozen-but-complex file ranks below it, and
-    a trivially-simple-but-churny file can't top the list on churn alone.
+    Composite hotspot score = sqrt(effective_ccn) * sqrt(1 + commits): a
+    sub-linear geometric mean of complexity and recent churn. Both axes are
+    damped, so a complex-AND-active file leads, a frozen-but-complex file ranks
+    below it, and a trivially-simple-but-churny file can't top the list on churn
+    alone. ``effective_ccn`` re-weights the file aggregate toward the worst
+    single function (see ``_effective_ccn``) so a broad coordinator class can't
+    out-rank a genuinely complex single method (issue #115).
 
     The ``ccn`` block and every row's ``ccn`` field are **file-level aggregates**
     (sum of per-function complexity). A per-function linter threshold (cyclop 15,
@@ -554,7 +587,12 @@ def write_stats(files: list[tuple[Path, int, float, str]],
             # (no git), so a missing value is distinct from a real 0.
             "commits": int(churn) if aux_data else None,
             "source": src,
-            "_score": math.sqrt(ccn) * math.sqrt(1.0 + churn),
+            # Ranked on the per-function-weighted effective complexity, not the
+            # raw aggregate, so a coordinator class can't out-rank the genuine
+            # single-method offender (issue #115). The `ccn` field above stays
+            # file-aggregate for the hue and the Layer 3 comparison.
+            "_score": math.sqrt(_effective_ccn(ccn, max_fn(path)))
+            * math.sqrt(1.0 + churn),
         })
 
     def strip(rows: list[dict]) -> list[dict]:
