@@ -115,6 +115,23 @@ def test_jvm_patterns_do_not_false_match_prose() -> None:
     assert count_verifiable_outcomes(prose) == 0
 
 
+def test_rg_prose_mention_is_not_credited() -> None:
+    # A bare reference to ripgrep without a runnable recipe (no flag, no
+    # quoted query) must not count as a verifiable outcome.
+    prose = (
+        "# Guidelines\n\n"
+        "You can use rg to find things, and rg or grep are both useful. "
+        "The rg tool is fast.\n"
+    )
+    assert count_verifiable_outcomes(prose) == 0
+
+
+def test_rg_recipe_with_flag_is_credited() -> None:
+    # A real ripgrep recipe (flag-driven, unquoted query) is verifiable.
+    text = "# Guidelines\n\nCheck for leftovers: `rg -n TODO src/main/java`.\n"
+    assert count_verifiable_outcomes(text) >= 1
+
+
 def test_grade_returns_letter_grade(good_text: str, bad_text: str) -> None:
     good = grade_instructions(good_text, freshness_days=10)
     bad = grade_instructions(bad_text, freshness_days=10)

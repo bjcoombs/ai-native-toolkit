@@ -57,9 +57,12 @@ VERIFIABLE_PATTERNS = [
     # that merely mentions Maven or Gradle is not credited.
     r"\bmvn\s+(?:-\S+\s+)*(?:clean\s+)?(?:test|verify|install|integration-test)\b",  # mvn test / verify
     r"-Dtest=\S",                                                                     # mvn test -Dtest=Class#method
-    r"\b\.?/?gradlew?\s+(?:-\S+\s+)*(?:test|build|check|clean|assemble)\b",           # gradle / ./gradlew test|build|check
+    r"(?:^|\s)\.?/?gradlew?\s+(?:-\S+\s+)*(?:test|build|check|clean|assemble)\b",     # gradle / ./gradlew test|build|check
     r"--tests\s+\S",                                                                  # gradle test --tests Foo
-    r"\brg\s+(?:-{1,2}[\w-]+\s+)*['\"]?\S",                                           # ripgrep verification recipes
+    # ripgrep verification recipes - require a flag or a quoted query so that
+    # bare prose mentions ("use rg to find things", "rg or grep") are not
+    # credited, only an actual runnable search command.
+    r"\brg\s+(?:(?:-{1,2}[\w-]+\s+)+\S|(?:-{1,2}[\w-]+\s+)*['\"]\S)",
 ]
 
 # Size/bloat metrics with CONSERVATIVE thresholds.
