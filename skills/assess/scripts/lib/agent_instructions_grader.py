@@ -7,7 +7,8 @@ correlate with usefulness to an LLM contributor:
     positive_directives: "Use X", "Prefer Y", "Default to Z" (positive framing)
     tradeoff_phrases:    "because", "over X", "instead of", "rather than"
     path_references:     file paths like src/foo/bar.py, tests/..., etc.
-    verifiable_outcomes: "Working if", "verify:", "success criteria"
+    verifiable_outcomes: "Working if", "verify:", "success criteria", or a
+                         runnable verification command (mvn/gradle/rg)
     freshness:           days since last git modification
 
 No LLM calls. Pure regex + arithmetic. Deterministic.
@@ -43,10 +44,22 @@ PATH_PATTERN = re.compile(
 )
 
 VERIFIABLE_PATTERNS = [
+    # Phrase-based outcomes (JS/Python/general prose idioms).
     r"\bworking if\b",
     r"\bverify:\b",
     r"\bsuccess criteria\b",
     r"\bacceptance criteria\b",
+    # Runnable verification commands (issue #116). A CLAUDE.md that hands the
+    # agent an exact command to confirm an outcome is just as "verifiable" as
+    # one that spells out "success criteria" in prose - the original idiom set
+    # only credited JS/Python phrasing and scored Maven/Gradle/JVM files zero.
+    # Kept high-precision (a tool name plus a real subcommand/flag) so prose
+    # that merely mentions Maven or Gradle is not credited.
+    r"\bmvn\s+(?:-\S+\s+)*(?:clean\s+)?(?:test|verify|install|integration-test)\b",  # mvn test / verify
+    r"-Dtest=\S",                                                                     # mvn test -Dtest=Class#method
+    r"\b\.?/?gradlew?\s+(?:-\S+\s+)*(?:test|build|check|clean|assemble)\b",           # gradle / ./gradlew test|build|check
+    r"--tests\s+\S",                                                                  # gradle test --tests Foo
+    r"\brg\s+(?:-{1,2}[\w-]+\s+)*['\"]?\S",                                           # ripgrep verification recipes
 ]
 
 # Size/bloat metrics with CONSERVATIVE thresholds.
