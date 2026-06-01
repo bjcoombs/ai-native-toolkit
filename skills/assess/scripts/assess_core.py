@@ -698,6 +698,13 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
               "discoverable": {"present": False, "signals": []},
               "reachable": {"present": False, "signals": []}}
     )
+    # Capability-driven JVM offers (issue #113): present only when a Maven/Gradle
+    # project is detected, so non-JVM repos carry no extra key (the run-context
+    # baseline stays stable). Names each unserved capability + a candidate tool
+    # (honest-degrade) and the liveness run/install-consent offer the Step 2
+    # offer-layer turns into an AskUserQuestion.
+    if liveness_ok and isinstance(liveness.get("jvm_capabilities"), dict):
+        ctx["capability_offers"] = liveness["jvm_capabilities"]
 
     # Keyhole-readiness signals (PRD 2026-05-29): the static-structure,
     # behaviour (change-coupling / containment / static-vs-historical),

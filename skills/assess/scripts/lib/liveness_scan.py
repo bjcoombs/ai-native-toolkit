@@ -520,28 +520,83 @@ def scan_observability(repo_root: Path,
     )
 
 
+def _merge_jvm_liveness(dead_code: dict, jvm: dict) -> None:
+    """Fold the JVM liveness capability into the existing ``dead_code`` block so
+    the per-symbol dead-code consumers (the ``runtime`` block, the report) see
+    Maven candidates without a schema change. The full capability-offer detail
+    (honest-degrade + crediting) rides separately on ``jvm_capabilities``.
+
+    A ``served`` Maven liveness contributes its coarse module-level candidates
+    and flips ``available``; an ``offer`` contributes only a tool entry so the
+    block records "a tool could serve this" rather than a silent miss.
+    """
+    liveness = jvm.get("capabilities", {}).get("liveness", {})
+    state = liveness.get("state")
+    tool = liveness.get("candidate_tool", "mvn dependency:analyze")
+    if state == "served":
+        candidates = liveness.get("candidates", [])
+        existing = dead_code.setdefault("candidates", [])
+        existing.extend(candidates)
+        dead_code["candidate_count"] = len(existing)
+        if candidates:
+            dead_code["available"] = True
+        dead_code.setdefault("tools", []).append({
+            "language": "java", "tool": tool, "status": "ran",
+            "reason": f"{len(candidates)} unused-declared-dependency candidate(s)",
+        })
+    elif state == "offer":
+        consent = liveness.get("consent")
+        dead_code.setdefault("tools", []).append({
+            "language": "java", "tool": tool,
+            "status": "available_not_run",
+            "reason": liveness.get("note", "Maven liveness offer pending"),
+            "consent": consent,
+        })
+    elif state == "honest_degrade":
+        dead_code.setdefault("tools", []).append({
+            "language": "java", "tool": tool,
+            "status": "honest_degrade",
+            "reason": liveness.get("note", "no served liveness path"),
+        })
+
+
 def scan_liveness(repo_root: Path, run_dead_code: bool = True,
                   run_build_tools: bool = False,
                   extra_exclude_dirs: set[str] | None = None,
                   extra_exclude_patterns: list[str] | None = None,
                   ) -> dict:
-    """Top-level Layer 1 scan: dead-code candidates + observability rungs.
+    """Top-level Layer 1 scan: dead-code candidates + observability rungs, plus
+    the capability-driven JVM offer block when a Maven/Gradle project is found.
 
     `run_build_tools` defaults to False so the scan stays read-only - build-
-    mutating dead-code tools are reported as available-but-not-run.
+    mutating dead-code tools (and `mvn dependency:analyze`, a run-consent goal)
+    are reported as available-but-not-run / offer rather than executed.
     `extra_exclude_dirs` and `extra_exclude_patterns` come from
-    `.assess/config.toml` / `--exclude` and apply to both the dead-code
-    scan and the observability tree walk.
+    `.assess/config.toml` / `--exclude` and apply to the dead-code scan, the
+    observability tree walk, and JVM build-file detection alike.
     """
-    return {
-        "dead_code": scan_dead_code(
-            repo_root, run=run_dead_code, run_build_tools=run_build_tools,
-            extra_exclude_dirs=extra_exclude_dirs,
-            extra_exclude_patterns=extra_exclude_patterns,
-        ).as_dict(),
+    from lib.jvm_capabilities import scan_jvm_capabilities
+
+    dead_code = scan_dead_code(
+        repo_root, run=run_dead_code, run_build_tools=run_build_tools,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    ).as_dict()
+    jvm = scan_jvm_capabilities(
+        repo_root, run_build_tools=run_build_tools,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    )
+    if jvm.get("available"):
+        _merge_jvm_liveness(dead_code, jvm)
+    result = {
+        "dead_code": dead_code,
         "observability": scan_observability(
             repo_root,
             extra_exclude_dirs=extra_exclude_dirs,
             extra_exclude_patterns=extra_exclude_patterns,
         ).as_dict(),
     }
+    if jvm.get("available"):
+        result["jvm_capabilities"] = jvm
+    return result

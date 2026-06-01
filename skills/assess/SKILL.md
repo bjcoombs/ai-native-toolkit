@@ -120,9 +120,17 @@ If the user picks **Install scc**, run the platform-appropriate command:
 
 If the install fails or the platform isn't covered, fall back to lizard-only and continue - don't block the assessment.
 
-### 2b: Offer to install per-language dead-code tools (one-time per tool)
+### 2b: Offer analysis tools (capability-driven, detect-or-propose)
 
-Layer 1's intra-repo dead-code scan calls a per-language tool (`vulture` for Python, `ts-prune`/`knip` for TS/JS, `staticcheck`/`deadcode` for Go). When the tool is absent, the scan degrades to `tool_absent` and the user has no resolution path inside the skill - they'd have to know which tool fits the language, which package manager to use, and run the install themselves. The same install-offer pattern as Step 2a closes the loop without leaving them to figure it out.
+`/assess` maps each Layer 1/Layer 3 analysis **capability** (liveness/dead-code, static module graph, linting, modernization) to a serving tool. Historically that map was a **hardcoded per-language allowlist** - `vulture` for Python, `ts-prune`/`knip` for TS/JS, `staticcheck`/`deadcode` for Go. The defect that allowlist created: when a repo's language **isn't enumerated**, every capability silently degraded to "unavailable" - the report read "this layer is absent here" rather than "a tool could serve this - install one?". A non-enumerated language was locked out with no resolution path inside the run.
+
+The flow is now **capability-driven detect-or-propose**, in three moves per capability:
+
+1. **Detect** whether a serving tool already exists (on PATH, or configured in build/lint config). If it does, **use it** - and if it's configured in the build, **credit it; never re-offer**.
+2. **Propose** an ecosystem-appropriate candidate when none exists. For an enumerated language this is the table below; for a non-enumerated one **you propose a fitting tool at runtime** (reasoned latitude - you are not locked out because the language isn't in a hardcoded list). Ask the user with the same **AskUserQuestion** pattern.
+3. **Honest-degrade** anything you can detect-but-not-serve: name the capability **and** a candidate tool in the report. This is a deliverable state distinct from both "Present" and a silent "Missing" - never let a capability vanish without naming what would serve it.
+
+The per-language dead-code offer below is the simplest instance (one capability, install-consent). When the tool is absent, the scan degrades to `tool_absent` and the user has no resolution path inside the skill - they'd have to know which tool fits the language, which package manager to use, and run the install themselves. The same install-offer pattern as Step 2a closes the loop without leaving them to figure it out.
 
 Detect languages with cheap `fd` counts (mirroring Step 2a's heuristic - the treemap script's own classification isn't exposed in the stats sidecar, and shelling out is fine here):
 
@@ -171,6 +179,20 @@ touch "$REPO_ROOT/.assess/.no-<tool>"   # e.g. .no-staticcheck
 ```
 
 For multi-language repos with several offers, the AskUserQuestion call lists every language in one prompt rather than serialising. The user answers once and the run proceeds with whichever tools they accepted.
+
+#### JVM / Maven capability offers (v1)
+
+When the deterministic core detects a Maven or Gradle project it emits a `capability_offers` block in `run-context.json` - the first proof of the capability-driven flow on a non-enumerated ecosystem. Read it after Step 2c's core run, before scoring, and act on each capability's `state`:
+
+```bash
+jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"
+```
+
+- **`liveness` → `state: "offer"`** - Maven was detected but `mvn dependency:analyze` (coarse module-level dead-dependency detection) has not run. The `consent` field names the shape: `run` (`mvn` is on PATH - offer to **run** it against the project; `dependency:analyze` needs a *compiling build*, so this is a **run-consent**, heavier than a static scan) or `install` (`mvn` absent - offer to **install** Maven first). Use **AskUserQuestion** exactly as Step 2b, phrasing the trade-off (a build that resolves dependencies and may hit the network). On accept and a `run` consent, run `mvn dependency:analyze`, capture its output, and re-run the core with the served result so the candidates feed Layer 1. On decline, the capability stays honestly named, not silently dropped.
+- **`linting` / `modernization` → `state: "credited"`** - an already-configured pom.xml plugin serves it (`served_by` lists which: Checkstyle, SpotBugs, PMD, error-prone, OpenRewrite, Modernizer). **Credit it in the report; do not re-offer.**
+- **Any capability → `state: "honest_degrade"`** - nothing serves it yet (module graph, linting/modernization without a configured plugin, and **all** capabilities under Gradle in v1). The block carries a `candidate_tool` and `gloss`. **Name both in the report's Layer 1/Layer 3 prose** ("module-graph analysis is unserved here; `jdeps` would provide it"). Honest-degrade is a deliverable - surfacing the candidate is the point.
+
+**Boundary (v1).** Only Maven liveness is *served*. Module graph (`jdeps`), linting, and modernization honest-degrade; Gradle honest-degrades entirely. The `candidate_tool` values are deterministic defaults - you may propose a better-fitting ecosystem tool at runtime (the detect-or-propose latitude above); that choice is human-judged, not CI-tested. CI tests only **signal consumption**: given a tool's output, the scorecard feeds correctly.
 
 ### 2c: Run the treemap
 

@@ -133,6 +133,17 @@ jq '.dead_code, .observability' "$REPO_ROOT/.assess/run-context.json"
 
 Two `tools[].status` values need handling in the report: `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it - surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `timeout` / `tool_absent` likewise degrade, not penalise.
 
+**Capability-driven JVM offers (`capability_offers`).** When the repo is a Maven or Gradle project, `run-context.json` carries a `capability_offers` block and the `dead_code.tools` list includes a `java` entry. This is the capability-driven flow (SKILL.md Step 2b) surfaced to the scorer:
+
+```bash
+jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"
+```
+
+- `capabilities.liveness.state == "served"` - `mvn dependency:analyze` ran; its coarse module-level candidates (unused declared dependencies) are already merged into `dead_code.candidates`. Score Layer 1's dead-code tier from them as usual, noting the granularity is dependency-level, not per-symbol.
+- `capabilities.liveness.state == "offer"` - Maven detected, analyze not run (a **run-consent** the user can accept in Step 2b). Treat like `available_not_run`: surface the candidate tool as a follow-up, don't penalise.
+- `state == "credited"` (linting/modernization) - a configured pom.xml plugin (`served_by`) already serves it. Credit it in the relevant layer; do **not** report it as missing.
+- `state == "honest_degrade"` - nothing serves the capability yet (module graph, unconfigured linting/modernization, all Gradle capabilities in v1). **Name the capability and its `candidate_tool` in the report** - this is a deliverable, distinct from a silent miss. Never report a honest-degraded capability as simply "absent".
+
 **Observability tier (the decisive one) - three rungs (`observability.rung`, 0-3):**
 
 1. **Instrumented** - telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging). Necessary, not sufficient.
