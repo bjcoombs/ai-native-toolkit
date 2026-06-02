@@ -6,7 +6,7 @@ The navigation index for `ai-native-toolkit`. Every shipped doc in this repo is 
 
 | Subtree | Entry doc | What lives there |
 |---------|-----------|------------------|
-| Skills | [`skills/`](../skills/README.md) | The plugin's skills - the headline `/assess`, `/huddle`, `/deslop`, plus `/ghsync` and the team-orchestration library skills |
+| Skills | [`skills/`](../skills/README.md) | The plugin's skills - the headline `/assess`, `/huddle`, `/deslop`, `/skill-forge`, plus `/ghsync` and the team-orchestration library skills |
 | Commands | [`commands/`](../commands/README.md) | Slash commands - portable framework commands and opt-in personal workflow commands |
 | Agents | [`agents/`](../agents/README.md) | The Six Thinking Hats team that `/huddle` and `/6hats` orchestrate |
 | Docs | this file | Design history, runbooks, and the rendered example SVGs |
@@ -21,6 +21,7 @@ Portable (work in any Claude Code session, also shipped as standalone ZIPs):
 - [`/huddle`](../skills/huddle/SKILL.md) - structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing.
 - [`/deslop`](../skills/deslop/SKILL.md) - detect and remove the telltale signs of AI writing. Ships an exhaustive [reference checklist](../skills/deslop/references/full-checklist.md).
 - [`/ghsync`](../skills/ghsync/SKILL.md) - bulk-clone and fast-forward sync every GitHub repo you can access across an org.
+- [`/skill-forge`](../skills/skill-forge/SKILL.md) - harden a skill through judge-panel refinement rounds to a 3-tier promotion gate; refined through its own process. Ships an [example forge report](../skills/skill-forge/references/example-forge-report.md).
 
 Team-orchestration library skills (invoked by the workflow commands, not standalone):
 

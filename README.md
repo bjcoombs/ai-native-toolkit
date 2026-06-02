@@ -12,11 +12,12 @@ The aim is not an AI that comprehends complexity humans no longer can, trusted b
 
 There's a second half, and it's the same ethic pointed the other way. When a contributor makes a mistake, the question is never "who do we blame" but "what made that mistake possible, and what would make it impossible next time?" A bank doesn't give a new engineer production access and hope - it builds role-based access, staged environments, and CI that catches the error before it ships. Those guardrails aren't distrust; they're how you protect people from costly mistakes by design, and an AI contributor needs the same protection a human does. `/assess` scores exactly these: linters, architecture tests, CI gates, coverage, review automation. Framed positively: **have we set the codebase up so that doing the wrong thing is hard, and the right thing is the path of least resistance?** Give the contributor the map *and* the guardrails - that is what `/assess` measures the distance to.
 
-The headline pieces are three **skills**:
+The headline pieces are four **skills**:
 
 - **`/assess`** - score any codebase's readiness for AI agent contributors against an 8-layer contract model (navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Generates a report + the two SVGs and opens a PR in the target repo.
 - **`/huddle`** - structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board).
 - **`/deslop`** - detect and remove the telltale signs of AI writing (puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations). Runs as a silent quality gate while writing, or as an explicit audit/edit pass. Derived from Wikipedia's "Signs of AI writing".
+- **`/skill-forge`** - harden a skill (draft or existing) through judge-panel refinement rounds until it clears a strict 3-tier promotion gate. A prove-and-promote quality gate that runs after authoring, built on the same team-lead pattern as `/huddle` - and proven by forging itself.
 
 ## What `/assess` produces
 
@@ -118,7 +119,7 @@ A single `main.dart.js` or thousands of lines of `.pb.go` shouldn't dominate the
 
 The skill runs locally - lizard, optional scc, and git log do the analysis in your Claude Code session. No data leaves the machine.
 
-> **Portability split.** The framework pieces (`/assess`, `/huddle`, `/deslop`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session. The workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
+> **Portability split.** The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session. The workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
 
 ## Install
 
@@ -133,7 +134,7 @@ Skills appear namespaced: `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddl
 
 ## Also available in Claude Desktop and claude.ai web
 
-`/assess`, `/huddle`, and `/deslop` are installable as standalone skill ZIPs - no Claude Code required. Verified working in claude.ai web and Claude Desktop.
+`/assess`, `/huddle`, `/deslop`, and `/skill-forge` are installable as standalone skill ZIPs - no Claude Code required. Verified working in claude.ai web and Claude Desktop.
 
 ### Two install paths - pick by where you use Claude
 
