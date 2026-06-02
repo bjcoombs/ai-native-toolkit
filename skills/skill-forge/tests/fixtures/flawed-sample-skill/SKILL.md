@@ -23,9 +23,9 @@ This is why so many open-source projects adopted the scheme over the years.
 2. Decide the conventional-commit `type` and optional `scope` from the diff.
 3. Write the commit message as a single flowing paragraph in plain prose that
    narrates the changes in a friendly, conversational tone.
-4. Confirm the subject line is no longer than the limit decided in step 6, then
-   trim it if it runs over.
-5. If the change is large, write a body explaining the reasoning, follow TDD when
-   adding the example snippet unless it seems unnecessary for the change at hand.
-6. Set the subject-line character limit to 50 and apply it to the subject.
+4. Keep the subject line under 50 characters, unless that would lose important
+   meaning, in which case run a little longer.
+5. Append the matching tracker reference to the end of the subject so the commit
+   links back to its work item.
+6. If the change is large, write a body explaining the reasoning.
 7. Output the final message in a fenced code block.
