@@ -82,6 +82,31 @@ a judge that starts amending, or a lead that starts executing collapses the loop
 boundary generalizes `marathon`'s "lead delegates, never executes" to all three roles, and
 every spawn prompt states the role's lane and its "not my job" boundary explicitly.
 
+### The runner prompt (named here, written in the plan)
+
+The runner prompt is the most load-bearing prompt in the system: runner transcripts are the
+evidence every behavioural lens judges, so any contamination here corrupts the whole gate. The
+plan writes the exact template; the spec pins its constraints so it is not improvised.
+
+It must be a **pure wrapper** - it never explains *why* the skill works or adds context beyond
+the draft, or the runner ends up testing "skill + prompt additions" instead of the skill.
+Required sections:
+
+1. **Role statement** - "You are a test runner. Apply the following skill to the following
+   input, exactly as the skill instructs."
+2. **Role boundary** - do not add, skip, or reinterpret steps; if the skill is ambiguous, note
+   it but still attempt to follow it as written; do not judge the skill (the axis-1 boundary).
+3. **The skill draft** - the full current draft, verbatim.
+4. **The test-case input** - this runner's specific input.
+5. **Self-report format** - the runner reports: the output it produced; which steps it
+   followed, which it skipped, and why; ambiguities hit and how it resolved them; any
+   improvisation beyond the skill; any point it wanted to deviate but followed literally.
+
+The self-report fields are not cosmetic - they are what each lens reads. Skipped-vs-followed
+steps feed **Usability**; improvisation and "wanted to deviate but didn't" feed **Adversarial**
+(the rationalization-escape hunt); resolved ambiguities feed both. A vague self-report blinds
+those lenses, so the template treats these fields as required output, not optional notes.
+
 ## Input contract
 
 | Input | Required | Notes |
@@ -189,6 +214,14 @@ or distortion. Sub-HIGH Fidelity findings are advisory and do not fail the case;
 Gate 2 applies to dissent, so both gates speak one severity language. The bar is propositional,
 not a numeric score - numeric scores on LLM judges are false precision.
 
+**What "measurable gain" means** (Gate 3). The amendment's own hypothesis is the yardstick.
+Each AMEND logs "changed X, expect Z to improve," and Gate 3 registers gain only if **Z - the
+metric the hypothesis targeted - actually improved.** A round whose targeted metric did not
+move is a failed hypothesis and counts as no gain, even if some unrelated lens happened to
+improve. This is the same causal-attribution principle as one-change-per-round: credit the
+change for what it aimed at, not for coincidental drift. (Regressions are handled separately,
+upstream - a regressing round fails Gate 1.)
+
 **Promote** if and only if Gate 1 passes **and** Gate 2 passes. Otherwise **STOP** at Gate 3
 or the budget ceiling with the best-so-far artifact and a report that names which gates were
 and were not met.
@@ -241,9 +274,10 @@ fixture is therefore a panel-calibration harness as much as a forge target, and 
 a teaching example. It is a manual/example artifact, not a CI assertion.
 
 **The fixture is versioned alongside the skill.** As `skill-forge` evolves through re-forging,
-its failure modes change; whenever it is re-forged, the fixture's planted defects are reviewed
-and updated so each still exercises a current failure mode. The cost is low (it is a manual
-artifact) and it stops the calibration harness from going stale.
+its failure modes change. So **re-forging re-enters Phase A- first**: a fixture review/update
+step that runs before Phase B and confirms each planted defect still exercises a current
+failure mode. Making it a phase, not a prose instruction, stops it being skipped. The cost is
+low (it is a manual artifact) and it keeps the calibration harness from going stale.
 
 ### Recursion guard, axis 2: depth-1
 
