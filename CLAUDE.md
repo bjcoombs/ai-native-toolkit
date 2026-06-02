@@ -8,6 +8,14 @@ Source for the `ai-native-toolkit` Claude Code plugin. Two portable skills (`/as
 
 The deliverable is markdown: agents, commands, skills. It also ships a Python deterministic core under `skills/assess/scripts/` (plus `lib/`) and a standalone-skill build pipeline under `scripts/`. There is no application runtime, but there are pytest suites (`skills/assess/`, `scripts/`), a ruff + mypy lint gate, and a standalone-ZIP build step - all enforced in CI.
 
+## North star
+
+Everything here serves one goal: make an AI contributor feel like an engineer who has been in the org eighteen months, not a brand-new hire. The difference is *externalized context*, not capability. An AI is structurally always the new hire - each session starts with an empty head and one narrow context window - so the codebase has to supply the tenure: a navigable map, load-bearing contracts made explicit, complexity made *locally* legible so the relevant slice fits one keyhole.
+
+The safety half is non-negotiable: the goal is **legibility you can trust, not omniscience you can't.** An agent fluent about code nobody can verify is the dangerous failure, not the win. Answers must stay anchored to code a human can spot-check.
+
+**Use this as the feature test.** Judge any change to a skill or report by: does it make a fresh agent more tenured on day one, *and* keep its answers verifiable? Prefer honest-degrade over impressive-but-wrong, local comprehension over global, and "ground the claim in the file" over a fluent narrative.
+
 ## Versioning
 
 The plugin follows [semver](https://semver.org). Version lives in `.claude-plugin/plugin.json` under `.version`.
