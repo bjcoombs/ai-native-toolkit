@@ -4,6 +4,12 @@ A Claude Code plugin: skills, agents, and commands for AI-native development. Ru
 
 > **New here?** The [Map of Content](docs/index.md) is the navigation index - one trail to every skill, command, agent, and design doc in this repo. The [`CLAUDE.md`](CLAUDE.md) contract holds the rules for editing it.
 
+## Why this exists
+
+When you hand work to an AI, does it behave like a brand-new hire, or like an engineer who has been in the org eighteen months? The difference isn't capability - both can write correct code. It's *externalized context*: knowing where things live, which contracts are load-bearing, where the minefields are, and why the weird thing is weird. An AI contributor is structurally always the new hire - every session starts with an empty head, seeing the codebase through one narrow context window. So the whole question becomes: **how much of the tenured engineer's implicit map has the codebase made explicit and navigable?** The more it has, the more a fresh agent behaves like it has been here eighteen months.
+
+The aim is not an AI that comprehends complexity humans no longer can, trusted blindly - an agent fluent about code nobody can verify is the dangerous case, not the goal. The aim is a codebase legible enough that the *relevant slice* fits one context window, where the agent's answers stay anchored to code you can still check in ten seconds. **Legibility you can trust, not omniscience you can't.** `/assess` measures the distance to that.
+
 The headline pieces are three **skills**:
 
 - **`/assess`** - score any codebase's readiness for AI agent contributors against an 8-layer contract model (navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Generates a report + the two SVGs and opens a PR in the target repo.
