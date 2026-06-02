@@ -14,7 +14,9 @@ Everything here serves one goal: make an AI contributor feel like an engineer wh
 
 The safety half is non-negotiable: the goal is **legibility you can trust, not omniscience you can't.** An agent fluent about code nobody can verify is the dangerous failure, not the win. Answers must stay anchored to code a human can spot-check.
 
-**Use this as the feature test.** Judge any change to a skill or report by: does it make a fresh agent more tenured on day one, *and* keep its answers verifiable? Prefer honest-degrade over impressive-but-wrong, local comprehension over global, and "ground the claim in the file" over a fluent narrative.
+The other half is the same ethic pointed at the write side: when a contributor makes a mistake, ask "what made it possible, and what would make it impossible next time?" - not "who's to blame". Guardrails (linters, architecture tests, CI gates, coverage, review automation - Layers 3-7) aren't a leash on the AI; they protect the contributor from costly mistakes by design, the way an org protects a human engineer with RBAC and staged environments rather than hope. This is **correctness by construction** / poka-yoke: make the wrong action hard and the right action the path of least resistance.
+
+**Use this as the feature test.** Judge any change to a skill or report by: does it help a fresh agent (the map), keep its answers verifiable (trust), *and* make the wrong action hard to take (guardrails - protecting the contributor, not policing it)? Prefer honest-degrade over impressive-but-wrong, local comprehension over global, and "ground the claim in the file" over a fluent narrative.
 
 ## Versioning
 
