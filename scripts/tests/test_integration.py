@@ -172,6 +172,12 @@ class TestSkillForge:
                 f"{name}: namespaced slash command leaked"
             )
 
+    def test_no_agent_teams_env_var(self, forge_zip):
+        for name, content in _md_contents(forge_zip).items():
+            assert "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" not in content, (
+                f"{name}: capability flag env var leaked"
+            )
+
     def test_chat_replace_marker_consumed(self, forge_zip):
         # The marker itself is consumed by the transform; only its standalone
         # replacement text survives.

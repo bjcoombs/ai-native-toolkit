@@ -74,7 +74,10 @@ A strict hierarchy, not a menu: **Gate 1 - Objective** (every case passes Fideli
 
 ## Execution modes
 
-Capability-detected via `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, mirroring `huddle`. The modes below all run the same loop; they differ only in how the panel remembers across rounds, and the **panel ledger** carries that memory - see [panel-ledger](references/panel-ledger.md).
+<!-- chat-skip:start -->
+Capability-detected via `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, mirroring `huddle`.
+<!-- chat-skip:end -->
+The modes below all run the same loop; they differ only in how the panel remembers across rounds, and the **panel ledger** carries that memory - see [panel-ledger](references/panel-ledger.md).
 
 <!-- chat-replace:execution-mode-rule -->
 Pick the mode **deterministically**: if the Agent Teams capability is confirmed available and the panel scales past a single lens (see [judge-lenses](references/judge-lenses.md)), run **team mode**; if the flag is off, run **phased sub-agent mode**; in chat or the standalone ZIP, run **solo mode**. If you cannot confirm team mode, default to phased - it degrades gracefully, whereas attempting team mode without the capability fails loudly.
