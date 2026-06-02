@@ -45,7 +45,7 @@ The panel is five skill-quality lenses, scaled by stakes (2 for a quick check, 3
 
 ## The loop: OBSERVE -> INSPECT -> GATE -> AMEND
 
-Three operational phases cycle through a gate check. The source framework's fourth verb, **EVALUATE, is not a separate phase** - it is the name for what opens every round after the first: a re-run with the judges told to watch previously-passing cases for regressions. So EVALUATE = OBSERVE + INSPECT carrying a regression-focus flag.
+Three operational phases cycle through a gate check. EVALUATE is not a separate phase - rounds >= 2 just re-run OBSERVE and INSPECT with a regression-focus flag set.
 
 ```mermaid
 flowchart LR
@@ -57,8 +57,8 @@ flowchart LR
     G -->|"budget / no-gain"| S["STOP<br/>best-so-far + honest report"]
 ```
 
-1. **OBSERVE** (runner team). The lead finalizes the test suite (see [test-taxonomy](references/test-taxonomy.md)), then spawns one ephemeral runner per case in parallel; each runs the draft-as-instructions on its input and returns a transcript.
-2. **INSPECT** (judge panel). Each judge reviews every transcript through its lens, producing per-case pass/fail plus severity-rated findings (`LOW` / `MED` / `HIGH`) and dissent. On every round after the first, the judges give previously-passing cases extra scrutiny for regressions - the persistent panel (or the panel ledger in non-team modes) carries what passed before. The panel cross-talks; the lead-chair synthesizes a `round_verdict` per lens.
+1. **OBSERVE** (runner). The lead finalizes the test suite (see [test-taxonomy](references/test-taxonomy.md)), then runs the draft-as-instructions on each case input - one runner per case - producing a transcript per case. The execution mode decides whether the runners are parallel subagents or the lead working them sequentially.
+2. **INSPECT** (judge panel). Each judge reviews every transcript through its lens, producing per-case pass/fail plus severity-rated findings (`LOW` / `MED` / `HIGH`) and dissent. On every round after the first, the judges give previously-passing cases extra scrutiny for regressions, reading what passed before from the panel ledger (see [panel-ledger](references/panel-ledger.md)). The lead-chair synthesizes a `round_verdict` per lens.
 3. **GATE** (lead applies the hierarchy): promote, iterate, or stop.
 4. **AMEND** (lead). Synthesize the panel's findings into **one** minimal targeted change. Edit the draft. Log the hypothesis: "changed X because the `<lens>` found Y; expect Z to improve." Then loop back to OBSERVE.
 
@@ -74,17 +74,17 @@ A strict hierarchy, not a menu: **Gate 1 - Objective** (every case passes Fideli
 
 ## Execution modes
 
-Capability-detected via `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, mirroring `huddle`. Required because the skill ships as a standalone ZIP where Agent Teams do not exist. In team mode the judges persist and remember prior rounds natively; in the non-team modes the **panel ledger** is injected into each judge spawn so the panel still remembers what passed before and what each lens found - see [panel-ledger](references/panel-ledger.md).
+Capability-detected via `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, mirroring `huddle`. The modes below all run the same loop; they differ only in how the panel remembers across rounds, and the **panel ledger** carries that memory - see [panel-ledger](references/panel-ledger.md).
 
 <!-- chat-replace:execution-mode-rule -->
-Pick the mode **deterministically**: if you can confirm the Agent Teams capability is available and the panel has at least 2 lenses, run **team mode**; if the flag is off, run **phased sub-agent mode**; in chat / the standalone ZIP, run **solo mode**. If you cannot confirm team mode, default to phased - it degrades gracefully, whereas attempting team mode without the capability fails loudly.
+Pick the mode **deterministically**: if the Agent Teams capability is confirmed available and the panel scales past a single lens (see [judge-lenses](references/judge-lenses.md)), run **team mode**; if the flag is off, run **phased sub-agent mode**; in chat or the standalone ZIP, run **solo mode**. If you cannot confirm team mode, default to phased - it degrades gracefully, whereas attempting team mode without the capability fails loudly.
 
 | Mode | When | Mechanism |
 |------|------|-----------|
-| **Phased sub-agent** | flag off | No persistent agents - the panel ledger is injected into each fresh judge spawn so the panel still remembers prior rounds. |
-| **Solo** | chat / standalone ZIP | The lead runs runners as plain subagents and judges through each lens itself, sequentially, reading the panel ledger. |
+| **Solo** | chat / standalone ZIP, no subagents | One agent plays all three roles in a single context, round by round: it applies the draft to each test case using the [runner-prompt](references/runner-prompt.md) wrapper verbatim, then judges each transcript through every lens, then amends one thing - keeping the panel ledger as its across-round memory. |
+| **Phased sub-agent** | flag off | The lead spawns a fresh runner subagent per case and a fresh judge subagent per lens; with no persistent agents, the panel ledger is injected into each judge spawn so the panel still remembers prior rounds. |
 <!-- chat-skip:start -->
-| **Team** | flag on, panel >= 2 | Persistent judges cross-talk via `SendMessage`; ephemeral runners spawned per round. |
+| **Team** | flag on | Persistent judges cross-talk via `SendMessage` and remember prior rounds natively; ephemeral runners are spawned per round. |
 
 **Agent Teams flag.** Team mode needs `TeamCreate`, `SendMessage`, and `TeamDelete`. Enable it in your environment:
 
@@ -110,22 +110,14 @@ The panel cross-talks by sending one `SendMessage` per teammate (there is no bro
 
 The lead designs 3-5 cases spanning **happy path / edge case / adversarial / composition**, leaning on whichever the skill is most fragile against. When a new failure mode surfaces mid-run, add a case for it. The corpus is **persistent across re-forge runs** - it accumulates a skill's known failure modes so re-forging re-runs them, compounding like the `.assess/` wiki. Design guides for each case type and where the corpus lives are in [test-taxonomy](references/test-taxonomy.md).
 
-## Self-application: the bootstrap
+## Self-application
 
-Skill-forge cannot be forged before it runs, so it was built in ordered phases, and the version that ships is the one its own panel signed off:
+Skill-forge was bootstrapped by forging itself; two rules from that govern every run where the target is skill-forge:
 
-| Phase | What |
-|-------|------|
-| **A- - Flawed fixture** | Build the target-skill fixture first - one planted defect per lens (5 defects). It is the system's first input and a panel-calibration harness: a lens that misses its planted defect proves the panel is broken. |
-| **A - Seed** | Hand-author this `SKILL.md` plus references well enough to execute one full loop. |
-| **B - Self-forge** | Run skill-forge on skill-forge, using the fixture as the target it forges. The panel critiques the seed, the lead amends one thing per round, iterate until it clears its own 3-tier gate. |
-| **C - Promote** | The seed that survived ships as v1; the Phase B forge report ships as the canonical example. |
+1. **Re-forging re-enters fixture review first.** As skill-forge evolves its failure modes change, so a re-forge starts by confirming each planted defect in the flawed-sample fixture still exercises a current failure mode, before any rounds run. It is a step, not a prose aside, so it cannot be skipped.
+2. **Depth-1 recursion guard (axis 2).** When the skill under test **is** skill-forge, the runners forge the **fixture**, never skill-forge again - "forge the forge" tests its ability to forge *something else*, it does not build an infinite tower. With the role boundary (axis 1), both recursion paths are closed by construction.
 
-**Re-forging re-enters Phase A- first.** As skill-forge evolves its failure modes change, so a re-forge begins with a fixture review that confirms each planted defect still exercises a current failure mode, before Phase B runs. Making it a phase, not a prose aside, stops it being skipped.
-
-### Depth-1 recursion guard (axis 2)
-
-Self-application is **depth-1**. When the skill under test **is** skill-forge, the runners forge the **fixture**, never skill-forge again. "Forge the forge" tests its ability to forge *something else*; it does not build an infinite tower. Combined with the role boundary (axis 1), both recursion paths are closed by construction.
+The full A- -> A -> B -> C bootstrap story is in the [design spec](../../docs/superpowers/specs/2026-06-02-skill-forge-design.md).
 
 ## Artifacts
 
