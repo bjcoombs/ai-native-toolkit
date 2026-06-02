@@ -123,10 +123,12 @@ each one before round 1. Fidelity never judges against an unconfirmed ASSUMED cl
 
 ## The judge panel: five lenses
 
-Huddle's professional lenses, repointed at skill quality. The panel scales **2 -> 3 -> 5**
-lenses by stakes (huddle's Fibonacci team-sizing, capped at the five lenses below): 2 for a
-quick check, 3 for the default forge, all 5 for a deep one. Confidence is **not** a lens - it
-is the stopping decision in Gate 2, not an artifact perspective.
+Huddle's professional lenses, repointed at skill quality. The panel runs **all five by
+default**; the lead drops to 3 (Fidelity, Adversarial, Usability) for an explicit quick check
+or 2 for a fast gut check, and a self-forge always uses all five. (This default was reconciled
+from 3 to 5 during skill-forge's own self-forge, which found that a 3-lens default silently
+dropped the Compression and Trigger lenses - see the shipped example forge report.) Confidence
+is **not** a lens - it is the stopping decision in Gate 2, not an artifact perspective.
 
 **Behavioural vs static evidence.** Four lenses judge runner *transcripts* - observed
 behaviour. The fifth, Trigger/routing, judges the skill *text* directly, because

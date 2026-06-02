@@ -21,7 +21,7 @@
 
 ## File Structure
 
-```
+```text
 skills/skill-forge/
   SKILL.md                              # orchestrator: roles, loop, gate, modes, bootstrap, guards
   references/

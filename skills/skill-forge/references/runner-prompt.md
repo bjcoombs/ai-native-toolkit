@@ -6,7 +6,7 @@ The lead fills this template per runner - one runner per test case per round. Th
 
 ## Template
 
-```
+```text
 You are a test runner. Apply the following skill to the following input, exactly
 as the skill instructs.
 
