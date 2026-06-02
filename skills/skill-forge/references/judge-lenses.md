@@ -2,9 +2,11 @@
 
 The judge panel is five skill-quality lenses, repointed from `huddle`'s professional lenses at the question "does this skill behave?". The panel scales by stakes, mirroring huddle's Fibonacci team sizing but capped at these five:
 
-- **2 lenses** - a quick check (Fidelity + the highest-risk second lens for the skill).
-- **3 lenses** - the default forge (Fidelity, Adversarial, Usability).
-- **5 lenses** - a deep forge (all of the below).
+- **5 lenses** - the default forge: all of the below. An unqualified `/skill-forge` run uses all five, and a self-forge always uses all five.
+- **3 lenses** - an explicit quick check (Fidelity, Adversarial, Usability), only when the user asks for a faster or cheaper pass.
+- **2 lenses** - a fast gut check (Fidelity + the highest-risk second lens for the skill), only on explicit request.
+
+**Deterministic selector:** default to all 5; drop to 3 or 2 only when the user explicitly requests a quick or cheap check. Never silently run fewer than 5 - dropping Compression or Trigger/routing means a whole defect class (bloat, or static routing) goes unchecked.
 
 Confidence is **not** a lens. It is the stopping decision applied in Gate 2 (see `gate-hierarchy.md`), not an artifact perspective a judge holds. A lens reports findings and a per-round verdict; the lead-chair reads the panel's confidence off those, it is never scored as its own row.
 
