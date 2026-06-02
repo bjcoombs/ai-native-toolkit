@@ -28,7 +28,7 @@ The amendment's own logged hypothesis is the yardstick - nothing else.
 Each AMEND logs "changed X because the `<lens>` found Y; expect Z to improve" into the `amend_log` (see `panel-ledger.md`, fields `change` and `hypothesis_metric`). Gate 3 registers gain **only if Z - the metric the hypothesis targeted - actually improved.** The signal is the targeted lens's `round_verdict`: a verdict of `better` on the metric the hypothesis named is a gain; `same` is not.
 
 - A round whose targeted metric did not move is a **failed hypothesis** and counts as no gain, even if some unrelated lens happened to improve. Coincidental improvement elsewhere does not count.
-- This is the same causal-attribution principle as one-change-per-round: credit the change for what it aimed at, not for coincidental drift.
+- This is the same causal-attribution principle as one-change-per-round (credit a change only for the metric it targeted): credit the change for what it aimed at, not for coincidental drift.
 - **Regressions are handled upstream, not here.** A round that makes a previously-passing case fail fails Gate 1; Gate 3 only ever asks whether the intended improvement landed.
 
 ## Promotion decision

@@ -22,6 +22,8 @@ The skill combined with another skill or concept - invoked alongside a second sk
 
 The corpus is **kept across re-forge runs**. It accumulates a skill's known failure modes, so re-forging the same skill later re-runs every case the skill has ever failed - the suite compounds over time the way the `.assess/` wiki does. A skill that has been forged three times carries the union of all three runs' hard cases, and a regression on any of them is caught immediately.
 
+Each case records whether it was a `seed` case (designed at the start of a run) or an `added round N` case (born from a failure mode surfaced mid-run) - the same vocabulary the test-suite table uses in `forge-report-template.md`.
+
 The corpus lives as a **sidecar in the target skill's forge directory** - alongside the skill being forged, not inside `skill-forge` itself and not at a hard-coded absolute path. The exact location is recorded in the forge report (see `forge-report-template.md`) so a later re-forge can find and reload it. In the standalone/chat path where there is no on-disk forge directory, the corpus is carried in the scratch artifact for the session.
 
 Self-application is the deciding argument for persistence: forging the forge benefits directly from accumulating the meta-skill's own failure modes, so each self-forge starts harder than the last.

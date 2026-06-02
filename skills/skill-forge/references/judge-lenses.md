@@ -20,16 +20,12 @@ Confidence is **not** a lens. It is the stopping decision applied in Gate 2 (see
 
 ## Behavioural vs static evidence
 
-Four lenses - Fidelity, Adversarial, Compression, Usability - judge **runner transcripts**: observed behaviour, what the agent actually did when fed the draft as instructions. These are observations.
+Four lenses - Fidelity, Adversarial, Compression, Usability - judge **runner transcripts** (observed behaviour), so their findings are tagged `behavioural`. Trigger/routing judges the **skill text directly**: prompt-injection hands the draft to the runner as its instructions, so the runner always runs the skill and injection can never make a `TRIGGER` clause mis-fire the way a live router would. Its findings are therefore **predictions**, tagged `static`. The flawed fixture calibrates this lens's *reading* of the `description`, not a behavioural observation.
 
-The fifth lens, Trigger/routing, judges the **skill text directly**. Prompt-injection hands the draft to the runner as its instructions, so the runner always runs the skill - injection can never make a `TRIGGER` clause mis-fire or over-fire the way a live router would. Trigger/routing findings are therefore **predictions, not observations**.
+Two consequences follow:
 
-The asymmetry has three consequences, all enforced by the rest of the system:
-
-- The forge report tags every finding `behavioural` or `static` (see `forge-report-template.md`). All four observational lenses produce `behavioural` findings; Trigger/routing produces `static` ones.
-- **Trigger/routing findings never gate Gate 1**, which is behavioural-only (every case passing Fidelity). A static prediction cannot fail an objective behavioural gate.
-- A HIGH-severity Trigger/routing prediction blocks only at **Gate 2**, surfaced as panel dissent. LOW/MED Trigger predictions are documented, not blocking - the same severity rule the other lenses follow.
-- The flawed fixture's planted trigger defect calibrates this lens's **reading** ability (can it spot a bad `description` in the text?), not a behavioural observation. The other four lenses are calibrated against observed behaviour; Trigger/routing alone is calibrated against the static read.
+- The forge report tags every finding `behavioural` or `static` (see `forge-report-template.md`).
+- **Trigger/routing findings never gate Gate 1** (behavioural-only); a HIGH-severity Trigger prediction blocks only at **Gate 2**, as panel dissent. LOW/MED Trigger predictions are documented, not blocking.
 
 ## What each lens reads in the self-report
 
