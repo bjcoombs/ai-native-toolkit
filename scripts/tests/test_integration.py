@@ -232,3 +232,34 @@ class TestDeslopBuild:
         zf1 = _build("deslop", tmp_path / "run1")
         zf2 = _build("deslop", tmp_path / "run2")
         assert Path(zf1.filename).read_bytes() == Path(zf2.filename).read_bytes()
+
+
+# ── semantic-compress ─────────────────────────────────────────────────────────
+class TestSemanticCompressBuild:
+    @pytest.fixture(scope="class")
+    def sc_zip(self, tmp_path_factory):
+        return _build("semantic-compress", tmp_path_factory.mktemp("semantic-compress"))
+
+    def test_skill_md_present(self, sc_zip):
+        assert "semantic-compress/SKILL.md" in sc_zip.namelist()
+
+    def test_forge_report_present(self, sc_zip):
+        assert "semantic-compress/references/forge-report.md" in sc_zip.namelist()
+
+    def test_frontmatter_name_correct(self, sc_zip):
+        skill_md = sc_zip.read("semantic-compress/SKILL.md").decode("utf-8")
+        assert "name: semantic-compress" in skill_md
+
+    def test_standalone_description_applied(self, sc_zip):
+        skill_md = sc_zip.read("semantic-compress/SKILL.md").decode("utf-8")
+        assert "Standalone build v" in skill_md
+
+    def test_no_orphan_markers(self, sc_zip):
+        for name, content in _md_contents(sc_zip).items():
+            assert "chat-skip" not in content, f"{name}: chat-skip marker leaked"
+            assert "chat-replace" not in content, f"{name}: chat-replace marker leaked"
+
+    def test_zip_is_deterministic(self, tmp_path):
+        zf1 = _build("semantic-compress", tmp_path / "run1")
+        zf2 = _build("semantic-compress", tmp_path / "run2")
+        assert Path(zf1.filename).read_bytes() == Path(zf2.filename).read_bytes()

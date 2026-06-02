@@ -222,4 +222,23 @@ SKILLS: dict[str, dict] = {
         "exclude_dirs": set(),
         "replacements": {},
     },
+    "semantic-compress": {
+        "standalone_name": "semantic-compress",
+        "standalone_description": (
+            "Compress instructions written for an LLM reader by pointing at core knowledge "
+            "the model already holds (a concept name activates it) and keeping project-specific "
+            "detail explicit and verbatim. Point at what the model knows, spell out what it "
+            "doesn't. TRIGGER when asked to compress, tighten, shorten, or strip a prompt or "
+            "instruction meant for an LLM, when an instruction set explains concepts the model "
+            "already knows from training, or when reducing token cost of an LLM-directed prompt "
+            "without losing meaning. Not for human-facing prose."
+            + VERSION_SUFFIX
+        ),
+        "source_dir": "skills/semantic-compress",
+        # Pure-markdown skill, portable as-is: no plugin path resolution,
+        # $ARGUMENTS, namespaced slash commands, or Claude-Code-only tools to
+        # strip, so no chat-skip/chat-replace markers and no replacements.
+        "exclude_dirs": set(),
+        "replacements": {},
+    },
 }
