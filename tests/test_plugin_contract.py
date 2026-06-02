@@ -30,6 +30,15 @@ LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 USE_SKILL_RE = re.compile(r"[Uu]se the ([a-z0-9][a-z0-9-]*) skill")
 SUBAGENT_RE = re.compile(r'subagent_type:\s*"([^"]+)"')
 
+# Tool-call envelope tags that leak from an agent's own output into authored
+# markdown (e.g. a doc-writing agent echoing </invoke> or </content> into the
+# file it writes). These render as visible junk and ride into the standalone
+# skill ZIPs / releases. Regression guard for the v1.24.0 leaked-tag escape,
+# where 5 Map-of-Content docs shipped </content> and </invoke> residue.
+ENVELOPE_TAG_RE = re.compile(
+    r"</?(?:antml:)?(?:invoke|parameter|function_calls)\b|</?content>",
+)
+
 
 def _split_frontmatter(path: Path):
     text = path.read_text(encoding="utf-8")
@@ -58,6 +67,27 @@ def command_files():
 
 def shipped_md():
     return [d / "SKILL.md" for d in skill_dirs()] + command_files()
+
+
+def all_authored_markdown():
+    """Every authored markdown file that ships with the plugin.
+
+    Broader than ``shipped_md()`` (SKILL.md + commands) because leaked envelope
+    tags can land in docs/ and module README.md files too - that's exactly where
+    the v1.24.0 escape happened. Excludes test fixtures (intentional inputs) and
+    build/VCS dirs.
+    """
+    if not REPO.is_dir():
+        return []
+    out = []
+    for p in sorted(REPO.rglob("*.md")):
+        parts = p.relative_to(REPO).parts
+        if {".git", "dist", "node_modules"} & set(parts):
+            continue
+        if "fixtures" in parts:
+            continue
+        out.append(p)
+    return out
 
 
 def known_skill_names():
@@ -118,6 +148,15 @@ def test_subagent_types_resolve(p):
         if "<" in name:  # template placeholder like task-<task-id>
             continue
         assert name in known, f"{p.name}: subagent_type \"{name}\" has no agents/{name}.md"
+
+
+@pytest.mark.parametrize("p", all_authored_markdown(), ids=lambda p: str(p.relative_to(REPO)))
+def test_no_leaked_tool_envelope_tags(p):
+    found = sorted(set(ENVELOPE_TAG_RE.findall(p.read_text(encoding="utf-8"))))
+    assert not found, (
+        f"{p.relative_to(REPO)}: leaked tool-call envelope tag(s) {found} - "
+        "agent tool-envelope residue must never ship in authored markdown"
+    )
 
 
 def test_plugin_json_valid():

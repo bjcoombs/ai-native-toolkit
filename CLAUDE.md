@@ -86,7 +86,8 @@ No human reviewers and no `claude[bot]` on this repo.
 ### CI Patterns
 
 - **Required (merge-gating) checks**: `skills/assess pytest`, `scripts/ pytest`, `plugin contract pytest`, `Validate PR title` (enforced by branch protection - see the CI section).
-- **Non-blocking checks**: `CodeRabbit` (rate-limited bot), `Auto-label from PR title` (convenience automation), `build` (push-only standalone publish - does not run on PRs).
+- **Non-blocking checks**: `CodeRabbit` (rate-limited bot), `Auto-label from PR title` (convenience automation), `build` (push-only standalone publish - does not run on PRs), `claude-review` (advisory AI review - posts findings as threads but never gates merge; slow, often finishes after the required checks are green).
+- **`AI-readiness regression gate`**: an `/assess`-based gate that is **effectively required but re-runs on every base advance** (it diffs the PR against `main`). It is not in the classic branch-protection `required_status_checks.contexts`, so it won't show in that API list, but a plain `gh pr merge` is refused while it is re-running. In a multi-PR wave each merge re-triggers it on the still-open PRs - so either wait for it to re-settle per PR, or merge with `--admin` once the four named required checks are green.
 - **Local-run gotcha**: the `skills/assess` pytest suite shows ~7 phantom git-commit failures from global git config when run locally - run with `GIT_CONFIG_GLOBAL=/dev/null` to clear them. They are not CI failures.
 - **Hot file on every PR**: `.claude-plugin/plugin.json` `.version` - each PR must bump it. Identical bumps 3-way-merge cleanly; divergent bumps conflict, so merge sequentially (highest version wins). Tell each teammate the next version explicitly when running several PRs at once.
 
