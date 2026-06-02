@@ -194,6 +194,11 @@ class TestSkillForge:
         skill_md = forge_zip.read("skill-forge/SKILL.md").decode("utf-8")
         assert "name: skill-forge" in skill_md
 
+    def test_zip_is_deterministic(self, tmp_path):
+        zf1 = _build("skill-forge", tmp_path / "run1")
+        zf2 = _build("skill-forge", tmp_path / "run2")
+        assert Path(zf1.filename).read_bytes() == Path(zf2.filename).read_bytes()
+
 
 # ── deslop ──────────────────────────────────────────────────────────────────
 

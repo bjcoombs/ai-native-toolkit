@@ -97,11 +97,11 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 
 The team lifecycle follows `marathon`'s idioms - the lead delegates and never executes, runner teammates are ephemeral (spawned per round, shut down after), and the judge panel is the one persistent team. As illustrative text (do not treat the snippets below as live tool calls):
 
-```
+```text
 TeamCreate(team_name: "forge-<skill-slug>", description: "skill-forge panel for <skill>")
 ```
 
-```
+```text
 # spawn one judge per active lens (persistent) and one runner per test case (ephemeral)
 Agent(subagent_type: "general-purpose", team_name: "forge-<skill-slug>", name: "fidelity", prompt: "<lens brief>")
 ```
