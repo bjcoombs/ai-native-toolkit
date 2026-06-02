@@ -317,12 +317,25 @@ If green with 0 unresolved threads, run smart-merge regardless of teammate messa
 
 The lead runs smart-merge via the pr-review-merge skill (Smart Merge section): dismiss stale
 bot CRs, verify the four auto-merge criteria, handle UNSTABLE/UNKNOWN, merge in hot-file order.
+On a solo-maintainer repo (0 required approvals) merge with `gh pr merge $PR --squash --delete-branch --admin`
+once the *required* checks are green — a plain merge gets bounced when a non-required check (CodeRabbit,
+an advisory AI review, a regression gate that re-runs on base advance) is mid-run at the merge instant.
 After a merge, close the unit via the adapter's **close on merge** operation, then proceed to
 the wave transition below.
 
+**Gate cleanup on a VERIFIED merge.** Worktree removal, branch deletion, and unit-close MUST run
+only after confirming `gh pr view $PR --json state --jq '.state' == "MERGED"`. Never chain them
+unconditionally after the merge call — a rejected merge with chained cleanup deletes the branch/worktree
+of a PR that never merged (recoverable via the remote branch, but it wastes a recovery cycle every time).
+
+**Don't merge an AI-authored docs/content PR while its AI reviewer is still pending.** Even when the
+required checks are green and `mergeStateStatus` is CLEAN, wait for `claude[bot]`/`claude-review` to post —
+AI-written docs are exactly where AI-authoring residue (leaked tool-envelope tags, duplicated sections)
+hides, and the reviewer catches it. The minutes of waiting are cheaper than a follow-up PR + patch release.
+
 **After merge:**
 1. Report to user
-2. Shutdown teammate
+2. Shutdown teammate (gate on verified `state == "MERGED"` first)
 3. Mark internal task completed
 4. Check for newly unblocked tasks
 5. **Wave transition**: Batch-dismiss stale CRs across all eligible PRs before spawning next wave. Review signals from completed wave, adapt next prompts with learnings.

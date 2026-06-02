@@ -155,19 +155,28 @@ gh pr view $PR --json mergeStateStatus,mergedAt,reviews \
 
 **UNKNOWN handling:** GitHub sometimes returns `mergeStateStatus: "UNKNOWN"` even when all checks pass. If UNKNOWN but CI all green and 0 unresolved threads, retry up to 3 times with 30s backoff. If still UNKNOWN after retries, treat as CLEAN and proceed (log the override).
 
+**The merge command — use `--admin` on solo-maintainer repos.** When `$REQUIRED_APPROVALS` is 0 and only the named required checks gate, a plain `gh pr merge --squash` can be **refused** ("base branch policy prohibits the merge") whenever a *non-required* check (CodeRabbit, an advisory AI review, a regression gate that re-runs on base advance) is PENDING or re-running at the exact merge instant — even though `mergeStateStatus` reported CLEAN/UNSTABLE a moment earlier. Once the named required checks are all SUCCESS, merge with admin override so a mid-run non-required check can't bounce you:
+```bash
+gh pr merge $PR --squash --delete-branch --admin
+```
+Only do this once the *required* checks are green (admin override bypasses branch policy, not your own merge criteria). On multi-PR waves, a gate that re-runs on every base advance (each merge re-triggers it on the pending PRs) makes the plain-merge bounce recurring — `--admin` avoids a wait-and-retry cycle per PR.
+
 **Verify before merging** — never trust the caller's claim that a PR is ready:
 ```bash
 gh pr view $PR --json state,mergedAt,mergeStateStatus | jq '{state, mergedAt, mergeStateStatus}'
 ```
 Trust the API, not the message.
 
-**After merge:**
-
-Close the work unit via the consumer's **close on merge** adapter operation, then remove its worktree and delete its branch using the consumer's branch/worktree convention:
+**After merge — gate cleanup on a VERIFIED merge.** A merge call can be rejected (see the `--admin` note above) while a chained one-liner blindly runs cleanup anyway, deleting the worktree and branch of a PR that never merged. **Never chain cleanup unconditionally after the merge command.** Confirm `state == "MERGED"` (or `mergedAt != null`) first, then close the unit via the consumer's **close on merge** adapter operation and remove its worktree + branch:
 
 ```bash
-git worktree remove --force <worktree-path-for-this-unit>
-git branch -D <branch-for-this-unit>
+MERGED=$(gh pr view $PR --json state --jq '.state')
+if [ "$MERGED" = "MERGED" ]; then
+  git worktree remove --force <worktree-path-for-this-unit>
+  git branch -D <branch-for-this-unit>
+else
+  echo "MERGE NOT CONFIRMED ($MERGED) — skipping cleanup, retry merge"
+fi
 ```
 
 Report the merge to the user. Any wave/next-task orchestration after a merge is the caller's responsibility (the marathon engine handles waves and teammate lifecycle) — this skill's job ends at a clean merge + cleanup.
