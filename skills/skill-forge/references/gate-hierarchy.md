@@ -20,6 +20,7 @@ A test case **passes Fidelity** when the runner's output preserves the intent's 
 - **Sub-HIGH Fidelity findings are advisory.** A LOW or MED Fidelity finding does not fail the case - it is recorded and may inform an amendment, but the case still passes Gate 1.
 - **A HIGH-severity Fidelity finding is an automatic Gate-1 failure.** This is the same `HIGH` bar Gate 2 applies to dissent, so both gates speak one severity language.
 - The bar is **propositional, not numeric.** "Did the output keep these propositions intact?" - not "did it score 8/10." Numeric scores on LLM judges are false precision.
+- **Gate 1 is behavioural-only.** Static (Trigger/routing) findings never count toward Gate 1 - they block only at Gate 2 as dissent (see `judge-lenses.md`). A future edit tightening Gate 1 must not fold static findings in: Gate 1 reads Fidelity, and Fidelity alone.
 
 ## What "measurable gain" means (Gate 3)
 

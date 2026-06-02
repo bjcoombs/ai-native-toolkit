@@ -1,6 +1,6 @@
 # The runner prompt
 
-The runner prompt is the most load-bearing prompt in the system. Runner transcripts are the evidence every behavioural lens judges, so any contamination here corrupts the whole gate. It must be a **pure wrapper**: it never explains *why* the skill works, never adds context beyond the draft, never coaches the runner. The moment the prompt adds anything, the runner is testing "skill + prompt additions" instead of the skill, and the panel judges a thing that will not ship.
+It must be a **pure wrapper**: it never explains why the skill works, adds context beyond the draft, or coaches the runner (SKILL.md carries the rationale for why this is load-bearing).
 
 The lead fills this template per runner - one runner per test case per round. The five sections are all required. Copy the template, drop in the draft and the case input, send it to a fresh-context runner.
 
@@ -44,19 +44,12 @@ Self-report format (all fields required - fill every one):
    <where following the skill as written felt wrong, but you did it anyway>
 ```
 
-## The five sections
+## The role-boundary section
 
-1. **Role statement** - "You are a test runner. Apply the following skill to the following input, exactly as the skill instructs." Establishes the runner applies, it does not judge or author.
-2. **Role boundary** - do not add, skip, or reinterpret steps; note ambiguity but still follow as written; do not judge the skill. This is the axis-1 recursion guard at the runner end: runners apply, lenses judge, the lead amends.
-3. **The skill draft** - the full current draft, verbatim, fenced. Nothing paraphrased, nothing summarized.
-4. **The test-case input** - this runner's specific input, and only this input.
-5. **Self-report format** - the five required fields above.
+The role-boundary section is the axis-1 recursion guard at the runner end: runners apply, lenses judge, the lead amends. A runner that starts judging the skill collapses that separation, which is why the boundary spells out "do not judge the skill" explicitly.
 
 ## Why the self-report fields are required output, not optional notes
 
-These fields are what each lens reads (see `judge-lenses.md`). They are required output, not optional notes, because a vague self-report blinds the lenses that depend on them:
-
-- **Usability** reads *steps followed / skipped + why* - if the runner does not record which steps it skipped, Usability cannot tell a clear skill from a confusing one.
-- **Adversarial** reads *improvisation beyond the skill* and *any point you wanted to deviate but followed literally* - these are the rationalization-escape signals. A runner that silently improvises hides exactly the holes Adversarial exists to find.
+These fields are what each lens reads; the full self-report-field-to-lens mapping is owned by `judge-lenses.md`. They are required output, not optional notes, because a vague self-report blinds the lenses that depend on them.
 
 A runner that returns "I wrote the message" with the other fields blank has produced an unjudgeable transcript. Treat any missing field as a failed runner and re-run it.

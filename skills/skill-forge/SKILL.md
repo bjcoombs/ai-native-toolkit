@@ -66,7 +66,7 @@ flowchart LR
 
 One change per round isolates a single hypothesis, so every round's delta is causally attributable - consistent with the "minimal targeted regeneration over wholesale rewrites" principle. This is the default discipline, kept until evidence says otherwise.
 
-**Concrete escape (a starting hypothesis, tunable during Phase B - not a fixed law):** if 3 consecutive rounds each surface `HIGH`/`MED` findings from at least 2 different lenses and none of those rounds produced a regression, the lead may batch independent amendments - one change per independent finding-cluster. The principle (isolate cause) and the guard (never batch across a round that regressed) are fixed; the threshold is exactly the kind of parameter the self-forge exists to calibrate.
+**Concrete escape:** if 3 consecutive rounds each surface `HIGH`/`MED` findings from at least 2 different lenses and none of those rounds produced a regression, the lead may batch independent amendments - one change per independent finding-cluster. The principle (isolate cause) and the guard (never batch across a round that regressed) are fixed. The threshold is calibrated between forge campaigns - via Phase B or a later re-forge - and is **fixed for the duration of any single run**: an in-flight forge may not lower the threshold to justify batching this round. Calibration happens between runs, never under in-run pressure.
 
 ## Gate hierarchy
 
@@ -81,7 +81,7 @@ Pick the mode **deterministically**: if the Agent Teams capability is confirmed 
 
 | Mode | When | Mechanism |
 |------|------|-----------|
-| **Solo** | chat / standalone ZIP, no subagents | One agent plays all three roles in a single context, round by round: it applies the draft to each test case using the [runner-prompt](references/runner-prompt.md) wrapper verbatim, then judges each transcript through every lens, then amends one thing - keeping the panel ledger as its across-round memory. |
+| **Solo** | chat / standalone ZIP, no subagents | One agent plays all three roles in a single context, round by round: it applies the draft to each test case using the [runner-prompt](references/runner-prompt.md) wrapper verbatim, then judges each transcript through every lens, then amends one thing - keeping the panel ledger as its across-round memory. It repeats the round (OBSERVE -> INSPECT -> GATE -> AMEND) until the gate promotes or the budget ceiling stops it - the same termination as the other modes. |
 | **Phased sub-agent** | flag off | The lead spawns a fresh runner subagent per case and a fresh judge subagent per lens; with no persistent agents, the panel ledger is injected into each judge spawn so the panel still remembers prior rounds. |
 <!-- chat-skip:start -->
 | **Team** | flag on | Persistent judges cross-talk via `SendMessage` and remember prior rounds natively; ephemeral runners are spawned per round. |
@@ -114,7 +114,7 @@ The lead designs 3-5 cases spanning **happy path / edge case / adversarial / com
 
 Skill-forge was bootstrapped by forging itself; two rules from that govern every run where the target is skill-forge:
 
-1. **Re-forging re-enters fixture review first.** As skill-forge evolves its failure modes change, so a re-forge starts by confirming each planted defect in the flawed-sample fixture still exercises a current failure mode, before any rounds run. It is a step, not a prose aside, so it cannot be skipped.
+1. **Re-forging re-enters fixture review first.** As skill-forge evolves its failure modes change, so a re-forge starts by confirming each planted defect in the flawed-sample fixture still exercises a current failure mode, before any rounds run. It is a step, not a prose aside, so it cannot be skipped. The **lead** performs this Phase A- fixture review against `DEFECTS.md` (the answer key), while the runners forging the fixture never read `DEFECTS.md` - that role boundary keeps the calibration honest, since a runner that saw the answer key could not give a blind transcript.
 2. **Depth-1 recursion guard (axis 2).** When the skill under test **is** skill-forge, the runners forge the **fixture**, never skill-forge again - "forge the forge" tests its ability to forge *something else*, it does not build an infinite tower. With the role boundary (axis 1), both recursion paths are closed by construction.
 
 The full A- -> A -> B -> C bootstrap story is in the [design spec](../../docs/superpowers/specs/2026-06-02-skill-forge-design.md).

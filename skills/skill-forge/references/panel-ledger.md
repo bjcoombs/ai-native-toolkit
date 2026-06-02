@@ -23,13 +23,13 @@ In team mode the judges persist across rounds and remember prior findings native
 
 ### Fields
 
-- `meta` - the run header: `target_skill`, current `round`, execution `mode` (`team` / `phased` / `solo`), and the `budget` block (`max_rounds` ceiling and `rounds_spent`) the escape hatch reads.
-- `intent[]` - the intent clauses and each clause's `status`: `confirmed`, `assumed-accepted`, or `assumed-rejected`. Enforces the ASSUMED guard.
-- `lenses` - one entry per active lens (`fidelity`, `adversarial`, `compression`, `usability`, `trigger-routing`). Each holds:
-  - `round_verdict` - `better` / `same` / `worse` versus the previous round, for that lens.
-  - `findings[]` - per-case findings: `case` id, `severity` (`LOW` / `MED` / `HIGH`), a `summary`, and `kind` (`behavioural` for the four observational lenses, `static` for `trigger-routing`).
-- `dissent[]` - the cumulative, severity-tagged dissent log: which `lens` dissented, at what `severity`, with a `summary` and the `round` it was raised.
-- `amend_log[]` - one entry per round's single amendment: the `round`, the `change` made, the `hypothesis_metric` it targeted, and the `result` (`improved` / `flat`).
+Notes beyond the schema above - enum values and which gate reads each field:
+
+- `meta.mode` - one of `team` / `phased` / `solo`. `meta.budget` (`max_rounds`, `rounds_spent`) is what the budget escape hatch reads.
+- `intent[].status` - `confirmed`, `assumed-accepted`, or `assumed-rejected`; enforces the ASSUMED guard (Fidelity ignores `assumed-rejected` clauses).
+- `lenses` - one entry per active lens (`fidelity`, `adversarial`, `compression`, `usability`, `trigger-routing`). `round_verdict` is `better` / `same` / `worse`; `findings[].severity` is `LOW` / `MED` / `HIGH` and `findings[].kind` is `behavioural` for the four observational lenses, `static` for `trigger-routing`.
+- `dissent[]` - cumulative and severity-tagged; a `HIGH` entry blocks Gate 2.
+- `amend_log[].result` - `improved` / `flat`; Gate 3 reads gain off the `round_verdict` of the lens named by `hypothesis_metric`.
 
 ## Worked example
 
