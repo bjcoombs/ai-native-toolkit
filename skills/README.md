@@ -12,6 +12,7 @@ Work in any Claude Code session, and are also distributed as standalone ZIPs for
 | `/huddle` | [`huddle/SKILL.md`](./huddle/SKILL.md) | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing |
 | `/deslop` | [`deslop/SKILL.md`](./deslop/SKILL.md) | Detect and remove the telltale signs of AI writing; ships a [`references/full-checklist.md`](./deslop/references/full-checklist.md) |
 | `/ghsync` | [`ghsync/SKILL.md`](./ghsync/SKILL.md) | Bulk-clone and fast-forward sync every GitHub repo you can access across an org |
+| `/skill-forge` | [`skill-forge/SKILL.md`](./skill-forge/SKILL.md) | Harden a skill through judge-panel refinement rounds to a 3-tier promotion gate; refined through its own process |
 
 ## Assessment helpers
 

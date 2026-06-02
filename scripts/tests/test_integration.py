@@ -130,6 +130,71 @@ class TestHuddleBuild:
         assert "name: huddle" in skill_md
 
 
+# ── skill-forge ───────────────────────────────────────────────────────────────
+
+class TestSkillForge:
+    @pytest.fixture(scope="class")
+    def forge_zip(self, tmp_path_factory):
+        return _build("skill-forge", tmp_path_factory.mktemp("skill-forge"))
+
+    def test_skill_md_present(self, forge_zip):
+        assert "skill-forge/SKILL.md" in forge_zip.namelist()
+
+    def test_tests_fixture_excluded(self, forge_zip):
+        names = forge_zip.namelist()
+        assert not any("/tests/" in n for n in names), "tests/ fixture leaked into ZIP"
+
+    def test_no_team_create(self, forge_zip):
+        for name, content in _md_contents(forge_zip).items():
+            assert "TeamCreate" not in content, f"{name}: TeamCreate leaked"
+
+    def test_no_send_message(self, forge_zip):
+        for name, content in _md_contents(forge_zip).items():
+            assert "SendMessage" not in content, f"{name}: SendMessage leaked"
+
+    def test_no_team_delete(self, forge_zip):
+        for name, content in _md_contents(forge_zip).items():
+            assert "TeamDelete" not in content, f"{name}: TeamDelete leaked"
+
+    def test_no_plugin_root_reference(self, forge_zip):
+        for name, content in _md_contents(forge_zip).items():
+            assert "$CLAUDE_PLUGIN_ROOT" not in content, (
+                f"{name}: $CLAUDE_PLUGIN_ROOT leaked"
+            )
+
+    def test_no_dollar_arguments(self, forge_zip):
+        for name, content in _md_contents(forge_zip).items():
+            assert "$ARGUMENTS" not in content, f"{name}: $ARGUMENTS leaked"
+
+    def test_no_namespaced_slash_command(self, forge_zip):
+        for name, content in _md_contents(forge_zip).items():
+            assert "ai-native-toolkit:skill-forge" not in content, (
+                f"{name}: namespaced slash command leaked"
+            )
+
+    def test_no_agent_teams_env_var(self, forge_zip):
+        for name, content in _md_contents(forge_zip).items():
+            assert "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" not in content, (
+                f"{name}: capability flag env var leaked"
+            )
+
+    def test_chat_replace_marker_consumed(self, forge_zip):
+        # The marker itself is consumed by the transform; only its standalone
+        # replacement text survives.
+        for name, content in _md_contents(forge_zip).items():
+            assert "chat-replace:execution-mode-rule" not in content, (
+                f"{name}: chat-replace marker leaked"
+            )
+
+    def test_solo_replacement_applied(self, forge_zip):
+        skill_md = forge_zip.read("skill-forge/SKILL.md").decode("utf-8")
+        assert "Run in solo mode" in skill_md
+
+    def test_frontmatter_name_correct(self, forge_zip):
+        skill_md = forge_zip.read("skill-forge/SKILL.md").decode("utf-8")
+        assert "name: skill-forge" in skill_md
+
+
 # ── deslop ──────────────────────────────────────────────────────────────────
 
 class TestDeslopBuild:

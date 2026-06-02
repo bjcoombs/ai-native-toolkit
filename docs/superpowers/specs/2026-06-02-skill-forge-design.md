@@ -1,0 +1,320 @@
+# Design: `skill-forge` - judge-panel skill-hardening harness
+
+Date: 2026-06-02
+Status: Approved for implementation planning
+
+## Problem
+
+The toolkit has no quality gate for skills themselves. A `SKILL.md` is written, eyeballed,
+and shipped. "Works on paper" is the bar, and paper lies: a skill can read well and still
+fail in execution - a `TRIGGER` clause that never fires, a body an agent rationalizes its
+way out of following, denormalized training knowledge bloating the context window, an edge
+case nobody exercised. Nothing proves a skill *behaves* before it lands in the library.
+
+The toolkit also already owns the two machines needed to fix this. `marathon` is a
+source-agnostic team-execution engine (ephemeral one-job teammates, waves, crash recovery,
+retrospective). `huddle` is a multi-perspective deliberation chair (a lead chairing
+professional lenses that cross-talk and deliver a verdict with preserved dissent). Neither
+is pointed at skill quality.
+
+## Goal
+
+Add `skill-forge`: a shippable skill that takes a skill (draft or existing) plus its intent
+and drives it through adversarial execution rounds judged by a panel, amending one thing per
+round, until it clears a strict 3-tier promotion gate or hits a budget ceiling. The output is
+a hardened `SKILL.md` plus an honest forge report.
+
+The acceptance test for `skill-forge` is **`skill-forge` run on itself**. A harness that
+gates other skills has no credibility until it has survived its own gauntlet. Its promotion
+gate is its own gate.
+
+## Non-goals
+
+- **Not an authoring tool.** `brainstorming` + superpowers `writing-skills` author skills
+  from scratch. `skill-forge` is the prove-and-promote gate that runs *after*, or standalone
+  against a skill that already exists. One line in the SKILL.md states this boundary.
+- **No real-install execution.** Runners exercise the draft via prompt-injection, not by
+  installing it as a live plugin skill. (Rejected for breaking the standalone/chat path and
+  per-round cost - see Decisions.)
+- **No deterministic CI snapshot of forge output.** `skill-forge` is LLM-driven and
+  non-deterministic; the flawed fixture is a manual/example artifact, not a pytest assertion.
+- **No new behaviour in `marathon` or `huddle`.** `skill-forge` borrows their idioms; it does
+  not modify them.
+
+## Architecture
+
+### A new shippable skill
+
+```
+skills/skill-forge/
+  SKILL.md
+  references/
+    judge-lenses.md            The 5 lens definitions + what each flags
+    test-taxonomy.md           happy / edge / adversarial / composition design guide
+    gate-hierarchy.md          The 3-tier gate + promotion decision table
+    forge-report-template.md   The shipped report format
+  tests/
+    fixtures/
+      flawed-sample-skill/     A skill with one planted defect per lens (see Phase A-)
+```
+
+Pure markdown orchestration, like `marathon` and `huddle` - no Python core. It ships as a
+standalone ZIP for Claude Desktop / Cowork, so all team infrastructure is wrapped in
+`chat-skip` / `chat-replace` markers exactly as `huddle` does (`chat-skip` blocks are stripped
+from the standalone build; `chat-replace` swaps one plugin-only line for a chat-safe one).
+
+### The hybrid team
+
+`skill-forge` fuses both backbones: `marathon`'s ephemeral execution team runs the draft,
+`huddle`'s persistent deliberation panel judges it, and the lead chairs the loop.
+
+| Role | Lifecycle | Job |
+|------|-----------|-----|
+| **Forge Master (lead, chair)** | whole run | Designs test cases, spawns runners, chairs the panel, applies the gate hierarchy, makes the one amend per round, decides promote/stop. Delegates, never executes (marathon lead authority). |
+| **Runners** | ephemeral, one per test case per round | Fresh context. Get `draft content + one test-case input`, execute via prompt-injection, return a transcript + self-report. Shut down after the round. |
+| **Judge panel** | persistent across rounds | Each judge is one skill-quality lens with a persisted identity, so it can report "better/worse than last round" (feeds Gate 3) and catch regressions. Cross-talk via `SendMessage` (team mode) or a shared synopsis (phased). |
+
+### Role boundary (recursion guard, axis 1)
+
+**Runners apply, lenses judge, lead amends.** This separation is not stylistic - it is one of
+the two ways self-application could recurse without terminating. A runner that starts judging,
+a judge that starts amending, or a lead that starts executing collapses the loop. The
+boundary generalizes `marathon`'s "lead delegates, never executes" to all three roles, and
+every spawn prompt states the role's lane and its "not my job" boundary explicitly.
+
+### The runner prompt (named here, written in the plan)
+
+The runner prompt is the most load-bearing prompt in the system: runner transcripts are the
+evidence every behavioural lens judges, so any contamination here corrupts the whole gate. The
+plan writes the exact template; the spec pins its constraints so it is not improvised.
+
+It must be a **pure wrapper** - it never explains *why* the skill works or adds context beyond
+the draft, or the runner ends up testing "skill + prompt additions" instead of the skill.
+Required sections:
+
+1. **Role statement** - "You are a test runner. Apply the following skill to the following
+   input, exactly as the skill instructs."
+2. **Role boundary** - do not add, skip, or reinterpret steps; if the skill is ambiguous, note
+   it but still attempt to follow it as written; do not judge the skill (the axis-1 boundary).
+3. **The skill draft** - the full current draft, verbatim.
+4. **The test-case input** - this runner's specific input.
+5. **Self-report format** - the runner reports: the output it produced; which steps it
+   followed, which it skipped, and why; ambiguities hit and how it resolved them; any
+   improvisation beyond the skill; any point it wanted to deviate but followed literally.
+
+The self-report fields are not cosmetic - they are what each lens reads. Skipped-vs-followed
+steps feed **Usability**; improvisation and "wanted to deviate but didn't" feed **Adversarial**
+(the rationalization-escape hunt); resolved ambiguities feed both. A vague self-report blinds
+those lenses, so the template treats these fields as required output, not optional notes.
+
+## Input contract
+
+| Input | Required | Notes |
+|-------|----------|-------|
+| Target skill | yes | Path to a `SKILL.md`, or inline draft text |
+| Intent / spec | yes | What it should do + who/what should trigger it. The ground truth the Fidelity lens judges against. See the derivation guard below. |
+| Known failure modes / existing tests | no | Seeds the test corpus |
+
+**Intent derivation guard.** If no intent is supplied the lead derives one *from the draft* -
+but the draft is the thing under test, so a silently-derived intent would encode the draft's
+own mistakes, and Fidelity would then certify the skill for being *consistently wrong*. Every
+derived clause is therefore marked **ASSUMED**, and the user must explicitly accept or reject
+each one before round 1. Fidelity never judges against an unconfirmed ASSUMED clause.
+
+## The judge panel: five lenses
+
+Huddle's professional lenses, repointed at skill quality. The panel scales **2 -> 3 -> 5**
+lenses by stakes (huddle's Fibonacci team-sizing, capped at the five lenses below): 2 for a
+quick check, 3 for the default forge, all 5 for a deep one. Confidence is **not** a lens - it
+is the stopping decision in Gate 2, not an artifact perspective.
+
+**Behavioural vs static evidence.** Four lenses judge runner *transcripts* - observed
+behaviour. The fifth, Trigger/routing, judges the skill *text* directly, because
+prompt-injection feeds the draft to the runner as instructions and so can never make a
+`TRIGGER` clause mis-fire. Its findings are therefore **predictions, not observations**: the
+forge report tags every finding `behavioural` or `static`; Trigger findings never gate Gate 1
+(which is behavioural-only); and a HIGH-severity Trigger prediction blocks only at Gate 2, as
+panel dissent. The flawed fixture's planted trigger defect calibrates this lens's *reading*
+ability, not a behavioural observation - an asymmetry the other four lenses do not have.
+
+| Lens | Judges | Defect class it owns |
+|------|--------|----------------------|
+| **Fidelity** | Did the runner's behaviour match the stated intent? | The core pass/fail. Skill says X, agent did Y. |
+| **Adversarial** | Can it be broken? Ambiguous input, boundaries, rationalization escapes, and **future-edit safety** (does it stay correct when someone edits it later)? | Maintainability folds in here as an attack vector. |
+| **Compression** | Is it as short as it can be? | Bloat, redundancy, denormalized training knowledge ("point, don't paste"). |
+| **Usability** | Could a fresh agent follow it without confusion? | Ordering, missing steps, contradictions. |
+| **Trigger/routing** | Will the router fire it on the right phrases and not over-fire? | A bug class no other lens sees - the one thing prompt-injection cannot behaviourally test, so it is judged statically against the `description`/`TRIGGER` clause. |
+
+## The loop: OBSERVE -> INSPECT -> AMEND (cycling through a gate)
+
+Three operational phases cycle through a gate check. The source framework's fourth verb,
+EVALUATE, is **not** a separate activity - it is the name for what opens every round after
+the first: a re-run with the judges told to watch previously-passing cases for regressions.
+So EVALUATE = OBSERVE + INSPECT carrying a regression-focus flag, not a distinct phase.
+
+```mermaid
+flowchart LR
+    O["OBSERVE<br/>spawn 1 runner / test case<br/>(ephemeral, parallel)"] --> I["INSPECT<br/>panel scores every transcript<br/>pass/fail + severity + dissent<br/>(rounds >= 2: regression focus)"]
+    I --> G{"GATE<br/>(lead applies hierarchy)"}
+    G -->|"promote"| P["PROMOTE<br/>hardened skill + report"]
+    G -->|"iterate"| A["AMEND<br/>lead makes ONE targeted change<br/>+ logs the hypothesis"]
+    A --> O
+    G -->|"budget / no-gain"| S["STOP<br/>best-so-far + honest report"]
+```
+
+1. **OBSERVE** (runner team). Lead finalizes the test suite. Spawns one ephemeral runner per
+   case in parallel; each runs draft-as-instructions on its input and returns a transcript.
+2. **INSPECT** (judge panel). Each judge reviews every transcript through its lens, producing
+   per-case pass/fail plus severity-rated findings (LOW/MED/HIGH) and dissent. On every round
+   after the first, the judges give previously-passing cases extra scrutiny for regressions
+   (the persistent panel - or the panel ledger in non-team modes - carries what passed
+   before). Panel cross-talks. The lead-chair synthesizes a round verdict.
+3. **GATE** (lead applies the hierarchy below): promote, iterate, or stop.
+4. **AMEND** (lead). Synthesize the panel's findings into **one** minimal targeted change.
+   Edit the draft. Log the hypothesis: "changed X because the <lens> found Y; expect Z to
+   improve." One change per round isolates a single hypothesis, so every round's delta is
+   causally attributable - the rigor of the A/B model preserved inside the panel model, and
+   consistent with the "minimal targeted regeneration over wholesale rewrites" principle.
+   Then loop back to OBSERVE.
+
+### One-change-per-round: default with an evidence-based escape
+
+This is the default discipline, kept until evidence says otherwise. **Concrete escape (a
+starting hypothesis, tuned during Phase B - not a fixed law):** if 3 consecutive rounds each
+surface HIGH/MED findings from >= 2 different lenses and none of those rounds produced a
+regression, the lead may batch independent amendments - one change per independent
+finding-cluster. The threshold is exactly the kind of parameter the self-forge exists to
+calibrate, so Phase B may move it; what is fixed is the principle (isolate cause) and the
+guard (never batch across a round that regressed).
+
+## Test-case taxonomy
+
+The lead designs 3-5 cases spanning **happy path / edge case / adversarial / composition**
+(the skill combined with another skill or concept). When a new failure mode surfaces
+mid-run, it is added to the corpus. The corpus is **persistent across re-forge runs** - it
+accumulates a skill's known failure modes, so re-forging later re-runs them (compounding,
+like the `.assess/` wiki). Self-application is the deciding argument: forging the forge
+benefits directly from accumulating the meta-skill's own failure modes.
+
+## Gate hierarchy and promotion
+
+A strict hierarchy, not a menu. Dissent is always documented, never suppressed.
+
+| Gate | Bar | Effect |
+|------|-----|--------|
+| **Gate 1 - Objective** | Every test case passes the Fidelity judge | Hard. Any fail -> not promotable, must amend. Prevents standard-drift. |
+| **Gate 2 - Panel confidence** | All green *and* no HIGH-severity dissent | LOW/MED dissent is documented, does not block. Only HIGH blocks. Catches "passes but weak." |
+| **Gate 3 - Diminishing returns** | A round produced measurable gain | No gain -> stop coasting. |
+| **Escape hatch - Budget** | Max rounds / token ceiling | Always terminates with best-so-far + an honest "not promoted, here's why." |
+
+**What "passes Fidelity" means** (Gate 1 is the hard gate, so this cannot be a vibe). A test
+case passes when the runner's output preserves the intent's core propositions with no omission
+or distortion. Sub-HIGH Fidelity findings are advisory and do not fail the case; a
+**HIGH-severity Fidelity finding is an automatic Gate 1 failure**. This is the same HIGH bar
+Gate 2 applies to dissent, so both gates speak one severity language. The bar is propositional,
+not a numeric score - numeric scores on LLM judges are false precision.
+
+**What "measurable gain" means** (Gate 3). The amendment's own hypothesis is the yardstick.
+Each AMEND logs "changed X, expect Z to improve," and Gate 3 registers gain only if **Z - the
+metric the hypothesis targeted - actually improved.** A round whose targeted metric did not
+move is a failed hypothesis and counts as no gain, even if some unrelated lens happened to
+improve. This is the same causal-attribution principle as one-change-per-round: credit the
+change for what it aimed at, not for coincidental drift. (Regressions are handled separately,
+upstream - a regressing round fails Gate 1.)
+
+**Promote** if and only if Gate 1 passes **and** Gate 2 passes. Otherwise **STOP** at Gate 3
+or the budget ceiling with the best-so-far artifact and a report that names which gates were
+and were not met.
+
+## Execution modes (graceful degrade)
+
+Mirrors `huddle`, capability-detected via `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. Required
+because the skill ships as a standalone ZIP where Agent Teams do not exist.
+
+| Mode | When | Mechanism |
+|------|------|-----------|
+| **Team** | flag on, panel >= 2 | Persistent judges cross-talk via `SendMessage`; ephemeral runners spawned per round |
+| **Phased sub-agent** | flag off | No persistent agents - the **panel ledger** (below) is injected into each judge spawn so the panel still remembers prior rounds |
+| **Solo** | chat / standalone ZIP | Lead runs runners as plain subagents and judges through each lens itself, sequentially, reading the panel ledger |
+
+### The panel ledger (how non-team modes remember)
+
+In team mode the judges persist and remember prior rounds natively. In phased and solo modes
+the judge subagents have **fresh contexts** - they remember nothing - so "the lead keeps a
+running synopsis" is doing load-bearing work a prose blurb cannot carry. It is a structured
+**panel ledger**, injected into every judge spawn, holding per lens:
+
+- prior findings and their severity ratings,
+- a better / same / worse verdict versus the previous round (the input **Gate 3** reads to
+  detect diminishing returns),
+- the cumulative, severity-tagged dissent log.
+
+Without the ledger, Gate 3 and regression detection do not work off the flag. **The panel
+ledger and the crash-recovery round-tracking JSON are the same object** - one persisted file
+in the scratch dir that both survives a crash and feeds the next round's judges. Its concrete
+schema is a plan-level deliverable (adapt `marathon`'s `pr-tracking.json`).
+
+## Self-application: the bootstrap
+
+`skill-forge` cannot be forged before it runs, so it is built in ordered phases, and the
+version that ships is the one its own panel signed off.
+
+| Phase | What | Forged? |
+|-------|------|---------|
+| **A- - Flawed fixture** | Build the target-skill fixture *first* - it is the system's first input. One planted defect per lens (5 defects: a fidelity gap, an adversarial/rationalization hole, bloat, a usability ambiguity, a bad TRIGGER). | n/a |
+| **A - Seed** | Hand-author `SKILL.md` + references well enough to execute one full loop. | No (it does not exist yet) |
+| **B - Self-forge** | Run `skill-forge` on `skill-forge`, using the fixture as the target it forges. Panel critiques the seed, lead amends one thing per round, iterate until it clears its own 3-tier gate. | Yes, by itself |
+| **C - Promote** | The seed that survived ships as v1. The Phase B forge report ships as the canonical example. | - |
+
+### The fixture calibrates the panel, not just the skill
+
+One defect per lens means a correct panel catches all five. If a lens misses its planted
+defect, the **panel** is broken - independent of whether the skill under test is good. The
+fixture is therefore a panel-calibration harness as much as a forge target, and it doubles as
+a teaching example. It is a manual/example artifact, not a CI assertion.
+
+**The fixture is versioned alongside the skill.** As `skill-forge` evolves through re-forging,
+its failure modes change. So **re-forging re-enters Phase A- first**: a fixture review/update
+step that runs before Phase B and confirms each planted defect still exercises a current
+failure mode. Making it a phase, not a prose instruction, stops it being skipped. The cost is
+low (it is a manual artifact) and it keeps the calibration harness from going stale.
+
+### Recursion guard, axis 2: depth-1
+
+Self-application is depth-1. When the skill under test *is* `skill-forge`, runners exercise it
+against the target-skill fixture, never against `skill-forge` again. "Forge the forge" tests
+its ability to forge *something else*; it does not build an infinite tower. Combined with the
+role boundary (axis 1), both recursion paths are closed by construction.
+
+## Artifacts, isolation, recovery
+
+- **Isolation.** Never touch the user's pristine source. In a git repo, work on a
+  branch/worktree; in chat, a scratch file. Each amend is a visible diff.
+- **Artifacts.** The hardened `SKILL.md`; a **forge report** (intent, suite, per-round
+  hypothesis->result log, gate ledger, severity-tagged dissent log, final verdict, rounds +
+  estimated waste); the grown test corpus. Optional end-offer to open a PR, like `assess-pr`.
+- **Crash recovery + retrospective.** The round-tracking JSON in the scratch dir survives
+  crashes and reconciles on restart - it is the same panel ledger that powers Gate 3 in
+  non-team modes (see The panel ledger). An end-of-run retrospective (which lens caught the
+  most, waste estimate) follows - both straight from `marathon`.
+
+## Decisions
+
+| Decision | Choice | Why |
+|----------|--------|-----|
+| Home | Shippable toolkit skill | Same shelf as `assess`/`huddle`; version-bumped, CI-gated, standalone-ZIP. |
+| Iteration model | Judge-panel refinement | Panel critiques one draft per round; no literal A/B control/variant split. |
+| Team shape | Hybrid (marathon runners + huddle panel + chair lead) | Reuses both backbones; rejected wholesale marathon adapter (its fire-and-forget-to-merge model fits iterative refinement awkwardly). |
+| Execution | Hybrid prompt-injection + trigger lens | Portable (works in chat/standalone), proves execution, closes the trigger gap a lens can read but injection cannot test. |
+| Gate | 3-tier hierarchy + budget escape | Gate 1 prevents standard-drift; Gate 2 catches weak-but-passing; Gate 3 prevents coasting; budget always terminates. |
+| Lenses | Fidelity, Adversarial, Compression, Usability, Trigger/routing | Maintainability folds into Adversarial; confidence is the gate, not a lens. |
+| Corpus | Persistent across runs | Self-application benefits from accumulated failure modes. |
+| Recursion guard | Depth-1 + role boundary | Two independent recursion paths, both closed by construction. |
+
+## Open questions for the plan
+
+- Exact panel-ledger / round-tracking JSON schema, the one unified object (adapt `marathon`'s
+  `pr-tracking.json`): per-lens findings + severity, better/same/worse-than-last-round, dissent log.
+- Whether the forge report and grown corpus persist inside the target skill's directory or a
+  sidecar, and how that interacts with the standalone path.
+- Concrete budget defaults (max rounds, token ceiling) - tune during the Phase B self-forge.

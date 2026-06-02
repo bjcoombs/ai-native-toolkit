@@ -18,9 +18,11 @@ The plans and specs behind the skills, captured as they were built. These are hi
 | [Issues marathon + shared skills](./plans/2026-05-29-issues-marathon-shared-skills.md) | `/issues` marathon and shared marathon skills |
 | [Assess dogfooded - baseline analysis](./plans/2026-05-31-assess-dogfooded-analysis.md) | Phase 0 baseline and seam analysis |
 | [Assess dogfooded - PRD](./plans/2026-05-31-assess-dogfooded.md) | Teeth, a frozen harness, and decomposition |
+| [skill-forge](./plans/2026-06-02-skill-forge.md) | Build the judge-panel skill-hardening harness in bootstrap order, forged by itself |
 
 ## Specs
 
 | Spec | Subject |
 |------|---------|
 | [Issues marathon shared-skills design](./specs/2026-05-29-issues-marathon-shared-skills-design.md) | Design for `/issues` via shared marathon skills |
+| [skill-forge design](./specs/2026-06-02-skill-forge-design.md) | Judge-panel skill-hardening harness, refined through its own process |

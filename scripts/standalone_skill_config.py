@@ -180,6 +180,28 @@ SKILLS: dict[str, dict] = {
             "hats/blue-hat.md": "agents/blue-hat.md",
         },
     },
+    "skill-forge": {
+        "standalone_name": "skill-forge",
+        "standalone_description": (
+            "Harden a skill (draft or existing) through judge-panel refinement rounds until it "
+            "clears a 3-tier promotion gate, then promote it. A quality gate that runs after "
+            "authoring, not an authoring tool. TRIGGER when asked to test/harden/forge/prove a "
+            "skill, wanting a skill driven through adversarial rounds before shipping, asking 'is "
+            "this skill ready?', or wanting a skill quality-gated by a judge panel. Team mode "
+            "with persistent judges requires the Claude Code CLI; this build runs solo."
+            + VERSION_SUFFIX
+        ),
+        "source_dir": "skills/skill-forge",
+        "exclude_dirs": {"tests", "__pycache__", ".pytest_cache", ".venv"},
+        "replacements": {
+            "execution-mode-rule": (
+                "Run in solo mode: a single agent plays all three roles - runner, panel, "
+                "and lead - in one context, applying the draft to each test case, judging "
+                "every transcript through each lens, then amending one thing, round by round "
+                "until the gate promotes or the budget ceiling stops it."
+            ),
+        },
+    },
     "deslop": {
         "standalone_name": "deslop",
         "standalone_description": (
