@@ -10,6 +10,18 @@ The judge panel is five skill-quality lenses, repointed from `huddle`'s professi
 
 Confidence is **not** a lens. It is the stopping decision applied in Gate 2 (see `gate-hierarchy.md`), not an artifact perspective a judge holds. A lens reports findings and a per-round verdict; the lead-chair reads the panel's confidence off those, it is never scored as its own row.
 
+## Scope-based test scaling
+
+The **lens count is fixed at five**; what scales with skill size is the **number of test cases** and the **round budget** - the two multipliers that actually drive runner cost. The scope metric is the skill's lines / surface area (count the `SKILL.md` plus the reference files an agent must load to act). The thresholds below are **lead-judgement starting points, not hard rules** - a 60-line skill with a fragile trigger may still warrant a Medium suite.
+
+| Scope | Size | Test cases | Round budget |
+|-------|------|------------|--------------|
+| **Small** | < 100 lines | 1-2 cases (1 happy-path + 1 adversarial) | 3-round |
+| **Medium** | 100-300 lines | 3-4 cases | 5-round |
+| **Large** | > 300 lines | full 3-5 per taxonomy type | 7-round |
+
+**All five lenses run regardless of scope - dropping lenses by size re-opens the exact hole the self-forge closed** (the 5-lens-promise-undercut-by-a-3-lens-default HIGH that round 1 of the bootstrap caught). Scope scales test cases and rounds; it never scales the panel. A small skill gets fewer runners, not fewer lenses.
+
 ## The five lenses
 
 | Lens | Judges | Defect class it owns |
@@ -24,6 +36,8 @@ Confidence is **not** a lens. It is the stopping decision applied in Gate 2 (see
 
 Four lenses - Fidelity, Adversarial, Compression, Usability - judge **runner transcripts** (observed behaviour), so their findings are tagged `behavioural`. Trigger/routing judges the **skill text directly**: prompt-injection hands the draft to the runner as its instructions, so the runner always runs the skill and injection can never make a `TRIGGER` clause mis-fire the way a live router would. Its findings are therefore **predictions**, tagged `static`. The flawed fixture calibrates this lens's *reading* of the `description`, not a behavioural observation.
 
+**The fixture calibrates both detection and severity.** Beyond the one planted defect per lens (detection), the flawed fixture carries borderline cases with expected severities (a Borderline-LOW and a Borderline-MED) plus a clean-pass and a near-miss case that must draw no finding (see the fixture's `DEFECTS.md`). A lens that detects every defect but mis-rates its severity - or fires on the clean-pass / near-miss case - is miscalibrated even when detection is perfect. Rating, not just finding, is part of what the fixture proves.
+
 Two consequences follow:
 
 - The forge report tags every finding `behavioural` or `static` (see `forge-report-template.md`).
@@ -31,7 +45,7 @@ Two consequences follow:
 
 ## What each lens reads in the self-report
 
-Every runner returns a self-report in the format defined in `runner-prompt.md`. Each behavioural lens reads specific fields:
+Every runner returns a self-report in the format defined in ab-equivalence's runner prompt - skill-forge composes that runner rather than owning one (`../../ab-equivalence/references/runner-prompt.md`, relative to this file). Each behavioural lens reads specific fields:
 
 - **Fidelity** reads the *output produced* and compares it against the confirmed intent clauses (it ignores any clause whose `intent[].status` is `assumed-rejected` - see `panel-ledger.md`).
 - **Usability** reads *steps followed / skipped and why* - a step skipped because it was unclear or unreachable is a usability defect, not a runner failure.

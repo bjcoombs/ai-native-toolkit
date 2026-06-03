@@ -11,6 +11,11 @@ Fill the template below. Replace every `<...>` with the run's actual values.
 
 **Run date:** <date>  **Mode:** <team | phased | solo>  **Verdict:** <PROMOTE | STOP - best-so-far>
 
+**Runner Model(s) Tested:** <single model, e.g. `haiku`; or a sweep, e.g.
+`haiku: PROMOTE / sonnet: PROMOTE / opus: PROMOTE` with the per-tier verdict for
+each. Certification valid only for the tested tier(s) - a skill forged only on a
+strong tier is not certified for a weaker one.>
+
 ## Intent
 
 The ground truth the Fidelity lens judged against. Derived clauses were marked
@@ -70,7 +75,27 @@ block. HIGH dissent blocks Gate 2; LOW/MED is recorded only.
 - Gates met: <e.g. Gate 1, Gate 2, Gate 3>
 - Gates not met: <none | which, and why>
 - Residual HIGH-severity dissent: <none | summary> (required if STOP)
-- Best-so-far artifact: <path to the hardened or best-reached SKILL.md>
+- Best-so-far artifact: <path to the hardened or best-reached SKILL.md, relative to the repo root>
+- **Recommended Next Step:** <required when the outcome is STOP; omit when PROMOTE.
+  Map the STOP reason to its move per `gate-hierarchy.md`: Gate 1 unmet ->
+  revise substantively and re-forge; Gate 2 HIGH dissent -> address the HIGH
+  finding and re-forge, or accept best-so-far with the dissent documented;
+  budget hit -> raise the budget and continue, or accept best-so-far. State the
+  chosen move, not just the menu.>
+
+## Artifacts written
+
+Exactly what the promote step wrote and where - one row per file. The action
+depends on context (plugin repo / personal skill / chat-standalone); see the
+Promote semantics table in `SKILL.md`. Branch + URL are filled only for the
+PR-offered (plugin-repo) context; chat-standalone records the artifact as output
+for manual copy.
+
+| File | Path (relative to repo root, or "chat output") | Action | Branch + PR URL |
+|------|-------------------------------------------------|--------|-----------------|
+| SKILL.md | <path> | created / updated / PR-offered / output-for-copy | <branch + URL, or -> |
+| <reference file> | <path> | created / updated / PR-offered / output-for-copy | <branch + URL, or -> |
+| forge report | <path> | created / updated / PR-offered / output-for-copy | <branch + URL, or -> |
 
 ## Rounds and waste
 

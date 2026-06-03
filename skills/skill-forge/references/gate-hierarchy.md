@@ -42,3 +42,15 @@ Otherwise **STOP** - either because Gate 3 reports no measurable gain (the loop 
 - a report (see `forge-report-template.md`) that names **which gates were met and which were not**, and the residual HIGH-severity dissent that kept it from promoting.
 
 A STOP is a valid v1 outcome, not a failure of the harness - the loop always terminates with useful, honest output. Dissent recorded along the way is always preserved in the report, never suppressed to make a gate look cleaner.
+
+### STOP reason -> recommended next move
+
+A STOP is never a dead end: it names *why* it stopped and *what to do next*. **The recommended next move is explicit in the report, not left for the user to infer.** The reason maps to a move:
+
+| STOP reason | Recommended next move |
+|-------------|-----------------------|
+| **Gate 1 (Fidelity) unmet** - a case still fails Fidelity | Revise the skill substantively (the failing case names what behaviour is missing or distorted) and **re-forge**. A failing Gate 1 is not a ship-with-caveats outcome - the skill still misbehaves. |
+| **Gate 2 HIGH dissent** - all cases pass but a HIGH finding stands | **Address the HIGH finding and re-forge**, OR **accept the best-so-far with the dissent documented** if the finding is a known, acceptable trade-off. Both are valid; the report records which was chosen. |
+| **Budget hit** - max rounds / token ceiling reached before promotion | **Raise the budget and continue** if the per-round log shows the loop was still gaining, OR **accept the best-so-far** if rounds were coming back flat. Gate 3's `round_verdict` trend tells you which. |
+
+The chosen move is written into the forge report's **Recommended Next Step** field (see `forge-report-template.md`), which is required on every STOP.

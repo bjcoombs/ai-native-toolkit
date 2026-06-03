@@ -222,6 +222,32 @@ SKILLS: dict[str, dict] = {
         "exclude_dirs": set(),
         "replacements": {},
     },
+    "ab-equivalence": {
+        "standalone_name": "ab-equivalence",
+        "standalone_description": (
+            "Compare two versions of an LLM-directed document - an original (teacher) and a "
+            "candidate (student) - across a transfer set and return a per-case "
+            "behavioural-equivalence verdict plus an efficiency signal. A transform-agnostic "
+            "library capability other skills compose to gate a transform on behavioural sameness. "
+            "TRIGGER when asked to A/B test two versions of a prompt, instruction, or skill, to "
+            "check whether a rewritten or compressed document still behaves the same as the "
+            "original, to validate behavioural equivalence between two document versions, or to "
+            "gate a transform on no-regression. This standalone build runs solo mode only; "
+            "phased sub-agent and team modes require the Claude Code CLI."
+            + VERSION_SUFFIX
+        ),
+        "source_dir": "skills/ab-equivalence",
+        "exclude_dirs": {"tests", "__pycache__", ".pytest_cache", ".venv"},
+        "replacements": {
+            "execution-mode-rule": (
+                "This standalone build runs solo mode only: a single agent works each case "
+                "sequentially - applying the original and candidate via the runner wrapper, "
+                "then judging the two transcripts with the equivalence-judge prompt to record "
+                "the per-case verdict and efficiency signal. Phased sub-agent and team modes "
+                "require the Claude Code CLI and are not available here."
+            ),
+        },
+    },
     "semantic-compress": {
         "standalone_name": "semantic-compress",
         "standalone_description": (
