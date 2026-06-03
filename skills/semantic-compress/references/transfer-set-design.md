@@ -2,7 +2,7 @@
 
 The transfer set is the set of behavioural test cases the distillation is validated against. It is the **operational definition of the document's essence**: the distill loop accepts a smaller candidate only when it reproduces the original's behaviour *on these cases*, so what the set covers is exactly what the compression is allowed to claim safety over. A thin set yields a weak claim; an untested behaviour is an unguaranteed one. The set is therefore derived deliberately, scored for coverage, and **confirmed by the user before any baseline run** - the user signs off on what "same behaviour" means before the engine spends a single runner invocation.
 
-This guide owns deriving and confirming the set. The downstream loop (`distill-loop.md`) consumes the confirmed set; the A/B capability it composes (`skills/skill-forge/references/ab-equivalence.md`) consumes the same cases verbatim. The case types reuse the skill-forge taxonomy (`skills/skill-forge/references/test-taxonomy.md`), adapted from skill-level to document-level.
+This guide owns deriving and confirming the set. The downstream loop (`distill-loop.md`) consumes the confirmed set; the A/B capability it composes (`skills/ab-equivalence/references/ab-equivalence.md`) consumes the same cases verbatim. The case types reuse the skill-forge taxonomy (`skills/skill-forge/references/test-taxonomy.md`), adapted from skill-level to document-level.
 
 ## Derivation algorithm
 
@@ -97,7 +97,7 @@ The confirmed set is the contract the loop and the A/B capability both read. Fie
 - `cases[].input` - the exact input both the teacher and candidate runners receive, unchanged between versions.
 - `cases[].exercises_sections` - the document sections this case drives; the add-back mechanism maps a lost behaviour back through these.
 - `cases[].status` - provenance: `derived` (engine-generated), `user-modified`, `user-added`, or `confirmed` (the final state of every case in a confirmed set).
-- `cases[].gate_responses` - scripted answers for the interactive gates this case reaches, consumed in order by the runner; an empty array for a case that drives no gate. The runner (`skills/skill-forge/references/runner-prompt.md`) matches each gate's prompt against the entries and injects the response; a gate with no matching entry truncates the baseline (see `distill-loop.md`).
+- `cases[].gate_responses` - scripted answers for the interactive gates this case reaches, consumed in order by the runner; an empty array for a case that drives no gate. The runner (`skills/ab-equivalence/references/runner-prompt.md`) matches each gate's prompt against the entries and injects the response; a gate with no matching entry truncates the baseline (see `distill-loop.md`).
   - `gate_responses[].gate_id` - identifier for this gate instance within the case.
   - `gate_responses[].gate_type` - the tool or gate type (`AskUserQuestion`, a confirmation prompt, a choice point).
   - `gate_responses[].pattern` - regex or substring matching the gate's prompt text, used to pair the response to the gate at runtime.

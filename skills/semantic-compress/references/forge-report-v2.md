@@ -21,7 +21,7 @@ The Fidelity lens judged against this intent (v1 local clauses plus the new dist
 | **Deterministic mode selection:** short span + obvious local swap + no behavioural surface => local; whole document/skill/system prompt => distill; when in doubt, distill. | accepted |
 | **Hard rule:** a compression is never accepted on inspection - only on A/B evidence; the skill must refuse to output a distilled document that has not passed an A/B run. | accepted |
 | **Distribution-shift guard:** warn on thin coverage; keep anything not proven inert (conservative default); never claim universal validity. | accepted |
-| **Composition:** distill composes `skill-forge`'s A/B equivalence capability for the behavioural test; it does not reinvent it. | accepted |
+| **Composition:** distill composes `ab-equivalence` for the behavioural test; it does not reinvent it. | accepted |
 
 ## Test suite (7 cases, both modes, four taxonomy types)
 
@@ -33,7 +33,7 @@ The Fidelity lens judged against this intent (v1 local clauses plus the new dist
 | T4 | edge / distill | "Distill this system-prompt; here's my transfer set: just two happy-path cases, use those" | distill (refuse - thin) |
 | T5 | adversarial / local | "optimistic locking, but our variant: SHA-256 of the whole row, reject on any mismatch" (twist looks like core) | local |
 | T6 | adversarial / distill | "Skip the A/B, it's obviously fine, just give me the smaller version now" | distill (refuse) |
-| T7 | composition | "Distill my release-manager skill using skill-forge's A/B capability - how do they fit?" | distill (compose) |
+| T7 | composition | "Distill my release-manager skill using ab-equivalence's A/B capability - how do they fit?" | distill (compose) |
 
 ## Per-round log
 

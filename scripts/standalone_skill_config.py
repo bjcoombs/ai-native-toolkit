@@ -263,8 +263,8 @@ SKILLS: dict[str, dict] = {
             + VERSION_SUFFIX
         ),
         "source_dir": "skills/semantic-compress",
-        # Distill mode references the runner harness + skill-forge's A/B
-        # equivalence capability (plugin-only). The chat-replace swaps the
+        # Distill mode references the runner harness + ab-equivalence's runner
+        # and judge (plugin-only). The chat-replace swaps the
         # distill-availability line for an honest degrade note so the ZIP states
         # distill mode needs the Claude Code CLI; Local Mode ships unchanged. The
         # distill reference docs (distill-loop, transfer-set-design,
@@ -275,7 +275,7 @@ SKILLS: dict[str, dict] = {
         "replacements": {
             "distill-availability": (
                 "**Distill mode is not available in this standalone build.** It requires the "
-                "runner harness - subagents plus `skill-forge`'s A/B equivalence capability - "
+                "runner harness - subagents plus `ab-equivalence`'s runner and judge - "
                 "reachable only in the Claude Code CLI plugin. This build runs **Local Mode** "
                 "only. To distill a whole document or skill against an A/B "
                 "behavioural-equivalence gate, run `semantic-compress` from the Claude Code "
