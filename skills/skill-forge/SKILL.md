@@ -72,6 +72,10 @@ One change per round isolates a single hypothesis, so every round's delta is cau
 
 A strict hierarchy, not a menu: **Gate 1 - Objective** (every case passes Fidelity; hard), **Gate 2 - Panel confidence** (all green and no `HIGH`-severity dissent), **Gate 3 - Diminishing returns** (the round produced measurable gain), and the **budget** escape hatch that always terminates. Promote if and only if Gate 1 and Gate 2 both pass; otherwise stop with the best-so-far artifact and a report naming the unmet gate. The Gate 1 Fidelity bar, the Gate 3 "measurable gain" rule, and the promotion decision are spelled out in [gate-hierarchy](references/gate-hierarchy.md).
 
+## A/B equivalence (library capability for other skills)
+
+A thin, transform-agnostic capability that compares two versions of a document (original = teacher, candidate = student) across a transfer set and returns per-case `equivalent | candidate-regressed | candidate-diverged` verdicts plus a per-case efficiency signal - it answers "does the candidate still do what the original did?", not "is this skill good?". It reuses the runner unchanged and adds one focused compare-two-transcripts judge, separate from the five lenses; it is a **library capability other skills compose** (e.g. `semantic-compress` gates a distillation on it, as `marathon` composes `pr-review-merge`) and does **not** change the forge's own five-lens gate hierarchy above. Contract and schema: [ab-equivalence](references/ab-equivalence.md); the judge prompt: [equivalence-judge-prompt](references/equivalence-judge-prompt.md).
+
 ## Execution modes
 
 <!-- chat-skip:start -->
