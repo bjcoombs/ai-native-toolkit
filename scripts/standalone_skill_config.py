@@ -225,20 +225,32 @@ SKILLS: dict[str, dict] = {
     "semantic-compress": {
         "standalone_name": "semantic-compress",
         "standalone_description": (
-            "Compress instructions written for an LLM reader by pointing at core knowledge "
-            "the model already holds (a concept name activates it) and keeping project-specific "
-            "detail explicit and verbatim. Point at what the model knows, spell out what it "
-            "doesn't. TRIGGER when asked to compress, tighten, shorten, or strip a prompt or "
-            "instruction meant for an LLM, when an instruction set explains concepts the model "
-            "already knows from training, or when reducing token cost of an LLM-directed prompt "
-            "without losing meaning. Not for human-facing prose."
+            "Make an LLM-directed document smaller while preserving what it does. Point at core "
+            "knowledge the model already holds (a concept name activates it) and keep "
+            "project-specific detail explicit and verbatim. TRIGGER when asked to compress, "
+            "tighten, shorten, or strip a prompt or instruction meant for an LLM, when an "
+            "instruction set explains concepts the model already knows from training, or when "
+            "reducing token cost of an LLM-directed prompt without losing meaning. Not for "
+            "human-facing prose. This standalone build runs Local Mode (span-level core->pointer) "
+            "only; Distill Mode (A/B-validated whole-document compression) requires the runner "
+            "harness available in the Claude Code CLI."
             + VERSION_SUFFIX
         ),
         "source_dir": "skills/semantic-compress",
-        # Pure-markdown skill, portable as-is: no plugin path resolution,
-        # $ARGUMENTS, namespaced slash commands, or Claude-Code-only tools to
-        # strip, so no chat-skip/chat-replace markers and no replacements.
+        # Distill mode references the runner harness + skill-forge's A/B
+        # equivalence capability (plugin-only). The chat-replace swaps the
+        # distill-availability line for an honest degrade note so the ZIP states
+        # distill mode needs the Claude Code CLI; Local Mode ships unchanged.
         "exclude_dirs": set(),
-        "replacements": {},
+        "replacements": {
+            "distill-availability": (
+                "**Distill mode is not available in this standalone build.** It requires the "
+                "runner harness - subagents plus `skill-forge`'s A/B equivalence capability - "
+                "reachable only in the Claude Code CLI plugin. This build runs **Local Mode** "
+                "only. To distill a whole document or skill against an A/B "
+                "behavioural-equivalence gate, run `semantic-compress` from the Claude Code "
+                "plugin."
+            ),
+        },
     },
 }
