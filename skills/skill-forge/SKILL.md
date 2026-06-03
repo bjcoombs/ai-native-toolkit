@@ -41,6 +41,15 @@ If no intent is supplied the lead derives one **from the draft** - but the draft
 
 The runner prompt is the most load-bearing prompt in the system: runner transcripts are the evidence every behavioural lens judges, so any contamination there corrupts the whole gate. It is a **pure wrapper** - it never explains why the skill works or adds context beyond the draft, or the runner ends up testing "skill + prompt additions" instead of the skill. The exact five-section template (role statement, role boundary, the verbatim draft, the test-case input, the required self-report fields) is in [runner-prompt](../ab-equivalence/references/runner-prompt.md). Fill one per runner per test case.
 
+## Runner model selection
+
+The model the runners execute on is a **knob**, because a skill that holds together on a strong model can fall apart on a weak one - a weaker model unpacks instructions less reliably, so a defect that a strong runner papers over surfaces only when a weak runner hits it. The forge certifies behaviour *for the tier it was forged on*, nothing stronger and nothing weaker.
+
+- **Single model (default).** Forge against the **weakest tier the skill will ship to**: Haiku if the skill ships broadly to all tiers, otherwise the intended deployment tier. Forging on the weakest tier is the conservative gate - clearing it certifies every stronger tier too, the way targeting the lowest-spec deployment target certifies the rest.
+- **Tier sweep (optional).** Run the same test case through runners on more than one tier in the same round (e.g. Haiku + Sonnet + Opus) and record a per-tier verdict. Use a sweep when the skill must be certified across tiers explicitly, or to locate the tier at which it starts to fail.
+
+**A skill forged only on Opus is not certified for Haiku.** The runner model is recorded in the forge report (see [forge-report-template](references/forge-report-template.md)); certification is valid only for the tested tier(s). The runner-model knob changes only which model executes the wrapper - it never changes the wrapper itself, which stays the pure template ab-equivalence owns.
+
 ## The five lenses
 
 The panel is five skill-quality lenses. **All five run by default**; the lead drops to 3 or 2 only on an explicit quick-check request, and a self-forge always uses all five - see the deterministic selector in [judge-lenses](references/judge-lenses.md). Confidence is **not** a lens - it is the Gate 2 stopping decision. Four lenses (Fidelity, Adversarial, Compression, Usability) judge runner transcripts and produce `behavioural` findings; Trigger/routing judges the skill text directly and produces `static` predictions, because prompt-injection can never make a `TRIGGER` clause mis-fire. Full definitions, what each reads in the self-report, and the behavioural/static rule are in [judge-lenses](references/judge-lenses.md).

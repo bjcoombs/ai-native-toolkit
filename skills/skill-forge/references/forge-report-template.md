@@ -11,6 +11,11 @@ Fill the template below. Replace every `<...>` with the run's actual values.
 
 **Run date:** <date>  **Mode:** <team | phased | solo>  **Verdict:** <PROMOTE | STOP - best-so-far>
 
+**Runner Model(s) Tested:** <single model, e.g. `haiku`; or a sweep, e.g.
+`haiku: PROMOTE / sonnet: PROMOTE / opus: PROMOTE` with the per-tier verdict for
+each. Certification valid only for the tested tier(s) - a skill forged only on a
+strong tier is not certified for a weaker one.>
+
 ## Intent
 
 The ground truth the Fidelity lens judged against. Derived clauses were marked
