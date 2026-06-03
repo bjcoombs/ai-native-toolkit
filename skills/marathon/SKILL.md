@@ -263,7 +263,7 @@ Only message the lead for **meaningful events**:
 1. Implement → push incrementally → create PR → message lead PR_CREATED
 2. Fix any failing **required** checks and any already-posted bot threads; push. Do NOT watch CI - the lead owns that.
 3. Message lead REVIEW_CLEAR (required checks green, threads resolved) and stand down. Do not sit through the slow `claude-review`/AI-review window - that wait is the lead's to hold.
-4. The lead owns the claude-review wait + merge, cleans up, and shuts you down at green. After REVIEW_CLEAR you are not re-woken - if more work surfaces the lead spawns a fresh teammate (one task, one teammate). Approve the shutdown request when received.
+4. The lead owns the claude-review wait + merge, cleans up, and shuts you down at green. After REVIEW_CLEAR you are not re-woken - if more work surfaces the lead spawns a fresh teammate (one task, one teammate). **Approve the lead's `shutdown_request` promptly when it arrives, and after REVIEW_CLEAR do NOT idle-ping or re-send merge-readiness nudges** — the lead owns the merge; re-nudging an already-cleared PR just churns the lead while it holds the claude-review wait.
 """
 )
 ```

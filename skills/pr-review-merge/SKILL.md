@@ -55,6 +55,16 @@ git fetch origin $BASE && git merge origin/$BASE --no-edit
 # If can't auto-resolve: report blocked with details
 ```
 
+**Resolving a `.claude-plugin/plugin.json` conflict (the common one in multi-PR waves).** The conflict is **not always confined to `.version`** — a sibling PR may also have reframed the marketplace `description` or another field. A version-only line edit (`sed`-ing just the version line, or a regex that targets only `.version`) silently keeps the stale side of *every other* field and can leave merge markers behind. Resolve the **whole file** deterministically: take the side carrying the siblings' already-merged field changes (usually base), then overwrite only the version with `jq`:
+
+```bash
+git checkout --theirs .claude-plugin/plugin.json   # base side, which has the merged siblings' description/other-field edits
+jq --arg v "<your-next-version>" '.version = $v' .claude-plugin/plugin.json > /tmp/pj && mv /tmp/pj .claude-plugin/plugin.json
+git add .claude-plugin/plugin.json
+```
+
+Always `git diff` the full `plugin.json` before resolving — never assume the only divergence is the version line.
+
 **Conflict resolution patterns:**
 - **Import/route files** (e.g., App.tsx, index.ts): Accept BOTH sides — additions are additive
 - **Barrel exports** (e.g., shared/index.ts): Accept both sides — each adds its own export
