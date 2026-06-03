@@ -183,4 +183,4 @@ The A/B distillation report (`references/distillation-report-template.md`) makes
 
 ## Provenance
 
-This skill was hardened with `/skill-forge` before shipping - the forge changed its central thesis from delete-what-the-model-knows to point-at-core / spell-out-bespoke. See [forge-report](references/forge-report.md). Distill mode (v2) extends it from a local textual edit to a holistic, A/B-validated behavioural-equivalence loop.
+This skill was hardened with `/skill-forge` before shipping - the forge changed its central thesis from delete-what-the-model-knows to point-at-core / spell-out-bespoke. See [forge-report](references/forge-report.md). Distill mode (v2) extends it from a local textual edit to a holistic, A/B-validated behavioural-equivalence loop. The two-mode v2 was re-forged, and distill mode was validated end-to-end on a real engineering `CLAUDE.md` (full A/B, 30.6% reduction at zero regressions); see [forge-report-v2](references/forge-report-v2.md) and [acceptance-distillation-report](references/acceptance-distillation-report.md).
