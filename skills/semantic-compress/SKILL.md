@@ -121,7 +121,7 @@ The headline operation: produce the **smallest document that behaves the same as
 - `references/distill-loop.md` - the engine: teacher baseline capture, candidate regeneration, and the iterate-to-minimal controller.
 
 <!-- chat-replace:distill-availability -->
-The loop **composes `skill-forge`'s A/B equivalence capability** (`skills/skill-forge/references/ab-equivalence.md`) for the behavioural test - exactly as `marathon` composes `pr-review-merge`. This skill owns compression (transfer set, candidate regeneration, the loop, the report); `skill-forge` owns the behavioural comparison (running the runner over the transfer set, judging equivalence per case).
+The loop **composes `skill-forge`'s A/B equivalence capability** (`skills/skill-forge/references/ab-equivalence.md`) for the behavioural test. This skill owns compression (transfer set, candidate regeneration, the loop, the report); `skill-forge` owns the behavioural comparison (running the runner over the transfer set, judging equivalence per case).
 
 ### The distill loop (seven steps)
 

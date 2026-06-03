@@ -13,6 +13,7 @@ Save the report as `<document-name>-distillation-report.md` **alongside the outp
 | Size Delta | **Mandatory** | The headline metric - what the compression bought. |
 | Transfer Set + coverage | **Mandatory** | What was tested; the operational definition of essence. |
 | Per-Case Equivalence Verdicts | **Mandatory** | The behavioural evidence the compression passed. |
+| Gate-Truncated Coverage | **Mandatory if any gate-truncation** | Honest about partial measurement where a case stopped at a gate. |
 | Distribution-Shift Caveat | **Mandatory** | The honesty clause - the boundary of the claim. Stated verbatim, never edited away. |
 | What Was Dropped | Optional | Include if anything was removed (almost always). |
 | What Proved Load-Bearing | Optional | Include if any add-back occurred, and to list uncovered-but-kept sections. |
@@ -25,7 +26,7 @@ A report missing any mandatory field is incomplete and the distillation is not v
 ```markdown
 # A/B Distillation Report: <document name>
 
-**Run date:** <ISO date>  **Mode:** distill  **Verdict:** <PASS|FAIL>  **Rounds:** <N>
+**Run date:** <ISO date>  **Mode:** distill  **Verdict:** <PASS|FAIL><add ` (gate-truncated)` if any case was truncated at a gate>  **Rounds:** <N>
 **Coverage:** <sections_covered>/<sections_identified> sections exercised (<X>%)
 
 ## Size Delta
@@ -50,6 +51,19 @@ Estimated tokens = characters / 4 (a coarse proxy, no tokenizer dependency).
 
 **Coverage:** N/M sections exercised (X%)
 **Thin-coverage warnings:** <one line per uncovered/under-covered section: the section name and the behaviour that went untested - or "none">
+
+## Gate-Truncated Coverage
+
+<Include this section whenever any case was gate-truncated; omit it only when no case hit an unanswered gate.>
+
+| Case | Gate Type | Truncation Point | Behaviour Beyond Gate |
+|------|-----------|------------------|----------------------|
+| T3 | AskUserQuestion | "Install scc?" | NOT MEASURED |
+| T5 | AskUserQuestion | "Skip permanently?" | NOT MEASURED |
+
+**⚠️ Coverage was gate-truncated.** The A/B equivalence verdict applies only to behaviour before the gates listed above. Behaviour triggered by user responses to these gates was not measured in this run.
+
+To extend coverage: add `gate_responses` entries for these gates and re-run the distillation.
 
 ## Per-Case Equivalence Verdicts
 
@@ -94,3 +108,7 @@ Verdicts are `equivalent` | `candidate-regressed` | `candidate-diverged`. **PASS
 - **Coverage % (header and Transfer Set).** `sections_covered / sections_identified`. Below 70%, the run should have warned before proceeding (the coverage threshold in the Distribution-Shift Guard); if it proceeded anyway, the report says so.
 - **Behaviour delta.** For a regressed or diverged case, name the specific behaviour - the discipline, step, or output that changed. "Different" is not enough; the report names *what*.
 - **Conservative-default sections.** Every section not exercised by any case is listed under What Proved Load-Bearing as "kept (uncovered, conservative default)" - this is how the report makes the guard's conservatism legible rather than silent.
+- **Gate-truncated coverage (the honest-degrade rules).** When a case stopped at a gate with no scripted answer (`gate_truncated` in `distill-loop.md`), the report must degrade loudly, never silently:
+  - The **verdict header** carries the `(gate-truncated)` suffix if any case was truncated, e.g. `**Verdict:** PASS (gate-truncated)`. The suffix is mandatory whenever the Gate-Truncated Coverage table is non-empty.
+  - `sections_covered` **excludes** any section reachable only beyond a gate-truncation point - a section behind an unanswered gate was not measured and must not inflate the coverage count or percentage.
+  - `thin_coverage_warnings` **includes** one line per such section: "Section X is reachable only after gate G; not measured in this run."
