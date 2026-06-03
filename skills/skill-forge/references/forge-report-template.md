@@ -75,7 +75,13 @@ block. HIGH dissent blocks Gate 2; LOW/MED is recorded only.
 - Gates met: <e.g. Gate 1, Gate 2, Gate 3>
 - Gates not met: <none | which, and why>
 - Residual HIGH-severity dissent: <none | summary> (required if STOP)
-- Best-so-far artifact: <path to the hardened or best-reached SKILL.md>
+- Best-so-far artifact: <path to the hardened or best-reached SKILL.md, relative to the repo root>
+- **Recommended Next Step:** <required when the outcome is STOP; omit when PROMOTE.
+  Map the STOP reason to its move per `gate-hierarchy.md`: Gate 1 unmet ->
+  revise substantively and re-forge; Gate 2 HIGH dissent -> address the HIGH
+  finding and re-forge, or accept best-so-far with the dissent documented;
+  budget hit -> raise the budget and continue, or accept best-so-far. State the
+  chosen move, not just the menu.>
 
 ## Rounds and waste
 
