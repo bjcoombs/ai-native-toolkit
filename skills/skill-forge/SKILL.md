@@ -37,7 +37,7 @@ If no intent is supplied the lead derives one **from the draft** - but the draft
 
 ## The runner prompt
 
-The runner prompt is the most load-bearing prompt in the system: runner transcripts are the evidence every behavioural lens judges, so any contamination there corrupts the whole gate. It is a **pure wrapper** - it never explains why the skill works or adds context beyond the draft, or the runner ends up testing "skill + prompt additions" instead of the skill. The exact five-section template (role statement, role boundary, the verbatim draft, the test-case input, the required self-report fields) is in [runner-prompt](references/runner-prompt.md). Fill one per runner per test case.
+The runner prompt is the most load-bearing prompt in the system: runner transcripts are the evidence every behavioural lens judges, so any contamination there corrupts the whole gate. It is a **pure wrapper** - it never explains why the skill works or adds context beyond the draft, or the runner ends up testing "skill + prompt additions" instead of the skill. The exact five-section template (role statement, role boundary, the verbatim draft, the test-case input, the required self-report fields) is in [runner-prompt](../ab-equivalence/references/runner-prompt.md). Fill one per runner per test case.
 
 ## The five lenses
 
@@ -74,7 +74,7 @@ A strict hierarchy, not a menu: **Gate 1 - Objective** (every case passes Fideli
 
 ## A/B equivalence (library capability for other skills)
 
-A thin, transform-agnostic capability that compares two versions of a document (original = teacher, candidate = student) across a transfer set and returns per-case `equivalent | candidate-regressed | candidate-diverged` verdicts plus a per-case efficiency signal - it answers "does the candidate still do what the original did?", not "is this skill good?". It reuses the runner unchanged and adds one focused compare-two-transcripts judge, separate from the five lenses; it is a **library capability other skills compose** (e.g. `semantic-compress` gates a distillation on it) and does **not** change the forge's own five-lens gate hierarchy above. Contract and schema: [ab-equivalence](references/ab-equivalence.md); the judge prompt: [equivalence-judge-prompt](references/equivalence-judge-prompt.md).
+A thin, transform-agnostic capability that compares two versions of a document (original = teacher, candidate = student) across a transfer set and returns per-case `equivalent | candidate-regressed | candidate-diverged` verdicts plus a per-case efficiency signal - it answers "does the candidate still do what the original did?", not "is this skill good?". It reuses the runner unchanged and adds one focused compare-two-transcripts judge, separate from the five lenses; it is a **library capability other skills compose** (e.g. `semantic-compress` gates a distillation on it) and does **not** change the forge's own five-lens gate hierarchy above. Contract and schema: [ab-equivalence](../ab-equivalence/references/ab-equivalence.md); the judge prompt: [equivalence-judge-prompt](../ab-equivalence/references/equivalence-judge-prompt.md).
 
 ## Execution modes
 
@@ -88,7 +88,7 @@ Pick the mode **deterministically**: if the Agent Teams capability is confirmed 
 
 | Mode | When | Mechanism |
 |------|------|-----------|
-| **Solo** | chat / standalone ZIP, no subagents | One agent plays all three roles in a single context, round by round: it applies the draft to each test case using the [runner-prompt](references/runner-prompt.md) wrapper verbatim, then judges each transcript through every lens, then amends one thing - keeping the panel ledger as its across-round memory. It repeats the round (OBSERVE -> INSPECT -> GATE -> AMEND) until the gate promotes or the budget ceiling stops it - the same termination as the other modes. |
+| **Solo** | chat / standalone ZIP, no subagents | One agent plays all three roles in a single context, round by round: it applies the draft to each test case using the [runner-prompt](../ab-equivalence/references/runner-prompt.md) wrapper verbatim, then judges each transcript through every lens, then amends one thing - keeping the panel ledger as its across-round memory. It repeats the round (OBSERVE -> INSPECT -> GATE -> AMEND) until the gate promotes or the budget ceiling stops it - the same termination as the other modes. |
 | **Phased sub-agent** | flag off | The lead spawns a fresh runner subagent per case and a fresh judge subagent per lens; with no persistent agents, the panel ledger is injected into each judge spawn so the panel still remembers prior rounds. |
 <!-- chat-skip:start -->
 | **Team** | flag on | Persistent judges cross-talk via `SendMessage` and remember prior rounds natively; ephemeral runners are spawned per round. |
