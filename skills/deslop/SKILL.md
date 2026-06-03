@@ -104,6 +104,16 @@ AI invents plausible-looking sources, dead URLs, fake DOIs, or attributes claims
 
 **Fix:** Verify every citation actually exists and supports the claim. Never let an unverifiable reference through. If you can't confirm a source, remove the claim or flag it explicitly.
 
+### 13. Gratuitous cross-references
+
+Naming a sibling skill, command, or concept as analogy or aside when the reader doesn't need to understand it to follow the instructions. The reference adds comprehension cost ("what's `marathon` - do I need to read that first?") with no behavioural payoff; the sentence would instruct identically without it.
+
+> "This dispersal works **exactly as `marathon` composes `pr-review-merge`.**"
+
+Distinct from a load-bearing composition pointer the reader must actually follow ("composes `skill-forge`'s A/B equivalence capability") - that one is legitimate, don't flag it.
+
+**Fix:** Cut the analogy. If the reader genuinely needs the referenced skill, make it a declared dependency, not a passing mention. This is prose-level judgment only - it catches decorative name-drops, not whether a document's real composition graph is correct.
+
 ## Output formats
 
 **When editing:** Return the cleaned text. If the user wants to see what changed, follow with a short bullet list of the categories you hit and why - quote the worst offenders.
