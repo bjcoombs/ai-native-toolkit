@@ -13,7 +13,7 @@ Work in any Claude Code session, and are also distributed as standalone ZIPs for
 | `/deslop` | [`deslop/SKILL.md`](./deslop/SKILL.md) | Detect and remove the telltale signs of AI writing; ships a [`references/full-checklist.md`](./deslop/references/full-checklist.md) |
 | `/ghsync` | [`ghsync/SKILL.md`](./ghsync/SKILL.md) | Bulk-clone and fast-forward sync every GitHub repo you can access across an org |
 | `/skill-forge` | [`skill-forge/SKILL.md`](./skill-forge/SKILL.md) | Harden a skill through judge-panel refinement rounds to a 3-tier promotion gate; refined through its own process |
-| `/semantic-compress` | [`semantic-compress/SKILL.md`](./semantic-compress/SKILL.md) | Compress LLM-directed instructions in two modes: a local core->pointer pass, and an A/B-validated distill loop producing the smallest behaviourally-equivalent document. Point at core knowledge the model holds, keep project-specific detail verbatim. Forged by `/skill-forge` |
+| `/semantic-compress` | [`semantic-compress/SKILL.md`](./semantic-compress/SKILL.md) | Optimize LLM-directed instructions while preserving behaviour, with two transforms in one family - both gated on `/skill-forge`'s A/B equivalence harness. **compress** (Transform #1): a local core->pointer pass + an A/B-validated distill loop producing the smallest behaviourally-equivalent document; point at core knowledge the model holds, keep project-specific detail verbatim. **directive-clarity** (Transform #2): rewrites latent-action instructions into directives that name the action, gated on a measured directness gain at zero regression. Forged by `/skill-forge` |
 
 ## Assessment helpers
 
