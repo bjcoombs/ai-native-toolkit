@@ -36,6 +36,8 @@ The **lens count is fixed at five**; what scales with skill size is the **number
 
 Four lenses - Fidelity, Adversarial, Compression, Usability - judge **runner transcripts** (observed behaviour), so their findings are tagged `behavioural`. Trigger/routing judges the **skill text directly**: prompt-injection hands the draft to the runner as its instructions, so the runner always runs the skill and injection can never make a `TRIGGER` clause mis-fire the way a live router would. Its findings are therefore **predictions**, tagged `static`. The flawed fixture calibrates this lens's *reading* of the `description`, not a behavioural observation.
 
+**The fixture calibrates both detection and severity.** Beyond the one planted defect per lens (detection), the flawed fixture carries borderline cases with expected severities (a Borderline-LOW and a Borderline-MED) plus a clean-pass and a near-miss case that must draw no finding (see the fixture's `DEFECTS.md`). A lens that detects every defect but mis-rates its severity - or fires on the clean-pass / near-miss case - is miscalibrated even when detection is perfect. Rating, not just finding, is part of what the fixture proves.
+
 Two consequences follow:
 
 - The forge report tags every finding `behavioural` or `static` (see `forge-report-template.md`).
