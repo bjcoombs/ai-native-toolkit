@@ -37,6 +37,8 @@ If no intent is supplied the lead derives one **from the draft** - but the draft
 
 ## The runner prompt
 
+**skill-forge composes ab-equivalence's runner for test execution.** The runner is owned by [ab-equivalence](../ab-equivalence/SKILL.md), the library skill that holds the shared execution primitive; skill-forge does not re-implement it - it fills ab-equivalence's pure-wrapper template per runner per test case.
+
 The runner prompt is the most load-bearing prompt in the system: runner transcripts are the evidence every behavioural lens judges, so any contamination there corrupts the whole gate. It is a **pure wrapper** - it never explains why the skill works or adds context beyond the draft, or the runner ends up testing "skill + prompt additions" instead of the skill. The exact five-section template (role statement, role boundary, the verbatim draft, the test-case input, the required self-report fields) is in [runner-prompt](../ab-equivalence/references/runner-prompt.md). Fill one per runner per test case.
 
 ## The five lenses
@@ -71,10 +73,6 @@ One change per round isolates a single hypothesis, so every round's delta is cau
 ## Gate hierarchy
 
 A strict hierarchy, not a menu: **Gate 1 - Objective** (every case passes Fidelity; hard), **Gate 2 - Panel confidence** (all green and no `HIGH`-severity dissent), **Gate 3 - Diminishing returns** (the round produced measurable gain), and the **budget** escape hatch that always terminates. Promote if and only if Gate 1 and Gate 2 both pass; otherwise stop with the best-so-far artifact and a report naming the unmet gate. The Gate 1 Fidelity bar, the Gate 3 "measurable gain" rule, and the promotion decision are spelled out in [gate-hierarchy](references/gate-hierarchy.md).
-
-## A/B equivalence (library capability for other skills)
-
-A thin, transform-agnostic capability that compares two versions of a document (original = teacher, candidate = student) across a transfer set and returns per-case `equivalent | candidate-regressed | candidate-diverged` verdicts plus a per-case efficiency signal - it answers "does the candidate still do what the original did?", not "is this skill good?". It reuses the runner unchanged and adds one focused compare-two-transcripts judge, separate from the five lenses; it is a **library capability other skills compose** (e.g. `semantic-compress` gates a distillation on it) and does **not** change the forge's own five-lens gate hierarchy above. Contract and schema: [ab-equivalence](../ab-equivalence/references/ab-equivalence.md); the judge prompt: [equivalence-judge-prompt](../ab-equivalence/references/equivalence-judge-prompt.md).
 
 ## Execution modes
 

@@ -31,7 +31,7 @@ Two consequences follow:
 
 ## What each lens reads in the self-report
 
-Every runner returns a self-report in the format defined in `runner-prompt.md`. Each behavioural lens reads specific fields:
+Every runner returns a self-report in the format defined in ab-equivalence's runner prompt - skill-forge composes that runner rather than owning one (`../../ab-equivalence/references/runner-prompt.md`, relative to this file). Each behavioural lens reads specific fields:
 
 - **Fidelity** reads the *output produced* and compares it against the confirmed intent clauses (it ignores any clause whose `intent[].status` is `assumed-rejected` - see `panel-ledger.md`).
 - **Usability** reads *steps followed / skipped and why* - a step skipped because it was unclear or unreachable is a usability defect, not a runner failure.
