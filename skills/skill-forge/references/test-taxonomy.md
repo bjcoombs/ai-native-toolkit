@@ -4,6 +4,10 @@ The lead designs a small suite of test cases that the runners execute against th
 
 Design **3-5 cases** for a forge, spanning the four types below. Not every type needs equal weight - a skill with a fragile trigger or a rationalization risk should lean adversarial; a skill meant to chain with others needs at least one composition case. When a new failure mode surfaces mid-run (a runner self-report exposes a gap no existing case covers), add a case for it to the corpus immediately, so the rest of the run and every future re-forge exercises it.
 
+### Minimal suites for small skills
+
+The 3-5-case default is the Medium/Large suite; it scales down by scope (see the scope-scaling table in `judge-lenses.md`). **A 50-line reference card needs 1 happy-path and 1 adversarial case, not the full taxonomy** - the edge and composition types are optional when the skill has no branches and no intended pairing. What does **not** scale down is the panel: the **five-lens default stays; only the test-case count and the round ceiling scale** with size. A small suite means fewer runners, never fewer lenses.
+
 ## The four case types
 
 ### Happy path

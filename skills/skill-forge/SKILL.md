@@ -54,6 +54,8 @@ The model the runners execute on is a **knob**, because a skill that holds toget
 
 The panel is five skill-quality lenses. **All five run by default**; the lead drops to 3 or 2 only on an explicit quick-check request, and a self-forge always uses all five - see the deterministic selector in [judge-lenses](references/judge-lenses.md). Confidence is **not** a lens - it is the Gate 2 stopping decision. Four lenses (Fidelity, Adversarial, Compression, Usability) judge runner transcripts and produce `behavioural` findings; Trigger/routing judges the skill text directly and produces `static` predictions, because prompt-injection can never make a `TRIGGER` clause mis-fire. Full definitions, what each reads in the self-report, and the behavioural/static rule are in [judge-lenses](references/judge-lenses.md).
 
+What scales with skill size is the **test-case count and round budget**, not the lens count: the **cost driver is runners = test cases x rounds**, and all five lenses run regardless of scope. A small skill gets a smaller suite and a tighter round ceiling but the same five-lens panel - the scope-scaling thresholds (Small / Medium / Large) are in [judge-lenses](references/judge-lenses.md) and [test-taxonomy](references/test-taxonomy.md).
+
 ## The loop: OBSERVE -> INSPECT -> GATE -> AMEND
 
 Three operational phases cycle through a gate check. EVALUATE is not a separate phase - rounds >= 2 just re-run OBSERVE and INSPECT with a regression-focus flag set.

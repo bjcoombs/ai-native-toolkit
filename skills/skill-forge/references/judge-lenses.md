@@ -10,6 +10,18 @@ The judge panel is five skill-quality lenses, repointed from `huddle`'s professi
 
 Confidence is **not** a lens. It is the stopping decision applied in Gate 2 (see `gate-hierarchy.md`), not an artifact perspective a judge holds. A lens reports findings and a per-round verdict; the lead-chair reads the panel's confidence off those, it is never scored as its own row.
 
+## Scope-based test scaling
+
+The **lens count is fixed at five**; what scales with skill size is the **number of test cases** and the **round budget** - the two multipliers that actually drive runner cost. The scope metric is the skill's lines / surface area (count the `SKILL.md` plus the reference files an agent must load to act). The thresholds below are **lead-judgement starting points, not hard rules** - a 60-line skill with a fragile trigger may still warrant a Medium suite.
+
+| Scope | Size | Test cases | Round budget |
+|-------|------|------------|--------------|
+| **Small** | < 100 lines | 1-2 cases (1 happy-path + 1 adversarial) | 3-round |
+| **Medium** | 100-300 lines | 3-4 cases | 5-round |
+| **Large** | > 300 lines | full 3-5 per taxonomy type | 7-round |
+
+**All five lenses run regardless of scope - dropping lenses by size re-opens the exact hole the self-forge closed** (the 5-lens-promise-undercut-by-a-3-lens-default HIGH that round 1 of the bootstrap caught). Scope scales test cases and rounds; it never scales the panel. A small skill gets fewer runners, not fewer lenses.
+
 ## The five lenses
 
 | Lens | Judges | Defect class it owns |
