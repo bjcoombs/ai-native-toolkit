@@ -22,7 +22,7 @@ Portable (work in any Claude Code session, also shipped as standalone ZIPs):
 - [`/deslop`](../skills/deslop/SKILL.md) - detect and remove the telltale signs of AI writing. Ships an exhaustive [reference checklist](../skills/deslop/references/full-checklist.md).
 - [`/ghsync`](../skills/ghsync/SKILL.md) - bulk-clone and fast-forward sync every GitHub repo you can access across an org.
 - [`/skill-forge`](../skills/skill-forge/SKILL.md) - harden a skill through judge-panel refinement rounds to a 3-tier promotion gate; refined through its own process. Ships an [example forge report](../skills/skill-forge/references/example-forge-report.md).
-- [`/semantic-compress`](../skills/semantic-compress/SKILL.md) - compress LLM-directed instructions by pointing at core knowledge the model holds and keeping project-specific detail verbatim. Hardened by `/skill-forge`; ships its [forge report](../skills/semantic-compress/references/forge-report.md).
+- [`/semantic-compress`](../skills/semantic-compress/SKILL.md) - compress LLM-directed instructions by pointing at core knowledge the model holds and keeping project-specific detail verbatim. Two modes: a local span-level core->pointer pass, and an A/B-validated distill loop that produces the smallest behaviourally-equivalent version of a whole document or skill. Hardened by `/skill-forge`; ships its [forge report](../skills/semantic-compress/references/forge-report.md).
 
 Team-orchestration library skills (invoked by the workflow commands, not standalone):
 
