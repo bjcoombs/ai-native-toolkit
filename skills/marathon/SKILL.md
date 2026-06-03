@@ -182,6 +182,9 @@ Store non-required check names in `meta.flaky_checks`.
 
 ## Step 3: Spawn Teammates
 
+**Pre-spawn: Read the retro log's open template changes:**
+Before writing any spawn prompt, read the retro log (Marathon Configuration `$RETRO_LOG`) Template Changes table. Apply every row still marked Pending to this run's spawn prompts and lead behaviour now - that is what the table is for. Reading these only at retro time is too late: the same friction recurs the whole run. (The teammate-watcher/idle-churn fix below was logged Pending for two consecutive marathons before it shipped, because the lead read the table after the run, not before.)
+
 **Pre-spawn: Check for already-completed work:**
 Before spawning Wave 1, check recent merged PRs for task keywords to avoid spawning work that's already done:
 ```bash
@@ -232,12 +235,12 @@ Additive files (imports, barrel exports, routes): accept both sides. Same-line c
 1. **Implement using TDD**. Push commits incrementally for backup.
 2. **Before creating PR**, check for existing: `gh pr list --head "<branch-name>" --state all --json number,state,mergedAt`
    - Merged → message lead, wait idle. Open → use it. None → create one.
-3. **Review loop:** Use the pr-review-merge skill to drive your PR to green (5 criteria, thread rules, background CI watcher, batch fixes). Do not block on CI yourself.
+3. **Get required checks green, then stand down.** Use the pr-review-merge skill's criteria and thread rules to fix any failing *required* checks and resolve any bot threads already posted, pushing fixes. Then report and go idle. **Do NOT run a `gh pr checks --watch` loop or any background CI watcher** - in marathon mode the lead owns CI watching, the slow `claude-review`/AI-review wait, and the merge. A teammate that watches a slow advisory check sits idle for minutes and floods the lead with idle notifications; that is the lead's job here, not yours. The lead wakes you only if a fix is needed after you stand down.
 
 ## Communication
 Only message the lead for **meaningful events**:
 - PR created: `SendMessage(type: "message", recipient: "lead", content: "PR_CREATED: PR #<number> for <tag>.<task-id>", summary: "PR created <task-id>")`
-- Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR: PR #<number> for <tag>.<task-id> — all criteria met", summary: "Review clear <task-id>")`
+- Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR: PR #<number> for <tag>.<task-id> — required checks green, threads resolved, standing down (lead owns claude-review wait + merge)", summary: "Review clear <task-id>")`
 - Blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED: <tag>.<task-id> — <reason>", summary: "Blocked <task-id>")`
 - Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX: <tag>.<task-id> — <brief reasoning>", summary: "Too complex <task-id>")`
 
@@ -246,10 +249,10 @@ Only message the lead for **meaningful events**:
 - If you discover related work that needs doing, mention it in your PR description — don't create additional PRs.
 
 ## Lifecycle
-1. Implement → push incrementally → create PR → review loop until green
-2. Message lead REVIEW_CLEAR and wait idle
-3. Lead merges directly (no handshake needed), cleans up, and shuts you down
-4. Approve shutdown request when received
+1. Implement → push incrementally → create PR → message lead PR_CREATED
+2. Fix any failing **required** checks and any already-posted bot threads; push. Do NOT watch CI - the lead owns that.
+3. Message lead REVIEW_CLEAR (required checks green, threads resolved) and stand down. Do not sit through the slow `claude-review`/AI-review window - that wait is the lead's to hold.
+4. The lead owns the claude-review wait + merge, cleans up, and shuts you down at green; it wakes you only if a fix is needed. Approve the shutdown request when received.
 """
 )
 ```
@@ -271,8 +274,8 @@ Report team status after spawning:
 
 | Message | Lead Action |
 |---------|-------------|
-| PR_CREATED | Update tracking, report to user |
-| REVIEW_CLEAR | Run [Smart Merge](#smart-merge) — teammate is idle, merge directly |
+| PR_CREATED | Update tracking, report to user, and **start owning the CI watch for this PR** (the teammate does not watch it) |
+| REVIEW_CLEAR | Verify required-green + threads, then **shut the teammate down immediately** (don't leave it idle through the claude-review wait), hold for claude-review per the AI-docs rule, and run [Smart Merge](#smart-merge) |
 | CLARIFICATION_NEEDED | Answer from task context, or relay to user if genuinely ambiguous |
 | BLOCKED (merge conflicts) | Push back: "Resolve conflicts yourself" |
 | BLOCKED (genuine) | Report to user, ask for guidance |
@@ -282,6 +285,8 @@ Report team status after spawning:
 1. Shutdown teammate, clean up failed worktree/branch
 2. Decompose: expand the task into subtasks (or cancel + create new peer tasks for sibling split)
 3. Spawn fresh teammates for resulting tasks
+
+**Shut teammates down early to kill idle churn**: The moment a teammate's PR has required checks green and threads resolved (its REVIEW_CLEAR, or your own poll showing it), shut the teammate down - do not leave it idle through the claude-review wait and the merge. The lead owns that tail. A live-but-idle teammate emits a continuous stream of idle notifications (the harness re-pings idle members), which is pure attention-drain on the lead; early shutdown is the fix, not patience. This is also why teammates are told not to run their own CI watcher - the lead watches, the lead merges, the teammate is gone before the slow advisory checks finish.
 
 **Lead conflict resolution**: When a teammate is idle and their PR is DIRTY (merge conflict), resolve it directly instead of nudging the teammate. Pull `$BASE_BRANCH`, resolve the conflict, push. Faster than round-tripping to an idle teammate (~10 min saved per conflict).
 
@@ -369,8 +374,8 @@ Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`.
 One task, one session. The work source is the coordination brain.
 
 ```
-Spawn → Setup worktree → Implement → Create PR → Review loop → REVIEW_CLEAR → Idle
-  → Lead: smart-merge + cleanup → Shutdown teammate
+Spawn → Setup worktree → Implement → Create PR → required checks green + threads resolved → REVIEW_CLEAR
+  → Lead: shut teammate down → Lead owns claude-review wait → smart-merge + cleanup
 ```
 
 Never reuse a teammate for a different task. Shutdown + spawn fresh.
