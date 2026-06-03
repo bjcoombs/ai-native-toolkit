@@ -1,6 +1,6 @@
 # The distill loop - iterate to the minimal behaviourally-equivalent document
 
-This is the engine of distill mode: the loop that produces the **smallest document that behaves the same as the original**, with acceptance gated on A/B behavioural evidence, never on inspection. It composes skill-forge's A/B equivalence capability (`skills/skill-forge/references/ab-equivalence.md`) for the behavioural test - this engine owns compression (deriving candidates, the loop, the report); skill-forge owns the behavioural comparison (running the runner over the transfer set, judging equivalence).
+This is the engine of distill mode: the loop that produces the **smallest document that behaves the same as the original**, with acceptance gated on A/B behavioural evidence, never on inspection. It composes ab-equivalence (`skills/ab-equivalence/references/ab-equivalence.md`) for the behavioural test - this engine owns compression (deriving candidates, the loop, the report); ab-equivalence owns the behavioural comparison (running the runner over the transfer set, judging equivalence).
 
 **The hard rule, stated once and binding on everything below: a compressed document is never accepted on inspection - only on A/B behavioural evidence from a run against the original.** Introspection about whether a smaller version "still does the same thing" is structurally unreliable - the model guesses optimistically. Execution over the transfer set is the only arbiter. The engine must refuse to output a candidate that has not passed an A/B equivalence run.
 
@@ -11,7 +11,7 @@ The loop runs on a **confirmed** transfer set (`transfer-set-design.md`) - the o
 For each confirmed case, capture how the **original** document behaves. This is the equivalence target every candidate is measured against.
 
 <!-- chat-skip:start -->
-For each case, spawn a runner using skill-forge's exact `runner-prompt.md` template, unchanged - drop in the **original** document as the skill draft and the case `input` as the test-case input. The runner applies the document verbatim and returns its five-field self-report. The runner and runner-prompt are reused exactly as the forge loop uses them; nothing about how a single version is executed changes.
+For each case, spawn a runner using ab-equivalence's exact `runner-prompt.md` template, unchanged - drop in the **original** document as the skill draft and the case `input` as the test-case input. The runner applies the document verbatim and returns its five-field self-report. The runner and runner-prompt are reused exactly as ab-equivalence defines them; nothing about how a single version is executed changes.
 <!-- chat-skip:end -->
 
 Record the runner's full self-report per case - all five required fields - and extract the disciplines the document held the runner to:
@@ -131,7 +131,7 @@ The iterate-to-minimal loop. It drives the baseline and the candidate through th
 DEFINE   -> confirmed transfer set (transfer-set-design.md); user has signed off.
 CAPTURE  -> teacher baseline, once, cached on (document_hash, transfer_set_hash) (Part 1).
 COMPRESS -> regenerate a smaller candidate: core->pointer, de-dup, inert-prose removal (Part 2).
-VALIDATE -> call skill-forge A/B equivalence (ab-equivalence.md) on (original, candidate, transfer set),
+VALIDATE -> call ab-equivalence (ab-equivalence.md) on (original, candidate, transfer set),
             passing the cached teacher transcripts so only the candidate is re-run this round.
   | on regression (any case candidate-regressed):
   |     the behaviour_delta NAMES the load-bearing behaviour that was lost.

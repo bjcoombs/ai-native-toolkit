@@ -187,4 +187,4 @@ Surfaced by this run, deliberately out of scope (these skills are battle-scar-de
 
 1. **Apply the M-c / P-d background-CI-watcher rewrite** to both skills' "do not block on CI" lines - the highest-value convert-for-free, measured at +1 directness on M1, and the same instruction appears in both skills.
 2. **Apply the P-j vague-pointer rewrite** to `pr-review-merge`'s DIRTY-handling line, recovering the threshold from the conflict-resolution patterns directly above it - measured +1 directness on P1.
-3. **Gate-scripting for the runner harness** (`skills/skill-forge/references/runner-prompt.md`) to drive runners past sequential interactive gates, enabling a full end-to-end A/B of infrastructure-coupled and interactive skills. Already tracked from the distillation acceptance; this run is a second data point that wants it.
+3. **Gate-scripting for the runner harness** (`skills/ab-equivalence/references/runner-prompt.md`) to drive runners past sequential interactive gates, enabling a full end-to-end A/B of infrastructure-coupled and interactive skills. Already tracked from the distillation acceptance; this run is a second data point that wants it.

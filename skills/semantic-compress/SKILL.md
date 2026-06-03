@@ -121,7 +121,7 @@ The headline operation: produce the **smallest document that behaves the same as
 - `references/distill-loop.md` - the engine: teacher baseline capture, candidate regeneration, and the iterate-to-minimal controller.
 
 <!-- chat-replace:distill-availability -->
-The loop **composes `skill-forge`'s A/B equivalence capability** (`skills/skill-forge/references/ab-equivalence.md`) for the behavioural test. This skill owns compression (transfer set, candidate regeneration, the loop, the report); `skill-forge` owns the behavioural comparison (running the runner over the transfer set, judging equivalence per case).
+The loop **composes `ab-equivalence`** (`skills/ab-equivalence/references/ab-equivalence.md`) for the behavioural test. This skill owns compression (transfer set, candidate regeneration, the loop, the report); `ab-equivalence` owns the behavioural comparison (running the runner over the transfer set, judging equivalence per case).
 
 ### The distill loop (seven steps)
 
@@ -183,7 +183,7 @@ The A/B distillation report (`references/distillation-report-template.md`) makes
 
 ## Transform #2: Directive-clarity
 
-Compression (Local + Distill above) is Transform #1 of this skill's optimizer family: it makes a document *smaller* while preserving behaviour. Directive-clarity is Transform #2: it makes a document *lighter to act on* while preserving behaviour, by rewriting instructions that force the reading model to unpack an action before it can act into concrete directives that name the action. Both transforms share one validator - skill-forge's A/B equivalence harness (`skills/skill-forge/references/ab-equivalence.md`) - and differ only in the gate they apply to its result. The frame that generates this transform, and the caveat that keeps it honest (every claimed gain is a hypothesis the harness must measure, never an assertion), is `references/cognitive-ergonomics.md`.
+Compression (Local + Distill above) is Transform #1 of this skill's optimizer family: it makes a document *smaller* while preserving behaviour. Directive-clarity is Transform #2: it makes a document *lighter to act on* while preserving behaviour, by rewriting instructions that force the reading model to unpack an action before it can act into concrete directives that name the action. Both transforms share one validator - ab-equivalence's harness (`skills/ab-equivalence/references/ab-equivalence.md`) - and differ only in the gate they apply to its result. The frame that generates this transform, and the caveat that keeps it honest (every claimed gain is a hypothesis the harness must measure, never an assertion), is `references/cognitive-ergonomics.md`.
 
 ### When it fires
 
@@ -196,7 +196,7 @@ Compression (Local + Distill above) is Transform #1 of this skill's optimizer fa
 1. **Detect patterns.** Scan the document for the four latent-action shapes - bare negation, fact-not-action, vague pointer, ordering/policy rule - per `references/directive-clarity-patterns.md`. Detection over-includes on purpose: it optimises for recall, flagging every candidate shape.
 2. **Classify each candidate convert-for-free vs battle-scar.** Route every detected pattern through `references/battle-scar-classifier.md`. A battle-scar - a prohibition earned from a specific past failure, where the wording is the load-bearing content - is flagged for preservation and never rewritten. The classifier is the precision half: it holds back scars to a sub-10% false-positive target, defaulting to preserve on uncertainty. Only the convert-for-free set proceeds.
 3. **Rewrite.** Turn each released candidate into a concrete directive per `references/directive-clarity-rewrites.md`, under the two acceptance checks (names-the-concrete-action, semantic-equivalence). Keep every qualifier that scopes a prohibition; keep the fact behind a fact-not-action rewrite; never fabricate a referent for a vague pointer - flag it for human confirmation and leave the original in place.
-4. **A/B validate.** Run the candidate against the teacher over the transfer set via skill-forge's A/B equivalence harness (`skills/skill-forge/references/ab-equivalence.md`). The harness emits, per case, an equivalence verdict (`equivalent` / `candidate-regressed` / `candidate-diverged`) and an efficiency signal (`original_directness`, `candidate_directness`, `interpretation_notes`).
+4. **A/B validate.** Run the candidate against the teacher over the transfer set via ab-equivalence's harness (`skills/ab-equivalence/references/ab-equivalence.md`). The harness emits, per case, an equivalence verdict (`equivalent` / `candidate-regressed` / `candidate-diverged`) and an efficiency signal (`original_directness`, `candidate_directness`, `interpretation_notes`).
 5. **Present for approval.** Surface the per-rewrite diffs, the A/B verdicts, the preserved battle-scars, and any vague pointers held for confirmation. The user approves before the rewritten document is emitted.
 
 ### The gate
@@ -204,7 +204,7 @@ Compression (Local + Distill above) is Transform #1 of this skill's optimizer fa
 Directive-clarity's acceptance is **stricter than compression's**. Compression gates on strict no-regression alone (sameness). Directive-clarity gates on no-regression **and** a measured directness gain:
 
 - **No-regression**: zero cases return `candidate-regressed` (`summary.pass == true`). A rewrite that reads cleaner but permits a behaviour the original forbade is a regression and fails here.
-- **Directness gain**: `candidate_directness` > `original_directness` on the rewritten cases, with no `candidate-regressed`. This is the efficiency signal the A/B harness already records on every run (`skills/skill-forge/references/ab-equivalence.md`) - directive-clarity *reads* that signal and gates on it; it does not redesign or re-instrument the harness. A rewrite that loses nothing but also measures no directness improvement has not earned its place: keep the original.
+- **Directness gain**: `candidate_directness` > `original_directness` on the rewritten cases, with no `candidate-regressed`. This is the efficiency signal the A/B harness already records on every run (`skills/ab-equivalence/references/ab-equivalence.md`) - directive-clarity *reads* that signal and gates on it; it does not redesign or re-instrument the harness. A rewrite that loses nothing but also measures no directness improvement has not earned its place: keep the original.
 
 On a regression, the divergence names the rewrite that lost behaviour. Revert that specific rewrite to its pre-rewrite form, keep the passing rewrites, and re-validate - the same granular add-back the distill loop uses.
 
