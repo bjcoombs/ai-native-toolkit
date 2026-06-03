@@ -240,8 +240,12 @@ SKILLS: dict[str, dict] = {
         # Distill mode references the runner harness + skill-forge's A/B
         # equivalence capability (plugin-only). The chat-replace swaps the
         # distill-availability line for an honest degrade note so the ZIP states
-        # distill mode needs the Claude Code CLI; Local Mode ships unchanged.
-        "exclude_dirs": set(),
+        # distill mode needs the Claude Code CLI; Local Mode ships unchanged. The
+        # distill reference docs (distill-loop, transfer-set-design,
+        # distillation-report-template) ride along under references/; their
+        # team/subagent spawn mechanics are wrapped in chat-skip so only the
+        # methodology survives, never a Claude-Code-only tool.
+        "exclude_dirs": {"tests", "__pycache__", ".pytest_cache", ".venv"},
         "replacements": {
             "distill-availability": (
                 "**Distill mode is not available in this standalone build.** It requires the "

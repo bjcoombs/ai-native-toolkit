@@ -246,6 +246,31 @@ class TestSemanticCompressBuild:
     def test_forge_report_present(self, sc_zip):
         assert "semantic-compress/references/forge-report.md" in sc_zip.namelist()
 
+    def test_distill_references_present(self, sc_zip):
+        # Distill mode degrades to a CLI-only note in standalone, but the three
+        # distill reference docs still ride along under references/ so the
+        # bundled SKILL.md's relative links resolve.
+        names = sc_zip.namelist()
+        for ref in (
+            "semantic-compress/references/distill-loop.md",
+            "semantic-compress/references/transfer-set-design.md",
+            "semantic-compress/references/distillation-report-template.md",
+        ):
+            assert ref in names, f"{ref} missing from ZIP"
+
+    def test_no_team_infrastructure_leaked(self, sc_zip):
+        # The distill engine docs describe spawning runner subagents (Claude
+        # Code-only); those mechanics are wrapped in chat-skip. No Claude
+        # Code-only tool name may survive into the standalone ZIP.
+        for name, content in _md_contents(sc_zip).items():
+            for tool in ("TeamCreate", "TeamDelete", "SendMessage", "TaskCreate"):
+                assert tool not in content, f"{name}: {tool} leaked"
+        # The A/B harness / skill-forge dependency must appear only in degraded
+        # form: the SKILL.md states distill mode is unavailable standalone.
+        skill_md = sc_zip.read("semantic-compress/SKILL.md").decode("utf-8")
+        assert "Distill mode is not available in this standalone build" in skill_md
+        assert "runner harness" in skill_md
+
     def test_frontmatter_name_correct(self, sc_zip):
         skill_md = sc_zip.read("semantic-compress/SKILL.md").decode("utf-8")
         assert "name: semantic-compress" in skill_md
