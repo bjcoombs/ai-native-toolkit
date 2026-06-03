@@ -26,3 +26,6 @@ The plans and specs behind the skills, captured as they were built. These are hi
 |------|---------|
 | [Issues marathon shared-skills design](./specs/2026-05-29-issues-marathon-shared-skills-design.md) | Design for `/issues` via shared marathon skills |
 | [skill-forge design](./specs/2026-06-02-skill-forge-design.md) | Judge-panel skill-hardening harness, refined through its own process |
+| [semantic-compress distillation design](./specs/2026-06-03-semantic-compress-distillation-design.md) | semantic-compress v2 holistic distillation - produce the smallest document that passes A/B behavioural equivalence |
+| [instruction optimizer directive-clarity design](./specs/2026-06-03-instruction-optimizer-directive-clarity-design.md) | Directive-clarity transform - first A/B-validated member of the instruction cognitive-ergonomics family |
+| [skill-forge hardening + A/B-extraction design](./specs/2026-06-03-skill-forge-hardening-and-ab-extraction-design.md) | Extract A/B-equivalence into a standalone library skill and apply five B1-B5 hardening changes to skill-forge |
