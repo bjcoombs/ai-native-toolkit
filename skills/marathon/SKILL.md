@@ -4,10 +4,12 @@ description: >
   Run a list of work units to completion with an Agent Team: derive a dependency DAG and
   hot-file map, spawn one ephemeral teammate per unit (or combined group), drive each PR
   through pr-review-merge, smart-merge in waves, recover from crashes, and run a
-  retrospective. Source-agnostic — the caller supplies a work-source adapter. Invoked by
-  the /tm and /issues commands. TRIGGER when a command needs autonomous multi-unit team
-  orchestration to completion, or when the user asks to run a tag/issue queue to done with
-  Agent Teams.
+  retrospective. Source-agnostic — the caller supplies a work-source adapter. A library
+  skill invoked BY the /tm and /issues commands, not run directly by a user (it needs a
+  caller-supplied adapter). TRIGGER when a command needs autonomous multi-unit team
+  orchestration to completion — a tag, issue queue, backlog, or set of tickets run to done
+  with Agent Teams. For a single PR use pr-review-merge instead; not for one-off single-task
+  work.
 ---
 
 # Marathon Engine
@@ -52,7 +54,7 @@ Read the repo's CLAUDE.md for a `## Marathon Configuration` section. This provid
 | Bot reviewer rules | (none) | Per-bot thread resolution patterns |
 | CI patterns | (none) | Known flaky checks, pre-existing failures |
 
-If no Marathon Configuration section exists, **prompt the user to set one up before starting marathon mode**:
+If no Marathon Configuration section exists, **advise the user to set one up — this is non-blocking; emit the notice and proceed with defaults** (do not wait for an answer):
 ```
 No Marathon Configuration found in this project's CLAUDE.md.
 
@@ -78,16 +80,23 @@ Enumerate work units via the adapter's **enumerate** operation.
 3. **Challenge unnecessary dependencies** — different files/modules may not need sequencing
 4. Look for tasks chained sequentially that could run in parallel
 5. **Identify hot files** — files touched by multiple tasks. Record as `$HOT_FILES`.
-6. **Primary mitigation: combine tasks that share hot files** into one teammate. This eliminates merge conflicts entirely (proven across 3 marathons: 0 conflicts when combining). Combine when:
-   - Tasks share hot files (strongest signal — always prefer combining over dependency management)
+6. **Primary mitigation: combine tasks that share hot files** into one teammate. This eliminates merge conflicts entirely (0 conflicts across 3 marathons when combining). Combine when:
+   - Tasks share hot files (strongest signal — prefer combining over dependency management for *small, coupled* tasks)
    - Tightly coupled output (e.g., "add resources" + "add docs for resources")
    - Content-only tasks touching non-overlapping directories (e.g., adding 3 independent pattern dirs)
    - One is docs/config for the other, or one is meaningless without the other
    - Small tasks (complexity 1-2) that share a theme — PR-per-task overhead exceeds the work itself
-7. **Fallback: dependencies** — when combining isn't feasible (both tasks complexity 8+, fundamentally different concerns despite shared file, or 5+ tasks on one file):
+
+   **Combining has a ceiling — it must not swallow the parallelism it exists to protect.** Combining buys zero conflicts by trading away concurrency, so it only pays while the combined unit stays small and genuinely coupled. A hot file is a combine *candidate*, not a combine *mandate*. Do NOT combine when it would:
+   - push the combined unit past ~complexity 8 — one teammate then serially implements a large PR, which is slower than parallel teammates each resolving an additive conflict;
+   - collapse the wave — if combining would leave fewer than 2 parallel units where the DAG allowed more, you have destroyed the wave, not optimized it; use dependencies instead;
+   - fold in a task that *depends on* the others, or a complexity-8+ task — a dependency is a sequencing signal, not a combine signal. Sequence it across PRs; don't serialize it inside one.
+
+   Some hot files are touched by *every* PR and want **sequential merge, never combining**: a version counter (`.claude-plugin/plugin.json` `.version`), a changelog, a lockfile. Identical bumps 3-way-merge cleanly; divergent bumps conflict, so tell each teammate the next value explicitly and merge in order (highest version wins) — combining all PRs to dodge a one-line version conflict is the trap, not the fix.
+7. **Fallback: dependencies** — when combining isn't feasible or would breach the ceiling above (any task complexity 8+, a real dependency between the tasks, fundamentally different concerns despite a shared file, or 5+ tasks on one file):
    - **Add explicit dependencies** — merge the simpler/faster task first, then the other depends on it.
    - Teammate prompts: include conflict resolution patterns
-   - If 5+ tasks touch one file and combining is unwieldy, consider a dedicated consolidation task
+   - If 5+ tasks touch one file, decide by the *kind* of contention. This additive-vs-serialize split is a **5+-on-one-file rule and does not override Step 1.6 below that threshold**: a small coupled pair (2-4 tasks) sharing one additive hot file under the complexity ceiling still **combines** — combining is the primary mechanic, it yields 0 conflicts, and it costs only one parallel slot. At 5+ the arithmetic flips: **purely additive** edits (schema appends, barrel exports, route registration — the "accept both sides" cases) are cheap to merge, so keep the units **parallel** in one wave and merge them in order rather than collapsing four-plus parallel slots into one teammate; do NOT serialize them. Reserve the **dedicated consolidation task** (one teammate owns that file; the others depend on it) for **same-line or structural** contention where parallel edits would genuinely conflict — and even then, prefer it over folding all 5+ into one mega-PR.
 8. Report the optimized plan:
    ```
    ## Dependency Analysis: <tag>
@@ -183,7 +192,7 @@ Store non-required check names in `meta.flaky_checks`.
 ## Step 3: Spawn Teammates
 
 **Pre-spawn: Read the retro log's open template changes:**
-Before writing any spawn prompt, read the retro log (Marathon Configuration `$RETRO_LOG`) Template Changes table. Apply every row still marked Pending to this run's spawn prompts and lead behaviour now - that is what the table is for. Reading these only at retro time is too late: the same friction recurs the whole run. (The teammate-watcher/idle-churn fix below was logged Pending for two consecutive marathons before it shipped, because the lead read the table after the run, not before.)
+Before writing any spawn prompt, read the retro log (Marathon Configuration `$RETRO_LOG`) Template Changes table — **skip this step entirely if `$RETRO_LOG` is unset** (defaults supply none), the same escape the completion-time read uses. Apply every row still marked Pending to this run's spawn prompts and lead behaviour now - that is what the table is for. Reading these only at retro time is too late: the same friction recurs the whole run. (The teammate-watcher/idle-churn fix below was logged Pending for two consecutive marathons before it shipped, because the lead read the table after the run, not before.)
 
 **Pre-spawn: Check for already-completed work:**
 Before spawning Wave 1, check recent merged PRs for task keywords to avoid spawning work that's already done:
@@ -197,16 +206,18 @@ Cross-reference with pending tasks. If a task's work was already merged (e.g., f
 - **Opus** (default for reliability): Multi-file PRs, review-heavy tasks, tasks touching shared files (barrel exports, routing, config), complexity 5+
 - **Sonnet** (cost-efficient for simple work): Single-file changes, isolated modules, complexity 1-4 with no shared-file risk, docs/config-only tasks
 
-Sonnet is cost-effective but has a recurring false REVIEW_CLEAR problem — reports review-clear without verifying all criteria (~15 min waste per marathon when it happens). Opus has 0 false signals across all marathons. When in doubt, use opus — the cost delta is cheaper than intervention time.
+Sonnet is cost-effective but has a recurring false REVIEW_CLEAR problem — reports review-clear without verifying all criteria. Opus has not shown this. When in doubt, use opus — the cost delta is cheaper than intervention time.
 
 Haiku cannot reliably handle review loops — never use for teammates.
+
+**Combined-group identity:** combining is the primary mechanic, so a teammate often covers several units. Give a combined group one identity derived from its member ids: name `task-<id>+<id>` (e.g. `task-1+2`), branch `<tag>--<id>+<id>--<slug>`, worktree `worktree/<tag>/<id>+<id>--<slug>`; its complexity is the sum of its members'. The Scope guard and the activity-check `find` path below operate on this combined branch/worktree — substitute the combined id wherever the singular `<task-id>` appears. Mark each member unit in-progress and close each on merge.
 
 **Teammate prompt template:**
 ```
 Task(
   subagent_type: "general-purpose",
   team_name: "<tag>",
-  name: "task-<task-id>",
+  name: "task-<task-id>",   # combined group: task-<id>+<id> (see Combined-group identity above)
   model: "<chosen-model>",
   prompt: """
 # Implement <tag>.<task-id>: <task-title>
@@ -245,7 +256,7 @@ Only message the lead for **meaningful events**:
 - Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX: <tag>.<task-id> — <brief reasoning>", summary: "Too complex <task-id>")`
 
 ## Scope
-- Only create PRs on YOUR branch (`<tag>--<task-id>--<slug>`). Never create PRs on other branches or for work outside your assigned task.
+- Only create PRs on YOUR branch (`<tag>--<task-id>--<slug>`, or the combined-group branch `<tag>--<id>+<id>--<slug>` if you cover several units). Never create PRs on other branches or for work outside your assigned task(s).
 - If you discover related work that needs doing, mention it in your PR description — don't create additional PRs.
 
 ## Lifecycle
@@ -288,7 +299,7 @@ Report team status after spawning:
 
 **Shut teammates down early to kill idle churn**: The moment a teammate's PR has required checks green and threads resolved (its REVIEW_CLEAR, or your own poll showing it), shut the teammate down - do not leave it idle through the claude-review wait and the merge. The lead owns that tail. A live-but-idle teammate emits a continuous stream of idle notifications (the harness re-pings idle members), which is pure attention-drain on the lead; early shutdown is the fix, not patience. This is also why teammates are told not to run their own CI watcher - the lead watches, the lead merges, the teammate is gone before the slow advisory checks finish.
 
-**Lead conflict resolution**: When a teammate is idle and their PR is DIRTY (merge conflict), resolve it directly instead of nudging the teammate. Pull `$BASE_BRANCH`, resolve the conflict, push. Faster than round-tripping to an idle teammate (~10 min saved per conflict).
+**Lead conflict resolution**: When a teammate is idle and their PR is DIRTY (merge conflict), resolve it directly instead of nudging the teammate. Pull `$BASE_BRANCH`, resolve the conflict, push. Faster than round-tripping to an idle teammate (~10 min saved per conflict). This idle-DIRTY conflict is the **sole** work the lead executes directly — it does not generalize: a failing test, missing implementation, or thread fix is still delegated per [Lead Authority](#lead-authority), even when it looks like a quick edit.
 
 **Non-responsive teammate escalation**: If a teammate ignores a direct instruction (nudge to fix CI, address review feedback, follow lead guidance) or sends a false REVIEW_CLEAR (claims ready but criteria aren't met), don't keep nudging. Shut it down and respawn the same task on opus. One strike — don't give sonnet a second chance on the same task.
 
@@ -328,6 +339,13 @@ an advisory AI review, a regression gate that re-runs on base advance) is mid-ru
 After a merge, close the unit via the adapter's **close on merge** operation, then proceed to
 the wave transition below.
 
+**Teammate shutdown and cleanup are two separate stages — don't conflate them.** The teammate is shut
+down *early*, at REVIEW_CLEAR (see [Step 4](#step-4-lead-monitoring)) — the moment its PR is required-green
+with threads resolved, never held live through the claude-review wait or the merge. *Cleanup* (worktree
+removal, branch deletion, unit-close) is the *later* stage and is the only thing the verified-MERGED gate
+guards. By the time you merge, the teammate is already gone; the post-merge step below is a confirm-pane-dead
+check, not a second shutdown.
+
 **Gate cleanup on a VERIFIED merge.** Worktree removal, branch deletion, and unit-close MUST run
 only after confirming `gh pr view $PR --json state --jq '.state' == "MERGED"`. Never chain them
 unconditionally after the merge call — a rejected merge with chained cleanup deletes the branch/worktree
@@ -340,7 +358,7 @@ hides, and the reviewer catches it. The minutes of waiting are cheaper than a fo
 
 **After merge:**
 1. Report to user
-2. Shutdown teammate (gate on verified `state == "MERGED"` first)
+2. Confirm the teammate is already down — you stood it down at REVIEW_CLEAR; this is a confirm-pane-dead check, not a second shutdown, and is **not** gated on the merge. The verified-`MERGED` gate below guards *cleanup* (step 3 onward), not the shutdown.
 3. Mark internal task completed
 4. Check for newly unblocked tasks
 5. **Wave transition**: Batch-dismiss stale CRs across all eligible PRs before spawning next wave. Review signals from completed wave, adapt next prompts with learnings.
@@ -384,7 +402,7 @@ Never reuse a teammate for a different task. Shutdown + spawn fresh.
 
 The lead operates as a **tech lead running a sprint** — not a task router.
 
-**The lead delegates, never executes.** During a marathon, the lead's job is to coordinate: merge PRs, spawn teammates, monitor status. Any work that takes more than ~30 seconds (tests, coverage, code exploration, implementation, thread resolution) must be delegated to a teammate or subagent. The lead must stay responsive to teammate messages at all times. The moment the lead starts executing, messages queue up and momentum stalls.
+**The lead delegates, never executes.** During a marathon, the lead's job is to coordinate: merge PRs, spawn teammates, monitor status. Any work that takes more than ~30 seconds (tests, coverage, code exploration, implementation, thread resolution) must be delegated to a teammate or subagent. The one carve-out is resolving a DIRTY merge conflict for an *idle* teammate (see [Lead conflict resolution](#step-4-lead-monitoring)) — that, and nothing else, the lead does directly. The lead must stay responsive to teammate messages at all times. The moment the lead starts executing, messages queue up and momentum stalls.
 
 **Trusted decisions (no human approval needed):**
 - Defer or cancel tasks that become irrelevant
@@ -412,9 +430,9 @@ The lead operates as a **tech lead running a sprint** — not a task router.
    - Criteria met (with PR evidence)
    - Criteria not met or partially met (flag for user)
    - Scope that was delivered beyond the original acceptance criteria (emergent work)
-4. Read the retro log (path from Marathon Configuration `$RETRO_LOG`, or skip if not configured)
-5. Run retrospective using the structured format below
-6. Append this marathon to the retro log (Marathon History + update Template Changes validation)
+5. Read the retro log (path from Marathon Configuration `$RETRO_LOG`, or skip if not configured)
+6. Run retrospective using the structured format below
+7. Append this marathon to the retro log (Marathon History + update Template Changes validation)
 
 ```
 ## Marathon Complete: <tag>
