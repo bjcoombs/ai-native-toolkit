@@ -37,11 +37,24 @@ If no intent is supplied the lead derives one **from the draft** - but the draft
 
 ## The runner prompt
 
+**skill-forge composes ab-equivalence's runner for test execution.** The runner is owned by [ab-equivalence](../ab-equivalence/SKILL.md), the library skill that holds the shared execution primitive; skill-forge does not re-implement it - it fills ab-equivalence's pure-wrapper template per runner per test case.
+
 The runner prompt is the most load-bearing prompt in the system: runner transcripts are the evidence every behavioural lens judges, so any contamination there corrupts the whole gate. It is a **pure wrapper** - it never explains why the skill works or adds context beyond the draft, or the runner ends up testing "skill + prompt additions" instead of the skill. The exact five-section template (role statement, role boundary, the verbatim draft, the test-case input, the required self-report fields) is in [runner-prompt](../ab-equivalence/references/runner-prompt.md). Fill one per runner per test case.
+
+## Runner model selection
+
+The model the runners execute on is a **knob**, because a skill that holds together on a strong model can fall apart on a weak one - a weaker model unpacks instructions less reliably, so a defect that a strong runner papers over surfaces only when a weak runner hits it. The forge certifies behaviour *for the tier it was forged on*, nothing stronger and nothing weaker.
+
+- **Single model (default).** Forge against the **weakest tier the skill will ship to**: Haiku if the skill ships broadly to all tiers, otherwise the intended deployment tier. Forging on the weakest tier is the conservative gate - clearing it certifies every stronger tier too, the way targeting the lowest-spec deployment target certifies the rest.
+- **Tier sweep (optional).** Run the same test case through runners on more than one tier in the same round (e.g. Haiku + Sonnet + Opus) and record a per-tier verdict. Use a sweep when the skill must be certified across tiers explicitly, or to locate the tier at which it starts to fail.
+
+**A skill forged only on Opus is not certified for Haiku.** The runner model is recorded in the forge report (see [forge-report-template](references/forge-report-template.md)); certification is valid only for the tested tier(s). The runner-model knob changes only which model executes the wrapper - it never changes the wrapper itself, which stays the pure template ab-equivalence owns.
 
 ## The five lenses
 
 The panel is five skill-quality lenses. **All five run by default**; the lead drops to 3 or 2 only on an explicit quick-check request, and a self-forge always uses all five - see the deterministic selector in [judge-lenses](references/judge-lenses.md). Confidence is **not** a lens - it is the Gate 2 stopping decision. Four lenses (Fidelity, Adversarial, Compression, Usability) judge runner transcripts and produce `behavioural` findings; Trigger/routing judges the skill text directly and produces `static` predictions, because prompt-injection can never make a `TRIGGER` clause mis-fire. Full definitions, what each reads in the self-report, and the behavioural/static rule are in [judge-lenses](references/judge-lenses.md).
+
+What scales with skill size is the **test-case count and round budget**, not the lens count: the **cost driver is runners = test cases x rounds**, and all five lenses run regardless of scope. A small skill gets a smaller suite and a tighter round ceiling but the same five-lens panel - the scope-scaling thresholds (Small / Medium / Large) are in [judge-lenses](references/judge-lenses.md) and [test-taxonomy](references/test-taxonomy.md).
 
 ## The loop: OBSERVE -> INSPECT -> GATE -> AMEND
 
@@ -71,10 +84,6 @@ One change per round isolates a single hypothesis, so every round's delta is cau
 ## Gate hierarchy
 
 A strict hierarchy, not a menu: **Gate 1 - Objective** (every case passes Fidelity; hard), **Gate 2 - Panel confidence** (all green and no `HIGH`-severity dissent), **Gate 3 - Diminishing returns** (the round produced measurable gain), and the **budget** escape hatch that always terminates. Promote if and only if Gate 1 and Gate 2 both pass; otherwise stop with the best-so-far artifact and a report naming the unmet gate. The Gate 1 Fidelity bar, the Gate 3 "measurable gain" rule, and the promotion decision are spelled out in [gate-hierarchy](references/gate-hierarchy.md).
-
-## A/B equivalence (library capability for other skills)
-
-A thin, transform-agnostic capability that compares two versions of a document (original = teacher, candidate = student) across a transfer set and returns per-case `equivalent | candidate-regressed | candidate-diverged` verdicts plus a per-case efficiency signal - it answers "does the candidate still do what the original did?", not "is this skill good?". It reuses the runner unchanged and adds one focused compare-two-transcripts judge, separate from the five lenses; it is a **library capability other skills compose** (e.g. `semantic-compress` gates a distillation on it) and does **not** change the forge's own five-lens gate hierarchy above. Contract and schema: [ab-equivalence](../ab-equivalence/references/ab-equivalence.md); the judge prompt: [equivalence-judge-prompt](../ab-equivalence/references/equivalence-judge-prompt.md).
 
 ## Execution modes
 
@@ -121,7 +130,7 @@ The lead designs 3-5 cases spanning **happy path / edge case / adversarial / com
 
 Skill-forge was bootstrapped by forging itself; two rules from that govern every run where the target is skill-forge:
 
-1. **Re-forging re-enters fixture review first.** As skill-forge evolves its failure modes change, so a re-forge starts by confirming each planted defect in the flawed-sample fixture still exercises a current failure mode, before any rounds run. It is a step, not a prose aside, so it cannot be skipped. The **lead** performs this Phase A- fixture review against `DEFECTS.md` (the answer key), while the runners forging the fixture never read `DEFECTS.md` - that role boundary keeps the calibration honest, since a runner that saw the answer key could not give a blind transcript.
+1. **Re-forging re-enters fixture review first.** As skill-forge evolves its failure modes change, so a re-forge starts by confirming each planted defect in the flawed-sample fixture still exercises a current failure mode, before any rounds run. It is a step, not a prose aside, so it cannot be skipped. The **lead** performs this Phase A- fixture review against `DEFECTS.md` (the answer key), while the runners forging the fixture never read `DEFECTS.md` - that role boundary keeps the calibration honest, since a runner that saw the answer key could not give a blind transcript. The flawed fixture now includes **borderline cases that calibrate severity judgement, not just detection**: a Borderline-LOW and a Borderline-MED defect with expected severities, plus a clean-pass and a near-miss case that must draw no finding. A lens that catches every planted defect but rates them all HIGH is miscalibrated, and a lens that fires on the clean-pass or near-miss case is over-firing - both are calibration failures the fixture review must check, not just whether each defect was detected.
 2. **Depth-1 recursion guard (axis 2).** When the skill under test **is** skill-forge, the runners forge the **fixture**, never skill-forge again - "forge the forge" tests its ability to forge *something else*, it does not build an infinite tower. With the role boundary (axis 1), both recursion paths are closed by construction.
 
 The full A- -> A -> B -> C bootstrap story is in the [design spec](../../docs/superpowers/specs/2026-06-02-skill-forge-design.md).
@@ -129,3 +138,15 @@ The full A- -> A -> B -> C bootstrap story is in the [design spec](../../docs/su
 ## Artifacts
 
 Never touch the user's pristine source: in a git repo work on a branch or worktree, in chat a scratch file; each amend is a visible diff. The run produces the hardened `SKILL.md`, the grown test corpus, and a **forge report** - intent and the ASSUMED-clause acceptance record, the test suite, the per-round hypothesis-to-result log, the gate ledger, the severity-tagged dissent log, the final verdict, and rounds plus estimated waste. The crash-recovery round-tracking JSON is the same object as the panel ledger, so a crashed run reconciles on restart. The report format is in [forge-report-template](references/forge-report-template.md); an end-of-run retrospective (which lens caught the most, waste estimate) follows, as in `marathon`. For a real worked example, see [example-forge-report](references/example-forge-report.md) - skill-forge forging itself, the run that promoted this skill.
+
+## Promote semantics
+
+What "promote" *does* depends on where the skill lives. The same hardened artifact lands differently in a plugin repo, a personal skill directory, or a chat session - and **the forge report always lists exactly what was written and where** (the Artifacts Written section in [forge-report-template](references/forge-report-template.md)), so promotion is never a silent mutation.
+
+| Context | Promote action |
+|---------|----------------|
+| **Plugin repo** (the skill is a tracked file in a git repo) | Write the hardened files on a **branch**, never the pristine default branch, and **offer a PR** - the same PR-offering pattern `assess-pr` uses for its report (see [assess-pr](../assess-pr/SKILL.md)). The user reviews the diff and merges; the forge does not self-merge. |
+| **Personal skill** (`~/.claude/skills/<name>/`, path relative to the user's home directory) | **Update in place** and **state what was written** - which files changed, so the user can see the promotion landed in their live skill directory. |
+| **Chat / standalone** (no on-disk skill, e.g. Claude Desktop or the standalone ZIP) | **Output the hardened artifact** for the user to copy manually - there is no file to write, so the report carries the full hardened `SKILL.md` text. |
+
+The promote action follows the artifacts-on-a-branch rule already in **Artifacts** above: in every repo context the work happens on a branch or worktree, never the pristine source.

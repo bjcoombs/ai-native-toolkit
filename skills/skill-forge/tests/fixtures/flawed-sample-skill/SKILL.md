@@ -29,3 +29,11 @@ This is why so many open-source projects adopted the scheme over the years.
    links back to its work item.
 6. If the change is large, write a body explaining the reasoning.
 7. Output the final message in a fenced code block.
+
+## Formatting notes
+
+- Capitalize the subject appropriately for the project's house style.
+- Add a list of the affected files at the end when it seems helpful.
+- Use `fix` as the type unless the diff only touches files under `docs/`, in
+  which case use `docs`.
+- Always wrap any body text at 72 columns.

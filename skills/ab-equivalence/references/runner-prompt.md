@@ -2,11 +2,15 @@
 
 It must be a **pure wrapper**: it never explains why the skill works, adds context beyond the draft, or coaches the runner (SKILL.md carries the rationale for why this is load-bearing).
 
-The lead fills this template per runner - one runner per test case per round. Every self-report field is required; fields 1-5 are the standard report, and field 6 (gates hit) records interactive gates and reads "none encountered" on a run that hit none. Copy the template, drop in the draft and the case input, send it to a fresh-context runner.
+The lead fills this template per runner - one runner per test case per round. Every self-report field is required; fields 1-5 are the standard report, and field 6 (gates hit) records interactive gates and reads "none encountered" on a run that hit none. The optional `Runner model` header records which model tier is executing, so a caller running a multi-tier sweep (e.g. skill-forge's runner-model knob) can attribute each transcript's verdict to a tier; omit it when no model is pinned. Copy the template, drop in the draft and the case input, send it to a fresh-context runner.
 
 ## Template
 
 ```text
+Runner model: <optional - the model tier executing this runner, e.g. haiku |
+sonnet | opus; record it so the transcript's verdict can be attributed to a tier.
+Omit if the caller is not pinning a model.>
+
 You are a test runner. Apply the following skill to the following input, exactly
 as the skill instructs.
 
