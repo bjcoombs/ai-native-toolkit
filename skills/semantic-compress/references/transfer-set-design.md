@@ -13,7 +13,9 @@ Read the document once and extract its **behavioural surface** - every place it 
 3. **Named concepts.** Every concept the document names and relies on (a principle, a method, a domain term - standard or locally redefined). A case should exercise whether the candidate still activates the concept's behaviour. Locally-redefined concepts (the bespoke twist) are load-bearing: a case must prove the candidate keeps the *twist*, not just the standard concept.
 4. **Composition points.** Every place the document assumes it runs alongside another skill, consumes another process's output, or hands off to one. Each is a behaviour that only appears when the document is composed, never in isolation.
 
-The output of derivation is a list of candidate behaviours, each tagged with the section(s) of the document that induce it. This section map is what coverage scoring and the add-back mechanism (in `distill-loop.md`) both read.
+A fifth pass identifies **interactive gates** - the points where the document pauses for user input rather than acting on its own: `AskUserQuestion` calls, confirmation prompts ("Do you want to...?"), and user choice points ("Select option A, B, or C"). A gate is not a behaviour to reproduce; it is a point where the A/B run stalls, because the runner that applies the document has no interactive user to answer it. Left unhandled, every case that reaches a gate measures only pre-gate behaviour - a silent partial pass. So each gate a case drives into needs a scripted answer. For every gate found, generate a default `gate_responses` entry on the cases that reach it (the gate type, a pattern matching its prompt text, and a default response); the user confirms these alongside the case inputs, and a case that drives no gate carries an empty array.
+
+The output of derivation is a list of candidate behaviours, each tagged with the section(s) of the document that induce it, plus the interactive gates each case reaches. This section map is what coverage scoring and the add-back mechanism (in `distill-loop.md`) both read.
 
 ## Generating cases across the four types
 
@@ -42,8 +44,8 @@ Track, per case, which document sections it exercises (`exercises_sections`). Ag
 
 The transfer set *is* the operational definition of essence, so the user signs off on it before the engine commits to it. Confirmation is a hard gate: **no baseline run, no runner invocation, until the user confirms.**
 
-1. **Present** the derived set: each case with its `type`, `input`, and the `exercises_sections` it drives. Present coverage alongside - `sections_identified`, `sections_covered`, and every `thin_coverage_warning` - so the user sees what is and is not protected.
-2. The user may **accept** the set as-is, **modify** a case (input or type), **add** a case (covering a behaviour they know matters that derivation missed), or **reject** a case (a "behaviour" they consider incidental and not part of the essence). Each add/modify updates the section map and re-scores coverage.
+1. **Present** the derived set: each case with its `type`, `input`, the `exercises_sections` it drives, and the `gate_responses` derivation generated for any interactive gates it reaches. Present coverage alongside - `sections_identified`, `sections_covered`, and every `thin_coverage_warning` - so the user sees what is and is not protected.
+2. The user may **accept** the set as-is, **modify** a case (input, type, or a gate response), **add** a case (covering a behaviour they know matters that derivation missed), or **reject** a case (a "behaviour" they consider incidental and not part of the essence). The user also confirms or corrects each `gate_responses` entry - a wrong scripted answer steers the runner down the wrong branch, so the answers are signed off alongside the inputs. Each add/modify updates the section map and re-scores coverage.
 3. **Confirm.** Only once the user explicitly confirms is `user_confirmed` set true and `confirmation_timestamp` recorded. The confirmed set is then frozen for the run and its hash (`transfer_set_hash`, see `distill-loop.md`) becomes part of the baseline cache key - changing the set after confirmation invalidates the baseline.
 
 The protocol is deliberately conservative: a behaviour the user does not list as essence can still be preserved (the loop keeps anything not *proven* inert), but a behaviour the user *does* list is a hard equivalence target. The user can broaden the definition of essence but the engine never narrows it on its own.
@@ -71,7 +73,15 @@ The confirmed set is the contract the loop and the A/B capability both read. Fie
       "type": "happy|edge|adversarial|composition",
       "input": "string",
       "exercises_sections": ["string"],
-      "status": "derived|user-modified|user-added|confirmed"
+      "status": "derived|user-modified|user-added|confirmed",
+      "gate_responses": [
+        {
+          "gate_id": "string",
+          "gate_type": "AskUserQuestion|other_gate_type",
+          "pattern": "regex or substring to identify the gate prompt",
+          "response": "the scripted answer to provide"
+        }
+      ]
     }
   ],
   "user_confirmed": false,
@@ -87,4 +97,9 @@ The confirmed set is the contract the loop and the A/B capability both read. Fie
 - `cases[].input` - the exact input both the teacher and candidate runners receive, unchanged between versions.
 - `cases[].exercises_sections` - the document sections this case drives; the add-back mechanism maps a lost behaviour back through these.
 - `cases[].status` - provenance: `derived` (engine-generated), `user-modified`, `user-added`, or `confirmed` (the final state of every case in a confirmed set).
+- `cases[].gate_responses` - scripted answers for the interactive gates this case reaches, consumed in order by the runner; an empty array for a case that drives no gate. The runner (`skills/skill-forge/references/runner-prompt.md`) matches each gate's prompt against the entries and injects the response; a gate with no matching entry truncates the baseline (see `distill-loop.md`).
+  - `gate_responses[].gate_id` - identifier for this gate instance within the case.
+  - `gate_responses[].gate_type` - the tool or gate type (`AskUserQuestion`, a confirmation prompt, a choice point).
+  - `gate_responses[].pattern` - regex or substring matching the gate's prompt text, used to pair the response to the gate at runtime.
+  - `gate_responses[].response` - the deterministic answer injected when the pattern matches.
 - `user_confirmed` / `confirmation_timestamp` - the sign-off gate; both must be set before the loop captures the baseline.

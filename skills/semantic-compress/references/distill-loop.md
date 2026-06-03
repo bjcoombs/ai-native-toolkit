@@ -1,6 +1,6 @@
 # The distill loop - iterate to the minimal behaviourally-equivalent document
 
-This is the engine of distill mode: the loop that produces the **smallest document that behaves the same as the original**, with acceptance gated on A/B behavioural evidence, never on inspection. It composes skill-forge's A/B equivalence capability (`skills/skill-forge/references/ab-equivalence.md`) for the behavioural test, exactly as `marathon` composes `pr-review-merge` - this engine owns compression (deriving candidates, the loop, the report); skill-forge owns the behavioural comparison (running the runner over the transfer set, judging equivalence).
+This is the engine of distill mode: the loop that produces the **smallest document that behaves the same as the original**, with acceptance gated on A/B behavioural evidence, never on inspection. It composes skill-forge's A/B equivalence capability (`skills/skill-forge/references/ab-equivalence.md`) for the behavioural test - this engine owns compression (deriving candidates, the loop, the report); skill-forge owns the behavioural comparison (running the runner over the transfer set, judging equivalence).
 
 **The hard rule, stated once and binding on everything below: a compressed document is never accepted on inspection - only on A/B behavioural evidence from a run against the original.** Introspection about whether a smaller version "still does the same thing" is structurally unreliable - the model guesses optimistically. Execution over the transfer set is the only arbiter. The engine must refuse to output a candidate that has not passed an A/B equivalence run.
 
@@ -24,6 +24,15 @@ Record the runner's full self-report per case - all five required fields - and e
 - **`disciplines_enforced`** - extracted from the self-report (read from `steps_followed`, `improvisations`, and `wanted_to_deviate`): the rules, guards, and disciplines the original actually held the runner to. This is the load-bearing list - a candidate that lets any of these slide has regressed.
 
 A behaviour counts as part of the baseline **only if it actually appears in the teacher transcript** - the engine compares observed behaviour to observed behaviour, never a candidate against what the original document *says* it should do. A faithful distillation preserves the original's gaps as well as its disciplines.
+
+### Gate handling during baseline capture
+
+A document that gates on user input (an `AskUserQuestion`, a confirmation prompt) stalls a non-interactive runner: the runner has no user to answer it. The case's `gate_responses` array (`transfer-set-design.md`) is the scripted answer set that carries it past each gate.
+
+- Pass the case's `gate_responses` array to the runner. The runner matches each gate's prompt against the entries and injects the response, reporting what it did in self-report field 6 (`gates_hit`).
+- If the runner hits a gate with no scripted answer, baseline capture for that case is **truncated**: it stops at the gate and reports `STOPPED (no scripted answer)`.
+- Record in the baseline: `gate_truncated: true` and `truncation_point: { gate_type, prompt_text }`.
+- The baseline then represents behaviour **up to the gate, not beyond**. This is a loud honest-degrade, not a silent partial pass - the truncation is recorded, judged only up to the gate (Part 3), and declared in the report (`distillation-report-template.md`).
 
 ### Caching rule (the teacher is captured once)
 
@@ -49,9 +58,12 @@ The original does not change across the loop, so its baseline is **captured once
         "steps_skipped": ["string"],
         "ambiguities_hit": ["string"],
         "improvisations": ["string"],
-        "wanted_to_deviate": ["string"]
+        "wanted_to_deviate": ["string"],
+        "gates_hit": ["string"]
       },
-      "disciplines_enforced": ["string"]
+      "disciplines_enforced": ["string"],
+      "gate_truncated": false,
+      "truncation_point": null
     }
   ]
 }
@@ -59,8 +71,10 @@ The original does not change across the loop, so its baseline is **captured once
 
 - `document_hash` / `transfer_set_hash` - the cache key; both must match the current run or the baseline is invalid and is recaptured.
 - `cases[].case_id` - matches the transfer-set `cases[].id` and the A/B capability's `case_id`.
-- `cases[].self_report` - the runner's five required fields verbatim, field names shared with `runner-prompt.md`.
+- `cases[].self_report` - the runner's required fields verbatim, field names shared with `runner-prompt.md`. `gates_hit` records each interactive gate the runner reached and how it was answered (or `STOPPED (no scripted answer)`).
 - `cases[].disciplines_enforced` - the disciplines extracted from the self-report; the equivalence target for that case.
+- `cases[].gate_truncated` - `true` when the runner stopped at a gate with no scripted answer; the baseline for this case covers only behaviour up to that gate.
+- `cases[].truncation_point` - `{ gate_type, prompt_text }` for the gate that truncated capture, or `null` when the case ran to completion.
 
 ## Part 2 - Candidate regeneration
 
@@ -129,6 +143,14 @@ CONVERGE -> output the minimal passing candidate + the A/B distillation report.
 
 VALIDATE is the only acceptance gate. A candidate that has not been through it is never output - the hard rule above. The A/B call returns the schema in `ab-equivalence.md`: per-case `verdict` (`equivalent` / `candidate-regressed` / `candidate-diverged`) and a `summary` whose `pass` is true iff zero cases regressed. Divergences do not fail the run - they are surfaced for the user's judgement, not treated as regressions.
 
+### Gate-truncated cases in A/B validation
+
+When a case's teacher baseline is `gate_truncated`, the equivalence judgement narrows to match the evidence:
+
+- Equivalence is judged **only up to the truncation point** - the candidate must reproduce the baseline behaviour observed before the gate.
+- The candidate is run with the same `gate_responses` as the teacher, so both stop at the same gate; behaviour **beyond** the gate was never captured for either version and is not measured.
+- Unmeasured post-gate behaviour is not a pass and not a fail - it is **declared**: the controller records the case in `gate_truncated_cases` and the report carries the Gate-Truncated Coverage section and the `(gate-truncated)` verdict suffix (`distillation-report-template.md`). Never let a gate-truncated case read as full coverage.
+
 ### Add-back mechanism
 
 A regression is a signal, not a dead end: the judge's `behaviour_delta` for a `candidate-regressed` case **names the specific behaviour lost**. Map it back and restore the minimum:
@@ -169,6 +191,8 @@ One object per round, for the A/B distillation report.
   },
   "action": "shrink|add-back|converge",
   "add_backs": ["string"],
+  "gate_truncated_cases": ["string"],
+  "coverage_notes": "string",
   "hypothesis": "string",
   "outcome": "string"
 }
@@ -179,6 +203,8 @@ One object per round, for the A/B distillation report.
 - `ab_result` - the `summary` block from the A/B capability's output (`ab-equivalence.md`): `pass` plus the verdict counts.
 - `action` - what the controller did this round: `shrink` (regenerated smaller), `add-back` (restored a lost behaviour), or `converge` (accepted the candidate).
 - `add_backs` - for an `add-back` round, the behaviours restored (the `behaviour_delta` strings the A/B named) and the sections they mapped to.
+- `gate_truncated_cases` - the `case_id`s whose equivalence was judged only up to a gate this round (empty when no case was truncated).
+- `coverage_notes` - a plain-language note on any gate-truncation this round, e.g. "Cases T3, T5 gate-truncated at AskUserQuestion; behaviour beyond gate not measured" (empty string when coverage was full).
 - `hypothesis` - what this round attempted (e.g. "drop the rationale paragraph in section 3 - baseline shows no case acted on it").
 - `outcome` - what the A/B proved (e.g. "passed: paragraph was inert" or "regressed case adversarial-2: the soft rule was load-bearing").
 

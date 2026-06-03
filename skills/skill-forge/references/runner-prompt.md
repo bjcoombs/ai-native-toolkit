@@ -2,7 +2,7 @@
 
 It must be a **pure wrapper**: it never explains why the skill works, adds context beyond the draft, or coaches the runner (SKILL.md carries the rationale for why this is load-bearing).
 
-The lead fills this template per runner - one runner per test case per round. The five sections are all required. Copy the template, drop in the draft and the case input, send it to a fresh-context runner.
+The lead fills this template per runner - one runner per test case per round. Every self-report field is required; fields 1-5 are the standard report, and field 6 (gates hit) records interactive gates and reads "none encountered" on a run that hit none. Copy the template, drop in the draft and the case input, send it to a fresh-context runner.
 
 ## Template
 
@@ -17,6 +17,16 @@ Role boundary:
   "should" have said.
 - Do not judge the skill. Judging the skill is not your job; another agent does
   that from your report. Your job is to apply it and report honestly.
+
+Gate handling (for A/B equivalence runs):
+- If the skill invokes an interactive gate (AskUserQuestion, confirmation prompt),
+  consume the next scripted answer from the provided gate_responses array.
+- Match the gate's prompt text against each gate_response.pattern in order.
+- If a match is found, respond with gate_response.response and continue execution.
+- If no match is found (gate reached but no scripted answer available):
+  1. Record the gate as a checkpoint: log the gate type, prompt text, and execution state.
+  2. STOP execution immediately.
+  3. Report the checkpoint in your self-report under a new field: gates_hit.
 
 --- SKILL DRAFT (apply this verbatim) ---
 <the full current draft of the skill, fenced exactly as authored>
@@ -42,6 +52,9 @@ Self-report format (all fields required - fill every one):
 
 5. Any point you wanted to deviate but followed literally:
    <where following the skill as written felt wrong, but you did it anyway>
+
+6. Gates hit:
+   <each interactive gate encountered: gate_type, prompt_text, response_used or "STOPPED (no scripted answer)">
 ```
 
 ## The role-boundary section
@@ -50,6 +63,6 @@ The role-boundary section is the axis-1 recursion guard at the runner end: runne
 
 ## Why the self-report fields are required output, not optional notes
 
-These fields are what each lens reads; the full self-report-field-to-lens mapping is owned by `judge-lenses.md`. They are required output, not optional notes, because a vague self-report blinds the lenses that depend on them.
+Fields 1-5 are what each lens reads; the full self-report-field-to-lens mapping is owned by `judge-lenses.md`. They are required output, not optional notes, because a vague self-report blinds the lenses that depend on them. Field 6 (gates hit) is not lens input - it is read by the distill loop's gate-truncation logic (`skills/semantic-compress/references/distill-loop.md`) to mark a baseline truncated at an unanswered gate.
 
 A runner that returns "I wrote the message" with the other fields blank has produced an unjudgeable transcript. Treat any missing field as a failed runner and re-run it.
