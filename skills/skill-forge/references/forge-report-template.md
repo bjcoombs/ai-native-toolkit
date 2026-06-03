@@ -83,6 +83,20 @@ block. HIGH dissent blocks Gate 2; LOW/MED is recorded only.
   budget hit -> raise the budget and continue, or accept best-so-far. State the
   chosen move, not just the menu.>
 
+## Artifacts written
+
+Exactly what the promote step wrote and where - one row per file. The action
+depends on context (plugin repo / personal skill / chat-standalone); see the
+Promote semantics table in `SKILL.md`. Branch + URL are filled only for the
+PR-offered (plugin-repo) context; chat-standalone records the artifact as output
+for manual copy.
+
+| File | Path (relative to repo root, or "chat output") | Action | Branch + PR URL |
+|------|-------------------------------------------------|--------|-----------------|
+| SKILL.md | <path> | created / updated / PR-offered / output-for-copy | <branch + URL, or -> |
+| <reference file> | <path> | created / updated / PR-offered / output-for-copy | <branch + URL, or -> |
+| forge report | <path> | created / updated / PR-offered / output-for-copy | <branch + URL, or -> |
+
 ## Rounds and waste
 
 - Rounds run: <N>

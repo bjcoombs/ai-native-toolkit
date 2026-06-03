@@ -138,3 +138,15 @@ The full A- -> A -> B -> C bootstrap story is in the [design spec](../../docs/su
 ## Artifacts
 
 Never touch the user's pristine source: in a git repo work on a branch or worktree, in chat a scratch file; each amend is a visible diff. The run produces the hardened `SKILL.md`, the grown test corpus, and a **forge report** - intent and the ASSUMED-clause acceptance record, the test suite, the per-round hypothesis-to-result log, the gate ledger, the severity-tagged dissent log, the final verdict, and rounds plus estimated waste. The crash-recovery round-tracking JSON is the same object as the panel ledger, so a crashed run reconciles on restart. The report format is in [forge-report-template](references/forge-report-template.md); an end-of-run retrospective (which lens caught the most, waste estimate) follows, as in `marathon`. For a real worked example, see [example-forge-report](references/example-forge-report.md) - skill-forge forging itself, the run that promoted this skill.
+
+## Promote semantics
+
+What "promote" *does* depends on where the skill lives. The same hardened artifact lands differently in a plugin repo, a personal skill directory, or a chat session - and **the forge report always lists exactly what was written and where** (the Artifacts Written section in [forge-report-template](references/forge-report-template.md)), so promotion is never a silent mutation.
+
+| Context | Promote action |
+|---------|----------------|
+| **Plugin repo** (the skill is a tracked file in a git repo) | Write the hardened files on a **branch**, never the pristine default branch, and **offer a PR** - the same PR-offering pattern `assess-pr` uses for its report (see [assess-pr](../assess-pr/SKILL.md)). The user reviews the diff and merges; the forge does not self-merge. |
+| **Personal skill** (`~/.claude/skills/<name>/`, path relative to the user's home directory) | **Update in place** and **state what was written** - which files changed, so the user can see the promotion landed in their live skill directory. |
+| **Chat / standalone** (no on-disk skill, e.g. Claude Desktop or the standalone ZIP) | **Output the hardened artifact** for the user to copy manually - there is no file to write, so the report carries the full hardened `SKILL.md` text. |
+
+The promote action follows the artifacts-on-a-branch rule already in **Artifacts** above: in every repo context the work happens on a branch or worktree, never the pristine source.
