@@ -100,6 +100,7 @@ Why it exists: compression's gate is **strict no-regression** (sameness alone). 
 
 ## Execution modes
 
+<!-- chat-replace:execution-mode-rule -->
 The capability runs the same mechanism in every mode; modes differ only in how the runner pair per case and the equivalence judge are spawned. The caller's harness selects the mode; A/B equivalence runs inside whatever mode it is handed.
 
 **Solo mode** (chat / standalone ZIP, no subagents) is the default: a single agent works each case sequentially - it applies the `original` via the runner wrapper, then the `candidate` on the identical input, then judges the two transcripts with the equivalence-judge prompt, recording the verdict and efficiency signal before moving to the next case. The cached teacher transcript is the only state carried between rounds.
