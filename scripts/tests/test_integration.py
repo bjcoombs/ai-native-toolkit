@@ -234,6 +234,55 @@ class TestDeslopBuild:
         assert Path(zf1.filename).read_bytes() == Path(zf2.filename).read_bytes()
 
 
+# ── ab-equivalence ───────────────────────────────────────────────────────────
+
+class TestAbEquivalenceBuild:
+    @pytest.fixture(scope="class")
+    def ab_zip(self, tmp_path_factory):
+        return _build("ab-equivalence", tmp_path_factory.mktemp("ab-equivalence"))
+
+    def test_skill_md_present(self, ab_zip):
+        assert "ab-equivalence/SKILL.md" in ab_zip.namelist()
+
+    def test_references_present(self, ab_zip):
+        names = ab_zip.namelist()
+        for ref in (
+            "ab-equivalence/references/runner-prompt.md",
+            "ab-equivalence/references/ab-equivalence.md",
+            "ab-equivalence/references/equivalence-judge-prompt.md",
+        ):
+            assert ref in names, f"{ref} missing from ZIP"
+
+    def test_no_team_infrastructure_leaked(self, ab_zip):
+        for name, content in _md_contents(ab_zip).items():
+            for tool in ("TeamCreate", "SendMessage", "TeamDelete"):
+                assert tool not in content, f"{name}: {tool} leaked"
+
+    def test_no_agent_teams_env_var(self, ab_zip):
+        for name, content in _md_contents(ab_zip).items():
+            assert "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" not in content, (
+                f"{name}: capability flag env var leaked"
+            )
+
+    def test_frontmatter_name_correct(self, ab_zip):
+        skill_md = ab_zip.read("ab-equivalence/SKILL.md").decode("utf-8")
+        assert "name: ab-equivalence" in skill_md
+
+    def test_standalone_description_applied(self, ab_zip):
+        skill_md = ab_zip.read("ab-equivalence/SKILL.md").decode("utf-8")
+        assert "Standalone build v" in skill_md
+
+    def test_no_orphan_markers(self, ab_zip):
+        for name, content in _md_contents(ab_zip).items():
+            assert "chat-skip" not in content, f"{name}: chat-skip marker leaked"
+            assert "chat-replace" not in content, f"{name}: chat-replace marker leaked"
+
+    def test_zip_is_deterministic(self, tmp_path):
+        zf1 = _build("ab-equivalence", tmp_path / "run1")
+        zf2 = _build("ab-equivalence", tmp_path / "run2")
+        assert Path(zf1.filename).read_bytes() == Path(zf2.filename).read_bytes()
+
+
 # ── semantic-compress ─────────────────────────────────────────────────────────
 class TestSemanticCompressBuild:
     @pytest.fixture(scope="class")
