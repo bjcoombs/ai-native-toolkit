@@ -38,6 +38,18 @@ Exhaustive companion to SKILL.md, adapted from Wikipedia's "Signs of AI writing"
 
 **A11. Date-handling tells.** Vague or self-dating temporal references that will rot or that hide a missing fact: "in recent years," "currently," "to date," "as of this writing," "the latest," present-tense claims about things that change, round-number estimates with false precision. Also inconsistent or silently US-default date formats (Month DD, YYYY) where the document otherwise uses DMY/ISO. Distinct from D3 (chatbot knowledge-cutoff disclaimers): this is the prose itself failing to anchor a time-bound fact. **Fix:** anchor to a specific, sourced, dated fact ("as of the 2021 census"), or remove the claim; match the document's established date format.
 
+**A12. Gratuitous cross-references.** Names a sibling skill, command, or concept as analogy or aside when the reader doesn't need to understand that reference to follow the document's instructions. The reference adds comprehension cost ("what's `marathon` - do I need to read that first?") without contributing behaviour; the sentence would instruct identically without it. Distinct from a load-bearing composition pointer ("composes `skill-forge`'s A/B equivalence capability"), which the reader MUST follow to use the document - that one is legitimate, don't flag it. *Watch:* "exactly as X does Y", "similar to how Z works", "like the X skill", "in the style of Y", "mirrors the approach in Z" - when illustrative rather than instructional. **Fix:** cut the analogy; if the reference is load-bearing, make it explicit via the document's declared dependencies. *Advisory and prose-level only: it flags apparent decorative references from textual context and can't see the document's real dependency graph, so it surfaces candidates for human judgment, not violations.*
+
+Decorative (flag):
+- "This dispersal works exactly as `marathon` composes `pr-review-merge`" - the dispersal is understandable without knowing `marathon`.
+- "Similar to how the `huddle` skill gathers perspectives" - an illustrative aside, not a required pre-read.
+- "In the style of `assess`'s tiered severity model" - the severity model is described inline; the name adds nothing.
+
+Load-bearing (do NOT flag):
+- "Composes `skill-forge`'s A/B equivalence capability for behavioural validation" - the reader must understand `skill-forge` to use this.
+- "Inherits the transfer-set format from `semantic-compress`'s distill mode" - a functional dependency.
+- "See `assess`'s severity-tier table for rating guidance" - an explicit pointer to a required reference.
+
 ---
 
 ## B. Language and grammar tells
