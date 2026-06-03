@@ -4,7 +4,7 @@ In-repo contract for agents editing `ai-native-toolkit`. Repo-specific rules onl
 
 ## Scope of this repo
 
-Source for the `ai-native-toolkit` Claude Code plugin. Portable skills (`/assess`, `/huddle`, `/deslop`, `/ghsync`, `/skill-forge`, `/semantic-compress`), portable framework commands (`/6hats`, `/understand`), and personal workflow commands that are opt-in (`/tm`, `/issues`, `/fix-pr`, `/fix-develop`).
+Source for the `ai-native-toolkit` Claude Code plugin. Portable skills (`/assess`, `/huddle`, `/deslop`, `/ghsync`, `/skill-forge`, `/semantic-compress`), portable framework commands (`/6hats`, `/understand`), personal workflow commands that are opt-in (`/tm`, `/issues`, `/fix-pr`, `/fix-develop`), and team-orchestration library skills (`marathon`, `pr-review-merge`, `ab-equivalence`) that are composed by the workflow commands and portable skills rather than invoked standalone.
 
 The deliverable is markdown: agents, commands, skills. It also ships a Python deterministic core under `skills/assess/scripts/` (plus `lib/`) and a standalone-skill build pipeline under `scripts/`. There is no application runtime, but there are pytest suites (`skills/assess/`, `scripts/`), a ruff + mypy lint gate, and a standalone-ZIP build step - all enforced in CI.
 
