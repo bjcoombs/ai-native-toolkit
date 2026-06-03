@@ -181,6 +181,53 @@ The A/B distillation report (`references/distillation-report-template.md`) makes
 - Uncovered-but-kept sections labelled "conservative default" under What Proved Load-Bearing.
 - The distribution-shift caveat stated verbatim: behaviour outside the transfer set is not guaranteed equivalent.
 
+## Transform #2: Directive-clarity
+
+Compression (Local + Distill above) is Transform #1 of this skill's optimizer family: it makes a document *smaller* while preserving behaviour. Directive-clarity is Transform #2: it makes a document *lighter to act on* while preserving behaviour, by rewriting instructions that force the reading model to unpack an action before it can act into concrete directives that name the action. Both transforms share one validator - skill-forge's A/B equivalence harness (`skills/skill-forge/references/ab-equivalence.md`) - and differ only in the gate they apply to its result. The frame that generates this transform, and the caveat that keeps it honest (every claimed gain is a hypothesis the harness must measure, never an assertion), is `references/cognitive-ergonomics.md`.
+
+### When it fires
+
+- **Explicitly invoked**: `--directive-clarity <document>` targets a document directly.
+- **Auto-suggested**: when distill mode detects high negation density or vague-pointer patterns in the document it is compressing, it surfaces directive-clarity as the recommended next stage. This is the natural entry into the staged compose order below.
+- **Never auto-applied.** The transform *proposes* rewrites; the A/B run *validates* them; the user *approves* the result. No rewrite reaches the output document without passing the gate and the user signing off - directive-clarity changes the words the model acts on, so the human confirms the change.
+
+### The loop
+
+1. **Detect patterns.** Scan the document for the four latent-action shapes - bare negation, fact-not-action, vague pointer, ordering/policy rule - per `references/directive-clarity-patterns.md`. Detection over-includes on purpose: it optimises for recall, flagging every candidate shape.
+2. **Classify each candidate convert-for-free vs battle-scar.** Route every detected pattern through `references/battle-scar-classifier.md`. A battle-scar - a prohibition earned from a specific past failure, where the wording is the load-bearing content - is flagged for preservation and never rewritten. The classifier is the precision half: it holds back scars to a sub-10% false-positive target, defaulting to preserve on uncertainty. Only the convert-for-free set proceeds.
+3. **Rewrite.** Turn each released candidate into a concrete directive per `references/directive-clarity-rewrites.md`, under the two acceptance checks (names-the-concrete-action, semantic-equivalence). Keep every qualifier that scopes a prohibition; keep the fact behind a fact-not-action rewrite; never fabricate a referent for a vague pointer - flag it for human confirmation and leave the original in place.
+4. **A/B validate.** Run the candidate against the teacher over the transfer set via skill-forge's A/B equivalence harness (`skills/skill-forge/references/ab-equivalence.md`). The harness emits, per case, an equivalence verdict (`equivalent` / `candidate-regressed` / `candidate-diverged`) and an efficiency signal (`original_directness`, `candidate_directness`, `interpretation_notes`).
+5. **Present for approval.** Surface the per-rewrite diffs, the A/B verdicts, the preserved battle-scars, and any vague pointers held for confirmation. The user approves before the rewritten document is emitted.
+
+### The gate
+
+Directive-clarity's acceptance is **stricter than compression's**. Compression gates on strict no-regression alone (sameness). Directive-clarity gates on no-regression **and** a measured directness gain:
+
+- **No-regression**: zero cases return `candidate-regressed` (`summary.pass == true`). A rewrite that reads cleaner but permits a behaviour the original forbade is a regression and fails here.
+- **Directness gain**: `candidate_directness` > `original_directness` on the rewritten cases, with no `candidate-regressed`. This is the efficiency signal the A/B harness already records on every run (`skills/skill-forge/references/ab-equivalence.md`) - directive-clarity *reads* that signal and gates on it; it does not redesign or re-instrument the harness. A rewrite that loses nothing but also measures no directness improvement has not earned its place: keep the original.
+
+On a regression, the divergence names the rewrite that lost behaviour. Revert that specific rewrite to its pre-rewrite form, keep the passing rewrites, and re-validate - the same granular add-back the distill loop uses.
+
+### How directive-clarity composes with compress
+
+When both transforms run on one document, they run as **Option C: staged with a checkpoint** - compress first, freeze its gains, then directive-clarity on top, with any regressing rewrite reverting to the frozen state without losing the compression.
+
+**Why staged, not the alternatives:**
+
+- **Not combined/interleaved (Option B).** The two transforms apply *different gates* to the A/B result: compress accepts on no-regression alone, directive-clarity demands no-regression *and* a directness gain. A single interleaved A/B cycle cannot apply two gates to one result, and when a combined pass regresses there is no way to attribute the loss to a compression pointer-swap or a directive rewrite. Attribution loss makes add-back guess. Ruled out.
+- **Not loosely independent (Option A).** Running two unlinked passes leaves directive-clarity's teacher baseline underspecified. If its A/B teacher were the *original* document, the measured directness gain would conflate compression's effect with directive-clarity's, and nothing would structurally stop a directive-clarity regression - measured against the original - from pulling behaviour back past the compression gains. Clean attribution and a protected floor both require an explicit checkpoint.
+- **Staged with checkpoint (Option C, chosen).** The compressed document becomes an explicit checkpoint that is *both* directive-clarity's new teacher baseline *and* its revert floor. Directness is then measured against compressed behaviour (clean attribution: the gain is directive-clarity's alone), and no rewrite can regress below the compressed state because the teacher *is* the compressed state. This is exactly the behaviour the transform must guarantee: compress gains kept, only the regressing rewrite reverts.
+
+**Run order and checkpoint mechanism (precise):**
+
+1. **Compress to convergence.** Run distill mode to its minimal equivalent document `D_compressed`, accepted by compression's strict no-regression gate against the original teacher.
+2. **Checkpoint.** Freeze `D_compressed` as the directive-clarity stage's input. Capture a fresh teacher baseline by running the A/B harness's runner over `D_compressed` once per transfer-set case - these become the cached teacher transcripts for the next stage. (`D_compressed` is behaviourally equivalent to the original by construction, but its *directness* differs, so the gain must be measured against `D_compressed`'s directness, not the original's.) The original teacher transcripts from step 1 are not reused here.
+3. **Directive-clarity over `D_compressed`.** Detect -> classify -> rewrite (loop steps 1-3) to produce candidate `D_direct`.
+4. **A/B validate `D_direct` against the `D_compressed` checkpoint teacher.** Apply the directive-clarity gate (no-regression AND directness gain).
+5. **Granular revert on regression.** A rewrite that regresses against the checkpoint reverts to its `D_compressed` form; passing rewrites stay. Because the teacher is `D_compressed`, the checkpoint is the floor - no rewrite can drop behaviour below the compressed state. Re-validate and converge.
+
+Compress first (not directive-clarity first) because compression can point-away or de-duplicate prose that directive-clarity would otherwise spend a rewrite and an A/B cycle on; compressing first shrinks the surface directive-clarity must scan and avoids rewriting spans that compression removes.
+
 ## Provenance
 
 This skill was hardened with `/skill-forge` before shipping - the forge changed its central thesis from delete-what-the-model-knows to point-at-core / spell-out-bespoke. See [forge-report](references/forge-report.md). Distill mode (v2) extends it from a local textual edit to a holistic, A/B-validated behavioural-equivalence loop. The two-mode v2 was re-forged, and distill mode was validated end-to-end on a real engineering `CLAUDE.md` (full A/B, 30.6% reduction at zero regressions); see [forge-report-v2](references/forge-report-v2.md) and [acceptance-distillation-report](references/acceptance-distillation-report.md).
