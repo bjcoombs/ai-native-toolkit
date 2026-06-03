@@ -32,3 +32,4 @@ Invoked by the workflow commands ([`/tm`](../commands/tm.md), [`/issues`](../com
 |-------|----------|-------------|
 | `marathon` | [`marathon/SKILL.md`](./marathon/SKILL.md) | Parallel agent marathon orchestration: DAG analysis, waves, crash recovery, retrospective |
 | `pr-review-merge` | [`pr-review-merge/SKILL.md`](./pr-review-merge/SKILL.md) | The PR review-to-green loop plus smart merge |
+| `ab-equivalence` | [`ab-equivalence/SKILL.md`](./ab-equivalence/SKILL.md) | A/B behavioural equivalence testing - given two document versions and a transfer set, judges per-case equivalence. Composed by skill-forge and semantic-compress. |
