@@ -16,6 +16,11 @@ Fill the template below. Replace every `<...>` with the run's actual values.
 each. Certification valid only for the tested tier(s) - a skill forged only on a
 strong tier is not certified for a weaker one.>
 
+**Judge Model:** <the tier the judge panel ran on, e.g. `opus`. The second half of
+the certification signature: a weaker judge passes weaker skills, so the gate is
+valid for this `(runner-tier, judge-tier)` pair. Record per swept runner row if the
+judge tier varied across a sweep.>
+
 ## Intent
 
 The ground truth the Fidelity lens judged against. Derived clauses were marked
