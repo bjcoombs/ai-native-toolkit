@@ -13,6 +13,7 @@ Save the report as `<document-name>-distillation-report.md` **alongside the outp
 | Size Delta | **Mandatory** | The headline metric - what the compression bought. |
 | Transfer Set + coverage | **Mandatory** | What was tested; the operational definition of essence. |
 | Per-Case Equivalence Verdicts | **Mandatory** | The behavioural evidence the compression passed. |
+| Per-Case Directness (efficiency signal) | **Mandatory for directive-clarity, optional for compress** | The `original_directness`->`candidate_directness` the A/B harness records per case. Directive-clarity *gates* on a measured directness gain, so the report must record it or the gate is unauditable; compress does not gate on it, so the column is informational there. |
 | Gate-Truncated Coverage | **Mandatory if any gate-truncation** | Honest about partial measurement where a case stopped at a gate. |
 | Distribution-Shift Caveat | **Mandatory** | The honesty clause - the boundary of the claim. Stated verbatim, never edited away. |
 | What Was Dropped | Optional | Include if anything was removed (almost always). |
@@ -67,12 +68,12 @@ To extend coverage: add `gate_responses` entries for these gates and re-run the 
 
 ## Per-Case Equivalence Verdicts
 
-| Case | Verdict | Behaviour delta |
-|------|---------|-----------------|
-| T1 | equivalent | - |
-| T2 | equivalent | - |
-| T3 | candidate-diverged | <what differed, not worse - documented for judgement> |
-| T4 | equivalent | - |
+| Case | Verdict | Directness (orig->cand) | Behaviour delta |
+|------|---------|-------------------------|-----------------|
+| T1 | equivalent | 3->3 | - |
+| T2 | equivalent | 3->3 | - |
+| T3 | candidate-diverged | 3->4 | <what differed, not worse - documented for judgement> |
+| T4 | equivalent | 3->3 | - |
 
 Verdicts are `equivalent` | `candidate-regressed` | `candidate-diverged`. **PASS iff zero `candidate-regressed`.** A `candidate-diverged` case is surfaced for the user's judgement, not a failure. Any `candidate-regressed` that survives to the final candidate is a FAIL - the original ships instead.
 
@@ -107,6 +108,7 @@ Verdicts are `equivalent` | `candidate-regressed` | `candidate-diverged`. **PASS
 - **Verdict (header).** `PASS` only if the final candidate has zero `candidate-regressed` cases. If the loop hit its budget ceiling mid-add-back with no passing candidate, the verdict is `FAIL` and the **original** is shipped (a distillation that cannot be proven equivalent is not output) - the report states this.
 - **Coverage % (header and Transfer Set).** `sections_covered / sections_identified`. Below 70%, the run should have warned before proceeding (the coverage threshold in the Distribution-Shift Guard); if it proceeded anyway, the report says so.
 - **Behaviour delta.** For a regressed or diverged case, name the specific behaviour - the discipline, step, or output that changed. "Different" is not enough; the report names *what*.
+- **Directness (orig->cand).** The per-case `original_directness`->`candidate_directness` (1-5) the A/B harness records on every run (`skills/ab-equivalence/references/ab-equivalence.md`). For a **directive-clarity** run this column is the audit trail for the gated directness gain (`candidate_directness` > `original_directness` with no `candidate-regressed`) - omitting it makes the gate unauditable, so it is mandatory there. For a **compress** run the gain is not required; the column is informational and typically reads unchanged (e.g. `3->3`).
 - **Conservative-default sections.** Every section not exercised by any case is listed under What Proved Load-Bearing as "kept (uncovered, conservative default)" - this is how the report makes the guard's conservatism legible rather than silent.
 - **Gate-truncated coverage (the honest-degrade rules).** When a case stopped at a gate with no scripted answer (`gate_truncated` in `distill-loop.md`), the report must degrade loudly, never silently:
   - The **verdict header** carries the `(gate-truncated)` suffix if any case was truncated, e.g. `**Verdict:** PASS (gate-truncated)`. The suffix is mandatory whenever the Gate-Truncated Coverage table is non-empty.
