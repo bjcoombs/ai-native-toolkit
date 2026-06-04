@@ -93,11 +93,44 @@ def test_golden_report_has_normalized_provenance() -> None:
     report = golden.load_golden_report()
     assert f"_Generated {golden.SENTINEL}._" in report
     assert f"- **Measured at commit:** {golden.SENTINEL}" in report
-    # The report still carries its substantive sections.
-    assert "## AI Readiness" in report
+    # The report still carries its substantive sections (the scorecard table
+    # now lives inside the 📊 fold rather than under a bare ## AI Readiness).
     assert "## Top 3 Actions" in report
+    assert "Full scorecard" in report
+    assert "| Layer | What it asks |" in report
 
 
 def test_normalize_report_is_idempotent() -> None:
     report = golden.load_golden_report()
     assert golden.normalize_report(report) == report
+
+
+def test_load_bearing_surface_is_outside_folds() -> None:
+    """The two-audience report keeps a short, picture-led human surface while
+    keeping every verbose section present in the raw markdown inside collapsed
+    <details> folds (an agent reading the file still sees all of it).
+
+    A section-ablation A/B established the split: the score headline and the
+    Top 3 Actions are load-bearing (folding the Top 3 made a fresh agent act on
+    the wrong item), so they must stay on the visible surface; the verbose
+    scorecard / findings / framing are foldable. This guard fails loudly if that
+    split ever regresses in either direction.
+    """
+    report = golden.load_golden_report()
+    surface, sep, folded = report.partition("<details>")
+    assert sep, "report must contain at least one <details> fold"
+
+    # Load-bearing: must be on the default-visible surface, never folded.
+    assert "## Top 3 Actions" in surface
+    assert "Score: 6.0 / 8" in surface
+    # The two SVG snapshots carry the human value up top.
+    assert surface.count("![") >= 2
+
+    # Foldable verbose detail must live inside a fold, never on the surface.
+    for marker in (
+        "| Layer | What it asks |",          # the 9-layer scorecard table
+        "## Cross-Layer Findings",            # the keyhole findings block
+        "How to read this report",            # the framing/method preamble
+    ):
+        assert marker not in surface, f"{marker!r} leaked onto the visible surface"
+        assert marker in folded, f"{marker!r} missing from the folded detail"
