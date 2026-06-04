@@ -24,5 +24,3 @@ Understanding is complete when: core terms are defined; explicit and implicit ne
 Produce a provisional, solution-independent restatement of the problem - explicitly marked to-be-validated, not yet agreed.
 
 Return to understanding when new assumptions or implicit needs surface, context shifts, understanding feels incomplete, solutions are proposed prematurely, the problem statement embeds a solution, or stakeholders are misaligned.
-
-Apply to following statement:
