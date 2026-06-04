@@ -1,6 +1,8 @@
 # AI Native Toolkit
 
-A Claude Code plugin: skills, agents, and commands for AI-native development. Runs locally in your Claude Code session, against your own codebase, using whichever model you're already paying for - nothing leaves your machine beyond what Claude Code itself sends.
+A Claude Code plugin - and a set of standalone skills for **any AI assistant**: skills, agents, and commands for AI-native development. In Claude Code it runs locally against your own codebase using whichever model you already pay for. Several of the skills also ship as standalone [Agent Skills](https://www.anthropic.com/news/skills) ZIPs you can upload to claude.ai, Claude Desktop, Cowork, or any assistant that supports the skills format - no Claude Code required.
+
+> **Want the skills without Claude Code?** Download the ZIPs from the **[latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/latest)** - the release notes link straight to that version's standalone skill bundle - and upload them in your assistant's Skills UI. Full walkthrough: [Standalone skill ZIPs](#standalone-skill-zips-any-ai-assistant). Currently standalone: `/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`.
 
 > **New here?** The [Map of Content](docs/index.md) is the navigation index - one trail to every skill, command, agent, and design doc in this repo. The [`CLAUDE.md`](CLAUDE.md) contract holds the rules for editing it.
 
@@ -12,12 +14,13 @@ The aim is not an AI that comprehends complexity humans no longer can, trusted b
 
 There's a second half, and it's the same ethic pointed the other way. When a contributor makes a mistake, the question is never "who do we blame" but "what made that mistake possible, and what would make it impossible next time?" A bank doesn't give a new engineer production access and hope - it builds role-based access, staged environments, and CI that catches the error before it ships. Those guardrails aren't distrust; they're how you protect people from costly mistakes by design, and an AI contributor needs the same protection a human does. `/assess` scores exactly these: linters, architecture tests, CI gates, coverage, review automation. Framed positively: **have we set the codebase up so that doing the wrong thing is hard, and the right thing is the path of least resistance?** Give the contributor the map *and* the guardrails - that is what `/assess` measures the distance to.
 
-The headline pieces are four **skills**:
+The headline pieces are five **skills**:
 
 - **`/assess`** - score any codebase's readiness for AI agent contributors against an 8-layer contract model (navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Generates a report + the two SVGs and opens a PR in the target repo.
 - **`/huddle`** - structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board).
 - **`/deslop`** - detect and remove the telltale signs of AI writing (puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations). Runs as a silent quality gate while writing, or as an explicit audit/edit pass. Derived from Wikipedia's "Signs of AI writing".
 - **`/skill-forge`** - harden a skill (draft or existing) through judge-panel refinement rounds until it clears a strict 3-tier promotion gate. A prove-and-promote quality gate that runs after authoring, built on the same team-lead pattern as `/huddle` - and proven by forging itself.
+- **`/semantic-compress`** - shrink an LLM-directed document (a prompt, instruction set, or skill) while preserving what it does: point at core knowledge the model already holds, keep project-specific detail verbatim, and - in Claude Code - gate whole-document distillation on an A/B behavioural-equivalence check so every cut is proven, not guessed. Includes a directive-clarity pass that rewrites latent-action instructions into ones that name the action.
 
 ## What `/assess` produces
 
@@ -119,7 +122,7 @@ A single `main.dart.js` or thousands of lines of `.pb.go` shouldn't dominate the
 
 The skill runs locally - lizard, optional scc, and git log do the analysis in your Claude Code session. No data leaves the machine.
 
-> **Portability split.** The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session. The workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
+> **Portability split.** The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session. The workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
 
 ## Install
 
@@ -132,16 +135,16 @@ From inside a Claude Code session (not a shell - `/plugin` is a Claude Code comm
 
 Skills appear namespaced: `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`, `/ai-native-toolkit:deslop`. Update with `/plugin update ai-native-toolkit`. Remove with `/plugin remove ai-native-toolkit`. The plugin doesn't touch your existing `~/.claude/` files.
 
-## Also available in Claude Desktop and claude.ai web
+## Standalone skill ZIPs (any AI assistant)
 
-`/assess`, `/huddle`, `/deslop`, and `/skill-forge` are installable as standalone skill ZIPs - no Claude Code required. Verified working in claude.ai web and Claude Desktop.
+`/assess`, `/huddle`, `/deslop`, `/skill-forge`, and `/semantic-compress` ship as standalone [Agent Skills](https://www.anthropic.com/news/skills) ZIPs - **no Claude Code required**. They are plain skill folders (a `SKILL.md` plus reference files), so they work in any assistant that supports the skills format. Verified in claude.ai web, Claude Desktop, and Cowork; usable anywhere the format is accepted. Each ZIP is fully self-contained - download just the skill you want.
 
-### Two install paths - pick by where you use Claude
+### Two install paths - pick by where you work
 
 | You use... | Install via | Updates |
 |---|---|---|
 | Claude Code | `/plugin install` (see [Install](#install) above) | Automatic on `/plugin update`. Use this when available - it's the maintained path. |
-| claude.ai web or Claude Desktop only | Manual ZIP upload (below) | Manual: re-download from the rolling release and use the Skills UI's **Replace** option. See [Upgrading the standalone install](#upgrading-the-standalone-install) and [Staying notified of new versions](#staying-notified-of-new-versions) below. |
+| claude.ai, Claude Desktop, Cowork, or any other AI assistant | Manual ZIP upload (below) | Manual: re-download from the latest release and use the Skills UI's **Replace** option. See [Upgrading the standalone install](#upgrading-the-standalone-install) and [Staying notified of new versions](#staying-notified-of-new-versions) below. |
 
 The ZIPs are rebuilt automatically from the same source on every plugin version bump, so feature parity is maintained - only the update mechanism differs.
 
@@ -149,24 +152,24 @@ The ZIPs are rebuilt automatically from the same source on every plugin version 
 
 - A paid plan (Pro, Max, Team, or Enterprise) - Skills upload is not on the Free tier.
 - For `/assess`: **Settings → Capabilities → Code execution and file creation** must be on (required for the Python scripts). Enable **Allow network egress** too if your repo's `pyproject.toml` pulls dependencies.
-- `/huddle` and `/deslop` need neither - they're pure reasoning.
+- `/huddle`, `/deslop`, `/skill-forge`, and `/semantic-compress` need neither - they're pure reasoning.
 
 ### Install (claude.ai web - verified path)
 
-1. Download `assess.zip`, `huddle.zip`, and `deslop.zip` from the [newest standalone-skills release](https://github.com/bjcoombs/ai-native-toolkit/releases?q=standalone-skills&expanded=true) (a fresh `standalone-skills-vX.Y.Z` release is published on every plugin version bump; pick the one at the top).
+1. Open the **[latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/latest)**. Its release notes link to that version's **standalone skill ZIPs** bundle (a fresh bundle is published on every plugin version bump). From there, download the skill(s) you want - `assess.zip`, `huddle.zip`, `deslop.zip`, `skill-forge.zip`, `semantic-compress.zip`. Each ZIP is self-contained, so grab only the ones you need.
 2. Open https://claude.ai/customize/skills (or sidebar → Customize → Skills).
 3. Click the **+** at the top right of the Skills column.
 4. Hover **Create skill →** then click **Upload a skill**.
 5. Select the `.zip` (don't unzip).
 6. Confirm the skill appears under **Personal skills** with toggle on and **Trigger: Slash command + auto**.
 
-Claude Desktop has the same Skills uploader under Settings; the flow is analogous.
+Claude Desktop, Cowork, and other assistants expose the same Skills uploader (usually under Settings); the flow is analogous.
 
 ### Upgrading the standalone install
 
 The Skills UI has a built-in **Replace** option - use it instead of uninstalling and re-uploading (Replace preserves any in-progress chats that reference the skill).
 
-1. Download the new `assess.zip` / `huddle.zip` / `deslop.zip` from the [newest standalone-skills release](https://github.com/bjcoombs/ai-native-toolkit/releases?q=standalone-skills&expanded=true) (the top `standalone-skills-vX.Y.Z` entry).
+1. Download the new ZIP for the skill you're upgrading from the [latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/latest) (follow the standalone skill ZIPs link in its notes).
 2. In Customize → Skills, click the skill you want to upgrade.
 3. Open the three-dot menu (⋮) in the top right of the detail pane.
 4. Click **Replace** and select the new `.zip`.
@@ -190,6 +193,8 @@ In a fresh chat, try:
 - **assess**: "How AI-ready is this codebase?" / "Give me a complexity heatmap"
 - **huddle**: "Run a huddle on [decision]" / "Give me red-team/blue-team analysis of [question]"
 - **deslop**: "Make this sound less like AI" / "De-slop this draft" / "Does this read as AI-written?"
+- **skill-forge**: "Harden this skill" / "Is this skill ready to ship?"
+- **semantic-compress**: "Compress this prompt without losing meaning" / "Tighten this instruction set"
 
 If a skill only fires on `/skill-name` and not on natural language, the frontmatter description is missing trigger phrasing - edit `standalone_description` in `scripts/standalone_skill_config.py` and rebuild.
 

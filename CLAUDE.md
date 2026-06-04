@@ -119,9 +119,19 @@ As the **final** step, once all of a marathon's PRs are merged and the retrospec
 ```bash
 VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
 gh release create "v$VERSION" --generate-notes --title "v$VERSION"
+
+# Prepend a pointer to the standalone ZIP bundle so the README's stable
+# releases/latest link can hand off to that version's downloadable ZIPs.
+# (build-standalone-skills.yml publishes standalone-skills-v$VERSION on the
+# version-bump push, so it exists by the time you cut this release.)
+ZIP_URL="https://github.com/bjcoombs/ai-native-toolkit/releases/tag/standalone-skills-v${VERSION}"
+BODY=$(gh release view "v$VERSION" --json body -q .body)
+gh release edit "v$VERSION" --notes "📦 **Standalone skill ZIPs** (claude.ai, Claude Desktop, Cowork, any Agent-Skills assistant): ${ZIP_URL}
+
+${BODY}"
 ```
 
-`.github/release.yml` maps the PR labels (`feat`/`fix`/`docs`/`chore`/`refactor`) to release-note categories, and `build-standalone-skills.yml` republishes the standalone ZIPs on the version bump. One release per marathon, not one per PR.
+`.github/release.yml` maps the PR labels (`feat`/`fix`/`docs`/`chore`/`refactor`) to release-note categories, and `build-standalone-skills.yml` republishes the standalone ZIPs on the version bump. The plugin release is marked Latest, so `releases/latest` always resolves to it and its notes link straight to the ZIP bundle. One release per marathon, not one per PR.
 
 ## Testing a branch before merging
 
@@ -129,7 +139,9 @@ gh release create "v$VERSION" --generate-notes --title "v$VERSION"
 
 ## Standalone skill pipeline
 
-`assess` and `huddle` are also distributed as standalone ZIPs for Claude Desktop chat and Cowork via `Settings → Customize → Skills → Upload Skill`.
+`assess`, `huddle`, `deslop`, `skill-forge`, and `semantic-compress` are also distributed as standalone ZIPs for claude.ai, Claude Desktop, Cowork, and any other Agent-Skills assistant via `Settings → Customize → Skills → Upload Skill`. The set is whatever `SKILLS` in `scripts/standalone_skill_config.py` lists.
+
+**Each ZIP must be self-contained.** A standalone ZIP ships one skill with no siblings, so a plugin-time cross-skill link (`../<other-skill>/...` or `skills/<other-skill>/...`) cannot resolve. Two mechanisms keep ZIPs whole: `bundle_files` vendors a needed file from another skill into the ZIP (e.g. skill-forge vendors `ab-equivalence`'s `runner-prompt.md`, the wrapper its solo mode fills), and the build's link localizer (`transform_skill.localize_cross_skill_links`) rewrites every cross-skill reference - to the local copy if vendored, otherwise degraded to a bare mention. `ab-equivalence` is a **library skill** (composed by skill-forge and semantic-compress, never invoked directly), so it ships **no** standalone ZIP of its own; its files are vendored into the consumer that uses them. `scripts/tests/test_integration.py::test_no_dangling_cross_skill_references` fails the build if any shipped `.md` still carries a `../<skill>`/`skills/<skill>` path - the guardrail that was missing when the ab-equivalence extraction left skill-forge's runner reference dangling.
 
 **Build locally:**
 ```bash
@@ -145,7 +157,7 @@ bash scripts/build-standalone-skills.sh --dest ~/Desktop  # custom output dir
 - `scripts/tests/test_integration.py` - full-build ZIP content validation (forbidden strings, expected files)
 - Run: `cd scripts && uv run --with pytest pytest -v`
 
-**CI:** `.github/workflows/build-standalone-skills.yml` triggers on `plugin.json` version bumps and publishes a per-version immutable release tagged `standalone-skills-v<version>` (one create call, no delete - GitHub immutable releases permanently reserve a tag once it has backed a release, so the old rolling `standalone-skills-latest` delete-and-recreate pattern can never succeed again). The newest is always at `releases?q=standalone-skills`. `.github/workflows/tests.yml` now runs both the `skills/assess/` suite and the `scripts/` suite on every PR and push.
+**CI:** `.github/workflows/build-standalone-skills.yml` triggers on `plugin.json` version bumps and publishes a per-version immutable release tagged `standalone-skills-v<version>` (one create call, no delete - GitHub immutable releases permanently reserve a tag once it has backed a release, so the old rolling `standalone-skills-latest` delete-and-recreate pattern can never succeed again). Users don't browse these directly: the per-marathon plugin release (`v<version>`, marked Latest) carries a link to that version's `standalone-skills-v<version>` bundle in its notes, so the README points at `releases/latest` and the release page hands off to the ZIP tag (see "Release after a marathon"). `.github/workflows/tests.yml` now runs both the `skills/assess/` suite and the `scripts/` suite on every PR and push.
 
 **Marker rules:**
 - `<!-- chat-skip:start/end -->` - wraps content to remove entirely (plugin path resolution, `$ARGUMENTS`, agent-orchestration infrastructure, namespaced slash commands)

@@ -4,6 +4,7 @@ Integration tests: run the full standalone skill build and validate ZIP contents
 Catches the class of bug where plugin-internal content leaks into bundled
 reference files that weren't processed by the transformer.
 """
+import re
 import zipfile
 from pathlib import Path
 
@@ -18,6 +19,9 @@ def _build(skill_name: str, tmp_path: Path) -> zipfile.ZipFile:
 
     cfg = SKILLS[skill_name]
     out_zip = tmp_path / f"{cfg['standalone_name']}.zip"
+    bundle_files = {
+        dest: REPO_ROOT / src for dest, src in cfg.get("bundle_files", {}).items()
+    } or None
     issues = build_standalone_skill_zip(
         skill_source_dir=REPO_ROOT / cfg["source_dir"],
         out_zip=out_zip,
@@ -25,6 +29,7 @@ def _build(skill_name: str, tmp_path: Path) -> zipfile.ZipFile:
         standalone_description=cfg["standalone_description"],
         replacements=cfg["replacements"],
         exclude_dirs=frozenset(cfg["exclude_dirs"]),
+        bundle_files=bundle_files,
     )
     assert not issues, "Build produced issues:\n" + "\n".join(issues)
     assert out_zip.exists(), "ZIP not created despite no issues reported"
@@ -234,53 +239,64 @@ class TestDeslopBuild:
         assert Path(zf1.filename).read_bytes() == Path(zf2.filename).read_bytes()
 
 
-# ── ab-equivalence ───────────────────────────────────────────────────────────
+# ── ab-equivalence (vendored, no standalone ZIP of its own) ───────────────────
+# ab-equivalence is a library skill composed by skill-forge and semantic-compress,
+# never invoked directly, so it ships no standalone ZIP. The one file skill-forge's
+# solo mode uses (the runner-prompt wrapper) is vendored into skill-forge's ZIP;
+# the build's link localizer rewrites the `../ab-equivalence/.../runner-prompt.md`
+# references to that local copy. These tests pin that vendoring.
 
-class TestAbEquivalenceBuild:
+
+class TestSkillForgeVendorsRunner:
     @pytest.fixture(scope="class")
-    def ab_zip(self, tmp_path_factory):
-        return _build("ab-equivalence", tmp_path_factory.mktemp("ab-equivalence"))
+    def forge_zip(self, tmp_path_factory):
+        return _build("skill-forge", tmp_path_factory.mktemp("forge-vendor"))
 
-    def test_skill_md_present(self, ab_zip):
-        assert "ab-equivalence/SKILL.md" in ab_zip.namelist()
+    def test_runner_prompt_vendored(self, forge_zip):
+        assert "skill-forge/references/runner-prompt.md" in forge_zip.namelist(), (
+            "skill-forge composes ab-equivalence's runner; the wrapper must be "
+            "vendored into the standalone ZIP so solo mode can fill it"
+        )
 
-    def test_references_present(self, ab_zip):
-        names = ab_zip.namelist()
-        for ref in (
-            "ab-equivalence/references/runner-prompt.md",
-            "ab-equivalence/references/ab-equivalence.md",
-            "ab-equivalence/references/equivalence-judge-prompt.md",
-        ):
-            assert ref in names, f"{ref} missing from ZIP"
+    def test_runner_link_resolves_locally(self, forge_zip):
+        skill_md = forge_zip.read("skill-forge/SKILL.md").decode("utf-8")
+        assert "(references/runner-prompt.md)" in skill_md, (
+            "the runner link must be rewritten to the vendored local copy"
+        )
 
-    def test_no_team_infrastructure_leaked(self, ab_zip):
-        for name, content in _md_contents(ab_zip).items():
-            for tool in ("TeamCreate", "SendMessage", "TeamDelete"):
-                assert tool not in content, f"{name}: {tool} leaked"
+    def test_ab_equivalence_skill_link_degraded(self, forge_zip):
+        # The capability mention `[ab-equivalence](../ab-equivalence/SKILL.md)`
+        # has no local target, so it degrades to plain text, never a dead link.
+        skill_md = forge_zip.read("skill-forge/SKILL.md").decode("utf-8")
+        assert "](../ab-equivalence/SKILL.md)" not in skill_md
 
-    def test_no_agent_teams_env_var(self, ab_zip):
-        for name, content in _md_contents(ab_zip).items():
-            assert "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" not in content, (
-                f"{name}: capability flag env var leaked"
-            )
 
-    def test_frontmatter_name_correct(self, ab_zip):
-        skill_md = ab_zip.read("ab-equivalence/SKILL.md").decode("utf-8")
-        assert "name: ab-equivalence" in skill_md
+def _all_standalone_skill_names() -> list[str]:
+    from standalone_skill_config import SKILLS
 
-    def test_standalone_description_applied(self, ab_zip):
-        skill_md = ab_zip.read("ab-equivalence/SKILL.md").decode("utf-8")
-        assert "Standalone build v" in skill_md
+    return list(SKILLS)
 
-    def test_no_orphan_markers(self, ab_zip):
-        for name, content in _md_contents(ab_zip).items():
-            assert "chat-skip" not in content, f"{name}: chat-skip marker leaked"
-            assert "chat-replace" not in content, f"{name}: chat-replace marker leaked"
 
-    def test_zip_is_deterministic(self, tmp_path):
-        zf1 = _build("ab-equivalence", tmp_path / "run1")
-        zf2 = _build("ab-equivalence", tmp_path / "run2")
-        assert Path(zf1.filename).read_bytes() == Path(zf2.filename).read_bytes()
+# Plugin-time cross-skill references (`../<skill>/...`, possibly several `../`
+# deep, or `skills/<skill>/...`) cannot resolve in a standalone ZIP, which ships
+# one skill with no siblings. The build's localizer must rewrite or degrade every
+# one. This guardrail is exactly the check that was missing when the ab-equivalence
+# extraction left skill-forge's runner reference dangling.
+_CROSS_SKILL_RE = re.compile(r"(?:\.\./|skills/)[a-z][a-z0-9-]+/[A-Za-z0-9._/-]*\.md")
+
+
+@pytest.mark.parametrize("skill_name", _all_standalone_skill_names())
+def test_no_dangling_cross_skill_references(skill_name, tmp_path):
+    zf = _build(skill_name, tmp_path)
+    offenders: list[str] = []
+    for name, content in _md_contents(zf).items():
+        for hit in _CROSS_SKILL_RE.findall(content):
+            offenders.append(f"{name}: {hit}")
+    assert not offenders, (
+        f"{skill_name} ships dangling cross-skill references (each standalone ZIP "
+        "must be self-contained; vendor the file or let the localizer degrade it):\n"
+        + "\n".join(offenders)
+    )
 
 
 # ── semantic-compress ─────────────────────────────────────────────────────────

@@ -68,6 +68,6 @@ jobs:
 
           gh release create "$TAG" \
             --title "Standalone skill ZIPs — v${VERSION}" \
-            --notes "Standalone skill ZIPs for Claude Desktop and claude.ai, built from plugin v${VERSION}. Install via Settings → Customize → Skills → Upload Skill. A new release is published on every plugin version bump; find the newest at https://github.com/bjcoombs/ai-native-toolkit/releases?q=standalone-skills" \
+            --notes "Standalone skill ZIPs for claude.ai, Claude Desktop, Cowork, and any other Agent-Skills assistant, built from plugin v${VERSION}. Each ZIP is self-contained - download only the skill(s) you want. Install via Settings → Customize → Skills → Upload Skill. The newest bundle is always linked from the latest plugin release: https://github.com/bjcoombs/ai-native-toolkit/releases/latest" \
             --latest=false \
             dist/standalone-skills/*.zip
