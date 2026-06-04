@@ -2,25 +2,42 @@
 
 _Generated <<normalized>>._
 
-> **Meta-assessment.** This is `/assess` run against the repository that *owns* `/assess`, captured as the Phase-0 dogfood baseline for the `assess-dogfooded` work (teeth + frozen harness + decomposition). Two false positives the tool previously produced about itself - a self-referential Layer-1 rung-3 and a `lying_map` flag on a same-day-edited doc - are now fixed: this run scores observability at rung 0 (honest: no deployed runtime) and emits an empty `lying_map`. The snapshot is preserved as the regression baseline for the decomposition parity tests.
+**Score: 6.0 / 8 - Solid** · Keyhole: 5 structural concerns (5 hidden coupling), 1 safe zone.
 
-## How to read this report
+> This is an improvement roadmap, not a verdict - a **Missing** or **Partial** locates where someone working here is partly blind, not a mark against the code.
 
-This is an improvement roadmap, not a verdict. It measures one thing: **is the codebase kept honest, not just scaffolded.** It pairs three views:
+## Top 3 Actions
 
-- **Where the codebase is today** - the complexity heatmap shows current complexity and churn. Vivid red = complex AND actively changing = the files most likely to bite an agent (or a human) next week.
-- **Whether an agent can navigate it** - the doc graph shows the docs' link structure: how much is reachable from the entry point, and which docs are stale maps of churning code.
-- **What keeps it from getting worse** - the AI Readiness score (0-8) across three bands: read-side foundation, write-side enforcement, and meta.
+The mandatory attention paths (the `hidden_coupling` seams) are covered by Actions 1-2; Action 3 addresses the single highest-leverage scorecard gap (L0 navigability), which moves the overall score from 6.0 toward 7.0.
 
-A codebase can be 8/8 and still on fire, or 2/8 with a calm treemap. The views matter together.
+| # | Action | Layer | Effort | Command / First Step | Hotspot files this addresses | Issue |
+|---|--------|-------|--------|---------------------|------------------------------|-------|
+| 1 | Add a coverage step with a patch-coverage floor, then add mutation testing on the deterministic core to confirm the 26 test files actually pin behaviour | 6 | medium | Add `pytest --cov` to `tests.yml` with a patch floor; pilot `mutmut`/`cosmic-ray` on `skills/assess/scripts/lib/` | `skills/assess/scripts/lib/doc_graph.py`, `skills/assess/scripts/assess_core.py` | - |
+| 2 | Extend the `mypy` gate from `scripts/lib/` to the orchestrator scripts so the most-churned files are type-checked too | 2 | small | Widen the `mypy` target in `skills/assess/pyproject.toml` / the lint job to include `assess_core.py`, `complexity-treemap.py`, `doc-graph-svg.py` | `skills/assess/scripts/assess_core.py`, `skills/assess/scripts/complexity-treemap.py` | - |
+| 3 | Wire a small Map-of-Content (or extend `README.md`) linking skills, agents, and the plan archive, and close the missing cross-references so the README becomes a real index | 0 | small | Add an `index.md` MOC or a "Map" section to `README.md` linking `skills/*/SKILL.md`, `agents/*.md`, `docs/superpowers/plans/` | - | - |
 
-The "Top 3 Actions" table at the bottom names specific files. Start there.
+### Why these three?
+
+Action 1 is the highest-leverage gap: write-side enforcement is strong everywhere except behaviour-constraint - 26 test files run in CI but nothing proves they pin behaviour rather than just execute lines, and the deterministic core is exactly the kind of code (high aggregate complexity, heavy churn) where a survivor cluster would hide. Action 2 closes the remaining type-safety gap on the files that change most often (`assess_core.py` leads churn at 14 commits) - the config comment already names this as the next ratchet step. Action 3 is low-priority human-wayfinding polish: an agent navigates this repo fine by convention, but a human browsing on GitHub gets no map.
 
 ## Snapshots
 
 ### Complexity - riskiest to change
 
 [![Complexity hotspot](./complexity-heatmap.svg)](./complexity-heatmap.svg)
+
+Every hotspot is in `skills/assess/scripts/` - the assessment engine is the most complex, most-churned surface in the repo; per-function ccn p95 9 sits under the C901 gate of 15, so the high file-aggregate numbers are sums of many small functions, not monster functions.
+
+### Doc navigability - can an agent find its way?
+
+[![Doc map](./doc-graph.svg)](./doc-graph.svg)
+
+Only 11% link-reachable (89% orphan, 35 islands), but this is curation, not access: most "docs" are skill-trigger / agent-persona files Claude Code loads by convention, not by link-traversal. No credible lying maps.
+
+<details>
+<summary>📈 Snapshot detail (commit, hotspots, navigability, lying maps)</summary>
+
+#### Complexity profile
 
 - **Measured at commit:** <<normalized>>
 - **Files scored:** 58 (56 lizard, 2 scc)
@@ -33,19 +50,26 @@ The "Top 3 Actions" table at the bottom names specific files. Start there.
 
 The hotspots are exactly the deterministic core of `/assess` itself - the most-churned, most-complex files are the scanners. That is expected for an actively-developed analysis tool, and the per-function complexity is fenced: ccn p95 is 9, well under the C901 threshold of 15, with the genuine offenders (worst function 38 in `assess_core.py`) carrying explicit `# noqa: C901` ratchet markers. The high *aggregate* ccn (169 on `doc_graph.py`) is many simple functions summed, not one monster function.
 
-### Doc navigability - can an agent find its way?
+Size encodes lines of code, colour encodes cyclomatic complexity (dark red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk.
 
-[![Doc map](./doc-graph.svg)](./doc-graph.svg)
+#### Doc navigability
 
 Of 37 docs, **11% are reachable** by following links from the entry points (`CLAUDE.md`, `README.md`); the rest sit in **35 disconnected islands** (89% orphan rate, only 2 inter-doc links total). At face value that reads alarming, but read it as **curation, not access**: this is a Claude Code *plugin* repo, and most of its "docs" are not prose articles - they are skill-trigger files (`skills/*/SKILL.md`), agent-persona prompts (`agents/*.md`), and dated planning records under `docs/superpowers/plans/`. Claude Code loads these by *trigger and convention*, not by link-traversal, so the absence of cross-links is largely by design. An agent can still `ls skills/` and open any file by path - nothing is hidden.
 
 The honest gap: a human browsing on GitHub has no map. The `README.md` is rich but doesn't function as a wired index - it links out once. Adding a Map-of-Content that links the skills, agents, and plan archive would help human wayfinding. This is a **wayfinding improvement, not a blocker** - priority is low for an agent-loaded plugin repo. The scanner also flags **missing cross-references** (docs that name another doc's filename in prose without linking it, e.g. several plans naming `skills/pr-review-merge/SKILL.md`) - low-effort wins if you want the README to become a real index.
 
-**Lying maps?** None credible. Every entry in `stale_hubs` carries `subject_method: repo-baseline` and `confidence: low` - meaning the "subject churn" is just the whole repo's churn (a coarse proxy), not the specific code a doc describes. The top "stale hubs" (`skills/deslop/references/full-checklist.md`, `.github/claude-review-instructions.md`, `docs/testing-a-branch-locally.md`) were all changed within the last 3 days. The deterministic `derived_findings.lying_map` list is correctly **empty** this run - the `confidence != "low"` guard now applies to the derivation, not just the L0 reporting.
+Colour = staleness (vivid red = a frozen doc beside churning code); structure = reachability (centre = entry, rim = unreachable, dashed ring = orphan); size = file length. Open the SVG directly for per-node hover tooltips.
 
-## AI Readiness
+#### What changed since last run
 
-**Score: 6.0 / 8** - Solid
+_Diff suppressed - the prior snapshot was produced by an earlier plugin version, and file-filter differences across versions surface phantom graduated/new transitions that didn't really happen. Cross-run comparison resumes once two runs share a plugin version._
+
+</details>
+
+<details>
+<summary>📊 Full scorecard (per-layer evidence & gaps)</summary>
+
+The two headline metrics measure **different things and are never combined.** The 0-8 score answers _"is the scaffolding in place to catch problems?"_ The Keyhole Readiness summary answers _"where is today's structural pain?"_ - a count of structural concerns and safe zones from the eight cross-layer findings. Here: strong scaffolding (6.0/8) over a small, cohesive, actively-developed subsystem whose files change together.
 
 | Layer | What it asks | Band | Status | Evidence | Gap |
 |-------|--------------|------|--------|----------|-----|
@@ -76,7 +100,12 @@ Present = 1, Partial = 0.5, Missing = 0:
 
 This repo sits at the top of **Solid**. The write-side enforcement (types, linting, CI, review bots) is genuinely strong - the thing holding it back from AI-Native is a coverage/behaviour-constraint gate (L6) and two read-side gaps that are mostly benign for a plugin repo (L1 has no runtime to instrument; L0's doc-link fragmentation is curation, not inaccessibility).
 
-## Lying Signals
+</details>
+
+<details>
+<summary>🔎 Cross-layer findings & lying signals (keyhole detail)</summary>
+
+### Lying Signals
 
 The most dangerous failure mode is an artefact that looks true but isn't. This run produced **none** - a clean result, and a useful contrast with the 2026-05-31 baseline where the tool emitted two false positives about itself (since fixed):
 
@@ -84,27 +113,44 @@ The most dangerous failure mode is an artefact that looks true but isn't. This r
 - **L1 dead-but-present:** the intra-repo dead-code scan didn't run (`vulture` absent), so there is no candidate to surface - degrade, not a lie.
 - **L6 green-but-hollow:** mutation data wasn't collected (opt-in), so survivor density is unknown - which is itself the L6 gap, not a lie.
 
-## Top 3 Actions
+## Cross-Layer Findings (Keyhole Readiness)
 
-| # | Action | Layer | Effort | Command / First Step | Hotspot files this addresses | Issue |
-|---|--------|-------|--------|---------------------|------------------------------|-------|
-| 1 | Add a coverage step with a patch-coverage floor, then add mutation testing on the deterministic core to confirm the 26 test files actually pin behaviour | 6 | medium | Add `pytest --cov` to `tests.yml` with a patch floor; pilot `mutmut`/`cosmic-ray` on `skills/assess/scripts/lib/` | `skills/assess/scripts/lib/doc_graph.py`, `skills/assess/scripts/assess_core.py` | - |
-| 2 | Extend the `mypy` gate from `scripts/lib/` to the orchestrator scripts so the most-churned files are type-checked too | 2 | small | Widen the `mypy` target in `skills/assess/pyproject.toml` / the lint job to include `assess_core.py`, `complexity-treemap.py`, `doc-graph-svg.py` | `skills/assess/scripts/assess_core.py`, `skills/assess/scripts/complexity-treemap.py` | - |
-| 3 | Wire a small Map-of-Content (or extend `README.md`) linking skills, agents, and the plan archive, and close the missing cross-references so the README becomes a real index | 0 | small | Add an `index.md` MOC or a "Map" section to `README.md` linking `skills/*/SKILL.md`, `agents/*.md`, `docs/superpowers/plans/` | - | - |
+These are the axis-crossing signals no single layer surfaces - where the static structure and the git history disagree. The dominant signal here is benign-by-context: the assessment engine's scripts and their tests change together because they *are* one cohesive, actively-developed subsystem.
 
-**Frame positively.** Each action says what to add, not what to stop doing.
+### hidden_coupling
 
-### Why these three?
+Action: investigate the seam
 
-Action 1 is the highest-leverage gap: write-side enforcement is strong everywhere except behaviour-constraint - 26 test files run in CI but nothing proves they pin behaviour rather than just execute lines, and the deterministic core is exactly the kind of code (high aggregate complexity, heavy churn) where a survivor cluster would hide. Action 2 closes the remaining type-safety gap on the files that change most often (`assess_core.py` leads churn at 14 commits) - the config comment already names this as the next ratchet step. Action 3 is low-priority human-wayfinding polish: an agent navigates this repo fine by convention, but a human browsing on GitHub gets no map.
+Paths:
+- scripts
+- scripts/tests
+- skills/assess/scripts
+- skills/assess/scripts/lib
+- skills/assess/tests
 
-## Additional Opportunities
+### refactor_boundary
 
-- **L5:** add the `ruff + mypy gates` job to required status checks on `main` - it runs today but a lint/type failure won't block merge.
-- **L1:** `uv tool install vulture` to enable the Python intra-repo dead-code scan - it degrades silently today, so a dead export in the scanners wouldn't be flagged.
-- **Hidden coupling (keyhole finding):** `derived_findings.hidden_coupling` flags `skills/assess/scripts`, `skills/assess/scripts/lib`, `skills/assess/tests`, `scripts`, and `scripts/tests` as changing together historically despite being separate directories - expected for a tool whose scanners, their tests, and the standalone-build scripts evolve in lockstep, but worth watching as a seam before trusting those boundaries.
+Action: safe to hand an agent in isolation
 
-## Strengths
+Paths:
+- commands
+
+### Attention List (Priority Order)
+
+- scripts (score 1): hidden_coupling
+- scripts/tests (score 1): hidden_coupling
+- skills/assess/scripts (score 1): hidden_coupling
+- skills/assess/scripts/lib (score 1): hidden_coupling
+- skills/assess/tests (score 1): hidden_coupling
+
+**Reading these:** every concern is `hidden_coupling` within the `/assess` engine - `scripts/lib` modules and their `tests/` move in the same commits. For a tightly-cohesive subsystem under active development this is *expected*, not a defect. The one **safe zone** is `commands/` (containment 0.92) - edits there stay local, so it is the directory you can hand an agent in isolation with the least risk.
+
+</details>
+
+<details>
+<summary>✅ Strengths & further opportunities</summary>
+
+### Strengths
 
 - **Real write-side enforcement, not theatre.** `ruff` C901 complexity ratchet (threshold 15, with documented `# noqa` exceptions) and a `mypy` type gate both run in CI - and the per-function complexity actually sits under the bar (p95 9 across 777 functions).
 - **Branch protection with teeth:** `enforce_admins: true` and 3 blocking pytest jobs + PR-title lint on `main`. CI failure means a real regression.
@@ -113,7 +159,50 @@ Action 1 is the highest-leverage gap: write-side enforcement is strong everywher
 - **Excellent agent instructions:** `CLAUDE.md` (A, 184 lean lines) plus 6 factored skills for progressive disclosure - lean pointers over a monolith.
 - **A safe refactor zone:** `derived_findings.refactor_boundary` flags `commands/` as high-containment - edits stay local, so it is safe to hand an agent in isolation.
 
-**Wiki:** see `.assess/index.md` for the full hotspot catalog across runs, `.assess/log.md` for run history, and `.assess/hotspots/<file>.md` for per-file briefings.
+### Additional Opportunities
+
+- **L5:** add the `ruff + mypy gates` job to required status checks on `main` - it runs today but a lint/type failure won't block merge.
+- **L1:** `uv tool install vulture` to enable the Python intra-repo dead-code scan - it degrades silently today, so a dead export in the scanners wouldn't be flagged.
+- **Hidden coupling (keyhole finding):** `derived_findings.hidden_coupling` flags `skills/assess/scripts`, `skills/assess/scripts/lib`, `skills/assess/tests`, `scripts`, and `scripts/tests` as changing together historically despite being separate directories - expected for a tool whose scanners, their tests, and the standalone-build scripts evolve in lockstep, but worth watching as a seam before trusting those boundaries.
+
+**If you are an agent working in this repo, read the `.assess/` directory - it is actionable feedback written for you, not just a report you skim once.**
+
+- `.assess/assess-report.md` - this report: the scorecard, the lying signals, and the Top 3 Actions with exact commands and file paths.
+- `.assess/hotspots/<file>.md` - a per-file briefing for each hotspot, with a **Suggested actions** section. Read it before changing a file that appears there.
+- `.assess/index.md` - the catalog of every hotspot ever flagged (current and graduated).
+- `.assess/log.md` - run history, so you can see whether a hotspot is regressing, persistent, or improving.
+
+</details>
+
+<details>
+<summary>🧭 How to read this report (framing & method)</summary>
+
+**Meta-assessment.** This is `/assess` run against the repository that *owns* `/assess`, captured as the Phase-0 dogfood baseline for the `assess-dogfooded` work (teeth + frozen harness + decomposition). Two false positives the tool previously produced about itself - a self-referential Layer-1 rung-3 and a `lying_map` flag on a same-day-edited doc - are now fixed: this run scores observability at rung 0 (honest: no deployed runtime) and emits an empty `lying_map`. The snapshot is preserved as the regression baseline for the decomposition parity tests.
+
+This is an improvement roadmap, not a verdict. It measures one thing: **is the codebase kept honest, not just scaffolded.** It pairs three views:
+
+- **Where the codebase is today** - the complexity heatmap shows current complexity and churn. Vivid red = complex AND actively changing = the files most likely to bite an agent (or a human) next week.
+- **Whether an agent can navigate it** - the doc graph shows the docs' link structure: how much is reachable from the entry point, and which docs are stale maps of churning code.
+- **What keeps it from getting worse** - the AI Readiness score (0-8) across three bands: read-side foundation, write-side enforcement, and meta.
+
+A codebase can be 8/8 and still on fire, or 2/8 with a calm treemap. The views matter together.
+
+**How it's measured.** This is an AI-readiness review run almost entirely on *traditional* tooling - static analysis, git history, and graph metrics over the docs and code. The model only writes the prose around those numbers; it does no scanning itself. That keeps a full run fast and close to zero in model tokens, and makes the structural findings reproducible run-to-run.
+
+</details>
+
+<details>
+<summary>🤖 Machine-readable data (for agents)</summary>
+
+Structured sidecars an agent can ingest directly, without re-parsing this prose:
+
+- `.assess/run-context.json` - the full data bus (findings, attention, keyhole summary, prescribed actions, stats, diff).
+- `.assess/complexity-stats.json` - complexity percentiles plus the ranked file lists (`top_hotspots`, `top_complex`, `top_large`).
+- `.assess/hotspots/<file>.md` - per-file briefings, each with a **Suggested actions** section.
+- `.assess/index.md` - the catalog of every hotspot ever flagged (current and graduated).
+- `.assess/log.md` - append-only run history.
+
+</details>
 
 ---
 
