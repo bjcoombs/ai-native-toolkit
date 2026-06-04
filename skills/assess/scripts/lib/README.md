@@ -31,6 +31,30 @@ Seeing these two files in the same commit as `assess_core.py` is expected, not a
 defect. If the core is later decomposed, treat this seam as the natural boundary -
 `doc_graph` and `keyhole_signals` are where the cut-line already lives.
 
+## The wider co-change seams (cohesion, not entanglement)
+
+`/assess`'s own hotspot scan flags several directories as historically co-changing:
+`skills/assess/scripts`, `skills/assess/scripts/lib`, `skills/assess/tests`,
+`skills/assess/tests/fixtures`, and `scripts` (+ `scripts/tests`). That is the static
+import map saying "separate directories" while git says "they move together." Here the
+coupling is genuine subsystem cohesion, and naming it is the point - so a reader (or an
+agent) trusts the boundary deliberately rather than being surprised by the seam:
+
+- **`scripts/lib` modules <-> `skills/assess/tests`.** Each deterministic module is
+  pinned by a test in `skills/assess/tests/`, and the contract in `CLAUDE.md` is explicit
+  ("Add a test alongside any change to a deterministic module"). So a module and its test
+  are *meant* to move in the same commit - the test is the module's behavioural contract,
+  not a separable concern. A reviewer seeing `doc_graph.py` and `test_doc_graph.py` in one
+  diff is seeing the intended unit of change.
+- **`scripts/` (standalone build) <-> `skills/`.** The standalone-skill build under
+  `scripts/` vendors and transforms the very skills it packages, so a change to a skill's
+  shape and the build that ships it co-change by construction. That seam is documented in
+  `CLAUDE.md`'s "Standalone skill pipeline" section; it is cohesion between a packager and
+  the thing it packages, not a leak.
+
+None of these is a refactor task. They are recorded here so the seam is owned: if any is
+ever cut, this note is where the intended boundary is written down.
+
 ---
 
 ## Module reference
@@ -96,10 +120,13 @@ signal regardless of doc state.
 Integration barrier between the individual signal modules and `assess_core`. Derives
 the per-directory containment view from the commit-file sets the orchestrator parses
 once and passes in, then assembles all five run-context blocks from the upstream signal
-outputs. Emits the six named derived findings (hidden coupling, bleeding module,
-refactor boundary, orphaned understanding, lying map, etc.) as a structured array.
-Each block build is wrapped in a catch-all so one signal's failure degrades that block
-to `available: False` rather than crashing the run.
+outputs. Emits the eight named derived findings as a fixed-order structured array:
+`hidden_coupling`, `lying_map`, `unexplained_complexity`, `untrusted_hotspot`,
+`self_referential_tests`, `orphaned_understanding`, `candidate_dead_weight`, and
+`refactor_boundary` (the two trust-axis findings, `untrusted_hotspot` and
+`self_referential_tests`, were added after this module's first cut). Each block build
+is wrapped in a catch-all so one signal's failure degrades that block to
+`available: False` rather than crashing the run.
 
 **`coupling_analysis.py`**
 B3 static-vs-historical disagreement cross: compares the import-graph view
@@ -155,12 +182,28 @@ usefulness: positive directives, tradeoff phrases, path references, verifiable
 outcomes, and freshness. Pure regex + arithmetic, filename-agnostic.
 
 **`liveness_scan.py`**
-Layer 1 liveness inputs, two tiers:
+Layer 1 liveness inputs, three tiers:
 - Dead-code tier: runs a language-appropriate static dead-code tool (vulture, ts-prune,
   staticcheck, etc.) to flag candidate-dead exports within the repo boundary.
 - Observability tier: scores three rungs - instrumented (telemetry emitted), discoverable
   (runbook present), reachable (agent has an invokable path to runtime state). The
   reachability rung decides the Layer 1 score.
+- Capability-offer tier: delegates to `jvm_capabilities.py` to detect JVM/Maven build
+  systems and report, per analysis capability, whether a serving tool is already
+  configured, could be run/installed in-session, or honest-degrades with a named
+  candidate. Surfaced so a non-enumerated ecosystem proposes a tool rather than
+  silently reading "absent".
+
+**`jvm_capabilities.py`**
+JVM/Maven capability-driven analysis offers (issue #113, v1 bounded). Generalises
+`/assess`'s tool mapping from a hardcoded per-language allowlist (vulture for Python,
+ts-prune for TS, staticcheck for Go) to a *capability-driven detect-or-propose* model,
+proven on one capability (liveness) in one build system (Maven). Reports each capability
+in one of four states - `served`, `offer` (with a run-or-install `consent` shape),
+`credited` (a configured pom.xml plugin already serves it), or `honest_degrade` (nothing
+serves it yet; the report names the capability and a candidate tool). Imported by
+`liveness_scan.py`, never by the orchestrator - it is an inward dependency of the
+liveness tier.
 
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
