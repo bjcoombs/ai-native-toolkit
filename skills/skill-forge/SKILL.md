@@ -50,6 +50,8 @@ The model the runners execute on is a **knob**, because a skill that holds toget
 
 **A skill forged only on Opus is not certified for Haiku.** The runner model is recorded in the forge report (see [forge-report-template](references/forge-report-template.md)); certification is valid only for the tested tier(s). The runner-model knob changes only which model executes the wrapper - it never changes the wrapper itself, which stays the pure template ab-equivalence owns.
 
+**The judge tier is the second half of the certification signature.** A weaker judge passes weaker skills, so certification is a `(runner-tier, judge-tier)` pair, not runner-tier alone: a skill cleared by a Haiku panel was not held to the bar an Opus panel would apply. Pin the panel to a single declared tier - default the lead's session model - and record it as **Judge Model** alongside the runner model in the forge report. (For a tier sweep the judge tier is recorded per swept runner row.)
+
 ## The five lenses
 
 The panel is five skill-quality lenses. **All five run by default**; the lead drops to 3 or 2 only on an explicit quick-check request, and a self-forge always uses all five - see the deterministic selector in [judge-lenses](references/judge-lenses.md). Confidence is **not** a lens - it is the Gate 2 stopping decision. Four lenses (Fidelity, Adversarial, Compression, Usability) judge runner transcripts and produce `behavioural` findings; Trigger/routing judges the skill text directly and produces `static` predictions, because prompt-injection can never make a `TRIGGER` clause mis-fire. Full definitions, what each reads in the self-report, and the behavioural/static rule are in [judge-lenses](references/judge-lenses.md).
