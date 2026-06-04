@@ -1,6 +1,7 @@
 """Transform a Claude Code plugin skill into a standalone ZIP for Chat / Cowork."""
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import zipfile
@@ -89,6 +90,68 @@ def _transform_md(text: str, replacements: dict[str, str]) -> str:
     text = strip_chat_skip(text)
     text = apply_chat_replace(text, replacements)
     return text
+
+
+# A cross-skill reference: a markdown path that points OUT of this skill, either
+# `../<other-skill>/...` (sibling in the plugin tree, possibly several `../`
+# segments deep) or `skills/<other-skill>/...` (repo-root style). In the plugin
+# these resolve because every skill is a sibling; in a standalone ZIP each skill
+# ships alone, so they dangle. The localizer below rewrites them: to a path
+# relative to the referencing file if the target was vendored into the ZIP,
+# otherwise to a bare mention (drops the path/link, keeps the name).
+_CROSS_SKILL_LINK = re.compile(
+    r"\[([^\]]+)\]\(((?:(?:\.\./)+|skills/)[A-Za-z0-9][A-Za-z0-9./-]*?\.md)\)"
+)
+_CROSS_SKILL_PATH = re.compile(
+    r"(?:(?:\.\./)+|skills/)[A-Za-z0-9][A-Za-z0-9./-]*?/([A-Za-z0-9._-]+\.md)"
+)
+
+
+def localize_cross_skill_links(target_root: Path) -> None:
+    """Rewrite cross-skill markdown references in the staged ZIP tree in place.
+
+    A standalone ZIP ships one skill with no siblings, so a plugin-time link like
+    ``../ab-equivalence/references/runner-prompt.md`` cannot resolve. For each
+    ``.md`` in *target_root*:
+
+    - if the referenced basename was vendored into this ZIP (present somewhere
+      under the skill root), the path is rewritten relative to the referencing
+      file so the link resolves (a ``references/`` file pointing at a vendored
+      sibling becomes a bare ``runner-prompt.md``, not ``references/...``);
+    - otherwise the reference degrades to a bare mention - a markdown link
+      ``[label](path)`` becomes ``label``, and an inline path token keeps only
+      its basename - so no dangling ``../<skill>``/``skills/<skill>`` path ships.
+
+    The top-level ``SKILL.md`` is excluded as a link *target*: a cross-skill
+    ``[x](../x/SKILL.md)`` is a capability mention, not navigation to *this*
+    skill's own manifest, so it degrades to plain text rather than self-linking.
+    """
+    present: dict[str, Path] = {}
+    for f in target_root.rglob("*"):
+        if f.is_file() and f.name != "SKILL.md":
+            present.setdefault(f.name, f)
+
+    for md in target_root.rglob("*.md"):
+        def _rel(basename: str) -> str | None:
+            target = present.get(basename)
+            if target is None:
+                return None
+            return Path(os.path.relpath(target, md.parent)).as_posix()
+
+        def _link(m: re.Match[str]) -> str:
+            label, path = m.group(1), m.group(2)
+            rel = _rel(path.rsplit("/", 1)[-1])
+            return f"[{label}]({rel})" if rel is not None else label
+
+        def _path(m: re.Match[str]) -> str:
+            basename = m.group(1)
+            rel = _rel(basename)
+            return rel if rel is not None else basename
+
+        text = md.read_text("utf-8")
+        text = _CROSS_SKILL_LINK.sub(_link, text)
+        text = _CROSS_SKILL_PATH.sub(_path, text)
+        md.write_text(text, "utf-8")
 
 
 def strip_frontmatter(text: str) -> str:
@@ -184,6 +247,13 @@ def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly
             ),
             "utf-8",
         )
+
+    # After the full tree is staged (source + vendored bundle_files), rewrite any
+    # cross-skill references so each ZIP is self-contained: vendored targets link
+    # locally, everything else degrades to a bare mention. Runs before the
+    # orphan-marker check and zip so the shipped .md never carries a dangling
+    # `../<skill>` / `skills/<skill>` path.
+    localize_cross_skill_links(target_root)
 
     issues: list[str] = []
     for md in sorted(target_root.rglob("*.md")):

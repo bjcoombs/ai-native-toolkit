@@ -201,6 +201,17 @@ SKILLS: dict[str, dict] = {
                 "until the gate promotes or the budget ceiling stops it."
             ),
         },
+        # skill-forge composes ab-equivalence's runner: solo mode fills the
+        # pure-wrapper template verbatim per runner per test case. In the plugin
+        # that template lives in the sibling ab-equivalence skill; a standalone
+        # ZIP has no siblings, so vendor the one file skill-forge actually uses.
+        # The build's link localizer rewrites `../ab-equivalence/.../runner-prompt.md`
+        # references to this local copy; the other ab-equivalence files (the
+        # contract and the equivalence judge) are not used by the forge loop, so
+        # they are not vendored.
+        "bundle_files": {
+            "references/runner-prompt.md": "skills/ab-equivalence/references/runner-prompt.md",
+        },
     },
     "deslop": {
         "standalone_name": "deslop",
@@ -222,32 +233,14 @@ SKILLS: dict[str, dict] = {
         "exclude_dirs": set(),
         "replacements": {},
     },
-    "ab-equivalence": {
-        "standalone_name": "ab-equivalence",
-        "standalone_description": (
-            "Compare two versions of an LLM-directed document - an original (teacher) and a "
-            "candidate (student) - across a transfer set and return a per-case "
-            "behavioural-equivalence verdict plus an efficiency signal. A transform-agnostic "
-            "library capability other skills compose to gate a transform on behavioural sameness. "
-            "TRIGGER when asked to A/B test two versions of a prompt, instruction, or skill, to "
-            "check whether a rewritten or compressed document still behaves the same as the "
-            "original, to validate behavioural equivalence between two document versions, or to "
-            "gate a transform on no-regression. This standalone build runs solo mode only; "
-            "phased sub-agent and team modes require the Claude Code CLI."
-            + VERSION_SUFFIX
-        ),
-        "source_dir": "skills/ab-equivalence",
-        "exclude_dirs": {"tests", "__pycache__", ".pytest_cache", ".venv"},
-        "replacements": {
-            "execution-mode-rule": (
-                "This standalone build runs solo mode only: a single agent works each case "
-                "sequentially - applying the original and candidate via the runner wrapper, "
-                "then judging the two transcripts with the equivalence-judge prompt to record "
-                "the per-case verdict and efficiency signal. Phased sub-agent and team modes "
-                "require the Claude Code CLI and are not available here."
-            ),
-        },
-    },
+    # ab-equivalence is a library skill: it is composed by skill-forge and
+    # semantic-compress, never invoked directly by a user, so it ships no
+    # standalone ZIP of its own. The one file a standalone consumer actually uses
+    # (the runner-prompt wrapper, by skill-forge solo mode) is vendored into that
+    # consumer's ZIP via bundle_files above. semantic-compress's standalone build
+    # disables Distill mode (the only other ab-equivalence consumer), so it needs
+    # nothing vendored; the build's link localizer degrades its ab-equivalence
+    # references to bare mentions.
     "semantic-compress": {
         "standalone_name": "semantic-compress",
         "standalone_description": (
