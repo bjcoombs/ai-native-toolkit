@@ -308,8 +308,18 @@ class TestSemanticCompressBuild:
     def test_skill_md_present(self, sc_zip):
         assert "semantic-compress/SKILL.md" in sc_zip.namelist()
 
-    def test_forge_report_present(self, sc_zip):
-        assert "semantic-compress/references/forge-report.md" in sc_zip.namelist()
+    def test_result_docs_absent(self, sc_zip):
+        # Forge/acceptance result docs are run instances, not skill content: the
+        # runner owns the report format (the template), never report instances.
+        # They must not ship in the standalone ZIP.
+        names = sc_zip.namelist()
+        for ref in (
+            "semantic-compress/references/forge-report.md",
+            "semantic-compress/references/forge-report-v2.md",
+            "semantic-compress/references/acceptance-directive-clarity.md",
+            "semantic-compress/references/acceptance-distillation-report.md",
+        ):
+            assert ref not in names, f"{ref} should not ship (result doc, not skill content)"
 
     def test_distill_references_present(self, sc_zip):
         # Distill mode degrades to a CLI-only note in standalone, but the three
