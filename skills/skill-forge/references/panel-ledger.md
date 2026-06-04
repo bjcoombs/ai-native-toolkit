@@ -2,7 +2,7 @@
 
 In team mode the judges persist across rounds and remember prior findings natively. In phased and solo modes the judge subagents have **fresh contexts** - they remember nothing - so a prose synopsis cannot carry the load. The panel ledger is a structured object, injected into every judge spawn, that lets the panel remember prior rounds without persistent agents.
 
-**The panel ledger and the crash-recovery round-tracking JSON are the same object** - one persisted file in the scratch directory that both survives a crash and feeds the next round's judges. It is adapted from `marathon`'s `pr-tracking.json` tracking shape.
+**The panel ledger and the crash-recovery round-tracking JSON are the same object** - one persisted file in the scratch directory that both survives a crash and feeds the next round's judges.
 
 ## Schema
 

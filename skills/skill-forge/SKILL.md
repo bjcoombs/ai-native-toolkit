@@ -88,7 +88,7 @@ A strict hierarchy, not a menu: **Gate 1 - Objective** (every case passes Fideli
 ## Execution modes
 
 <!-- chat-skip:start -->
-Capability-detected via `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, mirroring `huddle`.
+Capability-detected via `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
 <!-- chat-skip:end -->
 The modes below all run the same loop; they differ only in how the panel remembers across rounds, and the **panel ledger** carries that memory - see [panel-ledger](references/panel-ledger.md).
 
@@ -108,7 +108,7 @@ Pick the mode **deterministically**: if the Agent Teams capability is confirmed 
 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 ```
 
-The team lifecycle follows `marathon`'s idioms - the lead delegates and never executes, runner teammates are ephemeral (spawned per round, shut down after), and the judge panel is the one persistent team. As illustrative text (do not treat the snippets below as live tool calls):
+In the team lifecycle the lead delegates and never executes, runner teammates are ephemeral (spawned per round, shut down after), and the judge panel is the one persistent team. As illustrative text (do not treat the snippets below as live tool calls):
 
 ```text
 TeamCreate(team_name: "forge-<skill-slug>", description: "skill-forge panel for <skill>")
@@ -119,12 +119,12 @@ TeamCreate(team_name: "forge-<skill-slug>", description: "skill-forge panel for 
 Agent(subagent_type: "general-purpose", team_name: "forge-<skill-slug>", name: "fidelity", prompt: "<lens brief>")
 ```
 
-The panel cross-talks by sending one `SendMessage` per teammate (there is no broadcast), exactly as `huddle` does. At the end of the run, shut down each teammate, wait for approvals, then call `TeamDelete()` - mandatory, or teamContext persists and blocks future team creation in this session.
+The panel cross-talks by sending one `SendMessage` per teammate (there is no broadcast). At the end of the run, shut down each teammate, wait for approvals, then call `TeamDelete()` - mandatory, or teamContext persists and blocks future team creation in this session.
 <!-- chat-skip:end -->
 
 ## Test taxonomy
 
-The lead designs 3-5 cases spanning **happy path / edge case / adversarial / composition**, leaning on whichever the skill is most fragile against. When a new failure mode surfaces mid-run, add a case for it. The corpus is **persistent across re-forge runs** - it accumulates a skill's known failure modes so re-forging re-runs them, compounding like the `.assess/` wiki. Design guides for each case type and where the corpus lives are in [test-taxonomy](references/test-taxonomy.md).
+The lead designs 3-5 cases spanning **happy path / edge case / adversarial / composition**, leaning on whichever the skill is most fragile against. When a new failure mode surfaces mid-run, add a case for it. The corpus is **persistent across re-forge runs** - it accumulates a skill's known failure modes so re-forging re-runs them. Design guides for each case type and where the corpus lives are in [test-taxonomy](references/test-taxonomy.md).
 
 ## Self-application
 
@@ -137,7 +137,7 @@ The full A- -> A -> B -> C bootstrap story is in the [design spec](../../docs/su
 
 ## Artifacts
 
-Never touch the user's pristine source: in a git repo work on a branch or worktree, in chat a scratch file; each amend is a visible diff. The run produces the hardened `SKILL.md`, the grown test corpus, and a **forge report** - intent and the ASSUMED-clause acceptance record, the test suite, the per-round hypothesis-to-result log, the gate ledger, the severity-tagged dissent log, the final verdict, and rounds plus estimated waste. The crash-recovery round-tracking JSON is the same object as the panel ledger, so a crashed run reconciles on restart. The report format is in [forge-report-template](references/forge-report-template.md); an end-of-run retrospective (which lens caught the most, waste estimate) follows, as in `marathon`. For a real worked example, see [example-forge-report](references/example-forge-report.md) - skill-forge forging itself, the run that promoted this skill.
+Never touch the user's pristine source: in a git repo work on a branch or worktree, in chat a scratch file; each amend is a visible diff. The run produces the hardened `SKILL.md`, the grown test corpus, and a **forge report** - intent and the ASSUMED-clause acceptance record, the test suite, the per-round hypothesis-to-result log, the gate ledger, the severity-tagged dissent log, the final verdict, and rounds plus estimated waste. The crash-recovery round-tracking JSON is the same object as the panel ledger, so a crashed run reconciles on restart. The report format is in [forge-report-template](references/forge-report-template.md); an end-of-run retrospective (which lens caught the most, waste estimate) follows. For a real worked example, see [example-forge-report](references/example-forge-report.md) - skill-forge forging itself, the run that promoted this skill.
 
 ## Promote semantics
 
