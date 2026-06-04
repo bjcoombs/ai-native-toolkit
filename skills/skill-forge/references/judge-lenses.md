@@ -1,6 +1,6 @@
 # Judge lenses
 
-The judge panel is five skill-quality lenses. The panel scales by stakes, mirroring huddle's Fibonacci team sizing but capped at these five:
+The judge panel is five skill-quality lenses. The panel scales by stakes, capped at these five:
 
 - **5 lenses** - the default forge: all of the below. An unqualified `/skill-forge` run uses all five, and a self-forge always uses all five.
 - **3 lenses** - an explicit quick check (Fidelity, Adversarial, Usability), only when the user asks for a faster or cheaper pass.
