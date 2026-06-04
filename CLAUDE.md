@@ -181,6 +181,8 @@ Deterministic core in `skills/assess/scripts/lib/` does all data work; the LLM o
 
 Tests live in `skills/assess/tests/` and run via `uv run --with pytest pytest`. Add a test alongside any change to a deterministic module - that's the contract that lets us trust the output regardless of which LLM is driving.
 
+`skills/assess/scripts/lib/README.md` is the per-module reference and the home of the **co-change seam map**: it names the directories that move together by design (the core <-> lib seam, each lib module <-> its test, and the standalone build <-> the skills it packages) so the historical coupling `/assess` flags on this repo reads as owned cohesion, not entanglement. Update it alongside any change to a `lib/` module so it never becomes a lying map of its own.
+
 The `.assess/` directory in a target repo is a compounding wiki:
 
 - `assess-report.md` - latest prose-heavy summary (LLM-written)
