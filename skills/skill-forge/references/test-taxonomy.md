@@ -24,7 +24,7 @@ The skill combined with another skill or concept - invoked alongside a second sk
 
 ## The persistent corpus
 
-The corpus is **kept across re-forge runs**. It accumulates a skill's known failure modes, so re-forging the same skill later re-runs every case the skill has ever failed - the suite compounds over time the way the `.assess/` wiki does. A skill that has been forged three times carries the union of all three runs' hard cases, and a regression on any of them is caught immediately.
+The corpus is **kept across re-forge runs**. It accumulates a skill's known failure modes, so re-forging the same skill later re-runs every case the skill has ever failed. A skill that has been forged three times carries the union of all three runs' hard cases, and a regression on any of them is caught immediately.
 
 Each case records whether it was a `seed` case (designed at the start of a run) or an `added round N` case (born from a failure mode surfaced mid-run) - the same vocabulary the test-suite table uses in `forge-report-template.md`.
 
