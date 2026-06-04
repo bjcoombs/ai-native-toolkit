@@ -1,44 +1,53 @@
 {
-  "plugin_version": "1.23.0",
-  "files_scored": 69,
+  "plugin_version": "1.35.0",
+  "files_scored": 72,
   "scoring_coverage": {
-    "lizard": 67,
+    "lizard": 70,
     "scc": 2
   },
   "churn_window": "commits (last 12mo)",
   "loc": {
-    "p50": 127.0,
-    "p95": 488.5999999999999,
+    "p50": 152.0,
+    "p95": 490.8,
     "max": 790.0,
-    "total": 12128
+    "total": 12961
   },
   "ccn": {
     "basis": "file-aggregate",
     "p50": 31.0,
-    "p95": 111.39999999999995,
+    "p95": 112.05000000000003,
     "max": 169.0
   },
   "fn_ccn": {
     "basis": "per-function",
     "source": "lizard-only",
-    "function_count": 957,
+    "function_count": 1040,
     "p50": 1.0,
     "p95": 9.0,
-    "max": 38.0
+    "max": 40.0
   },
   "churn": {
     "p50": 2.0,
-    "p95": 9.199999999999989,
-    "max": 15.0
+    "p95": 11.900000000000006,
+    "max": 17.0
   },
   "top_hotspots": [
     {
       "path": "skills/assess/scripts/assess_core.py",
-      "loc": 497,
-      "ccn": 106.0,
+      "loc": 499,
+      "ccn": 108.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 38.0,
-      "commits": 15,
+      "max_fn_ccn": 40.0,
+      "commits": 16,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/complexity-treemap.py",
+      "loc": 489,
+      "ccn": 117.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 19.0,
+      "commits": 11,
       "source": "lizard"
     },
     {
@@ -51,56 +60,11 @@
       "source": "lizard"
     },
     {
-      "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 482,
-      "ccn": 115.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 19.0,
-      "commits": 10,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/tests/test_assess_core.py",
-      "loc": 790,
-      "ccn": 80.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 6.0,
-      "commits": 13,
-      "source": "lizard"
-    },
-    {
       "path": "skills/assess/scripts/lib/doc_staleness.py",
       "loc": 245,
       "ccn": 69.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 26.0,
-      "commits": 7,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/lib/keyhole_signals.py",
-      "loc": 493,
-      "ccn": 130.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 11.0,
-      "commits": 3,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/lib/liveness_scan.py",
-      "loc": 371,
-      "ccn": 100.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 14.0,
-      "commits": 4,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/tests/test_doc_graph.py",
-      "loc": 270,
-      "ccn": 52.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 4.0,
       "commits": 7,
       "source": "lizard"
     },
@@ -114,12 +78,48 @@
       "source": "lizard"
     },
     {
+      "path": "skills/assess/tests/test_assess_core.py",
+      "loc": 790,
+      "ccn": 80.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 6.0,
+      "commits": 13,
+      "source": "lizard"
+    },
+    {
       "path": "skills/assess/scripts/lib/change_coupling.py",
       "loc": 237,
       "ccn": 84.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 33.0,
       "commits": 3,
+      "source": "lizard"
+    },
+    {
+      "path": "scripts/transform_skill.py",
+      "loc": 165,
+      "ccn": 44.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 19.0,
+      "commits": 6,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/lib/liveness_scan.py",
+      "loc": 412,
+      "ccn": 107.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 14.0,
+      "commits": 5,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/lib/agent_instructions_grader.py",
+      "loc": 260,
+      "ccn": 70.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 14.0,
+      "commits": 4,
       "source": "lizard"
     }
   ],
@@ -153,29 +153,38 @@
     },
     {
       "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 482,
-      "ccn": 115.0,
+      "loc": 489,
+      "ccn": 117.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 19.0,
-      "commits": 10,
+      "commits": 11,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/assess_core.py",
-      "loc": 497,
-      "ccn": 106.0,
+      "loc": 499,
+      "ccn": 108.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 38.0,
-      "commits": 15,
+      "max_fn_ccn": 40.0,
+      "commits": 16,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/liveness_scan.py",
-      "loc": 371,
-      "ccn": 100.0,
+      "loc": 412,
+      "ccn": 107.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 14.0,
-      "commits": 4,
+      "commits": 5,
+      "source": "lizard"
+    },
+    {
+      "path": "scripts/tests/test_integration.py",
+      "loc": 245,
+      "ccn": 89.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 3.0,
+      "commits": 10,
       "source": "lizard"
     },
     {
@@ -204,15 +213,6 @@
       "max_fn_ccn": 33.0,
       "commits": 3,
       "source": "lizard"
-    },
-    {
-      "path": "skills/assess/tests/test_assess_core.py",
-      "loc": 790,
-      "ccn": 80.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 6.0,
-      "commits": 13,
-      "source": "lizard"
     }
   ],
   "top_large": [
@@ -236,11 +236,11 @@
     },
     {
       "path": "skills/assess/scripts/assess_core.py",
-      "loc": 497,
-      "ccn": 106.0,
+      "loc": 499,
+      "ccn": 108.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 38.0,
-      "commits": 15,
+      "max_fn_ccn": 40.0,
+      "commits": 16,
       "source": "lizard"
     },
     {
@@ -254,11 +254,20 @@
     },
     {
       "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 482,
-      "ccn": 115.0,
+      "loc": 489,
+      "ccn": 117.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 19.0,
-      "commits": 10,
+      "commits": 11,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/lib/liveness_scan.py",
+      "loc": 412,
+      "ccn": 107.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 14.0,
+      "commits": 5,
       "source": "lizard"
     },
     {
@@ -271,12 +280,12 @@
       "source": "lizard"
     },
     {
-      "path": "skills/assess/scripts/lib/liveness_scan.py",
-      "loc": 371,
-      "ccn": 100.0,
+      "path": "skills/assess/tests/test_complexity_treemap.py",
+      "loc": 368,
+      "ccn": 42.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 14.0,
-      "commits": 4,
+      "max_fn_ccn": 3.0,
+      "commits": 6,
       "source": "lizard"
     },
     {
@@ -295,15 +304,6 @@
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 36.0,
       "commits": 3,
-      "source": "lizard"
-    },
-    {
-      "path": "scripts/tests/test_transform.py",
-      "loc": 339,
-      "ccn": 53.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 3.0,
-      "commits": 5,
       "source": "lizard"
     }
   ]

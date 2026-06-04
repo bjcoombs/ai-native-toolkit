@@ -33,3 +33,14 @@
 [Full report](./assess-report.md)
 
 ---
+## 2026-06-04 (v1.35.0)
+
+- **Files scored:** 72
+- **AI Readiness:** 7.0 / 8 (AI-Native)
+- **Instructions grade:** A
+- **Hotspot transitions:** 2 graduated, 3 regressed, 2 new, 5 persistent
+- **Top action:** Extend the co-change seam map (skills/assess/scripts/lib/README.md) to the full scripts <-> scripts/tests <-> skills/assess span so the coupling is owned, not just observed
+
+[Full report](./assess-report.md)
+
+---

@@ -6,93 +6,279 @@
 </style>
 <rect x="0" y="0" width="1180" height="1230" fill="#ffffff"/>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9aa0a6"/></marker></defs>
-<line x1="705.4" y1="644.7" x2="782.0" y2="736.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
-<line x1="474.6" y1="573.3" x2="398.1" y2="481.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
-<circle cx="815.2" cy="892.8" r="10.6" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>.github/claude-review-instructions.md
-238 lines · in 0 · out 0 · orphan · 1d stale, subject churn 199</title></circle>
-<circle cx="705.4" cy="644.7" r="9.8" fill="#fff7ec" stroke="#0072B2" stroke-width="3.5"><title>CLAUDE.md
-185 lines · in 0 · out 1 · entry · 1d stale, subject churn 199</title></circle>
-<circle cx="474.6" cy="573.3" r="12.2" fill="#fff7ec" stroke="#0072B2" stroke-width="3.5"><title>README.md
-363 lines · in 0 · out 1 · entry · 1d stale, subject churn 199</title></circle>
-<circle cx="734.1" cy="941.4" r="13.3" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/assess-layer-scorer.md
-473 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
-<circle cx="643.1" cy="967.3" r="8.2" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/black-hat.md
-97 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
-<circle cx="548.6" cy="968.9" r="7.3" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/blue-hat.md
-58 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
-<circle cx="456.8" cy="945.9" r="7.6" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/green-hat.md
-70 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
-<circle cx="374.2" cy="899.9" r="7.9" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/red-hat.md
-84 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
-<circle cx="306.2" cy="834.2" r="8.0" fill="#8a0000" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/scribe.md
-86 lines · in 0 · out 0 · orphan · 257d stale, subject churn 199</title></circle>
-<circle cx="257.6" cy="753.1" r="7.6" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/white-hat.md
-70 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
-<circle cx="231.7" cy="662.1" r="7.3" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>agents/yellow-hat.md
-58 lines · in 0 · out 0 · orphan · 59d stale, subject churn 199</title></circle>
-<circle cx="230.1" cy="567.6" r="5.8" fill="#fdd8a8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/6hats.md
-18 lines · in 0 · out 0 · orphan · 58d stale, subject churn 199</title></circle>
-<circle cx="253.1" cy="475.8" r="9.4" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/fix-develop.md
-158 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
-<circle cx="299.1" cy="393.2" r="8.2" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/fix-pr.md
-97 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
-<circle cx="364.8" cy="325.2" r="8.5" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/issues.md
-111 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
-<circle cx="445.9" cy="276.6" r="7.5" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/tm-marathon-config-example.md
-68 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
-<circle cx="536.9" cy="250.7" r="17.0" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/tm.md
-918 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
-<circle cx="631.4" cy="249.1" r="8.2" fill="#7f0000" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>commands/understand.md
-94 lines · in 0 · out 0 · orphan · 265d stale, subject churn 199</title></circle>
-<circle cx="723.2" cy="272.1" r="24.0" fill="#fef2e1" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-22-assess-deterministic-wiki.md
-2177 lines · in 0 · out 0 · orphan · 10d stale, subject churn 199</title></circle>
-<circle cx="805.8" cy="318.1" r="19.3" fill="#fef2e1" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-22-assess-v1.5-real-use-fixes.md
-1277 lines · in 0 · out 0 · orphan · 10d stale, subject churn 199</title></circle>
-<circle cx="873.8" cy="383.8" r="19.6" fill="#fef3e4" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-23-standalone-skill-pipeline.md
-1328 lines · in 0 · out 0 · orphan · 8d stale, subject churn 199</title></circle>
-<circle cx="922.4" cy="464.9" r="9.8" fill="#fef5e8" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md
-186 lines · in 0 · out 0 · orphan · 4d stale, subject churn 199</title></circle>
-<circle cx="948.3" cy="555.9" r="8.6" fill="#fef5e7" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-27-huddle-broadcast-per-recipient.md
-115 lines · in 0 · out 0 · orphan · 5d stale, subject churn 199</title></circle>
-<circle cx="949.9" cy="650.4" r="8.3" fill="#fef5e7" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-27-huddle-cli-team-mode-regression.md
-99 lines · in 0 · out 0 · orphan · 5d stale, subject churn 199</title></circle>
-<circle cx="926.9" cy="742.2" r="10.4" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md
-220 lines · in 0 · out 0 · orphan · 3d stale, subject churn 199</title></circle>
-<circle cx="880.9" cy="824.8" r="9.9" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md
-189 lines · in 0 · out 0 · orphan · 3d stale, subject churn 199</title></circle>
-<circle cx="765.0" cy="1059.2" r="9.2" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md
-145 lines · in 0 · out 0 · orphan · 3d stale, subject churn 199</title></circle>
-<circle cx="535.8" cy="1088.9" r="18.1" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md
-1080 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
-<circle cx="318.9" cy="1008.8" r="8.0" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-31-assess-dogfooded-analysis.md
-89 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
-<circle cx="164.2" cy="837.0" r="8.9" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/plans/2026-05-31-assess-dogfooded.md
-133 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
-<circle cx="107.0" cy="613.0" r="10.5" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md
-228 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
-<circle cx="789.3" cy="745.4" r="8.4" fill="#fef6e9" stroke="#b8b8b8" stroke-width="1.0"><title>docs/testing-a-branch-locally.md
-106 lines · in 1 · out 0 · reachable · 3d stale, subject churn 199</title></circle>
-<circle cx="527.8" cy="130.0" r="12.0" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/assess/SKILL.md
-346 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
-<circle cx="160.5" cy="388.1" r="11.0" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/assess-findings/SKILL.md
-268 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
-<circle cx="312.3" cy="213.8" r="11.4" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/assess-pr/SKILL.md
-300 lines · in 0 · out 0 · orphan · 0d stale, subject churn 199</title></circle>
-<circle cx="757.5" cy="156.0" r="8.7" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/deslop/SKILL.md
-120 lines · in 0 · out 0 · orphan · 3d stale, subject churn 199</title></circle>
-<circle cx="390.7" cy="472.6" r="8.6" fill="#fef6e9" stroke="#b8b8b8" stroke-width="1.0"><title>skills/deslop/references/full-checklist.md
-115 lines · in 1 · out 0 · reachable · 3d stale, subject churn 199</title></circle>
-<circle cx="948.9" cy="285.7" r="8.5" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/ghsync/SKILL.md
-110 lines · in 0 · out 0 · orphan · 1d stale, subject churn 199</title></circle>
-<circle cx="1058.0" cy="489.5" r="12.4" fill="#fef6e9" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/huddle/SKILL.md
-386 lines · in 0 · out 0 · orphan · 3d stale, subject churn 199</title></circle>
-<circle cx="1059.9" cy="720.7" r="13.1" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/marathon/SKILL.md
-450 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
-<circle cx="954.2" cy="926.3" r="10.0" fill="#fef6ea" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/pr-review-merge/SKILL.md
-196 lines · in 0 · out 0 · orphan · 2d stale, subject churn 199</title></circle>
+<line x1="705.4" y1="644.7" x2="412.6" y2="462.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.4" y1="691.1" x2="560.1" y2="501.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.4" y1="691.1" x2="692.5" y2="647.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.4" y1="691.1" x2="433.9" y2="436.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.4" y1="691.1" x2="656.6" y2="389.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.4" y1="691.1" x2="821.4" y2="592.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.4" y1="691.1" x2="408.7" y2="754.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="501.4" y1="691.1" x2="754.8" y2="774.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="710.6" y2="656.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="569.4" y2="500.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="735.9" y2="431.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="438.2" y2="789.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="509.1" y2="830.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="588.6" y2="846.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="706.6" y2="818.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="472.4" y2="812.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="628.8" y2="844.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="668.2" y2="835.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="548.3" y2="841.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="744.9" y2="793.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="763.4" y1="777.1" x2="587.3" y2="381.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="488.4" y2="699.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="557.7" y2="500.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="423.4" y2="783.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="724.0" y2="426.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="364.3" y2="536.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="357.1" y2="586.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="356.4" y2="659.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="367.3" y2="698.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="385.4" y2="735.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="352.0" y2="617.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="752.9" y2="453.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="401.3" y1="759.7" x2="780.1" y2="482.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="506.1" y2="676.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="696.4" y2="635.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="440.1" y2="431.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="405.9" y2="751.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="758.2" y2="769.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="578.9" y2="382.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="720.6" y2="421.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="616.9" y2="380.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="654.2" y2="387.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="690.6" y2="400.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="800.2" y2="701.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="797.2" y2="509.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="821.6" y2="586.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="820.6" y2="625.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="813.7" y2="547.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="814.6" y2="665.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="749.3" y2="446.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="777.6" y2="475.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="473.3" y2="410.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="508.6" y2="397.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="543.2" y2="386.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="433.0" y2="781.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="371.9" y2="525.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="371.0" y2="560.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="361.0" y2="641.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="369.9" y2="680.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="386.2" y2="715.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="357.8" y2="602.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="500.7" y2="822.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="577.9" y2="839.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="693.3" y2="814.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="465.3" y2="804.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="617.7" y2="838.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="656.7" y2="830.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="538.6" y2="833.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="724.7" y2="789.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="414.1" y2="458.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="389.3" y2="490.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="563.2" y1="491.3" x2="780.3" y2="735.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="425.4" y2="434.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="400.5" y2="750.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="552.5" y2="491.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="795.4" y2="874.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="723.6" y2="922.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="639.4" y2="946.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="555.4" y2="958.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="468.8" y2="939.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="389.4" y2="899.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="323.1" y2="838.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="273.7" y2="765.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="244.4" y2="682.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="244.8" y2="589.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="251.9" y2="510.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="286.4" y2="434.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="336.8" y2="371.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="400.6" y2="312.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="478.9" y2="275.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="656.4" y2="261.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="568.1" y2="255.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="815.7" y2="338.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="379.8" y1="490.0" x2="740.9" y2="290.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="750.9" y1="284.4" x2="817.0" y2="328.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="695.0" y2="636.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="553.6" y2="486.5" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="567.0" y2="373.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="719.3" y2="416.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="610.6" y2="373.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="650.4" y2="380.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="688.5" y2="395.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="799.5" y2="702.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="797.4" y2="507.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="488.7" y2="392.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="527.5" y2="379.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="362.1" y2="549.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="355.6" y2="637.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="364.7" y2="677.3" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="380.7" y2="713.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="748.9" y2="442.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="777.7" y2="473.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="431.5" y1="426.8" x2="455.1" y2="409.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="809.5" y1="709.7" x2="913.6" y2="745.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="809.5" y1="709.7" x2="473.3" y2="410.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="809.5" y1="709.7" x2="884.7" y2="412.4" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="809.5" y1="709.7" x2="924.1" y2="492.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="809.5" y1="709.7" x2="938.7" y2="665.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="809.5" y1="709.7" x2="873.9" y2="819.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="809.5" y1="709.7" x2="943.0" y2="578.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="809.5" y1="709.7" x2="493.7" y2="274.2" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line x1="809.5" y1="709.7" x2="549.5" y2="383.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<circle cx="789.3" cy="745.4" r="10.6" fill="#fef5e8" stroke="#b8b8b8" stroke-width="1.0"><title>.github/claude-review-instructions.md
+238 lines · in 1 · out 0 · reachable · 4d stale, subject churn 225</title></circle>
+<circle cx="705.4" cy="644.7" r="10.2" fill="#fff7ec" stroke="#0072B2" stroke-width="3.5"><title>CLAUDE.md
+208 lines · in 4 · out 1 · entry · 0d stale, subject churn 225</title></circle>
+<circle cx="501.4" cy="691.1" r="12.7" fill="#dad8da" stroke="#0072B2" stroke-width="3.5"><title>README.md
+414 lines · in 2 · out 7 · entry · 0d stale, subject churn 46</title></circle>
+<circle cx="763.4" cy="777.1" r="6.1" fill="#fef6ea" stroke="#b8b8b8" stroke-width="1.0"><title>agents/README.md
+24 lines · in 2 · out 13 · reachable · 2d stale, subject churn 225</title></circle>
+<circle cx="732.5" cy="804.0" r="13.4" fill="#fef6ea" stroke="#b8b8b8" stroke-width="1.0"><title>agents/assess-layer-scorer.md
+484 lines · in 2 · out 0 · reachable · 2d stale, subject churn 225</title></circle>
+<circle cx="697.5" cy="825.3" r="8.2" fill="#fdd5a1" stroke="#b8b8b8" stroke-width="1.0"><title>agents/black-hat.md
+97 lines · in 2 · out 0 · reachable · 62d stale, subject churn 225</title></circle>
+<circle cx="659.4" cy="840.3" r="7.3" fill="#fdd5a1" stroke="#b8b8b8" stroke-width="1.0"><title>agents/blue-hat.md
+58 lines · in 2 · out 0 · reachable · 62d stale, subject churn 225</title></circle>
+<circle cx="619.3" cy="848.7" r="7.6" fill="#fdd5a1" stroke="#b8b8b8" stroke-width="1.0"><title>agents/green-hat.md
+70 lines · in 2 · out 0 · reachable · 62d stale, subject churn 225</title></circle>
+<circle cx="578.4" cy="850.2" r="7.9" fill="#fdd5a1" stroke="#b8b8b8" stroke-width="1.0"><title>agents/red-hat.md
+84 lines · in 2 · out 0 · reachable · 62d stale, subject churn 225</title></circle>
+<circle cx="537.8" cy="844.8" r="8.0" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>agents/scribe.md
+86 lines · in 2 · out 0 · reachable · 259d stale, subject churn 225</title></circle>
+<circle cx="498.7" cy="832.6" r="7.6" fill="#fdd5a1" stroke="#b8b8b8" stroke-width="1.0"><title>agents/white-hat.md
+70 lines · in 2 · out 0 · reachable · 62d stale, subject churn 225</title></circle>
+<circle cx="462.2" cy="813.9" r="7.3" fill="#fdd5a1" stroke="#b8b8b8" stroke-width="1.0"><title>agents/yellow-hat.md
+58 lines · in 2 · out 0 · reachable · 62d stale, subject churn 225</title></circle>
+<circle cx="429.4" cy="789.4" r="5.8" fill="#fdd6a2" stroke="#b8b8b8" stroke-width="1.0"><title>commands/6hats.md
+18 lines · in 3 · out 0 · reachable · 61d stale, subject churn 225</title></circle>
+<circle cx="401.3" cy="759.7" r="6.1" fill="#fef6ea" stroke="#b8b8b8" stroke-width="1.0"><title>commands/README.md
+23 lines · in 3 · out 12 · reachable · 2d stale, subject churn 225</title></circle>
+<circle cx="378.5" cy="725.6" r="9.4" fill="#fef5e7" stroke="#b8b8b8" stroke-width="1.0"><title>commands/fix-develop.md
+158 lines · in 3 · out 0 · reachable · 5d stale, subject churn 225</title></circle>
+<circle cx="361.8" cy="688.2" r="8.2" fill="#fef5e7" stroke="#b8b8b8" stroke-width="1.0"><title>commands/fix-pr.md
+97 lines · in 3 · out 0 · reachable · 5d stale, subject churn 225</title></circle>
+<circle cx="351.7" cy="648.5" r="8.5" fill="#fef5e7" stroke="#b8b8b8" stroke-width="1.0"><title>commands/issues.md
+111 lines · in 3 · out 0 · reachable · 5d stale, subject churn 225</title></circle>
+<circle cx="348.5" cy="607.6" r="7.5" fill="#fef5e7" stroke="#b8b8b8" stroke-width="1.0"><title>commands/tm-marathon-config-example.md
+68 lines · in 2 · out 0 · reachable · 5d stale, subject churn 225</title></circle>
+<circle cx="352.2" cy="566.8" r="17.0" fill="#fef5e7" stroke="#b8b8b8" stroke-width="1.0"><title>commands/tm.md
+918 lines · in 3 · out 0 · reachable · 5d stale, subject churn 225</title></circle>
+<circle cx="362.8" cy="527.3" r="6.3" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>commands/understand.md
+29 lines · in 2 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="563.2" cy="491.3" r="7.7" fill="#fff7ec" stroke="#0072B2" stroke-width="3.5"><title>docs/index.md
+76 lines · in 5 · out 39 · entry · 0d stale, subject churn 225</title></circle>
+<circle cx="379.8" cy="490.0" r="6.5" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/README.md
+33 lines · in 1 · out 22 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="815.2" cy="892.8" r="24.0" fill="#fef1de" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-22-assess-deterministic-wiki.md
+2177 lines · in 1 · out 0 · reachable · 13d stale, subject churn 225</title></circle>
+<circle cx="737.5" cy="939.8" r="19.3" fill="#fef1de" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-22-assess-v1.5-real-use-fixes.md
+1277 lines · in 1 · out 0 · reachable · 13d stale, subject churn 225</title></circle>
+<circle cx="650.6" cy="966.1" r="19.6" fill="#fef2e0" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-23-standalone-skill-pipeline.md
+1328 lines · in 1 · out 0 · reachable · 11d stale, subject churn 225</title></circle>
+<circle cx="559.9" cy="970.0" r="9.8" fill="#fef4e5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md
+186 lines · in 1 · out 0 · reachable · 7d stale, subject churn 225</title></circle>
+<circle cx="471.1" cy="951.2" r="8.6" fill="#fef4e5" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-27-huddle-broadcast-per-recipient.md
+115 lines · in 1 · out 0 · reachable · 7d stale, subject churn 225</title></circle>
+<circle cx="389.7" cy="910.8" r="8.3" fill="#fef3e4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-27-huddle-cli-team-mode-regression.md
+99 lines · in 1 · out 0 · reachable · 8d stale, subject churn 225</title></circle>
+<circle cx="320.9" cy="851.6" r="10.4" fill="#fef4e6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md
+220 lines · in 1 · out 0 · reachable · 6d stale, subject churn 225</title></circle>
+<circle cx="269.1" cy="777.0" r="9.9" fill="#fef4e6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md
+189 lines · in 1 · out 0 · reachable · 6d stale, subject churn 225</title></circle>
+<circle cx="237.4" cy="691.9" r="9.2" fill="#fef4e6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md
+145 lines · in 1 · out 0 · reachable · 6d stale, subject churn 225</title></circle>
+<circle cx="227.8" cy="601.6" r="18.1" fill="#fef5e7" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md
+1080 lines · in 1 · out 0 · reachable · 5d stale, subject churn 225</title></circle>
+<circle cx="241.0" cy="511.8" r="8.0" fill="#fef6e9" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-31-assess-dogfooded-analysis.md
+89 lines · in 1 · out 0 · reachable · 3d stale, subject churn 225</title></circle>
+<circle cx="276.2" cy="428.1" r="8.9" fill="#fef6e9" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-31-assess-dogfooded.md
+133 lines · in 1 · out 0 · reachable · 3d stale, subject churn 225</title></circle>
+<circle cx="331.0" cy="355.7" r="13.8" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-06-02-skill-forge.md
+526 lines · in 1 · out 0 · reachable · 1d stale, subject churn 225</title></circle>
+<circle cx="402.2" cy="299.3" r="10.5" fill="#fef5e7" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md
+228 lines · in 1 · out 0 · reachable · 5d stale, subject churn 225</title></circle>
+<circle cx="485.1" cy="262.3" r="11.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-02-skill-forge-design.md
+323 lines · in 2 · out 0 · reachable · 1d stale, subject churn 225</title></circle>
+<circle cx="574.6" cy="247.1" r="7.4" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-03-instruction-optimizer-directive-clarity-design.md
+64 lines · in 1 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="665.1" cy="254.6" r="8.4" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-03-semantic-compress-distillation-design.md
+103 lines · in 1 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="750.9" cy="284.4" r="8.5" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-03-skill-forge-extraction-verification.md
+108 lines · in 1 · out 1 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="826.5" cy="334.6" r="8.5" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-03-skill-forge-hardening-and-ab-extraction-design.md
+108 lines · in 2 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="403.0" cy="456.2" r="8.4" fill="#fef4e6" stroke="#b8b8b8" stroke-width="1.0"><title>docs/testing-a-branch-locally.md
+106 lines · in 2 · out 0 · reachable · 6d stale, subject churn 225</title></circle>
+<circle cx="431.5" cy="426.8" r="6.6" fill="#d8d7d9" stroke="#b8b8b8" stroke-width="1.0"><title>skills/README.md
+36 lines · in 3 · out 18 · reachable · 0d stale, subject churn 37</title></circle>
+<circle cx="464.5" cy="402.6" r="8.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/ab-equivalence/SKILL.md
+122 lines · in 3 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="765.0" cy="1059.2" r="8.4" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/ab-equivalence/references/ab-equivalence.md
+104 lines · in 0 · out 0 · orphan · 0d stale, subject churn 225</title></circle>
+<circle cx="434.7" cy="1066.4" r="8.6" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/ab-equivalence/references/equivalence-judge-prompt.md
+114 lines · in 0 · out 0 · orphan · 0d stale, subject churn 225</title></circle>
+<circle cx="887.3" cy="402.1" r="7.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/ab-equivalence/references/runner-prompt.md
+73 lines · in 1 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="581.1" cy="367.7" r="12.2" fill="#fef6ea" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess/SKILL.md
+368 lines · in 3 · out 0 · reachable · 2d stale, subject churn 225</title></circle>
+<circle cx="177.1" cy="859.5" r="9.7" fill="#dcdadb" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/assess/scripts/lib/README.md
+176 lines · in 0 · out 0 · orphan · 2d stale, subject churn 58</title></circle>
+<circle cx="112.6" cy="535.5" r="7.7" fill="#e2dfdd" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/assess/tests/README.md
+76 lines · in 0 · out 0 · orphan · 2d stale, subject churn 84</title></circle>
+<circle cx="501.2" cy="384.4" r="11.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess-findings/SKILL.md
+323 lines · in 2 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="540.5" cy="372.6" r="11.4" fill="#fef6e9" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess-pr/SKILL.md
+300 lines · in 3 · out 0 · reachable · 3d stale, subject churn 225</title></circle>
+<circle cx="622.0" cy="369.6" r="8.9" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/deslop/SKILL.md
+130 lines · in 2 · out 0 · reachable · 1d stale, subject churn 225</title></circle>
+<circle cx="662.0" cy="378.5" r="8.8" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/deslop/references/full-checklist.md
+127 lines · in 3 · out 0 · reachable · 1d stale, subject churn 225</title></circle>
+<circle cx="699.9" cy="394.0" r="8.5" fill="#fef5e8" stroke="#b8b8b8" stroke-width="1.0"><title>skills/ghsync/SKILL.md
+110 lines · in 2 · out 0 · reachable · 4d stale, subject churn 225</title></circle>
+<circle cx="734.7" cy="415.6" r="12.4" fill="#fef4e6" stroke="#b8b8b8" stroke-width="1.0"><title>skills/huddle/SKILL.md
+386 lines · in 4 · out 0 · reachable · 6d stale, subject churn 225</title></circle>
+<circle cx="765.3" cy="442.9" r="13.4" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/marathon/SKILL.md
+486 lines · in 3 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="271.6" cy="245.8" r="7.9" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/marathon/forge/corpus.md
+84 lines · in 0 · out 0 · orphan · 0d stale, subject churn 225</title></circle>
+<circle cx="579.5" cy="126.1" r="8.4" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/marathon/forge/forge-report.md
+107 lines · in 0 · out 0 · orphan · 0d stale, subject churn 225</title></circle>
+<circle cx="790.8" cy="474.9" r="10.3" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/pr-review-merge/SKILL.md
+215 lines · in 3 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="810.6" cy="510.8" r="10.5" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/SKILL.md
+230 lines · in 2 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="824.0" cy="549.5" r="7.6" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/references/battle-scar-classifier.md
+71 lines · in 1 · out 0 · reachable · 1d stale, subject churn 225</title></circle>
+<circle cx="830.7" cy="589.9" r="6.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/references/cognitive-ergonomics.md
+41 lines · in 2 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="830.5" cy="630.8" r="8.2" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/references/directive-clarity-patterns.md
+97 lines · in 1 · out 0 · reachable · 1d stale, subject churn 225</title></circle>
+<circle cx="823.4" cy="671.2" r="7.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/references/directive-clarity-rewrites.md
+74 lines · in 1 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="892.4" cy="232.3" r="10.4" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/semantic-compress/references/distill-loop.md
+224 lines · in 0 · out 0 · orphan · 0d stale, subject churn 225</title></circle>
+<circle cx="1063.7" cy="514.8" r="8.6" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/semantic-compress/references/distillation-report-template.md
+117 lines · in 0 · out 0 · orphan · 0d stale, subject churn 225</title></circle>
+<circle cx="1013.4" cy="841.4" r="8.4" fill="#fff7ec" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>skills/semantic-compress/references/transfer-set-design.md
+106 lines · in 0 · out 0 · orphan · 0d stale, subject churn 225</title></circle>
+<circle cx="809.5" cy="709.7" r="9.4" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/SKILL.md
+161 lines · in 2 · out 9 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="929.5" cy="482.5" r="8.5" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/references/forge-report-template.md
+111 lines · in 1 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="950.2" cy="570.9" r="7.2" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/references/gate-hierarchy.md
+57 lines · in 1 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="948.4" cy="661.7" r="7.2" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/references/judge-lenses.md
+57 lines · in 1 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="924.0" cy="749.2" r="8.0" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/references/panel-ledger.md
+89 lines · in 1 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
+<circle cx="878.7" cy="827.8" r="6.5" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/references/test-taxonomy.md
+34 lines · in 1 · out 0 · reachable · 0d stale, subject churn 225</title></circle>
 
-<text x="590" y="40" font-size="24" font-weight="600" text-anchor="middle">Doc map — 41 docs, 2 links, 39 islands</text>
-<text x="590" y="66" font-size="14" fill="#555" text-anchor="middle">90% orphaned · 10% reachable from the entry point</text>
+<text x="590" y="40" font-size="24" font-weight="600" text-anchor="middle">Doc map — 74 docs, 122 links, 10 islands</text>
+<text x="590" y="66" font-size="14" fill="#555" text-anchor="middle">12% orphaned · 88% reachable from the entry point</text>
 <defs><linearGradient id="stalegrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff7ec"/><stop offset="0.5" stop-color="#fc8d59"/><stop offset="1" stop-color="#7f0000"/></linearGradient></defs>
 <text x="334" y="1162" font-size="12" fill="#555" text-anchor="end">stable</text>
 <rect x="340" y="1151" width="110" height="12" rx="3" fill="url(#stalegrad)"/>
