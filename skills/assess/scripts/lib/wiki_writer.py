@@ -38,7 +38,11 @@ class LogEntry:
     files_scored: int
     readiness_score: float
     maturity_label: str
-    instructions_grade: str
+    # Optional[str]: None means no instruction file was found at any known
+    # location (the schema convention in CLAUDE.md). The log template renders it
+    # via str.format, so a None prints as "None" - unchanged from prior runtime
+    # behaviour; only the annotation is corrected to match the data.
+    instructions_grade: str | None
     graduated_count: int
     regressed_count: int
     new_count: int

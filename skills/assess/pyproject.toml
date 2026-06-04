@@ -56,10 +56,11 @@ max-complexity = 15
 [tool.mypy]
 # Issue #79: type hints existed but were unenforced. This gate makes them a
 # contract. Scoped to the deterministic core (lib/) where the annotations are
-# densest and most load-bearing; the top-level orchestrator scripts
-# (assess_core.py, assess_finalize.py, complexity-treemap.py) and the build
-# pipeline are the next ratchet step.
-files = ["scripts/lib"]
+# densest and most load-bearing, plus the orchestrator assess_core.py (the
+# most-churned file, ratcheted in here). The remaining orchestrator scripts
+# (assess_finalize.py, complexity-treemap.py) and the build pipeline are the
+# next ratchet step.
+files = ["scripts/lib", "scripts/assess_core.py"]
 # lib/ is a package; treat scripts/ as the import base so lib.<mod> resolves and
 # the back-compat shims (scripts/stats_diff.py, lib/assess_core.py) don't collide
 # as duplicate top-level modules.

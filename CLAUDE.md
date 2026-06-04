@@ -170,7 +170,7 @@ bash scripts/build-standalone-skills.sh --dest ~/Desktop  # custom output dir
 
 ## /assess architecture
 
-Deterministic core in `skills/assess/scripts/lib/` does all data work; the LLM only writes prose.
+Deterministic core in `skills/assess/scripts/lib/` does all data work; the LLM only writes prose. The layering is **inward-only**: a `lib/` module may import other `lib/` modules and third-party libraries, but never an orchestrator script (`assess_core.py`, `assess_finalize.py`, `assess_report.py`, `assess_gate.py`, ...). This keeps the core independently testable and reusable. It is no longer just a convention - `skills/assess/tests/test_self_architecture.py` enforces it as a contract: an `ast` scan fails the build if any `lib/` module imports an orchestrator (the forbidden set is derived from disk, so a new orchestrator is covered automatically).
 
 - `lib/agent_instructions_grader.py` - heuristic scoring of CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md (regex + arithmetic, no AI)
 - `lib/stats_diff.py` - cross-run comparison (graduated/regressed/new/persistent hotspots)

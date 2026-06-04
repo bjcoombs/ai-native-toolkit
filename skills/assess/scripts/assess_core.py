@@ -32,6 +32,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -587,7 +588,11 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     )
     append_log_entry(assess_dir, log_entry)
 
-    ctx = {
+    # Heterogeneous run-context bus: values are dicts, lists, scalars, or the
+    # degrade-gracefully bool/str/None fallbacks. Typed as dict[str, Any] so the
+    # block accessors below (ctx["dead_code"] etc.) stay assignable to the
+    # signal functions that consume them.
+    ctx: dict[str, Any] = {
         "run_date": run_date,
         # The commit the scan measured. Absolute LOC/CCN figures are a snapshot
         # of this commit; the report pins the SHA and warns when HEAD is dirty
