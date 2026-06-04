@@ -41,6 +41,8 @@ If no intent is supplied the lead derives one **from the draft** - but the draft
 
 The runner prompt is the most load-bearing prompt in the system: runner transcripts are the evidence every behavioural lens judges, so any contamination there corrupts the whole gate. It is a **pure wrapper** - it never explains why the skill works or adds context beyond the draft, or the runner ends up testing "skill + prompt additions" instead of the skill. The exact five-section template (role statement, role boundary, the verbatim draft, the test-case input, the required self-report fields) is in [runner-prompt](../ab-equivalence/references/runner-prompt.md). Fill one per runner per test case.
 
+**Coupling note (cross-skill).** The runner prompt is owned by `ab-equivalence`, so a change there shifts the self-report fields every behavioural lens reads - it can move skill-forge's calibration with no skill-forge edit. This channel is live, not theoretical: the runner prompt grew a `gates_hit` field for semantic-compress's distill gate-truncation, which skill-forge inherited (benignly - its lenses ignore that field). On a **re-forge**, confirm the runner prompt is unchanged since the last forge; if it changed, re-baseline the fixture before trusting prior-round comparisons (for a self-forge this is part of Phase A- below).
+
 ## Runner model selection
 
 The model the runners execute on is a **knob**, because a skill that holds together on a strong model can fall apart on a weak one - a weaker model unpacks instructions less reliably, so a defect that a strong runner papers over surfaces only when a weak runner hits it. The forge certifies behaviour *for the tier it was forged on*, nothing stronger and nothing weaker.
