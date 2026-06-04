@@ -602,6 +602,12 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         "stats_summary": {
             "files_scored": current.get("files_scored", 0),
             "loc": current.get("loc", {}),
+            # Estimated tokens (the keyhole size unit) + the budget rollup: repo
+            # total and how many files / top-level subtrees exceed one
+            # context-window keyhole. The most on-thesis snapshot signal - the
+            # literal "does the relevant slice fit?" measure. Empty {} on a
+            # pre-token stats snapshot (back-compat).
+            "est_tokens": current.get("est_tokens", {}),
             "ccn": current.get("ccn", {}),
             "top_hotspots": current.get("top_hotspots", []),
         },

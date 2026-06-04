@@ -44,14 +44,14 @@ Here is the same repo twice: an already-good AI-native codebase **before**, then
     <td colspan="2" align="center"><b>Complexity hotspot heatmap</b> - which files are riskiest to change next week?</td>
   </tr>
   <tr>
-    <td><a href="docs/example-heatmap.svg"><img alt="Complexity hotspot heatmap before the action sweep" title="Before: complexity hotspots, size = LOC, hue = complexity, saturation = churn" src="docs/example-heatmap.svg"></a></td>
-    <td><a href="docs/example-heatmap-after.svg"><img alt="Complexity hotspot heatmap for the same repo after the action sweep" title="After: same repo, complexity hotspots, size = LOC, hue = complexity, saturation = churn" src="docs/example-heatmap-after.svg"></a></td>
+    <td><a href="docs/example-heatmap.svg"><img alt="Complexity hotspot heatmap before the action sweep" title="Before: complexity hotspots, size = estimated tokens, hue = complexity, saturation = churn" src="docs/example-heatmap.svg"></a></td>
+    <td><a href="docs/example-heatmap-after.svg"><img alt="Complexity hotspot heatmap for the same repo after the action sweep" title="After: same repo, complexity hotspots, size = estimated tokens, hue = complexity, saturation = churn" src="docs/example-heatmap-after.svg"></a></td>
   </tr>
 </table>
 
 > **The measurable win.** In the doc-navigability graph, reachability from the entry point climbs from **30% to 89%**, orphaned docs fall from **24% to 11%**, disconnected islands drop from **43 to 20**, and the **15 broken links are gone**. The rim of orphans thins, the islands reconnect, and the lying-map reds cool - the map an agent consults before changing anything becomes honest. The heatmap stays the same repo's complexity profile throughout: it tells you which territory is dangerous, while the graph tells you whether the map is honest.
 
-> **How to read them.** *Doc graph* - structure encodes reachability (centre = entry, rings = link-distance from entry, rim = unreachable, dashed ring = orphan); colour encodes staleness (vivid red = a frozen doc beside churning code, a *lying map*); size encodes file length. *Heatmap* - size encodes lines of code, hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active); the vivid-red blocks are the migration risk an agent (or human) is most likely to break next week. Both SVGs are colour-blind-safe (OrRd ramp, no red-green).
+> **How to read them.** *Doc graph* - structure encodes reachability (centre = entry, rings = link-distance from entry, rim = unreachable, dashed ring = orphan); colour encodes staleness (vivid red = a frozen doc beside churning code, a *lying map*); size encodes file length. *Heatmap* - size encodes estimated tokens (~chars/4 - the keyhole size unit; the familiar LOC is one hover away in the tooltip), hue encodes cyclomatic complexity (red = high), saturation encodes recent git churn (vivid = active); the vivid-red blocks are the migration risk an agent (or human) is most likely to break next week. Both SVGs are colour-blind-safe (OrRd ramp, no red-green).
 
 ### The same lens, three real public repos
 

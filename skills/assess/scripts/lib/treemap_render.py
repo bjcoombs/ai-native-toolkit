@@ -29,6 +29,11 @@ class Node:
     size: int = 0
     color: tuple = (0.5, 0.5, 0.5, 1.0)
     loc: int = 0
+    # Estimated token count (chars/4). The code heatmap sizes blocks by this so
+    # the layout reflects context-window burden, not line count; ``loc`` stays
+    # the file's real line count for the tooltip. 0 means "no token signal"
+    # (the docs heatmap, which sizes by loc and renders its own tooltip2).
+    est_tokens: int = 0
     metric: float = 0.0
     aux_metric: float = 0.0
     aux_label: str = ""
@@ -50,10 +55,18 @@ class Node:
 def build_tree(files_with_color, root: Path,
                aux_data: dict[Path, int] | None = None,
                aux_label: str = "",
-               node_overrides: dict[Path, dict] | None = None) -> Node:
+               node_overrides: dict[Path, dict] | None = None,
+               size_by: dict[Path, int] | None = None) -> Node:
     """Build the directory tree of Nodes. `files_with_color` is a list of
     (path, size, metric, source, color). `node_overrides` optionally maps a
-    file path to a dict of extra Node fields (tooltip2, label_* ...)."""
+    file path to a dict of extra Node fields (tooltip2, label_* ...).
+
+    `size_by` optionally overrides the block *area* per file (path -> size)
+    while `size` from the tuple is preserved as the node's `loc`. The code
+    heatmap passes estimated token counts here so blocks are sized by
+    context-window burden; `loc` stays the real line count for the tooltip.
+    When `size_by` is None the area is the tuple's size (unchanged - the docs
+    heatmap path)."""
     rootnode = Node(name=root.name)
     by_path: dict[Path, Node] = {root: rootnode}
     for path, size, metric, _src, color in files_with_color:
@@ -71,9 +84,11 @@ def build_tree(files_with_color, root: Path,
                 parent.children.append(n)
             parent = by_path[cur]
         aux_val = float(aux_data.get(path, 0)) if aux_data else 0.0
+        area = size_by.get(path, size) if size_by else size
+        est_tokens = size_by.get(path, 0) if size_by else 0
         leaf = Node(
-            name=rel.parts[-1], size=size, color=color,
-            loc=size, metric=metric, aux_metric=aux_val,
+            name=rel.parts[-1], size=area, color=color,
+            loc=size, est_tokens=est_tokens, metric=metric, aux_metric=aux_val,
             aux_label=aux_label, rel_path=str(rel), is_file=True,
         )
         if node_overrides and path in node_overrides:
@@ -223,6 +238,13 @@ def write_svg(rects: list, root: Path, W: float, H: float,
         rel = node.rel_path or node.name
         if node.tooltip2:
             line2 = node.tooltip2
+        elif node.est_tokens:
+            # Code heatmap: block area is estimated tokens, so lead with that
+            # and keep the familiar LOC one hover away (PRD: nothing lost).
+            line2 = (f"{node.est_tokens:,} est. tokens · {node.loc} loc "
+                     f"· {metric_label} {node.metric:.0f}")
+            if node.aux_label:
+                line2 += f" · {node.aux_label} {node.aux_metric:.0f}"
         else:
             line2 = f"{node.loc} loc · {metric_label} {node.metric:.0f}"
             if node.aux_label:
@@ -255,7 +277,12 @@ def write_svg(rects: list, root: Path, W: float, H: float,
             fs = max(7, min(int(min(w, h) / 6), 18))
             cx, cy = x + w / 2, y + h / 2
             name = html.escape(node.name)
-            size_text = node.label_size_text or f"{node.loc} loc"
+            if node.label_size_text:
+                size_text = node.label_size_text
+            elif node.est_tokens:
+                size_text = f"{node.est_tokens:,} est. tokens"
+            else:
+                size_text = f"{node.loc} loc"
             metric_text = node.label_metric_text or f"{metric_label} {node.metric:.0f}"
             parts.append(
                 f'<text x="{cx:.1f}" y="{cy - fs:.1f}" '

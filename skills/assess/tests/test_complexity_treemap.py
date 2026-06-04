@@ -96,7 +96,12 @@ def test_write_stats_uses_commits_field_and_balanced_rank(treemap, tmp_path):
     ]
     aux_data = {frozen_complex: 1, active_moderate: 45}
     out = root / "stats.json"
-    treemap.write_stats(files, aux_data, "commits (last 12mo)", root, out)
+    # The composite now includes a sqrt(est_tokens) size axis. Hold size equal
+    # so this test isolates the churn axis it is about (issue #47); otherwise
+    # frozen.go's larger size would confound the ranking.
+    tokens = {frozen_complex: 1000, active_moderate: 1000}
+    treemap.write_stats(files, aux_data, "commits (last 12mo)", root, out,
+                        tokens_by_path=tokens)
 
     stats = json.loads(out.read_text())
     assert "plugin_version" in stats
@@ -191,9 +196,13 @@ def test_hotspot_rank_favours_per_function_offender(treemap, tmp_path):
     dao_fns = [28.0]  # the single complex method is the whole file's ccn
     aux_data = {coordinator: 5, dao: 5}  # equal churn isolates the ccn re-weight
     out = root / "stats.json"
+    # Equal est_tokens too, so the new sqrt(est_tokens) size axis doesn't
+    # confound the per-function re-weight this test is about (issue #115).
+    tokens = {coordinator: 1000, dao: 1000}
     treemap.write_stats(
         files, aux_data, "commits (last 12mo)", root, out,
         fn_ccn_by_path={coordinator: coordinator_fns, dao: dao_fns},
+        tokens_by_path=tokens,
     )
     stats = json.loads(out.read_text())
     hotspots = stats["top_hotspots"]
@@ -564,3 +573,145 @@ def test_load_survivor_density_absent_block_is_empty(treemap, tmp_path):
 
 def test_load_survivor_density_missing_file_is_empty(treemap, tmp_path):
     assert treemap.load_survivor_density(tmp_path / "nope.json", tmp_path) == {}
+
+
+# --- Estimated tokens as the keyhole size unit (PRD 2026-06) -----------------
+
+def test_est_token_count_is_chars_over_four(treemap, tmp_path):
+    """est_tokens = ceil(len(text)/4) for a real on-disk file."""
+    f = tmp_path / "a.py"
+    f.write_text("x" * 800, encoding="utf-8")  # 800 chars -> 200 tokens
+    assert treemap.est_token_count(f, 0) == 200
+
+
+def test_est_token_count_falls_back_to_loc_when_unreadable(treemap, tmp_path):
+    """An unreadable/absent file estimates from loc - a conservative floor that
+    can't inflate a benign file's rank."""
+    missing = tmp_path / "gone.py"
+    assert treemap.est_token_count(missing, 137) == 137
+
+
+def test_write_stats_emits_est_tokens_per_row_and_uses_real_text(treemap, tmp_path):
+    """Each row carries est_tokens; for on-disk files it is the char-based
+    estimate, not the loc (a dense file reads higher than its line count)."""
+    root = tmp_path
+    dense = root / "dense.py"
+    dense.write_text("y" * 4000, encoding="utf-8")  # 1000 est tokens
+    out = root / "stats.json"
+    treemap.write_stats([(dense, 50, 5.0, "lizard")], None, None, root, out)
+    stats = json.loads(out.read_text())
+    row = stats["top_hotspots"][0]
+    assert row["est_tokens"] == 1000          # chars/4, not the 50 loc
+    assert row["loc"] == 50                    # loc preserved alongside
+    assert stats["est_tokens"]["total"] == 1000
+
+
+def test_hotspot_score_includes_token_factor(treemap, tmp_path):
+    """With ccn and churn held equal, the larger file (more estimated tokens)
+    ranks first - the size axis is live in the composite."""
+    root = tmp_path
+    big = root / "big.go"
+    small = root / "small.go"
+    files = [(big, 200, 30.0, "lizard"), (small, 200, 30.0, "lizard")]
+    aux_data = {big: 10, small: 10}
+    tokens = {big: 40000, small: 4000}  # same ccn + churn, 10x size
+    out = root / "stats.json"
+    treemap.write_stats(files, aux_data, "commits (last 12mo)", root, out,
+                        tokens_by_path=tokens)
+    hotspots = json.loads(out.read_text())["top_hotspots"]
+    assert hotspots[0]["path"] == "big.go"
+
+
+def test_big_but_simple_stable_file_does_not_top_on_size_alone(treemap, tmp_path):
+    """PRD validation guard: a large-but-simple-stable file (a long config or
+    data table - low ccn, no churn, huge size) must NOT top the hotspot list.
+    The sqrt bounding keeps its single big axis from dominating a genuine
+    complex+churning hotspot."""
+    root = tmp_path
+    data_table = root / "data.json"      # huge, trivial, frozen
+    hotspot = root / "engine.go"         # complex AND churning, modest size
+    files = [(data_table, 5000, 1.0, "lizard"), (hotspot, 300, 100.0, "lizard")]
+    aux_data = {data_table: 0, hotspot: 30}
+    tokens = {data_table: 200000, hotspot: 5000}  # data table 40x bigger
+    out = root / "stats.json"
+    treemap.write_stats(files, aux_data, "commits (last 12mo)", root, out,
+                        tokens_by_path=tokens)
+    hotspots = json.loads(out.read_text())["top_hotspots"]
+    assert hotspots[0]["path"] == "engine.go"  # complexity+churn beats raw size
+
+
+def test_keyhole_budget_rollup_counts_files_and_subtrees(treemap, tmp_path):
+    """The est_tokens.budget block reports the repo total plus how many files
+    and top-level subtrees exceed one context-window keyhole."""
+    root = tmp_path
+    over_file = root / "giant.py"           # single file over budget
+    a1 = root / "pkg_a" / "x.py"            # pkg_a subtree over budget in sum
+    a2 = root / "pkg_a" / "y.py"
+    small = root / "tiny.py"
+    files = [
+        (over_file, 10, 1.0, "lizard"),
+        (a1, 10, 1.0, "lizard"),
+        (a2, 10, 1.0, "lizard"),
+        (small, 10, 1.0, "lizard"),
+    ]
+    tokens = {over_file: 250000, a1: 150000, a2: 120000, small: 100}
+    out = root / "stats.json"
+    treemap.write_stats(files, None, None, root, out, tokens_by_path=tokens)
+    budget = json.loads(out.read_text())["est_tokens"]["budget"]
+    assert budget["budget"] == treemap.CONTEXT_WINDOW_BUDGET_TOKENS
+    assert budget["total"] == 250000 + 150000 + 120000 + 100
+    assert budget["files_over_budget"] == 1           # only giant.py alone
+    # pkg_a (270k) and giant.py-as-its-own-subtree (250k) both exceed 200k.
+    assert budget["subtrees_over_budget"] == 2
+    over_names = {s["path"] for s in budget["over_budget_subtrees"]}
+    assert "pkg_a" in over_names and "giant.py" in over_names
+
+
+def test_est_tokens_are_post_artifact_filter(treemap, tmp_path):
+    """est_tokens are computed only over the files passed in (already filtered
+    by collect), so a filtered bundle never inflates the totals or budget."""
+    root = tmp_path
+    real = root / "real.py"
+    real.write_text("z" * 400, encoding="utf-8")  # 100 tokens
+    out = root / "stats.json"
+    # The bundle is simply absent from `files` (collect dropped it) - the
+    # totals reflect only the surviving file.
+    treemap.write_stats([(real, 20, 5.0, "lizard")], None, None, root, out)
+    stats = json.loads(out.read_text())
+    assert stats["est_tokens"]["total"] == 100
+
+
+def test_build_tree_size_by_decouples_area_from_loc(render_lib):
+    """size_by overrides the block area (estimated tokens) while each leaf keeps
+    its real loc and records est_tokens for the tooltip."""
+    root = Path("/repo")
+    a = root / "a.py"
+    files_colored = [(a, 500, 5.0, "lizard", (0.8, 0.2, 0.1, 1.0))]
+    tree = render_lib.build_tree(files_colored, root, size_by={a: 1800})
+    leaf = tree.children[0]
+    assert leaf.size == 1800        # layout area = estimated tokens
+    assert leaf.loc == 500          # real loc preserved
+    assert leaf.est_tokens == 1800
+
+
+def test_build_tree_without_size_by_is_unchanged(render_lib):
+    """No size_by (the docs-heatmap path) keeps area == loc, est_tokens 0."""
+    root = Path("/repo")
+    a = root / "a.py"
+    files_colored = [(a, 500, 5.0, "lizard", (0.8, 0.2, 0.1, 1.0))]
+    leaf = render_lib.build_tree(files_colored, root).children[0]
+    assert leaf.size == 500 and leaf.loc == 500 and leaf.est_tokens == 0
+
+
+def test_write_svg_tooltip_shows_est_tokens_and_loc(render_lib, tmp_path):
+    """A code-heatmap node (est_tokens set) leads its tooltip with estimated
+    tokens and keeps LOC alongside."""
+    node = render_lib.Node(name="a.py", rel_path="a.py", loc=514,
+                           est_tokens=8200, metric=12.0,
+                           color=(0.8, 0.2, 0.1, 1.0), is_file=True)
+    rects = [(0.0, 0.0, 100.0, 100.0, node)]
+    out = tmp_path / "tok.svg"
+    render_lib.write_svg(rects, Path("/repo"), 1600.0, 1000.0, out, False, "ccn")
+    svg = out.read_text()
+    assert "8,200 est. tokens" in svg
+    assert "514 loc" in svg
