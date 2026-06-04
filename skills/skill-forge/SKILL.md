@@ -124,7 +124,7 @@ The panel cross-talks by sending one `SendMessage` per teammate (there is no bro
 
 ## Test taxonomy
 
-The lead designs 3-5 cases spanning **happy path / edge case / adversarial / composition**, leaning on whichever the skill is most fragile against. When a new failure mode surfaces mid-run, add a case for it. The corpus is **persistent across re-forge runs** - it accumulates a skill's known failure modes so re-forging re-runs them, compounding like the `.assess/` wiki. Design guides for each case type and where the corpus lives are in [test-taxonomy](references/test-taxonomy.md).
+The lead designs 3-5 cases spanning **happy path / edge case / adversarial / composition**, leaning on whichever the skill is most fragile against. When a new failure mode surfaces mid-run, add a case for it. The corpus is **persistent across re-forge runs** - it accumulates a skill's known failure modes so re-forging re-runs them. Design guides for each case type and where the corpus lives are in [test-taxonomy](references/test-taxonomy.md).
 
 ## Self-application
 
