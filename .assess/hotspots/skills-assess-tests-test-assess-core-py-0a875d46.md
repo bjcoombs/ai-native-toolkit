@@ -1,6 +1,6 @@
 # Hotspot: `skills/assess/tests/test_assess_core.py`
 
-_First flagged: 2026-05-31. Last seen: 2026-06-01. Status: regressed._
+_First flagged: 2026-05-31. Last seen: 2026-06-04. Status: persistent._
 
 ## Current metrics
 
@@ -15,15 +15,14 @@ _First flagged: 2026-05-31. Last seen: 2026-06-01. Status: regressed._
 
 | Run date | LOC | CCN | Commits | Status |
 |----------|-----|-----|---------|--------|
-| 2026-06-01 | 790 | 80.0 | 13 | regressed |
+| 2026-06-04 | 790 | 80.0 | 13 | persistent |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/tests/test_assess_core.py`:
 
-Hotspot (regressed). 790 LOC, max cyclomatic complexity 80.0, 13 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
+Hotspot (persistent). 790 LOC, max cyclomatic complexity 80.0, 13 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
 
 ## Suggested actions
 
-- This suite co-changes with assess_core.py by design - note in the test file which source behaviours it pins
-
+- Pending LLM-generated suggestions

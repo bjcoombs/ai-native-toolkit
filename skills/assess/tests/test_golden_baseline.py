@@ -134,3 +134,27 @@ def test_load_bearing_surface_is_outside_folds() -> None:
     ):
         assert marker not in surface, f"{marker!r} leaked onto the visible surface"
         assert marker in folded, f"{marker!r} missing from the folded detail"
+
+
+def test_opening_summary_is_bespoke_not_boilerplate() -> None:
+    """The first thing a human reads (the line under the score headline) must be
+    a bespoke, strength-led summary of *this* run - not the old fixed caveat that
+    printed identically under every score. The non-verdict reassurance still
+    lives in the 'How to read' fold; it must not lead the report.
+    """
+    report = golden.load_golden_report()
+    surface, _, folded = report.partition("<details>")
+    boilerplate = "This is an improvement roadmap, not a verdict"
+    assert boilerplate not in surface, (
+        "the fixed 'not a verdict' caveat must not lead the report - the opening "
+        "is a bespoke, strength-led summary"
+    )
+    assert boilerplate in folded, "the non-verdict framing should remain in the 'How to read' fold"
+
+
+def test_agent_assess_block_is_not_duplicated() -> None:
+    """The 'read the .assess/ directory' block is for agents and belongs only in
+    the Machine-readable fold - it used to also appear in the Strengths fold.
+    """
+    report = golden.load_golden_report()
+    assert report.count("the `.assess/` directory is actionable feedback written for you") == 1

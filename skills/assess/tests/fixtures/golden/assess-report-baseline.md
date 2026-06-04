@@ -4,7 +4,7 @@ _Generated <<normalized>>._
 
 **Score: 6.0 / 8 - Solid** · Keyhole: 5 structural concerns (5 hidden coupling), 1 safe zone.
 
-> This is an improvement roadmap, not a verdict - a **Missing** or **Partial** locates where someone working here is partly blind, not a mark against the code.
+The write-side here is genuinely enforced, not decorative: a ruff complexity ratchet, a mypy type gate, and three blocking pytest jobs under branch protection catch a bad change before it merges, and per-function complexity actually sits under the bar (p95 9 against a 15 cap). The clearest opportunity is behaviour-constraint - 26 tests run in CI but no coverage or mutation gate yet proves they pin behaviour - which is exactly what would carry this from Solid toward AI-Native.
 
 ## Top 3 Actions
 
@@ -165,13 +165,6 @@ Paths:
 - **L1:** `uv tool install vulture` to enable the Python intra-repo dead-code scan - it degrades silently today, so a dead export in the scanners wouldn't be flagged.
 - **Hidden coupling (keyhole finding):** `derived_findings.hidden_coupling` flags `skills/assess/scripts`, `skills/assess/scripts/lib`, `skills/assess/tests`, `scripts`, and `scripts/tests` as changing together historically despite being separate directories - expected for a tool whose scanners, their tests, and the standalone-build scripts evolve in lockstep, but worth watching as a seam before trusting those boundaries.
 
-**If you are an agent working in this repo, read the `.assess/` directory - it is actionable feedback written for you, not just a report you skim once.**
-
-- `.assess/assess-report.md` - this report: the scorecard, the lying signals, and the Top 3 Actions with exact commands and file paths.
-- `.assess/hotspots/<file>.md` - a per-file briefing for each hotspot, with a **Suggested actions** section. Read it before changing a file that appears there.
-- `.assess/index.md` - the catalog of every hotspot ever flagged (current and graduated).
-- `.assess/log.md` - run history, so you can see whether a hotspot is regressing, persistent, or improving.
-
 </details>
 
 <details>
@@ -194,13 +187,14 @@ A codebase can be 8/8 and still on fire, or 2/8 with a calm treemap. The views m
 <details>
 <summary>🤖 Machine-readable data (for agents)</summary>
 
-Structured sidecars an agent can ingest directly, without re-parsing this prose:
+If you are an agent working in this repo, the `.assess/` directory is actionable feedback written for you - the first place to look when deciding where to point effort. It is a compounding, AI-readable record an agent can ingest directly, without re-parsing this prose:
 
+- `.assess/assess-report.md` - this report: the scorecard, the lying signals, and the Top 3 Actions with exact commands and file paths.
 - `.assess/run-context.json` - the full data bus (findings, attention, keyhole summary, prescribed actions, stats, diff).
 - `.assess/complexity-stats.json` - complexity percentiles plus the ranked file lists (`top_hotspots`, `top_complex`, `top_large`).
-- `.assess/hotspots/<file>.md` - per-file briefings, each with a **Suggested actions** section.
+- `.assess/hotspots/<file>.md` - per-file briefings, each with a **Suggested actions** section. Read a file's briefing before you change it.
 - `.assess/index.md` - the catalog of every hotspot ever flagged (current and graduated).
-- `.assess/log.md` - append-only run history.
+- `.assess/log.md` - append-only run history, so a hotspot's trajectory (regressing / persistent / improving) is visible across runs.
 
 </details>
 

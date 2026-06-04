@@ -1,6 +1,6 @@
 # Hotspot: `skills/assess/scripts/lib/doc_staleness.py`
 
-_First flagged: 2026-05-31. Last seen: 2026-06-01. Status: persistent._
+_First flagged: 2026-05-31. Last seen: 2026-06-04. Status: persistent._
 
 ## Current metrics
 
@@ -15,7 +15,7 @@ _First flagged: 2026-05-31. Last seen: 2026-06-01. Status: persistent._
 
 | Run date | LOC | CCN | Commits | Status |
 |----------|-----|-----|---------|--------|
-| 2026-06-01 | 245 | 69.0 | 7 | persistent |
+| 2026-06-04 | 245 | 69.0 | 7 | persistent |
 
 ## Briefing for editing this file
 
