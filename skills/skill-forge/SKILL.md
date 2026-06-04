@@ -119,7 +119,7 @@ TeamCreate(team_name: "forge-<skill-slug>", description: "skill-forge panel for 
 Agent(subagent_type: "general-purpose", team_name: "forge-<skill-slug>", name: "fidelity", prompt: "<lens brief>")
 ```
 
-The panel cross-talks by sending one `SendMessage` per teammate (there is no broadcast), exactly as `huddle` does. At the end of the run, shut down each teammate, wait for approvals, then call `TeamDelete()` - mandatory, or teamContext persists and blocks future team creation in this session.
+The panel cross-talks by sending one `SendMessage` per teammate (there is no broadcast). At the end of the run, shut down each teammate, wait for approvals, then call `TeamDelete()` - mandatory, or teamContext persists and blocks future team creation in this session.
 <!-- chat-skip:end -->
 
 ## Test taxonomy
