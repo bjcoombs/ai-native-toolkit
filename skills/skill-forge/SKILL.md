@@ -88,7 +88,7 @@ A strict hierarchy, not a menu: **Gate 1 - Objective** (every case passes Fideli
 ## Execution modes
 
 <!-- chat-skip:start -->
-Capability-detected via `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, mirroring `huddle`.
+Capability-detected via `$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
 <!-- chat-skip:end -->
 The modes below all run the same loop; they differ only in how the panel remembers across rounds, and the **panel ledger** carries that memory - see [panel-ledger](references/panel-ledger.md).
 
