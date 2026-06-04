@@ -14,7 +14,9 @@ Each rectangle is one file, grouped by folder. The combined view encodes
 three signals on one canvas (Adam Tornhill "hotspot" pattern, CodeScene-
 style saturation):
 
-  - Size        -> lines of code
+  - Size        -> estimated tokens (~chars/4; the keyhole size unit. LOC is
+                   kept in the hover tooltip). LOC undercounts dense/wide files
+                   and overcounts sparse code; tokens track context burden.
   - Hue         -> cyclomatic complexity (dark red = complex, pale = simple;
                    colour-blind-safe OrRd ramp, no red-green)
   - Saturation  -> recent git churn (vivid = active, grey = stable)
@@ -38,8 +40,8 @@ otherwise the full max-of-data range is used so small/well-behaved data
 sees the full gradient.
 
 Output is a single self-contained SVG with hover tooltips on every block
-(file path, LOC, complexity, recent commit count). Pass --labels to also
-annotate large blocks with text.
+(file path, estimated tokens, LOC, complexity, recent commit count). Pass
+--labels to also annotate large blocks with text.
 
 Build artifacts (main.dart.js, *.min.js, *.bundle.js, *.map, files under
 node_modules/dist/build/.next/.nuxt/etc.) and generated code (*.pb.go,
@@ -411,7 +413,8 @@ def render(files: list[tuple[Path, int, float, str]],
            by: str = "complexity",
            aux_data: dict[Path, int] | None = None,
            aux_label: str | None = None,
-           survivor_density: dict[Path, float] | None = None) -> None:
+           survivor_density: dict[Path, float] | None = None,
+           tokens_by_path: dict[Path, int] | None = None) -> None:
     metric_label = "commits" if by == "churn" else "ccn"
     metrics = [f[2] for f in files]
     cap, cap_kind = adaptive_cap(metrics)
@@ -437,9 +440,14 @@ def render(files: list[tuple[Path, int, float, str]],
             color = base
         files_colored.append((f[0], f[1], f[2], f[3], color))
 
+    # Block area is estimated tokens (the keyhole size unit), not LOC: size_by
+    # overrides the layout area per file while each leaf keeps its real LOC for
+    # the tooltip. Falls back to LOC area when no token map is supplied.
+    tokens = (tokens_by_path if tokens_by_path is not None
+              else est_tokens_by_path(files))
     overrides = _survivor_overrides(files, survivor_density)
     tree = build_tree(files_colored, root, aux_data, aux_label or "",
-                      node_overrides=overrides or None)
+                      node_overrides=overrides or None, size_by=tokens)
     W, H = 1600.0, 1000.0
     rects: list = []
     layout(tree, 0, 0, W, H, rects)
@@ -459,9 +467,9 @@ def render(files: list[tuple[Path, int, float, str]],
         print(f"saturation: {aux_label}; range 0-{aux_max:.0f}; "
               f"cap {aux_cap:.0f} ({aux_cap_kind})")
 
-    biggest = sorted(files, key=lambda f: -f[1])[:5]
+    biggest = sorted(files, key=lambda f: -tokens.get(f[0], 0))[:5]
     if biggest:
-        print("biggest files (size dominates layout):")
+        print("biggest files (estimated tokens dominate layout):")
         for path, loc, metric, src in biggest:
             try:
                 rel = path.relative_to(root)
@@ -470,8 +478,8 @@ def render(files: list[tuple[Path, int, float, str]],
             aux_str = ""
             if aux_data is not None:
                 aux_str = f"  {aux_label} {aux_data.get(path, 0):>4d}"
-            print(f"  {loc:>7} loc  {metric_label} {metric:>5.0f}{aux_str}  "
-                  f"[{src:6}]  {rel}")
+            print(f"  {tokens.get(path, 0):>9,} est.tok  {loc:>7} loc  "
+                  f"{metric_label} {metric:>5.0f}{aux_str}  [{src:6}]  {rel}")
 
 
 def _read_plugin_version() -> str:
@@ -495,6 +503,87 @@ def _read_plugin_version() -> str:
 # complexity is a weighted geometric mean of the file aggregate and the file's
 # worst single function, leaning toward the per-function offender (issue #115).
 PER_FUNCTION_WEIGHT = 0.7
+
+# Token estimation. /assess measures the keyhole in tokens, not lines: LOC
+# undercounts dense/wide files (long identifiers, comments, data tables, prose)
+# and overcounts sparse code. A treemap and a ranking need only *relative* size,
+# so the standard ~4-chars-per-token heuristic is visually and ordinally
+# equivalent to a real tokenizer while staying deterministic, dependency-free,
+# and model-agnostic (a tokenizer is model-specific - OpenAI != Claude - and
+# adds a reproducibility caveat). Always labelled "estimated tokens": an honest
+# stable estimate, never an exact count.
+CHARS_PER_TOKEN = 4
+
+# A subtree (or single file) above this many estimated tokens no longer fits one
+# context-window keyhole - the literal "does the relevant slice fit?" measure.
+# An estimate, labelled as such; a documented default, not a model-exact limit.
+CONTEXT_WINDOW_BUDGET_TOKENS = 200_000
+
+
+def est_token_count(path: Path, loc: int) -> int:
+    """Estimated token count for one file: ``ceil(len(text) / 4)``.
+
+    Reads the file text and applies the ~4-chars-per-token heuristic. On an
+    unreadable file (binary, vanished, decode error) it falls back to ``loc`` -
+    a conservative floor that can't inflate a benign file's rank. Always >= 1 so
+    a file never has zero area.
+    """
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except (OSError, ValueError):
+        return max(1, loc)
+    return max(1, math.ceil(len(text) / CHARS_PER_TOKEN))
+
+
+def est_tokens_by_path(
+    files: list[tuple[Path, int, float, str]],
+) -> dict[Path, int]:
+    """``{path: est_tokens}`` for the already-filtered scoreable files.
+
+    Called after the artifact filter (``collect``), so a minified/generated
+    bundle that never reaches the treemap never contributes to the token totals
+    or the keyhole budget either.
+    """
+    return {f[0]: est_token_count(f[0], f[1]) for f in files}
+
+
+def _keyhole_budget_rollup(
+    tokens: dict[Path, int], root: Path,
+    budget: int = CONTEXT_WINDOW_BUDGET_TOKENS,
+) -> dict:
+    """Roll per-file estimated tokens into the keyhole-budget finding.
+
+    Reports the repo total and how many individual files / top-level subtrees
+    exceed one context-window budget - the most on-thesis signal /assess emits:
+    "does the relevant slice fit one keyhole?". The budget is an estimate
+    (char-based tokens against a documented default), labelled as such.
+    """
+    total = sum(tokens.values())
+    files_over = sum(1 for t in tokens.values() if t > budget)
+    subtree_totals: dict[str, int] = {}
+    for path, t in tokens.items():
+        try:
+            rel = path.relative_to(root)
+        except ValueError:
+            continue
+        # First path component: a top-level file maps to itself, anything under
+        # a directory maps to that directory.
+        top = rel.parts[0] if rel.parts else rel.name
+        subtree_totals[top] = subtree_totals.get(top, 0) + t
+    over_subtrees = sorted(
+        ({"path": name, "est_tokens": tot}
+         for name, tot in subtree_totals.items() if tot > budget),
+        key=lambda s: -s["est_tokens"],
+    )
+    return {
+        "total": total,
+        "budget": budget,
+        "budget_basis": "estimate (~4 chars/token, documented default)",
+        "chars_per_token": CHARS_PER_TOKEN,
+        "files_over_budget": files_over,
+        "subtrees_over_budget": len(over_subtrees),
+        "over_budget_subtrees": over_subtrees[:10],
+    }
 
 
 def _effective_ccn(ccn: float, max_fn_ccn: float | None) -> float:
@@ -525,18 +614,27 @@ def write_stats(files: list[tuple[Path, int, float, str]],
                 aux_data: dict[Path, int] | None,
                 aux_label: str | None,
                 root: Path, out_path: Path,
-                fn_ccn_by_path: dict[Path, list[float]] | None = None) -> None:
+                fn_ccn_by_path: dict[Path, list[float]] | None = None,
+                tokens_by_path: dict[Path, int] | None = None) -> None:
     """Write a JSON stats sidecar summarising the treemap data.
 
     Consumed by the /assess skill: percentiles drive Layer 3 (linter) scoring,
     top hotspot lists become the named files in the actions table.
-    Composite hotspot score = sqrt(effective_ccn) * sqrt(1 + commits): a
-    sub-linear geometric mean of complexity and recent churn. Both axes are
-    damped, so a complex-AND-active file leads, a frozen-but-complex file ranks
-    below it, and a trivially-simple-but-churny file can't top the list on churn
-    alone. ``effective_ccn`` re-weights the file aggregate toward the worst
-    single function (see ``_effective_ccn``) so a broad coordinator class can't
-    out-rank a genuinely complex single method (issue #115).
+    Composite hotspot score = sqrt(effective_ccn) * sqrt(1 + commits) *
+    sqrt(est_tokens): a sub-linear geometric mean of complexity, recent churn,
+    and context-window size. All three axes are sqrt-damped, so a file high on
+    *multiple* axes - big AND complex AND churning - is the worst keyhole and
+    leads; a frozen-but-complex file ranks below an equally-sized active one;
+    a trivially-simple-but-churny file can't top on churn alone; and a
+    big-but-simple-stable file (a long config or data table) can't top on size
+    alone (low ccn * low churn * big size stays moderate). ``effective_ccn``
+    re-weights the file aggregate toward the worst single function (see
+    ``_effective_ccn``) so a broad coordinator class can't out-rank a genuinely
+    complex single method (issue #115).
+
+    ``tokens_by_path`` carries the per-file estimated token counts (computed
+    once by ``main`` post-artifact-filter). When omitted it is derived here from
+    the same files, so the sidecar is self-consistent whoever calls it.
 
     The ``ccn`` block and every row's ``ccn`` field are **file-level aggregates**
     (sum of per-function complexity). A per-function linter threshold (cyclop 15,
@@ -547,7 +645,9 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     ``fn_ccn`` / ``max_fn_ccn``, never the aggregate (issue #58).
     """
     fn_ccn_by_path = fn_ccn_by_path or {}
+    tokens = tokens_by_path if tokens_by_path is not None else est_tokens_by_path(files)
     locs = [f[1] for f in files]
+    token_vals = [tokens.get(f[0], est_token_count(f[0], f[1])) for f in files]
     ccns = [f[2] for f in files]
     churns = ([float(aux_data.get(f[0], 0)) for f in files]
               if aux_data is not None else [])
@@ -574,9 +674,14 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     enriched = []
     for path, loc, ccn, src in files:
         churn = float(aux_data.get(path, 0)) if aux_data else 0.0
+        est_tokens = tokens.get(path, est_token_count(path, loc))
         enriched.append({
             "path": rel(path),
             "loc": int(loc),
+            # Estimated tokens (~chars/4), the size unit the treemap blocks and
+            # the hotspot composite use. `loc` is kept alongside (tooltip +
+            # back-compat). An estimate, not a model-exact count.
+            "est_tokens": int(est_tokens),
             # File-level aggregate (sum of per-function ccn). See `max_fn_ccn`
             # for the per-function worst case the linter threshold gates.
             "ccn": float(ccn),
@@ -587,12 +692,15 @@ def write_stats(files: list[tuple[Path, int, float, str]],
             # (no git), so a missing value is distinct from a real 0.
             "commits": int(churn) if aux_data else None,
             "source": src,
-            # Ranked on the per-function-weighted effective complexity, not the
-            # raw aggregate, so a coordinator class can't out-rank the genuine
-            # single-method offender (issue #115). The `ccn` field above stays
-            # file-aggregate for the hue and the Layer 3 comparison.
+            # Ranked on the per-function-weighted effective complexity, recent
+            # churn, AND context-window size - each sqrt-damped so the worst
+            # keyhole (high on multiple axes) leads and no single axis can top
+            # the list alone (issue #115 for the ccn re-weight; PRD 2026-06 for
+            # the token axis). The `ccn`/`loc` fields above stay raw for the hue
+            # and the Layer 3 comparison.
             "_score": math.sqrt(_effective_ccn(ccn, max_fn(path)))
-            * math.sqrt(1.0 + churn),
+            * math.sqrt(1.0 + churn)
+            * math.sqrt(est_tokens),
         })
 
     def strip(rows: list[dict]) -> list[dict]:
@@ -615,6 +723,16 @@ def write_stats(files: list[tuple[Path, int, float, str]],
             "p95": pct(locs, 95),
             "max": float(max(locs)) if locs else 0.0,
             "total": sum(locs),
+        },
+        # Estimated tokens (~chars/4) - the keyhole size unit. Sized the treemap
+        # blocks and feeds the hotspot composite. `budget` rolls the per-file
+        # totals into the "does the relevant slice fit one keyhole?" finding.
+        "est_tokens": {
+            "p50": pct(token_vals, 50),
+            "p95": pct(token_vals, 95),
+            "max": float(max(token_vals)) if token_vals else 0.0,
+            "total": sum(token_vals),
+            "budget": _keyhole_budget_rollup(tokens, root),
         },
         # File-level aggregate complexity (sum per file). Drives the treemap hue
         # and the hotspot composite - NOT comparable to a per-function linter
@@ -707,11 +825,13 @@ def main() -> int:
               "./hotspot-<folder>.svg in the current working directory."),
     )
     ap.add_argument("--labels", action="store_true",
-                    help="Annotate large blocks with filename, LOC and metric")
+                    help=("Annotate large blocks with filename, estimated "
+                          "tokens and metric"))
     ap.add_argument(
         "--stats", type=Path,
-        help=("Write a JSON stats sidecar (file count, LOC/CCN percentiles, "
-              "top hotspot/complex/large files). Used by /assess to score "
+        help=("Write a JSON stats sidecar (file count, estimated-token / "
+              "LOC / CCN percentiles, keyhole-budget rollup, top "
+              "hotspot/complex/large files). Used by /assess to score "
               "Layer 3 and surface specific improvement actions."),
     )
     ap.add_argument(
@@ -773,6 +893,10 @@ def main() -> int:
         return 1
 
     _warn_if_dominated_by_one_file(files)
+    # Estimate tokens once, post-artifact-filter, and share the map between the
+    # treemap (block area) and the stats sidecar (size unit + keyhole budget) so
+    # both views agree and no file is read twice.
+    tokens = est_tokens_by_path(files)
     survivor_density = (
         load_survivor_density(args.test_pressure, root)
         if args.test_pressure else {}
@@ -782,10 +906,10 @@ def main() -> int:
     render(files, root, out, f"Hotspot: {root.name}",
            show_labels=args.labels, by=effective_by,
            aux_data=aux_data, aux_label=aux_label,
-           survivor_density=survivor_density)
+           survivor_density=survivor_density, tokens_by_path=tokens)
     if args.stats:
         write_stats(files, aux_data, aux_label, root, args.stats,
-                    fn_ccn_by_path=fn_ccn_by_path)
+                    fn_ccn_by_path=fn_ccn_by_path, tokens_by_path=tokens)
     return 0
 
 
