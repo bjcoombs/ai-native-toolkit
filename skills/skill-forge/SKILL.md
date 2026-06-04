@@ -108,7 +108,7 @@ Pick the mode **deterministically**: if the Agent Teams capability is confirmed 
 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 ```
 
-The team lifecycle follows `marathon`'s idioms - the lead delegates and never executes, runner teammates are ephemeral (spawned per round, shut down after), and the judge panel is the one persistent team. As illustrative text (do not treat the snippets below as live tool calls):
+In the team lifecycle the lead delegates and never executes, runner teammates are ephemeral (spawned per round, shut down after), and the judge panel is the one persistent team. As illustrative text (do not treat the snippets below as live tool calls):
 
 ```text
 TeamCreate(team_name: "forge-<skill-slug>", description: "skill-forge panel for <skill>")
