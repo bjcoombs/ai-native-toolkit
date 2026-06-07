@@ -174,17 +174,19 @@ if [ "$account_type" = "User" ]; then
     # no default branch and nothing to check out, so they are skipped
     # (gh renders their defaultBranchRef as null or {"name": ""}).
     # gh repo list paginates internally up to --limit; 4000 comfortably
-    # covers any personal account, and a truncated run is warned about.
+    # covers any personal account. Fetch once and filter locally so the
+    # truncation check sees the raw count, before any filtering.
     repo_list_limit=4000
     echo "Fetching repositories for personal account $ORG..."
-    gh repo list "$ORG" --limit "$repo_list_limit" --json name,isArchived,defaultBranchRef \
-        --jq '.[] | select(.isArchived == false and (.defaultBranchRef.name // "") != "") | .name' >> "$all_repos_file"
-    gh repo list "$ORG" --limit "$repo_list_limit" --json name,isArchived \
-        --jq '.[] | select(.isArchived == true) | .name' >> "$archived_repos_file"
+    repo_list_json=$(mktemp)
+    gh repo list "$ORG" --limit "$repo_list_limit" --json name,isArchived,defaultBranchRef > "$repo_list_json"
+    jq -r '.[] | select(.isArchived == false and (.defaultBranchRef.name // "") != "") | .name' "$repo_list_json" >> "$all_repos_file"
+    jq -r '.[] | select(.isArchived == true) | .name' "$repo_list_json" >> "$archived_repos_file"
 
-    if [ "$(wc -l < "$all_repos_file" | tr -d ' ')" -ge "$repo_list_limit" ]; then
+    if [ "$(jq 'length' "$repo_list_json")" -ge "$repo_list_limit" ]; then
         echo "Warning: hit the $repo_list_limit-repo listing cap; some repos may be missing"
     fi
+    rm -f "$repo_list_json"
 else
     # Organization: fetch the user's teams in the org
     echo "Fetching your teams in $ORG..."
