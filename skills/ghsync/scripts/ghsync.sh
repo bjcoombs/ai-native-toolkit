@@ -97,7 +97,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      sed -n '4,45p' "$0"
+      sed -n '4,41p' "$0"
       exit 0
       ;;
     *)
@@ -173,11 +173,18 @@ if [ "$account_type" = "User" ]; then
     # Personal account: list the account's repos directly. Empty repos have
     # no default branch and nothing to check out, so they are skipped
     # (gh renders their defaultBranchRef as null or {"name": ""}).
+    # gh repo list paginates internally up to --limit; 4000 comfortably
+    # covers any personal account, and a truncated run is warned about.
+    repo_list_limit=4000
     echo "Fetching repositories for personal account $ORG..."
-    gh repo list "$ORG" --limit 1000 --json name,isArchived,defaultBranchRef \
+    gh repo list "$ORG" --limit "$repo_list_limit" --json name,isArchived,defaultBranchRef \
         --jq '.[] | select(.isArchived == false and (.defaultBranchRef.name // "") != "") | .name' >> "$all_repos_file"
-    gh repo list "$ORG" --limit 1000 --json name,isArchived \
+    gh repo list "$ORG" --limit "$repo_list_limit" --json name,isArchived \
         --jq '.[] | select(.isArchived == true) | .name' >> "$archived_repos_file"
+
+    if [ "$(wc -l < "$all_repos_file" | tr -d ' ')" -ge "$repo_list_limit" ]; then
+        echo "Warning: hit the $repo_list_limit-repo listing cap; some repos may be missing"
+    fi
 else
     # Organization: fetch the user's teams in the org
     echo "Fetching your teams in $ORG..."
