@@ -20,7 +20,7 @@ class HotspotEntry:
     path: str
     first_flagged: str
     last_seen: str
-    status: str   # active | graduated | regressed | persistent
+    status: str   # active | new | graduated | regressed | persistent
     # `ccn` and `loc` are `None` when the file's current metrics are not
     # carried in the latest stats sidecar (e.g. a graduated file that fell
     # off every top-N list). The wiki renders `None` as "-" - the file
