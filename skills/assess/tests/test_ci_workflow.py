@@ -2,14 +2,21 @@
 
 The emitter bakes the discovered toolchain into a GitHub Action. These tests pin
 the substitution (version, branch, tool steps), the literal-dollar escaping for
-shell vars, and that the result is well-formed YAML when a parser is available.
+shell vars, the supply-chain pins (no @latest, actions on commit SHAs), the
+warn-only infra degrade (a failed fetch/install skips instead of failing), and
+that the result is well-formed YAML when a parser is available.
 """
 from __future__ import annotations
 
+import re
 
 import pytest
 
 from lib.ci_workflow import emit_ci_workflow, render_ci_workflow
+
+# Every external tool the emitter knows how to install - renders the maximal
+# workflow so the supply-chain assertions cover all recipes.
+ALL_EXTERNAL_TOOLS = ["scc", "staticcheck", "ts-prune", "knip"]
 
 
 def test_render_substitutes_version_and_branch():
@@ -51,6 +58,78 @@ def test_render_emits_scc_install_step():
     assert "go install github.com/boyter/scc" in out
 
 
+def test_render_contains_no_floating_latest():
+    """Supply-chain pin: @latest makes the frozen contract non-deterministic.
+
+    A future scc (or other tool) release could shift complexity-stats.json and
+    move the regression baseline without any change in the assessed tree.
+    """
+    out = render_ci_workflow(plugin_version="1.23.0", discovered_tools=ALL_EXTERNAL_TOOLS)
+    assert "@latest" not in out
+
+
+def test_render_pins_go_and_npm_tools_to_versions():
+    out = render_ci_workflow(plugin_version="1.23.0", discovered_tools=ALL_EXTERNAL_TOOLS)
+    for line in out.splitlines():
+        if "go install" in line or "npm install" in line:
+            assert re.search(r"@v?\d", line), f"unpinned install: {line.strip()}"
+
+
+def test_render_pins_actions_to_commit_shas():
+    """Every third-party action rides a full commit SHA with a version comment.
+
+    Mutable tags (@v4) can be re-pointed by the action's maintainer (or an
+    attacker with push access), silently changing what runs in the gate.
+    """
+    out = render_ci_workflow(plugin_version="1.23.0", discovered_tools=ALL_EXTERNAL_TOOLS)
+    uses_lines = [ln for ln in out.splitlines() if ln.strip().startswith("uses:") or " uses:" in ln]
+    assert uses_lines, "expected at least one uses: step"
+    for line in uses_lines:
+        ref = line.split("@", 1)[1].split("#", 1)[0].strip()
+        assert re.fullmatch(r"[0-9a-f]{40}", ref), f"not SHA-pinned: {line.strip()}"
+        assert re.search(r"#\s*v\d", line), f"missing version comment: {line.strip()}"
+
+
+def test_checkout_does_not_persist_credentials():
+    """Nothing downstream pushes, so the checked-out token must not linger."""
+    out = render_ci_workflow(plugin_version="1.23.0")
+    assert "persist-credentials: false" in out
+
+
+def test_toolkit_fetch_failure_degrades_to_skip():
+    """The warn-only contract survives infra failure.
+
+    A failed clone (rate limit, network blip, tag not yet released) must emit a
+    notice and skip the assessment, never fail the check - the gate only goes
+    red for what .assess/config.toml opts into.
+    """
+    out = render_ci_workflow(plugin_version="1.23.0")
+    assert "if ! git clone" in out
+    assert "skip=true" in out
+    assert "::notice::" in out
+    # No bare, hard-failing clone remains.
+    for line in out.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("git clone"):
+            pytest.fail(f"unguarded clone: {stripped}")
+
+
+def test_assessment_steps_are_guarded_on_infra_outcomes():
+    """Render + gate steps only run when the fetch and uv setup succeeded."""
+    out = render_ci_workflow(plugin_version="1.23.0")
+    assert out.count("steps.fetch-toolkit.outputs.skip != 'true'") == 2
+    assert out.count("steps.setup-uv.outcome == 'success'") == 2
+
+
+def test_tool_install_failures_do_not_red_the_check():
+    """Each install step degrades to reduced coverage, not a failed check."""
+    out = render_ci_workflow(plugin_version="1.23.0", discovered_tools=ALL_EXTERNAL_TOOLS)
+    installs = out.count("go install") + out.count("npm install")
+    assert installs == len(ALL_EXTERNAL_TOOLS)
+    # One continue-on-error per tool install, plus one on the uv setup step.
+    assert out.count("continue-on-error: true") == installs + 1
+
+
 def test_render_skips_python_dep_tools():
     """Python deps (lizard, grimp) ride uv - they never get an OS install step."""
     out = render_ci_workflow(plugin_version="1.23.0", discovered_tools=["lizard", "grimp"])
@@ -76,7 +155,7 @@ def test_render_runs_the_four_core_scripts():
 
 def test_render_is_valid_yaml():
     yaml = pytest.importorskip("yaml")
-    out = render_ci_workflow(plugin_version="1.23.0", discovered_tools=["scc"])
+    out = render_ci_workflow(plugin_version="1.23.0", discovered_tools=ALL_EXTERNAL_TOOLS)
     doc = yaml.safe_load(out)
     assert doc["name"] == "Assess Gate"
     # PyYAML parses the unquoted `on:` key as boolean True (the YAML 1.1 norm).

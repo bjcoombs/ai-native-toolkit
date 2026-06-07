@@ -24,22 +24,36 @@ _TEMPLATE_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "
 # external binaries (scc and the per-language dead-code tools) get a step here.
 # A discovered tool with no recipe is surfaced as a comment so the maintainer
 # wires it in rather than the gate silently dropping it.
+#
+# Two invariants, both enforced by tests:
+# - Every install is pinned to an exact release. A floating @latest can shift
+#   complexity-stats.json between runs and move the regression baseline with no
+#   change in the assessed tree (a future scc release did exactly this risk).
+# - Every install carries ``continue-on-error: true``. The gate's contract is
+#   warn-only until the repo opts in via .assess/config.toml; an install failure
+#   is infrastructure, not a finding, so it degrades to reduced coverage (the
+#   core skips tools missing from PATH) instead of a red check.
+_CONTINUE = "        continue-on-error: true  # missing tool degrades coverage, not the check\n"
 _TOOL_STEPS: dict[str, str] = {
     "scc": (
         "      - name: Install scc\n"
-        "        run: go install github.com/boyter/scc/v3@latest\n"
+        + _CONTINUE
+        + "        run: go install github.com/boyter/scc/v3@v3.7.0\n"
     ),
     "staticcheck": (
         "      - name: Install staticcheck\n"
-        "        run: go install honnef.co/go/tools/cmd/staticcheck@latest\n"
+        + _CONTINUE
+        + "        run: go install honnef.co/go/tools/cmd/staticcheck@2026.1\n"
     ),
     "ts-prune": (
         "      - name: Install ts-prune\n"
-        "        run: npm install -g ts-prune\n"
+        + _CONTINUE
+        + "        run: npm install -g ts-prune@0.10.3\n"
     ),
     "knip": (
         "      - name: Install knip\n"
-        "        run: npm install -g knip\n"
+        + _CONTINUE
+        + "        run: npm install -g knip@6.16.1\n"
     ),
 }
 

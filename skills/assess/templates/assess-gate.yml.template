@@ -9,9 +9,17 @@
 # committed snapshot. No AI is in this loop - it is the frozen contract version
 # of the assessment you just ran by hand.
 #
+# Warn-only covers infrastructure too: actions are pinned to commit SHAs, tools
+# to exact releases (a floating latest tag could shift complexity-stats.json and
+# move the regression baseline with no change in this tree), and a failed
+# toolkit fetch or tool install degrades to a skip notice instead of a red
+# check. The only thing that fails a PR is what .assess/config.toml opts into.
+#
 # Note: this clones ai-native-toolkit at the tag v$plugin_version, which must
 # exist upstream before the first gated PR runs (the marathon's release step
-# creates it). Running a fork of the toolkit means editing the clone URL below.
+# creates it). Until it does, the fetch step skips with a notice rather than
+# failing the PR. Running a fork of the toolkit means editing the clone URL
+# below.
 name: Assess Gate
 
 on:
@@ -27,19 +35,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
         with:
           fetch-depth: 0  # full history so the churn window is accurate
+          persist-credentials: false  # nothing here pushes; don't leave a token in .git
 $tool_steps
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        id: setup-uv
+        # Infra failure degrades to a skipped assessment, never a red check.
+        continue-on-error: true
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
 
       - name: Fetch the /assess deterministic core
+        id: fetch-toolkit
         run: |
-          git clone --depth 1 --branch "v$plugin_version" \
-            https://github.com/bjcoombs/ai-native-toolkit.git "$${RUNNER_TEMP}/ai-native-toolkit"
+          # A failed fetch (rate limit, network blip, tag not yet released) must
+          # not fail the PR: the gate is warn-only until the repo opts in via
+          # .assess/config.toml, and infra failures are never findings.
+          if ! git clone --depth 1 --branch "v$plugin_version" \
+              https://github.com/bjcoombs/ai-native-toolkit.git "$${RUNNER_TEMP}/ai-native-toolkit"; then
+            echo "::notice::assess-gate: could not fetch ai-native-toolkit v$plugin_version - skipping the assessment (warn-only contract)."
+            echo "skip=true" >> "$$GITHUB_OUTPUT"
+          fi
 
       - name: Render the deterministic snapshot
+        if: steps.fetch-toolkit.outputs.skip != 'true' && steps.setup-uv.outcome == 'success'
         working-directory: $${{ runner.temp }}/ai-native-toolkit/skills/assess
         run: |
           mkdir -p "$${GITHUB_WORKSPACE}/.assess"
@@ -50,7 +70,13 @@ $tool_steps
           uv run scripts/assess_report.py "$${GITHUB_WORKSPACE}"
 
       - name: Gate on regressions
+        if: steps.fetch-toolkit.outputs.skip != 'true' && steps.setup-uv.outcome == 'success'
         working-directory: $${{ runner.temp }}/ai-native-toolkit/skills/assess
         run: |
           uv run scripts/assess_gate.py "$${GITHUB_WORKSPACE}" \
             --config "$${GITHUB_WORKSPACE}/.assess/config.toml"
+
+      - name: Explain the skip
+        if: steps.fetch-toolkit.outputs.skip == 'true' || steps.setup-uv.outcome != 'success'
+        run: |
+          echo "::notice::assess-gate: assessment skipped this run (toolkit fetch or uv setup unavailable). The gate stays green by design; it runs again on the next push."
