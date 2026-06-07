@@ -166,7 +166,10 @@ deterministic core (which runs with `networkx` alone) - only by the treemap scri
 **`ci_workflow.py`**
 Renders the frozen-harness GitHub Action from `templates/assess-gate.yml.template`
 using `string.Template`. Bakes in the toolchain discovered during the current run so
-the workflow is a reproducible contract, not a norm.
+the workflow is a reproducible contract, not a norm. The emitted workflow pins its
+supply chain (actions to commit SHAs, tools to exact releases) and degrades infra
+failures - toolkit fetch, tool installs, uv setup - to a skip notice so the gate's
+warn-only contract survives a flaky network or a missing tag.
 
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
