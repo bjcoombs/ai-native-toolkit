@@ -86,6 +86,21 @@ def test_write_index_renders_none_metrics_as_dash(tmp_assess_dir: Path) -> None:
     assert "| 0 | 0 |" in row
 
 
+def test_write_index_legend_defines_every_status_token(tmp_assess_dir: Path) -> None:
+    """The legend must define every status a hotspot row can carry: the four
+    tokens assess_core's diff/status map emits (graduated, new, regressed,
+    persistent) plus the `active` fallback for paths with no diff entry."""
+    entries = [HotspotEntry(
+        path="src/foo.go", first_flagged="2026-06-07", last_seen="2026-06-07",
+        status="new", ccn=30, loc=600,
+    )]
+    write_index(tmp_assess_dir, entries, last_updated="2026-06-07")
+    content = (tmp_assess_dir / "index.md").read_text()
+    legend = content.split("## Legend", 1)[1]
+    for status in ("active", "new", "graduated", "regressed", "persistent"):
+        assert f"- **{status}**" in legend, f"legend missing status {status!r}"
+
+
 def test_append_log_entry_creates_file_if_missing(tmp_assess_dir: Path) -> None:
     entry = LogEntry(
         run_date="2026-05-22", files_scored=100, readiness_score=4.5,
