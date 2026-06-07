@@ -105,6 +105,15 @@ def test_normalize_report_is_idempotent() -> None:
     assert golden.normalize_report(report) == report
 
 
+def test_report_has_single_cross_layer_findings_heading() -> None:
+    """The 'Cross-Layer Findings (Keyhole Readiness)' heading appears exactly
+    once: `findings_markdown` owns it, and the report writer places framing
+    prose directly under it instead of adding a duplicate framing heading
+    (issue #164)."""
+    report = golden.load_golden_report()
+    assert report.count("Cross-Layer Findings (Keyhole Readiness)") == 1
+
+
 def test_load_bearing_surface_is_outside_folds() -> None:
     """The two-audience report keeps a short, picture-led human surface while
     keeping every verbose section present in the raw markdown inside collapsed
