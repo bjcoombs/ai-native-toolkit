@@ -387,6 +387,24 @@ def test_build_keyhole_summary_no_concerns_with_safe_zones() -> None:
     assert summary["summary_text"] == "No structural concerns, 2 safe zones."
 
 
+def test_build_keyhole_summary_hyphenates_self_referential_tests() -> None:
+    """Compound-adjective finding names get an explicit display name
+    ('self-referential tests'), not a naive underscore->space replace."""
+    findings = ks.assemble_findings({"self_referential_tests": ["a", "b"]})
+    summary = ks.build_keyhole_summary(findings)
+    assert summary["summary_text"] == (
+        "2 structural concerns (2 self-referential tests), 0 safe zones."
+    )
+
+
+def test_finding_display_name_map_with_space_fallback() -> None:
+    """Mapped names use the display-name override; unmapped names fall back to
+    the plain underscore->space replace."""
+    assert ks.finding_display_name("self_referential_tests") == "self-referential tests"
+    assert ks.finding_display_name("hidden_coupling") == "hidden coupling"
+    assert ks.finding_display_name("some_future_finding") == "some future finding"
+
+
 # --- Task 4: build_prescribed_actions / render_prescribed_actions ------------
 
 def test_build_prescribed_actions_picks_worst_finding_per_unit() -> None:
