@@ -10,6 +10,11 @@ set -euo pipefail
 # a new enterprise: drop into the org directory, run it, and you have a
 # local mirror of everything you can touch.
 #
+# Personal accounts work too: when the target is a User rather than an
+# Organization, repos are discovered from the account's repo list instead
+# of team membership (empty repos, which have no default branch, are
+# skipped).
+#
 # Org detection:
 #   The org defaults to the basename of the directory you run from, so
 #   running inside ~/dev/github.com/meridianhub syncs the "meridianhub"
@@ -92,7 +97,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      sed -n '4,40p' "$0"
+      sed -n '4,45p' "$0"
       exit 0
       ;;
     *)
@@ -145,40 +150,67 @@ fi
 echo "Org:  $ORG"
 echo "Root: $GITHUB_DEV_PATH"
 
-# Fetch user's teams in the org
-echo "Fetching your teams in $ORG..."
-user_teams=($(gh api user/teams --paginate --jq ".[] | select(.organization.login == \"$ORG\") | .slug"))
-
-if [ ${#user_teams[@]} -eq 0 ]; then
-    echo "Error: You don't appear to be a member of any teams in $ORG"
+# Detect account type: organizations are discovered via team membership,
+# personal accounts via their repo list. A 404 here means the name itself
+# is wrong (typo, or the directory name doesn't match any GitHub account).
+account_type=$(gh api "users/$ORG" --jq '.type' 2>/dev/null) || {
+    echo "Error: GitHub account '$ORG' not found"
     echo "  - Check the org name (it defaults to the directory you ran from: $(basename "$ROOT"))"
     echo "  - Override with --org NAME if the directory name differs from the org"
     exit 1
-fi
+}
 
-echo "Found ${#user_teams[@]} team(s): ${user_teams[*]}"
-
-if [ "$LIST_TEAMS" = true ]; then
-    echo ""
-    echo "Teams you belong to in $ORG:"
-    for team in "${user_teams[@]}"; do
-        repo_count=$(gh api "orgs/$ORG/teams/$team/repos" --paginate --jq 'length' 2>/dev/null || echo "?")
-        echo "  - $team ($repo_count repos)"
-    done
-    exit 0
-fi
-
-# Fetch repos from all teams and deduplicate
-echo "Fetching repositories from all teams..."
+user_teams=()
 all_repos_file=$(mktemp)
 archived_repos_file=$(mktemp)
 
-for team in "${user_teams[@]}"; do
-    echo "  - Fetching from $team..."
-    # Fetch all repos and split into active vs archived
-    gh api "orgs/$ORG/teams/$team/repos" --paginate --jq '.[] | select(.archived == false) | .name' 2>/dev/null >> "$all_repos_file" || true
-    gh api "orgs/$ORG/teams/$team/repos" --paginate --jq '.[] | select(.archived == true) | .name' 2>/dev/null >> "$archived_repos_file" || true
-done
+if [ "$account_type" = "User" ]; then
+    if [ "$LIST_TEAMS" = true ]; then
+        echo "$ORG is a personal account; teams don't apply. Use --list-repos instead."
+        exit 0
+    fi
+
+    # Personal account: list the account's repos directly. Empty repos have
+    # no default branch and nothing to check out, so they are skipped
+    # (gh renders their defaultBranchRef as null or {"name": ""}).
+    echo "Fetching repositories for personal account $ORG..."
+    gh repo list "$ORG" --limit 1000 --json name,isArchived,defaultBranchRef \
+        --jq '.[] | select(.isArchived == false and (.defaultBranchRef.name // "") != "") | .name' >> "$all_repos_file"
+    gh repo list "$ORG" --limit 1000 --json name,isArchived \
+        --jq '.[] | select(.isArchived == true) | .name' >> "$archived_repos_file"
+else
+    # Organization: fetch the user's teams in the org
+    echo "Fetching your teams in $ORG..."
+    user_teams=($(gh api user/teams --paginate --jq ".[] | select(.organization.login == \"$ORG\") | .slug"))
+
+    if [ ${#user_teams[@]} -eq 0 ]; then
+        echo "Error: You don't appear to be a member of any teams in $ORG"
+        echo "  - Check the org name (it defaults to the directory you ran from: $(basename "$ROOT"))"
+        echo "  - Override with --org NAME if the directory name differs from the org"
+        exit 1
+    fi
+
+    echo "Found ${#user_teams[@]} team(s): ${user_teams[*]}"
+
+    if [ "$LIST_TEAMS" = true ]; then
+        echo ""
+        echo "Teams you belong to in $ORG:"
+        for team in "${user_teams[@]}"; do
+            repo_count=$(gh api "orgs/$ORG/teams/$team/repos" --paginate --jq 'length' 2>/dev/null || echo "?")
+            echo "  - $team ($repo_count repos)"
+        done
+        exit 0
+    fi
+
+    # Fetch repos from all teams and deduplicate
+    echo "Fetching repositories from all teams..."
+    for team in "${user_teams[@]}"; do
+        echo "  - Fetching from $team..."
+        # Fetch all repos and split into active vs archived
+        gh api "orgs/$ORG/teams/$team/repos" --paginate --jq '.[] | select(.archived == false) | .name' 2>/dev/null >> "$all_repos_file" || true
+        gh api "orgs/$ORG/teams/$team/repos" --paginate --jq '.[] | select(.archived == true) | .name' 2>/dev/null >> "$archived_repos_file" || true
+    done
+fi
 
 # Deduplicate and sort
 github_repos=($(sort -u "$all_repos_file"))
@@ -214,11 +246,19 @@ fi
 total_repos=${#github_repos[@]}
 
 if [ "$total_repos" -eq 0 ]; then
-    echo "No repositories found across your teams"
+    if [ "$account_type" = "User" ]; then
+        echo "No repositories found for personal account $ORG"
+    else
+        echo "No repositories found across your teams"
+    fi
     exit 0
 fi
 
-echo "Found $total_repos unique repositories across ${#user_teams[@]} team(s)"
+if [ "$account_type" = "User" ]; then
+    echo "Found $total_repos repositories for personal account $ORG"
+else
+    echo "Found $total_repos unique repositories across ${#user_teams[@]} team(s)"
+fi
 
 if [ "$LIST_REPOS" = true ]; then
     echo ""
@@ -551,8 +591,12 @@ if [ "$QUIET_MODE" = false ]; then
 fi
 
 # Print summary
-echo -e "\n====== GitHub Sync Summary ($ORG - ${#user_teams[@]} teams) ======"
-echo "Teams: ${user_teams[*]}"
+if [ "$account_type" = "User" ]; then
+    echo -e "\n====== GitHub Sync Summary ($ORG - personal account) ======"
+else
+    echo -e "\n====== GitHub Sync Summary ($ORG - ${#user_teams[@]} teams) ======"
+    echo "Teams: ${user_teams[*]}"
+fi
 
 updated_count=$([ -f "$status_dir/updated" ] && wc -l < "$status_dir/updated" | tr -d ' ' || echo 0)
 current_count=$([ -f "$status_dir/current" ] && wc -l < "$status_dir/current" | tr -d ' ' || echo 0)

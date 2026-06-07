@@ -1,6 +1,6 @@
 ---
 name: ghsync
-description: "Bulk clone and keep in sync every GitHub repo you can access across an org. Discovers all repos reachable through the teams you belong to, deduplicates them, then clones new ones and fast-forward syncs existing ones (and their worktrees) into a consistent <repo>/<repo>-main + <repo>/worktree layout. The org defaults to the directory you run from, so dropping into ~/dev/github.com/<org> mirrors that org. TRIGGER when the user types /ghsync, wants to clone or sync all org repos, asks to mirror everything they have access to, is onboarding into a new enterprise/org, or wants to refresh their local checkouts to latest."
+description: "Bulk clone and keep in sync every GitHub repo you can access across an org or personal account. Discovers all repos reachable through the teams you belong to (or the account's repo list for a personal account), deduplicates them, then clones new ones and fast-forward syncs existing ones (and their worktrees) into a consistent <repo>/<repo>-main + <repo>/worktree layout. The org defaults to the directory you run from, so dropping into ~/dev/github.com/<org> mirrors that org. TRIGGER when the user types /ghsync, wants to clone or sync all org repos or their own personal repos, asks to mirror everything they have access to, is onboarding into a new enterprise/org, or wants to refresh their local checkouts to latest."
 ---
 
 # ghsync: mirror and sync every repo you can access
@@ -15,7 +15,10 @@ everything you can reach and **keeps it in sync**.
   local work: repos with uncommitted changes or on a non-default branch are
   fetched but not pulled, and reported in the summary.
 
-It is **org-agnostic** — point it at any GitHub org or GitHub Enterprise host.
+It is **org-agnostic** — point it at any GitHub org, GitHub Enterprise host, or
+**personal account**. The script detects the account type itself: organizations
+are discovered through team membership, personal accounts through the account's
+repo list (private repos included when it's your own account).
 
 ## How to run it
 
@@ -44,9 +47,9 @@ bash "$SKILL_DIR/scripts/ghsync.sh" --org meridianhub --root ~/dev/github.com/me
 
 ## What to do when invoked
 
-1. **Confirm the target.** Run with `--list-teams` or `--list-repos` first so
-   the user sees which org and how many repos before any cloning. This doubles
-   as a check that the derived org name is correct.
+1. **Confirm the target.** Run with `--list-repos` first (or `--list-teams`
+   for an org) so the user sees which account and how many repos before any
+   cloning. This doubles as a check that the derived account name is correct.
 2. **Dry run on first use against a new org** (`--dry-run`) to preview clones
    and updates without touching disk.
 3. **Run the real sync.** Stream the output; the run ends with a summary
@@ -59,9 +62,9 @@ bash "$SKILL_DIR/scripts/ghsync.sh" --org meridianhub --root ~/dev/github.com/me
 
 | Flag | Effect |
 |------|--------|
-| `--org NAME` | Org to sync (default: basename of `--root` / cwd) |
+| `--org NAME` | Org or personal account to sync (default: basename of `--root` / cwd) |
 | `--root DIR` | Directory to clone into (default: current directory) |
-| `--list-teams` | List your teams in the org (with repo counts) and exit |
+| `--list-teams` | List your teams in the org (with repo counts) and exit; orgs only |
 | `--list-repos` | List the deduplicated accessible repos and exit |
 | `--dry-run` | Show what would be cloned/updated without making changes |
 | `--limit N` | Process only the first N repos (useful for a quick test) |
@@ -98,9 +101,12 @@ sibling worktrees.
 - **GitHub Enterprise:** `gh` uses its configured host. Target a GHE instance by
   setting `GH_HOST=github.example.com` or running
   `gh auth login --hostname github.example.com` first.
-- **Access model:** repos are discovered through the **teams you belong to** in
-  the org (`gh api user/teams`), then deduplicated. Repos you can only reach via
-  direct collaborator grants outside any team are not included.
+- **Access model:** for an **organization**, repos are discovered through the
+  **teams you belong to** (`gh api user/teams`), then deduplicated — repos you
+  can only reach via direct collaborator grants outside any team are not
+  included. For a **personal account**, repos come from `gh repo list <account>`
+  (includes private repos when authenticated as that account); empty repos with
+  no default branch are skipped.
 - **Blacklist:** export `GHSYNC_BLACKLIST="repo-a repo-b"` to skip oversized or
   problematic repos.
 - **`timeout`:** optional but recommended (`brew install coreutils`) — caps each
