@@ -15,6 +15,20 @@ from pathlib import Path
 _TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates"
 
 
+# Default "## Suggested actions" body for a hotspot page that has not (yet) been
+# finalized with file-specific LLM actions. Worded as a deliberate pointer, not a
+# TODO: a page that is never finalized - a hotspot flagged outside the run's Top 3,
+# which assess_finalize is only required to fill for the Top 3 - still reads as
+# intentional rather than as unfinished work. assess_finalize overwrites this
+# section for the pages it's handed concrete actions; the heading is unchanged so
+# that rewrite contract still holds (issue #165).
+UNFINALIZED_ACTIONS_POINTER = (
+    "This file is flagged but outside this run's Top 3. "
+    "See the report's Top 3 Actions, or run a focused /assess pass "
+    "for file-specific guidance."
+)
+
+
 @dataclass(frozen=True)
 class HotspotEntry:
     path: str
