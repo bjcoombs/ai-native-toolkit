@@ -198,6 +198,52 @@ def test_build_run_context_first_run(tmp_path: Path) -> None:
     assert (assess_dir / "index.md").exists()
 
 
+def test_unfinalized_hotspot_page_uses_neutral_pointer_not_placeholder(tmp_path: Path) -> None:
+    """A hotspot page the deterministic core writes - before any LLM finalize -
+    must carry the neutral out-of-Top-3 pointer, never a TODO-style placeholder.
+
+    assess_finalize only rewrites the pages it's handed actions for (at minimum
+    the Top 3), so a flagged-but-not-Top-3 page can ship un-finalized. Its default
+    "Suggested actions" body must read as intentional, not as unfinished work
+    (issue #165).
+    """
+    from lib.wiki_writer import UNFINALIZED_ACTIONS_POINTER, slug_for_path
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 50,
+        "loc": {"p50": 30, "p95": 200, "max": 500},
+        "ccn": {"p50": 2, "p95": 8, "max": 20},
+        "top_hotspots": [{"path": "src/a.go", "loc": 500, "ccn": 20, "commits": 5}],
+        "top_complex": [{"path": "src/a.go", "ccn": 20}],
+        "top_large": [{"path": "src/a.go", "loc": 500}],
+    }))
+
+    build_run_context(repo_root=repo, run_date="2026-05-22")
+
+    page = (assess_dir / "hotspots" / f"{slug_for_path('src/a.go')}.md").read_text(encoding="utf-8")
+    # The "## Suggested actions" heading the finalizer keys off must survive.
+    assert "## Suggested actions" in page
+    # The neutral pointer is present...
+    assert UNFINALIZED_ACTIONS_POINTER in page
+    # ...and no TODO/placeholder marker leaks into the committed page.
+    for marker in ("Pending LLM-generated suggestions", "TODO", "placeholder", "FIXME"):
+        assert marker not in page
+
+
+def test_unfinalized_actions_pointer_carries_no_placeholder_marker() -> None:
+    """The neutral pointer text itself must be free of TODO-style markers - it is
+    the default that ships when a page is never finalized."""
+    from lib.wiki_writer import UNFINALIZED_ACTIONS_POINTER
+
+    lowered = UNFINALIZED_ACTIONS_POINTER.lower()
+    for marker in ("pending", "todo", "placeholder", "fixme", "tbd"):
+        assert marker not in lowered
+
+
 def test_build_run_context_with_claude_md(tmp_path: Path, fixtures_dir: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

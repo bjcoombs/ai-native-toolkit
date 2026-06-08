@@ -54,6 +54,7 @@ from lib.structure_graph import analyze_structure
 from lib.stats_diff import diff_stats, hotspot_commits, load_stats
 from lib.test_pressure import scan_test_pressure
 from lib.wiki_writer import (
+    UNFINALIZED_ACTIONS_POINTER,
     HotspotEntry,
     LogEntry,
     append_log_entry,
@@ -527,7 +528,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
                 f"{commits} commits in churn window. "
                 "(Briefing refined by LLM via assess_finalize - see Suggested actions below.)"
             ),
-            actions="- Pending LLM-generated suggestions",
+            actions=UNFINALIZED_ACTIONS_POINTER,
         )
 
     # Also surface graduated hotspots in the index. Carry the file's actual

@@ -354,9 +354,9 @@ This replaces:
 - `log.md`'s last entry placeholder `**Top action:** Deterministic ranker not yet wired ...` with your actual Top 1 action.
 - Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file.
 
-Without this step, the wiki carries deterministic-core placeholders forward forever. The hotspot page briefings will say "Pending LLM-generated suggestions" indefinitely.
+Without this step, the `log.md` placeholders above carry forward forever. Hotspot pages you don't supply actions for keep a neutral pointer (`This file is flagged but outside this run's Top 3. See the report's Top 3 Actions, or run a focused /assess pass for file-specific guidance.`) rather than an unfinished-work placeholder - a flagged-but-not-Top-3 page reads as intentional.
 
-The hotspot_actions dict should include at minimum the files mentioned in your Top 3 Actions. You can include more if you have specific suggestions for them.
+The hotspot_actions dict should include at minimum the files mentioned in your Top 3 Actions. You can include more if you have specific suggestions for them; any file you omit keeps the neutral pointer.
 
 
 ## Step 8: End-of-Run Offers
