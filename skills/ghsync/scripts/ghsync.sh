@@ -36,7 +36,7 @@ set -euo pipefail
 #   --quiet        Suppress per-repository messages during sync
 #   --limit N      Process only N repositories (useful for testing)
 #   --dry-run      Show what would be done without making changes
-#   --list-teams   List your teams in the org and exit
+#   --list-teams   List your teams in the org and exit (orgs only)
 #   --list-repos   List the deduplicated accessible repos and exit
 # ===================================================================
 
@@ -163,6 +163,9 @@ account_type=$(gh api "users/$ORG" --jq '.type' 2>/dev/null) || {
 user_teams=()
 all_repos_file=$(mktemp)
 archived_repos_file=$(mktemp)
+# Remove the temp files on any exit path, including the --list-teams early
+# exits below which return before the explicit rm -f calls.
+trap 'rm -f "$all_repos_file" "$archived_repos_file"' EXIT
 
 if [ "$account_type" = "User" ]; then
     if [ "$LIST_TEAMS" = true ]; then
