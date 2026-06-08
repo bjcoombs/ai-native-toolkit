@@ -41,15 +41,23 @@ esac
 # resolve a different owner/repo than the configured remote implies.
 REMOTE_URL=$(git remote get-url origin 2>/dev/null || true)
 if [ -n "$REMOTE_URL" ]; then
-  # Strip trailing .git, then extract owner/repo from SSH and HTTPS forms.
-  # SSH:   git@github.com:owner/repo.git -> owner/repo
-  # HTTPS: https://github.com/owner/repo -> owner/repo
-  REMOTE_SLUG=$(echo "$REMOTE_URL" | sed -e 's/\.git$//' -e 's|.*github\.com[:/]\(.*\)|\1|')
+  # Normalise SSH and HTTPS forms (and GitHub Enterprise hosts) to owner/repo.
+  # SSH:   git@host:owner/repo.git   -> owner/repo
+  # HTTPS: https://host/owner/repo/  -> owner/repo
+  # Strip protocol, any user@, the host (not just github.com), a trailing .git,
+  # and a trailing slash - so a GHE host or a trailing slash can't masquerade as
+  # a redirect.
+  REMOTE_SLUG=$(echo "$REMOTE_URL" \
+    | sed -e 's|^[a-zA-Z]*://||' -e 's|^[^@/]*@||' -e 's|^[^/:]*[:/]||' -e 's|\.git$||' -e 's|/$||')
 else
   REMOTE_SLUG=""
 fi
 GH_SLUG=$(echo "$PUSH_INFO" | jq -r '.nameWithOwner // empty')
-if [ -n "$REMOTE_SLUG" ] && [ -n "$GH_SLUG" ] && [ "$REMOTE_SLUG" != "$GH_SLUG" ]; then
+# Compare case-insensitively: GitHub treats owner/repo as case-insensitive, so a
+# pure case difference is not a redirect and must not emit a spurious notice.
+REMOTE_SLUG_LC=$(echo "$REMOTE_SLUG" | tr '[:upper:]' '[:lower:]')
+GH_SLUG_LC=$(echo "$GH_SLUG" | tr '[:upper:]' '[:lower:]')
+if [ -n "$REMOTE_SLUG" ] && [ -n "$GH_SLUG" ] && [ "$REMOTE_SLUG_LC" != "$GH_SLUG_LC" ]; then
   REDIRECT_NOTICE="Note: origin (\`$REMOTE_SLUG\`) redirects to \`$GH_SLUG\`; the offers below target the redirected repo."
 else
   REDIRECT_NOTICE=""
