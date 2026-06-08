@@ -198,10 +198,19 @@ def _render_commit_note(ctx: dict) -> str:
 
 
 def _render_churn_window(ctx: dict) -> str:
-    """Surface the churn-window label the treemap/doc-staleness pass settled on."""
+    """Surface the churn-window label the treemap/doc-staleness pass settled on.
+
+    When the history is degenerate (every file ~1 commit - a snapshot with no
+    usable history), the label carries a caveat so the churn axis, the saturation
+    treemap channel, and any churn-derived finding are read as inactive rather
+    than as a live signal (issue #172).
+    """
     doc_staleness = ctx.get("doc_staleness") or {}
     window = doc_staleness.get("churn_window")
-    return window if window else "unavailable"
+    label = window if window else "unavailable"
+    if ctx.get("churn_degenerate"):
+        return f"{label} - snapshot / no usable history, churn signal flat"
+    return label
 
 
 def render_report(ctx: dict, repo_name: str) -> str:

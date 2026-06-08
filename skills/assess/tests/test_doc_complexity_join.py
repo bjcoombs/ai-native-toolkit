@@ -90,6 +90,42 @@ def test_complex_plus_stale_is_lying_map_negative_value() -> None:
     assert "do not auto-generate" in rec
 
 
+def test_degenerate_churn_caps_confidence_and_suppresses_lying_map() -> None:
+    """Issue #172: a precise (nearest-ancestor, high-confidence) association over
+    a DEGENERATE churn history must not stamp a lying_map. The churn count means
+    nothing - confidence encodes association precision, not measurement
+    reliability - so the join caps confidence to 'low' (the existing guard then
+    suppresses the finding). Same stale ratio and high confidence as the
+    lying_map case; only ``churn_degenerate`` differs."""
+    staleness = _staleness([_doc("pkg/engine/README.md", ratio=6.0)])
+    staleness["churn_degenerate"] = True
+    result = analyze_doc_complexity_join(COMPLEXITY_STATS, staleness, Path("/repo"))
+
+    doc = _by_path(result)["pkg/engine/README.md"]
+    # The ratio still computes negative freshness from the inflated churn...
+    assert doc["freshness"] == -1.0
+    # ...but the measurement is unreliable: confidence is capped and no lie called.
+    assert doc["confidence"] == "low"
+    assert doc["finding"] is None
+    assert result["findings"]["lying_maps"] == []
+
+
+def test_non_degenerate_churn_preserves_high_confidence_lying_map() -> None:
+    """Regression guard: with genuine churn variance (churn_degenerate False, the
+    default) the same precise association still produces a high-confidence
+    lying_map - the fix must not blunt real findings."""
+    staleness = _staleness([_doc("pkg/engine/README.md", ratio=6.0)])
+    staleness["churn_degenerate"] = False
+    result = analyze_doc_complexity_join(COMPLEXITY_STATS, staleness, Path("/repo"))
+
+    doc = _by_path(result)["pkg/engine/README.md"]
+    assert doc["confidence"] == "high"
+    assert doc["finding"] == "lying_map"
+    assert [u["path"] for u in result["findings"]["lying_maps"]] == [
+        "pkg/engine/README.md"
+    ]
+
+
 def test_low_confidence_stale_doc_is_not_a_lying_map() -> None:
     """A stale-by-ratio doc whose staleness is low-confidence (subject_method ==
     'repo-baseline') must NOT be classified a lying_map: the ratio is measured

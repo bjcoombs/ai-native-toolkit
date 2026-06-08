@@ -343,6 +343,89 @@ def test_render_findings_markdown_attention_section_caps_at_five() -> None:
     assert len(rows) == ks.MAX_ATTENTION_ROWS_RENDERED
 
 
+# --- Issue #172: degenerate churn drops churn-derived findings ----------------
+
+# A bleeding-but-statically-modular dir -> hidden_coupling; reused below.
+_BLEEDING_COMMIT_SETS = [
+    {Path("looksmodular/x.py"), Path("core/util.py")},
+    {Path("looksmodular/y.py"), Path("core/util.py")},
+    {Path("looksmodular/x.py"), Path("core/other.py")},
+    {Path("looksmodular/z.py"), Path("core/util.py")},
+    {Path("looksmodular/x.py"), Path("shared/s.py")},
+]
+_MODULAR_STRUCTURE = {
+    "available": True, "modularity_q": 0.6, "front_door_ratio": 0.95,
+}
+# A complex code file under a doc dir, so a stale high-confidence doc -> lying_map.
+_COMPLEXITY_STATS = {
+    "ccn": {"p50": 3.0, "p95": 8.0, "max": 30.0},
+    "files_scored": 1,
+    "top_complex": [{"path": "pkg/core.py", "loc": 400, "ccn": 30.0}],
+    "top_hotspots": [],
+    "top_large": [],
+}
+
+
+def _stale_doc_staleness(*, churn_degenerate: bool) -> dict:
+    """A high-confidence stale doc over pkg/core.py - a lying_map when the churn
+    history is real, suppressed when it is degenerate."""
+    return {
+        "available": True,
+        "churn_window": "commits (last 12mo)",
+        "churn_degenerate": churn_degenerate,
+        "docs": [{
+            "path": "pkg/README.md",
+            "ratio": 6.0,
+            "last_commit_days": 10,
+            "doc_churn_in_window": 1,
+            "code_churn_in_window": 6,
+            "subject_code_count": 1,
+            "subject_method": "nearest-ancestor",
+            "confidence": "high",
+        }],
+    }
+
+
+def _integrate(*, churn_degenerate: bool) -> dict:
+    return ks.integrate(
+        repo_root=Path("/nonexistent"),
+        complexity_stats=_COMPLEXITY_STATS,
+        doc_staleness=_stale_doc_staleness(churn_degenerate=churn_degenerate),
+        dead_code={"available": False, "candidate_count": 0,
+                   "candidates": [], "tools": []},
+        observability={"rung": None, "reachable": {"present": False}},
+        structure=_MODULAR_STRUCTURE,
+        commit_sets=_BLEEDING_COMMIT_SETS,
+    )
+
+
+def _finding_paths(result: dict, name: str) -> list[str]:
+    return next(f["paths"] for f in result["derived_findings"] if f["name"] == name)
+
+
+def test_real_churn_produces_churn_derived_findings() -> None:
+    """Baseline: with real churn (not degenerate), the lying_map and
+    hidden_coupling findings fire and are counted in the keyhole summary."""
+    result = _integrate(churn_degenerate=False)
+    assert _finding_paths(result, "lying_map") == ["pkg/README.md"]
+    assert _finding_paths(result, "hidden_coupling") == ["looksmodular"]
+    counted = {c["name"] for c in result["keyhole_summary"]["concerns"]}
+    assert {"lying_map", "hidden_coupling"} <= counted
+
+
+def test_degenerate_churn_drops_churn_derived_findings_from_summary() -> None:
+    """Issue #172: on a degenerate churn history the same inputs yield zero
+    churn-derived findings - lying_map (confidence capped in the join) and
+    hidden_coupling (dropped here) are absent from derived_findings AND the
+    keyhole_summary, so a reader sees 0 lying maps from a meaningless signal."""
+    result = _integrate(churn_degenerate=True)
+    assert _finding_paths(result, "lying_map") == []
+    assert _finding_paths(result, "hidden_coupling") == []
+    counted = {c["name"] for c in result["keyhole_summary"]["concerns"]}
+    assert "lying_map" not in counted
+    assert "hidden_coupling" not in counted
+
+
 # --- Task 3: build_keyhole_summary -------------------------------------------
 
 def test_build_keyhole_summary_counts_concerns_and_safe_zones() -> None:
