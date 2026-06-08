@@ -11,6 +11,7 @@ Catalog of every hotspot ever flagged by `/assess` in this repo. Status reflects
 ## Legend
 
 - **active** - in the latest top hotspots list
+- **new** - newly entered the hotspot list this run
 - **graduated** - was a hotspot, no longer is (good)
 - **regressed** - still a hotspot, and getting worse
 - **persistent** - still a hotspot, roughly unchanged

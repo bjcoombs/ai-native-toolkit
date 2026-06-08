@@ -560,13 +560,27 @@ def render_findings_markdown(
     return "\n".join(lines).rstrip() + "\n"
 
 
+# Display-name overrides for finding identifiers whose naive underscore->space
+# form reads wrong (compound adjectives need a hyphen). Names not listed here
+# fall back to a plain underscore->space replace in ``finding_display_name``.
+FINDING_DISPLAY_NAMES = {
+    "self_referential_tests": "self-referential tests",
+}
+
+
+def finding_display_name(name: str) -> str:
+    """Human-readable form of a finding identifier for summary text."""
+    return FINDING_DISPLAY_NAMES.get(name, name.replace("_", " "))
+
+
 def _format_summary(concerns: list[dict], safe_zones: int) -> str:
     """One-line human-readable keyhole-readiness summary.
 
     Pure count with a positive/negative split (PRD: never imply commensurability
     with the 0-8 score). Singular/plural handled for the headline count and the
-    safe-zone count; the per-finding labels keep the finding name verbatim
-    (``2 hidden coupling``), matching the PRD's worked example.
+    safe-zone count; the per-finding labels use ``finding_display_name`` (plain
+    underscore->space, e.g. ``2 hidden coupling``, with explicit overrides for
+    compound adjectives, e.g. ``self-referential tests``).
     """
     def plural(n: int, word: str) -> str:
         return f"{n} {word}" if n == 1 else f"{n} {word}s"
@@ -575,7 +589,9 @@ def _format_summary(concerns: list[dict], safe_zones: int) -> str:
     if not concerns:
         return f"No structural concerns, {zones}."
     total = sum(c["count"] for c in concerns)
-    detail = ", ".join(f"{c['count']} {c['name'].replace('_', ' ')}" for c in concerns)
+    detail = ", ".join(
+        f"{c['count']} {finding_display_name(c['name'])}" for c in concerns
+    )
     headline = plural(total, "structural concern")
     return f"{headline} ({detail}), {zones}."
 
