@@ -36,6 +36,32 @@ esac
 # If the command failed (no remote, no gh, not a GitHub repo, unauthenticated),
 # $PUSH_INFO is empty and $PERM stays empty - fall back to the local-branch
 # flow with the reason. Never silently assume push works.
+
+# Detect remote-to-gh redirect: GitHub follows transfers/renames, so gh may
+# resolve a different owner/repo than the configured remote implies.
+REMOTE_URL=$(git remote get-url origin 2>/dev/null || true)
+if [ -n "$REMOTE_URL" ]; then
+  # Normalise SSH and HTTPS forms (and GitHub Enterprise hosts) to owner/repo.
+  # SSH:   git@host:owner/repo.git   -> owner/repo
+  # HTTPS: https://host/owner/repo/  -> owner/repo
+  # Strip protocol, any user@, the host (not just github.com), a trailing .git,
+  # and a trailing slash - so a GHE host or a trailing slash can't masquerade as
+  # a redirect.
+  REMOTE_SLUG=$(echo "$REMOTE_URL" \
+    | sed -e 's|^[a-zA-Z]*://||' -e 's|^[^@/]*@||' -e 's|^[^/:]*[:/]||' -e 's|\.git$||' -e 's|/$||')
+else
+  REMOTE_SLUG=""
+fi
+GH_SLUG=$(echo "$PUSH_INFO" | jq -r '.nameWithOwner // empty')
+# Compare case-insensitively: GitHub treats owner/repo as case-insensitive, so a
+# pure case difference is not a redirect and must not emit a spurious notice.
+REMOTE_SLUG_LC=$(echo "$REMOTE_SLUG" | tr '[:upper:]' '[:lower:]')
+GH_SLUG_LC=$(echo "$GH_SLUG" | tr '[:upper:]' '[:lower:]')
+if [ -n "$REMOTE_SLUG" ] && [ -n "$GH_SLUG" ] && [ "$REMOTE_SLUG_LC" != "$GH_SLUG_LC" ]; then
+  REDIRECT_NOTICE="Note: origin (\`$REMOTE_SLUG\`) redirects to \`$GH_SLUG\`; the offers below target the redirected repo."
+else
+  REDIRECT_NOTICE=""
+fi
 ```
 
 Interpret the result:
@@ -43,6 +69,8 @@ Interpret the result:
 - `CAN_PUSH=1` (viewerPermission is `WRITE` / `MAINTAIN` / `ADMIN`, or the remote is a push-eligible fork): offer the direct PR flow below.
 - `CAN_PUSH=0` and viewerPermission is `READ` / `TRIAGE`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
 - `gh` unavailable / not a GitHub remote / not authenticated (`$PUSH_INFO` empty): skip both PR offers entirely and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
+
+If `$REDIRECT_NOTICE` is non-empty, output it verbatim on its own line before the offer below.
 
 Then surface the question - verbatim, picking the shape that matches the access tier.
 
