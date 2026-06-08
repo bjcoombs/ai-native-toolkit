@@ -76,7 +76,11 @@ import numpy as np
 # implementation. Only the colour mapping differs per heatmap and stays local.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.assess_config import load_excludes  # noqa: E402
-from lib.git_churn import git_churn_scores, pick_churn_window  # noqa: E402
+from lib.git_churn import (  # noqa: E402
+    churn_is_degenerate,
+    git_churn_scores,
+    pick_churn_window,
+)
 from lib.treemap_render import (  # noqa: E402
     adaptive_cap,
     blend_to_grey,
@@ -414,13 +418,22 @@ def render(files: list[tuple[Path, int, float, str]],
            aux_data: dict[Path, int] | None = None,
            aux_label: str | None = None,
            survivor_density: dict[Path, float] | None = None,
-           tokens_by_path: dict[Path, int] | None = None) -> None:
+           tokens_by_path: dict[Path, int] | None = None,
+           churn_degenerate: bool = False) -> None:
     metric_label = "commits" if by == "churn" else "ccn"
     metrics = [f[2] for f in files]
     cap, cap_kind = adaptive_cap(metrics)
     # OrRd (ColorBrewer): colour-blind-safe sequential ramp, pale = simple ->
     # dark red = complex. Avoids the red-green of RdYlGn (the most common CVD).
     cmap = plt.get_cmap("OrRd")
+
+    # Degenerate churn = a flat saturation axis (every file ~1 commit), which
+    # would render as uniform full-saturation and read as a live signal. Drop it:
+    # the blocks render fully vivid (pure complexity), matching the no-git path,
+    # and the one-line summary below states the axis is inactive rather than
+    # legending a meaningless gradient.
+    if churn_degenerate:
+        aux_data = None
 
     aux_cap = 1.0
     aux_cap_kind = ""
@@ -461,7 +474,10 @@ def render(files: list[tuple[Path, int, float, str]],
     mx = float(max(metrics)) if metrics else 0.0
     print(f"hue: {metric_label}; range 0-{mx:.0f}; "
           f"cap {cap:.0f} ({cap_kind})")
-    if aux_data is not None:
+    if churn_degenerate:
+        print("saturation: churn signal flat (degenerate history - every file "
+              "~1 commit); axis inactive, rendering pure complexity.")
+    elif aux_data is not None:
         aux_max = max((float(aux_data.get(f[0], 0)) for f in files),
                        default=0.0)
         print(f"saturation: {aux_label}; range 0-{aux_max:.0f}; "
@@ -615,7 +631,8 @@ def write_stats(files: list[tuple[Path, int, float, str]],
                 aux_label: str | None,
                 root: Path, out_path: Path,
                 fn_ccn_by_path: dict[Path, list[float]] | None = None,
-                tokens_by_path: dict[Path, int] | None = None) -> None:
+                tokens_by_path: dict[Path, int] | None = None,
+                churn_degenerate: bool = False) -> None:
     """Write a JSON stats sidecar summarising the treemap data.
 
     Consumed by the /assess skill: percentiles drive Layer 3 (linter) scoring,
@@ -718,6 +735,12 @@ def write_stats(files: list[tuple[Path, int, float, str]],
             "scc": sum(1 for f in files if f[3] == "scc"),
         },
         "churn_window": aux_label,
+        # Churn-measurement reliability (lib.git_churn.churn_is_degenerate). True
+        # when the history is degenerate - every file ~1 commit - so the
+        # saturation axis carries no signal and the hotspot composite's churn
+        # term (sqrt(1 + commits)) is near-constant. A reader (and the report)
+        # treats the `commits` column and saturation axis as inactive here.
+        "churn_degenerate": bool(churn_degenerate),
         "loc": {
             "p50": pct(locs, 50),
             "p95": pct(locs, 95),
@@ -893,6 +916,14 @@ def main() -> int:
         return 1
 
     _warn_if_dominated_by_one_file(files)
+    # Is the churn axis trustworthy? A degenerate history (shallow clone, fresh
+    # import, squashed/extracted tree) shows ~1 commit per file, so the
+    # saturation axis is a flat non-signal. Detected via the single source of
+    # truth in lib.git_churn and threaded to render (drop the axis) and
+    # write_stats (record the flag). Computed only in hotspot mode (aux_data set).
+    churn_degenerate = aux_data is not None and churn_is_degenerate(
+        aux_data.values()
+    )
     # Estimate tokens once, post-artifact-filter, and share the map between the
     # treemap (block area) and the stats sidecar (size unit + keyhole budget) so
     # both views agree and no file is read twice.
@@ -906,10 +937,12 @@ def main() -> int:
     render(files, root, out, f"Hotspot: {root.name}",
            show_labels=args.labels, by=effective_by,
            aux_data=aux_data, aux_label=aux_label,
-           survivor_density=survivor_density, tokens_by_path=tokens)
+           survivor_density=survivor_density, tokens_by_path=tokens,
+           churn_degenerate=churn_degenerate)
     if args.stats:
         write_stats(files, aux_data, aux_label, root, args.stats,
-                    fn_ccn_by_path=fn_ccn_by_path, tokens_by_path=tokens)
+                    fn_ccn_by_path=fn_ccn_by_path, tokens_by_path=tokens,
+                    churn_degenerate=churn_degenerate)
     return 0
 
 

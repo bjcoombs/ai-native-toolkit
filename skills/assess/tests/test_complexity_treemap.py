@@ -117,6 +117,22 @@ def test_write_stats_uses_commits_field_and_balanced_rank(treemap, tmp_path):
     assert by_path["frozen.go"]["commits"] == 1
 
 
+def test_write_stats_records_churn_degenerate_flag(treemap, tmp_path):
+    """Issue #172: the stats sidecar carries ``churn_degenerate`` so the report
+    and a reader know the saturation axis / commits column is inactive. Default
+    is False; passing the flag records True."""
+    root = tmp_path
+    f = root / "a.go"
+    out = root / "stats.json"
+    treemap.write_stats([(f, 100, 5.0, "lizard")], {f: 1}, "commits (all-time)",
+                        root, out)
+    assert json.loads(out.read_text())["churn_degenerate"] is False
+
+    treemap.write_stats([(f, 100, 5.0, "lizard")], {f: 1}, "commits (all-time)",
+                        root, out, churn_degenerate=True)
+    assert json.loads(out.read_text())["churn_degenerate"] is True
+
+
 def test_write_stats_commits_none_without_git(treemap, tmp_path):
     """No churn data (no git) -> commits is None, distinct from a real 0."""
     root = tmp_path

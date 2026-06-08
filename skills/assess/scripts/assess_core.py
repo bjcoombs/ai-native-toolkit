@@ -659,6 +659,17 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     ctx["doc_graph"] = doc_graph
     ctx["doc_staleness"] = doc_staleness
     ctx["stale_hubs"] = _build_stale_hubs(doc_graph, doc_staleness)
+    # Churn-measurement reliability, surfaced to the report layer so the score
+    # line can carry a "snapshot / no usable history" caveat. True when the git
+    # history is degenerate - every file ~1 commit (shallow clone, fresh import,
+    # squashed/extracted tree) - in which case churn-derived findings are
+    # discounted (confidence capped, lying_map / hidden_coupling not counted) and
+    # the treemap saturation axis is inactive. Single source of truth: the
+    # doc-staleness block (lib.git_churn.churn_is_degenerate).
+    ctx["churn_degenerate"] = bool(
+        doc_staleness.get("churn_degenerate", False)
+        if isinstance(doc_staleness, dict) else False
+    )
     # Instruction-surface integrity (Layer 0): files present on disk but not
     # committed, and advertised-but-broken instruction references (dangling
     # symlinks + entry docs linking a missing instruction file). A broken

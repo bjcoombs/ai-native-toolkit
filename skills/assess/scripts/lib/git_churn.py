@@ -12,8 +12,10 @@ scripts (which also pull in lizard/matplotlib/squarify).
 """
 from __future__ import annotations
 
+import math
 import subprocess
 import sys
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
 
@@ -259,3 +261,62 @@ def pick_churn_window(
         return ({p: data.get(p, 0) for p in file_paths},
                 f"commits ({label})")
     return None, None
+
+
+# A churn window is "degenerate" when its commits-per-file distribution is
+# effectively flat: almost every file that moved in the window shows a single
+# commit. That is the fingerprint of a history with no usable churn signal -
+# a shallow clone, a fresh import, or a squashed/extracted source tree where
+# every file was created in one bulk commit. A count of "1 commit" there is an
+# extraction artifact, not a measure of how much the file actually churns.
+#
+# The danger is that downstream signals read the count as if it meant activity:
+# `code_churn_in_window` swells to ~= the file count, the doc-staleness ratio
+# inflates, and a *precise* doc->code association (high `subject_method`
+# confidence) then stamps a high-confidence `lying_map` onto pure noise. The two
+# properties are independent - association precision says *which* code a doc maps
+# to; measurement reliability says whether the churn count *means* anything - and
+# only this flag carries the second. Consumers that read it degrade: cap finding
+# confidence, drop churn-derived findings from the summary, flatten the treemap
+# saturation axis. This is the single source of truth; consumers thread the
+# boolean rather than recomputing the distribution.
+DEGENERATE_CHURN_P95 = 1
+# Below this many files with any activity the distribution is too small to judge.
+# A three-file utility repo where each file shows one commit is not the
+# shallow-clone / squashed-history artifact this guards against, so we never call
+# degeneracy on a handful of files - we'd risk flattening a genuinely tiny repo.
+MIN_ACTIVE_FILES_FOR_DEGENERACY = 5
+
+
+def churn_is_degenerate(
+    commit_counts: Iterable[int],
+    min_active_files: int = MIN_ACTIVE_FILES_FOR_DEGENERACY,
+    p95_threshold: int = DEGENERATE_CHURN_P95,
+) -> bool:
+    """True when a per-file commit-count distribution carries no churn signal.
+
+    `commit_counts` is any iterable of per-file commit counts - the values of a
+    churn map (``pick_churn_window`` / ``git_churn_scores`` output). Files with
+    zero commits in the window are ignored: degeneracy is a property of the
+    *shape* of the activity among files that actually moved, not of how many sat
+    idle. Among those active files we take the 95th percentile (nearest-rank, so
+    a couple of genuinely-churned files can't mask an otherwise-flat import) and
+    call the window degenerate when it is at or below ``p95_threshold`` (1 by
+    default - "almost every touched file shows a single commit"). p95 rather than
+    max so the detector reports on the bulk of the distribution, equivalent to
+    "near-zero variance across files".
+
+    Returns False when fewer than ``min_active_files`` files have any activity:
+    too few data points to distinguish a degenerate history from a legitimately
+    small or quiet repo, where flattening the churn signal would be the wrong
+    call. Pure and side-effect-free so every consumer (doc-staleness join,
+    keyhole summary, treemap) can read the same verdict off the same data.
+    """
+    active = sorted(c for c in commit_counts if c and c > 0)
+    if len(active) < min_active_files:
+        return False
+    # Nearest-rank p95: index of the ceil(0.95 * n)-th value (1-based), so for an
+    # all-ones distribution p95 == 1 and a single outlier among thousands of
+    # ones still leaves p95 == 1.
+    idx = max(0, math.ceil(0.95 * len(active)) - 1)
+    return active[idx] <= p95_threshold
