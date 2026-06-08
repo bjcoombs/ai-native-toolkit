@@ -126,6 +126,40 @@ def test_stale_doc_beside_churny_code_has_high_ratio(git_repo) -> None:
     assert readme["ratio"] >= 5  # frozen map of a churning module
 
 
+def test_churn_degenerate_flag_on_single_commit_per_file_repo(git_repo) -> None:
+    """Issue #172: a history where every file shows one commit (a bulk import /
+    shallow clone / squashed tree) is degenerate - the churn count is an
+    extraction artifact, not activity. The doc-staleness block surfaces that as
+    ``churn_degenerate: True`` so downstream consumers discount churn findings."""
+    repo, commit = git_repo
+    (repo / "README.md").write_text("module map", encoding="utf-8")
+    for i in range(6):
+        (repo / f"mod{i}.py").write_text(f"x = {i}", encoding="utf-8")
+    commit("bulk import - one commit touches every file", days_ago=10)
+
+    r = analyze_doc_staleness(repo)
+    assert r["churn_degenerate"] is True
+
+
+def test_churn_not_degenerate_with_genuine_variance(git_repo) -> None:
+    """Regression guard: a repo with a real spread of commits-per-file is NOT
+    degenerate, so its high-confidence churn findings are untouched."""
+    repo, commit = git_repo
+    (repo / "README.md").write_text("module map", encoding="utf-8")
+    for i in range(6):
+        (repo / f"mod{i}.py").write_text("start", encoding="utf-8")
+    commit("init", days_ago=30)
+    # mod0 churns repeatedly; mod1 once more; mod2..5 stay frozen -> a spread.
+    for j in range(8):
+        (repo / "mod0.py").write_text(f"v = {j}", encoding="utf-8")
+        commit(f"churn {j}", days_ago=20 - j)
+    (repo / "mod1.py").write_text("v = 99", encoding="utf-8")
+    commit("touch mod1", days_ago=5)
+
+    r = analyze_doc_staleness(repo)
+    assert r["churn_degenerate"] is False
+
+
 def test_fresh_doc_beside_fresh_code_has_low_ratio(git_repo) -> None:
     repo, commit = git_repo
     (repo / "README.md").write_text("module map", encoding="utf-8")

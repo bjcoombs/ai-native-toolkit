@@ -209,6 +209,16 @@ def analyze_doc_complexity_join(
         if doc_staleness.get("available", False)
         else []
     )
+    # Churn-measurement reliability (set once in lib.git_churn, carried on the
+    # doc-staleness block). When the history is degenerate - every file ~1 commit
+    # (shallow clone, fresh import, squashed/extracted tree) - the `ratio` that
+    # drives `freshness` is built on a churn count that means nothing, even
+    # though the doc->code association may be perfectly precise. `confidence`
+    # encodes association precision, not measurement reliability, so a precise
+    # map over a meaningless churn signal would otherwise stamp a high-confidence
+    # lying_map. Cap every doc's confidence to "low" so the existing
+    # low-confidence guard below suppresses the lying_map classification.
+    churn_degenerate = bool(doc_staleness.get("churn_degenerate", False))
     doc_paths = [d["path"] for d in docs_in]
     assignment = _assign_code_to_docs(list(file_ccn), doc_paths)
     covered_code = {c for codes in assignment.values() for c in codes}
@@ -227,6 +237,10 @@ def analyze_doc_complexity_join(
         )
         freshness = _signed_freshness(doc)
         doc_value = round(complexity_summarised * freshness, 3)
+        # Degenerate churn caps measurement confidence to "low" regardless of how
+        # precise the association is (see churn_degenerate above). The reported
+        # confidence reflects the cap so a downstream reader sees the discount.
+        confidence = "low" if churn_degenerate else doc.get("confidence")
 
         finding: str | None = None
         # Trivial code never produces a finding: complexity_summarised below the
@@ -239,7 +253,7 @@ def analyze_doc_complexity_join(
             # "stale" purely because the repo is busy elsewhere. That is too
             # coarse to call a lying map - the same confidence guard the Layer 0
             # stale-hub reporting applies. Leave such a doc unclassified.
-            low_confidence = doc.get("confidence") == "low"
+            low_confidence = confidence == "low"
             if freshness < 0 and not low_confidence:
                 finding = "lying_map"
             elif freshness > 0:
@@ -251,7 +265,7 @@ def analyze_doc_complexity_join(
             "freshness": freshness,
             "doc_value": doc_value,
             "finding": finding,
-            "confidence": doc.get("confidence"),
+            "confidence": confidence,
             "subject_code_count": len(subject),
             "recommendation": _RECOMMENDATIONS.get(finding) if finding else None,
         }

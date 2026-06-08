@@ -135,6 +135,21 @@ def test_full_render_metrics_values() -> None:
     assert "**Churn window:** commits (last 12mo)" in report
 
 
+def test_churn_window_carries_degenerate_caveat() -> None:
+    """Issue #172: when the run-context flags a degenerate churn history, the
+    churn-window line carries a 'snapshot / no usable history' caveat so the
+    score line isn't read as backed by a live churn signal."""
+    ctx = _full_ctx()
+    ctx["churn_degenerate"] = True
+    report = render_report(ctx, "demo")
+    assert "snapshot / no usable history, churn signal flat" in report
+
+    # Default (no flag) leaves the line clean - no regression for real histories.
+    clean = render_report(_full_ctx(), "demo")
+    assert "**Churn window:** commits (last 12mo)" in clean
+    assert "snapshot / no usable history" not in clean
+
+
 def test_full_render_substitute_is_strict() -> None:
     # render_report must not raise on a fully populated context.
     render_report(_full_ctx(), "demo")

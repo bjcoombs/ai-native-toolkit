@@ -801,9 +801,30 @@ def integrate(
     except Exception:  # noqa: BLE001 - degrade, never crash
         self_ref_paths = []
 
+    # Churn-measurement reliability (single source of truth: lib.git_churn, set
+    # on the doc-staleness block). When the history is degenerate - every file ~1
+    # commit (shallow clone, fresh import, squashed/extracted tree) - the churn
+    # signal carries no information, so the two findings derived from it must not
+    # be counted: `lying_map` (built on the doc-staleness ratio) and
+    # `hidden_coupling` (built on co-commit change coupling, which a single bulk
+    # import maximally inflates). lying_map is already suppressed upstream by the
+    # confidence cap in the join; hidden_coupling is dropped here. Both blocks
+    # keep their raw data (honest); only the *counted findings* degrade.
+    churn_degenerate = bool(doc_staleness.get("churn_degenerate", False))
+    churn_derived_findings = {"lying_map", "hidden_coupling"}
+
+    def _churn_paths(name: str, paths: list[str]) -> list[str]:
+        return [] if (churn_degenerate and name in churn_derived_findings) else paths
+
     findings = assemble_findings({
-        "hidden_coupling": [h["path"] for h in behaviour.get("hidden_coupling_findings", [])],
-        "lying_map": [d["path"] for d in documentation.get("stale_doc_on_complexity", [])],
+        "hidden_coupling": _churn_paths(
+            "hidden_coupling",
+            [h["path"] for h in behaviour.get("hidden_coupling_findings", [])],
+        ),
+        "lying_map": _churn_paths(
+            "lying_map",
+            [d["path"] for d in documentation.get("stale_doc_on_complexity", [])],
+        ),
         "unexplained_complexity": [
             d["path"] for d in documentation.get("unexplained_complexity", [])
         ],

@@ -32,6 +32,7 @@ from lib.doc_graph import (
     is_repo_file,
 )
 from lib.git_churn import (
+    churn_is_degenerate,
     file_last_commit_days,
     pick_churn_window,
     tracked_files,
@@ -237,6 +238,17 @@ def analyze_doc_staleness(
         churn_map = {}
         churn_label = None
 
+    # Is the churn measurement itself trustworthy? A degenerate history (shallow
+    # clone, fresh import, squashed/extracted tree) shows ~1 commit per file, so
+    # `code_churn_in_window` swells to the file count and inflates every ratio
+    # below. We measure degeneracy over the *code* distribution (the subject the
+    # ratio's numerator sums) and surface it as the single source of truth other
+    # consumers read - the doc->complexity join caps confidence, the keyhole
+    # summary drops churn-derived findings, the report carries a snapshot caveat.
+    churn_degenerate = churn_is_degenerate(
+        churn_map.get(c, 0) for c in code_files
+    )
+
     base_doc_dirs = _build_base_doc_dirs(repo_root, docs)
     code_dirs = {c.parent for c in code_files}
 
@@ -337,6 +349,11 @@ def analyze_doc_staleness(
     return {
         "available": True,
         "churn_window": churn_label,
+        # Churn-measurement reliability, independent of doc->code association
+        # precision. True = the window has no usable churn signal (every file ~1
+        # commit), so any finding built on `code_churn_in_window` / `ratio` must
+        # be discounted - see `lib.git_churn.churn_is_degenerate`.
+        "churn_degenerate": churn_degenerate,
         "docs": [r.as_dict() for r in sorted(results, key=lambda r: -r.ratio)],
         "association": {
             "code_file_count": len(code_files),
