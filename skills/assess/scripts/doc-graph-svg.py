@@ -52,6 +52,7 @@ from lib.doc_graph import (  # noqa: E402
     group_broken_links,
     radial_shells,
 )
+from lib.assess_config import resolve_excludes  # noqa: E402
 from lib.doc_staleness import analyze_doc_staleness  # noqa: E402
 from lib.treemap_render import adaptive_cap, blend_to_grey, rgba_to_hex  # noqa: E402
 
@@ -448,6 +449,16 @@ def main() -> int:
                          "status: navigability colours (entry/reachable/island/orphan).")
     ap.add_argument("--labels", action="store_true",
                     help="Add inline filename labels (default hover-only).")
+    ap.add_argument(
+        "--exclude", action="append", default=[], metavar="PATTERN",
+        help=("Skip files / directories that match PATTERN. Repeatable. "
+              "A plain string (`regulatory-raw`) is treated as a directory "
+              "name; a glob (`*.csv`) is matched against the basename. "
+              "Extends the built-in defaults. For a durable per-repo list use "
+              "`.assess/config.toml` (`exclude_dirs` / `exclude_patterns`); "
+              "those are always honoured so the SVG and the scorer compute over "
+              "the identical doc set (issue #177)."),
+    )
     args = ap.parse_args()
 
     root = args.path.resolve()
@@ -455,7 +466,16 @@ def main() -> int:
         print(f"error: {root} is not a directory", file=sys.stderr)
         return 1
 
-    result = build_doc_graph(root)
+    # Honour the same excludes the scorer applies (`.assess/config.toml` plus
+    # any `--exclude`) so the SVG and `lib.doc_graph` compute over the identical
+    # doc set rather than reporting different doc counts for one run (issue #177).
+    extra_dirs, extra_patterns = resolve_excludes(root, args.exclude)
+
+    result = build_doc_graph(
+        root,
+        extra_exclude_dirs=extra_dirs,
+        extra_exclude_patterns=extra_patterns,
+    )
     if not result.available:
         print(f"error: doc graph unavailable - {result.reason}", file=sys.stderr)
         return 1
@@ -465,7 +485,9 @@ def main() -> int:
 
     # Staleness data for colour (reuses the same metric as the heatmap).
     staleness_block = analyze_doc_staleness(
-        root, doc_to_code_edges=result.doc_to_code_edges)
+        root, doc_to_code_edges=result.doc_to_code_edges,
+        extra_exclude_dirs=extra_dirs,
+        extra_exclude_patterns=extra_patterns)
     staleness = {d["path"]: d for d in staleness_block.get("docs", [])}
 
     out = args.out or Path(f"doc-graph-{root.name}.svg")

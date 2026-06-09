@@ -260,3 +260,36 @@ def load_excludes(repo_root: Path) -> tuple[set[str], list[str]]:
     dirs = set(_string_list(cfg, "exclude_dirs"))
     pats = _string_list(cfg, "exclude_patterns")
     return dirs, pats
+
+
+def split_cli_excludes(cli_excludes: list[str]) -> tuple[set[str], list[str]]:
+    """Split repeatable `--exclude PATTERN` values into `(dirs, glob_patterns)`.
+
+    A pattern containing a glob metacharacter (`*?[`) is a basename glob; any
+    other value is treated as a directory name. This is the same shape the
+    treemap CLI accepts, so `--exclude regulatory-raw` works as a dir match
+    without the user picking the right list.
+    """
+    dirs: set[str] = set()
+    patterns: list[str] = []
+    for pat in cli_excludes:
+        if any(c in pat for c in "*?["):
+            patterns.append(pat)
+        else:
+            dirs.add(pat)
+    return dirs, patterns
+
+
+def resolve_excludes(
+    repo_root: Path, cli_excludes: list[str] | None = None,
+) -> tuple[set[str], list[str]]:
+    """Config excludes (`.assess/config.toml`) + CLI `--exclude`, combined.
+
+    The single resolution path shared by the treemap CLI and the doc-graph SVG
+    so every artifact computes over the *identical* doc/code set. Both extend
+    the built-in defaults; callers union the result with their own defaults
+    rather than replacing them (issue #177).
+    """
+    cfg_dirs, cfg_patterns = load_excludes(repo_root)
+    cli_dirs, cli_patterns = split_cli_excludes(cli_excludes or [])
+    return cfg_dirs | cli_dirs, cfg_patterns + cli_patterns
