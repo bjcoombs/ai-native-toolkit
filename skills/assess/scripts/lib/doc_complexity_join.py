@@ -115,16 +115,37 @@ def _high_ccn_threshold(complexity_stats: dict) -> float:
 
 
 def _signed_freshness(doc: dict) -> float:
-    """Map the doc-staleness ``ratio`` onto a signed freshness in [-1, +1].
+    """Map the doc's staleness state onto a signed freshness in [-1, +1].
 
-    ``ratio`` (code churn per unit of doc maintenance) is the doc-staleness
-    metric's decaying-map signal: 0 when the code is as quiet as the doc, large
-    when the code churns while the doc sits frozen. Piecewise-linear::
+    **Generated docs with declared provenance** (issue #178) bypass the churn
+    ratio entirely: a generated doc's freshness is determined by whether its
+    declared source has moved on, not by how busy the surrounding code is. So
+    when the doc-staleness block carries a ``provenance.source_newer`` verdict::
+
+        source_newer == False -> +1.0  (doc still matches its source -> fresh,
+                                         never a lying_map)
+        source_newer == True  -> -1.0  (source has outrun the doc -> stale)
+
+    A ``source_newer`` of ``None`` means provenance was declared but the
+    comparison was indeterminate (no usable timestamps), so we fall back to the
+    churn ratio below.
+
+    Otherwise (the ordinary hand-written doc), ``ratio`` (code churn per unit of
+    doc maintenance) is the decaying-map signal: 0 when the code is as quiet as
+    the doc, large when the code churns while the doc sits frozen.
+    Piecewise-linear::
 
         ratio = 0                       -> +1.0  (doc fully keeps pace)
         ratio = THRESHOLD               ->  0.0  (doc starts lagging)
         ratio >= 2 * THRESHOLD          -> -1.0  (doc has outrun, clamped)
     """
+    provenance = doc.get("provenance")
+    if isinstance(provenance, dict):
+        source_newer = provenance.get("source_newer")
+        if source_newer is True:
+            return -1.0
+        if source_newer is False:
+            return 1.0
     ratio = float(doc.get("ratio", 0.0) or 0.0)
     return round(_clamp((STALENESS_RATIO_THRESHOLD - ratio) / STALENESS_RATIO_THRESHOLD,
                         -1.0, 1.0), 3)
@@ -237,10 +258,25 @@ def analyze_doc_complexity_join(
         )
         freshness = _signed_freshness(doc)
         doc_value = round(complexity_summarised * freshness, 3)
-        # Degenerate churn caps measurement confidence to "low" regardless of how
-        # precise the association is (see churn_degenerate above). The reported
-        # confidence reflects the cap so a downstream reader sees the discount.
-        confidence = "low" if churn_degenerate else doc.get("confidence")
+        # Provenance (issue #178): when the freshness came from a definite
+        # source-vs-doc comparison (a generated doc declaring its source), it is
+        # a direct, high-confidence verdict - NOT the coarse churn ratio. The
+        # churn-based confidence caps below (repo-baseline, degenerate history)
+        # exist to discount the ratio; they must not suppress a provenance
+        # verdict. So a provenance doc reports "high" confidence and bypasses the
+        # low-confidence guard.
+        prov = doc.get("provenance")
+        has_provenance_verdict = (
+            isinstance(prov, dict) and prov.get("source_newer") in (True, False)
+        )
+        confidence: str | None
+        if has_provenance_verdict:
+            confidence = "high"
+        else:
+            # Degenerate churn caps measurement confidence to "low" regardless of
+            # how precise the association is (see churn_degenerate above). The
+            # reported confidence reflects the cap so a downstream reader sees it.
+            confidence = "low" if churn_degenerate else doc.get("confidence")
 
         finding: str | None = None
         # Trivial code never produces a finding: complexity_summarised below the
@@ -252,8 +288,9 @@ def analyze_doc_complexity_join(
             # specific code it describes, so a doc edited today can still read as
             # "stale" purely because the repo is busy elsewhere. That is too
             # coarse to call a lying map - the same confidence guard the Layer 0
-            # stale-hub reporting applies. Leave such a doc unclassified.
-            low_confidence = confidence == "low"
+            # stale-hub reporting applies. Leave such a doc unclassified. A
+            # provenance verdict is exempt (see has_provenance_verdict).
+            low_confidence = confidence == "low" and not has_provenance_verdict
             if freshness < 0 and not low_confidence:
                 finding = "lying_map"
             elif freshness > 0:

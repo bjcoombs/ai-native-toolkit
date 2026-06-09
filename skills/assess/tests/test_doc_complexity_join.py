@@ -211,3 +211,58 @@ def test_result_is_json_serialisable() -> None:
     assert reloaded["available"] is True
     assert reloaded["high_ccn_threshold"] == max(8.0, MIN_HIGH_CCN)
     assert STALENESS_RATIO_THRESHOLD == 2.0
+
+
+# --- Provenance-aware freshness for generated docs (issue #178) -----------
+
+def _gen_doc(path: str, source_newer, ratio: float = 0.0,
+             confidence: str = "low") -> dict:
+    """A generated doc carrying a provenance verdict. ratio is deliberately set
+    low/zero (the churn signal is irrelevant once provenance decides freshness)
+    and confidence "low" to prove the provenance verdict bypasses the guard."""
+    d = _doc(path, ratio, confidence=confidence)
+    d["subject_method"] = "repo-baseline"
+    d["provenance"] = {
+        "method": "frontmatter",
+        "sources": ["data/jira.tsv"],
+        "generated_by": None,
+        "source_newer": source_newer,
+    }
+    return d
+
+
+def test_generated_doc_source_not_moved_is_not_lying_map() -> None:
+    """source_newer False -> freshness +1 -> good_contract, never lying_map,
+    even though the churn ratio is low-confidence (repo-baseline). This is the
+    issue #178 hard requirement: an accurate generated doc is not a lying map."""
+    staleness = _staleness([_gen_doc("pkg/engine/api.md", source_newer=False)])
+    result = analyze_doc_complexity_join(COMPLEXITY_STATS, staleness, Path("."))
+    api = _by_path(result)["pkg/engine/api.md"]
+    assert api["freshness"] == 1.0
+    assert api["finding"] == "good_contract"
+    assert result["findings"]["lying_maps"] == []
+
+
+def test_generated_doc_source_moved_on_is_lying_map() -> None:
+    """source_newer True -> freshness -1 -> lying_map over complex code, and the
+    repo-baseline low-confidence guard does NOT suppress it (the provenance
+    verdict is a direct, high-confidence source comparison)."""
+    staleness = _staleness([_gen_doc("pkg/engine/api.md", source_newer=True)])
+    result = analyze_doc_complexity_join(COMPLEXITY_STATS, staleness, Path("."))
+    api = _by_path(result)["pkg/engine/api.md"]
+    assert api["freshness"] == -1.0
+    assert api["finding"] == "lying_map"
+    assert api["confidence"] == "high"
+    assert [u["path"] for u in result["findings"]["lying_maps"]] == ["pkg/engine/api.md"]
+
+
+def test_provenance_indeterminate_falls_back_to_ratio() -> None:
+    """source_newer None (no usable timestamps) -> the churn ratio decides, so a
+    busy-ratio repo-baseline doc stays unclassified under the low-confidence
+    guard exactly as before provenance existed."""
+    staleness = _staleness([_gen_doc("pkg/engine/api.md", source_newer=None,
+                                      ratio=5.0)])
+    result = analyze_doc_complexity_join(COMPLEXITY_STATS, staleness, Path("."))
+    api = _by_path(result)["pkg/engine/api.md"]
+    assert api["freshness"] < 0  # ratio 5 > threshold -> negative
+    assert api["finding"] is None  # low-confidence repo-baseline guard holds

@@ -13,9 +13,17 @@ under `.assess/`):
 ```toml
 exclude_dirs = ["regulatory-raw", "vetted-context"]
 exclude_patterns = ["*.csv", "*.parquet"]
+
+# Provenance for generated-doc trees (issue #178): doc-staleness for docs
+# under `path` is measured against `source` (newer source = stale) instead of
+# the doc's own file age. `source` may be a string or a list. Paths are
+# relative to the repo root.
+[[generated]]
+path = "notes"
+source = "data/jira.tsv"
 ```
 
-The same two lists feed every scan. There is no per-scan override knob -
+The exclude lists feed every scan. There is no per-scan override knob -
 if the user excludes `regulatory-raw/`, they mean "this is reference data,
 not source," and that statement applies to every layer's view of the
 codebase. Consistency is the point.
@@ -247,6 +255,52 @@ def load_gate_config_file(config_path: Path) -> dict:
         )
         cfg = {}
     return _parse_gate_section(cfg)
+
+
+def load_generated_sources(repo_root: Path) -> list[tuple[str, list[str]]]:
+    """Return the ``[[generated]]`` folder->source provenance mappings.
+
+    Lets a repo declare that a generated-doc tree derives from a source file or
+    command, so doc-staleness for those docs is measured against the source
+    rather than the doc's own age (issue #178). Schema::
+
+        [[generated]]
+        path = "notes"
+        source = "data/jira.tsv"
+
+        [[generated]]
+        path = "docs/api"
+        source = ["openapi.yaml", "schema.proto"]
+
+    ``path`` is a folder relative to the repo root; every doc under it inherits
+    the mapping. ``source`` is a string or list of strings relative to the repo
+    root. Returns a list of ``(path, [sources])`` tuples, in declaration order so
+    the first matching prefix wins deterministically. Honours the same "degrade
+    silently" contract as the other loaders: a missing file, missing/!list
+    section, or malformed entry is skipped rather than blocking the assessment.
+    """
+    cfg = load_config(repo_root)
+    raw = cfg.get("generated")
+    if not isinstance(raw, list):
+        return []
+    out: list[tuple[str, list[str]]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        path = entry.get("path")
+        if not isinstance(path, str) or not path.strip():
+            continue
+        source = entry.get("source")
+        if isinstance(source, str):
+            sources = [source]
+        elif isinstance(source, list):
+            sources = [s for s in source if isinstance(s, str)]
+        else:
+            sources = []
+        if not sources:
+            continue
+        out.append((path.strip(), sources))
+    return out
 
 
 def load_excludes(repo_root: Path) -> tuple[set[str], list[str]]:

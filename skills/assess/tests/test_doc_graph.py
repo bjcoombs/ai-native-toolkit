@@ -91,6 +91,42 @@ def test_dangling_wikilink_counted(tmp_path: Path) -> None:
     assert r.dangling_links >= 1
 
 
+def test_vault_detected_at_repo_root(tmp_path: Path) -> None:
+    """`.obsidian/` at the scan target -> the repo is the vault root."""
+    (tmp_path / ".obsidian").mkdir()
+    _write(tmp_path, "note.md", "content")
+    r = build_doc_graph(tmp_path)
+    assert r.vault_detected is True
+
+
+def test_vault_detected_when_nested_below_repo_root(tmp_path: Path) -> None:
+    """A vault kept as a subdirectory of a git repo (`repo/notes/.obsidian/`)
+    puts `.obsidian/` below the scan target. The flag must still read true -
+    the false negative this guards against silently disabled every downstream
+    vault accommodation (#179)."""
+    (tmp_path / "notes" / ".obsidian").mkdir(parents=True)
+    _write(tmp_path, "notes/note.md", "content")
+    r = build_doc_graph(tmp_path)
+    assert r.vault_detected is True
+
+
+def test_vault_not_detected_on_plain_repo(tmp_path: Path) -> None:
+    """A repo with no `.obsidian/` anywhere reports false."""
+    _write(tmp_path, "README.md", "no vault here")
+    r = build_doc_graph(tmp_path)
+    assert r.vault_detected is False
+
+
+def test_vault_not_detected_for_obsidian_under_excluded_dir(tmp_path: Path) -> None:
+    """A `.obsidian/` vendored under a pruned tree (e.g. `node_modules/`) is a
+    build/dependency artifact, not this repo's vault - it must not trip the
+    flag."""
+    (tmp_path / "node_modules" / "pkg" / ".obsidian").mkdir(parents=True)
+    _write(tmp_path, "README.md", "real repo, not a vault")
+    r = build_doc_graph(tmp_path)
+    assert r.vault_detected is False
+
+
 def test_wikilink_inside_fenced_code_block_is_not_counted(tmp_path: Path) -> None:
     """A FORMAT spec or Obsidian-syntax tutorial that *shows* `[[foo]]` as a
     sample inside a fenced code block must not contribute a phantom edge or
