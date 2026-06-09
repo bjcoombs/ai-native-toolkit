@@ -99,7 +99,12 @@ Doc link-graph for Layer 0 navigability. Parses `[[wikilinks]]` and
 graph. Derives PageRank centrality, orphan rate, connectivity, MOC validation, and
 doc->code association edges. The doc->code edges are reused by `doc_staleness.py` and
 `understanding_analysis.py`, making this module a shared dependency for the document
-analysis layer.
+analysis layer. Obsidian-vault detection (`_vault_detected`) walks the repo subtree,
+pruning `EXCLUDE_DIRS`, to find a `.obsidian/` directory anywhere under `repo_root`,
+not just at the root - a vault kept as a subdirectory (`repo/notes/.obsidian/`) sits
+below the `git rev-parse --show-toplevel` scan target and was previously reported as no
+vault, silently disabling downstream vault accommodations (#179). Pruning `EXCLUDE_DIRS`
+keeps a vendored or build-artifact `.obsidian/` from tripping a false positive.
 
 **`doc_staleness.py`**
 Doc-staleness metric for Layer 0. Associates each doc with the code it describes via
