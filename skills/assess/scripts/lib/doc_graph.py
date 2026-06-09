@@ -28,6 +28,7 @@ required. If ``networkx`` is unavailable the module degrades to an
 """
 from __future__ import annotations
 
+import os
 import posixpath
 import re
 from dataclasses import dataclass, field
@@ -272,7 +273,32 @@ def _strip_anchor_and_alias(target: str) -> str:
 
 
 def _vault_detected(repo_root: Path) -> bool:
-    return (repo_root / ".obsidian").is_dir()
+    """True if the repo is, or contains, an Obsidian vault.
+
+    A vault is rooted at the directory holding `.obsidian/`, but that root is
+    not always the scan target: `/assess` scans from `git rev-parse
+    --show-toplevel`, so a vault kept as a subdirectory of a git repo
+    (`repo/notes/.obsidian/`) puts `.obsidian/` *below* repo_root. The old
+    `repo_root/.obsidian` check only saw a vault rooted exactly at the scan
+    target and reported `false` for the nested case - a false negative that
+    silently disabled every downstream vault accommodation (#179).
+
+    We therefore check repo_root and walk its subtree, pruning the same
+    non-navigational trees the doc scan skips (`EXCLUDE_DIRS` - `node_modules`,
+    `vendor`, ...) so a vendored or build-artifact `.obsidian/` can't trip a
+    false positive, while a real vault is found wherever it sits in the repo.
+    """
+    repo_root = repo_root.resolve()
+    if (repo_root / ".obsidian").is_dir():
+        return True
+    for _dirpath, dirnames, _filenames in os.walk(repo_root):
+        if ".obsidian" in dirnames:
+            return True
+        # Prune heavy / non-navigational subtrees from the descent. `.obsidian`
+        # is itself in EXCLUDE_DIRS, but we've already matched it above before
+        # pruning, so it never gets removed out from under the search.
+        dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
+    return False
 
 
 def _obsidiantools_available() -> bool:
