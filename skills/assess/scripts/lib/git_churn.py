@@ -134,16 +134,14 @@ def git_commit_info(root: Path) -> dict:
     return info
 
 
-def file_last_commit_days(path: Path) -> int | None:
-    """Days since `path` was last committed in git. None if not tracked.
+def file_last_commit_epoch(path: Path) -> int | None:
+    """Unix timestamp (epoch seconds) of `path`'s last commit. None if untracked.
 
-    Distinct from churn count - this is the staleness axis (how long since
-    the file last moved), used to colour the docs-staleness heatmap and to
-    compute the doc-vs-code staleness ratio. None means "no git history for
-    this file" so callers can degrade rather than treating untracked as fresh.
+    The raw commit time, before the days-ago conversion `file_last_commit_days`
+    applies. Provenance-aware staleness needs the absolute timestamp so it can
+    compare a generated doc against its declared source on the same axis (epoch
+    seconds), independent of "now" - see `lib.doc_provenance`.
     """
-    import datetime as _dt
-
     try:
         out = subprocess.run(
             ["git", "log", "-1", "--format=%ct", "--", str(path)],
@@ -157,8 +155,23 @@ def file_last_commit_days(path: Path) -> int | None:
     if not raw:
         return None
     try:
-        ts = int(raw)
+        return int(raw)
     except ValueError:
+        return None
+
+
+def file_last_commit_days(path: Path) -> int | None:
+    """Days since `path` was last committed in git. None if not tracked.
+
+    Distinct from churn count - this is the staleness axis (how long since
+    the file last moved), used to colour the docs-staleness heatmap and to
+    compute the doc-vs-code staleness ratio. None means "no git history for
+    this file" so callers can degrade rather than treating untracked as fresh.
+    """
+    import datetime as _dt
+
+    ts = file_last_commit_epoch(path)
+    if ts is None:
         return None
     delta = _dt.datetime.now().timestamp() - ts
     return max(0, int(delta // 86400))

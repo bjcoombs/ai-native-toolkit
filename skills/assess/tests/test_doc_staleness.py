@@ -225,3 +225,79 @@ def test_doc_staleness_excludes_test_fixtures(tmp_path: Path) -> None:
     assert r["association"]["doc_count"] == 1
     assert r["association"]["code_file_count"] == 1
     assert all("fixtures" not in d["path"] for d in r["docs"])
+
+
+# --- Provenance-aware staleness for generated docs (issue #178) -----------
+
+def test_generated_doc_source_newer_is_flagged(git_repo) -> None:
+    """A generated doc whose declared source committed AFTER it -> source_newer
+    True. Staleness is measured against the source, not the doc's own age."""
+    repo, commit = git_repo
+    (repo / "data").mkdir()
+    (repo / "data" / "jira.tsv").write_text("rows v1", encoding="utf-8")
+    (repo / "notes").mkdir()
+    (repo / "notes" / "dump.md").write_text(
+        "---\nsource: data/jira.tsv\ngenerated_by: scripts/gen.py\n---\nnotes",
+        encoding="utf-8",
+    )
+    commit("generate notes from source", days_ago=24)
+    # The source moves on; the generated dump is never regenerated.
+    (repo / "data" / "jira.tsv").write_text("rows v2", encoding="utf-8")
+    commit("source data updated", days_ago=1)
+
+    r = analyze_doc_staleness(repo)
+    dump = next(d for d in r["docs"] if d["path"] == "notes/dump.md")
+    assert dump["provenance"]["method"] == "frontmatter"
+    assert dump["provenance"]["sources"] == ["data/jira.tsv"]
+    assert dump["provenance"]["generated_by"] == "scripts/gen.py"
+    assert dump["provenance"]["source_newer"] is True
+
+
+def test_generated_doc_source_not_newer_is_fresh(git_repo) -> None:
+    """An old-but-accurate generated doc (regenerated AFTER its source last
+    moved) is fresh: source_newer False and ratio forced to 0 so no downstream
+    consumer reads it as a decaying/lying map."""
+    repo, commit = git_repo
+    (repo / "data").mkdir()
+    (repo / "data" / "jira.tsv").write_text("rows", encoding="utf-8")
+    commit("source data", days_ago=30)
+    # Regenerate the dump well after the source last changed.
+    (repo / "notes").mkdir()
+    (repo / "notes" / "dump.md").write_text(
+        "---\nsource: data/jira.tsv\n---\nnotes", encoding="utf-8",
+    )
+    commit("regenerate notes", days_ago=2)
+
+    r = analyze_doc_staleness(repo)
+    dump = next(d for d in r["docs"] if d["path"] == "notes/dump.md")
+    assert dump["provenance"]["source_newer"] is False
+    assert dump["ratio"] == 0.0  # provably matches source -> not a decaying map
+
+
+def test_generated_doc_via_config_mapping(tmp_path: Path) -> None:
+    """A bulk-generated tree declares provenance via .assess/config.toml rather
+    than per-file frontmatter; staleness still measured against the source."""
+    import os
+    (tmp_path / "data").mkdir()
+    src = tmp_path / "data" / "jira.tsv"
+    src.write_text("rows", encoding="utf-8")
+    (tmp_path / "notes").mkdir()
+    doc = tmp_path / "notes" / "123.md"
+    doc.write_text("no frontmatter here", encoding="utf-8")
+    os.utime(doc, (1_000_000, 1_000_000))
+    os.utime(src, (2_000_000, 2_000_000))  # source newer than the doc
+
+    r = analyze_doc_staleness(
+        tmp_path, generated_sources=[("notes", ["data/jira.tsv"])]
+    )
+    doc_row = next(d for d in r["docs"] if d["path"] == "notes/123.md")
+    assert doc_row["provenance"]["method"] == "config"
+    assert doc_row["provenance"]["source_newer"] is True
+
+
+def test_ordinary_doc_has_no_provenance_block(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "plain doc, no source declared")
+    _write(tmp_path, "app.py", "x")
+    r = analyze_doc_staleness(tmp_path)
+    readme = next(d for d in r["docs"] if d["path"] == "README.md")
+    assert "provenance" not in readme
