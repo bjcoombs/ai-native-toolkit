@@ -75,7 +75,7 @@ import numpy as np
 # heatmap, the docs heatmap, and the Layer 0 staleness metric reuse one
 # implementation. Only the colour mapping differs per heatmap and stays local.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib.assess_config import load_excludes  # noqa: E402
+from lib.assess_config import resolve_excludes  # noqa: E402
 from lib.git_churn import (  # noqa: E402
     churn_is_degenerate,
     git_churn_scores,
@@ -895,16 +895,11 @@ def main() -> int:
     # the way the config does. A CLI pattern containing a glob char goes to
     # exclude_patterns; everything else goes to exclude_dirs (so the same
     # `--exclude regulatory-raw` shape works as a dir match without needing
-    # the user to pick the right list). The same lists feed every other
-    # /assess scan via the orchestrator - see `assess_core.build_run_context`.
-    cfg_dirs, cfg_patterns = load_excludes(root)
-    extra_dirs: set[str] = set(cfg_dirs)
-    extra_patterns: list[str] = list(cfg_patterns)
-    for pat in args.exclude:
-        if any(c in pat for c in "*?["):
-            extra_patterns.append(pat)
-        else:
-            extra_dirs.add(pat)
+    # the user to pick the right list). `resolve_excludes` is the single shared
+    # resolution path - the doc-graph SVG uses it too, so every artifact
+    # computes over the identical set (issue #177); the orchestrator drives the
+    # read-side scans via the same config - see `assess_core.build_run_context`.
+    extra_dirs, extra_patterns = resolve_excludes(root, args.exclude)
 
     files, effective_by, aux_data, aux_label, fn_ccn_by_path = collect(
         root, by="hotspot", include_artifacts=args.include_artifacts,

@@ -99,12 +99,24 @@ Doc link-graph for Layer 0 navigability. Parses `[[wikilinks]]` and
 graph. Derives PageRank centrality, orphan rate, connectivity, MOC validation, and
 doc->code association edges. The doc->code edges are reused by `doc_staleness.py` and
 `understanding_analysis.py`, making this module a shared dependency for the document
-analysis layer. Obsidian-vault detection (`_vault_detected`) walks the repo subtree,
-pruning `EXCLUDE_DIRS`, to find a `.obsidian/` directory anywhere under `repo_root`,
-not just at the root - a vault kept as a subdirectory (`repo/notes/.obsidian/`) sits
-below the `git rev-parse --show-toplevel` scan target and was previously reported as no
-vault, silently disabling downstream vault accommodations (#179). Pruning `EXCLUDE_DIRS`
-keeps a vendored or build-artifact `.obsidian/` from tripping a false positive.
+analysis layer. Folds in vault-native navigation edges from `vault_queries.py` (`.base`
+hubs become entry nodes; `dataview` query blocks emit edges from their declaring note),
+so a vault navigated by dynamic queries doesn't score as orphaned. `doc-graph-svg.py`
+renders this exact graph, so the two artifacts always agree. Obsidian-vault detection
+(`_vault_detected`) walks the repo subtree, pruning `EXCLUDE_DIRS`, to find a `.obsidian/`
+directory anywhere under `repo_root`, not just at the root - a vault kept as a subdirectory
+(`repo/notes/.obsidian/`) sits below the `git rev-parse --show-toplevel` scan target and was
+previously reported as no vault, silently disabling downstream vault accommodations (#179).
+Pruning `EXCLUDE_DIRS` keeps a vendored or build-artifact `.obsidian/` from tripping a false
+positive.
+
+**`vault_queries.py`**
+Static parser for Obsidian dynamic-navigation hubs: `.base` view files and
+`dataview` query blocks. Resolves the folder / tag / frontmatter-field
+predicates it can evaluate from the committed files alone (no running Obsidian) into the
+set of notes a hub surfaces. Pure - no filesystem walk, no `doc_graph` import - so
+`doc_graph.py` owns discovery/excludes and consumes this module's parse + selection. Add
+a fixture-backed test here alongside any predicate change.
 
 **`doc_staleness.py`**
 Doc-staleness metric for Layer 0. Associates each doc with the code it describes via
@@ -167,8 +179,10 @@ conservative agent/human classification is defined one way.
 Reads the optional per-repo `.assess/config.toml`: `exclude_dirs` / `exclude_patterns`
 (the same two lists feed every scan - heatmap, doc graph, staleness, liveness - so
 exclusion is consistent), the `[gate]` and `[structure]` sections, and the `[[generated]]`
-folder->source provenance map (issue #178) consumed by `doc_provenance.py`. Degrades
-silently on missing or malformed config rather than blocking the run.
+folder->source provenance map (issue #178) consumed by `doc_provenance.py`. `resolve_excludes`
+is the single shared path that combines config excludes with CLI `--exclude`; both the treemap
+CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.
+Degrades silently on missing or malformed config rather than blocking the run.
 
 ### Output and formatting
 

@@ -447,3 +447,60 @@ def test_degrades_when_networkx_unavailable(tmp_path: Path, monkeypatch) -> None
     assert "networkx" in r.reason
     # must not crash; as_dict is still serialisable
     assert r.as_dict()["available"] is False
+
+
+# ---- vault-native navigation (issue #176) ---------------------------------
+
+def test_base_hub_links_folder_notes_no_longer_orphaned(tmp_path: Path) -> None:
+    # A `.base` viewing `_jira` is the only navigation surface: no static links
+    # anywhere. Before #176 every note scored as an orphan / unreachable.
+    _write(tmp_path, "tasks.base",
+           'filters:\n  and:\n    - file.inFolder("_jira")\n    - file.ext == "md"\n'
+           'views:\n  - type: table\n    name: All\n')
+    for i in range(5):
+        _write(tmp_path, f"_jira/ABC-{i}.md", f"# Ticket {i}\nstatus: open\n")
+
+    r = build_doc_graph(tmp_path)
+    # The .base hub is a node + entry point; the 5 notes are its descendants.
+    assert "tasks.base" in r.entry_points
+    assert r.edge_count == 5
+    assert r.orphans == []           # every note has the hub as an inbound link
+    assert r.orphan_rate == 0.0
+    assert r.reachability_pct == 1.0  # all reachable from the hub entry
+
+
+def test_base_that_selects_nothing_is_not_added(tmp_path: Path) -> None:
+    # A `.base` whose query matches no note must not appear as an orphan hub node.
+    _write(tmp_path, "empty.base", '- file.inFolder("does-not-exist")\n')
+    _write(tmp_path, "README.md", "# Home\n")
+    r = build_doc_graph(tmp_path)
+    assert "empty.base" not in r.entry_points
+    assert r.doc_count == 1  # only README.md; the empty base is not a node
+
+
+def test_dataview_hub_links_notes_from_its_note(tmp_path: Path) -> None:
+    # A `dataview` block inside a hub note (itself reachable from the README)
+    # surfaces the `_archive` folder; those notes become reachable, not orphans.
+    _write(tmp_path, "README.md", "Start at the [hub](hub.md)")
+    _write(tmp_path, "hub.md",
+           "# Hub\n\n```dataview\nLIST\nFROM \"_archive\"\n```\n")
+    for i in range(3):
+        _write(tmp_path, f"_archive/note-{i}.md", f"old note {i}")
+
+    r = build_doc_graph(tmp_path)
+    # hub.md -> each archive note (3) plus README -> hub (1)
+    assert r.edge_count == 4
+    assert r.orphans == []
+    assert r.reachability_pct == 1.0
+
+
+def test_dataview_tag_hub_uses_frontmatter(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "see [hub](hub.md)")
+    _write(tmp_path, "hub.md", "```dataview\nLIST FROM #project\n```")
+    _write(tmp_path, "p1.md", "---\ntags: [project]\n---\nbody")
+    _write(tmp_path, "p2.md", "---\ntags: [other]\n---\nbody")
+
+    r = build_doc_graph(tmp_path)
+    # hub -> p1 (tagged project) only; p2 is not tagged so stays an orphan.
+    assert "p1.md" not in r.orphans
+    assert "p2.md" in r.orphans

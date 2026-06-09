@@ -47,6 +47,11 @@ from lib.git_churn import tracked_files  # noqa: E402
 
 DOC_EXTENSIONS = {".md", ".mdx", ".markdown"}
 
+# Obsidian Bases view files. Not markdown - they are query hubs that surface
+# notes dynamically - so they are discovered separately and added as hub nodes
+# (issue #176), never counted as prose docs by the markdown walk.
+BASE_EXTENSIONS = {".base"}
+
 # Extensions we treat as "code" when a doc link points at one (doc->code edge).
 CODE_EXTENSIONS = {
     ".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".go", ".java",
@@ -235,20 +240,25 @@ def is_repo_file(path: Path, repo_root: Path, tracked: set[Path] | frozenset[Pat
     return True
 
 
-def discover_doc_files(
+def _discover_files(
     repo_root: Path,
+    extensions: set[str],
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
 ) -> list[Path]:
-    """Return all in-repo markdown docs under repo_root, skipping excluded dirs."""
+    """Return all in-repo files of the given extensions, skipping excluded dirs.
+
+    The single walk shared by the markdown-doc and `.base`-hub discovery so both
+    honour the identical exclude resolution (built-in defaults + user excludes).
+    """
     from lib.assess_config import is_user_excluded
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
-    docs: list[Path] = []
+    found: list[Path] = []
     for path in repo_root.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in DOC_EXTENSIONS:
+        if not path.is_file() or path.suffix.lower() not in extensions:
             continue
         try:
             rel = path.relative_to(repo_root)
@@ -260,8 +270,30 @@ def discover_doc_files(
             continue
         if not is_repo_file(path, repo_root, tracked):
             continue
-        docs.append(path)
-    return sorted(docs)
+        found.append(path)
+    return sorted(found)
+
+
+def discover_doc_files(
+    repo_root: Path,
+    extra_exclude_dirs: set[str] | None = None,
+    extra_exclude_patterns: list[str] | None = None,
+) -> list[Path]:
+    """Return all in-repo markdown docs under repo_root, skipping excluded dirs."""
+    return _discover_files(
+        repo_root, DOC_EXTENSIONS, extra_exclude_dirs, extra_exclude_patterns,
+    )
+
+
+def discover_base_files(
+    repo_root: Path,
+    extra_exclude_dirs: set[str] | None = None,
+    extra_exclude_patterns: list[str] | None = None,
+) -> list[Path]:
+    """Return all in-repo Obsidian Bases (`.base`) files, skipping excluded dirs."""
+    return _discover_files(
+        repo_root, BASE_EXTENSIONS, extra_exclude_dirs, extra_exclude_patterns,
+    )
 
 
 def _strip_anchor_and_alias(target: str) -> str:
@@ -595,14 +627,82 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
 
     missing = _missing_xrefs(docs, texts, graph, repo_root, rel)
 
+    # Vault-native navigation: `.base` view hubs + ```dataview``` query blocks
+    # surface notes dynamically, so a static-link-only graph scores a navigable
+    # vault as orphaned (issue #176). Recognise those query hubs as edge sources.
+    base_hubs = _apply_vault_edges(
+        graph, repo_root, docs, texts, rel,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    )
+
     result = _derive_signals(
         graph=graph, docs=docs, repo_root=repo_root, rel=rel,
         doc_to_code=doc_to_code, dangling=len(broken), ambiguous=ambiguous,
-        vault=vault, obs=obs,
+        vault=vault, obs=obs, base_hubs=base_hubs,
     )
     result.broken_links = broken[:MAX_BROKEN_LINKS]
     result.missing_xrefs = missing[:MAX_MISSING_XREFS]
     return result
+
+
+def _apply_vault_edges(
+    graph, repo_root: Path, docs: list[Path], texts: dict[Path, str], rel,
+    *, extra_exclude_dirs: set[str] | None = None,
+    extra_exclude_patterns: list[str] | None = None,
+) -> list[str]:
+    """Add Obsidian Bases (`.base`) and Dataview query edges to `graph`.
+
+    Mutates `graph` in place and returns the rel-paths of the `.base` hub nodes
+    it added. A `.base` hub is a dynamic navigation surface (you open it to see
+    its notes), so it is treated as an entry point for reachability. Dataview
+    query blocks live inside existing notes, so their edges originate from the
+    note that declares them - no new node.
+    """
+    from lib.vault_queries import (
+        parse_base_queries,
+        parse_dataview_queries,
+        parse_frontmatter,
+        select_notes,
+    )
+
+    doc_rels: list[tuple[Path, Path]] = [(d, d.relative_to(repo_root)) for d in docs]
+    _fm_cache: dict[Path, dict[str, object]] = {}
+
+    def frontmatter_of(d: Path) -> dict[str, object]:
+        if d not in _fm_cache:
+            _fm_cache[d] = parse_frontmatter(texts.get(d, ""))
+        return _fm_cache[d]
+
+    # Dataview blocks: edges from the declaring note to the notes it selects.
+    for d in docs:
+        text = texts.get(d)
+        if not text:
+            continue
+        for query in parse_dataview_queries(text):
+            for tgt in select_notes(query, doc_rels, frontmatter_of):
+                if tgt != d:
+                    graph.add_edge(rel(d), rel(tgt))
+
+    # `.base` hubs: a new hub node with edges to every note its query selects.
+    base_hubs: list[str] = []
+    for bf in discover_base_files(repo_root, extra_exclude_dirs, extra_exclude_patterns):
+        try:
+            btext = bf.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        targets: set[Path] = set()
+        for query in parse_base_queries(btext):
+            targets |= select_notes(query, doc_rels, frontmatter_of)
+        if not targets:  # a base that selects nothing is not a hub edge source
+            continue
+        hub = rel(bf)
+        if hub not in graph:
+            graph.add_node(hub)
+        base_hubs.append(hub)
+        for tgt in targets:
+            graph.add_edge(hub, rel(tgt))
+    return base_hubs
 
 
 def _pagerank(graph, alpha: float = 0.85, max_iter: int = 100,
@@ -651,10 +751,12 @@ def _is_declared_moc(path: Path) -> bool:
 
 def _pick_entry_points(
     docs: list[Path], repo_root: Path, pagerank: dict[str, float], rel,
+    base_hubs: list[str] | None = None,
 ) -> list[str]:
-    """Entry roots for reachability: root-level README/AGENTS/CLAUDE/index plus
-    the single highest-PageRank declared MOC. Falls back to the top doc overall
-    so reachability is always computable."""
+    """Entry roots for reachability: root-level README/AGENTS/CLAUDE/index, the
+    single highest-PageRank declared MOC, plus any `.base` view hub (a dynamic
+    navigation surface). Falls back to the top doc overall so reachability is
+    always computable."""
     entries: list[str] = []
     for d in docs:
         r = d.relative_to(repo_root)
@@ -665,6 +767,11 @@ def _pick_entry_points(
         top_moc = max(mocs, key=lambda x: x[1])[0]
         if top_moc not in entries:
             entries.append(top_moc)
+    # `.base` hubs are real entries, so add them before the fallback - otherwise
+    # the "no entries" fallback fires spuriously and crowns a random sink node.
+    for hub in base_hubs or []:
+        if hub not in entries:
+            entries.append(hub)
     if not entries and pagerank:
         entries.append(max(pagerank, key=lambda k: pagerank[k]))
     return entries
@@ -673,7 +780,7 @@ def _pick_entry_points(
 def _derive_signals(
     *, graph, docs: list[Path], repo_root: Path, rel,
     doc_to_code: list[dict], dangling: int, ambiguous: int,
-    vault: bool, obs: bool,
+    vault: bool, obs: bool, base_hubs: list[str] | None = None,
 ) -> DocGraphResult:
     nodes = list(graph.nodes())
     n = len(nodes)
@@ -683,7 +790,9 @@ def _derive_signals(
     in_deg = dict(graph.in_degree())
     out_deg = dict(graph.out_degree())
 
-    entry_set = set(_pick_entry_points(docs, repo_root, pagerank, rel))
+    # `.base` hubs are dynamic navigation surfaces, so they seed reachability
+    # alongside the README/AGENTS/MOC entry points (issue #176).
+    entry_set = set(_pick_entry_points(docs, repo_root, pagerank, rel, base_hubs))
 
     orphans = sorted(
         x for x in nodes if in_deg.get(x, 0) == 0 and x not in entry_set
