@@ -31,6 +31,7 @@ from lib.doc_graph import (
     is_excluded_path,
     is_repo_file,
 )
+from lib.doc_provenance import resolve_doc_sources, source_is_newer
 from lib.git_churn import (
     churn_is_degenerate,
     file_last_commit_days,
@@ -61,6 +62,16 @@ class DocStaleness:
     subject_code_count: int
     subject_method: str
     ratio: float
+    # Provenance (generated docs only; see lib.doc_provenance). When a doc
+    # declares a source, staleness is measured against that source instead of
+    # the doc's own age/churn: `provenance_method` names how it was declared
+    # ("frontmatter"/"config"), `provenance_sources` are the resolved source rel
+    # paths, and `source_newer` is True iff a source has changed more recently
+    # than the doc. All None/empty for an ordinary hand-written doc.
+    provenance_method: str = ""
+    provenance_sources: tuple[str, ...] = ()
+    provenance_generated_by: str | None = None
+    source_newer: bool | None = None
 
     @property
     def confidence(self) -> str:
@@ -70,7 +81,7 @@ class DocStaleness:
         return "low" if self.subject_method == "repo-baseline" else "high"
 
     def as_dict(self) -> dict:
-        return {
+        d: dict = {
             "path": self.path,
             "last_commit_days": self.last_commit_days,
             "doc_churn_in_window": self.doc_churn_in_window,
@@ -80,6 +91,14 @@ class DocStaleness:
             "ratio": round(self.ratio, 2),
             "confidence": self.confidence,
         }
+        if self.provenance_method:
+            d["provenance"] = {
+                "method": self.provenance_method,
+                "sources": list(self.provenance_sources),
+                "generated_by": self.provenance_generated_by,
+                "source_newer": self.source_newer,
+            }
+        return d
 
 
 def _discover(repo_root: Path, exts: set[str],
@@ -129,6 +148,16 @@ def discover_doc_files(repo_root: Path,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
     )
+
+
+def _safe_rel(path: Path, repo_root: Path) -> str:
+    """Repo-relative path string, falling back to the absolute path when the
+    target lies outside the repo root (a provenance source can resolve via the
+    doc's own directory to a sibling tree)."""
+    try:
+        return str(path.relative_to(repo_root))
+    except ValueError:
+        return str(path)
 
 
 def _is_base_doc(doc: Path) -> bool:
@@ -208,9 +237,18 @@ def analyze_doc_staleness(
     doc_to_code_edges: list[dict] | None = None,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
+    generated_sources: list[tuple[str, list[str]]] | None = None,
 ) -> dict:
-    """Compute the doc-staleness metric and doc->code association summary."""
+    """Compute the doc-staleness metric and doc->code association summary.
+
+    ``generated_sources`` is the ``[[generated]]`` folder->source map (issue
+    #178). When None it is read from ``.assess/config.toml``; pass an explicit
+    list to override (tests, or a caller that already loaded the config).
+    """
     repo_root = repo_root.resolve()
+    if generated_sources is None:
+        from lib.assess_config import load_generated_sources
+        generated_sources = load_generated_sources(repo_root)
     docs = [
         d.resolve() for d in (
             doc_files if doc_files is not None
@@ -312,6 +350,29 @@ def analyze_doc_staleness(
         method_counts[method] = method_counts.get(method, 0) + 1
         doc_churn = churn_map.get(d, 0)
         ratio = code_churn / max(doc_churn, 1)
+
+        # Provenance (issue #178): a *generated* doc that declares a source is
+        # measured against that source, not its own age/churn. When the source
+        # has NOT moved on, the doc provably matches its source, so its
+        # decaying-map ratio is zero by construction - this is what keeps a
+        # freshly-accurate generated doc out of the lying_map bucket regardless
+        # of how busy the surrounding code is. When the source HAS moved on,
+        # `source_newer` carries the staleness verdict for the join to sign
+        # freshness directly; the churn ratio is left untouched as a secondary
+        # signal.
+        prov_sources, generated_by, prov_method = resolve_doc_sources(
+            d, repo_root, generated_sources
+        )
+        src_newer: bool | None = None
+        prov_source_rels: tuple[str, ...] = ()
+        if prov_method:
+            src_newer = source_is_newer(d, prov_sources)
+            prov_source_rels = tuple(
+                _safe_rel(s, repo_root) for s in prov_sources
+            )
+            if src_newer is False:
+                ratio = 0.0
+
         results.append(DocStaleness(
             path=rel(d),
             last_commit_days=file_last_commit_days(d),
@@ -320,6 +381,10 @@ def analyze_doc_staleness(
             subject_code_count=subject_count,
             subject_method=method,
             ratio=ratio,
+            provenance_method=prov_method,
+            provenance_sources=prov_source_rels,
+            provenance_generated_by=generated_by,
+            source_newer=src_newer,
         ))
 
     # Association-derivability is itself a Layer 0 signal.

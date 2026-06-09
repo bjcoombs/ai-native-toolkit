@@ -233,6 +233,27 @@ Full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS
 
    No section header is needed - the file is already namespaced by living under `.assess/`. Missing or malformed files degrade silently to no extra excludes; the assessment never blocks on a broken config.
 
+**Provenance for generated docs (staleness measured against the source).** A *generated* doc - a Jira note dump, an API reference, codegen output - is not stale because the file is old; it is stale when the **source it was derived from has moved on**. The mtime/age model gets this backwards: a freshly regenerated dump of 1,200 notes shares one recent mtime (looks fresh) even when its source changed afterwards, and an old-but-accurate generated doc reads as a lying map when it is not. Declare provenance and doc-staleness is computed as "is the source newer than the doc?" instead - a generated doc whose source is quiet is never flagged as a `lying_map`, regardless of how busy the surrounding code is. Two ways to declare it (frontmatter wins when both name a source for the same doc):
+
+1. **Frontmatter** on the generated doc - a `source:` key (a string or a list), resolved relative to the repo root first, then to the doc's own directory. An optional `generated_by:` records the generator for humans (it does not affect staleness):
+
+   ```markdown
+   ---
+   source: data/jira.tsv
+   generated_by: scripts/dump-jira-notes.py
+   ---
+   ```
+
+2. **Per-repo config** `.assess/config.toml` `[[generated]]` array-of-tables, for bulk-generated trees that cannot each carry frontmatter. `path` is a folder relative to the repo root; every doc under it inherits the mapping. `source` is a string or list of strings relative to the repo root:
+
+   ```toml
+   [[generated]]
+   path = "notes"
+   source = "data/jira.tsv"
+   ```
+
+   When a generated doc's source is newer than the doc, the staleness verdict is a direct, high-confidence source-vs-doc comparison (git commit time, falling back to mtime) - so a stale generated doc over complex code still surfaces as a `lying_map`, while a fresh one never does.
+
 The script's own output directory `.assess/` is excluded automatically - prior runs' `run-context.json` and SVGs never feed the next run's heatmap, the doc graph, or the dead-code scan. Test fixtures under `**/tests/fixtures/**` are likewise excluded automatically - they are inputs that exercise the scanners (sample `CLAUDE.md` / monolithic-instruction files), not navigational docs or live code, so counting them would inflate the orphan rate and depress the Layer 0 navigability read.
 
 **If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated - <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
