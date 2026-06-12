@@ -122,6 +122,22 @@ A single `main.dart.js` or thousands of lines of `.pb.go` shouldn't dominate the
 
 The skill runs locally - lizard, optional scc, and git log do the analysis in your Claude Code session. No data leaves the machine.
 
+### Use as a GitHub Action
+
+The assess gate also ships as a composite GitHub Action, so any repo can run the deterministic core on every PR without installing the plugin:
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+    with:
+      fetch-depth: 0   # full history so the churn window is accurate
+  - uses: bjcoombs/ai-native-toolkit@v1.42.0
+    with:
+      config: .assess/config.toml   # optional; warn-only defaults without it
+```
+
+Warn-only by default: the only thing that can fail a PR is what `.assess/config.toml` opts into (`fail_on` findings, complexity floors, `fail_on_regression`). Because the version rides a `uses:` pin on an immutable release tag, **Dependabot and Renovate detect new toolkit releases and open upgrade PRs automatically** - add a `.github/dependabot.yml` with the `github-actions` ecosystem and the gate keeps itself current. The `/assess` end-of-run "freeze into CI" offer emits exactly this workflow.
+
 > **Portability split.** The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session. The workflow commands (`/tm`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
 
 ## Install

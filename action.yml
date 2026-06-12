@@ -1,0 +1,99 @@
+# The AI-Readiness Assess Gate as a composite GitHub Action.
+#
+# Consumers reference this with a normal `uses:` line, which is what makes the
+# version VISIBLE to dependency automation: Dependabot's `github-actions`
+# ecosystem (and Renovate) read `uses: bjcoombs/ai-native-toolkit@v<semver>`
+# and open upgrade PRs when a newer release tag exists. The previous mechanism
+# (a `git clone --branch v<semver>` inside a `run:` step) was invisible to all
+# of them - emitted gates silently aged forever.
+#
+# Contract (identical to the emitted workflow this action replaces):
+# - Warn-only by default: the only thing that can fail a consumer's PR is what
+#   their `.assess/config.toml` opts into (assess_gate.py's exit code).
+# - Infra failures degrade to a skip notice, never a red check: ripgrep or uv
+#   being unavailable reduces coverage, it is not a finding.
+# - Supply chain pinned: ripgrep and uv install at exact versions. A floating
+#   "latest" could shift complexity-stats.json and move the regression baseline
+#   with no change in the assessed tree. This repo cuts immutable releases, so
+#   the action tag a consumer pins is itself immutable.
+#
+# The composite checkout of this action (github.action_path) IS the toolkit at
+# the pinned version - no separate clone step, no tag-must-exist race: if the
+# `uses:` ref resolved, the scripts are present.
+name: 'AI-Readiness Assess Gate'
+description: >-
+  Run the /assess deterministic core (complexity treemap, promissory-marker
+  scan, doc-graph signals) against the checked-out repository and gate on the
+  [gate] section of .assess/config.toml. Zero LLM tokens; warn-only until the
+  repository opts in. Requires actions/checkout with fetch-depth: 0 first.
+author: 'bjcoombs'
+branding:
+  icon: 'shield'
+  color: 'orange'
+
+inputs:
+  config:
+    description: >-
+      Path to the gate config, relative to the consumer workspace. Missing or
+      malformed config degrades to warn-only defaults.
+    required: false
+    default: '.assess/config.toml'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install ripgrep (pinned)
+      shell: bash
+      # The promissory-marker scan shells out to rg; ubuntu-latest does not
+      # ship it. Failure degrades to reduced coverage (the scan reports
+      # honestly that rg is absent), never a red check - hence the guarded
+      # exit 0.
+      run: |
+        if ! command -v rg >/dev/null 2>&1; then
+          curl -fsSLO https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep_14.1.1-1_amd64.deb \
+            && sudo dpkg -i ripgrep_14.1.1-1_amd64.deb \
+            || echo "::notice::assess-gate: ripgrep install failed - the marker scan degrades to reduced coverage (warn-only contract)."
+        fi
+        exit 0
+
+    - name: Ensure uv (pinned)
+      id: ensure-uv
+      shell: bash
+      # uv resolves the deterministic core's Python deps (PEP 723 inline
+      # metadata). Unavailable uv means the assessment cannot run at all, so it
+      # degrades to an explicit skip notice - infra failures are never findings.
+      run: |
+        if command -v uv >/dev/null 2>&1; then
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if curl -LsSf https://astral.sh/uv/0.5.9/install.sh | sh; then
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::notice::assess-gate: uv unavailable - skipping the assessment this run (warn-only contract; it runs again on the next push)."
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Render the deterministic snapshot
+      if: steps.ensure-uv.outputs.ok == 'true'
+      shell: bash
+      working-directory: ${{ github.action_path }}/skills/assess
+      run: |
+        mkdir -p "${GITHUB_WORKSPACE}/.assess"
+        uv run scripts/complexity-treemap.py "${GITHUB_WORKSPACE}" \
+          -o "${GITHUB_WORKSPACE}/.assess/complexity-heatmap.svg" \
+          --stats "${GITHUB_WORKSPACE}/.assess/complexity-stats.json"
+        uv run scripts/assess_core.py "${GITHUB_WORKSPACE}"
+        uv run scripts/assess_report.py "${GITHUB_WORKSPACE}"
+
+    - name: Gate on floors and regressions
+      if: steps.ensure-uv.outputs.ok == 'true'
+      shell: bash
+      working-directory: ${{ github.action_path }}/skills/assess
+      # The single step whose exit code can fail the consumer's PR - and only
+      # per their own config.toml opt-ins.
+      run: |
+        uv run scripts/assess_gate.py "${GITHUB_WORKSPACE}" \
+          --config "${GITHUB_WORKSPACE}/${{ inputs.config }}"

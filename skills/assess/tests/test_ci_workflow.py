@@ -22,19 +22,16 @@ ALL_EXTERNAL_TOOLS = ["scc", "staticcheck", "ts-prune", "knip"]
 def test_render_substitutes_version_and_branch():
     out = render_ci_workflow(plugin_version="1.23.0", default_branch="develop")
     assert "ai-native-toolkit v1.23.0" in out
-    assert 'branch "v1.23.0"' in out
+    assert "uses: bjcoombs/ai-native-toolkit@v1.23.0" in out
     assert "branches: [develop]" in out
 
 
-def test_render_escapes_shell_vars():
-    """${RUNNER_TEMP} / ${GITHUB_WORKSPACE} must survive as literal shell refs."""
+def test_render_leaves_no_unresolved_placeholders():
     out = render_ci_workflow(plugin_version="1.23.0")
-    assert "${RUNNER_TEMP}/ai-native-toolkit" in out
-    assert "${GITHUB_WORKSPACE}/.assess" in out
-    # No unresolved template placeholders leaked through.
     assert "$plugin_version" not in out
     assert "$tool_steps" not in out
     assert "$default_branch" not in out
+    assert "$generated_date" not in out
 
 
 def test_working_directory_uses_actions_expression_not_shell_var():
@@ -85,6 +82,14 @@ def test_render_pins_actions_to_commit_shas():
     uses_lines = [ln for ln in out.splitlines() if ln.strip().startswith("uses:") or " uses:" in ln]
     assert uses_lines, "expected at least one uses: step"
     for line in uses_lines:
+        if "bjcoombs/ai-native-toolkit@" in line:
+            # First-party exception: this repo publishes IMMUTABLE releases, so
+            # the tag cannot be re-pointed - the guarantee SHA-pinning buys for
+            # third-party actions. A tag pin here is what lets Dependabot
+            # propose readable version bumps to consumers.
+            ref = line.split("@", 1)[1].strip()
+            assert re.fullmatch(r"v\d+\.\d+\.\d+", ref), f"not semver-tag-pinned: {line.strip()}"
+            continue
         ref = line.split("@", 1)[1].split("#", 1)[0].strip()
         assert re.fullmatch(r"[0-9a-f]{40}", ref), f"not SHA-pinned: {line.strip()}"
         assert re.search(r"#\s*v\d", line), f"missing version comment: {line.strip()}"
@@ -96,29 +101,17 @@ def test_checkout_does_not_persist_credentials():
     assert "persist-credentials: false" in out
 
 
-def test_toolkit_fetch_failure_degrades_to_skip():
-    """The warn-only contract survives infra failure.
-
-    A failed clone (rate limit, network blip, tag not yet released) must emit a
-    notice and skip the assessment, never fail the check - the gate only goes
-    red for what .assess/config.toml opts into.
-    """
+def test_render_delegates_to_the_action_not_a_clone():
+    """The gate logic ships as a composite action; the emitted workflow is a
+    thin pin. No `git clone` of the toolkit may remain - a clone inside a run:
+    step is invisible to Dependabot/Renovate, which was the defect this action
+    exists to fix. Infra degrade now lives inside the action itself."""
     out = render_ci_workflow(plugin_version="1.23.0")
-    assert "if ! git clone" in out
-    assert "skip=true" in out
-    assert "::notice::" in out
-    # No bare, hard-failing clone remains.
-    for line in out.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("git clone"):
-            pytest.fail(f"unguarded clone: {stripped}")
-
-
-def test_assessment_steps_are_guarded_on_infra_outcomes():
-    """Render + gate steps only run when the fetch and uv setup succeeded."""
-    out = render_ci_workflow(plugin_version="1.23.0")
-    assert out.count("steps.fetch-toolkit.outputs.skip != 'true'") == 2
-    assert out.count("steps.setup-uv.outcome == 'success'") == 2
+    assert "git clone" not in out
+    assert "uses: bjcoombs/ai-native-toolkit@v1.23.0" in out
+    assert "config: .assess/config.toml" in out
+    # The Dependabot enablement snippet ships in the header comment.
+    assert "package-ecosystem: github-actions" in out
 
 
 def test_tool_install_failures_do_not_red_the_check():
@@ -126,26 +119,9 @@ def test_tool_install_failures_do_not_red_the_check():
     out = render_ci_workflow(plugin_version="1.23.0", discovered_tools=ALL_EXTERNAL_TOOLS)
     installs = out.count("go install") + out.count("npm install")
     assert installs == len(ALL_EXTERNAL_TOOLS)
-    # One continue-on-error per tool install, plus one on the uv setup step,
-    # plus one on the always-present ripgrep step (the marker scan dependency).
-    assert out.count("continue-on-error: true") == installs + 2
-
-
-def test_render_always_installs_pinned_ripgrep():
-    """The promissory-marker scan needs rg, which ubuntu-latest does not ship.
-
-    The step is unconditional (the scan is core, not a discovered extra) and
-    version-pinned like every other install: without rg the scan honestly
-    degrades, which would make a config.toml gating on unactioned_intent
-    silently toothless in CI while local runs report debt.
-    """
-    out = render_ci_workflow(plugin_version="1.23.0")
-    assert "Install ripgrep" in out
-    rg_lines = [ln for ln in out.splitlines() if "ripgrep/releases/download" in ln]
-    assert rg_lines, "expected a pinned ripgrep download"
-    assert re.search(r"/download/\d+\.\d+\.\d+/", rg_lines[0]), (
-        f"unpinned ripgrep: {rg_lines[0].strip()}"
-    )
+    # One continue-on-error per tool install; rg/uv degrade now lives inside
+    # the composite action, not the emitted workflow.
+    assert out.count("continue-on-error: true") == installs
 
 
 def test_render_skips_python_dep_tools():
@@ -163,12 +139,6 @@ def test_render_comments_unknown_tools():
 def test_render_dedupes_tools():
     out = render_ci_workflow(plugin_version="1.23.0", discovered_tools=["scc", "scc"])
     assert out.count("Install scc") == 1
-
-
-def test_render_runs_the_four_core_scripts():
-    out = render_ci_workflow(plugin_version="1.23.0")
-    for script in ("complexity-treemap.py", "assess_core.py", "assess_report.py", "assess_gate.py"):
-        assert script in out
 
 
 def test_render_is_valid_yaml():
