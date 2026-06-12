@@ -23,6 +23,12 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4
 
+      # The promissory-marker scan shells out to ripgrep; without it the scan
+      # honestly degrades to "rg not on PATH" and its fixture tests cannot
+      # exercise the detector. ubuntu-latest does not ship rg.
+      - name: Install ripgrep
+        run: sudo apt-get update -q && sudo apt-get install -y -q ripgrep
+
       - name: Run pytest
         run: uv run --with pytest pytest -v
         working-directory: skills/assess
