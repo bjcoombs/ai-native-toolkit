@@ -256,6 +256,14 @@ Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
 sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
 
+**`badge.py`**
+Shields.io endpoint badge for the wiki (`.assess/badge.json`). Two producers on an
+honest-degrade ladder: `assess_finalize` always writes the LLM-scored form
+("7.0/8 · AI-Native", colour banded from the score), `assess_core` writes the
+deterministic findings-count fallback only when no badge exists - so a gate-only
+repo gets a truthful badge and a scored badge is never downgraded by a
+deterministic-only rerun. Pure threshold functions, fixture-tested.
+
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
 CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts and

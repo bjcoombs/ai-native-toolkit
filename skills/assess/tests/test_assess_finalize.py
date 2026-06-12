@@ -365,3 +365,22 @@ def test_finalize_all_actions_malformed_writes_no_contract(tmp_assess_dir: Path)
     finalize_run(assess_dir=tmp_assess_dir)
 
     assert not (tmp_assess_dir / "actions.json").exists()
+
+
+def test_finalize_writes_score_badge(tmp_assess_dir: Path) -> None:
+    """Finalize always (over)writes badge.json with the LLM-scored form."""
+    _seed_log_md(tmp_assess_dir)
+    (tmp_assess_dir / "badge.json").write_text(
+        '{"schemaVersion": 1, "label": "AI-readiness", '
+        '"message": "9 findings · 9 stale markers", "color": "orange"}',
+        encoding="utf-8",
+    )
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(_base_input()), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    badge = json.loads((tmp_assess_dir / "badge.json").read_text(encoding="utf-8"))
+    assert badge["message"] == "6.0/8 · Solid"
+    assert badge["color"] == "green"

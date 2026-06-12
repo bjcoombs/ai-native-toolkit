@@ -1153,3 +1153,30 @@ def test_test_pressure_scan_failure_degrades_not_crashes(tmp_path: Path, monkeyp
     # downstream blocks still present - one failed scan never blocks the run.
     assert "anomalies" in ctx
     assert "plugin_version" in ctx
+
+
+def test_core_writes_fallback_badge_only_when_absent(tmp_path: Path) -> None:
+    """A never-scored repo gets the deterministic findings badge; a finalized
+    score badge survives deterministic-only reruns (no downgrade)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 1, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }), encoding="utf-8")
+
+    build_run_context(repo_root=repo, run_date="2026-06-12")
+    badge = json.loads((assess_dir / "badge.json").read_text(encoding="utf-8"))
+    assert badge["label"] == "AI-readiness"
+    assert "findings" in badge["message"]  # deterministic fallback form
+
+    # Simulate a finalized score badge, then rerun the deterministic core.
+    (assess_dir / "badge.json").write_text(json.dumps({
+        "schemaVersion": 1, "label": "AI-readiness",
+        "message": "7.0/8 · AI-Native", "color": "brightgreen",
+    }), encoding="utf-8")
+    build_run_context(repo_root=repo, run_date="2026-06-13")
+    badge2 = json.loads((assess_dir / "badge.json").read_text(encoding="utf-8"))
+    assert badge2["message"] == "7.0/8 · AI-Native"

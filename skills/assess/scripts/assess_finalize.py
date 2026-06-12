@@ -38,6 +38,7 @@ from pathlib import Path
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from lib.badge import score_badge, write_badge
 from lib.wiki_writer import slug_for_path
 
 
@@ -177,6 +178,11 @@ def finalize_run(*, assess_dir: Path) -> None:
     actions = data.get("actions")
     if isinstance(actions, list) and actions:
         _write_actions_contract(assess_dir, actions)
+    # The score badge always overwrites: finalize carries the freshest
+    # LLM-scored run, the strongest claim the badge is allowed to make.
+    write_badge(
+        assess_dir, score_badge(data["score"], data["maturity_label"])
+    )
     # Clean up: the input file is consumed - delete from both the cache and
     # the legacy in-tree location so a stale copy can't leak into a commit.
     try:

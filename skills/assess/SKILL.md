@@ -387,6 +387,12 @@ This replaces:
 - `log.md`'s last entry placeholder `**Top action:** Deterministic ranker not yet wired ...` with your actual Top 1 action.
 - Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file.
 
+`assess_finalize.py` also refreshes `.assess/badge.json` (shields.io endpoint schema) from your score and maturity label - the live README badge. When offering the PR (assess-pr), include the embed snippet if the repo's README has no badge yet:
+
+```markdown
+![AI-readiness](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F<owner>%2F<repo>%2F<default-branch>%2F.assess%2Fbadge.json)
+```
+
 The `actions` array mirrors the report's Top 3 Actions table one-to-one and **must carry every table row** - `rank`, `action`, `done_when`, and `scope_fence` are required per entry (`layer`, `effort`, `files`, `first_step` recommended). `assess_finalize.py` writes it to `.assess/actions.json`, the *durable* machine-readable contract: unlike this input file (consumed and deleted), `actions.json` persists so an executing agent - including a smaller, cheaper model - can pick up the work with its exit criteria and fences intact, without parsing the report's markdown.
 
 Without this step, the `log.md` placeholders above carry forward forever. Hotspot pages you don't supply actions for keep a neutral pointer (`This file is flagged but outside this run's Top 3. See the report's Top 3 Actions, or run a focused /assess pass for file-specific guidance.`) rather than an unfinished-work placeholder - a flagged-but-not-Top-3 page reads as intentional.
