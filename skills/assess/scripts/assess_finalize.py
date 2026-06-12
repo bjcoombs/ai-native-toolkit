@@ -17,6 +17,10 @@ Updates:
     {repo_root}/.assess/log.md           (last entry's placeholders)
     {repo_root}/.assess/hotspots/*.md    (Suggested actions sections)
 
+Writes (when the input carries an ``actions`` array):
+    {repo_root}/.assess/actions.json     (durable machine-readable Top 3
+                                          action contract for executor agents)
+
 Run:
     uv run assess_finalize.py <repo_root>
 """
@@ -107,6 +111,41 @@ def _finalize_hotspot_actions(assess_dir: Path, *, hotspot_actions: dict[str, li
         page_path.write_text(new_text, encoding="utf-8")
 
 
+# Keys every action contract entry must carry. The executor-critical pair is
+# done_when (the exit criterion - without it a weak model doesn't know when to
+# stop) and scope_fence (what NOT to touch - without it a weak model
+# over-extends). Entries missing required keys are dropped with a warning
+# rather than failing the run: a partial contract beats none, but a malformed
+# entry must not reach an executor as if it were complete.
+ACTION_REQUIRED_KEYS = {"rank", "action", "done_when", "scope_fence"}
+
+
+def _write_actions_contract(assess_dir: Path, actions: list[dict]) -> None:
+    """Write the durable machine-readable Top 3 contract to actions.json.
+
+    Unlike finalize-input.json (consumed and deleted - transient by design),
+    actions.json persists: it is the artifact an executing agent reads to know
+    what to do, how to verify it, and where to stop, without parsing the
+    report's markdown table.
+    """
+    valid = []
+    for a in actions:
+        if not isinstance(a, dict) or not ACTION_REQUIRED_KEYS <= set(a):
+            missing = ACTION_REQUIRED_KEYS - set(a) if isinstance(a, dict) else ACTION_REQUIRED_KEYS
+            print(
+                f"actions.json: dropping malformed entry (missing {sorted(missing)})",
+                file=sys.stderr,
+            )
+            continue
+        valid.append(a)
+    if not valid:
+        return
+    payload = {"schema": 1, "actions": sorted(valid, key=lambda a: a["rank"])}
+    (assess_dir / "actions.json").write_text(
+        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+    )
+
+
 def _locate_input(assess_dir: Path) -> Path:
     """Find finalize-input.json. Prefer the transient cache location; fall back
     to the legacy in-tree path for backwards compatibility.
@@ -135,6 +174,9 @@ def finalize_run(*, assess_dir: Path) -> None:
         top_action=data["top_action"],
     )
     _finalize_hotspot_actions(assess_dir, hotspot_actions=data.get("hotspot_actions", {}))
+    actions = data.get("actions")
+    if isinstance(actions, list) and actions:
+        _write_actions_contract(assess_dir, actions)
     # Clean up: the input file is consumed - delete from both the cache and
     # the legacy in-tree location so a stale copy can't leak into a commit.
     try:

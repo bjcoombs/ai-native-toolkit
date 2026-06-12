@@ -356,7 +356,19 @@ cat > "$REPO_ROOT/.assess/.cache/finalize-input.json" <<'EOF'
       "Split parseLine into smaller functions",
       "Add a test file at src/foo_test.go"
     ]
-  }
+  },
+  "actions": [
+    {
+      "rank": 1,
+      "action": "Add cyclop rule (threshold 15) to .golangci.yml",
+      "layer": 3,
+      "effort": "small",
+      "files": [".golangci.yml"],
+      "first_step": "Add 'cyclop' with max-complexity: 15 under linters",
+      "done_when": "golangci-lint run passes with the rule active; no new suppressions added",
+      "scope_fence": "Only .golangci.yml; do not edit source files to chase pre-existing violations"
+    }
+  ]
 }
 EOF
 
@@ -374,6 +386,8 @@ This replaces:
 - `log.md`'s last entry placeholder `**AI Readiness:** 0.0 / 8 ((LLM fills in))` with your actual score and maturity label.
 - `log.md`'s last entry placeholder `**Top action:** Deterministic ranker not yet wired ...` with your actual Top 1 action.
 - Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file.
+
+The `actions` array mirrors the report's Top 3 Actions table one-to-one and **must carry every table row** - `rank`, `action`, `done_when`, and `scope_fence` are required per entry (`layer`, `effort`, `files`, `first_step` recommended). `assess_finalize.py` writes it to `.assess/actions.json`, the *durable* machine-readable contract: unlike this input file (consumed and deleted), `actions.json` persists so an executing agent - including a smaller, cheaper model - can pick up the work with its exit criteria and fences intact, without parsing the report's markdown.
 
 Without this step, the `log.md` placeholders above carry forward forever. Hotspot pages you don't supply actions for keep a neutral pointer (`This file is flagged but outside this run's Top 3. See the report's Top 3 Actions, or run a focused /assess pass for file-specific guidance.`) rather than an unfinished-work placeholder - a flagged-but-not-Top-3 page reads as intentional.
 

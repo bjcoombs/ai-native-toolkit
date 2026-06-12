@@ -307,6 +307,8 @@ In the matrix, "complexity in the High range" means **per-function** `fn_ccn` cl
 
 When scoring Partial or Missing on this combined check, name the top 3 worst offenders from `top_complex` / `top_large` in the report's Evidence/Gap columns. Those are the files the missing rule would have flagged. For each `top_complex` offender, cite its `max_fn_ccn` (the per-function value the threshold gates), not just the aggregate `ccn` - and if `max_fn_ccn` is under the threshold, it is not actually a per-function offender even though its aggregate is high.
 
+**Erosion cap (promissory markers).** Read `promissory_markers` from run-context. When `available` and `aging_reliable` are true and `families.suppression.stale` is greater than ~10 (or clearly growing vs the prior run), cap Layer 3 at **Partial** regardless of config quality: the linter exists but is being hollowed out - each stale suppression is a hole punched in the gate that survived 5+ edits without being fixed. Cite the count and the worst offender from `top_offenders` in the Evidence column. Suppressions with a trailing justification count as `linked`, not debt - only the bare remainder erodes.
+
 ### Layer 4: Architecture Tests (Conventions as Contracts)
 
 **Scan for architecture test files:**
@@ -392,6 +394,7 @@ gh api repos/{owner}/{repo}/branches/develop/protection 2>/dev/null
 
 **Scoring:**
 - Present: CI runs on every PR with build+lint+test+coverage, failures block merge
+- **Erosion cap**: even with a complete pipeline, cap at **Partial** when `promissory_markers.families.disabled_test.stale` is greater than ~10 with `aging_reliable` true - each stale skip is a guardrail switched off while still counting as "tests exist" (a skip whose reason describes an obsolete scenario is a delete candidate, not a fix candidate). Cite the count and worst offender.
 - Partial: CI exists but missing key steps, or failures are advisory
 - Missing: No CI configuration found
 
@@ -480,4 +483,6 @@ rg -i 'retrospective|retro|feedback loop|learnings|post.?mortem' "$REPO_ROOT"/{C
 - Present: Structured AI task management with feedback loop that updates contracts
 - Partial: Some orchestration tooling exists but no systematic feedback loop, or ad-hoc retro notes without structured process
 - Missing: No AI-aware project management
+
+**Intent-tracking evidence (promissory markers).** `promissory_markers.todo_bare` vs `todo_linked` is a direct, deterministic measure of dimension 2: a healthy linked:bare ratio (most TODOs cite an issue/ticket/date) is positive evidence the intent loop works even when retro files are sparse; a large bare majority with stale TODOs is concrete evidence the loop is missing. `stale_agent_introduced` > 0 names the failure precisely: agents are recording intent nobody routes into the tracker.
 

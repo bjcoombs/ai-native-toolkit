@@ -270,3 +270,98 @@ def test_finalize_updates_last_entry_when_older_entry_unfinalized(tmp_assess_dir
     older_section = content.split("## 2026-05-22")[0]
     assert "AI Readiness:** 0.0 / 8 ((LLM fills in))" in older_section
     assert "Deterministic ranker not yet wired" in older_section
+
+
+def _base_input() -> dict:
+    return {
+        "score": 6.0,
+        "maturity_label": "Solid",
+        "top_action": "Add cyclop rule",
+        "hotspot_actions": {},
+    }
+
+
+def _good_action(rank: int = 1) -> dict:
+    return {
+        "rank": rank,
+        "action": "Add cyclop rule (threshold 15) to .golangci.yml",
+        "layer": 3,
+        "effort": "small",
+        "files": [".golangci.yml"],
+        "first_step": "Add cyclop under linters",
+        "done_when": "golangci-lint run passes with the rule active",
+        "scope_fence": "Only .golangci.yml; no source edits",
+    }
+
+
+def test_finalize_writes_actions_contract(tmp_assess_dir: Path) -> None:
+    """An `actions` array in the input becomes the durable .assess/actions.json,
+    sorted by rank, with the executor-critical fields intact."""
+    _seed_log_md(tmp_assess_dir)
+    finalize_input = {
+        **_base_input(),
+        "actions": [_good_action(rank=2), _good_action(rank=1)],
+    }
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    contract = json.loads(
+        (tmp_assess_dir / "actions.json").read_text(encoding="utf-8")
+    )
+    assert contract["schema"] == 1
+    assert [a["rank"] for a in contract["actions"]] == [1, 2]
+    for a in contract["actions"]:
+        assert a["done_when"]
+        assert a["scope_fence"]
+
+
+def test_finalize_without_actions_writes_no_contract(tmp_assess_dir: Path) -> None:
+    """Backwards compatibility: an input with no `actions` key (the pre-1.41
+    shape) finalizes the wiki exactly as before and writes no actions.json."""
+    _seed_log_md(tmp_assess_dir)
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(_base_input()), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    assert not (tmp_assess_dir / "actions.json").exists()
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "AI Readiness:** 6.0 / 8 (Solid)" in content
+
+
+def test_finalize_drops_malformed_action_entries(tmp_assess_dir: Path) -> None:
+    """An entry missing done_when/scope_fence is dropped (a malformed contract
+    must not reach an executor as if complete); valid siblings still land."""
+    _seed_log_md(tmp_assess_dir)
+    incomplete = {"rank": 2, "action": "vague intention"}  # no done_when/fence
+    finalize_input = {
+        **_base_input(),
+        "actions": [_good_action(rank=1), incomplete],
+    }
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    contract = json.loads(
+        (tmp_assess_dir / "actions.json").read_text(encoding="utf-8")
+    )
+    assert len(contract["actions"]) == 1
+    assert contract["actions"][0]["rank"] == 1
+
+
+def test_finalize_all_actions_malformed_writes_no_contract(tmp_assess_dir: Path) -> None:
+    _seed_log_md(tmp_assess_dir)
+    finalize_input = {**_base_input(), "actions": [{"rank": 1}]}
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    assert not (tmp_assess_dir / "actions.json").exists()
