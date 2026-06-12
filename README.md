@@ -6,6 +6,8 @@ A Claude Code plugin - and a set of standalone skills for **any AI assistant**: 
 
 > **New here?** The [Map of Content](docs/index.md) is the navigation index - one trail to every skill, command, agent, and design doc in this repo. The [`CLAUDE.md`](CLAUDE.md) contract holds the rules for editing it.
 
+> **Here from the GitHub Marketplace?** You found the **AI-Readiness Assess Gate** - the CI-gate half of this toolkit. It runs the same deterministic engine the `/assess` skill uses (complexity treemap, promissory-marker scan, doc-graph signals - zero AI tokens) on every pull request and gates on what your `.assess/config.toml` opts into. Jump straight to [Use as a GitHub Action](#use-as-a-github-action); the rest of this README covers the full plugin the action is carved from.
+
 ## Why this exists
 
 When you hand work to an AI, does it behave like a brand-new hire, or like an engineer who has been in the org eighteen months? The difference isn't capability - both can write correct code. It's *externalized context*: knowing where things live, which contracts are load-bearing, where the minefields are, and why the weird thing is weird. An AI contributor is structurally always the new hire - every session starts with an empty head, seeing the codebase through one narrow context window. So the whole question becomes: **how much of the tenured engineer's implicit map has the codebase made explicit and navigable?** The more it has, the more a fresh agent behaves like it has been here eighteen months.
@@ -124,14 +126,14 @@ The skill runs locally - lizard, optional scc, and git log do the analysis in yo
 
 ### Use as a GitHub Action
 
-The assess gate also ships as a composite GitHub Action, so any repo can run the deterministic core on every PR without installing the plugin:
+The assess gate ships as a composite GitHub Action ([Marketplace listing](https://github.com/marketplace/actions/ai-readiness-assess-gate)), so any repo can run the deterministic core on every PR without installing the plugin - no Claude, no API keys, no tokens spent:
 
 ```yaml
 steps:
   - uses: actions/checkout@v6
     with:
       fetch-depth: 0   # full history so the churn window is accurate
-  - uses: bjcoombs/ai-native-toolkit@v1.42.0
+  - uses: bjcoombs/ai-native-toolkit@v1.42.2
     with:
       config: .assess/config.toml   # optional; warn-only defaults without it
 ```
