@@ -44,6 +44,12 @@ from lib.agent_instructions_grader import (
     scan_sensitive_content,
 )
 from lib.anomaly_detector import detect_anomalies
+from lib.badge import (
+    badge_exists,
+    concern_count_from_findings,
+    fallback_badge,
+    write_badge,
+)
 from lib.assess_config import load_excludes, load_structure_config
 from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.doc_staleness import analyze_doc_staleness
@@ -381,6 +387,28 @@ def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None
     (assess_dir / "first-flagged.json").write_text(
         json.dumps(first_flagged, indent=2), encoding="utf-8"
     )
+
+
+def _write_fallback_badge_if_absent(
+    assess_dir: Path, promissory: Any, derived_findings: list[dict]
+) -> None:
+    """Deterministic fallback badge - only when none exists.
+
+    A gate-only repo (never LLM-scored) gets a truthful findings-count badge;
+    a repo with a finalized score badge keeps it (a deterministic-only rerun
+    must not downgrade the stronger claim; finalize refreshes it on scored
+    runs).
+    """
+    if badge_exists(assess_dir):
+        return
+    stale = (
+        promissory.get("total_stale", 0)
+        if isinstance(promissory, dict) and promissory.get("available")
+        else 0
+    )
+    write_badge(assess_dir, fallback_badge(
+        concern_count_from_findings(derived_findings), stale,
+    ))
 
 
 def _marker_debt_sentence(debt: dict | None) -> str:
@@ -844,6 +872,8 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     ctx["findings_markdown"] = keyhole["findings_markdown"]
     ctx["keyhole_summary"] = keyhole["keyhole_summary"]
     ctx["prescribed_actions"] = keyhole["prescribed_actions"]
+
+    _write_fallback_badge_if_absent(assess_dir, promissory, ctx["derived_findings"])
 
     ctx["plugin_version"] = _read_plugin_version()
     ctx["anomalies"] = [

@@ -1,5 +1,7 @@
 # AI Native Toolkit
 
+[![AI-readiness](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fbjcoombs%2Fai-native-toolkit%2Fmain%2F.assess%2Fbadge.json)](.assess/assess-report.md) [![Assess Gate](https://github.com/bjcoombs/ai-native-toolkit/actions/workflows/assess-gate.yml/badge.svg)](https://github.com/bjcoombs/ai-native-toolkit/actions/workflows/assess-gate.yml)
+
 A Claude Code plugin - and a set of standalone skills for **any AI assistant**: skills, agents, and commands for AI-native development. In Claude Code it runs locally against your own codebase using whichever model you already pay for. Several of the skills also ship as standalone [Agent Skills](https://www.anthropic.com/news/skills) ZIPs you can upload to claude.ai, Claude Desktop, Cowork, or any assistant that supports the skills format - no Claude Code required.
 
 > **Want the skills without Claude Code?** Download the ZIPs from the **[latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/latest)** - the release notes link straight to that version's standalone skill bundle - and upload them in your assistant's Skills UI. Full walkthrough: [Standalone skill ZIPs](#standalone-skill-zips-any-ai-assistant). Currently standalone: `/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`.
@@ -136,6 +138,13 @@ steps:
   - uses: bjcoombs/ai-native-toolkit@v1.42.2
     with:
       config: .assess/config.toml   # optional; warn-only defaults without it
+```
+
+Two badges come with it - GitHub's native status badge for the gate workflow, and a live AI-readiness score badge served from the committed `.assess/badge.json` via shields.io (written by every assess run; deterministic findings-count fallback when no scored run exists):
+
+```markdown
+[![Assess Gate](https://github.com/<owner>/<repo>/actions/workflows/assess-gate.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/assess-gate.yml)
+![AI-readiness](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F<owner>%2F<repo>%2F<branch>%2F.assess%2Fbadge.json)
 ```
 
 Warn-only by default: the only thing that can fail a PR is what `.assess/config.toml` opts into (`fail_on` findings, complexity floors, `fail_on_regression`). Because the version rides a `uses:` pin on an immutable release tag, **Dependabot and Renovate detect new toolkit releases and open upgrade PRs automatically** - add a `.github/dependabot.yml` with the `github-actions` ecosystem and the gate keeps itself current. The `/assess` end-of-run "freeze into CI" offer emits exactly this workflow.
