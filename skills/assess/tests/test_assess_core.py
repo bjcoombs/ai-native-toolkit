@@ -506,6 +506,7 @@ def test_run_context_has_deterministic_keyhole_products(tmp_path: Path) -> None:
     assert names == [
         "hidden_coupling", "lying_map", "unexplained_complexity",
         "untrusted_hotspot", "self_referential_tests",
+        "unactioned_intent",
         "orphaned_understanding", "candidate_dead_weight", "refactor_boundary",
     ]
 
@@ -606,6 +607,7 @@ def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
     assert findings, "derived_findings must not be empty"
     expected = {"hidden_coupling", "lying_map", "unexplained_complexity",
                 "untrusted_hotspot", "self_referential_tests",
+                "unactioned_intent",
                 "orphaned_understanding", "candidate_dead_weight", "refactor_boundary"}
     assert {f["name"] for f in findings} == expected
     for f in findings:

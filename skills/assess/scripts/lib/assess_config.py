@@ -155,6 +155,7 @@ GATE_CONCERN_FINDINGS = [
     "unexplained_complexity",
     "untrusted_hotspot",
     "self_referential_tests",
+    "unactioned_intent",
     "orphaned_understanding",
     "candidate_dead_weight",
 ]

@@ -63,6 +63,7 @@ FINDING_ORDER = [
     "unexplained_complexity",
     "untrusted_hotspot",  # E1: complex churning code with hollow tests
     "self_referential_tests",  # E2: tests authored with the code they cover
+    "unactioned_intent",  # stale promissory markers that survived many edits
     "orphaned_understanding",
     "candidate_dead_weight",
     "refactor_boundary",
@@ -73,6 +74,7 @@ FINDING_ACTIONS = {
     "unexplained_complexity": "write the missing contract (do NOT auto-generate)",
     "untrusted_hotspot": "strengthen tests to pin observable behaviour (not internal state)",
     "self_referential_tests": "request human review - tests verify internal consistency, not truth",
+    "unactioned_intent": "action the promise: fix it, ticket it, or delete the marker/skip",
     "orphaned_understanding": "assign a human anchor before further change",
     "candidate_dead_weight": "verify liveness, then delete if dead",
     "refactor_boundary": "safe to hand an agent in isolation",
@@ -721,6 +723,7 @@ def integrate(
     structure: dict,
     commit_sets: list[set[Path]] | None = None,
     test_pressure: dict | None = None,
+    promissory_markers: dict | None = None,
 ) -> dict:
     """Build the five run-context blocks + derived findings + attention list.
 
@@ -728,8 +731,11 @@ def integrate(
     (the orchestrator parses git log once and reuses it for churn etc.);
     otherwise it is parsed here. ``test_pressure`` is the Layer-1 write-side scan
     (the E1 trust axis crosses it with the complexity hotspots); when absent E1
-    degrades to silent. Every block is built defensively - a failure in one
-    degrades that block to ``available: False`` and leaves the rest intact.
+    degrades to silent. ``promissory_markers`` is the marker-scan summary
+    (``promissory_markers.MarkerScan.summary()``); when absent or unreliable the
+    ``unactioned_intent`` finding degrades to silent. Every block is built
+    defensively - a failure in one degrades that block to ``available: False``
+    and leaves the rest intact.
     """
     repo_root = Path(repo_root)
     if commit_sets is None:
@@ -816,6 +822,17 @@ def integrate(
     def _churn_paths(name: str, paths: list[str]) -> list[str]:
         return [] if (churn_degenerate and name in churn_derived_findings) else paths
 
+    # Unactioned intent: files carrying stale promissory markers (markers that
+    # survived >= threshold edits to their own file). Silent when the scan was
+    # unavailable or the history is too thin to age markers (aging_reliable
+    # False) - thin history must read "not assessed", never "clean".
+    pm = promissory_markers or {}
+    unactioned = (
+        sorted(pm.get("stale_by_file", {}))
+        if pm.get("available") and pm.get("aging_reliable", True)
+        else []
+    )
+
     findings = assemble_findings({
         "hidden_coupling": _churn_paths(
             "hidden_coupling",
@@ -830,6 +847,7 @@ def integrate(
         ],
         "untrusted_hotspot": untrusted,
         "self_referential_tests": self_ref_paths,
+        "unactioned_intent": unactioned,
         "orphaned_understanding": understanding.get("orphaned_understanding", []),
         "candidate_dead_weight": dead_weight,
         "refactor_boundary": [b["path"] for b in behaviour.get("refactor_boundaries", [])],

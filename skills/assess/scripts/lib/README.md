@@ -240,6 +240,22 @@ serves it yet; the report names the capability and a candidate tool). Imported b
 `liveness_scan.py`, never by the orchestrator - it is an inward dependency of the
 liveness tier.
 
+**`promissory_markers.py`**
+Write-side erosion instrument: detects the four families of promissory markers
+(TODO/FIXME, deprecations, lint suppressions, disabled tests) via one rg pass per
+family, then ages each marker by *survived touches* - the number of commits to its
+file since the marker's introducing commit (batched `git blame` + one git-log
+pass). A marker that survived many edits to an actively-maintained file is
+unactioned intent; calendar age alone can't tell that from dormancy. Classifies
+markers as tracked (issue/ticket/URL/date reference, or a justified suppression)
+vs bare, and each introducing commit as agent/human (reusing `change_coupling`'s
+conservative B4 identity rules). Honours the shared excludes and the generated-file
+filter (codegen `ignore_for_file` boilerplate is not debt), and degrades aging to
+`aging_reliable: False` on degenerate history (same verdict as `git_churn`).
+Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
+sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
+fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
+
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
 CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts and

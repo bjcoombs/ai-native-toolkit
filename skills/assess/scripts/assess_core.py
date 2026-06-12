@@ -50,6 +50,7 @@ from lib.doc_staleness import analyze_doc_staleness
 from lib.git_churn import git_commit_info, tracked_files
 from lib.keyhole_signals import integrate as integrate_keyhole_signals
 from lib.liveness_scan import scan_liveness
+from lib.promissory_markers import scan_promissory_markers
 from lib.structure_graph import analyze_structure
 from lib.stats_diff import diff_stats, hotspot_commits, load_stats
 from lib.test_pressure import scan_test_pressure
@@ -382,6 +383,17 @@ def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None
     )
 
 
+def _marker_debt_sentence(debt: dict | None) -> str:
+    """One briefing sentence accusing a hotspot of its own stale promises."""
+    if not debt:
+        return ""
+    families = ", ".join(debt["families"])
+    return (
+        f"Carries {debt['count']} stale promissory marker(s) "
+        f"({families}; oldest survived {debt['max_survived']} edits to this file). "
+    )
+
+
 def _safe(label: str, fn):
     """Run a read-side scan, degrading to an unavailable marker on any failure.
 
@@ -473,6 +485,27 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # Load (and later update) the persistent first-flagged date map
     first_flagged_map = _load_first_flagged(assess_dir)
 
+    # User-supplied excludes (`.assess/config.toml`), loaded once and threaded
+    # into every read-side scan (heatmap parity, doc graph, staleness, liveness,
+    # markers) so "this is reference data, not source" is a single statement.
+    extra_exclude_dirs, extra_exclude_patterns = load_excludes(repo_root)
+
+    # Promissory markers (stale TODO/FIXME, suppressions, disabled tests),
+    # scanned before the wiki pages so each hotspot page can carry its own
+    # marker debt. summary() shape on success; _safe's degrade dict on failure
+    # (both carry `available`).
+    promissory = _safe(
+        "promissory_markers",
+        lambda: scan_promissory_markers(
+            repo_root,
+            extra_exclude_dirs=extra_exclude_dirs,
+            extra_exclude_patterns=extra_exclude_patterns,
+        ).summary(),
+    )
+    marker_debt_by_file = (
+        promissory.get("stale_by_file", {}) if promissory.get("available") else {}
+    )
+
     # Build status map: which paths are graduated, new, regressed, persistent
     status_map: dict[str, str] = {}
     for h in diff.graduated:
@@ -526,7 +559,8 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
                 f"{loc} LOC, "
                 f"max cyclomatic complexity {ccn}, "
                 f"{commits} commits in churn window. "
-                "(Briefing refined by LLM via assess_finalize - see Suggested actions below.)"
+                + _marker_debt_sentence(marker_debt_by_file.get(path))
+                + "(Briefing refined by LLM via assess_finalize - see Suggested actions below.)"
             ),
             actions=UNFINALIZED_ACTIONS_POINTER,
         )
@@ -626,13 +660,9 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         },
     }
 
-    # User-supplied excludes (`.assess/config.toml`) are loaded once and
-    # threaded into every read-side scan so a `regulatory-raw/` directory
-    # disappears uniformly from the heatmap, the doc-navigability graph,
-    # the doc-staleness pass, and the liveness scan. The treemap CLI also
-    # honours `--exclude` on top of these; the read-side scans are driven
-    # by the orchestrator and pick up the config-only path.
-    extra_exclude_dirs, extra_exclude_patterns = load_excludes(repo_root)
+    # extra_exclude_dirs / extra_exclude_patterns were loaded once above
+    # (before the marker scan + wiki pages) and apply uniformly to every
+    # read-side scan below. The treemap CLI also honours `--exclude` on top.
 
     # Read-side foundation signals (Layer 0 navigability + Layer 1 liveness).
     # Each is best-effort and degrades rather than blocking the assessment.
@@ -784,6 +814,12 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         },
     }
 
+    # Promissory markers (stale TODO/FIXME, suppressions, disabled tests):
+    # the write-side erosion instrument. Family totals + stale counts feed the
+    # Layer 3/5/8 scoring rules; stale_by_file feeds the unactioned_intent
+    # finding and the hotspot pages (already written above with marker debt).
+    ctx["promissory_markers"] = promissory
+
     keyhole = integrate_keyhole_signals(
         repo_root=repo_root,
         complexity_stats=current,
@@ -792,6 +828,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         observability=ctx["observability"],
         structure=structure,
         test_pressure=ctx["test_pressure"],
+        promissory_markers=promissory if isinstance(promissory, dict) else None,
     )
     ctx["structure"] = keyhole["structure"]
     ctx["behaviour"] = keyhole["behaviour"]
