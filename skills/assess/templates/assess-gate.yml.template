@@ -39,6 +39,18 @@ jobs:
         with:
           fetch-depth: 0  # full history so the churn window is accurate
           persist-credentials: false  # nothing here pushes; don't leave a token in .git
+
+      - name: Install ripgrep (promissory-marker scan)
+        # The marker scan (stale TODOs, suppressions, disabled tests) shells out
+        # to rg; ubuntu-latest does not ship it. Without rg the scan honestly
+        # degrades - but then the unactioned_intent finding can never fire in
+        # CI, so a config.toml gating on it would be silently toothless. Pinned
+        # .deb per the supply-chain invariant (a floating apt version could move
+        # the baseline with no change in this tree).
+        continue-on-error: true  # missing tool degrades coverage, not the check
+        run: |
+          curl -fsSLO https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep_14.1.1-1_amd64.deb
+          sudo dpkg -i ripgrep_14.1.1-1_amd64.deb
 $tool_steps
       - name: Install uv
         id: setup-uv
