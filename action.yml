@@ -21,11 +21,12 @@
 # the pinned version - no separate clone step, no tag-must-exist race: if the
 # `uses:` ref resolved, the scripts are present.
 name: 'AI-Readiness Assess Gate'
+# Marketplace requires the description under 125 chars. The longer contract
+# (config.toml gating, checkout with fetch-depth: 0 first) lives in the
+# header comment above and the README's "Use as a GitHub Action" section.
 description: >-
-  Run the /assess deterministic core (complexity treemap, promissory-marker
-  scan, doc-graph signals) against the checked-out repository and gate on the
-  [gate] section of .assess/config.toml. Zero LLM tokens; warn-only until the
-  repository opts in. Requires actions/checkout with fetch-depth: 0 first.
+  Deterministic AI-readiness gate: complexity, churn and promissory-marker
+  signals on every PR. Zero AI tokens, warn-only.
 author: 'bjcoombs'
 branding:
   icon: 'shield'

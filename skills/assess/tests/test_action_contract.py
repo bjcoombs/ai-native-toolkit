@@ -116,3 +116,10 @@ def test_action_yml_is_git_tracked():
         capture_output=True, text=True,
     )
     assert out.stdout.strip() == "action.yml"
+
+
+def test_action_description_fits_marketplace_limit():
+    """GitHub Marketplace rejects an action whose description is 125+ chars -
+    discovered live on the v1.42.0 release page. Pin publishability."""
+    desc = _action()["description"]
+    assert len(desc) < 125, f"{len(desc)} chars: {desc}"
