@@ -4,11 +4,13 @@ set -euo pipefail
 # ===================================================================
 # ghsync.sh - Bulk clone + sync every repo you can access in an org
 #
-# Discovers all GitHub repositories accessible to you across every team
-# you belong to in an org, deduplicates them, and clones or fast-forward
-# updates each into a worktree-friendly layout. Built for onboarding into
-# a new enterprise: drop into the org directory, run it, and you have a
-# local mirror of everything you can touch.
+# Discovers every GitHub repository you can access in an org - both through
+# the teams you belong to and through the org's repo list (which surfaces
+# public repos and repos reachable via direct collaborator grants outside
+# any team) - deduplicates them, and clones or fast-forward updates each
+# into a worktree-friendly layout. Built for onboarding into a new
+# enterprise: drop into the org directory, run it, and you have a local
+# mirror of everything you can touch.
 #
 # Personal accounts work too: when the target is a User rather than an
 # Organization, repos are discovered from the account's repo list instead
@@ -191,37 +193,75 @@ if [ "$account_type" = "User" ]; then
     fi
     rm -f "$repo_list_json"
 else
-    # Organization: fetch the user's teams in the org
+    # Organization: discover repos by unioning two sources, so team
+    # membership is not a precondition for sync:
+    #   1. Every team you belong to (gh api user/teams).
+    #   2. The org's repo list (gh repo list), which also surfaces public
+    #      repos and repos reachable via direct collaborator grants outside
+    #      any team.
+    # A user on no team can still sync the repos they can otherwise access.
     echo "Fetching your teams in $ORG..."
-    user_teams=($(gh api user/teams --paginate --jq ".[] | select(.organization.login == \"$ORG\") | .slug"))
+    # Guard the team fetch: under `set -euo pipefail` an unguarded failure
+    # (transient API/network error, or a token without the read:org scope)
+    # would abort the whole script before the org repo-list fallback below
+    # ever runs - defeating the union discovery this path exists to provide.
+    # Capture the command's exit status directly (a process-substitution feed
+    # into mapfile would mask gh's failure), then fall back to no teams.
+    team_output=$(gh api user/teams --paginate --jq ".[] | select(.organization.login == \"$ORG\") | .slug") || {
+        echo "Note: unable to fetch your team memberships in $ORG; continuing with org repo list discovery"
+        team_output=""
+    }
+    user_teams=()
+    [ -n "$team_output" ] && mapfile -t user_teams <<< "$team_output"
 
     if [ ${#user_teams[@]} -eq 0 ]; then
-        echo "Error: You don't appear to be a member of any teams in $ORG"
-        echo "  - Check the org name (it defaults to the directory you ran from: $(basename "$ROOT"))"
-        echo "  - Override with --org NAME if the directory name differs from the org"
-        exit 1
+        echo "Note: you don't belong to any teams in $ORG; discovering repos via the org repo list instead"
+    else
+        echo "Found ${#user_teams[@]} team(s): ${user_teams[*]}"
     fi
-
-    echo "Found ${#user_teams[@]} team(s): ${user_teams[*]}"
 
     if [ "$LIST_TEAMS" = true ]; then
         echo ""
-        echo "Teams you belong to in $ORG:"
-        for team in "${user_teams[@]}"; do
-            repo_count=$(gh api "orgs/$ORG/teams/$team/repos" --paginate --jq 'length' 2>/dev/null || echo "?")
-            echo "  - $team ($repo_count repos)"
-        done
+        if [ ${#user_teams[@]} -eq 0 ]; then
+            echo "You don't belong to any teams in $ORG."
+            echo "Run with --list-repos to see the repos discovered via the org repo list."
+        else
+            echo "Teams you belong to in $ORG:"
+            for team in "${user_teams[@]}"; do
+                repo_count=$(gh api "orgs/$ORG/teams/$team/repos" --paginate --jq 'length' 2>/dev/null || echo "?")
+                echo "  - $team ($repo_count repos)"
+            done
+        fi
         exit 0
     fi
 
-    # Fetch repos from all teams and deduplicate
-    echo "Fetching repositories from all teams..."
-    for team in "${user_teams[@]}"; do
-        echo "  - Fetching from $team..."
-        # Fetch all repos and split into active vs archived
-        gh api "orgs/$ORG/teams/$team/repos" --paginate --jq '.[] | select(.archived == false) | .name' 2>/dev/null >> "$all_repos_file" || true
-        gh api "orgs/$ORG/teams/$team/repos" --paginate --jq '.[] | select(.archived == true) | .name' 2>/dev/null >> "$archived_repos_file" || true
-    done
+    # Source 1: repos from every team you belong to.
+    if [ ${#user_teams[@]} -gt 0 ]; then
+        echo "Fetching repositories from all teams..."
+        for team in "${user_teams[@]}"; do
+            echo "  - Fetching from $team..."
+            # Fetch all repos and split into active vs archived
+            gh api "orgs/$ORG/teams/$team/repos" --paginate --jq '.[] | select(.archived == false) | .name' 2>/dev/null >> "$all_repos_file" || true
+            gh api "orgs/$ORG/teams/$team/repos" --paginate --jq '.[] | select(.archived == true) | .name' 2>/dev/null >> "$archived_repos_file" || true
+        done
+    fi
+
+    # Source 2: the org repo list (public + direct-collaborator repos). gh
+    # returns names without the org prefix, matching the team source's
+    # format, so the later sort -u dedupes cleanly across both sources.
+    # Empty repos have no default branch and nothing to check out, so they
+    # are skipped - mirroring the personal-account path above.
+    echo "Fetching the $ORG repo list..."
+    org_repo_list_limit=4000
+    org_repo_list_json=$(mktemp)
+    gh repo list "$ORG" --limit "$org_repo_list_limit" --json name,isArchived,defaultBranchRef > "$org_repo_list_json"
+    jq -r '.[] | select(.isArchived == false and (.defaultBranchRef.name // "") != "") | .name' "$org_repo_list_json" >> "$all_repos_file"
+    jq -r '.[] | select(.isArchived == true) | .name' "$org_repo_list_json" >> "$archived_repos_file"
+
+    if [ "$(jq 'length' "$org_repo_list_json")" -ge "$org_repo_list_limit" ]; then
+        echo "Warning: hit the $org_repo_list_limit-repo listing cap; some repos may be missing"
+    fi
+    rm -f "$org_repo_list_json"
 fi
 
 # Deduplicate and sort
@@ -261,15 +301,17 @@ if [ "$total_repos" -eq 0 ]; then
     if [ "$account_type" = "User" ]; then
         echo "No repositories found for personal account $ORG"
     else
-        echo "No repositories found across your teams"
+        echo "No repositories found in $ORG (no team repos and an empty org repo list)"
     fi
     exit 0
 fi
 
 if [ "$account_type" = "User" ]; then
     echo "Found $total_repos repositories for personal account $ORG"
+elif [ ${#user_teams[@]} -gt 0 ]; then
+    echo "Found $total_repos unique repositories across ${#user_teams[@]} team(s) and the $ORG repo list"
 else
-    echo "Found $total_repos unique repositories across ${#user_teams[@]} team(s)"
+    echo "Found $total_repos repositories in $ORG"
 fi
 
 if [ "$LIST_REPOS" = true ]; then
@@ -605,9 +647,11 @@ fi
 # Print summary
 if [ "$account_type" = "User" ]; then
     echo -e "\n====== GitHub Sync Summary ($ORG - personal account) ======"
-else
+elif [ ${#user_teams[@]} -gt 0 ]; then
     echo -e "\n====== GitHub Sync Summary ($ORG - ${#user_teams[@]} teams) ======"
     echo "Teams: ${user_teams[*]}"
+else
+    echo -e "\n====== GitHub Sync Summary ($ORG) ======"
 fi
 
 updated_count=$([ -f "$status_dir/updated" ] && wc -l < "$status_dir/updated" | tr -d ' ' || echo 0)

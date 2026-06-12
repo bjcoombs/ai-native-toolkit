@@ -1,6 +1,6 @@
 ---
 name: ghsync
-description: "Bulk clone and keep in sync every GitHub repo you can access across an org or personal account. Discovers all repos reachable through the teams you belong to (or the account's repo list for a personal account), deduplicates them, then clones new ones and fast-forward syncs existing ones (and their worktrees) into a consistent <repo>/<repo>-main + <repo>/worktree layout. The org defaults to the directory you run from, so dropping into ~/dev/github.com/<org> mirrors that org. TRIGGER when the user types /ghsync, wants to clone or sync all org repos or their own personal repos, asks to mirror everything they have access to, is onboarding into a new enterprise/org, or wants to refresh their local checkouts to latest."
+description: "Bulk clone and keep in sync every GitHub repo you can access across an org or personal account. For an org it unions the repos reachable through the teams you belong to with the org's repo list (so direct-collaborator and public repos count even with no team membership); for a personal account it uses the account's repo list. Deduplicates them, then clones new ones and fast-forward syncs existing ones (and their worktrees) into a consistent <repo>/<repo>-main + <repo>/worktree layout. The org defaults to the directory you run from, so dropping into ~/dev/github.com/<org> mirrors that org. TRIGGER when the user types /ghsync, wants to clone or sync all org repos or their own personal repos, asks to mirror everything they have access to, is onboarding into a new enterprise/org, or wants to refresh their local checkouts to latest."
 ---
 
 # ghsync: mirror and sync every repo you can access
@@ -16,9 +16,11 @@ everything you can reach and **keeps it in sync**.
   fetched but not pulled, and reported in the summary.
 
 It is **org-agnostic** — point it at any GitHub org, GitHub Enterprise host, or
-**personal account**. The script detects the account type itself: organizations
-are discovered through team membership, personal accounts through the account's
-repo list (private repos included when it's your own account).
+**personal account**. The script detects the account type itself: for an
+organization it unions the teams you belong to with the org's repo list (so
+direct-collaborator and public repos are included even with no team
+membership); for a personal account it uses the account's repo list (private
+repos included when it's your own account).
 
 ## How to run it
 
@@ -101,12 +103,15 @@ sibling worktrees.
 - **GitHub Enterprise:** `gh` uses its configured host. Target a GHE instance by
   setting `GH_HOST=github.example.com` or running
   `gh auth login --hostname github.example.com` first.
-- **Access model:** for an **organization**, repos are discovered through the
-  **teams you belong to** (`gh api user/teams`), then deduplicated — repos you
-  can only reach via direct collaborator grants outside any team are not
-  included. For a **personal account**, repos come from `gh repo list <account>`
-  (includes private repos when authenticated as that account); empty repos with
-  no default branch are skipped.
+- **Access model:** for an **organization**, repos are discovered by unioning
+  two sources and deduplicating: the **teams you belong to** (`gh api
+  user/teams`) and the **org repo list** (`gh repo list <org>`), which also
+  surfaces public repos and repos reachable via direct collaborator grants
+  outside any team. Team membership is **not** a precondition — a user on no
+  team still syncs every repo they can otherwise access. For a **personal
+  account**, repos come from `gh repo list <account>` (includes private repos
+  when authenticated as that account). Empty repos with no default branch are
+  skipped in both cases.
 - **Blacklist:** export `GHSYNC_BLACKLIST="repo-a repo-b"` to skip oversized or
   problematic repos.
 - **`timeout`:** optional but recommended (`brew install coreutils`) — caps each
