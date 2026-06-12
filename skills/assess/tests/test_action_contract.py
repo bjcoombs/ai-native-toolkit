@@ -102,3 +102,17 @@ def test_own_workflow_self_tests_the_action():
         _ACTION_PATH.parent / ".github" / "workflows" / "assess-gate.yml"
     ).read_text(encoding="utf-8")
     assert "uses: ./" in wf
+
+
+def test_action_yml_is_git_tracked():
+    """The repo .gitignore is an allowlist (`/*` + unignores); a root file not
+    explicitly unignored is silently skipped by `git add -A`. That happened to
+    action.yml on first publish - the self-test workflow failed with
+    'Can't find action.yml'. Pin trackedness so the action can't ship absent."""
+    import subprocess
+
+    out = subprocess.run(
+        ["git", "-C", str(_ACTION_PATH.parent), "ls-files", "--", "action.yml"],
+        capture_output=True, text=True,
+    )
+    assert out.stdout.strip() == "action.yml"
