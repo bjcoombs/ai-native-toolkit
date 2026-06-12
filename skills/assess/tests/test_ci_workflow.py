@@ -126,8 +126,26 @@ def test_tool_install_failures_do_not_red_the_check():
     out = render_ci_workflow(plugin_version="1.23.0", discovered_tools=ALL_EXTERNAL_TOOLS)
     installs = out.count("go install") + out.count("npm install")
     assert installs == len(ALL_EXTERNAL_TOOLS)
-    # One continue-on-error per tool install, plus one on the uv setup step.
-    assert out.count("continue-on-error: true") == installs + 1
+    # One continue-on-error per tool install, plus one on the uv setup step,
+    # plus one on the always-present ripgrep step (the marker scan dependency).
+    assert out.count("continue-on-error: true") == installs + 2
+
+
+def test_render_always_installs_pinned_ripgrep():
+    """The promissory-marker scan needs rg, which ubuntu-latest does not ship.
+
+    The step is unconditional (the scan is core, not a discovered extra) and
+    version-pinned like every other install: without rg the scan honestly
+    degrades, which would make a config.toml gating on unactioned_intent
+    silently toothless in CI while local runs report debt.
+    """
+    out = render_ci_workflow(plugin_version="1.23.0")
+    assert "Install ripgrep" in out
+    rg_lines = [ln for ln in out.splitlines() if "ripgrep/releases/download" in ln]
+    assert rg_lines, "expected a pinned ripgrep download"
+    assert re.search(r"/download/\d+\.\d+\.\d+/", rg_lines[0]), (
+        f"unpinned ripgrep: {rg_lines[0].strip()}"
+    )
 
 
 def test_render_skips_python_dep_tools():
