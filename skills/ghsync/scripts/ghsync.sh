@@ -201,7 +201,18 @@ else
     #      any team.
     # A user on no team can still sync the repos they can otherwise access.
     echo "Fetching your teams in $ORG..."
-    user_teams=($(gh api user/teams --paginate --jq ".[] | select(.organization.login == \"$ORG\") | .slug"))
+    # Guard the team fetch: under `set -euo pipefail` an unguarded failure
+    # (transient API/network error, or a token without the read:org scope)
+    # would abort the whole script before the org repo-list fallback below
+    # ever runs - defeating the union discovery this path exists to provide.
+    # Capture the command's exit status directly (a process-substitution feed
+    # into mapfile would mask gh's failure), then fall back to no teams.
+    team_output=$(gh api user/teams --paginate --jq ".[] | select(.organization.login == \"$ORG\") | .slug") || {
+        echo "Note: unable to fetch your team memberships in $ORG; continuing with org repo list discovery"
+        team_output=""
+    }
+    user_teams=()
+    [ -n "$team_output" ] && mapfile -t user_teams <<< "$team_output"
 
     if [ ${#user_teams[@]} -eq 0 ]; then
         echo "Note: you don't belong to any teams in $ORG; discovering repos via the org repo list instead"
