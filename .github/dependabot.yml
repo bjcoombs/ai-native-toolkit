@@ -1,0 +1,14 @@
+# Keeps this repo's own action pins fresh (checkout, setup-uv, the pinned
+# tool versions inside workflows) - the same mechanism the emitted Assess
+# Gate workflow documents for consumers. Dogfood: if this file works here,
+# the advice we ship in the template is tested advice.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
