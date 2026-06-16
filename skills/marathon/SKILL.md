@@ -66,6 +66,17 @@ Proceeding with defaults: base branch=main, 1 approval, no bot reviewer rules.
 
 Defaults apply for non-marathon use (single task mode, planning mode) without prompting. The template below uses `$BASE_BRANCH` where previous versions hardcoded `develop`.
 
+## Execution Modes
+
+The steps below are written for **team mode** — the lead chairs an Agent Team, spawns one ephemeral teammate per unit, and coordinates via `SendMessage` and `shutdown_request`. Phase 0's `$TEAMS_AVAILABLE` selects the mode:
+
+| Mode | When | How the body maps |
+|------|------|-------------------|
+| **Team** | `$TEAMS_AVAILABLE` true | Run the body as written: `TeamCreate`, one teammate per unit/combined group, message-driven monitoring. |
+| **Phased sub-agent** | `$TEAMS_AVAILABLE` false | No persistent team and no `SendMessage`. The lead runs each wave as a batch of parallel subagents, reads their returned transcripts in place of messages, and drives the same loop. See [Subagent Fallback](#subagent-fallback-no-teams). |
+
+Everything else — the DAG analysis, hot-file combining, tracking file, smart-merge, crash recovery, and retrospective — is identical across modes; only the teammate-coordination mechanism differs. Where a step is team-only (the `SendMessage` events, early-shutdown, and idle-ping handling), the phased fallback simply has no equivalent: subagents return rather than message.
+
 ## Step 1: DAG + Hot-File Analysis
 
 **CRITICAL: Global Source-of-Truth Write Rule**
@@ -94,7 +105,7 @@ Enumerate work units via the adapter's **enumerate** operation.
 
    Some hot files are touched by *every* PR and want **sequential merge, never combining**: a version counter (`.claude-plugin/plugin.json` `.version`), a changelog, a lockfile. Assign each teammate its target value explicitly at spawn and merge in order (highest version wins) — combining all PRs to dodge a one-line version conflict is the trap, not the fix.
 
-   **Version values assigned at spawn are final.** If readiness order ends up differing from the planned merge order, fix it *at merge time* — hold the lower-version PR, or lead-resolve the conflict to the highest value — **never re-message a new version to an in-flight teammate**: that instruction races with PR_CREATED/REVIEW_CLEAR and produces crossed-message churn. The usual trigger is an externally-merged PR advancing the base mid-run; lead-resolve it at merge time.
+   **Version values assigned at spawn are final — never re-message a new version to an in-flight teammate** (it races with PR_CREATED/REVIEW_CLEAR and produces crossed-message churn). If readiness order ends up differing from the planned merge order, that is handled at merge time, not by re-messaging — see [Smart Merge](#smart-merge).
 
    **One caveat overrides "identical bumps merge cleanly":** if the repo auto-publishes an *immutable per-version artifact* on a version *change* (e.g. a `standalone-skills-v<version>` build that fires on the `plugin.json` bump), identical bumps across parallel PRs silently break it — the first merge fires the build from an incomplete tree and permanently consumes that version's tag, and the later identical bumps don't change the version so the build never re-fires. There, do **not** use identical bumps: have the **last-merging PR bump one step higher** (or bump once at the very end, after all merges) so the complete tree republishes.
 7. **Fallback: dependencies** — when combining isn't feasible or would breach the ceiling above (any task complexity 8+, a real dependency between the tasks, fundamentally different concerns despite a shared file, or 5+ tasks on one file):
@@ -345,6 +356,13 @@ an advisory AI review, a regression gate that re-runs on base advance) is mid-ru
 After a merge, close the unit via the adapter's **close on merge** operation, then proceed to
 the wave transition below.
 
+**Version-counter conflicts resolve here, never by re-messaging.** Each teammate's target version
+was fixed at spawn (Step 1). When a PR becomes ready out of the planned merge order — usually because
+an externally-merged PR advanced the base mid-run — either hold the lower-version PR until its
+predecessor merges, or lead-resolve the `plugin.json` conflict to the highest version (per
+[Lead conflict resolution](#step-4-lead-monitoring)). Re-messaging a new version to an in-flight
+teammate races with its own PR_CREATED/REVIEW_CLEAR — don't.
+
 **Teammate shutdown and cleanup are two separate stages — don't conflate them.** The teammate is shut
 down *early*, at REVIEW_CLEAR (see [Step 4](#step-4-lead-monitoring)) — the moment its PR is required-green
 with threads resolved, never held live through the claude-review wait or the merge. *Cleanup* (worktree
@@ -494,4 +512,4 @@ For each that was exercised: did it help, hurt, or not apply? Mark validated.>
 
 ## Subagent Fallback (no teams)
 
-When `$TEAMS_AVAILABLE` is `false`, use parallel subagents after each cleanup cycle: enumerate next-ready units via the adapter's enumerate operation and spawn parallel subagents for each.
+When `$TEAMS_AVAILABLE` is `false`, run the same loop without a persistent team (see [Execution Modes](#execution-modes)). Per wave: enumerate the next-ready units via the adapter, spawn one parallel subagent per unit (or combined group), and wait for their returned transcripts in place of `SendMessage` events. The lead still owns CI watching, smart-merge, and cleanup exactly as in team mode, and the tracking file (Step 2) carries cross-wave state in place of live teammates. There is no `shutdown_request` or idle-churn to manage — subagents return when done — so the early-shutdown and idle-ping guidance simply has no equivalent here.
