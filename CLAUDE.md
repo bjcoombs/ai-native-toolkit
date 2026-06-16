@@ -107,7 +107,7 @@ No human reviewers and no `claude[bot]` on this repo.
 - **Non-blocking checks**: `CodeRabbit` (rate-limited bot), `Auto-label from PR title` (convenience automation), `build` (push-only standalone publish - does not run on PRs), `claude-review` (advisory AI review - posts findings as threads but never gates merge; slow, often finishes after the required checks are green).
 - **`AI-readiness regression gate`**: an `/assess`-based gate that is **effectively required but re-runs on every base advance** (it diffs the PR against `main`). It is not in the classic branch-protection `required_status_checks.contexts`, so it won't show in that API list, but a plain `gh pr merge` is refused while it is re-running. In a multi-PR wave each merge re-triggers it on the still-open PRs - so either wait for it to re-settle per PR, or merge with `--admin` once the four named required checks are green.
 - **Local-run gotcha**: the `skills/assess` pytest suite shows ~7 phantom git-commit failures from global git config when run locally - run with `GIT_CONFIG_GLOBAL=/dev/null` to clear them. They are not CI failures.
-- **Hot file on every PR**: `.claude-plugin/plugin.json` `.version` - each PR must bump it. Identical bumps 3-way-merge cleanly; divergent bumps conflict, so merge sequentially (highest version wins). Tell each teammate the next version explicitly when running several PRs at once.
+- **Hot file on every PR**: `.claude-plugin/plugin.json` `.version` - each PR must bump it. Assign each teammate its target version explicitly at spawn and merge sequentially (highest version wins); values assigned at spawn are final - if merge order shifts (e.g. an externally-merged PR advances `main`), fix it at merge time by holding or lead-resolving the conflict, never by re-messaging an in-flight teammate. **Identical bumps across parallel PRs are unsafe here**: `build-standalone-skills.yml` publishes an immutable `standalone-skills-v<version>` on the version *change*, so the first merge ships an incomplete bundle and the identical later bumps never re-fire it - have the last-merging PR bump one step higher (or bump once at the end) so the complete tree republishes.
 
 ### GitHub Issues (for `/issues`)
 
@@ -140,6 +140,8 @@ ${BODY}"
 ```
 
 `.github/release.yml` maps the PR labels (`feat`/`fix`/`docs`/`chore`/`refactor`) to release-note categories, and `build-standalone-skills.yml` republishes the standalone ZIPs on the version bump. The plugin release is marked Latest, so `releases/latest` always resolves to it and its notes link straight to the ZIP bundle. One release per marathon, not one per PR.
+
+When several PRs share one marathon, the standalone build fires on the **first** version-changing merge - so the final merged tree must carry the highest version (have the last-merging PR bump one step higher, per the version hot-file note above), otherwise the published `standalone-skills-v<version>` bundle is missing the later PRs and no further build re-fires for that version.
 
 **Marketplace listing (manual, web-only).** The repo also publishes the [AI-Readiness Assess Gate action](https://github.com/marketplace/actions/ai-readiness-assess-gate). The listing's "latest version" does **not** advance with `gh release create` - no API exists for the Marketplace flag. To refresh it: edit the release in the web UI, tick "Publish this Action to the GitHub Marketplace", update. Do this on marathon releases; consumers are unaffected either way (their `uses:` pins and Dependabot bumps read git tags, not the listing).
 
