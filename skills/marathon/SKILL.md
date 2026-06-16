@@ -69,7 +69,7 @@ Defaults apply for non-marathon use (single task mode, planning mode) without pr
 ## Step 1: DAG + Hot-File Analysis
 
 **CRITICAL: Global Source-of-Truth Write Rule**
-Never run source-of-truth write commands as parallel background jobs — concurrent writes race. Each such command may internally switch global state, and concurrent invocations can silently land work on wrong targets. Always run source-of-truth write commands **sequentially inline**. This was validated in the 047-security-audit marathon where 10 background `add-task` calls created tasks on wrong tags.
+Never run source-of-truth write commands as parallel background jobs — concurrent writes race. Each such command may internally switch global state, and concurrent invocations can silently land work on wrong targets. Always run source-of-truth write commands **sequentially inline** — 10 concurrent background `add-task` calls once landed tasks on the wrong tags.
 
 Enumerate work units via the adapter's **enumerate** operation.
 
@@ -80,7 +80,7 @@ Enumerate work units via the adapter's **enumerate** operation.
 3. **Challenge unnecessary dependencies** — different files/modules may not need sequencing
 4. Look for tasks chained sequentially that could run in parallel
 5. **Identify hot files** — files touched by multiple tasks. Record as `$HOT_FILES`.
-6. **Primary mitigation: combine tasks that share hot files** into one teammate. This eliminates merge conflicts entirely (0 conflicts across 3 marathons when combining). Combine when:
+6. **Primary mitigation: combine tasks that share hot files** into one teammate. Combined units share one branch and worktree, so there is no inter-unit merge and the conflict class is eliminated entirely. Combine when:
    - Tasks share hot files (strongest signal — prefer combining over dependency management for *small, coupled* tasks)
    - Tightly coupled output (e.g., "add resources" + "add docs for resources")
    - Content-only tasks touching non-overlapping directories (e.g., adding 3 independent pattern dirs)
@@ -94,7 +94,7 @@ Enumerate work units via the adapter's **enumerate** operation.
 
    Some hot files are touched by *every* PR and want **sequential merge, never combining**: a version counter (`.claude-plugin/plugin.json` `.version`), a changelog, a lockfile. Assign each teammate its target value explicitly at spawn and merge in order (highest version wins) — combining all PRs to dodge a one-line version conflict is the trap, not the fix.
 
-   **Version values assigned at spawn are final.** If readiness order ends up differing from the planned merge order, fix it *at merge time* — hold the lower-version PR, or lead-resolve the conflict to the highest value — **never re-message a new version to an in-flight teammate**: that instruction races with PR_CREATED/REVIEW_CLEAR and produces crossed-message churn. (Validated across four marathons; an externally-merged PR advancing the base mid-run is the usual trigger, and lead-resolving at merge time absorbs it with zero churn.)
+   **Version values assigned at spawn are final.** If readiness order ends up differing from the planned merge order, fix it *at merge time* — hold the lower-version PR, or lead-resolve the conflict to the highest value — **never re-message a new version to an in-flight teammate**: that instruction races with PR_CREATED/REVIEW_CLEAR and produces crossed-message churn. The usual trigger is an externally-merged PR advancing the base mid-run; lead-resolve it at merge time.
 
    **One caveat overrides "identical bumps merge cleanly":** if the repo auto-publishes an *immutable per-version artifact* on a version *change* (e.g. a `standalone-skills-v<version>` build that fires on the `plugin.json` bump), identical bumps across parallel PRs silently break it — the first merge fires the build from an incomplete tree and permanently consumes that version's tag, and the later identical bumps don't change the version so the build never re-fires. There, do **not** use identical bumps: have the **last-merging PR bump one step higher** (or bump once at the very end, after all merges) so the complete tree republishes.
 7. **Fallback: dependencies** — when combining isn't feasible or would breach the ceiling above (any task complexity 8+, a real dependency between the tasks, fundamentally different concerns despite a shared file, or 5+ tasks on one file):
@@ -196,7 +196,7 @@ Store non-required check names in `meta.flaky_checks`.
 ## Step 3: Spawn Teammates
 
 **Pre-spawn: Read the retro log's open template changes:**
-Before writing any spawn prompt, read the retro log (Marathon Configuration `$RETRO_LOG`) Template Changes table — **skip this step entirely if `$RETRO_LOG` is unset** (defaults supply none), the same escape the completion-time read uses. Apply every row still marked Pending to this run's spawn prompts and lead behaviour now - that is what the table is for. Reading these only at retro time is too late: the same friction recurs the whole run. (The teammate-watcher/idle-churn fix below was logged Pending for two consecutive marathons before it shipped, because the lead read the table after the run, not before.)
+Before writing any spawn prompt, read the retro log (Marathon Configuration `$RETRO_LOG`) Template Changes table — **skip this step entirely if `$RETRO_LOG` is unset** (defaults supply none), the same escape the completion-time read uses. Apply every row still marked Pending to this run's spawn prompts and lead behaviour now - that is what the table is for. Reading these only at retro time is too late — the same friction then recurs the whole run, which is exactly how past fixes sat unapplied across entire marathons before shipping.
 
 **Pre-spawn: Check for already-completed work:**
 Before spawning Wave 1, check recent merged PRs for task keywords to avoid spawning work that's already done:
@@ -301,7 +301,7 @@ Report team status after spawning:
 2. Decompose: expand the task into subtasks (or cancel + create new peer tasks for sibling split)
 3. Spawn fresh teammates for resulting tasks
 
-**Shut teammates down early to kill idle churn**: The moment a teammate's PR has required checks green and threads resolved (its REVIEW_CLEAR, or your own poll showing it), shut the teammate down - do not leave it idle through the claude-review wait and the merge. The lead owns that tail. A live-but-idle teammate emits a continuous stream of idle notifications (the harness re-pings idle members), which is pure attention-drain on the lead; early shutdown is the fix, not patience. This is also why teammates are told not to run their own CI watcher - the lead watches, the lead merges, the teammate is gone before the slow advisory checks finish.
+**Shut teammates down early to kill idle churn**: The moment a teammate's PR has required checks green and threads resolved (its REVIEW_CLEAR, or your own poll showing it), shut the teammate down - do not leave it idle through the claude-review wait and the merge. The lead owns that tail. A live-but-idle teammate emits a continuous stream of idle notifications (the harness re-pings idle members), which is pure attention-drain on the lead; early shutdown is the fix, not patience. This is also why teammates are told not to run their own CI watcher - the lead watches, the lead merges, the teammate is gone before the slow advisory checks finish. If you have sent a `shutdown_request` and the teammate keeps emitting idle notifications without approving it, re-send the request once rather than sitting through the idle stream — the re-send re-prompts it to process the approval.
 
 **Lead conflict resolution**: When a teammate is idle and their PR is DIRTY (merge conflict), resolve it directly instead of nudging the teammate. Pull `$BASE_BRANCH`, resolve the conflict, push. Faster than round-tripping to an idle teammate (~10 min saved per conflict). This idle-DIRTY conflict is the **sole** work the lead executes directly — it does not generalize: a failing test, missing implementation, or thread fix is still delegated per [Lead Authority](#lead-authority), even when it looks like a quick edit. If the teammate whose branch you're resolving may still be live (not yet idle/down), message it *before* you push — "leave the version conflict to me, I'm resolving" — then push; pushing first races with the teammate resolving the same conflict in its own worktree.
 
@@ -361,6 +361,12 @@ of a PR that never merged (recoverable via the remote branch, but it wastes a re
 required checks are green and `mergeStateStatus` is CLEAN, wait for `claude[bot]`/`claude-review` to post —
 AI-written docs are exactly where AI-authoring residue (leaked tool-envelope tags, duplicated sections)
 hides, and the reviewer catches it. The minutes of waiting are cheaper than a follow-up PR + patch release.
+
+**Any push after REVIEW_CLEAR re-opens the verify gate.** A lead conflict-resolution, a base-advance
+re-trigger, or a late fix all produce a new head, and bots re-review that new commit — a reviewer that
+passed clean on the prior head can post a fresh finding on this one. After any post-REVIEW_CLEAR push,
+re-check the required checks *and* unresolved threads on the new head before merging; never merge on the
+strength of the earlier REVIEW_CLEAR alone.
 
 **After merge:**
 1. Report to user
@@ -488,4 +494,4 @@ For each that was exercised: did it help, hurt, or not apply? Mark validated.>
 
 ## Subagent Fallback (no teams)
 
-When `$MARATHON_MODE` but `$TEAMS_AVAILABLE` is `false`, use parallel subagents after each cleanup cycle: enumerate next-ready units via the adapter's enumerate operation and spawn parallel subagents for each.
+When `$TEAMS_AVAILABLE` is `false`, use parallel subagents after each cleanup cycle: enumerate next-ready units via the adapter's enumerate operation and spawn parallel subagents for each.
