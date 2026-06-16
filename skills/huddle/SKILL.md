@@ -19,7 +19,7 @@ Scales from a solo gut check to a board-level deliberation using Fibonacci team 
 ## Capability Requirements
 
 <!-- chat-replace:execution-mode-rule -->
-Three execution modes exist. Pick one **deterministically**: team size = 1 → **solo flat-parallel**; team size ≥ 2 AND you can confirm the team-mode capability (`TeamCreate` / `SendMessage`) is available → **team mode**; otherwise → **phased sub-agent mode**. If you cannot confirm team mode, default to phased - it degrades gracefully, whereas attempting team mode without the capability fails loudly.
+Three execution modes exist. Pick one **deterministically**: team size = 1 → **solo flat-parallel**; team size ≥ 2 AND you can confirm the team-mode capability (`TeamCreate` / `SendMessage`) is available → **team mode**; otherwise → **phased sub-agent mode**. Confirming availability means actively probing, not glancing at your visible tools - these tools may be deferred behind `ToolSearch` (see the capability-detection step). If, after probing, you still cannot reach team mode, default to phased - it degrades gracefully, whereas attempting team mode without the capability fails loudly.
 
 | Mode | When chosen | Mechanism | Cost (relative) |
 |------|-------------|-----------|----------------|
@@ -37,11 +37,13 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 
 Without the flag, `/huddle` still runs multi-perspective deliberations via phased sub-agent mode - it just trades cross-talk between agents for a running synopsis Blue Hat maintains as the persistent memory. Quality drops a little, cost drops a lot.
 
+**Deferred-tool caveat (the silent-fallback trap).** With the flag enabled, newer Claude Code builds do not list `TeamCreate` / `SendMessage` in your live tool set - they defer them behind `ToolSearch`, surfacing only their names in a system-reminder. If you decide between team and phased mode by glancing at your visible tools, you will wrongly conclude team mode is unavailable and degrade to phased with no error. Resolve it at the capability-detection step below by loading the schemas with `ToolSearch("select:TeamCreate,SendMessage")` before you decide - a successful load is confirmation that team mode is reachable.
+
 **Why enable team mode anyway:** persistent professional-lens agents talking to each other across phases produce noticeably deeper synthesis - disagreements get rebutted in real time, edge cases surface from cross-talk, and the verdict feels like real deliberation rather than serially-summarised opinions. Worth it for decisions where being wrong costs 100× more than the analysis: architecture choices, irreversible migrations, hiring calls, contractual commitments.
 <!-- chat-skip:end -->
 
 <!-- chat-replace:capability-detection -->
-**Tell the user which mode you're in** before you start. If the Agent Teams capability (`TeamCreate` / `SendMessage`) is available and team size ≥ 2, announce team mode - one line, e.g. "Running in team mode (3 professional lenses, 5 phases - persistent agents)." Otherwise announce phased sub-agent mode, e.g. "Running in phased sub-agent mode (3 lenses, 5 phases)."
+**Tell the user which mode you're in** before you start, but probe for the team capability first - do not treat "not in my visible tool list" as "unavailable". Newer Claude Code builds defer `TeamCreate` / `SendMessage` behind `ToolSearch`: when the flag is enabled they are listed only by name in a system-reminder, not as directly-callable tools, so a naive availability check false-negatives and silently drops you into phased mode. If they are not already live, run `ToolSearch("select:TeamCreate,SendMessage")` to load their schemas and treat a successful load as confirmation. If they load (or are already callable) and team size ≥ 2, announce team mode - one line, e.g. "Running in team mode (3 professional lenses, 5 phases - persistent agents)." Announce phased sub-agent mode only if the probe genuinely fails to surface them, e.g. "Running in phased sub-agent mode (3 lenses, 5 phases)."
 
 ## No Arguments Behavior
 
