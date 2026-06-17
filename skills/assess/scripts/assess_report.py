@@ -49,6 +49,37 @@ DIFF_CATEGORIES = [
     ("persistent", "Persistent", "still in the hotspot list"),
 ]
 
+# Caps on listed empty-ownership patterns so a pathologically broken ownership
+# map can't bloat the frozen report. The full list stays in run-context.json.
+MAX_EMPTY_PATTERNS_RENDERED = 20
+
+# Tier 1 grouping-disagreement metrics, in render order. Each row is the
+# run-context key stem (the ``_count`` suffix is added at read time), a
+# human label, and the one-line interpretation - the disagreement (or
+# agreement) the metric measures between the declared boundary, the static
+# import graph, and the co-change history. The objective count is rendered
+# first, the interpretation second (SKILL.md deterministic-findings rule).
+TIER1_METRICS = [
+    ("human_grouped_static_splits",
+     "declared together, import graph splits them",
+     "a boundary the dependency structure no longer backs"),
+    ("human_split_static_fuses",
+     "import graph fuses them, no declared boundary does",
+     "cohesion the ownership map misses"),
+    ("human_grouped_never_cochange",
+     "declared together, commit log never couples them",
+     "a boundary history does not exercise as a unit"),
+    ("human_split_but_cochange",
+     "keep co-changing, no declared boundary groups them",
+     "a hidden seam the map omits (folded into hidden_coupling above)"),
+    ("human_static_agree",
+     "declared and dependency lenses agree",
+     "boundary backed by the import graph"),
+    ("human_cochange_agree",
+     "declared and historical lenses agree",
+     "boundary exercised as a unit by history"),
+]
+
 REPORT_TEMPLATE = Template("""# Deterministic Assessment Snapshot: $repo_name
 
 _Generated $run_date by `/assess` v$plugin_version.${commit_note}_
@@ -69,7 +100,7 @@ $hotspots_table
 $keyhole_summary
 
 $findings_section
-
+$structure_drift_section
 ## Changes Since Last Run
 
 $diff_section
@@ -124,6 +155,121 @@ def render_findings_section(ctx: dict) -> str:
     if not markdown or not markdown.strip():
         return "_No cross-layer findings recorded._"
     return markdown.strip()
+
+
+def _render_tier0_drift(tier_0: dict) -> list[str]:
+    """Tier 0 ownership-map drift: declared globs matching zero tracked files.
+
+    Each empty pattern is a slice of the tree the ownership map *claims* to
+    cover but no file satisfies, so any edit there silently skips the declared
+    owner's review. Lists the pattern, where it was declared, and the owners it
+    would have routed to. Returns ``[]`` (caller omits the section) when Tier 0
+    is unavailable or no pattern is empty - absence reads as "nothing stale",
+    never a broken half-section.
+    """
+    if not tier_0.get("available"):
+        return []
+    patterns = tier_0.get("empty_ownership_patterns") or []
+    if not patterns:
+        return []
+    ordered = sorted(
+        patterns,
+        key=lambda p: (p.get("pattern", ""), p.get("declared_in", "")),
+    )
+    lines = [
+        "### Tier 0 - Ownership Map Drift",
+        "",
+        (f"{len(patterns)} declared ownership pattern"
+         f"{'' if len(patterns) == 1 else 's'} match zero tracked files. "
+         "Stale ownership silently drops review coverage: an edit under one of "
+         "these patterns routes to no declared owner."),
+        "",
+    ]
+    for p in ordered[:MAX_EMPTY_PATTERNS_RENDERED]:
+        owners = p.get("owners") or []
+        owners_text = ", ".join(owners) if owners else "_no owners declared_"
+        lines.append(
+            f"- `{p.get('pattern', '?')}` "
+            f"(declared in {p.get('declared_in', '?')}; owners: {owners_text})"
+        )
+    overflow = len(ordered) - MAX_EMPTY_PATTERNS_RENDERED
+    if overflow > 0:
+        lines.append(f"- ...and {overflow} more")
+    lines.append("")
+    return lines
+
+
+def _render_tier1_disagreement(tier_1: dict, repo_name: str) -> list[str]:
+    """Tier 1 grouping disagreement: six set-algebra counts over the declared,
+    static-import, and co-change groupings, plus the seam-allowlist note.
+
+    The objective counts lead; the interpretation follows each (SKILL.md
+    deterministic-findings rule). The hidden-seam direction
+    (``human_split_but_cochange``) already folds into the ``hidden_coupling``
+    finding above, so this block surfaces the explicit magnitudes and the
+    allowlist transparency line rather than re-rendering that finding. Returns
+    ``[]`` (caller omits) when the static lens was unavailable.
+    """
+    if not tier_1.get("available"):
+        return []
+    lines = [
+        "### Tier 1 - Grouping Disagreement",
+        "",
+        ("Set-algebra over three groupings - the declared boundary, the static "
+         "import graph, and the co-change history - counting the file pairs each "
+         "lens pair agrees or disagrees on:"),
+        "",
+    ]
+    for key, label, interpretation in TIER1_METRICS:
+        count = tier_1.get(f"{key}_count", 0)
+        lines.append(f"- **{count}** `{key}` - {label}: {interpretation}")
+    lines.append("")
+    if tier_1.get("seam_allowlist_applied"):
+        n = tier_1.get("allowlist_pairs_count", 0)
+        note = (
+            f"Seam allowlist applied: {n} owned seam pair"
+            f"{'' if n == 1 else 's'} excluded from the disagreement counts "
+            "before they were reported."
+        )
+        if _is_self_assessment(repo_name):
+            note += " See `lib/README.md` for the owned seams."
+        lines.append(note)
+        lines.append("")
+    return lines
+
+
+def _is_self_assessment(repo_name: str) -> bool:
+    """True when /assess is assessing its own repo - the only case where the
+    ``lib/README.md`` owned-seams footnote points at a file that exists."""
+    return repo_name == "ai-native-toolkit"
+
+
+def format_structure_drift_findings(
+    structure_drift: dict | None, repo_name: str = "",
+) -> str:
+    """Render the run-context ``structure_drift`` block as a Markdown section.
+
+    Two tiers, each independently omitted when it has nothing to say:
+    - **Tier 0** lists declared ownership patterns matching no tracked file.
+    - **Tier 1** surfaces the six grouping-disagreement counts and the
+      seam-allowlist transparency line.
+
+    Counts lead, interpretation follows; the harness never auto-prescribes
+    regenerating the ownership map - that is a human decision, stated here only
+    so the human can make it. Returns ``""`` (caller omits the heading) when the
+    block is absent or both tiers are empty - graceful degrade, no broken
+    markdown.
+    """
+    if not structure_drift:
+        return ""
+    body: list[str] = []
+    body += _render_tier0_drift(structure_drift.get("tier_0") or {})
+    body += _render_tier1_disagreement(
+        structure_drift.get("tier_1") or {}, repo_name,
+    )
+    if not body:
+        return ""
+    return "## Structure Drift\n\n" + "\n".join(body).rstrip() + "\n"
 
 
 def _format_transition(category: str, entry: dict) -> str:
@@ -238,9 +384,18 @@ def render_report(ctx: dict, repo_name: str) -> str:
         hotspots_table=render_hotspots_table(ctx),
         keyhole_summary=render_keyhole_summary(ctx),
         findings_section=render_findings_section(ctx),
+        structure_drift_section=_structure_drift_section(ctx, repo_name),
         diff_section=render_diff_section(ctx),
     )
     return report.rstrip() + "\n"
+
+
+def _structure_drift_section(ctx: dict, repo_name: str) -> str:
+    """Template-ready structure-drift block: the rendered section followed by a
+    blank line, or ``""`` when there's nothing to render (the surrounding blank
+    line in the template then collapses on the final ``rstrip``)."""
+    section = format_structure_drift_findings(ctx.get("structure_drift"), repo_name)
+    return f"\n{section.rstrip()}\n" if section else ""
 
 
 def load_context(repo_root: Path) -> dict:

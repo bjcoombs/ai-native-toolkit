@@ -15,6 +15,7 @@ import pytest
 from assess_report import (
     _fmt,
     _render_commit_note,
+    format_structure_drift_findings,
     load_context,
     main,
     render_diff_section,
@@ -74,6 +75,37 @@ def _full_ctx() -> dict:
             {"path": "scripts", "action": "investigate the seam",
              "findings": ["hidden_coupling"], "rank": 1},
         ],
+        "structure_drift": _structure_drift_block(),
+    }
+
+
+def _structure_drift_block() -> dict:
+    """A populated structure_drift block: Tier 0 empty globs + Tier 1 counts."""
+    return {
+        "tier_0": {
+            "available": True,
+            "total_patterns": 30,
+            "matched_patterns": 8,
+            "empty_ownership_patterns": [
+                {"pattern": "../skills/marathon/SKILL.md",
+                 "declared_in": "commands/README.md::Workflow",
+                 "owners": []},
+                {"pattern": "./assess/SKILL.md",
+                 "declared_in": "skills/README.md::Portable",
+                 "owners": ["@platform-team"]},
+            ],
+        },
+        "tier_1": {
+            "available": True,
+            "human_grouped_static_splits_count": 6582,
+            "human_split_static_fuses_count": 0,
+            "human_grouped_never_cochange_count": 6636,
+            "human_split_but_cochange_count": 6,
+            "human_static_agree_count": 56,
+            "human_cochange_agree_count": 2,
+            "seam_allowlist_applied": True,
+            "allowlist_pairs_count": 2,
+        },
     }
 
 
@@ -312,6 +344,101 @@ def test_commit_note_dirty_and_behind() -> None:
 def test_commit_note_unavailable_is_empty() -> None:
     assert _render_commit_note({"measured_commit": {"available": False}}) == ""
     assert _render_commit_note({}) == ""
+
+
+# --------------------------------------------------------------------------
+# Structure drift (Tier 0 ownership-map drift + Tier 1 grouping disagreement)
+# --------------------------------------------------------------------------
+
+def test_structure_drift_tier0_lists_empty_patterns() -> None:
+    """Tier 0 surfaces each empty ownership pattern with its declared_in source
+    and owners, framed as stale ownership dropping review coverage."""
+    out = format_structure_drift_findings(_structure_drift_block())
+    assert "Tier 0" in out
+    assert "Ownership Map Drift" in out
+    assert "`../skills/marathon/SKILL.md`" in out
+    assert "commands/README.md::Workflow" in out
+    assert "@platform-team" in out
+    # The interpretation is review-coverage loss, not a blame.
+    assert "review coverage" in out
+
+
+def test_structure_drift_tier0_omitted_when_no_empty_patterns() -> None:
+    block = _structure_drift_block()
+    block["tier_0"]["empty_ownership_patterns"] = []
+    out = format_structure_drift_findings(block)
+    assert "Tier 0" not in out
+
+
+def test_structure_drift_tier0_omitted_when_unavailable() -> None:
+    block = _structure_drift_block()
+    block["tier_0"] = {"available": False}
+    out = format_structure_drift_findings(block)
+    assert "Tier 0" not in out
+
+
+def test_structure_drift_tier1_renders_six_counts() -> None:
+    """Tier 1 surfaces the six disagreement/agreement counts, objective first."""
+    out = format_structure_drift_findings(_structure_drift_block())
+    assert "Tier 1" in out
+    assert "Grouping Disagreement" in out
+    # All six magnitudes are present.
+    assert "6582" in out
+    assert "6636" in out
+    assert "56" in out
+    assert "2" in out
+    # Zero counts are shown explicitly, not dropped.
+    assert "human_split_static_fuses" in out
+    assert "human_split_but_cochange" in out
+
+
+def test_structure_drift_tier1_omitted_when_unavailable() -> None:
+    block = _structure_drift_block()
+    block["tier_1"] = {"available": False}
+    out = format_structure_drift_findings(block)
+    assert "Grouping Disagreement" not in out
+
+
+def test_structure_drift_seam_allowlist_transparency() -> None:
+    """When the allowlist fired, the report says so and how many pairs it cut."""
+    out = format_structure_drift_findings(_structure_drift_block())
+    assert "allowlist" in out
+    assert "2" in out  # allowlist_pairs_count
+
+
+def test_structure_drift_never_auto_recommends_regenerate_codeowners() -> None:
+    """The deterministic harness states counts; regenerating the ownership map is
+    a human decision, never an auto-prescribed action."""
+    out = format_structure_drift_findings(_structure_drift_block()).lower()
+    assert "regenerate codeowners" not in out
+    assert "regenerate the ownership map" not in out
+
+
+def test_structure_drift_empty_block_omitted() -> None:
+    assert format_structure_drift_findings(None) == ""
+    assert format_structure_drift_findings({}) == ""
+
+
+def test_structure_drift_deterministic() -> None:
+    block = _structure_drift_block()
+    assert format_structure_drift_findings(block) == \
+        format_structure_drift_findings(block)
+
+
+def test_structure_drift_in_full_report() -> None:
+    report = render_report(_full_ctx(), "demo")
+    assert "Structure Drift" in report
+    assert "Tier 0" in report
+    assert "Tier 1" in report
+    assert "$" not in report
+
+
+def test_structure_drift_absent_block_leaves_valid_report() -> None:
+    ctx = _full_ctx()
+    del ctx["structure_drift"]
+    report = render_report(ctx, "demo")
+    assert "Structure Drift" not in report
+    assert "$" not in report
 
 
 # --------------------------------------------------------------------------
