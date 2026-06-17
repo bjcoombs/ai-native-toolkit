@@ -32,6 +32,14 @@ The 9 layers (0-8) fall into three bands, ordered by dependency - what must hold
 - **Write-side enforcement** (L2-L7) - can the agent be trusted to produce good output? Only means something once you can trust that what you're reading is real and current.
 - **Meta** (L8 feedback) - does the system keep itself honest over time? Depends on a working enforced system to improve, so it stays last.
 
+### The three write-side tendencies the layers guard against
+
+The write-side scores aren't abstract good practice - each traces to a known tendency of an AI contributor, observed across models. All three are the same defect: a self-description (the file's shape, a comment's promise, a gate's verdict) under no pressure to stay true. The deterministic core turns each into a cross-layer finding so the report names the specific files, not just the category:
+
+- **Accretion** - an agent does what is asked, and what is asked is feature after feature; nothing in that loop asks for a refactor, so files only grow. **Now fully instrumented** via the `accretion_ratchet` finding: a file whose accumulated line count ratcheted monotonically upward across multiple commits with almost no deletion pressure (deletions below ~15% of total churn). Only top complexity/size-band files are flagged, so growth-but-simple is never noise. It surfaces on three surfaces - the `accretion_ratchet` block in `run-context.json`, the `accretion_ratchet` cross-layer finding (with its files in the attention list), and a *growth-profile* line on each flagged hotspot page (`hotspots/*.md`). The signal disclaims itself (rather than dropping the result) when the git history is degenerate - a shallow clone or squashed import has no meaningful net-delta sequence, so the block carries `reliable: false` and the hotspot line is marked as possibly incomplete.
+- **Unactioned intent** - an agent records promises it never returns to keep (`TODO` / `FIXME` / "remove after migration"). Instrumented via the `unactioned_intent` finding: markers aged by the edits they survived without being kept - a lying map of intent.
+- **Guardrail erosion** - under pressure to make red go green, an agent loosens the check instead of fixing the root (a suppression, a skipped test, a widened threshold), hollowing out the layers meant to protect it while they still read as Present.
+
 <!-- chat-skip:start -->
 **$ARGUMENTS**
 <!-- chat-skip:end -->

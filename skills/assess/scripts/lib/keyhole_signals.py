@@ -54,7 +54,7 @@ MAX_ATTENTION_UNITS = 10
 # commits can't establish whether edits "stay contained").
 MIN_DIR_COMMITS_FOR_CONTAINMENT = 5
 
-# The six named derived findings, in a fixed report order (worst-first, the one
+# The named derived findings, in a fixed report order (worst-first, the one
 # positive last). The action strings are the deterministic recommendation the
 # report leads with; the LLM elaborates but never contradicts them.
 FINDING_ORDER = [

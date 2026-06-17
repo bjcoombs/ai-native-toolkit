@@ -265,6 +265,14 @@ def test_hotspot_page_carries_growth_profile_when_file_accretes(git_repo) -> Non
     flagged = {f["path"] for f in ctx["accretion_ratchet"].get("files", [])}
     assert "src/grower.go" in flagged
 
+    # The block must also reach the keyhole: a populated accretion_ratchet block
+    # is wired into the derived finding (assess_core passes it to integrate), so
+    # the cross-layer finding lists the path - not just the run-context block.
+    finding = next(
+        f for f in ctx["derived_findings"] if f["name"] == "accretion_ratchet"
+    )
+    assert "src/grower.go" in finding["paths"]
+
     page = (assess_dir / "hotspots" / f"{slug_for_path('src/grower.go')}.md").read_text(
         encoding="utf-8"
     )
