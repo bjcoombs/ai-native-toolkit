@@ -108,7 +108,7 @@ The capability runs the same mechanism in every mode; modes differ only in how t
 <!-- chat-skip:start -->
 **Phased sub-agent mode** (Agent Teams flag off): the lead spawns a fresh runner subagent per version per case (the runner pair) and a fresh judge subagent per case. With no persistent agents, the cached teacher transcripts are injected into each round so only the candidate is re-run.
 
-**Team mode** (Agent Teams flag on, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`): the equivalence judge can run as a persistent teammate spawned via `TeamCreate` / `Agent`, communicating with the lead via `SendMessage`; ephemeral runners are spawned per round and shut down after. As with the forge loop, `TeamDelete` is mandatory at the end of the run or teamContext persists and blocks future team creation in this session.
+**Team mode** (Agent Teams flag on, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`): the equivalence judge can run as a persistent background teammate (`Agent` with `run_in_background: true`, joined to the session's single implicit team), communicating with the lead via `SendMessage`; ephemeral runners are spawned per round and shut down after. As with the forge loop, there is no `TeamCreate`/`TeamDelete` - shut each teammate down with a `SendMessage` shutdown_request at the end of the run; nothing persists to block a future run.
 
 No persistent team is required by the capability itself - the judge holds no across-round memory of its own; the cached teacher transcript is the only state carried between rounds, and the caller owns it.
 <!-- chat-skip:end -->

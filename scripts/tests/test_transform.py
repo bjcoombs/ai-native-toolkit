@@ -434,9 +434,8 @@ def test_huddle_plugin_source_retains_team_mode_infrastructure():
     source = Path("../skills/huddle/SKILL.md").read_text("utf-8")
 
     required_tool_names = [
-        "TeamCreate",          # team creation
-        "SendMessage",         # cross-agent messaging
-        "TeamDelete",          # team shutdown
+        "SendMessage",         # cross-agent messaging (the capability that gates team mode)
+        "run_in_background",   # background-teammate spawn forming the single implicit team
         "subagent_type",       # Agent-tool dispatch path
         "~/.claude/agents",    # hat methodology resolution in plugin
         "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",  # capability env var
@@ -449,10 +448,10 @@ def test_huddle_plugin_source_retains_team_mode_infrastructure():
         )
 
     required_section_headers = [
-        "### Step 2: Create the Team",
+        "### Step 2: Form the Implicit Team",
         "### Step 3: Spawn Team Members",
         "### Step 4: Facilitate Hat Phases",
-        "### Step 6: Shutdown the Team",
+        "### Step 6: Wind Down the Team",
     ]
     for header in required_section_headers:
         assert header in source, (

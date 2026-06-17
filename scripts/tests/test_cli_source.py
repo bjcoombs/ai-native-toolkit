@@ -95,28 +95,34 @@ def test_huddle_raw_source_keeps_cli_team_mode_path():
     """The CLI source must positively describe the team-mode path, so a future
     edit cannot quietly strip it while still passing the negative checks."""
     raw = _raw_skill_md("huddle")
-    assert "TeamCreate" in raw, "CLI team-mode infrastructure missing from raw huddle source"
+    assert "run_in_background" in raw, (
+        "CLI team-mode infrastructure missing from raw huddle source - the "
+        "implicit-team spawn (Agent with run_in_background) is how persistent "
+        "teammates are formed in this build"
+    )
     assert "flag enabled" in raw, (
         "CLI team-mode branch (Size 2+, flag enabled → team mode) missing from raw huddle source"
     )
 
 
 def test_huddle_raw_source_instructs_deferred_tool_probe():
-    """Newer Claude Code builds defer TeamCreate / SendMessage behind ToolSearch:
-    the tools are enabled but listed only by name in a system-reminder, not as
-    directly-callable tools. A capability check that only glances at the visible
-    tool list false-negatives and silently drops a size-2+ huddle into phased
-    mode even with the flag live. The CLI source must instruct an active probe
-    (ToolSearch load) before concluding team mode is unavailable, so the chair
-    cannot regress to the naive glance-and-degrade behaviour."""
+    """Newer Claude Code builds defer SendMessage behind ToolSearch: the tool is
+    enabled but listed only by name in a system-reminder, not as a directly-
+    callable tool. A capability check that only glances at the visible tool list
+    false-negatives and silently drops a size-2+ huddle into phased mode even
+    with the flag live. The CLI source must instruct an active probe (ToolSearch
+    load) before concluding team mode is unavailable, so the chair cannot regress
+    to the naive glance-and-degrade behaviour. (This build forms a single implicit
+    team - there is no TeamCreate - so SendMessage is the capability that gates
+    team mode.)"""
     raw = _raw_skill_md("huddle")
     assert "ToolSearch" in raw, (
-        "raw huddle source must instruct a ToolSearch probe for the deferred team "
-        "tools; without it the chair false-negatives on TeamCreate/SendMessage and "
-        "silently degrades to phased mode"
+        "raw huddle source must instruct a ToolSearch probe for the deferred "
+        "SendMessage tool; without it the chair false-negatives on team-mode "
+        "availability and silently degrades to phased mode"
     )
-    assert "select:TeamCreate,SendMessage" in raw, (
+    assert "select:SendMessage" in raw, (
         "raw huddle source must name the concrete ToolSearch probe query "
-        '("select:TeamCreate,SendMessage") so the chair loads the deferred tool '
-        "schemas before deciding the execution mode"
+        '("select:SendMessage") so the chair loads the deferred tool schema '
+        "before deciding the execution mode"
     )

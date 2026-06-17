@@ -19,17 +19,17 @@ Scales from a solo gut check to a board-level deliberation using Fibonacci team 
 ## Capability Requirements
 
 <!-- chat-replace:execution-mode-rule -->
-Three execution modes exist. Pick one **deterministically**: team size = 1 → **solo flat-parallel**; team size ≥ 2 AND you can confirm the team-mode capability (`TeamCreate` / `SendMessage`) is available → **team mode**; otherwise → **phased sub-agent mode**. Confirming availability means actively probing, not glancing at your visible tools - these tools may be deferred behind `ToolSearch` (see the capability-detection step). If, after probing, you still cannot reach team mode, default to phased - it degrades gracefully, whereas attempting team mode without the capability fails loudly.
+Three execution modes exist. Pick one **deterministically**: team size = 1 → **solo flat-parallel**; team size ≥ 2 AND you can confirm the team-mode capability (`SendMessage` plus background `Agent` teammates) is available → **team mode**; otherwise → **phased sub-agent mode**. Confirming availability means actively probing, not glancing at your visible tools - `SendMessage` may be deferred behind `ToolSearch` (see the capability-detection step). If, after probing, you still cannot reach team mode, default to phased - it degrades gracefully, whereas attempting team mode without the capability fails loudly.
 
 | Mode | When chosen | Mechanism | Cost (relative) |
 |------|-------------|-----------|----------------|
 | **Solo flat-parallel** | Size 1 | Hat agents fire in parallel via standard Agent tool; Blue Hat synthesises | 1× |
 | **Phased sub-agent** | Size 2+, no flag | Iterate phases sequentially; spawn N sub-agents per phase (one per lens), each with fresh context, briefed via a running synopsis Blue Hat maintains | 2-4× |
 <!-- chat-replace:team-mode-row -->
-| **Team mode** | Size 2+, flag enabled | Persistent `TeamCreate` agents cross-talk via `SendMessage` across phases | 5-15× |
+| **Team mode** | Size 2+, flag enabled | Persistent background `Agent` teammates in one implicit team cross-talk via `SendMessage` across phases | 5-15× |
 
 <!-- chat-skip:start -->
-**Agent Teams flag** enables `TeamCreate`, `SendMessage`, and related tools. Enable in your environment:
+**Agent Teams flag** enables `SendMessage` and the background-teammate mechanism (`Agent` spawned with `run_in_background: true`, joined into one implicit team). Enable in your environment:
 
 ```bash
 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
@@ -37,13 +37,13 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 
 Without the flag, `/huddle` still runs multi-perspective deliberations via phased sub-agent mode - it just trades cross-talk between agents for a running synopsis Blue Hat maintains as the persistent memory. Quality drops a little, cost drops a lot.
 
-**Deferred-tool caveat (the silent-fallback trap).** With the flag enabled, newer Claude Code builds do not list `TeamCreate` / `SendMessage` in your live tool set - they defer them behind `ToolSearch`, surfacing only their names in a system-reminder. If you decide between team and phased mode by glancing at your visible tools, you will wrongly conclude team mode is unavailable and degrade to phased with no error. Resolve it at the capability-detection step below by loading the schemas with `ToolSearch("select:TeamCreate,SendMessage")` before you decide - a successful load is confirmation that team mode is reachable.
+**Deferred-tool caveat (the silent-fallback trap).** With the flag enabled, newer Claude Code builds do not list `SendMessage` in your live tool set - they defer it behind `ToolSearch`, surfacing only its name in a system-reminder. If you decide between team and phased mode by glancing at your visible tools, you will wrongly conclude team mode is unavailable and degrade to phased with no error. Resolve it at the capability-detection step below by loading the schema with `ToolSearch("select:SendMessage")` before you decide - a successful load is confirmation that team mode is reachable. (This build forms a **single implicit team**: there is no `TeamCreate`. You spawn named background `Agent` teammates and they join automatically - so `SendMessage` is the one capability that gates team mode.)
 
 **Why enable team mode anyway:** persistent professional-lens agents talking to each other across phases produce noticeably deeper synthesis - disagreements get rebutted in real time, edge cases surface from cross-talk, and the verdict feels like real deliberation rather than serially-summarised opinions. Worth it for decisions where being wrong costs 100× more than the analysis: architecture choices, irreversible migrations, hiring calls, contractual commitments.
 <!-- chat-skip:end -->
 
 <!-- chat-replace:capability-detection -->
-**Tell the user which mode you're in** before you start, but probe for the team capability first - do not treat "not in my visible tool list" as "unavailable". Newer Claude Code builds defer `TeamCreate` / `SendMessage` behind `ToolSearch`: when the flag is enabled they are listed only by name in a system-reminder, not as directly-callable tools, so a naive availability check false-negatives and silently drops you into phased mode. If they are not already live, run `ToolSearch("select:TeamCreate,SendMessage")` to load their schemas and treat a successful load as confirmation. If they load (or are already callable) and team size ≥ 2, announce team mode - one line, e.g. "Running in team mode (3 professional lenses, 5 phases - persistent agents)." Announce phased sub-agent mode only if the probe genuinely fails to surface them, e.g. "Running in phased sub-agent mode (3 lenses, 5 phases)."
+**Tell the user which mode you're in** before you start, but probe for the team capability first - do not treat "not in my visible tool list" as "unavailable". Newer Claude Code builds defer `SendMessage` behind `ToolSearch`: when the flag is enabled it is listed only by name in a system-reminder, not as a directly-callable tool, so a naive availability check false-negatives and silently drops you into phased mode. If it is not already live, run `ToolSearch("select:SendMessage")` to load its schema and treat a successful load as confirmation. (Team formation needs no separate `TeamCreate` - this build uses a single implicit team that named background `Agent` teammates join on spawn; `SendMessage` is what gates the cross-talk.) If it loads (or is already callable) and team size ≥ 2, announce team mode - one line, e.g. "Running in team mode (3 professional lenses, 5 phases - persistent agents)." Announce phased sub-agent mode only if the probe genuinely fails to surface it, e.g. "Running in phased sub-agent mode (3 lenses, 5 phases)."
 
 ## No Arguments Behavior
 
@@ -100,7 +100,7 @@ Spawn hat agents in parallel based on your chosen sequence. Each agent operates 
 ### Phased Sub-Agent Mode (Size 2+, no team flag)
 
 <!-- chat-skip:start -->
-When team size > 1 but `TeamCreate` is unavailable, do not collapse to flat-parallel - that throws away both phase ordering and multi-lens diversity. Instead, iterate phases sequentially and spawn fresh sub-agents per phase:
+When team size > 1 but team mode is unavailable, do not collapse to flat-parallel - that throws away both phase ordering and multi-lens diversity. Instead, iterate phases sequentially and spawn fresh sub-agents per phase:
 <!-- chat-skip:end -->
 When team size > 1 but team mode is unavailable, do not collapse to flat-parallel - that throws away both phase ordering and multi-lens diversity. Instead, iterate phases sequentially and spawn fresh sub-agents per phase:
 
@@ -126,7 +126,7 @@ When team size > 1 but team mode is unavailable, do not collapse to flat-paralle
 - Multi-lens diversity preserved - N professionals still weigh in per phase.
 - Phase ordering preserved - Black Hat sees White Hat's facts via the synopsis.
 <!-- chat-skip:start -->
-- No `TeamCreate` / `SendMessage` required; uses only the standard Agent tool.
+- No `SendMessage` or background teammates required; uses only foreground Agent calls.
 <!-- chat-skip:end -->
 - No team mode infrastructure required; uses only the standard Agent tool.
 
@@ -138,14 +138,9 @@ When team size > 1 but team mode is unavailable, do not collapse to flat-paralle
 For team modes (size 2+) with the flag enabled, continue to Step 2.
 
 <!-- chat-skip:start -->
-### Step 2: Create the Team
+### Step 2: Form the Implicit Team
 
-```
-TeamCreate(
-  team_name: "6hats-<brief-topic-slug>",
-  description: "Six Hats team analysis of: <topic>"
-)
-```
+This build forms a **single implicit team** - there is no `TeamCreate` call. The team comes into being the moment you spawn named background agents (Step 3): each `Agent(name: ..., run_in_background: true)` joins the session's one implicit team automatically and becomes addressable by name via `SendMessage`. There is nothing to create here; proceed to Step 3.
 <!-- chat-skip:end -->
 
 <!-- chat-skip:start -->
@@ -162,11 +157,13 @@ For each member, use the Agent tool:
 ```
 Agent(
   subagent_type: "general-purpose",
-  team_name: "<team-name>",
-  name: "<role-slug>",  // e.g. "security-eng", "product-mgr"
+  name: "<role-slug>",          // e.g. "security-eng" - addressable via SendMessage(to: "<role-slug>")
+  run_in_background: true,        // persistent teammate: runs concurrently, reports back via SendMessage
   prompt: "<member prompt — see below>"
 )
 ```
+
+`run_in_background: true` is what makes each member a persistent, concurrently-running teammate rather than a blocking sub-call; `name` is what makes it addressable. There is no `team_name` - the session's single implicit team is joined automatically.
 
 **Member prompt template:**
 
@@ -181,7 +178,7 @@ You are a [ROLE] with deep expertise in [DOMAIN]. This identity persists across 
 
 ## Your Teammates
 
-[ROSTER — the chair lists every other member's name slug here, e.g. "security-eng, product-mgr, sre".] You share findings by sending one `SendMessage` per teammate name; there is no broadcast. If this roster is missing, read `~/.claude/teams/{team}/config.json` and use `members[].name` (excluding yourself) as your peer list.
+[ROSTER — the chair lists every other member's name slug here, e.g. "security-eng, product-mgr, sre".] You share findings by sending one `SendMessage` per teammate name; there is no broadcast. If this roster is missing, message the chair (`SendMessage(to: "main", ...)`) and ask for the peer list.
 
 ## IMMEDIATE FIRST TASK
 
@@ -317,18 +314,15 @@ After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. 
 ```
 
 <!-- chat-skip:start -->
-### Step 6: Shutdown the Team
+### Step 6: Wind Down the Team
 
-After delivering the verdict:
+After delivering the verdict, release any teammate still running. A background teammate that has finished its last phase and reported back has already exited and needs no teardown. For any still working, send one shutdown request each and await approval:
 
-1. Send shutdown requests to each member:
-   ```
-   SendMessage(to: "<member-name>", message: { type: "shutdown_request", reason: "Analysis complete" })
-   ```
-2. Wait for all shutdown approvals
-3. Call `TeamDelete()` to clear team context from the session
+```
+SendMessage(to: "<member-name>", message: { type: "shutdown_request", reason: "Analysis complete" })
+```
 
-**TeamDelete is mandatory.** Without it, teamContext persists and blocks future team creation in this session. The sequence is always: shutdown teammates → wait for approvals → TeamDelete.
+The implicit team has no separate team object to tear down - there is no `TeamDelete` step and nothing persists to block a future huddle. Once every teammate has reported or approved shutdown, the huddle is complete.
 <!-- chat-skip:end -->
 
 ## Facilitation Principles

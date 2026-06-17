@@ -72,7 +72,7 @@ The steps below are written for **team mode** — the lead chairs an Agent Team,
 
 | Mode | When | How the body maps |
 |------|------|-------------------|
-| **Team** | `$TEAMS_AVAILABLE` true | Run the body as written: `TeamCreate`, one teammate per unit/combined group, message-driven monitoring. |
+| **Team** | `$TEAMS_AVAILABLE` true | Run the body as written: spawn one background teammate (`Agent` with `run_in_background`) per unit/combined group into the session's single implicit team, message-driven monitoring. |
 | **Phased sub-agent** | `$TEAMS_AVAILABLE` false | No persistent team and no `SendMessage`. The lead runs each wave as a batch of parallel subagents, reads their returned transcripts in place of messages, and drives the same loop. See [Subagent Fallback](#subagent-fallback-no-teams). |
 
 Everything else — the DAG analysis, hot-file combining, tracking file, smart-merge, crash recovery, and retrospective — is identical across modes; only the teammate-coordination mechanism differs. Where a step is team-only (the `SendMessage` events, early-shutdown, and idle-ping handling), the phased fallback simply has no equivalent: subagents return rather than message.
@@ -132,12 +132,7 @@ Enumerate work units via the adapter's **enumerate** operation.
 
 ## Step 2: Team + Tracking
 
-```
-TeamCreate(
-  team_name: "<tag>",
-  description: "Marathon mode for tag <tag> - <N> tasks total, <M> ready"
-)
-```
+This build uses a **single implicit team** - there is no `TeamCreate` step. The team forms as you spawn named background teammates (next): each `Agent(name: "task-<id>", run_in_background: true)` joins the session's implicit team and is addressable via `SendMessage(to: "task-<id>")`. Proceed straight to tracking.
 
 **PR tracking** — persisted in worktree dir (survives crashes and team cleanup):
 
@@ -229,9 +224,9 @@ Haiku cannot reliably handle review loops — never use for teammates.
 
 **Teammate prompt template:**
 ```
-Task(
+Agent(
   subagent_type: "general-purpose",
-  team_name: "<tag>",
+  run_in_background: true,
   name: "task-<task-id>",   # combined group: task-<id>+<id> (see Combined-group identity above)
   model: "<chosen-model>",
   prompt: """
@@ -402,7 +397,7 @@ strength of the earlier REVIEW_CLEAR alone.
 
 ## Crash Recovery
 
-If the session crashes, teammates linger as "active members" preventing `TeamDelete()`.
+If the session crashes, background teammates may linger as active members. The implicit team has no `TeamDelete` to block, but stale team/task state under `~/.claude/` should still be cleared so a re-run starts clean.
 
 ```bash
 # 1. Force-remove stale team
@@ -455,7 +450,7 @@ The lead operates as a **tech lead running a sprint** — not a task router.
 
 1. Send `shutdown_request` to each remaining teammate
 2. Wait for all shutdown approvals
-3. Call `TeamDelete()` - if it fails with "active members", verify panes are dead and retry. **TeamDelete is mandatory** - without it, teamContext persists and blocks future team creation in this session.
+3. The implicit team has no `TeamDelete` - once every teammate has approved shutdown or already exited, the team is gone. If a stale background teammate lingers, verify its pane/process is dead; nothing persists to block a future marathon.
 4. **PRD delivery check** — Re-read the original work units' acceptance criteria (PRD, issue bodies, or task details) and cross-reference against merged PRs. Report:
    - Criteria met (with PR evidence)
    - Criteria not met or partially met (flag for user)
