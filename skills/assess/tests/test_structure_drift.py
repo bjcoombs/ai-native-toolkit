@@ -18,7 +18,15 @@ import os
 import subprocess
 from pathlib import Path
 
-from lib.structure_drift import detect_path_existence_drift
+from lib.structure_drift import (
+    apply_seam_allowlist,
+    cochange_grouping_relation,
+    compute_grouping_disagreement,
+    detect_grouping_disagreement,
+    detect_path_existence_drift,
+    human_grouping_relation,
+    static_grouping_relation,
+)
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -241,3 +249,232 @@ def test_integration_lib_readme_seam_paths_are_not_false_positives() -> None:
         and "doc_graph.py" in e["pattern"]
     ]
     assert offenders == [], offenders
+
+
+# =====================================================================
+# Tier 1 - equivalence-relation grouping disagreement
+# =====================================================================
+
+def _p(name: str) -> Path:
+    return Path(name)
+
+
+# --- 7. Relation construction from a grouping --------------------------------
+
+def test_human_relation_emits_all_same_group_pairs() -> None:
+    """A boundary owning n files contributes its n*(n-1)/2 canonical pairs.
+
+    Two boundaries each owning two files yield two intra-group pairs; the cross-
+    boundary pairs are absent (different groups), and every pair is canonical
+    (``file_a < file_b``).
+    """
+    ownership = {
+        "A": {_p("f1.py"), _p("f2.py")},
+        "B": {_p("f3.py"), _p("f4.py")},
+    }
+    rel = human_grouping_relation(ownership)
+    assert rel == {
+        (_p("f1.py"), _p("f2.py")),
+        (_p("f3.py"), _p("f4.py")),
+    }
+
+
+def test_singleton_group_contributes_no_pair() -> None:
+    """A boundary owning one file declares no co-membership, so adds no pair."""
+    assert human_grouping_relation({"solo": {_p("only.py")}}) == set()
+
+
+def test_cochange_relation_filters_by_support_threshold() -> None:
+    """Only co-change pairs at or above the support threshold enter the relation.
+
+    The pair below ``threshold_pct`` is dropped; the survivor is canonicalised
+    regardless of the order ``change_coupling`` listed its files.
+    """
+    pairs = [
+        {"file_a": "b.py", "file_b": "a.py", "co_change_count": 9, "support_pct": 12.0},
+        {"file_a": "c.py", "file_b": "d.py", "co_change_count": 2, "support_pct": 1.0},
+    ]
+    rel = cochange_grouping_relation(pairs, threshold_pct=5.0)
+    assert rel == {(_p("a.py"), _p("b.py"))}
+
+
+# --- 8. Split-vs-fuse disagreement -------------------------------------------
+
+def test_split_and_fuse_are_directional_set_differences() -> None:
+    """human-static and static-human capture the two disagreement directions.
+
+    ``human`` groups (f1,f2); ``static`` instead groups (f2,f3). The pair the
+    human declares but static splits is (f1,f2); the pair static fuses but the
+    human splits is (f2,f3); they share no agreement.
+    """
+    human = {(_p("f1"), _p("f2"))}
+    static = {(_p("f2"), _p("f3"))}
+    d = compute_grouping_disagreement(human, static, cochange_rel=set())
+    assert d["human_grouped_static_splits"] == [{"file_a": "f1", "file_b": "f2"}]
+    assert d["human_grouped_static_splits_count"] == 1
+    assert d["human_split_static_fuses"] == [{"file_a": "f2", "file_b": "f3"}]
+    assert d["human_static_agree"] == []
+
+
+def test_agreement_is_the_intersection() -> None:
+    """A pair both lenses group lands in the agree set, not either difference."""
+    human = {(_p("f1"), _p("f2")), (_p("f3"), _p("f4"))}
+    static = {(_p("f1"), _p("f2"))}
+    d = compute_grouping_disagreement(human, static, cochange_rel=set())
+    assert d["human_static_agree"] == [{"file_a": "f1", "file_b": "f2"}]
+    assert d["human_grouped_static_splits"] == [{"file_a": "f3", "file_b": "f4"}]
+
+
+# --- 9. THE label-permutation invariance test (the hard gate) ----------------
+
+def test_disagreement_is_invariant_to_community_relabeling() -> None:
+    """Relabeling / reordering the communities must not change any metric.
+
+    Communities ``[A:{f1,f2}, B:{f3,f4}]`` and the relabelled, reordered
+    ``[X:{f3,f4}, Y:{f1,f2}]`` are the SAME partition - same co-membership
+    relation. The disagreement against a fixed human grouping must be byte-
+    identical. This is the correctness property of the whole tier: the metric
+    carries pairs, never community labels.
+    """
+    human = {(_p("f1"), _p("f2"))}
+
+    static_a = {(_p("f1"), _p("f2")), (_p("f3"), _p("f4"))}
+    # Same partition, communities swapped and relabelled - identical relation.
+    static_b = {(_p("f3"), _p("f4")), (_p("f1"), _p("f2"))}
+
+    d_a = compute_grouping_disagreement(human, static_a, cochange_rel=set())
+    d_b = compute_grouping_disagreement(human, static_b, cochange_rel=set())
+    assert json.dumps(d_a, sort_keys=True) == json.dumps(d_b, sort_keys=True)
+
+
+def test_static_relation_invariant_to_community_order(tmp_path: Path) -> None:
+    """``static_grouping_relation`` ignores community order and labels.
+
+    Building the relation from communities in one order and from the reversed
+    list yields the identical pair set - the relation never records which
+    community a pair came from. Uses bare module names that resolve to no file,
+    so the relation is exercised purely as set math (empty here), the invariance
+    holding trivially and by construction.
+    """
+    repo = _init_repo(tmp_path)
+    _write(repo, "a.py")
+    _commit_all(repo)
+    comms = [{"lib.x", "lib.y"}, {"lib.z", "lib.w"}]
+    forward = static_grouping_relation(repo, comms)
+    reverse = static_grouping_relation(repo, list(reversed(comms)))
+    assert forward == reverse
+
+
+# --- 10. Seam allowlist ------------------------------------------------------
+
+def test_seam_allowlist_drops_the_allowlisted_pair() -> None:
+    """A pair straddling an allowlisted seam is subtracted from the denominator.
+
+    The lib<->tests seam pair is removed from the disagreement list and its count
+    drops to zero; a genuine off-seam disagreement is untouched.
+    """
+    seam_pair = {
+        "file_a": "skills/assess/scripts/lib/foo.py",
+        "file_b": "skills/assess/tests/test_foo.py",
+    }
+    off_seam = {"file_a": "src/a.py", "file_b": "src/b.py"}
+    disagreement = {
+        "human_grouped_never_cochange": [seam_pair, off_seam],
+        "human_grouped_never_cochange_count": 2,
+    }
+    filtered = apply_seam_allowlist(disagreement)
+    assert filtered["human_grouped_never_cochange"] == [off_seam]
+    assert filtered["human_grouped_never_cochange_count"] == 1
+
+
+def test_seam_allowlist_only_removes_never_adds() -> None:
+    """An allowlist can only shrink a list (correct-by-construction denominator)."""
+    disagreement = {
+        "human_split_but_cochange": [{"file_a": "x/a.py", "file_b": "y/b.py"}],
+        "human_split_but_cochange_count": 1,
+    }
+    filtered = apply_seam_allowlist(disagreement)
+    assert len(filtered["human_split_but_cochange"]) <= 1
+
+
+# --- 11. Top-level callable: degradation + determinism -----------------------
+
+def test_tier1_degrades_with_no_ownership_map(tmp_path: Path) -> None:
+    """No CODEOWNERS and no boundary doc -> available:False, all lists empty."""
+    repo = _init_repo(tmp_path)
+    _write(repo, "a.py")
+    _commit_all(repo)
+
+    result = detect_grouping_disagreement(repo)
+    assert result["available"] is False
+    assert result["reason"] == "no ownership map"
+    assert result["tier_1_available"] is False
+    assert result["human_grouped_static_splits"] == []
+    assert result["human_grouped_static_splits_count"] == 0
+
+
+def test_tier1_is_byte_identical_across_runs(tmp_path: Path) -> None:
+    """Two runs over one repo serialize identically (no set order leaks)."""
+    repo = _init_repo(tmp_path)
+    _write(repo, "src/a.py")
+    _write(repo, "src/b.py")
+    _write(repo, "CODEOWNERS", "src/** @a\n")
+    _commit_all(repo)
+
+    first = json.dumps(
+        detect_grouping_disagreement(repo, communities=[], coupling_pairs=[]),
+        sort_keys=True,
+    )
+    second = json.dumps(
+        detect_grouping_disagreement(repo, communities=[], coupling_pairs=[]),
+        sort_keys=True,
+    )
+    assert first == second
+
+
+def test_tier1_human_only_groups_codeowners_files(tmp_path: Path) -> None:
+    """With no static / co-change lens, a multi-file boundary self-disagrees.
+
+    A CODEOWNERS glob grouping two files declares them co-grouped; with empty
+    static and co-change relations, that pair is ``human_grouped_static_splits``
+    AND ``human_grouped_never_cochange`` (no lens corroborates it) and never
+    ``agree``.
+    """
+    repo = _init_repo(tmp_path)
+    _write(repo, "pkg/a.py")
+    _write(repo, "pkg/b.py")
+    _write(repo, "CODEOWNERS", "pkg/** @team\n")
+    _commit_all(repo)
+
+    result = detect_grouping_disagreement(repo, communities=[], coupling_pairs=[])
+    assert result["available"] is True
+    pair = {"file_a": "pkg/a.py", "file_b": "pkg/b.py"}
+    assert pair in result["human_grouped_static_splits"]
+    assert pair in result["human_grouped_never_cochange"]
+    assert result["human_static_agree"] == []
+
+
+# --- 12. Integration: this repo, zero false positives after allowlist --------
+
+def test_tier1_integration_no_false_positives_after_allowlist() -> None:
+    """On this repo the documented seams don't surface as Tier 1 disagreement.
+
+    The lib README declares the ``skills/assess/scripts/lib`` <-> ``skills/assess/
+    tests`` seam; any co-change pair straddling it must be absorbed by the seam
+    allowlist, never reported as ``human_split_but_cochange``. This is the dogfood
+    guard that the allowlist matches the README's stated seams.
+    """
+    repo_root = Path(__file__).resolve().parents[3]
+    result = detect_grouping_disagreement(repo_root)
+    assert result["available"] in (True, False)
+    if not result["available"]:
+        return
+    for row in result["human_split_but_cochange"]:
+        a, b = row["file_a"], row["file_b"]
+        lib_test_seam = (
+            (a.startswith("skills/assess/scripts/lib")
+             and b.startswith("skills/assess/tests"))
+            or (b.startswith("skills/assess/scripts/lib")
+                and a.startswith("skills/assess/tests"))
+        )
+        assert not lib_test_seam, row
