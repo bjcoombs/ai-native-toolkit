@@ -1,0 +1,5 @@
+# A CODEOWNERS that declares no boundaries at all: only comments and blank
+# lines. The structure_drift suite uses it to assert an ownership *file* that
+# carries no glob still degrades to "no ownership map" when nothing else is
+# declared.
+

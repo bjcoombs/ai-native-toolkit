@@ -34,6 +34,8 @@ dist/standalone-skills/
 **/.pytest_cache/
 **/.venv/
 **/uv.lock
+**/.coverage
+**/.coverage.*
 
 # Ignore nested CLAUDE.md files (e.g. user's personal config when they
 # clone this into ~/.claude/). The root /CLAUDE.md is re-allowlisted
