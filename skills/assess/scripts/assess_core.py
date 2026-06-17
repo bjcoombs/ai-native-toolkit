@@ -951,6 +951,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         structure=structure,
         test_pressure=ctx["test_pressure"],
         promissory_markers=promissory if isinstance(promissory, dict) else None,
+        accretion_ratchet=ctx["accretion_ratchet"],
     )
     ctx["structure"] = keyhole["structure"]
     ctx["behaviour"] = keyhole["behaviour"]
