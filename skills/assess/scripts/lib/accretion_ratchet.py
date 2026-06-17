@@ -146,10 +146,6 @@ class _FileHistory:
     net_sequence: list[int] = field(default_factory=list)
 
 
-def _unavailable_summary(reason: str) -> dict[str, Any]:
-    return AccretionScan(available=False, reason=reason).summary()
-
-
 def _repo_top(repo_root: Path) -> str | None:
     """Absolute repo top-level for ``repo_root``, or None if not in a git repo."""
     try:
@@ -241,13 +237,17 @@ def _is_monotonic_nondecreasing(sequence: list[int]) -> bool:
     return all(b >= a for a, b in zip(sequence, sequence[1:]))
 
 
-def _build_accretion_file(path: str, hist: _FileHistory) -> AccretionFile | None:
+def _build_accretion_file(
+    path: str, hist: _FileHistory, deletion_threshold: float
+) -> AccretionFile | None:
     """Promote one file's history to an AccretionFile, or None if it isn't accreting.
 
     Applies the multi-commit gate, the monotonic-growth test, and the
     deletion-fraction threshold. A file passes only when it grew across multiple
     commits, its running net-delta never came back down, and its deletions stayed
-    below the threshold share of total churn.
+    below ``deletion_threshold`` share of total churn. The threshold is the
+    caller's value (see :func:`scan_accretion_ratchet`) so the cut applied is the
+    one reported, with no second filter downstream.
     """
     if hist.commit_count < MIN_COMMITS_FOR_ACCRETION:
         return None
@@ -256,7 +256,7 @@ def _build_accretion_file(path: str, hist: _FileHistory) -> AccretionFile | None
     if total_churn == 0:
         return None
     deletion_fraction = hist.deletions / total_churn
-    if deletion_fraction >= DELETION_FRACTION_THRESHOLD:
+    if deletion_fraction >= deletion_threshold:
         return None
 
     net = hist.additions - hist.deletions
@@ -307,8 +307,8 @@ def scan_accretion_ratchet(
 
         files: list[AccretionFile] = []
         for path, hist in histories.items():
-            accreting = _build_accretion_file(path, hist)
-            if accreting is not None and accreting.deletion_fraction < deletion_threshold:
+            accreting = _build_accretion_file(path, hist, deletion_threshold)
+            if accreting is not None:
                 files.append(accreting)
 
         files.sort(key=lambda f: (-f.net_additions, f.path))
