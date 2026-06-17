@@ -256,6 +256,22 @@ Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
 sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
 
+**`accretion_ratchet.py`**
+Write-side accretion instrument: detects files that only ever grow. Walks each
+file's full numstat history in author-time order (one `git log --no-merges
+--no-renames --numstat` pass, sorted explicitly by `%at` then SHA so the
+accumulation order is clone-independent) and flags a file when its running
+net-delta is non-decreasing *and* its deletion fraction (deletions over total
+churn) stays below a threshold - growth with almost no deletion pressure, the
+fingerprint of pure append-only accretion rather than ordinary maintenance. A
+multi-commit gate drops single-touch rename artifacts; binary files (numstat
+`-`) are skipped. Compensates the *Accretion* contributor tendency named in the
+repo north star. Degrades to `available: False` on git failure and
+`reliable: False` on degenerate history (same verdict as `git_churn`). Reuses
+`git_churn`'s `GIT_TIMEOUT_SECONDS` and `churn_is_degenerate`; imports no
+orchestrator. Add a fixture-backed test in `tests/test_accretion_ratchet.py`
+alongside any change to the flagging rule.
+
 **`badge.py`**
 Shields.io endpoint badge for the wiki (`.assess/badge.json`). Two producers on an
 honest-degrade ladder: `assess_finalize` always writes the LLM-scored form
