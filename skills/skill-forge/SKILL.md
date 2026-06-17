@@ -110,24 +110,20 @@ Pick the mode **deterministically**: if the Agent Teams capability is confirmed 
 <!-- chat-skip:start -->
 | **Team** | flag on | Persistent judges cross-talk via `SendMessage` and remember prior rounds natively; ephemeral runners are spawned per round. |
 
-**Agent Teams flag.** Team mode needs `TeamCreate`, `SendMessage`, and `TeamDelete`. Enable it in your environment:
+**Agent Teams flag.** Team mode needs `SendMessage` and background `Agent` teammates (one implicit team; no `TeamCreate`/`TeamDelete`). Enable it in your environment:
 
 ```bash
 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 ```
 
-In the team lifecycle the lead delegates and never executes, runner teammates are ephemeral (spawned per round, shut down after), and the judge panel is the one persistent team. As illustrative text (do not treat the snippets below as live tool calls):
-
-```text
-TeamCreate(team_name: "forge-<skill-slug>", description: "skill-forge panel for <skill>")
-```
+In the team lifecycle the lead delegates and never executes, runner teammates are ephemeral (spawned per round, shut down after), and the judge panel is the one persistent team. The session forms a **single implicit team** - there is no `TeamCreate` step; each named background agent joins it on spawn. As illustrative text (do not treat the snippet below as a live tool call):
 
 ```text
 # spawn one judge per active lens (persistent) and one runner per test case (ephemeral)
-Agent(subagent_type: "general-purpose", team_name: "forge-<skill-slug>", name: "fidelity", prompt: "<lens brief>")
+Agent(subagent_type: "general-purpose", run_in_background: true, name: "fidelity", prompt: "<lens brief>")
 ```
 
-The panel cross-talks by sending one `SendMessage` per teammate (there is no broadcast). At the end of the run, shut down each teammate, wait for approvals, then call `TeamDelete()` - mandatory, or teamContext persists and blocks future team creation in this session.
+The panel cross-talks by sending one `SendMessage` per teammate (there is no broadcast). At the end of the run, shut down each teammate via a `SendMessage` shutdown_request and await approval; there is no `TeamDelete` - the implicit team leaves nothing to tear down.
 <!-- chat-skip:end -->
 
 ## Test taxonomy

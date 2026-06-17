@@ -481,14 +481,9 @@ jq '."<tag>".tasks[] | {id, title: .title[0:50], status, dependencies, complexit
    task-master update-task --id=<task-id> --prompt="Remove dependency on task <X>, these are independent"
    ```
 
-### Step 2: Create Team and Initialize Tracking
+### Step 2: Form Team and Initialize Tracking
 
-```
-TeamCreate(
-  team_name: "<tag>",
-  description: "Marathon mode for tag <tag> - <N> tasks total, <M> ready"
-)
-```
+This build uses a **single implicit team** - there is no `TeamCreate` step. The team forms as you spawn named background teammates: each `Agent(name: "task-<id>", run_in_background: true)` joins the session's implicit team and is addressable via `SendMessage(to: "task-<id>")`. Proceed straight to tracking.
 
 **PR tracking** - persisted in worktree dir (survives crashes and team cleanup):
 
@@ -575,9 +570,9 @@ Haiku cannot reliably handle review loops - never use for teammates.
 
 **Teammate prompt template:**
 ```
-Task(
+Agent(
   subagent_type: "general-purpose",
-  team_name: "<tag>",
+  run_in_background: true,
   name: "task-<task-id>",
   model: "<chosen-model>",
   prompt: """
@@ -814,7 +809,7 @@ The lead operates as a **tech lead running a sprint** - not a task router.
 
 ### Crash Recovery
 
-If the session crashes, teammates linger as "active members" preventing `TeamDelete()`.
+If the session crashes, background teammates may linger as active members. The implicit team has no `TeamDelete` to block, but stale team/task state under `~/.claude/` should still be cleared so a re-run starts clean.
 
 ```bash
 # 1. Force-remove stale team
@@ -834,7 +829,7 @@ Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`.
 
 1. Send `shutdown_request` to each remaining teammate
 2. Wait for all shutdown approvals
-3. Call `TeamDelete()` - if it fails with "active members", verify panes are dead and retry. **TeamDelete is mandatory** - without it, teamContext persists and blocks future team creation in this session.
+3. The implicit team has no `TeamDelete` - once every teammate has approved shutdown or already exited, the team is gone. If a stale background teammate lingers, verify its pane/process is dead; nothing persists to block a future marathon.
 4. **PRD delivery check** - re-read the original PRD/issue and its success criteria. Cross-reference against merged PRs. Report:
    - Criteria met (with PR evidence)
    - Criteria not met or partially met (flag for user)
