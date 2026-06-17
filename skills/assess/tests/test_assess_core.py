@@ -1180,3 +1180,120 @@ def test_core_writes_fallback_badge_only_when_absent(tmp_path: Path) -> None:
     build_run_context(repo_root=repo, run_date="2026-06-13")
     badge2 = json.loads((assess_dir / "badge.json").read_text(encoding="utf-8"))
     assert badge2["message"] == "7.0/8 · AI-Native"
+
+
+# --------------------------------------------------------------------------
+# Accretion ratchet block (files that only ever grow)
+# --------------------------------------------------------------------------
+
+def _accreting_history(repo: Path, commit, rel_path: str, *, commits: int = 5) -> None:
+    """Grow ``rel_path`` monotonically across ``commits`` commits, never deleting.
+
+    Each commit appends lines and removes none, so the file's running net-delta
+    is non-decreasing and its deletion fraction is zero - the pure-accretion
+    fingerprint the scanner flags (it needs >= MIN_COMMITS_FOR_ACCRETION commits).
+    Commits are backdated in descending order so author time advances forward.
+    """
+    src = repo / rel_path
+    src.parent.mkdir(parents=True, exist_ok=True)
+    body = ""
+    for i in range(commits):
+        body += "".join(f"line_{i}_{j} = {j}\n" for j in range(10))
+        src.write_text(body)
+        commit(f"grow {rel_path} step {i}", days_ago=commits - i)
+
+
+def test_accretion_ratchet_block_present_and_well_formed(git_repo) -> None:
+    """run-context.json carries a well-formed accretion_ratchet block, and a
+    monotonically-growing file that is also a complexity/size hotspot earns a row."""
+    repo, commit = git_repo
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    _accreting_history(repo, commit, "src/grower.py")
+
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 1, "loc": {"p50": 50, "p95": 50, "max": 50},
+        "ccn": {"p50": 1, "p95": 1, "max": 1},
+        "top_hotspots": [{"path": "src/grower.py", "loc": 50, "ccn": 1, "commits": 5}],
+        "top_complex": [{"path": "src/grower.py", "ccn": 1}],
+        "top_large": [{"path": "src/grower.py", "loc": 50}],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+
+    assert "accretion_ratchet" in ctx
+    block = ctx["accretion_ratchet"]
+    assert set(block) >= {"available", "reliable", "deletion_fraction_threshold", "files"}
+    assert block["available"] is True
+    assert isinstance(block["files"], list)
+    paths = [f["path"] for f in block["files"]]
+    assert "src/grower.py" in paths
+    flagged = next(f for f in block["files"] if f["path"] == "src/grower.py")
+    assert set(flagged) == {
+        "path", "net_additions", "commit_count", "deletion_fraction", "time_span_months"
+    }
+    assert flagged["net_additions"] > 0
+    assert flagged["deletion_fraction"] == 0.0
+
+
+def test_accretion_ratchet_noise_budget_filters_non_hotspots(git_repo) -> None:
+    """A file that grows but is NOT in the top complexity/size band earns no row -
+    growth alone doesn't cry wolf; only band-resident files are surfaced."""
+    repo, commit = git_repo
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    # Two accreting files, but only one is declared a hotspot in the stats.
+    _accreting_history(repo, commit, "src/in_band.py")
+    _accreting_history(repo, commit, "src/out_of_band.py")
+
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 2, "loc": {"p50": 50, "p95": 50, "max": 50},
+        "ccn": {"p50": 1, "p95": 1, "max": 1},
+        "top_hotspots": [{"path": "src/in_band.py", "loc": 50, "ccn": 1, "commits": 5}],
+        "top_complex": [{"path": "src/in_band.py", "ccn": 1}],
+        "top_large": [{"path": "src/in_band.py", "loc": 50}],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+    paths = [f["path"] for f in ctx["accretion_ratchet"]["files"]]
+    assert "src/in_band.py" in paths
+    assert "src/out_of_band.py" not in paths  # grew, but not a hotspot -> filtered
+
+
+def test_accretion_ratchet_degenerate_history_unreliable(tmp_path: Path) -> None:
+    """A non-git target degrades to available:false; the block is still emitted
+    with the degrade shape (a failed scan is never read as 'no accretion')."""
+    repo = _minimal_repo(tmp_path)  # plain dir, not a git repo
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+    block = ctx["accretion_ratchet"]
+    assert block["available"] is False
+    assert block["files"] == []
+    assert block["reason"]
+
+
+def test_accretion_ratchet_files_sorted_worst_first(git_repo) -> None:
+    """Serialized files are a total, deterministic order: net additions desc,
+    path tie-break - so the deterministic core stays byte-identical per repo."""
+    repo, commit = git_repo
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    _accreting_history(repo, commit, "src/big.py", commits=8)    # more growth
+    _accreting_history(repo, commit, "src/small.py", commits=4)  # less growth
+
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 2, "loc": {"p50": 50, "p95": 80, "max": 80},
+        "ccn": {"p50": 1, "p95": 1, "max": 1},
+        "top_hotspots": [
+            {"path": "src/big.py", "loc": 80, "ccn": 1, "commits": 8},
+            {"path": "src/small.py", "loc": 40, "ccn": 1, "commits": 4},
+        ],
+        "top_complex": [{"path": "src/big.py", "ccn": 1}],
+        "top_large": [{"path": "src/big.py", "loc": 80}, {"path": "src/small.py", "loc": 40}],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+    files = ctx["accretion_ratchet"]["files"]
+    nets = [f["net_additions"] for f in files]
+    assert nets == sorted(nets, reverse=True)  # worst (largest growth) first
+    assert files[0]["path"] == "src/big.py"

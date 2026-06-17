@@ -37,6 +37,7 @@ from typing import Any
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from lib.accretion_ratchet import scan_accretion_ratchet
 from lib.agent_instructions_grader import (
     detect_alias,
     detect_skills_dir,
@@ -411,6 +412,60 @@ def _write_fallback_badge_if_absent(
     ))
 
 
+# Cap on accretion files carried into run-context.json. The scanner measures
+# every file; the run-context list keeps only the worst few that also score in
+# the top complexity/size band, so a growing-but-simple file never earns a line.
+MAX_ACCRETION_FILES = 12
+
+
+def _top_band_paths(complexity_stats: dict) -> set[str]:
+    """Paths already in the top complexity/size band of this run's stats.
+
+    Union of the three ranked top-N lists (``top_hotspots``/``top_complex``/
+    ``top_large``). Accretion is only surfaced for a file already in this set:
+    a growing file that scores low on complexity *and* size isn't a hotspot, so
+    flagging its growth would be noise. Mirrors lib.keyhole_signals._paths_from_stats.
+    """
+    paths: set[str] = set()
+    for key in ("top_hotspots", "top_complex", "top_large"):
+        for entry in complexity_stats.get(key) or []:
+            path = entry.get("path")
+            if path:
+                paths.add(path)
+    return paths
+
+
+def _accretion_block(scan: Any, complexity_stats: dict) -> dict[str, Any]:
+    """Serialize an AccretionScan into the run-context ``accretion_ratchet`` block.
+
+    On an unavailable scan, emits the same shape with an empty file list and the
+    scan's reason (graceful degradation - a failed scan is never read as "no
+    accretion"). On success, the flagged files are filtered to those already in
+    the top complexity/size band (the noise budget), sorted by net additions
+    descending with a path tie-break for a total, deterministic order, and capped
+    at MAX_ACCRETION_FILES.
+    """
+    block: dict[str, Any] = {
+        "available": scan.available,
+        "reason": scan.reason,
+        "reliable": scan.reliable,
+        "deletion_fraction_threshold": scan.deletion_fraction_threshold,
+        "files": [],
+    }
+    if not scan.available:
+        return block
+
+    band = _top_band_paths(complexity_stats)
+    in_band = [f for f in scan.files if f.path in band]
+    # The scan already sorts by (-net_additions, path); re-sort defensively so
+    # the serialized order is a total, clone-independent order regardless of the
+    # filtered subset's incoming order.
+    in_band.sort(key=lambda f: (-f.net_additions, f.path))
+    block["total_in_band"] = len(in_band)
+    block["files"] = [f.to_dict() for f in in_band[:MAX_ACCRETION_FILES]]
+    return block
+
+
 def _marker_debt_sentence(debt: dict | None) -> str:
     """One briefing sentence accusing a hotspot of its own stale promises."""
     if not debt:
@@ -533,6 +588,15 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     marker_debt_by_file = (
         promissory.get("stale_by_file", {}) if promissory.get("available") else {}
     )
+
+    # Accretion ratchet (files whose line count only ever grows): the first of
+    # the three write-side tendencies. scan_accretion_ratchet never raises - it
+    # degrades to available=False internally - and returns an AccretionScan
+    # dataclass (not a dict), so it is called directly rather than through _safe
+    # (whose degrade path yields a dict). The block is serialized below, after
+    # the complexity band is known, so growth is reported only for files already
+    # in the top complexity/size band.
+    accretion_scan = scan_accretion_ratchet(repo_root)
 
     # Build status map: which paths are graduated, new, regressed, persistent
     status_map: dict[str, str] = {}
@@ -847,6 +911,12 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # Layer 3/5/8 scoring rules; stale_by_file feeds the unactioned_intent
     # finding and the hotspot pages (already written above with marker debt).
     ctx["promissory_markers"] = promissory
+
+    # Accretion ratchet (write-side tendency: files that only ever grow). The
+    # scan measured every file above; here it is filtered to files already in the
+    # top complexity/size band, sorted worst-first, and capped - so a file earns
+    # a line only by scoring high on complexity/LOC *and* growing monotonically.
+    ctx["accretion_ratchet"] = _accretion_block(accretion_scan, current)
 
     keyhole = integrate_keyhole_signals(
         repo_root=repo_root,
