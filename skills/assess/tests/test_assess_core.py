@@ -234,6 +234,74 @@ def test_unfinalized_hotspot_page_uses_neutral_pointer_not_placeholder(tmp_path:
         assert marker not in page
 
 
+def test_hotspot_page_carries_growth_profile_when_file_accretes(git_repo) -> None:
+    """A top-hotspot file that the accretion scan flags (monotonic growth, low
+    deletion across several commits) gets the growth-profile line wired into its
+    generated hotspot page - tasks 4+5 end-to-end."""
+    from lib.wiki_writer import slug_for_path
+
+    repo, commit = git_repo
+    src = repo / "src"
+    src.mkdir()
+    grower = src / "grower.go"
+    # Five commits that only add lines and never delete: pure accretion.
+    for i in range(1, 6):
+        grower.write_text("\n".join(f"line {n}" for n in range(i * 40)) + "\n")
+        commit(f"grow {i}", days_ago=(6 - i) * 20)
+
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir(exist_ok=True)
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 50,
+        "loc": {"p50": 30, "p95": 200, "max": 500},
+        "ccn": {"p50": 2, "p95": 8, "max": 20},
+        "top_hotspots": [{"path": "src/grower.go", "loc": 200, "ccn": 20, "commits": 5}],
+        "top_complex": [{"path": "src/grower.go", "ccn": 20}],
+        "top_large": [{"path": "src/grower.go", "loc": 200}],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+    # Precondition: the scan actually flagged this file (else the test proves nothing).
+    flagged = {f["path"] for f in ctx["accretion_ratchet"].get("files", [])}
+    assert "src/grower.go" in flagged
+
+    page = (assess_dir / "hotspots" / f"{slug_for_path('src/grower.go')}.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Growth profile: monotonic" in page
+    assert "0 net reductions over" in page
+
+
+def test_hotspot_page_omits_growth_profile_when_scan_unavailable(tmp_path: Path) -> None:
+    """Graceful degradation: outside a git repo the accretion scan is
+    unavailable, so the hotspot page is still written - just without a growth
+    line. Hotspot generation never depends on the scan succeeding."""
+    from lib.wiki_writer import slug_for_path
+
+    repo = tmp_path / "repo"  # not a git repo
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 50,
+        "loc": {"p50": 30, "p95": 200, "max": 500},
+        "ccn": {"p50": 2, "p95": 8, "max": 20},
+        "top_hotspots": [{"path": "src/a.go", "loc": 500, "ccn": 20, "commits": 5}],
+        "top_complex": [{"path": "src/a.go", "ccn": 20}],
+        "top_large": [{"path": "src/a.go", "loc": 500}],
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+    assert ctx["accretion_ratchet"]["available"] is False
+
+    page = (assess_dir / "hotspots" / f"{slug_for_path('src/a.go')}.md").read_text(
+        encoding="utf-8"
+    )
+    # Page exists and is complete, but carries no growth profile.
+    assert "## Suggested actions" in page
+    assert "Growth profile" not in page
+
+
 def test_unfinalized_actions_pointer_carries_no_placeholder_marker() -> None:
     """The neutral pointer text itself must be free of TODO-style markers - it is
     the default that ships when a page is never finalized."""
