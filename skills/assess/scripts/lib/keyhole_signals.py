@@ -64,6 +64,7 @@ FINDING_ORDER = [
     "untrusted_hotspot",  # E1: complex churning code with hollow tests
     "self_referential_tests",  # E2: tests authored with the code they cover
     "unactioned_intent",  # stale promissory markers that survived many edits
+    "accretion_ratchet",  # files that only ever grow - never meaningfully cut back
     "orphaned_understanding",
     "candidate_dead_weight",
     "refactor_boundary",
@@ -75,6 +76,7 @@ FINDING_ACTIONS = {
     "untrusted_hotspot": "strengthen tests to pin observable behaviour (not internal state)",
     "self_referential_tests": "request human review - tests verify internal consistency, not truth",
     "unactioned_intent": "action the promise: fix it, ticket it, or delete the marker/skip",
+    "accretion_ratchet": "refactor down: extract, delete dead code, or split the file",
     "orphaned_understanding": "assign a human anchor before further change",
     "candidate_dead_weight": "verify liveness, then delete if dead",
     "refactor_boundary": "safe to hand an agent in isolation",
@@ -511,6 +513,91 @@ def build_test_to_code_map(
 
 
 # --------------------------------------------------------------------------
+# Accretion ratchet finding: files that only ever grow
+# --------------------------------------------------------------------------
+
+# Maximum number of per-file detail lines emitted in the finding items list.
+# The full list is available in the run-context accretion_ratchet block; this
+# cap keeps the finding items readable and bounded.
+MAX_ACCRETION_ITEMS = 10
+
+# Unreliable-history disclaimer, mirroring the pattern used by other
+# reliability-flagged signals (e.g. unactioned_intent aging_reliable).
+_ACCRETION_UNRELIABLE_DISCLAIMER = (
+    "History reliability: UNRELIABLE (degenerate history - shallow clone or "
+    "squashed import). Results shown but should not be acted on without "
+    "verifying against a full clone."
+)
+
+
+def _accretion_ratchet_finding(run_context: dict) -> list[str]:
+    """Derive the accretion_ratchet finding paths from the run-context block.
+
+    Reads ``run_context["accretion_ratchet"]``; returns an empty list when the
+    block is absent, unavailable, or carries no flagged files - so the finding
+    degrades to silent rather than manufacturing paths. The returned list is
+    sorted by net additions descending (worst first), then by path for a stable
+    tie-break, matching the serialization order in the block. Determinism is
+    non-negotiable: no set iteration, no dict-order dependency.
+    """
+    block = run_context.get("accretion_ratchet") or {}
+    if not block.get("available"):
+        return []
+    files = block.get("files") or []
+    if not files:
+        return []
+    # The block already sorts by (-net_additions, path); re-sort defensively so
+    # the finding list is a total, deterministic order regardless of upstream.
+    ordered = sorted(files, key=lambda f: (-f["net_additions"], f["path"]))
+    return [f["path"] for f in ordered]
+
+
+def _format_accretion_items(run_context: dict) -> list[str]:
+    """Build the human-readable detail items for the accretion_ratchet finding.
+
+    Returns a roll-up sentence followed by one line per file (capped at
+    MAX_ACCRETION_ITEMS), then a reliability disclaimer when the history is
+    degenerate. The format mirrors the sibling per-file lines used in the
+    report: path, net LOC added, time span, commit count, and deletion
+    fraction, with plain-English time span phrasing.
+    """
+    block = run_context.get("accretion_ratchet") or {}
+    files = block.get("files") or []
+    if not files:
+        return []
+
+    total = block.get("total_in_band", len(files))
+    top = sorted(files, key=lambda f: (-f["net_additions"], f["path"]))
+    hottest = top[:MAX_ACCRETION_ITEMS]
+
+    def _months_str(months: float) -> str:
+        """Human-readable time span: whole months, or '<1mo' for short spans."""
+        if months < 1.0:
+            return "<1mo"
+        return f"{round(months)}mo"
+
+    items: list[str] = [
+        f"{total} file{'s' if total != 1 else ''} show monotonic growth; "
+        f"the {len(hottest)} hottest {'are' if len(hottest) != 1 else 'is'} below"
+    ]
+    for f in hottest:
+        net = f["net_additions"]
+        months = _months_str(f["time_span_months"])
+        commits = f["commit_count"]
+        del_frac = f["deletion_fraction"]
+        items.append(
+            f"{f['path']} — +{net:,} LOC over {months} across {commits} commit"
+            f"{'s' if commits != 1 else ''}, {del_frac:.0%} net reductions"
+            " — only ever grows"
+        )
+
+    if not block.get("reliable", True):
+        items.append(_ACCRETION_UNRELIABLE_DISCLAIMER)
+
+    return items
+
+
+# --------------------------------------------------------------------------
 # Deterministic markdown / summary renderers (the report-skeleton products)
 # --------------------------------------------------------------------------
 
@@ -724,6 +811,7 @@ def integrate(
     commit_sets: list[set[Path]] | None = None,
     test_pressure: dict | None = None,
     promissory_markers: dict | None = None,
+    accretion_ratchet: dict | None = None,
 ) -> dict:
     """Build the five run-context blocks + derived findings + attention list.
 
@@ -733,9 +821,11 @@ def integrate(
     (the E1 trust axis crosses it with the complexity hotspots); when absent E1
     degrades to silent. ``promissory_markers`` is the marker-scan summary
     (``promissory_markers.MarkerScan.summary()``); when absent or unreliable the
-    ``unactioned_intent`` finding degrades to silent. Every block is built
-    defensively - a failure in one degrades that block to ``available: False``
-    and leaves the rest intact.
+    ``unactioned_intent`` finding degrades to silent. ``accretion_ratchet`` is the
+    serialized ``AccretionScan`` block from ``assess_core._accretion_block``; when
+    absent or unavailable the ``accretion_ratchet`` finding degrades to silent.
+    Every block is built defensively - a failure in one degrades that block to
+    ``available: False`` and leaves the rest intact.
     """
     repo_root = Path(repo_root)
     if commit_sets is None:
@@ -833,6 +923,14 @@ def integrate(
         else []
     )
 
+    # Accretion ratchet: files in the top complexity/size band that only ever
+    # grew - monotonic net additions, almost no deletion pressure. Silent when
+    # the block is absent or unavailable (the caller hasn't passed it yet, or
+    # the scan failed). Paths are extracted in worst-first order (descending
+    # net additions) by the helper so the finding list is deterministic.
+    ratchet_run_ctx: dict = {"accretion_ratchet": accretion_ratchet or {}}
+    accreting_paths = _accretion_ratchet_finding(ratchet_run_ctx)
+
     findings = assemble_findings({
         "hidden_coupling": _churn_paths(
             "hidden_coupling",
@@ -848,6 +946,7 @@ def integrate(
         "untrusted_hotspot": untrusted,
         "self_referential_tests": self_ref_paths,
         "unactioned_intent": unactioned,
+        "accretion_ratchet": accreting_paths,
         "orphaned_understanding": understanding.get("orphaned_understanding", []),
         "candidate_dead_weight": dead_weight,
         "refactor_boundary": [b["path"] for b in behaviour.get("refactor_boundaries", [])],

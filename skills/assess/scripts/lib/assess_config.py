@@ -156,6 +156,7 @@ GATE_CONCERN_FINDINGS = [
     "untrusted_hotspot",
     "self_referential_tests",
     "unactioned_intent",
+    "accretion_ratchet",
     "orphaned_understanding",
     "candidate_dead_weight",
 ]
