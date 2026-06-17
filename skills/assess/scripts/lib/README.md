@@ -181,11 +181,23 @@ excluded files counts as empty (the excludes are not part of the navigable repo)
 a JSON-serialisable `structure_drift` run-context block (`empty_ownership_patterns`, a
 coverage ratio, and legacy-shape `empty_globs` mirrors for the orchestrator's
 enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
-sorts every list by `(pattern, declared_in)`. Tier 1 (grouping declared boundaries against
-where their files have actually scattered, task 10) will **add** a second function to this
-same module rather than a new one - hence the `tier_0_available` field and the room the
-block schema leaves for a `tier_1` sibling. Co-changes with `ownership_parser.py` (its
-parse foundation) and its test `tests/test_structure_drift.py`.
+sorts every list by `(pattern, declared_in)`. **Tier 1** - `detect_grouping_disagreement()` -
+is the next cut up: not "does the boundary still match any file?" but "do the files a
+boundary groups still belong together?". Three lenses each induce a grouping - the declared
+one (an owner / architecture module groups its files), the static one (an import-graph
+community groups co-dependent modules), and the historical one (files that keep co-changing).
+A grouping is reported as its **co-membership equivalence relation** over canonical file-pairs
+`(min(a, b), max(a, b))`, so disagreement is set algebra over pairs and **invariant to
+community relabeling by construction** - relabel or reorder the groups and nothing changes,
+because the relation carries pairs, never labels. The six metrics are set differences /
+intersections of the three relations (human-vs-static splits/fuses, human-vs-cochange, and
+the two agreement sets). Known-good architectural seams (the lib<->tests and standalone-build
+<->skills seams documented above) are an allowlist subtracted from the *denominator* - correct
+by construction, a seam can only suppress an owned boundary, never manufacture drift. Tier 1
+degrades to `available: False` reason `"no ownership map"` and emits its own `tier_1_available`
+field. Co-changes with `ownership_parser.py` (its parse foundation), `structure_graph.py` and
+`change_coupling.py` (the static and historical lenses it consumes), and its test
+`tests/test_structure_drift.py`.
 
 ### Signal integration
 
