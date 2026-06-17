@@ -143,6 +143,50 @@ signal regardless of doc state. When a doc carries a `doc_provenance` verdict, f
 comes from the source-vs-doc comparison (a direct, high-confidence signal that bypasses
 the churn-ratio confidence guards) instead of the ratio.
 
+### Ownership and structure drift
+
+**`ownership_parser.py`**
+Parse half for Layer 0 structure-drift. Ownership is *declared* in two places an LLM
+contributor reads as authoritative boundaries: a GitHub `CODEOWNERS` (glob -> owner,
+honoured at the root, `.github/`, or `docs/` by GitHub's precedence) and a
+boundary-declaring `ARCHITECTURE.md` / `DESIGN.md` - or a seam-mapping `README.md`
+admitted only when its prose carries the ownership/seam vocabulary, so a generic project
+README is skipped. `parse_codeowners` resolves each glob against the git-tracked,
+non-excluded file set into `{glob_pattern: {matched_files}}`; `parse_architecture_md`
+sections each doc by markdown header and attributes the path references in a section's
+body (read from inline code, wikilinks, and bare prose paths) to the module the header
+names, keyed `<doc>::<header>` so two docs declaring the same section don't collide, and
+keeping only references that resolve to real files. `find_empty_globs` flags the CODEOWNERS
+patterns that match zero tracked files - the cheapest drift, a boundary the filesystem has
+left behind - and `parse_ownership` runs both with the module-shape degradation contract
+(`available: False`, reason `"no ownership map"` when neither map exists). It mirrors
+`doc_graph.py` deliberately: the same `EXCLUDE_DIRS` / `is_excluded_path` resolution and
+`tracked_files` filtering, the same honest-degrade-over-crash shape, every collection
+sorted at the boundary for byte-identical output. The one inversion is that it *reads*
+inline-code path spans (a path written as code is the boundary declaration we want) where
+the doc graph strips them. This is the parsing foundation the structure-drift signals
+consume; it owns no drift logic itself.
+
+**`structure_drift.py`**
+The Layer 0 structure-drift signal, built entirely on `ownership_parser`'s parse + resolve
+primitives (it re-implements no parsing). A declaration is a self-description under no
+pressure to stay true: a directory is renamed, a module's files scatter, a pattern is
+typo'd - and the map becomes a *lying map of ownership*, the same defect as a stale doc
+(behaviour) or an aged TODO (intent). **Tier 0** - `detect_path_existence_drift()` - is the
+zero-threshold cut: the enumerate-both-sides shape `doc_graph.py` uses for broken links,
+where side A is every declared boundary (CODEOWNERS globs + architecture-doc path
+references) and side B the tracked, non-excluded file set, and the finding is the
+declarations whose match set is empty. Binary, no statistics; a pattern matching only
+excluded files counts as empty (the excludes are not part of the navigable repo). It emits
+a JSON-serialisable `structure_drift` run-context block (`empty_ownership_patterns`, a
+coverage ratio, and legacy-shape `empty_globs` mirrors for the orchestrator's
+enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
+sorts every list by `(pattern, declared_in)`. Tier 1 (grouping declared boundaries against
+where their files have actually scattered, task 10) will **add** a second function to this
+same module rather than a new one - hence the `tier_0_available` field and the room the
+block schema leaves for a `tier_1` sibling. Co-changes with `ownership_parser.py` (its
+parse foundation) and its test `tests/test_structure_drift.py`.
+
 ### Signal integration
 
 **`keyhole_signals.py`** *(co-change hotspot)*
