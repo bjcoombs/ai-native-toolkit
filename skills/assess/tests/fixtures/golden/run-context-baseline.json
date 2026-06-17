@@ -2550,5 +2550,1450 @@
     ],
     "orphaned_understanding": []
   },
-  "untracked_instruction_files": []
+  "untracked_instruction_files": [],
+  "structure_drift": {
+    "tier_0": {
+      "available": true,
+      "empty_ownership_patterns": [
+        {
+          "pattern": "../../commands/README.md",
+          "declared_in": "docs/superpowers/README.md::Design history",
+          "owners": []
+        },
+        {
+          "pattern": "../../skills/README.md",
+          "declared_in": "docs/superpowers/README.md::Design history",
+          "owners": []
+        },
+        {
+          "pattern": "../CLAUDE.md",
+          "declared_in": "skills/README.md::Skills",
+          "owners": []
+        },
+        {
+          "pattern": "../README.md",
+          "declared_in": "commands/README.md::Commands",
+          "owners": []
+        },
+        {
+          "pattern": "../commands/fix-develop.md",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "../commands/fix-pr.md",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "../commands/issues.md",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "../commands/tm.md",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "../docs/index.md",
+          "declared_in": "commands/README.md::Commands",
+          "owners": []
+        },
+        {
+          "pattern": "../docs/index.md",
+          "declared_in": "skills/README.md::Skills",
+          "owners": []
+        },
+        {
+          "pattern": "../index.md",
+          "declared_in": "docs/superpowers/README.md::Design history",
+          "owners": []
+        },
+        {
+          "pattern": "../skills/huddle/SKILL.md",
+          "declared_in": "commands/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "../skills/marathon/SKILL.md",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "../skills/pr-review-merge/SKILL.md",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "./6hats.md",
+          "declared_in": "commands/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "./ab-equivalence/SKILL.md",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "./assess-findings/SKILL.md",
+          "declared_in": "skills/README.md::Assessment helpers",
+          "owners": []
+        },
+        {
+          "pattern": "./assess-pr/SKILL.md",
+          "declared_in": "skills/README.md::Assessment helpers",
+          "owners": []
+        },
+        {
+          "pattern": "./assess/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "./deslop/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "./deslop/references/full-checklist.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "./fix-develop.md",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "./fix-pr.md",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "./ghsync/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "./huddle/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "./issues.md",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "./marathon/SKILL.md",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-22-assess-deterministic-wiki.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-22-assess-v1.5-real-use-fixes.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-23-standalone-skill-pipeline.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-27-assess-truth-pressure-signals.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-27-huddle-broadcast-per-recipient.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-27-huddle-cli-team-mode-regression.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-28-assess-dismiss-false-positives.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-29-assess-keyhole-readiness.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-29-assess-write-side-truth-pressure.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-29-issues-marathon-shared-skills.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-31-assess-dogfooded-analysis.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-05-31-assess-dogfooded.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./plans/2026-06-02-skill-forge.md",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "./pr-review-merge/SKILL.md",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "./semantic-compress/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "./skill-forge/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "./specs/2026-05-29-issues-marathon-shared-skills-design.md",
+          "declared_in": "docs/superpowers/README.md::Specs",
+          "owners": []
+        },
+        {
+          "pattern": "./specs/2026-06-02-skill-forge-design.md",
+          "declared_in": "docs/superpowers/README.md::Specs",
+          "owners": []
+        },
+        {
+          "pattern": "./specs/2026-06-03-instruction-optimizer-directive-clarity-design.md",
+          "declared_in": "docs/superpowers/README.md::Specs",
+          "owners": []
+        },
+        {
+          "pattern": "./specs/2026-06-03-semantic-compress-distillation-design.md",
+          "declared_in": "docs/superpowers/README.md::Specs",
+          "owners": []
+        },
+        {
+          "pattern": "./specs/2026-06-03-skill-forge-extraction-verification.md",
+          "declared_in": "docs/superpowers/README.md::Specs",
+          "owners": []
+        },
+        {
+          "pattern": "./specs/2026-06-03-skill-forge-hardening-and-ab-extraction-design.md",
+          "declared_in": "docs/superpowers/README.md::Specs",
+          "owners": []
+        },
+        {
+          "pattern": "./tm-marathon-config-example.md",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "./tm.md",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "./understand.md",
+          "declared_in": "commands/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": ".assess",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": ".assess",
+          "declared_in": "skills/assess/scripts/lib/README.md::Output and formatting",
+          "owners": []
+        },
+        {
+          "pattern": ".assess/assess-report.md",
+          "declared_in": "README.md::AI Native Toolkit",
+          "owners": []
+        },
+        {
+          "pattern": ".assess/assess-report.md",
+          "declared_in": "README.md::Assess a codebase",
+          "owners": []
+        },
+        {
+          "pattern": ".assess/badge.json",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": ".assess/badge.json",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": ".assess/complexity-heatmap.svg",
+          "declared_in": "README.md::Assess a codebase",
+          "owners": []
+        },
+        {
+          "pattern": ".assess/complexity-stats.json",
+          "declared_in": "README.md::Assess a codebase",
+          "owners": []
+        },
+        {
+          "pattern": ".assess/config.toml",
+          "declared_in": "README.md::AI Native Toolkit",
+          "owners": []
+        },
+        {
+          "pattern": ".assess/config.toml",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": ".assess/config.toml",
+          "declared_in": "skills/assess/scripts/lib/README.md::Configuration",
+          "owners": []
+        },
+        {
+          "pattern": ".assess/doc-graph.svg",
+          "declared_in": "README.md::Assess a codebase",
+          "owners": []
+        },
+        {
+          "pattern": ".github/copilot-instructions.md",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": ".next",
+          "declared_in": "README.md::Build artifacts and generated code are filtered by default",
+          "owners": []
+        },
+        {
+          "pattern": ".nuxt",
+          "declared_in": "README.md::Build artifacts and generated code are filtered by default",
+          "owners": []
+        },
+        {
+          "pattern": ".obsidian",
+          "declared_in": "skills/assess/scripts/lib/README.md::Document analysis",
+          "owners": []
+        },
+        {
+          "pattern": "/6hats",
+          "declared_in": "README.md::Adapting for your workflow",
+          "owners": []
+        },
+        {
+          "pattern": "/6hats",
+          "declared_in": "README.md::Agents (invoked by skills, or directly via `Task(subagent_type=...)`)",
+          "owners": []
+        },
+        {
+          "pattern": "/6hats",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "/6hats",
+          "declared_in": "commands/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "/6hats <q>",
+          "declared_in": "README.md::Run a huddle on a hard decision",
+          "owners": []
+        },
+        {
+          "pattern": "/6hats <question>",
+          "declared_in": "README.md::Commands (slash-only, no bundled assets)",
+          "owners": []
+        },
+        {
+          "pattern": "/6hats review please",
+          "declared_in": "README.md::Why Six Hats?",
+          "owners": []
+        },
+        {
+          "pattern": "/ai-native-toolkit:assess",
+          "declared_in": "README.md::Install",
+          "owners": []
+        },
+        {
+          "pattern": "/ai-native-toolkit:deslop",
+          "declared_in": "README.md::Install",
+          "owners": []
+        },
+        {
+          "pattern": "/ai-native-toolkit:huddle",
+          "declared_in": "README.md::Install",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::AI Native Toolkit",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::Adapting for your workflow",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::Capability differences vs Claude Code",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::Contributors",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::Prerequisites for the ZIP path",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::Standalone skill ZIPs (any AI assistant)",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::The intent: keep codebases comprehensible as AI accelerates them",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::The same lens, three real public repos",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::What `/assess` produces",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::Why this exists",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "README.md::Why this matters for an AI-driven codebase",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "skills/README.md::Assessment helpers",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "skills/assess/scripts/lib/README.md::The wider co-change seams (cohesion, not entanglement)",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "skills/assess/scripts/lib/README.md::skills/assess/scripts/lib",
+          "owners": []
+        },
+        {
+          "pattern": "/assess",
+          "declared_in": "skills/assess/tests/README.md::skills/assess/tests",
+          "owners": []
+        },
+        {
+          "pattern": "/deslop",
+          "declared_in": "README.md::AI Native Toolkit",
+          "owners": []
+        },
+        {
+          "pattern": "/deslop",
+          "declared_in": "README.md::Prerequisites for the ZIP path",
+          "owners": []
+        },
+        {
+          "pattern": "/deslop",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "/deslop",
+          "declared_in": "README.md::Standalone skill ZIPs (any AI assistant)",
+          "owners": []
+        },
+        {
+          "pattern": "/deslop",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "/deslop",
+          "declared_in": "README.md::Why this exists",
+          "owners": []
+        },
+        {
+          "pattern": "/deslop",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "/fix-develop",
+          "declared_in": "README.md::Adapting for your workflow",
+          "owners": []
+        },
+        {
+          "pattern": "/fix-develop",
+          "declared_in": "README.md::Commands (slash-only, no bundled assets)",
+          "owners": []
+        },
+        {
+          "pattern": "/fix-develop",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "/fix-develop",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "/fix-develop",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "/fix-pr",
+          "declared_in": "README.md::Adapting for your workflow",
+          "owners": []
+        },
+        {
+          "pattern": "/fix-pr",
+          "declared_in": "README.md::Commands (slash-only, no bundled assets)",
+          "owners": []
+        },
+        {
+          "pattern": "/fix-pr",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "/fix-pr",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "/fix-pr",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "/ghsync",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "/ghsync",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "README.md::AI Native Toolkit",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "README.md::Adapting for your workflow",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "README.md::Agents (invoked by skills, or directly via `Task(subagent_type=...)`)",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "README.md::Capability differences vs Claude Code",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "README.md::Commands (slash-only, no bundled assets)",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "README.md::Contributors",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "README.md::Prerequisites for the ZIP path",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "README.md::Standalone skill ZIPs (any AI assistant)",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "README.md::Why this exists",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "commands/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "/huddle",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "/issues",
+          "declared_in": "README.md::Commands (slash-only, no bundled assets)",
+          "owners": []
+        },
+        {
+          "pattern": "/issues",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "/issues",
+          "declared_in": "docs/superpowers/README.md::Plans",
+          "owners": []
+        },
+        {
+          "pattern": "/issues",
+          "declared_in": "docs/superpowers/README.md::Specs",
+          "owners": []
+        },
+        {
+          "pattern": "/issues",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "/plugin",
+          "declared_in": "README.md::Install",
+          "owners": []
+        },
+        {
+          "pattern": "/plugin install",
+          "declared_in": "README.md::Two install paths - pick by where you work",
+          "owners": []
+        },
+        {
+          "pattern": "/plugin remove ai-native-toolkit",
+          "declared_in": "README.md::Install",
+          "owners": []
+        },
+        {
+          "pattern": "/plugin update",
+          "declared_in": "README.md::Two install paths - pick by where you work",
+          "owners": []
+        },
+        {
+          "pattern": "/plugin update ai-native-toolkit",
+          "declared_in": "README.md::Install",
+          "owners": []
+        },
+        {
+          "pattern": "/plugin update ai-native-toolkit",
+          "declared_in": "README.md::Staying notified of new versions",
+          "owners": []
+        },
+        {
+          "pattern": "/semantic-compress",
+          "declared_in": "README.md::AI Native Toolkit",
+          "owners": []
+        },
+        {
+          "pattern": "/semantic-compress",
+          "declared_in": "README.md::Prerequisites for the ZIP path",
+          "owners": []
+        },
+        {
+          "pattern": "/semantic-compress",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "/semantic-compress",
+          "declared_in": "README.md::Standalone skill ZIPs (any AI assistant)",
+          "owners": []
+        },
+        {
+          "pattern": "/semantic-compress",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "/semantic-compress",
+          "declared_in": "README.md::Why this exists",
+          "owners": []
+        },
+        {
+          "pattern": "/semantic-compress",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "/skill-forge",
+          "declared_in": "README.md::AI Native Toolkit",
+          "owners": []
+        },
+        {
+          "pattern": "/skill-forge",
+          "declared_in": "README.md::Prerequisites for the ZIP path",
+          "owners": []
+        },
+        {
+          "pattern": "/skill-forge",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "/skill-forge",
+          "declared_in": "README.md::Standalone skill ZIPs (any AI assistant)",
+          "owners": []
+        },
+        {
+          "pattern": "/skill-forge",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "/skill-forge",
+          "declared_in": "README.md::Why this exists",
+          "owners": []
+        },
+        {
+          "pattern": "/skill-forge",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "/skill-name",
+          "declared_in": "README.md::Verify the auto-trigger works",
+          "owners": []
+        },
+        {
+          "pattern": "/tm",
+          "declared_in": "README.md::Adapting for your workflow",
+          "owners": []
+        },
+        {
+          "pattern": "/tm",
+          "declared_in": "README.md::Commands (slash-only, no bundled assets)",
+          "owners": []
+        },
+        {
+          "pattern": "/tm",
+          "declared_in": "README.md::Git workflow assumed by `/tm`, `/fix-pr`, `/fix-develop`",
+          "owners": []
+        },
+        {
+          "pattern": "/tm",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "/tm",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "/tm",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "/tm-marathon-config-example",
+          "declared_in": "README.md::Commands (slash-only, no bundled assets)",
+          "owners": []
+        },
+        {
+          "pattern": "/tm-marathon-config-example",
+          "declared_in": "commands/README.md::Workflow (personal setup, opt-in)",
+          "owners": []
+        },
+        {
+          "pattern": "/understand",
+          "declared_in": "README.md::Adapting for your workflow",
+          "owners": []
+        },
+        {
+          "pattern": "/understand",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "/understand",
+          "declared_in": "commands/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "/understand <thing>",
+          "declared_in": "README.md::Commands (slash-only, no bundled assets)",
+          "owners": []
+        },
+        {
+          "pattern": "2.5/8",
+          "declared_in": "README.md::The same lens, three real public repos",
+          "owners": []
+        },
+        {
+          "pattern": "2/8",
+          "declared_in": "README.md::The intent: keep codebases comprehensible as AI accelerates them",
+          "owners": []
+        },
+        {
+          "pattern": "3/5/8",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "4.0/8",
+          "declared_in": "README.md::The same lens, three real public repos",
+          "owners": []
+        },
+        {
+          "pattern": "5.5/8",
+          "declared_in": "README.md::The same lens, three real public repos",
+          "owners": []
+        },
+        {
+          "pattern": "7.0/8",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "8/8",
+          "declared_in": "README.md::The intent: keep codebases comprehensible as AI accelerates them",
+          "owners": []
+        },
+        {
+          "pattern": "<name>/SKILL.md",
+          "declared_in": "skills/README.md::Skills",
+          "owners": []
+        },
+        {
+          "pattern": "<name>/references",
+          "declared_in": "skills/README.md::Skills",
+          "owners": []
+        },
+        {
+          "pattern": "<name>/scripts",
+          "declared_in": "skills/README.md::Skills",
+          "owners": []
+        },
+        {
+          "pattern": "<repo>-main",
+          "declared_in": "README.md::Git workflow assumed by `/tm`, `/fix-pr`, `/fix-develop`",
+          "owners": []
+        },
+        {
+          "pattern": "<repo>-main",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "<repo>/<repo>-main",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "<repo>/worktree",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "A/B",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "A/B",
+          "declared_in": "README.md::Why this exists",
+          "owners": []
+        },
+        {
+          "pattern": "A/B",
+          "declared_in": "docs/superpowers/README.md::Specs",
+          "owners": []
+        },
+        {
+          "pattern": "A/B",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "A/B",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "A/B-equivalence",
+          "declared_in": "docs/superpowers/README.md::Specs",
+          "owners": []
+        },
+        {
+          "pattern": "A/B-extraction",
+          "declared_in": "docs/superpowers/README.md::Specs",
+          "owners": []
+        },
+        {
+          "pattern": "A/B-validated",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "A/B-validated",
+          "declared_in": "docs/superpowers/README.md::Specs",
+          "owners": []
+        },
+        {
+          "pattern": "A/B-validated",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "AGENTS.md",
+          "declared_in": "README.md::The intent: keep codebases comprehensible as AI accelerates them",
+          "owners": []
+        },
+        {
+          "pattern": "AGENTS.md",
+          "declared_in": "README.md::The same lens, three real public repos",
+          "owners": []
+        },
+        {
+          "pattern": "ARCHITECTURE.md",
+          "declared_in": "skills/assess/scripts/lib/README.md::Ownership and structure drift",
+          "owners": []
+        },
+        {
+          "pattern": "Atom/RSS",
+          "declared_in": "README.md::Staying notified of new versions",
+          "owners": []
+        },
+        {
+          "pattern": "C/C",
+          "declared_in": "README.md::The same lens, three real public repos",
+          "owners": []
+        },
+        {
+          "pattern": "CodeRabbit/claude",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "DESIGN.md",
+          "declared_in": "skills/assess/scripts/lib/README.md::Ownership and structure drift",
+          "owners": []
+        },
+        {
+          "pattern": "JVM/Maven",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "LLM/Phase-2",
+          "declared_in": "README.md::The intent: keep codebases comprehensible as AI accelerates them",
+          "owners": []
+        },
+        {
+          "pattern": "SHA/timestamp",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "TODO/FIXME",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "[text](relative/path",
+          "declared_in": "skills/assess/scripts/lib/README.md::Document analysis",
+          "owners": []
+        },
+        {
+          "pattern": "ab-equivalence/SKILL.md",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "agent/human",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "agent/human",
+          "declared_in": "skills/assess/scripts/lib/README.md::Signal integration",
+          "owners": []
+        },
+        {
+          "pattern": "assess-findings/SKILL.md",
+          "declared_in": "skills/README.md::Assessment helpers",
+          "owners": []
+        },
+        {
+          "pattern": "assess-pr/SKILL.md",
+          "declared_in": "skills/README.md::Assessment helpers",
+          "owners": []
+        },
+        {
+          "pattern": "assess-report.md",
+          "declared_in": "README.md::Why this matters for an AI-driven codebase",
+          "owners": []
+        },
+        {
+          "pattern": "assess/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "audit/edit",
+          "declared_in": "README.md::Why this exists",
+          "owners": []
+        },
+        {
+          "pattern": "build",
+          "declared_in": "README.md::Build artifacts and generated code are filtered by default",
+          "owners": []
+        },
+        {
+          "pattern": "chars/4",
+          "declared_in": "README.md::What `/assess` produces",
+          "owners": []
+        },
+        {
+          "pattern": "de-slop/audit",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "deslop/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "discovery/excludes",
+          "declared_in": "skills/assess/scripts/lib/README.md::Document analysis",
+          "owners": []
+        },
+        {
+          "pattern": "dist",
+          "declared_in": "README.md::Build artifacts and generated code are filtered by default",
+          "owners": []
+        },
+        {
+          "pattern": "doc/code",
+          "declared_in": "skills/assess/scripts/lib/README.md::Configuration",
+          "owners": []
+        },
+        {
+          "pattern": "generated",
+          "declared_in": "skills/assess/scripts/lib/README.md::Configuration",
+          "owners": []
+        },
+        {
+          "pattern": "generated",
+          "declared_in": "skills/assess/scripts/lib/README.md::Document analysis",
+          "owners": []
+        },
+        {
+          "pattern": "ghsync/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "hotspots/*.md",
+          "declared_in": "skills/assess/scripts/lib/README.md::Output and formatting",
+          "owners": []
+        },
+        {
+          "pattern": "hotspots/*.md",
+          "declared_in": "skills/assess/tests/README.md::Orchestrator suites",
+          "owners": []
+        },
+        {
+          "pattern": "huddle/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "human/agent/mixed/unknown",
+          "declared_in": "skills/assess/scripts/lib/README.md::Data collection",
+          "owners": []
+        },
+        {
+          "pattern": "internal/import/parser.go",
+          "declared_in": "README.md::The intent: keep codebases comprehensible as AI accelerates them",
+          "owners": []
+        },
+        {
+          "pattern": "issue/ticket/URL/date",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "lib/__init__.py",
+          "declared_in": "skills/assess/tests/README.md::Infrastructure suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/agent_instructions_grader.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/change_coupling.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/ci_workflow.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/coupling_analysis.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/doc_complexity_join.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/doc_graph.py",
+          "declared_in": "skills/assess/tests/README.md::Test/source co-change seam",
+          "owners": []
+        },
+        {
+          "pattern": "lib/doc_graph.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/doc_staleness.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/git_churn.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/keyhole_signals.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/liveness_scan.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/stats_diff.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/structure_graph.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/test_pressure",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/understanding_analysis.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lib/wiki_writer.py",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "lizard/scc",
+          "declared_in": "skills/assess/tests/README.md::Orchestrator suites",
+          "owners": []
+        },
+        {
+          "pattern": "log.md",
+          "declared_in": "README.md::The intent: keep codebases comprehensible as AI accelerates them",
+          "owners": []
+        },
+        {
+          "pattern": "log.md",
+          "declared_in": "skills/assess/scripts/lib/README.md::Output and formatting",
+          "owners": []
+        },
+        {
+          "pattern": "log.md",
+          "declared_in": "skills/assess/tests/README.md::Orchestrator suites",
+          "owners": []
+        },
+        {
+          "pattern": "logs/metrics/traces",
+          "declared_in": "README.md::The intent: keep codebases comprehensible as AI accelerates them",
+          "owners": []
+        },
+        {
+          "pattern": "marathon/SKILL.md",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "markdown/JSON/YAML",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "node_modules",
+          "declared_in": "README.md::Build artifacts and generated code are filtered by default",
+          "owners": []
+        },
+        {
+          "pattern": "ownership/seam",
+          "declared_in": "skills/assess/scripts/lib/README.md::Ownership and structure drift",
+          "owners": []
+        },
+        {
+          "pattern": "pr-review-merge/SKILL.md",
+          "declared_in": "skills/README.md::Team-orchestration library skills",
+          "owners": []
+        },
+        {
+          "pattern": "red-team/blue-team",
+          "declared_in": "README.md::Verify the auto-trigger works",
+          "owners": []
+        },
+        {
+          "pattern": "references/full-checklist.md",
+          "declared_in": "README.md::Skills (auto-discovered by Claude Code)",
+          "owners": []
+        },
+        {
+          "pattern": "references/full-checklist.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "repo/notes/.obsidian",
+          "declared_in": "skills/assess/scripts/lib/README.md::Document analysis",
+          "owners": []
+        },
+        {
+          "pattern": "run/installed",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "scripts/assess_core.py",
+          "declared_in": "skills/assess/tests/README.md::Orchestrator suites",
+          "owners": []
+        },
+        {
+          "pattern": "scripts/assess_emit_workflow.py",
+          "declared_in": "skills/assess/tests/README.md::Orchestrator suites",
+          "owners": []
+        },
+        {
+          "pattern": "scripts/assess_finalize.py",
+          "declared_in": "skills/assess/tests/README.md::Orchestrator suites",
+          "owners": []
+        },
+        {
+          "pattern": "scripts/assess_gate.py",
+          "declared_in": "skills/assess/tests/README.md::Orchestrator suites",
+          "owners": []
+        },
+        {
+          "pattern": "scripts/assess_report.py",
+          "declared_in": "skills/assess/tests/README.md::Orchestrator suites",
+          "owners": []
+        },
+        {
+          "pattern": "scripts/complexity-treemap.py",
+          "declared_in": "skills/assess/tests/README.md::Orchestrator suites",
+          "owners": []
+        },
+        {
+          "pattern": "scripts/lib",
+          "declared_in": "skills/assess/scripts/lib/README.md::The wider co-change seams (cohesion, not entanglement)",
+          "owners": []
+        },
+        {
+          "pattern": "semantic-compress/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "skill-forge/SKILL.md",
+          "declared_in": "skills/README.md::Portable",
+          "owners": []
+        },
+        {
+          "pattern": "skills/assess/tests/fixtures",
+          "declared_in": "skills/assess/scripts/lib/README.md::The wider co-change seams (cohesion, not entanglement)",
+          "owners": []
+        },
+        {
+          "pattern": "spec/doc",
+          "declared_in": "skills/assess/scripts/lib/README.md::Signal integration",
+          "owners": []
+        },
+        {
+          "pattern": "splits/fuses",
+          "declared_in": "skills/assess/scripts/lib/README.md::Ownership and structure drift",
+          "owners": []
+        },
+        {
+          "pattern": "templates/assess-gate.yml.template",
+          "declared_in": "skills/assess/scripts/lib/README.md::Output and formatting",
+          "owners": []
+        },
+        {
+          "pattern": "test/source",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "test/source",
+          "declared_in": "skills/assess/tests/README.md::lib/ suites",
+          "owners": []
+        },
+        {
+          "pattern": "test_pressure",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "tests/golden.py",
+          "declared_in": "skills/assess/tests/README.md::Infrastructure suites",
+          "owners": []
+        },
+        {
+          "pattern": "tests/test_accretion_ratchet.py",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "tests/test_doc_provenance.py",
+          "declared_in": "skills/assess/scripts/lib/README.md::Document analysis",
+          "owners": []
+        },
+        {
+          "pattern": "tests/test_promissory_markers.py",
+          "declared_in": "skills/assess/scripts/lib/README.md::Scoring",
+          "owners": []
+        },
+        {
+          "pattern": "tests/test_structure_drift.py",
+          "declared_in": "skills/assess/scripts/lib/README.md::Ownership and structure drift",
+          "owners": []
+        },
+        {
+          "pattern": "wikilinks",
+          "declared_in": "skills/assess/scripts/lib/README.md::Document analysis",
+          "owners": []
+        },
+        {
+          "pattern": "worktree",
+          "declared_in": "README.md::Adapting for your workflow",
+          "owners": []
+        },
+        {
+          "pattern": "worktree",
+          "declared_in": "README.md::Use as a GitHub Action",
+          "owners": []
+        },
+        {
+          "pattern": "~/.claude",
+          "declared_in": "README.md::Install",
+          "owners": []
+        },
+        {
+          "pattern": "~/dev/github.com/<org>/<repo>/<repo>-main",
+          "declared_in": "README.md::Adapting for your workflow",
+          "owners": []
+        }
+      ],
+      "total_patterns": 400,
+      "matched_patterns": 115
+    },
+    "tier_1": {
+      "available": true,
+      "human_grouped_static_splits_count": 6582,
+      "human_split_static_fuses_count": 0,
+      "human_grouped_never_cochange_count": 6636,
+      "human_split_but_cochange_count": 6,
+      "human_static_agree_count": 56,
+      "human_cochange_agree_count": 2,
+      "seam_allowlist_applied": true,
+      "allowlist_pairs_count": 2
+    }
+  }
 }

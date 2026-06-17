@@ -40,6 +40,7 @@ from lib.doc_complexity_join import (
     analyze_doc_complexity_join,
 )
 from lib.liveness_scan import STATIC_REACHABILITY_CAVEAT
+from lib.structure_drift import detect_grouping_disagreement
 from lib.understanding_analysis import analyze_understanding
 
 # Caps so a pathological repo can't bloat run-context.json. The treemap and
@@ -598,6 +599,72 @@ def _format_accretion_items(run_context: dict) -> list[str]:
 
 
 # --------------------------------------------------------------------------
+# Structure drift (Tier 1) as a B3 hidden-coupling signal
+# --------------------------------------------------------------------------
+#
+# Tier 1's ``human_split_but_cochange`` is, by construction, a B3 signal: file
+# pairs the commit log keeps coupling that *no* declared ownership boundary
+# groups - a hidden seam the map omits, exactly the question B3
+# (static-vs-historical disagreement) already asks. So it folds into the
+# *existing* ``hidden_coupling`` finding rather than a new finding type, after
+# the seam allowlist (applied inside ``detect_grouping_disagreement``) has
+# absorbed the known-good seams.
+#
+# The aggregation tests directory *pairs*, not single directories: a genuine
+# hidden seam is two trees that keep co-changing across several distinct file
+# pairs, not one hub file that touches everything. The version hot-file
+# ``plugin.json`` co-changes with a file in every tree on each PR - inflating its
+# own directory's single-dir count - but each of those couplings is a *different*
+# counterpart directory through the *same* hub file, so no directory *pair*
+# recurs. Requiring a directory pair to recur (``min_pairs`` distinct file pairs
+# straddling the same two trees) is the recurrence test that distinguishes a
+# mutual entanglement from a repo-wide hub, and yields no false positive from the
+# version-bump ritual.
+
+MIN_DRIFT_PAIRS_FOR_HIDDEN_COUPLING = 2
+
+
+def _parent_dir(path_str: str) -> str:
+    """The repo-relative parent directory of a file path (``.`` for repo root)."""
+    return Path(path_str).parent.as_posix()
+
+
+def structure_drift_hidden_coupling_dirs(
+    tier1: dict, min_pairs: int = MIN_DRIFT_PAIRS_FOR_HIDDEN_COUPLING,
+) -> list[str]:
+    """Directories entangled by a recurring Tier 1 hidden seam.
+
+    Aggregates the post-allowlist ``human_split_but_cochange`` pairs (co-change
+    with no declared boundary) to *directory pairs* and keeps the directories of
+    any directory pair straddled by at least ``min_pairs`` distinct file pairs.
+    Testing directory pairs (not single directories) is what filters a repo-wide
+    hub - the version hot-file couples with every tree, inflating its own
+    directory's appearances, but always through a *different* counterpart
+    directory, so no directory pair recurs and it never reads as a seam. A pair
+    where both files share a directory is ignored (intra-directory cohesion is
+    not a cross-tree seam), as is any pair touching the repo root ``.`` (vacuous
+    containment, never an attention unit). Returns a sorted, deduped path list
+    matching the dir granularity of the existing ``hidden_coupling`` finding so
+    the attention list stays deterministic.
+    """
+    if not tier1.get("available"):
+        return []
+    dir_pair_counts: Counter[tuple[str, str]] = Counter()
+    for row in tier1.get("human_split_but_cochange", []):
+        da, db = _parent_dir(row["file_a"]), _parent_dir(row["file_b"])
+        if da == db or "." in (da, db):
+            continue
+        key: tuple[str, str] = (da, db) if da <= db else (db, da)
+        dir_pair_counts[key] += 1
+    out: set[str] = set()
+    for (da, db), n in dir_pair_counts.items():
+        if n >= min_pairs:
+            out.add(da)
+            out.add(db)
+    return sorted(out)
+
+
+# --------------------------------------------------------------------------
 # Deterministic markdown / summary renderers (the report-skeleton products)
 # --------------------------------------------------------------------------
 
@@ -782,6 +849,32 @@ def _safe_block(label: str, fn, fallback: dict) -> dict:
         return {**fallback, "available": False, "reason": f"{label} failed: {e}"}
 
 
+def _structure_drift_tier1(
+    repo_root: Path, structure: dict | None, behaviour: dict,
+) -> dict:
+    """Tier 1 grouping disagreement, fed the behaviour block's co-change pairs.
+
+    Returns ``{"available": False}`` (no disagreement to surface) whenever the
+    static import graph is unavailable - with no static lens there is nothing to
+    disagree with. Otherwise calls ``detect_grouping_disagreement`` with the
+    co-change pairs the behaviour block already computed (no second git-log
+    parse); the static communities are recomputed inside the detector from the
+    same grimp packages ``structure`` was built from, since the structure block
+    keeps only modularity_q, not the partition. Any failure degrades to an empty
+    available:False result - this is additive B3 context, never a gate.
+    """
+    if not structure or not structure.get("available"):
+        return {"available": False}
+    coupling_pairs = (
+        behaviour.get("change_coupling_pairs", [])
+        if behaviour.get("available") else []
+    )
+    try:
+        return detect_grouping_disagreement(repo_root, coupling_pairs=coupling_pairs)
+    except Exception:  # noqa: BLE001 - degrade, never crash
+        return {"available": False}
+
+
 def _paths_from_stats(complexity_stats: dict, cap: int = MAX_AUTHORSHIP_PATHS) -> list[str]:
     """The ranked-list paths to run authorship analysis over (capped).
 
@@ -931,10 +1024,24 @@ def integrate(
     ratchet_run_ctx: dict = {"accretion_ratchet": accretion_ratchet or {}}
     accreting_paths = _accretion_ratchet_finding(ratchet_run_ctx)
 
+    # Structure drift (Tier 1): grouping disagreement between the declared
+    # ownership map, the static import graph, and the commit-log co-change. Run
+    # only when the static lens exists (no graph -> nothing to disagree with);
+    # fed the behaviour block's already-computed co-change pairs so no second
+    # git-log parse happens. Its hidden-seam direction folds into the existing
+    # hidden_coupling finding below. Degrades to an empty (available:False) result
+    # when no ownership map exists or the detector fails - never crashes the run.
+    structure_drift_tier1 = _structure_drift_tier1(repo_root, structure, behaviour)
+    # The hidden-seam dirs are co-change-derived, so a degenerate history (which
+    # maximally inflates co-change) must suppress them exactly as it suppresses
+    # the containment-derived hidden_coupling - via the same _churn_paths gate.
+    drift_hidden_dirs = structure_drift_hidden_coupling_dirs(structure_drift_tier1)
+
     findings = assemble_findings({
         "hidden_coupling": _churn_paths(
             "hidden_coupling",
-            [h["path"] for h in behaviour.get("hidden_coupling_findings", [])],
+            [h["path"] for h in behaviour.get("hidden_coupling_findings", [])]
+            + drift_hidden_dirs,
         ),
         "lying_map": _churn_paths(
             "lying_map",
@@ -964,4 +1071,8 @@ def integrate(
         "findings_markdown": render_findings_markdown(findings, attention),
         "keyhole_summary": build_keyhole_summary(findings),
         "prescribed_actions": build_prescribed_actions(attention, findings),
+        # The Tier 1 grouping disagreement, computed once here from the behaviour
+        # block's co-change pairs, so the orchestrator can build the run-context
+        # structure_drift tier_1 sub-block from it without a second computation.
+        "structure_drift_tier1": structure_drift_tier1,
     }
