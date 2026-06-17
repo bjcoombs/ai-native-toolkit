@@ -668,8 +668,8 @@ def test_format_accretion_items_roll_up_and_per_file_lines() -> None:
     assert any("src/fat.py" in line and "+2,400 LOC" in line for line in items)
     assert any("lib/bloat.py" in line for line in items)
     # Worst offender comes first.
-    fat_idx = next(i for i, l in enumerate(items) if "src/fat.py" in l)
-    bloat_idx = next(i for i, l in enumerate(items) if "lib/bloat.py" in l)
+    fat_idx = next(i for i, line in enumerate(items) if "src/fat.py" in line)
+    bloat_idx = next(i for i, line in enumerate(items) if "lib/bloat.py" in line)
     assert fat_idx < bloat_idx
 
 
