@@ -466,6 +466,25 @@ def _accretion_block(scan: Any, complexity_stats: dict) -> dict[str, Any]:
     return block
 
 
+def _accretion_lookup(scan: Any) -> dict[str, dict]:
+    """O(1) ``{path: accretion_info}`` for the hotspot pages, from one scan.
+
+    Each entry is the serialized AccretionFile plus the scan-wide ``reliable``
+    flag, so a hotspot page can name a file's growth profile and disclaim it on
+    degenerate history without re-deriving anything. Returns ``{}`` when the
+    scan was unavailable - the hotspot loop then writes pages with no growth
+    line (graceful degradation; the scan never gates page generation).
+    """
+    if not scan.available:
+        return {}
+    lookup: dict[str, dict] = {}
+    for af in scan.files:
+        entry = af.to_dict()
+        entry["reliable"] = scan.reliable
+        lookup[af.path] = entry
+    return lookup
+
+
 def _marker_debt_sentence(debt: dict | None) -> str:
     """One briefing sentence accusing a hotspot of its own stale promises."""
     if not debt:
@@ -597,6 +616,10 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # the complexity band is known, so growth is reported only for files already
     # in the top complexity/size band.
     accretion_scan = scan_accretion_ratchet(repo_root)
+    # O(1) per-file lookup for the hotspot pages, built from the same scan the
+    # run-context block serializes (no re-scan). Empty when the scan was
+    # unavailable - graceful degradation: those files just get no growth line.
+    accretion_by_file = _accretion_lookup(accretion_scan)
 
     # Build status map: which paths are graduated, new, regressed, persistent
     status_map: dict[str, str] = {}
@@ -655,6 +678,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
                 + "(Briefing refined by LLM via assess_finalize - see Suggested actions below.)"
             ),
             actions=UNFINALIZED_ACTIONS_POINTER,
+            accretion_data=accretion_by_file.get(path),
         )
 
     # Also surface graduated hotspots in the index. Carry the file's actual

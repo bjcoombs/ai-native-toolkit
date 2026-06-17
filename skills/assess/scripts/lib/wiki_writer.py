@@ -29,6 +29,32 @@ UNFINALIZED_ACTIONS_POINTER = (
 )
 
 
+def _growth_profile_line(accretion: dict | None) -> str:
+    """One briefing line naming a hotspot's monotonic-growth profile, or "".
+
+    ``accretion`` is the per-file accretion-ratchet entry for *this* hotspot
+    (the serialized AccretionFile dict: ``net_additions`` / ``commit_count`` /
+    ``time_span_months``), plus a ``reliable`` flag threaded down from the scan.
+    A file absent from the accretion data (no entry, or None) earns no line -
+    growth that wasn't flagged as pure accretion is normal development, not a
+    ratchet. When the underlying git history is degenerate (shallow/squashed
+    clone) the count is still reported but disclaimed, since the scan can't see
+    the full sequence.
+    """
+    if not accretion:
+        return ""
+    net = accretion.get("net_additions", 0)
+    commits = accretion.get("commit_count", 0)
+    months = round(accretion.get("time_span_months", 0))
+    line = (
+        f"Growth profile: monotonic "
+        f"(+{net} LOC, 0 net reductions over {commits} commits in {months} months)."
+    )
+    if accretion.get("reliable") is False:
+        line += " (history may be incomplete - shallow/squashed repo)"
+    return line
+
+
 @dataclass(frozen=True)
 class HotspotEntry:
     path: str
@@ -176,11 +202,18 @@ def write_hotspot_page(
     history_rows: str,
     briefing: str,
     actions: str,
+    accretion_data: dict | None = None,
 ) -> None:
     """(Re)write hotspots/<slug>.md.
 
     has_tests=None means "we don't know yet" - shown as "unknown" in the page.
     Test-to-code pairing is a deferred feature; honest reporting beats lying.
+
+    ``accretion_data`` is the accretion-ratchet entry for *this* file (the
+    serialized AccretionFile dict plus the scan's ``reliable`` flag), or None
+    when the file isn't accreting. When present, one growth-profile line is
+    appended to the briefing - no new section header - so the page names the
+    monotonic-growth tendency right where an agent is briefed before editing.
     """
     hotspots_dir = assess_dir / "hotspots"
     hotspots_dir.mkdir(exist_ok=True)
@@ -188,6 +221,9 @@ def write_hotspot_page(
         has_tests_str = "unknown"
     else:
         has_tests_str = "yes" if has_tests else "no"
+    growth = _growth_profile_line(accretion_data)
+    if growth:
+        briefing = f"{briefing} {growth}"
     content = _load_template("hotspot.md.template").format(
         path=path,
         first_flagged=first_flagged,

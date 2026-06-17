@@ -249,3 +249,70 @@ def test_write_hotspot_page_unknown_has_tests(tmp_assess_dir: Path) -> None:
     page = next((tmp_assess_dir / "hotspots").iterdir())
     content = page.read_text(encoding="utf-8")
     assert "Has test file | unknown" in content
+
+
+def _hotspot_kwargs(**overrides: object) -> dict:
+    """Baseline write_hotspot_page kwargs; overrides win."""
+    base = dict(
+        path="src/foo.go",
+        first_flagged="2026-01-01",
+        last_seen="2026-06-17",
+        status="active",
+        loc=600,
+        ccn=30,
+        commits=15,
+        has_tests=None,
+        history_rows="| 2026-06-17 | 600 | 30 | 15 | active |",
+        briefing="Go API handler.",
+        actions="- Investigate complexity",
+    )
+    base.update(overrides)
+    return base
+
+
+def test_hotspot_page_includes_growth_profile_when_accreting(tmp_assess_dir: Path) -> None:
+    """A file present in the accretion data gets one growth-profile line in the
+    briefing - the monotonic-growth tendency named where an agent is briefed."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(accretion_data={
+        "path": "src/foo.go", "net_additions": 420, "commit_count": 18,
+        "deletion_fraction": 0.04, "time_span_months": 7.2, "reliable": True,
+    }))
+    page = next((tmp_assess_dir / "hotspots").iterdir())
+    content = page.read_text(encoding="utf-8")
+    assert "Growth profile: monotonic" in content
+    assert "+420 LOC" in content
+    assert "0 net reductions over 18 commits in 7 months" in content
+    # No new section header - the line rides inside the existing briefing.
+    assert "## Growth" not in content
+
+
+def test_hotspot_page_no_growth_profile_without_accretion_data(tmp_assess_dir: Path) -> None:
+    """A file with no accretion entry (None) earns no line - growth that wasn't
+    flagged as pure accretion is normal development, not a ratchet."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(accretion_data=None))
+    page = next((tmp_assess_dir / "hotspots").iterdir())
+    content = page.read_text(encoding="utf-8")
+    assert "Growth profile" not in content
+
+
+def test_hotspot_page_growth_profile_defaults_to_none(tmp_assess_dir: Path) -> None:
+    """accretion_data is optional: a caller that doesn't pass it still works and
+    produces no growth line (back-compat with the pre-accretion call site)."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs())
+    page = next((tmp_assess_dir / "hotspots").iterdir())
+    content = page.read_text(encoding="utf-8")
+    assert "Growth profile" not in content
+
+
+def test_hotspot_page_growth_profile_disclaims_unreliable_history(tmp_assess_dir: Path) -> None:
+    """reliable=False (shallow/squashed clone) still reports the profile but
+    appends the incomplete-history disclaimer so the count isn't over-trusted."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(accretion_data={
+        "path": "src/foo.go", "net_additions": 200, "commit_count": 5,
+        "deletion_fraction": 0.02, "time_span_months": 3.0, "reliable": False,
+    }))
+    page = next((tmp_assess_dir / "hotspots").iterdir())
+    content = page.read_text(encoding="utf-8")
+    assert "Growth profile: monotonic" in content
+    assert "history may be incomplete" in content
+    assert "shallow/squashed repo" in content
