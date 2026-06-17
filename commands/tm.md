@@ -485,6 +485,8 @@ jq '."<tag>".tasks[] | {id, title: .title[0:50], status, dependencies, complexit
 
 This build uses a **single implicit team** - there is no `TeamCreate` step. The team forms as you spawn named background teammates: each `Agent(name: "task-<id>", run_in_background: true)` joins the session's implicit team and is addressable via `SendMessage(to: "task-<id>")`. Proceed straight to tracking.
 
+A session has exactly one implicit team and this session is its permanent lead, so this marathon owns it: don't run a second team-mode skill (another marathon, a `/huddle`) in the same session - start it in a separate terminal/worktree, which gets its own isolated team. For two concurrent marathons, pass `--tag` on every Task Master call (or use the MCP tools) so the global tag selection doesn't drift between sessions.
+
 **PR tracking** - persisted in worktree dir (survives crashes and team cleanup):
 
 ```bash
@@ -809,21 +811,17 @@ The lead operates as a **tech lead running a sprint** - not a task router.
 
 ### Crash Recovery
 
-If the session crashes, background teammates may linger as active members. The implicit team has no `TeamDelete` to block, but stale team/task state under `~/.claude/` should still be cleared so a re-run starts clean.
+If the session crashes, background teammates live only as long as the session. The team config directory (`~/.claude/teams/session-<id>/`, named from the session ID - **not** the tag) is removed automatically when the session exits, and the task-list directory (`~/.claude/tasks/session-<id>/`) is intentionally kept so a resumed session recovers its tasks. There is no per-tag team directory to force-remove and no `TeamDelete` to call - the state that actually carries a marathon across a crash is the worktree and its `pr-tracking.json`, so recovery is just reconciliation:
 
 ```bash
-# 1. Force-remove stale team
-rm -rf ~/.claude/teams/<tag>
-rm -rf ~/.claude/tasks/<tag>
-
-# 2. Check worktrees for uncommitted work
+# 1. Check worktrees for uncommitted work
 git worktree list | grep "<tag>"
 
-# 3. Resume: /tm <tag>
-# Reconciliation handles stale tracking entries automatically.
+# 2. Resume: /tm <tag>
+# Reconciliation against the source of truth + GitHub handles stale tracking entries automatically.
 ```
 
-Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`.
+Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`. If a background teammate pane genuinely lingers after the session exits, end it at the terminal level (`tmux ls` → `tmux kill-session`), not by deleting `~/.claude/` state.
 
 ### Step 6: Completion and Retrospective
 

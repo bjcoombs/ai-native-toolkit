@@ -57,7 +57,7 @@ or a wrong tier (e.g. a removed command flag shipped as PATCH).
 Skills ship as standalone ZIPs via `scripts/transform_skill.py`. Any **new
 skill content** that references `$ARGUMENTS`, `SKILL_DIR` / `$CLAUDE_PLUGIN_ROOT`,
 a namespaced slash command (`/ai-native-toolkit:*`), or a Claude-Code-only tool
-(`Agent`, `TeamCreate`, `SendMessage`, `TeamDelete`) **must** be wrapped in
+(`Agent`, `SendMessage`, or a `run_in_background` teammate spawn) **must** be wrapped in
 `<!-- chat-skip:start -->` / `<!-- chat-skip:end -->` or replaced via
 `<!-- chat-replace:key -->`, or it leaks into the chat ZIP. Markers must be
 balanced and applied to **all** `.md` in the skill dir, not just `SKILL.md`.

@@ -178,7 +178,7 @@ bash scripts/build-standalone-skills.sh --dest ~/Desktop  # custom output dir
 - Markers must be balanced; keep them at line start (the transformer handles indented markers via `.strip()`, but line-start is cleaner)
 - Run `cd scripts && uv run --with pytest pytest -v` to validate after any marker changes
 
-**When to add markers:** any new skill content that references `SKILL_DIR`, `$ARGUMENTS`, a namespaced slash command (`/ai-native-toolkit:*`), or a Claude Code-only tool (`Agent`, `TeamCreate`, `SendMessage`, `TeamDelete`).
+**When to add markers:** any new skill content that references `SKILL_DIR`, `$ARGUMENTS`, a namespaced slash command (`/ai-native-toolkit:*`), or a Claude Code-only tool (`Agent`, `SendMessage`, a `run_in_background` teammate spawn).
 
 ## /assess architecture
 
