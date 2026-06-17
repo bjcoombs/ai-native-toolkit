@@ -737,3 +737,105 @@ def test_integrate_accretion_ratchet_absent_is_silent() -> None:
         commit_sets=_BLEEDING_COMMIT_SETS,
     )
     assert _finding_paths(result, "accretion_ratchet") == []
+
+
+# --- structure drift (Tier 1) folded into hidden_coupling --------------------
+
+def _drift_tier1(pairs: list[tuple[str, str]]) -> dict:
+    """A minimal available Tier 1 result carrying only the hidden-seam list."""
+    return {
+        "available": True,
+        "human_split_but_cochange": [
+            {"file_a": a, "file_b": b} for a, b in pairs
+        ],
+    }
+
+
+def test_drift_hidden_coupling_unavailable_is_empty() -> None:
+    """An unavailable Tier 1 result yields no hidden-coupling dirs."""
+    assert ks.structure_drift_hidden_coupling_dirs({"available": False}) == []
+    assert ks.structure_drift_hidden_coupling_dirs({}) == []
+
+
+def test_drift_hidden_coupling_recurring_dir_pair_surfaces() -> None:
+    """Two trees straddled by >= min_pairs distinct file pairs both surface.
+
+    Two distinct file pairs link src/ and lib/; the pair recurs, so both
+    directories read as a genuine hidden seam.
+    """
+    tier1 = _drift_tier1([
+        ("src/a.py", "lib/x.py"),
+        ("src/b.py", "lib/y.py"),
+    ])
+    assert ks.structure_drift_hidden_coupling_dirs(tier1) == ["lib", "src"]
+
+
+def test_drift_hidden_coupling_hub_file_is_not_a_seam() -> None:
+    """A single hub file coupling with every tree manufactures no seam.
+
+    The version hot-file shape: one file in cfg/ co-changes with a different
+    directory on each pair. Each directory *pair* occurs exactly once, so none
+    recurs and no directory surfaces - the version-bump ritual is not drift.
+    """
+    tier1 = _drift_tier1([
+        ("cfg/v.json", "src/a.py"),
+        ("cfg/v.json", "lib/b.py"),
+        ("cfg/v.json", "docs/c.md"),
+    ])
+    assert ks.structure_drift_hidden_coupling_dirs(tier1) == []
+
+
+def test_drift_hidden_coupling_ignores_root_and_intra_dir() -> None:
+    """Pairs touching the repo root, or within one directory, are ignored.
+
+    A root-level file (dir ``.``) has vacuous containment; an intra-directory
+    pair is cohesion, not a cross-tree seam. Neither contributes a finding even
+    when repeated.
+    """
+    tier1 = _drift_tier1([
+        ("README.md", "src/a.py"),   # root side -> ignored
+        ("README.md", "src/b.py"),   # root side -> ignored
+        ("src/c.py", "src/d.py"),    # intra-dir -> ignored
+        ("src/e.py", "src/f.py"),    # intra-dir -> ignored
+    ])
+    assert ks.structure_drift_hidden_coupling_dirs(tier1) == []
+
+
+def test_drift_hidden_coupling_single_pair_below_threshold() -> None:
+    """One file pair straddling two trees is below the recurrence threshold."""
+    tier1 = _drift_tier1([("src/a.py", "lib/x.py")])
+    assert ks.structure_drift_hidden_coupling_dirs(tier1) == []
+
+
+def test_drift_tier1_silent_without_static_graph() -> None:
+    """_structure_drift_tier1 returns unavailable when the static graph is out.
+
+    With no import graph there is nothing to disagree with, so Tier 1 is not
+    even attempted - the detector is never called.
+    """
+    out = ks._structure_drift_tier1(
+        Path("/nonexistent"),
+        {"available": False},
+        {"available": True, "change_coupling_pairs": []},
+    )
+    assert out == {"available": False}
+
+
+def test_integrate_returns_structure_drift_tier1() -> None:
+    """integrate() exposes the Tier 1 result for the orchestrator to serialise.
+
+    With a /nonexistent repo there is no ownership map, so the detector degrades
+    to available:False - but the key is present, proving the wiring exists.
+    """
+    result = ks.integrate(
+        repo_root=Path("/nonexistent"),
+        complexity_stats=_COMPLEXITY_STATS,
+        doc_staleness=_stale_doc_staleness(churn_degenerate=False),
+        dead_code={"available": False, "candidate_count": 0,
+                   "candidates": [], "tools": []},
+        observability={"rung": None, "reachable": {"present": False}},
+        structure=_MODULAR_STRUCTURE,
+        commit_sets=_BLEEDING_COMMIT_SETS,
+    )
+    assert "structure_drift_tier1" in result
+    assert result["structure_drift_tier1"].get("available") in (True, False)

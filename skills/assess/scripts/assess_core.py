@@ -60,6 +60,10 @@ from lib.liveness_scan import scan_liveness
 from lib.promissory_markers import scan_promissory_markers
 from lib.structure_graph import analyze_structure
 from lib.stats_diff import diff_stats, hotspot_commits, load_stats
+from lib.structure_drift import (
+    SEAM_ALLOWLIST,
+    detect_path_existence_drift,
+)
 from lib.test_pressure import scan_test_pressure
 from lib.wiki_writer import (
     UNFINALIZED_ACTIONS_POINTER,
@@ -483,6 +487,87 @@ def _accretion_lookup(scan: Any) -> dict[str, dict]:
         entry["reliable"] = scan.reliable
         lookup[af.path] = entry
     return lookup
+
+
+# The six Tier 1 grouping-disagreement counts, in a fixed order so the
+# run-context tier_1 sub-block is deterministic regardless of dict iteration.
+_TIER1_DISAGREEMENT_KEYS = (
+    "human_grouped_static_splits",
+    "human_split_static_fuses",
+    "human_grouped_never_cochange",
+    "human_split_but_cochange",
+    "human_static_agree",
+    "human_cochange_agree",
+)
+
+
+def _structure_drift_block(
+    repo_root: Path, tier_1: dict,
+) -> dict | None:
+    """Build the run-context ``structure_drift`` block (Tier 0 + Tier 1).
+
+    Tier 0 (``detect_path_existence_drift``) is the zero-threshold cut: declared
+    ownership patterns matching no tracked file. It runs whenever an ownership
+    map exists; when none does it degrades to ``available: False`` and the whole
+    block is omitted (the caller drops a ``None``), keeping non-owned repos'
+    run-context byte-stable.
+
+    ``tier_1`` is the grouping-disagreement result ``keyhole_signals.integrate``
+    already computed from the behaviour block's co-change pairs (no second
+    ``git log`` parse, no double computation) - either the six disagreement
+    counts or an ``available: False`` marker when the static import graph was
+    unavailable or no ownership map existed. The seam allowlist was applied
+    inside the detector, so the counts here are already post-allowlist.
+
+    Returns ``None`` when Tier 0 is unavailable (no ownership map) - a graceful,
+    half-block-free omission. Otherwise returns a JSON-serialisable block whose
+    ``tier_0`` always carries data and whose ``tier_1`` is either the six
+    disagreement counts or ``{"available": False}``.
+    """
+    tier_0 = detect_path_existence_drift(repo_root)
+    if not tier_0.get("available"):
+        return None  # no ownership map - omit the block entirely
+
+    block: dict[str, Any] = {
+        "tier_0": {
+            "available": True,
+            "empty_ownership_patterns": tier_0["empty_ownership_patterns"],
+            "total_patterns": tier_0["total_patterns"],
+            "matched_patterns": tier_0["matched_patterns"],
+        },
+    }
+
+    if not tier_1.get("available"):
+        block["tier_1"] = {"available": False}
+        return block
+
+    tier_1_block: dict[str, Any] = {"available": True}
+    for key in _TIER1_DISAGREEMENT_KEYS:
+        tier_1_block[f"{key}_count"] = tier_1.get(f"{key}_count", 0)
+    tier_1_block["seam_allowlist_applied"] = True
+    tier_1_block["allowlist_pairs_count"] = len(SEAM_ALLOWLIST)
+    block["tier_1"] = tier_1_block
+    return block
+
+
+def _attach_structure_drift(
+    ctx: dict[str, Any], repo_root: Path, tier_1: dict,
+) -> None:
+    """Attach the structure_drift block to ctx, or omit it on a graceful degrade.
+
+    Builds the block via :func:`_structure_drift_block` (Tier 0 + the supplied
+    Tier 1 result) under :func:`_safe`. Attaches only a real block (one carrying
+    a ``tier_0``): the no-ownership-map path returns ``None`` and a scan failure
+    returns ``_safe``'s degrade dict (no ``tier_0``); both omit the block rather
+    than emit a half-block, keeping the contract that absence means "nothing to
+    drift against / not assessed", never "no drift".
+    """
+    block = _safe(
+        "structure_drift",
+        lambda: _structure_drift_block(repo_root, tier_1),
+    )
+    if isinstance(block, dict) and "tier_0" in block:
+        ctx["structure_drift"] = block
 
 
 def _marker_debt_sentence(debt: dict | None) -> str:
@@ -967,6 +1052,16 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     ctx["findings_markdown"] = keyhole["findings_markdown"]
     ctx["keyhole_summary"] = keyhole["keyhole_summary"]
     ctx["prescribed_actions"] = keyhole["prescribed_actions"]
+
+    # Structure drift (third write-side tendency surface: a declared ownership
+    # map that no longer matches where the code lives). Tier 0 is the cheap
+    # path-existence cut; Tier 1 the grouping-disagreement cut keyhole_signals
+    # already computed from the behaviour block's co-change pairs (no second
+    # git-log parse). The block is omitted entirely when no ownership map exists
+    # - a graceful, half-block-free degrade that keeps a non-owned repo's
+    # run-context byte-stable - and its Tier 1 hidden-seam already flows into the
+    # report's B3 attention list via keyhole_signals; this block is the record.
+    _attach_structure_drift(ctx, repo_root, keyhole["structure_drift_tier1"])
 
     _write_fallback_badge_if_absent(assess_dir, promissory, ctx["derived_findings"])
 

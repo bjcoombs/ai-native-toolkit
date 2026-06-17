@@ -161,6 +161,57 @@ def test_opening_summary_is_bespoke_not_boilerplate() -> None:
     assert boilerplate in folded, "the non-verdict framing should remain in the 'How to read' fold"
 
 
+def test_golden_has_structure_drift_block_with_both_tiers() -> None:
+    """The captured baseline carries the structure_drift block (Tier 0 + Tier 1).
+
+    This repo declares an ownership map (the lib README seam doc + the README
+    cross-links), so Tier 0 is available; the static import graph exists, so
+    Tier 1 is available too. The block's shape is pinned here so a future
+    pipeline change that drops or reshapes it fails loudly.
+    """
+    ctx = golden.load_golden_run_context()
+    assert "structure_drift" in ctx, "golden run-context missing structure_drift"
+    sd = ctx["structure_drift"]
+
+    t0 = sd["tier_0"]
+    assert t0["available"] is True
+    assert isinstance(t0["empty_ownership_patterns"], list)
+    assert isinstance(t0["total_patterns"], int)
+    assert isinstance(t0["matched_patterns"], int)
+    # Every empty-pattern row has the documented {pattern, declared_in, owners}.
+    for row in t0["empty_ownership_patterns"]:
+        assert set(row) == {"pattern", "declared_in", "owners"}
+
+    t1 = sd["tier_1"]
+    assert t1["available"] is True
+    for key in (
+        "human_grouped_static_splits",
+        "human_split_static_fuses",
+        "human_grouped_never_cochange",
+        "human_split_but_cochange",
+        "human_static_agree",
+        "human_cochange_agree",
+    ):
+        assert isinstance(t1[f"{key}_count"], int)
+    assert t1["seam_allowlist_applied"] is True
+    assert isinstance(t1["allowlist_pairs_count"], int)
+
+
+def test_golden_structure_drift_tier1_has_no_false_positive_seam() -> None:
+    """After the seam allowlist this repo surfaces no hidden-coupling seam.
+
+    The documented seams (lib<->tests, build<->skills) are absorbed by the
+    allowlist, and the version hot-file's repo-wide couplings don't recur as a
+    directory pair - so the drift-derived hidden_coupling contribution is empty.
+    The captured derived hidden_coupling finding therefore carries only the
+    pre-existing containment-derived directories, never a drift false positive.
+    """
+    ctx = golden.load_golden_run_context()
+    hc = next(f for f in ctx["derived_findings"] if f["name"] == "hidden_coupling")
+    # The version-hot-file directory must never appear as a hidden-coupling seam.
+    assert ".claude-plugin" not in hc["paths"]
+
+
 def test_agent_assess_block_is_not_duplicated() -> None:
     """The 'read the .assess/ directory' block is for agents and belongs only in
     the Machine-readable fold - it used to also appear in the Strengths fold.

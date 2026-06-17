@@ -1373,3 +1373,86 @@ def test_accretion_ratchet_files_sorted_worst_first(git_repo) -> None:
     nets = [f["net_additions"] for f in files]
     assert nets == sorted(nets, reverse=True)  # worst (largest growth) first
     assert files[0]["path"] == "src/big.py"
+
+
+# --- structure_drift block (Tier 0 + Tier 1 orchestration) -------------------
+
+def test_structure_drift_block_omitted_without_ownership_map(git_repo) -> None:
+    """A repo with no CODEOWNERS / boundary doc emits no structure_drift block.
+
+    Tier 0 degrades to "no ownership map", so the orchestrator omits the block
+    entirely rather than emitting a half-block - the contract that absence means
+    "nothing to drift against", never "no drift".
+    """
+    repo, commit = git_repo
+    _seed_assess(repo)
+    (repo / "a.py").write_text("x = 1\n")
+    commit("init")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    assert "structure_drift" not in ctx
+
+
+def test_structure_drift_block_present_with_codeowners(git_repo) -> None:
+    """A repo with a CODEOWNERS map emits a Tier 0 block.
+
+    Tier 1 is present-or-absent depending on whether the static import graph is
+    available in the test env; either way the block carries a tier_0 with the
+    documented aggregate fields and a tier_1 with an explicit availability flag.
+    """
+    repo, commit = git_repo
+    _seed_assess(repo)
+    (repo / "src").mkdir()
+    (repo / "src" / "a.py").write_text("x = 1\n")
+    (repo / "CODEOWNERS").write_text("src/** @team\nghost/** @nobody\n")
+    commit("init")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    assert "structure_drift" in ctx
+    sd = ctx["structure_drift"]
+    assert sd["tier_0"]["available"] is True
+    assert sd["tier_0"]["total_patterns"] == 2
+    assert sd["tier_0"]["matched_patterns"] == 1
+    # The stale glob is the single empty pattern.
+    patterns = [e["pattern"] for e in sd["tier_0"]["empty_ownership_patterns"]]
+    assert patterns == ["ghost/**"]
+    # tier_1 always carries an availability flag (true or a graceful false).
+    assert "available" in sd["tier_1"]
+
+
+def test_structure_drift_block_builder_tier1_available() -> None:
+    """_structure_drift_block surfaces the six Tier 1 counts when available.
+
+    Pure builder test: a Tier 1 result with counts is rendered into the tier_1
+    sub-block with the seam-allowlist metadata, independent of any git/grimp.
+    """
+    repo = Path(__file__).resolve().parents[3]  # has an ownership map (lib README)
+    tier_1 = {
+        "available": True,
+        "human_grouped_static_splits_count": 3,
+        "human_split_static_fuses_count": 0,
+        "human_grouped_never_cochange_count": 4,
+        "human_split_but_cochange_count": 1,
+        "human_static_agree_count": 2,
+        "human_cochange_agree_count": 1,
+    }
+    block = assess_core._structure_drift_block(repo, tier_1)
+    assert block is not None
+    assert block["tier_1"]["available"] is True
+    assert block["tier_1"]["human_grouped_static_splits_count"] == 3
+    assert block["tier_1"]["human_split_but_cochange_count"] == 1
+    assert block["tier_1"]["seam_allowlist_applied"] is True
+    assert block["tier_1"]["allowlist_pairs_count"] >= 1
+
+
+def test_structure_drift_block_builder_tier1_unavailable() -> None:
+    """When Tier 1 is unavailable, tier_1 degrades to a bare available:False.
+
+    The static lens being out (no import graph) yields an unavailable Tier 1;
+    the block still carries the cheap Tier 0 data and a half-block-free tier_1.
+    """
+    repo = Path(__file__).resolve().parents[3]
+    block = assess_core._structure_drift_block(repo, {"available": False})
+    assert block is not None
+    assert block["tier_0"]["available"] is True
+    assert block["tier_1"] == {"available": False}

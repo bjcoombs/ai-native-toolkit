@@ -195,8 +195,13 @@ the two agreement sets). Known-good architectural seams (the lib<->tests and sta
 <->skills seams documented above) are an allowlist subtracted from the *denominator* - correct
 by construction, a seam can only suppress an owned boundary, never manufacture drift. Tier 1
 degrades to `available: False` reason `"no ownership map"` and emits its own `tier_1_available`
-field. Co-changes with `ownership_parser.py` (its parse foundation), `structure_graph.py` and
-`change_coupling.py` (the static and historical lenses it consumes), and its test
+field. `keyhole_signals.py` orchestrates Tier 1 (feeding it the behaviour block's already-parsed
+co-change pairs) and folds the hidden-seam direction (`human_split_but_cochange`) into the
+existing `hidden_coupling` finding - a recurring directory pair, not the version hot-file's
+repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into the
+`structure_drift` run-context block. Co-changes with `ownership_parser.py` (its parse foundation),
+`structure_graph.py` and `change_coupling.py` (the static and historical lenses it consumes),
+`keyhole_signals.py` / `assess_core.py` (its orchestrator and serialiser), and its test
 `tests/test_structure_drift.py`.
 
 ### Signal integration
@@ -211,7 +216,11 @@ outputs. Emits the eight named derived findings as a fixed-order structured arra
 `refactor_boundary` (the two trust-axis findings, `untrusted_hotspot` and
 `self_referential_tests`, were added after this module's first cut). Each block build
 is wrapped in a catch-all so one signal's failure degrades that block to
-`available: False` rather than crashing the run.
+`available: False` rather than crashing the run. It also runs `structure_drift.py`'s Tier 1
+grouping disagreement (fed the behaviour block's co-change pairs so no second git-log parse
+happens) and folds its hidden-seam direction into the `hidden_coupling` finding, returning the
+Tier 1 result for `assess_core` to serialise into the `structure_drift` run-context block - so
+structure-drift findings flow through this barrier rather than being assembled in the orchestrator.
 
 **`coupling_analysis.py`**
 B3 static-vs-historical disagreement cross: compares the import-graph view
