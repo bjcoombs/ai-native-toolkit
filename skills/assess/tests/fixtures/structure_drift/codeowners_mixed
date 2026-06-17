@@ -1,0 +1,5 @@
+# Sample CODEOWNERS consumed as test data by the structure_drift suite.
+# Two globs match a committed file; one points at a directory that is gone.
+src/** @core-team
+docs/ @docs-team
+legacy/** @nobody
