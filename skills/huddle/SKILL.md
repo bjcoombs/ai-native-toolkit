@@ -37,7 +37,7 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 
 Without the flag, `/huddle` still runs multi-perspective deliberations via phased sub-agent mode - it just trades cross-talk between agents for a running synopsis Blue Hat maintains as the persistent memory. Quality drops a little, cost drops a lot.
 
-**Deferred-tool caveat (the silent-fallback trap).** With the flag enabled, newer Claude Code builds do not list `SendMessage` in your live tool set - they defer it behind `ToolSearch`, surfacing only its name in a system-reminder. If you decide between team and phased mode by glancing at your visible tools, you will wrongly conclude team mode is unavailable and degrade to phased with no error. Resolve it at the capability-detection step below by loading the schema with `ToolSearch("select:SendMessage")` before you decide - a successful load is confirmation that team mode is reachable. (This build forms a **single implicit team**: there is no `TeamCreate`. You spawn named background `Agent` teammates and they join automatically - so `SendMessage` is the one capability that gates team mode.)
+**Deferred-tool caveat (the silent-fallback trap).** With the flag enabled, newer Claude Code builds do not list `SendMessage` in your live tool set - they defer it behind `ToolSearch`, surfacing only its name in a system-reminder. If you decide between team and phased mode by glancing at your visible tools, you will wrongly conclude team mode is unavailable and degrade to phased with no error. Resolve it at the capability-detection step below by loading the schema with `ToolSearch("select:SendMessage")` before you decide - a successful load is confirmation that team mode is reachable. (This build forms a **single implicit team**: you spawn named background `Agent` teammates and they join automatically, so `SendMessage` is the one capability that gates team mode.)
 
 **Why enable team mode anyway:** persistent professional-lens agents talking to each other across phases produce noticeably deeper synthesis - disagreements get rebutted in real time, edge cases surface from cross-talk, and the verdict feels like real deliberation rather than serially-summarised opinions. Worth it for decisions where being wrong costs 100× more than the analysis: architecture choices, irreversible migrations, hiring calls, contractual commitments.
 
@@ -45,7 +45,7 @@ Without the flag, `/huddle` still runs multi-perspective deliberations via phase
 <!-- chat-skip:end -->
 
 <!-- chat-replace:capability-detection -->
-**Tell the user which mode you're in** before you start, but probe for the team capability first - do not treat "not in my visible tool list" as "unavailable". Newer Claude Code builds defer `SendMessage` behind `ToolSearch`: when the flag is enabled it is listed only by name in a system-reminder, not as a directly-callable tool, so a naive availability check false-negatives and silently drops you into phased mode. If it is not already live, run `ToolSearch("select:SendMessage")` to load its schema and treat a successful load as confirmation. (Team formation needs no separate `TeamCreate` - this build uses a single implicit team that named background `Agent` teammates join on spawn; `SendMessage` is what gates the cross-talk.) If it loads (or is already callable) and team size ≥ 2, announce team mode - one line, e.g. "Running in team mode (3 professional lenses, 5 phases - persistent agents)." Announce phased sub-agent mode only if the probe genuinely fails to surface it, e.g. "Running in phased sub-agent mode (3 lenses, 5 phases)."
+**Tell the user which mode you're in** before you start, but probe for the team capability first - do not treat "not in my visible tool list" as "unavailable". Newer Claude Code builds defer `SendMessage` behind `ToolSearch`: when the flag is enabled it is listed only by name in a system-reminder, not as a directly-callable tool, so a naive availability check false-negatives and silently drops you into phased mode. If it is not already live, run `ToolSearch("select:SendMessage")` to load its schema and treat a successful load as confirmation. (This build uses a single implicit team that named background `Agent` teammates join on spawn; `SendMessage` is what gates the cross-talk.) If it loads (or is already callable) and team size ≥ 2, announce team mode - one line, e.g. "Running in team mode (3 professional lenses, 5 phases - persistent agents)." Announce phased sub-agent mode only if the probe genuinely fails to surface it, e.g. "Running in phased sub-agent mode (3 lenses, 5 phases)."
 
 ## No Arguments Behavior
 
@@ -142,7 +142,7 @@ For team modes (size 2+) with the flag enabled, continue to Step 2.
 <!-- chat-skip:start -->
 ### Step 2: Form the Implicit Team
 
-This build forms a **single implicit team** - there is no `TeamCreate` call. The team comes into being the moment you spawn named background agents (Step 3): each `Agent(name: ..., run_in_background: true)` joins the session's one implicit team automatically and becomes addressable by name via `SendMessage`. There is nothing to create here; proceed to Step 3.
+This build forms a **single implicit team**: the team comes into being the moment you spawn named background agents (Step 3) - each `Agent(name: ..., run_in_background: true)` joins the session's one implicit team automatically and becomes addressable by name via `SendMessage`. Proceed to Step 3.
 <!-- chat-skip:end -->
 
 <!-- chat-skip:start -->
@@ -324,7 +324,7 @@ After delivering the verdict, release any teammate still running. A background t
 SendMessage(to: "<member-name>", message: { type: "shutdown_request", reason: "Analysis complete" })
 ```
 
-The implicit team has no separate team object to tear down - there is no `TeamDelete` step and nothing persists to block a future huddle. Once every teammate has reported or acknowledged shutdown, the huddle is complete.
+Once every teammate has reported or acknowledged shutdown, the huddle is complete - nothing persists to block a future one.
 
 **Interim behaviour (CC 2.1.178+) - do not block on a structured approval.** Since the team→subagent merge, a background subagent cannot send a structured `shutdown_response`; it rejects the request with "Structured team-protocol messages ... cannot be sent by a background subagent. Send a plain text message instead." So send `shutdown_request` **once**, treat the teammate's plain-text acknowledgement as the completion signal, and ignore any subsequent `idle_notification`s rather than re-sending or waiting on an approval that never arrives (`TaskStop` / `TaskList` cannot reach background teammates either; they reap when the session exits). Restore a real lead-side approval-wait here when anthropics/claude-code#68721 and anthropics/claude-code#60199 land.
 <!-- chat-skip:end -->

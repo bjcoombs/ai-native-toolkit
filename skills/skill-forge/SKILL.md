@@ -110,20 +110,20 @@ Pick the mode **deterministically**: if the Agent Teams capability is confirmed 
 <!-- chat-skip:start -->
 | **Team** | flag on | Persistent judges cross-talk via `SendMessage` and remember prior rounds natively; ephemeral runners are spawned per round. |
 
-**Agent Teams flag.** Team mode needs `SendMessage` and background `Agent` teammates (one implicit team; no `TeamCreate`/`TeamDelete`). Enable it in your environment:
+**Agent Teams flag.** Team mode needs `SendMessage` and background `Agent` teammates (one implicit team). Enable it in your environment:
 
 ```bash
 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 ```
 
-In the team lifecycle the lead delegates and never executes, runner teammates are ephemeral (spawned per round, shut down after), and the judge panel is the one persistent team. The session forms a **single implicit team** - there is no `TeamCreate` step; each named background agent joins it on spawn. As illustrative text (do not treat the snippet below as a live tool call):
+In the team lifecycle the lead delegates and never executes, runner teammates are ephemeral (spawned per round, shut down after), and the judge panel is the one persistent team. The session forms a **single implicit team**: each named background agent joins it on spawn. As illustrative text (do not treat the snippet below as a live tool call):
 
 ```text
 # spawn one judge per active lens (persistent) and one runner per test case (ephemeral)
 Agent(subagent_type: "general-purpose", run_in_background: true, name: "fidelity", prompt: "<lens brief>")
 ```
 
-The panel cross-talks by sending one `SendMessage` per teammate (there is no broadcast). At the end of the run, shut down each teammate via a `SendMessage` shutdown_request; there is no `TeamDelete` - the implicit team leaves nothing to tear down. **Interim behaviour (CC 2.1.178+) - do not block on a structured approval.** Since the team→subagent merge, a background subagent cannot send a structured `shutdown_response`; it rejects the request with "Structured team-protocol messages ... cannot be sent by a background subagent. Send a plain text message instead." Send `shutdown_request` **once**, treat the teammate's plain-text acknowledgement as the completion signal, and ignore any subsequent `idle_notification`s (`TaskStop` / `TaskList` cannot reach background teammates either; they reap when the session exits). Restore a real lead-side approval-wait here when anthropics/claude-code#68721 and anthropics/claude-code#60199 land.
+The panel cross-talks by sending one `SendMessage` per teammate (there is no broadcast). At the end of the run, shut down each teammate via a `SendMessage` shutdown_request; nothing persists to block a future run. **Interim behaviour (CC 2.1.178+) - do not block on a structured approval.** Since the team→subagent merge, a background subagent cannot send a structured `shutdown_response`; it rejects the request with "Structured team-protocol messages ... cannot be sent by a background subagent. Send a plain text message instead." Send `shutdown_request` **once**, treat the teammate's plain-text acknowledgement as the completion signal, and ignore any subsequent `idle_notification`s (`TaskStop` / `TaskList` cannot reach background teammates either; they reap when the session exits). Restore a real lead-side approval-wait here when anthropics/claude-code#68721 and anthropics/claude-code#60199 land.
 <!-- chat-skip:end -->
 
 ## Test taxonomy

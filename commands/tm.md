@@ -483,7 +483,7 @@ jq '."<tag>".tasks[] | {id, title: .title[0:50], status, dependencies, complexit
 
 ### Step 2: Form Team and Initialize Tracking
 
-This build uses a **single implicit team** - there is no `TeamCreate` step. The team forms as you spawn named background teammates: each `Agent(name: "task-<id>", run_in_background: true)` joins the session's implicit team and is addressable via `SendMessage(to: "task-<id>")`. Proceed straight to tracking.
+This build uses a **single implicit team**: the team forms as you spawn named background teammates - each `Agent(name: "task-<id>", run_in_background: true)` joins the session's implicit team and is addressable via `SendMessage(to: "task-<id>")`. Proceed straight to tracking.
 
 A session has exactly one implicit team and this session is its permanent lead, so this marathon owns it: don't run a second team-mode skill (another marathon, a `/huddle`) in the same session - start it in a separate terminal/worktree, which gets its own isolated team. For two concurrent marathons, pass `--tag` on every Task Master call (or use the MCP tools) so the global tag selection doesn't drift between sessions.
 
@@ -811,7 +811,7 @@ The lead operates as a **tech lead running a sprint** - not a task router.
 
 ### Crash Recovery
 
-If the session crashes, background teammates live only as long as the session. The team config directory (`~/.claude/teams/session-<id>/`, named from the session ID - **not** the tag) is removed automatically when the session exits, and the task-list directory (`~/.claude/tasks/session-<id>/`) is intentionally kept so a resumed session recovers its tasks. There is no per-tag team directory to force-remove and no `TeamDelete` to call - the state that actually carries a marathon across a crash is the worktree and its `pr-tracking.json`, so recovery is just reconciliation:
+If the session crashes, background teammates live only as long as the session. The team config directory (`~/.claude/teams/session-<id>/`, named from the session ID - **not** the tag) is removed automatically when the session exits, and the task-list directory (`~/.claude/tasks/session-<id>/`) is intentionally kept so a resumed session recovers its tasks. There is no per-tag team directory to force-remove - the state that actually carries a marathon across a crash is the worktree and its `pr-tracking.json`, so recovery is just reconciliation:
 
 ```bash
 # 1. Check worktrees for uncommitted work
@@ -826,7 +826,7 @@ Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`. If a back
 ### Step 6: Completion and Retrospective
 
 1. Send `shutdown_request` to each remaining teammate **once**. **Interim behaviour (CC 2.1.178+) - do not block on a structured approval.** Since the team→subagent merge, a background subagent cannot send a structured `shutdown_response`; it rejects the request with "Structured team-protocol messages ... cannot be sent by a background subagent. Send a plain text message instead." Treat the teammate's plain-text acknowledgement (or its already-exited state) as the completion signal, and ignore any subsequent `idle_notification`s rather than re-sending or waiting (`TaskStop` / `TaskList` cannot reach background teammates either). Restore a real lead-side approval-wait here when anthropics/claude-code#68721 and anthropics/claude-code#60199 land.
-2. The implicit team has no `TeamDelete` - once every teammate has acknowledged shutdown or already exited, the team is gone. Background teammates reap when the session exits; if a stale one lingers, verify its pane/process is dead. Nothing persists to block a future marathon.
+2. Once every teammate has acknowledged shutdown or already exited, the team is gone - background teammates reap when the session exits. If a stale one lingers, verify its pane/process is dead. Nothing persists to block a future marathon.
 3. **PRD delivery check** - re-read the original PRD/issue and its success criteria. Cross-reference against merged PRs. Report:
    - Criteria met (with PR evidence)
    - Criteria not met or partially met (flag for user)
