@@ -320,7 +320,7 @@ After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. 
 
 After delivering the verdict, release any teammate still running. A background teammate that has finished its last phase and reported back has already exited and needs no teardown. For any still working, send one shutdown request each:
 
-```
+```text
 SendMessage(to: "<member-name>", message: { type: "shutdown_request", reason: "Analysis complete" })
 ```
 
