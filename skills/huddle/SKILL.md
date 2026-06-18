@@ -318,13 +318,15 @@ After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. 
 <!-- chat-skip:start -->
 ### Step 6: Wind Down the Team
 
-After delivering the verdict, release any teammate still running. A background teammate that has finished its last phase and reported back has already exited and needs no teardown. For any still working, send one shutdown request each and await approval:
+After delivering the verdict, release any teammate still running. A background teammate that has finished its last phase and reported back has already exited and needs no teardown. For any still working, send one shutdown request each:
 
 ```
 SendMessage(to: "<member-name>", message: { type: "shutdown_request", reason: "Analysis complete" })
 ```
 
-The implicit team has no separate team object to tear down - there is no `TeamDelete` step and nothing persists to block a future huddle. Once every teammate has reported or approved shutdown, the huddle is complete.
+The implicit team has no separate team object to tear down - there is no `TeamDelete` step and nothing persists to block a future huddle. Once every teammate has reported or acknowledged shutdown, the huddle is complete.
+
+**Interim behaviour (CC 2.1.178+) - do not block on a structured approval.** Since the team→subagent merge, a background subagent cannot send a structured `shutdown_response`; it rejects the request with "Structured team-protocol messages ... cannot be sent by a background subagent. Send a plain text message instead." So send `shutdown_request` **once**, treat the teammate's plain-text acknowledgement as the completion signal, and ignore any subsequent `idle_notification`s rather than re-sending or waiting on an approval that never arrives (`TaskStop` / `TaskList` cannot reach background teammates either; they reap when the session exits). Restore a real lead-side approval-wait here when anthropics/claude-code#68721 and anthropics/claude-code#60199 land.
 <!-- chat-skip:end -->
 
 ## Facilitation Principles
