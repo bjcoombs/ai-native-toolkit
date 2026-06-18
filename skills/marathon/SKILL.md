@@ -134,7 +134,7 @@ Enumerate work units via the adapter's **enumerate** operation.
 
 ## Step 2: Team + Tracking
 
-This build uses a **single implicit team** - there is no `TeamCreate` step. The team forms as you spawn named background teammates (next): each `Agent(name: "task-<id>", run_in_background: true)` joins the session's implicit team and is addressable via `SendMessage(to: "task-<id>")`. Proceed straight to tracking.
+This build uses a **single implicit team**: the team forms as you spawn named background teammates (next) - each `Agent(name: "task-<id>", run_in_background: true)` joins the session's implicit team and is addressable via `SendMessage(to: "task-<id>")`. Proceed straight to tracking.
 
 **PR tracking** — persisted in worktree dir (survives crashes and team cleanup):
 
@@ -399,7 +399,7 @@ strength of the earlier REVIEW_CLEAR alone.
 
 ## Crash Recovery
 
-If the session crashes, background teammates live only as long as the session. The team config directory (`~/.claude/teams/session-<id>/`, named from the session ID - **not** the tag) is removed automatically when the session exits, and the task-list directory (`~/.claude/tasks/session-<id>/`) is intentionally kept so a resumed session recovers its tasks. There is no per-tag team directory to force-remove and no `TeamDelete` to call - the state that actually carries a marathon across a crash is the worktree and its `pr-tracking.json`, so recovery is just reconciliation:
+If the session crashes, background teammates live only as long as the session. The team config directory (`~/.claude/teams/session-<id>/`, named from the session ID - **not** the tag) is removed automatically when the session exits, and the task-list directory (`~/.claude/tasks/session-<id>/`) is intentionally kept so a resumed session recovers its tasks. There is no per-tag team directory to force-remove - the state that actually carries a marathon across a crash is the worktree and its `pr-tracking.json`, so recovery is just reconciliation:
 
 ```bash
 # 1. Check worktrees for uncommitted work
@@ -446,16 +446,15 @@ The lead operates as a **tech lead running a sprint** — not a task router.
 
 ## Completion + Retrospective
 
-1. Send `shutdown_request` to each remaining teammate
-2. Wait for all shutdown approvals
-3. The implicit team has no `TeamDelete` - once every teammate has approved shutdown or already exited, the team is gone. If a stale background teammate lingers, verify its pane/process is dead; nothing persists to block a future marathon.
-4. **PRD delivery check** — Re-read the original work units' acceptance criteria (PRD, issue bodies, or task details) and cross-reference against merged PRs. Report:
+1. Send `shutdown_request` to each remaining teammate **once**. **Interim behaviour (CC 2.1.178+) - do not block on a structured approval.** Since the team→subagent merge, a background subagent cannot send a structured `shutdown_response`; it rejects the request with "Structured team-protocol messages ... cannot be sent by a background subagent. Send a plain text message instead." Treat the teammate's plain-text acknowledgement (or its already-exited state) as the completion signal, and ignore any subsequent `idle_notification`s rather than re-sending or waiting (`TaskStop` / `TaskList` cannot reach background teammates either). Restore a real lead-side approval-wait here when anthropics/claude-code#68721 and anthropics/claude-code#60199 land.
+2. Once every teammate has acknowledged shutdown or already exited, the team is gone - background teammates reap when the session exits. If a stale one lingers, verify its pane/process is dead. Nothing persists to block a future marathon.
+3. **PRD delivery check** — Re-read the original work units' acceptance criteria (PRD, issue bodies, or task details) and cross-reference against merged PRs. Report:
    - Criteria met (with PR evidence)
    - Criteria not met or partially met (flag for user)
    - Scope that was delivered beyond the original acceptance criteria (emergent work)
-5. Read the retro log (path from Marathon Configuration `$RETRO_LOG`, or skip if not configured)
-6. Run retrospective using the structured format below
-7. Append this marathon to the retro log (Marathon History + update Template Changes validation)
+4. Read the retro log (path from Marathon Configuration `$RETRO_LOG`, or skip if not configured)
+5. Run retrospective using the structured format below
+6. Append this marathon to the retro log (Marathon History + update Template Changes validation)
 
 ```
 ## Marathon Complete: <tag>
