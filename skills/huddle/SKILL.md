@@ -180,7 +180,7 @@ You are a [ROLE] with deep expertise in [DOMAIN]. This identity persists across 
 
 ## Your Teammates
 
-[ROSTER — the chair lists every other member's name slug here, e.g. "security-eng, product-mgr, sre".] You share findings by sending one `SendMessage` per teammate name; there is no broadcast. If this roster is missing, message the chair (`SendMessage(to: "main", ...)`) and ask for the peer list.
+[ROSTER — the chair lists every other member's name slug here, e.g. "security-eng, product-mgr, sre".] You share findings by sending one `SendMessage` per teammate name; there is no broadcast. If this roster is missing, do NOT address the chair as `"main"` — for a background teammate `"main"` resolves to your own sub-session and is rejected ("you are the main conversation"), which can make you silently give up on reporting. Reach the chair as `SendMessage(to: "team-lead", ...)` — the `teammate_id` under which your spawn instructions arrived — and ask for the peer list. If you would rather self-discover, read the team config at `~/.claude/teams/<session-team>/config.json` and take the other `members[].name` entries.
 
 ## IMMEDIATE FIRST TASK
 
