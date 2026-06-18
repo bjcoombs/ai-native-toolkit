@@ -200,7 +200,7 @@ Blue Hat (the team lead) will announce each new phase. When announced:
 
 1. **Spawn the hat agent** with a prompt shaped by YOUR professional lens
 2. **Share findings** with each teammate individually — one `SendMessage` per name on your roster (no broadcast)
-3. **Discuss with peers** — 2-3 substantive messages max per phase
+3. **Engage the tension Blue raises** — Blue will name a specific disagreement and ask you to respond to a specific peer. Answer it *from your lens*: rebut, qualify, or build on their point with NEW reasoning your discipline supplies. 2-3 substantive messages max per phase.
 4. **Follow Blue's direction** — when Blue says move on, move on
 
 ## Communication Style
@@ -209,6 +209,7 @@ Blue Hat (the team lead) will announce each new phase. When announced:
 - Reference specific findings from your hat agent investigation.
 - Challenge other members respectfully when your expertise says otherwise.
 - Build on others' observations — "Adding to what [member] said..."
+- **Stay in your lens — don't merge into the group voice.** Argue *from* your named profession. When you agree, say *why* from your expertise, or what your discipline would still flag; never collapse into a generic "I agree." The friction your specialty adds is your entire value here.
 - Keep exchanges focused — 2-3 substantive messages per phase, not endless back-and-forth.
 - **Never re-broadcast findings you already shared.** If Blue or a peer asks you to elaborate, add NEW detail or nuance.
 - When Blue announces a new phase, commit fully to the new hat. Don't continue cross-discussing the prior phase.
@@ -249,31 +250,31 @@ SendMessage(
 
 **Include specific questions and prior-phase context in every announcement.** Vague prompts like "share your gut reactions" produce idle members. Concrete prompts like "the dunning race condition and the demo conflict are the two biggest risks - what else?" produce immediate action.
 
-**4b. Monitor the discussion**
+**4b. Run the deliberation loop**
 
-As messages come in from team members:
-- Let them discuss peer-to-peer - don't relay messages
-- Intervene if someone drifts off the current hat's focus
-- If a member goes idle without sharing findings, send ONE direct nudge with an explicit agent spawn prompt. If they don't respond after the nudge, move on - don't block the meeting on one member.
-- Note consensus and dissent internally
-- Extend the phase if dialogue is producing genuine insight
+A phase is a facilitated discussion, not a round of parallel reports. Run this loop before you advance - it is what makes sequential hats worth the cost:
 
-**4c. Move to next phase**
+1. **Collect first findings.** Wait for findings from at least N-1 members (e.g., 2 of 3); don't block on one idle member. If a member goes idle without sharing, send ONE direct nudge with an explicit agent spawn prompt, then proceed without them.
+2. **Seed an exchange - required before you may advance.** Reading the findings, pick the single sharpest disagreement between two lenses and prompt both members by name to respond to each other: "security-eng flagged X; product-mgr, your lens values Y, which conflicts - respond directly to security-eng." This forces a real rebuttal/build-on instead of parallel monologues. A phase must contain at least one such exchange before it closes.
+3. **Seed more while it pays.** If the discussion is producing genuine insight and other live disagreements remain, seed them too - your judgment. Stop seeding when no new substantive points surface.
+4. **Keep it on the hat, and keep the lenses apart.** Redirect anyone drifting off the current hat or rehashing a prior phase (one message; enforce each hat's "Not My Job" lane). Watch for **voice-collapse** - members agreeing without lens-specific reasoning - and re-anchor them: "That's a security framing - product-mgr, what does YOUR lens say?" Distinct professional voices held apart is the goal; homogenised consensus is a failure mode dressed as success. Don't relay messages - members talk directly.
 
-Move on when you have findings from at least N-1 members (e.g., 2 of 3). Do not wait indefinitely for every member. Announce the transition to each member individually - one `SendMessage` per member name (there is no all-recipients broadcast):
+**4c. Converge-or-cap, then advance**
+
+Close the phase when **either** the discussion has converged (no new substantive points; consensus and the specific dissent are both clear) **or** each engaged member has had ~2 exchange rounds (the 2-3-message cap). Whichever comes first - this bounds cost and can't deadlock on an over-talker. Then announce the transition to each member individually - one `SendMessage` per member name (there is no all-recipients broadcast) - leading with a synthesis of what just happened:
 
 ```
 for each <member-name> in your team:
 SendMessage(
   to: "<member-name>",
-  message: "[1-2 sentence summary of key takeaway from this phase]. Moving to [NEXT HAT] phase.
+  message: "[1-2 sentence synthesis: what the team converged on, and the specific dissent we carry forward]. Moving to [NEXT HAT] phase.
 
   [Specific framing questions informed by what was just surfaced]",
   summary: "Phase summary, moving to [next hat]"
 )
 ```
 
-Carry forward key tensions or open questions into the framing of the next phase.
+The synthesis is the artifact the pause produces - a running consensus/dissent ledger, not just elapsed time. Carry the live tensions into the framing of the next phase.
 <!-- chat-skip:end -->
 
 ### Step 5: Deliver the Verdict
