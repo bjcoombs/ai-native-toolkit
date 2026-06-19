@@ -11,5 +11,6 @@
   "skills/assess/scripts/lib/agent_instructions_grader.py": "2026-05-31",
   "skills/assess/scripts/lib/keyhole_signals.py": "2026-06-01",
   "skills/assess/scripts/lib/change_coupling.py": "2026-06-01",
-  "scripts/transform_skill.py": "2026-06-04"
+  "scripts/transform_skill.py": "2026-06-04",
+  "skills/assess/tests/test_keyhole_signals.py": "2026-06-19"
 }

@@ -1,112 +1,142 @@
 {
-  "plugin_version": "1.35.0",
-  "files_scored": 72,
+  "plugin_version": "1.46.2",
+  "files_scored": 92,
   "scoring_coverage": {
-    "lizard": 70,
-    "scc": 2
+    "lizard": 89,
+    "scc": 3
   },
   "churn_window": "commits (last 12mo)",
+  "churn_degenerate": false,
   "loc": {
-    "p50": 152.0,
-    "p95": 490.8,
-    "max": 790.0,
-    "total": 12961
+    "p50": 156.5,
+    "p95": 565.2,
+    "max": 1015.0,
+    "total": 17885
+  },
+  "est_tokens": {
+    "p50": 2761.0,
+    "p95": 9112.400000000001,
+    "max": 15969.0,
+    "total": 306840,
+    "budget": {
+      "total": 306840,
+      "budget": 200000,
+      "budget_basis": "estimate (~4 chars/token, documented default)",
+      "chars_per_token": 4,
+      "files_over_budget": 0,
+      "subtrees_over_budget": 1,
+      "over_budget_subtrees": [
+        {
+          "path": "skills",
+          "est_tokens": 278285
+        }
+      ]
+    }
   },
   "ccn": {
     "basis": "file-aggregate",
     "p50": 31.0,
-    "p95": 112.05000000000003,
-    "max": 169.0
+    "p95": 115.75000000000004,
+    "max": 194.0
   },
   "fn_ccn": {
     "basis": "per-function",
     "source": "lizard-only",
-    "function_count": 1040,
+    "function_count": 1461,
     "p50": 1.0,
-    "p95": 9.0,
-    "max": 40.0
+    "p95": 8.0,
+    "max": 43.0
   },
   "churn": {
     "p50": 2.0,
-    "p95": 11.900000000000006,
-    "max": 17.0
+    "p95": 11.800000000000011,
+    "max": 26.0
   },
   "top_hotspots": [
     {
       "path": "skills/assess/scripts/assess_core.py",
-      "loc": 499,
-      "ccn": 108.0,
+      "loc": 635,
+      "est_tokens": 12313,
+      "ccn": 137.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 40.0,
-      "commits": 16,
+      "max_fn_ccn": 43.0,
+      "commits": 26,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 489,
-      "ccn": 117.0,
+      "loc": 558,
+      "est_tokens": 10414,
+      "ccn": 133.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 19.0,
-      "commits": 11,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/lib/doc_graph.py",
-      "loc": 514,
-      "ccn": 169.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 23.0,
-      "commits": 7,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/lib/doc_staleness.py",
-      "loc": 245,
-      "ccn": 69.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 26.0,
-      "commits": 7,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/doc-graph-svg.py",
-      "loc": 342,
-      "ccn": 88.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 36.0,
-      "commits": 3,
+      "max_fn_ccn": 22.0,
+      "commits": 14,
       "source": "lizard"
     },
     {
       "path": "skills/assess/tests/test_assess_core.py",
-      "loc": 790,
-      "ccn": 80.0,
+      "loc": 1015,
+      "est_tokens": 15969,
+      "ccn": 109.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 6.0,
-      "commits": 13,
+      "commits": 21,
       "source": "lizard"
     },
     {
-      "path": "skills/assess/scripts/lib/change_coupling.py",
-      "loc": 237,
-      "ccn": 84.0,
+      "path": "skills/assess/scripts/lib/doc_graph.py",
+      "loc": 592,
+      "est_tokens": 9229,
+      "ccn": 194.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 33.0,
-      "commits": 3,
+      "max_fn_ccn": 23.0,
+      "commits": 9,
       "source": "lizard"
     },
     {
-      "path": "scripts/transform_skill.py",
-      "loc": 165,
-      "ccn": 44.0,
+      "path": "skills/assess/scripts/lib/keyhole_signals.py",
+      "loc": 609,
+      "est_tokens": 11916,
+      "ccn": 166.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 19.0,
+      "max_fn_ccn": 15.0,
+      "commits": 9,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/lib/doc_staleness.py",
+      "loc": 288,
+      "est_tokens": 4706,
+      "ccn": 77.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 31.0,
+      "commits": 9,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/doc-graph-svg.py",
+      "loc": 360,
+      "est_tokens": 5811,
+      "ccn": 88.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 36.0,
+      "commits": 4,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_signals.py",
+      "loc": 574,
+      "est_tokens": 8883,
+      "ccn": 105.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 8.0,
       "commits": 6,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/liveness_scan.py",
       "loc": 412,
+      "est_tokens": 6709,
       "ccn": 107.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 14.0,
@@ -114,37 +144,61 @@
       "source": "lizard"
     },
     {
-      "path": "skills/assess/scripts/lib/agent_instructions_grader.py",
-      "loc": 260,
-      "ccn": 70.0,
+      "path": "skills/assess/scripts/lib/change_coupling.py",
+      "loc": 237,
+      "est_tokens": 4345,
+      "ccn": 84.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 14.0,
-      "commits": 4,
+      "max_fn_ccn": 33.0,
+      "commits": 3,
       "source": "lizard"
     }
   ],
   "top_complex": [
     {
       "path": "skills/assess/scripts/lib/doc_graph.py",
-      "loc": 514,
-      "ccn": 169.0,
+      "loc": 592,
+      "est_tokens": 9229,
+      "ccn": 194.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 23.0,
-      "commits": 7,
+      "commits": 9,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/keyhole_signals.py",
-      "loc": 493,
-      "ccn": 130.0,
+      "loc": 609,
+      "est_tokens": 11916,
+      "ccn": 166.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 11.0,
-      "commits": 3,
+      "max_fn_ccn": 15.0,
+      "commits": 9,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/assess_core.py",
+      "loc": 635,
+      "est_tokens": 12313,
+      "ccn": 137.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 43.0,
+      "commits": 26,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/complexity-treemap.py",
+      "loc": 558,
+      "est_tokens": 10414,
+      "ccn": 133.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 22.0,
+      "commits": 14,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/test_pressure/heuristics.py",
       "loc": 298,
+      "est_tokens": 4533,
       "ccn": 124.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 14.0,
@@ -152,26 +206,19 @@
       "source": "lizard"
     },
     {
-      "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 489,
-      "ccn": 117.0,
+      "path": "skills/assess/tests/test_assess_core.py",
+      "loc": 1015,
+      "est_tokens": 15969,
+      "ccn": 109.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 19.0,
-      "commits": 11,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/assess_core.py",
-      "loc": 499,
-      "ccn": 108.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 40.0,
-      "commits": 16,
+      "max_fn_ccn": 6.0,
+      "commits": 21,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/liveness_scan.py",
       "loc": 412,
+      "est_tokens": 6709,
       "ccn": 107.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 14.0,
@@ -179,91 +226,121 @@
       "source": "lizard"
     },
     {
-      "path": "scripts/tests/test_integration.py",
-      "loc": 245,
-      "ccn": 89.0,
+      "path": "skills/assess/tests/test_keyhole_signals.py",
+      "loc": 574,
+      "est_tokens": 8883,
+      "ccn": 105.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 3.0,
-      "commits": 10,
+      "max_fn_ccn": 8.0,
+      "commits": 6,
       "source": "lizard"
     },
     {
-      "path": "skills/assess/scripts/doc-graph-svg.py",
+      "path": "skills/assess/scripts/lib/structure_drift.py",
       "loc": 342,
-      "ccn": 88.0,
+      "est_tokens": 7566,
+      "ccn": 90.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 36.0,
-      "commits": 3,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/lib/structure_graph.py",
-      "loc": 300,
-      "ccn": 86.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 20.0,
+      "max_fn_ccn": 8.0,
       "commits": 2,
       "source": "lizard"
     },
     {
-      "path": "skills/assess/scripts/lib/change_coupling.py",
-      "loc": 237,
-      "ccn": 84.0,
+      "path": "scripts/tests/test_integration.py",
+      "loc": 245,
+      "est_tokens": 4038,
+      "ccn": 89.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 33.0,
-      "commits": 3,
+      "max_fn_ccn": 3.0,
+      "commits": 10,
       "source": "lizard"
     }
   ],
   "top_large": [
     {
       "path": "skills/assess/tests/test_assess_core.py",
-      "loc": 790,
-      "ccn": 80.0,
+      "loc": 1015,
+      "est_tokens": 15969,
+      "ccn": 109.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 6.0,
-      "commits": 13,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/lib/doc_graph.py",
-      "loc": 514,
-      "ccn": 169.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 23.0,
-      "commits": 7,
+      "commits": 21,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/assess_core.py",
-      "loc": 499,
-      "ccn": 108.0,
+      "loc": 635,
+      "est_tokens": 12313,
+      "ccn": 137.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 40.0,
-      "commits": 16,
+      "max_fn_ccn": 43.0,
+      "commits": 26,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/keyhole_signals.py",
-      "loc": 493,
-      "ccn": 130.0,
+      "loc": 609,
+      "est_tokens": 11916,
+      "ccn": 166.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 11.0,
-      "commits": 3,
+      "max_fn_ccn": 15.0,
+      "commits": 9,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/lib/doc_graph.py",
+      "loc": 592,
+      "est_tokens": 9229,
+      "ccn": 194.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 23.0,
+      "commits": 9,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_signals.py",
+      "loc": 574,
+      "est_tokens": 8883,
+      "ccn": 105.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 8.0,
+      "commits": 6,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 489,
-      "ccn": 117.0,
+      "loc": 558,
+      "est_tokens": 10414,
+      "ccn": 133.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 19.0,
-      "commits": 11,
+      "max_fn_ccn": 22.0,
+      "commits": 14,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/tests/test_complexity_treemap.py",
+      "loc": 479,
+      "est_tokens": 7834,
+      "ccn": 57.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 3.0,
+      "commits": 8,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/tests/test_structure_drift.py",
+      "loc": 467,
+      "est_tokens": 9017,
+      "ccn": 71.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 6.0,
+      "commits": 3,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/liveness_scan.py",
       "loc": 412,
+      "est_tokens": 6709,
       "ccn": 107.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 14.0,
@@ -273,36 +350,10 @@
     {
       "path": "skills/assess/tests/test_test_pressure.py",
       "loc": 384,
+      "est_tokens": 6161,
       "ccn": 79.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 4.0,
-      "commits": 3,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/tests/test_complexity_treemap.py",
-      "loc": 368,
-      "ccn": 42.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 3.0,
-      "commits": 6,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/tests/test_keyhole_signals.py",
-      "loc": 357,
-      "ccn": 64.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 6.0,
-      "commits": 2,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/doc-graph-svg.py",
-      "loc": 342,
-      "ccn": 88.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 36.0,
       "commits": 3,
       "source": "lizard"
     }

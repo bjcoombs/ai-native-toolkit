@@ -44,3 +44,14 @@
 [Full report](./assess-report.md)
 
 ---
+## 2026-06-19 (v1.46.2)
+
+- **Files scored:** 92
+- **AI Readiness:** 8.0 / 8 (AI-Native (Optimized))
+- **Instructions grade:** A
+- **Hotspot transitions:** 2 graduated, 5 regressed, 2 new, 3 persistent
+- **Top action:** Refactor down assess_core.py (only grows: +1089 net, ~7% deletion) behind its existing tests, then action the stale promissory marker at line 680
+
+[Full report](./assess-report.md)
+
+---
