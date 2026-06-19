@@ -52,6 +52,29 @@ The hotspots are exactly the deterministic core of `/assess` itself - the most-c
 
 Size encodes lines of code, colour encodes cyclomatic complexity (dark red = high), saturation encodes recent git churn (vivid = active). Vivid red blocks are the migration risk.
 
+No hatching visible - mutation analysis was not run. The hatching would mark covered-but-unpinned code (tests that execute without constraining). Run `/assess` and accept the mutation offer to enable it.
+
+#### Where to focus testing
+
+Coverage data: none found - test signals are heuristic-only.
+
+The cheap, always-on read of which risky files most need test work. No coverage report exists for this repo, so every covered/uncovered call is unknown rather than guessed - each risky file is surfaced for test work, not silently blessed as clean.
+
+| File | Risk | Test Signal | Suggested Action |
+|------|------|-------------|------------------|
+| `skills/assess/scripts/assess_core.py` | High | Unknown (no coverage) | Add tests |
+| `skills/assess/scripts/lib/doc_graph.py` | High | Unknown (no coverage) | Add tests |
+| `skills/assess/scripts/complexity-treemap.py` | High | Unknown (no coverage) | Add tests |
+| `skills/assess/tests/test_assess_core.py` | Medium | Unknown (no coverage) | Add tests |
+| `skills/assess/scripts/lib/doc_staleness.py` | Medium | Unknown (no coverage) | Add tests |
+| `skills/assess/scripts/lib/liveness_scan.py` | Medium | Unknown (no coverage) | Add tests |
+| `skills/assess/tests/test_doc_graph.py` | Medium | Unknown (no coverage) | Add tests |
+| `skills/assess/scripts/doc-graph-svg.py` | Low | Unknown (no coverage) | Add tests |
+
+(8 of 10 focus targets shown; the full ranked list is in `run-context.json` under `.test_focus.entries`.)
+
+These are the **cheap** signals - risk band plus the absence of any coverage report. The **expensive** confirmation lives in the cross-layer findings: the `untrusted_hotspot` finding confirms which files mutation testing proved hollow, and the Layer 6 green-but-hollow row in the Lying Signals table pairs coverage against the mutation score. Both are silent on this run because mutation wasn't collected - which is the Layer 6 gap itself, and the reason every signal above reads "unknown" rather than a confirmed hollow.
+
 #### Doc navigability
 
 Of 37 docs, **11% are reachable** by following links from the entry points (`CLAUDE.md`, `README.md`); the rest sit in **35 disconnected islands** (89% orphan rate, only 2 inter-doc links total). At face value that reads alarming, but read it as **curation, not access**: this is a Claude Code *plugin* repo, and most of its "docs" are not prose articles - they are skill-trigger files (`skills/*/SKILL.md`), agent-persona prompts (`agents/*.md`), and dated planning records under `docs/superpowers/plans/`. Claude Code loads these by *trigger and convention*, not by link-traversal, so the absence of cross-links is largely by design. An agent can still `ls skills/` and open any file by path - nothing is hidden.

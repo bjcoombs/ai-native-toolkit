@@ -22,6 +22,8 @@ EXPECTED_BLOCKS = (
     "understanding",
     "runtime",
     "structure",
+    "test_focus",
+    "coverage_report",
 )
 
 
@@ -210,6 +212,75 @@ def test_golden_structure_drift_tier1_has_no_false_positive_seam() -> None:
     hc = next(f for f in ctx["derived_findings"] if f["name"] == "hidden_coupling")
     # The version-hot-file directory must never appear as a hidden-coupling seam.
     assert ".claude-plugin" not in hc["paths"]
+
+
+def test_golden_run_context_has_test_focus_and_coverage_shape() -> None:
+    """The focus-funnel blocks the report's 'Where to focus testing' table reads:
+    a ranked `test_focus` list and the `coverage_report` provenance. Pinned here
+    so a pipeline change that drops or reshapes either fails loudly."""
+    ctx = golden.load_golden_run_context()
+
+    tf = ctx["test_focus"]
+    assert tf["available"] is True
+    assert isinstance(tf["coverage_present"], bool)
+    assert tf["total_focus_targets"] == len(tf["entries"])
+    assert tf["entries"], "golden test_focus must carry entries to exercise the table"
+    for entry in tf["entries"]:
+        assert set(entry) == {
+            "path", "risk_band", "test_signal",
+            "hollow_heuristic_kinds", "suggested_action",
+        }
+        assert entry["risk_band"] in {"high", "medium", "low"}
+        assert entry["test_signal"] in {
+            "no_covering_test", "covered_but_hollow",
+            "unknown_no_coverage", "covered_clean",
+        }
+        assert entry["suggested_action"] in {
+            "add_tests", "strengthen_assertions", "none",
+        }
+
+    cov = ctx["coverage_report"]
+    assert isinstance(cov["available"], bool)
+    assert "source" in cov
+
+
+def test_report_renders_where_to_focus_testing_table() -> None:
+    """The report renders the focus read inside a fold: the section heading, the
+    File|Risk|Test Signal|Suggested Action columns, and at least one mapped row.
+    The raw `test_focus` signal values must NOT leak - they are mapped to the
+    human-readable labels."""
+    report = golden.load_golden_report()
+    surface, sep, folded = report.partition("<details>")
+    assert sep
+
+    assert "#### Where to focus testing" in folded
+    assert "| File | Risk | Test Signal | Suggested Action |" in folded
+    # The golden is a no-coverage run, so every row maps to the Unknown label.
+    assert "Unknown (no coverage)" in folded
+    assert "Add tests" in folded
+    # Raw schema values must be mapped, never rendered verbatim into the table.
+    assert "unknown_no_coverage" not in report
+    assert "add_tests" not in report
+    # The verbose section lives in a fold, never on the human surface.
+    assert "Where to focus testing" not in surface
+
+
+def test_report_always_explains_hatching() -> None:
+    """The always-present hatching explainer kills the silent-absence problem:
+    this golden is a mutation-not-run snapshot, so the report states the hatching
+    is absent and why, rather than leaving a green-but-unverified treemap to read
+    as safe."""
+    report = golden.load_golden_report()
+    assert "No hatching visible - mutation analysis was not run." in report
+    assert "accept the mutation offer to enable it." in report
+
+
+def test_report_has_coverage_provenance_line() -> None:
+    """The coverage provenance line states whether the test signals rest on a
+    real coverage report or on heuristics alone. The golden has no report, so it
+    must read 'none found'."""
+    report = golden.load_golden_report()
+    assert "Coverage data: none found - test signals are heuristic-only." in report
 
 
 def test_agent_assess_block_is_not_duplicated() -> None:
