@@ -1,30 +1,30 @@
 # Hotspot: `skills/assess/scripts/lib/doc_graph.py`
 
-_First flagged: 2026-05-31. Last seen: 2026-06-04. Status: persistent._
+_First flagged: 2026-05-31. Last seen: 2026-06-19. Status: regressed._
 
 ## Current metrics
 
 | Metric | Value |
 |--------|-------|
-| LOC | 514 |
-| Cyclomatic complexity (file max) | 169.0 |
-| Commits in churn window | 7 |
+| LOC | 592 |
+| Cyclomatic complexity (file max) | 194.0 |
+| Commits in churn window | 9 |
 | Has test file | no |
 
 ## History across runs
 
 | Run date | LOC | CCN | Commits | Status |
 |----------|-----|-----|---------|--------|
-| 2026-06-04 | 514 | 169.0 | 7 | persistent |
+| 2026-06-19 | 592 | 194.0 | 9 | regressed |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/scripts/lib/doc_graph.py`:
 
-Hotspot (persistent). 514 LOC, max cyclomatic complexity 169.0, 7 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
+Hotspot (regressed). 592 LOC, max cyclomatic complexity 194.0, 9 commits in churn window. Carries 3 stale promissory marker(s) (suppression; oldest survived 8 edits to this file). (Briefing refined by LLM via assess_finalize - see Suggested actions below.) Growth profile: monotonic (+907 LOC, 0 net reductions over 9 commits in 0 months).
 
 ## Suggested actions
 
-- Add a coverage floor + mutation pilot to confirm the suite pins behaviour
-- Worst function ccn 23 is fenced with # noqa: C901 - keep it annotated, don't pre-emptively split
+- Split into graph-build vs render - highest file-aggregate ccn (194), worst single function 23; it only grows and carries stale intent
+- Clear the `nx = None  # type: ignore` dead-import suppression context
 
