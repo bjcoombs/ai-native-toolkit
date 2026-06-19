@@ -71,6 +71,24 @@ SKILLS: dict[str, dict] = {
                 '--test-pressure "$REPO_ROOT/.assess/run-context.json"'
             ),
             "uv-core": 'uv run scripts/assess_core.py "$REPO_ROOT"',
+            "uv-core-mutation": (
+                'uv run scripts/assess_core.py "$REPO_ROOT" --opt-in-mutation'
+            ),
+            # The opt-in mutation pass is offered via AskUserQuestion in plugin
+            # mode (stripped here). Standalone keeps the capability as a manual
+            # step: if a mutation tool is installed and test_focus has entries,
+            # run the commands below; otherwise the cheap heuristics stand as the
+            # Layer 1 read and the report should say the deep pass was not run.
+            "mutation-offer-intro": (
+                "When `test_focus.entries` is non-empty, you can deepen the "
+                "Layer 1 read manually: install a mutation tool (`mutmut` for "
+                "Python, `stryker` for TS/JS) and run the `--test-pressure` step "
+                "manually using the commands below - the bounded mutation pass "
+                "over the focus files, then the heatmap overlay regeneration. "
+                "Without a tool, the cheap hollow-test heuristics already in "
+                "`test_pressure` stand as the Layer 1 read; note in the report "
+                "that the deep mutation pass was not run."
+            ),
             "uv-finalize": 'uv run scripts/assess_finalize.py "$REPO_ROOT"',
             "uv-emit-workflow": 'uv run scripts/assess_emit_workflow.py "$REPO_ROOT"',
             "treemap-exclude-example": (

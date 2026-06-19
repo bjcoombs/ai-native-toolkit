@@ -1456,3 +1456,133 @@ def test_structure_drift_block_builder_tier1_unavailable() -> None:
     assert block is not None
     assert block["tier_0"]["available"] is True
     assert block["tier_1"] == {"available": False}
+
+
+# ── opt-in mutation affordance (run_opt_in_mutation) ──────────────────────────
+
+def _seed_run_context(repo: Path, *, test_focus: dict) -> Path:
+    """Write a minimal run-context.json carrying a test_focus block."""
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir(parents=True, exist_ok=True)
+    ctx_path = assess_dir / "run-context.json"
+    ctx_path.write_text(json.dumps({
+        "run_date": "2026-06-19",
+        "test_focus": test_focus,
+        "test_pressure": {
+            "available": True,
+            "mutation_run": False,
+            "mutation_config_present": False,
+            "cheap_heuristics": {
+                "assertion_on_internal": [],
+                "untested_boundaries": [],
+                "duplicate_truth": [],
+            },
+        },
+    }), encoding="utf-8")
+    return ctx_path
+
+
+def test_run_opt_in_mutation_rewrites_test_pressure(tmp_path: Path, monkeypatch) -> None:
+    """An accepted mutation pass re-runs scan_test_pressure scoped to the
+    test_focus targets with opt_in=True and rewrites the test_pressure block."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    ctx_path = _seed_run_context(repo, test_focus={
+        "available": True,
+        "coverage_present": True,
+        "entries": [
+            {"path": "src/a.py", "risk_band": "high", "test_signal": "no_covering_test"},
+            {"path": "src/b.py", "risk_band": "medium", "test_signal": "covered_but_hollow"},
+        ],
+        "total_focus_targets": 2,
+    })
+
+    captured: dict = {}
+
+    def fake_scan(repo_root, hot_files=None, opt_in=False, coverage_data=None):
+        captured["hot_files"] = hot_files
+        captured["opt_in"] = opt_in
+        return {
+            "available": True,
+            "mutation_run": True,
+            "mutation_config_present": False,
+            "mutation_scope": hot_files,
+            "per_file": [{"file": "src/a.py", "survived": 3, "total": 10}],
+            "cheap_heuristics": {
+                "assertion_on_internal": [],
+                "untested_boundaries": [],
+                "duplicate_truth": [],
+            },
+        }
+
+    monkeypatch.setattr(assess_core, "scan_test_pressure", fake_scan)
+    rc = assess_core.run_opt_in_mutation(repo)
+    assert rc == 0
+    # Scoped to the focus targets, with the bounded pass enabled.
+    assert captured["opt_in"] is True
+    assert captured["hot_files"] == ["src/a.py", "src/b.py"]
+    # test_pressure block rewritten in place with the mutation results.
+    ctx = json.loads(ctx_path.read_text(encoding="utf-8"))
+    assert ctx["test_pressure"]["mutation_run"] is True
+    assert ctx["test_pressure"]["per_file"] == [
+        {"file": "src/a.py", "survived": 3, "total": 10}
+    ]
+
+
+def test_run_opt_in_mutation_no_focus_targets(tmp_path: Path, monkeypatch) -> None:
+    """Empty test_focus.entries means nothing to mutate - the scan never runs
+    and the context is left untouched."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _seed_run_context(repo, test_focus={
+        "available": True, "coverage_present": True, "entries": [],
+        "total_focus_targets": 0,
+    })
+
+    called = {"ran": False}
+
+    def fake_scan(*a, **k):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr(assess_core, "scan_test_pressure", fake_scan)
+    rc = assess_core.run_opt_in_mutation(repo)
+    assert rc == 0
+    assert called["ran"] is False
+
+
+def test_run_opt_in_mutation_missing_context(tmp_path: Path) -> None:
+    """No prior run-context.json -> non-zero return, no crash."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    rc = assess_core.run_opt_in_mutation(repo)
+    assert rc == 1
+
+
+def test_run_opt_in_mutation_degrades_on_scan_failure(tmp_path: Path, monkeypatch) -> None:
+    """A raising scan degrades to the unavailable shape rather than crashing,
+    preserving the cheap_heuristics schema so the consumer's shape is stable."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    ctx_path = _seed_run_context(repo, test_focus={
+        "available": True, "coverage_present": True,
+        "entries": [{"path": "src/a.py", "risk_band": "high",
+                     "test_signal": "no_covering_test"}],
+        "total_focus_targets": 1,
+    })
+
+    def boom(*a, **k):
+        raise RuntimeError("mutation exploded")
+
+    monkeypatch.setattr(assess_core, "scan_test_pressure", boom)
+    rc = assess_core.run_opt_in_mutation(repo)
+    assert rc == 0
+    ctx = json.loads(ctx_path.read_text(encoding="utf-8"))
+    tp = ctx["test_pressure"]
+    assert tp["available"] is False
+    assert tp["mutation_config_present"] is None
+    assert tp["cheap_heuristics"] == {
+        "assertion_on_internal": [],
+        "untested_boundaries": [],
+        "duplicate_truth": [],
+    }
