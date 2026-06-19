@@ -369,6 +369,10 @@ separately. Stdlib only, imports no orchestrator. Add fixtures + cases in
 **`test_pressure/`**
 Layer 1 write-side truth pressure. Two tiers:
 - Mutation tier: runs a mutation-testing tool (mutmut for Python) over a sample of the
-  codebase to measure whether the test suite actually catches changes.
+  codebase to measure whether the test suite actually catches changes. For mutmut the
+  run is two-step - `mutmut run` then `mutmut junitxml` - because the run's stdout lists
+  only survivors (no totals); the junitxml report carries every mutant, so per-file
+  killed/survived/total (and a real survivor density) can be derived. Falls back to the
+  survivor-only stdout parse when junitxml is absent (e.g. mutmut 3.x) or empty.
 - Cheap heuristics: test/source ratio, assertion density, and the coverage gap signal -
   fast proxies that run without a mutation tool.

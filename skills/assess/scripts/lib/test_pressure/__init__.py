@@ -53,6 +53,7 @@ from .mutation import (
     _parse_cargo_mutants,
     _parse_gremlins,
     _parse_mutmut,
+    _parse_mutmut_junitxml,
     _parse_stryker_json,
     compute_gap_signal,
     compute_survivor_density,
