@@ -19,6 +19,7 @@ from lib.test_pressure import (
     _parse_cargo_mutants,
     _parse_gremlins,
     _parse_mutmut,
+    _parse_mutmut_junitxml,
     _parse_stryker_json,
 )
 
@@ -268,6 +269,104 @@ def test_compute_gap_signal_variants() -> None:
     assert compute_gap_signal(0.9, 0.8) == "no gap"
     assert compute_gap_signal(None, 0.3) == "not assessed"
     assert compute_gap_signal(0.9, None) == "not assessed"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# TASK 2 - mutmut junitxml parser (real totals, not survivor-only)
+# ════════════════════════════════════════════════════════════════════════════
+
+def test_parse_mutmut_junitxml_per_file_totals(fixtures_dir: Path) -> None:
+    """A real mutmut junitxml fixture yields per-file killed/survived/total.
+    A <testcase> with a <failure> child is a survivor; otherwise it was killed."""
+    parsed = {p["file"]: p for p in
+              _parse_mutmut_junitxml(fixtures_dir / "mutmut-junitxml.xml")}
+    assert parsed["src/calc.py"]["killed"] == 1
+    assert parsed["src/calc.py"]["survived"] == 2
+    assert parsed["src/calc.py"]["total"] == 3
+    assert parsed["src/util.py"]["killed"] == 2
+    assert parsed["src/util.py"]["survived"] == 0
+    assert parsed["src/util.py"]["total"] == 2
+
+
+def test_parse_mutmut_junitxml_classname_fallback(tmp_path: Path) -> None:
+    """Some versions encode the path in classname (mutmut.<dotted>) instead of
+    the file attribute - derive <path>.py from it when file= is absent."""
+    xml = (
+        '<?xml version="1.0" ?>\n'
+        '<testsuites><testsuite name="mutmut">'
+        '<testcase classname="mutmut.pkg.mod" name="m1"></testcase>'
+        '<testcase classname="mutmut.pkg.mod" name="m2">'
+        '<failure message="bad_survived">x</failure></testcase>'
+        '</testsuite></testsuites>'
+    )
+    p = tmp_path / "report.xml"
+    p.write_text(xml, encoding="utf-8")
+    parsed = {row["file"]: row for row in _parse_mutmut_junitxml(p)}
+    assert parsed["pkg/mod.py"] == {
+        "file": "pkg/mod.py", "killed": 1, "survived": 1, "total": 2}
+
+
+def test_parse_mutmut_junitxml_missing_file_degrades(tmp_path: Path) -> None:
+    assert _parse_mutmut_junitxml(tmp_path / "nope.xml") == []
+
+
+def test_parse_mutmut_junitxml_malformed_degrades(tmp_path: Path) -> None:
+    p = tmp_path / "bad.xml"
+    p.write_text("not xml at all <<<", encoding="utf-8")
+    assert _parse_mutmut_junitxml(p) == []
+
+
+def test_junitxml_to_density_overall_is_non_null(fixtures_dir: Path) -> None:
+    """The whole point of the fix: junitxml carries totals, so survivor density
+    has a real overall value (unlike the survivor-only stdout parse)."""
+    per_file = _parse_mutmut_junitxml(fixtures_dir / "mutmut-junitxml.xml")
+    d = compute_survivor_density(per_file)
+    assert d["overall"] is not None
+    assert d["total_mutants"] == 5
+    assert d["total_survived"] == 2
+    assert abs(d["overall"] - 0.4) < 1e-9
+
+
+def test_run_bounded_mutation_uses_junitxml(tmp_path: Path, monkeypatch,
+                                            fixtures_dir: Path) -> None:
+    """The two-step mutmut path: `mutmut run` then `mutmut junitxml`. The junitxml
+    parse wins, so per_file carries real totals."""
+    _write(tmp_path, "app.py", "def f(): pass")
+    monkeypatch.setattr(tp.shutil, "which", lambda t: "/usr/bin/" + t)
+    xml = (fixtures_dir / "mutmut-junitxml.xml").read_text(encoding="utf-8")
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["mutmut", "junitxml"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout=xml, stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="app.py:3\n", stderr="")
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    r = run_bounded_mutation(tmp_path, hot_files=["app.py"], opt_in=True)
+    assert r["mutation_run"] is True
+    assert r["tool"] == "mutmut"
+    by_file = {p["file"]: p for p in r["per_file"]}
+    assert by_file["src/calc.py"]["total"] == 3
+    assert compute_survivor_density(r["per_file"])["overall"] is not None
+
+
+def test_run_bounded_mutation_junitxml_empty_falls_back_to_stdout(
+        tmp_path: Path, monkeypatch) -> None:
+    """When `mutmut junitxml` is absent/empty (e.g. mutmut 3.x dropped it), the
+    run degrades to the survivor-only stdout parse - exactly as before the fix."""
+    _write(tmp_path, "app.py", "def f(): pass")
+    monkeypatch.setattr(tp.shutil, "which", lambda t: "/usr/bin/" + t)
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["mutmut", "junitxml"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="no cmd")
+        return subprocess.CompletedProcess(cmd, 0, stdout="app.py:3\napp.py:9\n",
+                                           stderr="")
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    r = run_bounded_mutation(tmp_path, hot_files=["app.py"], opt_in=True)
+    assert r["mutation_run"] is True
+    assert r["per_file"][0]["survived"] == 2
+    assert r["per_file"][0]["total"] is None  # stdout parse: no totals
 
 
 # ════════════════════════════════════════════════════════════════════════════

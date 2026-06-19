@@ -581,6 +581,29 @@ def test_load_survivor_density_from_per_file(treemap, tmp_path):
     assert (tmp_path / "src/c.py").resolve() not in density  # no total
 
 
+def test_mutmut_junitxml_drives_hatch_overlay(treemap, tmp_path, fixtures_dir):
+    """End to end: a real mutmut junitxml parse -> run-context per_file ->
+    load_survivor_density -> hatch overrides. Before the junitxml fix the mutmut
+    path carried no totals, so this overlay could never render on a Python repo."""
+    from lib.test_pressure import _parse_mutmut_junitxml
+
+    per_file = _parse_mutmut_junitxml(fixtures_dir / "mutmut-junitxml.xml")
+    ctx = {"test_pressure": {"per_file": per_file}}
+    j = tmp_path / "run-context.json"
+    j.write_text(json.dumps(ctx), encoding="utf-8")
+
+    density = treemap.load_survivor_density(j, tmp_path)
+    calc = (tmp_path / "src/calc.py").resolve()
+    util = (tmp_path / "src/util.py").resolve()
+    assert density[calc] == 2 / 3      # real density, not skipped
+    assert density[util] == 0.0         # all killed -> real 0 density (has a total)
+
+    files = [(calc, 100, 5.0, "lizard"), (util, 50, 3.0, "lizard")]
+    overrides = treemap._survivor_overrides(files, density)
+    assert overrides[calc] == {"hatch": "cross"}  # 0.67 > 0.5
+    assert util not in overrides                   # 0.0 below hatch threshold
+
+
 def test_load_survivor_density_absent_block_is_empty(treemap, tmp_path):
     j = tmp_path / "run-context.json"
     j.write_text(json.dumps({"doc_graph": {}}), encoding="utf-8")
