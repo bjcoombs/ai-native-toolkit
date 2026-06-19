@@ -52,6 +52,7 @@ from lib.badge import (
     write_badge,
 )
 from lib.assess_config import load_excludes, load_structure_config
+from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.doc_staleness import analyze_doc_staleness
 from lib.git_churn import git_commit_info, tracked_files
@@ -988,9 +989,27 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # mutation survivor density with the complexity hotspots.
     hot_files = [h.get("path") for h in current.get("top_hotspots", [])
                  if h.get("path")]
+    # Pull line-coverage truth from a report the project already generated (CI or
+    # local) - /assess never runs the suite, so an existing coverage.xml / lcov.info
+    # is the only honest source. Absent or malformed -> None, and the scan reports
+    # "not assessed" rather than guessing. Provenance is recorded separately so the
+    # report can distinguish a real read from "none found".
+    cov_detect = detect_coverage_report(repo_root)
+    coverage_data = load_coverage_data(repo_root)
+    ctx["coverage_report"] = (
+        {
+            "available": True,
+            "source": cov_detect["source"],
+            "format": cov_detect["format"],
+            "parsed": coverage_data is not None,
+        }
+        if cov_detect
+        else {"available": False, "source": "none found"}
+    )
     test_pressure = _safe(
         "test_pressure",
-        lambda: scan_test_pressure(repo_root, hot_files=hot_files, opt_in=False),
+        lambda: scan_test_pressure(repo_root, hot_files=hot_files, opt_in=False,
+                                   coverage_data=coverage_data),
     )
     # A failed (or malformed) scan must not read as "no mutation setup": that
     # would mis-score Layer 1 just as a failed liveness scan would mis-score
