@@ -350,6 +350,22 @@ Inspects a run-context dict for suspicious results (e.g. zero files scored, impl
 CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts and
 grades only, no paths or code) so they are safe to include in self-feedback issues.
 
+**`coverage_report.py`**
+Parses an *existing* coverage report into the shape the `test_pressure` scan's
+`coverage_data=` param consumes (`{_overall, per_file: {relpath: line_rate}}`).
+Two formats: Cobertura `coverage.xml` (`_overall` from the root `line-rate`,
+per-file from each `<class>` element's `filename`/`line-rate`; one `iter("class")`
+walk handles both the flat and nested `<packages>` schemas) and `lcov.info`
+(per-file `LH/LF`, overall `sum(LH)/sum(LF)`). `/assess` never runs the suite, so a
+report the project already generated is the only honest line-coverage source - the
+parser reads it without taking a coverage.py runtime dependency. `detect_coverage_report`
+searches the repo root, `./coverage/`, and `./.coverage/` (a `.coverage` SQLite *file*
+is out of scope - reading it needs the coverage.py lib). Honest-degrade is the hard
+contract: a missing or malformed report returns `None`, never raises, never blocks the
+assessment; `assess_core.py` records provenance ("none found" vs. the file/format read)
+separately. Stdlib only, imports no orchestrator. Add fixtures + cases in
+`tests/test_coverage_report.py` alongside any change to a parse rule.
+
 **`test_pressure/`**
 Layer 1 write-side truth pressure. Two tiers:
 - Mutation tier: runs a mutation-testing tool (mutmut for Python) over a sample of the
