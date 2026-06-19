@@ -1,0 +1,34 @@
+<?xml version="1.0" ?>
+<testsuites disabled="0" errors="0" failures="2" tests="5" time="0.0">
+	<testsuite disabled="0" errors="0" failures="2" name="mutmut" skipped="0" tests="5" time="0">
+		<testcase name="Mutant #1" file="src/calc.py" line="2">
+			<system-out>    return a + b</system-out>
+		</testcase>
+		<testcase name="Mutant #2" file="src/calc.py" line="6">
+			<failure type="failure" message="bad_survived">--- src/calc.py
++++ src/calc.py
+@@ -3,7 +3,7 @@
+ def sub(a, b):
+-    return a - b
++    return a + b
+</failure>
+			<system-out>    return a - b</system-out>
+		</testcase>
+		<testcase name="Mutant #3" file="src/calc.py" line="10">
+			<failure type="failure" message="bad_survived">--- src/calc.py
++++ src/calc.py
+@@ -7,5 +7,5 @@
+ def mul(a, b):
+-    return a * b
++    return a / b
+</failure>
+			<system-out>    return a * b</system-out>
+		</testcase>
+		<testcase name="Mutant #4" file="src/util.py" line="3">
+			<system-out>    return x or y</system-out>
+		</testcase>
+		<testcase name="Mutant #5" file="src/util.py" line="7">
+			<system-out>    return not flag</system-out>
+		</testcase>
+	</testsuite>
+</testsuites>

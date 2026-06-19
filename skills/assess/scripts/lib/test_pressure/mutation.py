@@ -10,9 +10,13 @@ mutates and *runs* code, so it is never part of a default read-only assessment.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
+import tempfile
+import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from .common import _iter_files, _read
@@ -150,6 +154,54 @@ def _parse_mutmut(stdout: str) -> list[dict]:
             for f, n in out.items()]
 
 
+def _testcase_file(testcase: ET.Element) -> str | None:
+    """Derive the source file path for a mutmut junitxml ``<testcase>``.
+
+    mutmut 2.x emits ``<testcase ... file="src/foo.py">`` - the file attribute
+    is the source path directly. Some versions/tools instead encode it in
+    ``classname`` as a dotted module path (``mutmut.src.foo`` -> ``src/foo.py``),
+    so we fall back to that. Returns None when neither yields a path."""
+    file_attr = testcase.get("file")
+    if file_attr:
+        return file_attr
+    classname = testcase.get("classname") or ""
+    if classname.startswith("mutmut."):
+        dotted = classname[len("mutmut."):]
+        if dotted:
+            return dotted.replace(".", "/") + ".py"
+    return None
+
+
+def _parse_mutmut_junitxml(xml_path: Path) -> list[dict]:
+    """Parse ``mutmut junitxml`` output into per-file killed/survived/total.
+
+    Unlike the survivor-only stdout listing, junitxml reports *every* mutant -
+    one ``<testcase>`` each - so we recover real totals. A testcase with a
+    ``<failure>`` child is a survivor (the suite did not catch the mutation);
+    otherwise it was killed. Returns ``list[{file, killed, survived, total}]``
+    with ``total = killed + survived``. Never raises - returns ``[]`` on any
+    error (missing file, malformed XML, unexpected shape) so the run degrades
+    gracefully to the stdout fallback."""
+    try:
+        root = ET.parse(xml_path).getroot()
+    except (ET.ParseError, OSError, ValueError):
+        return []
+    per_file: dict[str, dict[str, int]] = {}
+    try:
+        for testcase in root.iter("testcase"):
+            fname = _testcase_file(testcase)
+            if not fname:
+                continue
+            survived = testcase.find("failure") is not None
+            agg = per_file.setdefault(fname, {"killed": 0, "survived": 0})
+            agg["survived" if survived else "killed"] += 1
+    except Exception:  # pragma: no cover - defensive: never crash the run
+        return []
+    return [{"file": f, "killed": d["killed"], "survived": d["survived"],
+             "total": d["killed"] + d["survived"]}
+            for f, d in per_file.items()]
+
+
 def _parse_gremlins(stdout: str) -> list[dict]:
     """gremlins per-mutant lines: ``KILLED|LIVED|TIMED OUT|NOT COVERED ... <file>:<line>``.
     LIVED / NOT COVERED == survived."""
@@ -265,6 +317,7 @@ def run_bounded_mutation(repo_root: Path, hot_files: list | None = None,
                 "reason": "no supported mutation tool on PATH for languages present"}
 
     scope = [str(f) for f in (hot_files or [])][:MAX_FILES_TO_MUTATE]
+    started = time.monotonic()
     try:
         proc = subprocess.run(
             spec["cmd"](repo_root, scope), cwd=str(repo_root),
@@ -282,8 +335,53 @@ def run_bounded_mutation(repo_root: Path, hot_files: list | None = None,
         per_file = spec["parser"](proc.stdout)
     except Exception:  # pragma: no cover - parser must never crash the run
         per_file = []
+
+    # mutmut's stdout only lists survivors (no totals), so density can't be
+    # derived from it. A second `mutmut junitxml` call reports every mutant -
+    # giving real killed/survived/total per file. The two-step run shares the
+    # MUTATION_TIMEOUT budget; junitxml is best-effort and falls back to the
+    # survivor-only stdout parse on any failure or empty result.
+    if spec["tool"] == "mutmut":
+        remaining = MUTATION_TIMEOUT - (time.monotonic() - started)
+        if remaining > 0:
+            xml_per_file = _run_mutmut_junitxml(repo_root, remaining)
+            if xml_per_file:
+                per_file = xml_per_file
+
     return {"mutation_run": True, "available": True, "tool": spec["tool"],
             "scope": scope, "per_file": per_file}
+
+
+def _run_mutmut_junitxml(repo_root: Path, timeout: float) -> list[dict]:
+    """Run ``mutmut junitxml`` (after a completed ``mutmut run``) and parse it
+    into per-file totals. mutmut writes the XML report to stdout, so we capture
+    it to a temp file and hand that to ``_parse_mutmut_junitxml``. Best-effort:
+    returns ``[]`` on any failure (older mutmut without the subcommand, timeout,
+    crash, malformed output) so the caller falls back to the stdout parse."""
+    try:
+        proc = subprocess.run(
+            ["mutmut", "junitxml"], cwd=str(repo_root),
+            capture_output=True, text=True, timeout=max(1.0, timeout), check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError):  # pragma: no cover - defensive
+        return []
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return []
+    tmp_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".xml", delete=False, encoding="utf-8") as fh:
+            fh.write(proc.stdout)
+            tmp_path = fh.name
+        return _parse_mutmut_junitxml(Path(tmp_path))
+    except OSError:  # pragma: no cover - defensive
+        return []
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:  # pragma: no cover - defensive
+                pass
 
 
 # ── aggregation over per-file mutation results ────────────────────────────────
