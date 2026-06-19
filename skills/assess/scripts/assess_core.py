@@ -26,6 +26,7 @@ The LLM reads run-context.json to ground that prose in deterministic data.
 # ///
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import subprocess
@@ -595,6 +596,39 @@ def _safe(label: str, fn):
         return {"available": False, "reason": f"{label} scan failed: {e}"}
 
 
+def _normalize_test_pressure(test_pressure: Any) -> dict:
+    """Normalize a ``scan_test_pressure`` result into the run-context block shape.
+
+    A failed (or malformed) scan must not read as "no mutation setup": that
+    would mis-score Layer 1 just as a failed liveness scan would mis-score
+    observability. On a bad result, carry an explicit unavailable marker with a
+    null ``mutation_config_present`` and empty heuristic buckets so the LLM sees
+    "not assessed", never a false negative. Keys mirror the real block's
+    ``cheap_heuristics`` schema (assertion_on_internal / untested_boundaries /
+    duplicate_truth) so the consumer's shape doesn't change on the failure path.
+
+    Shared by the default read-only scan (``build_run_context``) and the opt-in
+    mutation re-run (``run_opt_in_mutation``) so both write an identical shape.
+    """
+    tp_ok = (isinstance(test_pressure, dict)
+             and "mutation_config_present" in test_pressure
+             and "cheap_heuristics" in test_pressure)
+    if tp_ok:
+        return test_pressure
+    return {
+        "available": False,
+        "reason": (test_pressure.get("reason")
+                   if isinstance(test_pressure, dict)
+                   else "test_pressure scan unavailable"),
+        "mutation_config_present": None,
+        "cheap_heuristics": {
+            "assertion_on_internal": [],
+            "untested_boundaries": [],
+            "duplicate_truth": [],
+        },
+    }
+
+
 def _build_stale_hubs(doc_graph: dict, doc_staleness: dict) -> list[dict]:
     """Centrality x staleness - the priority Layer 0 signal.
 
@@ -1012,28 +1046,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         lambda: scan_test_pressure(repo_root, hot_files=hot_files, opt_in=False,
                                    coverage_data=coverage_data),
     )
-    # A failed (or malformed) scan must not read as "no mutation setup": that
-    # would mis-score Layer 1 just as a failed liveness scan would mis-score
-    # observability. Carry an explicit unavailable marker with a null
-    # mutation_config_present and empty heuristic buckets so the LLM sees
-    # "not assessed", never a false negative. Keys mirror the real block's
-    # `cheap_heuristics` schema (assertion_on_internal / untested_boundaries /
-    # duplicate_truth) so the consumer's shape doesn't change on the failure path.
-    tp_ok = (isinstance(test_pressure, dict)
-             and "mutation_config_present" in test_pressure
-             and "cheap_heuristics" in test_pressure)
-    ctx["test_pressure"] = test_pressure if tp_ok else {
-        "available": False,
-        "reason": (test_pressure.get("reason")
-                   if isinstance(test_pressure, dict)
-                   else "test_pressure scan unavailable"),
-        "mutation_config_present": None,
-        "cheap_heuristics": {
-            "assertion_on_internal": [],
-            "untested_boundaries": [],
-            "duplicate_truth": [],
-        },
-    }
+    ctx["test_pressure"] = _normalize_test_pressure(test_pressure)
 
     # Cross-join the three already-collected signals - hotspot risk band, parsed
     # coverage, hollow-test heuristics - into one ranked focus list answering
@@ -1106,11 +1119,80 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     return ctx
 
 
-def main() -> int:
-    if len(sys.argv) < 2:
-        print("Usage: assess_core.py <repo_root>", file=sys.stderr)
-        return 2
-    repo_root = Path(sys.argv[1]).resolve()
+def run_opt_in_mutation(repo_root: Path) -> int:
+    """Re-run the Layer-1 test-pressure scan with the bounded mutation pass ON.
+
+    The consent-gated counterpart to the default read-only scan in
+    ``build_run_context``. The orchestrator (SKILL.md Step 2d) calls this only
+    after the user accepts the mutation offer - it mutates and *runs* code, so it
+    is never part of the default pass. It does not recompute the whole context:
+    it reads the existing ``run-context.json``, takes the focus targets from the
+    ``test_focus`` block (the single source of focus files), runs
+    ``scan_test_pressure(..., opt_in=True)`` scoped to them, and rewrites only the
+    ``test_pressure`` block in place. ``run_bounded_mutation`` itself caps the
+    scope at ``MAX_FILES_TO_MUTATE``, so passing every focus path is safe.
+
+    The treemap overlay (regenerated separately by the orchestrator) then reads
+    the refreshed ``test_pressure.per_file`` so covered-but-unpinned files get
+    hatched. Never raises beyond argparse/IO; degrades to a non-zero return.
+    """
+    assess_dir = repo_root / ".assess"
+    ctx_path = assess_dir / "run-context.json"
+    if not ctx_path.exists():
+        print("run-context.json not found - run assess_core.py first",
+              file=sys.stderr)
+        return 1
+    try:
+        ctx = json.loads(ctx_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"could not read run-context.json: {e}", file=sys.stderr)
+        return 1
+
+    focus = ctx.get("test_focus") or {}
+    entries = focus.get("entries") or []
+    focus_files = [e.get("path") for e in entries
+                   if isinstance(e, dict) and e.get("path")]
+    if not focus_files:
+        print("no test_focus targets - nothing to mutate", file=sys.stderr)
+        return 0
+
+    coverage_data = load_coverage_data(repo_root)
+    test_pressure = _safe(
+        "test_pressure",
+        lambda: scan_test_pressure(repo_root, hot_files=focus_files, opt_in=True,
+                                   coverage_data=coverage_data),
+    )
+    ctx["test_pressure"] = _normalize_test_pressure(test_pressure)
+    ctx_path.write_text(json.dumps(ctx, indent=2), encoding="utf-8")
+
+    tp = ctx["test_pressure"]
+    print(json.dumps({
+        "mutation_run": tp.get("mutation_run", False),
+        "mutation_scope": tp.get("mutation_scope", []),
+        "mutation_note": tp.get("mutation_note"),
+    }))
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Deterministic core for /assess; writes run-context.json.",
+    )
+    parser.add_argument("repo_root", help="Path to the repo root to assess.")
+    parser.add_argument(
+        "--opt-in-mutation",
+        action="store_true",
+        help=(
+            "Re-run only the Layer-1 test-pressure scan with the bounded "
+            "mutation pass enabled, scoped to the existing run-context.json "
+            "test_focus targets, and rewrite the test_pressure block in place. "
+            "Requires a prior default run. Mutates and runs code - consent-gated."
+        ),
+    )
+    parsed = parser.parse_args(argv)
+    repo_root = Path(parsed.repo_root).resolve()
+    if parsed.opt_in_mutation:
+        return run_opt_in_mutation(repo_root)
     run_date = datetime.now().strftime("%Y-%m-%d")
     ctx = build_run_context(repo_root=repo_root, run_date=run_date)
     print(json.dumps(ctx["diff"]))
