@@ -366,6 +366,21 @@ assessment; `assess_core.py` records provenance ("none found" vs. the file/forma
 separately. Stdlib only, imports no orchestrator. Add fixtures + cases in
 `tests/test_coverage_report.py` alongside any change to a parse rule.
 
+**`test_focus.py`**
+Cross-joins three already-collected signals - the hotspot risk band (position in
+`complexity_stats.top_hotspots`), the parsed coverage report, and the
+`test_pressure` cheap heuristics - into one ranked focus list. `compute_test_focus`
+classifies each top-10 hot file (`no_covering_test` / `covered_but_hollow` /
+`covered_clean` / `unknown_no_coverage`), filters out `covered_clean`, and ranks by
+risk band then signal severity. Honest-degrade is the contract: `coverage_data is
+None` makes every file `unknown_no_coverage` (never `covered_clean`) and records
+`coverage_present: False`; it never raises. Pure data - inputs are passed in
+(`hot_files`, `coverage_data`, `cheap_heuristics`), no file I/O, stdlib only,
+imports no orchestrator. This block is the SINGLE source both the report focus
+table and the mutation offer consume - it is the contract, not duplicated
+downstream. Add cases in `tests/test_test_focus.py` alongside any change to a
+classification or ranking rule.
+
 **`test_pressure/`**
 Layer 1 write-side truth pressure. Two tiers:
 - Mutation tier: runs a mutation-testing tool (mutmut for Python) over a sample of the

@@ -65,6 +65,7 @@ from lib.structure_drift import (
     SEAM_ALLOWLIST,
     detect_path_existence_drift,
 )
+from lib.test_focus import compute_test_focus
 from lib.test_pressure import scan_test_pressure
 from lib.wiki_writer import (
     UNFINALIZED_ACTIONS_POINTER,
@@ -1033,6 +1034,18 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
             "duplicate_truth": [],
         },
     }
+
+    # Cross-join the three already-collected signals - hotspot risk band, parsed
+    # coverage, hollow-test heuristics - into one ranked focus list answering
+    # "which risky files most need test work, and which kind?". Pure composition
+    # of values already in hand (the top hotspots, the coverage_data loaded above,
+    # and this block's cheap_heuristics), so it cannot fail the scan. This block is
+    # the single source the report table and the mutation offer both consume.
+    ctx["test_focus"] = compute_test_focus(
+        current.get("top_hotspots", []),
+        coverage_data,
+        ctx["test_pressure"].get("cheap_heuristics"),
+    )
 
     # Promissory markers (stale TODO/FIXME, suppressions, disabled tests):
     # the write-side erosion instrument. Family totals + stale counts feed the
