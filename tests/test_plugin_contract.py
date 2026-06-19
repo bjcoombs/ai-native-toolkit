@@ -39,6 +39,17 @@ ENVELOPE_TAG_RE = re.compile(
     r"</?(?:antml:)?(?:invoke|parameter|function_calls)\b|</?content>",
 )
 
+# Unresolved git conflict markers committed into a shipped file. Markdown is the
+# silent vector - no parser rejects a literal `<<<<<<<` line, so an unresolved
+# merge rides into the plugin (and the standalone ZIPs) unnoticed. Default git
+# markers are 7+ identical chars at line start; the angle/pipe forms are
+# unambiguous (a `=======` separator collides with markdown setext headings, and
+# is always bracketed by the angle markers anyway, so we don't need it).
+# Regression guard for #211/#216, where commands/tm.md shipped on main for ~3
+# weeks with three unresolved conflict regions (535 stale lines). Reference a
+# marker illustratively as inline code (`` `<<<<<<<` ``) so it never starts a line.
+CONFLICT_MARKER_RE = re.compile(r"(?:<{7,}|>{7,}|\|{7,})(?: |$)")
+
 
 def _split_frontmatter(path: Path):
     text = path.read_text(encoding="utf-8")
@@ -156,6 +167,19 @@ def test_no_leaked_tool_envelope_tags(p):
     assert not found, (
         f"{p.relative_to(REPO)}: leaked tool-call envelope tag(s) {found} - "
         "agent tool-envelope residue must never ship in authored markdown"
+    )
+
+
+@pytest.mark.parametrize("p", all_authored_markdown(), ids=lambda p: str(p.relative_to(REPO)))
+def test_no_conflict_markers(p):
+    hits = [
+        i + 1
+        for i, line in enumerate(p.read_text(encoding="utf-8").splitlines())
+        if CONFLICT_MARKER_RE.match(line)
+    ]
+    assert not hits, (
+        f"{p.relative_to(REPO)}: unresolved git conflict marker(s) at line(s) {hits} - "
+        "a merge was committed without resolving it; reference markers as inline code instead"
     )
 
 
