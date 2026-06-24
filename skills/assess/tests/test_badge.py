@@ -71,3 +71,20 @@ def test_write_and_exists_roundtrip(tmp_path: Path):
     data = json.loads((tmp_path / "badge.json").read_text(encoding="utf-8"))
     assert data["schemaVersion"] == 1
     assert data["message"] == "5.0/8 · Solid"
+
+
+def test_score_badge_knowledge_base_denominator():
+    """A KB renormalises the denominator over its applicable layers (#224)."""
+    badge = score_badge(2.5, "Knowledge Base · Solid", denominator=3)
+    assert badge["message"] == "2.5/3 · Knowledge Base · Solid"
+    # 2.5/3 = 0.833 -> green band (>= 0.6875), not the misleading 2.5/8 yellow.
+    assert badge["color"] == "green"
+
+
+def test_score_color_normalises_over_denominator():
+    # Full marks on a KB denominator is brightgreen, not red.
+    assert score_color(3.0, 3) == "brightgreen"
+    assert score_color(0.0, 3) == "red"
+    # Default denominator 8 reproduces the original absolute bands.
+    assert score_color(7.0) == "brightgreen"
+    assert score_color(7.0, 8) == "brightgreen"

@@ -19,18 +19,42 @@ The orchestrator passes you `REPO_ROOT` (the absolute repo path). Everything you
 
 A scorecard the orchestrator forwards to the `assess-findings` step:
 
-- the **0-8 score** (one point per layer that is Present; half for Partial - see the scoring rule in the methodology),
-- the **per-layer verdict** (Present / Partial / Missing) with a one-line evidence note each,
-- the **maturity label** the score maps to, and
+- the **score** (one point per layer that is Present; half for Partial - see the scoring rule in the methodology) **and its denominator** (8 for a software repo; the applicable-layer count for a knowledge base - see Step 0),
+- the **per-layer verdict** (Present / Partial / Missing, or **N/A** for a layer the archetype excludes) with a one-line evidence note each,
+- the **maturity label** the score maps to (for a non-software archetype it **names the archetype and the applicable-layer count** - see Step 0), and
 - any layer-specific observations the report should lead with (e.g. "Layer 3 linter exists but no complexity gate").
 
 Return this as a compact structured summary (not the full report prose). The `assess-findings` step renders it into the report template alongside the deterministic findings.
 
 ---
 
+## Step 0: Read the archetype (do this before scoring any layer)
+
+The 0-8 model assumes a software repo. A **knowledge / document base** - markdown sources, an LLM-maintained wiki, a `CLAUDE.md` schema, and no application code or runtime - has no code surface for the write-side layers (L2-L7). Scoring them Missing is a lying score: it penalises the repo for not having tests on code it doesn't contain, so a well-run KB reads ~2.5/8 ("Not Ready") when it is actually well-run.
+
+The deterministic core has already classified the repo. Read it first:
+
+```bash
+jq '.archetype' "$REPO_ROOT/.assess/run-context.json"
+```
+
+The block carries: `archetype` (`"software"` or `"knowledge-base"`), `detected_via` (`"heuristic"` or `"override"` - an `assess-archetype:` marker in an instruction file forced/suppressed it), `reason`, `signals` (code/doc file counts, ratio, runtime-surface flag), `applicable_layers`, `na_layers`, `denominator`, and `kb_maintenance` (the Karpathy LLM-wiki signal - see Layer 0 below). When `available` is `false`, the classification failed - score as a software repo (all 0-8 layers) and note the degrade.
+
+**When `archetype == "knowledge-base"`:**
+
+- Score **N/A** (not Missing, not Partial) for every layer in `na_layers` (the write-side L2-L7). N/A means *not applicable* - the layer has no code surface to enforce, which is a different thing from a real gap. Use the literal status `N/A` in the scorecard you return, never `Missing`, for these layers. Do **not** propose remediation actions for an N/A layer.
+- Score **only** the `applicable_layers` (L0, L1, L8) on their merits using the methodology below.
+- **Compute the score over the applicable layers only**: sum Present=1 / Partial=0.5 over L0, L1, L8; the **denominator is `archetype.denominator`** (3 for a KB), not 8. Excluded N/A layers are out of both numerator and denominator.
+- **The maturity label names the archetype and the applicable-layer count**, e.g. `Knowledge Base · Solid (3 applicable layers)`. Map the *renormalised fraction* (score ÷ denominator) onto the same maturity ladder the findings skill uses (≥0.875 AI-Native, ≥0.625 Solid, ≥0.375 Basic, else Not Ready).
+- Return `denominator` in your scorecard so the report headline, badge, and `finalize-input.json` renormalise (the findings skill reads it).
+
+**When `archetype == "software"`** (the default), nothing changes: score all 0-8 layers, denominator 8, exactly as before.
+
+This is intentionally **one** archetype (knowledge-base). The detection is dispatch-friendly so more archetypes are cheap to add later, but do not invent archetype rules beyond what `.archetype` reports.
+
 ## Scoring the Layers
 
-Run these checks in parallel where possible. For each layer, collect evidence and assess quality.
+Run these checks in parallel where possible. For each layer, collect evidence and assess quality. **For a knowledge base, skip the `na_layers` entirely** (score them N/A) and apply the methodology only to the applicable layers.
 
 ### Layer 0: Agent Instructions & Navigability (Read-Side Foundation)
 
@@ -118,6 +142,18 @@ Score navigability from these signals:
 **Truth-pressure ordering of navigation aids** (weight maintained/executable aids higher): executable aids that run in CI (skills, doctests) **>** tests **>** linked-doc graph / MOC **>** prose. Executable aids fail loudly when they rot; prose rots silently.
 
 **Scoring rule (mirror the null-vs-F split):** a wiki/MOC/`AGENTS.md` scores **Present** only when *maintained* - its churn tracks the code's churn (low `stale_hubs` ratios, `island_count` ≈ 1, reachability high). Score **Partial/Missing** when stale relative to code churn or fragmented, and flag stale-but-present as **actively misleading** - score it at or below absent. Combine with 0a: strong instruction files **and** a maintained, navigable doc graph → Present; good instructions but a stale or fragmented doc set → Partial; neither → Missing.
+
+#### 0c - Documented AI maintenance workflow (Karpathy LLM-wiki pattern)
+
+For a doc-heavy repo - acutely a knowledge base - a load-bearing read-side signal is whether the repo *documents how the AI maintains it*. A wiki that no described process keeps honest rots into a lying map. The deterministic core scores this:
+
+```bash
+jq '.archetype.kb_maintenance' "$REPO_ROOT/.assess/run-context.json"
+```
+
+`kb_maintenance.documented` is true when the instruction text describes the [Karpathy LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) - immutable raw sources, the schema file as the product, an ingest workflow, query-as-filing, periodic lint/consolidation. `signals_found` lists which facets matched; `gist` is the best-practice pointer to **cite in the report whether or not the workflow is documented** (it is the canonical reference for the pattern being scored).
+
+Score it as a **read-side (Layer 0) quality signal**: a documented maintenance loop pulls Layer 0 *up* (the docs are under a described pressure to stay true); its absence on a knowledge base is a concrete Layer 0 gap with the remediation "document the KB maintenance workflow (immutable sources, schema-as-product, ingest, query-as-filing, periodic consolidation) in `CLAUDE.md`, citing the Karpathy LLM-wiki gist." On a software repo the signal is informational, not penalising.
 
 ### Layer 1: Runtime Legibility / Liveness (Read-Side Foundation)
 
