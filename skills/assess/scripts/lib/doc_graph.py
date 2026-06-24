@@ -124,8 +124,14 @@ HUB_MIN_OUTDEGREE = 3
 _WIKILINK_RE = re.compile(r"\[\[([^\[\]]+?)\]\]")
 # Markdown inline links: [text](target). Excludes images handled below.
 _MDLINK_RE = re.compile(r"(?<!\!)\[(?:[^\]]*)\]\(([^)]+)\)")
-# Schemes / forms that are not intra-repo file links.
-_EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*://|^mailto:|^tel:", re.IGNORECASE)
+# Schemes / forms that are not intra-repo file links.  Any token matching
+# the RFC 3986 URI-scheme pattern (`[a-z][a-z0-9+.-]*:`) is non-navigational:
+# `http://`, `https://`, `ftp://` (the scheme-plus-`://` form), but also bare
+# schemes such as `tel:`, `mailto:`, `sms:`, `callto:`, `javascript:`, etc.
+# Using the generic scheme pattern rather than an allowlist keeps the regex
+# stable as new schemes appear and avoids the specific-scheme gap that caused
+# `sms:` and `skype:` to be misclassified as broken file references (issue #227).
+_EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
 _FENCE_RE = re.compile(r"```.*?\n.*?```", re.DOTALL)  # fenced code blocks
 # Inline-code spans: backtick-delimited segments on a single logical line. A
 # link target inside `[[foo]]` or `[text](./foo.md)` is documentation syntax
@@ -595,13 +601,20 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
         link_text = _strip_code_spans(text)
         # Wikilinks resolve by note name across the vault.
         for m in _WIKILINK_RE.finditer(link_text):
+            # Strip alias/anchor first so the scheme check sees the bare target
+            # (e.g. `tel:+1-555-1234` from `[[tel:+1-555-1234|Call us]]`).
+            wikilink_target = _strip_anchor_and_alias(m.group(1))
+            if _EXTERNAL_RE.match(wikilink_target):
+                # Non-navigational URI (`tel:`, `mailto:`, etc.) -- not a note
+                # reference; skip without counting as a broken link (issue #227).
+                continue
             tgt, amb = _resolve_wikilink(
                 m.group(1), d, repo_root, by_relpath, by_name, by_stem,
             )
             if amb:
                 ambiguous += 1
             if tgt is None:
-                _add_broken(d, _strip_anchor_and_alias(m.group(1)), "wikilink")
+                _add_broken(d, wikilink_target, "wikilink")
                 continue
             if tgt in doc_set and tgt != d:
                 graph.add_edge(rel(d), rel(tgt))
