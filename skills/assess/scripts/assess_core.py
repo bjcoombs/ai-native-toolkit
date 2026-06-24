@@ -46,6 +46,7 @@ from lib.agent_instructions_grader import (
     scan_sensitive_content,
 )
 from lib.anomaly_detector import detect_anomalies
+from lib.archetype import analyze_archetype
 from lib.badge import (
     badge_exists,
     concern_count_from_findings,
@@ -949,6 +950,13 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # recommending the file be committed - acutely so for a public repo. All
     # evidence is redacted at the source (scan_sensitive_content).
     ctx["sensitive_instruction_content"] = sensitive_instr
+    # Repository archetype (issue #224): is this a software repo or a
+    # knowledge/document base? A knowledge base has no code surface for the
+    # write-side layers (L2-L7), so they are marked N/A and excluded from the
+    # denominator rather than scored Missing. The block also carries the
+    # Karpathy LLM-wiki maintenance signal (a read-side / Layer 0 quality
+    # signal) and the gist pointer. Degrades to available=False on error.
+    ctx["archetype"] = _safe("archetype", lambda: analyze_archetype(repo_root))
     # Ancestor-cascade acknowledgement (issue #57): instruction files that live
     # above the repo root (or in the global user config) and cascade into the
     # working tree locally, but reach no fresh clone. Distinguishes "no
