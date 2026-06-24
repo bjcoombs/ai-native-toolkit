@@ -110,6 +110,19 @@ previously reported as no vault, silently disabling downstream vault accommodati
 Pruning `EXCLUDE_DIRS` keeps a vendored or build-artifact `.obsidian/` from tripping a false
 positive.
 
+**`raw_source.py`**
+Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:
+given per-doc graph signals (in/out degree + a machine-extraction-link count), it
+identifies maximal directory subtrees that are large, almost entirely
+link-isolated, and carry the machine-extraction fingerprint - a dump of raw,
+machine-extracted source documents (a disclosure / SAR export of converted
+`.msg`/`.pdf` files). `doc_graph.py` gathers the signals from the link graph it
+already builds and excludes the qualifying subtrees from the headline read-side
+metrics (orphan rate, reachability, broken links), reporting them separately so
+the curated-wiki signal isn't drowned. Pure - no `doc_graph` import - so
+`doc_graph.py` owns the graph and consumes this module's verdict. Co-changes with
+`doc_graph.py` (its consumer) and its test `tests/test_raw_source.py`.
+
 **`vault_queries.py`**
 Static parser for Obsidian dynamic-navigation hubs: `.base` view files and
 `dataview` query blocks. Resolves the folder / tag / frontmatter-field

@@ -185,6 +185,18 @@ class DocGraphResult:
     # Broken links: a link whose target file doesn't exist (a "ghost"). The
     # renderer draws these as ghost nodes - the missing name is the suggested fix.
     broken_links: list[dict] = field(default_factory=list)  # [{from, target, kind}]
+    # Raw-source-tree exclusion (issue #225). The headline read-side metrics
+    # above (orphan_rate, reachability_pct, orphans, unreachable, island_count,
+    # broken_links, dangling_links) describe the *curated* wiki layer: subtrees
+    # of raw, machine-extracted source documents (a disclosure/SAR export of
+    # converted .msg/.pdf files) are detected and excluded so they don't inflate
+    # the figures. Each excluded tree is named with its file count so the
+    # exclusion stays legible; the raw layer's own figures are reported alongside.
+    excluded_raw_trees: list[dict] = field(default_factory=list)  # [{path, file_count}]
+    raw_source_doc_count: int = 0       # total docs across all excluded raw trees
+    curated_doc_count: int = 0          # docs in the curated layer (== doc_count)
+    raw_source_orphan_rate: float = 0.0  # orphan rate within the raw layer
+    raw_source_broken_links: int = 0     # broken links originating in the raw layer
     # Missing cross-references: a doc names another doc but never links to it
     # (Karpathy Lint). [{from, to}].
     missing_xrefs: list[dict] = field(default_factory=list)
@@ -222,6 +234,11 @@ class DocGraphResult:
             "ambiguous_wikilinks": self.ambiguous_wikilinks,
             "vault_detected": self.vault_detected,
             "obsidiantools_available": self.obsidiantools_available,
+            "excluded_raw_trees": self.excluded_raw_trees,
+            "raw_source_doc_count": self.raw_source_doc_count,
+            "curated_doc_count": self.curated_doc_count,
+            "raw_source_orphan_rate": round(self.raw_source_orphan_rate, 3),
+            "raw_source_broken_links": self.raw_source_broken_links,
         }
 
 
@@ -580,6 +597,10 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
     broken: list[dict] = []
     _broken_seen: set[tuple[str, str]] = set()
     texts: dict[Path, str] = {}
+    # Per-doc count of non-navigational URI-scheme links (mailto:/tel:/external
+    # http) - the machine-extraction fingerprint a converted document carries.
+    # Feeds raw-source-tree detection (issue #225).
+    machine_links: dict[str, int] = {}
 
     def _add_broken(src: Path, target: str, kind: str) -> None:
         key = (rel(src), target)
@@ -607,6 +628,8 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
             if _EXTERNAL_RE.match(wikilink_target):
                 # Non-navigational URI (`tel:`, `mailto:`, etc.) -- not a note
                 # reference; skip without counting as a broken link (issue #227).
+                # Count it as a machine-extraction fingerprint (issue #225).
+                machine_links[rel(d)] = machine_links.get(rel(d), 0) + 1
                 continue
             tgt, amb = _resolve_wikilink(
                 m.group(1), d, repo_root, by_relpath, by_name, by_stem,
@@ -627,8 +650,11 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
                 # (a "ghost"). External URLs, pure #anchors, and links to an
                 # existing directory are not broken.
                 cleaned = _strip_anchor_and_alias(raw)
-                if (cleaned and not raw.strip().startswith("#")
-                        and not _EXTERNAL_RE.match(cleaned)
+                if cleaned and _EXTERNAL_RE.match(cleaned):
+                    # Non-navigational URI (mailto:/tel:/external http): the
+                    # machine-extraction fingerprint, not a broken link (#225).
+                    machine_links[rel(d)] = machine_links.get(rel(d), 0) + 1
+                elif (cleaned and not raw.strip().startswith("#")
                         and not _target_exists(raw, d, repo_root)):
                     _add_broken(d, cleaned, "mdlink")
                 continue
@@ -649,14 +675,79 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
         extra_exclude_patterns=extra_exclude_patterns,
     )
 
+    # Raw-source-tree exclusion (issue #225). Detect subtrees of raw,
+    # machine-extracted source documents - link-isolated and carrying the
+    # machine-extraction fingerprint - and exclude them from the headline
+    # read-side metrics so the curated-wiki signal isn't drowned. Detection runs
+    # on the *final* graph (after vault edges), so a doc made navigable by a
+    # `.base` hub or dataview query is not misread as raw.
+    excluded_docs, raw_trees = _detect_raw_trees(
+        graph, docs, repo_root, rel, base_hubs, machine_links,
+    )
+    curated_docs = [d for d in docs if rel(d) not in excluded_docs]
+    curated_nodes = [n for n in graph.nodes() if n not in excluded_docs]
+    curated_graph = graph.subgraph(curated_nodes).copy()
+    curated_broken = [b for b in broken if b.get("from") not in excluded_docs]
+    raw_broken = [b for b in broken if b.get("from") in excluded_docs]
+    curated_missing = [
+        mx for mx in missing
+        if mx.get("from") not in excluded_docs and mx.get("to") not in excluded_docs
+    ]
+
     result = _derive_signals(
-        graph=graph, docs=docs, repo_root=repo_root, rel=rel,
-        doc_to_code=doc_to_code, dangling=len(broken), ambiguous=ambiguous,
+        graph=curated_graph, docs=curated_docs, repo_root=repo_root, rel=rel,
+        doc_to_code=doc_to_code, dangling=len(curated_broken), ambiguous=ambiguous,
         vault=vault, obs=obs, base_hubs=base_hubs,
     )
-    result.broken_links = broken[:MAX_BROKEN_LINKS]
-    result.missing_xrefs = missing[:MAX_MISSING_XREFS]
+    result.broken_links = curated_broken[:MAX_BROKEN_LINKS]
+    result.missing_xrefs = curated_missing[:MAX_MISSING_XREFS]
+
+    # Raw-layer figures, reported separately so the exclusion stays legible.
+    in_deg_full = dict(graph.in_degree())
+    raw_doc_count = len(excluded_docs)
+    raw_orphans = sum(1 for r in excluded_docs if in_deg_full.get(r, 0) == 0)
+    result.excluded_raw_trees = [
+        {"path": t["path"], "file_count": t["file_count"]} for t in raw_trees
+    ]
+    result.raw_source_doc_count = raw_doc_count
+    result.curated_doc_count = result.doc_count
+    result.raw_source_orphan_rate = (raw_orphans / raw_doc_count) if raw_doc_count else 0.0
+    result.raw_source_broken_links = len(raw_broken)
     return result
+
+
+def _detect_raw_trees(
+    graph, docs: list[Path], repo_root: Path, rel, base_hubs: list[str],
+    machine_links: dict[str, int],
+) -> tuple[set[str], list[dict]]:
+    """Detect raw-source subtrees and return (excluded_doc_rels, raw_trees).
+
+    Assembles the per-doc graph signals (in/out degree from the final graph plus
+    the machine-extraction fingerprint count) and delegates the threshold-based
+    verdict to ``lib.raw_source.classify_raw_trees``. ``base_hubs`` and the
+    README/MOC entries are passed as entry points so a doc reachable through a
+    dynamic navigation surface is never counted toward a subtree's isolation.
+    """
+    from lib.raw_source import classify_raw_trees
+
+    in_deg = dict(graph.in_degree())
+    out_deg = dict(graph.out_degree())
+    doc_rels = {rel(d) for d in docs}
+    doc_signals = {
+        r: {
+            "in_degree": in_deg.get(r, 0),
+            "out_degree": out_deg.get(r, 0),
+            "machine_links": machine_links.get(r, 0),
+        }
+        for r in doc_rels
+    }
+    pagerank = _pagerank(graph)
+    entries = set(_pick_entry_points(docs, repo_root, pagerank, rel, base_hubs))
+    raw_trees = classify_raw_trees(doc_signals, entries=entries)
+    excluded: set[str] = set()
+    for tree in raw_trees:
+        excluded.update(tree["docs"])
+    return excluded, raw_trees
 
 
 def _apply_vault_edges(
