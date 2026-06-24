@@ -504,3 +504,88 @@ def test_dataview_tag_hub_uses_frontmatter(tmp_path: Path) -> None:
     # hub -> p1 (tagged project) only; p2 is not tagged so stays an orphan.
     assert "p1.md" not in r.orphans
     assert "p2.md" in r.orphans
+
+
+# ---- non-navigational URI scheme exclusions (issue #227) -------------------
+
+def test_tel_mdlink_not_counted_broken(tmp_path: Path) -> None:
+    """[text](tel:+1-555-1234) is a phone-dialer link. It is not a broken
+    navigation edge -- the file `tel:+1-555-1234` does not exist, and that
+    is expected. The broken-link counter must not count it."""
+    _write(tmp_path, "contact.md", "Call us at [phone](tel:+1-555-1234)")
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("tel:" in t for t in targets)
+
+
+def test_mailto_mdlink_not_counted_broken(tmp_path: Path) -> None:
+    """[text](mailto:hello@example.com) is an email link, not a broken file
+    reference. The broken-link counter must not count it."""
+    _write(tmp_path, "contact.md", "Email us at [email](mailto:hello@example.com)")
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("mailto:" in t for t in targets)
+
+
+def test_other_non_http_scheme_mdlink_not_counted_broken(tmp_path: Path) -> None:
+    """Non-navigational URI schemes beyond tel:/mailto: (sms:, callto:, etc.)
+    are not file references and must not contribute broken links."""
+    _write(
+        tmp_path,
+        "contact.md",
+        "Text us at [sms](sms:+1-555-1234) or via [Skype](skype:username)",
+    )
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("sms:" in t or "skype:" in t for t in targets)
+
+
+def test_tel_wikilink_not_counted_broken(tmp_path: Path) -> None:
+    """[[tel:+1-555-1234]] is a non-navigational URI in wikilink form. It
+    must not be counted as a broken wikilink to a missing note."""
+    _write(tmp_path, "contact.md", "Dial [[tel:+1-555-1234]] for support")
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("tel:" in t for t in targets)
+
+
+def test_mailto_wikilink_not_counted_broken(tmp_path: Path) -> None:
+    """[[mailto:user@example.com]] in wikilink form must not count as a broken
+    note reference."""
+    _write(tmp_path, "contact.md", "Write to [[mailto:user@example.com]]")
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("mailto:" in t for t in targets)
+
+
+def test_uri_scheme_inside_code_fence_not_counted(tmp_path: Path) -> None:
+    """A tel: or mailto: link shown as an example inside a fenced code block
+    (e.g. in a FORMAT spec or tutorial) must not count -- it is documentation
+    syntax, not a navigation edge."""
+    _write(
+        tmp_path,
+        "guide.md",
+        "Contact links look like:\n\n```markdown\n"
+        "[phone](tel:+1-555-1234)\n"
+        "[email](mailto:hello@example.com)\n"
+        "```\n",
+    )
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("tel:" in t or "mailto:" in t for t in targets)
+
+
+def test_real_file_links_still_flagged_after_scheme_exclusions(tmp_path: Path) -> None:
+    """URI-scheme exclusions must not accidentally suppress genuine broken
+    relative-path links. A link to a missing file must still be flagged."""
+    _write(tmp_path, "a.md", "[gone](missing-file.md) and [phone](tel:555-1234)")
+    r = build_doc_graph(tmp_path)
+    targets = {bl["target"] for bl in r.broken_links}
+    assert "missing-file.md" in targets
+    assert not any("tel:" in t for t in targets)
