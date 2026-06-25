@@ -142,7 +142,7 @@ In the team lifecycle the lead delegates and never executes, runner teammates ar
 Agent(subagent_type: "general-purpose", run_in_background: true, name: "fidelity", prompt: "<lens brief>")
 ```
 
-The panel cross-talks by sending one `SendMessage` per teammate (there is no broadcast). At the end of the run, shut down each teammate via a `SendMessage` shutdown_request; nothing persists to block a future run. **Interim behaviour (CC 2.1.178+) - do not block on a structured approval.** Since the team→subagent merge, a background subagent cannot send a structured `shutdown_response`; it rejects the request with "Structured team-protocol messages ... cannot be sent by a background subagent. Send a plain text message instead." Send `shutdown_request` **once**, treat the teammate's plain-text acknowledgement as the completion signal, and ignore any subsequent `idle_notification`s (`TaskStop` / `TaskList` cannot reach background teammates either; they reap when the session exits). Restore a real lead-side approval-wait here when anthropics/claude-code#68721 and anthropics/claude-code#60199 land.
+The panel cross-talks by sending one `SendMessage` per teammate (there is no broadcast). At the end of the run, shut down each teammate via a `SendMessage` shutdown_request; nothing persists to block a future run. Send `shutdown_request` **once**; the teammate approves with a structured `shutdown_response` (addressed to `team-lead`, echoing the `request_id`, `approve: true`), which terminates it. Treat that approval, or an already-exited teammate, as the completion signal; any that linger reap when the session exits.
 <!-- chat-skip:end -->
 
 ## Test taxonomy

@@ -1,4 +1,9 @@
-Deep Understanding Mode
+---
+description: "Deep understanding mode (nemawashi) - exhaustive context-gathering before action"
+argument-hint: "<thing to understand>"
+---
+
+# Deep Understanding Mode
 
 Lay groundwork before any solution. Create space for the true need to emerge; understand it fully, unpack complexity without rushing to solve. Reach an intuitive grasp of the core issue.
 
