@@ -144,6 +144,69 @@ def test_unknown_flag_exits_nonzero():
     assert res.returncode != 0
 
 
+# A `gh` stub covering every call the real ghsync discovery AND ghreport's
+# per-repo queries make, so the full pipeline runs offline. openrepo has no
+# branch protection (gh emits the real "(HTTP 404)" string); lockedrepo is
+# protected. This exercises the query path the hand-written fixtures bypass -
+# in particular the 404 grep that classifies "unprotected".
+GH_STUB_INTEGRATION = """\
+#!/usr/bin/env bash
+sub=$1; shift || true
+case "$sub" in
+  auth) exit 0 ;;
+  repo)
+    cat <<'JSON'
+[{"name":"openrepo","isArchived":false,"defaultBranchRef":{"name":"main"}},
+ {"name":"lockedrepo","isArchived":false,"defaultBranchRef":{"name":"main"}}]
+JSON
+    exit 0 ;;
+esac
+path=$1
+case "$path" in
+  users/*) echo "Organization" ;;
+  user/teams) echo "" ;;
+  *pulls*) echo '[]' ;;
+  *actions/runs*) echo '{"workflow_runs":[]}' ;;
+  *dependabot/alerts*) echo 0 ;;
+  *code-scanning/alerts*) echo 0 ;;
+  *secret-scanning/alerts*) echo 0 ;;
+  */openrepo/branches/*/protection) echo "gh: Branch not protected (HTTP 404)" >&2; exit 1 ;;
+  */lockedrepo/branches/*/protection) echo '{"required_pull_request_reviews":{}}' ;;
+  repos/testorg/*) echo '{"default_branch":"main"}' ;;
+  *) echo "" ;;
+esac
+"""
+
+
+def test_protection_detection_end_to_end(tmp_path):
+    """Full pipeline (real ghsync + stubbed gh): the unprotected signal must fire.
+
+    Guards the MUST-FIX regression where the 404 grep matched `(404)` instead
+    of the `(HTTP 404)` gh actually emits, so `unprotected` was dead code.
+    """
+    stub_dir = tmp_path / "bin"
+    stub_dir.mkdir()
+    gh = stub_dir / "gh"
+    gh.write_text(GH_STUB_INTEGRATION)
+    gh.chmod(0o755)
+    root = tmp_path / "root"
+    root.mkdir()
+    env = dict(os.environ)
+    env["PATH"] = f"{stub_dir}:{env['PATH']}"
+    res = subprocess.run(
+        ["bash", str(GHREPORT), "--org", "testorg", "--root", str(root),
+         "--quiet", "--no-file"],
+        capture_output=True, text=True, timeout=90, env=env,
+    )
+    assert res.returncode == 0, res.stderr
+    assert "1 with an unprotected default branch" in res.stdout
+    assert "| openrepo | 0 | none | 0 | 0 | 0 | unprotected |" in res.stdout
+    assert "| lockedrepo | 0 | none | 0 | 0 | 0 | protected |" in res.stdout
+    attention = res.stdout.split("Needs attention")[-1]
+    assert "openrepo" in attention and "unprotected" in attention
+    assert "lockedrepo" not in attention
+
+
 def test_missing_ghsync_exits_nonzero(tmp_path):
     """Discovery mode with no resolvable ghsync.sh must fail clearly, not hang."""
     isolated = tmp_path / "isolated"

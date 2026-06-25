@@ -128,7 +128,10 @@ query_repo() {
         protection="protected"
     else
         prot_err=$(gh api "repos/$ORG/$repo/branches/$default_branch/protection" 2>&1 || true)
-        if echo "$prot_err" | grep -q "(404)"; then
+        # gh formats a missing protection as "Branch not protected (HTTP 404)";
+        # a 404 means the branch genuinely has no protection, anything else
+        # (typically 403) means we were denied and must stay "unknown".
+        if echo "$prot_err" | grep -q "HTTP 404"; then
             protection="unprotected"
         fi
     fi
@@ -260,7 +263,7 @@ assemble() {
             echo "## Legend"
             echo ""
             echo "- **CI**: latest completed run per workflow on the default branch (\`pass\` / \`fail\` / \`none\`)."
-            echo "- **n/a** in an alert column: the alert API denied access (admin required) - not the same as zero."
+            echo "- **n/a** in an alert column: the alert API returned no access - the feature is disabled on the repo or admin access is required. Either way it is not the same as a confirmed zero."
             echo "- **Protection**: \`unknown\` means the protection API denied access; \`unprotected\` means it confirmed no protection."
         } > "$report_file"
         echo ""
@@ -290,10 +293,18 @@ if [ ! -f "$GHSYNC_SH" ]; then
 fi
 
 echo "Discovering repos in $ORG ..." >&2
+# Capture discovery output and exit status separately. Process substitution
+# would discard ghsync's exit code (it is not a pipeline, so pipefail does not
+# apply), masking an auth/deps failure as "no repositories". Capturing lets us
+# distinguish a genuine empty org from a failed discovery.
+disc_out=$(bash "$GHSYNC_SH" --porcelain --org "$ORG" --root "$ROOT" ${LIMIT:+--limit "$LIMIT"}) || {
+    echo "Error: repo discovery via ghsync failed (see its output above)." >&2
+    exit 1
+}
 repos=()
-mapfile -t repos < <(bash "$GHSYNC_SH" --porcelain --org "$ORG" --root "$ROOT" ${LIMIT:+--limit "$LIMIT"})
+[ -n "$disc_out" ] && mapfile -t repos <<< "$disc_out"
 if [ ${#repos[@]} -eq 0 ]; then
-    echo "No repositories discovered for $ORG." >&2
+    echo "No repositories discovered for $ORG (the org is empty or nothing is accessible)." >&2
     exit 0
 fi
 echo "Querying state for ${#repos[@]} repo(s) ..." >&2
