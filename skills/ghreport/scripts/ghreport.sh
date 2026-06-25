@@ -297,7 +297,7 @@ echo "Discovering repos in $ORG ..." >&2
 # would discard ghsync's exit code (it is not a pipeline, so pipefail does not
 # apply), masking an auth/deps failure as "no repositories". Capturing lets us
 # distinguish a genuine empty org from a failed discovery.
-disc_out=$(bash "$GHSYNC_SH" --porcelain --org "$ORG" --root "$ROOT" ${LIMIT:+--limit "$LIMIT"}) || {
+disc_out=$(bash "$GHSYNC_SH" --porcelain --org "$ORG" --root "$ROOT") || {
     echo "Error: repo discovery via ghsync failed (see its output above)." >&2
     exit 1
 }
@@ -306,6 +306,15 @@ repos=()
 if [ ${#repos[@]} -eq 0 ]; then
     echo "No repositories discovered for $ORG (the org is empty or nothing is accessible)." >&2
     exit 0
+fi
+
+# --limit caps the expensive querying (~5 REST calls per repo), so apply it
+# here rather than passing it to ghsync: ghsync's --porcelain implies
+# --list-repos, which exits before ghsync applies its own --limit, so a
+# passed-through limit would be silently ignored.
+if [ "$LIMIT" -gt 0 ] && [ "$LIMIT" -lt ${#repos[@]} ]; then
+    echo "Limiting to the first $LIMIT of ${#repos[@]} discovered repo(s)." >&2
+    repos=("${repos[@]:0:$LIMIT}")
 fi
 echo "Querying state for ${#repos[@]} repo(s) ..." >&2
 

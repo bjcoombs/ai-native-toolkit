@@ -207,6 +207,29 @@ def test_protection_detection_end_to_end(tmp_path):
     assert "lockedrepo" not in attention
 
 
+def test_limit_truncates_before_querying(tmp_path):
+    """--limit must actually cap the repos queried, not silently no-op."""
+    stub_dir = tmp_path / "bin"
+    stub_dir.mkdir()
+    gh = stub_dir / "gh"
+    gh.write_text(GH_STUB_INTEGRATION)
+    gh.chmod(0o755)
+    root = tmp_path / "root"
+    root.mkdir()
+    env = dict(os.environ)
+    env["PATH"] = f"{stub_dir}:{env['PATH']}"
+    res = subprocess.run(
+        ["bash", str(GHREPORT), "--org", "testorg", "--root", str(root),
+         "--quiet", "--no-file", "--limit", "1"],
+        capture_output=True, text=True, timeout=90, env=env,
+    )
+    assert res.returncode == 0, res.stderr
+    assert "Limiting to the first 1 of 2" in res.stderr
+    data_rows = [ln for ln in res.stdout.splitlines()
+                 if ln.startswith("| ") and "Repo" not in ln and "---" not in ln]
+    assert len(data_rows) == 1, data_rows
+
+
 def test_missing_ghsync_exits_nonzero(tmp_path):
     """Discovery mode with no resolvable ghsync.sh must fail clearly, not hang."""
     isolated = tmp_path / "isolated"
