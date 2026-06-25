@@ -111,7 +111,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      sed -n '4,45p' "$0"
+      sed -n '4,44p' "$0"
       exit 0
       ;;
     *)
