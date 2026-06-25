@@ -327,7 +327,7 @@ SendMessage(to: "<member-name>", message: { type: "shutdown_request", reason: "A
 
 Once every teammate has reported or acknowledged shutdown, the huddle is complete - nothing persists to block a future one.
 
-**Interim behaviour (CC 2.1.178+) - do not block on a structured approval.** Since the team→subagent merge, a background subagent cannot send a structured `shutdown_response`; it rejects the request with "Structured team-protocol messages ... cannot be sent by a background subagent. Send a plain text message instead." So send `shutdown_request` **once**, treat the teammate's plain-text acknowledgement as the completion signal, and ignore any subsequent `idle_notification`s rather than re-sending or waiting on an approval that never arrives (`TaskStop` / `TaskList` cannot reach background teammates either; they reap when the session exits). Restore a real lead-side approval-wait here when anthropics/claude-code#68721 and anthropics/claude-code#60199 land.
+**Shutdown handshake.** Send each still-running teammate one `shutdown_request`. It approves with a structured `shutdown_response` (addressed to `team-lead` - a teammate's `to: "main"` bounces back to itself - echoing the `request_id`, `approve: true`), and approving terminates the teammate. Treat that approval, or an already-exited teammate that never replies, as the completion signal; don't block waiting on one that has already gone. Any that linger reap when the session exits.
 <!-- chat-skip:end -->
 
 ## Facilitation Principles

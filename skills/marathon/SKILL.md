@@ -446,7 +446,7 @@ The lead operates as a **tech lead running a sprint** — not a task router.
 
 ## Completion + Retrospective
 
-1. Send `shutdown_request` to each remaining teammate **once**. **Interim behaviour (CC 2.1.178+) - do not block on a structured approval.** Since the team→subagent merge, a background subagent cannot send a structured `shutdown_response`; it rejects the request with "Structured team-protocol messages ... cannot be sent by a background subagent. Send a plain text message instead." Treat the teammate's plain-text acknowledgement (or its already-exited state) as the completion signal, and ignore any subsequent `idle_notification`s rather than re-sending or waiting (`TaskStop` / `TaskList` cannot reach background teammates either). Restore a real lead-side approval-wait here when anthropics/claude-code#68721 and anthropics/claude-code#60199 land.
+1. Send `shutdown_request` to each remaining teammate **once**. Each approves with a structured `shutdown_response` (addressed to `team-lead`, echoing the `request_id`, `approve: true`), which terminates it. Treat that approval, or an already-exited teammate, as the completion signal - don't block waiting on one that has already gone.
 2. Once every teammate has acknowledged shutdown or already exited, the team is gone - background teammates reap when the session exits. If a stale one lingers, verify its pane/process is dead. Nothing persists to block a future marathon.
 3. **PRD delivery check** — Re-read the original work units' acceptance criteria (PRD, issue bodies, or task details) and cross-reference against merged PRs. Report:
    - Criteria met (with PR evidence)

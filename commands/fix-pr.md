@@ -1,3 +1,8 @@
+---
+description: "Autonomous PR fixing loop - iterates on CI failures and review comments until green"
+argument-hint: "[pr-number] (optional - derives from current branch if omitted)"
+---
+
 # Fix PR Autonomously
 
 Enter autonomous PR review loop for the current branch's PR. Loops until the PR is merge-ready across ALL criteria, not just CI.

@@ -1,3 +1,8 @@
+---
+description: "Autonomous fix loop for failing CI on the repo's default branch"
+argument-hint: "[branch] (optional - defaults to the repo's default branch)"
+---
+
 # Fix Default Branch
 
 Assess failing CI on the repo's default branch (main / develop / etc., or nightly build), create a worktree with a fix, push a PR, and loop until CI passes and review comments are addressed.
