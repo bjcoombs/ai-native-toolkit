@@ -42,11 +42,20 @@ from lib.badge import score_badge, write_badge
 from lib.wiki_writer import slug_for_path
 
 
-def _finalize_log(assess_dir: Path, *, score: float, maturity_label: str, top_action: str) -> None:
+def _finalize_log(
+    assess_dir: Path,
+    *,
+    score: float,
+    maturity_label: str,
+    top_action: str,
+    denominator: int = 8,
+) -> None:
     """Replace placeholders in the latest log.md entry.
 
     Only the most recent entry (top of file after the heading) is updated.
-    Prior entries are immutable historical records.
+    Prior entries are immutable historical records. ``denominator`` is 8 for a
+    software repo and the applicable-layer count for a knowledge base (#224),
+    so the finalised line reads ``2.5 / 3`` rather than ``2.5 / 8``.
     """
     log_path = assess_dir / "log.md"
     if not log_path.exists():
@@ -55,11 +64,13 @@ def _finalize_log(assess_dir: Path, *, score: float, maturity_label: str, top_ac
     text = log_path.read_text(encoding="utf-8")
     # Replace the LAST occurrence of each placeholder - log entries are appended
     # (newest at the bottom of the file), and we want to finalize the latest run.
-    # An unfinalized older entry stays untouched as historical evidence.
+    # An unfinalized older entry stays untouched as historical evidence. The
+    # placeholder the core writes is always "/ 8"; the finalised denominator may
+    # differ for a knowledge base, so the replacement carries it explicitly.
     text = _replace_last(
         text,
         pattern=r"\*\*AI Readiness:\*\* [\d.]+ / 8 \(\(LLM fills in\)\)",
-        replacement=f"**AI Readiness:** {score} / 8 ({maturity_label})",
+        replacement=f"**AI Readiness:** {score} / {denominator} ({maturity_label})",
     )
     text = _replace_last(
         text,
@@ -168,11 +179,16 @@ def finalize_run(*, assess_dir: Path) -> None:
     """
     input_path = _locate_input(assess_dir)
     data = json.loads(input_path.read_text(encoding="utf-8"))
+    # Denominator: 8 for a software repo (the display ceiling), or the count of
+    # applicable layers for a knowledge base (issue #224). Defaults to 8 so a
+    # pre-archetype finalize-input.json finalises exactly as before.
+    denominator = int(data.get("denominator", 8))
     _finalize_log(
         assess_dir,
         score=data["score"],
         maturity_label=data["maturity_label"],
         top_action=data["top_action"],
+        denominator=denominator,
     )
     _finalize_hotspot_actions(assess_dir, hotspot_actions=data.get("hotspot_actions", {}))
     actions = data.get("actions")
@@ -181,7 +197,7 @@ def finalize_run(*, assess_dir: Path) -> None:
     # The score badge always overwrites: finalize carries the freshest
     # LLM-scored run, the strongest claim the badge is allowed to make.
     write_badge(
-        assess_dir, score_badge(data["score"], data["maturity_label"])
+        assess_dir, score_badge(data["score"], data["maturity_label"], denominator)
     )
     # Clean up: the input file is consumed - delete from both the cache and
     # the legacy in-tree location so a stale copy can't leak into a commit.

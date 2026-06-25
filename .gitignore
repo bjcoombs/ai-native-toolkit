@@ -49,3 +49,7 @@ dist/standalone-skills/
 # the grader tests have committed inputs on CI.
 !/skills/assess/tests/fixtures/lean_with_skills/CLAUDE.md
 !/skills/assess/tests/fixtures/lean_with_skills/.claude/
+# skill-forge's instruction-file calibration fixture: a deliberately flawed
+# always-loaded CLAUDE.md with a count-surface trap (issue #226). Committed so
+# the contract test has an input on CI.
+!/skills/skill-forge/tests/fixtures/flawed-instruction-file/CLAUDE.md

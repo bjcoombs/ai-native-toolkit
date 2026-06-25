@@ -29,34 +29,47 @@ from typing import Any
 BADGE_FILENAME = "badge.json"
 LABEL = "AI-readiness"
 
-# Score -> shields colour. Ordered thresholds, first match wins. The bands
-# mirror the maturity ladder: the top colour starts where "AI-Native" scoring
-# typically lands, the bottom is reserved for near-zero scaffolding.
-_SCORE_COLORS: list[tuple[float, str]] = [
-    (7.0, "brightgreen"),
-    (5.5, "green"),
-    (4.0, "yellowgreen"),
-    (2.5, "yellow"),
-    (1.0, "orange"),
+# Score -> shields colour, expressed as a *fraction of the denominator* so the
+# bands hold whether the score is over the full 0-8 software scale or a
+# renormalised knowledge-base denominator (issue #224). Ordered thresholds,
+# first match wins; the top band starts where "AI-Native" lands (7/8 = 0.875),
+# the bottom is reserved for near-zero scaffolding. For the default
+# denominator 8 these fractions reproduce the original absolute thresholds
+# exactly (0.875·8 = 7.0, 0.6875·8 = 5.5, ...).
+_SCORE_COLOR_RATIOS: list[tuple[float, str]] = [
+    (0.875, "brightgreen"),
+    (0.6875, "green"),
+    (0.5, "yellowgreen"),
+    (0.3125, "yellow"),
+    (0.125, "orange"),
     (0.0, "red"),
 ]
 
 
-def score_color(score: float) -> str:
-    """Deterministic colour band for a 0-8 layered score."""
-    for floor, color in _SCORE_COLORS:
-        if score >= floor:
+def score_color(score: float, denominator: float = 8) -> str:
+    """Deterministic colour band for a layered score over its denominator."""
+    ratio = (score / denominator) if denominator else 0.0
+    for floor, color in _SCORE_COLOR_RATIOS:
+        if ratio >= floor:
             return color
     return "red"
 
 
-def score_badge(score: float, maturity_label: str) -> dict[str, Any]:
-    """The headline badge: layered score + maturity label."""
+def score_badge(
+    score: float, maturity_label: str, denominator: int = 8
+) -> dict[str, Any]:
+    """The headline badge: layered score + maturity label.
+
+    ``denominator`` is 8 for a software repo (the display ceiling) and the
+    count of applicable layers for a knowledge base (issue #224), so the badge
+    reads e.g. ``2.5/3 · Knowledge Base · Solid`` instead of a misleading
+    ``2.5/8``.
+    """
     return {
         "schemaVersion": 1,
         "label": LABEL,
-        "message": f"{score}/8 · {maturity_label}",
-        "color": score_color(score),
+        "message": f"{score}/{denominator} · {maturity_label}",
+        "color": score_color(score, denominator),
     }
 
 

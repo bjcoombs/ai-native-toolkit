@@ -53,6 +53,68 @@ def test_untracked_instruction_file_flagged_not_graded(git_repo, fixtures_dir: P
     assert "CLAUDE.md" in ctx["untracked_instruction_files"]    # but flagged
 
 
+def test_archetype_block_emitted_for_software_repo(git_repo) -> None:
+    """Issue #224: run-context carries an archetype block; a code repo is software."""
+    repo, commit = git_repo
+    _seed_assess(repo)
+    src = repo / "src"
+    src.mkdir()
+    for i in range(12):
+        (src / f"mod_{i}.py").write_text(f"def f{i}():\n    return {i}\n", encoding="utf-8")
+    (repo / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+    commit("software repo")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    arch = ctx["archetype"]
+    assert arch["available"] is True
+    assert arch["archetype"] == "software"
+    assert arch["na_layers"] == []
+    assert arch["denominator"] == 8
+
+
+def test_archetype_block_detects_knowledge_base(git_repo) -> None:
+    """Issue #224: a markdown-only repo is detected as a knowledge base with
+    write-side layers N/A and a renormalised denominator."""
+    repo, commit = git_repo
+    _seed_assess(repo)
+    notes = repo / "notes"
+    notes.mkdir()
+    for i in range(15):
+        (notes / f"note-{i}.md").write_text(f"# Note {i}\n\nbody\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text(
+        "# KB\nRaw sources are immutable. A periodic consolidation pass lints the wiki.\n",
+        encoding="utf-8",
+    )
+    commit("knowledge base")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    arch = ctx["archetype"]
+    assert arch["archetype"] == "knowledge-base"
+    assert arch["na_layers"] == [2, 3, 4, 5, 6, 7]
+    assert arch["denominator"] == 3
+    assert arch["kb_maintenance"]["documented"] is True
+
+
+def test_archetype_override_marker_suppresses(git_repo) -> None:
+    """Issue #224: an `assess-archetype: software` marker forces software even
+    on a markdown-only repo."""
+    repo, commit = git_repo
+    _seed_assess(repo)
+    notes = repo / "notes"
+    notes.mkdir()
+    for i in range(15):
+        (notes / f"note-{i}.md").write_text(f"# Note {i}\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text(
+        "# Docs repo\n\n<!-- assess-archetype: software -->\n", encoding="utf-8"
+    )
+    commit("override to software")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    arch = ctx["archetype"]
+    assert arch["archetype"] == "software"
+    assert arch["detected_via"] == "override"
+
+
 def test_dangling_symlink_instruction_is_broken_ref(git_repo) -> None:
     """Issue #34 Gap 2: a committed instruction file that is a dangling symlink
     is an advertised-but-broken reference."""

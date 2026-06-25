@@ -201,12 +201,15 @@ SKILLS: dict[str, dict] = {
     "skill-forge": {
         "standalone_name": "skill-forge",
         "standalone_description": (
-            "Harden a skill (draft or existing) through judge-panel refinement rounds until it "
-            "clears a 3-tier promotion gate, then promote it. A quality gate that runs after "
-            "authoring, not an authoring tool. TRIGGER when asked to test/harden/forge/prove a "
-            "skill, wanting a skill driven through adversarial rounds before shipping, asking 'is "
-            "this skill ready?', or wanting a skill quality-gated by a judge panel. Team mode "
-            "with persistent judges requires the Claude Code CLI; this build runs solo."
+            "Harden a skill or any agent instruction file (CLAUDE.md, AGENTS.md, GEMINI.md, "
+            ".cursor/rules, .github/copilot-instructions.md) through judge-panel refinement "
+            "rounds until it clears a 3-tier promotion gate, then promote it. A quality gate "
+            "that runs after authoring, not an authoring tool. TRIGGER when asked to "
+            "test/harden/forge/prove a skill or an instruction file, wanting a skill or a "
+            "CLAUDE.md driven through adversarial rounds before shipping, asking 'is this skill "
+            "ready?' or 'is this CLAUDE.md safe for a cold-start agent?', or wanting a skill or "
+            "instruction file quality-gated by a judge panel. Team mode with persistent judges "
+            "requires the Claude Code CLI; this build runs solo."
             + VERSION_SUFFIX
         ),
         "source_dir": "skills/skill-forge",

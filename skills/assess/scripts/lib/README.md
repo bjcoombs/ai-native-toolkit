@@ -110,6 +110,19 @@ previously reported as no vault, silently disabling downstream vault accommodati
 Pruning `EXCLUDE_DIRS` keeps a vendored or build-artifact `.obsidian/` from tripping a false
 positive.
 
+**`raw_source.py`**
+Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:
+given per-doc graph signals (in/out degree + a machine-extraction-link count), it
+identifies maximal directory subtrees that are large, almost entirely
+link-isolated, and carry the machine-extraction fingerprint - a dump of raw,
+machine-extracted source documents (a disclosure / SAR export of converted
+`.msg`/`.pdf` files). `doc_graph.py` gathers the signals from the link graph it
+already builds and excludes the qualifying subtrees from the headline read-side
+metrics (orphan rate, reachability, broken links), reporting them separately so
+the curated-wiki signal isn't drowned. Pure - no `doc_graph` import - so
+`doc_graph.py` owns the graph and consumes this module's verdict. Co-changes with
+`doc_graph.py` (its consumer) and its test `tests/test_raw_source.py`.
+
 **`vault_queries.py`**
 Static parser for Obsidian dynamic-navigation hubs: `.base` view files and
 `dataview` query blocks. Resolves the folder / tag / frontmatter-field
@@ -337,13 +350,35 @@ repo north star. Degrades to `available: False` on git failure and
 orchestrator. Add a fixture-backed test in `tests/test_accretion_ratchet.py`
 alongside any change to the flagging rule.
 
+**`archetype.py`**
+Repository archetype detection (issue #224). Classifies a repo as `software` or
+`knowledge-base` from the code-file ratio + the absence of a runtime surface
+(`package.json`/`pyproject.toml`/`go.mod`/`Dockerfile`/...), with an
+`assess-archetype:` marker in any instruction file that **forces or suppresses**
+the verdict. A knowledge base has no code surface for the write-side layers, so
+the block names L2-L7 as `na_layers` (rendered N/A, excluded from the
+denominator) and renormalises the denominator over the applicable layers (L0,
+L1, L8 → 3). Also detects the Karpathy LLM-wiki maintenance pattern
+(`kb_maintenance` - immutable sources, schema-as-product, ingest, query-as-filing,
+periodic consolidation) as a Layer 0 read-side signal and always carries the
+gist pointer. The IO-free `classify_archetype` is the tested core; `analyze_archetype`
+gathers the inputs. Imports `doc_graph` (extensions) and `git_churn`
+(`tracked_files`), never an orchestrator. Structured as an extensible dispatch
+(one archetype today, YAGNI on a general framework). Read by `assess_core`
+(writes the `archetype` block to `run-context.json`), the `assess-layer-scorer`
+agent (N/A scoring + denominator), and the `assess-findings` skill (renders N/A
++ renormalised headline). Co-changes with `badge.py`/`assess_finalize.py` (the
+denominator) and its test `tests/test_archetype.py`.
+
 **`badge.py`**
 Shields.io endpoint badge for the wiki (`.assess/badge.json`). Two producers on an
 honest-degrade ladder: `assess_finalize` always writes the LLM-scored form
-("7.0/8 · AI-Native", colour banded from the score), `assess_core` writes the
-deterministic findings-count fallback only when no badge exists - so a gate-only
-repo gets a truthful badge and a scored badge is never downgraded by a
-deterministic-only rerun. Pure threshold functions, fixture-tested.
+("7.0/8 · AI-Native", colour banded from the score over its denominator -
+`denominator` defaults to 8 but renormalises for a knowledge-base archetype, e.g.
+"2.5/3 · Knowledge Base · Solid"), `assess_core` writes the deterministic
+findings-count fallback only when no badge exists - so a gate-only repo gets a
+truthful badge and a scored badge is never downgraded by a deterministic-only
+rerun. Pure threshold functions, fixture-tested.
 
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible

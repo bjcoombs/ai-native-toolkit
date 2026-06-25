@@ -57,6 +57,28 @@ def test_finalize_updates_log_last_entry(tmp_assess_dir: Path) -> None:
     assert "Deterministic ranker not yet wired" not in content
 
 
+def test_finalize_knowledge_base_denominator(tmp_assess_dir: Path) -> None:
+    """A KB run finalises the log + badge over its applicable-layer denominator (#224)."""
+    _seed_log_md(tmp_assess_dir)
+    finalize_input = {
+        "score": 2.5,
+        "maturity_label": "Knowledge Base · Solid (3 applicable layers)",
+        "denominator": 3,
+        "top_action": "Document the KB maintenance workflow in CLAUDE.md",
+        "hotspot_actions": {},
+    }
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "AI Readiness:** 2.5 / 3 (Knowledge Base · Solid (3 applicable layers))" in content
+    assert "/ 8" not in content  # the misleading software denominator is gone
+    badge = json.loads((tmp_assess_dir / "badge.json").read_text(encoding="utf-8"))
+    assert badge["message"].startswith("2.5/3 · Knowledge Base")
+
+
 def test_finalize_updates_hotspot_actions(tmp_assess_dir: Path) -> None:
     """Hotspot pages get their 'Suggested actions' section rewritten with LLM input."""
     # The slug for "src/foo.go" includes a sha256[:8] hash - use the same function the script uses

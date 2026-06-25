@@ -40,6 +40,19 @@ The write-side scores aren't abstract good practice - each traces to a known ten
 - **Unactioned intent** - an agent records promises it never returns to keep (`TODO` / `FIXME` / "remove after migration"). Instrumented via the `unactioned_intent` finding: markers aged by the edits they survived without being kept - a lying map of intent.
 - **Guardrail erosion** - under pressure to make red go green, an agent loosens the check instead of fixing the root (a suppression, a skipped test, a widened threshold), hollowing out the layers meant to protect it while they still read as Present.
 
+### Repository archetype (not every repo is software)
+
+The 0-8 model assumes a software repo. A **knowledge / document base** - markdown sources, an LLM-maintained wiki, a `CLAUDE.md` schema, and no application code or runtime - has no code surface for the write-side layers (L2-L7). Scoring them Missing is itself a lying score: a well-run KB reads ~2.5/8 ("Not Ready") when it is in fact well-run, penalised for not testing code it doesn't contain.
+
+The deterministic core (`lib/archetype.py`) classifies the repo and writes an `archetype` block to `run-context.json`:
+
+- **Detection** is a heuristic - the code-file ratio (code vs markdown) and the absence of a runtime surface (`package.json`, `pyproject.toml`, `go.mod`, `Dockerfile`, ...). A documentation-heavy *application* (lots of markdown but a real build) stays software because of the runtime-surface gate.
+- **Override marker.** An `assess-archetype: knowledge-base` (or `software`) marker in any instruction file (`CLAUDE.md`/`AGENTS.md`/...) **forces or suppresses** detection, so a maintainer is never trapped by a misfire. Write it as an HTML comment, e.g. `<!-- assess-archetype: knowledge-base -->`.
+- **Scoring.** For a detected knowledge base the write-side layers (2-7) are scored **N/A** (not Missing) and **excluded from the denominator**; the headline renormalises over the applicable layers (L0, L1, L8 → denominator 3) and the maturity label names the archetype and the applicable-layer count (e.g. `Knowledge Base · Solid (3 applicable layers)`). A software repo is unaffected - all 0-8 layers, denominator 8.
+- **KB-maintenance signal.** `archetype.kb_maintenance` flags whether the repo documents *how the AI maintains the KB* - the [Karpathy LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (immutable raw sources, the schema file as the product, an ingest workflow, query-as-filing, periodic lint/consolidation). It is both a detection signal and a scored read-side (Layer 0) quality signal; the gist is cited in the report as the best-practice pointer whether or not the workflow is documented.
+
+This is intentionally **one** archetype (knowledge base), structured as an extensible dispatch so more are cheap to add later - not a general archetype framework (YAGNI). The `assess-layer-scorer` agent reads the block (its Step 0) and the `assess-findings` skill renders N/A layers and the renormalised headline.
+
 <!-- chat-skip:start -->
 **$ARGUMENTS**
 <!-- chat-skip:end -->
@@ -264,6 +277,8 @@ Full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS
 
 The script's own output directory `.assess/` is excluded automatically - prior runs' `run-context.json` and SVGs never feed the next run's heatmap, the doc graph, or the dead-code scan. Test fixtures under `**/tests/fixtures/**` are likewise excluded automatically - they are inputs that exercise the scanners (sample `CLAUDE.md` / monolithic-instruction files), not navigational docs or live code, so counting them would inflate the orphan rate and depress the Layer 0 navigability read.
 
+**Raw-source-tree exclusion.** The read-side metrics (orphan rate, reachability, broken links) describe the **curated wiki** - the navigable layer an agent traverses. A repo can also track trees of raw, machine-extracted source documents (a disclosure / SAR export of hundreds of `.msg`/`.pdf`/`.docx` files converted to markdown). Those are immutable raw sources: they legitimately have no inbound wiki links and carry machine-extracted, non-navigational links (`mailto:`/`tel:`/footer URLs), so counting them as orphans / broken links inflates the figures and masks the curated signal. The doc graph auto-detects such subtrees - threshold-based: a large subtree that is almost entirely link-isolated *and* carries the machine-extraction fingerprint (`lib/raw_source.py`) - and **excludes** them from the headline metrics, reporting each excluded tree + its file count (`doc_graph.excluded_raw_trees`) and the raw layer's own figures separately (`raw_source_doc_count` / `raw_source_orphan_rate` / `raw_source_broken_links`). A repo with no raw-source tree is unaffected. The detection reuses the link graph already built, so there is no second parse.
+
 **If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated - <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
 
 Run the full sequence - rotate the prior sidecar first, then the treemap, then the deterministic core:
@@ -411,6 +426,7 @@ cat > "$REPO_ROOT/.assess/.cache/finalize-input.json" <<'EOF'
 {
   "score": 6.0,
   "maturity_label": "Solid",
+  "denominator": 8,
   "top_action": "Add cyclop rule (threshold 15) to .golangci.yml",
   "hotspot_actions": {
     "src/foo.go": [
@@ -447,6 +463,8 @@ This replaces:
 - `log.md`'s last entry placeholder `**AI Readiness:** 0.0 / 8 ((LLM fills in))` with your actual score and maturity label.
 - `log.md`'s last entry placeholder `**Top action:** Deterministic ranker not yet wired ...` with your actual Top 1 action.
 - Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file.
+
+The optional `denominator` field is **8** for a software repo (the default when omitted) or the applicable-layer count for a detected archetype (3 for a knowledge base - see "Repository archetype" above). `assess_finalize.py` renormalises both the `log.md` AI-Readiness line and the badge over it, so a KB reads `2.5 / 3` rather than a misleading `2.5 / 8`.
 
 `assess_finalize.py` also refreshes `.assess/badge.json` (shields.io endpoint schema) from your score and maturity label - the live README badge. When offering the PR (assess-pr), include the embed snippet if the repo's README has no badge yet:
 

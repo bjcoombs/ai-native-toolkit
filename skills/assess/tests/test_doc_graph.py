@@ -504,3 +504,170 @@ def test_dataview_tag_hub_uses_frontmatter(tmp_path: Path) -> None:
     # hub -> p1 (tagged project) only; p2 is not tagged so stays an orphan.
     assert "p1.md" not in r.orphans
     assert "p2.md" in r.orphans
+
+
+# ---- non-navigational URI scheme exclusions (issue #227) -------------------
+
+def test_tel_mdlink_not_counted_broken(tmp_path: Path) -> None:
+    """[text](tel:+1-555-1234) is a phone-dialer link. It is not a broken
+    navigation edge -- the file `tel:+1-555-1234` does not exist, and that
+    is expected. The broken-link counter must not count it."""
+    _write(tmp_path, "contact.md", "Call us at [phone](tel:+1-555-1234)")
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("tel:" in t for t in targets)
+
+
+def test_mailto_mdlink_not_counted_broken(tmp_path: Path) -> None:
+    """[text](mailto:hello@example.com) is an email link, not a broken file
+    reference. The broken-link counter must not count it."""
+    _write(tmp_path, "contact.md", "Email us at [email](mailto:hello@example.com)")
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("mailto:" in t for t in targets)
+
+
+def test_other_non_http_scheme_mdlink_not_counted_broken(tmp_path: Path) -> None:
+    """Non-navigational URI schemes beyond tel:/mailto: (sms:, callto:, etc.)
+    are not file references and must not contribute broken links."""
+    _write(
+        tmp_path,
+        "contact.md",
+        "Text us at [sms](sms:+1-555-1234) or via [Skype](skype:username)",
+    )
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("sms:" in t or "skype:" in t for t in targets)
+
+
+def test_tel_wikilink_not_counted_broken(tmp_path: Path) -> None:
+    """[[tel:+1-555-1234]] is a non-navigational URI in wikilink form. It
+    must not be counted as a broken wikilink to a missing note."""
+    _write(tmp_path, "contact.md", "Dial [[tel:+1-555-1234]] for support")
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("tel:" in t for t in targets)
+
+
+def test_mailto_wikilink_not_counted_broken(tmp_path: Path) -> None:
+    """[[mailto:user@example.com]] in wikilink form must not count as a broken
+    note reference."""
+    _write(tmp_path, "contact.md", "Write to [[mailto:user@example.com]]")
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("mailto:" in t for t in targets)
+
+
+def test_uri_scheme_inside_code_fence_not_counted(tmp_path: Path) -> None:
+    """A tel: or mailto: link shown as an example inside a fenced code block
+    (e.g. in a FORMAT spec or tutorial) must not count -- it is documentation
+    syntax, not a navigation edge."""
+    _write(
+        tmp_path,
+        "guide.md",
+        "Contact links look like:\n\n```markdown\n"
+        "[phone](tel:+1-555-1234)\n"
+        "[email](mailto:hello@example.com)\n"
+        "```\n",
+    )
+    r = build_doc_graph(tmp_path)
+    assert r.dangling_links == 0
+    targets = {bl["target"] for bl in r.broken_links}
+    assert not any("tel:" in t or "mailto:" in t for t in targets)
+
+
+def test_real_file_links_still_flagged_after_scheme_exclusions(tmp_path: Path) -> None:
+    """URI-scheme exclusions must not accidentally suppress genuine broken
+    relative-path links. A link to a missing file must still be flagged."""
+    _write(tmp_path, "a.md", "[gone](missing-file.md) and [phone](tel:555-1234)")
+    r = build_doc_graph(tmp_path)
+    targets = {bl["target"] for bl in r.broken_links}
+    assert "missing-file.md" in targets
+    assert not any("tel:" in t for t in targets)
+
+
+# --- Raw-source-tree exclusion (issue #225) -------------------------------
+
+def _curated_wiki(root: Path) -> None:
+    """A small, well-linked curated wiki: index hub + three linked notes."""
+    _write(root, "index.md", "# Index\n[[setup]] [[guide]] [[api]]")
+    _write(root, "setup.md", "see [[guide]]")
+    _write(root, "guide.md", "back to [[index]]")
+    _write(root, "api.md", "[[setup]]")
+
+
+def _raw_export(root: Path, subdir: str, n: int) -> None:
+    """A raw-source dump: ``n`` link-isolated docs each carrying a
+    machine-extracted (mailto:/tel:) link, the SAR-export fingerprint."""
+    for i in range(n):
+        _write(
+            root, f"{subdir}/msg-{i:03d}.md",
+            f"From: sender{i}@example.com\n"
+            f"Contact [email](mailto:user{i}@example.com) or [call](tel:+1-555-{i:04d}).\n"
+            "Body text extracted from the original message.\n",
+        )
+
+
+def test_raw_source_tree_excluded_from_metrics(tmp_path: Path) -> None:
+    _curated_wiki(tmp_path)
+    _raw_export(tmp_path, "sar-export", 14)
+    r = build_doc_graph(tmp_path)
+
+    # The raw subtree is named with its file count.
+    assert r.excluded_raw_trees == [{"path": "sar-export", "file_count": 14}]
+    assert r.raw_source_doc_count == 14
+
+    # Curated metrics exclude the raw docs: none of the raw files appear as
+    # orphans, and the curated layer is small + well-connected.
+    assert not any(o.startswith("sar-export/") for o in r.orphans)
+    assert r.curated_doc_count == 4
+    assert r.doc_count == 4  # headline doc_count is the curated layer
+    # Orphan rate over the curated wiki is low, not the ~78% the raw dump
+    # would have produced if counted.
+    assert r.orphan_rate <= 0.25
+    # The raw layer's own orphan rate is reported separately and is high.
+    assert r.raw_source_orphan_rate >= 0.9
+
+
+def test_no_raw_tree_is_unaffected(tmp_path: Path) -> None:
+    _curated_wiki(tmp_path)
+    _write(tmp_path, "lonely.md", "I link to nobody")
+    r = build_doc_graph(tmp_path)
+    assert r.excluded_raw_trees == []
+    assert r.raw_source_doc_count == 0
+    assert r.raw_source_broken_links == 0
+    assert r.curated_doc_count == r.doc_count == 5
+    # lonely.md is still a genuine orphan - not swept up by raw detection.
+    assert "lonely.md" in r.orphans
+
+
+def test_raw_broken_links_excluded_from_headline(tmp_path: Path) -> None:
+    _curated_wiki(tmp_path)
+    # Raw docs that also carry a broken relative link: the broken link must be
+    # attributed to the raw layer, not the curated headline count.
+    for i in range(14):
+        _write(
+            tmp_path, f"dump/msg-{i:03d}.md",
+            f"[email](mailto:user{i}@example.com) and [missing](./ghost-{i}.md)\n",
+        )
+    r = build_doc_graph(tmp_path)
+    assert r.excluded_raw_trees == [{"path": "dump", "file_count": 14}]
+    # No curated broken link points at a raw ghost target.
+    assert not any(bl["from"].startswith("dump/") for bl in r.broken_links)
+    assert r.raw_source_broken_links >= 14
+
+
+def test_isolated_curated_folder_not_excluded(tmp_path: Path) -> None:
+    # A folder of hand-written standalone notes (link-isolated but NO machine
+    # fingerprint) must not be mistaken for a raw dump.
+    _curated_wiki(tmp_path)
+    for i in range(14):
+        _write(tmp_path, f"notes/note-{i:03d}.md", "A standalone hand-written note.\n")
+    r = build_doc_graph(tmp_path)
+    assert r.excluded_raw_trees == []
+    assert any(o.startswith("notes/") for o in r.orphans)

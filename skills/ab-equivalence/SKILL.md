@@ -11,6 +11,13 @@ It is **transform-agnostic**: it judges *behavioural equivalence between two ver
 
 This skill **owns the runner** (`references/runner-prompt.md`, the pure-wrapper template, paths relative to this skill directory). The runner is the shared execution primitive: it applies one version of a document to one case input and returns a transcript and self-report. Skills that need behavioural comparison compose this capability rather than re-implementing the runner.
 
+The runner ships in **two variants**, both pure wrappers returning the same six self-report fields (see `references/runner-prompt.md`):
+
+- the **skill variant** (default) - the document is invoked on demand against a case input;
+- the **instruction-file variant** - the document is an *always-loaded* agent instruction file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/*`, `.github/copilot-instructions.md`); the runner is handed only that file as its operating context plus a realistic repo task, and runs **read-only / sandboxed** (it states the actions it would take, never mutating the repo).
+
+The variant is the caller's choice (skill-forge's artifact-type detection selects it); both produce a transcript the equivalence judge and skill-forge's lenses read identically.
+
 ## Input contract
 
 | Input | Required | Notes |

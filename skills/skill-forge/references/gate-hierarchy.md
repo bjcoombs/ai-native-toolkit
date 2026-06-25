@@ -17,6 +17,7 @@ Gate 1 is the hard gate, so this cannot be a vibe.
 
 A test case **passes Fidelity** when the runner's output preserves the intent's core propositions with **no omission or distortion**. The intent clauses are the confirmed ones only - Fidelity never judges against a clause whose `intent[].status` is `assumed-rejected` (the ASSUMED guard; see `panel-ledger.md`).
 
+- **For an instruction file, the accuracy sub-check is part of Gate 1.** A stated command or path that does not exist, or a checklist that names a strict subset of what the repo's validator enforces (the count-surface trap), is a Fidelity accuracy finding (see `judge-lenses.md`). When such a divergence would fail or skip a real build/test/CI step, it is HIGH - an automatic Gate-1 failure, exactly like any other HIGH Fidelity finding. Accuracy is behavioural (grounded in what the read-only runner found against the real repo), so it counts at Gate 1, not Gate 2.
 - **Sub-HIGH Fidelity findings are advisory.** A LOW or MED Fidelity finding does not fail the case - it is recorded and may inform an amendment, but the case still passes Gate 1.
 - **A HIGH-severity Fidelity finding is an automatic Gate-1 failure.** This is the same `HIGH` bar Gate 2 applies to dissent, so both gates speak one severity language.
 - The bar is **propositional, not numeric.** "Did the output keep these propositions intact?" - not "did it score 8/10." Numeric scores on LLM judges are false precision.
