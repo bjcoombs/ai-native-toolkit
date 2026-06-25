@@ -32,7 +32,7 @@ set -euo pipefail
 # --hostname github.example.com` first.
 #
 # Usage: ./ghsync.sh [--org NAME] [--root DIR] [--quiet] [--limit N]
-#                    [--dry-run] [--list-teams] [--list-repos]
+#                    [--dry-run] [--list-teams] [--list-repos] [--porcelain]
 #   --org NAME     Org to sync (default: basename of --root / cwd)
 #   --root DIR     Directory to clone into (default: current directory)
 #   --quiet        Suppress per-repository messages during sync
@@ -40,6 +40,8 @@ set -euo pipefail
 #   --dry-run      Show what would be done without making changes
 #   --list-teams   List your teams in the org and exit (orgs only)
 #   --list-repos   List the deduplicated accessible repos and exit
+#   --porcelain    Machine-readable repo list: one name per line to stdout,
+#                  all progress/status chatter to stderr; implies --list-repos
 # ===================================================================
 
 # Process command line args
@@ -50,6 +52,7 @@ REPO_LIMIT=0
 DRY_RUN=false
 LIST_TEAMS=false
 LIST_REPOS=false
+PORCELAIN_MODE=false
 
 # Repositories to never sync (oversized, checkout issues, etc.).
 # Override per-machine by exporting GHSYNC_BLACKLIST as a space-separated
@@ -98,17 +101,36 @@ while [[ $# -gt 0 ]]; do
       LIST_REPOS=true
       shift
       ;;
+    --porcelain)
+      # Machine-readable repo list for downstream tooling (e.g. ghreport).
+      # Implies the --list-repos early exit, but with a clean stdout: only
+      # repo names reach stdout; every progress/status message is routed to
+      # stderr by the fd swap below.
+      PORCELAIN_MODE=true
+      LIST_REPOS=true
+      shift
+      ;;
     -h|--help)
-      sed -n '4,41p' "$0"
+      sed -n '4,44p' "$0"
       exit 0
       ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: $0 [--org NAME] [--root DIR] [--quiet] [--limit N] [--dry-run] [--list-teams] [--list-repos]"
+      echo "Usage: $0 [--org NAME] [--root DIR] [--quiet] [--limit N] [--dry-run] [--list-teams] [--list-repos] [--porcelain]"
       exit 1
       ;;
   esac
 done
+
+# Porcelain mode: keep stdout clean for machine consumers. Save the real
+# stdout on fd 3 and redirect fd 1 to stderr, so every informational echo,
+# warning, and progress line in the rest of the script lands on stderr
+# without having to touch each call site. Only the repo-name list is then
+# explicitly written to fd 3 (real stdout) in the --list-repos block below.
+# Without --porcelain this is a no-op and behaviour is unchanged.
+if [ "$PORCELAIN_MODE" = true ]; then
+    exec 3>&1 1>&2
+fi
 
 # Derive root and org. Root is where repos land (default: cwd). Org defaults
 # to the basename of root, so dropping into ~/dev/github.com/<org> just works.
@@ -315,11 +337,19 @@ else
 fi
 
 if [ "$LIST_REPOS" = true ]; then
-    echo ""
-    echo "Repositories accessible to you:"
-    for repo in "${github_repos[@]}"; do
-        echo "  - $repo"
-    done
+    if [ "$PORCELAIN_MODE" = true ]; then
+        # Machine-readable: one repo name per line to real stdout (fd 3),
+        # no prefix, no surrounding chatter.
+        for repo in "${github_repos[@]}"; do
+            echo "$repo" >&3
+        done
+    else
+        echo ""
+        echo "Repositories accessible to you:"
+        for repo in "${github_repos[@]}"; do
+            echo "  - $repo"
+        done
+    fi
     exit 0
 fi
 

@@ -68,6 +68,7 @@ bash "$SKILL_DIR/scripts/ghsync.sh" --org meridianhub --root ~/dev/github.com/me
 | `--root DIR` | Directory to clone into (default: current directory) |
 | `--list-teams` | List your teams in the org (with repo counts) and exit; orgs only |
 | `--list-repos` | List the deduplicated accessible repos and exit |
+| `--porcelain` | Machine-readable repo list: one name per line to stdout, all chatter to stderr; implies `--list-repos`. Consumed by downstream tooling such as `/ghreport`. |
 | `--dry-run` | Show what would be cloned/updated without making changes |
 | `--limit N` | Process only the first N repos (useful for a quick test) |
 | `--quiet` | Suppress per-repository chatter; keep the final summary |
