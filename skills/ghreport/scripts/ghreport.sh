@@ -122,18 +122,15 @@ query_repo() {
     code_scanning=$(gh api "repos/$ORG/$repo/code-scanning/alerts?state=open&per_page=100" --jq 'length' 2>/dev/null) || code_scanning="no-access"
     secret_scanning=$(gh api "repos/$ORG/$repo/secret-scanning/alerts?state=open&per_page=100" --jq 'length' 2>/dev/null) || secret_scanning="no-access"
 
-    # Branch protection: success -> protected, 404 -> unprotected, else unknown.
-    local protection="unknown" prot_err
-    if gh api "repos/$ORG/$repo/branches/$default_branch/protection" &>/dev/null; then
+    # Branch protection, in a single API call: success -> protected; a 404
+    # ("Branch not protected (HTTP 404)") means genuinely no protection ->
+    # unprotected; anything else (typically 403) means we were denied and must
+    # stay "unknown" rather than claim a clean state.
+    local protection="unknown" prot_out
+    if prot_out=$(gh api "repos/$ORG/$repo/branches/$default_branch/protection" 2>&1); then
         protection="protected"
-    else
-        prot_err=$(gh api "repos/$ORG/$repo/branches/$default_branch/protection" 2>&1 || true)
-        # gh formats a missing protection as "Branch not protected (HTTP 404)";
-        # a 404 means the branch genuinely has no protection, anything else
-        # (typically 403) means we were denied and must stay "unknown".
-        if echo "$prot_err" | grep -q "HTTP 404"; then
-            protection="unprotected"
-        fi
+    elif echo "$prot_out" | grep -q "HTTP 404"; then
+        protection="unprotected"
     fi
 
     jq -n \
