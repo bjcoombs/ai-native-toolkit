@@ -54,9 +54,15 @@ If called without arguments, respond with:
 
 ## Protocol
 
-### Step 1: Analyze the Topic
+### Step 1: Frame the focus, then analyze the topic
 
-Assess the topic to determine:
+You are the opening Blue Hat here, and the opening Blue has two jobs: define the focus, then set the process. Do the focus first - it is the cheapest phase (one chair pass, no spawns) sitting at the highest-leverage point, because every hat and lens downstream inherits the frame. A flawless five-hat deliberation on the wrong problem is the one failure no later hat can catch.
+
+**Frame the focus.** State what is being deliberated as a one-sentence **Topic line** that names the *problem*, not a solution. Run the premise check: does the topic name a problem, or pre-select an answer? If it embeds a solution (e.g. "should we migrate to microservices?" pre-selects microservices), name the underlying problem and demote the proposed solution to one option the hats will weigh. A frame that names a solution has smuggled Yellow/Black judgement into the setup phase, out of sequence - so this is the huddle refusing to execute a handed premise unexamined.
+
+The Topic line is **provisional**. When you run the White Hat phase, hand it the Topic line and ask it to flag if the facts reframe the problem - White is the hat positioned to catch a wrong frame on evidence. If any hat reframes, update the Topic line and carry the move forward: a reframe is the framing step working, not failing.
+
+Then assess the topic to determine:
 
 1. **Team size** - Fibonacci numbers scale naturally with complexity:
 
@@ -80,7 +86,16 @@ Assess the topic to determine:
    - **Red Hat is always available.** Permission to ask "what does my gut say?"
    - Adapt the sequence to the topic. These are guides, not straitjackets.
 
-Announce your team composition and sequence to the user before proceeding.
+Announce your team composition, sequence, **and the Topic line** to the user before proceeding. Surfacing depth rides the same stakes dial as sizing - framing always happens; how loudly you surface it scales:
+
+- **Size 1:** state the Topic line in your announcement and proceed - no validation handshake.
+- **Size 2+:** lead the announcement with the Topic line so the user can redirect a wrong frame before any spend.
+- **Solution-laden topic (any size):** surface the reframe to the user regardless of size - a smuggled solution is the one failure the whole huddle would otherwise execute flawlessly, so even the gut-check tier flags it.
+
+Stating the frame is a statement, not a blocking gate.
+<!-- chat-skip:start -->
+In autonomous/headless runs (`/tm`, `/issues`, marathon) state the Topic line and proceed without waiting for confirmation; it is logged in the verdict for later inspection, never a stall.
+<!-- chat-skip:end -->
 
 ### Branch by capability
 
@@ -287,7 +302,7 @@ After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. 
 ## Chairperson's Summary
 
 ### Topic
-[The topic analyzed]
+[The Topic line. If a hat reframed the problem during deliberation, state both: "Convened on X; reframed to X' at the White Hat phase because Y." A frame that moved is a finding - often the most valuable one the huddle produced.]
 
 ### Team
 [List of professional lenses and why they were chosen]
@@ -373,6 +388,7 @@ Once every teammate has reported or acknowledged shutdown, the huddle is complet
 - **Move on without stragglers.** One nudge per straggler. If they don't respond, proceed with N-1 findings.
 - **Concrete phase prompts.** "The dunning race condition is the biggest risk - how do we fix it?" produces action. "What are the risks?" produces confusion.
 - **Red Hat after White is a natural pairing.** Facts first, then gut check - grounds intuition in evidence.
+- **Frame before you size.** The cheapest phase guards the most expensive failure - a flawless deliberation on the wrong problem. State the Topic line as a problem, not a solution; if the topic pre-selects an answer, name the underlying problem and let the hats weigh the answer as one option.
 <!-- chat-skip:start -->
 - **Broadcast - one message to all teammates at once - is unsupported; address each teammate by name.** In team mode both the chair and members send one `SendMessage` per recipient, so every member needs the roster of peer names in its spawn prompt.
 <!-- chat-skip:end -->
@@ -381,6 +397,6 @@ Once every teammate has reported or acknowledged shutdown, the huddle is complet
 `/huddle [topic or problem to analyze]`
 
 ## Examples
-- `/huddle Should we migrate our monolith to microservices?` (size 3-5 deliberation)
+- `/huddle Should we migrate our monolith to microservices?` → framed Topic line: *"Our monolith's deploy coupling and team-scaling limits - is microservices the right fix, or is there a cheaper one?"* (size 3-5; note how framing demotes the smuggled solution to one option the hats weigh)
 - `/huddle quick gut check on this API design` (size 1 solo analysis)
 - `/6hats database query performance issue` (alias for size 1 solo)
