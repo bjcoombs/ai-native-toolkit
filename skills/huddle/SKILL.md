@@ -16,6 +16,24 @@ Scales from a solo gut check to a board-level deliberation using Fibonacci team 
 
 **Team members** (when team size > 1) are persistent general-purpose agents with professional identities who call hat agents through their professional lens.
 
+## Hat Findings Schema
+
+Every hat agent returns its findings as one structured object - the unit the chair synthesises, the critic reviews, and the discovery loop tests for new claims. It is the same shape in all three execution modes (solo, phased, team).
+
+```json
+{
+  "lens": "",
+  "hat": "white|red|black|yellow|green",
+  "claims": [
+    { "claim": "", "severity_or_value": "HIGH|MEDIUM|LOW | positive | neutral", "evidence": "" }
+  ]
+}
+```
+
+- `lens` - the professional lens the finding came through (e.g. `security-eng`); empty/`blue` for solo, where the chair runs the hats directly.
+- `severity_or_value` - reads by hat: **Black** uses risk severity (`HIGH`/`MEDIUM`/`LOW`); **Yellow**/**Green** use opportunity value (`positive`/`neutral`); **White** facts carry no severity (`neutral`); **Red** records the gut-check signal in the same field (e.g. `HIGH` unease, `positive` pull).
+- `evidence` - the file, quote, datum, or reasoning the claim rests on. An empty `evidence` is what the completeness-critic flags as an unverified claim.
+
 ## Capability Requirements
 
 <!-- chat-replace:execution-mode-rule -->
@@ -112,7 +130,7 @@ After Step 1 you have a team size, a list of professional lenses, and a hat sequ
 
 ### Solo flat-parallel (Size 1)
 
-Spawn hat agents in parallel based on your chosen sequence. Each agent operates independently on the topic. Collect results, then synthesize as Blue Hat. No team, no discussion - just parallel analysis.
+Spawn hat agents in parallel based on your chosen sequence. Each agent operates independently on the topic and returns a Hat Findings object (see schema). Collect the structured findings, then synthesize as Blue Hat: group claims by hat, rank each group by `severity_or_value`, and cross-reference evidence across lenses to spot agreement and contradiction. No team, no discussion - just parallel analysis.
 
 ### Phased Sub-Agent Mode (Size 2+, no team flag)
 
@@ -130,7 +148,7 @@ When team size > 1 but team mode is unavailable, do not collapse to flat-paralle
    - The hat methodology for this phase (`Agent` tool with `subagent_type=<hat>` resolves the agent file from `~/.claude/agents/`)
    - The topic
    - **A running synopsis you maintain as Blue Hat** - a 200-400 word summary of what every prior phase produced. This is how cross-phase continuity survives without a persistent team. Each sub-agent has a fresh context window, so the synopsis is its only memory of what came before.
-3. **Collect all sub-agent outputs.** As Blue Hat, write a 100-200 word phase summary capturing: what each lens contributed, where they agreed, where they conflicted, what changed your view. Append this to the running synopsis.
+3. **Collect structured findings.** Each sub-agent returns a Hat Findings object (see schema). As Blue Hat, write a 100-200 word phase summary capturing: each lens's claims grouped by `severity_or_value`, where claims conflicted, what changed your view. Append this to the running synopsis.
 4. **Surface the phase summary to the user** before moving on. Short, scannable.
 
 **When to collapse to one sub-agent per phase voicing all lenses.** Default is one sub-agent per lens per phase (preserves independent fresh contexts). But total spawns = `team_size × phases` - a size-5 board × 5 phases = 25 sub-agent calls. When that count exceeds ~8-10, or when running in a chat UI where spawn latency is user-visible, collapse to **one sub-agent per phase voicing all lenses**. When you do, **explicitly instruct that sub-agent to keep the lenses cognitively distinct** - separate labelled sections per lens, no blending. Without that instruction the lenses blur and you lose most of the multi-perspective value. This is a degraded fallback, not a third mode; reach for it deliberately.
@@ -238,6 +256,10 @@ Shape every hat agent prompt through your lens:
 Your professional lens determines WHAT you ask each hat to investigate. The hat methodology determines HOW it investigates.
 
 **Lane discipline**: Stay within the hat's defined methodology. Each hat has a "Not My Job" section — respect those boundaries. Don't duplicate other hats' concerns.
+
+## Hat Agent Output Format
+
+Every hat agent returns its findings as a Hat Findings object (the schema in the skill): `{lens, hat, claims: [{claim, severity_or_value, evidence}]}`. When you share findings, the body of each `SendMessage` IS that structured object — `SendMessage(to: "<teammate>", message: JSON.stringify({lens, hat, claims}), summary: "...")` — so peers and the chair consume claims, not prose.
 ```
 <!-- chat-skip:end -->
 
@@ -308,11 +330,19 @@ After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. 
 [List of professional lenses and why they were chosen]
 
 ### Key Findings
-- [Most important facts established (White Hat phase)]
-- [Critical emotional/intuitive signals (Red Hat phase, if used)]
-- [Top risks and concerns (Black Hat phase)]
-- [Best opportunities identified (Yellow Hat phase)]
-- [Most promising creative alternatives (Green Hat phase)]
+Render the collected Hat Findings as a table, highest `severity_or_value` first within each hat:
+
+| Hat | Lens | Claim | Severity/Value | Evidence |
+|-----|------|-------|----------------|----------|
+| White | ... | ... | neutral | ... |
+| Black | ... | ... | HIGH | ... |
+| ... | ... | ... | ... | ... |
+
+- White Hat: [most important facts established]
+- Red Hat: [critical emotional/intuitive signals, if used]
+- Black Hat: [top risks and concerns]
+- Yellow Hat: [best opportunities identified]
+- Green Hat: [most promising creative alternatives]
 
 ### Where the Team Agreed
 [Points of consensus across professional perspectives]
