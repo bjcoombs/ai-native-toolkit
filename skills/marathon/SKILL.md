@@ -261,11 +261,34 @@ Additive files (imports, barrel exports, routes): accept both sides. Same-line c
 3. **Get required checks green, then stand down.** Use the pr-review-merge skill's criteria and thread rules to fix any failing *required* checks and resolve any bot threads already posted, pushing fixes. Then report and go idle. **Do NOT run a `gh pr checks --watch` loop or any background CI watcher** - in marathon mode the lead owns CI watching, the slow `claude-review`/AI-review wait, and the merge. A teammate that watches a slow advisory check sits idle for minutes and floods the lead with idle notifications; that is the lead's job here, not yours. While your PR is not yet at required-green the lead may message you to fix a failing check or thread - respond and push. Once you send REVIEW_CLEAR you are done: the lead does not re-wake you, it spawns a fresh teammate if more work surfaces (one task, one teammate).
 
 ## Communication
-Only message the lead for **meaningful events**:
-- PR created: `SendMessage(type: "message", recipient: "lead", content: "PR_CREATED: PR #<number> for <tag>.<task-id>", summary: "PR created <task-id>")`
-- Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR: PR #<number> for <tag>.<task-id> — required checks green, threads resolved, standing down (lead owns claude-review wait + merge)", summary: "Review clear <task-id>")`
-- Blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED: <tag>.<task-id> — <reason>", summary: "Blocked <task-id>")`
-- Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX: <tag>.<task-id> — <brief reasoning>", summary: "Too complex <task-id>")`
+Only message the lead for **meaningful events**. Send the matching JSON payload from [Teammate Event Payloads](#teammate-event-payloads) as the message `content` (the `event` field self-identifies it; the `summary` stays human-readable):
+- PR created: `SendMessage(type: "message", recipient: "lead", content: JSON.stringify({event: "PR_CREATED", task_id: "<tag>.<task-id>", pr_number: <number>, branch: "<branch>"}), summary: "PR created <task-id>")`
+- Review clear: `SendMessage(type: "message", recipient: "lead", content: JSON.stringify({event: "REVIEW_CLEAR", task_id: "<tag>.<task-id>", pr_number: <number>, required_checks_green: true, threads_resolved: true}), summary: "Review clear <task-id> — standing down (lead owns claude-review wait + merge)")`
+- Blocked: `SendMessage(type: "message", recipient: "lead", content: JSON.stringify({event: "BLOCKED", task_id: "<tag>.<task-id>", pr_number: <number>, blocking_reason: "<reason>", blocking_category: "merge_conflict|ci_failure|dependency|external"}), summary: "Blocked <task-id>")`
+- Too complex: `SendMessage(type: "message", recipient: "lead", content: JSON.stringify({event: "TOO_COMPLEX", task_id: "<tag>.<task-id>", complexity_reason: "<reason>", suggested_decomposition: ["<subtask>", "<subtask>"]}), summary: "Too complex <task-id>")`
+- Clarification needed: `SendMessage(type: "message", recipient: "lead", content: JSON.stringify({event: "CLARIFICATION_NEEDED", task_id: "<tag>.<task-id>", question: "<question>", context: "<context>"}), summary: "Clarification <task-id>")`
+
+`REVIEW_CLEAR` reports shape, not a verdict the lead trusts blindly — set `required_checks_green`/`threads_resolved` only when genuinely true, but expect the lead to re-verify both via the GitHub API before merging.
+
+## Teammate Event Payloads
+Each event is a JSON object whose `event` field names the type. Required fields per type (omit unknown values rather than inventing them):
+```json
+// PR_CREATED — a PR now exists for this task
+{ "event": "PR_CREATED", "task_id": "<tag>.<task-id>", "pr_number": 123, "branch": "<branch-name>" }
+
+// REVIEW_CLEAR — required checks green and posted threads resolved; standing down
+{ "event": "REVIEW_CLEAR", "task_id": "<tag>.<task-id>", "pr_number": 123, "required_checks_green": true, "threads_resolved": true }
+
+// BLOCKED — cannot progress without intervention
+{ "event": "BLOCKED", "task_id": "<tag>.<task-id>", "pr_number": 123, "blocking_reason": "<what is blocking>", "blocking_category": "merge_conflict|ci_failure|dependency|external" }
+
+// TOO_COMPLEX — task is too large to land as one PR
+{ "event": "TOO_COMPLEX", "task_id": "<tag>.<task-id>", "complexity_reason": "<why>", "suggested_decomposition": ["<subtask>", "<subtask>"] }
+
+// CLARIFICATION_NEEDED — requirements ambiguous, need a decision
+{ "event": "CLARIFICATION_NEEDED", "task_id": "<tag>.<task-id>", "question": "<the question>", "context": "<relevant context>" }
+```
+`pr_number` is omitted on `TOO_COMPLEX`/`CLARIFICATION_NEEDED` (no PR yet) and on `BLOCKED` if the block predates the PR.
 
 ## Scope
 - Only create PRs on YOUR branch (`<tag>--<task-id>--<slug>`, or the combined-group branch `<tag>--<id>+<id>--<slug>` if you cover several units). Never create PRs on other branches or for work outside your assigned task(s).
@@ -295,14 +318,15 @@ Report team status after spawning:
 
 #### Teammate Messages (reactive)
 
-| Message | Lead Action |
-|---------|-------------|
-| PR_CREATED | Update tracking, report to user, and **start owning the CI watch for this PR** (the teammate does not watch it) |
-| REVIEW_CLEAR | Verify required-green + threads, then **shut the teammate down immediately** (don't leave it idle through the claude-review wait), hold for claude-review per the AI-docs rule, and run [Smart Merge](#smart-merge) |
-| CLARIFICATION_NEEDED | Answer from task context, or relay to user if genuinely ambiguous |
-| BLOCKED (merge conflicts) | Push back: "Resolve conflicts yourself" |
-| BLOCKED (genuine) | Report to user, ask for guidance |
-| TOO_COMPLEX | Shutdown teammate, decompose task, spawn fresh |
+Read the `event` field of the message's JSON payload (see [Teammate Event Payloads](#teammate-event-payloads)) and key the action off the listed fields. **Backward compatibility**: a teammate mid-transition may still send a prose message (`PR_CREATED: PR #123 for ...`); fall back to matching the leading `EVENT:` token and parse `#<n>`/`<tag>.<id>` from the text. Both forms drive the same action — the schema standardises shape, not the action taken.
+
+| `event` | Fields used | Lead Action |
+|---------|-------------|-------------|
+| PR_CREATED | `task_id`, `pr_number`, `branch` | Update tracking with `pr_number`, report to user, and **start owning the CI watch for this PR** (the teammate does not watch it) |
+| REVIEW_CLEAR | `task_id`, `pr_number`, `required_checks_green`, `threads_resolved` | **Re-verify `required_checks_green` and `threads_resolved` via the GitHub API — never act on the reported booleans alone (polling-over-trust; the schema standardises shape, not honesty).** Once verified, **shut the teammate down immediately** (don't leave it idle through the claude-review wait), hold for claude-review per the AI-docs rule, and run [Smart Merge](#smart-merge) |
+| CLARIFICATION_NEEDED | `task_id`, `question`, `context` | Answer from task context, or relay to user if genuinely ambiguous |
+| BLOCKED | `task_id`, `pr_number`, `blocking_reason`, `blocking_category` | `blocking_category: "merge_conflict"` → push back "resolve conflicts yourself" (or lead-resolve if the teammate is idle/down); any other category → report `blocking_reason` to user, ask for guidance |
+| TOO_COMPLEX | `task_id`, `complexity_reason`, `suggested_decomposition` | Shutdown teammate, decompose task (seed subtasks from `suggested_decomposition`), spawn fresh |
 
 **On TOO_COMPLEX:**
 1. Shutdown teammate, clean up failed worktree/branch
@@ -504,4 +528,4 @@ For each that was exercised: did it help, hurt, or not apply? Mark validated.>
 
 ## Subagent Fallback (no teams)
 
-When `$TEAMS_AVAILABLE` is `false`, run the same loop without a persistent team (see [Execution Modes](#execution-modes)). Per wave: enumerate the next-ready units via the adapter, spawn one parallel subagent per unit (or combined group), and wait for their returned transcripts in place of `SendMessage` events. The lead still owns CI watching, smart-merge, and cleanup exactly as in team mode, and the tracking file (Step 2) carries cross-wave state in place of live teammates. There is no `shutdown_request` or idle-churn to manage — subagents return when done — so the early-shutdown and idle-ping guidance simply has no equivalent here.
+When `$TEAMS_AVAILABLE` is `false`, run the same loop without a persistent team (see [Execution Modes](#execution-modes)). Per wave: enumerate the next-ready units via the adapter, spawn one parallel subagent per unit (or combined group), and wait for their returned transcripts in place of `SendMessage` events. Instruct each subagent to end its transcript with the same JSON payload it would otherwise `SendMessage` (the [Teammate Event Payloads](#teammate-event-payloads) schema — typically a `PR_CREATED` then a `REVIEW_CLEAR`), so the lead parses the `event` field and drives the [reactive table](#teammate-messages-reactive) identically in both modes. The lead still owns CI watching, smart-merge, and cleanup exactly as in team mode — `REVIEW_CLEAR` from a returned transcript is API-re-verified just as a `SendMessage` one is — and the tracking file (Step 2) carries cross-wave state in place of live teammates. There is no `shutdown_request` or idle-churn to manage — subagents return when done — so the early-shutdown and idle-ping guidance simply has no equivalent here.
