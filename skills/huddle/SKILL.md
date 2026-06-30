@@ -80,6 +80,13 @@ You are the opening Blue Hat here, and the opening Blue has two jobs: define the
 
 The Topic line is **provisional**. When you run the White Hat phase, hand it the Topic line and ask it to flag if the facts reframe the problem - White is the hat positioned to catch a wrong frame on evidence. If any hat reframes, update the Topic line and carry the move forward: a reframe is the framing step working, not failing.
 
+**Classify discovery vs deliberation.** Before sizing, decide whether the topic is discovery-shaped. The rule: a topic is **discovery** if the goal is to *enumerate items from a long-tailed distribution*, and **deliberation** if the goal is to *converge on a decision*. When uncertain, default to deliberation - single-pass is safer and cheaper.
+
+- **Discovery** (engages the Loop-Until-Dry section below for Black, and Green where applicable): risk surfacing ("what could go wrong with X?"), red-team ("how could an adversary exploit X?"), failure-mode enumeration ("all the ways X could fail"), exhaustive option exploration ("all the options for X").
+- **Deliberation** (single-pass, behaviour unchanged): decision questions ("should we do X or Y?"), evaluation ("is X a good approach?"), trade-off analysis ("pros/cons of X?").
+
+Announce the classification with the frame: `Classification: **discovery** (loop-until-dry for Black/Green)` or `**deliberation** (single-pass)`.
+
 Then assess the topic to determine:
 
 1. **Team size** - Fibonacci numbers scale naturally with complexity:
@@ -132,6 +139,8 @@ After Step 1 you have a team size, a list of professional lenses, and a hat sequ
 
 Spawn hat agents in parallel based on your chosen sequence. Each agent operates independently on the topic and returns a Hat Findings object (see schema). Collect the structured findings, then synthesize as Blue Hat: group claims by hat, rank each group by `severity_or_value`, and cross-reference evidence across lenses to spot agreement and contradiction. No team, no discussion - just parallel analysis.
 
+For a **discovery**-classified topic, re-run the Black (and where applicable Green) hat agent per the Loop-Until-Dry section until convergence or the hard cap, rather than once.
+
 ### Phased Sub-Agent Mode (Size 2+, no team flag)
 
 <!-- chat-skip:start -->
@@ -140,6 +149,8 @@ When team size > 1 but team mode is unavailable, do not collapse to flat-paralle
 When team size > 1 but team mode is unavailable, do not collapse to flat-parallel - that throws away both phase ordering and multi-lens diversity. Instead, iterate phases sequentially and spawn fresh sub-agents per phase:
 
 **Loop over each hat phase in your sequence:**
+
+For a **discovery**-classified topic, the Black (and where applicable Green) phase repeats per the Loop-Until-Dry section - re-spawn the hat sub-agent each round with the running synopsis until convergence or the hard cap. Every other phase, and every phase of a **deliberation** topic, runs once exactly as below.
 
 1. **Announce the phase to the user.** "Phase 3 of 5: Black Hat - risks."
 2. **For each professional lens, spawn a sub-agent in parallel** for this phase. Each sub-agent gets:
@@ -266,7 +277,7 @@ Every hat agent returns its findings as a Hat Findings object (the schema in the
 <!-- chat-skip:start -->
 ### Step 4: Facilitate Hat Phases
 
-For each hat in your chosen sequence, facilitate a phase:
+For each hat in your chosen sequence, facilitate a phase. If the topic was classified **discovery** in Step 1, the Black (and where applicable Green) phase repeats per the Loop-Until-Dry section - re-announce the hat phase to members each round until convergence or the hard cap, testing each round's shares for new claims. A **deliberation** topic runs every phase once, exactly as below.
 
 **4a. Announce the phase**
 
@@ -379,6 +390,7 @@ Render the collected Hat Findings as a table, highest `severity_or_value` first 
 - Black Hat: [top risks and concerns]
 - Yellow Hat: [best opportunities identified]
 - Green Hat: [most promising creative alternatives]
+- [Discovery mode only] Loop status: [hat, rounds run, converged or hit the 5-round hard cap]
 
 ### Where the Team Agreed
 [Points of consensus across professional perspectives]
@@ -416,6 +428,39 @@ Once every teammate has reported or acknowledged shutdown, the huddle is complet
 
 **Shutdown handshake.** Send each still-running teammate one `shutdown_request`. It approves with a structured `shutdown_response` (addressed to `team-lead` - a teammate's `to: "main"` bounces back to itself - echoing the `request_id`, `approve: true`), and approving terminates the teammate. Treat that approval, or an already-exited teammate that never replies, as the completion signal; don't block waiting on one that has already gone. Any that linger reap when the session exits.
 <!-- chat-skip:end -->
+
+## Discovery Mode: Loop-Until-Dry
+
+For topics classified **discovery** in Step 1 only. Black Hat (and Green Hat where the topic is about generating options, not just risks) repeats until it stops surfacing anything new, instead of running once. A single risk-surfacing pass under-counts a long tail; one more round almost always finds another failure mode. Deliberation topics never enter this loop.
+
+**Termination - whichever comes first:**
+1. **Convergence**: two consecutive rounds add no new claims to the findings.
+2. **Hard cap**: 5 rounds per hat.
+
+```
+round = 1
+prev_empty = false
+while round <= 5:
+    run_hat_phase(hat)              # discovery semantics: "what have we NOT yet named?"
+    new_claims = claims this round absent from the accumulated findings
+    if new_claims == [] and prev_empty:   # two consecutive empty rounds
+        break                              # converged
+    prev_empty = (new_claims == [])
+    round += 1
+if round > 5:
+    record "hard cap" in the verdict
+```
+
+**What counts as a new claim** (reuse the Hat Findings `claim` field):
+- Restating a prior claim in different words - **not new**.
+- Elaborating a prior claim with additional evidence - **new** (adds information).
+- Introducing a new risk/opportunity - **new**.
+
+**Verdict disclosure.** If the hard cap stops the loop before convergence, the verdict must say so - no silent truncation: e.g. "Discovery loop: Black Hat ran 5 rounds (hard cap), did not fully converge - additional risks may exist." On convergence, record the round count plainly.
+
+This loop applies in every mode - solo (Blue Hat re-runs the hat agent), phased (re-spawn the hat sub-agent per round with the running synopsis), and team (re-announce the hat phase to members each round). In all modes the chair runs the new-claim test against the accumulated findings.
+
+**Non-discovery topics retain single-pass behaviour, unchanged.** This mode adds behaviour only to discovery-classified topics; every deliberation huddle runs exactly as it did before, save for the new Coverage line from the completeness-critic pass.
 
 ## Facilitation Principles
 
