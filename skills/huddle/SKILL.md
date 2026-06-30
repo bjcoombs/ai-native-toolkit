@@ -314,6 +314,42 @@ SendMessage(
 The synthesis is the artifact the pause produces - a running consensus/dissent ledger, not just elapsed time. Carry the live tensions into the framing of the next phase.
 <!-- chat-skip:end -->
 
+### Step 4b: Completeness-Critic Pass
+
+After the final hat phase and before delivering the verdict, run **exactly one** completeness-critic pass over the accumulated Hat Findings. It is a single-round bound: it cannot loop, and it cannot spawn new hat phases - it can only seat one final contribution per gap or record the gap. Its job is to catch the two failures the hat sequence structurally can't: a perspective never seated, and a claim left standing on no evidence.
+
+**Scale by meeting size:**
+- **Size 1 (solo):** Blue Hat self-runs the critic prompt against its own accumulated findings.
+- **Size 2+:** one dedicated critic agent (phased mode) or one critic share (team mode); Blue Hat may voice it directly.
+
+**Critic prompt:**
+
+```
+Review the accumulated findings from all phases. Identify:
+1. Missing perspectives: which actor, lens, or domain expertise would naturally
+   weigh in on this topic but was never seated? (e.g. legal for a contract
+   decision, security for an auth change)
+2. Unverified claims: which claims lack sufficient evidence, or contradict each
+   other without resolution?
+
+Return as structured JSON:
+{
+  "missing_perspectives": [ {"perspective": "", "relevance": ""} ],
+  "unverified_claims": [ {"claim": "", "issue": ""} ]
+}
+```
+
+**Gap resolution (before the verdict closes).** For each missing perspective, resolve ONE of two ways: **seat the missing lens** - spawn a single final-contribution agent through that lens and add its Hat Findings to the record - or **accept the gap** - record it explicitly in the verdict's Coverage line. For each unverified claim: **verify** it by citing evidence found elsewhere in the findings, or **flag** it as `unverified` in the verdict, where it carries reduced weight.
+
+**By mode:**
+- **Solo:** Blue Hat runs the critic prompt against its own findings and self-resolves or records each gap.
+- **Phased:** spawn one critic sub-agent with the running synopsis, then process its structured response.
+<!-- chat-skip:start -->
+- **Team:** send one critic-phase announcement to a designated critic member (or Blue Hat voices it directly) and process the structured response.
+<!-- chat-skip:end -->
+
+In autonomous/headless runs (`/tm`, `/issues`, marathon) the critic pass still runs; gaps are recorded in the verdict's Coverage line for later inspection rather than gated on user confirmation.
+
 ### Step 5: Deliver the Verdict
 
 After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. Deliver the chairperson's summary directly:
@@ -350,6 +386,12 @@ Render the collected Hat Findings as a table, highest `severity_or_value` first 
 ### Where the Team Disagreed
 [Points of dissent — and why the disagreement matters]
 [Which perspective has more weight and why]
+
+### Coverage
+[From the completeness-critic pass (Step 4b). Size 2+ verdicts always carry this.]
+- Perspectives seated: [professional lenses that participated]
+- Perspectives not seated: [gaps accepted without seating, with why proceeding anyway]
+- Unverified claims: [claims flagged as lacking sufficient evidence - reduced weight]
 
 ### Recommendation
 [Clear, actionable recommendation informed by all phases]
