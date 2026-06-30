@@ -222,14 +222,14 @@ Sonnet is cost-effective but has a recurring false REVIEW_CLEAR problem — repo
 
 Haiku cannot reliably handle review loops — never use for teammates.
 
-**Combined-group identity:** combining is the primary mechanic, so a teammate often covers several units. Give a combined group one identity derived from its member ids: name `task-<id>+<id>` (e.g. `task-1+2`), branch `<tag>--<id>+<id>--<slug>`, worktree `worktree/<tag>/<id>+<id>--<slug>`; its complexity is the sum of its members'. The Scope guard and the activity-check `find` path below operate on this combined branch/worktree — substitute the combined id wherever the singular `<task-id>` appears. Mark each member unit in-progress and close each on merge.
+**Combined-group identity:** combining is the primary mechanic, so a teammate often covers several units. Give a combined group one identity derived from its member ids: name `task-<id>-<id>` (e.g. `task-1-2`) — the Agent `name` regex allows only letters, digits, `_`, and `-`, so a `+` in the name is rejected at spawn; branch `<tag>--<id>+<id>--<slug>` and worktree `worktree/<tag>/<id>+<id>--<slug>` may keep `+` (git accepts it in refs and paths). Its complexity is the sum of its members'. The Scope guard and the activity-check `find` path below operate on this combined branch/worktree — substitute the combined id wherever the singular `<task-id>` appears. Mark each member unit in-progress and close each on merge.
 
 **Teammate prompt template:**
 ```
 Agent(
   subagent_type: "general-purpose",
   run_in_background: true,
-  name: "task-<task-id>",   # combined group: task-<id>+<id> (see Combined-group identity above)
+  name: "task-<task-id>",   # combined group: task-<id>-<id> — no '+' in agent names (see Combined-group identity above)
   model: "<chosen-model>",
   prompt: """
 # Implement <tag>.<task-id>: <task-title>
@@ -253,6 +253,7 @@ Always pipe `gh` output to `jq` (never use `gh --jq` with complex filters). Use 
 ## Known Conflict Patterns
 <If $HOT_FILES identified, include here. Otherwise omit.>
 Additive files (imports, barrel exports, routes): accept both sides. Same-line conflicts or complex JSX blocks: escalate immediately with file, line range, and both versions.
+**Do NOT resolve the `.claude-plugin/plugin.json` version-line conflict yourself** — the version hot-file is lead-owned end to end. If your PR goes DIRTY *only* on the version line because the base advanced, leave it; the lead resolves it on sight. Touching it races the lead and can strand a half-resolved conflict.
 
 ## Workflow
 1. **Implement using TDD**. Push commits incrementally for backup. If your change touched a module that has a documented co-change partner — a sibling doc or a seam-map README named in your Project Guidelines — update it in the same PR. A code change without its paired doc is a lying map and a predictable review thread; updating it now is cheaper than a follow-up cycle after REVIEW_CLEAR.
@@ -336,6 +337,10 @@ Read the `event` field of the message's JSON payload (see [Teammate Event Payloa
 **Shut teammates down early to kill idle churn**: The moment a teammate's PR has required checks green and threads resolved (its REVIEW_CLEAR, or your own poll showing it), shut the teammate down - do not leave it idle through the claude-review wait and the merge. The lead owns that tail. A live-but-idle teammate emits a continuous stream of idle notifications (the harness re-pings idle members), which is pure attention-drain on the lead; early shutdown is the fix, not patience. This is also why teammates are told not to run their own CI watcher - the lead watches, the lead merges, the teammate is gone before the slow advisory checks finish. If you have sent a `shutdown_request` and the teammate keeps emitting idle notifications without approving it, re-send the request once rather than sitting through the idle stream — the re-send re-prompts it to process the approval.
 
 **Lead conflict resolution**: When a teammate is idle and their PR is DIRTY (merge conflict), resolve it directly instead of nudging the teammate. Pull `$BASE_BRANCH`, resolve the conflict, push. Faster than round-tripping to an idle teammate (~10 min saved per conflict). This idle-DIRTY conflict is the **sole** work the lead executes directly — it does not generalize: a failing test, missing implementation, or thread fix is still delegated per [Lead Authority](#lead-authority), even when it looks like a quick edit. If the teammate whose branch you're resolving may still be live (not yet idle/down), message it *before* you push — "leave the version conflict to me, I'm resolving" — then push; pushing first races with the teammate resolving the same conflict in its own worktree.
+
+**Version-only base-advance DIRTY: lead-resolve on sight, don't message first.** The exception to the message-before-push rule is a PR that is DIRTY *only* on the `.claude-plugin/plugin.json` version line because the base advanced. Teammates are told never to touch the version hot-file (see the teammate template), so there is no one to race — resolve it directly the moment it appears (merge the base in, set `.version` to the highest of the conflicting values, push) rather than round-tripping to an idle teammate. Highest version always wins.
+
+**Commit the resolution from the worktree cwd, not a `*-main` dir.** The `worktree-guard` PreToolUse hook blocks any command containing a `git commit` line whenever the shell's cwd is a `*-main` directory — and the lead's `gh` polling naturally leaves cwd there. So `cd` into the teammate's worktree as part of the resolve command (or in a prior command, since cwd persists), or the commit is rejected even though it targets the worktree, not `*-main`.
 
 **Check `mergeStateStatus` before watching CI on a late-wave PR.** A PR branched before its siblings merged can be DIRTY against an advanced `$BASE_BRANCH`; GitHub computes no merge ref for a DIRTY PR, so the test workflow never registers and a CI watcher waits forever for checks that cannot appear. On PR_CREATED for any PR that may sit behind already-merged siblings, check `mergeStateStatus` first and resolve DIRTY before starting the watch.
 
