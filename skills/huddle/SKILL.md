@@ -16,6 +16,24 @@ Scales from a solo gut check to a board-level deliberation using Fibonacci team 
 
 **Team members** (when team size > 1) are persistent general-purpose agents with professional identities who call hat agents through their professional lens.
 
+## Hat Findings Schema
+
+Every hat agent returns its findings as one structured object - the unit the chair synthesises, the critic reviews, and the discovery loop tests for new claims. It is the same shape in all three execution modes (solo, phased, team).
+
+```json
+{
+  "lens": "",
+  "hat": "white|red|black|yellow|green",
+  "claims": [
+    { "claim": "", "severity_or_value": "HIGH|MEDIUM|LOW | positive | neutral", "evidence": "" }
+  ]
+}
+```
+
+- `lens` - the professional lens the finding came through (e.g. `security-eng`); empty/`blue` for solo, where the chair runs the hats directly.
+- `severity_or_value` - reads by hat: **Black** uses risk severity (`HIGH`/`MEDIUM`/`LOW`); **Yellow**/**Green** use opportunity value (`positive`/`neutral`); **White** facts carry no severity (`neutral`); **Red** records the gut-check signal in the same field (e.g. `HIGH` unease, `positive` pull).
+- `evidence` - the file, quote, datum, or reasoning the claim rests on. An empty `evidence` is what the completeness-critic flags as an unverified claim.
+
 ## Capability Requirements
 
 <!-- chat-replace:execution-mode-rule -->
@@ -61,6 +79,13 @@ You are the opening Blue Hat here, and the opening Blue has two jobs: define the
 **Frame the focus.** State what is being deliberated as a one-sentence **Topic line** that names the *problem*, not a solution. Run the premise check: does the topic name a problem, or pre-select an answer? If it embeds a solution (e.g. "should we migrate to microservices?" pre-selects microservices), name the underlying problem and demote the proposed solution to one option the hats will weigh. A frame that names a solution has smuggled Yellow/Black judgement into the setup phase, out of sequence - so this is the huddle refusing to execute a handed premise unexamined.
 
 The Topic line is **provisional**. When you run the White Hat phase, hand it the Topic line and ask it to flag if the facts reframe the problem - White is the hat positioned to catch a wrong frame on evidence. If any hat reframes, update the Topic line and carry the move forward: a reframe is the framing step working, not failing.
+
+**Classify discovery vs deliberation.** Before sizing, decide whether the topic is discovery-shaped. The rule: a topic is **discovery** if the goal is to *enumerate items from a long-tailed distribution*, and **deliberation** if the goal is to *converge on a decision*. When uncertain, default to deliberation - single-pass is safer and cheaper.
+
+- **Discovery** (engages the Loop-Until-Dry section below for Black, and Green where applicable): risk surfacing ("what could go wrong with X?"), red-team ("how could an adversary exploit X?"), failure-mode enumeration ("all the ways X could fail"), exhaustive option exploration ("all the options for X").
+- **Deliberation** (single-pass, behaviour unchanged): decision questions ("should we do X or Y?"), evaluation ("is X a good approach?"), trade-off analysis ("pros/cons of X?").
+
+Announce the classification with the frame: `Classification: **discovery** (loop-until-dry for Black/Green)` or `**deliberation** (single-pass)`.
 
 Then assess the topic to determine:
 
@@ -112,7 +137,9 @@ After Step 1 you have a team size, a list of professional lenses, and a hat sequ
 
 ### Solo flat-parallel (Size 1)
 
-Spawn hat agents in parallel based on your chosen sequence. Each agent operates independently on the topic. Collect results, then synthesize as Blue Hat. No team, no discussion - just parallel analysis.
+Spawn hat agents in parallel based on your chosen sequence. Each agent operates independently on the topic and returns a Hat Findings object (see schema). Collect the structured findings, then synthesize as Blue Hat: group claims by hat, rank each group by `severity_or_value`, and cross-reference evidence across lenses to spot agreement and contradiction. No team, no discussion - just parallel analysis.
+
+For a **discovery**-classified topic, re-run the Black (and where applicable Green) hat agent per the Loop-Until-Dry section until convergence or the hard cap, rather than once.
 
 ### Phased Sub-Agent Mode (Size 2+, no team flag)
 
@@ -123,6 +150,8 @@ When team size > 1 but team mode is unavailable, do not collapse to flat-paralle
 
 **Loop over each hat phase in your sequence:**
 
+For a **discovery**-classified topic, the Black (and where applicable Green) phase repeats per the Loop-Until-Dry section - re-spawn the hat sub-agent each round with the running synopsis until convergence or the hard cap. Every other phase, and every phase of a **deliberation** topic, runs once exactly as below.
+
 1. **Announce the phase to the user.** "Phase 3 of 5: Black Hat - risks."
 2. **For each professional lens, spawn a sub-agent in parallel** for this phase. Each sub-agent gets:
    - Its persona (the professional lens you assigned in Step 1)
@@ -130,7 +159,7 @@ When team size > 1 but team mode is unavailable, do not collapse to flat-paralle
    - The hat methodology for this phase (`Agent` tool with `subagent_type=<hat>` resolves the agent file from `~/.claude/agents/`)
    - The topic
    - **A running synopsis you maintain as Blue Hat** - a 200-400 word summary of what every prior phase produced. This is how cross-phase continuity survives without a persistent team. Each sub-agent has a fresh context window, so the synopsis is its only memory of what came before.
-3. **Collect all sub-agent outputs.** As Blue Hat, write a 100-200 word phase summary capturing: what each lens contributed, where they agreed, where they conflicted, what changed your view. Append this to the running synopsis.
+3. **Collect structured findings.** Each sub-agent returns a Hat Findings object (see schema). As Blue Hat, write a 100-200 word phase summary capturing: each lens's claims grouped by `severity_or_value`, where claims conflicted, what changed your view. Append this to the running synopsis.
 4. **Surface the phase summary to the user** before moving on. Short, scannable.
 
 **When to collapse to one sub-agent per phase voicing all lenses.** Default is one sub-agent per lens per phase (preserves independent fresh contexts). But total spawns = `team_size × phases` - a size-5 board × 5 phases = 25 sub-agent calls. When that count exceeds ~8-10, or when running in a chat UI where spawn latency is user-visible, collapse to **one sub-agent per phase voicing all lenses**. When you do, **explicitly instruct that sub-agent to keep the lenses cognitively distinct** - separate labelled sections per lens, no blending. Without that instruction the lenses blur and you lose most of the multi-perspective value. This is a degraded fallback, not a third mode; reach for it deliberately.
@@ -238,13 +267,17 @@ Shape every hat agent prompt through your lens:
 Your professional lens determines WHAT you ask each hat to investigate. The hat methodology determines HOW it investigates.
 
 **Lane discipline**: Stay within the hat's defined methodology. Each hat has a "Not My Job" section — respect those boundaries. Don't duplicate other hats' concerns.
+
+## Hat Agent Output Format
+
+Every hat agent returns its findings as a Hat Findings object (the schema in the skill): `{lens, hat, claims: [{claim, severity_or_value, evidence}]}`. When you share findings, the body of each `SendMessage` IS that structured object — `SendMessage(to: "<teammate>", message: JSON.stringify({lens, hat, claims}), summary: "...")` — so peers and the chair consume claims, not prose.
 ```
 <!-- chat-skip:end -->
 
 <!-- chat-skip:start -->
 ### Step 4: Facilitate Hat Phases
 
-For each hat in your chosen sequence, facilitate a phase:
+For each hat in your chosen sequence, facilitate a phase. If the topic was classified **discovery** in Step 1, the Black (and where applicable Green) phase repeats per the Loop-Until-Dry section - re-announce the hat phase to members each round until convergence or the hard cap, testing each round's shares for new claims. A **deliberation** topic runs every phase once, exactly as below.
 
 **4a. Announce the phase**
 
@@ -292,6 +325,42 @@ SendMessage(
 The synthesis is the artifact the pause produces - a running consensus/dissent ledger, not just elapsed time. Carry the live tensions into the framing of the next phase.
 <!-- chat-skip:end -->
 
+### Step 4b: Completeness-Critic Pass
+
+After the final hat phase and before delivering the verdict, run **exactly one** completeness-critic pass over the accumulated Hat Findings. It is a single-round bound: it cannot loop, and it cannot spawn new hat phases - it can only seat one final contribution per gap or record the gap. Its job is to catch the two failures the hat sequence structurally can't: a perspective never seated, and a claim left standing on no evidence.
+
+**Scale by meeting size:**
+- **Size 1 (solo):** Blue Hat self-runs the critic prompt against its own accumulated findings.
+- **Size 2+:** one dedicated critic agent (phased mode) or one critic share (team mode); Blue Hat may voice it directly.
+
+**Critic prompt:**
+
+```
+Review the accumulated findings from all phases. Identify:
+1. Missing perspectives: which actor, lens, or domain expertise would naturally
+   weigh in on this topic but was never seated? (e.g. legal for a contract
+   decision, security for an auth change)
+2. Unverified claims: which claims lack sufficient evidence, or contradict each
+   other without resolution?
+
+Return as structured JSON:
+{
+  "missing_perspectives": [ {"perspective": "", "relevance": ""} ],
+  "unverified_claims": [ {"claim": "", "issue": ""} ]
+}
+```
+
+**Gap resolution (before the verdict closes).** For each missing perspective, resolve ONE of two ways: **seat the missing lens** - spawn a single final-contribution agent through that lens and add its Hat Findings to the record - or **accept the gap** - record it explicitly in the verdict's Coverage line. For each unverified claim: **verify** it by citing evidence found elsewhere in the findings, or **flag** it as `unverified` in the verdict, where it carries reduced weight.
+
+**By mode:**
+- **Solo:** Blue Hat runs the critic prompt against its own findings and self-resolves or records each gap.
+- **Phased:** spawn one critic sub-agent with the running synopsis, then process its structured response.
+<!-- chat-skip:start -->
+- **Team:** send one critic-phase announcement to a designated critic member (or Blue Hat voices it directly) and process the structured response.
+<!-- chat-skip:end -->
+
+In autonomous/headless runs (`/tm`, `/issues`, marathon) the critic pass still runs; gaps are recorded in the verdict's Coverage line for later inspection rather than gated on user confirmation.
+
 ### Step 5: Deliver the Verdict
 
 After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. Deliver the chairperson's summary directly:
@@ -308,11 +377,20 @@ After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. 
 [List of professional lenses and why they were chosen]
 
 ### Key Findings
-- [Most important facts established (White Hat phase)]
-- [Critical emotional/intuitive signals (Red Hat phase, if used)]
-- [Top risks and concerns (Black Hat phase)]
-- [Best opportunities identified (Yellow Hat phase)]
-- [Most promising creative alternatives (Green Hat phase)]
+Render the collected Hat Findings as a table, highest `severity_or_value` first within each hat:
+
+| Hat | Lens | Claim | Severity/Value | Evidence |
+|-----|------|-------|----------------|----------|
+| White | ... | ... | neutral | ... |
+| Black | ... | ... | HIGH | ... |
+| ... | ... | ... | ... | ... |
+
+- White Hat: [most important facts established]
+- Red Hat: [critical emotional/intuitive signals, if used]
+- Black Hat: [top risks and concerns]
+- Yellow Hat: [best opportunities identified]
+- Green Hat: [most promising creative alternatives]
+- [Discovery mode only] Loop status: [hat, rounds run, converged or hit the 5-round hard cap]
 
 ### Where the Team Agreed
 [Points of consensus across professional perspectives]
@@ -320,6 +398,12 @@ After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. 
 ### Where the Team Disagreed
 [Points of dissent — and why the disagreement matters]
 [Which perspective has more weight and why]
+
+### Coverage
+[From the completeness-critic pass (Step 4b). Size 2+ verdicts always carry this.]
+- Perspectives seated: [professional lenses that participated]
+- Perspectives not seated: [gaps accepted without seating, with why proceeding anyway]
+- Unverified claims: [claims flagged as lacking sufficient evidence - reduced weight]
 
 ### Recommendation
 [Clear, actionable recommendation informed by all phases]
@@ -344,6 +428,39 @@ Once every teammate has reported or acknowledged shutdown, the huddle is complet
 
 **Shutdown handshake.** Send each still-running teammate one `shutdown_request`. It approves with a structured `shutdown_response` (addressed to `team-lead` - a teammate's `to: "main"` bounces back to itself - echoing the `request_id`, `approve: true`), and approving terminates the teammate. Treat that approval, or an already-exited teammate that never replies, as the completion signal; don't block waiting on one that has already gone. Any that linger reap when the session exits.
 <!-- chat-skip:end -->
+
+## Discovery Mode: Loop-Until-Dry
+
+For topics classified **discovery** in Step 1 only. Black Hat (and Green Hat where the topic is about generating options, not just risks) repeats until it stops surfacing anything new, instead of running once. A single risk-surfacing pass under-counts a long tail; one more round almost always finds another failure mode. Deliberation topics never enter this loop.
+
+**Termination - whichever comes first:**
+1. **Convergence**: two consecutive rounds add no new claims to the findings.
+2. **Hard cap**: 5 rounds per hat.
+
+```
+round = 1
+prev_empty = false
+while round <= 5:
+    run_hat_phase(hat)              # discovery semantics: "what have we NOT yet named?"
+    new_claims = claims this round absent from the accumulated findings
+    if new_claims == [] and prev_empty:   # two consecutive empty rounds
+        break                              # converged
+    prev_empty = (new_claims == [])
+    round += 1
+if round > 5:
+    record "hard cap" in the verdict
+```
+
+**What counts as a new claim** (reuse the Hat Findings `claim` field):
+- Restating a prior claim in different words - **not new**.
+- Elaborating a prior claim with additional evidence - **new** (adds information).
+- Introducing a new risk/opportunity - **new**.
+
+**Verdict disclosure.** If the hard cap stops the loop before convergence, the verdict must say so - no silent truncation: e.g. "Discovery loop: Black Hat ran 5 rounds (hard cap), did not fully converge - additional risks may exist." On convergence, record the round count plainly.
+
+This loop applies in every mode - solo (Blue Hat re-runs the hat agent), phased (re-spawn the hat sub-agent per round with the running synopsis), and team (re-announce the hat phase to members each round). In all modes the chair runs the new-claim test against the accumulated findings.
+
+**Non-discovery topics retain single-pass behaviour, unchanged.** This mode adds behaviour only to discovery-classified topics; every deliberation huddle runs exactly as it did before, save for the new Coverage line from the completeness-critic pass.
 
 ## Facilitation Principles
 
