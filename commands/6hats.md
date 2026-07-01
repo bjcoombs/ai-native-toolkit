@@ -1,4 +1,5 @@
 ---
+name: 6hats
 description: "Six Thinking Hats Analysis"
 argument-hint: "<topic or problem to analyze>"
 ---

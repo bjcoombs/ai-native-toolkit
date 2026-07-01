@@ -1,4 +1,5 @@
 ---
+name: fix-pr
 description: "Autonomous PR fixing loop - iterates on CI failures and review comments until green"
 argument-hint: "[pr-number] (optional - derives from current branch if omitted)"
 ---
