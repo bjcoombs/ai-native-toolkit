@@ -62,6 +62,7 @@ Required frontmatter:
 
 Frontmatter recommended (some existing commands don't have it yet):
 
+- `name` - kebab-case, must match the filename. Claude Code doesn't need it (it uses the filename), but the Claude Desktop / claude.ai skill loader parses a lone uploaded command file as a `SKILL.md` and errors with `missing field 'name' in SKILL.md frontmatter` when it's absent - a single uploaded file has no directory name to fall back on. Include it so a command's `.md` also works when uploaded as a standalone skill.
 - `description` - shown in `/help`
 - `argument-hint` - shown after the command name when typing
 

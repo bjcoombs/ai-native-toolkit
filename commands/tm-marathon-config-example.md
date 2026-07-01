@@ -1,4 +1,5 @@
 ---
+name: tm-marathon-config-example
 description: "Example Marathon Configuration for CLAUDE.md - copy the section below into your project's CLAUDE.md"
 ---
 
