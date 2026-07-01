@@ -1,5 +1,6 @@
 ---
 name: understand
+disable-model-invocation: true
 description: "Deep understanding mode (nemawashi) - exhaustive context-gathering before action"
 argument-hint: "<thing to understand>"
 ---

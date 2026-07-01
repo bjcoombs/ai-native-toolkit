@@ -1,5 +1,6 @@
 ---
 name: issues
+disable-model-invocation: true
 description: GitHub-issue marathon - triage open issues, then run agent-ready ones to merge with Agent Teams
 argument-hint: [scope-label] (optional - narrows which open issues are considered; default: all open issues)
 ---

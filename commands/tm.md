@@ -1,5 +1,6 @@
 ---
 name: tm
+disable-model-invocation: true
 description: Task Master - plan, start, review, and close
 argument-hint: [tag [task-id] | feature description] (optional - derives context from worktree if omitted)
 ---

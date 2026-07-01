@@ -1,5 +1,6 @@
 ---
 name: tm-marathon-config-example
+disable-model-invocation: true
 description: "Example Marathon Configuration for CLAUDE.md - copy the section below into your project's CLAUDE.md"
 ---
 
