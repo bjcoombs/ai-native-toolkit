@@ -1,5 +1,6 @@
 ---
 name: 6hats
+disable-model-invocation: true
 description: "Six Thinking Hats Analysis"
 argument-hint: "<topic or problem to analyze>"
 ---
