@@ -2,9 +2,13 @@
 
 _Generated <<normalized>>._
 
-**Score: 6.0 / 8 - Solid** · Keyhole: 5 structural concerns (5 hidden coupling), 1 safe zone.
+**Score: 6.0 / 8 - Solid** - a readiness snapshot, not a verdict · Keyhole: 5 structural concerns (5 hidden coupling), 1 safe zone.
 
 The write-side here is genuinely enforced, not decorative: a ruff complexity ratchet, a mypy type gate, and three blocking pytest jobs under branch protection catch a bad change before it merges, and per-function complexity actually sits under the bar (p95 9 against a 15 cap). The clearest opportunity is behaviour-constraint - 26 tests run in CI but no coverage or mutation gate yet proves they pin behaviour - which is exactly what would carry this from Solid toward AI-Native.
+
+_Note: Mutation testing was not run. Layer 6 (Coverage) is capped at Partial and truth-pressure remains unproven._
+
+> **Agents start here.** The prioritized Top 3 actions below are also machine-readable in `.assess/actions.json` (schema v2: every entry carries `rank`, `action`, `done_when`, and `scope_fence`, plus the lifecycle fields `status` / `claimed_by` / `completed_sha` and a derived execution `mode`). Read that file to pick up the work - even with a smaller model - without parsing this report's prose.
 
 ## Top 3 Actions
 

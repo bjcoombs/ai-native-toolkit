@@ -163,6 +163,54 @@ def test_opening_summary_is_bespoke_not_boilerplate() -> None:
     assert boilerplate in folded, "the non-verdict framing should remain in the 'How to read' fold"
 
 
+def test_not_a_verdict_frame_adjacent_to_score() -> None:
+    """A short 'not a verdict' frame sits on the score line above the fold, so a
+    reader never mistakes the LLM score for a pass/fail gate (task 20). The full
+    'improvement roadmap, not a verdict' framing still lives in the 'How to read'
+    fold - guarded by test_opening_summary_is_bespoke_not_boilerplate - so this
+    short frame must use different wording and must not reintroduce the boiler-
+    plate onto the surface.
+    """
+    report = golden.load_golden_report()
+    surface, sep, _ = report.partition("<details>")
+    assert sep
+    score_line = next(
+        line for line in surface.splitlines() if line.startswith("**Score:")
+    )
+    assert "not a verdict" in score_line
+    # The compact frame is not the folded boilerplate sentence.
+    assert "This is an improvement roadmap, not a verdict" not in score_line
+
+
+def test_agents_start_here_pointer_above_the_fold() -> None:
+    """The deterministic 'agents start here -> .assess/actions.json' pointer sits
+    above the first fold and names the durable machine-readable Top-3 contract
+    (actions.json schema v2, task 16), so an executing agent - even a smaller
+    model - picks up the prioritized work without parsing the report prose."""
+    report = golden.load_golden_report()
+    surface, sep, _ = report.partition("<details>")
+    assert sep
+    assert "Agents start here" in surface
+    assert "`.assess/actions.json`" in surface
+    # It points at the Top 3 and therefore precedes the Top 3 Actions table.
+    assert surface.index("Agents start here") < surface.index("## Top 3 Actions")
+
+
+def test_mutation_caveat_present_when_mutation_not_run() -> None:
+    """The golden is a mutation-not-run snapshot, so the deterministic
+    MUTATION_CAVEAT line appears above the fold: Layer 6 (Coverage) is capped at
+    Partial and truth-pressure is unproven (task 8 data). It renders only when
+    mutation did not run - keyed on mutation_not_run_cap.applies / mutation_run.
+    """
+    report = golden.load_golden_report()
+    surface, sep, _ = report.partition("<details>")
+    assert sep
+    assert (
+        "Mutation testing was not run. Layer 6 (Coverage) is capped at Partial "
+        "and truth-pressure remains unproven." in surface
+    )
+
+
 def test_golden_has_structure_drift_block_with_both_tiers() -> None:
     """The captured baseline carries the structure_drift block (Tier 0 + Tier 1).
 
