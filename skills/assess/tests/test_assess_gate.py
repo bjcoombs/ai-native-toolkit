@@ -328,9 +328,29 @@ def test_main_honors_explicit_config_path(tmp_path):
     assert main([str(tmp_path), "--config", str(cfg)]) == 1
 
 
-def test_main_missing_context_is_usage_error(tmp_path, capsys):
-    assert main([str(tmp_path)]) == 2
-    assert "run assess_core.py first" in capsys.readouterr().err
+def test_main_missing_context_skips_not_fails(tmp_path, capsys):
+    """A missing run-context is an infrastructure failure, not a finding: the
+    gate skips with a clear notice and exits 0 so it never red-checks an
+    unrelated PR (it runs again once the core produces a clean run-context)."""
+    assert main([str(tmp_path)]) == 0
+    err = capsys.readouterr().err
+    assert "gate skipped" in err
+    assert "infrastructure failure" in err
+    assert "not a finding" in err
+    assert "next push" in err
+
+
+def test_main_corrupt_context_skips_not_fails(tmp_path, capsys):
+    """A corrupt (unparseable) run-context is also infra, not a finding: skip
+    with a notice and exit 0 rather than fail the PR."""
+    (tmp_path / ".assess").mkdir(parents=True)
+    (tmp_path / ".assess" / "run-context.json").write_text(
+        "{ not valid json", encoding="utf-8"
+    )
+    assert main([str(tmp_path)]) == 0
+    err = capsys.readouterr().err
+    assert "gate skipped" in err
+    assert "infrastructure failure" in err
 
 
 def test_main_no_args_is_usage_error(capsys):
