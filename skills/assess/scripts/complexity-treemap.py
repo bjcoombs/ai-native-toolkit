@@ -1,7 +1,13 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#     "lizard",
+#     # Pinned to an EXACT version. lizard produces the per-function cyclomatic
+#     # complexity that drives the treemap hue and the regression baseline; a
+#     # floating version could shift complexity-stats.json between runs and move
+#     # the regression gate with no change in the assessed tree (the same risk
+#     # ci_workflow.py pins scc against). The captured version is stamped into
+#     # complexity-stats.json (`lizard_version`) so a diff can detect a change.
+#     "lizard==1.23.0",
 #     "squarify",
 #     "matplotlib",
 #     "numpy",
@@ -515,6 +521,66 @@ def _read_plugin_version() -> str:
         return "unknown"
 
 
+# Version of the complexity-stats.json layout the diff compares. A cross-run
+# diff is only trustworthy when both snapshots share this schema; a bump here
+# is a structural change to the sidecar shape (a metric added/removed/redefined)
+# that voids the diff against an older snapshot until the next clean run
+# re-seeds the baseline (assess_core._diff_is_reliable reads it).
+STATS_SCHEMA_VERSION = 1
+
+
+def _lizard_version() -> str:
+    """Capture the installed lizard version at runtime.
+
+    lizard exposes no ``__version__`` attribute, so the version comes from the
+    installed-package metadata. Stamped into complexity-stats.json so a later
+    run can tell that the complexity backend moved (a lizard release can shift
+    cyclomatic scores) and flag the diff against the prior snapshot as not
+    comparable. Returns "unknown" if the metadata can't be read.
+    """
+    try:
+        from importlib.metadata import version
+        return version("lizard")
+    except Exception:
+        # Defensive: a metadata quirk must never fail the scan, only the stamp.
+        return "unknown"
+
+
+def _scc_version() -> str | None:
+    """Capture the installed scc version, or ``None`` when scc is not on PATH.
+
+    scc prints ``scc version 3.7.0``; the trailing token is the version. Only
+    stamped into the sidecar when scc actually scored files, so its absence in
+    the stats is honest (scc contributed nothing) rather than a false "unknown".
+    """
+    if shutil.which("scc") is None:
+        return None
+    try:
+        out = subprocess.run(
+            ["scc", "--version"], capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (subprocess.SubprocessError, OSError):
+        return None
+    if not out:
+        return None
+    return out.split()[-1]
+
+
+def _tool_versions(files: list[tuple[Path, int, float, str]]) -> dict[str, str]:
+    """Map the complexity backends that scored this run to their versions.
+
+    Always carries ``lizard``; adds ``scc`` only when at least one file was
+    scored by scc (the sidecar's own ``scoring_coverage`` is the source of that
+    truth), so the version set matches the tools that actually shaped the data.
+    """
+    versions: dict[str, str] = {"lizard": _lizard_version()}
+    if any(f[3] == "scc" for f in files):
+        scc_v = _scc_version()
+        if scc_v is not None:
+            versions["scc"] = scc_v
+    return versions
+
+
 # Weight of the per-function worst case in the hotspot composite. The effective
 # complexity is a weighted geometric mean of the file aggregate and the file's
 # worst single function, leaning toward the per-function offender (issue #115).
@@ -727,8 +793,18 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     by_ccn = sorted(enriched, key=lambda f: -f["ccn"])
     by_loc = sorted(enriched, key=lambda f: -f["loc"])
 
+    tool_versions = _tool_versions(files)
     stats: dict = {
         "plugin_version": _read_plugin_version(),
+        # Layout version of this sidecar. A cross-run diff is only comparable
+        # when both snapshots share it (assess_core._diff_is_reliable).
+        "schema_version": STATS_SCHEMA_VERSION,
+        # The complexity backends and their captured versions. A backend version
+        # change can shift scores, so a later run flags the diff as not
+        # comparable and names the tool. lizard is always present; scc only when
+        # it scored files.
+        "lizard_version": tool_versions["lizard"],
+        **({"scc_version": tool_versions["scc"]} if "scc" in tool_versions else {}),
         "files_scored": len(files),
         "scoring_coverage": {
             "lizard": sum(1 for f in files if f[3] == "lizard"),

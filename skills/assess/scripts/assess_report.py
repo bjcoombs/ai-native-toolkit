@@ -321,6 +321,14 @@ def render_diff_section(ctx: dict) -> str:
         return "_No prior run to compare against - this is the first recorded snapshot._"
     if not ctx.get("diff_reliable", True):
         note = ctx.get("diff_version_note") or "prior and current snapshots are not comparable"
+        if ctx.get("diff_trend_reset"):
+            # A MAJOR version bump broke comparability: state the reset explicitly
+            # so a suppressed diff isn't misread as a clean, unchanged run.
+            return (
+                f"_Trend baseline reset: {note}. Prior hotspot history is not "
+                "comparable across a major version; the trend restarts from this "
+                "snapshot._"
+            )
         return f"_Diff suppressed: {note}._"
 
     summary = ctx.get("diff", {})
@@ -441,7 +449,21 @@ def main(argv: list[str] | None = None) -> int:
         print("Usage: assess_report.py <repo_root> [--stdout]", file=sys.stderr)
         return 2
     repo_root = Path(positional[0]).resolve()
-    ctx = load_context(repo_root)
+    try:
+        ctx = load_context(repo_root)
+    except (OSError, json.JSONDecodeError) as e:
+        # Infrastructure failure (the core never wrote run-context.json, or it is
+        # corrupt), not a finding. Emit a skip notice and succeed so a broken
+        # snapshot never renders a red check on an unrelated PR - the assessment
+        # runs again on the next push.
+        print(
+            f"/assess report skipped: infrastructure failure "
+            f"({type(e).__name__}: {e}).\n"
+            "This is an infra issue, not a finding. The report will render on "
+            "the next push.",
+            file=sys.stderr,
+        )
+        return 0
     report = render_report(ctx, repo_root.name)
     if to_stdout:
         sys.stdout.write(report)
