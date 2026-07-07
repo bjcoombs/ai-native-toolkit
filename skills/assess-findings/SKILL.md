@@ -157,6 +157,8 @@ Then the table, one row per entry, mapping the raw `.test_focus.entries` values 
 
 **Cross-reference, don't duplicate.** This table surfaces the **cheap** signals - risk band, coverage presence, and the hollow-test heuristics. The **expensive** confirmation lives elsewhere and is referenced, not repeated: the `untrusted_hotspot` finding confirms which files mutation testing proved hollow, and the Layer 6 green-but-hollow row in the Lying Signals table pairs a file's coverage against its mutation score. A file flagged `covered_but_hollow` here and confirmed by `untrusted_hotspot` there is the same file seen through the cheap then the expensive lens - so point at the finding, don't restate it.
 
+**Disclose active declines.** When `run-context.json .decline_disclosures` is non-empty, the user has permanently declined one or more optional tools for this repo, so a capability was deliberately silenced. Render each line verbatim under a short **"Declined tools"** note so the read stays honest about its own depth - e.g. _"Mutation testing permanently declined by ben on 2026-07-07"_ tells the reader the Layer 1/6 depth was capped by choice, not by a gap. Omit the note entirely when `decline_disclosures` is empty (no markers, the common case).
+
 #### Doc navigability
 
 Read the structured signal from `run-context.json` (`.doc_graph`, `.doc_staleness`, `.stale_hubs`) and write this in **plain language** - explain the metrics, don't just dump numbers. Define each term the first time you use it:
