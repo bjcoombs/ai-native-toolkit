@@ -65,6 +65,8 @@ import math
 import shutil
 import subprocess
 import sys
+import uuid
+from datetime import datetime
 from pathlib import Path
 
 import lizard
@@ -498,6 +500,19 @@ def render(files: list[tuple[Path, int, float, str]],
                   f"{metric_label} {metric:>5.0f}{aux_str}  [{src:6}]  {rel}")
 
 
+# Artifact schema version for complexity-stats.json. Mirrors assess_core's
+# SCHEMA_VERSION - the treemap runs as a separate process, so the constant is
+# duplicated rather than imported (the script has no dependency on assess_core).
+SCHEMA_VERSION = "1.0.0"
+
+
+def _new_run_id() -> str:
+    """A unique id for this stats emission: sortable wall-clock stamp + random
+    suffix (``YYYYMMDDHHMMSS-<8 hex>``), so each complexity-stats.json is
+    traceable to the run that wrote it."""
+    return f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
+
+
 def _read_plugin_version() -> str:
     """Read the plugin version from .claude-plugin/plugin.json.
 
@@ -728,6 +743,8 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     by_loc = sorted(enriched, key=lambda f: -f["loc"])
 
     stats: dict = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": _new_run_id(),
         "plugin_version": _read_plugin_version(),
         "files_scored": len(files),
         "scoring_coverage": {

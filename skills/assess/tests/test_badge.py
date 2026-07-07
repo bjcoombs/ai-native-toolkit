@@ -13,6 +13,7 @@ from lib.badge import (
     badge_exists,
     concern_count_from_findings,
     fallback_badge,
+    maturity_band,
     score_badge,
     score_color,
     write_badge,
@@ -88,3 +89,40 @@ def test_score_color_normalises_over_denominator():
     # Default denominator 8 reproduces the original absolute bands.
     assert score_color(7.0) == "brightgreen"
     assert score_color(7.0, 8) == "brightgreen"
+
+
+def test_maturity_band_ladder():
+    """The documented ladder: >=0.875 AI-Native, >=0.625 Solid, >=0.375 Basic,
+    else Not Ready. Band edges hit exactly."""
+    assert maturity_band(7.0) == "AI-Native"   # 0.875
+    assert maturity_band(6.9) == "Solid"       # 0.8625
+    assert maturity_band(5.0) == "Solid"       # 0.625
+    assert maturity_band(4.9) == "Basic"       # 0.6125
+    assert maturity_band(3.0) == "Basic"       # 0.375
+    assert maturity_band(2.9) == "Not Ready"   # 0.3625
+    assert maturity_band(0.0) == "Not Ready"
+
+
+def test_maturity_band_normalises_over_denominator():
+    # A KB scoring full marks earns AI-Native, not the misleading 2.5/8 read.
+    assert maturity_band(3.0, 3) == "AI-Native"
+    assert maturity_band(2.5, 3) == "Solid"   # 0.833
+
+
+def test_score_badge_stamps_run_id_when_supplied():
+    badge = score_badge(6.0, "Solid", run_id="20260707120000-abcdef01")
+    assert badge["run_id"] == "20260707120000-abcdef01"
+    # Message/colour are unchanged by the extra provenance field.
+    assert badge["message"] == "6.0/8 · Solid"
+
+
+def test_badge_run_id_omitted_by_default():
+    """No run_id -> no key, so the badge dict is byte-identical to before."""
+    assert "run_id" not in score_badge(6.0, "Solid")
+    assert "run_id" not in fallback_badge(1, 0)
+
+
+def test_fallback_badge_stamps_run_id_when_supplied():
+    badge = fallback_badge(2, 1, run_id="20260707120000-abcdef01")
+    assert badge["run_id"] == "20260707120000-abcdef01"
+    assert badge["message"] == "2 findings · 1 stale markers"

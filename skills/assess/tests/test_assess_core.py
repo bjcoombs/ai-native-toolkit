@@ -1648,3 +1648,48 @@ def test_run_opt_in_mutation_degrades_on_scan_failure(tmp_path: Path, monkeypatc
         "untested_boundaries": [],
         "duplicate_truth": [],
     }
+
+
+# --- run_id / schema_version stamps + Layer 6 cap (assess-obey-thyself) -------
+
+
+def test_run_context_carries_run_id_and_schema_version(tmp_path: Path) -> None:
+    repo = _minimal_repo(tmp_path)
+    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    assert ctx["schema_version"] == assess_core.SCHEMA_VERSION == "1.0.0"
+    # run_id shape: YYYYMMDDHHMMSS-<8 hex>
+    run_id = ctx["run_id"]
+    stamp, _, suffix = run_id.partition("-")
+    assert len(stamp) == 14 and stamp.isdigit()
+    assert len(suffix) == 8 and all(c in "0123456789abcdef" for c in suffix)
+    # The same id is persisted to run-context.json on disk.
+    on_disk = json.loads((repo / ".assess" / "run-context.json").read_text())
+    assert on_disk["run_id"] == run_id
+    assert on_disk["schema_version"] == "1.0.0"
+
+
+def test_run_context_run_id_is_unique_per_run(tmp_path: Path) -> None:
+    repo = _minimal_repo(tmp_path)
+    a = build_run_context(repo_root=repo, run_date="2026-07-07")["run_id"]
+    b = build_run_context(repo_root=repo, run_date="2026-07-07")["run_id"]
+    assert a != b
+
+
+def test_run_context_run_id_stamped_on_badge(tmp_path: Path) -> None:
+    """The deterministic fallback badge carries the run_id (no prior badge)."""
+    repo = _minimal_repo(tmp_path)
+    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    badge = json.loads((repo / ".assess" / "badge.json").read_text())
+    assert badge["run_id"] == ctx["run_id"]
+
+
+def test_mutation_not_run_cap_applies_on_default_scan(tmp_path: Path) -> None:
+    """The default read-only pass never runs mutation, so Layer 6 is capped at
+    Partial and the required annotation is present for the LLM to read."""
+    repo = _minimal_repo(tmp_path)
+    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    cap = ctx["mutation_not_run_cap"]
+    assert cap["applies"] is True
+    assert cap["mutation_run"] is False
+    assert cap["max_layer6_band"] == "Partial"
+    assert cap["annotation"] == "truth-pressure unproven (mutation not run)"

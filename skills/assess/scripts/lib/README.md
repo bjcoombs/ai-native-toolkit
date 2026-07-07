@@ -267,6 +267,8 @@ Degrades silently on missing or malformed config rather than blocking the run.
 **`wiki_writer.py`**
 Renders and writes the `.assess/` wiki files (`index.md`, `log.md`,
 `hotspots/*.md`) from string templates. No LLM calls. Pure string formatting + file IO.
+An optional `run_id`/`schema_version` prepends a non-rendering HTML-comment
+provenance stamp to each file (omitted -> byte-identical legacy output).
 
 **`treemap_render.py`**
 Shared treemap layout and SVG primitives for the code heatmap and the doc-staleness
@@ -378,7 +380,10 @@ honest-degrade ladder: `assess_finalize` always writes the LLM-scored form
 "2.5/3 · Knowledge Base · Solid"), `assess_core` writes the deterministic
 findings-count fallback only when no badge exists - so a gate-only repo gets a
 truthful badge and a scored badge is never downgraded by a deterministic-only
-rerun. Pure threshold functions, fixture-tested.
+rerun. Pure threshold functions, fixture-tested. Also exposes `maturity_band`
+(the same score/denominator fraction mapped to the named tier ladder), the
+single source of truth `assess_finalize` reconciles the LLM's `maturity_label`
+against. Both producers accept an optional `run_id` provenance stamp.
 
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
