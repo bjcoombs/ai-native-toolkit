@@ -92,11 +92,7 @@ Feed the complexity stats into the linter/complexity layer (Layer 3) and the `do
 
 ### The consent lifecycle (read `references/consent-lifecycle.md`)
 
-Steps 2a/2b/2d and the assess-pr end-of-run offers share one consent model, specified in full in `references/consent-lifecycle.md` (relative to this skill dir). Load it before running the offers. The load-bearing points the steps below rely on:
-
-- **Decline markers carry provenance.** A permanent decline writes `$REPO_ROOT/.assess/.no-<tool>` as JSON `{declined_by, declined_at, plugin_version, reason?}` via the reference's `write_decline_marker <tool>` helper - never a bare `touch`. The core reads them into `run-context.json` (`decline_markers`, `decline_disclosures`, `reoffer_mutation`): the report discloses each active decline, and a mutation decline made under an older plugin *major* sets `reoffer_mutation: true` so Step 2d re-asks once. Legacy empty/non-JSON markers still count as a decline (no provenance, never re-offered). Define the reference's helper functions once before the first `write_decline_marker` call.
-- **Three phases, one question each.** Phase 1 = tool installs (Steps 2a+2b, one batched question); Phase 3 = the code-modifying mutation pass (Step 2d, kept separate); Phase 2 = the four write-back offers (assess-pr, one batched question). Batching avoids 8-10 serial modals.
-- **Non-interactive contract.** In a headless/CI run (no human to answer), **make no AskUserQuestion calls in any phase** - a headless run completes with zero prompts. Phase 1 precedes the core, so honour this as orchestration from your own runtime context; Phases 3 and 2 (after Step 2c) read the core's `run-context.json .interactive` flag, which also pre-records every offer as `{type, status: "skipped", reason: "non-interactive"}` in `.offers` (the audit trail).
+Steps 2a/2b/2d and the assess-pr end-of-run offers share one consent model, **specified in full in `references/consent-lifecycle.md`** (relative to this skill dir) - load it before running the offers. Load-bearing hooks the steps rely on: decline markers carry provenance (write `.no-<tool>` JSON via the reference's `write_decline_marker` helper, never a bare `touch`; a mutation decline under an older plugin *major* sets `reoffer_mutation: true` so Step 2d re-asks once); three phases each a single batched question (Phase 1 tool installs 2a+2b, Phase 3 the separate mutation pass 2d, Phase 2 the assess-pr write-back offers); and the non-interactive contract - a headless/CI run makes **no AskUserQuestion calls in any phase**, Phase 1 as orchestration from your runtime context and Phases 2/3 from the core's `run-context.json .interactive` flag, which pre-records every skipped offer in `.offers`.
 
 ### 2a: Detect `scc` need (feeds Phase 1)
 
@@ -183,9 +179,7 @@ needs_offer ts-prune "$TS_FILES"     && OFFERS+=("typescript|ts-prune|npm instal
 needs_offer staticcheck "$GO_FILES"  && OFFERS+=("go|staticcheck|go install honnef.co/go/tools/cmd/staticcheck@latest (or 'brew install staticcheck')")
 ```
 
-**Non-interactive short-circuit.** Phase 1 runs *before* the core writes `run-context.json`, so honour the non-interactive contract as orchestration: in a headless/CI run (no human to answer), make **no** AskUserQuestion call and install nothing - proceed to 2c with lizard-only + whatever tools are already on PATH. The core records this Phase 1 skip in `offers` when it runs at 2c.
-
-If `OFFERS` is empty (no language hits the threshold, or every tool is already installed/declined), skip straight to 2c.
+If `OFFERS` is empty (no language hits the threshold, or every tool is already installed/declined), skip straight to 2c. **Non-interactive short-circuit:** Phase 1 precedes the core, so in a headless/CI run make **no** AskUserQuestion call and install nothing - proceed to 2c with lizard-only plus whatever is already on PATH (the core records the skip in `offers` at 2c).
 
 Otherwise, in an interactive run, batch **all** of Phase 1 into **a single AskUserQuestion call** - one question per entry in `OFFERS` (scc and each dead-code tool together), three options per question. This is the one tool-install decision surface; the user never faces scc and the linters as separate modals:
 
@@ -308,17 +302,15 @@ uv run "$SKILL_DIR/scripts/doc-graph-svg.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess
 
 # Run the deterministic core (instruction grading, doc link-graph, doc staleness,
 # liveness/dead-code, observability rungs, stats diff, wiki files, run-context.json)
-# Headless/CI run (the same condition you used for Phase 1 in Step 2b)? Append
-# `--non-interactive` so the core records every consent offer as skipped. A normal
-# interactive /assess omits it - the core NEVER infers interactivity from stdin,
-# because it runs as a subprocess with no controlling terminal.
+# On a headless/CI run (as in Phase 1), append `--non-interactive` so every consent
+# offer records as skipped; a normal interactive /assess omits the flag.
 <!-- chat-replace:uv-core -->
 uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT"
 ```
 
 Either SVG is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated - <reason>" in the report and continue. The doc graph shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
 
-**Interactivity signal (explicit, not stdin).** The core is a subprocess with no controlling terminal, so `sys.stdin.isatty()` is always false even in a normal interactive `/assess` - it is never used to decide interactivity. Instead you tell the core: pass `--non-interactive` (or set `ASSESS_NON_INTERACTIVE=1` / `CI`) **only** on a genuinely headless/CI run - the same signal you already self-determined for Phase 1. With no flag and no CI env, the run is interactive by default and `run-context.json .interactive` is `true`, so Phases 3 and 2 present their offers live. This keeps all three phases consistent: Phase 1 (orchestration) and Phases 2/3 (the flag you pass here) read from one decision, not two.
+Interactivity is an explicit signal, never a stdin probe: pass `--non-interactive` only on a headless/CI run, otherwise the run is interactive by default. See `references/consent-lifecycle.md` for why (`isatty()` misreads a subprocess).
 
 Now `$REPO_ROOT/.assess/run-context.json` contains the structured data you need for the prose sections. Read it before writing the report.
 
@@ -326,9 +318,7 @@ The `plugin_version` field in `run-context.json` tells you which plugin version 
 
 ### 2d: Phase 3 - the bounded mutation pass (opt-in, kept separate)
 
-**This is its own phase, asked on its own - never batched with the Phase 1 tool installs.** The Phase 1 installs are read-only; this pass **modifies your source files and runs your test suite over the mutated code**. That is a different risk class, so it gets a dedicated question with explicit code-modification framing rather than being waved through inside a bundle of install prompts. **Non-interactive contract:** when `run-context.json .interactive` is `false`, make no offer - the mutation offer is already recorded as skipped in `offers`; continue with the read-only signal.
-
-The default core run is read-only - it never mutates or runs code, so `test_pressure` carries the cheap hollow-test heuristics and mutation-config detection but no survivor data. The decisive Layer 1 signal (would a test actually fail if the code were wrong?) needs a bounded mutation pass, which mutates source and *runs* the suite. That is consent-gated, so offer it here rather than running it silently.
+**This is its own phase, asked on its own - never batched with the Phase 1 tool installs.** The default core run is read-only - it never mutates or runs code, so `test_pressure` carries the cheap hollow-test heuristics and mutation-config detection but no survivor data. The decisive Layer 1 signal (would a test actually fail if the code were wrong?) needs this bounded pass, which **modifies your source files and runs your test suite over the mutated code** - a different risk class, so it gets a dedicated question with explicit code-modification framing rather than being waved through inside a bundle of install prompts, and honours the non-interactive contract (skip when `run-context.json .interactive` is `false`).
 
 The `test_focus` block is the single source of focus targets - the risky files that most need test work, already cross-joined from hotspot risk, coverage, and the hollow-test heuristics. Read it; don't recompute it:
 
