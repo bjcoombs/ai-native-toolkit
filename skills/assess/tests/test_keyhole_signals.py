@@ -973,3 +973,31 @@ def test_integrate_returns_structure_drift_tier1() -> None:
     )
     assert "structure_drift_tier1" in result
     assert result["structure_drift_tier1"].get("available") in (True, False)
+
+
+# --- FINDING_MODES / mode_for_finding ---------------------------------------
+
+def test_finding_modes_cover_every_finding() -> None:
+    """Every named finding maps to a mode - no finding reaches the report
+    without a deterministic execution posture."""
+    assert set(ks.FINDING_MODES) == set(ks.FINDING_ORDER)
+
+
+def test_finding_modes_use_only_the_closed_mode_set() -> None:
+    """The three modes are a closed vocabulary; no finding invents a fourth."""
+    allowed = {"characterize_first", "verify_then_retire", "refactor_safe"}
+    assert set(ks.FINDING_MODES.values()) <= allowed
+    assert ks.FINDING_MODE_VALUES == frozenset(ks.FINDING_MODES.values())
+
+
+def test_mode_for_finding_maps_known_types() -> None:
+    assert ks.mode_for_finding("lying_map") == "verify_then_retire"
+    assert ks.mode_for_finding("refactor_boundary") == "refactor_safe"
+    assert ks.mode_for_finding("hidden_coupling") == "characterize_first"
+
+
+def test_mode_for_finding_defaults_for_unknown_or_missing() -> None:
+    """An unknown or absent finding falls back to the conservative default."""
+    assert ks.mode_for_finding(None) == ks.DEFAULT_FINDING_MODE
+    assert ks.mode_for_finding("not_a_real_finding") == ks.DEFAULT_FINDING_MODE
+    assert ks.DEFAULT_FINDING_MODE == "characterize_first"

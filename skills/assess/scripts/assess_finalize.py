@@ -19,7 +19,9 @@ Updates:
 
 Writes (when the input carries an ``actions`` array):
     {repo_root}/.assess/actions.json     (durable machine-readable Top 3
-                                          action contract for executor agents)
+                                          action contract for executor agents;
+                                          v2 - carries per-action status/mode and
+                                          preserves done state across re-runs)
 
 Run:
     uv run assess_finalize.py <repo_root>
@@ -39,6 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.badge import maturity_band, score_badge, write_badge
+from lib.keyhole_signals import mode_for_finding
 from lib.wiki_writer import slug_for_path
 
 
@@ -160,15 +163,77 @@ def _finalize_hotspot_actions(assess_dir: Path, *, hotspot_actions: dict[str, li
 # entry must not reach an executor as if it were complete.
 ACTION_REQUIRED_KEYS = {"rank", "action", "done_when", "scope_fence"}
 
+# actions.json schema version. v2 adds executor-lifecycle fields (status /
+# claimed_by / completed_sha) plus a deterministic execution ``mode`` per action
+# and a top-level ``run_id`` stamp. v1 (schema:1, no lifecycle fields) is still
+# read for status carry-forward - see _read_prior_action_status.
+ACTIONS_SCHEMA_VERSION = 2
 
-def _write_actions_contract(assess_dir: Path, actions: list[dict]) -> None:
-    """Write the durable machine-readable Top 3 contract to actions.json.
+# The executor lifecycle. A fresh action is ``pending``; an executor ``claimed``
+# it; ``done`` records the ``completed_sha`` that satisfied ``done_when``;
+# ``reopened`` means a later run re-flagged work a prior run marked done.
+ACTION_STATUS_VALUES = frozenset({"pending", "claimed", "done", "reopened"})
+
+# Lifecycle fields carried forward from a prior actions.json so a done action
+# stays done (with its completed_sha and claimant) across re-runs. Everything
+# else - rank, mode, done_when, scope_fence - is recomputed each run from the
+# freshest findings.
+_ACTION_CARRY_FIELDS = ("status", "claimed_by", "completed_sha")
+
+
+def _read_prior_action_status(assess_dir: Path) -> dict[str, dict]:
+    """Prior actions keyed by their ``action`` text, for status carry-forward.
+
+    The action directive is the stable identity across runs: rank reshuffles as
+    findings re-prioritise, but "investigate the src/foo.go seam" is the same
+    piece of work whether it ranks 1 or 3 this time. Reads v1 and v2 contracts
+    alike - a v1 entry simply carries no lifecycle fields, so a re-run over a v1
+    actions.json initialises every action to pending (backward compatible). A
+    missing or unreadable prior contract yields no carry-forward, not an error.
+    """
+    path = assess_dir / "actions.json"
+    if not path.exists():
+        return {}
+    try:
+        prior = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    out: dict[str, dict] = {}
+    for a in prior.get("actions", []) if isinstance(prior, dict) else []:
+        if isinstance(a, dict) and isinstance(a.get("action"), str):
+            out[a["action"]] = a
+    return out
+
+
+def _carry_status_fields(prior_entry: dict) -> dict:
+    """The lifecycle fields to inherit from a matching prior action.
+
+    An unrecognised prior status resets to ``pending`` (a corrupted or
+    hand-edited contract must not smuggle an out-of-vocabulary status forward).
+    A v1 prior entry has none of these fields, so the executor sees a fresh
+    pending action with a null claimant and no completed_sha.
+    """
+    status = prior_entry.get("status")
+    return {
+        "status": status if status in ACTION_STATUS_VALUES else "pending",
+        "claimed_by": prior_entry.get("claimed_by"),
+        "completed_sha": prior_entry.get("completed_sha"),
+    }
+
+
+def _write_actions_contract(
+    assess_dir: Path, actions: list[dict], *, run_id: str | None = None
+) -> None:
+    """Write the durable machine-readable Top 3 contract to actions.json (v2).
 
     Unlike finalize-input.json (consumed and deleted - transient by design),
     actions.json persists: it is the artifact an executing agent reads to know
-    what to do, how to verify it, and where to stop, without parsing the
-    report's markdown table.
+    what to do, how to verify it, where to stop, and - v2 - whether the work is
+    still open. Status/claimed_by/completed_sha are carried forward from any
+    existing contract so a done action stays done across re-runs; ``mode`` is
+    derived deterministically from each action's ``finding`` type.
     """
+    prior = _read_prior_action_status(assess_dir)
     valid = []
     for a in actions:
         if not isinstance(a, dict) or not ACTION_REQUIRED_KEYS <= set(a):
@@ -181,7 +246,22 @@ def _write_actions_contract(assess_dir: Path, actions: list[dict]) -> None:
         valid.append(a)
     if not valid:
         return
-    payload = {"schema": 1, "actions": sorted(valid, key=lambda a: a["rank"])}
+    entries = []
+    for a in sorted(valid, key=lambda a: a["rank"]):
+        # Keep whatever the LLM supplied (rank/action/done_when/scope_fence plus
+        # any recommended files/first_step/layer/effort/finding), then stamp the
+        # v2 lifecycle + derived mode over it so those fields are authoritative.
+        entry = {
+            **a,
+            **_carry_status_fields(prior.get(a["action"], {})),
+            "mode": mode_for_finding(a.get("finding")),
+        }
+        entries.append(entry)
+    payload = {
+        "schema": ACTIONS_SCHEMA_VERSION,
+        "run_id": run_id,
+        "actions": entries,
+    }
     (assess_dir / "actions.json").write_text(
         json.dumps(payload, indent=2) + "\n", encoding="utf-8"
     )
@@ -410,7 +490,7 @@ def finalize_run(*, assess_dir: Path) -> None:
     _finalize_hotspot_actions(assess_dir, hotspot_actions=data.get("hotspot_actions", {}))
     actions = data.get("actions")
     if isinstance(actions, list) and actions:
-        _write_actions_contract(assess_dir, actions)
+        _write_actions_contract(assess_dir, actions, run_id=ctx.get("run_id"))
     # The score badge always overwrites: finalize carries the freshest
     # LLM-scored run, the strongest claim the badge is allowed to make. Stamp it
     # with the run-context run_id (when present) so the badge is traceable.
