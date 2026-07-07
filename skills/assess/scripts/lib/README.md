@@ -223,12 +223,18 @@ repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into
 Integration barrier between the individual signal modules and `assess_core`. Derives
 the per-directory containment view from the commit-file sets the orchestrator parses
 once and passes in, then assembles all five run-context blocks from the upstream signal
-outputs. Emits the eight named derived findings as a fixed-order structured array:
-`hidden_coupling`, `lying_map`, `unexplained_complexity`, `untrusted_hotspot`,
-`self_referential_tests`, `orphaned_understanding`, `candidate_dead_weight`, and
-`refactor_boundary` (the two trust-axis findings, `untrusted_hotspot` and
-`self_referential_tests`, were added after this module's first cut). Each block build
-is wrapped in a catch-all so one signal's failure degrades that block to
+outputs. Emits the named derived findings as a fixed-order structured array (the single
+source of order is `FINDING_ORDER`): `hidden_coupling`, `lying_map`,
+`unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`,
+`unactioned_intent`, `accretion_ratchet`, `orphaned_understanding`,
+`candidate_dead_weight`, `override_contradicts_signals` (archetype marker disagrees with
+the deterministic signals - fed the `archetype` block), and the one positive
+`refactor_boundary` last. After assembly `apply_config_excludes` drops any finding path a
+user config exclude (`exclude_dirs`/`exclude_patterns`) covers - the git-log-derived
+findings never saw the scan-level filter - and returns the dropped paths as
+`excluded_finding_paths` so `assess_core` can serialise the `excluded_by_config`
+disclosure (a suppressed finding is counted and named, never silently vanished). Each
+block build is wrapped in a catch-all so one signal's failure degrades that block to
 `available: False` rather than crashing the run. It also runs `structure_drift.py`'s Tier 1
 grouping disagreement (fed the behaviour block's co-change pairs so no second git-log parse
 happens) and folds its hidden-seam direction into the `hidden_coupling` finding, returning the
@@ -363,7 +369,12 @@ denominator) and renormalises the denominator over the applicable layers (L0,
 L1, L8 → 3). Also detects the Karpathy LLM-wiki maintenance pattern
 (`kb_maintenance` - immutable sources, schema-as-product, ingest, query-as-filing,
 periodic consolidation) as a Layer 0 read-side signal and always carries the
-gist pointer. The IO-free `classify_archetype` is the tested core; `analyze_archetype`
+gist pointer. When an `assess-archetype:` marker forces a classification the
+deterministic signals disagree with, the override still wins but the block sets
+`override_contradicts_signals` + `contradiction_details` (and records the marker's
+`override_source` file) so `keyhole_signals` can fire the visible
+`override_contradicts_signals` finding rather than swallowing the override
+silently. The IO-free `classify_archetype` is the tested core; `analyze_archetype`
 gathers the inputs. Imports `doc_graph` (extensions) and `git_churn`
 (`tracked_files`), never an orchestrator. Structured as an extensible dispatch
 (one archetype today, YAGNI on a general framework). Read by `assess_core`

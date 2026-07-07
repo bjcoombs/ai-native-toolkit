@@ -19,6 +19,7 @@ from assess_report import (
     load_context,
     main,
     render_diff_section,
+    render_exclusion_disclosure,
     render_findings_section,
     render_hotspots_table,
     render_keyhole_summary,
@@ -154,6 +155,47 @@ def test_full_render_has_all_sections() -> None:
     assert "## Changes Since Last Run" in report
     # No unsubstituted placeholders leaked.
     assert "$" not in report
+
+
+# --------------------------------------------------------------------------
+# Config-exclusion disclosure
+# --------------------------------------------------------------------------
+
+
+def test_exclusion_disclosure_renders_when_findings_suppressed() -> None:
+    disclosure = render_exclusion_disclosure({
+        "excluded_by_config": {
+            "dirs": ["vendor"], "patterns": ["*.gen.py"],
+            "affected_finding_paths": ["vendor/x.py", "a.gen.py"], "count": 2,
+        }
+    })
+    assert "2 findings suppressed by config excludes" in disclosure
+    assert "dirs: vendor" in disclosure
+    assert "patterns: *.gen.py" in disclosure
+
+
+def test_exclusion_disclosure_empty_without_excludes() -> None:
+    assert render_exclusion_disclosure({}) == ""
+    assert render_exclusion_disclosure(
+        {"excluded_by_config": {"dirs": [], "patterns": [], "count": 0}}
+    ) == ""
+
+
+def test_report_includes_exclusion_disclosure() -> None:
+    ctx = _full_ctx()
+    ctx["excluded_by_config"] = {
+        "dirs": ["vendor"], "patterns": [],
+        "affected_finding_paths": ["vendor/x.py"], "count": 1,
+    }
+    report = render_report(ctx, "demo")
+    assert "1 finding suppressed by config excludes" in report
+    # It sits in the Keyhole Readiness section, right after the summary line.
+    assert report.index("Keyhole Readiness") < report.index("suppressed by config")
+
+
+def test_report_no_disclosure_line_when_no_excludes() -> None:
+    report = render_report(_full_ctx(), "demo")
+    assert "suppressed by config excludes" not in report
 
 
 def test_full_render_metrics_values() -> None:
