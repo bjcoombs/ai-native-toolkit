@@ -94,7 +94,11 @@ def test_finalize_updates_log_last_entry(tmp_assess_dir: Path) -> None:
 
 
 def test_finalize_knowledge_base_denominator(tmp_assess_dir: Path) -> None:
-    """A KB run finalises the log + badge over its applicable-layer denominator (#224)."""
+    """A KB run finalises the log over its applicable-layer denominator (#224).
+
+    The score is renormalised in the log/report line; it is deliberately NOT
+    written to the badge, which stays the deterministic form assess_core wrote.
+    """
     _seed_log_md(tmp_assess_dir)
     _seed_run_context(tmp_assess_dir, denominator=3)
     finalize_input = {
@@ -112,8 +116,9 @@ def test_finalize_knowledge_base_denominator(tmp_assess_dir: Path) -> None:
     content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     assert "AI Readiness:** 2.5 / 3 (Knowledge Base · Solid (3 applicable layers))" in content
     assert "/ 8" not in content  # the misleading software denominator is gone
-    badge = json.loads((tmp_assess_dir / "badge.json").read_text(encoding="utf-8"))
-    assert badge["message"].startswith("2.5/3 · Knowledge Base")
+    # Finalize writes no badge - the score lives in the report line above, not
+    # on the shipped (deterministic) badge.
+    assert not (tmp_assess_dir / "badge.json").exists()
 
 
 def test_finalize_updates_hotspot_actions(tmp_assess_dir: Path) -> None:
@@ -559,15 +564,21 @@ def test_finalize_all_actions_malformed_writes_no_contract(tmp_assess_dir: Path)
     assert not (tmp_assess_dir / "actions.json").exists()
 
 
-def test_finalize_writes_score_badge(tmp_assess_dir: Path) -> None:
-    """Finalize always (over)writes badge.json with the LLM-scored form."""
+def test_finalize_leaves_deterministic_badge_untouched(tmp_assess_dir: Path) -> None:
+    """Finalize does NOT overwrite the deterministic badge with the LLM score.
+
+    The shipped badge stays the findings-count form assess_core wrote; the
+    LLM-derived score lands in the report/log instead, so the badge never claims
+    a grade a deterministic run cannot reproduce.
+    """
     _seed_log_md(tmp_assess_dir)
     _seed_run_context(tmp_assess_dir)
-    (tmp_assess_dir / "badge.json").write_text(
+    deterministic_badge = (
         '{"schemaVersion": 1, "label": "AI-readiness", '
-        '"message": "9 findings · 9 stale markers", "color": "orange"}',
-        encoding="utf-8",
+        '"message": "9 findings · 9 stale markers", "color": "orange", '
+        '"link": "./assess-report.md"}'
     )
+    (tmp_assess_dir / "badge.json").write_text(deterministic_badge, encoding="utf-8")
     (tmp_assess_dir / "finalize-input.json").write_text(
         json.dumps(_base_input()), encoding="utf-8"
     )
@@ -575,8 +586,13 @@ def test_finalize_writes_score_badge(tmp_assess_dir: Path) -> None:
     finalize_run(assess_dir=tmp_assess_dir)
 
     badge = json.loads((tmp_assess_dir / "badge.json").read_text(encoding="utf-8"))
-    assert badge["message"] == "6.0/8 · Solid"
-    assert badge["color"] == "green"
+    # Badge unchanged: still the deterministic findings form, no LLM score.
+    assert badge["message"] == "9 findings · 9 stale markers"
+    assert "6.0/8" not in badge["message"]
+    assert badge["link"] == "./assess-report.md"
+    # The LLM score still lands where it belongs: the report/log entry.
+    log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "**AI Readiness:** 6.0 / 8 (Solid)" in log
 
 
 # --- Task 1: finalize reconciles run-context invariants (fail-closed) --------
@@ -702,8 +718,13 @@ def test_finalize_run_id_mismatch_refuses(tmp_assess_dir: Path) -> None:
         finalize_run(assess_dir=tmp_assess_dir)
 
 
-def test_finalize_run_id_match_stamps_badge(tmp_assess_dir: Path) -> None:
-    """Matching run_id passes, and the badge is stamped with it."""
+def test_finalize_run_id_match_finalizes_log(tmp_assess_dir: Path) -> None:
+    """A matching run_id passes the torn-write check and finalize completes.
+
+    (The badge is deterministic and written by assess_core, so finalize no
+    longer stamps it - the run_id proves the input was authored against this
+    run, which is what unblocks the write-back.)
+    """
     _seed_log_md(tmp_assess_dir)
     run_id = "20260707120000-abcdef01"
     _seed_run_context(tmp_assess_dir, run_id=run_id)
@@ -711,8 +732,8 @@ def test_finalize_run_id_match_stamps_badge(tmp_assess_dir: Path) -> None:
 
     finalize_run(assess_dir=tmp_assess_dir)
 
-    badge = json.loads((tmp_assess_dir / "badge.json").read_text(encoding="utf-8"))
-    assert badge["run_id"] == run_id
+    log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "**AI Readiness:** 6.0 / 8 (Solid)" in log
 
 
 def test_finalize_legacy_input_without_run_id_still_works(tmp_assess_dir: Path) -> None:

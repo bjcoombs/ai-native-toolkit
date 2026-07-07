@@ -391,14 +391,16 @@ agent (N/A scoring + denominator), and the `assess-findings` skill (renders N/A
 denominator) and its test `tests/test_archetype.py`.
 
 **`badge.py`**
-Shields.io endpoint badge for the wiki (`.assess/badge.json`). Two producers on an
-honest-degrade ladder: `assess_finalize` always writes the LLM-scored form
-("7.0/8 · AI-Native", colour banded from the score over its denominator -
-`denominator` defaults to 8 but renormalises for a knowledge-base archetype, e.g.
-"2.5/3 · Knowledge Base · Solid"), `assess_core` writes the deterministic
-findings-count fallback only when no badge exists - so a gate-only repo gets a
-truthful badge and a scored badge is never downgraded by a deterministic-only
-rerun. Pure threshold functions, fixture-tested. Also exposes `maturity_band`
+Shields.io endpoint badge for the wiki (`.assess/badge.json`). The shipped badge
+is deterministic by default: `assess_core` always writes the findings-count form
+(`fallback_badge`, "2 findings · 0 stale markers", colour banded from the counts)
+and stamps a `link` to `assess-report.md`, so a badge-clicker lands on the full
+report. The LLM-derived headline (`score_badge`, "7.0/8 · AI-Native",
+renormalised over its `denominator` - 8 for software, the applicable-layer count
+for a knowledge-base archetype, e.g. "2.5/3 · Knowledge Base · Solid") is *not*
+written to the badge; it appears inside `assess-report.md`, so the badge never
+claims a grade a deterministic run cannot reproduce. Pure threshold functions,
+fixture-tested. Also exposes `maturity_band`
 (the same score/denominator fraction mapped to the named tier ladder), the
 single source of truth `assess_finalize` reconciles the LLM's `maturity_label`
 against. Both producers accept an optional `run_id` provenance stamp.
