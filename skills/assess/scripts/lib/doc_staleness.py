@@ -103,16 +103,24 @@ class DocStaleness:
 
 def _discover(repo_root: Path, exts: set[str],
               extra_exclude_dirs: set[str] | None = None,
-              extra_exclude_patterns: list[str] | None = None) -> list[Path]:
-    """In-repo files with the given extensions (tracked + within repo only)."""
+              extra_exclude_patterns: list[str] | None = None,
+              scope: Path | None = None) -> list[Path]:
+    """In-repo files with the given extensions (tracked + within repo only).
+
+    `scope` (an absolute path under `repo_root`) restricts discovery to a
+    subtree for `/assess <path>` monorepo scoping; omit it for a whole-repo run.
+    """
     from lib.assess_config import is_user_excluded
     repo_root = repo_root.resolve()
+    scope_abs = scope.resolve() if scope is not None else None
     tracked = tracked_files(repo_root)
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
     files: list[Path] = []
     for path in repo_root.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in exts:
+            continue
+        if scope_abs is not None and not path.resolve().is_relative_to(scope_abs):
             continue
         try:
             rel = path.relative_to(repo_root)
@@ -131,22 +139,26 @@ def _discover(repo_root: Path, exts: set[str],
 def discover_code_files(repo_root: Path,
                         extra_exclude_dirs: set[str] | None = None,
                         extra_exclude_patterns: list[str] | None = None,
+                        scope: Path | None = None,
                         ) -> list[Path]:
     return _discover(
         repo_root, CODE_EXTENSIONS,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
+        scope=scope,
     )
 
 
 def discover_doc_files(repo_root: Path,
                        extra_exclude_dirs: set[str] | None = None,
                        extra_exclude_patterns: list[str] | None = None,
+                       scope: Path | None = None,
                        ) -> list[Path]:
     return _discover(
         repo_root, DOC_EXTENSIONS,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
+        scope=scope,
     )
 
 
@@ -238,12 +250,17 @@ def analyze_doc_staleness(
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
     generated_sources: list[tuple[str, list[str]]] | None = None,
+    scope: Path | None = None,
 ) -> dict:
     """Compute the doc-staleness metric and doc->code association summary.
 
     ``generated_sources`` is the ``[[generated]]`` folder->source map (issue
     #178). When None it is read from ``.assess/config.toml``; pass an explicit
     list to override (tests, or a caller that already loaded the config).
+
+    ``scope`` (an absolute path under ``repo_root``) restricts both the doc and
+    code discovery to a subtree for ``/assess <path>`` monorepo scoping; omit it
+    for a whole-repo run.
     """
     repo_root = repo_root.resolve()
     if generated_sources is None:
@@ -256,6 +273,7 @@ def analyze_doc_staleness(
                 repo_root,
                 extra_exclude_dirs=extra_exclude_dirs,
                 extra_exclude_patterns=extra_exclude_patterns,
+                scope=scope,
             )
         )
     ]
@@ -263,6 +281,7 @@ def analyze_doc_staleness(
         repo_root,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
+        scope=scope,
     )
 
     def rel(p: Path) -> str:

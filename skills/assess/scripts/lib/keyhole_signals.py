@@ -994,6 +994,7 @@ def integrate(
     archetype: dict | None = None,
     exclude_dirs: set[str] | None = None,
     exclude_patterns: list[str] | None = None,
+    scope: Path | None = None,
 ) -> dict:
     """Build the five run-context blocks + derived findings + attention list.
 
@@ -1021,6 +1022,25 @@ def integrate(
             commit_sets = parse_commit_file_sets(repo_root)
         except Exception:  # noqa: BLE001 - degrade to no-history
             commit_sets = []
+
+    # `/assess <path>` monorepo scoping: confine the change-history file-sets to
+    # the subtree so the behaviour block (coupling, containment, hidden-seam)
+    # carries no co-change signal from a sibling directory. A commit that touched
+    # both a scoped and a sibling file keeps only its scoped files; commits that
+    # touched nothing in scope drop out. None (a whole-repo run) is unchanged.
+    if scope is not None:
+        scope_abs = Path(scope).resolve()
+
+        def _in_scope(f: Path) -> bool:
+            try:
+                return (repo_root / f).resolve().is_relative_to(scope_abs)
+            except (ValueError, OSError):
+                return False
+
+        commit_sets = [
+            scoped for scoped in ({f for f in s if _in_scope(f)} for s in commit_sets)
+            if scoped
+        ]
 
     behaviour = _safe_block(
         "behaviour",

@@ -376,8 +376,15 @@ def scan_promissory_markers(
     stale_touches: int = STALE_TOUCHES_DEFAULT,
     extra_exclude_dirs: Iterable[str] | None = None,
     extra_exclude_patterns: Iterable[str] | None = None,
+    scope: Path | None = None,
 ) -> MarkerScan:
-    """Full pipeline: detect -> blame-age -> authorship -> severity."""
+    """Full pipeline: detect -> blame-age -> authorship -> severity.
+
+    `scope` (an absolute path under `repo_root`) confines the markers to a
+    subtree for `/assess <path>` monorepo scoping, so a scoped run carries no
+    unactioned-intent signal from a sibling directory. Omit it for a whole-repo
+    run.
+    """
     try:
         subprocess.run(["rg", "--version"], capture_output=True, check=True)
     except (OSError, subprocess.CalledProcessError):
@@ -389,6 +396,12 @@ def scan_promissory_markers(
         markers = _detect(
             repo_root, _extra_globs(extra_exclude_dirs, extra_exclude_patterns)
         )
+        if scope is not None:
+            scope_abs = scope.resolve()
+            markers = [
+                m for m in markers
+                if (repo_root / m.path).resolve().is_relative_to(scope_abs)
+            ]
         _blame_ages(repo_root, markers)
         _classify_authorship(repo_root, markers)
         commit_times = _file_commit_times(repo_root)

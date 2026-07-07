@@ -423,12 +423,18 @@ def analyze_structure(
     repo_root: Path,
     keyhole_budget: int | None = None,
     extra_exclude_dirs: set[str] | None = None,
+    scope: Path | None = None,
 ) -> StructureGraphResult:
     """Run the A1-A4 static structure analysis over the repo's Python packages.
 
     Degrades gracefully (``available=False``) when grimp or networkx is missing
     or no importable Python package is found. The result is JSON-serialisable
     via ``as_dict()`` and deterministic for a given source tree.
+
+    ``scope`` (an absolute path under ``repo_root``) confines the analysis to
+    packages within a subtree for ``/assess <path>`` monorepo scoping, so a
+    scoped run carries no structure signal from a sibling directory. Omit it for
+    a whole-repo run.
     """
     repo_root = Path(repo_root).resolve()
     budget = keyhole_budget if keyhole_budget is not None else DEFAULT_KEYHOLE_BUDGET
@@ -442,6 +448,11 @@ def analyze_structure(
         )
 
     package_dirs = discover_packages(repo_root, extra_exclude_dirs)
+    if scope is not None:
+        scope_abs = scope.resolve()
+        package_dirs = [
+            p for p in package_dirs if p.resolve().is_relative_to(scope_abs)
+        ]
     if not package_dirs:
         return StructureGraphResult(
             available=True,
