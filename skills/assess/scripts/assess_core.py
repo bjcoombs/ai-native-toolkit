@@ -1090,6 +1090,9 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         test_pressure=ctx["test_pressure"],
         promissory_markers=promissory if isinstance(promissory, dict) else None,
         accretion_ratchet=ctx["accretion_ratchet"],
+        archetype=ctx["archetype"] if isinstance(ctx.get("archetype"), dict) else None,
+        exclude_dirs=extra_exclude_dirs,
+        exclude_patterns=extra_exclude_patterns,
     )
     ctx["structure"] = keyhole["structure"]
     ctx["behaviour"] = keyhole["behaviour"]
@@ -1105,6 +1108,18 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     ctx["findings_markdown"] = keyhole["findings_markdown"]
     ctx["keyhole_summary"] = keyhole["keyhole_summary"]
     ctx["prescribed_actions"] = keyhole["prescribed_actions"]
+    # Config-exclusion disclosure: config excludes silently drop paths from every
+    # scan, so a finding suppressed by an exclude must be counted and named rather
+    # than vanish. keyhole_signals filtered the excluded finding paths; this block
+    # records the active excludes alongside the paths that would otherwise have
+    # been findings, so the gate and report can surface the suppression.
+    excluded_finding_paths = keyhole.get("excluded_finding_paths", [])
+    ctx["excluded_by_config"] = {
+        "dirs": sorted(extra_exclude_dirs),
+        "patterns": list(extra_exclude_patterns),
+        "affected_finding_paths": excluded_finding_paths,
+        "count": len(excluded_finding_paths),
+    }
 
     # Structure drift (third write-side tendency surface: a declared ownership
     # map that no longer matches where the code lives). Tier 0 is the cheap

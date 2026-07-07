@@ -285,6 +285,48 @@ def test_format_verdict_clean():
     assert "clean snapshot" in out
 
 
+# --- config-exclusion disclosure ------------------------------------------
+
+
+def test_verdict_discloses_config_suppressed_findings():
+    ctx = _ctx([])
+    ctx["excluded_by_config"] = {
+        "dirs": ["vendor"],
+        "patterns": ["*.gen.py"],
+        "affected_finding_paths": ["vendor/x.py", "a.gen.py"],
+        "count": 2,
+    }
+    out = format_verdict(evaluate(ctx, {"enabled": True, "fail_on": [], "warn_on": []}))
+    assert "2 findings suppressed by config excludes" in out
+    assert "dirs: vendor" in out
+    assert "patterns: *.gen.py" in out
+
+
+def test_verdict_singular_suppression_noun():
+    ctx = _ctx([])
+    ctx["excluded_by_config"] = {
+        "dirs": ["vendor"], "patterns": [],
+        "affected_finding_paths": ["vendor/x.py"], "count": 1,
+    }
+    out = format_verdict(evaluate(ctx, {"enabled": True, "fail_on": [], "warn_on": []}))
+    assert "1 finding suppressed by config excludes" in out
+    assert "patterns: none" in out
+
+
+def test_verdict_no_disclosure_when_no_excludes():
+    ctx = _ctx([])
+    ctx["excluded_by_config"] = {
+        "dirs": [], "patterns": [], "affected_finding_paths": [], "count": 0,
+    }
+    out = format_verdict(evaluate(ctx, {"enabled": True, "fail_on": [], "warn_on": []}))
+    assert "suppressed by config excludes" not in out
+
+
+def test_verdict_no_disclosure_when_block_absent():
+    out = format_verdict(evaluate(_ctx([]), {"enabled": True, "fail_on": [], "warn_on": []}))
+    assert "suppressed by config excludes" not in out
+
+
 # --- CLI ------------------------------------------------------------------
 
 

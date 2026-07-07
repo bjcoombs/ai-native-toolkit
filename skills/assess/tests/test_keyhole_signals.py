@@ -739,6 +739,140 @@ def test_integrate_accretion_ratchet_absent_is_silent() -> None:
     assert _finding_paths(result, "accretion_ratchet") == []
 
 
+# --- override_contradicts_signals finding (archetype marker vs signals) ------
+
+def test_override_contradicts_in_finding_order_and_actions() -> None:
+    """override_contradicts_signals is a named finding, positioned before the
+    one positive finding (refactor_boundary stays last)."""
+    assert "override_contradicts_signals" in ks.FINDING_ORDER
+    assert "override_contradicts_signals" in ks.FINDING_ACTIONS
+    order = ks.FINDING_ORDER
+    assert order.index("override_contradicts_signals") < order.index("refactor_boundary")
+    assert ks.FINDING_ACTIONS["override_contradicts_signals"] == (
+        "Review archetype marker - deterministic signals suggest a different "
+        "classification"
+    )
+
+
+def test_integrate_override_contradiction_fires_finding() -> None:
+    """A contradicting archetype block makes the finding fire against its source."""
+    archetype = {
+        "available": True,
+        "override_contradicts_signals": True,
+        "override_source": "CLAUDE.md",
+    }
+    result = ks.integrate(
+        repo_root=Path("/nonexistent"),
+        complexity_stats=_COMPLEXITY_STATS,
+        doc_staleness=_stale_doc_staleness(churn_degenerate=False),
+        dead_code={"available": False, "candidate_count": 0,
+                   "candidates": [], "tools": []},
+        observability={"rung": None, "reachable": {"present": False}},
+        structure=_MODULAR_STRUCTURE,
+        commit_sets=_BLEEDING_COMMIT_SETS,
+        archetype=archetype,
+    )
+    assert _finding_paths(result, "override_contradicts_signals") == ["CLAUDE.md"]
+
+
+def test_integrate_override_contradiction_absent_is_silent() -> None:
+    """No archetype contradiction -> the finding is silent (empty paths)."""
+    result = ks.integrate(
+        repo_root=Path("/nonexistent"),
+        complexity_stats=_COMPLEXITY_STATS,
+        doc_staleness=_stale_doc_staleness(churn_degenerate=False),
+        dead_code={"available": False, "candidate_count": 0,
+                   "candidates": [], "tools": []},
+        observability={"rung": None, "reachable": {"present": False}},
+        structure=_MODULAR_STRUCTURE,
+        commit_sets=_BLEEDING_COMMIT_SETS,
+        archetype={"available": True, "override_contradicts_signals": False},
+    )
+    assert _finding_paths(result, "override_contradicts_signals") == []
+
+
+# --- config-exclusion disclosure (apply_config_excludes) ---------------------
+
+def test_apply_config_excludes_filters_and_counts() -> None:
+    """Excluded finding paths are dropped from findings and returned separately."""
+    findings = [
+        {"name": "hidden_coupling", "paths": ["vendor/x", "src/a"], "action": "z"},
+        {"name": "refactor_boundary", "paths": ["vendor/y"], "action": "z"},
+    ]
+    filtered, dropped = ks.apply_config_excludes(findings, {"vendor"}, [])
+    kept = [p for f in filtered for p in f["paths"]]
+    assert kept == ["src/a"]
+    assert dropped == ["vendor/x", "vendor/y"]
+
+
+def test_apply_config_excludes_pattern_match() -> None:
+    """A basename glob pattern suppresses matching finding paths."""
+    findings = [{"name": "lying_map", "paths": ["docs/gen.md", "docs/hand.md"],
+                 "action": "z"}]
+    filtered, dropped = ks.apply_config_excludes(findings, set(), ["gen.md"])
+    assert filtered[0]["paths"] == ["docs/hand.md"]
+    assert dropped == ["docs/gen.md"]
+
+
+def test_apply_config_excludes_noop_without_config() -> None:
+    """No excludes -> findings untouched, nothing dropped."""
+    findings = [{"name": "hidden_coupling", "paths": ["a"], "action": "z"}]
+    filtered, dropped = ks.apply_config_excludes(findings, set(), [])
+    assert filtered == findings
+    assert dropped == []
+
+
+# A self-contained directory: repeatedly touched alone, so it reads as a
+# refactor_boundary (the git-log containment view, which scan-level excludes
+# never filter).
+_ISLAND_COMMIT_SETS = [
+    {Path("island/a.py")},
+    {Path("island/b.py")},
+    {Path("island/a.py")},
+    {Path("island/c.py")},
+    {Path("island/b.py")},
+]
+
+
+def test_integrate_excludes_suppress_finding_and_report_paths() -> None:
+    """A config-excluded finding path is filtered from findings but disclosed.
+
+    The refactor_boundary comes from the git-log containment view, which the
+    scan-level exclude never touches - so integrate() is where it is filtered.
+    """
+    result = ks.integrate(
+        repo_root=Path("/nonexistent"),
+        complexity_stats=_COMPLEXITY_STATS,
+        doc_staleness=_stale_doc_staleness(churn_degenerate=False),
+        dead_code={"available": False, "candidate_count": 0,
+                   "candidates": [], "tools": []},
+        observability={"rung": None, "reachable": {"present": False}},
+        structure=None,
+        commit_sets=_ISLAND_COMMIT_SETS,
+        exclude_dirs={"island"},
+    )
+    # island/ was a refactor_boundary; the exclude filters it out of findings.
+    assert "island" not in _finding_paths(result, "refactor_boundary")
+    # ...but it is disclosed as a suppressed finding path.
+    assert "island" in result["excluded_finding_paths"]
+
+
+def test_integrate_no_excludes_reports_empty_suppression() -> None:
+    """Without excludes, excluded_finding_paths is empty."""
+    result = ks.integrate(
+        repo_root=Path("/nonexistent"),
+        complexity_stats=_COMPLEXITY_STATS,
+        doc_staleness=_stale_doc_staleness(churn_degenerate=False),
+        dead_code={"available": False, "candidate_count": 0,
+                   "candidates": [], "tools": []},
+        observability={"rung": None, "reachable": {"present": False}},
+        structure=None,
+        commit_sets=_ISLAND_COMMIT_SETS,
+    )
+    assert result["excluded_finding_paths"] == []
+    assert "island" in _finding_paths(result, "refactor_boundary")
+
+
 # --- structure drift (Tier 1) folded into hidden_coupling --------------------
 
 def _drift_tier1(pairs: list[tuple[str, str]]) -> dict:

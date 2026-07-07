@@ -124,6 +124,92 @@ def test_override_suppresses_detection():
     assert block["denominator"] == 8
 
 
+# --- override_contradicts_signals (issue: silent override) --------------
+
+
+def test_kb_override_contradicts_high_code_ratio():
+    # A knowledge-base marker on a code-heavy repo with a runtime surface: the
+    # override wins the score, but the contradiction is surfaced with details.
+    block = classify_archetype(
+        code_file_count=500,
+        doc_file_count=3,
+        other_file_count=0,
+        has_runtime_surface=True,
+        override="knowledge-base",
+        kb_maintenance=_kb_maint_empty(),
+    )
+    assert block["override_contradicts_signals"] is True
+    assert block["contradiction_details"]
+    assert "software" in block["contradiction_details"]
+    # Override still wins: the denominator uses the forced (KB) archetype.
+    assert block["archetype"] == "knowledge-base"
+    assert block["denominator"] == 3
+
+
+def test_software_override_contradicts_pure_doc_repo():
+    block = classify_archetype(
+        code_file_count=0,
+        doc_file_count=99,
+        other_file_count=0,
+        has_runtime_surface=False,
+        override="software",
+        kb_maintenance=_kb_maint_empty(),
+    )
+    assert block["override_contradicts_signals"] is True
+    assert "knowledge-base" in block["contradiction_details"]
+    # Override still wins the classification.
+    assert block["archetype"] == "software"
+    assert block["denominator"] == 8
+
+
+def test_override_matching_heuristic_no_contradiction():
+    # A KB marker on a repo the heuristic would also call a KB: no contradiction.
+    block = classify_archetype(
+        code_file_count=1,
+        doc_file_count=80,
+        other_file_count=0,
+        has_runtime_surface=False,
+        override="knowledge-base",
+        kb_maintenance=_kb_maint_empty(),
+    )
+    assert block["override_contradicts_signals"] is False
+    assert block["contradiction_details"] is None
+    assert block["archetype"] == "knowledge-base"
+
+
+def test_heuristic_path_never_contradicts():
+    # No override -> no contradiction flag can fire (nothing forced anything).
+    block = classify_archetype(
+        code_file_count=1,
+        doc_file_count=80,
+        other_file_count=0,
+        has_runtime_surface=False,
+        override=None,
+        kb_maintenance=_kb_maint_empty(),
+    )
+    assert block["detected_via"] == "heuristic"
+    assert block["override_contradicts_signals"] is False
+    assert block["contradiction_details"] is None
+
+
+def test_analyze_records_override_source_on_contradiction(tmp_path: Path):
+    # A software marker on a pure-doc repo: analyze_archetype records the marker
+    # source file so a finding can point at it.
+    repo = tmp_path / "kb"
+    (repo / "notes").mkdir(parents=True)
+    for i in range(12):
+        (repo / "notes" / f"note-{i}.md").write_text(f"# Note {i}\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text(
+        "# KB\n\n<!-- assess-archetype: software -->\n", encoding="utf-8"
+    )
+    _git_init(repo)
+
+    block = analyze_archetype(repo)
+    assert block["archetype"] == "software"
+    assert block["override_contradicts_signals"] is True
+    assert block["override_source"] == "CLAUDE.md"
+
+
 # --- read_archetype_override --------------------------------------------
 
 

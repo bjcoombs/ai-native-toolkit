@@ -645,7 +645,8 @@ def test_run_context_has_deterministic_keyhole_products(tmp_path: Path) -> None:
         "hidden_coupling", "lying_map", "unexplained_complexity",
         "untrusted_hotspot", "self_referential_tests",
         "unactioned_intent", "accretion_ratchet",
-        "orphaned_understanding", "candidate_dead_weight", "refactor_boundary",
+        "orphaned_understanding", "candidate_dead_weight",
+        "override_contradicts_signals", "refactor_boundary",
     ]
 
 
@@ -746,7 +747,8 @@ def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
     expected = {"hidden_coupling", "lying_map", "unexplained_complexity",
                 "untrusted_hotspot", "self_referential_tests",
                 "unactioned_intent", "accretion_ratchet",
-                "orphaned_understanding", "candidate_dead_weight", "refactor_boundary"}
+                "orphaned_understanding", "candidate_dead_weight",
+                "override_contradicts_signals", "refactor_boundary"}
     assert {f["name"] for f in findings} == expected
     for f in findings:
         assert set(f) == {"name", "paths", "action"}
@@ -1648,3 +1650,111 @@ def test_run_opt_in_mutation_degrades_on_scan_failure(tmp_path: Path, monkeypatc
         "untested_boundaries": [],
         "duplicate_truth": [],
     }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Config-exclusion disclosure (excluded_by_config block)
+# ════════════════════════════════════════════════════════════════════════════
+
+def _write_min_stats(assess_dir: Path) -> None:
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+
+
+def test_excluded_by_config_block_present_and_empty_without_excludes(git_repo) -> None:
+    """A repo with no config excludes carries an empty excluded_by_config block."""
+    repo, commit = git_repo
+    (repo / ".assess").mkdir()
+    _write_min_stats(repo / ".assess")
+    (repo / "README.md").write_text("# Repo\n")
+    commit("init")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    block = ctx["excluded_by_config"]
+    assert block["dirs"] == []
+    assert block["patterns"] == []
+    assert block["affected_finding_paths"] == []
+    assert block["count"] == 0
+
+
+def test_excluded_by_config_discloses_suppressed_finding(git_repo) -> None:
+    """A config-excluded directory that would be a refactor_boundary is filtered
+    from the findings but named + counted in excluded_by_config.
+
+    The island/ directory is repeatedly touched alone (a self-contained
+    refactor_boundary from the git-log containment view, which scan-level
+    excludes never filter), so excluding it exercises the keyhole-level filter.
+    """
+    repo, commit = git_repo
+    (repo / ".assess").mkdir()
+    _write_min_stats(repo / ".assess")
+    (repo / ".assess" / "config.toml").write_text('exclude_dirs = ["island"]\n')
+    island = repo / "island"
+    island.mkdir()
+    (island / "a.py").write_text("x = 1\n")
+    commit("c1")
+    for i in range(2, 7):
+        (island / "a.py").write_text(f"x = {i}\n")
+        commit(f"c{i}")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    block = ctx["excluded_by_config"]
+    assert block["dirs"] == ["island"]
+    assert block["count"] == len(block["affected_finding_paths"])
+    assert block["count"] >= 1
+    assert "island" in block["affected_finding_paths"]
+    # The suppressed path is gone from the findings themselves.
+    rb = next(f for f in ctx["derived_findings"] if f["name"] == "refactor_boundary")
+    assert "island" not in rb["paths"]
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Archetype override contradiction finding (override_contradicts_signals)
+# ════════════════════════════════════════════════════════════════════════════
+
+def test_override_contradiction_fires_finding_end_to_end(git_repo) -> None:
+    """A software marker on a pure-doc repo lands the override_contradicts_signals
+    finding pointed at the marker's file, while the archetype block records the
+    contradiction (the override still wins the classification)."""
+    repo, commit = git_repo
+    (repo / ".assess").mkdir()
+    _write_min_stats(repo / ".assess")
+    (repo / "notes").mkdir()
+    for i in range(12):
+        (repo / "notes" / f"n{i}.md").write_text(f"# Note {i}\n")
+    (repo / "CLAUDE.md").write_text(
+        "# KB\n\n<!-- assess-archetype: software -->\n"
+    )
+    commit("init")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    arch = ctx["archetype"]
+    assert arch["archetype"] == "software"  # override wins
+    assert arch["override_contradicts_signals"] is True
+    assert arch["contradiction_details"]
+
+    finding = next(
+        f for f in ctx["derived_findings"]
+        if f["name"] == "override_contradicts_signals"
+    )
+    assert finding["paths"] == ["CLAUDE.md"]
+
+
+def test_no_override_no_contradiction_finding_end_to_end(git_repo) -> None:
+    """A plain software repo (no marker) leaves the finding silent."""
+    repo, commit = git_repo
+    (repo / ".assess").mkdir()
+    _write_min_stats(repo / ".assess")
+    (repo / "app.py").write_text("def f():\n    return 1\n")
+    (repo / "pyproject.toml").write_text("[project]\nname='app'\n")
+    commit("init")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    assert ctx["archetype"]["override_contradicts_signals"] is False
+    finding = next(
+        f for f in ctx["derived_findings"]
+        if f["name"] == "override_contradicts_signals"
+    )
+    assert finding["paths"] == []
