@@ -76,6 +76,8 @@ from lib.wiki_writer import (
     HotspotEntry,
     LogEntry,
     append_log_entry,
+    prune_orphan_hotspots,
+    verify_log_chain,
     write_hotspot_page,
     write_index,
 )
@@ -1000,6 +1002,13 @@ def build_run_context(
             schema_version=ARTIFACT_SCHEMA_VERSION,
         )
 
+    # Prune orphan hotspot pages: any page from a prior run whose source file no
+    # longer exists on disk is stamped retired (history preserved) so no active
+    # page keeps describing a deleted file. Runs after the current top hotspots
+    # are (re)written, so a file that is still a live hotspot has just had its
+    # page refreshed and won't be touched.
+    pruned_hotspots = prune_orphan_hotspots(assess_dir, repo_root)
+
     # Also surface graduated hotspots in the index. Carry the file's actual
     # current metrics across the three top-N lists in `current` - graduating
     # off `top_hotspots[:10]` means the file fell out of the composite
@@ -1063,6 +1072,12 @@ def build_run_context(
     )
     append_log_entry(assess_dir, log_entry)
 
+    # log.md integrity: verify the chained checksums after the append. A break
+    # (an earlier entry edited after the fact) is disclosed in log.md itself and
+    # surfaced here so the report/gate can render it - a lying history is exactly
+    # the self-description-under-no-pressure failure the toolkit guards against.
+    log_valid, log_broken_at = verify_log_chain(assess_dir)
+
     # Heterogeneous run-context bus: values are dicts, lists, scalars, or the
     # degrade-gracefully bool/str/None fallbacks. Typed as dict[str, Any] so the
     # block accessors below (ctx["dead_code"] etc.) stay assignable to the
@@ -1116,6 +1131,14 @@ def build_run_context(
             "new": [h.__dict__ for h in diff.new],
             "persistent": [h.__dict__ for h in diff.persistent],
         },
+        # Hotspot pages retired this run because their source file left the tree
+        # (task 9). Empty on a run that deleted nothing - a stable baseline.
+        "pruned_hotspots": pruned_hotspots,
+        # log.md integrity chain state (task 11). `valid` is False when an earlier
+        # log entry was edited after it was written; `broken_at_entry` is the
+        # 1-based index of the first entry that fails verification (None when
+        # intact). The break is also disclosed in log.md itself.
+        "log_integrity": {"valid": log_valid, "broken_at_entry": log_broken_at},
     }
 
     # extra_exclude_dirs / extra_exclude_patterns were loaded once above

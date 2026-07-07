@@ -275,6 +275,13 @@ Renders and writes the `.assess/` wiki files (`index.md`, `log.md`,
 `hotspots/*.md`) from string templates. No LLM calls. Pure string formatting + file IO.
 An optional `run_id`/`schema_version` prepends a non-rendering HTML-comment
 provenance stamp to each file (omitted -> byte-identical legacy output).
+Also guards wiki integrity: `prune_orphan_hotspots(assess_dir, repo_root)` stamps
+any hotspot page whose source file left the tree as `retired - file deleted`
+(history preserved, no active page lies about a live file); `append_log_entry`
+chains each `log.md` entry with a `<!-- chain:<hash> -->` marker and
+`verify_log_chain(assess_dir)` returns `(valid, broken_at_entry)` so a later edit
+of a prior entry is detected and disclosed. Both are additive and back-compat -
+a legacy wiki (no markers, live files) is untouched and reads valid.
 
 **`treemap_render.py`**
 Shared treemap layout and SVG primitives for the code heatmap and the doc-staleness
