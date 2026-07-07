@@ -137,6 +137,13 @@ def git_commit_info(root: Path) -> dict:
 def file_last_commit_epoch(path: Path) -> int | None:
     """Unix timestamp (epoch seconds) of `path`'s last commit. None if untracked.
 
+    Uses author time (``%at``), not committer time (``%ct``). Author time
+    reflects when the change was originally made, not when it was
+    rebased/cherry-picked - a rebase must not certify stale docs as fresh. A doc
+    authored 90 days ago and rebased yesterday should still read 90 days stale;
+    ``%ct`` would reset the clock and hide the decay. This matches the author-time
+    (``%at``) axis `lib.accretion_ratchet` and `lib.promissory_markers` already use.
+
     The raw commit time, before the days-ago conversion `file_last_commit_days`
     applies. Provenance-aware staleness needs the absolute timestamp so it can
     compare a generated doc against its declared source on the same axis (epoch
@@ -144,7 +151,7 @@ def file_last_commit_epoch(path: Path) -> int | None:
     """
     try:
         out = subprocess.run(
-            ["git", "log", "-1", "--format=%ct", "--", str(path)],
+            ["git", "log", "-1", "--format=%at", "--", str(path)],
             cwd=path.parent if path.parent.exists() else Path.cwd(),
             capture_output=True, text=True, check=False,
             timeout=GIT_TIMEOUT_SECONDS,
