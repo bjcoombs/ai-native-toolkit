@@ -1773,7 +1773,6 @@ def test_run_opt_in_mutation_degrades_on_scan_failure(tmp_path: Path, monkeypatc
     }
 
 
-<<<<<<< HEAD
 # --- run_id / schema_version stamps + Layer 6 cap (assess-obey-thyself) -------
 
 
@@ -1817,7 +1816,8 @@ def test_mutation_not_run_cap_applies_on_default_scan(tmp_path: Path) -> None:
     assert cap["mutation_run"] is False
     assert cap["max_layer6_band"] == "Partial"
     assert cap["annotation"] == "truth-pressure unproven (mutation not run)"
-=======
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # Config-exclusion disclosure (excluded_by_config block)
 # ════════════════════════════════════════════════════════════════════════════
@@ -1924,4 +1924,3 @@ def test_no_override_no_contradiction_finding_end_to_end(git_repo) -> None:
         if f["name"] == "override_contradicts_signals"
     )
     assert finding["paths"] == []
->>>>>>> origin/main
