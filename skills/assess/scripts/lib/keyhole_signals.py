@@ -26,6 +26,7 @@ import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from lib.assess_config import is_user_excluded
 from lib.change_coupling import (
     authorship_analysis,
     change_coupling_pairs,
@@ -68,6 +69,7 @@ FINDING_ORDER = [
     "accretion_ratchet",  # files that only ever grow - never meaningfully cut back
     "orphaned_understanding",
     "candidate_dead_weight",
+    "override_contradicts_signals",  # archetype marker disagrees with the signals
     "refactor_boundary",
 ]
 FINDING_ACTIONS = {
@@ -80,6 +82,10 @@ FINDING_ACTIONS = {
     "accretion_ratchet": "refactor down: extract, delete dead code, or split the file",
     "orphaned_understanding": "assign a human anchor before further change",
     "candidate_dead_weight": "verify liveness, then delete if dead",
+    "override_contradicts_signals": (
+        "Review archetype marker - deterministic signals suggest a different "
+        "classification"
+    ),
     "refactor_boundary": "safe to hand an agent in isolation",
 }
 
@@ -376,6 +382,39 @@ def assemble_findings(paths_by_name: dict[str, list[str]]) -> list[dict]:
         }
         for name in FINDING_ORDER
     ]
+
+
+def apply_config_excludes(
+    findings: list[dict],
+    exclude_dirs: set[str],
+    exclude_patterns: list[str],
+) -> tuple[list[dict], list[str]]:
+    """Drop config-excluded paths from findings, returning ``(filtered, dropped)``.
+
+    User-supplied excludes (``.assess/config.toml``) filter most scans at their
+    source, but a path can still reach a finding through a signal the scan-level
+    filter never sees (the git-log change-coupling and containment views parse
+    raw commit file-sets). Filtering here keeps the finding set honouring the
+    config, while the dropped paths are returned so the disclosure can make the
+    suppression *visible* rather than silent - config-based suppression is a form
+    of guardrail erosion when it happens without a trace.
+
+    Returns the findings unchanged and an empty dropped-list when no excludes are
+    configured, so the caller can call unconditionally.
+    """
+    if not exclude_dirs and not exclude_patterns:
+        return findings, []
+    dropped: set[str] = set()
+    filtered: list[dict] = []
+    for f in findings:
+        kept: list[str] = []
+        for p in f["paths"]:
+            if is_user_excluded(Path(p), exclude_dirs, exclude_patterns):
+                dropped.add(p)
+            else:
+                kept.append(p)
+        filtered.append({**f, "paths": kept})
+    return filtered, sorted(dropped)
 
 
 def build_attention_list(
@@ -905,6 +944,9 @@ def integrate(
     test_pressure: dict | None = None,
     promissory_markers: dict | None = None,
     accretion_ratchet: dict | None = None,
+    archetype: dict | None = None,
+    exclude_dirs: set[str] | None = None,
+    exclude_patterns: list[str] | None = None,
 ) -> dict:
     """Build the five run-context blocks + derived findings + attention list.
 
@@ -917,6 +959,12 @@ def integrate(
     ``unactioned_intent`` finding degrades to silent. ``accretion_ratchet`` is the
     serialized ``AccretionScan`` block from ``assess_core._accretion_block``; when
     absent or unavailable the ``accretion_ratchet`` finding degrades to silent.
+    ``archetype`` is the run-context archetype block; when its
+    ``override_contradicts_signals`` flag is set the ``override_contradicts_signals``
+    finding fires against the marker's source file. ``exclude_dirs`` /
+    ``exclude_patterns`` are the user-supplied config excludes; a finding path
+    matching them is filtered out and reported in ``excluded_finding_paths`` so the
+    suppression is disclosed rather than silent.
     Every block is built defensively - a failure in one degrades that block to
     ``available: False`` and leaves the rest intact.
     """
@@ -1037,6 +1085,16 @@ def integrate(
     # the containment-derived hidden_coupling - via the same _churn_paths gate.
     drift_hidden_dirs = structure_drift_hidden_coupling_dirs(structure_drift_tier1)
 
+    # Archetype-override contradiction: an `assess-archetype` marker forces a
+    # classification the deterministic signals disagree with. The override still
+    # wins the score, but the disagreement fires a finding pointed at the marker's
+    # source file so the override is never silent.
+    arch = archetype or {}
+    override_contradiction_paths = (
+        [arch.get("override_source") or "<archetype marker>"]
+        if arch.get("override_contradicts_signals") else []
+    )
+
     findings = assemble_findings({
         "hidden_coupling": _churn_paths(
             "hidden_coupling",
@@ -1056,8 +1114,18 @@ def integrate(
         "accretion_ratchet": accreting_paths,
         "orphaned_understanding": understanding.get("orphaned_understanding", []),
         "candidate_dead_weight": dead_weight,
+        "override_contradicts_signals": override_contradiction_paths,
         "refactor_boundary": [b["path"] for b in behaviour.get("refactor_boundaries", [])],
     })
+
+    # Config-based suppression: drop any finding path the user's config excludes
+    # cover (the git-log-derived findings never saw the scan-level filter), and
+    # carry the dropped paths out so the disclosure can count them. Applied before
+    # the attention/summary/markdown products so every downstream artifact honours
+    # the filtered set.
+    findings, excluded_finding_paths = apply_config_excludes(
+        findings, exclude_dirs or set(), exclude_patterns or [],
+    )
     attention = build_attention_list(findings)
 
     return {
@@ -1071,6 +1139,9 @@ def integrate(
         "findings_markdown": render_findings_markdown(findings, attention),
         "keyhole_summary": build_keyhole_summary(findings),
         "prescribed_actions": build_prescribed_actions(attention, findings),
+        # Paths dropped from the findings because a config exclude covered them -
+        # the raw material for the run-context `excluded_by_config` disclosure.
+        "excluded_finding_paths": excluded_finding_paths,
         # The Tier 1 grouping disagreement, computed once here from the behaviour
         # block's co-change pairs, so the orchestrator can build the run-context
         # structure_drift tier_1 sub-block from it without a second computation.

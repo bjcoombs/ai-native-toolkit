@@ -159,6 +159,7 @@ GATE_CONCERN_FINDINGS = [
     "accretion_ratchet",
     "orphaned_understanding",
     "candidate_dead_weight",
+    "override_contradicts_signals",
 ]
 
 

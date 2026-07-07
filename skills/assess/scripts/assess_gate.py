@@ -169,6 +169,10 @@ def evaluate(ctx: dict, gate: dict) -> dict:
         "failures": failures,
         "warnings": warnings,
         "threshold_breaches": threshold_breaches,
+        # Carried through so the verdict log can disclose findings the config
+        # excludes suppressed - the gate must never read clean when a real
+        # finding was filtered out by an exclude.
+        "excluded_by_config": ctx.get("excluded_by_config"),
     }
 
 
@@ -197,8 +201,32 @@ def format_verdict(verdict: dict) -> str:
         lines.append(f"  warn finding: {w['finding']} x{w['count']} ({sample})")
     if not verdict["failures"] and not verdict["threshold_breaches"] and not verdict["warnings"]:
         lines.append("  no findings fired - clean snapshot")
+    disclosure = _format_exclusion_disclosure(verdict.get("excluded_by_config"))
+    if disclosure:
+        lines.append(disclosure)
     lines.append("  RESULT: " + ("FAIL" if verdict["failed"] else "PASS"))
     return "\n".join(lines)
+
+
+def _format_exclusion_disclosure(excluded_by_config: dict | None) -> str:
+    """One indented line disclosing findings the config excludes suppressed.
+
+    Returns ``""`` when nothing was suppressed, so a clean run's log is
+    unchanged. When a path that would have been a finding was filtered out by a
+    config exclude, the suppression is stated with the excluding dirs/patterns so
+    a reader never mistakes a filtered PASS for a genuinely clean one.
+    """
+    block = excluded_by_config or {}
+    count = block.get("count", 0)
+    if not isinstance(count, int) or count <= 0:
+        return ""
+    dirs = ", ".join(block.get("dirs", [])) or "none"
+    patterns = ", ".join(block.get("patterns", [])) or "none"
+    noun = "finding" if count == 1 else "findings"
+    return (
+        f"  {count} {noun} suppressed by config excludes "
+        f"(dirs: {dirs}; patterns: {patterns})"
+    )
 
 
 def load_context(repo_root: Path) -> dict[str, Any]:

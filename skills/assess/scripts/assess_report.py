@@ -144,6 +144,28 @@ def render_keyhole_summary(ctx: dict) -> str:
     return text if text else "_Keyhole readiness summary unavailable._"
 
 
+def render_exclusion_disclosure(ctx: dict) -> str:
+    """One line disclosing findings suppressed by config excludes, or ``""``.
+
+    Config excludes silently drop paths from every scan; when at least one path
+    that would have been a finding is filtered out, this makes the suppression
+    visible - a reader must never mistake a filtered report for a clean one.
+    Returns ``""`` when nothing was suppressed, so a clean run's report is byte
+    identical to before this disclosure existed.
+    """
+    block = ctx.get("excluded_by_config") or {}
+    count = block.get("count", 0)
+    if not isinstance(count, int) or count <= 0:
+        return ""
+    dirs = ", ".join(block.get("dirs", [])) or "none"
+    patterns = ", ".join(block.get("patterns", [])) or "none"
+    noun = "finding" if count == 1 else "findings"
+    return (
+        f"_{count} {noun} suppressed by config excludes "
+        f"(dirs: {dirs}; patterns: {patterns})._"
+    )
+
+
 def render_findings_section(ctx: dict) -> str:
     """Return the pre-rendered cross-layer findings section, verbatim.
 
@@ -377,6 +399,13 @@ def render_report(ctx: dict, repo_name: str) -> str:
     stats = ctx.get("stats_summary", {})
     loc = stats.get("loc", {})
     ccn = stats.get("ccn", {})
+    # The keyhole summary line, with a config-exclusion disclosure appended when
+    # any finding was suppressed by config excludes (empty otherwise, so a clean
+    # run renders exactly as before).
+    keyhole_summary = render_keyhole_summary(ctx)
+    disclosure = render_exclusion_disclosure(ctx)
+    if disclosure:
+        keyhole_summary = f"{keyhole_summary}\n\n{disclosure}"
     report = REPORT_TEMPLATE.substitute(
         repo_name=repo_name,
         run_date=ctx.get("run_date", "unknown"),
@@ -390,7 +419,7 @@ def render_report(ctx: dict, repo_name: str) -> str:
         ccn_max=_fmt(ccn.get("max")),
         churn_window=_render_churn_window(ctx),
         hotspots_table=render_hotspots_table(ctx),
-        keyhole_summary=render_keyhole_summary(ctx),
+        keyhole_summary=keyhole_summary,
         findings_section=render_findings_section(ctx),
         structure_drift_section=_structure_drift_section(ctx, repo_name),
         diff_section=render_diff_section(ctx),

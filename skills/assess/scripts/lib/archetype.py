@@ -139,14 +139,13 @@ _KB_MAINTENANCE_SIGNALS: dict[str, list[str]] = {
 }
 
 
-def read_archetype_override(repo_root: Path) -> str | None:
-    """Return the forced archetype from an instruction-file marker, or None.
+def _scan_override(repo_root: Path) -> tuple[str | None, str | None]:
+    """Return ``(normalised_archetype, source_rel_path)`` for the first marker.
 
     Scans the known instruction files for ``assess-archetype: <value>`` and
-    normalises the value to ``knowledge-base`` or ``software``. A
-    ``knowledge-base`` marker *forces* the KB archetype; a ``software`` marker
-    *suppresses* it. An unrecognised value is ignored (returns None) so a typo
-    falls back to the heuristic rather than silently mis-scoring.
+    normalises the value to ``knowledge-base`` or ``software``, also carrying the
+    repo-relative path of the file the marker was found in so a contradiction
+    finding can point at it. Both are ``None`` when no recognised marker exists.
     """
     for rel in _INSTRUCTION_FILES:
         path = repo_root / rel
@@ -157,11 +156,22 @@ def read_archetype_override(repo_root: Path) -> str | None:
         m = _OVERRIDE_RE.search(text)
         if not m:
             continue
-        value = m.group(1).strip().lower()
-        normalised = _OVERRIDE_ALIASES.get(value)
+        normalised = _OVERRIDE_ALIASES.get(m.group(1).strip().lower())
         if normalised:
-            return normalised
-    return None
+            return normalised, rel
+    return None, None
+
+
+def read_archetype_override(repo_root: Path) -> str | None:
+    """Return the forced archetype from an instruction-file marker, or None.
+
+    Scans the known instruction files for ``assess-archetype: <value>`` and
+    normalises the value to ``knowledge-base`` or ``software``. A
+    ``knowledge-base`` marker *forces* the KB archetype; a ``software`` marker
+    *suppresses* it. An unrecognised value is ignored (returns None) so a typo
+    falls back to the heuristic rather than silently mis-scoring.
+    """
+    return _scan_override(repo_root)[0]
 
 
 def detect_kb_maintenance(text: str) -> dict[str, Any]:
@@ -281,6 +291,16 @@ def classify_archetype(
     content_total = code_file_count + doc_file_count
     code_ratio = (code_file_count / content_total) if content_total else 0.0
 
+    # What the deterministic heuristic would have concluded on its own signals -
+    # computed unconditionally so an override can be checked against it and any
+    # contradiction surfaced (the override still wins, but never silently).
+    heuristic_is_kb = (
+        doc_file_count >= KB_MIN_DOC_FILES
+        and code_ratio <= KB_CODE_RATIO_MAX
+        and not has_runtime_surface
+    )
+    heuristic_archetype = "knowledge-base" if heuristic_is_kb else "software"
+
     if override == "knowledge-base":
         archetype, detected_via = "knowledge-base", "override"
         reason = "forced by an `assess-archetype: knowledge-base` marker"
@@ -289,12 +309,8 @@ def classify_archetype(
         reason = "forced by an `assess-archetype: software` marker"
     else:
         detected_via = "heuristic"
-        is_kb = (
-            doc_file_count >= KB_MIN_DOC_FILES
-            and code_ratio <= KB_CODE_RATIO_MAX
-            and not has_runtime_surface
-        )
-        archetype = "knowledge-base" if is_kb else "software"
+        is_kb = heuristic_is_kb
+        archetype = heuristic_archetype
         if is_kb:
             reason = (
                 f"code-file ratio {code_ratio:.2f} "
@@ -313,6 +329,23 @@ def classify_archetype(
                 f"knowledge-base threshold {KB_CODE_RATIO_MAX:.2f}"
             )
 
+    # An override wins the classification (denominator, na_layers, reason all
+    # follow the forced archetype above), but when the deterministic signals
+    # would have concluded differently the disagreement is emitted as a visible
+    # finding. This is the guardrail-erosion tendency turned into a signal: a
+    # marker that quietly overrides what the code actually looks like.
+    override_contradicts_signals = (
+        detected_via == "override" and archetype != heuristic_archetype
+    )
+    contradiction_details: str | None = None
+    if override_contradicts_signals:
+        contradiction_details = (
+            f"Override forces {archetype}, but signals suggest "
+            f"{heuristic_archetype}: code_ratio={code_ratio:.2f}, "
+            f"has_runtime={has_runtime_surface}, doc_files={doc_file_count}, "
+            f"code_files={code_file_count}"
+        )
+
     if archetype == "knowledge-base":
         applicable = list(KB_APPLICABLE_LAYERS)
         na_layers = list(WRITE_SIDE_LAYERS)
@@ -327,6 +360,8 @@ def classify_archetype(
         "archetype": archetype,
         "detected_via": detected_via,
         "override": override,
+        "override_contradicts_signals": override_contradicts_signals,
+        "contradiction_details": contradiction_details,
         "reason": reason,
         "signals": {
             "code_file_count": code_file_count,
@@ -361,10 +396,10 @@ def analyze_archetype(repo_root: Path) -> dict[str, Any]:
     then delegates the verdict to ``classify_archetype``.
     """
     code, doc, other = _classify_files(repo_root)
-    override = read_archetype_override(repo_root)
+    override, override_source = _scan_override(repo_root)
     kb_maintenance = detect_kb_maintenance(_gather_instruction_text(repo_root))
     has_runtime = _has_runtime_surface(repo_root)
-    return classify_archetype(
+    block = classify_archetype(
         code_file_count=code,
         doc_file_count=doc,
         other_file_count=other,
@@ -372,3 +407,8 @@ def analyze_archetype(repo_root: Path) -> dict[str, Any]:
         override=override,
         kb_maintenance=kb_maintenance,
     )
+    # The marker source lets a contradiction finding point at the file the
+    # override lives in; recorded whenever a recognised marker was found.
+    if override_source is not None:
+        block["override_source"] = override_source
+    return block
