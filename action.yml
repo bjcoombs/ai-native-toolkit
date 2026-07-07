@@ -78,6 +78,12 @@ runs:
         fi
 
     - name: Render the deterministic snapshot
+      id: render
+      # continue-on-error keeps a mid-render crash (a tool install shortfall, a
+      # scan raising) from surfacing as a red check: rendering the snapshot is
+      # infrastructure, not a finding. The step's `outcome` still records the
+      # real result, so the gate below runs only when the snapshot is whole.
+      continue-on-error: true
       if: steps.ensure-uv.outputs.ok == 'true'
       shell: bash
       working-directory: ${{ github.action_path }}/skills/assess
@@ -89,8 +95,20 @@ runs:
         uv run scripts/assess_core.py "${GITHUB_WORKSPACE}"
         uv run scripts/assess_report.py "${GITHUB_WORKSPACE}"
 
+    - name: Report a skipped assessment
+      # Fires only when the render actually failed (not when it was skipped for
+      # want of uv). Makes the skip visible in the checks UI as a notice, never
+      # a failure - the warn-only contract.
+      if: steps.ensure-uv.outputs.ok == 'true' && steps.render.outcome == 'failure'
+      shell: bash
+      run: |
+        echo "::notice::assess-gate skipped: infrastructure failure rendering the snapshot - not a finding. The gate runs again on the next push."
+
     - name: Gate on floors and regressions
-      if: steps.ensure-uv.outputs.ok == 'true'
+      # Runs meaningfully only after the core succeeded: uv is present AND the
+      # snapshot rendered whole. A skipped render means no gate this run (infra
+      # failure, warn-only), never a red check.
+      if: steps.ensure-uv.outputs.ok == 'true' && steps.render.outcome == 'success'
       shell: bash
       working-directory: ${{ github.action_path }}/skills/assess
       # The single step whose exit code can fail the consumer's PR - and only

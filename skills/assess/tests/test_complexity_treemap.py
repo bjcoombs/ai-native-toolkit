@@ -117,6 +117,56 @@ def test_write_stats_uses_commits_field_and_balanced_rank(treemap, tmp_path):
     assert by_path["frozen.go"]["commits"] == 1
 
 
+def test_write_stats_stamps_schema_and_tool_versions(treemap, tmp_path, monkeypatch):
+    """The sidecar stamps the stats schema version and the complexity backend
+    versions so a later run can detect a schema or tool change and void a
+    non-comparable diff. scc_version is present only when scc scored files."""
+    monkeypatch.setattr(treemap, "_lizard_version", lambda: "1.23.0")
+    monkeypatch.setattr(treemap, "_scc_version", lambda: "3.7.0")
+    root = tmp_path
+    lz = root / "a.go"
+    sc = root / "b.rb"
+    out = root / "stats.json"
+
+    # lizard-only: no scc_version key.
+    treemap.write_stats([(lz, 100, 5.0, "lizard")], None, None, root, out)
+    stats = json.loads(out.read_text())
+    assert stats["schema_version"] == treemap.STATS_SCHEMA_VERSION
+    assert stats["lizard_version"] == "1.23.0"
+    assert "scc_version" not in stats
+
+    # A file scored by scc adds scc_version.
+    treemap.write_stats(
+        [(lz, 100, 5.0, "lizard"), (sc, 80, 4.0, "scc")], None, None, root, out
+    )
+    stats = json.loads(out.read_text())
+    assert stats["lizard_version"] == "1.23.0"
+    assert stats["scc_version"] == "3.7.0"
+
+
+def test_tool_versions_omits_scc_when_not_scored(treemap, monkeypatch):
+    """_tool_versions always carries lizard; scc appears only when a file was
+    scored by scc AND scc is resolvable."""
+    monkeypatch.setattr(treemap, "_lizard_version", lambda: "1.23.0")
+    monkeypatch.setattr(treemap, "_scc_version", lambda: "3.7.0")
+    assert treemap._tool_versions([(Path("a.go"), 1, 1.0, "lizard")]) == {
+        "lizard": "1.23.0"
+    }
+    assert treemap._tool_versions([(Path("b.rb"), 1, 1.0, "scc")]) == {
+        "lizard": "1.23.0", "scc": "3.7.0"
+    }
+
+
+def test_tool_versions_drops_scc_when_binary_absent(treemap, monkeypatch):
+    """When scc scored files but the binary can't report a version, scc is
+    omitted rather than stamped as a false 'unknown'."""
+    monkeypatch.setattr(treemap, "_lizard_version", lambda: "1.23.0")
+    monkeypatch.setattr(treemap, "_scc_version", lambda: None)
+    assert treemap._tool_versions([(Path("b.rb"), 1, 1.0, "scc")]) == {
+        "lizard": "1.23.0"
+    }
+
+
 def test_write_stats_records_churn_degenerate_flag(treemap, tmp_path):
     """Issue #172: the stats sidecar carries ``churn_degenerate`` so the report
     and a reader know the saturation axis / commits column is inactive. Default
