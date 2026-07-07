@@ -90,9 +90,18 @@ def maturity_band(score: float, denominator: float = 8) -> str:
     return "Not Ready"
 
 
+def _scoped_label(scope: str | None) -> str:
+    """The badge label, suffixed with the scope for a `/assess <path>` run.
+
+    ``scope`` is the repo-relative subtree (e.g. ``services/api``). None (a
+    whole-repo run) yields the bare ``LABEL`` so default output is unchanged.
+    """
+    return f"{LABEL} ({scope})" if scope else LABEL
+
+
 def score_badge(
     score: float, maturity_label: str, denominator: int = 8,
-    run_id: str | None = None,
+    run_id: str | None = None, scope: str | None = None,
 ) -> dict[str, Any]:
     """The in-report headline form: layered score + maturity label.
 
@@ -108,10 +117,14 @@ def score_badge(
     ``run_id`` (when supplied) is stamped as a non-rendering provenance field so
     the badge traces back to the run that produced it. shields.io ignores keys
     it doesn't recognise, so the extra field never changes what the badge shows.
+
+    ``scope`` (the repo-relative subtree) suffixes the label for a
+    ``/assess <path>`` monorepo run so the badge names what it measured; None
+    keeps the bare label.
     """
     badge = {
         "schemaVersion": 1,
-        "label": LABEL,
+        "label": _scoped_label(scope),
         "message": f"{score}/{denominator} · {maturity_label}",
         "color": score_color(score, denominator),
     }
@@ -121,7 +134,8 @@ def score_badge(
 
 
 def fallback_badge(
-    concern_count: int, stale_markers: int, run_id: str | None = None
+    concern_count: int, stale_markers: int, run_id: str | None = None,
+    scope: str | None = None,
 ) -> dict[str, Any]:
     """The default shipped badge: a deterministic, always-written self-description.
 
@@ -134,11 +148,12 @@ def fallback_badge(
     ``stale_markers`` is ``promissory_markers.total_stale`` (0 when the scan
     was unavailable - the message stays truthful because it only counts what
     was measured). ``run_id`` (when supplied) is stamped as a non-rendering
-    provenance field, exactly as in ``score_badge``.
+    provenance field, exactly as in ``score_badge``. ``scope`` suffixes the
+    label for a ``/assess <path>`` run.
     """
     badge = {
         "schemaVersion": 1,
-        "label": LABEL,
+        "label": _scoped_label(scope),
         "message": f"{concern_count} findings · {stale_markers} stale markers",
         "color": (
             "green"

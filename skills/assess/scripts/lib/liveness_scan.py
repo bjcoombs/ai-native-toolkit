@@ -214,10 +214,25 @@ class DeadCodeResult:
         }
 
 
+def _candidate_in_scope(repo_root: Path, rel_path: str, scope: Path | None) -> bool:
+    """True if a tool-reported candidate path lies within `scope`.
+
+    Tools report paths relative to `repo_root` (their cwd); resolve against it
+    and compare. A whole-repo run (`scope` is None) keeps every candidate.
+    """
+    if scope is None:
+        return True
+    try:
+        return (repo_root / rel_path).resolve().is_relative_to(scope.resolve())
+    except (ValueError, OSError):
+        return False
+
+
 def scan_dead_code(repo_root: Path, run: bool = True,
                    run_build_tools: bool = False,
                    extra_exclude_dirs: set[str] | None = None,
                    extra_exclude_patterns: list[str] | None = None,
+                   scope: Path | None = None,
                    ) -> DeadCodeResult:
     """Best-effort intra-repo dead-code scan. Never raises.
 
@@ -230,6 +245,12 @@ def scan_dead_code(repo_root: Path, run: bool = True,
     language-presence probe (`_has_ext` - so a repo whose only Python lives
     in `regulatory-raw/` reports `tool_absent: no Python in scope`), the
     vulture `--exclude` argument, and the post-scan filter on candidates.
+
+    `scope` (an absolute path under `repo_root`) restricts the candidates to a
+    subtree for `/assess <path>` monorepo scoping, so a scoped run carries no
+    dead-code signal from a sibling directory. The tool still runs over the repo
+    (it needs the whole import graph to judge liveness) and only its reported
+    candidates are confined. Omit it for a whole-repo run.
     """
     repo_root = repo_root.resolve()
     result = DeadCodeResult()
@@ -292,6 +313,7 @@ def scan_dead_code(repo_root: Path, run: bool = True,
                 extra_exclude_dirs=extra_dirs,
                 extra_exclude_patterns=extra_pats,
             )
+            and _candidate_in_scope(repo_root, c["path"], scope)
         ]
         result.available = True
         result.candidates.extend(found)
@@ -564,6 +586,7 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
                   run_build_tools: bool = False,
                   extra_exclude_dirs: set[str] | None = None,
                   extra_exclude_patterns: list[str] | None = None,
+                  scope: Path | None = None,
                   ) -> dict:
     """Top-level Layer 1 scan: dead-code candidates + observability rungs, plus
     the capability-driven JVM offer block when a Maven/Gradle project is found.
@@ -574,6 +597,10 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
     `extra_exclude_dirs` and `extra_exclude_patterns` come from
     `.assess/config.toml` / `--exclude` and apply to the dead-code scan, the
     observability tree walk, and JVM build-file detection alike.
+
+    `scope` (an absolute path under `repo_root`) confines the dead-code
+    candidates to a subtree for `/assess <path>` monorepo scoping; the
+    observability rungs stay repo-level (telemetry is a whole-repo property).
     """
     from lib.jvm_capabilities import scan_jvm_capabilities
 
@@ -581,6 +608,7 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
         repo_root, run=run_dead_code, run_build_tools=run_build_tools,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
+        scope=scope,
     ).as_dict()
     jvm = scan_jvm_capabilities(
         repo_root, run_build_tools=run_build_tools,

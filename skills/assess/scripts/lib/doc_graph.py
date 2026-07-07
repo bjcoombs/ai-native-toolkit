@@ -268,20 +268,28 @@ def _discover_files(
     extensions: set[str],
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
+    scope: Path | None = None,
 ) -> list[Path]:
     """Return all in-repo files of the given extensions, skipping excluded dirs.
 
     The single walk shared by the markdown-doc and `.base`-hub discovery so both
     honour the identical exclude resolution (built-in defaults + user excludes).
+
+    `scope` (an absolute path under `repo_root`) restricts discovery to a
+    subtree for `/assess <path>` monorepo scoping; omit it (the default) for a
+    whole-repo run, in which case the result is unchanged.
     """
     from lib.assess_config import is_user_excluded
     repo_root = repo_root.resolve()
+    scope_abs = scope.resolve() if scope is not None else None
     tracked = tracked_files(repo_root)
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
     found: list[Path] = []
     for path in repo_root.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in extensions:
+            continue
+        if scope_abs is not None and not path.resolve().is_relative_to(scope_abs):
             continue
         try:
             rel = path.relative_to(repo_root)
@@ -301,10 +309,12 @@ def discover_doc_files(
     repo_root: Path,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
+    scope: Path | None = None,
 ) -> list[Path]:
     """Return all in-repo markdown docs under repo_root, skipping excluded dirs."""
     return _discover_files(
         repo_root, DOC_EXTENSIONS, extra_exclude_dirs, extra_exclude_patterns,
+        scope=scope,
     )
 
 
@@ -312,10 +322,12 @@ def discover_base_files(
     repo_root: Path,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
+    scope: Path | None = None,
 ) -> list[Path]:
     """Return all in-repo Obsidian Bases (`.base`) files, skipping excluded dirs."""
     return _discover_files(
         repo_root, BASE_EXTENSIONS, extra_exclude_dirs, extra_exclude_patterns,
+        scope=scope,
     )
 
 
@@ -553,8 +565,15 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
     repo_root: Path, doc_files: list[Path] | None = None,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
+    scope: Path | None = None,
 ) -> DocGraphResult:
-    """Parse docs, build the link graph, and derive navigability signals."""
+    """Parse docs, build the link graph, and derive navigability signals.
+
+    `scope` (an absolute path under `repo_root`) restricts the graph to docs
+    within a subtree for `/assess <path>` monorepo scoping; omit it for a
+    whole-repo run. `.base` hub discovery honours the same scope so a scoped
+    graph carries no navigation signal from a sibling directory.
+    """
     repo_root = repo_root.resolve()
     vault = _vault_detected(repo_root)
     obs = _obsidiantools_available()
@@ -573,6 +592,7 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
             repo_root,
             extra_exclude_dirs=extra_exclude_dirs,
             extra_exclude_patterns=extra_exclude_patterns,
+            scope=scope,
         )
     )
     docs = [d.resolve() for d in docs]
@@ -673,6 +693,7 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
         graph, repo_root, docs, texts, rel,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
+        scope=scope,
     )
 
     # Raw-source-tree exclusion (issue #225). Detect subtrees of raw,
@@ -754,6 +775,7 @@ def _apply_vault_edges(
     graph, repo_root: Path, docs: list[Path], texts: dict[Path, str], rel,
     *, extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
+    scope: Path | None = None,
 ) -> list[str]:
     """Add Obsidian Bases (`.base`) and Dataview query edges to `graph`.
 
@@ -790,7 +812,9 @@ def _apply_vault_edges(
 
     # `.base` hubs: a new hub node with edges to every note its query selects.
     base_hubs: list[str] = []
-    for bf in discover_base_files(repo_root, extra_exclude_dirs, extra_exclude_patterns):
+    for bf in discover_base_files(
+        repo_root, extra_exclude_dirs, extra_exclude_patterns, scope=scope
+    ):
         try:
             btext = bf.read_text(encoding="utf-8", errors="ignore")
         except OSError:

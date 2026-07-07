@@ -24,7 +24,9 @@ from pathlib import Path
 GIT_TIMEOUT_SECONDS = 20
 
 
-def git_churn_scores(root: Path, since: str | None = None) -> dict[Path, int]:
+def git_churn_scores(
+    root: Path, since: str | None = None, scope: Path | None = None
+) -> dict[Path, int]:
     """Return {abs_path: commit_count} for files under root tracked in git.
 
     Returns empty dict if root is not inside a git repo. Commit counts are
@@ -32,6 +34,12 @@ def git_churn_scores(root: Path, since: str | None = None) -> dict[Path, int]:
     a git-compatible date expression (e.g. "6 months ago") to window the
     count. Renames are not followed - a file gets credit only under its
     current name.
+
+    `scope` (an absolute path under `root`) restricts the churn to a subtree:
+    git only walks that pathspec and the results are filtered to files under
+    it. Omit it (the default) for a whole-repo run - the output is then
+    byte-identical to before. Used by `/assess <path>` monorepo scoping so a
+    scoped assessment carries no churn signal from a sibling directory.
     """
     try:
         repo_top = subprocess.run(
@@ -42,11 +50,14 @@ def git_churn_scores(root: Path, since: str | None = None) -> dict[Path, int]:
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return {}
     repo = Path(repo_top).resolve()
+    scope_abs = scope.resolve() if scope is not None else None
 
     cmd = ["git", "-C", repo_top, "log",
            "--pretty=format:", "--name-only"]
     if since:
         cmd.append(f"--since={since}")
+    if scope_abs is not None:
+        cmd += ["--", str(scope_abs)]
     try:
         raw = subprocess.run(
             cmd, capture_output=True, text=True, check=True,
@@ -64,6 +75,11 @@ def git_churn_scores(root: Path, since: str | None = None) -> dict[Path, int]:
         try:
             path.relative_to(root)
         except ValueError:
+            continue
+        # A pathspec narrows which commits git walks, but a commit that touches
+        # a scoped file can also touch a sibling one; drop those so the count is
+        # strictly the subtree's.
+        if scope_abs is not None and not path.is_relative_to(scope_abs):
             continue
         counts[path] = counts.get(path, 0) + 1
     return counts
