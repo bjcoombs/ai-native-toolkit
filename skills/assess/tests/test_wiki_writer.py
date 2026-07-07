@@ -316,3 +316,56 @@ def test_hotspot_page_growth_profile_disclaims_unreliable_history(tmp_assess_dir
     assert "Growth profile: monotonic" in content
     assert "history may be incomplete" in content
     assert "shallow/squashed repo" in content
+
+
+# --- run_id / schema_version provenance stamps (assess-obey-thyself) ----------
+
+
+def test_write_index_stamps_run_id_comment(tmp_assess_dir: Path) -> None:
+    entries = [HotspotEntry(
+        path="src/foo.go", first_flagged="2026-01-01", last_seen="2026-07-07",
+        status="active", ccn=30, loc=600,
+    )]
+    write_index(
+        tmp_assess_dir, entries, last_updated="2026-07-07",
+        run_id="20260707120000-abcdef01", schema_version="1.0.0",
+    )
+    content = (tmp_assess_dir / "index.md").read_text()
+    assert "<!-- assess:run_id=20260707120000-abcdef01 artifact_schema_version=1.0.0 -->" in content
+
+
+def test_write_index_no_run_id_is_byte_identical(tmp_assess_dir: Path) -> None:
+    """Omitting run_id emits no comment - legacy callers get unchanged output."""
+    entries = [HotspotEntry(
+        path="src/foo.go", first_flagged="2026-01-01", last_seen="2026-07-07",
+        status="active", ccn=30, loc=600,
+    )]
+    write_index(tmp_assess_dir, entries, last_updated="2026-07-07")
+    content = (tmp_assess_dir / "index.md").read_text()
+    assert "<!-- assess:run_id" not in content
+
+
+def test_append_log_entry_stamps_run_id_per_entry(tmp_assess_dir: Path) -> None:
+    entry = LogEntry(
+        run_date="2026-07-07", files_scored=100, readiness_score=0.0,
+        maturity_label="(LLM fills in)", instructions_grade="B+",
+        graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
+        top_action="x", plugin_version="1.54.0",
+        run_id="20260707120000-abcdef01", schema_version="1.0.0",
+    )
+    append_log_entry(tmp_assess_dir, entry)
+    content = (tmp_assess_dir / "log.md").read_text()
+    assert "<!-- assess:run_id=20260707120000-abcdef01 artifact_schema_version=1.0.0 -->" in content
+
+
+def test_write_hotspot_page_stamps_run_id(tmp_assess_dir: Path) -> None:
+    write_hotspot_page(
+        tmp_assess_dir, path="src/foo.go", first_flagged="2026-01-01",
+        last_seen="2026-07-07", status="active", loc=600, ccn=30, commits=5,
+        has_tests=True, history_rows="| 2026-07-07 | 600 | 30 | 5 | active |",
+        briefing="x", actions="- y",
+        run_id="20260707120000-abcdef01", schema_version="1.0.0",
+    )
+    page = next((tmp_assess_dir / "hotspots").iterdir())
+    content = page.read_text(encoding="utf-8")
+    assert content.startswith("<!-- assess:run_id=20260707120000-abcdef01 artifact_schema_version=1.0.0 -->")

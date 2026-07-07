@@ -31,6 +31,7 @@ import json
 import re
 import subprocess
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -79,6 +80,25 @@ from lib.wiki_writer import (
     write_hotspot_page,
     write_index,
 )
+
+
+# Artifact schema version, stamped on every artifact the run produces
+# (run-context.json, the badge, the wiki pages, complexity-stats). Distinct from
+# the stats-layout `schema_version` (from #244) that versions the sidecar shape
+# for diff comparability: this one versions the run_id provenance envelope.
+# Bumped when the cross-artifact provenance schema changes shape in a way a
+# consumer must adapt to.
+ARTIFACT_SCHEMA_VERSION = "1.0.0"
+
+
+def _new_run_id() -> str:
+    """A unique id for this run: a sortable wall-clock stamp plus random suffix.
+
+    ``YYYYMMDDHHMMSS-<8 hex>`` - the timestamp orders runs, the uuid suffix makes
+    two runs in the same second still distinct. Stamped on every artifact so
+    finalize can prove the finalize-input and run-context came from one run.
+    """
+    return f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
 
 
 # Known agent instruction file locations (relative to repo root).
@@ -529,14 +549,15 @@ def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None
 
 
 def _write_fallback_badge_if_absent(
-    assess_dir: Path, promissory: Any, derived_findings: list[dict]
+    assess_dir: Path, promissory: Any, derived_findings: list[dict],
+    run_id: str | None = None,
 ) -> None:
     """Deterministic fallback badge - only when none exists.
 
     A gate-only repo (never LLM-scored) gets a truthful findings-count badge;
     a repo with a finalized score badge keeps it (a deterministic-only rerun
     must not downgrade the stronger claim; finalize refreshes it on scored
-    runs).
+    runs). ``run_id`` stamps the badge with the run that produced it.
     """
     if badge_exists(assess_dir):
         return
@@ -546,7 +567,7 @@ def _write_fallback_badge_if_absent(
         else 0
     )
     write_badge(assess_dir, fallback_badge(
-        concern_count_from_findings(derived_findings), stale,
+        concern_count_from_findings(derived_findings), stale, run_id=run_id,
     ))
 
 
@@ -760,6 +781,36 @@ def _normalize_test_pressure(test_pressure: Any) -> dict:
     }
 
 
+# The annotation the LLM must attach to Layer 6 when mutation testing never
+# ran. Layer 6 (truth pressure) asks whether the suite *proves* behaviour, not
+# merely visits it - a claim only a mutation run can substantiate. Absent that
+# run, the strongest honest verdict is Partial; a Present claim would be an
+# unproven self-description, exactly the guardrail-erosion failure /assess
+# exists to catch. assess_finalize enforces the cap deterministically.
+MUTATION_NOT_RUN_ANNOTATION = "truth-pressure unproven (mutation not run)"
+
+
+def _mutation_not_run_cap(test_pressure_block: dict) -> dict:
+    """The Layer 6 cap the LLM reads: does mutation evidence exist this run?
+
+    ``mutation_run`` is True only when the (opt-in, code-executing) bounded
+    mutation pass actually ran - coverage-config detection alone leaves it
+    False. When it is False, Layer 6 cannot be scored above Partial and the
+    ``annotation`` must be attached; assess_finalize rejects a finalize-input
+    that violates this.
+    """
+    mutation_run = bool(
+        isinstance(test_pressure_block, dict)
+        and test_pressure_block.get("mutation_run", False)
+    )
+    return {
+        "applies": not mutation_run,
+        "mutation_run": mutation_run,
+        "max_layer6_band": "Present" if mutation_run else "Partial",
+        "annotation": None if mutation_run else MUTATION_NOT_RUN_ANNOTATION,
+    }
+
+
 def _build_stale_hubs(doc_graph: dict, doc_staleness: dict) -> list[dict]:
     """Centrality x staleness - the priority Layer 0 signal.
 
@@ -815,6 +866,10 @@ def build_run_context(
     """
     assess_dir = repo_root / ".assess"
     assess_dir.mkdir(parents=True, exist_ok=True)
+    # Unique id minted once at the top of the run and stamped on every artifact
+    # this build produces, so finalize can prove the finalize-input it later
+    # consumes was authored against *this* run-context and not a stale one.
+    run_id = _new_run_id()
     current = load_stats(assess_dir / "complexity-stats.json") or {
         "files_scored": 0, "top_hotspots": [], "top_complex": [], "top_large": [],
         "loc": {}, "ccn": {},
@@ -940,6 +995,8 @@ def build_run_context(
             ),
             actions=UNFINALIZED_ACTIONS_POINTER,
             accretion_data=accretion_by_file.get(path),
+            run_id=run_id,
+            schema_version=ARTIFACT_SCHEMA_VERSION,
         )
 
     # Also surface graduated hotspots in the index. Carry the file's actual
@@ -982,7 +1039,10 @@ def build_run_context(
     # Persist the updated first-flagged map for future runs
     _save_first_flagged(assess_dir, first_flagged_map)
 
-    write_index(assess_dir, hotspot_entries, last_updated=run_date)
+    write_index(
+        assess_dir, hotspot_entries, last_updated=run_date,
+        run_id=run_id, schema_version=ARTIFACT_SCHEMA_VERSION,
+    )
 
     top_action = "Deterministic ranker not yet wired (LLM picks Top 3)"
     log_entry = LogEntry(
@@ -997,6 +1057,8 @@ def build_run_context(
         persistent_count=len(diff.persistent),
         top_action=top_action,
         plugin_version=_read_plugin_version(),
+        run_id=run_id,
+        schema_version=ARTIFACT_SCHEMA_VERSION,
     )
     append_log_entry(assess_dir, log_entry)
 
@@ -1005,6 +1067,13 @@ def build_run_context(
     # block accessors below (ctx["dead_code"] etc.) stay assignable to the
     # signal functions that consume them.
     ctx: dict[str, Any] = {
+        # Run provenance: the unique id every artifact of this run carries, and
+        # the artifact schema version a consumer checks before reading. finalize
+        # refuses to reconcile a finalize-input whose run_id disagrees (a torn
+        # write). `artifact_schema_version` is distinct from the stats-layout
+        # `schema_version` set further below (from #244).
+        "run_id": run_id,
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
         "run_date": run_date,
         # The commit the scan measured. Absolute LOC/CCN figures are a snapshot
         # of this commit; the report pins the SHA and warns when HEAD is dirty
@@ -1205,6 +1274,10 @@ def build_run_context(
                                    coverage_data=coverage_data),
     )
     ctx["test_pressure"] = _normalize_test_pressure(test_pressure)
+    # Layer 6 cap: on the default read-only pass the mutation tier never runs, so
+    # this reads "applies: true" and carries the required annotation. The LLM
+    # reads it when scoring Layer 6; assess_finalize enforces it.
+    ctx["mutation_not_run_cap"] = _mutation_not_run_cap(ctx["test_pressure"])
 
     # Cross-join the three already-collected signals - hotspot risk band, parsed
     # coverage, hollow-test heuristics - into one ranked focus list answering
@@ -1281,7 +1354,9 @@ def build_run_context(
     # report's B3 attention list via keyhole_signals; this block is the record.
     _attach_structure_drift(ctx, repo_root, keyhole["structure_drift_tier1"])
 
-    _write_fallback_badge_if_absent(assess_dir, promissory, ctx["derived_findings"])
+    _write_fallback_badge_if_absent(
+        assess_dir, promissory, ctx["derived_findings"], run_id=run_id
+    )
 
     ctx["plugin_version"] = _read_plugin_version()
 
@@ -1362,6 +1437,9 @@ def run_opt_in_mutation(repo_root: Path) -> int:
                                    coverage_data=coverage_data),
     )
     ctx["test_pressure"] = _normalize_test_pressure(test_pressure)
+    # Refresh the Layer 6 cap: the mutation tier may have run this pass, lifting
+    # the ceiling to Present. Written back so a subsequent finalize sees it.
+    ctx["mutation_not_run_cap"] = _mutation_not_run_cap(ctx["test_pressure"])
     ctx_path.write_text(json.dumps(ctx, indent=2), encoding="utf-8")
 
     tp = ctx["test_pressure"]

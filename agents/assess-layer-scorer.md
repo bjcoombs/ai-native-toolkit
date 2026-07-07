@@ -470,6 +470,8 @@ fd -t f '(mutation|survivor|mutant)' "$REPO_ROOT" --extension json --extension x
 
 **Asymmetry rule:** A high-coverage repo whose tests do not constrain behaviour scores **at or below** a repo with honest lower coverage. A confident-but-hollow gate is actively misleading; honest low coverage is merely incomplete.
 
+**Mutation-not-run cap (deterministically enforced).** Read `mutation_not_run_cap` from `run-context.json`. When `applies` is true - the default read-only pass never runs mutation; it only runs on the Step 2d opt-in accept - Layer 6 **cannot be Present**: a Present verdict claims tests *prove* behaviour, a claim only a mutation run substantiates. Score it **Partial** at most and carry the annotation `truth-pressure unproven (mutation not run)` in the Evidence cell. `assess_finalize.py` rejects a finalize-input scoring Layer 6 above Partial while `mutation_run` is false, so a Present verdict here fails the run, not merely reads wrong.
+
 ### Layer 7: Automated Code Review (Design-Level Feedback)
 
 **Scan for review bot configuration:**

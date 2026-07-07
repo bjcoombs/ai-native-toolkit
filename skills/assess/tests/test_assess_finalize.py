@@ -6,7 +6,42 @@ from pathlib import Path
 
 import pytest
 
-from assess_finalize import finalize_run
+from assess_finalize import FinalizeValidationError, finalize_run
+
+
+def _seed_run_context(
+    assess_dir: Path,
+    *,
+    denominator: int = 8,
+    hotspots: tuple[str, ...] = ("src/foo.go",),
+    mutation_run: bool = True,
+    run_id: str | None = None,
+) -> None:
+    """Write a minimal valid run-context.json for finalize to reconcile against.
+
+    finalize now reads run-context.json first and enforces invariants against it,
+    so every finalize test seeds a matching context. Defaults produce a
+    software-repo (denominator 8) context whose top hotspots and mutation state
+    satisfy the invariants; individual tests override to exercise a violation.
+    """
+    ctx: dict = {
+        "archetype": {"available": True, "denominator": denominator},
+        "stats_summary": {
+            "top_hotspots": [{"path": p} for p in hotspots],
+        },
+        "mutation_not_run_cap": {
+            "applies": not mutation_run,
+            "mutation_run": mutation_run,
+            "max_layer6_band": "Present" if mutation_run else "Partial",
+            "annotation": (
+                None if mutation_run
+                else "truth-pressure unproven (mutation not run)"
+            ),
+        },
+    }
+    if run_id is not None:
+        ctx["run_id"] = run_id
+    (assess_dir / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
 
 
 def _seed_log_md(assess_dir: Path) -> None:
@@ -38,6 +73,7 @@ def _seed_hotspot_page(assess_dir: Path, slug: str) -> None:
 def test_finalize_updates_log_last_entry(tmp_assess_dir: Path) -> None:
     """The latest log.md entry gets its placeholders replaced with LLM-provided values."""
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
     finalize_input = {
         "score": 6.0,
         "maturity_label": "Solid",
@@ -60,6 +96,7 @@ def test_finalize_updates_log_last_entry(tmp_assess_dir: Path) -> None:
 def test_finalize_knowledge_base_denominator(tmp_assess_dir: Path) -> None:
     """A KB run finalises the log + badge over its applicable-layer denominator (#224)."""
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir, denominator=3)
     finalize_input = {
         "score": 2.5,
         "maturity_label": "Knowledge Base · Solid (3 applicable layers)",
@@ -101,6 +138,7 @@ def test_finalize_updates_hotspot_actions(tmp_assess_dir: Path) -> None:
     )
     # Need a log.md too since finalize_run does both
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
 
     finalize_run(assess_dir=tmp_assess_dir)
     page = (tmp_assess_dir / "hotspots" / f"{slug}.md").read_text(encoding="utf-8")
@@ -122,6 +160,10 @@ def test_finalize_hotspot_without_match_is_skipped(tmp_assess_dir: Path) -> None
     between when the LLM read the data and when finalize runs.
     """
     _seed_log_md(tmp_assess_dir)
+    # The referenced path IS a real top hotspot in run-context (so it clears the
+    # fabrication invariant); its wiki page simply doesn't exist, which is the
+    # lifecycle case this test covers (graduated between LLM read and finalize).
+    _seed_run_context(tmp_assess_dir, hotspots=("src/nonexistent.go",))
     finalize_input = {
         "score": 6.0,
         "maturity_label": "Solid",
@@ -139,6 +181,7 @@ def test_finalize_hotspot_without_match_is_skipped(tmp_assess_dir: Path) -> None
 def test_finalize_log_handles_backslash_in_top_action(tmp_assess_dir: Path) -> None:
     """Top action text containing \\1 must be inserted literally, not as a regex backreference."""
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
     finalize_input = {
         "score": 6.0,
         "maturity_label": "Solid",
@@ -161,6 +204,7 @@ def test_finalize_hotspot_action_handles_backslash(tmp_assess_dir: Path) -> None
     slug = slug_for_path("src/foo.go")
     _seed_hotspot_page(tmp_assess_dir, slug=slug)
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
     finalize_input = {
         "score": 6.0,
         "maturity_label": "Solid",
@@ -184,6 +228,7 @@ def test_finalize_hotspot_action_handles_backslash(tmp_assess_dir: Path) -> None
 def test_finalize_reads_from_cache_path(tmp_assess_dir: Path) -> None:
     """The preferred input location is `.assess/.cache/finalize-input.json`."""
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
     cache_dir = tmp_assess_dir / ".cache"
     cache_dir.mkdir()
     (cache_dir / "finalize-input.json").write_text(
@@ -202,6 +247,7 @@ def test_finalize_reads_from_cache_path(tmp_assess_dir: Path) -> None:
 def test_finalize_deletes_input_after_success(tmp_assess_dir: Path) -> None:
     """The input file is one-off: delete it on success so it can't leak into commits."""
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
     legacy = tmp_assess_dir / "finalize-input.json"
     legacy.write_text(
         json.dumps({
@@ -220,6 +266,7 @@ def test_finalize_cleans_up_legacy_when_cache_present(tmp_assess_dir: Path) -> N
     legacy file), finalize prefers cache and cleans up both.
     """
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
     cache_dir = tmp_assess_dir / ".cache"
     cache_dir.mkdir()
     cache_path = cache_dir / "finalize-input.json"
@@ -255,6 +302,7 @@ def test_finalize_updates_last_entry_when_older_entry_unfinalized(tmp_assess_dir
     we'd overwrite stale historical data and leave the new run unfilled.
     The older unfinalized entry stays as evidence of "this run wasn't finalized."
     """
+    _seed_run_context(tmp_assess_dir)
     # Seed two entries: older (unfinalized, placeholders intact) then newer (also placeholders)
     (tmp_assess_dir / "log.md").write_text(
         "# Assess Log\n\n"
@@ -320,6 +368,7 @@ def test_finalize_writes_actions_contract(tmp_assess_dir: Path) -> None:
     """An `actions` array in the input becomes the durable .assess/actions.json,
     sorted by rank, with the executor-critical fields intact."""
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
     finalize_input = {
         **_base_input(),
         "actions": [_good_action(rank=2), _good_action(rank=1)],
@@ -344,6 +393,7 @@ def test_finalize_without_actions_writes_no_contract(tmp_assess_dir: Path) -> No
     """Backwards compatibility: an input with no `actions` key (the pre-1.41
     shape) finalizes the wiki exactly as before and writes no actions.json."""
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
     (tmp_assess_dir / "finalize-input.json").write_text(
         json.dumps(_base_input()), encoding="utf-8"
     )
@@ -359,6 +409,7 @@ def test_finalize_drops_malformed_action_entries(tmp_assess_dir: Path) -> None:
     """An entry missing done_when/scope_fence is dropped (a malformed contract
     must not reach an executor as if complete); valid siblings still land."""
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
     incomplete = {"rank": 2, "action": "vague intention"}  # no done_when/fence
     finalize_input = {
         **_base_input(),
@@ -379,6 +430,7 @@ def test_finalize_drops_malformed_action_entries(tmp_assess_dir: Path) -> None:
 
 def test_finalize_all_actions_malformed_writes_no_contract(tmp_assess_dir: Path) -> None:
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
     finalize_input = {**_base_input(), "actions": [{"rank": 1}]}
     (tmp_assess_dir / "finalize-input.json").write_text(
         json.dumps(finalize_input), encoding="utf-8"
@@ -392,6 +444,7 @@ def test_finalize_all_actions_malformed_writes_no_contract(tmp_assess_dir: Path)
 def test_finalize_writes_score_badge(tmp_assess_dir: Path) -> None:
     """Finalize always (over)writes badge.json with the LLM-scored form."""
     _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
     (tmp_assess_dir / "badge.json").write_text(
         '{"schemaVersion": 1, "label": "AI-readiness", '
         '"message": "9 findings · 9 stale markers", "color": "orange"}',
@@ -406,3 +459,187 @@ def test_finalize_writes_score_badge(tmp_assess_dir: Path) -> None:
     badge = json.loads((tmp_assess_dir / "badge.json").read_text(encoding="utf-8"))
     assert badge["message"] == "6.0/8 · Solid"
     assert badge["color"] == "green"
+
+
+# --- Task 1: finalize reconciles run-context invariants (fail-closed) --------
+
+
+def _write_input(assess_dir: Path, data: dict) -> None:
+    (assess_dir / "finalize-input.json").write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_finalize_missing_run_context_refuses(tmp_assess_dir: Path) -> None:
+    """A present input but no run-context.json is a hard, named failure - there
+    is nothing to reconcile against, so finalize refuses and writes nothing."""
+    _seed_log_md(tmp_assess_dir)  # note: no _seed_run_context
+    _write_input(tmp_assess_dir, _base_input())
+
+    with pytest.raises(FinalizeValidationError, match="run-context.json missing"):
+        finalize_run(assess_dir=tmp_assess_dir)
+
+    # Nothing written: the log placeholder survives untouched.
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "((LLM fills in))" in content
+    assert not (tmp_assess_dir / "actions.json").exists()
+
+
+def test_finalize_denominator_mismatch_refuses(tmp_assess_dir: Path) -> None:
+    """The input denominator must match run-context archetype.denominator."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir, denominator=3)  # KB
+    _write_input(tmp_assess_dir, {**_base_input(), "denominator": 8})
+
+    with pytest.raises(FinalizeValidationError, match="denominator mismatch"):
+        finalize_run(assess_dir=tmp_assess_dir)
+
+
+def test_finalize_score_exceeds_denominator_refuses(tmp_assess_dir: Path) -> None:
+    """A score above its denominator is impossible - refuse."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    _write_input(
+        tmp_assess_dir,
+        {**_base_input(), "score": 9.0, "maturity_label": "AI-Native"},
+    )
+
+    with pytest.raises(FinalizeValidationError, match="exceeds denominator"):
+        finalize_run(assess_dir=tmp_assess_dir)
+
+
+def test_finalize_maturity_inconsistent_with_score_refuses(tmp_assess_dir: Path) -> None:
+    """A label that overstates the score band (2.0/8 called 'AI-Native') is a
+    lying self-description - refuse, naming the expected tier."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    _write_input(
+        tmp_assess_dir,
+        {**_base_input(), "score": 2.0, "maturity_label": "AI-Native"},
+    )
+
+    with pytest.raises(FinalizeValidationError, match="claims tier 'AI-Native'"):
+        finalize_run(assess_dir=tmp_assess_dir)
+
+
+def test_finalize_valid_maturity_bands_pass(tmp_assess_dir: Path) -> None:
+    """The documented ladder is accepted verbatim: each score earns its label."""
+    for score, label in [
+        (7.0, "AI-Native"),   # 0.875
+        (6.0, "Solid"),       # 0.75
+        (3.0, "Basic"),       # 0.375
+        (1.0, "Not Ready"),   # 0.125
+    ]:
+        _seed_log_md(tmp_assess_dir)
+        _seed_run_context(tmp_assess_dir)
+        _write_input(
+            tmp_assess_dir,
+            {**_base_input(), "score": score, "maturity_label": label},
+        )
+        finalize_run(assess_dir=tmp_assess_dir)  # must not raise
+
+
+def test_finalize_fabricated_hotspot_path_refuses(tmp_assess_dir: Path) -> None:
+    """A hotspot_actions key absent from run-context top_hotspots is fabricated;
+    the error names the offending path."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir, hotspots=("src/foo.go",))
+    _write_input(
+        tmp_assess_dir,
+        {**_base_input(), "hotspot_actions": {"src/invented.go": ["do a thing"]}},
+    )
+
+    with pytest.raises(FinalizeValidationError, match=r"src/invented\.go"):
+        finalize_run(assess_dir=tmp_assess_dir)
+
+
+def test_finalize_writes_nothing_on_violation(tmp_assess_dir: Path) -> None:
+    """A violation short-circuits before any write: no badge, no actions.json,
+    log placeholders intact, and the input file is NOT consumed (so a fixed
+    rerun can still find it)."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    bad = {**_base_input(), "score": 2.0, "maturity_label": "AI-Native",
+           "actions": [_good_action(rank=1)]}
+    _write_input(tmp_assess_dir, bad)
+
+    with pytest.raises(FinalizeValidationError):
+        finalize_run(assess_dir=tmp_assess_dir)
+
+    assert "((LLM fills in))" in (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert not (tmp_assess_dir / "actions.json").exists()
+    assert not (tmp_assess_dir / "badge.json").exists()
+    assert (tmp_assess_dir / "finalize-input.json").exists()  # not consumed
+
+
+# --- Task 2: run_id torn-write detection -------------------------------------
+
+
+def test_finalize_run_id_mismatch_refuses(tmp_assess_dir: Path) -> None:
+    """finalize-input and run-context from different runs (mismatched run_id) is
+    a torn write - refuse."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir, run_id="20260707120000-aaaaaaaa")
+    _write_input(tmp_assess_dir, {**_base_input(), "run_id": "20260707130000-bbbbbbbb"})
+
+    with pytest.raises(FinalizeValidationError, match="torn write"):
+        finalize_run(assess_dir=tmp_assess_dir)
+
+
+def test_finalize_run_id_match_stamps_badge(tmp_assess_dir: Path) -> None:
+    """Matching run_id passes, and the badge is stamped with it."""
+    _seed_log_md(tmp_assess_dir)
+    run_id = "20260707120000-abcdef01"
+    _seed_run_context(tmp_assess_dir, run_id=run_id)
+    _write_input(tmp_assess_dir, {**_base_input(), "run_id": run_id})
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    badge = json.loads((tmp_assess_dir / "badge.json").read_text(encoding="utf-8"))
+    assert badge["run_id"] == run_id
+
+
+def test_finalize_legacy_input_without_run_id_still_works(tmp_assess_dir: Path) -> None:
+    """A legacy input carrying no run_id finalises even when run-context has one
+    (backward compat: the torn-write check needs both stamps to fire)."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir, run_id="20260707120000-abcdef01")
+    _write_input(tmp_assess_dir, _base_input())  # no run_id
+
+    finalize_run(assess_dir=tmp_assess_dir)  # must not raise
+    assert "AI Readiness:** 6.0 / 8 (Solid)" in (
+        tmp_assess_dir / "log.md"
+    ).read_text(encoding="utf-8")
+
+
+# --- Task 8: Layer 6 capped at Partial when mutation never ran ---------------
+
+
+def test_finalize_layer6_present_without_mutation_refuses(tmp_assess_dir: Path) -> None:
+    """Mutation never ran + LLM scores Layer 6 Present (1.0) -> finalize rejects,
+    naming the required annotation."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir, mutation_run=False)
+    _write_input(tmp_assess_dir, {**_base_input(), "layer_scores": {"6": 1.0}})
+
+    with pytest.raises(
+        FinalizeValidationError,
+        match="truth-pressure unproven",
+    ):
+        finalize_run(assess_dir=tmp_assess_dir)
+
+
+def test_finalize_layer6_present_with_mutation_allowed(tmp_assess_dir: Path) -> None:
+    """When mutation actually ran, a Present Layer 6 is allowed."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir, mutation_run=True)
+    _write_input(tmp_assess_dir, {**_base_input(), "layer_scores": {"6": 1.0}})
+
+    finalize_run(assess_dir=tmp_assess_dir)  # must not raise
+
+
+def test_finalize_layer6_partial_without_mutation_allowed(tmp_assess_dir: Path) -> None:
+    """Partial (0.5) is the ceiling when mutation didn't run - allowed."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir, mutation_run=False)
+    _write_input(tmp_assess_dir, {**_base_input(), "layer_scores": {"6": 0.5}})
+
+    finalize_run(assess_dir=tmp_assess_dir)  # must not raise
