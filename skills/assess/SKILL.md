@@ -384,6 +384,8 @@ With no mutation data the `--test-pressure` flag is a silent no-op, so the overl
 
 The deterministic core has written the data bus (`.assess/run-context.json`). Assigning each layer Present / Partial / Missing is judgement-heavy work that benefits from a fresh context window applying the layer methodology - so it runs as a dedicated unit, not inline here.
 
+**Layer 6 (truth pressure) is capped at Partial when mutation testing did not run.** Read `mutation_not_run_cap` from `run-context.json`: when `applies` is true (the default read-only pass leaves it true - mutation only runs on the opt-in Step 2d accept), Layer 6 **cannot** be scored Present. A Present verdict there claims the suite *proves* behaviour, which only a mutation run substantiates - absent it, the strongest honest verdict is Partial, annotated with `mutation_not_run_cap.annotation` (`truth-pressure unproven (mutation not run)`). This is enforced deterministically: `assess_finalize.py` refuses a finalize-input whose Layer 6 score exceeds Partial while `mutation_run` is false, so scoring it Present will fail the finalize step, not merely read wrong.
+
 <!-- chat-replace:layer-scorer-delegate -->
 Spawn the `assess-layer-scorer` agent (`subagent_type: "assess-layer-scorer"`), passing `REPO_ROOT`. It reads `.assess/run-context.json`, scores every layer, and returns the 0-8 score, the per-layer verdicts with evidence, and the maturity label. Hold that scorecard for Step 4.
 
@@ -424,9 +426,11 @@ The input file lives under `.assess/.cache/` rather than directly in `.assess/` 
 mkdir -p "$REPO_ROOT/.assess/.cache"
 cat > "$REPO_ROOT/.assess/.cache/finalize-input.json" <<'EOF'
 {
+  "run_id": "<copy run_id verbatim from run-context.json>",
   "score": 6.0,
   "maturity_label": "Solid",
   "denominator": 8,
+  "layer_scores": {"0": 1.0, "1": 0.5, "2": 1.0, "3": 0.5, "4": 1.0, "5": 0.5, "6": 0.5, "7": 1.0, "8": 0.5},
   "top_action": "Add cyclop rule (threshold 15) to .golangci.yml",
   "hotspot_actions": {
     "src/foo.go": [
@@ -465,6 +469,13 @@ This replaces:
 - Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file.
 
 The optional `denominator` field is **8** for a software repo (the default when omitted) or the applicable-layer count for a detected archetype (3 for a knowledge base - see "Repository archetype" above). `assess_finalize.py` renormalises both the `log.md` AI-Readiness line and the badge over it, so a KB reads `2.5 / 3` rather than a misleading `2.5 / 8`.
+
+**`assess_finalize.py` reconciles this input against `run-context.json` before writing anything, and refuses (writing nothing, exiting non-zero) on any violation.** So the fields must be internally honest:
+- `run_id` - **copy it verbatim** from `run-context.json`. It proves the input was authored against *this* run; a mismatch is treated as a torn write and rejected.
+- `denominator` must equal `archetype.denominator` in `run-context.json`.
+- `score` must not exceed `denominator`, and `maturity_label` must name the tier the score earns (≥0.875 AI-Native, ≥0.625 Solid, ≥0.375 Basic, else Not Ready over the denominator) - a label that overstates the score is rejected.
+- Every key in `hotspot_actions` must be a real top hotspot from `stats_summary.top_hotspots` - a fabricated path is rejected, naming the path.
+- `layer_scores` maps each layer id to its band (Missing 0.0 / Partial 0.5 / Present 1.0). Layer 6 must not exceed **0.5** when `mutation_not_run_cap.applies` is true (see Step 3). Include it so the cap is enforced; a legacy input omitting it skips only the Layer 6 check.
 
 `assess_finalize.py` also refreshes `.assess/badge.json` (shields.io endpoint schema) from your score and maturity label - the live README badge. When offering the PR (assess-pr), include the embed snippet if the repo's README has no badge yet:
 

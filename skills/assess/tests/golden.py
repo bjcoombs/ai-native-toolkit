@@ -40,6 +40,9 @@ _VOLATILE_TOP_LEVEL = (
     "plugin_version",
     "prior_plugin_version",
     "run_date",
+    # run_id is a fresh timestamp+uuid every run (schema_version is stable, so it
+    # stays comparable and is NOT masked).
+    "run_id",
     "diff",
     "diff_detail",
     "diff_reliable",

@@ -55,8 +55,40 @@ def score_color(score: float, denominator: float = 8) -> str:
     return "red"
 
 
+# Maturity ladder: the renormalised fraction (score / denominator) mapped to a
+# named tier. The top tier's floor is the same 0.875 that opens
+# ``_SCORE_COLOR_RATIOS`` (the brightgreen band where "AI-Native" lands); the
+# finer tiers below follow the scoring ladder documented in
+# ``agents/assess-layer-scorer.md`` (>=0.625 Solid, >=0.375 Basic, else Not
+# Ready), so the label finalize accepts is exactly the label the scorer was told
+# to emit from the same fraction. Ordered, first match wins - the single source
+# of truth for "what tier does this score earn?" that assess_finalize's
+# consistency invariant reconciles the LLM-supplied ``maturity_label`` against.
+_MATURITY_BANDS: list[tuple[float, str]] = [
+    (0.875, "AI-Native"),
+    (0.625, "Solid"),
+    (0.375, "Basic"),
+    (0.0, "Not Ready"),
+]
+
+
+def maturity_band(score: float, denominator: float = 8) -> str:
+    """The canonical maturity tier a score earns over its denominator.
+
+    Derived from the same fraction the badge colour uses; the tier names come
+    from the documented scoring ladder. Used by ``assess_finalize`` to reject a
+    ``maturity_label`` that overstates (or understates) the score band.
+    """
+    ratio = (score / denominator) if denominator else 0.0
+    for floor, label in _MATURITY_BANDS:
+        if ratio >= floor:
+            return label
+    return "Not Ready"
+
+
 def score_badge(
-    score: float, maturity_label: str, denominator: int = 8
+    score: float, maturity_label: str, denominator: int = 8,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
     """The headline badge: layered score + maturity label.
 
@@ -64,25 +96,35 @@ def score_badge(
     count of applicable layers for a knowledge base (issue #224), so the badge
     reads e.g. ``2.5/3 · Knowledge Base · Solid`` instead of a misleading
     ``2.5/8``.
+
+    ``run_id`` (when supplied) is stamped as a non-rendering provenance field so
+    the badge traces back to the run that produced it. shields.io ignores keys
+    it doesn't recognise, so the extra field never changes what the badge shows.
     """
-    return {
+    badge = {
         "schemaVersion": 1,
         "label": LABEL,
         "message": f"{score}/{denominator} · {maturity_label}",
         "color": score_color(score, denominator),
     }
+    if run_id is not None:
+        badge["run_id"] = run_id
+    return badge
 
 
-def fallback_badge(concern_count: int, stale_markers: int) -> dict[str, Any]:
+def fallback_badge(
+    concern_count: int, stale_markers: int, run_id: str | None = None
+) -> dict[str, Any]:
     """Deterministic badge for repos with no LLM-scored run.
 
     ``concern_count`` is the number of derived findings with non-empty paths
     (``refactor_boundary`` excluded - it is the positive finding);
     ``stale_markers`` is ``promissory_markers.total_stale`` (0 when the scan
     was unavailable - the message stays truthful because it only counts what
-    was measured).
+    was measured). ``run_id`` (when supplied) is stamped as a non-rendering
+    provenance field, exactly as in ``score_badge``.
     """
-    return {
+    badge = {
         "schemaVersion": 1,
         "label": LABEL,
         "message": f"{concern_count} findings · {stale_markers} stale markers",
@@ -94,6 +136,9 @@ def fallback_badge(concern_count: int, stale_markers: int) -> dict[str, Any]:
             else "orange"
         ),
     }
+    if run_id is not None:
+        badge["run_id"] = run_id
+    return badge
 
 
 def concern_count_from_findings(derived_findings: list[dict]) -> int:

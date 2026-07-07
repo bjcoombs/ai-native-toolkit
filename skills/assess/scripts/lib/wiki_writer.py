@@ -95,6 +95,26 @@ class LogEntry:
     # should always set it (issue #52 Bug 2).
     plugin_version: str | None = None
     report_link: str = "./assess-report.md"
+    # Run provenance (issue: assess-obey-thyself). When set, each appended entry
+    # carries a non-rendering HTML-comment stamp so a machine can trace the log
+    # line back to the run-context.json that produced it. Optional for
+    # backwards-compat with callers that don't pass it yet.
+    run_id: str | None = None
+    schema_version: str | None = None
+
+
+def _run_id_comment(run_id: str | None, schema_version: str | None) -> str:
+    """An HTML-comment provenance line stamping a wiki artifact with its run.
+
+    Returns "" when no run_id is supplied so legacy callers (and every test that
+    doesn't thread a run_id) produce byte-identical output. HTML comments don't
+    render in Markdown, so the stamp is invisible to a human reading the wiki but
+    lets a machine trace a page back to the run that wrote it.
+    """
+    if not run_id:
+        return ""
+    version = schema_version or "unknown"
+    return f"<!-- assess:run_id={run_id} artifact_schema_version={version} -->\n"
 
 
 def slug_for_path(path: str) -> str:
@@ -114,8 +134,15 @@ def _load_template(name: str) -> str:
     return (_TEMPLATES_DIR / name).read_text(encoding="utf-8")
 
 
-def write_index(assess_dir: Path, entries: list[HotspotEntry], *, last_updated: str) -> None:
-    """(Re)write index.md from the current set of hotspot entries."""
+def write_index(
+    assess_dir: Path, entries: list[HotspotEntry], *, last_updated: str,
+    run_id: str | None = None, schema_version: str | None = None,
+) -> None:
+    """(Re)write index.md from the current set of hotspot entries.
+
+    ``run_id`` / ``schema_version`` (when supplied) prepend a non-rendering
+    HTML-comment provenance stamp; omitted, output is byte-identical to before.
+    """
     rows = []
     for e in entries:
         # `None` -> "-" so an unknown metric never reads as "the file was
@@ -130,7 +157,9 @@ def write_index(assess_dir: Path, entries: list[HotspotEntry], *, last_updated: 
         last_updated=last_updated,
         hotspot_rows="\n".join(rows) if rows else "| _no hotspots tracked yet_ | | | | | |",
     )
-    (assess_dir / "index.md").write_text(content, encoding="utf-8")
+    (assess_dir / "index.md").write_text(
+        _run_id_comment(run_id, schema_version) + content, encoding="utf-8"
+    )
 
 
 def _build_log_heading(
@@ -182,6 +211,10 @@ def append_log_entry(assess_dir: Path, entry: LogEntry) -> None:
         top_action=entry.top_action,
         report_link=entry.report_link,
     )
+    # Stamp this entry (not the whole file) so the log stays a per-run history:
+    # each run's line carries its own run_id. "" when no run_id is set, keeping
+    # the appended snippet byte-identical for legacy callers.
+    snippet = _run_id_comment(entry.run_id, entry.schema_version) + snippet
     if existing:
         log_path.write_text(existing + snippet, encoding="utf-8")
     else:
@@ -203,6 +236,8 @@ def write_hotspot_page(
     briefing: str,
     actions: str,
     accretion_data: dict | None = None,
+    run_id: str | None = None,
+    schema_version: str | None = None,
 ) -> None:
     """(Re)write hotspots/<slug>.md.
 
@@ -237,4 +272,6 @@ def write_hotspot_page(
         briefing=briefing,
         actions=actions,
     )
-    (hotspots_dir / f"{slug_for_path(path)}.md").write_text(content, encoding="utf-8")
+    (hotspots_dir / f"{slug_for_path(path)}.md").write_text(
+        _run_id_comment(run_id, schema_version) + content, encoding="utf-8"
+    )
