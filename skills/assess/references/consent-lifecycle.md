@@ -9,8 +9,12 @@ A user can permanently decline any optional tool (`scc`, a dead-code linter, the
 ```bash
 # Resolve the plugin version for provenance stamping (degrades to "unknown").
 assess_plugin_version() {
-  local pj="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json}"
-  if [ -f "$pj" ]; then
+  local pj=""
+<!-- chat-skip:start -->
+  # Plugin install: read the version from the installed plugin.json.
+  pj="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json}"
+<!-- chat-skip:end -->
+  if [ -n "$pj" ] && [ -f "$pj" ]; then
     jq -r '.version // "unknown"' "$pj" 2>/dev/null || echo unknown
   elif [ -f "$REPO_ROOT/.assess/run-context.json" ]; then
     jq -r '.plugin_version // "unknown"' "$REPO_ROOT/.assess/run-context.json" 2>/dev/null || echo unknown
@@ -53,13 +57,17 @@ The phases are numbered by their risk grouping, not their run order: Phase 1 and
 
 ## Non-interactive contract (headless / CI)
 
-When no human can answer - a headless run, a CI job, any non-tty stdin - **every offer is treated as declined**. The run must complete with **zero interactive prompts**; never emit an AskUserQuestion that would block a pipeline forever. The deterministic core detects this (`sys.stdin.isatty() and not os.getenv("CI")`) and pre-records the outcome in `run-context.json`:
+When no human can answer - a headless run, a CI job, any non-tty stdin - **every offer is treated as declined**. The run must complete with **zero interactive prompts**; never emit an AskUserQuestion that would block a pipeline forever. This holds in every phase.
 
-```bash
-jq '{interactive, offers}' "$REPO_ROOT/.assess/run-context.json"
-```
+Two enforcement surfaces, because the phases straddle the core run (Step 2c, which writes `run-context.json`):
 
-- **`interactive: false`** - every offer is already recorded as `{type, status: "skipped", reason: "non-interactive"}` in `offers`. **Make no AskUserQuestion calls** in any phase; skip straight through every offer (install, mutation, and all write-back offers) using the read-only defaults. The audit trail is the `offers` array; nothing further is required of you.
-- **`interactive: true`** - `offers` is empty; drive the three phases live.
+- **Phase 1 (Steps 2a/2b) precedes the core** - `run-context.json` does not exist yet. Here the contract is **orchestration**: if this is a headless/CI run (no human to answer), make no Phase 1 AskUserQuestion calls, install nothing, write no markers. You determine this from your own runtime context, using the same condition the core will record.
+- **Phases 3 and 2 (Steps 2d and the assess-pr write-back) follow the core**, so they read the authoritative flag the core computed with `sys.stdin.isatty() and not os.getenv("CI")`:
 
-Check `interactive` **once**, up front, and honour it in every phase. This is an orchestration contract - the core cannot make AskUserQuestion calls for you, so you must enforce "no prompts when non-interactive" by reading this flag.
+  ```bash
+  jq '{interactive, offers}' "$REPO_ROOT/.assess/run-context.json"
+  ```
+
+  When `interactive` is `false`, **make no AskUserQuestion calls** - every offer (`tool_install`, `mutation`, `pr`, `issue_tracking`, `ci_gate`, `feedback`, `uninstall`) is already recorded as `{type, status: "skipped", reason: "non-interactive"}` in `offers`, the run's audit trail. When `true`, `offers` is empty and you drive the phases live.
+
+The core cannot make AskUserQuestion calls for you, so *you* enforce "no prompts when non-interactive"; the `offers` array is the record that you did.

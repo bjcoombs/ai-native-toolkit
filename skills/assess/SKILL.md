@@ -96,7 +96,7 @@ Steps 2a/2b/2d and the assess-pr end-of-run offers share one consent model, spec
 
 - **Decline markers carry provenance.** A permanent decline writes `$REPO_ROOT/.assess/.no-<tool>` as JSON `{declined_by, declined_at, plugin_version, reason?}` via the reference's `write_decline_marker <tool>` helper - never a bare `touch`. The core reads them into `run-context.json` (`decline_markers`, `decline_disclosures`, `reoffer_mutation`): the report discloses each active decline, and a mutation decline made under an older plugin *major* sets `reoffer_mutation: true` so Step 2d re-asks once. Legacy empty/non-JSON markers still count as a decline (no provenance, never re-offered). Define the reference's helper functions once before the first `write_decline_marker` call.
 - **Three phases, one question each.** Phase 1 = tool installs (Steps 2a+2b, one batched question); Phase 3 = the code-modifying mutation pass (Step 2d, kept separate); Phase 2 = the four write-back offers (assess-pr, one batched question). Batching avoids 8-10 serial modals.
-- **Non-interactive contract.** When `run-context.json .interactive` is `false` (headless/CI, detected by the core), **make no AskUserQuestion calls** - every offer is pre-recorded `{type, status: "skipped", reason: "non-interactive"}` in `.offers`. Check `interactive` once, honour it in every phase; a headless run completes with zero prompts.
+- **Non-interactive contract.** In a headless/CI run (no human to answer), **make no AskUserQuestion calls in any phase** - a headless run completes with zero prompts. Phase 1 precedes the core, so honour this as orchestration from your own runtime context; Phases 3 and 2 (after Step 2c) read the core's `run-context.json .interactive` flag, which also pre-records every offer as `{type, status: "skipped", reason: "non-interactive"}` in `.offers` (the audit trail).
 
 ### 2a: Detect `scc` need (feeds Phase 1)
 
@@ -183,7 +183,7 @@ needs_offer ts-prune "$TS_FILES"     && OFFERS+=("typescript|ts-prune|npm instal
 needs_offer staticcheck "$GO_FILES"  && OFFERS+=("go|staticcheck|go install honnef.co/go/tools/cmd/staticcheck@latest (or 'brew install staticcheck')")
 ```
 
-**Non-interactive short-circuit.** If `run-context.json .interactive` is `false` (headless/CI), make **no** AskUserQuestion call - every install is already recorded as skipped in `offers`. Proceed to 2c with lizard-only + whatever tools are already on PATH.
+**Non-interactive short-circuit.** Phase 1 runs *before* the core writes `run-context.json`, so honour the non-interactive contract as orchestration: in a headless/CI run (no human to answer), make **no** AskUserQuestion call and install nothing - proceed to 2c with lizard-only + whatever tools are already on PATH. The core records this Phase 1 skip in `offers` when it runs at 2c.
 
 If `OFFERS` is empty (no language hits the threshold, or every tool is already installed/declined), skip straight to 2c.
 
@@ -485,7 +485,7 @@ The hotspot_actions dict should include at minimum the files mentioned in your T
 
 ## Step 8: End-of-Run Offers
 
-With the report written and the wiki finalized, run the end-of-run offers - open a PR, track the Top 3 Actions, freeze the assessment into a CI gate - and the tool-feedback prompt. This is a reusable procedure (akin to `pr-review-merge`), so it runs as a sub-skill.
+With the report written and the wiki finalized, run the end-of-run offers - open a PR, track the Top 3 Actions, freeze the assessment into a CI gate, the tool-feedback prompt, and the **uninstall** escape hatch (remove everything this run wrote, per `run-context.json .uninstall_instructions_path`). These are batched into Phase 2's single question and honour the non-interactive contract. This is a reusable procedure (akin to `pr-review-merge`), so it runs as a sub-skill.
 
 <!-- chat-replace:pr-delegate -->
-Use the assess-pr skill. It runs the three offers (PR, issue tracking, freeze-into-CI) in order, then the tool-feedback prompt, reading the written `.assess/assess-report.md` artifact - notably mutating the Top 3 Actions table's `Issue` column in place when the user creates tracking items.
+Use the assess-pr skill. It runs the write-back offers (PR, issue tracking, freeze-into-CI) plus the tool-feedback prompt and the uninstall offer, reading the written `.assess/assess-report.md` artifact - notably mutating the Top 3 Actions table's `Issue` column in place when the user creates tracking items.

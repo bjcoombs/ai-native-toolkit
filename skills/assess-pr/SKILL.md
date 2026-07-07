@@ -5,26 +5,28 @@ description: The /assess end-of-run offers - open a PR with the report, track th
 
 # Assess PR and Issues
 
-The end-of-run half of `/assess`. The report (`.assess/assess-report.md`), the complexity heatmap, and the doc graph are written. This step runs the three optional offers - in order - then closes the loop with a feedback prompt:
+The end-of-run half of `/assess`. The report (`.assess/assess-report.md`), the complexity heatmap, and the doc graph are written. This step runs the optional end-of-run offers - in order - then closes the loop:
 
 1. **Open a PR** with the report (Step 5).
 2. **Track the Top 3 Actions** in the user's issue tracker (Step 6).
 3. **Freeze the assessment into a CI gate** (Step 6.5).
 4. **Tool feedback** (Step 7) - surface anomalies and offer to file feedback.
+5. **Uninstall `/assess`** (Step 8) - the escape hatch: remove everything this run wrote.
 
-Each offer is independent: a user can accept any subset. The step references back into the written `assess-report.md` artifact (notably the Top 3 Actions table's `Issue` column), not into the scoring prose, so it stays decoupled from how the report was produced.
+Each offer is independent (uninstall excepted - it's mutually exclusive with the write-back offers): a user can accept any subset. The step references back into the written `assess-report.md` artifact (notably the Top 3 Actions table's `Issue` column), not into the scoring prose, so it stays decoupled from how the report was produced.
 
 ## Phase 2: ask once, batched (and the non-interactive contract)
 
-These four are the **write-back phase** of the consent lifecycle (Phase 2; Phase 1 was the tool installs, Phase 3 the mutation pass - see the assess SKILL.md). Do not serialise them into four back-to-back modals. Present them as **one batched, multi-select AskUserQuestion**: "Now that the report is written, which of these should I do?" with the four options (open a PR, track the Top 3 Actions, freeze a CI gate, file feedback), pre-filtered by feasibility:
+These are the **write-back phase** of the consent lifecycle (Phase 2; Phase 1 was the tool installs, Phase 3 the mutation pass - see the assess SKILL.md). Do not serialise them into back-to-back modals. Present them as **one batched, multi-select AskUserQuestion**: "Now that the report is written, which of these should I do?" with the options (open a PR, track the Top 3 Actions, freeze a CI gate, file feedback, and - the mutually-exclusive escape hatch - uninstall `/assess` from this repo), pre-filtered by feasibility:
 
 - Drop the **PR** option when the push-capability / remote check below (Step 5) shows no direct or fork PR is possible; on a read-only target, offer the fork variant instead.
 - Drop the **CI gate** option when the workflow could never run (no GitHub remote).
 - Keep **issue tracking** and **feedback** always (feedback needs no repo write).
+- **Uninstall** (Step 8) always appears: it removes what this run wrote. It doesn't compose with the write-back offers (no point opening a PR *and* deleting the report), so treat selecting it as "skip the others and clean up".
 
-Then execute the accepted offers **in order** (PR → issues → gate → feedback), because the later ones cross-link to the PR the first may have opened. The per-step detail below is the execution recipe for each accepted offer; the *asking* happens once, here.
+Then execute the accepted offers **in order** (PR → issues → gate → feedback), because the later ones cross-link to the PR the first may have opened. Uninstall, if chosen, runs instead of the others. The per-step detail below is the execution recipe for each accepted offer; the *asking* happens once, here.
 
-**Non-interactive contract (headless / CI).** When `run-context.json .interactive` is `false`, **make no AskUserQuestion call at all** - every write-back offer is already recorded as `{type, status: "skipped", reason: "non-interactive"}` in `run-context.json .offers` (`pr`, `issue_tracking`, `ci_gate`, `feedback`). Write nothing back, open no PR, create no issues, emit no gate, file no feedback; the run ends with the local `.assess/` artifacts only. A headless `/assess` completes with zero prompts.
+**Non-interactive contract (headless / CI).** When `run-context.json .interactive` is `false`, **make no AskUserQuestion call at all** - every write-back offer is already recorded as `{type, status: "skipped", reason: "non-interactive"}` in `run-context.json .offers` (`pr`, `issue_tracking`, `ci_gate`, `feedback`, `uninstall`). Write nothing back, open no PR, create no issues, emit no gate, file no feedback, uninstall nothing; the run ends with the local `.assess/` artifacts only. A headless `/assess` completes with zero prompts.
 
 ```bash
 jq '{interactive, offers}' "$REPO_ROOT/.assess/run-context.json"
@@ -322,3 +324,20 @@ gh issue create \
 ```
 
 The user adds their observation in their own words; the pre-fill is just the deterministic context. Positive framing applies here too: "the grader missed positive directives in section X" beats "the grader is broken."
+
+## Step 8: Offer to Uninstall `/assess`
+
+The fifth option in the batched Phase 2 question - the escape hatch. `/assess` should be as easy to remove as to run: a tool that can't be cleanly undone is one users hesitate to try. Its wording in the batch:
+
+> **Remove `/assess` from this repo?** I can undo everything this run wrote - delete `.assess/`, strip the README badge, remove the CI gate workflow and any decline markers, and clear archetype override markers - leaving the repo exactly as it was. (This removes the *artifacts*, not the plugin.)
+
+Execute this step only if the user **selected the uninstall offer**. It is mutually exclusive with the write-back offers (uninstalling and opening a PR are contradictory) - if the user somehow selected both, confirm which they meant before acting.
+
+When selected, read the full removal procedure and follow it. The path is in run-context:
+
+```bash
+jq -r '.uninstall_instructions_path' "$REPO_ROOT/.assess/run-context.json"
+# -> references/uninstall.md (relative to the assess skill directory)
+```
+
+Read that `references/uninstall.md` and perform each step that applies (skip artifacts the run never created - no CI gate means no workflow to delete). Do each destructive action only after the user has confirmed uninstall, and **do not** close `assess-finding` tracker items - surface them so the user decides. Report back which artifacts were removed and which (if any) were left for the user to handle. If the user prefers to do it themselves, hand them the steps from `references/uninstall.md` rather than performing them.

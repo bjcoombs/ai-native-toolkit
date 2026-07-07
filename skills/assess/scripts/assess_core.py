@@ -1140,6 +1140,11 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     ctx["interactive"] = offers_block["interactive"]
     ctx["offers"] = offers_block["offers"]
 
+    # Where the end-of-run uninstall guide lives, relative to the assess skill
+    # directory (resolved by the orchestrator via $SKILL_DIR). A machine-stable
+    # pointer so an agent can Read the removal steps without hunting for them.
+    ctx["uninstall_instructions_path"] = "references/uninstall.md"
+
     ctx["anomalies"] = [
         {"code": a.code, "description": a.description, "detail": a.detail}
         for a in detect_anomalies(ctx)
