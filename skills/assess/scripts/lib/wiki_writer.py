@@ -137,11 +137,16 @@ def _load_template(name: str) -> str:
 def write_index(
     assess_dir: Path, entries: list[HotspotEntry], *, last_updated: str,
     run_id: str | None = None, schema_version: str | None = None,
+    scope: str | None = None,
 ) -> None:
     """(Re)write index.md from the current set of hotspot entries.
 
     ``run_id`` / ``schema_version`` (when supplied) prepend a non-rendering
     HTML-comment provenance stamp; omitted, output is byte-identical to before.
+
+    ``scope`` (the repo-relative subtree of a ``/assess <path>`` run) adds a
+    scope line under the title so the wiki page names what subtree it covers;
+    None (a whole-repo run) leaves the body byte-identical to before.
     """
     rows = []
     for e in entries:
@@ -157,6 +162,14 @@ def write_index(
         last_updated=last_updated,
         hotspot_rows="\n".join(rows) if rows else "| _no hotspots tracked yet_ | | | | | |",
     )
+    if scope:
+        # Insert a scope line right after the H1 title so a reader (and any
+        # committed diff) sees the page is subtree-scoped, not whole-repo.
+        content = content.replace(
+            "# Assess Wiki Index\n",
+            f"# Assess Wiki Index\n\n_Scope: `{scope}`_\n",
+            1,
+        )
     (assess_dir / "index.md").write_text(
         _run_id_comment(run_id, schema_version) + content, encoding="utf-8"
     )

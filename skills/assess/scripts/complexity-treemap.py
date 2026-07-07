@@ -293,6 +293,7 @@ def collect(root: Path, by: str = "complexity",
             include_artifacts: bool = False,
             extra_exclude_dirs: set[str] | None = None,
             extra_exclude_patterns: list[str] | None = None,
+            scope: Path | None = None,
             ) -> tuple[list[tuple[Path, int, float, str]], str,
                        dict[Path, int] | None, str | None,
                        dict[Path, list[float]]]:
@@ -306,6 +307,13 @@ def collect(root: Path, by: str = "complexity",
       only (scc reports file-level complexity with no function breakdown, so
       its paths are absent here). Threaded to `write_stats` so the report can
       separate per-function violations from file-level aggregates (issue #58).
+
+    `scope` (an absolute path under `root`) restricts scoring to a subtree for
+    `/assess <path>` monorepo scoping. The scan still roots at `root` so the
+    config/exclude resolution and churn windowing are unchanged; the scored file
+    list, dominance check, and churn axis then see only the subtree - so a scoped
+    treemap carries no complexity or churn signal from a sibling directory. Omit
+    it (the default) for a whole-repo run.
     """
     lz = lizard_scores(
         root, include_artifacts=include_artifacts,
@@ -326,13 +334,20 @@ def collect(root: Path, by: str = "complexity",
         if path not in lz:
             files.append((path, loc, cx, "scc"))
     files = [f for f in files if f[1] > 0]
+    if scope is not None:
+        scope_abs = scope.resolve()
+        files = [f for f in files if f[0].resolve().is_relative_to(scope_abs)]
+        fn_ccn_by_path = {
+            p: v for p, v in fn_ccn_by_path.items()
+            if p.resolve().is_relative_to(scope_abs)
+        }
 
     effective_by = by
     aux_data: dict[Path, int] | None = None
     aux_label: str | None = None
 
     if by == "churn":
-        churn = git_churn_scores(root)
+        churn = git_churn_scores(root, scope=scope)
         if not churn:
             _git_not_found_warning(root)
             effective_by = "complexity"
@@ -979,12 +994,33 @@ def main() -> int:
               "`.assess/config.toml` (top-level `exclude_dirs` / "
               "`exclude_patterns`)."),
     )
+    ap.add_argument(
+        "--scope", type=Path, metavar="SUBDIR",
+        help=("Restrict scoring to a subtree of the repo (for `/assess <path>` "
+              "monorepo scoping). A path under the analysed root; the scan still "
+              "roots at the repo (so excludes and churn windowing are unchanged) "
+              "but only files under this subtree are scored, so the treemap "
+              "carries no signal from a sibling directory. Omit for a whole-repo "
+              "run."),
+    )
     args = ap.parse_args()
 
     root = args.path.resolve()
     if not root.is_dir():
         print(f"error: {root} is not a directory", file=sys.stderr)
         return 1
+
+    scope: Path | None = None
+    if args.scope is not None:
+        scope = args.scope if args.scope.is_absolute() else (root / args.scope)
+        scope = scope.resolve()
+        if not scope.exists():
+            print(f"error: scope path {scope} does not exist", file=sys.stderr)
+            return 1
+        if not scope.is_relative_to(root):
+            print(f"error: scope path {scope} is not under {root}",
+                  file=sys.stderr)
+            return 1
 
     # Resolve user excludes from `.assess/config.toml` first, then layer the
     # CLI `--exclude` on top. Both extend the built-in defaults; the CLI is
@@ -1002,9 +1038,11 @@ def main() -> int:
         root, by="hotspot", include_artifacts=args.include_artifacts,
         extra_exclude_dirs=extra_dirs,
         extra_exclude_patterns=extra_patterns,
+        scope=scope,
     )
     if not files:
-        print("error: no scoreable files found", file=sys.stderr)
+        where = f" under {scope}" if scope is not None else ""
+        print(f"error: no scoreable files found{where}", file=sys.stderr)
         return 1
 
     _warn_if_dominated_by_one_file(files)
@@ -1024,9 +1062,20 @@ def main() -> int:
         load_survivor_density(args.test_pressure, root)
         if args.test_pressure else {}
     )
-    default_name = f"hotspot-{root.name}.svg"
+    scope_label = (
+        str(scope.relative_to(root)) if scope is not None and scope != root
+        else None
+    )
+    default_name = (
+        f"hotspot-{root.name}-{scope_label.replace('/', '-')}.svg"
+        if scope_label else f"hotspot-{root.name}.svg"
+    )
     out = args.out or Path(default_name)
-    render(files, root, out, f"Hotspot: {root.name}",
+    title = (
+        f"Hotspot: {root.name}/{scope_label}" if scope_label
+        else f"Hotspot: {root.name}"
+    )
+    render(files, root, out, title,
            show_labels=args.labels, by=effective_by,
            aux_data=aux_data, aux_label=aux_label,
            survivor_density=survivor_density, tokens_by_path=tokens,

@@ -60,12 +60,12 @@ This is intentionally **one** archetype (knowledge base), structured as an exten
 ## Step 1: Determine Repo Root and Output Directory
 
 ```bash
-# If arguments provided, use that path. Otherwise use pwd.
-# Find the git root from wherever we are.
-git rev-parse --show-toplevel
+git rev-parse --show-toplevel   # from the arg path if given, else pwd
 ```
 
 Set `$REPO_ROOT` to the result. All scanning happens from here.
+
+**Scoping a subtree (`/assess <path>`).** When the argument is a directory under the repo root, scope the whole run to it - metrics, score, badge, wiki, and gate all computed for and labelled with the scope, artifacts under `.assess/<scope-slug>/`, no signal from a sibling. Pass `--scope "$SCOPE"` to `complexity-treemap.py` and `assess_core.py` and swap `.assess/` for `.assess/<slug>/` throughout. Full recipe: `references/monorepo-scoping.md` (relative to this skill dir). A no-path run is whole-repo, unchanged.
 
 Decide the output directory (default: `$REPO_ROOT/.assess/`). Create it if needed:
 

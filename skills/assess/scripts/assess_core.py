@@ -550,14 +550,15 @@ def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None
 
 def _write_fallback_badge_if_absent(
     assess_dir: Path, promissory: Any, derived_findings: list[dict],
-    run_id: str | None = None,
+    run_id: str | None = None, scope: str | None = None,
 ) -> None:
     """Deterministic fallback badge - only when none exists.
 
     A gate-only repo (never LLM-scored) gets a truthful findings-count badge;
     a repo with a finalized score badge keeps it (a deterministic-only rerun
     must not downgrade the stronger claim; finalize refreshes it on scored
-    runs). ``run_id`` stamps the badge with the run that produced it.
+    runs). ``run_id`` stamps the badge with the run that produced it. ``scope``
+    (the repo-relative subtree) labels the badge for a ``/assess <path>`` run.
     """
     if badge_exists(assess_dir):
         return
@@ -568,6 +569,7 @@ def _write_fallback_badge_if_absent(
     )
     write_badge(assess_dir, fallback_badge(
         concern_count_from_findings(derived_findings), stale, run_id=run_id,
+        scope=scope,
     ))
 
 
@@ -851,8 +853,33 @@ def _build_stale_hubs(doc_graph: dict, doc_staleness: dict) -> list[dict]:
     )
 
 
+def resolve_scope(
+    repo_root: Path, scope: Path | None
+) -> tuple[Path | None, str | None, str]:
+    """Resolve a ``--scope`` argument into (absolute path, repo-relative, slug).
+
+    A whole-repo run (``scope`` is None) returns ``(None, None, "")`` so the
+    caller keeps ``repo_root/.assess`` and every output is byte-identical to a
+    pre-scope run. A scoped run validates the path exists and is under
+    ``repo_root``; the slug replaces path separators with hyphens so artifacts
+    land under ``.assess/<slug>/``. Raises ``ValueError`` on a missing or
+    outside-repo path so the CLI can report it cleanly (a non-zero exit).
+    """
+    if scope is None:
+        return None, None, ""
+    scope_abs = (scope if scope.is_absolute() else repo_root / scope).resolve()
+    if not scope_abs.exists():
+        raise ValueError(f"scope path does not exist: {scope_abs}")
+    if not scope_abs.is_relative_to(repo_root):
+        raise ValueError(f"scope path is not under repo root {repo_root}: {scope_abs}")
+    rel = scope_abs.relative_to(repo_root)
+    slug = str(rel).replace("/", "-").replace("\\", "-")
+    return scope_abs, str(rel), slug
+
+
 def build_run_context(
-    *, repo_root: Path, run_date: str, non_interactive: bool = False
+    *, repo_root: Path, run_date: str, non_interactive: bool = False,
+    scope: Path | None = None,
 ) -> dict:
     """Run the deterministic pipeline and return the structured context dict.
 
@@ -862,9 +889,16 @@ def build_run_context(
     from ``sys.stdin.isatty()`` - the core always runs as a subprocess with no
     controlling terminal, so an interactive /assess would misread as headless.
 
+    ``scope`` restricts the assessment to a subtree (``/assess <path>`` monorepo
+    scoping): artifacts land under ``.assess/<slug>/`` and the file-enumerating
+    scans (complexity stats read from the scoped sidecar, doc graph, doc
+    staleness) see only the subtree, so the score/badge/wiki carry no signal
+    from a sibling directory. None (the default) is a whole-repo run, unchanged.
+
     Side effects: writes index.md, log.md, hotspots/*.md, run-context.json.
     """
-    assess_dir = repo_root / ".assess"
+    scope_abs, scope_rel, scope_slug = resolve_scope(repo_root, scope)
+    assess_dir = repo_root / ".assess" / scope_slug if scope_slug else repo_root / ".assess"
     assess_dir.mkdir(parents=True, exist_ok=True)
     # Unique id minted once at the top of the run and stamped on every artifact
     # this build produces, so finalize can prove the finalize-input it later
@@ -918,6 +952,7 @@ def build_run_context(
             repo_root,
             extra_exclude_dirs=extra_exclude_dirs,
             extra_exclude_patterns=extra_exclude_patterns,
+            scope=scope_abs,
         ).summary(),
     )
     marker_debt_by_file = (
@@ -1042,6 +1077,7 @@ def build_run_context(
     write_index(
         assess_dir, hotspot_entries, last_updated=run_date,
         run_id=run_id, schema_version=ARTIFACT_SCHEMA_VERSION,
+        scope=scope_rel,
     )
 
     top_action = "Deterministic ranker not yet wired (LLM picks Top 3)"
@@ -1075,6 +1111,12 @@ def build_run_context(
         "run_id": run_id,
         "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
         "run_date": run_date,
+        # Monorepo scope (`/assess <path>`): the repo-relative subtree this run
+        # covers, and its artifact-directory slug (.assess/<slug>/). Both null /
+        # "" for a whole-repo run, so a consumer that ignores them sees the
+        # pre-scope shape. The report, badge, and wiki label the run with these.
+        "scope": scope_rel,
+        "scope_slug": scope_slug or None,
         # The commit the scan measured. Absolute LOC/CCN figures are a snapshot
         # of this commit; the report pins the SHA and warns when HEAD is dirty
         # or behind its upstream so the numbers aren't read as current (#59).
@@ -1127,6 +1169,7 @@ def build_run_context(
         repo_root,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
+        scope=scope_abs,
     ).as_dict())
     doc_to_code = (doc_graph.get("doc_to_code_edges", [])
                    if doc_graph.get("available") else [])
@@ -1136,12 +1179,14 @@ def build_run_context(
             repo_root, doc_to_code_edges=doc_to_code,
             extra_exclude_dirs=extra_exclude_dirs,
             extra_exclude_patterns=extra_exclude_patterns,
+            scope=scope_abs,
         ),
     )
     liveness = _safe("liveness", lambda: scan_liveness(
         repo_root,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
+        scope=scope_abs,
     ))
     ctx["doc_graph"] = doc_graph
     ctx["doc_staleness"] = doc_staleness
@@ -1238,6 +1283,7 @@ def build_run_context(
             repo_root,
             keyhole_budget=load_structure_config(repo_root)["keyhole_budget"],
             extra_exclude_dirs=extra_exclude_dirs,
+            scope=scope_abs,
         ).as_dict(),
     )
 
@@ -1316,6 +1362,7 @@ def build_run_context(
         archetype=ctx["archetype"] if isinstance(ctx.get("archetype"), dict) else None,
         exclude_dirs=extra_exclude_dirs,
         exclude_patterns=extra_exclude_patterns,
+        scope=scope_abs,
     )
     ctx["structure"] = keyhole["structure"]
     ctx["behaviour"] = keyhole["behaviour"]
@@ -1355,7 +1402,8 @@ def build_run_context(
     _attach_structure_drift(ctx, repo_root, keyhole["structure_drift_tier1"])
 
     _write_fallback_badge_if_absent(
-        assess_dir, promissory, ctx["derived_findings"], run_id=run_id
+        assess_dir, promissory, ctx["derived_findings"], run_id=run_id,
+        scope=scope_rel,
     )
 
     ctx["plugin_version"] = _read_plugin_version()
@@ -1393,7 +1441,7 @@ def build_run_context(
     return ctx
 
 
-def run_opt_in_mutation(repo_root: Path) -> int:
+def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     """Re-run the Layer-1 test-pressure scan with the bounded mutation pass ON.
 
     The consent-gated counterpart to the default read-only scan in
@@ -1410,7 +1458,12 @@ def run_opt_in_mutation(repo_root: Path) -> int:
     the refreshed ``test_pressure.per_file`` so covered-but-unpinned files get
     hatched. Never raises beyond argparse/IO; degrades to a non-zero return.
     """
-    assess_dir = repo_root / ".assess"
+    try:
+        _scope_abs, _scope_rel, scope_slug = resolve_scope(repo_root, scope)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    assess_dir = repo_root / ".assess" / scope_slug if scope_slug else repo_root / ".assess"
     ctx_path = assess_dir / "run-context.json"
     if not ctx_path.exists():
         print("run-context.json not found - run assess_core.py first",
@@ -1477,15 +1530,33 @@ def main(argv: list[str] | None = None) -> int:
             "Interactivity is never inferred from subprocess stdin."
         ),
     )
+    parser.add_argument(
+        "--scope", type=Path, metavar="SUBDIR",
+        help=(
+            "Scope the assessment to a subtree (`/assess <path>` monorepo "
+            "scoping). A path under the repo root; the metrics, score, badge, "
+            "wiki, and artifacts are all computed for and labelled with the "
+            "scope, and land under `.assess/<scope-slug>/`. The scoped scans "
+            "carry no signal from a sibling directory. Omit for a whole-repo "
+            "run (unchanged). Pass the same `--scope` to `--opt-in-mutation`."
+        ),
+    )
     parsed = parser.parse_args(argv)
     repo_root = Path(parsed.repo_root).resolve()
     if parsed.opt_in_mutation:
-        return run_opt_in_mutation(repo_root)
+        return run_opt_in_mutation(repo_root, scope=parsed.scope)
     run_date = datetime.now().strftime("%Y-%m-%d")
-    ctx = build_run_context(
-        repo_root=repo_root, run_date=run_date,
-        non_interactive=parsed.non_interactive,
-    )
+    try:
+        ctx = build_run_context(
+            repo_root=repo_root, run_date=run_date,
+            non_interactive=parsed.non_interactive,
+            scope=parsed.scope,
+        )
+    except ValueError as e:
+        # Invalid --scope (missing path or outside the repo). Report cleanly
+        # with a non-zero exit rather than a traceback.
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     print(json.dumps(ctx["diff"]))
     return 0
 
