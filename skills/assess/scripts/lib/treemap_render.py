@@ -210,10 +210,23 @@ def _survivor_legend_parts(W: float, H: float) -> list[str]:
     return parts
 
 
+# Default accessible name/description for the code heatmap. Passed as the root
+# <svg>'s <title>/<desc> (a11y metadata) so a screen reader announces what the
+# image is and how its channels encode; kept as defaults on write_svg so a
+# future consumer (e.g. a docs heatmap) can override without touching callers.
+DEFAULT_SVG_TITLE = "Complexity Hotspot Heatmap"
+DEFAULT_SVG_DESC = (
+    "Treemap showing code complexity by file size, hue indicates cyclomatic "
+    "complexity, saturation indicates git churn"
+)
+
+
 def write_svg(rects: list, root: Path, W: float, H: float,
               out_path: Path, show_labels: bool,
               metric_label: str,
-              show_survivor_legend: bool = False) -> None:
+              show_survivor_legend: bool = False,
+              svg_title: str = DEFAULT_SVG_TITLE,
+              svg_desc: str = DEFAULT_SVG_DESC) -> None:
     label_threshold = (W * H) / 200
     has_hatch = any(node.hatch for _x, _y, _w, _h, node in rects)
     total_h = H + (SURVIVOR_LEGEND_H if show_survivor_legend else 0.0)
@@ -222,7 +235,11 @@ def write_svg(rects: list, root: Path, W: float, H: float,
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'viewBox="0 0 {W:.0f} {total_h:.0f}" '
         f'width="{W:.0f}" height="{total_h:.0f}" '
-        f'preserveAspectRatio="xMidYMid meet">',
+        f'preserveAspectRatio="xMidYMid meet" role="img">',
+        # A11y: <title>/<desc> as the first children of the root <svg> give the
+        # image an accessible name and description (SVG accessibility contract).
+        f'<title>{html.escape(svg_title)}</title>',
+        f'<desc>{html.escape(svg_desc)}</desc>',
         '<style>',
         '  rect:hover { stroke: #000; stroke-width: 1.5; }',
         '  text { font-family: -apple-system, BlinkMacSystemFont, '

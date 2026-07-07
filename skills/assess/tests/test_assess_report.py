@@ -278,6 +278,21 @@ def test_diff_unreliable_without_note_falls_back() -> None:
     assert "not comparable" in out
 
 
+def test_diff_major_bump_renders_trend_reset_disclosure() -> None:
+    """A MAJOR version bump renders an explicit trend-reset line, distinct from a
+    plain suppression, so a voided diff isn't misread as an unchanged run."""
+    ctx = {
+        "prior_stats_exists": True,
+        "diff_reliable": False,
+        "diff_trend_reset": True,
+        "diff_version_note": "major version changed 1.54.1->2.0.0",
+    }
+    out = render_diff_section(ctx)
+    assert out.startswith("_Trend baseline reset:")
+    assert "major version changed 1.54.1->2.0.0" in out
+    assert "trend restarts" in out
+
+
 def test_diff_reliable_renders_all_categories() -> None:
     out = render_diff_section(_full_ctx())
     assert "- **Graduated** (left the hotspot list): 1" in out
@@ -496,3 +511,26 @@ def test_main_no_args_usage_error(capsys: pytest.CaptureFixture) -> None:
     rc = main([])
     assert rc == 2
     assert "Usage:" in capsys.readouterr().err
+
+
+def test_main_missing_context_skips_not_fails(tmp_path: Path,
+                                               capsys: pytest.CaptureFixture) -> None:
+    """A missing run-context is infrastructure, not a finding: the renderer skips
+    with a notice and exits 0 rather than crashing the check."""
+    rc = main([str(tmp_path)])
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "report skipped" in err
+    assert "infrastructure failure" in err
+    assert not (tmp_path / ".assess" / "deterministic-report.md").exists()
+
+
+def test_main_corrupt_context_skips_not_fails(tmp_path: Path,
+                                               capsys: pytest.CaptureFixture) -> None:
+    (tmp_path / ".assess").mkdir(parents=True)
+    (tmp_path / ".assess" / "run-context.json").write_text(
+        "{ not valid json", encoding="utf-8"
+    )
+    rc = main([str(tmp_path)])
+    assert rc == 0
+    assert "infrastructure failure" in capsys.readouterr().err
