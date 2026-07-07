@@ -267,7 +267,13 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  
     parts: list[str] = [
         '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {cw:.0f} {ch:.0f}" '
-        f'width="{cw:.0f}" height="{ch:.0f}" preserveAspectRatio="xMidYMid meet">',
+        f'width="{cw:.0f}" height="{ch:.0f}" preserveAspectRatio="xMidYMid meet" '
+        'role="img">',
+        # A11y: <title>/<desc> as the first children of the root <svg> give the
+        # image an accessible name and description (SVG accessibility contract).
+        '<title>Documentation Navigability Graph</title>',
+        '<desc>Graph showing documentation structure, reachability from entry '
+        'point, and staleness indicators</desc>',
         '<style>',
         '  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #1a1a1a; }',
         '  circle:hover { stroke: #000; stroke-width: 2; }',
