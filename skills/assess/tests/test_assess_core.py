@@ -262,6 +262,13 @@ def test_build_run_context_first_run(tmp_path: Path) -> None:
     assert ctx["decline_markers"] == []
     assert ctx["reoffer_mutation"] is False
     assert ctx["decline_disclosures"] == []
+    # Interactivity/offers block present; when non-interactive every offer is
+    # pre-recorded as skipped (the run's own environment decides which branch).
+    assert "interactive" in ctx
+    assert isinstance(ctx["offers"], list)
+    if not ctx["interactive"]:
+        assert all(o["status"] == "skipped" for o in ctx["offers"])
+        assert {o["type"] for o in ctx["offers"]}  # non-empty when headless
 
 
 def test_build_run_context_surfaces_decline_markers(tmp_path: Path) -> None:

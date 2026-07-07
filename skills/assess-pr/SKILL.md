@@ -14,6 +14,22 @@ The end-of-run half of `/assess`. The report (`.assess/assess-report.md`), the c
 
 Each offer is independent: a user can accept any subset. The step references back into the written `assess-report.md` artifact (notably the Top 3 Actions table's `Issue` column), not into the scoring prose, so it stays decoupled from how the report was produced.
 
+## Phase 2: ask once, batched (and the non-interactive contract)
+
+These four are the **write-back phase** of the consent lifecycle (Phase 2; Phase 1 was the tool installs, Phase 3 the mutation pass - see the assess SKILL.md). Do not serialise them into four back-to-back modals. Present them as **one batched, multi-select AskUserQuestion**: "Now that the report is written, which of these should I do?" with the four options (open a PR, track the Top 3 Actions, freeze a CI gate, file feedback), pre-filtered by feasibility:
+
+- Drop the **PR** option when the push-capability / remote check below (Step 5) shows no direct or fork PR is possible; on a read-only target, offer the fork variant instead.
+- Drop the **CI gate** option when the workflow could never run (no GitHub remote).
+- Keep **issue tracking** and **feedback** always (feedback needs no repo write).
+
+Then execute the accepted offers **in order** (PR → issues → gate → feedback), because the later ones cross-link to the PR the first may have opened. The per-step detail below is the execution recipe for each accepted offer; the *asking* happens once, here.
+
+**Non-interactive contract (headless / CI).** When `run-context.json .interactive` is `false`, **make no AskUserQuestion call at all** - every write-back offer is already recorded as `{type, status: "skipped", reason: "non-interactive"}` in `run-context.json .offers` (`pr`, `issue_tracking`, `ci_gate`, `feedback`). Write nothing back, open no PR, create no issues, emit no gate, file no feedback; the run ends with the local `.assess/` artifacts only. A headless `/assess` completes with zero prompts.
+
+```bash
+jq '{interactive, offers}' "$REPO_ROOT/.assess/run-context.json"
+```
+
 ---
 
 ## Step 5: Ask Whether to Open a PR
@@ -70,24 +86,16 @@ Interpret the result:
 - `CAN_PUSH=0` and viewerPermission is `READ` / `TRIAGE`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
 - `gh` unavailable / not a GitHub remote / not authenticated (`$PUSH_INFO` empty): skip both PR offers entirely and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
 
-If `$REDIRECT_NOTICE` is non-empty, output it verbatim on its own line before the offer below.
+If `$REDIRECT_NOTICE` is non-empty, output it verbatim on its own line before the batched Phase 2 question.
 
-Then surface the question - verbatim, picking the shape that matches the access tier.
+The push-capability result decides **how the PR option appears in the batched Phase 2 question** (it is not a separate prompt): use "open a PR in this repo" on a push-capable target, "fork and open a PR from your fork" on a read-only target, and drop the PR option entirely when no GitHub remote is detected. Frame the batched question with the written artifacts, e.g. _"Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Which of these should I do?"_ followed by the feasible offers.
 
-Push-capable target (`CAN_PUSH=1`):
-
-> Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Want me to open a PR in this repo with these files, or leave them local for you to review first?
-
-Read-only target (viewerPermission `READ` / `TRIAGE`):
-
-> Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. You have `READ` access to `<owner/repo>`, so a direct PR isn't possible. I can fork `<owner/repo>` to your account and open the PR from there, or leave the files local for you to review.
-
-If the user says **yes / PR** (direct flow, `CAN_PUSH=1`):
+If the user **selected the PR offer** (direct flow, `CAN_PUSH=1`):
 1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
 2. Stage and commit the report, the complexity heatmap, and the doc graph. Commit message: `docs: Add AI-readiness assessment + complexity and doc-navigability snapshots`.
 3. Push the branch and open a PR. Title: `docs: Codebase assessment - <YYYY-MM-DD>`.
 
-If the user says **yes / PR** (fork flow, `CAN_PUSH=0` on the upstream):
+If the user **selected the PR offer** (fork flow, `CAN_PUSH=0` on the upstream):
 1. `gh repo fork <owner>/<repo> --clone=false --remote=true` (creates the fork under the user's account and adds it as a remote named `origin` or similar; the upstream becomes `upstream` if the original was already `origin`).
 2. Create the branch as above, push to the **fork** (`git push -u <fork-remote> <branch>`), and open the PR via `gh pr create --repo <owner>/<repo>` (head defaults to the fork).
 3. Commit message, PR title, and body are unchanged from the direct flow.
@@ -114,19 +122,17 @@ If the user says **yes / PR** (fork flow, `CAN_PUSH=0` on the upstream):
    _Generated by [`/ai-native-toolkit:assess`](https://github.com/bjcoombs/ai-native-toolkit) — a Claude Code plugin for codebase readiness assessment with complexity hotspot heatmaps. Install in any Claude Code session: `/plugin marketplace add https://github.com/bjcoombs/ai-native-toolkit` then `/plugin install ai-native-toolkit@ai-native-toolkit`._
    ```
 
-If the user says **no / leave it**: stop. Files stay in `.assess/` for them to review - the plugin footer in the MD already advertises the tool when anyone opens the file.
+If the user **did not select the PR offer**: skip it. Files stay in `.assess/` for them to review - the plugin footer in the MD already advertises the tool when anyone opens the file.
 
 **Gitignore hint:** suggest the user add `.assess/complexity-stats.prior.json` to their `.gitignore`. It's a transient rotation file that the next run overwrites; keeping it tracked creates noisy diffs. The current stats (`complexity-stats.json`) should still be committed - it's the baseline for the next run's diff.
 
 ## Step 6: Offer to Track the Top 3 Actions in the User's Issue Tracker
 
-After Step 5 (whether a PR was opened or not), surface a separate question:
+This is the second item in the batched Phase 2 question (its wording there: _"track the Top 3 Actions in your issue tracker - each becomes a closeable, assignable work item rather than a bullet buried in a PR description"_). Execute this step only if the user **selected the issue-tracking offer**.
 
-> Want me to create tracking items for the Top 3 Actions in your issue tracker? Each becomes a closeable, assignable work item rather than a bullet buried in a PR description.
+If the user **did not select** it: skip. The Top 3 Actions table in the PR/report still lists everything inline.
 
-If the user says **no**: stop. The Top 3 Actions table in the PR/report still lists everything inline.
-
-If the user says **yes**, proceed agnostically - **don't assume GitHub** (or any specific tracker). Use your judgment based on what's actually in front of you.
+When selected, proceed agnostically - **don't assume GitHub** (or any specific tracker). Use your judgment based on what's actually in front of you.
 
 ### 6a: Identify the user's issue tracker
 
@@ -241,7 +247,7 @@ End with a short, tracker-specific summary. Examples:
 
 ## Step 6.5: Offer to Freeze the Assessment into a CI Check
 
-After the PR and issue offers, surface a third - the one that converts `/assess` from a norm into a contract:
+This is the third item in the batched Phase 2 question - the one that converts `/assess` from a norm into a contract. Its wording in the batch:
 
 > **Freeze this into a repeatable check?** I can emit a GitHub Action that:
 > - Runs the deterministic toolchain on every PR (the exact tools this run found),
@@ -250,11 +256,11 @@ After the PR and issue offers, surface a third - the one that converts `/assess`
 >
 > This turns `/assess` from a thing-you-run into a thing-that-runs. No AI in the loop - it is the frozen, contract version of the assessment you just ran by hand.
 
-This offer only makes sense when the repo can actually run the workflow. Apply the **same write-access check as Step 5** (`CAN_PUSH`): on a read-only target, the file can still be written locally for the user to commit via their fork, but don't promise to open the gating PR. If `gh` / the remote is unavailable, write the file locally and say so.
+This offer only makes sense when the repo can actually run the workflow. Apply the **same write-access check as Step 5** (`CAN_PUSH`): on a read-only target, the file can still be written locally for the user to commit via their fork, but don't promise to open the gating PR. If `gh` / the remote is unavailable, drop this option from the batched question (the workflow could never run).
 
-If the user says **no**: stop. The deterministic report and findings already shipped in `.assess/`.
+If the user **did not select** the CI-gate offer: skip. The deterministic report and findings already shipped in `.assess/`.
 
-If the user says **yes**, emit the workflow. The generator bakes in the plugin version this run used (read from `run-context.json`) and the discovered toolchain, so the frozen core matches the snapshot you just produced:
+If the user **selected** it, emit the workflow. The generator bakes in the plugin version this run used (read from `run-context.json`) and the discovered toolchain, so the frozen core matches the snapshot you just produced:
 
 ````bash
 <!-- chat-skip:start -->
@@ -290,24 +296,15 @@ enabled = true           # set false to mute the gate without deleting the workf
 
 ## Step 7: Tool Feedback (Optional)
 
-Close the loop: surface detected anomalies and offer the user a chance to file feedback against the toolkit.
+Feedback is the fourth item in the batched Phase 2 question (its wording there: _"file feedback against the toolkit - flag anything in this report that looks wrong or surprising"_). It is always offered, since it needs no repo write. Execute this step only if the user **selected the feedback offer**.
+
+When surfacing the batched question, first read detected anomalies so the feedback option can name them:
 
 ```bash
 jq '.anomalies' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-If the array is non-empty, list each anomaly to the user:
-
-> Detected anomalies in this run:
-> - `<code>`: <description>
->
-> These may indicate a bug or miscalibration in `/assess`. Want to file feedback so the toolkit can improve?
-
-Always also offer the open-ended option, even when no anomalies were detected:
-
-> Anything else in this report look wrong or surprising? Filing feedback helps `/assess` improve for everyone.
-
-If the user wants to file feedback, build a sanitized issue body from `run-context.json`:
+If the array is non-empty, mention them alongside the feedback option, e.g. _"I detected anomalies this run (`<code>`: <description>) that may indicate a bug - want to file feedback?"_. When the user **selected** the feedback offer, build a sanitized issue body from `run-context.json`:
 
 - **Include**: plugin version, run date, files_scored, instructions_grade (top-level) + per-file subscores (numbers only - file basenames like `CLAUDE.md` are public), stats percentiles (p50/p95/max for LOC and CCN), diff summary counts, anomaly codes.
 - **Never include**: file paths, code snippets, repo name, commit messages, hotspot path lists.

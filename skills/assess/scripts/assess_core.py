@@ -56,6 +56,7 @@ from lib.badge import (
 from lib.assess_config import load_excludes, load_structure_config
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
+from lib.interactivity import build_offers_block
 from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.doc_staleness import analyze_doc_staleness
 from lib.git_churn import git_commit_info, tracked_files
@@ -1130,6 +1131,14 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     ctx["decline_markers"] = decline["markers"]
     ctx["reoffer_mutation"] = decline["reoffer_mutation"]
     ctx["decline_disclosures"] = decline["disclosures"]
+
+    # Non-interactive contract: in a headless/CI run no human can answer an
+    # offer, so every offer is pre-recorded as skipped and the orchestrator must
+    # make zero interactive prompts. Interactive runs leave `offers` empty for
+    # the orchestrator to drive live (SKILL.md's three-phase consent flow).
+    offers_block = build_offers_block()
+    ctx["interactive"] = offers_block["interactive"]
+    ctx["offers"] = offers_block["offers"]
 
     ctx["anomalies"] = [
         {"code": a.code, "description": a.description, "detail": a.detail}

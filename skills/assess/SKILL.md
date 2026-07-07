@@ -90,46 +90,15 @@ This step produces **two** views of the codebase, both colour-blind-safe (OrRd r
 
 Feed the complexity stats into the linter/complexity layer (Layer 3) and the `doc_graph` / `doc_staleness` blocks of `run-context.json` into **Layer 0** (the graph SVG is the visual; the score reads the structured blocks).
 
-### Decline markers carry provenance (used by Steps 2a, 2b, 2d)
+### The consent lifecycle (read `references/consent-lifecycle.md`)
 
-A user can permanently decline any optional tool (scc, a dead-code linter, the mutation pass) by writing `$REPO_ROOT/.assess/.no-<tool>`. A decline is a durable, silencing choice, so the marker records **who** declined **what**, **when**, and under **which plugin version** - not a provenance-free empty file. Always write markers with this helper so the disclosure and re-offer logic downstream has the data it needs:
+Steps 2a/2b/2d and the assess-pr end-of-run offers share one consent model, specified in full in `references/consent-lifecycle.md` (relative to this skill dir). Load it before running the offers. The load-bearing points the steps below rely on:
 
-```bash
-# Resolve the plugin version for provenance stamping (degrades to "unknown").
-assess_plugin_version() {
-  local pj="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json}"
-  if [ -f "$pj" ]; then
-    jq -r '.version // "unknown"' "$pj" 2>/dev/null || echo unknown
-  elif [ -f "$REPO_ROOT/.assess/run-context.json" ]; then
-    jq -r '.plugin_version // "unknown"' "$REPO_ROOT/.assess/run-context.json" 2>/dev/null || echo unknown
-  else
-    echo unknown
-  fi
-}
+- **Decline markers carry provenance.** A permanent decline writes `$REPO_ROOT/.assess/.no-<tool>` as JSON `{declined_by, declined_at, plugin_version, reason?}` via the reference's `write_decline_marker <tool>` helper - never a bare `touch`. The core reads them into `run-context.json` (`decline_markers`, `decline_disclosures`, `reoffer_mutation`): the report discloses each active decline, and a mutation decline made under an older plugin *major* sets `reoffer_mutation: true` so Step 2d re-asks once. Legacy empty/non-JSON markers still count as a decline (no provenance, never re-offered). Define the reference's helper functions once before the first `write_decline_marker` call.
+- **Three phases, one question each.** Phase 1 = tool installs (Steps 2a+2b, one batched question); Phase 3 = the code-modifying mutation pass (Step 2d, kept separate); Phase 2 = the four write-back offers (assess-pr, one batched question). Batching avoids 8-10 serial modals.
+- **Non-interactive contract.** When `run-context.json .interactive` is `false` (headless/CI, detected by the core), **make no AskUserQuestion calls** - every offer is pre-recorded `{type, status: "skipped", reason: "non-interactive"}` in `.offers`. Check `interactive` once, honour it in every phase; a headless run completes with zero prompts.
 
-# Write a JSON decline marker with provenance. $1 = tool; $2 = optional reason.
-write_decline_marker() {
-  local tool="$1" reason="${2:-}"
-  mkdir -p "$REPO_ROOT/.assess"
-  local who when ver
-  who="$(git -C "$REPO_ROOT" config user.name 2>/dev/null || echo "${USER:-unknown}")"
-  when="$(date +%Y-%m-%d)"
-  ver="$(assess_plugin_version)"
-  jq -n --arg by "$who" --arg at "$when" --arg ver "$ver" --arg reason "$reason" \
-    '{declined_by: $by, declined_at: $at, plugin_version: $ver}
-       + (if $reason == "" then {} else {reason: $reason} end)' \
-    > "$REPO_ROOT/.assess/.no-$tool"
-}
-```
-
-The deterministic core reads every `.no-<tool>` back into `run-context.json` as `decline_markers` (with a `decline_disclosures` line per marker and a `reoffer_mutation` flag). Two downstream effects, both automatic once you write markers this way:
-
-- **Disclosure.** The report surfaces each active marker verbatim from `decline_disclosures`, e.g. _"Mutation testing permanently declined by ben on 2026-07-07"_ - a silenced capability is never invisible.
-- **Re-offer once per major.** When a mutation marker was written under an older *major* plugin version, the core sets `reoffer_mutation: true`; Step 2d re-asks once. Declining again permanently restamps the marker at the current version, so its major now matches and the re-offer does not repeat within the same major.
-
-**Pre-versioning markers** (empty or non-JSON files from before this convention) are still honoured as a decline; they read as "declined by an unknown user on an unknown date" and are never auto-re-offered (no major to compare). The `[ -f ... ]` presence checks below work identically for JSON and legacy markers.
-
-### 2a: Offer to install `scc` (one-time per repo)
+### 2a: Detect `scc` need (feeds Phase 1)
 
 The bundled treemap uses [`lizard`](https://github.com/terryyin/lizard) (Python, Go, JS, Java, C/C++, etc.) by default. Optional `scc` extends coverage to 200+ languages including markdown, JSON, YAML, SQL, and shell - useful when the repo's surface is more than just traditional source code.
 
@@ -151,19 +120,11 @@ CODE_FILES=$(fd -t f -e py -e js -e ts -e tsx -e jsx -e go -e java -e kt -e rs -
 NONCODE_FILES=$(fd -t f -e md -e json -e yaml -e yml -e toml -e sh -e sql . "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
 ```
 
-**Offer the install only if all three are true:** `SCC_PRESENT=0`, `SCC_DECLINED=0`, and the repo looks lizard-sparse (`CODE_FILES < NONCODE_FILES` or `CODE_FILES < 10`). Otherwise skip straight to 2b (or 2c if 2b has nothing to offer).
-
-When offering, use **AskUserQuestion** with three options (do **not** auto-install - `brew install` is a system mutation):
-
-- **Install scc** - run the appropriate installer for the platform and continue.
-- **Skip for now** - proceed with lizard only. Don't write the marker; ask again next run.
-- **Skip permanently for this repo** - `write_decline_marker scc` (see "Decline markers carry provenance" above) so future runs don't ask. Recommended for prompt repos or pure-docs repos where lizard-only is genuinely fine.
-
-Phrase the question so the user understands the trade-off, e.g.:
+**Add `scc` to the Phase 1 offer list only if all three are true:** `SCC_PRESENT=0`, `SCC_DECLINED=0`, and the repo looks lizard-sparse (`CODE_FILES < NONCODE_FILES` or `CODE_FILES < 10`). Otherwise it contributes nothing to Phase 1. Do **not** ask here - `scc` is batched with the dead-code tools into the single Phase 1 question in Step 2b. Its trade-off phrasing, for when the batched question is presented:
 
 > "This repo has <N> code files and <M> non-code files (markdown/JSON/YAML). `scc` would include the non-code files in the treemap; without it the treemap may be sparse. Install `scc`?"
 
-If the user picks **Install scc**, run the platform-appropriate command:
+The three options are the shared Phase 1 shape (**Install** / **Skip for now** / **Skip permanently** via `write_decline_marker scc`). If the user accepts, run the platform-appropriate command (do **not** auto-install - `brew install` is a system mutation):
 
 ```bash
 # macOS (Homebrew)
@@ -180,7 +141,7 @@ If the user picks **Install scc**, run the platform-appropriate command:
 
 If the install fails or the platform isn't covered, fall back to lizard-only and continue - don't block the assessment.
 
-### 2b: Offer analysis tools (capability-driven, detect-or-propose)
+### 2b: Phase 1 - batched analysis-tool install offer (capability-driven, detect-or-propose)
 
 `/assess` maps each Layer 1/Layer 3 analysis **capability** (liveness/dead-code, static module graph, linting, modernization) to a serving tool. Historically that map was a **hardcoded per-language allowlist** - `vulture` for Python, `ts-prune`/`knip` for TS/JS, `staticcheck`/`deadcode` for Go. The defect that allowlist created: when a repo's language **isn't enumerated**, every capability silently degraded to "unavailable" - the report read "this layer is absent here" rather than "a tool could serve this - install one?". A non-enumerated language was locked out with no resolution path inside the run.
 
@@ -212,14 +173,21 @@ needs_offer() {
 }
 
 OFFERS=()  # each entry: "language|tool|install_cmd"
+# Seed with scc first when Step 2a flagged it (the treemap-coverage tool shares
+# this one batched question with the per-language dead-code tools).
+[ "${SCC_PRESENT:-1}" = 0 ] && [ "${SCC_DECLINED:-0}" = 0 ] \
+  && { [ "${CODE_FILES:-0}" -lt "${NONCODE_FILES:-0}" ] || [ "${CODE_FILES:-0}" -lt 10 ]; } \
+  && OFFERS+=("coverage|scc|brew install scc (or apt/dnf/go install - see Step 2a)")
 needs_offer vulture "$PY_FILES"      && OFFERS+=("python|vulture|pip install vulture (or 'uv tool install vulture')")
 needs_offer ts-prune "$TS_FILES"     && OFFERS+=("typescript|ts-prune|npm install -g ts-prune")
 needs_offer staticcheck "$GO_FILES"  && OFFERS+=("go|staticcheck|go install honnef.co/go/tools/cmd/staticcheck@latest (or 'brew install staticcheck')")
 ```
 
+**Non-interactive short-circuit.** If `run-context.json .interactive` is `false` (headless/CI), make **no** AskUserQuestion call - every install is already recorded as skipped in `offers`. Proceed to 2c with lizard-only + whatever tools are already on PATH.
+
 If `OFFERS` is empty (no language hits the threshold, or every tool is already installed/declined), skip straight to 2c.
 
-Otherwise, batch the questions into **a single AskUserQuestion call** - one question per language in `OFFERS`, three options per question:
+Otherwise, in an interactive run, batch **all** of Phase 1 into **a single AskUserQuestion call** - one question per entry in `OFFERS` (scc and each dead-code tool together), three options per question. This is the one tool-install decision surface; the user never faces scc and the linters as separate modals:
 
 - **Install <tool>** - run the cited install command and continue.
 - **Skip for now** - proceed without the tool. Don't write a marker; ask again next run.
@@ -229,15 +197,7 @@ Phrase each question so the gain is concrete, e.g.:
 
 > "This repo has 47 Go files. `staticcheck -checks U1000` would let `/assess` flag unreachable Go funcs as Layer 1 candidates. Install? (`go install honnef.co/go/tools/cmd/staticcheck@latest` or `brew install staticcheck`)"
 
-When the user picks **Install <tool>**, run the platform-appropriate command from the offer. Surface any install failure as a chat message and continue - dead-code tools are degrade-don't-block (same contract as scc); a missing tool reduces Layer 1's precision but never gates the assessment.
-
-When the user picks **Skip permanently for this repo**, write the provenance marker:
-
-```bash
-write_decline_marker <tool>   # e.g. write_decline_marker staticcheck
-```
-
-For multi-language repos with several offers, the AskUserQuestion call lists every language in one prompt rather than serialising. The user answers once and the run proceeds with whichever tools they accepted.
+When the user picks **Install <tool>**, run the platform-appropriate command from the offer. Surface any install failure as a chat message and continue - dead-code tools are degrade-don't-block (same contract as scc); a missing tool reduces Layer 1's precision but never gates the assessment. When they pick **Skip permanently**, `write_decline_marker <tool>` (e.g. `write_decline_marker staticcheck`). The user answers this one batched question once and the run proceeds with whichever tools they accepted.
 
 #### JVM / Maven capability offers (v1)
 
@@ -247,7 +207,7 @@ When the deterministic core detects a Maven or Gradle project it emits a `capabi
 jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-- **`liveness` → `state: "offer"`** - Maven was detected but `mvn dependency:analyze` (coarse module-level dead-dependency detection) has not run. The `consent` field names the shape: `run` (`mvn` is on PATH - offer to **run** it against the project; `dependency:analyze` needs a *compiling build*, so this is a **run-consent**, heavier than a static scan) or `install` (`mvn` absent - offer to **install** Maven first). Use **AskUserQuestion** exactly as Step 2b, phrasing the trade-off (a build that resolves dependencies and may hit the network). On accept and a `run` consent, run `mvn dependency:analyze`, capture its output, and re-run the core with the served result so the candidates feed Layer 1. On decline, the capability stays honestly named, not silently dropped.
+- **`liveness` → `state: "offer"`** - Maven was detected but `mvn dependency:analyze` (coarse module-level dead-dependency detection) has not run. The `consent` field names the shape: `run` (`mvn` is on PATH - offer to **run** it against the project; `dependency:analyze` needs a *compiling build*, so this is a **run-consent**, heavier than a static scan) or `install` (`mvn` absent - offer to **install** Maven first). Use **AskUserQuestion** exactly as Step 2b, phrasing the trade-off (a build that resolves dependencies and may hit the network) - but honour the non-interactive contract: when `run-context.json .interactive` is `false`, skip this offer and honest-degrade the capability instead of prompting. On accept and a `run` consent, run `mvn dependency:analyze`, capture its output, and re-run the core with the served result so the candidates feed Layer 1. On decline, the capability stays honestly named, not silently dropped.
 - **`linting` / `modernization` → `state: "credited"`** - an already-configured pom.xml plugin serves it (`served_by` lists which: Checkstyle, SpotBugs, PMD, error-prone, OpenRewrite, Modernizer). **Credit it in the report; do not re-offer.**
 - **Any capability → `state: "honest_degrade"`** - nothing serves it yet (module graph, linting/modernization without a configured plugin, and **all** capabilities under Gradle in v1). The block carries a `candidate_tool` and `gloss`. **Name both in the report's Layer 1/Layer 3 prose** ("module-graph analysis is unserved here; `jdeps` would provide it"). Honest-degrade is a deliverable - surfacing the candidate is the point.
 
@@ -358,7 +318,9 @@ Now `$REPO_ROOT/.assess/run-context.json` contains the structured data you need 
 
 The `plugin_version` field in `run-context.json` tells you which plugin version produced this run. Surface it at the top of the report (e.g., "Generated by `/assess` v1.8.0") so readers can spot it if a stale cached version of the plugin produced unexpected output.
 
-### 2d: Offer the bounded mutation pass (opt-in)
+### 2d: Phase 3 - the bounded mutation pass (opt-in, kept separate)
+
+**This is its own phase, asked on its own - never batched with the Phase 1 tool installs.** The Phase 1 installs are read-only; this pass **modifies your source files and runs your test suite over the mutated code**. That is a different risk class, so it gets a dedicated question with explicit code-modification framing rather than being waved through inside a bundle of install prompts. **Non-interactive contract:** when `run-context.json .interactive` is `false`, make no offer - the mutation offer is already recorded as skipped in `offers`; continue with the read-only signal.
 
 The default core run is read-only - it never mutates or runs code, so `test_pressure` carries the cheap hollow-test heuristics and mutation-config detection but no survivor data. The decisive Layer 1 signal (would a test actually fail if the code were wrong?) needs a bounded mutation pass, which mutates source and *runs* the suite. That is consent-gated, so offer it here rather than running it silently.
 
@@ -390,7 +352,7 @@ command -v "$MUT_TOOL" >/dev/null 2>&1 && MUT_PRESENT=1 || MUT_PRESENT=0
 REOFFER_MUT=$(jq -r '.reoffer_mutation // false' "$REPO_ROOT/.assess/run-context.json" 2>/dev/null)
 ```
 
-**Offer with AskUserQuestion** (skip the offer entirely when `MUT_DECLINED=1` **unless** `REOFFER_MUT=true`, in which case ask once more - the prior decline predates a major bump). Phrase the trade-off concretely - a bounded pass that mutates source and runs the suite over up to 5 focus files, time-boxed. When re-offering, say so: _"You previously declined mutation testing under an older version; the pass has since changed - run it now?"_. Three options, same shape as Steps 2a/2b:
+**Offer with AskUserQuestion** as a **standalone question** (skip it entirely when `run-context.json .interactive` is `false`, or when `MUT_DECLINED=1` **unless** `REOFFER_MUT=true`, in which case ask once more - the prior decline predates a major bump). Frame the code modification explicitly - not "run a deeper test analysis?" but "**this will modify your source files** (mutating up to 5 focus files) and run your test suite over the changes, time-boxed, then revert". When re-offering, say so: _"You previously declined mutation testing under an older version; the pass has since changed - run it now?"_. Three options, same shape as Steps 2a/2b:
 
 - **Run mutation analysis** - run the bounded pass on the focus files (installing `$MUT_TOOL` first if `MUT_PRESENT=0`, exactly as Step 2b installs a dead-code tool: run the platform-appropriate install, surface any failure as a chat message, and fall back to no-mutation on failure - never block).
 - **Skip for now** - continue with the cheap read intact. Don't write a marker; ask again next run.
