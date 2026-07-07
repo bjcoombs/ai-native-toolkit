@@ -599,6 +599,25 @@ def test_write_svg_emits_hatch_overlay_and_legend(render_lib, tmp_path):
     assert 'height="1084"' in svg
 
 
+def test_write_svg_emits_a11y_title_and_desc(render_lib, tmp_path):
+    """Task 17: the root <svg> is role="img" with a <title>/<desc> pair as its
+    first children, so a screen reader announces the image and how it encodes."""
+    node = render_lib.Node(name="a.py", rel_path="a.py", loc=100,
+                           metric=5.0, color=(0.8, 0.2, 0.1, 1.0),
+                           is_file=True)
+    rects = [(0.0, 0.0, 100.0, 100.0, node)]
+    out = tmp_path / "a11y.svg"
+    render_lib.write_svg(rects, Path("/repo"), 1600.0, 1000.0, out, False, "ccn")
+    svg = out.read_text()
+    assert 'role="img"' in svg
+    assert "<title>Complexity Hotspot Heatmap</title>" in svg
+    assert "hue indicates cyclomatic complexity" in svg
+    assert "saturation indicates git churn" in svg
+    # <title>/<desc> are the root's first children (before the <style> block).
+    assert svg.index("<title>") < svg.index("<style>")
+    assert svg.index("<desc>") < svg.index("<style>")
+
+
 def test_write_svg_no_overlay_without_survivor_data(render_lib, tmp_path):
     """No hatch and no legend flag -> original full-canvas treemap, untouched:
     no survivor patterns, no <defs>, no extra legend band."""
