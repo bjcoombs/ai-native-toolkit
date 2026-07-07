@@ -53,10 +53,14 @@ def _git(repo: Path, *args: str, env: dict | None = None) -> None:
 def git_repo(tmp_path: Path):
     """Create an initialised git repo and return (repo_path, commit_fn).
 
-    commit_fn(message, days_ago=None) stages everything and commits; pass an
-    integer `days_ago` to backdate both author and committer time, which lets a
-    test simulate a stale doc beside churning code. Git's date env vars reject
-    relative strings ("500 days ago"), so we convert to a strict ISO timestamp.
+    commit_fn(message, days_ago=None, committer_days_ago=None) stages everything
+    and commits; pass an integer `days_ago` to backdate both author and committer
+    time, which lets a test simulate a stale doc beside churning code. Pass
+    `committer_days_ago` to backdate the committer time independently of the
+    author time - a rebase/cherry-pick keeps the original author time but stamps a
+    fresh committer time, so this lets a test prove staleness reads from author
+    time (`%at`), not committer time (`%ct`). Git's date env vars reject relative
+    strings ("500 days ago"), so we convert to a strict ISO timestamp.
     """
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -64,13 +68,27 @@ def git_repo(tmp_path: Path):
     _git(repo, "config", "user.email", "test@example.com")
     _git(repo, "config", "user.name", "Test")
 
-    def commit(message: str, days_ago: int | None = None) -> None:
+    def _stamp(days_ago: int) -> str:
+        when = _dt.datetime.now() - _dt.timedelta(days=days_ago)
+        return when.strftime("%Y-%m-%dT%H:%M:%S")
+
+    def commit(
+        message: str,
+        days_ago: int | None = None,
+        committer_days_ago: int | None = None,
+    ) -> None:
         _git(repo, "add", "-A")
         env = {}
         if days_ago is not None:
-            when = _dt.datetime.now() - _dt.timedelta(days=days_ago)
-            stamp = when.strftime("%Y-%m-%dT%H:%M:%S")
-            env = {"GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp}
+            author_stamp = _stamp(days_ago)
+            # Committer time defaults to author time; override it to simulate a
+            # rebase/cherry-pick, where the commit is re-applied "now" but keeps
+            # its original author date.
+            committer_at = committer_days_ago if committer_days_ago is not None else days_ago
+            env = {
+                "GIT_AUTHOR_DATE": author_stamp,
+                "GIT_COMMITTER_DATE": _stamp(committer_at),
+            }
         _git(repo, "commit", "-q", "-m", message, env=env)
 
     return repo, commit

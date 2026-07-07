@@ -126,6 +126,27 @@ def test_stale_doc_beside_churny_code_has_high_ratio(git_repo) -> None:
     assert readme["ratio"] >= 5  # frozen map of a churning module
 
 
+def test_staleness_uses_author_time_not_committer_time(git_repo) -> None:
+    """A rebase must not certify a stale doc as fresh.
+
+    A doc authored 90 days ago but rebased/cherry-picked yesterday (fresh
+    committer time, original author time) must still read ~90 days stale. Author
+    time (`%at`) reflects when the change was originally made; committer time
+    (`%ct`) would reset the clock on every rebase and hide the decay.
+    """
+    repo, commit = git_repo
+    (repo / "README.md").write_text("module map", encoding="utf-8")
+    (repo / "app.py").write_text("v = 0", encoding="utf-8")
+    # Authored 90 days ago, but committer time is yesterday (the rebase artifact).
+    commit("docs authored long ago, rebased yesterday", days_ago=90, committer_days_ago=1)
+
+    r = analyze_doc_staleness(repo)
+    readme = next(d for d in r["docs"] if d["path"] == "README.md")
+    # Author time wins: ~90 days, not ~1. A committer-time read would report <=2.
+    assert readme["last_commit_days"] is not None
+    assert readme["last_commit_days"] >= 85
+
+
 def test_churn_degenerate_flag_on_single_commit_per_file_repo(git_repo) -> None:
     """Issue #172: a history where every file shows one commit (a bulk import /
     shallow clone / squashed tree) is degenerate - the churn count is an
