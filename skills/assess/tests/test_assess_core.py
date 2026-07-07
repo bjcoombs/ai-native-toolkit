@@ -1468,9 +1468,9 @@ def test_test_pressure_scan_failure_degrades_not_crashes(tmp_path: Path, monkeyp
     assert "plugin_version" in ctx
 
 
-def test_core_writes_fallback_badge_only_when_absent(tmp_path: Path) -> None:
-    """A never-scored repo gets the deterministic findings badge; a finalized
-    score badge survives deterministic-only reruns (no downgrade)."""
+def test_core_always_writes_deterministic_badge_linking_to_report(tmp_path: Path) -> None:
+    """The shipped badge is the deterministic findings form, written on every
+    run and linking to the report - never an LLM-authored score number."""
     repo = tmp_path / "repo"
     repo.mkdir()
     assess_dir = repo / ".assess"
@@ -1483,16 +1483,21 @@ def test_core_writes_fallback_badge_only_when_absent(tmp_path: Path) -> None:
     build_run_context(repo_root=repo, run_date="2026-06-12")
     badge = json.loads((assess_dir / "badge.json").read_text(encoding="utf-8"))
     assert badge["label"] == "AI-readiness"
-    assert "findings" in badge["message"]  # deterministic fallback form
+    assert "findings" in badge["message"]        # deterministic form
+    assert "/8" not in badge["message"]           # no LLM score fraction
+    assert badge["link"] == "./assess-report.md"  # funnels to the report
 
-    # Simulate a finalized score badge, then rerun the deterministic core.
+    # A stale LLM-scored badge from a prior run is overwritten by the
+    # deterministic producer, not preserved - the badge stays reproducible.
     (assess_dir / "badge.json").write_text(json.dumps({
         "schemaVersion": 1, "label": "AI-readiness",
         "message": "7.0/8 · AI-Native", "color": "brightgreen",
     }), encoding="utf-8")
     build_run_context(repo_root=repo, run_date="2026-06-13")
     badge2 = json.loads((assess_dir / "badge.json").read_text(encoding="utf-8"))
-    assert badge2["message"] == "7.0/8 · AI-Native"
+    assert "findings" in badge2["message"]
+    assert badge2["message"] != "7.0/8 · AI-Native"
+    assert badge2["link"] == "./assess-report.md"
 
 
 # --------------------------------------------------------------------------

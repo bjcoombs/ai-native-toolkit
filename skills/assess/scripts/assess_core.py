@@ -49,7 +49,6 @@ from lib.agent_instructions_grader import (
 from lib.anomaly_detector import detect_anomalies
 from lib.archetype import analyze_archetype
 from lib.badge import (
-    badge_exists,
     concern_count_from_findings,
     fallback_badge,
     write_badge,
@@ -550,27 +549,29 @@ def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None
     )
 
 
-def _write_fallback_badge_if_absent(
+def _write_badge(
     assess_dir: Path, promissory: Any, derived_findings: list[dict],
     run_id: str | None = None,
 ) -> None:
-    """Deterministic fallback badge - only when none exists.
+    """Write the deterministic default badge, always.
 
-    A gate-only repo (never LLM-scored) gets a truthful findings-count badge;
-    a repo with a finalized score badge keeps it (a deterministic-only rerun
-    must not downgrade the stronger claim; finalize refreshes it on scored
-    runs). ``run_id`` stamps the badge with the run that produced it.
+    The shipped ``badge.json`` is the deterministic findings-count form: a pure
+    function of measured run data, never an LLM-authored score. It is written on
+    every run and is no longer overwritten by ``assess_finalize`` - the
+    LLM-derived grade lives in ``assess-report.md``, and the badge's ``link``
+    funnels a badge-clicker there. ``run_id`` stamps the badge with the run that
+    produced it.
     """
-    if badge_exists(assess_dir):
-        return
     stale = (
         promissory.get("total_stale", 0)
         if isinstance(promissory, dict) and promissory.get("available")
         else 0
     )
-    write_badge(assess_dir, fallback_badge(
+    badge = fallback_badge(
         concern_count_from_findings(derived_findings), stale, run_id=run_id,
-    ))
+    )
+    badge["link"] = "./assess-report.md"
+    write_badge(assess_dir, badge)
 
 
 # Cap on accretion files carried into run-context.json. The scanner measures
@@ -1377,7 +1378,7 @@ def build_run_context(
     # report's B3 attention list via keyhole_signals; this block is the record.
     _attach_structure_drift(ctx, repo_root, keyhole["structure_drift_tier1"])
 
-    _write_fallback_badge_if_absent(
+    _write_badge(
         assess_dir, promissory, ctx["derived_findings"], run_id=run_id
     )
 
