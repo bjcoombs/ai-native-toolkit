@@ -90,6 +90,45 @@ This step produces **two** views of the codebase, both colour-blind-safe (OrRd r
 
 Feed the complexity stats into the linter/complexity layer (Layer 3) and the `doc_graph` / `doc_staleness` blocks of `run-context.json` into **Layer 0** (the graph SVG is the visual; the score reads the structured blocks).
 
+### Decline markers carry provenance (used by Steps 2a, 2b, 2d)
+
+A user can permanently decline any optional tool (scc, a dead-code linter, the mutation pass) by writing `$REPO_ROOT/.assess/.no-<tool>`. A decline is a durable, silencing choice, so the marker records **who** declined **what**, **when**, and under **which plugin version** - not a provenance-free empty file. Always write markers with this helper so the disclosure and re-offer logic downstream has the data it needs:
+
+```bash
+# Resolve the plugin version for provenance stamping (degrades to "unknown").
+assess_plugin_version() {
+  local pj="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json}"
+  if [ -f "$pj" ]; then
+    jq -r '.version // "unknown"' "$pj" 2>/dev/null || echo unknown
+  elif [ -f "$REPO_ROOT/.assess/run-context.json" ]; then
+    jq -r '.plugin_version // "unknown"' "$REPO_ROOT/.assess/run-context.json" 2>/dev/null || echo unknown
+  else
+    echo unknown
+  fi
+}
+
+# Write a JSON decline marker with provenance. $1 = tool; $2 = optional reason.
+write_decline_marker() {
+  local tool="$1" reason="${2:-}"
+  mkdir -p "$REPO_ROOT/.assess"
+  local who when ver
+  who="$(git -C "$REPO_ROOT" config user.name 2>/dev/null || echo "${USER:-unknown}")"
+  when="$(date +%Y-%m-%d)"
+  ver="$(assess_plugin_version)"
+  jq -n --arg by "$who" --arg at "$when" --arg ver "$ver" --arg reason "$reason" \
+    '{declined_by: $by, declined_at: $at, plugin_version: $ver}
+       + (if $reason == "" then {} else {reason: $reason} end)' \
+    > "$REPO_ROOT/.assess/.no-$tool"
+}
+```
+
+The deterministic core reads every `.no-<tool>` back into `run-context.json` as `decline_markers` (with a `decline_disclosures` line per marker and a `reoffer_mutation` flag). Two downstream effects, both automatic once you write markers this way:
+
+- **Disclosure.** The report surfaces each active marker verbatim from `decline_disclosures`, e.g. _"Mutation testing permanently declined by ben on 2026-07-07"_ - a silenced capability is never invisible.
+- **Re-offer once per major.** When a mutation marker was written under an older *major* plugin version, the core sets `reoffer_mutation: true`; Step 2d re-asks once. Declining again permanently restamps the marker at the current version, so its major now matches and the re-offer does not repeat within the same major.
+
+**Pre-versioning markers** (empty or non-JSON files from before this convention) are still honoured as a decline; they read as "declined by an unknown user on an unknown date" and are never auto-re-offered (no major to compare). The `[ -f ... ]` presence checks below work identically for JSON and legacy markers.
+
 ### 2a: Offer to install `scc` (one-time per repo)
 
 The bundled treemap uses [`lizard`](https://github.com/terryyin/lizard) (Python, Go, JS, Java, C/C++, etc.) by default. Optional `scc` extends coverage to 200+ languages including markdown, JSON, YAML, SQL, and shell - useful when the repo's surface is more than just traditional source code.
@@ -118,7 +157,7 @@ When offering, use **AskUserQuestion** with three options (do **not** auto-insta
 
 - **Install scc** - run the appropriate installer for the platform and continue.
 - **Skip for now** - proceed with lizard only. Don't write the marker; ask again next run.
-- **Skip permanently for this repo** - write `$REPO_ROOT/.assess/.no-scc` so future runs don't ask. Recommended for prompt repos or pure-docs repos where lizard-only is genuinely fine.
+- **Skip permanently for this repo** - `write_decline_marker scc` (see "Decline markers carry provenance" above) so future runs don't ask. Recommended for prompt repos or pure-docs repos where lizard-only is genuinely fine.
 
 Phrase the question so the user understands the trade-off, e.g.:
 
@@ -184,7 +223,7 @@ Otherwise, batch the questions into **a single AskUserQuestion call** - one ques
 
 - **Install <tool>** - run the cited install command and continue.
 - **Skip for now** - proceed without the tool. Don't write a marker; ask again next run.
-- **Skip permanently for this repo** - write `$REPO_ROOT/.assess/.no-<tool>` so future runs don't ask. Recommended when the language only appears in scripts/configs that don't warrant symbol-level reachability.
+- **Skip permanently for this repo** - `write_decline_marker <tool>` so future runs don't ask. Recommended when the language only appears in scripts/configs that don't warrant symbol-level reachability.
 
 Phrase each question so the gain is concrete, e.g.:
 
@@ -192,11 +231,10 @@ Phrase each question so the gain is concrete, e.g.:
 
 When the user picks **Install <tool>**, run the platform-appropriate command from the offer. Surface any install failure as a chat message and continue - dead-code tools are degrade-don't-block (same contract as scc); a missing tool reduces Layer 1's precision but never gates the assessment.
 
-When the user picks **Skip permanently for this repo**, write the marker:
+When the user picks **Skip permanently for this repo**, write the provenance marker:
 
 ```bash
-mkdir -p "$REPO_ROOT/.assess"
-touch "$REPO_ROOT/.assess/.no-<tool>"   # e.g. .no-staticcheck
+write_decline_marker <tool>   # e.g. write_decline_marker staticcheck
 ```
 
 For multi-language repos with several offers, the AskUserQuestion call lists every language in one prompt rather than serialising. The user answers once and the run proceeds with whichever tools they accepted.
@@ -346,13 +384,17 @@ case "$FOCUS_FILES" in
 esac
 command -v "$MUT_TOOL" >/dev/null 2>&1 && MUT_PRESENT=1 || MUT_PRESENT=0
 [ -f "$REPO_ROOT/.assess/.no-$MUT_TOOL" ] && MUT_DECLINED=1 || MUT_DECLINED=0
+
+# Re-offer once when the existing decline was made under an older plugin major
+# (the mutation pass may have changed materially since). The core computes this.
+REOFFER_MUT=$(jq -r '.reoffer_mutation // false' "$REPO_ROOT/.assess/run-context.json" 2>/dev/null)
 ```
 
-**Offer with AskUserQuestion** (skip the offer entirely when `MUT_DECLINED=1`). Phrase the trade-off concretely - a bounded pass that mutates source and runs the suite over up to 5 focus files, time-boxed. Three options, same shape as Steps 2a/2b:
+**Offer with AskUserQuestion** (skip the offer entirely when `MUT_DECLINED=1` **unless** `REOFFER_MUT=true`, in which case ask once more - the prior decline predates a major bump). Phrase the trade-off concretely - a bounded pass that mutates source and runs the suite over up to 5 focus files, time-boxed. When re-offering, say so: _"You previously declined mutation testing under an older version; the pass has since changed - run it now?"_. Three options, same shape as Steps 2a/2b:
 
 - **Run mutation analysis** - run the bounded pass on the focus files (installing `$MUT_TOOL` first if `MUT_PRESENT=0`, exactly as Step 2b installs a dead-code tool: run the platform-appropriate install, surface any failure as a chat message, and fall back to no-mutation on failure - never block).
 - **Skip for now** - continue with the cheap read intact. Don't write a marker; ask again next run.
-- **Skip permanently for this repo** - `touch "$REPO_ROOT/.assess/.no-$MUT_TOOL"` so future runs don't ask.
+- **Skip permanently for this repo** - `write_decline_marker "$MUT_TOOL"` so future runs don't ask. Re-declining restamps the marker at the current version, so the re-offer won't repeat within this major.
 
 **On accept (tool available):** run the opt-in mutation pass, then regenerate the heatmap with the survivor overlay. The core re-run reads the `test_focus` targets itself, runs `scan_test_pressure(..., opt_in=True)` scoped to them, and rewrites the `test_pressure` block in `run-context.json` in place:
 

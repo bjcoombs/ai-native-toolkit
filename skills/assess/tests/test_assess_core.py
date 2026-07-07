@@ -258,6 +258,37 @@ def test_build_run_context_first_run(tmp_path: Path) -> None:
     assert ctx["diff"]["graduated"] == 0
     assert (assess_dir / "log.md").exists()
     assert (assess_dir / "index.md").exists()
+    # No decline markers in a bare repo -> empty block, no re-offer.
+    assert ctx["decline_markers"] == []
+    assert ctx["reoffer_mutation"] is False
+    assert ctx["decline_disclosures"] == []
+
+
+def test_build_run_context_surfaces_decline_markers(tmp_path: Path) -> None:
+    """A JSON decline marker flows into run-context with provenance + disclosure."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 1, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+    # Marker declined under an ancient major -> re-offer eligible.
+    (assess_dir / ".no-mutmut").write_text(json.dumps({
+        "declined_by": "ben", "declined_at": "2025-01-01",
+        "plugin_version": "0.9.0",
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+
+    markers = ctx["decline_markers"]
+    assert len(markers) == 1
+    assert markers[0]["tool"] == "mutmut"
+    assert markers[0]["declined_by"] == "ben"
+    assert ctx["reoffer_mutation"] is True
+    assert any("Mutation testing permanently declined by ben on 2025-01-01" in d
+               for d in ctx["decline_disclosures"])
 
 
 def test_unfinalized_hotspot_page_uses_neutral_pointer_not_placeholder(tmp_path: Path) -> None:

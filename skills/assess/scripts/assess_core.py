@@ -55,6 +55,7 @@ from lib.badge import (
 )
 from lib.assess_config import load_excludes, load_structure_config
 from lib.coverage_report import detect_coverage_report, load_coverage_data
+from lib.decline_markers import build_decline_block
 from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.doc_staleness import analyze_doc_staleness
 from lib.git_churn import git_commit_info, tracked_files
@@ -1119,6 +1120,17 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     _write_fallback_badge_if_absent(assess_dir, promissory, ctx["derived_findings"])
 
     ctx["plugin_version"] = _read_plugin_version()
+
+    # Decline markers (.assess/.no-<tool>): active permanent declines of the
+    # optional tools (scc, dead-code linters, the bounded mutation pass). The
+    # report discloses each so a silenced capability is never invisible, and a
+    # marker written under an older major sets reoffer_mutation so SKILL.md can
+    # re-ask once. Legacy empty/non-JSON markers are honoured without provenance.
+    decline = build_decline_block(assess_dir, ctx["plugin_version"])
+    ctx["decline_markers"] = decline["markers"]
+    ctx["reoffer_mutation"] = decline["reoffer_mutation"]
+    ctx["decline_disclosures"] = decline["disclosures"]
+
     ctx["anomalies"] = [
         {"code": a.code, "description": a.description, "detail": a.detail}
         for a in detect_anomalies(ctx)
