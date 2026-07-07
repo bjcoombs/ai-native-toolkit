@@ -6,19 +6,23 @@ AI-readiness badge with zero infrastructure::
 
     ![AI-readiness](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/<owner>/<repo>/<branch>/.assess/badge.json)
 
-Two producers, one honest-degrade ladder:
+Two producers, one default:
 
-- ``score_badge`` - the headline form ("7.0/8 · AI-Native"), written by
-  ``assess_finalize.py`` from the LLM-derived layered score. Always overwrites.
-- ``fallback_badge`` - the deterministic form ("2 findings · 0 stale markers"),
-  written by ``assess_core.py`` only when no badge exists yet, so a repo that
-  has never run the interactive scoring (a gate-only consumer) still gets a
-  truthful badge instead of a score it never earned - and an existing score
-  badge is never downgraded by a deterministic-only run.
+- ``fallback_badge`` - the deterministic default ("2 findings · 0 stale
+  markers"), the badge ``assess_core.py`` always writes to ``badge.json``. Its
+  message is a pure function of measured run data - never an LLM-authored score
+  - and ``assess_core`` stamps a ``link`` funnelling a badge-clicker to
+  ``assess-report.md``, where the LLM-derived grade lives.
+- ``score_badge`` - the headline form ("7.0/8 · AI-Native"), derived from the
+  LLM layered score. It is the in-report headline only; it is *not* written to
+  ``badge.json``, so the shipped badge never claims a grade a deterministic run
+  cannot reproduce.
 
-A badge is a self-description, so it inherits the truth-pressure rule: colours
-and messages are pure functions of run data (tested thresholds, no judgement),
-and the badge only ever claims what the producing run measured.
+A badge is a self-description, so it inherits the truth-pressure rule: the
+shipped badge's colours and messages are pure functions of run data (tested
+thresholds, no judgement), and it only ever claims what the producing run
+measured. The LLM-derived grade is one click away in the report, not baked into
+a badge that would need re-earning on every scoring run.
 """
 from __future__ import annotations
 
@@ -99,7 +103,11 @@ def score_badge(
     score: float, maturity_label: str, denominator: int = 8,
     run_id: str | None = None, scope: str | None = None,
 ) -> dict[str, Any]:
-    """The headline badge: layered score + maturity label.
+    """The in-report headline form: layered score + maturity label.
+
+    No longer written to ``badge.json`` - the shipped badge is always the
+    deterministic ``fallback_badge`` (which links to the report). This is the
+    LLM-derived grade that appears inside ``assess-report.md``.
 
     ``denominator`` is 8 for a software repo (the display ceiling) and the
     count of applicable layers for a knowledge base (issue #224), so the badge
@@ -129,7 +137,11 @@ def fallback_badge(
     concern_count: int, stale_markers: int, run_id: str | None = None,
     scope: str | None = None,
 ) -> dict[str, Any]:
-    """Deterministic badge for repos with no LLM-scored run.
+    """The default shipped badge: a deterministic, always-written self-description.
+
+    ``assess_core.py`` writes this to ``badge.json`` on every run and stamps a
+    ``link`` to ``assess-report.md``; the LLM-derived score lives in the report,
+    not the badge.
 
     ``concern_count`` is the number of derived findings with non-empty paths
     (``refactor_boundary`` excluded - it is the positive finding);

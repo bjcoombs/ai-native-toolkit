@@ -49,7 +49,6 @@ from lib.agent_instructions_grader import (
 from lib.anomaly_detector import detect_anomalies
 from lib.archetype import analyze_archetype
 from lib.badge import (
-    badge_exists,
     concern_count_from_findings,
     fallback_badge,
     write_badge,
@@ -77,6 +76,8 @@ from lib.wiki_writer import (
     HotspotEntry,
     LogEntry,
     append_log_entry,
+    prune_orphan_hotspots,
+    verify_log_chain,
     write_hotspot_page,
     write_index,
 )
@@ -548,29 +549,31 @@ def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None
     )
 
 
-def _write_fallback_badge_if_absent(
+def _write_badge(
     assess_dir: Path, promissory: Any, derived_findings: list[dict],
     run_id: str | None = None, scope: str | None = None,
 ) -> None:
-    """Deterministic fallback badge - only when none exists.
+    """Write the deterministic default badge, always.
 
-    A gate-only repo (never LLM-scored) gets a truthful findings-count badge;
-    a repo with a finalized score badge keeps it (a deterministic-only rerun
-    must not downgrade the stronger claim; finalize refreshes it on scored
-    runs). ``run_id`` stamps the badge with the run that produced it. ``scope``
-    (the repo-relative subtree) labels the badge for a ``/assess <path>`` run.
+    The shipped ``badge.json`` is the deterministic findings-count form: a pure
+    function of measured run data, never an LLM-authored score. It is written on
+    every run and is no longer overwritten by ``assess_finalize`` - the
+    LLM-derived grade lives in ``assess-report.md``, and the badge's ``link``
+    funnels a badge-clicker there. ``run_id`` stamps the badge with the run that
+    produced it. ``scope`` (the repo-relative subtree) labels the badge for a
+    ``/assess <path>`` monorepo run.
     """
-    if badge_exists(assess_dir):
-        return
     stale = (
         promissory.get("total_stale", 0)
         if isinstance(promissory, dict) and promissory.get("available")
         else 0
     )
-    write_badge(assess_dir, fallback_badge(
+    badge = fallback_badge(
         concern_count_from_findings(derived_findings), stale, run_id=run_id,
         scope=scope,
-    ))
+    )
+    badge["link"] = "./assess-report.md"
+    write_badge(assess_dir, badge)
 
 
 # Cap on accretion files carried into run-context.json. The scanner measures
@@ -1034,6 +1037,13 @@ def build_run_context(
             schema_version=ARTIFACT_SCHEMA_VERSION,
         )
 
+    # Prune orphan hotspot pages: any page from a prior run whose source file no
+    # longer exists on disk is stamped retired (history preserved) so no active
+    # page keeps describing a deleted file. Runs after the current top hotspots
+    # are (re)written, so a file that is still a live hotspot has just had its
+    # page refreshed and won't be touched.
+    pruned_hotspots = prune_orphan_hotspots(assess_dir, repo_root)
+
     # Also surface graduated hotspots in the index. Carry the file's actual
     # current metrics across the three top-N lists in `current` - graduating
     # off `top_hotspots[:10]` means the file fell out of the composite
@@ -1098,6 +1108,12 @@ def build_run_context(
     )
     append_log_entry(assess_dir, log_entry)
 
+    # log.md integrity: verify the chained checksums after the append. A break
+    # (an earlier entry edited after the fact) is disclosed in log.md itself and
+    # surfaced here so the report/gate can render it - a lying history is exactly
+    # the self-description-under-no-pressure failure the toolkit guards against.
+    log_valid, log_broken_at = verify_log_chain(assess_dir)
+
     # Heterogeneous run-context bus: values are dicts, lists, scalars, or the
     # degrade-gracefully bool/str/None fallbacks. Typed as dict[str, Any] so the
     # block accessors below (ctx["dead_code"] etc.) stay assignable to the
@@ -1157,6 +1173,14 @@ def build_run_context(
             "new": [h.__dict__ for h in diff.new],
             "persistent": [h.__dict__ for h in diff.persistent],
         },
+        # Hotspot pages retired this run because their source file left the tree
+        # (task 9). Empty on a run that deleted nothing - a stable baseline.
+        "pruned_hotspots": pruned_hotspots,
+        # log.md integrity chain state (task 11). `valid` is False when an earlier
+        # log entry was edited after it was written; `broken_at_entry` is the
+        # 1-based index of the first entry that fails verification (None when
+        # intact). The break is also disclosed in log.md itself.
+        "log_integrity": {"valid": log_valid, "broken_at_entry": log_broken_at},
     }
 
     # extra_exclude_dirs / extra_exclude_patterns were loaded once above
@@ -1401,7 +1425,7 @@ def build_run_context(
     # report's B3 attention list via keyhole_signals; this block is the record.
     _attach_structure_drift(ctx, repo_root, keyhole["structure_drift_tier1"])
 
-    _write_fallback_badge_if_absent(
+    _write_badge(
         assess_dir, promissory, ctx["derived_findings"], run_id=run_id,
         scope=scope_rel,
     )

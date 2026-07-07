@@ -468,7 +468,7 @@ This replaces:
 - `log.md`'s last entry placeholder `**Top action:** Deterministic ranker not yet wired ...` with your actual Top 1 action.
 - Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file.
 
-The optional `denominator` field is **8** for a software repo (the default when omitted) or the applicable-layer count for a detected archetype (3 for a knowledge base - see "Repository archetype" above). `assess_finalize.py` renormalises both the `log.md` AI-Readiness line and the badge over it, so a KB reads `2.5 / 3` rather than a misleading `2.5 / 8`.
+The optional `denominator` field is **8** for a software repo (the default when omitted) or the applicable-layer count for a detected archetype (3 for a knowledge base - see "Repository archetype" above). `assess_finalize.py` renormalises the `log.md` AI-Readiness line over it, so a KB reads `2.5 / 3` rather than a misleading `2.5 / 8`.
 
 **`assess_finalize.py` reconciles this input against `run-context.json` before writing anything, and refuses (writing nothing, exiting non-zero) on any violation.** So the fields must be internally honest:
 - `run_id` - **copy it verbatim** from `run-context.json`. It proves the input was authored against *this* run; a mismatch is treated as a torn write and rejected.
@@ -477,13 +477,13 @@ The optional `denominator` field is **8** for a software repo (the default when 
 - Every key in `hotspot_actions` must be a real top hotspot from `stats_summary.top_hotspots` - a fabricated path is rejected, naming the path.
 - `layer_scores` maps each layer id to its band (Missing 0.0 / Partial 0.5 / Present 1.0). Layer 6 must not exceed **0.5** when `mutation_not_run_cap.applies` is true (see Step 3). Include it so the cap is enforced; a legacy input omitting it skips only the Layer 6 check.
 
-`assess_finalize.py` also refreshes `.assess/badge.json` (shields.io endpoint schema) from your score and maturity label - the live README badge. When offering the PR (assess-pr), include the embed snippet if the repo's README has no badge yet:
+The live README badge (`.assess/badge.json`, shields.io endpoint schema) is deterministic: `assess_core.py` writes the findings-count form on every run and links it to `assess-report.md`. Your LLM-derived score is *not* written to the badge - it appears inside the report the badge links to, so the badge only ever claims what a deterministic run can reproduce. When offering the PR (assess-pr), include the embed snippet if the repo's README has no badge yet:
 
 ```markdown
 ![AI-readiness](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F<owner>%2F<repo>%2F<default-branch>%2F.assess%2Fbadge.json)
 ```
 
-The `actions` array mirrors the report's Top 3 Actions table one-to-one and **must carry every table row** - `rank`, `action`, `done_when`, and `scope_fence` are required per entry (`layer`, `effort`, `files`, `first_step` recommended). `assess_finalize.py` writes it to `.assess/actions.json`, the *durable* machine-readable contract: unlike this input file (consumed and deleted), `actions.json` persists so an executing agent - including a smaller, cheaper model - can pick up the work with its exit criteria and fences intact, without parsing the report's markdown.
+The `actions` array mirrors the report's Top 3 Actions table one-to-one and **must carry every table row** - `rank`, `action`, `done_when`, and `scope_fence` are required per entry (`layer`, `effort`, `files`, `first_step`, `finding` recommended). Set `finding` to the finding type the action addresses (e.g. `hidden_coupling`, `lying_map`, `unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`, `refactor_boundary`) so `assess_finalize.py` can stamp the deterministic execution `mode` an executor should take; an action with no `finding` defaults to the conservative `characterize_first` mode. `assess_finalize.py` writes it to `.assess/actions.json`, the *durable* machine-readable contract (schema 2): unlike this input file (consumed and deleted), `actions.json` persists so an executing agent - including a smaller, cheaper model - can pick up the work with its exit criteria, fences, execution mode, and lifecycle status intact, without parsing the report's markdown. Re-running `/assess` preserves each action's `status`/`claimed_by`/`completed_sha`, so a completed action stays done. See [`references/actions-schema.md`](references/actions-schema.md) for the full schema.
 
 Without this step, the `log.md` placeholders above carry forward forever. Hotspot pages you don't supply actions for keep a neutral pointer (`This file is flagged but outside this run's Top 3. See the report's Top 3 Actions, or run a focused /assess pass for file-specific guidance.`) rather than an unfinished-work placeholder - a flagged-but-not-Top-3 page reads as intentional.
 

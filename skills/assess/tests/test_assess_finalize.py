@@ -94,7 +94,11 @@ def test_finalize_updates_log_last_entry(tmp_assess_dir: Path) -> None:
 
 
 def test_finalize_knowledge_base_denominator(tmp_assess_dir: Path) -> None:
-    """A KB run finalises the log + badge over its applicable-layer denominator (#224)."""
+    """A KB run finalises the log over its applicable-layer denominator (#224).
+
+    The score is renormalised in the log/report line; it is deliberately NOT
+    written to the badge, which stays the deterministic form assess_core wrote.
+    """
     _seed_log_md(tmp_assess_dir)
     _seed_run_context(tmp_assess_dir, denominator=3)
     finalize_input = {
@@ -112,8 +116,9 @@ def test_finalize_knowledge_base_denominator(tmp_assess_dir: Path) -> None:
     content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     assert "AI Readiness:** 2.5 / 3 (Knowledge Base · Solid (3 applicable layers))" in content
     assert "/ 8" not in content  # the misleading software denominator is gone
-    badge = json.loads((tmp_assess_dir / "badge.json").read_text(encoding="utf-8"))
-    assert badge["message"].startswith("2.5/3 · Knowledge Base")
+    # Finalize writes no badge - the score lives in the report line above, not
+    # on the shipped (deterministic) badge.
+    assert not (tmp_assess_dir / "badge.json").exists()
 
 
 def test_finalize_updates_hotspot_actions(tmp_assess_dir: Path) -> None:
@@ -364,14 +369,22 @@ def _good_action(rank: int = 1) -> dict:
     }
 
 
+def _distinct_action(rank: int, *, finding: str | None = None) -> dict:
+    """A good action with a rank-unique directive (the carry-forward identity)."""
+    a = {**_good_action(rank=rank), "action": f"Action number {rank}"}
+    if finding is not None:
+        a["finding"] = finding
+    return a
+
+
 def test_finalize_writes_actions_contract(tmp_assess_dir: Path) -> None:
     """An `actions` array in the input becomes the durable .assess/actions.json,
-    sorted by rank, with the executor-critical fields intact."""
+    sorted by rank, with the executor-critical fields intact (v2 schema)."""
     _seed_log_md(tmp_assess_dir)
-    _seed_run_context(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir, run_id="run-abc")
     finalize_input = {
         **_base_input(),
-        "actions": [_good_action(rank=2), _good_action(rank=1)],
+        "actions": [_distinct_action(rank=2), _distinct_action(rank=1)],
     }
     (tmp_assess_dir / "finalize-input.json").write_text(
         json.dumps(finalize_input), encoding="utf-8"
@@ -382,11 +395,121 @@ def test_finalize_writes_actions_contract(tmp_assess_dir: Path) -> None:
     contract = json.loads(
         (tmp_assess_dir / "actions.json").read_text(encoding="utf-8")
     )
-    assert contract["schema"] == 1
+    assert contract["schema"] == 2
+    assert contract["run_id"] == "run-abc"
     assert [a["rank"] for a in contract["actions"]] == [1, 2]
     for a in contract["actions"]:
         assert a["done_when"]
         assert a["scope_fence"]
+        # v2 lifecycle fields present and initialised for a first run.
+        assert a["status"] == "pending"
+        assert a["claimed_by"] is None
+        assert a["completed_sha"] is None
+        assert a["mode"] in {
+            "characterize_first", "verify_then_retire", "refactor_safe",
+        }
+
+
+def test_finalize_derives_mode_from_finding(tmp_assess_dir: Path) -> None:
+    """`mode` is derived deterministically from each action's finding type; an
+    action with no finding falls back to the conservative characterize_first."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    finalize_input = {
+        **_base_input(),
+        "actions": [
+            _distinct_action(rank=1, finding="lying_map"),
+            _distinct_action(rank=2, finding="refactor_boundary"),
+            _distinct_action(rank=3),  # no finding -> default
+        ],
+    }
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    by_rank = {
+        a["rank"]: a
+        for a in json.loads(
+            (tmp_assess_dir / "actions.json").read_text(encoding="utf-8")
+        )["actions"]
+    }
+    assert by_rank[1]["mode"] == "verify_then_retire"
+    assert by_rank[2]["mode"] == "refactor_safe"
+    assert by_rank[3]["mode"] == "characterize_first"
+
+
+def test_finalize_carries_status_across_runs(tmp_assess_dir: Path) -> None:
+    """A done action stays done with its completed_sha on re-run - status,
+    claimed_by, and completed_sha are carried forward by the action directive."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    # Run 1: writes a pending contract.
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps({**_base_input(), "actions": [_distinct_action(rank=1)]}),
+        encoding="utf-8",
+    )
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    # An executor marks the action done out of band.
+    contract_path = tmp_assess_dir / "actions.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["actions"][0].update(
+        status="done", claimed_by="agent-7", completed_sha="deadbeef",
+    )
+    contract_path.write_text(json.dumps(contract), encoding="utf-8")
+
+    # Run 2: the same action re-appears (rank changed) - it must stay done.
+    # Same directive text (the carry-forward key), new rank.
+    _seed_log_md(tmp_assess_dir)
+    reranked = {**_distinct_action(rank=1), "rank": 3}
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps({**_base_input(), "actions": [reranked]}),
+        encoding="utf-8",
+    )
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    after = json.loads(contract_path.read_text(encoding="utf-8"))["actions"][0]
+    assert after["status"] == "done"
+    assert after["claimed_by"] == "agent-7"
+    assert after["completed_sha"] == "deadbeef"
+    assert after["rank"] == 3  # rank is recomputed, not carried
+
+
+def test_finalize_reads_v1_actions_for_carry_forward(tmp_assess_dir: Path) -> None:
+    """A pre-existing v1 actions.json (no lifecycle fields) is read without
+    error; the re-run upgrades it to v2 with every action initialised pending."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    # A v1-shaped contract on disk from before this schema existed.
+    (tmp_assess_dir / "actions.json").write_text(
+        json.dumps({
+            "schema": 1,
+            "actions": [{
+                "rank": 1,
+                "action": "Action number 1",
+                "done_when": "x",
+                "scope_fence": "y",
+            }],
+        }),
+        encoding="utf-8",
+    )
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps({**_base_input(), "actions": [_distinct_action(rank=1)]}),
+        encoding="utf-8",
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    contract = json.loads(
+        (tmp_assess_dir / "actions.json").read_text(encoding="utf-8")
+    )
+    assert contract["schema"] == 2
+    entry = contract["actions"][0]
+    assert entry["status"] == "pending"
+    assert entry["claimed_by"] is None
+    assert entry["completed_sha"] is None
 
 
 def test_finalize_without_actions_writes_no_contract(tmp_assess_dir: Path) -> None:
@@ -441,15 +564,21 @@ def test_finalize_all_actions_malformed_writes_no_contract(tmp_assess_dir: Path)
     assert not (tmp_assess_dir / "actions.json").exists()
 
 
-def test_finalize_writes_score_badge(tmp_assess_dir: Path) -> None:
-    """Finalize always (over)writes badge.json with the LLM-scored form."""
+def test_finalize_leaves_deterministic_badge_untouched(tmp_assess_dir: Path) -> None:
+    """Finalize does NOT overwrite the deterministic badge with the LLM score.
+
+    The shipped badge stays the findings-count form assess_core wrote; the
+    LLM-derived score lands in the report/log instead, so the badge never claims
+    a grade a deterministic run cannot reproduce.
+    """
     _seed_log_md(tmp_assess_dir)
     _seed_run_context(tmp_assess_dir)
-    (tmp_assess_dir / "badge.json").write_text(
+    deterministic_badge = (
         '{"schemaVersion": 1, "label": "AI-readiness", '
-        '"message": "9 findings · 9 stale markers", "color": "orange"}',
-        encoding="utf-8",
+        '"message": "9 findings · 9 stale markers", "color": "orange", '
+        '"link": "./assess-report.md"}'
     )
+    (tmp_assess_dir / "badge.json").write_text(deterministic_badge, encoding="utf-8")
     (tmp_assess_dir / "finalize-input.json").write_text(
         json.dumps(_base_input()), encoding="utf-8"
     )
@@ -457,8 +586,13 @@ def test_finalize_writes_score_badge(tmp_assess_dir: Path) -> None:
     finalize_run(assess_dir=tmp_assess_dir)
 
     badge = json.loads((tmp_assess_dir / "badge.json").read_text(encoding="utf-8"))
-    assert badge["message"] == "6.0/8 · Solid"
-    assert badge["color"] == "green"
+    # Badge unchanged: still the deterministic findings form, no LLM score.
+    assert badge["message"] == "9 findings · 9 stale markers"
+    assert "6.0/8" not in badge["message"]
+    assert badge["link"] == "./assess-report.md"
+    # The LLM score still lands where it belongs: the report/log entry.
+    log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "**AI Readiness:** 6.0 / 8 (Solid)" in log
 
 
 # --- Task 1: finalize reconciles run-context invariants (fail-closed) --------
@@ -584,8 +718,13 @@ def test_finalize_run_id_mismatch_refuses(tmp_assess_dir: Path) -> None:
         finalize_run(assess_dir=tmp_assess_dir)
 
 
-def test_finalize_run_id_match_stamps_badge(tmp_assess_dir: Path) -> None:
-    """Matching run_id passes, and the badge is stamped with it."""
+def test_finalize_run_id_match_finalizes_log(tmp_assess_dir: Path) -> None:
+    """A matching run_id passes the torn-write check and finalize completes.
+
+    (The badge is deterministic and written by assess_core, so finalize no
+    longer stamps it - the run_id proves the input was authored against this
+    run, which is what unblocks the write-back.)
+    """
     _seed_log_md(tmp_assess_dir)
     run_id = "20260707120000-abcdef01"
     _seed_run_context(tmp_assess_dir, run_id=run_id)
@@ -593,8 +732,8 @@ def test_finalize_run_id_match_stamps_badge(tmp_assess_dir: Path) -> None:
 
     finalize_run(assess_dir=tmp_assess_dir)
 
-    badge = json.loads((tmp_assess_dir / "badge.json").read_text(encoding="utf-8"))
-    assert badge["run_id"] == run_id
+    log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "**AI Readiness:** 6.0 / 8 (Solid)" in log
 
 
 def test_finalize_legacy_input_without_run_id_still_works(tmp_assess_dir: Path) -> None:

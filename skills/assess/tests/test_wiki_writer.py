@@ -9,9 +9,22 @@ from lib.wiki_writer import (
     LogEntry,
     append_log_entry,
     slug_for_path,
+    verify_log_chain,
     write_hotspot_page,
     write_index,
 )
+
+
+def _log_entry(**overrides: object) -> LogEntry:
+    """A baseline LogEntry; overrides win."""
+    base = dict(
+        run_date="2026-07-07", files_scored=100, readiness_score=4.5,
+        maturity_label="Solid", instructions_grade="B+",
+        graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
+        top_action="Action X", plugin_version="1.55.0",
+    )
+    base.update(overrides)
+    return LogEntry(**base)
 
 
 def test_slug_for_path_basic() -> None:
@@ -369,3 +382,101 @@ def test_write_hotspot_page_stamps_run_id(tmp_assess_dir: Path) -> None:
     page = next((tmp_assess_dir / "hotspots").iterdir())
     content = page.read_text(encoding="utf-8")
     assert content.startswith("<!-- assess:run_id=20260707120000-abcdef01 artifact_schema_version=1.0.0 -->")
+
+
+# --- log.md integrity chain (assess-obey-thyself, task 11) --------------------
+
+
+def test_log_entry_carries_chain_marker(tmp_assess_dir: Path) -> None:
+    """Every appended entry gets a 16-hex-char chain marker."""
+    append_log_entry(tmp_assess_dir, _log_entry())
+    content = (tmp_assess_dir / "log.md").read_text()
+    import re
+    markers = re.findall(r"<!-- chain:([0-9a-f]{16}) -->", content)
+    assert len(markers) == 1
+
+
+def test_log_chain_verifies_valid(tmp_assess_dir: Path) -> None:
+    """A log written only via append_log_entry verifies clean across many runs."""
+    for i in range(3):
+        append_log_entry(tmp_assess_dir, _log_entry(run_date=f"2026-07-0{i + 1}"))
+    valid, broken_at = verify_log_chain(tmp_assess_dir)
+    assert valid is True
+    assert broken_at is None
+
+
+def test_log_chain_genesis_no_file(tmp_assess_dir: Path) -> None:
+    """No log yet (fresh install) is vacuously valid - nothing to contradict."""
+    valid, broken_at = verify_log_chain(tmp_assess_dir)
+    assert valid is True
+    assert broken_at is None
+
+
+def test_log_chain_first_entry_uses_genesis(tmp_assess_dir: Path) -> None:
+    """The first entry chains off the literal 'genesis' - a lone entry verifies."""
+    append_log_entry(tmp_assess_dir, _log_entry())
+    valid, broken_at = verify_log_chain(tmp_assess_dir)
+    assert valid is True
+    assert broken_at is None
+
+
+def test_log_chain_hash_is_deterministic(tmp_path: Path) -> None:
+    """Identical content in two fresh logs yields byte-identical chain markers."""
+    import re
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+    append_log_entry(a, _log_entry())
+    append_log_entry(b, _log_entry())
+    marker_a = re.search(r"<!-- chain:([0-9a-f]{16}) -->", (a / "log.md").read_text())
+    marker_b = re.search(r"<!-- chain:([0-9a-f]{16}) -->", (b / "log.md").read_text())
+    assert marker_a is not None and marker_b is not None
+    assert marker_a.group(1) == marker_b.group(1)
+
+
+def test_log_chain_detects_edited_prior_entry(tmp_assess_dir: Path) -> None:
+    """Editing a prior entry breaks the chain; the next run detects the break at
+    entry N and discloses it in the log."""
+    append_log_entry(tmp_assess_dir, _log_entry(run_date="2026-07-01", top_action="First"))
+    append_log_entry(tmp_assess_dir, _log_entry(run_date="2026-07-02", top_action="Second"))
+    log_path = tmp_assess_dir / "log.md"
+
+    # Tamper with the first entry's body after the fact.
+    tampered = log_path.read_text().replace("First", "Tampered")
+    log_path.write_text(tampered)
+
+    valid, broken_at = verify_log_chain(tmp_assess_dir)
+    assert valid is False
+    assert broken_at == 1
+
+    # Next run discloses the break in the log itself.
+    append_log_entry(tmp_assess_dir, _log_entry(run_date="2026-07-03", top_action="Third"))
+    content = log_path.read_text()
+    assert "History integrity broken at entry 1" in content
+
+
+def test_log_chain_disclosure_added_once(tmp_assess_dir: Path) -> None:
+    """A persistent break is disclosed once, not re-spammed on every later run."""
+    append_log_entry(tmp_assess_dir, _log_entry(run_date="2026-07-01", top_action="First"))
+    log_path = tmp_assess_dir / "log.md"
+    log_path.write_text(log_path.read_text().replace("First", "Tampered"))
+
+    append_log_entry(tmp_assess_dir, _log_entry(run_date="2026-07-02"))
+    append_log_entry(tmp_assess_dir, _log_entry(run_date="2026-07-03"))
+    content = log_path.read_text()
+    assert content.count("History integrity broken at entry 1") == 1
+
+
+def test_log_chain_legacy_entry_without_marker_is_valid(tmp_assess_dir: Path) -> None:
+    """A pre-chain log (entries with no markers) verifies as valid, and a new
+    chained entry appended after it still verifies."""
+    (tmp_assess_dir / "log.md").write_text(
+        "# Assess Log\n\n## 2026-05-01\n\nOld entry.\n\n---\n"
+    )
+    valid, broken_at = verify_log_chain(tmp_assess_dir)
+    assert valid is True and broken_at is None
+
+    append_log_entry(tmp_assess_dir, _log_entry(run_date="2026-07-02"))
+    valid, broken_at = verify_log_chain(tmp_assess_dir)
+    assert valid is True and broken_at is None

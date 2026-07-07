@@ -89,6 +89,53 @@ FINDING_ACTIONS = {
     "refactor_boundary": "safe to hand an agent in isolation",
 }
 
+# The execution *mode* each finding type warrants - the deterministic posture an
+# executor should take before touching the code, derived from the finding, never
+# guessed by the LLM. Three modes, each tracing to one of the write-side
+# tendencies the toolkit guards against:
+#
+#   characterize_first  - understand/contract the code before changing it. The
+#       risk is acting blind on a seam or a complexity nobody has pinned, so the
+#       first move is to characterise (write the missing contract, investigate
+#       the seam, anchor an owner), not to edit.
+#   verify_then_retire  - a self-description that may be lying (a stale doc, an
+#       aged marker, a self-referential test, a maybe-dead file). Verify whether
+#       it is still true, then retire it - delete, ticket, or escalate. Never
+#       trust it as-is.
+#   refactor_safe       - a bounded island safe to restructure in isolation (a
+#       refactor boundary, or an accreted file to extract/split down).
+#
+# Every name in FINDING_ORDER is mapped; a finding that reaches mode derivation
+# without a mapping (or an action with no finding attribution) falls back to
+# DEFAULT_FINDING_MODE - characterize_first, the conservative "understand before
+# you touch it" posture.
+FINDING_MODES = {
+    "hidden_coupling": "characterize_first",
+    "lying_map": "verify_then_retire",
+    "unexplained_complexity": "characterize_first",
+    "untrusted_hotspot": "characterize_first",
+    "self_referential_tests": "verify_then_retire",
+    "unactioned_intent": "verify_then_retire",
+    "accretion_ratchet": "refactor_safe",
+    "orphaned_understanding": "characterize_first",
+    "candidate_dead_weight": "verify_then_retire",
+    "override_contradicts_signals": "characterize_first",
+    "refactor_boundary": "refactor_safe",
+}
+DEFAULT_FINDING_MODE = "characterize_first"
+# The closed set of modes, exposed for validators/tests that assert coverage.
+FINDING_MODE_VALUES = frozenset(FINDING_MODES.values())
+
+
+def mode_for_finding(name: str | None) -> str:
+    """The deterministic execution mode for a finding type.
+
+    Returns :data:`DEFAULT_FINDING_MODE` for an unknown or missing finding name,
+    so a caller can derive a mode unconditionally (an action with no finding
+    attribution still gets the conservative characterize-first posture).
+    """
+    return FINDING_MODES.get(name or "", DEFAULT_FINDING_MODE)
+
 # Source-file suffix/stem markers that mean a file IS itself a test (so it never
 # needs - and never maps to - a separate sibling test). Mirrors the same idiom
 # list assess_core uses for its co-location check, kept self-contained here so
