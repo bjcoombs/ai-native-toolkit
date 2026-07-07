@@ -331,7 +331,7 @@ def test_write_index_stamps_run_id_comment(tmp_assess_dir: Path) -> None:
         run_id="20260707120000-abcdef01", schema_version="1.0.0",
     )
     content = (tmp_assess_dir / "index.md").read_text()
-    assert "<!-- assess:run_id=20260707120000-abcdef01 schema_version=1.0.0 -->" in content
+    assert "<!-- assess:run_id=20260707120000-abcdef01 artifact_schema_version=1.0.0 -->" in content
 
 
 def test_write_index_no_run_id_is_byte_identical(tmp_assess_dir: Path) -> None:
@@ -355,7 +355,7 @@ def test_append_log_entry_stamps_run_id_per_entry(tmp_assess_dir: Path) -> None:
     )
     append_log_entry(tmp_assess_dir, entry)
     content = (tmp_assess_dir / "log.md").read_text()
-    assert "<!-- assess:run_id=20260707120000-abcdef01 schema_version=1.0.0 -->" in content
+    assert "<!-- assess:run_id=20260707120000-abcdef01 artifact_schema_version=1.0.0 -->" in content
 
 
 def test_write_hotspot_page_stamps_run_id(tmp_assess_dir: Path) -> None:
@@ -368,4 +368,4 @@ def test_write_hotspot_page_stamps_run_id(tmp_assess_dir: Path) -> None:
     )
     page = next((tmp_assess_dir / "hotspots").iterdir())
     content = page.read_text(encoding="utf-8")
-    assert content.startswith("<!-- assess:run_id=20260707120000-abcdef01 schema_version=1.0.0 -->")
+    assert content.startswith("<!-- assess:run_id=20260707120000-abcdef01 artifact_schema_version=1.0.0 -->")

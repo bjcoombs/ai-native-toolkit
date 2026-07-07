@@ -506,10 +506,12 @@ def render(files: list[tuple[Path, int, float, str]],
                   f"{metric_label} {metric:>5.0f}{aux_str}  [{src:6}]  {rel}")
 
 
-# Artifact schema version for complexity-stats.json. Mirrors assess_core's
-# SCHEMA_VERSION - the treemap runs as a separate process, so the constant is
-# duplicated rather than imported (the script has no dependency on assess_core).
-SCHEMA_VERSION = "1.0.0"
+# Artifact schema version for complexity-stats.json - the run_id provenance
+# schema (distinct from STATS_SCHEMA_VERSION below, which versions the stats
+# *layout* for diff comparability). Mirrors assess_core's
+# ARTIFACT_SCHEMA_VERSION - the treemap runs as a separate process, so the
+# constant is duplicated rather than imported (no dependency on assess_core).
+ARTIFACT_SCHEMA_VERSION = "1.0.0"
 
 
 def _new_run_id() -> str:
@@ -810,7 +812,9 @@ def write_stats(files: list[tuple[Path, int, float, str]],
 
     tool_versions = _tool_versions(files)
     stats: dict = {
-        "schema_version": SCHEMA_VERSION,
+        # Run provenance: the artifact schema and a unique id for this emission
+        # (distinct from schema_version below, which versions the stats layout).
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
         "run_id": _new_run_id(),
         "plugin_version": _read_plugin_version(),
         # Layout version of this sidecar. A cross-run diff is only comparable

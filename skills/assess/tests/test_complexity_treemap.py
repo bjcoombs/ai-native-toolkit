@@ -826,14 +826,18 @@ def test_write_svg_tooltip_shows_est_tokens_and_loc(render_lib, tmp_path):
 
 
 def test_write_stats_stamps_run_id_and_schema_version(treemap, tmp_path):
-    """The complexity-stats sidecar carries a schema_version and a unique run_id
-    (assess-obey-thyself), so each stats emission is traceable."""
+    """The complexity-stats sidecar carries an artifact_schema_version and a
+    unique run_id (assess-obey-thyself), so each stats emission is traceable.
+    Distinct from the stats-layout `schema_version` (an int, versions the diff
+    comparability)."""
     root = tmp_path
     f = root / "a.go"
     out = root / "stats.json"
     treemap.write_stats([(f, 100, 5.0, "lizard")], None, None, root, out)
     stats = json.loads(out.read_text())
-    assert stats["schema_version"] == treemap.SCHEMA_VERSION == "1.0.0"
+    assert stats["artifact_schema_version"] == treemap.ARTIFACT_SCHEMA_VERSION == "1.0.0"
+    # The stats-layout schema_version (from #244) still coexists as an int.
+    assert stats["schema_version"] == treemap.STATS_SCHEMA_VERSION
     run_id = stats["run_id"]
     stamp, _, suffix = run_id.partition("-")
     assert len(stamp) == 14 and stamp.isdigit()

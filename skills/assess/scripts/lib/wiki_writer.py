@@ -114,7 +114,7 @@ def _run_id_comment(run_id: str | None, schema_version: str | None) -> str:
     if not run_id:
         return ""
     version = schema_version or "unknown"
-    return f"<!-- assess:run_id={run_id} schema_version={version} -->\n"
+    return f"<!-- assess:run_id={run_id} artifact_schema_version={version} -->\n"
 
 
 def slug_for_path(path: str) -> str:

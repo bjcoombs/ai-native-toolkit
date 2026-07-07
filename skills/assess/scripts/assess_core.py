@@ -81,11 +81,12 @@ from lib.wiki_writer import (
 
 
 # Artifact schema version, stamped on every artifact the run produces
-# (run-context.json, the badge, actions.json, the wiki pages, complexity-stats).
-# Bumped when the cross-artifact schema changes shape in a way a consumer must
-# adapt to; a torn write (mismatched run_id) or an unexpected schema_version lets
-# assess_finalize refuse to reconcile artifacts from different runs.
-SCHEMA_VERSION = "1.0.0"
+# (run-context.json, the badge, the wiki pages, complexity-stats). Distinct from
+# the stats-layout `schema_version` (from #244) that versions the sidecar shape
+# for diff comparability: this one versions the run_id provenance envelope.
+# Bumped when the cross-artifact provenance schema changes shape in a way a
+# consumer must adapt to.
+ARTIFACT_SCHEMA_VERSION = "1.0.0"
 
 
 def _new_run_id() -> str:
@@ -985,7 +986,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
             actions=UNFINALIZED_ACTIONS_POINTER,
             accretion_data=accretion_by_file.get(path),
             run_id=run_id,
-            schema_version=SCHEMA_VERSION,
+            schema_version=ARTIFACT_SCHEMA_VERSION,
         )
 
     # Also surface graduated hotspots in the index. Carry the file's actual
@@ -1030,7 +1031,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
 
     write_index(
         assess_dir, hotspot_entries, last_updated=run_date,
-        run_id=run_id, schema_version=SCHEMA_VERSION,
+        run_id=run_id, schema_version=ARTIFACT_SCHEMA_VERSION,
     )
 
     top_action = "Deterministic ranker not yet wired (LLM picks Top 3)"
@@ -1047,7 +1048,7 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
         top_action=top_action,
         plugin_version=_read_plugin_version(),
         run_id=run_id,
-        schema_version=SCHEMA_VERSION,
+        schema_version=ARTIFACT_SCHEMA_VERSION,
     )
     append_log_entry(assess_dir, log_entry)
 
@@ -1057,10 +1058,12 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # signal functions that consume them.
     ctx: dict[str, Any] = {
         # Run provenance: the unique id every artifact of this run carries, and
-        # the schema version a consumer checks before reading. finalize refuses
-        # to reconcile a finalize-input whose run_id disagrees (a torn write).
+        # the artifact schema version a consumer checks before reading. finalize
+        # refuses to reconcile a finalize-input whose run_id disagrees (a torn
+        # write). `artifact_schema_version` is distinct from the stats-layout
+        # `schema_version` set further below (from #244).
         "run_id": run_id,
-        "schema_version": SCHEMA_VERSION,
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
         "run_date": run_date,
         # The commit the scan measured. Absolute LOC/CCN figures are a snapshot
         # of this commit; the report pins the SHA and warns when HEAD is dirty

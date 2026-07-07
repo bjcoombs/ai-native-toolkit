@@ -1777,7 +1777,7 @@ def test_run_opt_in_mutation_degrades_on_scan_failure(tmp_path: Path, monkeypatc
 def test_run_context_carries_run_id_and_schema_version(tmp_path: Path) -> None:
     repo = _minimal_repo(tmp_path)
     ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
-    assert ctx["schema_version"] == assess_core.SCHEMA_VERSION == "1.0.0"
+    assert ctx["artifact_schema_version"] == assess_core.ARTIFACT_SCHEMA_VERSION == "1.0.0"
     # run_id shape: YYYYMMDDHHMMSS-<8 hex>
     run_id = ctx["run_id"]
     stamp, _, suffix = run_id.partition("-")
@@ -1786,7 +1786,7 @@ def test_run_context_carries_run_id_and_schema_version(tmp_path: Path) -> None:
     # The same id is persisted to run-context.json on disk.
     on_disk = json.loads((repo / ".assess" / "run-context.json").read_text())
     assert on_disk["run_id"] == run_id
-    assert on_disk["schema_version"] == "1.0.0"
+    assert on_disk["artifact_schema_version"] == "1.0.0"
 
 
 def test_run_context_run_id_is_unique_per_run(tmp_path: Path) -> None:
