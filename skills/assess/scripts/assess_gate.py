@@ -18,9 +18,11 @@ nothing fails, so adopting the emitted workflow never blocks a pipeline by
 surprise.
 
 Exit codes:
-    0  pass (nothing failing, or the gate is disabled / warn-only)
+    0  pass (nothing failing, the gate is disabled / warn-only, OR an
+       infrastructure failure - missing/corrupt run-context - was skipped: an
+       infra failure is never a red check on an unrelated PR)
     1  fail (a floor was breached, or an opted-in regression fired)
-    2  usage error (missing run-context, bad arguments)
+    2  usage error (no repo_root argument)
 
 Run:
     uv run assess_gate.py <repo_root> [--config <path>]
@@ -232,12 +234,19 @@ def main(argv: list[str] | None = None) -> int:
     try:
         ctx = load_context(repo_root)
     except (OSError, json.JSONDecodeError) as e:
+        # The run-context is missing or corrupt because the deterministic core
+        # failed to produce it - an infrastructure failure, not an AI-readiness
+        # finding. Skip with a clear notice and exit 0 so a broken render never
+        # fails a PR that has nothing to do with the breakage. The gate runs
+        # again on the next push, when the core has a clean run-context.
         print(
-            f"error: could not read {repo_root}/.assess/run-context.json ({e}); "
-            "run assess_core.py first",
+            f"/assess gate skipped: infrastructure failure "
+            f"({type(e).__name__}: {e}).\n"
+            "This is an infra issue, not a finding. The gate will run on the "
+            "next push.",
             file=sys.stderr,
         )
-        return 2
+        return 0
     gate = (
         load_gate_config_file(Path(config_path))
         if config_path is not None

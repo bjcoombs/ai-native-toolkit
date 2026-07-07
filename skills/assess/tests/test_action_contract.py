@@ -73,12 +73,40 @@ def test_assessment_steps_are_guarded_on_uv():
     """Render + gate only run when uv is available; unavailable uv must skip
     with a notice (warn-only contract), never fail the consumer's check."""
     guarded = [
-        s for s in _steps() if s.get("if") == "steps.ensure-uv.outputs.ok == 'true'"
+        s for s in _steps() if "steps.ensure-uv.outputs.ok == 'true'" in (s.get("if") or "")
     ]
-    assert len(guarded) == 2
+    # Render, the skip-notice reporter, and the gate all require uv.
+    assert len(guarded) == 3
     ensure = next(s for s in _steps() if s.get("id") == "ensure-uv")
     assert "::notice::" in ensure["run"]
     assert "ok=false" in ensure["run"]
+
+
+def test_render_step_is_continue_on_error():
+    """A mid-render crash is infrastructure, not a finding: the render step must
+    continue-on-error so it degrades to a skip, never a red check."""
+    render = next(s for s in _steps() if s.get("id") == "render")
+    assert render["continue-on-error"] is True
+
+
+def test_gate_runs_only_after_successful_render():
+    """The gate must run meaningfully only when the snapshot rendered whole: its
+    guard requires both uv and a successful render outcome."""
+    gate = next(s for s in _steps() if "assess_gate.py" in s.get("run", ""))
+    cond = gate.get("if") or ""
+    assert "steps.ensure-uv.outputs.ok == 'true'" in cond
+    assert "steps.render.outcome == 'success'" in cond
+
+
+def test_failed_render_emits_skip_notice():
+    """A failed render surfaces a skip notice (never a failure) so the skip is
+    visible in the checks UI as infrastructure, not a finding."""
+    skip = next(
+        s for s in _steps()
+        if "steps.render.outcome == 'failure'" in (s.get("if") or "")
+    )
+    assert "::notice::" in skip["run"]
+    assert "not a finding" in skip["run"]
 
 
 def test_infra_steps_cannot_red_the_check():
