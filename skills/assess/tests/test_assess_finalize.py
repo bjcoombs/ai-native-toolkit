@@ -369,14 +369,22 @@ def _good_action(rank: int = 1) -> dict:
     }
 
 
+def _distinct_action(rank: int, *, finding: str | None = None) -> dict:
+    """A good action with a rank-unique directive (the carry-forward identity)."""
+    a = {**_good_action(rank=rank), "action": f"Action number {rank}"}
+    if finding is not None:
+        a["finding"] = finding
+    return a
+
+
 def test_finalize_writes_actions_contract(tmp_assess_dir: Path) -> None:
     """An `actions` array in the input becomes the durable .assess/actions.json,
-    sorted by rank, with the executor-critical fields intact."""
+    sorted by rank, with the executor-critical fields intact (v2 schema)."""
     _seed_log_md(tmp_assess_dir)
-    _seed_run_context(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir, run_id="run-abc")
     finalize_input = {
         **_base_input(),
-        "actions": [_good_action(rank=2), _good_action(rank=1)],
+        "actions": [_distinct_action(rank=2), _distinct_action(rank=1)],
     }
     (tmp_assess_dir / "finalize-input.json").write_text(
         json.dumps(finalize_input), encoding="utf-8"
@@ -387,11 +395,121 @@ def test_finalize_writes_actions_contract(tmp_assess_dir: Path) -> None:
     contract = json.loads(
         (tmp_assess_dir / "actions.json").read_text(encoding="utf-8")
     )
-    assert contract["schema"] == 1
+    assert contract["schema"] == 2
+    assert contract["run_id"] == "run-abc"
     assert [a["rank"] for a in contract["actions"]] == [1, 2]
     for a in contract["actions"]:
         assert a["done_when"]
         assert a["scope_fence"]
+        # v2 lifecycle fields present and initialised for a first run.
+        assert a["status"] == "pending"
+        assert a["claimed_by"] is None
+        assert a["completed_sha"] is None
+        assert a["mode"] in {
+            "characterize_first", "verify_then_retire", "refactor_safe",
+        }
+
+
+def test_finalize_derives_mode_from_finding(tmp_assess_dir: Path) -> None:
+    """`mode` is derived deterministically from each action's finding type; an
+    action with no finding falls back to the conservative characterize_first."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    finalize_input = {
+        **_base_input(),
+        "actions": [
+            _distinct_action(rank=1, finding="lying_map"),
+            _distinct_action(rank=2, finding="refactor_boundary"),
+            _distinct_action(rank=3),  # no finding -> default
+        ],
+    }
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps(finalize_input), encoding="utf-8"
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    by_rank = {
+        a["rank"]: a
+        for a in json.loads(
+            (tmp_assess_dir / "actions.json").read_text(encoding="utf-8")
+        )["actions"]
+    }
+    assert by_rank[1]["mode"] == "verify_then_retire"
+    assert by_rank[2]["mode"] == "refactor_safe"
+    assert by_rank[3]["mode"] == "characterize_first"
+
+
+def test_finalize_carries_status_across_runs(tmp_assess_dir: Path) -> None:
+    """A done action stays done with its completed_sha on re-run - status,
+    claimed_by, and completed_sha are carried forward by the action directive."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    # Run 1: writes a pending contract.
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps({**_base_input(), "actions": [_distinct_action(rank=1)]}),
+        encoding="utf-8",
+    )
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    # An executor marks the action done out of band.
+    contract_path = tmp_assess_dir / "actions.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract["actions"][0].update(
+        status="done", claimed_by="agent-7", completed_sha="deadbeef",
+    )
+    contract_path.write_text(json.dumps(contract), encoding="utf-8")
+
+    # Run 2: the same action re-appears (rank changed) - it must stay done.
+    # Same directive text (the carry-forward key), new rank.
+    _seed_log_md(tmp_assess_dir)
+    reranked = {**_distinct_action(rank=1), "rank": 3}
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps({**_base_input(), "actions": [reranked]}),
+        encoding="utf-8",
+    )
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    after = json.loads(contract_path.read_text(encoding="utf-8"))["actions"][0]
+    assert after["status"] == "done"
+    assert after["claimed_by"] == "agent-7"
+    assert after["completed_sha"] == "deadbeef"
+    assert after["rank"] == 3  # rank is recomputed, not carried
+
+
+def test_finalize_reads_v1_actions_for_carry_forward(tmp_assess_dir: Path) -> None:
+    """A pre-existing v1 actions.json (no lifecycle fields) is read without
+    error; the re-run upgrades it to v2 with every action initialised pending."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    # A v1-shaped contract on disk from before this schema existed.
+    (tmp_assess_dir / "actions.json").write_text(
+        json.dumps({
+            "schema": 1,
+            "actions": [{
+                "rank": 1,
+                "action": "Action number 1",
+                "done_when": "x",
+                "scope_fence": "y",
+            }],
+        }),
+        encoding="utf-8",
+    )
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps({**_base_input(), "actions": [_distinct_action(rank=1)]}),
+        encoding="utf-8",
+    )
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    contract = json.loads(
+        (tmp_assess_dir / "actions.json").read_text(encoding="utf-8")
+    )
+    assert contract["schema"] == 2
+    entry = contract["actions"][0]
+    assert entry["status"] == "pending"
+    assert entry["claimed_by"] is None
+    assert entry["completed_sha"] is None
 
 
 def test_finalize_without_actions_writes_no_contract(tmp_assess_dir: Path) -> None:
