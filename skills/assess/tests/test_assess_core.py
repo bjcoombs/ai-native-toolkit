@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 
 import assess_core
 from assess_core import build_run_context
@@ -229,7 +230,9 @@ def test_ancestor_instruction_files_key_present(tmp_path: Path) -> None:
     assert isinstance(ctx["ancestor_instruction_files"], list)
 
 
-def test_build_run_context_first_run(tmp_path: Path) -> None:
+def test_build_run_context_first_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """No prior .assess/, no instruction files - 'new' diff, empty instructions."""
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -248,6 +251,10 @@ def test_build_run_context_first_run(tmp_path: Path) -> None:
     }
     (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
 
+    # Clear the ambient CI signal so the default (no-flag) run is genuinely
+    # interactive regardless of where the suite runs (locally or under CI).
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("ASSESS_NON_INTERACTIVE", raising=False)
     ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
 
     assert ctx["run_date"] == "2026-05-22"
@@ -262,13 +269,20 @@ def test_build_run_context_first_run(tmp_path: Path) -> None:
     assert ctx["decline_markers"] == []
     assert ctx["reoffer_mutation"] is False
     assert ctx["decline_disclosures"] == []
-    # Interactivity/offers block present; when non-interactive every offer is
-    # pre-recorded as skipped (the run's own environment decides which branch).
-    assert "interactive" in ctx
-    assert isinstance(ctx["offers"], list)
-    if not ctx["interactive"]:
-        assert all(o["status"] == "skipped" for o in ctx["offers"])
-        assert {o["type"] for o in ctx["offers"]}  # non-empty when headless
+    # Default run (no --non-interactive, no CI env): interactive, offers left
+    # empty for the orchestrator to present live - NOT pre-recorded as skipped.
+    assert ctx["interactive"] is True
+    assert ctx["offers"] == []
+
+    # Explicit headless signal: every offer is pre-recorded as skipped and the
+    # orchestrator makes zero prompts. This is the wiring the CLI --non-interactive
+    # flag drives, verified independent of the ambient environment.
+    ctx_headless = build_run_context(
+        repo_root=repo, run_date="2026-05-22", non_interactive=True
+    )
+    assert ctx_headless["interactive"] is False
+    assert {o["type"] for o in ctx_headless["offers"]}  # non-empty
+    assert all(o["status"] == "skipped" for o in ctx_headless["offers"])
 
 
 def test_build_run_context_surfaces_decline_markers(tmp_path: Path) -> None:

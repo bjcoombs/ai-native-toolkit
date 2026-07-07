@@ -308,11 +308,17 @@ uv run "$SKILL_DIR/scripts/doc-graph-svg.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess
 
 # Run the deterministic core (instruction grading, doc link-graph, doc staleness,
 # liveness/dead-code, observability rungs, stats diff, wiki files, run-context.json)
+# Headless/CI run (the same condition you used for Phase 1 in Step 2b)? Append
+# `--non-interactive` so the core records every consent offer as skipped. A normal
+# interactive /assess omits it - the core NEVER infers interactivity from stdin,
+# because it runs as a subprocess with no controlling terminal.
 <!-- chat-replace:uv-core -->
 uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT"
 ```
 
 Either SVG is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated - <reason>" in the report and continue. The doc graph shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
+
+**Interactivity signal (explicit, not stdin).** The core is a subprocess with no controlling terminal, so `sys.stdin.isatty()` is always false even in a normal interactive `/assess` - it is never used to decide interactivity. Instead you tell the core: pass `--non-interactive` (or set `ASSESS_NON_INTERACTIVE=1` / `CI`) **only** on a genuinely headless/CI run - the same signal you already self-determined for Phase 1. With no flag and no CI env, the run is interactive by default and `run-context.json .interactive` is `true`, so Phases 3 and 2 present their offers live. This keeps all three phases consistent: Phase 1 (orchestration) and Phases 2/3 (the flag you pass here) read from one decision, not two.
 
 Now `$REPO_ROOT/.assess/run-context.json` contains the structured data you need for the prose sections. Read it before writing the report.
 

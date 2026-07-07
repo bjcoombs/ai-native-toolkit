@@ -94,6 +94,8 @@ def test_major_bump_sets_reoffer(tmp_path: Path) -> None:
     block = build_decline_block(d, "2.0.0")
     assert block["reoffer_mutation"] is True
     assert block["markers"][0]["reoffer"] is True
+    # A mutation tool IS re-offered (Step 2d), so its disclosure says so.
+    assert "re-offer eligible" in block["disclosures"][0]
 
 
 def test_minor_bump_no_reoffer(tmp_path: Path) -> None:
@@ -128,6 +130,10 @@ def test_reoffer_only_for_mutation_tools(tmp_path: Path) -> None:
     assert block["reoffer_mutation"] is False
     # ...but the marker itself is still flagged reoffer-eligible for its own line.
     assert block["markers"][0]["reoffer"] is True
+    # The disclosure must NOT claim "re-offer eligible": only mutation tools are
+    # re-offered (Step 2d); Step 2b never re-asks a linter decline, so promising
+    # a re-offer here would be a lying map.
+    assert "re-offer eligible" not in block["disclosures"][0]
 
 
 # ── legacy / malformed markers degrade gracefully ───────────────────────────

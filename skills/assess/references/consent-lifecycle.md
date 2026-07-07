@@ -61,8 +61,8 @@ When no human can answer - a headless run, a CI job, any non-tty stdin - **every
 
 Two enforcement surfaces, because the phases straddle the core run (Step 2c, which writes `run-context.json`):
 
-- **Phase 1 (Steps 2a/2b) precedes the core** - `run-context.json` does not exist yet. Here the contract is **orchestration**: if this is a headless/CI run (no human to answer), make no Phase 1 AskUserQuestion calls, install nothing, write no markers. You determine this from your own runtime context, using the same condition the core will record.
-- **Phases 3 and 2 (Steps 2d and the assess-pr write-back) follow the core**, so they read the authoritative flag the core computed with `sys.stdin.isatty() and not os.getenv("CI")`:
+- **Phase 1 (Steps 2a/2b) precedes the core** - `run-context.json` does not exist yet. Here the contract is **orchestration**: if this is a headless/CI run (no human to answer), make no Phase 1 AskUserQuestion calls, install nothing, write no markers. You determine this from your own runtime context.
+- **Phases 3 and 2 (Steps 2d and the assess-pr write-back) follow the core**, so they read the authoritative `interactive` flag from `run-context.json`. That flag is set from the **explicit signal you pass the core**, not a stdin probe: pass `--non-interactive` to `assess_core.py` (or set `ASSESS_NON_INTERACTIVE=1` / `CI`) **only** on the same headless/CI run for which you skipped Phase 1. `sys.stdin.isatty()` is never consulted - the core runs as a subprocess with no controlling terminal, so it would misread a normal interactive `/assess` as headless and silently suppress every offer. With no flag and no CI env, the run is interactive by default.
 
   ```bash
   jq '{interactive, offers}' "$REPO_ROOT/.assess/run-context.json"
@@ -70,4 +70,4 @@ Two enforcement surfaces, because the phases straddle the core run (Step 2c, whi
 
   When `interactive` is `false`, **make no AskUserQuestion calls** - every offer (`tool_install`, `mutation`, `pr`, `issue_tracking`, `ci_gate`, `feedback`, `uninstall`) is already recorded as `{type, status: "skipped", reason: "non-interactive"}` in `offers`, the run's audit trail. When `true`, `offers` is empty and you drive the phases live.
 
-The core cannot make AskUserQuestion calls for you, so *you* enforce "no prompts when non-interactive"; the `offers` array is the record that you did.
+Passing the same signal to Phase 1 (orchestration) and to the core (the `--non-interactive` flag) keeps all three phases reading one decision, not two. The core cannot make AskUserQuestion calls for you, so *you* enforce "no prompts when non-interactive"; the `offers` array is the record that you did.

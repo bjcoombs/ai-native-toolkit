@@ -800,8 +800,16 @@ def _build_stale_hubs(doc_graph: dict, doc_staleness: dict) -> list[dict]:
     )
 
 
-def build_run_context(*, repo_root: Path, run_date: str) -> dict:
+def build_run_context(
+    *, repo_root: Path, run_date: str, non_interactive: bool = False
+) -> dict:
     """Run the deterministic pipeline and return the structured context dict.
+
+    ``non_interactive`` is the orchestrator's explicit headless/CI signal; it
+    (together with the ``CI`` / ``ASSESS_NON_INTERACTIVE`` env vars) decides the
+    ``interactive`` flag and the pre-recorded ``offers``. It is never inferred
+    from ``sys.stdin.isatty()`` - the core always runs as a subprocess with no
+    controlling terminal, so an interactive /assess would misread as headless.
 
     Side effects: writes index.md, log.md, hotspots/*.md, run-context.json.
     """
@@ -1290,8 +1298,10 @@ def build_run_context(*, repo_root: Path, run_date: str) -> dict:
     # Non-interactive contract: in a headless/CI run no human can answer an
     # offer, so every offer is pre-recorded as skipped and the orchestrator must
     # make zero interactive prompts. Interactive runs leave `offers` empty for
-    # the orchestrator to drive live (SKILL.md's three-phase consent flow).
-    offers_block = build_offers_block()
+    # the orchestrator to drive live (SKILL.md's three-phase consent flow). The
+    # signal is explicit (the orchestrator's --non-interactive flag / CI env),
+    # never inferred from subprocess stdin.
+    offers_block = build_offers_block(non_interactive=non_interactive)
     ctx["interactive"] = offers_block["interactive"]
     ctx["offers"] = offers_block["offers"]
 
@@ -1378,12 +1388,26 @@ def main(argv: list[str] | None = None) -> int:
             "Requires a prior default run. Mutates and runs code - consent-gated."
         ),
     )
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help=(
+            "Mark this a headless/CI run: no human can answer, so every consent "
+            "offer is pre-recorded as skipped and the orchestrator makes zero "
+            "prompts. Set this (or the ASSESS_NON_INTERACTIVE / CI env vars) only "
+            "on a genuinely headless path; a normal interactive /assess omits it. "
+            "Interactivity is never inferred from subprocess stdin."
+        ),
+    )
     parsed = parser.parse_args(argv)
     repo_root = Path(parsed.repo_root).resolve()
     if parsed.opt_in_mutation:
         return run_opt_in_mutation(repo_root)
     run_date = datetime.now().strftime("%Y-%m-%d")
-    ctx = build_run_context(repo_root=repo_root, run_date=run_date)
+    ctx = build_run_context(
+        repo_root=repo_root, run_date=run_date,
+        non_interactive=parsed.non_interactive,
+    )
     print(json.dumps(ctx["diff"]))
     return 0
 

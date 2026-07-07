@@ -28,6 +28,14 @@ marker is stamped with the *current* version - its major now matches, so
 within the same major (re-offer once per major). Legacy markers carry no
 version, so they are never auto-re-offered (there is no major to compare).
 
+The ``reoffer`` field is a pure staleness signal, set for *any* tool declined
+under an older major - but only mutation tools are actually re-offered (SKILL.md
+Step 2d); Step 2b never re-asks a linter decline. So the report's
+"re-offer eligible" disclosure suffix is gated on ``MUTATION_TOOLS`` (see
+:func:`_disclosure`), and ``reoffer_mutation`` keys off the same set - a stale
+linter marker keeps ``reoffer: True`` for its own record without claiming a
+re-offer that never comes.
+
 Pure stdlib. Never raises out of :func:`read_decline_markers`.
 """
 from __future__ import annotations
@@ -180,7 +188,12 @@ def _disclosure(m: DeclineMarker) -> str:
     line = f"{label} permanently declined by {who} on {when}"
     if m.version:
         line += f" (plugin v{m.version})"
-    if m.reoffer:
+    # Only mutation tools are actually re-offered (SKILL.md Step 2d). A linter
+    # decline (scc, vulture, ...) carries reoffer=True too when it predates a
+    # major bump, but Step 2b never consults it - so gate the suffix on
+    # MUTATION_TOOLS, else a stale linter marker claims a re-offer that never
+    # comes.
+    if m.reoffer and m.tool in MUTATION_TOOLS:
         line += " - re-offer eligible (declined under an older major)"
     return line
 
