@@ -15,6 +15,18 @@ Two layers:
   validator gates certification on the operator sign-off.
 
 No AI, no network - the acceptance floor's deterministic layer.
+
+PRD criteria coverage (auditable map; entrypoint ``pytest tests/contract/``):
+- **Criterion 7 (artifact-file half):** a tier-3 escalation produces a REAL file
+  at the canonical path recorded in ``tier3_escalations[]`` -
+  ``test_tier3_criterion_materializes_artifact_file_at_recorded_path``; the run
+  stays uncertified until sign-off, which then certifies -
+  ``test_tier3_escalation_without_signoff_not_certified_then_signoff_certifies``
+  (the validator-only view of the same behaviour is in
+  ``test_completion_record.py``).
+- **A4 tier defaults** underpinning the interactive tier-3 floor (criterion 13):
+  ``test_class_tier_defaults_match_a4``,
+  ``test_unknown_class_defaults_to_two_conservative``.
 """
 from __future__ import annotations
 
