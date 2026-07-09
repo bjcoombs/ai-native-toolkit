@@ -237,8 +237,14 @@ document.addEventListener('DOMContentLoaded', async function() {
       document.addEventListener('pointerdown', onGesture, { capture: true });
       document.addEventListener('keydown', onGesture, { capture: true });
 
+      function hideExportButton() {
+        var btn = document.querySelector('button[title="Export video"]');
+        if (btn) btn.style.display = 'none';
+      }
+
       var lastVal = null, lastChangeTime = performance.now(), playing = false, playPending = false;
       function tick() {
+        hideExportButton();
         audio = document.getElementById('__narration-audio') || ensureAudio();
         var vals = findTimeNodes()
           .map(function (n) { return parseTime(n.textContent); })
