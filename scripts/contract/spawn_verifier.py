@@ -65,6 +65,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# `tiers` is a flat sibling module (no package); put this directory on the path
+# before importing it (matching verifier.py). It supplies the pure tier-3
+# artifact-path derivation and placeholder body; the chokepoint remains the sole
+# writer of the record and the materialized artifact files.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import tiers  # noqa: E402
+
 # Shared artifact location (mirrors validate_completion.DEFAULT_PROVENANCE_DIR).
 DEFAULT_CONTRACT_DIR = Path(".taskmaster/contract")
 
@@ -331,6 +338,46 @@ def _write_completion(path: Path, record: Dict[str, Any]) -> None:
     path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 
 
+def _materialize_tier3_escalations(
+    escalations: List[Dict[str, Any]], run_id: str, contract_dir: Path
+) -> List[Dict[str, Any]]:
+    """Canonicalize each tier-3 escalation and materialize its artifact FILE.
+
+    The chokepoint is the single writer of the completion record (C4); tying the
+    artifact file's creation to that same write keeps the recorded
+    ``artifact_path`` and the on-disk file co-consistent (PRD C2, criterion 7).
+    For each escalation it:
+
+    - derives the canonical, path-safe artifact location from (run_id,
+      criterion_id) via :func:`tiers.tier3_artifact_path` - the agent's proposed
+      path is advisory and is replaced with this canonical one, so a verifier
+      cannot point the record at an arbitrary or unsafe location;
+    - writes a placeholder artifact file there if none exists yet (a tier-3
+      property is human-mandatory: the operator observes into this file); and
+    - stamps ``awaiting_signoff: True`` (no operator sign-off exists at ingest).
+
+    RETURNS the enriched entries; the completion record itself is written only by
+    :func:`ingest_verifier_results`.
+    """
+    enriched: List[Dict[str, Any]] = []
+    for esc in escalations:
+        criterion_id = esc.get("criterion_id")
+        if not criterion_id:
+            raise ChokepointError("tier-3 escalation entry lacks a criterion_id")
+        artifact_path = tiers.tier3_artifact_path(run_id, criterion_id, contract_dir)
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        if not artifact_path.exists():
+            artifact_path.write_text(
+                tiers.tier3_artifact_contents(run_id, criterion_id, esc.get("observation", "")),
+                encoding="utf-8",
+            )
+        entry = dict(esc)
+        entry["artifact_path"] = str(artifact_path)
+        entry["awaiting_signoff"] = True
+        enriched.append(entry)
+    return enriched
+
+
 def ingest_verifier_results(
     spawn: VerifierSpawn, observations: VerifierObservations
 ) -> Dict[str, Any]:
@@ -348,7 +395,9 @@ def ingest_verifier_results(
     record["criteria_results"] = list(observations.criteria_results)
     record["couldnt_drive"] = list(observations.couldnt_drive)
     if observations.tier3_escalations:
-        record["tier3_escalations"] = list(observations.tier3_escalations)
+        record["tier3_escalations"] = _materialize_tier3_escalations(
+            observations.tier3_escalations, spawn.run_id, spawn.completion_path.parent
+        )
     if observations.abort_events:
         existing = record.get("abort_events")
         record["abort_events"] = (list(existing) if isinstance(existing, list) else []) + list(

@@ -88,7 +88,8 @@
         "properties": {
           "criterion_id": {"type": "string"},
           "artifact_path": {"type": "string"},
-          "observation": {"type": "string"}
+          "observation": {"type": "string"},
+          "awaiting_signoff": {"type": "boolean", "description": "Honest per-entry marker: true until the operator's sign-off is recorded. Certification is gated on record-level operator_signoff (C2, criterion 7), not on this flag."}
         }
       }
     },

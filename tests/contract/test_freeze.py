@@ -31,6 +31,7 @@ CANARIES = REPO / "tests" / "canaries"
 sys.path.insert(0, str(CONTRACT_DIR))
 
 import freeze as fz  # noqa: E402
+import tiers as ti  # noqa: E402
 import validate_completion as vc  # noqa: E402
 
 
@@ -226,6 +227,43 @@ def test_downgrade_with_justification_permits_freeze(tmp_path):
     result = fz.freeze(contract, RUN_ID, kt, record_path=record)
     assert result.frozen, result.reasons
     assert record.exists()
+
+
+REPORT_TIER1 = """# t
+
+```yaml
+class: report
+criteria:
+  - id: RP1
+    tier: 1
+    action: "Resolve each citation anchor (file path + line range)."
+    observation: "Every anchor resolves to the cited location."
+```
+"""
+
+
+def test_downgrade_defaults_derive_from_the_a4_table():
+    """The freeze gate's machine-enforced downgrade defaults are a SUBSET of the
+    authoritative A4 table (`tiers.CLASS_TIER_DEFAULTS`), keeping one source of
+    truth. interactive/report are excluded (structurally backstopped / prose-
+    guarded), so they never appear in the machine-enforced downgrade table."""
+    assert fz.DOWNGRADE_DEFAULT_TIER == {
+        "cli": ti.CLASS_TIER_DEFAULTS["cli"],
+        "refactor": ti.CLASS_TIER_DEFAULTS["refactor"],
+    }
+    assert "interactive" not in fz.DOWNGRADE_DEFAULT_TIER
+    assert "report" not in fz.DOWNGRADE_DEFAULT_TIER
+
+
+def test_report_tier1_citation_resolution_freezes_without_justification(tmp_path):
+    """A4 report split: citation-resolution is legitimately tier-1 with a
+    machine-resolvable anchor, and report downgrades are prose-guarded (not
+    machine-enforced), so a report tier-1 criterion freezes with no justification
+    - the honest-narrowness the PRD states rather than overclaiming."""
+    contract = write_contract(tmp_path, REPORT_TIER1)
+    kt = write_kill_test(tmp_path, kill_test_all_fail(contract))
+    result = fz.freeze(contract, RUN_ID, kt, record_path=tmp_path / "r.json")
+    assert result.frozen, result.reasons
 
 
 def test_upgrade_is_free(tmp_path):

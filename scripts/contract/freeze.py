@@ -56,18 +56,27 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# `tiers` is a flat sibling module (no package), so put this directory on the
+# path before importing it (matching verifier.py). Tests insert the same dir and
+# the CLI runs with the script dir on sys.path[0]; this is belt-and-suspenders
+# for other import contexts (e.g. the canary harness importing freeze).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import tiers  # noqa: E402
+
 # The four contract classes (PRD A4 / tests/canaries/README.md).
 CLASS_NAMES = ("cli", "interactive", "report", "refactor")
 VALID_TIERS = (1, 2, 3)
 
-# Class-default tiers whose downgrade is machine-enforced here (A4). Only classes
-# whose default sits above the tier-1 machine floor appear: a refactor criterion
-# is behavioural-equivalence-judged (tier-2) by default, so calling it tier-1
-# claims a binary check for something that needs equivalence judging - a real
-# weakening that must carry written justification. `cli` is listed at its tier-1
-# floor for completeness (nothing can sit below it, so it never flags).
+# Classes whose downgrade below the A4 default is MACHINE-enforced at freeze
+# (written justification required). This is deliberately a SUBSET of the full A4
+# table (`tiers.CLASS_TIER_DEFAULTS`, the single source of the defaults): a
+# refactor criterion is behavioural-equivalence-judged (tier-2) by default, so
+# calling it tier-1 claims a binary check for something that needs equivalence
+# judging - a real weakening that must carry written justification. `cli` is
+# listed at its tier-1 floor for completeness (nothing can sit below it, so it
+# never flags).
 #
-# `interactive` and `report` are intentionally ABSENT: interactive's tier-3
+# `interactive` and `report` are intentionally EXCLUDED: interactive's tier-3
 # default is machine-backstopped structurally instead (criterion 13 - an
 # interactive contract must CONTAIN a tier-3, rather than every criterion being
 # tier-3, because its headless-drivable checks legitimately sit at tier-1); and
@@ -75,7 +84,8 @@ VALID_TIERS = (1, 2, 3)
 # note, not machine-enforced. Encoding those as per-criterion downgrades would
 # false-refuse the sound interactive/report contracts that carry legitimate
 # tier-1 criteria.
-DOWNGRADE_DEFAULT_TIER = {"cli": 1, "refactor": 2}
+DOWNGRADE_ENFORCED_CLASSES = ("cli", "refactor")
+DOWNGRADE_DEFAULT_TIER = {c: tiers.CLASS_TIER_DEFAULTS[c] for c in DOWNGRADE_ENFORCED_CLASSES}
 
 # Default completion-record / provenance location, relative to the run cwd.
 DEFAULT_CONTRACT_DIR = Path(".taskmaster/contract")
