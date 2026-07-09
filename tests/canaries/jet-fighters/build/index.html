@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jet Fighters</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0a0a0b; overflow: hidden; }
+      body { display: flex; align-items: center; justify-content: center; }
+      #app { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+      canvas { background: #050507; border-radius: 12px; }
+    </style>
+  </head>
+  <body>
+    <div id="app"><canvas id="scope" width="480" height="320"></canvas></div>
+    <script>
+      // ------------------------------------------------------------------
+      // Jet Fighters - BROKEN BUILD (canary fixture).
+      //
+      // This reproduces the documented jet-fighters failure: the game merged
+      // 100% green through the marathon workflow and was UNPLAYABLE on first
+      // human launch. It launches and renders a full-looking VFD scope (jets,
+      // launcher, score) so process signals read as "done" - but no input is
+      // ever wired and the simulation never ticks. Pressing fire, moving the
+      // launcher lever, or waiting produces zero state change. The pathology
+      // the PRD's sabotage-sketch names verbatim: "game launches, renders, but
+      // input is never wired."
+      //
+      // A cold exit verifier that DRIVES this build (not just launches it) must
+      // observe the tier-1 launch/drive criteria FAIL - that detection is what
+      // canary criterion 1 asserts.
+      // ------------------------------------------------------------------
+      'use strict';
+
+      var LANES = 3;
+
+      // Single source of truth. Frozen at power-on state: it reads as a live
+      // game (PLAYING, jets on screen) but nothing ever mutates it.
+      var state = {
+        phase: 'PLAYING',
+        score: 0,
+        launcher: { lane: 1, lives: 3 },
+        // three ranks of jets, drawn once, never stepped
+        jets: [
+          { lane: 0, col: 5 }, { lane: 1, col: 5 }, { lane: 2, col: 5 },
+          { lane: 0, col: 4 }, { lane: 1, col: 4 }, { lane: 2, col: 4 }
+        ],
+        missile: null,
+        tick: 0
+      };
+
+      var canvas = document.getElementById('scope');
+      var ctx = canvas.getContext('2d');
+
+      function laneY(lane) { return 60 + lane * 90; }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // silkscreen frame
+        ctx.strokeStyle = '#cfcfcf';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(20, 20, 440, 280);
+        ctx.fillStyle = '#9aa';
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.fillText('COAST SIDE MISSILE STATION  RADAR SIGHT SCREEN', 40, 40);
+        // amber jets
+        ctx.fillStyle = '#ffab33';
+        for (var i = 0; i < state.jets.length; i++) {
+          var j = state.jets[i];
+          ctx.fillRect(60 + j.col * 40, laneY(j.lane), 22, 12);
+        }
+        // cyan launcher
+        ctx.fillStyle = '#33e0ff';
+        ctx.fillRect(420, laneY(state.launcher.lane), 18, 18);
+        // cyan missile trail (never fired in this build)
+        if (state.missile) {
+          ctx.fillRect(state.missile.x, laneY(state.missile.lane) + 4, 10, 6);
+        }
+        // VFD score readout
+        ctx.fillStyle = '#33e0ff';
+        ctx.font = 'bold 20px monospace';
+        ctx.fillText(String(state.score).padStart(3, '0'), 40, 290);
+      }
+
+      // Headless drive surface: a cold verifier reads state via this, and would
+      // send input via standard DOM keyboard events. See the intentional bug
+      // below - those events are never subscribed to.
+      window.__canary = {
+        ready: true,
+        getState: function () { return JSON.parse(JSON.stringify(state)); }
+      };
+
+      // --- THE BUG (faithful to the shipped failure) ---------------------
+      // A correct build wires input here and starts a fixed-timestep loop that
+      // steps the jets, moves the launcher, and fires missiles. This build does
+      // neither: no keydown/pointer listeners are attached, and no rAF loop
+      // advances the simulation. It renders exactly once and then sits inert.
+      //
+      //   window.addEventListener('keydown', onKey);   // <- never wired
+      //   requestAnimationFrame(loop);                 // <- never started
+      //
+      // Result: launch + render succeed (looks done), every drive is a no-op.
+      draw();
+    </script>
+  </body>
+</html>
