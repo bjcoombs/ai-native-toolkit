@@ -49,7 +49,7 @@
         "required": ["id", "tier", "result"],
         "properties": {
           "id": {"type": "string"},
-          "tier": {"enum": [1, 2, 3]},
+          "tier": {"type": "integer", "enum": [1, 2, 3]},
           "result": {"enum": ["pass", "fail", "undriven", "escalated"]},
           "observation": {"type": "string"}
         }

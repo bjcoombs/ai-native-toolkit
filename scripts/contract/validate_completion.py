@@ -201,6 +201,19 @@ def check_token(record: Dict[str, Any], provenance_dir: Optional[Any] = None) ->
         return False, "no chokepoint-issued provenance token (record has no verifier results)"
 
     run_id = record.get("run_id")
+    # run_id is interpolated into a filesystem path; a value containing path
+    # separators or ".." would escape the provenance dir and let a forged
+    # record point at an attacker-chosen side-channel file, defeating the
+    # criterion-15 token-authenticity guarantee. Reject those before building
+    # the path.
+    if (
+        not isinstance(run_id, str)
+        or not run_id
+        or "/" in run_id
+        or "\\" in run_id
+        or ".." in run_id
+    ):
+        return False, "invalid run_id: path separators are not allowed"
     path = _resolve_provenance_dir(provenance_dir) / ("%s.provenance.json" % run_id)
     if not path.exists():
         return False, "no provenance side-channel entry for run %r (forged or unissued token)" % run_id
@@ -328,6 +341,13 @@ def validate_path(record_path: Any, provenance_dir: Optional[Any] = None) -> Val
     except FileNotFoundError:
         return ValidationResult(
             VERDICT_REJECTED, False, reasons=["completion record not found: %s" % path]
+        )
+    except OSError as exc:
+        # PermissionError, IsADirectoryError, broken symlinks, etc. An
+        # unreadable record cannot be trusted, so refuse cleanly rather than
+        # crash. FileNotFoundError is handled above for a clearer message.
+        return ValidationResult(
+            VERDICT_REJECTED, False, reasons=["completion record could not be read: %s" % exc]
         )
     except ValueError as exc:
         return ValidationResult(

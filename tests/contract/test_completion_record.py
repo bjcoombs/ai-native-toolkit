@@ -307,3 +307,58 @@ def test_schema_file_is_valid_json_and_self_consistent():
     assert "run_id" in schema["required"]
     # A trivially valid record satisfies the schema.
     assert vc.validate_against_schema({"run_id": "x"}, schema) == []
+
+
+# --------------------------------------------------------------------------- #
+# Hardening: boolean tier, run_id path traversal, unreadable record file.
+# --------------------------------------------------------------------------- #
+
+
+def test_boolean_tier_rejected_by_schema(prov_dir):
+    """`tier: true` must not sneak past the schema. Python's `in` treats
+    True == 1, so an enum-only check accepts a boolean; the explicit integer
+    type is what refuses it."""
+    rec = base_record(
+        criteria_results=[
+            {"id": "c1", "tier": True, "result": "pass", "observation": "boolean tier"},
+        ]
+    )
+    result = vc.validate(rec, prov_dir)
+    assert result.verdict == vc.VERDICT_REJECTED
+    assert result.schema_errors
+    assert any("tier" in err for err in result.schema_errors)
+
+
+def test_run_id_path_traversal_not_authentic(tmp_path):
+    """A run_id with path separators must be rejected before the provenance
+    path is built, so a forged record cannot point at an attacker-chosen
+    side-channel file outside the provenance dir."""
+    prov = tmp_path / "contract"
+    # Plant an attacker-controlled provenance file one level up from prov.
+    evil_run = "../evil"
+    write_provenance(tmp_path, "evil", "tok-attacker")
+    (tmp_path / "evil.provenance.json").write_text(
+        json.dumps({"run_id": evil_run, "token": "tok-attacker"}), encoding="utf-8"
+    )
+    prov.mkdir(parents=True, exist_ok=True)
+
+    rec = base_record(run_id=evil_run)
+    rec["verifier_provenance"] = {"token": "tok-attacker", "run_id": evil_run}
+
+    authentic, reason = vc.check_token(rec, prov)
+    assert authentic is False
+    assert "run_id" in reason
+
+    # And the full validation cannot certify.
+    result = vc.validate(rec, prov)
+    assert not result.certified
+
+
+def test_unreadable_record_file_rejected(tmp_path):
+    """A record path that exists but cannot be read as a file (here, a
+    directory) yields a clean REJECTED, not a crash."""
+    record_path = tmp_path / "record.completion.json"
+    record_path.mkdir()  # a directory where a file is expected
+    result = vc.validate_path(record_path)
+    assert result.verdict == vc.VERDICT_REJECTED
+    assert not result.certified
