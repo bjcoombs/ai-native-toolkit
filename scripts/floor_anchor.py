@@ -136,7 +136,14 @@ def _default_branch(repo: str, token: str) -> str:
 
 
 def check_required_check(repo: str, branch: str, token: str) -> None:
-    """Fail unless FLOOR_CONTEXT is a required status check on ``branch``.
+    """Fail unless BOTH floor contexts are required status checks on ``branch``.
+
+    The deterministic ``FLOOR_CONTEXT`` job *and* the ``ANCHOR_CONTEXT`` job (this
+    self-anchor check) must each be required. Verifying only the deterministic one
+    leaves a disarm path: if the anchor job is not itself required, a later PR
+    could drop ``FLOOR_CONTEXT`` from protection -- the anchor would go red but no
+    longer gate, and the floor would silently disarm (PRD E2). So we fail closed
+    unless every floor context is present, naming exactly which one is missing.
 
     Checks both classic branch protection and repo rulesets, since either can
     supply a required check. A permission error (admin:read missing) fails closed.
@@ -163,13 +170,23 @@ def check_required_check(repo: str, branch: str, token: str) -> None:
     # Rulesets can also require checks (target: branch, required_status_checks rule).
     contexts.update(_ruleset_required_contexts(repo, token))
 
-    if FLOOR_CONTEXT not in contexts:
+    # Both the deterministic floor job and this self-anchor job must gate. Report
+    # the specific missing context(s) so the red is actionable per layer.
+    required = (FLOOR_CONTEXT, ANCHOR_CONTEXT)
+    missing = [ctx for ctx in required if ctx not in contexts]
+    if missing:
+        named = " and ".join(repr(ctx) for ctx in missing)
         raise AnchorError(
-            f"floor status check {FLOOR_CONTEXT!r} is NOT required on {branch!r}. "
-            f"Required contexts seen: {sorted(contexts) or 'none'}. The floor is "
-            "disarmed until it is restored (maintainer out-of-band sign-off)."
+            f"floor status check(s) {named} NOT required on {branch!r}. Both the "
+            f"deterministic floor check ({FLOOR_CONTEXT!r}) and the self-anchor "
+            f"check ({ANCHOR_CONTEXT!r}) must be required, or that layer can be "
+            f"silently disarmed. Required contexts seen: {sorted(contexts) or 'none'}. "
+            "Restore it (maintainer out-of-band sign-off)."
         )
-    print(f"ok   floor status check {FLOOR_CONTEXT!r} is required on {branch!r}.")
+    print(
+        f"ok   both floor status checks ({FLOOR_CONTEXT!r}, {ANCHOR_CONTEXT!r}) "
+        f"are required on {branch!r}."
+    )
 
 
 def _ruleset_required_contexts(repo: str, token: str) -> set[str]:

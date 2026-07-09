@@ -4,10 +4,32 @@ The API-driven checks are exercised in CI against live settings; these cover the
 deterministic, network-free surface: the fail-closed remediation message, the
 job-summary writer, and the path-glob matcher.
 """
+import pytest
+
 import floor_anchor
-from floor_anchor import _path_matches, _write_step_summary, main, remediation
+from floor_anchor import (
+    _path_matches,
+    _write_step_summary,
+    check_required_check,
+    main,
+    remediation,
+)
 
 REPO = "bjcoombs/ai-native-toolkit"
+
+
+def _stub_get(required_contexts):
+    """Return a fake ``_get`` that reports ``required_contexts`` on the branch and
+    no rulesets, so ``check_required_check`` runs offline against a known set."""
+
+    def _get(path, token):
+        if "required_status_checks" in path:
+            return 200, {"contexts": sorted(required_contexts)}
+        if path.endswith("/rulesets"):
+            return 200, []
+        return 404, {}
+
+    return _get
 
 
 # ── remediation: crisp, complete, actionable ─────────────────────────────────
@@ -84,6 +106,51 @@ def test_step_summary_noop_without_env(monkeypatch):
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     # Must not raise when the env var is absent.
     _write_step_summary("some reason", REPO)
+
+
+# ── check_required_check: BOTH floor contexts must gate (PRD E2) ─────────────
+
+def test_required_check_passes_when_both_contexts_present(monkeypatch, capsys):
+    monkeypatch.setattr(
+        floor_anchor,
+        "_get",
+        _stub_get({floor_anchor.FLOOR_CONTEXT, floor_anchor.ANCHOR_CONTEXT}),
+    )
+    # Both required -> no raise, and the ok line names both contexts.
+    check_required_check(REPO, "main", "tok")
+    out = capsys.readouterr().out
+    assert floor_anchor.FLOOR_CONTEXT in out
+    assert floor_anchor.ANCHOR_CONTEXT in out
+
+
+def test_required_check_fails_when_anchor_context_missing(monkeypatch):
+    # Deterministic layer required, self-anchor NOT: the disarm path this fix
+    # closes (a later PR could then drop 'floor enforcement' silently).
+    monkeypatch.setattr(
+        floor_anchor, "_get", _stub_get({floor_anchor.FLOOR_CONTEXT})
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        check_required_check(REPO, "main", "tok")
+    # The specific missing context is named; the present one is not flagged missing.
+    assert floor_anchor.ANCHOR_CONTEXT in str(exc.value)
+
+
+def test_required_check_fails_when_floor_context_missing(monkeypatch):
+    monkeypatch.setattr(
+        floor_anchor, "_get", _stub_get({floor_anchor.ANCHOR_CONTEXT})
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        check_required_check(REPO, "main", "tok")
+    assert floor_anchor.FLOOR_CONTEXT in str(exc.value)
+
+
+def test_required_check_fails_when_neither_context_present(monkeypatch):
+    monkeypatch.setattr(floor_anchor, "_get", _stub_get(set()))
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        check_required_check(REPO, "main", "tok")
+    msg = str(exc.value)
+    assert floor_anchor.FLOOR_CONTEXT in msg
+    assert floor_anchor.ANCHOR_CONTEXT in msg
 
 
 # ── main: fails closed when no token is available ────────────────────────────

@@ -79,4 +79,5 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           FLOOR_ANCHOR_TOKEN: ${{ secrets.FLOOR_ANCHOR_TOKEN }}
           FLOOR_CONTEXT: floor enforcement
+          ANCHOR_CONTEXT: floor self-anchor
         run: python scripts/floor_anchor.py
