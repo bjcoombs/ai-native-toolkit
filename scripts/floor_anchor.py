@@ -29,14 +29,76 @@ import urllib.request
 
 API = "https://api.github.com"
 
-# The required status check context (the floor.yml job name) and the path the
-# push ruleset must restrict.
+# The required status check context (the deterministic floor.yml job name) and
+# the path the push ruleset must restrict.
 FLOOR_CONTEXT = os.environ.get("FLOOR_CONTEXT", "floor enforcement")
 FLOOR_PATH = ".github/workflows/floor.yml"
 
 
 class AnchorError(Exception):
     """A settings gap or a failure to confirm the anchor. Always fails closed."""
+
+
+def remediation(repo: str) -> str:
+    """The three maintainer-only, out-of-band commands that arm the anchor.
+
+    Named verbatim so the red is actionable without opening the proof doc. These
+    require owner/admin and a fine-grained PAT with 'Administration: read' -- the
+    default Actions GITHUB_TOKEN cannot read branch protection or rulesets, which
+    is why the anchor fails closed until they are run (FLOOR.md clause iii).
+    """
+    return f"""\
+Missing configuration (maintainer-only, run out-of-band -- see docs/floor-anchor-proof.md):
+
+  1. Register the floor check as required on the default branch (preserving the
+     four existing required contexts):
+
+     gh api "repos/{repo}/branches/main/protection/required_status_checks" \\
+       --method PATCH \\
+       -f 'checks[][context]=skills/assess pytest' \\
+       -f 'checks[][context]=scripts/ pytest' \\
+       -f 'checks[][context]=plugin contract pytest' \\
+       -f 'checks[][context]=Validate PR title' \\
+       -f 'checks[][context]={FLOOR_CONTEXT}'
+
+  2. Path-restrict {FLOOR_PATH} via an active push ruleset (maintainer bypass),
+     so a self-merged PR cannot gut the workflow itself:
+
+     gh api "repos/{repo}/rulesets" --method POST --input - <<'JSON'
+     {{ "name": "floor-workflow-path-lock", "target": "push", "enforcement": "active",
+        "bypass_actors": [{{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}}],
+        "rules": [{{"type": "file_path_restriction",
+                   "parameters": {{"restricted_file_paths": ["{FLOOR_PATH}"]}}}}] }}
+     JSON
+
+  3. Create the anchor read token so this check can query the settings above:
+
+     gh secret set FLOOR_ANCHOR_TOKEN --repo "{repo}"   # paste a PAT: Administration: read"""
+
+
+def _write_step_summary(reason: str, repo: str) -> None:
+    """Surface the anchor-layer failure in the GitHub job summary if available.
+
+    Makes it unambiguous at a glance that the *anchor* layer is red while the
+    deterministic layer (a separate 'floor enforcement' job) is untouched.
+    """
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    body = (
+        "## Floor self-anchor: FAIL (fail-closed by design, PRD E2)\n\n"
+        f"**Anchor layer** could not confirm the floor is still enforced:\n\n"
+        f"> {reason}\n\n"
+        "The **deterministic layer** (marker-removal + FLOOR.md integrity) runs "
+        "as the separate `floor enforcement` job and is unaffected by this "
+        "failure.\n\n"
+        "```\n" + remediation(repo) + "\n```\n"
+    )
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(body)
+    except OSError:
+        pass  # step summary is best-effort; the stderr message still fails the job
 
 
 def _get(path: str, token: str) -> tuple[int, object]:
@@ -179,6 +241,14 @@ def _path_matches(target: str, patterns: list[str]) -> bool:
     return False
 
 
+def _fail(reason: str, repo: str) -> int:
+    """Emit a crisp, complete, actionable failure and fail closed."""
+    print(f"FAIL floor self-anchor: {reason}\n", file=sys.stderr)
+    print(remediation(repo), file=sys.stderr)
+    _write_step_summary(reason, repo)
+    return 1
+
+
 def main() -> int:
     repo = os.environ.get("GITHUB_REPOSITORY")
     if not repo:
@@ -186,19 +256,17 @@ def main() -> int:
         return 1
     token = os.environ.get("FLOOR_ANCHOR_TOKEN") or os.environ.get("GITHUB_TOKEN")
     if not token:
-        print(
-            "FAIL no token available. Set FLOOR_ANCHOR_TOKEN (fine-grained PAT, "
-            "'Administration: read') so the anchor can read repo settings.",
-            file=sys.stderr,
+        return _fail(
+            "no token available -- the FLOOR_ANCHOR_TOKEN secret is not set and "
+            "no GITHUB_TOKEN was provided, so repo settings cannot be read.",
+            repo,
         )
-        return 1
     try:
         branch = _default_branch(repo, token)
         check_required_check(repo, branch, token)
         check_path_restriction(repo, token)
     except AnchorError as exc:
-        print(f"FAIL self-anchor: {exc}", file=sys.stderr)
-        return 1
+        return _fail(str(exc), repo)
     print("\nSelf-anchor check passed: the floor is still enforced by repo settings.")
     return 0
 

@@ -10,20 +10,31 @@ after the outcome is recorded. Neither branch is the feature branch.
 
 ## Repo settings under test
 
+`floor.yml` runs the floor in two clearly separated jobs so a reader can see
+which layer is red: `floor enforcement` (the deterministic marker-removal +
+FLOOR.md-integrity layer, self-contained and green when honest) and
+`floor self-anchor` (the E2 repo-settings anchor, fail-closed).
+
 The enforcement topology this floor relies on (configured out-of-band by the
 maintainer -- FLOOR.md clause iii):
 
-1. **Required status check.** `floor enforcement` (the `floor.yml` job name) is a
-   required status check on `main`, added alongside the existing required checks
-   (`skills/assess pytest`, `scripts/ pytest`, `plugin contract pytest`,
-   `Validate PR title`) without disturbing them.
+1. **Required status checks.** Both floor job names -- `floor enforcement` and
+   `floor self-anchor` -- are required status checks on `main`, added alongside
+   the existing required checks (`skills/assess pytest`, `scripts/ pytest`,
+   `plugin contract pytest`, `Validate PR title`) without disturbing them. Two
+   contexts, so neither the deterministic layer nor the anchor layer can be
+   silently dropped.
 2. **Path restriction.** An active push ruleset with a `file_path_restriction`
    rule covering `.github/workflows/floor.yml`, requiring maintainer bypass to
    modify that path.
 3. **Anchor read token.** `FLOOR_ANCHOR_TOKEN` repo secret -- a fine-grained PAT
-   with `Administration: read` -- so `floor.yml`'s self-anchor step can query the
+   with `Administration: read` -- so the `floor self-anchor` job can query the
    settings above. (The default `GITHUB_TOKEN` cannot read branch protection or
    rulesets.)
+
+Until all three are configured, the `floor self-anchor` job fails closed and
+prints the exact commands below in its log and job summary; the `floor
+enforcement` deterministic job is unaffected and stays green.
 
 Exact configuration commands are in the "Configuration commands" section below so
 the state is reproducible.
@@ -91,7 +102,8 @@ gh api "repos/$REPO/branches/main/protection/required_status_checks" \
   -f 'checks[][context]=scripts/ pytest' \
   -f 'checks[][context]=plugin contract pytest' \
   -f 'checks[][context]=Validate PR title' \
-  -f 'checks[][context]=floor enforcement'
+  -f 'checks[][context]=floor enforcement' \
+  -f 'checks[][context]=floor self-anchor'
 
 # 2. Path-restrict floor.yml via a push ruleset (maintainer bypass).
 gh api "repos/$REPO/rulesets" --method POST --input - <<'JSON'
