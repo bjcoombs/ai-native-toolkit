@@ -417,6 +417,28 @@ def _certify(
     return ValidationResult(verdict, verdict == VERDICT_PASS, stamps, reasons)
 
 
+def freeze_evidence_valid(record: Dict[str, Any]) -> Tuple[bool, str]:
+    """Public: is this record's ``freeze_evidence`` valid freeze evidence?
+
+    Thin wrapper over the same content check the certification path uses
+    (``_freeze_valid``), exposed so the start gate can decide "may this run
+    start?" with the identical rule the validator applies at exit - freeze
+    evidence whose kill test failed, or that lacks the frozen contract hash, is
+    not valid start evidence any more than it is valid exit evidence. Reusing
+    this keeps the two gates from drifting apart.
+    """
+    return _freeze_valid(record.get("freeze_evidence"))
+
+
+def is_signed(record: Dict[str, Any]) -> bool:
+    """Public: does this record carry an operator sign-off / signed skip?
+
+    Exposes the same predicate the validator uses so the start gate recognizes a
+    capped skip by the identical rule (A1).
+    """
+    return _is_signed(record)
+
+
 def validate(record: Dict[str, Any], provenance_dir: Optional[Any] = None) -> ValidationResult:
     """Validate a completion record. Pure over (record, provenance_dir)."""
     # Schema. A malformed record is untrustworthy; refuse before logic.
