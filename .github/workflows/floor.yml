@@ -1,7 +1,7 @@
-# The constitutional floor of the acceptance-contract workflow (PRD E1/E2).
+# The constitutional floor of the acceptance-contract workflow (PRD E1/E2/E3).
 #
-# The floor is enforced in two clearly separated layers, each a distinct job so
-# a reader can see at a glance WHICH layer is red:
+# The floor is enforced in clearly separated layers, each a distinct job so a
+# reader can see at a glance WHICH layer is red:
 #
 #   floor enforcement (deterministic, self-contained, always green when honest):
 #     1. Marker removal detection (base-vs-head). Fails a PR that removes a floor
@@ -21,8 +21,26 @@
 #     the floor (FLOOR.md clause iii); until it is done the anchor fails closed
 #     with the exact commands needed, and its red is isolated to this job.
 #
-# Both jobs are required status checks on the default branch (see
-# docs/floor-anchor-proof.md), so neither layer can be silently disarmed.
+#   canary suite (E3, semantic layer -- conditional):
+#     Runs scripts/canaries/run_canaries.py, which drives the REAL gates against
+#     the committed and per-run blind fixtures (no mocks). It is the expensive
+#     semantic layer, so it runs only on PRs that touch the workflow skills or the
+#     gate/canary code (skills/marathon/, skills/pr-review-merge/, commands/tm.md,
+#     commands/issues.md, scripts/contract/, scripts/canaries/, tests/canaries/, and
+#     floor.yml itself, so a change to the wiring re-runs the canaries) -- a `canary
+#     path filter` job diffs the PR against its base and gates it. On a
+#     non-touching PR the suite job is skipped (neutral, never blocks). On a
+#     touching PR it retries ONCE on failure (a real infra/model flake is re-run)
+#     and then stays red -- it is never auto-skipped. The deterministic internals
+#     are additionally unit-tested by tests/contract/test_canary_harness.py in the
+#     required `plugin contract pytest` job, so the pure-code path is covered even
+#     on PRs that do not trigger this suite.
+#
+# The deterministic `floor enforcement` and `floor self-anchor` jobs are required
+# status checks on the default branch (see docs/floor-anchor-proof.md), so neither
+# can be silently disarmed. The `canary suite` is conditional (it cannot be a
+# required check, since it must be skippable on non-touching PRs) and is enforced
+# by always running when the gate code changes rather than by branch protection.
 name: Floor
 
 on:
@@ -81,3 +99,97 @@ jobs:
           FLOOR_CONTEXT: floor enforcement
           ANCHOR_CONTEXT: floor self-anchor
         run: python scripts/floor_anchor.py
+
+  # ------------------------------------------------------------------------- #
+  # Semantic layer (E3): the canary suite. Expensive, so gated to PRs that
+  # touch the workflow skills or the gate/canary code. The path filter diffs the
+  # PR against its merge-base with the base branch (the same base-vs-head
+  # mechanism the deterministic layer uses -- no new third-party action), rather
+  # than a workflow-level `paths:` trigger, because floor.yml must keep running
+  # on ALL PRs for the two jobs above.
+  canary-changes:
+    name: canary path filter
+    runs-on: ubuntu-latest
+    outputs:
+      run_canaries: ${{ steps.filter.outputs.run_canaries }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 0  # full history so the merge-base is resolvable
+          persist-credentials: false
+
+      - name: Fetch the PR base branch
+        run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+
+      - name: Detect changes to workflow-skill / gate paths
+        id: filter
+        run: |
+          BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          echo "merge-base: ${BASE_SHA}"
+          # Paths that carry a floor obligation, drive the gates the canary suite
+          # exercises, or wire the suite itself (floor.yml -- so a change to the
+          # canary invocation re-runs the canaries and proves the wiring). This is
+          # the file set FLOOR.md clause iii protects; keep the two in sync.
+          if git diff --name-only "${BASE_SHA}" HEAD \
+            | grep -qE '^(skills/marathon/|skills/pr-review-merge/|commands/tm\.md$|commands/issues\.md$|scripts/contract/|scripts/canaries/|tests/canaries/|\.github/workflows/floor\.yml$)'; then
+            echo "run_canaries=true" >> "$GITHUB_OUTPUT"
+            echo "Workflow-skill / gate paths changed: canary suite WILL run."
+          else
+            echo "run_canaries=false" >> "$GITHUB_OUTPUT"
+            echo "No workflow-skill / gate paths changed: canary suite will be skipped."
+          fi
+
+  canary-suite:
+    name: canary suite (semantic layer)
+    needs: canary-changes
+    if: needs.canary-changes.outputs.run_canaries == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+
+      # The interactive fixtures need a JS runtime to drive them; without one the
+      # harness reports criteria 1/2b as NOT-RUN and fails closed. ubuntu-latest
+      # ships Node preinstalled (node:fs + node:vm only -- no npm install), so a
+      # visible version print is enough to assert the runtime is present and fail
+      # loudly here rather than let the harness NOT-RUN downstream.
+      - name: Verify Node runtime for the interactive driver
+        run: node --version
+
+      # Semantic layer, E3 execution model: run the real-gate harness. Retry
+      # ONCE on failure to absorb a genuine infra/model flake; if the second
+      # attempt also fails the job stays RED. It is never auto-skipped -- a red
+      # canary suite is re-run, not waved through.
+      - name: Run the canary suite (retry once, then stay red)
+        run: |
+          set +e
+          for attempt in 1 2; do
+            echo "::group::canary suite attempt ${attempt} of 2"
+            uv run python scripts/canaries/run_canaries.py
+            status=$?
+            echo "::endgroup::"
+            if [ "${status}" -eq 0 ]; then
+              echo "Canary suite green on attempt ${attempt}."
+              exit 0
+            fi
+            echo "::warning::Canary suite failed on attempt ${attempt} (exit ${status})."
+          done
+          echo "::error::Canary suite red after 2 attempts (1 retry). Not auto-skipped -- re-run once the underlying cause is fixed."
+          exit 1
+
+      - name: Semantic layer summary
+        if: success()
+        run: |
+          {
+            echo "## Floor canary suite (semantic layer): PASS"
+            echo ""
+            echo "The real freeze / cold-exit / complete gates certified the committed"
+            echo "and per-run blind fixtures. This job ran because the PR touched the"
+            echo "workflow skills or the gate/canary code."
+          } >> "$GITHUB_STEP_SUMMARY"
