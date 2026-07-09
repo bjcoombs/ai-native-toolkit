@@ -10,10 +10,15 @@ after the outcome is recorded. Neither branch is the feature branch.
 
 ## Repo settings under test
 
-`floor.yml` runs the floor in two clearly separated jobs so a reader can see
-which layer is red: `floor enforcement` (the deterministic marker-removal +
+`floor.yml` runs the floor in clearly separated jobs so a reader can see which
+layer is red: `floor enforcement` (the deterministic marker-removal +
 FLOOR.md-integrity layer, self-contained and green when honest) and
-`floor self-anchor` (the E2 repo-settings anchor, fail-closed).
+`floor self-anchor` (the E2 repo-settings anchor, fail-closed). A third job,
+`canary suite (semantic layer)` (E3), runs the real-gate canary harness only on
+PRs that touch the workflow skills or gate/canary code (gated by a `canary path
+filter` job); it is conditional and skippable, so - unlike the two below - it is
+**not** a required status check and is not part of the anchored topology proved
+here.
 
 The enforcement topology this floor relies on (configured out-of-band by the
 maintainer -- FLOOR.md clause iii):
