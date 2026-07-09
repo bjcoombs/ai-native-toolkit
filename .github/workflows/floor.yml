@@ -1,0 +1,56 @@
+# The constitutional floor of the acceptance-contract workflow (PRD E1/E2).
+#
+# Three checks, all fail-closed, on every pull request (no path filter -- the
+# greps are cheap and the required check must always report):
+#
+#   1. Marker removal detection (base-vs-head). Fails a PR that removes a floor
+#      marker or a gate invocation from a file that previously carried it. This
+#      is NOT an unconditional grep: the markers land later in the marathon, so
+#      an unconditional check would red every intermediate PR. Removal detection
+#      arms itself the moment a marker is added and bites only on removal.
+#   2. FLOOR.md four-clause integrity (unconditional -- FLOOR.md exists from the
+#      PR that introduced this workflow onward).
+#   3. Self-anchor (E2): query the live GitHub API and fail if the floor check
+#      is no longer required on the default branch, or if the path restriction
+#      on this file is gone. Reading repo settings needs admin:read, which the
+#      default GITHUB_TOKEN lacks -- provide the FLOOR_ANCHOR_TOKEN secret
+#      (fine-grained PAT, "Administration: read"). This is a maintainer
+#      out-of-band step, itself part of the floor (FLOOR.md clause iii).
+name: Floor
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  floor:
+    name: floor enforcement
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 0  # full history so the merge-base is resolvable
+          persist-credentials: false
+
+      - name: Fetch the PR base branch
+        run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+
+      - name: Marker removal detection (base-vs-head)
+        run: |
+          BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          echo "merge-base: ${BASE_SHA}"
+          python scripts/floor_check.py markers --base "${BASE_SHA}"
+
+      - name: FLOOR.md four-clause integrity
+        run: python scripts/floor_check.py clauses
+
+      - name: Self-anchor (floor still required + path restricted)
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          FLOOR_ANCHOR_TOKEN: ${{ secrets.FLOOR_ANCHOR_TOKEN }}
+          FLOOR_CONTEXT: floor enforcement
+        run: python scripts/floor_anchor.py
