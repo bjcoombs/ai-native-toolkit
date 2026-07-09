@@ -93,7 +93,7 @@ def check_required_check(repo: str, branch: str, token: str) -> None:
         raise AnchorError(f"unexpected branch-protection response (HTTP {status}): {data}")
 
     # Rulesets can also require checks (target: branch, required_status_checks rule).
-    contexts.update(_ruleset_required_contexts(repo, branch, token))
+    contexts.update(_ruleset_required_contexts(repo, token))
 
     if FLOOR_CONTEXT not in contexts:
         raise AnchorError(
@@ -104,14 +104,15 @@ def check_required_check(repo: str, branch: str, token: str) -> None:
     print(f"ok   floor status check {FLOOR_CONTEXT!r} is required on {branch!r}.")
 
 
-def _ruleset_required_contexts(repo: str, branch: str, token: str) -> set[str]:
+def _ruleset_required_contexts(repo: str, token: str) -> set[str]:
+    # Best-effort: rulesets are a *second* place a required check can live. If
+    # the token cannot read them, don't fail here -- either branch protection
+    # already supplies the floor context (this call was just supplementary), or
+    # it doesn't and the membership check fails with the clearer "NOT required"
+    # message. The hard ruleset-access failure is owned by check_path_restriction,
+    # which genuinely cannot proceed without ruleset read.
     contexts: set[str] = set()
     status, rulesets = _get(f"/repos/{repo}/rulesets", token)
-    if status in (401, 403):
-        raise AnchorError(
-            f"cannot read rulesets (HTTP {status}). Set FLOOR_ANCHOR_TOKEN to a "
-            "PAT with 'Administration: read'."
-        )
     if status != 200 or not isinstance(rulesets, list):
         return contexts
     for summary in rulesets:
