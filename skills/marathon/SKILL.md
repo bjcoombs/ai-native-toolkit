@@ -12,6 +12,8 @@ description: >
   work.
 ---
 
+<!-- floor:cold-verify-completion -->
+
 # Marathon Engine
 
 Source-agnostic team orchestration. The caller supplies a **work-source adapter**; this
@@ -78,6 +80,16 @@ The steps below are written for **team mode** — the lead chairs an Agent Team,
 Everything else — the DAG analysis, hot-file combining, tracking file, smart-merge, crash recovery, and retrospective — is identical across modes; only the teammate-coordination mechanism differs. Where a step is team-only (the `SendMessage` events, early-shutdown, and idle-ping handling), the phased fallback simply has no equivalent: subagents return rather than message.
 
 **One team per session.** This build allows exactly one implicit team per Claude Code session, and the main session is its permanent lead. A team-mode marathon claims that single team - so do not start another team-mode skill (a second marathon, a `/huddle`) in the *same* session: its teammates would join this marathon's team and share one task list and mailbox. To run two team-mode workstreams at once (two PRDs in flight, or a huddle defining the next PRD while this marathon implements the current one), use a *separate* session - a second terminal with its own worktree. Each session gets its own isolated team (`session-<id>`-named), lead, task list, and mailbox. (Cross-session, the only shared state to watch is Task Master's global tag selection: pass `--tag` on every call or use the MCP tools so two concurrent marathons don't stomp each other's active tag.)
+
+## Entry Gate (non-removable)
+
+Before decomposing the run (Step 1), the acceptance contract must be frozen. Invoke the start gate first:
+
+```bash
+python scripts/contract/start_gate.py <run-id>   # run-id = the Task Master tag (/tm) or issue-queue slug (/issues)
+```
+
+`start_gate.py` fails closed (non-zero) unless the run has freeze evidence (a contract frozen before decomposition per `FLOOR.md` clause ii) or an `operator_signoff`-recorded signed skip. A signed skip is loud, human-authorized, and permanently caps the run at `UNVERIFIED` — it can never certify `PASS`. Do not run Step 1 or spawn any teammate until this gate exits zero. Part of the constitutional floor (`FLOOR.md`); the retro may propose changes to this step but never self-apply them.
 
 ## Step 1: DAG + Hot-File Analysis
 
@@ -477,13 +489,28 @@ The lead operates as a **tech lead running a sprint** — not a task router.
 
 1. Send `shutdown_request` to each remaining teammate **once**. Each approves with a structured `shutdown_response` (addressed to `team-lead`, echoing the `request_id`, `approve: true`), which terminates it. Treat that approval, or an already-exited teammate, as the completion signal - don't block waiting on one that has already gone.
 2. Once every teammate has acknowledged shutdown or already exited, the team is gone - background teammates reap when the session exits. If a stale one lingers, verify its pane/process is dead. Nothing persists to block a future marathon.
-3. **PRD delivery check** — Re-read the original work units' acceptance criteria (PRD, issue bodies, or task details) and cross-reference against merged PRs. Report:
+3. **Contract verification gate (non-removable)** — before the PRD-delivery check, run-complete requires a fresh non-implementing agent to execute the frozen acceptance contract against the assembled product. The frozen contract is required (its sha256 was recorded at freeze; the verifier re-hashes it and a mid-run edit aborts the run rather than certifying against a moved target). Spawn the cold verifier ONLY through the custody chokepoint — `python scripts/contract/spawn_verifier.py <frozen-contract-path> <assembled-product-path>` (exactly two positional inputs; the run-id is derived from the contract filename, and the chokepoint mints the provenance token and writes the side-channel). Drive the verifier with the emitted prompt, record its per-criterion observed results into the completion record, then gate completion with `python scripts/contract/complete_gate.py <run-id>`, which fails closed (non-zero) unless `scripts/contract/validate_completion.py` accepts the record — no record, a record without verifier results, or a rejected record all block completion. The run is not complete until this gate exits zero. Part of the constitutional floor (`FLOOR.md`); the retro may propose changes but never self-apply them.
+4. **PRD delivery check** — Re-read the original work units' acceptance criteria (PRD, issue bodies, or task details) and cross-reference against merged PRs. Report:
    - Criteria met (with PR evidence)
    - Criteria not met or partially met (flag for user)
    - Scope that was delivered beyond the original acceptance criteria (emergent work)
-4. Read the retro log (path from Marathon Configuration `$RETRO_LOG`, or skip if not configured)
-5. Run retrospective using the structured format below
-6. Append this marathon to the retro log (Marathon History + update Template Changes validation)
+5. Read the retro log (path from Marathon Configuration `$RETRO_LOG`, or skip if not configured)
+6. Run retrospective using the structured format below
+7. Append this marathon to the retro log (Marathon History + update Template Changes validation)
+
+### Retro Boundary
+
+The retrospective's self-rewrite scope **excludes** the floor artifacts. The retro may **propose** changes to any of them but must never self-apply one (`FLOOR.md` clause iii): a self-rewriting process with no outcome signal can optimize away its own verification, and that capability is already proven. Excluded (all paths relative to the repo root):
+
+- `FLOOR.md`
+- the `<!-- floor:cold-verify-completion -->` markers in all four marked files (`skills/marathon/SKILL.md`, `skills/pr-review-merge/SKILL.md`, `commands/tm.md`, `commands/issues.md`) and the gate invocations alongside them
+- `.github/workflows/floor.yml`
+- `scripts/contract/`
+- `scripts/canaries/`
+- `tests/canaries/`
+- `tests/contract/`
+
+A retro proposal touching any of these is recorded for the maintainer's out-of-band sign-off, never enacted by the run itself.
 
 ```
 ## Marathon Complete: <tag>
