@@ -32,6 +32,10 @@ API = "https://api.github.com"
 # The required status check context (the deterministic floor.yml job name) and
 # the path the push ruleset must restrict.
 FLOOR_CONTEXT = os.environ.get("FLOOR_CONTEXT", "floor enforcement")
+# The anchor job's own context. It must ALSO be a required check: if only the
+# deterministic layer is required, a later PR could drop it from protection, the
+# anchor would go red without gating, and the floor would silently disarm (E2).
+ANCHOR_CONTEXT = os.environ.get("ANCHOR_CONTEXT", "floor self-anchor")
 FLOOR_PATH = ".github/workflows/floor.yml"
 
 
@@ -50,8 +54,9 @@ def remediation(repo: str) -> str:
     return f"""\
 Missing configuration (maintainer-only, run out-of-band -- see docs/floor-anchor-proof.md):
 
-  1. Register the floor check as required on the default branch (preserving the
-     four existing required contexts):
+  1. Register BOTH floor checks as required on the default branch (preserving the
+     four existing required contexts). Both floor contexts must be required, or a
+     later PR could drop one and silently disarm that layer:
 
      gh api "repos/{repo}/branches/main/protection/required_status_checks" \\
        --method PATCH \\
@@ -59,7 +64,8 @@ Missing configuration (maintainer-only, run out-of-band -- see docs/floor-anchor
        -f 'checks[][context]=scripts/ pytest' \\
        -f 'checks[][context]=plugin contract pytest' \\
        -f 'checks[][context]=Validate PR title' \\
-       -f 'checks[][context]={FLOOR_CONTEXT}'
+       -f 'checks[][context]={FLOOR_CONTEXT}' \\
+       -f 'checks[][context]={ANCHOR_CONTEXT}'
 
   2. Path-restrict {FLOOR_PATH} via an active push ruleset (maintainer bypass),
      so a self-merged PR cannot gut the workflow itself:

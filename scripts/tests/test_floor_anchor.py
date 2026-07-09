@@ -25,6 +25,15 @@ def test_remediation_names_all_three_settings_actions():
     assert "Administration: read" in text
 
 
+def test_remediation_requires_both_floor_contexts():
+    # Both floor job contexts must be registered as required checks. Omitting the
+    # anchor context leaves the self-anchor job non-required, so a later PR could
+    # drop 'floor enforcement' from protection and the floor silently disarms (E2).
+    text = remediation(REPO)
+    assert "checks[][context]=floor enforcement" in text
+    assert "checks[][context]=floor self-anchor" in text
+
+
 def test_remediation_preserves_existing_required_contexts():
     text = remediation(REPO)
     for ctx in (
