@@ -5,6 +5,8 @@ description: Task Master - plan, start, review, and close
 argument-hint: [tag [task-id] | feature description] (optional - derives context from worktree if omitted)
 ---
 
+<!-- floor:cold-verify-completion -->
+
 # Task Master Orchestrator
 
 **$ARGUMENTS**
@@ -342,9 +344,42 @@ Agent(
 
 ---
 
+## Marathon Mode: Entry Gate (non-removable)
+
+Before starting ANY marathon run - Agent Teams or Subagent Fallback, before the
+first task is decomposed - invoke the acceptance-contract start gate. The run
+identifier is the TM tag.
+
+```bash
+python scripts/contract/start_gate.py "<tag>"
+```
+
+The gate fails closed. Exactly two doors open a run; there is no silent third:
+
+- **Frozen contract** - freeze evidence for `<tag>` is recorded (the contract's
+  sha256 frozen before decomposition, with a passing kill test): exit 0, proceed.
+- **Operator-signed skip** - no valid freeze, but an `operator_signoff` is
+  recorded before the run starts: exit 0 with a loud UNVERIFIED warning. The skip
+  is capped, not free - the run is permanently capped at `UNVERIFIED` and can
+  NEVER certify `PASS`.
+- **Neither** - non-zero exit. Do NOT start the run: freeze a contract
+  (`scripts/contract/freeze.py`) or record a signed skip first.
+
+The exit-side gates are owned by the marathon skill, not this command. Marathon
+routes every verifier spawn through `scripts/contract/spawn_verifier.py` (the
+custody chokepoint) and blocks run-complete on `scripts/contract/complete_gate.py
+<tag>`. Start gate here, exit gates there - each fails closed. The
+`<!-- floor:cold-verify-completion -->` marker in this file's header makes this
+invocation un-removable: `floor.yml` reds any PR that drops the marker or any of
+the three gate invocation strings from a file that carried them.
+
+---
+
 ## Marathon Mode: Agent Teams
 
 Prerequisite: `$MARATHON_MODE` AND `$TEAMS_AVAILABLE`.
+
+**First run the [Entry Gate](#marathon-mode-entry-gate-non-removable) above.**
 
 Use the marathon skill, supplying the TM Work-Source Adapter above and the Marathon
 Configuration values from Phase 0. The skill owns DAG/hot-file analysis, team lifecycle,
