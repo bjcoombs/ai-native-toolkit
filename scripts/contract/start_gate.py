@@ -81,15 +81,34 @@ def start_gate(run_id: str, contract_dir: Path) -> int:
             return 0
 
         if vc.is_signed(record):
+            # The signed door opens whenever freeze evidence is not valid - which
+            # is two distinct exit outcomes, and the warning must name the right
+            # one. A clean skip (no freeze evidence at all) is capped at
+            # UNVERIFIED by the validator. A present-but-invalid freeze proceeding
+            # under an operator sign-off is REJECTED at exit (the validator's
+            # _refusal_gate sees a non-empty freeze dict and takes the
+            # invalid-freeze branch, not the skip branch). Both refuse; neither can
+            # certify PASS - only the verdict label differs, so state it precisely.
+            if record.get("freeze_evidence"):
+                headline = [
+                    "UNCERTIFIABLE: run %r is starting on an operator sign-off" % run_id,
+                    "despite INVALID freeze evidence (%s)." % freeze_reason,
+                    "The exit validator will REJECT this run; it can NEVER certify PASS.",
+                ]
+            else:
+                headline = [
+                    "UNVERIFIED: run %r is starting WITHOUT a frozen acceptance" % run_id,
+                    "contract. A signed operator skip is recorded, so the run may",
+                    "proceed - but it is permanently CAPPED at UNVERIFIED and can",
+                    "NEVER certify PASS.",
+                ]
             print(
                 "\n".join(
                     [
                         _RULE,
-                        "UNVERIFIED: run %r is starting WITHOUT a frozen acceptance" % run_id,
-                        "contract. A signed operator skip is recorded, so the run may",
-                        "proceed - but it is permanently CAPPED at UNVERIFIED and can",
-                        "NEVER certify PASS. validate_completion.py enforces this cap at",
-                        "exit; the completion record records why.",
+                        *headline,
+                        "validate_completion.py enforces this at exit; the completion",
+                        "record records why.",
                         _RULE,
                     ]
                 ),

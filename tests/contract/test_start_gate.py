@@ -120,15 +120,22 @@ def test_freeze_without_contract_hash_refused(contract_dir):
     assert rc != 0
 
 
-def test_invalid_freeze_with_signed_skip_starts_capped(contract_dir, capsys):
+def test_invalid_freeze_with_signed_skip_starts_uncertifiable(contract_dir, capsys):
     """A broken freeze alone refuses, but with a signed operator skip the run may
-    start - capped at UNVERIFIED, exactly as a no-freeze skip is."""
+    start. The warning must be verdict-accurate: a present-but-invalid freeze is
+    REJECTED at exit (not merely capped at UNVERIFIED like a no-freeze skip), so
+    the message names REJECT and still states the run can never certify PASS."""
     rec = valid_freeze_record(operator_signoff={"operator": "ben", "scope": "skip"})
     rec["freeze_evidence"]["kill_test"]["null_artifact_all_fail"] = False
     write_record(contract_dir, RUN_ID, rec)
     rc = sg.main([RUN_ID, "--contract-dir", str(contract_dir)])
     assert rc == 0
-    assert "UNVERIFIED" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "REJECT" in err
+    assert "never" in err.lower() and "pass" in err.lower()
+    # It must NOT mislabel this present-but-invalid-freeze path as UNVERIFIED,
+    # which is the no-freeze-skip verdict.
+    assert "UNVERIFIED" not in err
 
 
 def test_malformed_record_refused(contract_dir):
