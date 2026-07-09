@@ -1,36 +1,56 @@
-# The `/huddle` explainer: how it got made
+# How to build a narrated skill explainer
 
-A roughly two-minute narrated explainer for `/huddle`, built to show someone unfamiliar with the skill why structured multi-perspective deliberation is a different thing from asking one model once. The visual asset was built in a Claude Design project and is published below as a static export; this folder carries that export, the narration audio, and the production story, because the story turned out to be a fitting demonstration of the thing the video is arguing for. Back to the [Map of Content](../index.md).
+A repeatable pipeline for turning a skill's `SKILL.md` into a short narrated animation: Claude Code drives a Claude Design project through MCP, ElevenLabs supplies the narration, and Claude in Chrome publishes the result. This page documents the pipeline itself, not just the one example it produced. Back to the [Map of Content](../index.md).
 
-## The asset
+Worked example: [Huddle Visualization](https://bjcoombs.github.io/ai-native-toolkit/huddle-explainer/visualization.html) (interactive export, synced to [`narration.mp3`](./narration.mp3); cue-by-cue script in [`narration-script.md`](./narration-script.md)), built from `/huddle`'s own [`skills/huddle/SKILL.md`](../../skills/huddle/SKILL.md).
 
-- **Interactive**: [Huddle Visualization](https://bjcoombs.github.io/ai-native-toolkit/huddle-explainer/visualization.html) - an animated timeline built in Claude Design and published as a self-contained export ([`visualization.html`](./visualization.html)), showing an open-ended problem move through framing, Fibonacci sizing, the five hats in sequence, forced cross-talk, a bounded completeness-critic pass, and a verdict that keeps its dissent attached rather than smoothing it away. Claude Design projects themselves are workspace-private with no public-link option, so this export is what makes the visual reachable outside the team. Its own play/pause/scrub transport also drives [`narration.mp3`](./narration.mp3) - the export has no exposed player API, so a small script tracks the two on-screen time readouts it does expose and keeps the audio's `currentTime` locked to whichever is smaller, self-healing after the export's own unpack step rewrites the page body.
-- **Audio**: [`narration.mp3`](./narration.mp3) - a 120-second narration track built to the video's exact timeline. [`narration-script.md`](./narration-script.md) has the full cue-by-cue script with timestamps and the reasoning behind every deviation from the on-screen captions.
+## What you need
 
-## Why this write-up exists
+- **Claude Code**, run from this repo so it can read the target skill's `SKILL.md` directly - that file is the source of truth for what the animation has to prove, not a paraphrase of it.
+- **A Claude Design project**, reachable from Claude Code via the DesignSync MCP (`/design-login` once per machine). Claude Code is the instigator throughout: it drafts the brief and the prompts, Claude Design builds and revises the animation, Claude Code reads the result back to check it against the skill file.
+- **An ElevenLabs account** (the free tier is enough) with the ElevenLabs MCP configured, for narration.
+- **Claude in Chrome** (browser automation), for the YouTube upload step and for verifying any published pages.
+- **Somewhere to host a public URL.** Claude Design projects are workspace-private with no "anyone with the link" option, so a Design link alone can never be shared outside the team. Plan to export the design as standalone HTML and host that export somewhere with a real public URL (this repo uses GitHub Pages, serving `docs/` on `main`) from the start, rather than discovering the gap after the fact.
 
-Every real fix in producing this asset had the same shape as the thing it's explaining: a fluent-sounding first pass that missed a load-bearing detail, caught only by checking it against something that could actually verify it - the source file for a mechanic, measured timing for a pace, a human ear for a pronunciation. That is worth documenting on its own merits, not as a victory lap.
+## The pipeline
 
-## What the first cut missed
+### 1. Draft the brief from the skill file, not from memory
 
-The initial animation nailed the surface - the color-coded hats, the Fibonacci team-size sweep, a verdict frame - but missed the part of `/huddle` that actually makes it a system rather than a fixed cast of six characters: team size, who is on the team, and the hat sequence are all chosen fresh, per problem, by the chair, not a script that runs the same way every time. [`skills/huddle/SKILL.md`](../../skills/huddle/SKILL.md) names all three explicitly:
+Read the target `SKILL.md` and pull out the specific claims that make it a system rather than a fixed script - the parts that change per invocation, not the parts that are always the same. For `/huddle` that meant three claims, each traceable to an exact quote:
 
-- Team size: "Fibonacci numbers scale naturally with complexity" (1 / 2 / 3 / 5 / 8+).
-- Who's seated: "Professional lenses... that create productive tension for THIS topic. You know what expertise fits - choose what creates the most useful disagreement."
-- The sequence: "Quick: Red only... Simple: White → Black... Moderate: White → Red → Black → Yellow → Green... Adapt the sequence to the topic. These are guides, not straitjackets."
+- Team size: "Fibonacci numbers scale naturally with complexity."
+- Who's seated: "Professional lenses... that create productive tension for THIS topic. You know what expertise fits."
+- The sequence: "Adapt the sequence to the topic. These are guides, not straitjackets."
 
-The fix wasn't a rebuild, it was one visual beat: at the "convene" moment, show a pool of ten candidate experts with only five stepping forward and getting seated, so the selection is dramatized instead of asserted. That single beat proves both the team-size and expert-selection claims at once, without adding runtime.
+Write the storyboard so every beat maps back to one of these quotes. A brief built from a vibe of what the skill does, rather than its actual text, will nail the surface (colors, layout, a verdict frame) and miss the mechanic.
 
-## What the narration pass caught
+### 2. Build and iterate the animation via DesignSync MCP
 
-Writing the script surfaced a second gap: roughly 32 seconds of the video - the six-hats legend, and the entire closing act - had real on-screen content and zero narration. New cues went in only where a scene genuinely had no commentary layer yet, reusing the pattern the file already establishes: a caption always adds something the primary on-screen text doesn't already say, never a duplicate readout of it. That rule is also why several proposed cues were deliberately left out (see [`narration-script.md`](./narration-script.md)) - narrating text that's already the hero content on screen would have been noise, not clarity.
+Have Claude Code push the brief to Claude Design and iterate through the MCP - `list_files` / `get_file` to read back what exists, `finalize_plan` / `write_files` to push changes. Review each pass against the brief's quotes, specifically:
 
-Generating the audio then surfaced two defects that no amount of reading the script would have caught:
+- **Does it dramatize the dynamic parts, or just the static ones?** A team-sizing sweep and color-coded hats are static-parts wins. Proving that the team and sequence are chosen fresh each time needs an explicit beat - showing a pool of candidates with only a subset stepping forward and getting seated proved both the team-size and expert-selection claims at once, without a rebuild.
+- **Does every caption add something the screen doesn't already say?** A caption that re-reads the on-screen text is noise, not narration-in-waiting; catching this now is cheaper than catching it during the narration pass.
 
-**A pacing collision.** Three lines were written assuming a spoken pace of roughly 2.5-3.3 words per second. The voice's actual realized pace across every other cue was a consistent ~2.0-2.1 words per second, so those three ran long enough to overlap the start of the next line by up to 1.6 seconds. The fix was trimming the text to the measured pace, not maxing out the playback-speed setting - for the worst offender, even the fastest allowed speed setting wouldn't have closed the gap.
+### 3. Write narration to the animation's exact timeline
 
-**A pronunciation problem only a human ear caught.** "Gut" rendered as something closer to "gute," and later, "a simpler call" blended into what sounded like one word. Neither showed up on a transcription round-trip: speech-to-text just normalizes back to the intended word regardless of how it was actually pronounced, so that check has no power over this specific failure mode. The fix was empirical - try a phonetic respelling ("gutt," forcing the short vowel) for the first, a rephrase that removed the "-er"-plus-hard-consonant collision for the second, then have a person listen and confirm before locking either one in.
+Configure the ElevenLabs MCP, then write cues against the animation's actual on-screen timeline, not a free-running script. Only narrate scenes that don't already carry their content on screen - check the animation for any stretch of real on-screen content with zero commentary layer (a legend, a closing act) and cue those specifically, rather than narrating start-to-finish by default.
 
-## The pattern, stated plainly
+### 4. Generate the audio, then correct it by measurement and by ear
 
-Every fix here came from the same move: don't trust the fluent-sounding first pass, check it against the thing that can actually verify it. That is the entire argument `/huddle` makes about deliberation. It held up under its own production.
+Generate each cue, then check two things a script read-through can't catch:
+
+- **Pacing.** Measure the voice's *actual* realized pace from the generated audio (words per second), not an assumed one. A cue timed to an assumed pace that runs long will overlap the next cue's start - fix by shortening the text to the measured pace, not by raising playback speed (for a large enough overrun, even the fastest speed setting won't close the gap).
+- **Pronunciation.** Listen to every cue. A speech-to-text round-trip will not catch a mispronunciation, because it normalizes back to the intended word regardless of how it was actually said - only a human ear catches "gut" rendering as "gute," or two words blending into one at a boundary. Fix a phoneme-level issue with a phonetic respelling (forcing the intended vowel sound); fix a word-boundary blend by rephrasing, not respelling. Re-render and re-listen before locking either fix in.
+
+### 5. Export the animation, then mux it with the narration
+
+Export the animation as video from Claude Design (`Share → Export → Video`). Combine the exported video with the narration track into one file - the two are already time-aligned from step 3, so this is a straight audio/video mux (`ffmpeg -i video -i narration -c:v copy -c:a aac -shortest`), not a re-edit.
+
+### 6. Publish
+
+- **Video.** Upload the muxed file to YouTube via Claude in Chrome: title, description, tags, category, visibility, and subtitles built from the same cue timestamps as the narration script. Rich-text fields in YouTube Studio (title, description) are contenteditable `<div>`s, not real `<input>` elements, so drive them with click + select-all + type rather than a form-fill tool.
+- **Interactive export, if you want one.** Export "Standalone HTML" from Claude Design's Share panel and host it with a real public URL (see "What you need" above) - a Claude Design link alone won't resolve for anyone outside the workspace. The export has no player API exposed (playback state lives inside its own runtime, and it rewrites its page body once after an internal unpack step), so don't try to control it programmatically. Instead, track whatever on-screen time readout the export already displays, and drive external audio's `currentTime` off that - re-attaching after the unpack step if needed, since anything appended to the page before that rewrite will be wiped along with it.
+
+## Doing this for another skill
+
+Repeat step 1 against that skill's own `SKILL.md` - the claims will be different, so the storyboard will be different - and the rest of the pipeline carries over unchanged.

@@ -71,6 +71,6 @@ The Six Thinking Hats team, indexed in [`agents/README.md`](../agents/README.md)
 - [Testing a branch locally](./testing-a-branch-locally.md) - run an unmerged branch's `SKILL.md` and scripts as a real plugin against a target repo.
 - [Design history](./superpowers/README.md) - the plans and specs behind the skills as they were built.
 - [Code review instructions](../.github/claude-review-instructions.md) - the guidelines the automated reviewer follows on pull requests.
-- [The `/huddle` explainer: how it got made](./huddle-explainer/README.md) - a narrated demo video plus the production story of building it, including the narration script and audio asset.
+- [How to build a narrated skill explainer](./huddle-explainer/README.md) - the repeatable Claude Code + Claude Design + ElevenLabs pipeline, worked through end to end on `/huddle`.
 
 The rendered example SVGs used in the README hero (the doc-navigability graph and the complexity heatmap, before and after the action sweep) live alongside this file in `docs/`.
