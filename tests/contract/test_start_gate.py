@@ -7,6 +7,14 @@ operator skip, mirroring the fail-closed complete gate on the exit side
 freeze evidence whose kill test failed is not valid start evidence.
 
 No AI, no network - the acceptance floor's deterministic layer.
+
+PRD criteria coverage (auditable map; entrypoint ``pytest tests/contract/``):
+- **Criterion 4 (start half):** the un-contracted path cannot start - no
+  freeze/skip refuses (``test_no_evidence_refused``), valid freeze starts
+  (``test_freeze_evidence_starts``), and a signed skip starts with a loud
+  ``UNVERIFIED`` warning that it can never certify PASS
+  (``test_signed_skip_starts_with_unverified_warning``). The green half (the
+  validator refusing PASS) is in ``test_completion_record.py``.
 """
 from __future__ import annotations
 

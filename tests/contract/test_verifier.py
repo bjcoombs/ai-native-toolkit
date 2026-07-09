@@ -15,6 +15,18 @@ Three strategy scenarios, plus parser and assembly units:
 
 The round-trips run through the REAL chokepoint (`spawn_verifier`) and the REAL
 validator (`validate_completion`): no AI, no network - the deterministic floor.
+
+PRD criteria coverage (auditable map; entrypoint ``pytest tests/contract/``):
+- **Criterion 6:** PARTIAL-with-non-empty-couldnt_drive AND
+  PASS-with-empty-couldnt_drive asserted together -
+  ``test_partial_and_pass_asserted_together``.
+- **Criterion 9:** a mid-run contract edit makes the exit re-hash mismatch and
+  aborts (``abort_events`` non-empty, no certification) -
+  ``test_mid_run_contract_edit_aborts``; the no-edit control is
+  ``test_no_edit_does_not_abort``.
+- **Criterion 11 (behavioural, verifier seam):** verifier output that reaches a
+  record without a chokepoint token is ``DEGRADED-custody`` -
+  ``test_verifier_output_without_token_is_rejected``.
 """
 from __future__ import annotations
 

@@ -7,6 +7,15 @@ record, a record without verifier results, or a record the validator rejects;
 it exits zero only when the validator certifies PASS.
 
 No AI, no network - the acceptance floor's deterministic layer.
+
+PRD criteria coverage (auditable map; entrypoint ``pytest tests/contract/``):
+- **Criterion 16 (complete gate):** exits non-zero for no record
+  (``test_no_record_refused``), a record without verifier results
+  (``test_record_without_verifier_results_refused``), and a validator-rejected
+  record (``test_validator_rejected_record_refused``); exits zero only when the
+  validator accepts (``test_validator_accepted_record_passes``). Delegation and
+  the skip/forged-token mirrors are ``test_skip_record_refused``,
+  ``test_forged_token_refused``.
 """
 from __future__ import annotations
 
