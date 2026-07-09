@@ -1,0 +1,83 @@
+# The constitutional floor of the acceptance-contract workflow (PRD E1/E2).
+#
+# The floor is enforced in two clearly separated layers, each a distinct job so
+# a reader can see at a glance WHICH layer is red:
+#
+#   floor enforcement (deterministic, self-contained, always green when honest):
+#     1. Marker removal detection (base-vs-head). Fails a PR that removes a floor
+#        marker or a gate invocation from a file that previously carried it. This
+#        is NOT an unconditional grep: the markers land later in the marathon, so
+#        an unconditional check would red every intermediate PR. Removal detection
+#        arms itself the moment a marker is added and bites only on removal.
+#     2. FLOOR.md four-clause integrity (unconditional -- FLOOR.md exists from the
+#        PR that introduced this workflow onward).
+#
+#   floor self-anchor (E2, fail-closed on repo settings):
+#     Query the live GitHub API and fail if the floor check is no longer required
+#     on the default branch, or if the path restriction on this file is gone.
+#     Reading repo settings needs admin:read, which the default GITHUB_TOKEN
+#     lacks -- provide the FLOOR_ANCHOR_TOKEN secret (fine-grained PAT,
+#     "Administration: read"). This out-of-band maintainer step is itself part of
+#     the floor (FLOOR.md clause iii); until it is done the anchor fails closed
+#     with the exact commands needed, and its red is isolated to this job.
+#
+# Both jobs are required status checks on the default branch (see
+# docs/floor-anchor-proof.md), so neither layer can be silently disarmed.
+name: Floor
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  floor:
+    name: floor enforcement
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 0  # full history so the merge-base is resolvable
+          persist-credentials: false
+
+      - name: Fetch the PR base branch
+        run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+
+      - name: Marker removal detection (base-vs-head)
+        run: |
+          BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          echo "merge-base: ${BASE_SHA}"
+          python scripts/floor_check.py markers --base "${BASE_SHA}"
+
+      - name: FLOOR.md four-clause integrity
+        run: python scripts/floor_check.py clauses
+
+      - name: Deterministic layer summary
+        if: success()
+        run: |
+          {
+            echo "## Floor enforcement (deterministic layer): PASS"
+            echo ""
+            echo "Marker-removal detection and FLOOR.md four-clause integrity both hold."
+            echo "The repo-settings anchor is checked separately by the \`floor self-anchor\` job."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  self-anchor:
+    name: floor self-anchor
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Self-anchor (floor still required + path restricted)
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          FLOOR_ANCHOR_TOKEN: ${{ secrets.FLOOR_ANCHOR_TOKEN }}
+          FLOOR_CONTEXT: floor enforcement
+          ANCHOR_CONTEXT: floor self-anchor
+        run: python scripts/floor_anchor.py
