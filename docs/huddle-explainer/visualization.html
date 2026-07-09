@@ -210,6 +210,14 @@ document.addEventListener('DOMContentLoaded', async function() {
           return el.children.length === 0 && /^\d+:\d{2}\.\d{2}$/.test((el.textContent || '').trim());
         });
       }
+      function primeElement(el) {
+        if (!el || el.__primed) return;
+        el.play().then(function () {
+          el.__primed = true;
+          el.pause();
+        }).catch(function () {});
+      }
+      var gestureSeen = false;
       function ensureAudio() {
         var a = document.getElementById('__narration-audio');
         if (a) return a;
@@ -218,19 +226,18 @@ document.addEventListener('DOMContentLoaded', async function() {
         a.src = 'narration.mp3';
         a.preload = 'auto';
         document.body.appendChild(a);
+        if (gestureSeen) primeElement(a);
         return a;
       }
       var audio = ensureAudio();
-      var primed = false;
-      function prime() {
-        if (primed) return;
-        primed = true;
-        audio.play().then(function () { audio.pause(); audio.currentTime = 0; }).catch(function () {});
+      function onGesture() {
+        gestureSeen = true;
+        primeElement(document.getElementById('__narration-audio') || audio);
       }
-      document.addEventListener('pointerdown', prime, { capture: true, once: true });
-      document.addEventListener('keydown', prime, { capture: true, once: true });
+      document.addEventListener('pointerdown', onGesture, { capture: true });
+      document.addEventListener('keydown', onGesture, { capture: true });
 
-      var lastVal = null, lastChangeTime = performance.now(), playing = false;
+      var lastVal = null, lastChangeTime = performance.now(), playing = false, playPending = false;
       function tick() {
         audio = document.getElementById('__narration-audio') || ensureAudio();
         var vals = findTimeNodes()
@@ -243,10 +250,15 @@ document.addEventListener('DOMContentLoaded', async function() {
             lastChangeTime = now;
           }
           var stalled = (now - lastChangeTime) > 400;
-          if (!stalled && !playing) {
-            playing = true;
+          if (!stalled && !playing && !playPending) {
+            playPending = true;
             audio.currentTime = cur;
-            audio.play().catch(function () {});
+            audio.play().then(function () {
+              playing = true;
+              playPending = false;
+            }).catch(function () {
+              playPending = false;
+            });
           } else if (stalled && playing) {
             playing = false;
             audio.pause();

@@ -3,6 +3,25 @@
 Covers the seven test-strategy cases plus the forged/copied/stale token cases
 that criterion 15 (token authenticity) demands. No AI, no network - the
 acceptance floor's deterministic layer.
+
+PRD criteria coverage (auditable map; entrypoint ``pytest tests/contract/``):
+- **Criterion 4 (green half):** a record lacking ``freeze_evidence`` cannot
+  certify, and a signed skip is capped at ``UNVERIFIED`` -
+  ``test_1_no_freeze_no_signoff_rejected``, ``test_2_signoff_no_freeze_unverified``
+  (the start half is in ``test_start_gate.py``).
+- **Criterion 7:** tier-3 escalation keeps the run uncertified until sign-off,
+  which then certifies - ``test_6_tier3_escalation_without_signoff_awaiting``,
+  ``test_6b_tier3_escalation_with_signoff_certifies`` (the artifact-file-exists
+  half is in ``test_tiers.py``).
+- **Criterion 8:** ``source: none`` -> ``DEGRADED`` stamp, ``source: human`` ->
+  no stamp - ``test_4_source_none_degraded_stamp``,
+  ``test_4b_source_human_no_degraded_stamp`` (recorder seam in ``test_readiness.py``).
+- **Criterion 15 (validator unit):** forged / copied-from-another-run / stale /
+  empty tokens all fail, only the exact side-channel match certifies -
+  ``test_15_forged_token_rejected``, ``test_15_copied_from_another_run_rejected``,
+  ``test_15_stale_token_rejected``, ``test_15_empty_token_rejected``,
+  ``test_15_any_nonempty_token_not_trusted``, ``test_15_exact_matching_token_certifies``
+  (the real-chokepoint round-trips are in ``test_custody.py``).
 """
 from __future__ import annotations
 
