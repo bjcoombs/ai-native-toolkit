@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lane Runner</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0a0a0b; overflow: hidden; }
+      body { display: flex; align-items: center; justify-content: center; }
+      canvas { background: #050507; border-radius: 12px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="field" width="360" height="240"></canvas>
+    <script>
+      // ------------------------------------------------------------------
+      // Lane Runner - WORKING interactive fixture (canary).
+      //
+      // A minimal, genuinely-playable interactive toy in the SAME class as the
+      // broken jet-fighters build. It launches, renders, wires input, and runs a
+      // loop - so a cold verifier can DRIVE its tier-1 criteria and see them
+      // pass, then stall only at the tier-3 (perceptual) criterion. This is the
+      // within-class discrimination (canary criterion 2b): a gate that actually
+      // drives builds distinguishes this working one (tier-1 green, awaiting
+      // human) from broken jet-fighters (tier-1 red), while a gate that
+      // blanket-refuses interactive products wrongly fails here.
+      //
+      // Rules: three lanes; Space starts (READY -> PLAYING); ArrowUp/ArrowDown
+      // move the runner between lanes; 'f' scores a point while PLAYING.
+      // ------------------------------------------------------------------
+      'use strict';
+
+      var LANES = 3;
+      var state = { phase: 'READY', lane: 1, score: 0, tick: 0 };
+
+      var canvas = document.getElementById('field');
+      var ctx = canvas.getContext('2d');
+      function laneY(l) { return 40 + l * 70; }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#334';
+        for (var l = 0; l < LANES; l++) {
+          ctx.beginPath(); ctx.moveTo(0, laneY(l) + 15); ctx.lineTo(canvas.width, laneY(l) + 15); ctx.stroke();
+        }
+        ctx.fillStyle = state.phase === 'PLAYING' ? '#4fe08a' : '#888';
+        ctx.fillRect(40, laneY(state.lane), 26, 26);
+        ctx.fillStyle = '#cfe';
+        ctx.font = 'bold 16px monospace';
+        ctx.fillText(state.phase + '  score=' + state.score, 12, 22);
+      }
+
+      // Input IS wired (the contrast with the broken jet-fighters build).
+      function onKey(e) {
+        var k = e.key;
+        if (k === ' ' || k === 'Spacebar') { if (state.phase === 'READY') state.phase = 'PLAYING'; e.preventDefault(); }
+        else if (k === 'ArrowUp') { state.lane = Math.max(0, state.lane - 1); e.preventDefault(); }
+        else if (k === 'ArrowDown') { state.lane = Math.min(LANES - 1, state.lane + 1); e.preventDefault(); }
+        else if (k === 'f' || k === 'F') { if (state.phase === 'PLAYING') state.score += 1; }
+        draw();
+      }
+      window.addEventListener('keydown', onKey);
+
+      // Fixed-cadence loop advances an internal tick so a verifier can confirm
+      // the simulation is live (not a frozen render).
+      function loop() { state.tick += 1; draw(); requestAnimationFrame(loop); }
+
+      // Headless drive surface for the cold verifier.
+      window.__canary = {
+        ready: true,
+        getState: function () { return JSON.parse(JSON.stringify(state)); }
+      };
+
+      draw();
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>
