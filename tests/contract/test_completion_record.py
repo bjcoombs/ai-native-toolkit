@@ -362,3 +362,127 @@ def test_unreadable_record_file_rejected(tmp_path):
     result = vc.validate_path(record_path)
     assert result.verdict == vc.VERDICT_REJECTED
     assert not result.certified
+
+
+# --------------------------------------------------------------------------- #
+# Per-criterion result consistency (finding 1) and freeze-evidence content
+# (finding 2): aggregate consistency the PASS path must enforce.
+# --------------------------------------------------------------------------- #
+
+
+def test_undriven_result_forces_partial_even_with_empty_couldnt_drive(prov_dir):
+    """A tier-1 criterion with result=undriven, an empty couldnt_drive, and no
+    tier3 escalation must NOT reach PASS: an undriven criterion is PARTIAL (C3),
+    exactly as a couldnt_drive entry is."""
+    rec = base_record(
+        criteria_results=[
+            {"id": "c1", "tier": 1, "result": "pass", "observation": "ok"},
+            {"id": "c2", "tier": 1, "result": "undriven", "observation": "no harness"},
+        ],
+        couldnt_drive=[],
+    )
+    result = vc.validate(rec, prov_dir)
+    assert result.verdict == vc.VERDICT_PARTIAL
+    assert not result.certified
+    assert vc.STAMP_PARTIAL in result.stamps
+
+
+def test_escalated_result_without_tier3_entry_not_certified(prov_dir):
+    """A criterion with result=escalated but no matching tier3_escalations entry
+    is internally inconsistent: refuse it (REJECTED), never PASS."""
+    rec = base_record(
+        criteria_results=[
+            {"id": "c1", "tier": 1, "result": "pass", "observation": "ok"},
+            {"id": "boss-fight", "tier": 3, "result": "escalated", "observation": "needs human"},
+        ],
+        tier3_escalations=[],
+    )
+    result = vc.validate(rec, prov_dir)
+    assert result.verdict == vc.VERDICT_REJECTED
+    assert not result.certified
+
+
+def test_escalated_result_with_matching_tier3_entry_flows_to_signoff(prov_dir):
+    """An escalated criterion WITH a matching tier3 entry is consistent: it flows
+    through the normal tier-3 path (AWAITING without sign-off, PASS once signed)."""
+    escalation = {
+        "criterion_id": "boss-fight",
+        "artifact_path": "artifacts/boss.gif",
+        "observation": "launched",
+    }
+    crit = [
+        {"id": "c1", "tier": 1, "result": "pass", "observation": "ok"},
+        {"id": "boss-fight", "tier": 3, "result": "escalated", "observation": "needs human"},
+    ]
+    awaiting = vc.validate(
+        base_record(criteria_results=crit, tier3_escalations=[escalation]), prov_dir
+    )
+    assert awaiting.verdict == vc.VERDICT_AWAITING_TIER3
+
+    signed = vc.validate(
+        base_record(
+            criteria_results=crit,
+            tier3_escalations=[escalation],
+            operator_signoff={"operator": "ben", "scope": "tier3", "note": "played it"},
+        ),
+        prov_dir,
+    )
+    assert signed.verdict == vc.VERDICT_PASS
+    assert signed.certified
+
+
+def test_freeze_evidence_with_failed_kill_test_cannot_pass(prov_dir):
+    """freeze_evidence whose kill test failed (null artifact did NOT fail every
+    criterion) is not valid freeze evidence: the record cannot certify PASS."""
+    rec = base_record(
+        freeze_evidence={
+            "contract_hash": "sha256:deadbeef",
+            "frozen_before_decomposition": True,
+            "kill_test": {"null_artifact_all_fail": False, "sabotage_rejected": True},
+        }
+    )
+    result = vc.validate(rec, prov_dir)
+    assert result.verdict == vc.VERDICT_REJECTED
+    assert not result.certified
+
+
+def test_freeze_evidence_with_rejected_sabotage_false_cannot_pass(prov_dir):
+    """An explicit sabotage_rejected=False marks a kill-test failure: not valid."""
+    rec = base_record(
+        freeze_evidence={
+            "contract_hash": "sha256:deadbeef",
+            "frozen_before_decomposition": True,
+            "kill_test": {"null_artifact_all_fail": True, "sabotage_rejected": False},
+        }
+    )
+    result = vc.validate(rec, prov_dir)
+    assert result.verdict == vc.VERDICT_REJECTED
+    assert not result.certified
+
+
+def test_freeze_evidence_without_contract_hash_cannot_pass(prov_dir):
+    """Freeze evidence lacking the frozen contract_hash is not a valid freeze."""
+    rec = base_record(
+        freeze_evidence={
+            "frozen_before_decomposition": True,
+            "kill_test": {"null_artifact_all_fail": True, "sabotage_rejected": True},
+        }
+    )
+    result = vc.validate(rec, prov_dir)
+    assert result.verdict == vc.VERDICT_REJECTED
+    assert not result.certified
+
+
+def test_freeze_evidence_null_sabotage_still_valid(prov_dir):
+    """sabotage_rejected=null means no sabotage was authored (B2 optional): the
+    freeze is still valid when the null-artifact kill test passed."""
+    rec = base_record(
+        freeze_evidence={
+            "contract_hash": "sha256:deadbeef",
+            "frozen_before_decomposition": True,
+            "kill_test": {"null_artifact_all_fail": True, "sabotage_rejected": None},
+        }
+    )
+    result = vc.validate(rec, prov_dir)
+    assert result.verdict == vc.VERDICT_PASS
+    assert result.certified

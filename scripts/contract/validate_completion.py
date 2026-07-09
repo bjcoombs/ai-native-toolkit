@@ -20,7 +20,13 @@ Design (see prd-acceptance-contract.md F1, C2-C5, A1/A3, success criteria
   recording the sign-off certifies (criterion 7).
 - Readiness ``source: none`` -> ``DEGRADED: no decorrelated review`` stamp;
   ``source: human`` (or ``non-claude-model``) -> no such stamp (criterion 8).
-- Non-empty ``couldnt_drive`` -> PARTIAL, never PASS (C3).
+- Non-empty ``couldnt_drive`` -> PARTIAL, never PASS (C3). A per-criterion
+  ``result: undriven`` is the same signal and forces PARTIAL identically.
+- Freeze evidence is checked by CONTENT, not presence: a freeze whose kill test
+  failed (``null_artifact_all_fail`` not true, or ``sabotage_rejected`` false) or
+  that lacks the frozen ``contract_hash`` is not valid freeze evidence -> REJECTED.
+- A criterion with ``result: escalated`` but no matching ``tier3_escalations``
+  entry is an internally-inconsistent record -> REJECTED.
 - Any schema violation -> REJECTED.
 - Tier-2 results REPORT but never BLOCK in v1 (unarmed by design, C2): a tier-2
   fail without a calibration record is noted in the output, not hard-failed.
@@ -248,65 +254,144 @@ def _tier_failures(record: Dict[str, Any], tier: int) -> List[str]:
     ]
 
 
-def validate(record: Dict[str, Any], provenance_dir: Optional[Any] = None) -> ValidationResult:
-    """Validate a completion record. Pure over (record, provenance_dir)."""
-    # 1. Schema. A malformed record is untrustworthy; refuse before logic.
-    schema_errors = validate_against_schema(record)
-    if schema_errors:
+def _criteria_by_result(record: Dict[str, Any], result_value: str) -> List[str]:
+    """IDs of every criterion whose ``result`` equals ``result_value`` (any tier)."""
+    return [
+        c.get("id", "<unnamed>")
+        for c in record.get("criteria_results", [])
+        if c.get("result") == result_value
+    ]
+
+
+def _freeze_valid(freeze: Any) -> Tuple[bool, str]:
+    """Return (valid, reason) for freeze evidence.
+
+    Presence alone is not enough (A1/B1/B2): freeze evidence only counts when it
+    carries the frozen contract hash AND its kill-test outcome indicates success
+    - the null artifact failed every criterion and any authored sabotage was
+    rejected. A freeze whose kill test failed proves nothing (the contract does
+    not even reject a null artifact), so it cannot back a PASS. ``sabotage_rejected``
+    is ``null`` when no sabotage was authored (acceptable); only an explicit
+    ``False`` marks a kill-test failure.
+    """
+    if not isinstance(freeze, dict):
+        return False, "freeze_evidence is not an object: not valid freeze evidence"
+    if not freeze.get("contract_hash"):
+        return False, "freeze_evidence lacks contract_hash: not a valid freeze"
+    kill = freeze.get("kill_test")
+    if not isinstance(kill, dict):
+        return False, "freeze_evidence has no kill_test record: kill test not run"
+    if kill.get("null_artifact_all_fail") is not True:
+        return False, "kill test failed: null artifact did not fail every criterion"
+    if kill.get("sabotage_rejected") is False:
+        return False, "kill test failed: authored sabotage was not rejected"
+    return True, "freeze evidence valid: kill test passed"
+
+
+def _orphan_escalations(record: Dict[str, Any]) -> List[str]:
+    """IDs of criteria marked ``result: escalated`` with no matching
+    ``tier3_escalations`` entry.
+
+    The schema enum allows ``escalated``, but an escalated criterion with no
+    escalation artifact recorded is an internally-inconsistent record: it claims
+    a criterion was escalated yet gives the operator nothing to observe. That is
+    a lying map of intent, refused outright (REJECTED) rather than parked in
+    AWAITING, which would imply a legitimate escalation merely awaiting sign-off.
+    """
+    tier3 = record.get("tier3_escalations") or []
+    tier3_ids = {e.get("criterion_id") for e in tier3 if isinstance(e, dict)}
+    return [cid for cid in _criteria_by_result(record, "escalated") if cid not in tier3_ids]
+
+
+def _refusal_gate(
+    record: Dict[str, Any], signed: bool, freeze: Any
+) -> Optional[ValidationResult]:
+    """Hard refusals that short-circuit before any stamp/verdict logic.
+
+    Returns a refusing ``ValidationResult`` when the record cannot even be scored
+    (missing/invalid freeze evidence, an abort, or an inconsistent escalation),
+    else ``None`` to continue to certification.
+    """
+    # Freeze evidence / signed-skip cap (A1, criterion 4).
+    if not freeze:
+        if signed:
+            return ValidationResult(
+                VERDICT_UNVERIFIED,
+                False,
+                stamps=[STAMP_CONTRACT_SKIPPED],
+                reasons=["no freeze evidence; signed skip capped at UNVERIFIED, can never certify PASS"],
+            )
         return ValidationResult(
-            verdict=VERDICT_REJECTED,
-            certified=False,
-            reasons=["schema violation: record does not satisfy completion.schema.json"],
-            schema_errors=schema_errors,
+            VERDICT_REJECTED, False, reasons=["no freeze evidence and no operator sign-off"]
         )
 
+    # Freeze-evidence content (A1/B1/B2). Presence is not enough: a freeze whose
+    # kill test failed, or that lacks the frozen contract hash, cannot back PASS.
+    freeze_valid, freeze_reason = _freeze_valid(freeze)
+    if not freeze_valid:
+        return ValidationResult(
+            VERDICT_REJECTED, False, reasons=["invalid freeze evidence: %s" % freeze_reason]
+        )
+
+    # Aborts (e.g. mid-run contract-hash mismatch, C5): cannot certify a moved target.
+    if record.get("abort_events"):
+        return ValidationResult(
+            VERDICT_ABORTED, False, reasons=["abort_events recorded: run aborted, not certified"]
+        )
+
+    # Per-criterion `result` aggregate consistency (C3, criterion 7).
+    orphan = _orphan_escalations(record)
+    if orphan:
+        return ValidationResult(
+            VERDICT_REJECTED,
+            False,
+            reasons=[
+                "criterion(s) marked result=escalated with no matching tier3_escalations "
+                "entry: %s" % ", ".join(map(str, orphan))
+            ],
+        )
+    return None
+
+
+def _certify(
+    record: Dict[str, Any], signed: bool, provenance_dir: Optional[Any]
+) -> ValidationResult:
+    """Score a record that cleared the hard-refusal gates into its final verdict."""
     stamps: List[str] = []
     reasons: List[str] = []
 
-    # 2. Freeze evidence / signed-skip cap (A1, criterion 4).
-    freeze = record.get("freeze_evidence")
-    signed = _is_signed(record)
-    if not freeze:
-        if signed:
-            stamps.append(STAMP_CONTRACT_SKIPPED)
-            reasons.append(
-                "no freeze evidence; signed skip capped at UNVERIFIED, can never certify PASS"
-            )
-            return ValidationResult(VERDICT_UNVERIFIED, False, stamps, reasons)
-        reasons.append("no freeze evidence and no operator sign-off")
-        return ValidationResult(VERDICT_REJECTED, False, stamps, reasons)
-
-    # 3. Aborts (e.g. mid-run contract-hash mismatch, C5). A run that aborted
-    #    cannot certify against a moved target.
-    if record.get("abort_events"):
-        reasons.append("abort_events recorded: run aborted, not certified")
-        return ValidationResult(VERDICT_ABORTED, False, stamps, reasons)
-
-    # 4. Decorrelation source stamp (A3, criterion 8). Non-blocking.
+    # Decorrelation source stamp (A3, criterion 8). Non-blocking.
     source = (record.get("readiness_verdict") or {}).get("source")
     if source == "none":
         stamps.append(STAMP_DEGRADED)
         reasons.append("readiness source is none: no decorrelated review")
 
-    # 5. Token authenticity / custody (C4, criteria 11 & 15). Blocking.
+    # Token authenticity / custody (C4, criteria 11 & 15). Blocking.
     token_ok, token_reason = check_token(record, provenance_dir)
     if not token_ok:
         stamps.append(STAMP_DEGRADED_CUSTODY)
         reasons.append(token_reason)
 
-    # 6. Tier-3 escalations require operator sign-off (C2, criterion 7).
-    tier3 = record.get("tier3_escalations") or []
-    tier3_awaiting = bool(tier3) and not signed
+    # Tier-3 escalations require operator sign-off (C2, criterion 7).
+    tier3_awaiting = bool(record.get("tier3_escalations")) and not signed
     if tier3_awaiting:
         reasons.append("tier-3 escalation recorded without operator sign-off")
 
-    # 7. Couldn't-drive honesty (C3). Blocking (PARTIAL, never PASS).
+    # Couldn't-drive honesty (C3). Blocking (PARTIAL, never PASS). A criterion
+    # whose `result` is `undriven` is the per-criterion twin of a couldnt_drive
+    # entry, so it forces PARTIAL identically (a pass with undriven criteria is
+    # PARTIAL, never PASS).
     couldnt = record.get("couldnt_drive") or []
-    if couldnt:
+    undriven_ids = _criteria_by_result(record, "undriven")
+    partial = bool(couldnt) or bool(undriven_ids)
+    if partial:
         stamps.append(STAMP_PARTIAL)
+    if couldnt:
         reasons.append("verifier could not drive: %s" % ", ".join(map(str, couldnt)))
+    if undriven_ids:
+        reasons.append("criterion(s) reported result=undriven: %s" % ", ".join(map(str, undriven_ids)))
 
-    # 8. Tier-1 hard gate; tier-2 reports but never blocks in v1 (C2).
+    # Tier-1 hard gate; tier-2 reports but never blocks in v1 (C2).
     tier1_fail = _tier_failures(record, 1)
     tier2_fail = _tier_failures(record, 2)
     if tier2_fail:
@@ -324,12 +409,32 @@ def validate(record: Dict[str, Any], provenance_dir: Optional[Any] = None) -> Va
         verdict = VERDICT_FAIL
     elif tier3_awaiting:
         verdict = VERDICT_AWAITING_TIER3
-    elif couldnt:
+    elif partial:
         verdict = VERDICT_PARTIAL
     else:
         verdict = VERDICT_PASS
 
     return ValidationResult(verdict, verdict == VERDICT_PASS, stamps, reasons)
+
+
+def validate(record: Dict[str, Any], provenance_dir: Optional[Any] = None) -> ValidationResult:
+    """Validate a completion record. Pure over (record, provenance_dir)."""
+    # Schema. A malformed record is untrustworthy; refuse before logic.
+    schema_errors = validate_against_schema(record)
+    if schema_errors:
+        return ValidationResult(
+            verdict=VERDICT_REJECTED,
+            certified=False,
+            reasons=["schema violation: record does not satisfy completion.schema.json"],
+            schema_errors=schema_errors,
+        )
+
+    signed = _is_signed(record)
+    refusal = _refusal_gate(record, signed, record.get("freeze_evidence"))
+    if refusal is not None:
+        return refusal
+
+    return _certify(record, signed, provenance_dir)
 
 
 def validate_path(record_path: Any, provenance_dir: Optional[Any] = None) -> ValidationResult:
