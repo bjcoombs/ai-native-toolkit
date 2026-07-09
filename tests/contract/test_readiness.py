@@ -14,6 +14,15 @@ validator (task 2, already unit-covered in test_completion_record.py):
 No AI, no network - the acceptance floor's deterministic layer. The output-format
 block is parsed with a tiny stdlib reader (no third-party YAML dependency, in
 keeping with validate_completion.py's dependency-free house style).
+
+PRD criteria coverage (auditable map; entrypoint ``pytest tests/contract/``):
+- **Criterion 8 (recorder seam):** a recorded ``source: none`` verdict yields the
+  ``DEGRADED: no decorrelated review`` stamp
+  (``test_recorded_source_none_yields_degraded_stamp``); ``source: human`` and
+  ``source: non-claude-model`` yield no such stamp
+  (``test_recorded_source_human_yields_no_degraded_stamp``,
+  ``test_recorded_source_non_claude_model_yields_no_degraded_stamp``). The
+  validator-unit view of criterion 8 is in ``test_completion_record.py``.
 """
 from __future__ import annotations
 

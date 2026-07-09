@@ -16,6 +16,24 @@ Two halves:
   `DEGRADED-custody` and cannot certify `PASS`.
 
 No AI, no network - the acceptance floor's deterministic layer.
+
+PRD criteria coverage (auditable map; entrypoint ``pytest tests/contract/``):
+- **Criterion 11 (structural):** ``spawn_verifier.py`` is the sole custody writer
+  and its interface is exactly {contract path, product path} -
+  ``test_spawn_verifier_is_sole_custody_writer``,
+  ``test_scan_*`` (positive/reader/new-writer/freeze-writer guards),
+  ``test_interface_has_exactly_two_positionals`` and the other ``test_interface_*``.
+- **Criterion 11 (behavioural):** results without a chokepoint token are
+  ``DEGRADED-custody``, results with the token certify -
+  ``test_results_without_token_are_degraded_custody``,
+  ``test_chokepoint_stamped_record_certifies``.
+- **Criterion 15 (all three forgery variants, real-chokepoint round-trip):**
+  forged - ``test_forged_token_rejected_round_trip``; copied-from-another-run -
+  ``test_copied_from_another_run_token_rejected_round_trip``; stale/reused -
+  ``test_stale_token_rejected_round_trip`` (validator stamp) and
+  ``test_superseded_spawn_refuses_to_ingest`` (loud refusal at ingest); the exact
+  side-channel match certifies via ``test_chokepoint_stamped_record_certifies``.
+  The validator-unit trio is in ``test_completion_record.py``.
 """
 from __future__ import annotations
 
@@ -388,6 +406,70 @@ def test_forged_token_rejected_round_trip(tmp_path):
     # Tamper: replace the authentic token with a forged one.
     record["verifier_provenance"]["token"] = "tok-forged-never-issued"
     result = vc.validate(record, cdir)
+    assert result.verdict == vc.VERDICT_DEGRADED_CUSTODY
+    assert not result.certified
+
+
+def test_copied_from_another_run_token_rejected_round_trip(tmp_path):
+    """Criterion 15 (copied-from-another-run): a token authentically issued to
+    run B, pasted into run A's completion record, mismatches A's own side-channel
+    entry - the real validator stamps DEGRADED-custody. Both tokens are genuine
+    chokepoint issuances, so this defeats an "any issued token is fine" validator
+    that fails to bind the token to THIS run's run_id."""
+    body = _write_contract(tmp_path).read_text(encoding="utf-8")
+    cdir = tmp_path / "ct"
+
+    # Run A: a real spawn + ingest produces run A's record and side-channel.
+    contract_a = tmp_path / "run-a.contract.md"
+    contract_a.write_text(body, encoding="utf-8")
+    spawn_a = sv.spawn_verifier(contract_a, tmp_path / "prod", contract_dir=cdir)
+    _seed_freeze_and_readiness(cdir, "run-a", spawn_a.contract_hash)
+    record_a = sv.ingest_verifier_results(
+        spawn_a,
+        sv.VerifierObservations(
+            criteria_results=[{"id": "C1", "tier": 1, "result": "pass", "observation": "exit 0"}]
+        ),
+    )
+
+    # Run B: a separate real spawn issues its own authentic token elsewhere.
+    contract_b = tmp_path / "run-b.contract.md"
+    contract_b.write_text(body, encoding="utf-8")
+    spawn_b = sv.spawn_verifier(contract_b, tmp_path / "prod", contract_dir=cdir)
+
+    # Paste run B's authentic token into run A's record: a run_id mismatch.
+    record_a["verifier_provenance"]["token"] = spawn_b.token
+    result = vc.validate(record_a, cdir)
+    assert result.verdict == vc.VERDICT_DEGRADED_CUSTODY
+    assert not result.certified
+
+
+def test_stale_token_rejected_round_trip(tmp_path):
+    """Criterion 15 (stale/reused): a token valid in an earlier verification run,
+    reused after a newer spawn overwrote the side-channel with a fresh token, no
+    longer matches - the real validator stamps DEGRADED-custody. This is the
+    validator-stamp view; test_superseded_spawn_refuses_to_ingest is the loud
+    refusal at the ingest seam."""
+    contract = _write_contract(tmp_path)
+    cdir = tmp_path / "ct"
+    spawn_old = sv.spawn_verifier(contract, tmp_path / "prod", contract_dir=cdir)
+    _seed_freeze_and_readiness(cdir, "run", spawn_old.contract_hash)
+
+    stale_record = {
+        "run_id": "run",
+        "freeze_evidence": {
+            "contract_hash": spawn_old.contract_hash,
+            "frozen_before_decomposition": True,
+            "kill_test": {"null_artifact_all_fail": True, "sabotage_rejected": True},
+        },
+        "readiness_verdict": {"verdict": "ready", "source": "human"},
+        "criteria_results": [{"id": "C1", "tier": 1, "result": "pass", "observation": "exit 0"}],
+        # The token spawn_old issued, still referenced after it was superseded.
+        "verifier_provenance": {"token": spawn_old.token, "run_id": "run"},
+    }
+    # A newer verification run supersedes the side-channel token for this run.
+    sv.spawn_verifier(contract, tmp_path / "prod", contract_dir=cdir)
+
+    result = vc.validate(stale_record, cdir)
     assert result.verdict == vc.VERDICT_DEGRADED_CUSTODY
     assert not result.certified
 

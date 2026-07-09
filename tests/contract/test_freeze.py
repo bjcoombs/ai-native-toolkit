@@ -16,6 +16,19 @@ success criteria 3, 13, 14):
 
 Deterministic, model-free: the agent-driven null-artifact kill test enters as a
 validated results file; here the tests supply those outcomes directly.
+
+PRD criteria coverage (auditable map; entrypoint ``pytest tests/contract/``):
+- **Criterion 13 (freeze structural floor):** an interactive-class contract with
+  zero tier-3 criteria is refused at freeze with the reason named
+  (``test_interactive_zero_tier3_refused_with_reason``); adding a tier-3
+  criterion permits freeze (``test_interactive_with_tier3_permits_freeze``).
+- **Criterion 3 (B1 vacuity, deterministic view):** a criterion passing against
+  the class null artifact is refused as vacuous, named
+  (``test_criterion_passing_against_null_refused_as_vacuous``,
+  ``test_committed_vacuous_fixture_rejected``); the committed sound fixtures
+  freeze by real kill-test outcome, not by name
+  (``test_committed_sound_fixtures_freeze``). The per-run blind pair (criterion
+  14) is the canary harness's job, not this deterministic module.
 """
 from __future__ import annotations
 
