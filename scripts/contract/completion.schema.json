@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-native-toolkit/acceptance-contract/completion.schema.json",
+  "title": "Acceptance Contract Completion Record",
+  "description": "Per-run completion record written to .taskmaster/contract/<run-id>.completion.json. Validated by scripts/contract/validate_completion.py, the single component that decides whether a record may claim PASS. run_id is the only unconditionally-required field: a signed-skip record legitimately carries no verifier results, so requiring criteria_results/readiness_verdict here would misclassify a valid skip as a schema violation. Deeper certification requirements (freeze evidence, chokepoint token, tier-3 sign-off) are enforced by the validator's logic, not by required-ness in this schema.",
+  "type": "object",
+  "required": ["run_id"],
+  "additionalProperties": true,
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Run identifier: a Task Master tag for /tm, an issue-queue slug for /issues. Keys every contract artifact for the run."
+    },
+    "contract_hash": {
+      "type": ["string", "null"],
+      "description": "sha256 of the frozen contract file, recorded at freeze before decomposition. The exit verifier re-hashes and aborts on mismatch (C5)."
+    },
+    "freeze_evidence": {
+      "type": ["object", "null"],
+      "description": "Present iff the contract was frozen (hash recorded before decomposition, kill-test passed). Absence means the run was skipped or never froze; the validator caps it accordingly and it can never certify PASS.",
+      "properties": {
+        "contract_hash": {"type": "string"},
+        "frozen_before_decomposition": {"type": "boolean"},
+        "kill_test": {
+          "type": "object",
+          "description": "B1/B2 kill-test evidence: the null artifact failed every criterion (and the sabotage was rejected where authored).",
+          "properties": {
+            "null_artifact_all_fail": {"type": "boolean"},
+            "sabotage_rejected": {"type": ["boolean", "null"]}
+          }
+        }
+      }
+    },
+    "readiness_verdict": {
+      "type": "object",
+      "description": "A2/A3 readiness check verdict and the decorrelation source. source: none stamps the run DEGRADED (no decorrelated review).",
+      "required": ["verdict", "source"],
+      "properties": {
+        "verdict": {"type": "string"},
+        "source": {"enum": ["non-claude-model", "human", "none"]}
+      }
+    },
+    "criteria_results": {
+      "type": "array",
+      "description": "Per-criterion observed results from the cold-exit verifier. Written only via the chokepoint (C4).",
+      "items": {
+        "type": "object",
+        "required": ["id", "tier", "result"],
+        "properties": {
+          "id": {"type": "string"},
+          "tier": {"enum": [1, 2, 3]},
+          "result": {"enum": ["pass", "fail", "undriven", "escalated"]},
+          "observation": {"type": "string"}
+        }
+      }
+    },
+    "tier2_calibration": {
+      "type": ["object", "null"],
+      "description": "C2 calibration record proving a tier-2 gate caught a planted regression. No v1 task seeds this, so tier-2 blocking is unarmed in v1: absent calibration means tier-2 reports, never blocks.",
+      "properties": {
+        "planted_id": {"type": "string"},
+        "caught": {"type": "boolean"},
+        "run_id": {"type": "string"}
+      }
+    },
+    "couldnt_drive": {
+      "type": "array",
+      "description": "C3: every criterion the verifier could not execute. Non-empty => PARTIAL, never PASS.",
+      "items": {"type": "string"}
+    },
+    "stamps": {
+      "type": "array",
+      "description": "Verifier/validator stamps recorded on the run (DEGRADED / DEGRADED-custody / PARTIAL / UNVERIFIED / contract-skipped). The validator recomputes these; a record may pre-declare them.",
+      "items": {"type": "string"}
+    },
+    "abort_events": {
+      "type": "array",
+      "description": "D2: raw record of aborts (e.g. mid-run contract-hash mismatch, C5). Non-empty => the run aborted and cannot certify.",
+      "items": {"type": "object"}
+    },
+    "tier3_escalations": {
+      "type": "array",
+      "description": "C2 tier-3 escalations to the operator, each with a human-observable artifact path. The run does not certify until operator_signoff is recorded.",
+      "items": {
+        "type": "object",
+        "required": ["criterion_id", "artifact_path"],
+        "properties": {
+          "criterion_id": {"type": "string"},
+          "artifact_path": {"type": "string"},
+          "observation": {"type": "string"}
+        }
+      }
+    },
+    "verifier_provenance": {
+      "type": ["object", "null"],
+      "description": "C4 detection half: the chokepoint's per-run random token, echoed here. The validator requires it to exactly match the provenance side-channel entry for THIS run; absent/mismatched/stale => DEGRADED-custody, no PASS.",
+      "properties": {
+        "token": {"type": "string"},
+        "run_id": {"type": "string"},
+        "spawned_by": {"type": "string"}
+      }
+    },
+    "operator_signoff": {
+      "type": ["object", "null"],
+      "description": "Operator authorization: a signed skip (A1, caps the run at UNVERIFIED) or a tier-3 sign-off (certifies an otherwise-complete run). Presence (non-null) means signed.",
+      "properties": {
+        "operator": {"type": "string"},
+        "scope": {"type": "string"},
+        "note": {"type": "string"}
+      }
+    }
+  }
+}
