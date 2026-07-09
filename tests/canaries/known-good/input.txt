@@ -1,0 +1,6 @@
+# repo records: name<TAB>archived
+zebra	false
+alpha	false
+arch-one	true
+zebra	false
+mid	false
