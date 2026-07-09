@@ -364,3 +364,73 @@ def test_invalid_tier_is_parse_error():
     body = "```yaml\nclass: cli\ncriteria:\n  - id: X\n    tier: 4\n    action: \"a\"\n    observation: \"o\"\n```\n"
     with pytest.raises(fz.ContractParseError):
         fz.parse_contract_text(body)
+
+
+# --------------------------------------------------------------------------- #
+# Malformed bound kill-test results: strict refusal, never a silent default
+# --------------------------------------------------------------------------- #
+
+
+def test_duplicate_result_id_raises_in_result_map():
+    """A duplicate id in a bound results file is rejected, mirroring the strict
+    duplicate-criterion-id rule in parse_contract_text - a later entry must not
+    silently override an earlier one (e.g. a vacuous pass masking a fail)."""
+    kill_test = {
+        "contract_sha256": "irrelevant",
+        "results": [
+            {"id": "A1", "passed_against_null": True},
+            {"id": "A1", "passed_against_null": False},
+        ],
+    }
+    with pytest.raises(fz.KillTestError, match="duplicate kill-test result id"):
+        fz._result_map(kill_test)
+
+
+def test_duplicate_result_id_refuses_freeze_with_named_reason(tmp_path):
+    contract = write_contract(tmp_path, CLI_CONTRACT)
+    payload = kill_test_all_fail(contract)
+    # A vacuous pass for A1 followed by a fail for the same id: last-wins would
+    # have kept the fail and frozen; strict rejection refuses instead.
+    payload["results"].insert(0, {"id": "A1", "passed_against_null": True})
+    kt = write_kill_test(tmp_path, payload)
+    result = fz.freeze(contract, RUN_ID, kt, record_path=tmp_path / "r.json")
+    assert not result.frozen
+    assert any("duplicate kill-test result id" in r for r in result.reasons)
+    assert not (tmp_path / "r.json").exists()
+
+
+def test_bound_results_not_a_list_refuses_cleanly(tmp_path):
+    contract = write_contract(tmp_path, CLI_CONTRACT)
+    payload = kill_test_all_fail(contract)
+    payload["results"] = {"A1": True}  # object, not a list
+    kt = write_kill_test(tmp_path, payload)
+    result = fz.freeze(contract, RUN_ID, kt, record_path=tmp_path / "r.json")
+    assert not result.frozen
+    assert any("results.results must be a list" in r for r in result.reasons)
+    assert not (tmp_path / "r.json").exists()
+
+
+def test_bound_result_missing_id_refuses_cleanly(tmp_path):
+    contract = write_contract(tmp_path, CLI_CONTRACT)
+    payload = kill_test_all_fail(contract)
+    del payload["results"][0]["id"]  # entry without an 'id'
+    kt = write_kill_test(tmp_path, payload)
+    result = fz.freeze(contract, RUN_ID, kt, record_path=tmp_path / "r.json")
+    assert not result.frozen
+    assert any("needs an 'id'" in r for r in result.reasons)
+    assert not (tmp_path / "r.json").exists()
+
+
+def test_main_emits_json_and_nonzero_exit_on_malformed_bound_results(tmp_path, capsys):
+    """The documented fail-closed structured output must hold on the
+    evaluate_kill_test path too: malformed bound results yield a non-zero exit
+    and valid JSON on stdout, never an uncaught traceback with no JSON."""
+    contract = write_contract(tmp_path, CLI_CONTRACT)
+    payload = kill_test_all_fail(contract)
+    payload["results"] = {"A1": True}  # object, not a list: raises in _result_map
+    kt = write_kill_test(tmp_path, payload)
+    code = fz.main([str(contract), "--run-id", RUN_ID, "--kill-test-results", str(kt)])
+    assert code != 0
+    out = json.loads(capsys.readouterr().out)  # valid JSON on stdout
+    assert out["frozen"] is False
+    assert any("results.results must be a list" in r for r in out["reasons"])

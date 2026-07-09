@@ -312,7 +312,13 @@ def _result_map(kill_test: Dict[str, Any]) -> Dict[str, Any]:
     for entry in results:
         if not isinstance(entry, dict) or "id" not in entry:
             raise KillTestError("each kill-test result needs an 'id'")
-        out[str(entry["id"])] = entry
+        rid = str(entry["id"])
+        if rid in out:
+            raise KillTestError(
+                "duplicate kill-test result id %r: a later entry would silently "
+                "override an earlier one (e.g. a vacuous pass masking a fail)" % rid
+            )
+        out[rid] = entry
     return out
 
 
@@ -475,7 +481,10 @@ def freeze(
     except KillTestError as exc:
         return FreezeResult(False, [str(exc)], contract_hash=contract_hash)
 
-    ok, reasons, sabotage_rejected = evaluate_kill_test(contract, kill_test, contract_hash)
+    try:
+        ok, reasons, sabotage_rejected = evaluate_kill_test(contract, kill_test, contract_hash)
+    except KillTestError as exc:
+        return FreezeResult(False, [str(exc)], contract_hash=contract_hash)
     if not ok:
         return FreezeResult(False, reasons, contract_hash=contract_hash)
 
