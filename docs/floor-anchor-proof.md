@@ -130,10 +130,10 @@ count-masked variant.
 
 | Field | Value |
 |---|---|
-| PR number | [#276](https://github.com/bjcoombs/ai-native-toolkit/pull/276) (re-triggered onto the fixed detector) |
-| `floor enforcement` result | _pending: finalized after the detector fix merges and #276 re-runs against it -- expected FAIL at "Marker removal detection (base-vs-head)"_ |
-| Mergeable? | _expected: no (required check red)_ |
-| Outcome | _pending: #276 closed unmerged with the criterion-5 note once the re-run confirms the FAIL_ |
+| PR number | [#276](https://github.com/bjcoombs/ai-native-toolkit/pull/276) (re-triggered onto the merged fixed detector) |
+| `floor enforcement` result | **FAIL** at step **"Marker removal detection (base-vs-head)"** -- log: `FAIL skills/marathon/SKILL.md: floor token weakened -> '<!-- floor:cold-verify-completion -->' (occurrences dropped, or its standalone anchor line was removed, between <merge-base> and head)` |
+| Mergeable? | No -- `mergeStateStatus: BLOCKED`. A plain `gh pr merge 276 --squash` (no `--admin`) was refused verbatim: `Pull request bjcoombs/ai-native-toolkit#276 is not mergeable: the base branch policy prohibits the merge.` |
+| Outcome | Criterion 5 proven: the required `floor enforcement` check catches the marker removal and blocks the merge. #276 closed unmerged with the criterion-5 note; never merged. |
 
 ## Configuration commands
 
