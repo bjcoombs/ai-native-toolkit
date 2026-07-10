@@ -111,6 +111,11 @@ gh api "repos/$REPO/branches/main/protection/required_status_checks" \
   -f 'checks[][context]=floor self-anchor'
 
 # 2. Path-restrict floor.yml via a push ruleset (maintainer bypass).
+#    DESCOPED (2026-07-10): this POST is known to fail with HTTP 422 on public,
+#    user-owned repos ("Source public repos cannot have push rules" / "Source
+#    only org-owned repos can have push rules"). Retained for the org-migration
+#    case only -- if this repo ever moves into an organization, run it to restore
+#    the mechanical path lock. See the "Honest-degrade note (E2)" below.
 gh api "repos/$REPO/rulesets" --method POST --input - <<'JSON'
 {
   "name": "floor-workflow-path-lock",
@@ -166,5 +171,13 @@ enforcement` + `floor self-anchor`), code review, and the retro boundary
 (FLOOR.md clause iii's out-of-band maintainer sign-off). These are process
 controls, not the mechanical file-path lock they replace.
 
-The outcome of the push-ruleset creation attempt (step 2) is recorded in Attack
-B above.
+The push-ruleset creation attempt (step 2 in Configuration commands) was
+observed to fail on 2026-07-10 with:
+
+```
+HTTP 422
+"Source public repos cannot have push rules"
+"Source only org-owned repos can have push rules"
+```
+
+That evidence is what grounds this descope; it is the same failure quoted above.
