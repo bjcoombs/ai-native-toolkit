@@ -6,13 +6,32 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
 
 ``markers``
     Base-vs-head *removal detection*. For each marked file, fail iff a floor
-    token (the marker comment or a gate invocation string) was present on the
-    merge-base but is absent on the PR head. This is deliberately NOT an
-    unconditional grep: the markers are added later in the marathon (tasks that
-    wire the gates into the skills), so an unconditional check would turn every
-    intermediate PR red. Removal detection arms itself automatically the moment
-    a marker lands and bites only when one is taken away -- including when the
-    whole marked file is deleted.
+    token (the marker comment or a gate invocation string) was weakened between
+    the merge-base and the PR head. "Weakened" is two complementary signals, not
+    a bare "absent from the whole file" test:
+
+    1. **Count decrease.** A token whose total occurrences drop base -> head is
+       flagged. This is stricter than presence-anywhere: removing the one
+       load-bearing anchor line still trips the check even when an *incidental*
+       mention of the same string survives elsewhere in the file (e.g. a prose
+       or documentation reference to the marker).
+    2. **Anchor-line loss** (marker only). The cold-verify marker is load-bearing
+       only as a *standalone line*; a backtick-wrapped mention inside prose is
+       documentation, not the obligation. So if the base carried at least one
+       standalone anchor line and the head carries none, the marker is flagged
+       even when the raw occurrence count was held constant (e.g. the anchor
+       line deleted and a fresh prose mention added to mask the count).
+
+    A presence-anywhere test alone was a false-negative: the marathon skill
+    documents the marker string in its own Retro Boundary prose, so deleting the
+    real anchor line left the substring present and the check passed. The two
+    signals above close that gap.
+
+    This is deliberately NOT an unconditional grep: the markers are added later
+    in the marathon (tasks that wire the gates into the skills), so an
+    unconditional check would turn every intermediate PR red. Removal detection
+    arms itself automatically the moment a marker lands and bites only when one
+    is taken away -- including when the whole marked file is deleted.
 
 ``clauses``
     Unconditional integrity check of ``FLOOR.md``: the file must exist and each
@@ -56,12 +75,32 @@ REQUIRED_CLAUSES = {
 
 # ── Pure logic (unit-tested) ─────────────────────────────────────────────────
 
+def standalone_anchor_count(text: str | None, marker: str = MARKER) -> int:
+    """Number of *standalone* anchor lines: lines whose stripped content is the
+    bare marker.
+
+    A backtick-wrapped mention inside prose (``- the `<!-- ... -->` markers``)
+    strips to something other than the bare marker, so it is documentation, not
+    a load-bearing anchor, and does not count here.
+    """
+    if not text:
+        return 0
+    return sum(1 for line in text.splitlines() if line.strip() == marker)
+
+
 def removed_tokens(
     base_text: str | None,
     head_text: str | None,
     tokens=FLOOR_TOKENS,
 ) -> list[str]:
-    """Tokens present in ``base_text`` but absent from ``head_text``.
+    """Floor tokens *weakened* from ``base_text`` to ``head_text``.
+
+    A token is flagged when either signal fires (see the module docstring):
+
+    * its total occurrence count decreased base -> head, or
+    * (marker only) the base carried a standalone anchor line and the head
+      carries none -- catching an anchor deletion masked by a fresh prose
+      mention that keeps the raw count constant.
 
     ``base_text is None`` means the file did not exist on the base -> nothing
     could be removed. ``head_text is None`` (or empty) means the file was
@@ -69,11 +108,22 @@ def removed_tokens(
     """
     if base_text is None:
         return []
-    present_in_base = [t for t in tokens if t in base_text]
-    if not present_in_base:
-        return []
     head = head_text or ""
-    return [t for t in present_in_base if t not in head]
+    removed = []
+    for token in tokens:
+        base_count = base_text.count(token)
+        if base_count == 0:
+            continue  # not carried on base -> nothing to remove
+        if head.count(token) < base_count:
+            removed.append(token)
+            continue
+        # Count held constant: for the anchor marker, still require a standalone
+        # anchor line to survive, so deleting the anchor and adding a prose
+        # mention to mask the count is caught.
+        if token == MARKER and standalone_anchor_count(base_text) > 0 \
+                and standalone_anchor_count(head) == 0:
+            removed.append(token)
+    return removed
 
 
 def missing_clauses(floor_text: str | None) -> list[str]:
@@ -126,8 +176,9 @@ def cmd_markers(args: argparse.Namespace) -> int:
             failed = True
             for token in removed:
                 print(
-                    f"FAIL {path}: floor token removed -> {token!r} "
-                    f"(present on {base}, absent on head)"
+                    f"FAIL {path}: floor token weakened -> {token!r} "
+                    f"(occurrences dropped, or its standalone anchor line was "
+                    f"removed, between {base} and head)"
                 )
         else:
             carried = [t for t in FLOOR_TOKENS if base_text and t in base_text]

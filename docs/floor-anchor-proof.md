@@ -44,53 +44,96 @@ enforcement` deterministic job is unaffected and stays green.
 Exact configuration commands are in the "Configuration commands" section below so
 the state is reproducible.
 
-## Attack A -- FLOOR.md clause removal
+## Attack A (stand-in) -- FLOOR.md clause removal
 
 **Branch:** `floor-attack-a-marker-removal`
 **Attack:** remove a clause (its anchor + key phrase) from `FLOOR.md`.
 **Expected:** `floor.yml`'s clause-integrity check fails; because `floor enforcement`
 is a required check, the PR cannot merge.
 
-> Scope note: the canonical criterion-5 attack removes the
-> `<!-- floor:cold-verify-completion -->` marker from `skills/marathon/SKILL.md`.
-> That marker is added later this marathon (the task that wires the gates into
-> the marathon skill). Until then the marker-removal path has nothing to remove,
-> so attack A exercises the equivalent floor-integrity failure via FLOOR.md
-> clause removal, which is armed from this PR. See the pending row below.
+> Scope note: this clause-removal variant was the stand-in used *before* the
+> `<!-- floor:cold-verify-completion -->` marker landed in the marathon skill --
+> the marker-removal path had nothing to remove until then, so attack A exercised
+> the equivalent floor-integrity failure via FLOOR.md clause removal. The marker
+> has since landed (merged in #267) and the **canonical marker-removal attack has
+> now been run** -- see the "Attack A (canonical) -- marathon marker removal"
+> section below for its two recorded outcomes. This clause-integrity path remains
+> armed from day one and is still enforced by the `clauses` check.
 
 | Field | Value |
 |---|---|
-| PR number | _pending: run after settings configured_ |
-| floor.yml result | _expected: FAIL at "FLOOR.md four-clause integrity"_ |
-| Mergeable? | _expected: no (required check red)_ |
-| Outcome | _pending_ |
+| PR number | n/a -- superseded by the canonical marker-removal attack (below); clause-integrity path remains armed |
+| floor.yml result | _clause-integrity check remains active: FAIL at "FLOOR.md four-clause integrity" on any clause removal_ |
+| Mergeable? | _no (required check red) if a clause is removed_ |
+| Outcome | Superseded by canonical Attack A below |
 
 ## Attack B -- gut floor.yml itself
 
 **Branch:** `floor-attack-b-gut-workflow`
 **Attack:** replace `.github/workflows/floor.yml` with a no-op that always passes.
-**Expected:** the push ruleset's path restriction refuses the change to
-`.github/workflows/floor.yml`; a plain (non-bypass) merge is blocked.
+**Intended defense:** an active push ruleset with a `file_path_restriction` rule
+covering `.github/workflows/floor.yml`, requiring maintainer bypass.
+
+**Capability result: the defense cannot be configured on this repo.** Creating the
+push ruleset (step 2 of the Configuration commands) returns GitHub **HTTP 422:
+"Source only org-owned repos can have push rules"**. Push rulesets with
+`file_path_restriction` are an organization-owned-repository feature and are
+unavailable on this user-owned repo. This is a capability wall, not a fixable
+bug, so per the honest-degrade contract it returns to the maintainer for an
+explicit descope decision rather than shipping as documentation.
 
 | Field | Value |
 |---|---|
-| PR number | _pending: run after settings configured_ |
-| Push/merge result | _expected: blocked by file_path_restriction ruleset_ |
-| Mergeable? | _expected: no (path restricted, maintainer bypass required)_ |
-| Outcome | _pending_ |
+| PR number | n/a -- attack not run (defense unconfigurable) |
+| Push/merge result | Ruleset creation blocked: GitHub 422 "Source only org-owned repos can have push rules" |
+| Mergeable? | n/a |
+| Outcome | Maintainer descope decision **pending** (see the honest-degrade note below) |
 
-## Pending: canonical marathon-marker attack (post-task-9)
+## Attack A (canonical) -- marathon marker removal
 
-The canonical marker-removal attack on `skills/marathon/SKILL.md` re-runs after the
-marathon-skill task lands the `<!-- floor:cold-verify-completion -->` marker and
-the gate invocations. The marathon lead owns that re-run.
+The canonical criterion-5 attack, run once the marathon-skill task landed the
+`<!-- floor:cold-verify-completion -->` marker (merged in #267). **Branch:**
+`floor-attack-a-marker-removal-2`. **Attack:** delete only the standalone
+`<!-- floor:cold-verify-completion -->` marker line from `skills/marathon/SKILL.md`.
+
+This run has two recorded outcomes -- the honest narrative matters, so both stay
+here rather than only the fixed state.
+
+### Outcome 1 -- false-negative (detector self-immunized by a prose mention)
+
+The first run **passed** `floor enforcement` when it should have failed. The
+marker-removal check (`scripts/floor_check.py`) tested only whether the marker
+*substring* was absent from the whole file. `skills/marathon/SKILL.md` documents
+the marker string in its own Retro Boundary section as a backtick-wrapped list
+item (`` - the `<!-- floor:cold-verify-completion -->` markers in all four ... ``),
+so deleting the load-bearing standalone anchor left the substring present
+elsewhere and the check reported `4 token(s) intact`. Any file that documents the
+marker string in prose was self-immunized against marker-removal detection.
 
 | Field | Value |
 |---|---|
-| PR number | _pending: post-marker task_ |
-| floor.yml result | _expected: FAIL at "Marker removal detection (base-vs-head)"_ |
+| PR number | [#276](https://github.com/bjcoombs/ai-native-toolkit/pull/276) |
+| `floor enforcement` result | **PASS (false-negative)** -- log: `ok skills/marathon/SKILL.md: 4 token(s) intact` |
+| Mergeable? | No -- but only because `floor self-anchor` fails closed repo-wide, **not** because marker removal was caught |
+| Root cause | `removed_tokens` used a whole-file substring test; the marker string also appears in the file's own Retro Boundary prose |
+| Outcome | Reported as a real floor bug (not descoped); detector fixed in this PR |
+
+### Outcome 2 -- fixed detector, attack re-proven
+
+The detector was hardened (this PR) to fail on two complementary signals: a
+base-vs-head **decrease in the marker's occurrence count** (so removing one
+anchor trips it even when an incidental mention survives), and **loss of the last
+standalone anchor line** (so deleting the anchor and adding a fresh prose mention
+to mask the count is still caught). Tests in `scripts/tests/test_floor_check.py`
+reproduce the exact false-negative against the real marathon file plus the
+count-masked variant.
+
+| Field | Value |
+|---|---|
+| PR number | [#276](https://github.com/bjcoombs/ai-native-toolkit/pull/276) (re-triggered onto the fixed detector) |
+| `floor enforcement` result | _pending: finalized after the detector fix merges and #276 re-runs against it -- expected FAIL at "Marker removal detection (base-vs-head)"_ |
 | Mergeable? | _expected: no (required check red)_ |
-| Outcome | _pending: re-run after the marathon-skill marker lands_ |
+| Outcome | _pending: #276 closed unmerged with the criterion-5 note once the re-run confirms the FAIL_ |
 
 ## Configuration commands
 
