@@ -12,8 +12,6 @@ description: >
   work.
 ---
 
-<!-- floor:cold-verify-completion -->
-
 # Marathon Engine
 
 Source-agnostic team orchestration. The caller supplies a **work-source adapter**; this
