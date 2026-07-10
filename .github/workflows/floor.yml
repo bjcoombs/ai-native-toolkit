@@ -13,13 +13,20 @@
 #        PR that introduced this workflow onward).
 #
 #   floor self-anchor (E2, fail-closed on repo settings):
-#     Query the live GitHub API and fail if the floor check is no longer required
-#     on the default branch, or if the path restriction on this file is gone.
-#     Reading repo settings needs admin:read, which the default GITHUB_TOKEN
-#     lacks -- provide the FLOOR_ANCHOR_TOKEN secret (fine-grained PAT,
-#     "Administration: read"). This out-of-band maintainer step is itself part of
-#     the floor (FLOOR.md clause iii); until it is done the anchor fails closed
-#     with the exact commands needed, and its red is isolated to this job.
+#     Query the live GitHub API and FAIL (fail-closed) if either floor check
+#     (floor enforcement / floor self-anchor) is no longer required on the
+#     default branch, or if branch protection cannot be read at all. Reading repo
+#     settings needs admin:read, which the default GITHUB_TOKEN lacks -- provide
+#     the FLOOR_ANCHOR_TOKEN secret (fine-grained PAT, "Administration: read").
+#     This out-of-band maintainer step is itself part of the floor (FLOOR.md
+#     clause iii); until it is done the anchor fails closed with the exact
+#     commands needed, and its red is isolated to this job.
+#     The floor.yml PATH LOCK (a push ruleset over this file) is DESCOPED per the
+#     maintainer's PRD-E2 decision (2026-07-10): GitHub refuses push rulesets on
+#     public, user-owned repos (HTTP 422, "Source public repos cannot have push
+#     rules"). The anchor now WARNS about that documented capability gap rather
+#     than failing on it -- see scripts/floor_anchor.py (PATH_LOCK_DESCOPED) and
+#     docs/floor-anchor-proof.md (Honest-degrade note, E2).
 #
 #   canary suite (E3, semantic layer -- conditional):
 #     Runs scripts/canaries/run_canaries.py, which drives the REAL gates against
