@@ -154,6 +154,11 @@ gh api "repos/$REPO/branches/main/protection/required_status_checks" \
   -f 'checks[][context]=floor self-anchor'
 
 # 2. Path-restrict floor.yml via a push ruleset (maintainer bypass).
+#    DESCOPED (2026-07-10): this POST is known to fail with HTTP 422 on public,
+#    user-owned repos ("Source public repos cannot have push rules" / "Source
+#    only org-owned repos can have push rules"). Retained for the org-migration
+#    case only -- if this repo ever moves into an organization, run it to restore
+#    the mechanical path lock. See the "Honest-degrade note (E2)" below.
 gh api "repos/$REPO/rulesets" --method POST --input - <<'JSON'
 {
   "name": "floor-workflow-path-lock",
@@ -175,8 +180,47 @@ gh secret set FLOOR_ANCHOR_TOKEN --repo "$REPO"   # paste the PAT when prompted
 
 ## Honest-degrade note (E2)
 
-If GitHub's model cannot enforce the `floor.yml` path restriction on this
-user-owned repo under solo-merge (e.g. push rulesets with `file_path_restriction`
-are unavailable outside organizations), the gap is **not** shipped as
-documentation: it returns to the maintainer for an explicit descope decision.
-The outcome of the push-ruleset creation (step 2) is recorded in Attack B above.
+**Descope decision (maintainer, 2026-07-10).** GitHub structurally refuses push
+rulesets on public, user-owned repos, so the `floor.yml` path lock (step 2, an
+active push ruleset with a `file_path_restriction` rule) **cannot be created on
+this repo**. Observed evidence from attempting the ruleset creation:
+
+```
+HTTP 422
+"Source public repos cannot have push rules"
+"Source only org-owned repos can have push rules"
+```
+
+Rather than migrate the repo into an organization solely to gain this rule, the
+maintainer chose (per PRD E2) to **descope the floor.yml path lock**. The gap is
+handled as a *named, documented capability limit*, not shipped as if the lock
+were live:
+
+- The two hard requirements remain **fail-closed**: both `floor enforcement` and
+  `floor self-anchor` must be required status checks on the default branch, and
+  branch protection must be readable via `FLOOR_ANCHOR_TOKEN`. The
+  `floor self-anchor` job still fails the PR if either does not hold.
+- The path-restriction check is **downgraded to a loud warning** (stderr
+  `::warning::` + job summary) that quotes the 422 evidence and this descope
+  decision. It is keyed on the explicit `PATH_LOCK_DESCOPED` constant in
+  `scripts/floor_anchor.py`, not silently removed.
+
+**Residual risk (stated honestly).** Without the path lock, a `floor.yml`-gut
+attack is *detected only until a gutted workflow merges* - the deterministic
+marker/clause checks catch the edit in the PR, but nothing structurally blocks a
+self-merge of a workflow that removes its own enforcement. Prevention now rests
+on **process signals, named as such**: the required status checks (`floor
+enforcement` + `floor self-anchor`), code review, and the retro boundary
+(FLOOR.md clause iii's out-of-band maintainer sign-off). These are process
+controls, not the mechanical file-path lock they replace.
+
+The push-ruleset creation attempt (step 2 in Configuration commands) was
+observed to fail on 2026-07-10 with:
+
+```
+HTTP 422
+"Source public repos cannot have push rules"
+"Source only org-owned repos can have push rules"
+```
+
+That evidence is what grounds this descope; it is the same failure quoted above.
