@@ -244,6 +244,19 @@ For a software repo (`.archetype.archetype == "software"` or `.archetype.availab
 
 For a renormalised archetype score, read the level off the **fraction** (numerator ÷ denominator), not the raw number: the bands above correspond to ≥0.875 AI-Native, ≥0.625 Solid, ≥0.375 Basic, else Not Ready. A KB at 2.5/3 (0.83) is **Solid**, not "Not Ready".
 
+### What this score unlocks
+
+The maturity band bounds how much agent **autonomy** this repo's contracts can safely absorb, in the vocabulary of the adoption ladder ([Steps of AI Adoption](https://www.threads.com/@boris_cherny/post/Da4CkQnEea-), B. Cherny, 2026): the per-step guardrails Cherny names are these layers (self-verification loops = L5/L6, automated review = L7, agent instructions = L0, encoded routines and permissions = L8).
+
+| Band | Contracts support up to | Why |
+|------|------------------------|-----|
+| Not Ready | Step 1 (Assisted) - one supervised agent | No verification contracts; a human must review every change |
+| Basic | Step 1-2 boundary | Parallel agents are risky until L5/L6 self-verification holds |
+| Solid | Step 2 (Parallel) - ~10 agents, one orchestrator | Self-verification and review automation absorb parallel diffs |
+| AI-Native | Step 3 (Supervised autonomy) - background routines | Contracts plus L8 orchestration can absorb autonomous loops |
+
+**This is a bound, not a claim about how the team actually works** - a Solid repo whose team reviews every diff by hand is operating below its bound; a Not Ready repo running unattended agents is operating beyond it (the risk the score names). Read the band off the renormalised **fraction** for a non-software archetype, exactly as with the maturity level above.
+
 </details>
 
 <details>

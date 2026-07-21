@@ -46,6 +46,7 @@ from lib.agent_instructions_grader import (
     grade_instructions,
     scan_sensitive_content,
 )
+from lib.agent_ops import scan_agent_ops
 from lib.anomaly_detector import detect_anomalies
 from lib.archetype import analyze_archetype
 from lib.badge import (
@@ -1366,6 +1367,13 @@ def build_run_context(
     # Layer 3/5/8 scoring rules; stale_by_file feeds the unactioned_intent
     # finding and the hotspot pages (already written above with marker debt).
     ctx["promissory_markers"] = promissory
+
+    # Agent-operations guardrails (permission allowlists, hooks, sandbox rules,
+    # routine definitions): Layer 8 workflow-maturity evidence. Tracked-only
+    # credit - an uncommitted settings file reaches no clone. Deliberately
+    # excludes .claude/agents/ and .claude/skills/ (Layer 0's evidence) so the
+    # two layers never double-count the same artifact.
+    ctx["agent_ops"] = _safe("agent_ops", lambda: scan_agent_ops(repo_root))
 
     # Accretion ratchet (write-side tendency: files that only ever grow). The
     # scan measured every file above; here it is filtered to files already in the
