@@ -349,6 +349,18 @@ Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
 sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
 
+**`agent_ops.py`**
+Layer 8 workflow-maturity evidence: scans the repo-observable agent-operations
+guardrails - `.claude/settings.json` / `.claude/settings.local.json` permission
+`allow`/`deny`/`ask` counts, hook events, sandbox config; scripts under
+`.claude/hooks/`; routine definitions under `.claude/workflows/` /
+`.claude/routines/`. Summary booleans (`permissions_encoded`, `hooks_present`,
+`routines_present`) credit **git-tracked** evidence only, mirroring the Layer 0
+rule (an uncommitted settings file reaches no clone). Deliberately excludes
+`.claude/agents/` and `.claude/skills/` - those are Layer 0's evidence - so the
+two layers never double-count. Pure stdlib JSON/filesystem reads plus
+`git_churn.tracked_files`.
+
 **`accretion_ratchet.py`**
 Write-side accretion instrument: detects files that only ever grow. Walks each
 file's full numstat history in author-time order (one `git log --no-merges

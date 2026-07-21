@@ -507,6 +507,14 @@ ls "$REPO_ROOT"/.continue/ 2>/dev/null             # Continue
 fd -t f '(kanban|backlog|sprint|iteration)' "$REPO_ROOT" --extension md --extension json --extension yaml 2>/dev/null | head -3
 ```
 
+**Read the agent-operations guardrails from the data bus:**
+
+```bash
+jq '.agent_ops' "$REPO_ROOT/.assess/run-context.json"
+```
+
+`agent_ops` is the deterministic scan of encoded operational guardrails - the repo-observable enablers of running agents in parallel or on routines rather than one supervised session at a time. `settings` lists each `.claude/settings.json` / `.claude/settings.local.json` found with its permission `allow_count` / `deny_count` / `ask_count`, `hook_events`, and `sandbox_configured`; `hooks_dir` and `routine_dirs` count scripts under `.claude/hooks/` and routine definitions under `.claude/workflows/` / `.claude/routines/`. The `summary` booleans (`permissions_encoded`, `hooks_present`, `routines_present`) credit **tracked** evidence only - an uncommitted settings file reaches no clone, the same rule Layer 0 applies to instruction files. Note `.claude/agents/` and `.claude/skills/` are deliberately absent here - they are Layer 0 evidence; do not count them twice.
+
 **Scan for feedback loop infrastructure:**
 ```bash
 # Retro logs, learnings, postmortems
@@ -519,7 +527,7 @@ rg -i 'retrospective|retro|feedback loop|learnings|post.?mortem' "$REPO_ROOT"/{C
 
 1. **Task orchestration** - Are AI tasks structured and tracked? (Task Master tags, SpecKit specs, GSD tasks, GitHub Projects with AI labels, etc.)
 2. **Feedback loop** - Do learnings feed back into contracts? (retro logs, agent instruction updates traced to incidents, iterative CLAUDE.md refinement)
-3. **Workflow maturity** - Is there evidence of repeated AI work cycles? (multiple completed tags/sprints, merged PR history from AI branches, wave-based orchestration)
+3. **Workflow maturity** - Is there evidence of repeated AI work cycles? (multiple completed tags/sprints, merged PR history from AI branches, wave-based orchestration). The `agent_ops` summary booleans are positive evidence here: `permissions_encoded` (pre-approved allowlists / deny rules mean the safe command surface is a committed contract, not one operator's session state), `hooks_present` (tool calls are intercepted by encoded policy), and `routines_present` (repeated agent work is defined as artifacts). Each true boolean strengthens this dimension; all three false is neutral (many mature repos run agents without them), so agent-ops evidence can lift a verdict toward Partial/Present but its absence never lowers one, and it is **never sufficient alone** - a repo with an allowlist but no task orchestration or feedback loop is still Missing.
 
 **Scoring:**
 - Present: Structured AI task management with feedback loop that updates contracts
