@@ -99,7 +99,7 @@ $ sed -n "50,60p" .github/workflows/tests.yml
 
 ## Design
 
-Three hooks, each in its owning plugin's `hooks/hooks.json` with a `description`. Plugin ownership follows the R1 component table cited in [../intent.md](../intent.md): the block hook is a delivery-workflow guardrail, the lint hook is a skill-authoring guardrail, and the migration notice belongs to the meta-plugin alone, because under D5 an existing 1.x install upgrades to the umbrella and to nothing else.
+Three hooks, each in its owning plugin's `hooks/hooks.json` with a `description`. The plugin set is the one D1 fixes in [../intent.md](../intent.md): six families - `assess`, `huddle`, `deslop`, `skill-craft`, `gh-org`, `delivery` - plus the `ai-native-toolkit` meta-plugin of D5. R1's per-component ownership table is not in this repository: it lives in the programme PRD, an un-versioned Task Master document kept outside the tree, and `intent.md` transcribes that PRD's Problem Statement, Decisions, Deprecation Path, sequence and Success Criteria rather than the R briefs. The three assignments this spec needs, stated here rather than pointed at: the block hook is a delivery-workflow guardrail and belongs to `delivery`; the lint hook is a skill-authoring guardrail and belongs to `skill-craft`; the migration notice belongs to the meta-plugin alone, because under D5 an existing 1.x install upgrades to the umbrella and to nothing else.
 
 ### Block hook (delivery)
 
@@ -115,7 +115,7 @@ Three hooks, each in its owning plugin's `hooks/hooks.json` with a `description`
         "hooks": [
           {
             "type": "command",
-            "command": "uv run ${CLAUDE_PLUGIN_ROOT}/hooks/block_integration_write.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/block_integration_write.py",
             "timeout": 5
           }
         ]
@@ -127,7 +127,20 @@ Three hooks, each in its owning plugin's `hooks/hooks.json` with a `description`
 
 No `if` condition, deliberately. The documented Bash permission-rule forms are an exact command (`Bash(git commit)`) and a prefix (`Bash(git commit:*)`); neither matches `cd <repo>-main && git commit -m ...`, whose first word is `cd`. That command is the motivating case, so an `if` that reads as a tightening would instead make the hook a silent no-op on the write it exists to catch: green in CI, `hooks.json` still reading as Present. Filtering moves into the handler, which exits 0 on the first pass when no segment is a `git commit` or `git push`.
 
-`block_integration_write.py` is a PEP 723 single-file script, matching the convention every other script in this repository uses. It reads the `PreToolUse` payload on stdin and:
+`block_integration_write.py` runs under `python3`, not `uv run`. It needs only the standard library - `json`, `shlex`, `subprocess`, `os.path` - and it fires on every Bash call in every subagent, so `uv run` would put a dependency-resolution step on the busiest path in this design in exchange for no dependencies. The PEP 723 convention is also narrower than "every script in the repository": seven of the repository's 142 Python files carry a `# /// script` block, and all seven are under `skills/assess/scripts/`, where the scripts do have third-party dependencies to declare. Measured at the same commit as the Current state section:
+
+```
+$ git ls-files "*.py" | wc -l
+     142
+
+$ git ls-files "*.py" | xargs grep -l "^# /// script" | wc -l
+       7
+
+$ git ls-files "*.py" | xargs grep -l "^# /// script" | xargs -n1 dirname | sort -u
+skills/assess/scripts
+```
+
+The handler reads the `PreToolUse` payload on stdin and:
 
 1. Splits `tool_input.command` on `&&`, `||`, `;` and newline into ordered segments.
 2. Selects the segments whose first word is `git` and whose subcommand is `commit` or `push`. Exits 0 when there are none.
@@ -143,7 +156,7 @@ Step 4 fails open. When `rev-parse` fails, because the path does not exist, is n
 
 Payload `cwd` and the cross-call `cd`. Rule 3 covers a `cd` in the same command string. The higher-frequency case is cross-call: a prior Bash call ran `cd <repo>-main`, this call is a bare `git commit -m ...`, and `skills/marathon/SKILL.md` records both that the lead's `gh` polling leaves cwd there and that cwd persists across tool calls. That case rests entirely on the payload `cwd`, and whether `cwd` tracks the persistent Bash shell cwd or the session directory is not something a fixture can settle, because a fixture carries whatever `cwd` its author typed into it. It is listed under Open verification with the probe that settles it and the fallback if the answer is the session directory.
 
-Documented limits: blocked under `allowManagedHooksOnly`, which drops plugin hooks entirely; runs on every Bash call, not only git ones, and inside every subagent, so the per-call cost multiplies across a team; sees only the literal command string, so a `git commit` inside a shell script file, a `bash -c` string, or a shell function is invisible; a repository legitimately named `*-main` that is not an integration checkout is a false positive, and the escape is `-C` onto a path whose toplevel is named otherwise; a path reaching the integration checkout through a symlink is caught only because `rev-parse` resolves it, and only when the path exists at hook time.
+Documented limits: blocked under `allowManagedHooksOnly`, which drops plugin hooks entirely; runs on every Bash call, not only git ones, and inside every subagent, so the per-call cost multiplies across a team; sees only the literal command string, so a `git commit` inside a shell script file, a `bash -c` string, or a shell function is invisible; a repository legitimately named `*-main` that is not an integration checkout is a false positive, and the escape is `-C` onto a path whose toplevel is named otherwise; a path reaching the integration checkout through a symlink is caught only because `rev-parse` resolves it, and only when the path exists at hook time; the `timeout: 5` is a second fail-open path, and unlike step 4 no fixture can see it, because requirement 8 pipes payloads straight to the handler and the timeout sits upstream of everything tested - a handler killed at 5 seconds lets the write through. Running a stdlib-only handler under `python3` keeps the real budget in milliseconds and is the reason the command is not `uv run`, whose cold-cache resolution is the one plausible way to reach 5 seconds. The residual exposure is a machine with no `python3` on `PATH`, where the hook fails open on every call.
 
 ### Lint hook (skill-craft)
 
@@ -156,7 +169,6 @@ Documented limits: blocked under `allowManagedHooksOnly`, which drops plugin hoo
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "if": "Edit(**/SKILL.md)",
         "hooks": [
           {
             "type": "command",
@@ -170,11 +182,11 @@ Documented limits: blocked under `allowManagedHooksOnly`, which drops plugin hoo
 }
 ```
 
-One entry, not two. The permission-rule namespace for file writes is `Edit`, and the documented rule table defines no `Write(...)` form: `Edit` rules apply to every built-in tool that edits files, `Write` included. So `Edit(**/SKILL.md)` already covers a `Write`, and a second entry keyed on `Write(**/SKILL.md)` would either be a rule that never evaluates or a duplicate that runs the handler twice on one call. The `matcher` is a regex over the tool name and stays `Edit|Write`, so the entry is reached for either tool; the `if` narrows it to `SKILL.md` paths. This rests on the documented rule table rather than on a run, so requirement 12 records a first-run verdict that a single `Write` to a `SKILL.md` fires the handler exactly once.
+No `if` condition, for the same reason as the block hook: the filter belongs where a fixture can reach it. `matcher` is a regex over the tool name, so `Edit|Write` reaches the handler for either tool, and `skill_lint.py` exits 0 on the first pass when `tool_input.file_path` does not end in `SKILL.md`. An `if: "Edit(**/SKILL.md)"` would buy one avoided process spawn on non-`SKILL.md` edits and cost a trigger condition nothing in this repository can exercise. The documented permission-rule namespace for file writes is `Edit`, with no `Write(...)` form defined, so `Edit(**/SKILL.md)` covering a `Write` is a reading of the rule table, not a tested fact; keying the filter on it would make the `Write` path either silently dead or, if a second entry were added, a double run on one call. The handler's own path check is the same rule expressed where the fixtures test it.
 
 `skill_lint.py` reads the `PostToolUse` payload on stdin, takes `tool_input.file_path`, exits 0 when that path does not end in `SKILL.md`, and otherwise asserts four things: the frontmatter parses as YAML and carries `name` and `description`; `description` is under 1,024 characters; the body after the frontmatter is under 500 lines; every relative link from the file is at most one directory deep (`references/<x>.md`, `scripts/<x>`), never `references/<a>/<b>.md`. Failures print on stderr and the script exits 2.
 
-Documented limits: exit 2 is the only exit code `PostToolUse` surfaces to Claude and it does not undo the write, so this is advice fed back into the turn, not a block; the hook does not fire on Bash-driven edits (`sed -i`, a heredoc redirect, `git apply`), because the matcher is the tool name; it lints the one file the tool touched, so a change that pushes a sibling file over a limit is not seen; if `Write` turns out to be a distinct rule namespace after all, the `Write` path never fires and the fix is a second entry with `if: "Write(**/SKILL.md)"`.
+Documented limits: exit 2 is the only exit code `PostToolUse` surfaces to Claude and it does not undo the write, so this is advice fed back into the turn, not a block; the hook does not fire on Bash-driven edits (`sed -i`, a heredoc redirect, `git apply`), because the matcher is the tool name; it lints the one file the tool touched, so a change that pushes a sibling file over a limit is not seen; with no `if`, the handler is spawned on every `Edit` and `Write`, not only on `SKILL.md` paths, and because `skill_lint.py` parses YAML it keeps its PEP 723 block and `uv run`, so the price of the untestable trigger condition is one warm-cache uv resolution per file edit - paid on a tool that fires far less often than Bash; the `timeout: 10` is a fail-open path the fixtures cannot see, on the same reasoning as the block hook's, and a cold uv cache is the way to reach it, dropping the lint for that edit.
 
 ### Migration notice (meta-plugin 2.0.0)
 
@@ -190,7 +202,7 @@ Documented limits: exit 2 is the only exit code `PostToolUse` surfaces to Claude
         "hooks": [
           {
             "type": "command",
-            "command": "uv run ${CLAUDE_PLUGIN_ROOT}/hooks/migration_notice.py",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/migration_notice.py",
             "timeout": 5
           }
         ]
@@ -202,7 +214,7 @@ Documented limits: exit 2 is the only exit code `PostToolUse` surfaces to Claude
 
 The meta-plugin is the only plugin that ships the notice. Under D5 an existing 1.x install upgrades to the umbrella, which makes the umbrella the entire audience for the migration text. An `assess` copy would fire for two populations the text is wrong for: someone who followed the notice and installed `assess`, re-told the migration they have just performed; and a fresh 2.0 user who never held 1.x, told to uninstall an umbrella they do not have. Gating an `assess` copy on the umbrella being installed was the alternative considered; no documented hook input or environment variable lets a handler see a sibling plugin, so the copy is cut rather than guarded. The double-registration nudge D5 relies on is already the closing clause of the umbrella's own wording.
 
-`migration_notice.py` reads the notice from `${CLAUDE_PLUGIN_ROOT}/hooks/notice-2.txt` and `CLAUDE_PLUGIN_DATA` from the environment. It prints nothing and exits 0 when `CLAUDE_PLUGIN_DATA` is unset, when the marker `${CLAUDE_PLUGIN_DATA}/notice-2` already exists, or when `notice-2.txt` cannot be read. Otherwise it creates the marker's parent directory, writes the marker, prints this object on stdout with `<notice>` standing for the exact bytes of `notice-2.txt`, and exits 0:
+`migration_notice.py` runs under `python3` for the reason the block handler does: it needs only the standard library, so `uv run` would add a resolution step to session startup for no dependencies. It reads the notice from `${CLAUDE_PLUGIN_ROOT}/hooks/notice-2.txt` and `CLAUDE_PLUGIN_DATA` from the environment. It prints nothing and exits 0 when `CLAUDE_PLUGIN_DATA` is unset, when the marker `${CLAUDE_PLUGIN_DATA}/notice-2` already exists, or when `notice-2.txt` cannot be read. Otherwise it creates the marker's parent directory, writes the marker, prints this object on stdout with `<notice>` standing for the exact bytes of `notice-2.txt`, and exits 0:
 
 ```json
 {
@@ -220,7 +232,7 @@ The meta-plugin is the only plugin that ships the notice. Under D5 an existing 1
 
 `systemMessage` reaches the user and `additionalContext` reaches Claude, so a user who asks "what changed?" gets an answer from the same text rather than a second explanation. The marker basename is keyed to the notice generation: `notice-2` for the 2.0 notice, `notice-3` for any 3.0 successor. R14 records why the marker is a file and not frontmatter: `once: true` exists only in skill frontmatter.
 
-Documented limits: the `startup` matcher fires on a new session only, so `--resume` and `--continue` sessions (matcher `resume`) never see the notice; a user who clears the plugin data directory sees it again; the 5 second timeout drops the notice for that session, which is an acceptable trade because the notice is informational and the timeout caps the added startup delay at 5 seconds, with `uv run` on a cold uv cache the path that can reach it.
+Documented limits: the `startup` matcher fires on a new session only, so `--resume` and `--continue` sessions (matcher `resume`) never see the notice; a user who clears the plugin data directory sees it again; the 5 second timeout drops the notice for that session, which is an acceptable trade because the notice is informational and the timeout caps the added startup delay at 5 seconds; running under `python3` with no dependency resolution leaves no plausible way to reach it, and a machine with no `python3` on `PATH` sees no notice at all.
 
 ### No dependency hook
 
@@ -232,14 +244,14 @@ R14 originally carried an assess dependency hook. The programme's Out of scope s
 2. The block handler exits 2 for `git commit` and for `git push` whose resolved target repository is a `<repo>-main` checkout, and exits 0 for the same commands targeting a worktree, and for `git checkout`, `git pull`, `git branch` and `git worktree add` targeting the integration checkout. Verified by the fixture-stdin cases in requirement 8.
 3. The block handler resolves the effective directory from `-C`, then a preceding `cd` in the same command string, then the payload `cwd`, in that order; applies the `-main` basename-suffix rule to the git toplevel rather than to the effective directory; and exits 0 when `rev-parse` fails. Verified by fixture cases covering each branch.
 4. The block message names the rule and the worktree command. Asserted on stderr by the fixture tests.
-5. `plugins/skill-craft/hooks/hooks.json` exists with a `description` and a single `PostToolUse` entry, `matcher: "Edit|Write"`, `if: "Edit(**/SKILL.md)"`. Verified by `jq` assertions in `tests/test_hook_skill_lint.py`.
-6. `plugins/skill-craft/scripts/skill_lint.py` exits 2 with the failing rule on stderr for each of the four checks and exits 0 for a compliant `SKILL.md`. Verified by the fixture cases in requirement 8.
+5. `plugins/skill-craft/hooks/hooks.json` exists with a `description` and a single `PostToolUse` entry, `matcher: "Edit|Write"`, and no `if` key. Verified by `jq` assertions in `tests/test_hook_skill_lint.py`.
+6. `plugins/skill-craft/scripts/skill_lint.py` exits 2 with the failing rule on stderr for each of the four checks, exits 0 for a compliant `SKILL.md`, and exits 0 for a `file_path` that does not end in `SKILL.md`. Verified by the fixture cases in requirement 8.
 7. `plugins/ai-native-toolkit/hooks/hooks.json` carries a `SessionStart` entry with `matcher: "startup"` and `timeout: 5`, and the notice handler exits 0 on every path, an unreadable `notice-2.txt` included. Verified by `jq` assertions and fixture cases in `tests/test_hook_migration_notice.py`.
 8. Each of the three hooks has a fixture-stdin test asserting exit code and message, under `tests/`, so the required `plugin contract pytest` check gates it with no workflow edit. Each hook's `hooks.json` shape assertion lives in that same file, so the three PRs share no test file.
 9. Both notice fields carry bytes identical to `plugins/ai-native-toolkit/hooks/notice-2.txt`, which is the in-repo source of the R20 wording: `intent.md` transcribes the programme PRD's Problem Statement, Decisions, Deprecation Path, sequence and Success Criteria, not the R briefs. Verified by `tests/test_hook_migration_notice.py`, which reads that file. No test parses this spec.
 10. `claude plugin validate plugins/<name> --strict` accepts each of the three plugins carrying a `hooks.json`, in the CI job R1 introduces. Recorded verdict: the paste from that job's first run on each WS6 PR.
 11. No WS6 PR adds a dependency hook, and `docs/migration-2.0.md` carries no dependency-hook row.
-12. Each hook is shown to fire, not only to be well formed. `matcher` and `if` are evaluated by Claude Code, so neither the fixture-stdin tests of requirement 8, which reach the handler directly, nor any `jq` assertion on those strings can exercise them. For each hook, the owning PR body carries a recorded `claude --print --plugin-dir plugins/<name>` run against a scratch checkout, next to requirement 10's validation paste: the block hook denies `cd <repo>-main && git commit -m probe` with the rule text on the tool result and allows the same commit from a worktree; the lint hook's rule text reaches the turn after one `Write` to an over-long `SKILL.md`, once rather than twice; the notice's `systemMessage` appears on the first startup and not the second.
+12. Each hook is shown to fire, not only to be well formed. `matcher` is evaluated by Claude Code, so neither the fixture-stdin tests of requirement 8, which reach the handler directly, nor any `jq` assertion on that string can exercise it. For each hook, the owning PR body carries a recorded `claude --print --plugin-dir plugins/<name>` run against a scratch checkout, next to requirement 10's validation paste: the block hook denies `cd <repo>-main && git commit -m probe` with the rule text on the tool result and allows the same commit from a worktree; the lint hook's rule text reaches the turn after one `Write` to an over-long `SKILL.md`, which is also what shows `matcher: "Edit|Write"` reaching the handler for a `Write` and not only an `Edit`; the notice's `systemMessage` appears on the first startup and not the second. D5 records that the meta-plugin cannot be dogfooded through `--plugin-dir`, because external symlinks are skipped for local installs, and that constraint does not reach this run: `hooks/hooks.json`, `hooks/migration_notice.py` and `hooks/notice-2.txt` are real files inside `plugins/ai-native-toolkit/`, not symlinks, so `SessionStart` fires and the notice is exercised. What the run does not exercise is the umbrella's symlinked `skills/` and `agents/`, which stay Probe 1's job under a GitHub-sourced marketplace, as `intent.md`'s success criterion has it.
 
 ## Verification
 
@@ -247,7 +259,7 @@ Fixtures live under `tests/fixtures/hooks/` and each is a recorded `PreToolUse`,
 
 `tests/test_hook_block_integration_write.py` asserts the shape of `plugins/delivery/hooks/hooks.json` (requirement 1) and runs nine fixtures: `commit-in-main.json` (exit 2), `push-in-main.json` (exit 2), `commit-in-worktree.json` (exit 0), `git-c-main-commit.json` (exit 2, `-C` wins over `cwd`), `cd-main-then-commit.json` (exit 2, `cd` wins over `cwd`), `cd-worktree-then-commit.json` (exit 0, `cd` wins over a `cwd` in the integration checkout), `worktree-add-in-main.json` (exit 0, subcommand not blocked), `no-git-segment.json` (exit 0, the handler's own filter now that there is no `if`), `missing-path.json` (exit 0, fail open). The two exit-2 cases assert the stderr message contains both the rule and `git worktree add`.
 
-`tests/test_hook_skill_lint.py` asserts the shape of `plugins/skill-craft/hooks/hooks.json` (requirement 5) and runs five fixtures under `tests/fixtures/hooks/skill-lint/`: `valid/SKILL.md` (exit 0), `bad-frontmatter/SKILL.md`, `long-description/SKILL.md` (1,025 characters), `long-body/SKILL.md` (501 body lines), `deep-reference/SKILL.md` (a `references/<a>/<b>.md` link). Each failing case asserts exit 2 and the failing rule named on stderr.
+`tests/test_hook_skill_lint.py` asserts the shape of `plugins/skill-craft/hooks/hooks.json` (requirement 5) and runs six cases: five fixtures under `tests/fixtures/hooks/skill-lint/` - `valid/SKILL.md` (exit 0), `bad-frontmatter/SKILL.md`, `long-description/SKILL.md` (1,025 characters), `long-body/SKILL.md` (501 body lines), `deep-reference/SKILL.md` (a `references/<a>/<b>.md` link) - and one payload whose `tool_input.file_path` ends in `README.md` (exit 0, the handler's own path filter now that there is no `if`). Each failing case asserts exit 2 and the failing rule named on stderr.
 
 `tests/test_hook_migration_notice.py` asserts the shape of `plugins/ai-native-toolkit/hooks/hooks.json` (requirement 7) and runs four cases driven by a `tmp_path` `CLAUDE_PLUGIN_DATA`: first run writes the marker, prints the JSON and exits 0; second run prints nothing and exits 0; unset variable prints nothing and exits 0; an unreadable `notice-2.txt` prints nothing and exits 0. The first-run case parses stdout and asserts `systemMessage` and `hookSpecificOutput.additionalContext` both equal the bytes of `plugins/ai-native-toolkit/hooks/notice-2.txt` (requirement 9).
 
@@ -259,7 +271,6 @@ Open verification, resolved on the first real run rather than asserted here:
 
 - Whether `CLAUDE_PLUGIN_DATA` is populated in a plugin-hook environment. If it is not, the notice never shows, and the fallback is the marker under the plugin's cache root with the same basename.
 - Whether the `PreToolUse` payload `cwd` tracks the persistent Bash shell cwd after a prior call's `cd`, or is the session directory. Probe: one `claude --print` session that runs `cd <repo>-main` in one Bash call and a `git commit` in the next, with the handler logging the `cwd` it received. If it is the session directory, the cross-call case is unreachable from the payload, the handler has no view of prior calls, and the fallback is to record the gap in the delivery skill and keep the same-command-string case rather than claim coverage the hook does not have.
-- Whether `Edit(**/SKILL.md)` covers a `Write`. Settled by requirement 12's lint run: if the handler does not fire on a `Write`, a second entry with `if: "Write(**/SKILL.md)"` is added.
 
 ## Breadcrumbs
 
