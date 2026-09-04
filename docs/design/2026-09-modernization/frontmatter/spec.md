@@ -137,7 +137,12 @@ skills/ghreport/SKILL.md:2
 skills/ghsync/SKILL.md:2
 ```
 
-`skills/assess/scripts/lib/interactivity.py:14` is a docstring mention, not a path expansion. Every `$SKILL_DIR` line in an assess file sits on a `chat-replace` target line or inside a `chat-skip` region, which is what keeps `SKILL_DIR` out of the standalone ZIP:
+```
+$ rg --no-heading -o '\$SKILL_DIR/scripts/' skills/ | wc -l
+      15
+```
+
+Fourteen of the fifteen are path expansions. The fifteenth is `skills/assess/scripts/lib/interactivity.py:14`, a docstring inside a `lib/` module that quotes `uv run "$SKILL_DIR/scripts/assess_core.py"` as the launch line, to explain why the core has no controlling terminal. It is prose, not a path expansion. Every `$SKILL_DIR` line in an assess file sits on a `chat-replace` target line or inside a `chat-skip` region, which is what keeps `SKILL_DIR` out of the standalone ZIP:
 
 ```
 $ rg -n --sort path -B1 '\$SKILL_DIR/scripts/' skills/assess/SKILL.md skills/assess-pr/SKILL.md | grep -E 'chat-replace|SKILL_DIR/scripts'
@@ -204,11 +209,35 @@ The count is 355 on `main` at 44bddbf; the branch carrying this spec reports 359
 
 `tests/test_plugin_contract.py` asserts `name` matches the directory and `description` is non-empty (`test_skill_frontmatter`) and that the frontmatter carries `TRIGGER` (`test_skill_has_trigger_clause`). Nothing asserts a tool field, an `argument-hint`, or a script-path form. `scripts/tests/test_integration.py::TestAssessBuild::test_no_skill_dir_reference` asserts the literal `SKILL_DIR` appears in no `.md` inside the assess ZIP; the same class asserts `CLAUDE_PLUGIN_ROOT` is absent. Both run under the required `scripts/ pytest` job.
 
+### Platform features relied on
+
+The Design section introduces three platform features the repo does not use anywhere today. Each comes from the Claude Code documentation, not from a precedent in the tree, so each carries its source here on the same terms `intent.md` D5 cites `plugins-reference` for the symlink meta-plugin.
+
+| Feature | Where the Design uses it | Source |
+|---------|--------------------------|--------|
+| `${CLAUDE_SKILL_DIR}` text substitution in skill markdown | Replaces the six bootstrap pairs (R4) | code.claude.com `skills` |
+| `user-invocable: false` skill frontmatter | Five library skills leave the `/` menu (R4) | code.claude.com `plugins-reference` |
+| `disallowedTools` agent frontmatter | Eight agents deny `Write`, `Edit`, `NotebookEdit` (R5) | code.claude.com `sub-agents` |
+
+Those three pages, plus `plugins`, are named on the programme PRD's "Reference docs" line as the sources the programme's decisions were taken from.
+
+Excluding this spec file, none of the three names occurs anywhere in the repo:
+
+```
+$ rg -n 'CLAUDE_SKILL_DIR|disallowedTools|user-invocable' docs/ skills/ commands/ agents/ scripts/ tests/ CLAUDE.md -g '!docs/design/2026-09-modernization/frontmatter/spec.md'
+$ echo $?
+1
+```
+
+So no text check can prove a token or key name is right. Requirements 1 through 11 assert the content of our own files and would all stay green on a misspelled token. The attestations are the live runs: requirement 12 for `${CLAUDE_SKILL_DIR}`, and the `claude plugin details` observations in requirements 6 and 10 for the two frontmatter keys.
+
 ## Design
 
 ### `${CLAUDE_SKILL_DIR}` replaces the bootstrap (R4)
 
-Each of the six bootstrap pairs is deleted along with its explanatory comment, and each consumer line becomes the literal `${CLAUDE_SKILL_DIR}/scripts/<x>`. Claude Code text-substitutes that token in skill markdown, and it resolves to the skill's own directory under a family install and under the meta-plugin, where the cache copy dereferences the symlink (D5).
+Each of the six bootstrap pairs is deleted along with its explanatory comment, and each consumer line becomes the literal `${CLAUDE_SKILL_DIR}/scripts/<x>`. Claude Code text-substitutes that token in skill markdown (code.claude.com `skills`), and it resolves to the skill's own directory under a family install. Under the meta-plugin it resolves to the dereferenced target rather than the umbrella's symlink, because the cache copy dereferences: Probe 1 installed the meta-plugin from a GitHub-sourced marketplace and `claude plugin details ai-native-toolkit` listed the symlinked skill and agent once each ([probes.md](../probes.md), Probe 1), which is what moves D5 to Decided. `--plugin-dir` cannot exercise that path - external symlinks are skipped for local installs (D5) - so requirement 12 verifies it from a GitHub-sourced marketplace instead.
+
+The one non-path mention of the old variable goes with the six pairs. `skills/assess/scripts/lib/interactivity.py:14` quotes `uv run "$SKILL_DIR/scripts/assess_core.py"` as the launch line that explains why the core has no controlling terminal; WS3-1 rewrites that quote to `${CLAUDE_SKILL_DIR}`. Left alone it would name a variable no assess file sets - a lying map of the launch path inside a `lib/` module.
 
 Rejected: keeping `CLAUDE_PLUGIN_ROOT`. It names a plugin-relative path (`.../skills/assess`) that the split changes for every skill, and under the meta-plugin it points at the umbrella rather than the owning family, so the path is right only while the symlink layout holds. Rejected: keeping the `~/.claude/skills` fallback. It exists because a stray hand-placed personal copy masked a clean-install break (#32) and was then copied five times; it makes a broken install look healthy, which is the failure it was meant to catch.
 
@@ -216,7 +245,7 @@ The `SKILL_DIR` literal must not survive into a standalone ZIP, and `${CLAUDE_SK
 
 ### `ghreport.sh` takes the `ghsync` path as an argument (R4)
 
-Text substitution reaches skill markdown, not a running script, so `ghreport.sh` cannot read `${CLAUDE_SKILL_DIR}`. The script gains a `--ghsync <path>` flag parsed beside the existing `--org` and `--root` cases at `skills/ghreport/scripts/ghreport.sh:40-42`; `ghreport/SKILL.md` passes `${CLAUDE_SKILL_DIR}/../ghsync/scripts/ghsync.sh`. The sibling lookup at line 283 stays as the default when the flag is absent, so a direct `bash ghreport.sh` from a checkout keeps working. The dead env fallback at line 285 is deleted; the not-found error at line 288 loses its `~/.claude/skills` clause and names the flag instead.
+Text substitution reaches skill markdown, not a running script, so `ghreport.sh` cannot read `${CLAUDE_SKILL_DIR}`. The script gains a `--ghsync <path>` flag parsed beside the existing `--org` and `--root` cases at `skills/ghreport/scripts/ghreport.sh:40-42`; `ghreport/SKILL.md` passes `${CLAUDE_SKILL_DIR}/../ghsync/scripts/ghsync.sh`. The sibling lookup at line 283 stays as the default when the flag is absent, so a direct `bash ghreport.sh` from a checkout keeps working. The dead env fallback at line 285 is deleted. At line 288 the whole parenthetical is replaced, not trimmed: today the line reads `Error: ghsync.sh not found (looked next to this script and under CLAUDE_PLUGIN_ROOT / ~/.claude/skills).`, and dropping only the `~/.claude/skills` clause would leave `CLAUDE_PLUGIN_ROOT` in the string and break requirement 4. The replacement names the sibling path that was tried and the `--ghsync` argument, so no `CLAUDE_PLUGIN_ROOT` or `~/.claude/skills` text survives anywhere in the script.
 
 ### Frontmatter fields (R4)
 
@@ -237,25 +266,30 @@ A `tools:` allowlist is rejected. It replaces the whole tool set, so it would st
 
 1. No `SKILL.md` resolves a script path through `CLAUDE_PLUGIN_ROOT`. Verify: `rg -n 'SKILL_DIR="\$\{CLAUDE_PLUGIN_ROOT' plugins/` returns nothing.
 2. No skill or script resolves a path through `~/.claude/skills`. Verify: `rg -n 'realpath ~/\.claude/skills' plugins/` and `rg -n 'CLAUDE_PLUGIN_ROOT:-\$HOME/\.claude/skills' plugins/` both return nothing. `skills/skill-forge/SKILL.md:172` mentions a home-directory skill path as prose about where a promoted file may live; that is content, not resolution, and stays.
-3. Every script invocation in skill markdown - `SKILL.md` and `references/` alike - uses the literal `${CLAUDE_SKILL_DIR}/scripts/<x>`. Verify: `rg -c 'CLAUDE_SKILL_DIR/scripts/' plugins/` accounts for the fourteen path-expanding lines counted above; the fifteenth match in that count is the docstring in `interactivity.py`, which is prose.
+3. Every script invocation in skill markdown - `SKILL.md` and `references/` alike - uses the literal `${CLAUDE_SKILL_DIR}/scripts/<x>`, and the `interactivity.py:14` docstring is rewritten with it so no reference to the old variable survives. Verify: `rg --no-heading -o 'CLAUDE_SKILL_DIR/scripts/' plugins/ | wc -l` prints 15, matching the pre-change count above - the fourteen path-expanding lines plus that one docstring. Both halves must move: rewriting only the fourteen prints 14 and leaves a docstring naming a variable nothing sets.
 4. `skills/assess/references/consent-lifecycle.md`'s plugin-manifest read is unchanged, and is the only remaining `CLAUDE_PLUGIN_ROOT` occurrence under `plugins/`.
 5. `ghreport.sh` accepts `--ghsync <path>`, defaults to the sibling lookup when the flag is absent, and exits non-zero with a message naming the flag when neither resolves. Verify: `tests/test_ghreport.py::test_missing_ghsync_exits_nonzero` plus a new `test_explicit_ghsync_path` case.
-6. `assess-findings`, `assess-pr`, `ab-equivalence`, `marathon`, and `pr-review-merge` declare `user-invocable: false`; no other skill does. Verify: `rg -l '^user-invocable: false' plugins/ | wc -l` prints 5.
+6. `assess-findings`, `assess-pr`, `ab-equivalence`, `marathon`, and `pr-review-merge` declare `user-invocable: false`; no other skill does, and Claude Code drops the five from the `/` menu. Verify, in two parts: `rg -l '^user-invocable: false' plugins/ | wc -l` prints 5, which asserts our own text; and a before/after `claude plugin details` paste per affected plugin (`assess`, `skill-craft`, `delivery`), which asserts the platform acts on the key. Current state counts nineteen menu entries; WS1's removal of the config example takes that to eighteen, and these five take it to thirteen, so the after paste shows thirteen across the six families. Only the paste fails if the key name is wrong.
 7. `assess` declares `argument-hint`; `huddle`'s `argument-hint` from WS2 is present and unmodified. Verify: `rg -n '^argument-hint:' plugins/assess plugins/huddle`.
 8. Every skill description keeps its TRIGGER clause and stays under 1,024 characters. Verify: `test_skill_has_trigger_clause` plus a new description-length ceiling test.
-9. Any `allowed-tools` value present matches the documented `Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/* *)` form. Verify: a new `test_allowed_tools_form` contract test, green over a tree that declares none.
-10. All eight agent files declare `disallowedTools: Write, Edit, NotebookEdit`, and none declares `tools`, `hooks`, `mcpServers`, or `permissionMode`. Verify: a new `test_agent_disallowed_tools` contract test parametrized over every agent file.
+9. Any `allowed-tools` value present matches the documented `Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/* *)` form. Verify: a new `test_allowed_tools_form` contract test carrying two cases. The tree scan is vacuous while no skill declares the key, so it cannot show the checker works; the second case is a negative unit test that feeds the bare `Bash(${CLAUDE_SKILL_DIR}/scripts/*)` form directly to the checker and asserts it is rejected. Without that case the guardrail can be broken from birth and stay green until the first author needs it.
+10. All eight agent files declare `disallowedTools: Write, Edit, NotebookEdit`, and none declares `tools`, `hooks`, `mcpServers`, or `permissionMode`, and Claude Code reads the restriction. Verify, in two parts: a new `test_agent_disallowed_tools` contract test parametrized over every agent file, which asserts our own text; and the agents section of a `claude plugin details` paste for `assess` (one agent) and `huddle` (seven), showing the tool restriction on each. `intent.md`'s Success Criteria already require a `claude plugin details` paste per family, so this reads the agents block of an output the programme takes anyway. If the key name is wrong the test still passes and the paste does not.
 11. `CLAUDE.md` lists `disallowedTools` as required agent frontmatter.
-12. A clean-profile run is pasted into the assess PR: in a profile with no `~/.claude/skills/assess`, `claude --plugin-dir plugins/assess` invoking `/assess` finds its scripts and completes Step 1. The paste carries the command, the profile path, and the resolved script path.
+12. Two live runs are pasted into the assess PR, because the substitution's text form is all any check can reach.
+    - Family install: in a profile with no `~/.claude/skills/assess`, `claude --plugin-dir plugins/assess` invoking `/assess` finds its scripts and completes Step 1. The paste carries the command, the profile path, and the resolved script path.
+    - Meta-plugin: the same skill installed from a GitHub-sourced marketplace, with a `claude plugin details ai-native-toolkit` paste showing `/assess` resolving and the resolved script path under the dereferenced skill directory, not the umbrella's symlink. `--plugin-dir` skips external symlinks for local installs (D5), so this leg cannot be dogfooded locally; Probe 1 ([probes.md](../probes.md)) is the precedent, having installed the meta-plugin the same way and recorded each symlinked skill and agent once.
+
+    The second leg is the one that covers existing users: every `ai-native-toolkit@ai-native-toolkit` install runs through the umbrella after `/plugin update`, so a token that resolved only under a family install would break `/assess` for all of them while requirements 1 through 11 stayed green.
 13. Every standalone ZIP builds with no `SKILL_DIR` or `CLAUDE_PLUGIN_ROOT` in any bundled `.md`. Verify: the `scripts/ pytest` job.
 14. Each WS3 PR bumps its plugin's `version` and adds a `CHANGELOG.md` entry, per R10 and R15.
 
 ## Verification
 
-- `tests/test_plugin_contract.py`: existing `test_skill_frontmatter` and `test_skill_has_trigger_clause`; new `test_agent_disallowed_tools`, `test_allowed_tools_form`, and the description-length ceiling. Runs under the required `plugin contract pytest` job.
+- `tests/test_plugin_contract.py`: existing `test_skill_frontmatter` and `test_skill_has_trigger_clause`; new `test_agent_disallowed_tools`, `test_allowed_tools_form` (tree scan plus the negative unit case of requirement 9), and the description-length ceiling. Runs under the required `plugin contract pytest` job.
 - `scripts/tests/test_integration.py::TestAssessBuild::test_no_skill_dir_reference` and `::test_no_plugin_root_reference`, plus the equivalent cases on the `huddle`, `skill-forge`, `deslop`, and `semantic-compress` ZIPs. These are what catch a `${CLAUDE_SKILL_DIR}` literal escaping a `chat-skip` region.
 - `tests/test_ghreport.py::test_missing_ghsync_exits_nonzero` (updated for the deleted env fallback), `::test_unknown_flag_exits_nonzero`, `::test_help_exits_zero`, and the new `test_explicit_ghsync_path`.
-- The clean-profile paste of requirement 12, recorded in the assess PR body. It is the only check that proves substitution reaches a live run; no unit test can.
+- Both live runs of requirement 12 - the clean-profile family install and the GitHub-sourced marketplace meta-plugin install - recorded in the assess PR body. They are the only checks that prove substitution reaches a running skill; no unit test can.
+- The `claude plugin details` pastes of requirements 6 and 10: thirteen menu entries after the five library skills are marked, and the tool restriction on the eight agents. With requirement 12 these are the three attestations for the platform features listed in Current state; every other check reads our own files.
 - A live `/ghreport` run against one org, pasted into the gh-org PR, showing discovery delegated through the passed `ghsync` path.
 - No `ab-equivalence` gate. The rewrite changes a path expression, not instructions, and the PRD records that no runner-consumable transfer set exists for `assess`. The freeze here is the clean-profile run plus the ZIP leak tests. `huddle`'s transfer set is a WS4 prerequisite (D9) and is not a WS3 dependency, because WS3 touches no huddle body text.
 
@@ -284,7 +318,7 @@ Every WS3 PR requires PR1 (WS1 + WS2) merged, because each one edits files at th
 
 | PR | Scope | May not touch |
 |----|-------|---------------|
-| WS3-1 `assess` | Four `SKILL_DIR` sites (three in `assess`, one in `assess-pr`), `user-invocable: false` on `assess-findings` and `assess-pr`, `argument-hint` on `assess`, `disallowedTools` on `assess-layer-scorer`, version bump, changelog | Any other plugin, `action.yml`, CI job names, `docs/migration-2.0.md`, `tests/test_plugin_contract.py` |
+| WS3-1 `assess` | Four `SKILL_DIR` sites (three in `assess`, one in `assess-pr`), the `interactivity.py:14` docstring quote, `user-invocable: false` on `assess-findings` and `assess-pr`, `argument-hint` on `assess`, `disallowedTools` on `assess-layer-scorer`, version bump, changelog | Any other plugin, `action.yml`, CI job names, `docs/migration-2.0.md`, `tests/test_plugin_contract.py` |
 | WS3-2 `gh-org` | `ghsync` and `ghreport` `SKILL_DIR` sites, `ghreport.sh` `--ghsync` flag and error text, `tests/test_ghreport.py` cases, version bump, changelog | Any other plugin, `tests/test_ghsync_porcelain.py` behaviour, `docs/migration-2.0.md` |
 | WS3-3 `skill-craft` | `user-invocable: false` on `ab-equivalence`, version bump, changelog | Any other plugin, any skill body, `docs/migration-2.0.md` |
 | WS3-4 `delivery` | `user-invocable: false` on `marathon` and `pr-review-merge`, version bump, changelog | Any other plugin, the Marathon Configuration heading or its four runtime readers, `docs/migration-2.0.md` |
