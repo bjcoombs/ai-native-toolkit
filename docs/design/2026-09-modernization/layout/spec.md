@@ -587,7 +587,7 @@ Every path below is a POST-move path (`plugins/<family>/...`); this is stated on
 9. `test_marketplace_entries_exist` additionally asserts, for the meta-plugin entry, that every symlink under `plugins/ai-native-toolkit/` resolves to an existing file. Verifiable: the test fails when a symlink target is renamed and passes otherwise, exercised by a unit case using `tmp_path`.
 10. Every consumer measured in Current state resolves post-move: the five `tests/*.py` path constants, the four `scripts/tests/*` paths, the ten `parents[3]` sites (replaced with explicit repo-root discovery rather than a deeper index), `SEAM_ALLOWLIST`, `action.yml:89/:113`, `tests.yml:34,47,80,84,90`, `standalone_skill_config.py`'s five `source_dir` values and its three `bundle_files` sources, the `build-standalone-skills.yml` `paths:` trigger and its three `plugin.json` reads, `.github/claude-review-instructions.md`, `docs/index.md`, `README.md`, `CLAUDE.md`, `docs/testing-a-branch-locally.md`.
 
-    Four consumers sit outside that set and each takes its own edit, or an explicit none:
+    Eight consumers sit outside that set, each with its own edit or an explicit reason it needs none:
 
     | Consumer | Edit in commit 2 |
     |----------|------------------|
@@ -595,8 +595,28 @@ Every path below is a POST-move path (`plugins/<family>/...`); this is stated on
     | `.github/workflows/claude-review.yml:64` | "deterministic core under `skills/assess/`" becomes `plugins/assess/skills/assess/`. The bot reads this file from the default branch (`:35`), so the correction takes effect for the PR after PR1, not for PR1 |
     | `docs/floor-anchor-proof.md` | none. It records a proof already run against the pre-move tree, so its paths are historical, exempt for the same reason as the golden baselines |
     | `scripts/tests/test_floor_anchor.py:93` | none. Its one match is the required-context literal `skills/assess pytest`, a check name and not a path, which D7 and Requirement 17 keep |
+    | `skills/assess/scripts/lib/README.md:1,37,38,43,44` | the five prose paths become `plugins/assess/skills/assess/...`. This file is the repository's module-ownership declaration and `/assess` parses it as data, so it moves with the skill and its declared paths are rewritten in the same commit |
+    | `skills/assess/tests/test_ownership_parser.py:369,379,385` | the docstring path and the two string literals take the same rewrite. `test_integration_parses_lib_readme_seam_declaration` parses the real `skills/assess/scripts/lib/README.md` and asserts its declared `doc_graph.py` path resolves to a tracked file, so the README prose and these literals must move together or the required `skills/assess pytest` context goes red |
+    | `skills/assess/tests/test_structure_drift.py:248,249,258,390,391,475,488-491,627,683` | the same rewrite. `test_integration_lib_readme_seam_paths_are_not_false_positives` (`:258`) asserts the README's declared seam paths produce no `empty_ownership_patterns`; `test_tier1_integration_no_false_positives_after_allowlist` (`:488-491`) asserts the real lib to tests seam is absorbed by the allowlist; the two synthetic seam pairs (`:390,391` and `:683`) must straddle the post-move `SEAM_ALLOWLIST`. Same red job otherwise |
+    | `skills/assess/tests/test_assess_report.py:91,416` | no functional edit. Both matches are one synthetic fixture string (`../skills/marathon/SKILL.md`) built inside the test and asserted in the formatter's output; nothing resolves it against the tree, so it is correct either side of the move. Commit 2 respells it anyway, so the backstop reaches 0 without a fifth exemption |
 
     The seventeen in-skill self-references measured in Current state, on fifteen lines, move with their own skill and are re-pointed in the same commit: `skills/semantic-compress/SKILL.md:124,186,199,207` and its five `references/` files cite `ab-equivalence` and `skill-forge`, and `skills/ab-equivalence/references/runner-prompt.md:144` cites `semantic-compress`, all three skills landing under `plugins/skill-craft/`; `skills/marathon/SKILL.md:506` and `skills/marathon/forge/forge-report.md:38,92` cite `marathon` and `pr-review-merge`, both under `plugins/delivery/`; `skills/assess-findings/SKILL.md:103` cites `assess`, under `plugins/assess/`.
+
+    The remaining matches are prose and comments rewritten with their own file in commit 2: `skills/assess/tests/README.md:1,70`, `scripts/pyproject.toml:21`, `skills/assess/scripts/doc-graph-svg.py:33`, `skills/assess/scripts/lib/ci_workflow.py:19`, `skills/assess/scripts/lib/ownership_parser.py:70,313`, `skills/assess/tests/test_self_architecture.py:4,5`, `skills/assess/tests/test_accretion_ratchet.py:376`, `skills/assess/tests/test_doc_graph.py:233`, `skills/assess/tests/test_uninstall.py:9`, plus four path-derivation comments in files the paragraph above already names (`skills/assess/scripts/assess_core.py:345`, `skills/assess/scripts/complexity-treemap.py:63,543`, `skills/assess/tests/test_decomposition_parity.py:29`), each describing the `parents[3]` hop count the same commit replaces.
+
+    Those 111 in 40 files sum as follows. The backstop runs without `-o`, so each count is matching lines:
+
+    | Group | Files | Lines |
+    |-------|-------|-------|
+    | Named consumers in the paragraph above: `docs/index.md` 12, `scripts/standalone_skill_config.py` 8, `CLAUDE.md` 7, `.github/workflows/tests.yml` 6, `.github/claude-review-instructions.md` 5, `docs/testing-a-branch-locally.md` 4, `scripts/tests/test_transform.py` 3, `.gitignore` 3 (R12), `skills/assess/scripts/lib/structure_drift.py` 2 (`SEAM_ALLOWLIST` and the comment above it), `action.yml` 2 | 10 | 52 |
+    | Files commit 2 deletes: `commands/README.md` 2, `agents/README.md` 2 (R5) | 2 | 4 |
+    | The table above: `docs/huddle-explainer/README.md` 1, `.github/workflows/claude-review.yml` 1. Its `docs/floor-anchor-proof.md` and `scripts/tests/test_floor_anchor.py` rows contribute nothing, hidden by the proof glob and the `(?! pytest)` lookahead | 2 | 2 |
+    | In-skill self-references, the fifteen lines listed above | 10 | 15 |
+    | Path-derivation comments in the named `parents[3]` files | 3 | 4 |
+    | The lib README seam set: `skills/assess/scripts/lib/README.md` 5, `test_ownership_parser.py` 3, `test_structure_drift.py` 12 | 3 | 20 |
+    | The remaining prose and comments listed above | 9 | 12 |
+    | Synthetic fixture string, no functional edit: `test_assess_report.py` 2 | 1 | 2 |
+    | **Total** | **40** | **111** |
 
     Verifiable: the three required pytest jobs are green, and the residue backstop returns nothing. The backstop is the Current state path grep plus four exemptions, run exactly as written here:
 
@@ -611,7 +631,7 @@ Every path below is a POST-move path (`plugins/<family>/...`); this is stated on
         "$BACKSTOP" . | wc -l
     ```
 
-    The expected count after PR1 is 0. It is 111 in 40 files on the pre-move tree (measured in Current state), and every one of those 111 is a consumer commit 2 rewrites or a line in a file it deletes. Each exemption exists because PR1 may not or need not clear what it hides:
+    The expected count after PR1 is 0. It is 111 in 40 files on the pre-move tree (measured in Current state), and the table above accounts for every one of them: each is a line commit 2 rewrites or a line in a file it deletes, the two in `test_assess_report.py` being a synthetic string respelled for the count rather than for correctness. Each exemption exists because PR1 may not or need not clear what it hides:
 
     - **The post-move prefix**, the two lookbehinds. Every family keeps its directory name under `plugins/<family>/skills/<name>/`, so the bare Current state pattern matches its own correct destination and can never reach zero: run as stated it returns 378 today, and after a flawless PR1 it would still match every correctly rewritten `plugins/<family>/skills/<name>/` path. The `${CLAUDE_PLUGIN_ROOT}/skills/<x>` and `~/.claude/skills/<x>` forms are plugin-root-relative and user-install paths, correct post-move and unchanged by WS1, which is why R4 (WS3) rather than PR1 owns the six `SKILL_DIR` sites.
     - **Check names, not paths**, the `(?! pytest)` lookahead. `.github/workflows/tests.yml:18` (`name: skills/assess pytest`) and `scripts/floor_anchor.py:97` (the same string as a required-status-check context) are branch-protection contexts, and Requirement 17 and D7 forbid changing either. The lookahead excludes the string `skills/assess pytest` and nothing else, so it also covers the same literal in `CLAUDE.md`, `.github/claude-review-instructions.md`, `scripts/tests/test_floor_anchor.py:93` and `docs/floor-anchor-proof.md`.
