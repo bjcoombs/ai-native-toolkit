@@ -1,3 +1,3 @@
 # WS4 spec: Disclosure and clarity
 
-Placeholder. The full specification for tag `modernization-disclosure` is written by task 8 of Task Master tag `modernization-spec` and replaces this file. Intent: [intent.md](../intent.md).
+Placeholder. Replaced by the WS4 (`modernization-disclosure`) spec PR of the programme indexed in [README.md](../README.md). Intent: [intent.md](../intent.md).

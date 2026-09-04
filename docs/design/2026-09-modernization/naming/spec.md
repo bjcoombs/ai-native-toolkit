@@ -1,3 +1,3 @@
 # WS2 spec: Naming
 
-Placeholder. The full specification for tag `modernization-naming` is written by task 6 of Task Master tag `modernization-spec` and replaces this file. Intent: [intent.md](../intent.md).
+Placeholder. Replaced by the WS2 (`modernization-naming`) spec PR of the programme indexed in [README.md](../README.md). Intent: [intent.md](../intent.md).

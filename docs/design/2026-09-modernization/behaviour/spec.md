@@ -1,3 +1,3 @@
 # WS8 spec: Behaviour
 
-Placeholder. The full specification for tag `modernization-behaviour` is written by task 12 of Task Master tag `modernization-spec` and replaces this file. Intent: [intent.md](../intent.md).
+Placeholder. Replaced by the WS8 (`modernization-behaviour`) spec PR of the programme indexed in [README.md](../README.md). Intent: [intent.md](../intent.md).

@@ -1,3 +1,3 @@
 # WS10 spec: Sunset
 
-Placeholder. The full specification for tag `modernization-sunset` is written by task 14 of Task Master tag `modernization-spec` and replaces this file. Intent: [intent.md](../intent.md).
+Placeholder. Replaced by the WS10 (`modernization-sunset`) spec PR of the programme indexed in [README.md](../README.md). Intent: [intent.md](../intent.md).

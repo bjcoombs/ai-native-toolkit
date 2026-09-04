@@ -1,3 +1,3 @@
 # WS5 spec: Knowledge files
 
-Placeholder. The full specification for tag `modernization-knowledge` is written by task 9 of Task Master tag `modernization-spec` and replaces this file. Intent: [intent.md](../intent.md).
+Placeholder. Replaced by the WS5 (`modernization-knowledge`) spec PR of the programme indexed in [README.md](../README.md). Intent: [intent.md](../intent.md).
