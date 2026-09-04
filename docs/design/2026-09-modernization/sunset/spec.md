@@ -6,7 +6,7 @@ Satisfies brief **R18** (removal half) of [../intent.md](../intent.md); tag `mod
 
 ## Current state
 
-Measured at `44bddbf`.
+Measured at `2027a23`.
 
 Deprecation Path rows in `../intent.md` whose "Removed in" column is `3.0.0`:
 
@@ -42,6 +42,29 @@ $ rg -n 'renames' .claude-plugin/marketplace.json
 [no output, exit 1]
 ```
 
+Files that reference `assess-findings` or `assess-pr` today, excluding this programme's own docs, the generated `.assess/` artefacts, and `docs/superpowers/` (which WS5 merges into `docs/design/`):
+
+```
+$ rg -c 'assess-findings|assess-pr' --glob '!docs/design/**' --glob '!.assess/**' --glob '!docs/superpowers/**' . | sort
+./agents/assess-layer-scorer.md:3
+./docs/index.md:2
+./scripts/standalone_skill_config.py:4
+./skills/assess-findings/SKILL.md:2
+./skills/assess-pr/SKILL.md:1
+./skills/assess/references/consent-lifecycle.md:3
+./skills/assess/references/uninstall.md:1
+./skills/assess/scripts/lib/archetype.py:1
+./skills/assess/scripts/lib/README.md:1
+./skills/assess/SKILL.md:5
+./skills/assess/tests/fixtures/golden/run-context-baseline.json:4
+./skills/assess/tests/test_decomposition_parity.py:3
+./skills/assess/tests/test_uninstall.py:1
+./skills/README.md:2
+./skills/skill-forge/SKILL.md:1
+```
+
+Thirteen files besides the two skills themselves. WS1's move relocates all of them under `plugins/<family>/`; the paths cited in Design are today's, and the edit each consumer needs is unchanged by the move.
+
 Two of the five items already exist on disk and will be live shims by the time this task runs: `.github/claude-review-instructions.md` (10,836 bytes today, replaced by `REVIEW.md` under R8/WS5) and `docs/superpowers/` (holds `README.md`, `plans/`, `specs/` today; WS5 merges those contents into the already-existing `docs/design/` - the directory this programme itself lives in - and leaves `docs/superpowers/README.md` as the redirect stub under R13).
 
 ## Design
@@ -56,9 +79,9 @@ One removal action per Deprecation Path row measured above:
 | `6hats` stub (D4, R12/WS2) | WS2 | Delete `plugins/huddle/skills/6hats/`; remove the `6hats` allow-list entry from the `^[a-z][a-z-]*$` naming contract test |
 | `docs/superpowers/` redirect stub (R13/WS5) | WS5 | Delete `docs/superpowers/README.md` - after WS5's merge into `docs/design/` that stub is all `docs/superpowers/` still holds - then remove the emptied directory once nothing else references it |
 | `.github/claude-review-instructions.md` pointer (R8/WS5) | WS5 | Delete `.github/claude-review-instructions.md`; `REVIEW.md` is by then the sole review-policy source |
-| Assess helpers fold (Out of scope, listed on the 3.0 list) | Not workstream-owned; deferred at programme design time because no runner-consumable transfer set exists for assess | Fold `plugins/assess/skills/assess-findings/` and `plugins/assess/skills/assess-pr/` into `plugins/assess/skills/assess/references/` |
+| Assess helpers fold (Out of scope, listed on the 3.0 list) | Not workstream-owned; deferred at programme design time because no runner-consumable transfer set exists for assess | Fold `plugins/assess/skills/assess-findings/` and `plugins/assess/skills/assess-pr/` into `plugins/assess/skills/assess/references/`, and rewire every consumer measured in Current state: **(a)** `skills/assess/SKILL.md:417,498` - replace "Use the assess-findings skill" and "Use the assess-pr skill" with read-the-reference instructions, since `USE_SKILL_RE` (`tests/test_plugin_contract.py:30`) makes `test_use_the_skill_references_resolve` assert each such name is an installed skill; **(b)** `skills/assess/tests/test_decomposition_parity.py:86` (`test_findings_and_pr_subskills_exist`) and `:93` (`test_orchestrator_delegates_to_each_unit`) - both hard-code the two `SKILL.md` paths and the two delegation names, so both are re-pointed at `references/`, not deleted (Requirement 12); **(c)** `skills/assess/tests/test_uninstall.py:12` - `ASSESS_PR_SKILL` resolves a sibling `assess-pr/SKILL.md`, re-point at the reference file; **(d)** `scripts/standalone_skill_config.py:138-139` - the `bundle_files` map reads the two `SKILL.md` files as ZIP sources, with the matching delegate prose at `:119,125`; **(e)** `skills/skill-forge/SKILL.md:171` - a live relative link to `../assess-pr/SKILL.md` that `test_internal_links_resolve` follows, and that crosses a plugin boundary after WS1's move; **(f)** `skills/README.md:24-25` and `docs/index.md:36-37` - rows linking both files, covered by no gate (`shipped_md()`, `tests/test_plugin_contract.py:79`, is skill `SKILL.md` plus command files), so they rot silently unless edited here; **(g)** prose naming the two units as skills in `agents/assess-layer-scorer.md:12,24,31`, `skills/assess/references/consent-lifecycle.md:3,54,65`, `skills/assess/references/uninstall.md:3`, `skills/assess/scripts/lib/README.md:401`, and `skills/assess/scripts/lib/archetype.py:62`, each re-worded to name the bundled reference rather than a skill. `skills/assess/tests/fixtures/golden/run-context-baseline.json:2639,2644,3589,3594` needs no edit: it is a captured snapshot the tests compare against itself (`skills/assess/tests/test_golden_baseline.py`), not a value re-derived from the tree |
 
-The marketplace edit for the first row:
+The marketplace edit for the first row. The key itself comes from D5's rejected-option note in [../intent.md](../intent.md) (`renames -> null` as a tombstone); the marketplace schema's keys are defined on the plugin-marketplaces documentation page, the same page D1 cites for `metadata.pluginRoot`. This spec has not verified against that page whether `renames` is a top-level key or nested (under `metadata`, say), and nothing in-repo settles it - the Current state `rg -n 'renames' .claude-plugin/marketplace.json` is empty. The placement in the snippet below is therefore unverified, and Requirement 3 carries the verification step: a `claude plugin validate .` run on the edited file, with the snippet corrected to whatever placement that page and that run establish.
 
 ```json
 {
@@ -80,22 +103,23 @@ The guide's shim section - the part of `docs/migration-2.0.md` that lists active
 
 ## Requirements
 
-1. `rg -c 'remove-in: 3.0.0' --glob '!docs/design/**' .` returns 0 (or no match) after the task; `docs/design/2026-09-modernization/intent.md` and this spec keep the term as a historical record and are excluded from the count, same as the Current state command above.
+1. `rg -c 'remove-in: 3.0.0' --glob '!docs/design/**' --glob '!docs/migration-2.0.md' .` returns 0 (or no match) after the task. Two exclusions, each for its own reason. `docs/design/**` covers `intent.md` and this spec, which keep the term as programme record - same as the Current state command above. `docs/migration-2.0.md` is excluded because its historical mapping table keeps a row that carries a `remove-in: 3.0.0` field: the `commands/6hats.md` row the merged [../naming/spec.md](../naming/spec.md) (Breadcrumbs, line 122) specifies, which Requirement 10 preserves. The boundary is the section, not the field - a `remove-in:` field on a mapping row records when the shim went, and does not make the row a live shim. The guide's shim section, which is the live list of shims and their remove-in status, is deleted under Requirement 10, so nothing outside the historical table still claims a shim exists.
 2. `plugins/ai-native-toolkit/` does not exist: `test -d plugins/ai-native-toolkit && echo present || echo absent` prints `absent`.
-3. `.claude-plugin/marketplace.json` carries `renames: {"ai-native-toolkit": null}` and no entry with `source: "./plugins/ai-native-toolkit"`: `jq '.renames, [.plugins[] | select(.source == "./plugins/ai-native-toolkit")]' .claude-plugin/marketplace.json` prints the rename and an empty array.
+3. `.claude-plugin/marketplace.json` carries a `renames` entry mapping `ai-native-toolkit` to null and no entry with `source: "./plugins/ai-native-toolkit"`: `jq '.renames, [.plugins[] | select(.source == "./plugins/ai-native-toolkit")]' .claude-plugin/marketplace.json` prints the rename and an empty array. The `jq` path assumes the top-level placement shown in Design, which is unverified; `claude plugin validate .` on the edited file, exiting zero with no warnings, is what establishes the key's real placement, and both the snippet and this `jq` filter are corrected to match it before the PR opens.
 4. `plugins/huddle/skills/6hats/` does not exist, and no naming-contract allow-list entry names it: `test -d plugins/huddle/skills/6hats && echo present || echo absent` prints `absent`.
 5. `docs/superpowers/` does not exist: `test -d docs/superpowers && echo present || echo absent` prints `absent`.
 6. `.github/claude-review-instructions.md` does not exist: `test -f .github/claude-review-instructions.md && echo present || echo absent` prints `absent`.
-7. `plugins/assess/skills/assess-findings/` and `plugins/assess/skills/assess-pr/` do not exist; their content is reachable under `plugins/assess/skills/assess/references/`.
+7. `plugins/assess/skills/assess-findings/` and `plugins/assess/skills/assess-pr/` do not exist; their content is reachable under `plugins/assess/skills/assess/references/`; and the rewire is green, not merely reachable. The `skills/assess pytest`, `plugin contract pytest`, and `scripts/ pytest` jobs all pass; `rg -c 'Use the assess-(findings|pr) skill' plugins/assess/skills/assess/SKILL.md` returns 0, so the orchestrator routes to neither removed name; and `claude plugin details assess` lists neither skill.
 8. Every plugin that survives this task has a version bump recorded in its `CHANGELOG.md` in the same PR (the `bump-requires-changelog` contract test from WS7/R10 is green for this PR's diff). The deleted meta-plugin is exempt: its `plugin.json` and `CHANGELOG.md` go with it, so it has neither a version to bump nor a changelog to record it in.
 9. The `family-bump-requires-umbrella-bump` contract test is gone: a grep of `tests/` for its name returns no match. This PR bumps all six family plugins while deleting the umbrella they were compared against, so the test cannot hold and is removed in the same diff; `bump-requires-changelog` (Requirement 8) is untouched.
-10. The shim section is gone from `docs/migration-2.0.md`: a grep for its heading returns no match, while the guide's historical 1.x-to-2.0 rows remain.
+10. The shim section is gone from `docs/migration-2.0.md`: a grep for its heading returns no match, while the guide's historical 1.x-to-2.0 rows remain - including the `commands/6hats.md` row that carries a `remove-in: 3.0.0` field, which is why Requirement 1's grep excludes this file.
 11. `GIT_CONFIG_GLOBAL=/dev/null uv run --with pytest pytest tests/test_plugin_contract.py -q` is green.
+12. The two decomposition-parity assertions that name the folded units survive the fold as assertions, not as deletions: `test_findings_and_pr_subskills_exist` asserts the two files under `references/`, and `test_orchestrator_delegates_to_each_unit` asserts the orchestrator's read-the-reference lines. Same disclosure Requirement 9 gives the umbrella test, opposite outcome: the umbrella test loses the thing it compares against and goes, while these two keep theirs under a new path and stay. A diff that deletes either assertion instead of re-pointing it fails this requirement.
 
 ## Verification
 
 - `tests/test_plugin_contract.py::test_internal_links_resolve` and `::test_marketplace_entries_exist` (`plugin contract pytest` job) catch any dangling link left by the deletions and any marketplace entry whose `source` no longer resolves.
-- `rg -c 'remove-in: 3.0.0' --glob '!docs/design/**' .` (Requirement 1) is the mechanical proof the enumeration is complete.
+- `rg -c 'remove-in: 3.0.0' --glob '!docs/design/**' --glob '!docs/migration-2.0.md' .` (Requirement 1) is the mechanical proof the enumeration is complete; the guide is read separately against Requirement 10, which keeps its historical rows and deletes its shim section.
 - `claude plugin validate .` zero warnings; `claude plugin validate plugins/<name> --strict` for each of the six remaining family plugins (the meta-plugin is gone, so it drops out of this loop).
 - The WS7-introduced `bump-requires-changelog` contract test (fetches the base ref) is green for every plugin this PR touches. Its sibling `family-bump-requires-umbrella-bump` is deleted by this PR rather than kept green, per Requirement 9.
 - The assess-helpers fold is not gated by `ab-equivalence`: the Out of scope entry in `../intent.md`'s programme source records that no runner-consumable transfer set exists for assess, so this fold ships as a plain move rather than a frozen one. It reaches no code under `assess`'s `lib/` and no stats schema, which is why it rides a MINOR (Design, citing D2) and not a MAJOR.
@@ -112,4 +136,4 @@ This PR is a pure deletion plus a version bump, docs and plugin trees only, no f
 
 One PR, opened only after WS3, WS5, WS6, WS7, and WS9 have all merged (the programme dependency graph's `WS3, WS5, WS6, WS7, WS9 -> WS10`; WS1, WS2, WS4, and WS8 are satisfied transitively, since each of those five depends on one or more of them). The task stays `deferred` in Task Master until the next MAJOR is scheduled - it is the last task in the programme to leave that status.
 
-It may not touch anything outside the five removal actions in Design, the version bumps they require, the `family-bump-requires-umbrella-bump` test removal named in that table's meta-plugin row, and the migration guide's shim-section deletion. It must not rename anything (WS2's territory, already merged), add a new component, touch `FLOOR.md`, `floor_check.py`, `floor_anchor.py`, or `floor.yml` (none of the five actions intersects a floor-marked path, per Design), or touch `action.yml` or a CI job `name:` (D7).
+It may not touch anything outside the five removal actions in Design, the consumer edits (a) to (g) enumerated in that table's assess-helpers row, the version bumps they require, the `family-bump-requires-umbrella-bump` test removal named in that table's meta-plugin row, and the migration guide's shim-section deletion. It must not rename anything (WS2's territory, already merged), add a new component, touch `FLOOR.md`, `floor_check.py`, `floor_anchor.py`, or `floor.yml` (none of the five actions intersects a floor-marked path, per Design), or touch `action.yml` or a CI job `name:` (D7).
