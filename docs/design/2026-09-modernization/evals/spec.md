@@ -162,6 +162,8 @@ plugins/<family>/evals/<type>-<slug>/
   README.md            what the case holds the skill to, and where its input came from
 ```
 
+`README.md` is a WS9 addition, and only WS9's own cases carry it. The `huddle` and `assess` sets WS4 authors ([disclosure/spec.md](../disclosure/spec.md)) carry `prompt.md` and `graders/criteria.md` only; the `deslop` and `skill-craft` cases PR-1 writes add the third file. Requirements 1, 2, 4 and 5 read accordingly: 1, 4 and 5 hold the WS9-authored sets to `README.md`, and 2 counts `prompt.md` across all four portable plugins.
+
 What each consumer reads:
 
 | Consumer | Reads | Contract it reads under |
@@ -293,7 +295,18 @@ Four points the sketch encodes.
 
 **Exit 2 is partial, exit 1 is a real failure.** `--max-cost-usd` aborts at exit 2 with partial results (Probe 3's `--help`), so the `case` maps 2 to a notice and leaves the job green. `--threshold` keeps its documented default of 1.0, so a case scoring below threshold exits 1 and the job goes red - which is the point of running the suite at all.
 
-**`--allow-tools Bash` is scoped to `assess` alone.** The flag is a run-level operator grant, not a per-case one, so scoping means splitting the run. The matrix already splits it per plugin, and only the assess family drives an agent that shells out: of the five SKILL.md files carrying a shell invocation at 0c6d3ad (`assess`, `assess-findings`, `assess-pr`, `ghsync`, `ghreport`), only the first three sit in a portable plugin. The other three legs run with no grant, so a case that tries to shell out fails rather than silently succeeding.
+**`--allow-tools Bash` is scoped to `assess` alone.** The flag is a run-level operator grant, not a per-case one, so scoping means splitting the run. The matrix already splits it per plugin, and only the assess family drives an agent that shells out. Five `SKILL.md` files invoke a script at 0c6d3ad - they reference `SKILL_DIR` or `CLAUDE_PLUGIN_ROOT`, or call `uv run` or `python3`:
+
+```
+$ git grep -l -E 'SKILL_DIR|CLAUDE_PLUGIN_ROOT|uv run|python3 ' 0c6d3ad -- 'skills/*/SKILL.md' | sort
+0c6d3ad:skills/assess-findings/SKILL.md
+0c6d3ad:skills/assess-pr/SKILL.md
+0c6d3ad:skills/assess/SKILL.md
+0c6d3ad:skills/ghreport/SKILL.md
+0c6d3ad:skills/ghsync/SKILL.md
+```
+
+That is the count of files that invoke a script, not the count of files carrying a fenced shell block: the same `git grep -l` run against a bash, sh or shell fence opener returns 9 at the same commit, because a fence that only shows a user-facing command line grants the agent nothing. Of the five, `assess`, `assess-findings` and `assess-pr` sit in a portable plugin; `ghsync` and `ghreport` belong to `gh-org`, which gets no `evals/` set at all (Requirement 3). The other three legs run with no grant, so a case that tries to shell out fails rather than silently succeeding.
 
 **The install line is not fixed here.** Probe 3 ran `claude` on this machine, not in Actions, so no recorded run establishes the CI install command. The WS9 PR fills both `Install Claude Code` steps from the installation page current at the time and pastes the first `workflow_dispatch` run's `claude --version` output into the PR body, which is the same evidence Probe 3 opens with.
 
@@ -337,7 +350,7 @@ Each requirement is verifiable by a command, a test, or a recorded verdict. Path
 9. The eval job is gated on the probe output, so a gated account produces one green probe job and four skipped eval jobs. Verified by the first `workflow_dispatch` run, its job conclusions pasted into the PR body.
 10. The eval command carries `--no-publish` and `--max-cost-usd`, and exit 2 is reported as a notice while any other non-zero exit fails the job. Verified by reading the `case` block and by `scripts/tests/test_evals_workflow.py`.
 11. `--allow-tools Bash` appears on the `assess` matrix leg and on no other. Verified by `rg -n 'allow_tools' .github/workflows/evals.yml`.
-12. `CLAUDE_CODE_OAUTH_TOKEN` is the only secret `evals.yml` names. Verified by `rg -no 'secrets\.[A-Z_]+' .github/workflows/evals.yml | sort -u`.
+12. `CLAUDE_CODE_OAUTH_TOKEN` is the only secret `evals.yml` names. Verified by `rg -no 'secrets\.[A-Z_]+' .github/workflows/evals.yml | sort -u`. `-o` prints one line per occurrence rather than per matching line, so the name appears once per job that reads it; `sort -u` collapses those to the single distinct name the requirement asserts.
 13. No `evals.yml` job name is added to branch protection, so the required-check set is unchanged. Verified by the repository's branch-protection contexts before and after, pasted into PR-2's body.
 14. `CLAUDE.md` carries the rule bullet, and the file stays under the 8,192-byte cap with `@` imports expanded. Verified by `rg -n "ab-equivalence.*evals/" CLAUDE.md` and by `tests/test_plugin_contract.py::test_claude_md_expanded_under_8kb`, the test WS5 ships.
 15. Each PR bumps the version of every plugin it touches, and the meta-plugin, per R10. PR-2 and PR-3 touch no plugin component and need no bump. Verified by the same-PR bump contract test WS7 ships.
@@ -378,6 +391,8 @@ No PR in this workstream touches `FLOOR.md`, a floor-marked file, `floor.yml`, `
 ## Sequencing
 
 WS9 starts after WS4 and WS8 have merged. WS4 authors the `huddle` and `assess` case sets in its PR-A and finishes with PR-D ([disclosure/spec.md](../disclosure/spec.md)); WS8 finishes with its Candidate C PR ([behaviour/spec.md](../behaviour/spec.md)), and WS9's suite has to run against the promoted bodies rather than the pre-forge ones. PR-3 additionally waits on WS5's PR-A, which is the PR that shrinks `CLAUDE.md` to its post-R7 shape.
+
+Two requirements are verified by tests this workstream does not write. Requirement 14 rests on `tests/test_plugin_contract.py::test_claude_md_expanded_under_8kb`, which WS5 ships ([knowledge/spec.md](../knowledge/spec.md)); Requirement 15 rests on the same-PR bump contract test WS7 ships ([distribution/spec.md](../distribution/spec.md)). Both already precede WS9 in the programme sequence, so neither adds an ordering constraint - it is recorded here so that a reordering of the programme is visibly a reordering of these two checks as well.
 
 | PR | Content | May not touch |
 |----|---------|---------------|
