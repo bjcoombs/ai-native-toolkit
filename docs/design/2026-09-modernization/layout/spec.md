@@ -16,6 +16,15 @@ $ rg -n '"version"' .claude-plugin/plugin.json
 4:  "version": "1.56.0",
 ```
 
+`main` has moved past that commit since the spec was written, and no measurement below is stale: every intervening commit touches only a sibling spec under `docs/design/2026-09-modernization/`, the directory each path command below already excludes.
+
+```
+$ git diff --stat 0c6d3ad origin/main
+ docs/design/2026-09-modernization/evals/spec.md    | 402 ++++++++++++++++++++-
+ .../2026-09-modernization/frontmatter/spec.md      | 322 ++++++++++++++++-
+ 2 files changed, 722 insertions(+), 2 deletions(-)
+```
+
 ### Three component directories, 29 loaded components, three of them not components
 
 ```
@@ -193,7 +202,14 @@ $ rg -n --no-heading -g '!docs/design/**' -g '!docs/superpowers/**' -g '!.assess
     -g '!skills/assess/tests/fixtures/**' \
     'skills/(assess|huddle|deslop|ghsync|ghreport|marathon|pr-review-merge|skill-forge|semantic-compress|ab-equivalence|assess-findings|assess-pr)\b' . | wc -l
 146
+
+$ rg -n --no-heading -g '!docs/design/**' -g '!docs/superpowers/**' \
+    -g '!skills/assess/tests/fixtures/**' \
+    'skills/(assess|huddle|deslop|ghsync|ghreport|marathon|pr-review-merge|skill-forge|semantic-compress|ab-equivalence|assess-findings|assess-pr)\b' . | wc -l
+378
 ```
+
+The second run is the same command without `-g '!.assess/**' -g '!*.svg'`: the 232 extra matches are the tracked `/assess` self-run outputs and the SVGs they embed, which is why Requirement 10's backstop keeps both exclusions.
 
 The consumers that a required CI job runs, by file:
 
@@ -286,6 +302,69 @@ $ rg -n 'paths:|plugin.json' .github/workflows/build-standalone-skills.yml | hea
 28:          old=$(git show "$BEFORE:.claude-plugin/plugin.json" 2>/dev/null \
 31:          new=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json')).get('version',''))")
 54:          VERSION=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+```
+
+`scripts/build-standalone-skills.sh` hard-codes no family path of its own. It reads every source directory from `standalone_skill_config.py` (`:69`, `skill_source_dir=repo_root / cfg["source_dir"]`), so PR1 gives it no edit:
+
+```
+$ rg -c 'skills/(assess|huddle|deslop|ghsync|ghreport|marathon|pr-review-merge|skill-forge|semantic-compress|ab-equivalence|assess-findings|assess-pr)\b' scripts/build-standalone-skills.sh; echo "rc=$?"
+rc=1
+```
+
+Four consumers sit outside the CI-run set above, and seventeen more references are skills citing each other. The pattern below is Requirement 10's residue backstop without its file exclusions: two lookbehinds skip a match that already carries a `plugins/<family>/` prefix, so it reads the same before and after the move.
+
+```
+$ RESIDUE='(?<!plugins/assess/|plugins/huddle/|plugins/deslop/|plugins/skill-craft/|plugins/gh-org/|plugins/delivery/|plugins/ai-native-toolkit/)skills/(assess|huddle|deslop|ghsync|ghreport|marathon|pr-review-merge|skill-forge|semantic-compress|ab-equivalence|assess-findings|assess-pr)[a-zA-Z0-9/._-]*'
+
+$ rg -noP "$RESIDUE" skills/semantic-compress/ skills/ab-equivalence/references/runner-prompt.md \
+    skills/marathon/forge/forge-report.md skills/marathon/SKILL.md skills/assess-findings/SKILL.md \
+    docs/huddle-explainer/README.md .github/workflows/claude-review.yml | sort
+.github/workflows/claude-review.yml:64:skills/assess/
+docs/huddle-explainer/README.md:5:skills/huddle/SKILL.md
+docs/huddle-explainer/README.md:5:skills/huddle/SKILL.md
+skills/ab-equivalence/references/runner-prompt.md:144:skills/semantic-compress/references/distill-loop.md
+skills/assess-findings/SKILL.md:103:skills/assess/
+skills/marathon/forge/forge-report.md:38:skills/marathon/forge/corpus.md
+skills/marathon/forge/forge-report.md:92:skills/marathon/SKILL.md
+skills/marathon/SKILL.md:506:skills/marathon/SKILL.md
+skills/marathon/SKILL.md:506:skills/pr-review-merge/SKILL.md
+skills/semantic-compress/references/cognitive-ergonomics.md:11:skills/ab-equivalence/references/ab-equivalence.md
+skills/semantic-compress/references/directive-clarity-rewrites.md:14:skills/ab-equivalence/references/ab-equivalence.md
+skills/semantic-compress/references/distill-loop.md:3:skills/ab-equivalence/references/ab-equivalence.md
+skills/semantic-compress/references/distillation-report-template.md:111:skills/ab-equivalence/references/ab-equivalence.md
+skills/semantic-compress/references/transfer-set-design.md:100:skills/ab-equivalence/references/runner-prompt.md
+skills/semantic-compress/references/transfer-set-design.md:5:skills/ab-equivalence/references/ab-equivalence.md
+skills/semantic-compress/references/transfer-set-design.md:5:skills/skill-forge/references/test-taxonomy.md
+skills/semantic-compress/SKILL.md:124:skills/ab-equivalence/references/ab-equivalence.md
+skills/semantic-compress/SKILL.md:186:skills/ab-equivalence/references/ab-equivalence.md
+skills/semantic-compress/SKILL.md:199:skills/ab-equivalence/references/ab-equivalence.md
+skills/semantic-compress/SKILL.md:207:skills/ab-equivalence/references/ab-equivalence.md
+```
+
+Seventeen of those twenty matches, on fifteen lines, are in-skill self-references that move with their own skill; the other three are `.github/workflows/claude-review.yml:64` and the two on `docs/huddle-explainer/README.md:5`, one of them a relative link `test_internal_links_resolve` follows. Requirement 10 assigns each its edit.
+
+Two files hold the required-status-check literal `skills/assess pytest` and no family path at all, so a residue grep that reads it as a path is asking PR1 to break a branch-protection context:
+
+```
+$ rg -nP 'skills/(assess|huddle|deslop|ghsync|ghreport|marathon|pr-review-merge|skill-forge|semantic-compress|ab-equivalence|assess-findings|assess-pr)\b' scripts/tests/test_floor_anchor.py
+93:        "skills/assess pytest",
+
+$ git ls-files .assess | wc -l
+22
+```
+
+Requirement 10's backstop, run with its four exemptions over this pre-move tree, returns 111 matches in 40 files. Every one is a consumer commit 2 rewrites or a file it deletes, which is why the post-PR1 expectation is zero:
+
+```
+$ BACKSTOP='(?<!plugins/assess/|plugins/huddle/|plugins/deslop/|plugins/skill-craft/|plugins/gh-org/|plugins/delivery/|plugins/ai-native-toolkit/)(?<!CLAUDE_PLUGIN_ROOT/|\.claude/)skills/(assess|huddle|deslop|ghsync|ghreport|marathon|pr-review-merge|skill-forge|semantic-compress|ab-equivalence|assess-findings|assess-pr)\b(?! pytest)'
+
+$ rg -nP --no-heading \
+    -g '!docs/design/**' -g '!docs/superpowers/**' -g '!.assess/**' -g '!*.svg' \
+    -g '!skills/assess/tests/fixtures/**' -g '!plugins/assess/skills/assess/tests/fixtures/**' \
+    -g '!FLOOR.md' -g '!scripts/floor_check.py' -g '!scripts/floor_anchor.py' \
+    -g '!.github/workflows/floor.yml' -g '!docs/floor-anchor-proof.md' \
+    "$BACKSTOP" . | wc -l
+111
 ```
 
 The six hand-rolled `SKILL_DIR` sites and the report footer:
@@ -438,7 +517,7 @@ D1 fixes six family plugins under `plugins/<name>/`, each its own marketplace en
 
 `tm-marathon-config-example` is not in the table: it becomes `plugins/delivery/skills/marathon/references/config-example.md` and stops being a component (R2). Each family plugin carries `.claude-plugin/plugin.json` with `name`, `displayName`, `description`, `version`, `license`, `author`, `homepage`, `repository`, `keywords`, plus a `README.md` at the plugin root carrying install and usage.
 
-`deslop` is the one plugin whose single skill sits at the plugin root rather than under `skills/`, per R1. That shape costs the umbrella a special case: seventeen of the eighteen skills are linked as one directory symlink each, while `deslop` needs `plugins/ai-native-toolkit/skills/deslop/` to be a real directory holding a `SKILL.md` symlink and a `references` symlink, because a directory symlink to `plugins/deslop/` would drag that plugin's own `plugin.json` and `README.md` into a skill directory. Verification gate 2 decides whether the shape is worth the case: if `claude plugin details deslop` does not list exactly one skill named `deslop`, the move target becomes `plugins/deslop/skills/deslop/SKILL.md`, the same shape as every other family, the umbrella's special case disappears, and nothing else in this spec changes.
+`deslop` is the one plugin whose single skill sits at the plugin root rather than under `skills/`, per R1. That shape costs the umbrella a special case: seventeen of the eighteen skills are linked as one directory symlink each, while `deslop` needs `plugins/ai-native-toolkit/skills/deslop/` to be a real directory holding a `SKILL.md` symlink and a `references` symlink, because a directory symlink to `plugins/deslop/` would drag that plugin's own `plugin.json` and `README.md` into a skill directory. Verification gate 2 decides whether the shape is worth the case, against Requirement 3's per-family inventory assertion: if `claude plugin details deslop` does not list exactly one skill named `deslop`, the move target becomes `plugins/deslop/skills/deslop/SKILL.md`, the same shape as every other family, the umbrella's special case disappears, and nothing else in this spec changes.
 
 ### The two-commit shape (D8)
 
@@ -506,7 +585,39 @@ Every path below is a POST-move path (`plugins/<family>/...`); this is stated on
 7. Every former `commands/*.md` file is a `plugins/<family>/skills/<name>/SKILL.md` keeping its `name`, `disable-model-invocation: true`, `description` and (where present) `argument-hint`, and `tm-marathon-config-example.md` is `plugins/delivery/skills/marathon/references/config-example.md`. Verifiable: `git log --follow` on each new path shows the rename; `test_skill_frontmatter` passes for the six new skill directories; `rg -c 'name: tm-marathon-config-example' plugins/` returns nothing.
 8. `plugins/ai-native-toolkit/` holds its own `plugin.json` (name `ai-native-toolkit`, version 2.0.0) and links every family component into its `skills/` and `agents/` directories, committed as git mode `120000`. No `dependencies`, no `strict`, no root manifest. Verifiable: every blob git tracks under `plugins/ai-native-toolkit/skills/` and `plugins/ai-native-toolkit/agents/` has mode `120000` - `git ls-files -s plugins/ai-native-toolkit/skills plugins/ai-native-toolkit/agents | rg -cv '^120000'` returns 0 - and Verification gate 4's `details` paste lists 18 skills and 8 agents.
 9. `test_marketplace_entries_exist` additionally asserts, for the meta-plugin entry, that every symlink under `plugins/ai-native-toolkit/` resolves to an existing file. Verifiable: the test fails when a symlink target is renamed and passes otherwise, exercised by a unit case using `tmp_path`.
-10. Every consumer measured in Current state resolves post-move: the five `tests/*.py` path constants, the four `scripts/tests/*` paths, the ten `parents[3]` sites (replaced with explicit repo-root discovery rather than a deeper index), `SEAM_ALLOWLIST`, `action.yml:89/:113`, `tests.yml:34,47,80,84,90`, `standalone_skill_config.py`'s five `source_dir` values and its three `bundle_files` sources, the `build-standalone-skills.yml` `paths:` trigger and its three `plugin.json` reads, `.github/claude-review-instructions.md`, `docs/index.md`, `README.md`, `CLAUDE.md`, `docs/testing-a-branch-locally.md`. Verifiable: the three required pytest jobs are green, and `rg -n 'skills/(assess|huddle|deslop|ghsync|ghreport|marathon|pr-review-merge|skill-forge|semantic-compress|ab-equivalence|assess-findings|assess-pr)\b'` outside `docs/superpowers/`, `docs/design/` and the assess fixtures returns nothing.
+10. Every consumer measured in Current state resolves post-move: the five `tests/*.py` path constants, the four `scripts/tests/*` paths, the ten `parents[3]` sites (replaced with explicit repo-root discovery rather than a deeper index), `SEAM_ALLOWLIST`, `action.yml:89/:113`, `tests.yml:34,47,80,84,90`, `standalone_skill_config.py`'s five `source_dir` values and its three `bundle_files` sources, the `build-standalone-skills.yml` `paths:` trigger and its three `plugin.json` reads, `.github/claude-review-instructions.md`, `docs/index.md`, `README.md`, `CLAUDE.md`, `docs/testing-a-branch-locally.md`.
+
+    Four consumers sit outside that set and each takes its own edit, or an explicit none:
+
+    | Consumer | Edit in commit 2 |
+    |----------|------------------|
+    | `docs/huddle-explainer/README.md:5` | the relative link `../../skills/huddle/SKILL.md` becomes `../../plugins/huddle/skills/huddle/SKILL.md`, and the inline mention on the same line with it. Without the edit Requirement 16's `test_internal_links_resolve` is red |
+    | `.github/workflows/claude-review.yml:64` | "deterministic core under `skills/assess/`" becomes `plugins/assess/skills/assess/`. The bot reads this file from the default branch (`:35`), so the correction takes effect for the PR after PR1, not for PR1 |
+    | `docs/floor-anchor-proof.md` | none. It records a proof already run against the pre-move tree, so its paths are historical, exempt for the same reason as the golden baselines |
+    | `scripts/tests/test_floor_anchor.py:93` | none. Its one match is the required-context literal `skills/assess pytest`, a check name and not a path, which D7 and Requirement 17 keep |
+
+    The seventeen in-skill self-references measured in Current state, on fifteen lines, move with their own skill and are re-pointed in the same commit: `skills/semantic-compress/SKILL.md:124,186,199,207` and its five `references/` files cite `ab-equivalence` and `skill-forge`, and `skills/ab-equivalence/references/runner-prompt.md:144` cites `semantic-compress`, all three skills landing under `plugins/skill-craft/`; `skills/marathon/SKILL.md:506` and `skills/marathon/forge/forge-report.md:38,92` cite `marathon` and `pr-review-merge`, both under `plugins/delivery/`; `skills/assess-findings/SKILL.md:103` cites `assess`, under `plugins/assess/`.
+
+    Verifiable: the three required pytest jobs are green, and the residue backstop returns nothing. The backstop is the Current state path grep plus four exemptions, run exactly as written here:
+
+    ```
+    $ BACKSTOP='(?<!plugins/assess/|plugins/huddle/|plugins/deslop/|plugins/skill-craft/|plugins/gh-org/|plugins/delivery/|plugins/ai-native-toolkit/)(?<!CLAUDE_PLUGIN_ROOT/|\.claude/)skills/(assess|huddle|deslop|ghsync|ghreport|marathon|pr-review-merge|skill-forge|semantic-compress|ab-equivalence|assess-findings|assess-pr)\b(?! pytest)'
+
+    $ rg -nP --no-heading \
+        -g '!docs/design/**' -g '!docs/superpowers/**' -g '!.assess/**' -g '!*.svg' \
+        -g '!skills/assess/tests/fixtures/**' -g '!plugins/assess/skills/assess/tests/fixtures/**' \
+        -g '!FLOOR.md' -g '!scripts/floor_check.py' -g '!scripts/floor_anchor.py' \
+        -g '!.github/workflows/floor.yml' -g '!docs/floor-anchor-proof.md' \
+        "$BACKSTOP" . | wc -l
+    ```
+
+    The expected count after PR1 is 0. It is 111 in 40 files on the pre-move tree (measured in Current state), and every one of those 111 is a consumer commit 2 rewrites or a line in a file it deletes. Each exemption exists because PR1 may not or need not clear what it hides:
+
+    - **The post-move prefix**, the two lookbehinds. Every family keeps its directory name under `plugins/<family>/skills/<name>/`, so the bare Current state pattern matches its own correct destination and can never reach zero: run as stated it returns 378 today, and after a flawless PR1 it would still match every correctly rewritten `plugins/<family>/skills/<name>/` path. The `${CLAUDE_PLUGIN_ROOT}/skills/<x>` and `~/.claude/skills/<x>` forms are plugin-root-relative and user-install paths, correct post-move and unchanged by WS1, which is why R4 (WS3) rather than PR1 owns the six `SKILL_DIR` sites.
+    - **Check names, not paths**, the `(?! pytest)` lookahead. `.github/workflows/tests.yml:18` (`name: skills/assess pytest`) and `scripts/floor_anchor.py:97` (the same string as a required-status-check context) are branch-protection contexts, and Requirement 17 and D7 forbid changing either. The lookahead excludes the string `skills/assess pytest` and nothing else, so it also covers the same literal in `CLAUDE.md`, `.github/claude-review-instructions.md`, `scripts/tests/test_floor_anchor.py:93` and `docs/floor-anchor-proof.md`.
+    - **Generated artefacts**, `-g '!.assess/**' -g '!*.svg'`. The 22 tracked files under `.assess/` are `/assess` self-run outputs, regenerated by Verification gate 7 after merge rather than hand-edited by PR1. This is the exemption the golden baselines already carry.
+    - **Floor core and its proof**, the last five globs. Requirement 17 forbids PR1 touching `FLOOR.md`, `scripts/floor_check.py`, `scripts/floor_anchor.py` and `.github/workflows/floor.yml`; PR0 owns their contents and deletes `MARKED_FILES` outright ([../floor/spec.md](../floor/spec.md)). `docs/floor-anchor-proof.md` is the historical record above.
+
 11. `test_action_contract.py` asserts every `working-directory` in `action.yml` exists on disk. Verifiable: the assertion is the R19 guard PR0 lands ([../floor/spec.md](../floor/spec.md), guard 1); PR1 inherits it and it goes red on a stale path.
 12. `.gitignore` allowlists `!/plugins/`, drops `!/agents/`, `!/commands/` and `!/skills/`, and rewrites all three fixture re-includes to their post-move paths. Verifiable: `git check-ignore -v plugins/assess/.claude-plugin/plugin.json` exits 1, and `git status --porcelain --ignored | rg 'fixtures/(lean_with_skills|flawed-instruction-file)'` returns nothing.
 13. The report footer in `plugins/assess/skills/assess-findings/SKILL.md` and `plugins/assess/skills/assess-pr/SKILL.md` cites bare `/assess` for new reports. Verifiable: `rg -c '/ai-native-toolkit:assess' plugins/assess/skills/` returns nothing; committed reports in adopter repos keep resolving through the umbrella (D5).
@@ -518,7 +629,7 @@ Every path below is a POST-move path (`plugins/<family>/...`); this is stated on
 ## Verification
 
 1. **`ab-equivalence` freeze.** The transfer sets that exist in this checkout are `skills/marathon/forge/corpus.md` (five cases: `happy-1`, `edge-1`, `adv-1`, `comp-1`, `crash-1`) and `skills/skill-forge/tests/fixtures/{flawed-sample-skill,flawed-instruction-file}`. `skills/huddle/` holds only `SKILL.md` and has no transfer set, which is what D9 records and WS4 builds. PR1 runs `ab-equivalence` over the marathon corpus against `plugins/delivery/skills/marathon/SKILL.md` and records the per-case verdict in the PR body; commit 1 is byte-identical, so a non-equivalent verdict means commit 2 changed behaviour it was not meant to. No transfer set is invented for the other five families: their freeze is the byte-identity of commit 1, evidenced by `git diff --find-renames --diff-filter=R --summary` showing R100 for every moved file.
-2. **`claude --plugin-dir plugins/<name>` per family.** Six runs, one per family plugin, each in a profile with no `~/.claude/skills/<name>` copy, pasting `claude plugin details <name>` and one bare invocation (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/ghsync`, `/tm`). This is the gate that decides Requirement 6's `deslop` plugin-root question and Requirement 4's token ceiling.
+2. **`claude --plugin-dir plugins/<name>` per family.** Six runs, one per family plugin, each in a profile with no `~/.claude/skills/<name>` copy, pasting `claude plugin details <name>` and one bare invocation (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/ghsync`, `/tm`). This is the gate that decides Requirement 3's per-family component inventory, the `deslop` plugin-root question the Design section leaves to it, and Requirement 4's token ceiling.
 3. **`claude plugin validate` in CI.** A new job runs `claude plugin validate .` and `claude plugin validate plugins/<name> --strict` for all seven. It is added as a new job with a new `name:`; it is not a required context, so no branch-protection change is needed (D7).
 4. **The meta-plugin, from a GitHub-sourced marketplace only.** `claude plugin marketplace add bjcoombs/ai-native-toolkit#<pr-branch>` then `claude plugin install ai-native-toolkit@ai-native-toolkit`, pasting `claude plugin details ai-native-toolkit`: 18 skills and 8 agents, each once, no `README`. `--plugin-dir` cannot do this (D5: local installs skip out-of-tree symlinks), which Probe 1 already worked around the same way.
 5. **Bare `subagent_type` resolution under the umbrella.** In the same GitHub-sourced install, invoke a skill whose body dispatches a bare agent name (`white-hat` from `huddle`, `assess-layer-scorer` from `assess`) and paste the result. Probe 1 measured loading and inventory, not name resolution, and recorded no bare registry entry, so this is the open half of D5 and PR1 does not merge without the paste. If a bare name does not resolve, the fix is inside WS1's scope: the affected skill bodies qualify the `subagent_type` as `ai-native-toolkit:<agent>`.
