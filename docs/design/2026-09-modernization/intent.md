@@ -1,6 +1,6 @@
 # Plugin Modernization: Intent
 
-This document mirrors the programme PRD at `.taskmaster/docs/prd-plugin-modernization.md` (path relative to the container). It carries that PRD's problem statement, decisions, deprecation path, sequence, and success criteria verbatim so every workstream spec has one source to cite. Decisions are cited by ID and not re-argued here.
+This file is the in-repo source of record for the programme's Problem Statement, Decisions, Deprecation Path, Programme sequence, and Success Criteria. The sections were transcribed verbatim from the programme PRD, an un-versioned Task Master working document kept outside the repository. Decisions are cited by ID and not re-argued here.
 
 ## Problem Statement
 
