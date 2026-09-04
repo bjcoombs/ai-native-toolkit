@@ -2,7 +2,7 @@
 
 Three probes settle D5 (umbrella for existing installs) and the WS9 eval gate. Run 4 September 2026 against `main` at 44bddbf, on this machine and this account. The probes are numbered as the programme PRD numbers them; they were executed 3, 1, 2 (Probe 3 is independent and needs no branch).
 
-Every command below is recorded verbatim with its exit code. Output is untidied, with two disclosed exceptions: timestamps are stripped from the `[DEBUG]` lines in Probe 2 (noted again there), and absolute home-directory paths and file owners are redacted - the worktree path to `<repo>`, the plugin cache path to `~`, and the `ls -laR` owner and group columns to `<user>` and `<group>`. Nothing else was altered.
+Every command below is recorded verbatim with its exit code. Output is untidied, with two disclosed exceptions: timestamps are stripped from the `[DEBUG]` lines in Probe 2 (noted again there), and absolute home-directory paths and file owners are redacted - the worktree path to `<repo>`, the plugin cache path to `~`, and the `ls -laR` owner and group columns to `<user>` and `<group>`. Nothing else was altered. One block is not a command transcript at all - the `ls -laR` listing in Probe 1 is a derived listing, labelled as such where it appears.
 
 ```
 $ claude --version
@@ -163,7 +163,7 @@ $ claude plugin list | rg -n 'ant-|ai-native-toolkit|Version|Status|Scope'
 Exit code: 0
 ```
 
-The installed cache copy is the meta-plugin with both symlink targets materialised as regular files, not the repository. `ls -laR` of `~/.claude/plugins/cache/ant-probe/ant-umbrella/0.1.0` (`.in_use` is a runtime lock directory):
+The installed cache copy is the meta-plugin with both symlink targets materialised as regular files, not the repository. The listing below is derived from an `ls -laR` of `~/.claude/plugins/cache/ant-probe/ant-umbrella/0.1.0`, not verbatim output, and is the one block in this file that is not a recorded transcript: it keeps the root section and the component-bearing directories only, dropping the recursive sections for `.claude-plugin/` and `.in_use/` and the `.` and `..` entries of the subdirectory sections, and abbreviating the repeated path prefix to `.../0.1.0/`. The exact invocation was not recorded, so no command line or exit code is shown. (`.in_use` is a runtime lock directory.)
 
 ```
 drwxr-xr-x@ 7 <user>  <group>  224  4 Sep 16:15 .
@@ -188,7 +188,7 @@ drwxr-xr-x@ 3 <user>  <group>   96  4 Sep 16:15 probeskill
 
 Both symlinks dereference. `claude plugin details ant-umbrella@ant-probe` reports `Skills (1)  probeskill` and `Agents (1)  probe-agent` - each symlinked component listed exactly once - and the cached install holds `agents/probe-agent.md` and `skills/probeskill/SKILL.md` as regular files (mode `-rw-r--r--`, not `lrwxr-xr-x`). The `agents/` dereference the plugins-reference does not document therefore works the same way `skills/` does. No `README` component appears in the inventory; note the weaker half of that finding, which the probe does not strengthen: `README.md` sat at the plugin root, where it was never a component. The repo's current `README` leak comes from `commands/README.md` and `agents/README.md`, and this probe did not reproduce that shape. D5 is marked Decided on the dereference finding; R3 still owns removing the two component-directory READMEs.
 
-The cache copy is the meta-plugin plus its dereferenced targets, roughly 700 bytes here, not a whole-repo copy - the cost D5 claims for the rejected hybrid root entry is confirmed absent for this option.
+The cache copy is the meta-plugin plus its dereferenced targets, roughly 700 bytes across the three component files listed above, not a whole-repo copy - the cost D5 claims for the rejected hybrid root entry is confirmed absent for this option.
 
 ## Probe 2
 
@@ -425,6 +425,12 @@ Exit code: 0
 
 ### Conclusion
 
-`evals.yml` must report neutral (feature early-access-gated for this account). The line that decides it is `` `plugin eval` is currently in early access ``, printed by `claude plugin eval init --bare sample` at exit 1 - the command refuses before doing any work. `--help` exits 0 and prints the full option set, so the subcommand is present in the CLI and parses; presence is not entitlement, and a workflow that keys off `--help` succeeding would run a gated command and fail. WS9's `evals.yml` must therefore treat the early-access line as a neutral outcome rather than a failure, and the eval-case format under `evals/<type>-<slug>/{prompt.md, graders/criteria.md}` is confirmed by the `--help` text as the format the runner will read once the gate lifts.
+`evals.yml` must report neutral (feature early-access-gated for this account). The line that decides it is `` `plugin eval` is currently in early access ``, printed by `claude plugin eval init --bare sample` at exit 1 - the command refuses before doing any work. `--help` exits 0 and prints the full option set, so the subcommand is present in the CLI and parses; presence is not entitlement, and a workflow that keys off `--help` succeeding would run a gated command and fail. WS9's `evals.yml` must therefore treat the early-access line as a neutral outcome rather than a failure.
+
+On the eval-case format, this probe establishes exactly one line of `--help`:
+
+> Run eval cases (`<eval dir>/**/case.yaml or prompt.md + graders/*.md`; the eval dir is `evals/` unless `--eval-dir` or the manifest says otherwise)
+
+That fixes three things and no more: the eval dir defaults to `evals/`; a case is either a `case.yaml` or a `prompt.md` beside a `graders/` directory of `.md` files; and cases are found at any depth below the eval dir (`**/`). Everything past that is our own convention and is not established here. The `evals/<type>-<slug>/` directory naming appears nowhere in the help text, and the help text says `graders/*.md`, not `graders/criteria.md` - the runner asks for `.md` files in `graders/`, not for that filename. Both are unverified precisely because the gate stopped `eval init --bare` from writing a template, so WS9 must carry them as house style it may change freely, not as a runner requirement to hard-code.
 
 The `--help` output also fixes two things WS9 depends on: exit 2 is a partial result (`--max-cost-usd` "abort and report partial results if hit (exit 2)"), and `--allow-tools` is the operator grant for `Bash`, needed only by the cases that shell out.
