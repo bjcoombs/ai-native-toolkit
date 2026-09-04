@@ -2,7 +2,7 @@
 
 Three probes settle D5 (umbrella for existing installs) and the WS9 eval gate. Run 4 September 2026 against `main` at 44bddbf, on this machine and this account. The probes are numbered as the programme PRD numbers them; they were executed 3, 1, 2 (Probe 3 is independent and needs no branch).
 
-Every command below is recorded verbatim with its exit code. Output is untidied.
+Every command below is recorded verbatim with its exit code. Output is untidied, with two disclosed exceptions: timestamps are stripped from the `[DEBUG]` lines in Probe 2 (noted again there), and absolute home-directory paths and file owners are redacted - the worktree path to `<repo>`, the plugin cache path to `~`, and the `ls -laR` owner and group columns to `<user>` and `<group>`. Nothing else was altered.
 
 ```
 $ claude --version
@@ -35,7 +35,7 @@ First validation run, before an `author` block and a marketplace `description` w
 
 ```
 $ claude plugin validate .
-Validating marketplace manifest: /Users/ben/dev/github.com/bjcoombs/ai-native-toolkit/worktree/modernization-spec/2+3--probes/.claude-plugin/marketplace.json
+Validating marketplace manifest: <repo>/.claude-plugin/marketplace.json
 
 ⚠ Found 3 warnings:
 
@@ -51,7 +51,7 @@ After adding both:
 
 ```
 $ claude plugin validate .
-Validating marketplace manifest: /Users/ben/dev/github.com/bjcoombs/ai-native-toolkit/worktree/modernization-spec/2+3--probes/.claude-plugin/marketplace.json
+Validating marketplace manifest: <repo>/.claude-plugin/marketplace.json
 
 ✔ Validation passed
 Exit code: 0
@@ -166,22 +166,22 @@ Exit code: 0
 The installed cache copy is the meta-plugin with both symlink targets materialised as regular files, not the repository. `ls -laR` of `~/.claude/plugins/cache/ant-probe/ant-umbrella/0.1.0` (`.in_use` is a runtime lock directory):
 
 ```
-drwxr-xr-x@ 7 ben  staff  224  4 Sep 16:15 .
-drwxr-xr-x@ 3 ben  staff   96  4 Sep 16:15 ..
-drwxr-xr-x@ 3 ben  staff   96  4 Sep 16:15 .claude-plugin
-drwxr-xr-x@ 3 ben  staff   96  4 Sep 16:15 .in_use
-drwxr-xr-x@ 3 ben  staff   96  4 Sep 16:15 agents
--rw-r--r--@ 1 ben  staff  100  4 Sep 16:15 README.md
-drwxr-xr-x@ 3 ben  staff   96  4 Sep 16:15 skills
+drwxr-xr-x@ 7 <user>  <group>  224  4 Sep 16:15 .
+drwxr-xr-x@ 3 <user>  <group>   96  4 Sep 16:15 ..
+drwxr-xr-x@ 3 <user>  <group>   96  4 Sep 16:15 .claude-plugin
+drwxr-xr-x@ 3 <user>  <group>   96  4 Sep 16:15 .in_use
+drwxr-xr-x@ 3 <user>  <group>   96  4 Sep 16:15 agents
+-rw-r--r--@ 1 <user>  <group>  100  4 Sep 16:15 README.md
+drwxr-xr-x@ 3 <user>  <group>   96  4 Sep 16:15 skills
 
 .../0.1.0/agents:
--rw-r--r--@ 1 ben  staff  254  4 Sep 16:15 probe-agent.md
+-rw-r--r--@ 1 <user>  <group>  254  4 Sep 16:15 probe-agent.md
 
 .../0.1.0/skills:
-drwxr-xr-x@ 3 ben  staff   96  4 Sep 16:15 probeskill
+drwxr-xr-x@ 3 <user>  <group>   96  4 Sep 16:15 probeskill
 
 .../0.1.0/skills/probeskill:
--rw-r--r--@ 1 ben  staff  317  4 Sep 16:15 SKILL.md
+-rw-r--r--@ 1 <user>  <group>  317  4 Sep 16:15 SKILL.md
 ```
 
 ### Conclusion
@@ -256,18 +256,21 @@ Exit code: 0
 
 Each plugin reports its own full inventory. Neither `details` output mentions the other, warns about a duplicate, or marks a component shadowed. The always-on totals (~121 and ~119) are charged separately, so a user holding both pays for `probeskill` and `probe-agent` twice.
 
-The session registry, read from the `system.init` event of a non-interactive run (the `slash_commands` and `agents` arrays, filtered):
+The session registry was read from the `system.init` event of a non-interactive run - the first `stream-json` line, which carries the `slash_commands` and `agents` arrays. The command as executed:
 
 ```
 $ claude --print --model haiku --output-format stream-json --verbose "hi" | head -1
-slash_commands matching probeskill:
-  ant-assess:probeskill
-  ant-umbrella:probeskill
-agents matching probe-agent:
-  ant-assess:probe-agent
-  ant-umbrella:probe-agent
 Exit code: 0
 ```
+
+That single JSON line is not reproduced here.
+
+**Derived summary** - not transcript output. The `slash_commands` and `agents` arrays on that line were filtered for entries containing `probeskill` and `probe-agent`; the filter was a `jq`/`rg` stage applied to the JSON after the fact, and its exact text was not recorded, so it cannot be reconstructed. The entries it reported:
+
+| Registry array | Entries matching |
+|----------------|------------------|
+| `slash_commands` | `ant-assess:probeskill`, `ant-umbrella:probeskill` |
+| `agents` | `ant-assess:probe-agent`, `ant-umbrella:probe-agent` |
 
 The same event carries 80 slash commands. Every plugin-supplied one is namespaced - the 58 unqualified entries are all built-ins (`clear`, `model`, `compact`, `init`), and the installed toolkit appears only as `ai-native-toolkit:assess`, `ai-native-toolkit:huddle` and so on. No bare `probeskill` entry exists in the registry for either plugin.
 
@@ -276,9 +279,9 @@ The debug log for a `/probeskill` run agrees that nothing was dropped:
 ```
 $ claude --print --model haiku --debug --debug-file /tmp/probe_debug.log "/probeskill"
 [DEBUG] Checking plugin ant-umbrella: skillsPath=exists, skillsPaths=0 paths
-[DEBUG] Attempting to load skills from plugin ant-umbrella default skillsPath: /Users/ben/.claude/plugins/cache/ant-probe/ant-umbrella/0.1.0/skills
+[DEBUG] Attempting to load skills from plugin ant-umbrella default skillsPath: ~/.claude/plugins/cache/ant-probe/ant-umbrella/0.1.0/skills
 [DEBUG] Checking plugin ant-assess: skillsPath=exists, skillsPaths=0 paths
-[DEBUG] Attempting to load skills from plugin ant-assess default skillsPath: /Users/ben/.claude/plugins/cache/ant-probe/ant-assess/0.1.0/skills
+[DEBUG] Attempting to load skills from plugin ant-assess default skillsPath: ~/.claude/plugins/cache/ant-probe/ant-assess/0.1.0/skills
 [DEBUG] Loaded 1 agents from plugin ant-assess default directory
 [DEBUG] Loaded 1 skills from plugin ant-umbrella default directory
 [DEBUG] Loaded 1 agents from plugin ant-umbrella default directory
@@ -287,9 +290,9 @@ $ claude --print --model haiku --debug --debug-file /tmp/probe_debug.log "/probe
 Exit code: 1
 ```
 
-(Timestamps stripped from the `[DEBUG]` lines above; every other character is verbatim. The lines are 41-52 and 58 of a 202-line log. The run exited 1 - the log's tail shows MCP servers aborting during teardown, not a skill-loading failure.)
+(Timestamps stripped from the `[DEBUG]` lines above, and the cache paths redacted to `~` as disclosed in the preamble; every other character is verbatim. The lines are 41-52 and 58 of a 202-line log. The run exited 1 - the log's tail shows MCP servers aborting during teardown, not a skill-loading failure.)
 
-A bare `claude --print "/probeskill"` did complete and answered from the skill, so bare invocation resolves to one of the two; which one is not observable non-interactively, and the two files are identical anyway.
+A bare `claude --print "/probeskill"` did complete and answered from the skill, so bare invocation resolves to one of the two; which one is not observable non-interactively, and the two files are identical anyway. That run was not transcribed - no command output or exit code was captured for it, so it stands as a recollection, not evidence.
 
 **Cleanup.**
 
