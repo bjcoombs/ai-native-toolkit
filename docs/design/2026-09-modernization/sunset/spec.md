@@ -6,7 +6,12 @@ Satisfies brief **R18** (removal half) of [../intent.md](../intent.md); tag `mod
 
 ## Current state
 
-Measured at `2027a23`.
+Measured at `22adf5d`, the commit `main` carried when this section was written. Every command below was re-run at it; the only commits between it and this branch's head touch sibling specs under `docs/design/2026-09-modernization/`, which no command here reads.
+
+```
+$ git log --oneline -1 22adf5d
+22adf5d docs: Add WS1 layout spec for the modernization programme (#303)
+```
 
 Deprecation Path rows in `../intent.md` whose "Removed in" column is `3.0.0`:
 
@@ -64,6 +69,13 @@ $ rg -c 'assess-findings|assess-pr' --glob '!docs/design/**' --glob '!.assess/**
 ```
 
 Thirteen files besides the two skills themselves. WS1's move relocates all of them under `plugins/<family>/`; the paths cited in Design are today's, and the edit each consumer needs is unchanged by the move.
+
+Size of `.github/claude-review-instructions.md` today:
+
+```
+$ wc -c .github/claude-review-instructions.md
+   10836 .github/claude-review-instructions.md
+```
 
 Two of the five items already exist on disk and will be live shims by the time this task runs: `.github/claude-review-instructions.md` (10,836 bytes today, replaced by `REVIEW.md` under R8/WS5) and `docs/superpowers/` (holds `README.md`, `plans/`, `specs/` today; WS5 merges those contents into the already-existing `docs/design/` - the directory this programme itself lives in - and leaves `docs/superpowers/README.md` as the redirect stub under R13).
 

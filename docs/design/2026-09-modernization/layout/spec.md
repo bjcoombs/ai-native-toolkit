@@ -9,20 +9,26 @@ Satisfies briefs **R1** (multi-plugin marketplace layout), **R2** (commands beco
 Every number below was measured against this checkout at `0c6d3ad`, the commit `main` carried when the spec was written, with Claude Code 2.1.260 and the plugin installed at 1.56.0. Each block shows the command and its real output.
 
 ```
-$ git rev-parse HEAD
+$ git rev-parse 0c6d3ad
 0c6d3ade41556d8e4906787ac4fde97ff140410f
+
+$ claude --version
+2.1.260 (Claude Code)
 
 $ rg -n '"version"' .claude-plugin/plugin.json
 4:  "version": "1.56.0",
 ```
 
-`main` has moved past that commit since the spec was written, and no measurement below is stale: every intervening commit touches only a sibling spec under `docs/design/2026-09-modernization/`, the directory each path command below already excludes.
+`main` has moved past that commit since the spec was written - it carried `22adf5d` when this section was last revised - and no measurement below is stale: every intervening commit touches only a spec under `docs/design/2026-09-modernization/` (this one included), the directory each path command below already excludes.
 
 ```
-$ git diff --stat 0c6d3ad origin/main
- docs/design/2026-09-modernization/evals/spec.md    | 402 ++++++++++++++++++++-
- .../2026-09-modernization/frontmatter/spec.md      | 322 ++++++++++++++++-
- 2 files changed, 722 insertions(+), 2 deletions(-)
+$ git log --oneline -1 22adf5d
+22adf5d docs: Add WS1 layout spec for the modernization programme (#303)
+
+$ git diff --name-only 0c6d3ad 22adf5d
+docs/design/2026-09-modernization/evals/spec.md
+docs/design/2026-09-modernization/frontmatter/spec.md
+docs/design/2026-09-modernization/layout/spec.md
 ```
 
 ### Three component directories, 29 loaded components, three of them not components
@@ -365,6 +371,14 @@ $ rg -nP --no-heading \
     -g '!.github/workflows/floor.yml' -g '!docs/floor-anchor-proof.md' \
     "$BACKSTOP" . | wc -l
 111
+
+$ rg -lP \
+    -g '!docs/design/**' -g '!docs/superpowers/**' -g '!.assess/**' -g '!*.svg' \
+    -g '!skills/assess/tests/fixtures/**' -g '!plugins/assess/skills/assess/tests/fixtures/**' \
+    -g '!FLOOR.md' -g '!scripts/floor_check.py' -g '!scripts/floor_anchor.py' \
+    -g '!.github/workflows/floor.yml' -g '!docs/floor-anchor-proof.md' \
+    "$BACKSTOP" . | wc -l
+40
 ```
 
 The six hand-rolled `SKILL_DIR` sites and the report footer:
@@ -470,9 +484,22 @@ A `git mv` into the un-allowlisted `plugins/` prefix succeeds and stages the ren
 
 ### What the move does not break
 
+```
+$ rg -c 'skills/(assess|huddle|deslop|ghsync|ghreport|marathon|pr-review-merge|skill-forge|semantic-compress|ab-equivalence|assess-findings|assess-pr)\b' \
+    skills/assess/tests/fixtures/golden/run-context-baseline.json \
+    skills/assess/tests/fixtures/golden/assess-report-baseline.md
+skills/assess/tests/fixtures/golden/assess-report-baseline.md:23
+skills/assess/tests/fixtures/golden/run-context-baseline.json:318
+```
+
 `skills/assess/tests/fixtures/golden/run-context-baseline.json` holds 318 lines matching a family skill path and `assess-report-baseline.md` holds 23, but neither is regenerated against this tree: `golden.py:114-123` loads both as stored inputs and `test_golden_baseline.py` asserts only their structure (block presence, sentinel normalization, finding order). `test_decomposition_parity.py` builds its own synthetic repository in `tmp_path`, so the stale paths inside the baselines fail no test. The two things in that file that do move are its `REPO_ROOT` (`:30`) and `ASSESS_SKILL` (`:31`).
 
 `.github/workflows/claude-review.yml:35` checks out `${{ github.event.repository.default_branch }}` for the bot's instructions, so PR1 is reviewed against the pre-move `.github/claude-review-instructions.md`, which itself holds 6 hard-coded family paths.
+
+```
+$ rg -c 'skills/(assess|huddle|deslop|ghsync|ghreport|marathon|pr-review-merge|skill-forge|semantic-compress|ab-equivalence|assess-findings|assess-pr)\b' .github/claude-review-instructions.md
+6
+```
 
 ## Design
 

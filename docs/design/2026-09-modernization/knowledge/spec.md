@@ -215,9 +215,12 @@ $ find docs/superpowers -type f -name '*.md' | sed 's|/[^/]*$||' | sort | uniq -
    1 docs/superpowers
   13 docs/superpowers/plans
    8 docs/superpowers/specs
+
+$ wc -c docs/superpowers/README.md
+    3325 docs/superpowers/README.md
 ```
 
-22 files: one `README.md` index (3,325 bytes), 13 plans, 8 specs. Inbound references from outside the directory:
+22 files: one index at `docs/superpowers/README.md` (3,325 bytes, `wc -c` above, unchanged at `22adf5d`), 13 plans, 8 specs. Inbound references from outside the directory:
 
 ```
 $ rg -n 'docs/superpowers|\./superpowers' --glob '!docs/superpowers/**' --glob '!.assess/**' --glob '!docs/design/**' -l . | sort
