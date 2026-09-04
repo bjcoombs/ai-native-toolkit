@@ -142,26 +142,21 @@ $ rg --no-heading -o '\$SKILL_DIR/scripts/' skills/ | wc -l
       15
 ```
 
-Fourteen of the fifteen are path expansions. The fifteenth is `skills/assess/scripts/lib/interactivity.py:14`, a docstring inside a `lib/` module that quotes `uv run "$SKILL_DIR/scripts/assess_core.py"` as the launch line, to explain why the core has no controlling terminal. It is prose, not a path expansion. Every `$SKILL_DIR` line in an assess file sits on a `chat-replace` target line or inside a `chat-skip` region, which is what keeps `SKILL_DIR` out of the standalone ZIP:
+Fourteen of the fifteen are path expansions. The fifteenth is `skills/assess/scripts/lib/interactivity.py:14`, a docstring inside a `lib/` module that quotes `uv run "$SKILL_DIR/scripts/assess_core.py"` as the launch line, to explain why the core has no controlling terminal. It is prose, not a path expansion. Every `$SKILL_DIR` line in an assess markdown file - `SKILL.md` and `references/` alike - sits on a `chat-replace` target line or inside a `chat-skip` region, which is what keeps `SKILL_DIR` out of the standalone ZIP. The audit below classifies all ten markdown occurrences; `interactivity.py` is not markdown, so no marker reaches it and the ZIP test asserts `.md` files only:
 
 ```
-$ rg -n --sort path -B1 '\$SKILL_DIR/scripts/' skills/assess/SKILL.md skills/assess-pr/SKILL.md | grep -E 'chat-replace|SKILL_DIR/scripts'
-skills/assess/SKILL.md-236-   <!-- chat-replace:treemap-exclude-example -->
-skills/assess/SKILL.md:237:   uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" --exclude regulatory-raw --exclude vetted-context --exclude '*.csv'
-skills/assess/SKILL.md-296-<!-- chat-replace:uv-treemap -->
-skills/assess/SKILL.md:297:uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/complexity-heatmap.svg" --stats "$REPO_ROOT/.assess/complexity-stats.json"
-skills/assess/SKILL.md-300-<!-- chat-replace:uv-doc-graph -->
-skills/assess/SKILL.md:301:uv run "$SKILL_DIR/scripts/doc-graph-svg.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/doc-graph.svg"
-skills/assess/SKILL.md-307-<!-- chat-replace:uv-core -->
-skills/assess/SKILL.md:308:uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT"
-skills/assess/SKILL.md-368-<!-- chat-replace:uv-core-mutation -->
-skills/assess/SKILL.md:369:uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT" --opt-in-mutation
-skills/assess/SKILL.md-373-<!-- chat-replace:uv-treemap-overlay -->
-skills/assess/SKILL.md:374:uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/complexity-heatmap.svg" --stats "$REPO_ROOT/.assess/complexity-stats.json" --test-pressure "$REPO_ROOT/.assess/run-context.json"
-skills/assess/SKILL.md-462-<!-- chat-replace:uv-finalize -->
-skills/assess/SKILL.md:463:uv run "$SKILL_DIR/scripts/assess_finalize.py" "$REPO_ROOT"
-skills/assess-pr/SKILL.md-274-<!-- chat-replace:uv-emit-workflow -->
-skills/assess-pr/SKILL.md:275:uv run "$SKILL_DIR/scripts/assess_emit_workflow.py" "$REPO_ROOT"
+$ awk 'FNR==1{s=0;r=0} /chat-skip:start/{s=1} /chat-skip:end/{s=0} /chat-replace:/{r=FNR} /\$SKILL_DIR\/scripts\//{printf "%s:%d %s\n", FILENAME, FNR, (s ? "inside chat-skip" : (r==FNR-1 ? "chat-replace target" : "UNMARKED"))}' \
+    skills/assess/SKILL.md skills/assess-pr/SKILL.md skills/assess/references/*.md
+skills/assess/SKILL.md:237 chat-replace target
+skills/assess/SKILL.md:297 chat-replace target
+skills/assess/SKILL.md:301 chat-replace target
+skills/assess/SKILL.md:308 chat-replace target
+skills/assess/SKILL.md:369 chat-replace target
+skills/assess/SKILL.md:374 chat-replace target
+skills/assess/SKILL.md:463 chat-replace target
+skills/assess-pr/SKILL.md:275 chat-replace target
+skills/assess/references/monorepo-scoping.md:41 inside chat-skip
+skills/assess/references/monorepo-scoping.md:49 inside chat-skip
 ```
 
 One further `CLAUDE_PLUGIN_ROOT` use is not a script path and stays: `skills/assess/references/consent-lifecycle.md:15` reads `${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json}` to learn the plugin version. A skill-directory substitution cannot reach a sibling manifest.
@@ -215,11 +210,11 @@ The Design section introduces three platform features the repo does not use anyw
 
 | Feature | Where the Design uses it | Source |
 |---------|--------------------------|--------|
-| `${CLAUDE_SKILL_DIR}` text substitution in skill markdown | Replaces the six bootstrap pairs (R4) | code.claude.com `skills` |
-| `user-invocable: false` skill frontmatter | Five library skills leave the `/` menu (R4) | code.claude.com `plugins-reference` |
-| `disallowedTools` agent frontmatter | Eight agents deny `Write`, `Edit`, `NotebookEdit` (R5) | code.claude.com `sub-agents` |
+| `${CLAUDE_SKILL_DIR}` text substitution in skill markdown | Replaces the six bootstrap pairs (R4) | code.claude.com `skills`, section "Available string substitutions" (under "Frontmatter reference") |
+| `user-invocable: false` skill frontmatter | Five library skills leave the `/` menu (R4) | code.claude.com `skills`, section "Control who invokes a skill" |
+| `disallowedTools` agent frontmatter | Eight agents deny `Write`, `Edit`, `NotebookEdit` (R5) | code.claude.com `sub-agents`, section "Supported frontmatter fields" |
 
-Those three pages, plus `plugins`, are named on the programme PRD's "Reference docs" line as the sources the programme's decisions were taken from.
+`user-invocable` is documented on the `skills` page, not on `plugins-reference`; `plugins-reference` carries the symlink section D5 cites, not this key. Those pages, plus `plugins-reference` and `plugins`, are named on the programme PRD's "Reference docs" line as the sources the programme's decisions were taken from.
 
 Excluding this spec file, none of the three names occurs anywhere in the repo:
 
@@ -235,7 +230,7 @@ So no text check can prove a token or key name is right. Requirements 1 through 
 
 ### `${CLAUDE_SKILL_DIR}` replaces the bootstrap (R4)
 
-Each of the six bootstrap pairs is deleted along with its explanatory comment, and each consumer line becomes the literal `${CLAUDE_SKILL_DIR}/scripts/<x>`. Claude Code text-substitutes that token in skill markdown (code.claude.com `skills`), and it resolves to the skill's own directory under a family install. Under the meta-plugin it resolves to the dereferenced target rather than the umbrella's symlink, because the cache copy dereferences: Probe 1 installed the meta-plugin from a GitHub-sourced marketplace and `claude plugin details ai-native-toolkit` listed the symlinked skill and agent once each ([probes.md](../probes.md), Probe 1), which is what moves D5 to Decided. `--plugin-dir` cannot exercise that path - external symlinks are skipped for local installs (D5) - so requirement 12 verifies it from a GitHub-sourced marketplace instead.
+Each of the six bootstrap pairs is deleted along with its explanatory comment, and each consumer line becomes the literal `${CLAUDE_SKILL_DIR}/scripts/<x>`. Claude Code text-substitutes that token in skill markdown (code.claude.com `skills`), and it resolves to the skill's own directory under a family install. Under the meta-plugin it is expected to resolve to the dereferenced target rather than the umbrella's symlink, because the cache copy dereferences. Probe 1, recorded in [`../probes.md`](../probes.md) by the probes PR (#295), reports that a throwaway meta-plugin whose skill and agent are symlinks into a sibling family plugin, installed from a GitHub-sourced marketplace, lists each of them once under `claude plugin details ant-umbrella@ant-probe` (`Skills (1) probeskill`, `Agents (1) probe-agent`); that record is what moves D5 to Decided. The probes PR has landed on `main` and this branch predates it, so the copy of `../probes.md` alongside this file is still the placeholder until WS3 merges - WS3 therefore cites the record rather than asserting the result. `--plugin-dir` cannot exercise that path (external symlinks are skipped for local installs, D5), so requirement 12 re-verifies the resolution from a GitHub-sourced marketplace.
 
 The one non-path mention of the old variable goes with the six pairs. `skills/assess/scripts/lib/interactivity.py:14` quotes `uv run "$SKILL_DIR/scripts/assess_core.py"` as the launch line that explains why the core has no controlling terminal; WS3-1 rewrites that quote to `${CLAUDE_SKILL_DIR}`. Left alone it would name a variable no assess file sets - a lying map of the launch path inside a `lib/` module.
 
@@ -249,7 +244,7 @@ Text substitution reaches skill markdown, not a running script, so `ghreport.sh`
 
 ### Frontmatter fields (R4)
 
-- `user-invocable: false` on the five library skills: `assess-findings`, `assess-pr`, `ab-equivalence`, `marathon`, `pr-review-merge`. Nineteen menu entries drop to thirteen once WS1 removes the config example. Descriptions stay always-on; this is a menu fix, not a token fix.
+- `user-invocable: false` on the five library skills: `assess-findings`, `assess-pr`, `ab-equivalence`, `marathon`, `pr-review-merge`. WS1's removal of the config example takes nineteen menu entries to eighteen, and these five take it to thirteen. Descriptions stay always-on; this is a menu fix, not a token fix.
 - `argument-hint` where the body consumes an argument. The measurement gives exactly one such skill, `assess`, which reads `$ARGUMENTS` at line 57. `huddle` also gains one, `[solo|2|3|5|8] <topic>`, but WS2 adds it inside PR1 (R12); WS3 asserts it rather than adding it. `ghsync`, `ghreport`, `deslop`, `semantic-compress`, and `skill-forge` take their input through flags on a bash invocation or from conversation, consume no `$ARGUMENTS`, and get no hint.
 - `allowed-tools`: WS3 adds none. Only the matching form `Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/* *)` matches a `uv run` invocation; the bare `Bash(${CLAUDE_SKILL_DIR}/scripts/*)` form never does. No skill's tool surface is its own scripts alone - `assess`, `ghsync`, and `ghreport` all shell out to `git`, `gh`, and `rg` as well - so a matching-form allowlist would block the rest of the skill. A contract test records the rule instead, so a future author cannot land the bare form.
 - Descriptions are untouched. Every one keeps its TRIGGER clause and stays under 1,024 characters.
@@ -277,7 +272,7 @@ A `tools:` allowlist is rejected. It replaces the whole tool set, so it would st
 11. `CLAUDE.md` lists `disallowedTools` as required agent frontmatter.
 12. Two live runs are pasted into the assess PR, because the substitution's text form is all any check can reach.
     - Family install: in a profile with no `~/.claude/skills/assess`, `claude --plugin-dir plugins/assess` invoking `/assess` finds its scripts and completes Step 1. The paste carries the command, the profile path, and the resolved script path.
-    - Meta-plugin: the same skill installed from a GitHub-sourced marketplace, with a `claude plugin details ai-native-toolkit` paste showing `/assess` resolving and the resolved script path under the dereferenced skill directory, not the umbrella's symlink. `--plugin-dir` skips external symlinks for local installs (D5), so this leg cannot be dogfooded locally; Probe 1 ([probes.md](../probes.md)) is the precedent, having installed the meta-plugin the same way and recorded each symlinked skill and agent once.
+    - Meta-plugin: the same skill installed from a GitHub-sourced marketplace, with a `claude plugin details ai-native-toolkit` paste showing `/assess` resolving and the resolved script path under the dereferenced skill directory, not the umbrella's symlink. `--plugin-dir` skips external symlinks for local installs (D5), so this leg cannot be dogfooded locally; Probe 1, recorded in [`../probes.md`](../probes.md) by the probes PR (#295), is the precedent: it reports a throwaway meta-plugin installed the same way, listing each symlinked skill and agent once.
 
     The second leg is the one that covers existing users: every `ai-native-toolkit@ai-native-toolkit` install runs through the umbrella after `/plugin update`, so a token that resolved only under a family install would break `/assess` for all of them while requirements 1 through 11 stayed green.
 13. Every standalone ZIP builds with no `SKILL_DIR` or `CLAUDE_PLUGIN_ROOT` in any bundled `.md`. Verify: the `scripts/ pytest` job.
