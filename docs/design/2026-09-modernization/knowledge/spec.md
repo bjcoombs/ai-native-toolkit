@@ -108,7 +108,7 @@ skills/pr-review-merge/SKILL.md:124:- Unresolved bot threads - **Check local cod
 skills/pr-review-merge/SKILL.md:34:Follow bot reviewer rules from the project's CLAUDE.md Marathon Configuration. Gene
 ```
 
-The four sites R7 names ([commands/tm.md](../../../../commands/tm.md) line 46, [skills/marathon/SKILL.md](../../../../skills/marathon/SKILL.md) line 48, [skills/pr-review-merge/SKILL.md](../../../../skills/pr-review-merge/SKILL.md) lines 34 and 124, [commands/issues.md](../../../../commands/issues.md) line 17) are unmoved at `44bddbf`. `tm.md:46` and `marathon/SKILL.md:48` extract the same six settings by name: `$BASE_BRANCH`, `$REQUIRED_APPROVALS`, `$MARKDOWN_APPROVALS`, `$RETRO_LOG`, bot reviewer rules, CI patterns. `issues.md:17` additionally reads the GitHub Issues subsection labels. Adopters carry the same heading in their own `CLAUDE.md`, so neither the heading text nor the six setting names may change.
+The four sites R7 names (`commands/tm.md` line 46, `skills/marathon/SKILL.md` line 48, `skills/pr-review-merge/SKILL.md` lines 34 and 124, `commands/issues.md` line 17) are unmoved at `44bddbf`. Those are the pre-PR1 paths the command above printed; PR1 relocates all four under `plugins/<family>/`, which is why they are inline code here rather than links. `tm.md:46` and `marathon/SKILL.md:48` extract the same six settings by name: `$BASE_BRANCH`, `$REQUIRED_APPROVALS`, `$MARKDOWN_APPROVALS`, `$RETRO_LOG`, bot reviewer rules, CI patterns. `issues.md:17` additionally reads the GitHub Issues subsection labels. Adopters carry the same heading in their own `CLAUDE.md`, so neither the heading text nor the six setting names may change.
 
 ### `.github/claude-review-instructions.md` and what the bot depends on
 
@@ -227,7 +227,7 @@ $ rg -n 'docs/superpowers|\./superpowers' --glob '!docs/superpowers/**' --glob '
 ./skills/skill-forge/SKILL.md
 ```
 
-[skills/skill-forge/SKILL.md](../../../../skills/skill-forge/SKILL.md) line 159 links `docs/superpowers/specs/2026-06-02-skill-forge-design.md` and is covered by `test_internal_links_resolve`; [docs/index.md](../../../index.md) line 72 links `./superpowers/README.md` and is not (that test parametrizes over `shipped_md()`, which is SKILL.md plus `commands/*.md`). The two golden fixtures are static captures of a past run and are not recomputed from the tree.
+`skills/skill-forge/SKILL.md` line 159 links `docs/superpowers/specs/2026-06-02-skill-forge-design.md` and is covered by `test_internal_links_resolve`; `docs/index.md` line 72 links `./superpowers/README.md` and is not (that test parametrizes over `shipped_md()`, which is SKILL.md plus `commands/*.md`). The two golden fixtures are static captures of a past run and are not recomputed from the tree.
 
 ### What does not exist yet
 
@@ -241,7 +241,9 @@ ls: scripts/README.md: No such file or directory
 ls: skills/marathon/references: No such file or directory
 ```
 
-`plugins/` does not exist either; PR1 (WS1) creates it. Every destination path below is stated in its post-PR1 form.
+`plugins/` does not exist either; PR1 (WS1) creates it. Every path from here on - destination or source - is stated in its post-PR1 form, derived from D1's six families (`assess`, `huddle`, `deslop`, `skill-craft`, `gh-org`, `delivery`) under `plugins/<family>/`. The paths in Current state above are the pre-PR1 ones the commands measured. Requirement 16 re-checks both against the merged PR1 tree before each WS5 PR opens.
+
+Every file mention in this spec is inline code, not a clickable link, for the reason recorded above: `test_internal_links_resolve` parametrizes over `shipped_md()`, so nothing under `docs/design/` is link-checked, and PR-C may not touch `docs/design/2026-09-modernization/` to repair a link PR1 invalidates.
 
 ## Design
 
@@ -249,9 +251,9 @@ WS5 lands after PR1, so the measurements above are a pre-PR1 baseline. Two of th
 
 ### The byte budget for `CLAUDE.md` (R7)
 
-R7's keep/move list does not close the 8 KB cap on its own. Kept blocks, summed at their `44bddbf` sizes and excluding the `commands/` subsection PR1 removes:
+R7's keep/move list does not close the 8 KB cap on its own. Its keep list, summed at `44bddbf` sizes and excluding the `commands/` subsection PR1 removes:
 
-| Kept block | Bytes |
+| R7 keep-list block | Bytes |
 |---|---|
 | Header (lines 1-4) | 213 |
 | `## Scope of this repo` | 878 |
@@ -269,21 +271,27 @@ R7's keep/move list does not close the 8 KB cap on its own. Kept blocks, summed 
 | `### Retrospective` | 294 |
 | `## Testing a branch before merging` | 404 |
 | `## Compatibility` | 148 |
-| Kept subtotal | 9,108 |
-| Four added pointer lines (three moves plus the Scope absorption) | approx. 440 |
-| Total before trimming | approx. 9,548 |
+| R7 keep-list subtotal | 9,108 |
+| Five pointer lines, one per moved section: `## North star`, `### Release after a marathon`, `## Standalone skill pipeline`, `## /assess architecture`, and the `## CI` move below, at approx. 110 each | approx. 550 |
+| The `## What this repo doesn't have` line absorbed into `## Scope of this repo` | approx. 110 |
+| The `disallowedTools` line added to `### agents/<name>.md` | approx. 110 |
+| Total before any move or trim | approx. 9,878 |
 
-That is 1,356 bytes over the cap with nothing left to move, so the design commits named trims inside kept blocks rather than a further move:
+That is 1,686 bytes over the cap, so the design commits one further move plus two named trims inside kept blocks:
 
-| Trim | From | To | Saved |
+| Change | From | To | Saved |
 |---|---|---|---|
-| `## CI` line 81, the 1,011-character bullet | 2,126 | approx. 1,120 | approx. 1,006 |
+| `## CI` moved whole to `REVIEW.md`; its one-line pointer is counted above | 2,126 | 0 | 2,126 |
 | `### CI Patterns`, bullets rewritten as fact lines with the prose rationale dropped | 2,038 | approx. 1,300 | approx. 738 |
 | `## Marathon Configuration` intro and `### Bot Reviewers` prose | 729 | approx. 520 | approx. 209 |
 
-Trimmed total: approximately 7,595 bytes, against a 8,192-byte cap. The design target is 7,700 bytes so an ordinary later edit does not trip the gate on its first line. The six setting names and the heading text survive every trim; only rationale prose is cut.
+Result: approximately 6,805 bytes, 1,387 under the 8,192-byte cap and 895 under the 7,700-byte design target, which exists so an ordinary later edit does not trip the gate on its first line. The six setting names and the heading text survive every trim.
 
-Rejected: raising the cap to 12 KB (the cap is the brief's acceptance criterion, and the file is 23,581 bytes today, so the cap is what forces the moves at all). Rejected: moving `### CI Patterns` out of `## Marathon Configuration` into a reference file (`tm.md:46` and `marathon/SKILL.md:48` extract "CI patterns" from inside the section, and adopters copy the section wholesale, so an out-of-file pointer breaks the read for every adopter as well as this repo).
+Nothing is deleted. The two authoring rules stated only in `## CI` line 81 - use inline code rather than a clickable relative link for an illustrative file mention, and never start a line with a git conflict marker, the rule the #211/#216 incident produced - travel with the section into `REVIEW.md`, whose house-conventions heading (`### 8. House conventions`, line 96 of the file it replaces) already carries the sibling no-em-dashes rule. Requirement 17 asserts they arrive; requirement 4's absence check asserts they leave `CLAUDE.md`; the Breadcrumbs pointer row names `REVIEW.md` as their destination.
+
+`## CI` is the move R7's list omits, and it is the honest one: its required-check names are one of the six elements `REVIEW.md` already inherits (`## CI status`, line 116 of `.github/claude-review-instructions.md`), so the section is a second copy of review policy rather than repo-authoring context. No reader site is affected: all four read `### CI Patterns` under `## Marathon Configuration`, which stays.
+
+Rejected: trimming line 81 in place instead of moving it (a bullet that still carries both authoring rules is roughly 350 characters, so it saves about 660 rather than 2,126 and leaves the total near 8,270 - over the cap, with requirement 1 no longer closing). Rejected: raising the cap to 12 KB (the cap is the brief's acceptance criterion, and the file is 23,581 bytes today, so the cap is what forces the moves at all). Rejected: moving `### CI Patterns` out of `## Marathon Configuration` into a reference file (`tm.md:46` and `marathon/SKILL.md:48` extract "CI patterns" from inside the section, and adopters copy the section wholesale, so an out-of-file pointer breaks the read for every adopter as well as this repo).
 
 ### Keep and move, every `CLAUDE.md` section
 
@@ -295,10 +303,10 @@ Rejected: raising the cap to 12 KB (the cap is the brief's acceptance criterion,
 | `## Versioning` | 695 | Keep | Per-plugin semver wording is R10 and belongs to WS7; WS5 keeps the heading and the bump-in-the-same-PR rule |
 | `## File conventions` intro | 21 | Keep | - |
 | `### skills/<name>/SKILL.md` | 386 | Keep | - |
-| `### agents/<name>.md` | 271 | Keep, gains a `disallowedTools` line | WS3 ships the field; WS5 documents it |
+| `### agents/<name>.md` | 271 | Keep, gains a `disallowedTools` line | WS3 ships the field; PR-A adds the line and merges after WS3 (see Sequencing) |
 | `### commands/<name>.md` | 1,073 | Removed by PR1 with `commands/` (R2) | - |
 | `## Invariants` | 384 | Keep | - |
-| `## CI` | 2,126 | Keep, trimmed | - |
+| `## CI` | 2,126 | Move | `REVIEW.md`, replaced by a one-line pointer; PR-B carries the text in, PR-A leaves the pointer |
 | `## Marathon Configuration` intro | 322 | Keep, trimmed | Heading text unchanged |
 | `### Branch and Merge` | 268 | Keep | - |
 | `### Bot Reviewers` | 407 | Keep, trimmed | - |
@@ -316,9 +324,11 @@ Rejected: raising the cap to 12 KB (the cap is the brief's acceptance criterion,
 
 ### `REVIEW.md` and the pointer (R8)
 
-`REVIEW.md` at the repo root carries the review policy. `.github/workflows/claude-review.yml` line 50 is re-pointed at it. The five depended-on elements listed in Current state move verbatim: the placeholder contract, the summary-comment upsert key, the CodeRabbit never-reply rule, self-thread resolution, the three outcome states, and the required-check names. `.github/claude-review-instructions.md` becomes a three-line pointer with `remove-in: 3.0.0`.
+`REVIEW.md` at the repo root carries the review policy. `.github/workflows/claude-review.yml` line 50 is re-pointed at it. The six depended-on elements listed in Current state move verbatim: the placeholder contract, the summary-comment upsert key, the CodeRabbit never-reply rule, self-thread resolution, the three outcome states, and the required-check names. `.github/claude-review-instructions.md` becomes a three-line pointer with `remove-in: 3.0.0`.
 
-The layer-0 problem the pointer creates is settled by adding `"REVIEW.md"` to `INSTRUCTION_FILE_PATHS` in `skills/assess/scripts/assess_core.py`, in the same PR that creates the file. That is an additive change to the deterministic core, so it is an `assess` MINOR under D2 and leaves `assess_gate.py`'s regression compare armed. Rejected: leaving `REVIEW.md` unscanned (the layer's evidence would then rest on `CLAUDE.md` alone while an A-graded file degrades to a stub, which is the lying-map failure the layer exists to catch). Rejected: keeping the policy in `.github/` and skipping R8 (the playbook's repo-root `REVIEW.md` is what the brief asks for, and the root position is what makes the policy discoverable to a human reviewer).
+PR-B also brings in `CLAUDE.md`'s `## CI` section, including the two authoring rules inside its line 81, under the house-conventions heading the file already carries. PR-B therefore merges before PR-A: the rules are stated in `REVIEW.md` before `CLAUDE.md` stops stating them, and between the two merges they are stated in both files, which is the safe direction.
+
+The layer-0 problem the pointer creates is settled by adding `"REVIEW.md"` to `INSTRUCTION_FILE_PATHS` in `plugins/assess/skills/assess/scripts/assess_core.py`, in the same PR that creates the file. That is an additive change to the deterministic core, so it is an `assess` MINOR under D2 and leaves `assess_gate.py`'s regression compare armed. Rejected: leaving `REVIEW.md` unscanned (the layer's evidence would then rest on `CLAUDE.md` alone while an A-graded file degrades to a stub, which is the lying-map failure the layer exists to catch). Rejected: keeping the policy in `.github/` and skipping R8 (the playbook's repo-root `REVIEW.md` is what the brief asks for, and the root position is what makes the policy discoverable to a human reviewer).
 
 Because `claude-review.yml` checks out the default branch, the PR that introduces `REVIEW.md` is reviewed by the old file. The PR body says so.
 
@@ -326,7 +336,9 @@ Because `claude-review.yml` checks out the default branch, the PR that introduce
 
 `docs/superpowers/plans/` and `docs/superpowers/specs/` move unchanged to `docs/design/plans/` and `docs/design/specs/`, beside the `docs/design/2026-09-modernization/` directory this programme already created. New design work uses `docs/design/<yyyy-mm-dd>-<slug>/` with `intent.md`, `spec.md`, `plan.md`; `docs/design/TEMPLATE/` carries that skeleton, and its `spec.md` links to the Task Master PRD as the task-generation source. `docs/superpowers/README.md` stays as a redirect stub with a table mapping all 21 moved files, `remove-in: 3.0.0`.
 
-Rejected: moving the existing files into dated `<yyyy-mm-dd>-<slug>/` directories to match the new convention (21 renames with no reader benefit; R13 says the existing files move unchanged).
+After PR-C, `docs/design/` holds three directory shapes at once: the moved `plans/` and `specs/`, the existing `2026-09-modernization/` programme directory in `<yyyy-mm>-<slug>` form, and the `<yyyy-mm-dd>-<slug>` convention `TEMPLATE/` establishes for new work. `2026-09-modernization/` is grandfathered and keeps its name: it is a programme of eleven specs rather than one design, and its Task Master tags, its own `README.md` rows and every cross-spec link name it. `docs/design/TEMPLATE/intent.md` states the convention and records that exemption, so a reader who meets the older shape first is not reading a silently violated rule.
+
+Rejected: moving the existing files into dated `<yyyy-mm-dd>-<slug>/` directories to match the new convention (21 renames with no reader benefit; R13 says the existing files move unchanged). Rejected: renaming `2026-09-modernization/` to the new shape in a later PR (it would rewrite eleven spec paths and the tags that name them, mid-programme, for a directory the convention exists to shape future work).
 
 ### Per-plugin `CHANGELOG.md` (R15)
 
@@ -343,22 +355,24 @@ Rejected: a single root `CHANGELOG.md` for all seven plugins (Dependabot would r
 5. `REVIEW.md` exists at the repo root and carries all six depended-on elements listed in Current state. Verified by a grep of the six literals in the PR body.
 6. `.github/workflows/claude-review.yml` reads `REVIEW.md` and no longer reads `.github/claude-review-instructions.md`; the workflow's `ref:` line is unchanged.
 7. `.github/claude-review-instructions.md` is a three-line pointer to `REVIEW.md` carrying `remove-in: 3.0.0`.
-8. `"REVIEW.md"` is in `INSTRUCTION_FILE_PATHS` in `skills/assess/scripts/assess_core.py`, and `plugins/assess/.claude-plugin/plugin.json` takes a MINOR bump in the same PR.
+8. `"REVIEW.md"` is in `INSTRUCTION_FILE_PATHS` in `plugins/assess/skills/assess/scripts/assess_core.py`, and `plugins/assess/.claude-plugin/plugin.json` takes a MINOR bump in the same PR.
 9. An `/assess` self-run on the post-WS5 tree reports layer 0 at Present, with `REVIEW.md` named in the evidence column. Recorded verdict pasted into the PR body.
 10. `docs/design/plans/` and `docs/design/specs/` hold the 13 plans and 8 specs byte-identically; `git diff -M50% --name-status` reports R100 for all 21.
 11. `docs/superpowers/README.md` is a redirect stub whose table maps all 21 moved files to their new paths, with `remove-in: 3.0.0`.
-12. `docs/design/TEMPLATE/` holds `intent.md`, `spec.md` and `plan.md` skeletons, and `spec.md` names the Task Master PRD as the task-generation source.
-13. Every inbound reference in Current state is re-pointed: `skills/skill-forge/SKILL.md` line 159 and `docs/index.md` line 72. The two golden fixtures are static captures and are not edited.
+12. `docs/design/TEMPLATE/` holds `intent.md`, `spec.md` and `plan.md` skeletons; `spec.md` names the Task Master PRD as the task-generation source, and `intent.md` states the `<yyyy-mm-dd>-<slug>` directory convention and records that `docs/design/2026-09-modernization/` predates it and is not renamed.
+13. Every inbound reference in Current state is re-pointed: `plugins/skill-craft/skills/skill-forge/SKILL.md` (line 159 at `44bddbf`) and `docs/index.md` line 72. The two golden fixtures are static captures and are not edited.
 14. Each of the seven plugins has `plugins/<name>/CHANGELOG.md` in Keep a Changelog format with a section for its first version; each 2.0.0 section links `docs/migration-2.0.md`.
 15. Root `CHANGELOG.md` exists, carries the `assess` 1.57.0 section, and points at the six family files.
-16. Every WS5 PR restates the Current state numbers it depends on, measured against its own base.
+16. Every WS5 PR restates the Current state numbers and paths it depends on, measured against its own base.
+17. `REVIEW.md` carries the `## CI` text moved out of `CLAUDE.md`, including both authoring rules from line 81: use inline code rather than a clickable relative link for an illustrative file mention, and never start a line with a git conflict marker. Verified by a grep of both rules in PR-B's body, and by requirement 4's absence check in PR-A. PR-B merges before PR-A.
 
 ## Verification
 
 - `tests/test_plugin_contract.py::test_claude_md_expanded_under_8kb` - new. Expands `@` imports from `CLAUDE.md` with the recursion in Current state and asserts the encoded length is at most 8,192 bytes. Guards requirement 1.
 - `tests/test_plugin_contract.py::test_marathon_config_contract` - new. Asserts the literal `## Marathon Configuration` heading is present in `CLAUDE.md` and that all six setting names and the four issue-label names appear under it. Guards requirements 2 and 3, and is the regression guard for an adopter-visible break.
-- `tests/test_plugin_contract.py::test_internal_links_resolve` - existing, parametrized over `shipped_md()`. Catches the `skills/skill-forge/SKILL.md` link once `docs/superpowers/specs/` moves. Guards requirement 13 for that file.
-- `skills/assess/tests/test_assess_core.py::test_review_md_is_scanned` - new, alongside the existing `.github/claude-review-instructions.md` scan test at line 1002. Writes a synthetic `REVIEW.md` into a fixture repo and asserts it appears in `ctx["instruction_files"]`. Guards requirement 8.
+- `tests/test_plugin_contract.py::test_internal_links_resolve` - existing, parametrized over `shipped_md()`. Catches the `plugins/skill-craft/skills/skill-forge/SKILL.md` link once `docs/superpowers/specs/` moves. Guards requirement 13 for that file.
+- `plugins/assess/skills/assess/tests/test_assess_core.py::test_review_md_is_scanned` - new, alongside the existing `.github/claude-review-instructions.md` scan test at line 1002. Writes a synthetic `REVIEW.md` into a fixture repo and asserts it appears in `ctx["instruction_files"]`. Guards requirement 8.
+- A grep of both line-81 authoring rules against `REVIEW.md`, output pasted into PR-B's body, and the same grep against `CLAUDE.md` in PR-A's body returning nothing. Guards requirement 17.
 - `/assess` self-run on the post-WS5 tree, layer 0 verdict recorded in the PR body. Guards requirement 9. The doc-graph broken-link count in the same run covers `docs/index.md`, which no pytest test reaches.
 - `git diff -M50% --name-status --diff-filter=R` on the R13 PR, output pasted into the PR body. Guards requirement 10, and is the same rename detection the R0 floor uses, so a rewrite disguised as a move fails both.
 - The R10 bump-requires-changelog contract test ships with WS7 and asserts against the files requirement 14 creates. WS5 does not ship that test.
@@ -371,14 +385,14 @@ Rejected: a single root `CHANGELOG.md` for all seven plugins (Dependabot would r
 | Three-line pointer to `REVIEW.md` | `.github/claude-review-instructions.md` | 3.0.0 | `.github/claude-review-instructions.md` to `REVIEW.md` |
 | One-line pointer per moved section | `CLAUDE.md` | never | `CLAUDE.md` sections moved, one row per destination |
 
-The three moved-section rows name `README.md` (North star), `scripts/README.md` (standalone skill pipeline), and `plugins/assess/README.md` (`/assess` architecture); the `### Release after a marathon` row names `plugins/delivery/skills/marathon/references/release-after-marathon.md`. Per the Deprecation Path in [intent.md](../intent.md), the `CLAUDE.md` pointers are permanent and the two stubs are on the 3.0 list that WS10 enumerates.
+The moved-section rows name `README.md` (North star), `scripts/README.md` (standalone skill pipeline), `plugins/assess/README.md` (`/assess` architecture), `REVIEW.md` (`## CI`, carrying both line-81 authoring rules), and `plugins/delivery/skills/marathon/references/release-after-marathon.md` (`### Release after a marathon`). Per the Deprecation Path in [intent.md](../intent.md), the `CLAUDE.md` pointers are permanent and the two stubs are on the 3.0 list that WS10 enumerates.
 
 ## Rollback
 
-Every WS5 PR is revertible in isolation, and none of them touches a floor-marked file, a CI job `name:`, or branch protection.
+Every WS5 PR is revertible, and none of them touches a floor-marked file, a CI job `name:`, or branch protection. PR-C and PR-D revert in isolation; PR-A and PR-B revert in isolation only in the reverse of their merge order, for the reason the R8 bullet gives.
 
-- R7 PR: `git revert` restores the 23,581-byte `CLAUDE.md` and deletes `scripts/README.md`. The new `test_claude_md_expanded_under_8kb` reverts with it, so `main` is green at the old size. If the test lands in a separate commit, revert that commit too, or `main` fails on the restored file.
-- R8 PR: `git revert` restores `.github/claude-review-instructions.md` and the workflow's line-50 read together. Because the workflow runs from the default branch, the revert takes effect on the next PR review with no re-run needed. The `INSTRUCTION_FILE_PATHS` entry and the `assess` MINOR bump revert in the same commit; the bump going backwards is safe because no tag is cut in WS5.
+- R7 PR: `git revert` restores the 23,581-byte `CLAUDE.md` and deletes `scripts/README.md`. `## CI` and its two authoring rules are then stated in both `CLAUDE.md` and `REVIEW.md`, which is the safe direction. The new `test_claude_md_expanded_under_8kb` reverts with it, so `main` is green at the old size. If the test lands in a separate commit, revert that commit too, or `main` fails on the restored file.
+- R8 PR: `git revert` restores `.github/claude-review-instructions.md` and the workflow's line-50 read together. Because the workflow runs from the default branch, the revert takes effect on the next PR review with no re-run needed. The `INSTRUCTION_FILE_PATHS` entry and the `assess` MINOR bump revert in the same commit; the bump going backwards is safe because no tag is cut in WS5. Because PR-B carries the `## CI` text that PR-A removes from `CLAUDE.md`, revert PR-B on its own only while PR-A is unmerged; after PR-A, revert PR-A first or re-state `## CI` in `CLAUDE.md` in the same commit, or both authoring rules are stated nowhere.
 - R13 PR: `git revert` restores `docs/superpowers/` and the two inbound references. `test_internal_links_resolve` is the gate in both directions.
 - R15 PR: `git revert` deletes the eight changelog files. No test asserts against them until WS7 lands, so a revert after WS7 has merged requires reverting WS7's contract test as well; sequence the revert that way or re-land the files.
 
@@ -386,13 +400,13 @@ No `v*` tag rides any WS5 commit, so no rollback is blocked by an immutable rele
 
 ## Sequencing
 
-Four PRs, all after PR1 has merged, all parallel to each other. They touch disjoint file sets, so no merge ordering is required.
+Four PRs, all after PR1 has merged. They touch disjoint file sets, so no merge conflict is possible in any order, but two orderings are required by what the files claim rather than by conflict: PR-B merges before PR-A, because PR-B carries the `## CI` text and its two authoring rules into `REVIEW.md` that PR-A removes from `CLAUDE.md`; and PR-A merges after WS3 has shipped the `disallowedTools` frontmatter field, so `CLAUDE.md` never documents a field no agent file carries. PR-C and PR-D are parallel to both and to each other.
 
 | PR | Brief | Touches | May not touch |
 |---|---|---|---|
-| PR-A | R7 | `CLAUDE.md`, `README.md`, `scripts/README.md`, `plugins/assess/README.md`, `plugins/delivery/skills/marathon/references/release-after-marathon.md`, `tests/test_plugin_contract.py` | `.github/`, `skills/assess/scripts/`, `docs/superpowers/`, any `CHANGELOG.md`, any file under `plugins/*/skills/*/SKILL.md` other than the new `references/` file |
-| PR-B | R8 | `REVIEW.md`, `.github/claude-review-instructions.md`, `.github/workflows/claude-review.yml`, `skills/assess/scripts/assess_core.py`, `skills/assess/tests/test_assess_core.py`, `plugins/assess/.claude-plugin/plugin.json` | `CLAUDE.md`, the workflow's `ref:` line, any CI job `name:`, `docs/superpowers/` |
-| PR-C | R13 | `docs/superpowers/` to `docs/design/`, `docs/design/TEMPLATE/`, `docs/index.md`, `skills/skill-forge/SKILL.md` line 159 | `CLAUDE.md`, `.github/`, `docs/design/2026-09-modernization/`, the two golden fixtures |
+| PR-A | R7 | `CLAUDE.md`, `README.md`, `scripts/README.md`, `plugins/assess/README.md`, `plugins/delivery/skills/marathon/references/release-after-marathon.md`, `tests/test_plugin_contract.py` | `REVIEW.md`, `.github/`, `plugins/assess/skills/assess/scripts/`, `docs/superpowers/`, any `CHANGELOG.md`, any file under `plugins/*/skills/*/SKILL.md` other than the new `references/` file |
+| PR-B | R8 | `REVIEW.md`, `.github/claude-review-instructions.md`, `.github/workflows/claude-review.yml`, `plugins/assess/skills/assess/scripts/assess_core.py`, `plugins/assess/skills/assess/tests/test_assess_core.py`, `plugins/assess/.claude-plugin/plugin.json` | `CLAUDE.md`, the workflow's `ref:` line, any CI job `name:`, `docs/superpowers/` |
+| PR-C | R13 | `docs/superpowers/` to `docs/design/`, `docs/design/TEMPLATE/`, `docs/index.md`, `plugins/skill-craft/skills/skill-forge/SKILL.md` | `CLAUDE.md`, `.github/`, `docs/design/2026-09-modernization/`, the two golden fixtures |
 | PR-D | R15 | `CHANGELOG.md`, `plugins/*/CHANGELOG.md` | `plugins/*/.claude-plugin/plugin.json`, `CLAUDE.md`, `.github/`, `tests/` |
 
 PR-B's body states that this PR is reviewed by `.github/claude-review-instructions.md`, not by the `REVIEW.md` it introduces, because `claude-review.yml` line 35 checks out the default branch; the first PR reviewed under the new policy is the next one merged after PR-B.
