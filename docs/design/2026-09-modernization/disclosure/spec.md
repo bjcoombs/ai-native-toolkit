@@ -122,7 +122,7 @@ $ grep -n -E 'floor:cold-verify-completion|start_gate\.py|spawn_verifier\.py|com
 15 89 92 492 506
 ```
 
-Lines 89 and 92 sit in `## Entry Gate (non-removable)` (10 lines); 492 and 506 sit in `## Completion + Retrospective` (28 lines). Both sections are token-bearing and stay in the body.
+Five line numbers, four of which sit in a section. Line 15 is a standalone `<!-- floor:cold-verify-completion -->` anchor in the preamble, ahead of the first heading (`## Work-Source Adapter Contract` at 23), so it belongs to no section and no candidate span touches it. `standalone_anchor_count` (`scripts/floor_check.py:78`) counts only lines whose stripped content is the bare marker, which makes line 15 the anchor the check treats as load-bearing and line 506 - a backtick-wrapped mention inside prose - not an anchor at all. Lines 89 and 92 sit in `## Entry Gate (non-removable)` (10 lines); 492 and 506 sit in `## Completion + Retrospective` (28 lines). Both sections are token-bearing and stay in the body.
 
 Marathon forge cases. The corpus holds five seed cases and no wave, shutdown, gate or retrospective case:
 
@@ -135,12 +135,18 @@ $ rg -n '^### ' skills/marathon/forge/corpus.md | cut -d' ' -f1,2
 73:### crash-1
 ```
 
-`edge-1` is the missing-Marathon-Configuration branch. The branch it exercises prints a pointer that WS1 (R2) retires, and that is the only live occurrence outside test fixtures:
+`edge-1` is the missing-Marathon-Configuration branch. The branch it exercises prints a pointer that WS1 (R2) retires. Five live occurrences remain outside test fixtures, one of them under `skills/`:
 
 ```
-$ rg -n 'tm-marathon-config-example' skills/ agents/ | grep -v fixtures
+$ rg -n 'tm-marathon-config-example' skills/ agents/ commands/ docs/index.md | grep -v fixtures | sort
+commands/README.md:20:| [`/tm-marathon-config-example`](./tm-marathon-config-example.md) | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` and `/issues` |
+commands/tm-marathon-config-example.md:2:name: tm-marathon-config-example
+commands/tm.md:62:Run `/tm-marathon-config-example` to see the template, then copy and customize it.
+docs/index.md:54:- [`/tm-marathon-config-example`](../commands/tm-marathon-config-example.md) - reference configuration block for marathon-mode `/tm` and `/issues`.
 skills/marathon/SKILL.md:64:Run `/tm-marathon-config-example` to see the configuration template (it covers both /tm and /issues), then copy and customize it for your project.
 ```
+
+`skills/marathon/SKILL.md:64` is the only one WS4 touches. The three under `commands/` die with the directory WS1 deletes under R2, and the `docs/index.md` link dies with them; none is WS4 work, which is why Requirement 3 is scoped to `skills/` and `agents/`.
 
 Existing `references/` files and their line counts. Five skills carry one; `huddle`, `marathon` and the scorer carry none:
 
@@ -178,7 +184,7 @@ $ find . -type d -name evals -not -path './.git/*'
 Two mechanical facts the design depends on, read from the transformer:
 
 - `scripts/transform_skill.py:202-213` copies every file under a skill's `source_dir` and runs the same `chat-skip` / `chat-replace` marker transform over each `.md`. A span moved from a `SKILL.md` into that skill's own `references/` keeps its markers working.
-- `scripts/standalone_skill_config.py:137` bundles `agents/assess-layer-scorer.md` into the assess ZIP as `references/assess-layer-scorer.md`. Files the scorer links to are not copied unless `bundle_files` names them.
+- `scripts/standalone_skill_config.py:137` bundles `agents/assess-layer-scorer.md` into the assess ZIP as `references/assess-layer-scorer.md`. It needs that entry because it sits outside the assess `source_dir` (`skills/assess`, line 55); a file that sits inside the `source_dir` needs no entry, because the rglob above already copies it.
 
 ## Design
 
@@ -199,9 +205,11 @@ Eight cases under `plugins/huddle/evals/<type>-<slug>/` with `prompt.md` and `gr
 | `edge-discovery-classification` | LLM-judged | Loop-until-dry classification of a finding that spans two hats |
 | `composition-critic-pass` | LLM-judged | Step 4b completeness critic finds the gap the hats left |
 
-Five script-graded, three LLM-judged. The five script-graded cases are WS9's huddle evals unchanged (D9). All eight run through `ab-equivalence`'s narrating solo runner (`skills/ab-equivalence/references/runner-prompt.md`): 8 teacher plus 8 candidate runner invocations plus 3 judge invocations is 19 per run.
+Five script-graded, three LLM-judged. That split is the eval harness's grading mode - runnable grader script against LLM rubric - and is not the `ab-equivalence` equivalence judge, which is a different component invoked once per case unconditionally (`skills/ab-equivalence/SKILL.md:33-37`; the judge prompt "is filled once per transfer-set case", `references/equivalence-judge-prompt.md:5`). The five script-graded cases are WS9's huddle evals unchanged (D9). All eight run through `ab-equivalence`'s narrating solo runner (`skills/ab-equivalence/references/runner-prompt.md`): round 1 is 8 teacher plus 8 candidate runner invocations plus 8 judge invocations, 24 in all. Teacher transcripts are captured once and reused (`skills/ab-equivalence/SKILL.md:43`), so each later round is 8 candidate plus 8 judge. The directive-clarity stage below adds a fresh teacher capture over the split checkpoint (`skills/semantic-compress/SKILL.md:224`), another 8 runner invocations per split PR.
 
 Rejected: authoring the set inside the split PR. The transfer set is the gate; a gate written against the document it grades measures nothing.
+
+The scorer's four cases are authored in the same PR-A, in the same directory shape, under `plugins/assess/evals/`. They need no new fixture: each case's input is a golden fixture that already exists (`skills/assess/tests/fixtures/golden/run-context-baseline.json`, and run-contexts over `hollow_test_repo`, `honest_test_repo` and `lean_with_skills`), and the case directory is only the `prompt.md` plus `graders/criteria.md` wrapper the CLI's second format needs. All four are script-graded against the layer verdicts the fixture pins.
 
 ### Marathon forge-case extension
 
@@ -234,9 +242,9 @@ Each moved span leaves a one-line pointer, so the arithmetic above is the floor 
 Two placement constraints decide the scorer's reference location:
 
 - R3 fails any `.md` under an `agents/` path that is not a valid agent, so `plugins/assess/agents/references/` is not available. The scorer's reference lands in the assess skill at `plugins/assess/skills/assess/references/layer-3-linters.md` and the agent links it as `../skills/assess/references/layer-3-linters.md`.
-- That path is correct in the repo and wrong in the standalone ZIP, where the scorer body ships as `references/assess-layer-scorer.md` and the reference ships as a sibling. The link is wrapped in a `chat-replace:scorer-reference-path` marker whose standalone replacement is the sibling path, and `bundle_files` gains the reference file. Rejected: leaving the link untransformed, which ships a dangling path and fails `test_no_dangling_cross_skill_references[assess]`.
+- That path is correct in the repo and wrong in the standalone ZIP, where the scorer body ships as `references/assess-layer-scorer.md` and the reference ships as a sibling. The link is wrapped in a `chat-replace:scorer-reference-path` marker whose standalone replacement is the sibling path. No `bundle_files` entry is added: the reference lands inside the assess skill's `source_dir`, so `transform_skill.py:202-213` already copies it into the ZIP as `references/layer-3-linters.md` and runs the marker transform over it. Rejected: leaving the link untransformed, which ships a dangling path and fails `test_no_dangling_cross_skill_references[assess]`.
 
-Marathon's floor tokens stay in the body. `## Entry Gate (non-removable)` and `## Completion + Retrospective` are not split, moved, or summarised; a reference file cannot carry the obligation because `floor_check.py compare` reads `skills/marathon/SKILL.md` alone and a token count that drops is a failure.
+Marathon's floor tokens stay in the body. `## Entry Gate (non-removable)` and `## Completion + Retrospective` are not split, moved, or summarised; a reference file cannot carry the obligation because `floor_check.py markers` reads `skills/marathon/SKILL.md` itself - the file is one of `MARKED_FILES` - and `removed_tokens` (`scripts/floor_check.py:91`) fails on either signal: a drop in a token's occurrence count, or the loss of the standalone anchor line. Tokens that leave the body for a reference file read as removed on both.
 
 Huddle's `## Protocol` (148 lines) stays. It is the step sequence the skill is, and the spawn machinery inside it already leaves the standalone ZIP through the `chat-skip` region opening at `skills/huddle/SKILL.md:192`. Moving it into a reference buys ZIP size that is already saved and costs the chair a hop in the middle of the protocol.
 
@@ -250,12 +258,12 @@ In the same PR as each split, `semantic-compress`'s directive-clarity transform 
 
 ## Requirements
 
-1. `plugins/huddle/evals/` holds the eight case directories in the Design table, each with `prompt.md` and `graders/criteria.md`; five carry a runnable grader script, three carry an LLM rubric. Verified by directory listing and by `ab-equivalence` consuming the set.
+1. `plugins/huddle/evals/` holds the eight case directories in the Design table, each with `prompt.md` and `graders/criteria.md`; five carry a runnable grader script, three carry an LLM rubric. `plugins/assess/evals/` holds the four scorer case directories in the Verification table in the same shape, each naming an existing golden fixture as its input and carrying a runnable grader script; no new fixture is authored. Both sets land in PR-A, ahead of every split. Verified by directory listing and by `ab-equivalence` consuming each set.
 2. `skills/marathon/forge/corpus.md` holds ten cases: the five in Current state plus `happy-2`, `adv-2`, `edge-2`, `edge-3`, `comp-2`. Verified by `rg -c '^### ' <corpus>` printing 10.
-3. No live reference to `/tm-marathon-config-example` remains outside `skills/assess/tests/fixtures/`. Verified by the Current state `rg` command returning no match.
+3. No live reference to `/tm-marathon-config-example` remains under `skills/` or `agents/` outside `skills/assess/tests/fixtures/`. The `commands/` and `docs/index.md` occurrences in Current state belong to WS1 (R2) and are out of scope here. Verified by `rg -n 'tm-marathon-config-example' skills/ agents/ | grep -v fixtures` returning no match.
 4. Every `SKILL.md` body and every agent body is under 500 lines, frontmatter excluded. Verified by the new contract test and by re-running the Current state counting command.
 5. Every reference file introduced sits exactly one directory below its owning skill, and any file over 100 lines opens with a contents list. Verified by path depth check and by reading the first block of each file over 100 lines.
-6. Every relative link from a split body to its reference files resolves. Verified by `tests/test_plugin_contract.py::test_internal_links_resolve`.
+6. Every relative link from a split body to its reference files resolves, and `test_internal_links_resolve` covers agent bodies. Today it is parametrized over `shipped_md()` (`tests/test_plugin_contract.py:79-80`), which is skill and command files only, so the scorer's `../skills/assess/references/layer-3-linters.md` link would go unchecked; PR-D widens the parametrization to include `agents/*.md` alongside the ceiling test, which already walks `agents/`. Verified by `tests/test_plugin_contract.py::test_internal_links_resolve` reporting a case id for `agents/assess-layer-scorer.md`.
 7. Each split records an `ab-equivalence` per-case verdict in its PR body, with zero `candidate-regressed`. Verified by the recorded verdict.
 8. Each directive-clarity pass records `original_directness` and `candidate_directness` per rewritten case; rewrites without a gain are dropped. Verified by the recorded efficiency signal.
 9. `skills/marathon/SKILL.md` carries the same four floor tokens at the same or higher counts than merge-base. Verified by the `floor enforcement` required check and by the Current state `grep -c` command.
@@ -271,7 +279,7 @@ The gate is `ab-equivalence` over a named set, run per split, with the per-case 
 |-------|--------------|-------|
 | `huddle` | `plugins/huddle/evals/` | The eight cases in the Design table |
 | `marathon` | `skills/marathon/forge/corpus.md` | Ten: `happy-1`, `happy-2`, `edge-1`, `edge-2`, `edge-3`, `adv-1`, `adv-2`, `comp-1`, `comp-2`, `crash-1` |
-| `assess-layer-scorer` | `plugins/assess/evals/`, built from the existing golden fixtures | Four: `skills/assess/tests/fixtures/golden/run-context-baseline.json`, and run-contexts over `hollow_test_repo`, `honest_test_repo`, `lean_with_skills` |
+| `assess-layer-scorer` | `plugins/assess/evals/`, authored in PR-A over the existing golden fixtures | Four: `skills/assess/tests/fixtures/golden/run-context-baseline.json`, and run-contexts over `hollow_test_repo`, `honest_test_repo`, `lean_with_skills` |
 
 Each run compares the pre-split body (teacher) against the split body (candidate) on identical input and returns one of `equivalent`, `candidate-diverged`, `candidate-regressed` per case. A single `candidate-regressed` blocks the merge: the span comes back into the body and a different span moves. The recorded artefact per PR is the case table with a verdict per row, the regression note where one exists, and the efficiency signal.
 
@@ -290,7 +298,7 @@ Each PR is one plugin's body, its reference files, and that plugin's version bum
 Two ordering facts make the revert clean:
 
 - The 500-line ceiling test lands in the last split PR. Reverting an earlier split with the test already on `main` would leave `main` red, so the ceiling test is reverted with it or the last PR is reverted first.
-- The marathon revert restores the four floor tokens at their merge-base counts, which is what `floor_check.py compare` asserts, so no floor edit and no sign-off is involved in either direction.
+- The marathon revert restores the four floor tokens at their merge-base counts, which is what `floor_check.py markers` asserts, so no floor edit and no sign-off is involved in either direction.
 
 The transfer-set PR is not reverted to fix a split. A failing split is reworked; the set is the measurement, not the change.
 
@@ -298,9 +306,9 @@ The transfer-set PR is not reverted to fix a split. A failing split is reworked;
 
 WS4 starts after WS1 has merged, because every path below is a post-move path.
 
-1. **PR-A, transfer set and corpus.** The eight huddle eval cases, the five marathon forge cases, and the `/tm-marathon-config-example` repoint. May not touch any body under `skills/` except that one pointer line. Bumps `huddle` and `delivery`.
+1. **PR-A, transfer sets and corpus.** The eight huddle eval cases, the four assess scorer eval cases, the five marathon forge cases, and the `/tm-marathon-config-example` repoint. May not touch any body under `skills/` except that one pointer line. Bumps `huddle`, `assess` and `delivery`.
 2. **PR-B, `huddle`.** The split, the reference files, the directive-clarity pass, the eight-case verdict. May not touch `marathon`, the scorer, or the contract test.
 3. **PR-C, `marathon`.** The split, the reference files, the directive-clarity pass, the ten-case verdict. May not touch `huddle`, the scorer, the contract test, or the two token-bearing sections.
-4. **PR-D, `assess-layer-scorer`.** The split, the reference file, the `bundle_files` and `chat-replace` entries, the four-case verdict, and the 500-line ceiling contract test. May not touch `huddle` or `marathon`.
+4. **PR-D, `assess-layer-scorer`.** The split, the reference file, the `chat-replace` marker on the link, the four-case verdict, the widening of `test_internal_links_resolve` to agent bodies, and the 500-line ceiling contract test. May not touch `huddle` or `marathon`.
 
 PR-B, PR-C and PR-D touch disjoint plugins and can run in parallel once PR-A has merged, except that PR-D carries the ceiling test and therefore merges last. WS8 and WS9 start after PR-D.
