@@ -70,6 +70,7 @@ The Six Thinking Hats team, indexed in [`agents/README.md`](../agents/README.md)
 
 - [Testing a branch locally](./testing-a-branch-locally.md) - run an unmerged branch's `SKILL.md` and scripts as a real plugin against a target repo.
 - [Design history](./superpowers/README.md) - the plans and specs behind the skills as they were built.
+- [Modernization programme (2026-09)](./design/2026-09-modernization/README.md) - intent, recorded probes, and the eleven workstream specs behind the multi-plugin split.
 - [Code review instructions](../.github/claude-review-instructions.md) - the guidelines the automated reviewer follows on pull requests.
 - [How to build a narrated skill explainer](./huddle-explainer/README.md) - the repeatable Claude Code + Claude Design + ElevenLabs pipeline, worked through end to end on `/huddle`.
 
