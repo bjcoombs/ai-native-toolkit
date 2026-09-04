@@ -135,18 +135,22 @@ $ rg -n '^### ' skills/marathon/forge/corpus.md | cut -d' ' -f1,2
 73:### crash-1
 ```
 
-`edge-1` is the missing-Marathon-Configuration branch. The branch it exercises prints a pointer that WS1 (R2) retires. Five live occurrences remain outside test fixtures, one of them under `skills/`:
+`edge-1` is the missing-Marathon-Configuration branch. The branch it exercises prints a pointer that WS1 (R2) retires. Five live occurrences remain outside test fixtures, one of them under `skills/`. The first command prints file and line only, and the second counts links rather than printing them: two of the five sites carry the pointer as a markdown link, and a link target quoted verbatim inside this file would be read as a link *from this file* by any relative-link check run over `docs/design/`, where it does not resolve.
 
 ```
-$ rg -n 'tm-marathon-config-example' skills/ agents/ commands/ docs/index.md | grep -v fixtures | sort
-commands/README.md:20:| [`/tm-marathon-config-example`](./tm-marathon-config-example.md) | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` and `/issues` |
-commands/tm-marathon-config-example.md:2:name: tm-marathon-config-example
-commands/tm.md:62:Run `/tm-marathon-config-example` to see the template, then copy and customize it.
-docs/index.md:54:- [`/tm-marathon-config-example`](../commands/tm-marathon-config-example.md) - reference configuration block for marathon-mode `/tm` and `/issues`.
-skills/marathon/SKILL.md:64:Run `/tm-marathon-config-example` to see the configuration template (it covers both /tm and /issues), then copy and customize it for your project.
+$ rg -n -o 'tm-marathon-config-example' skills/ agents/ commands/ docs/index.md | grep -v fixtures | cut -d: -f1,2 | sort -u
+commands/README.md:20
+commands/tm-marathon-config-example.md:2
+commands/tm.md:62
+docs/index.md:54
+skills/marathon/SKILL.md:64
+
+$ rg -c '\]\([^)]*tm-marathon-config-example[^)]*\)' commands/README.md commands/tm.md docs/index.md skills/marathon/SKILL.md | sort
+commands/README.md:1
+docs/index.md:1
 ```
 
-`skills/marathon/SKILL.md:64` is the only one WS4 touches. The three under `commands/` die with the directory WS1 deletes under R2, and the `docs/index.md` link dies with them; none is WS4 work, which is why Requirement 3 is scoped to `skills/` and `agents/`.
+Five sites, of which two - `commands/README.md:20` and `docs/index.md:54` - hold the pointer as a markdown link, which is what the second command counts. `skills/marathon/SKILL.md:64` is the only one WS4 touches. The three under `commands/` die with the directory WS1 deletes under R2, and the `docs/index.md` link dies with them; none is WS4 work, which is why Requirement 3 is scoped to `skills/` and `agents/`.
 
 Existing `references/` files and their line counts. Five skills carry one; `huddle`, `marathon` and the scorer carry none:
 

@@ -196,11 +196,17 @@ No agent declares a tool field, `hooks`, `mcpServers`, or `permissionMode`. `CLA
 ### What the gates enforce today
 
 ```
-$ GIT_CONFIG_GLOBAL=/dev/null uv run --with pytest pytest tests/test_plugin_contract.py -q | tail -1
-355 passed in 0.12s
+$ rg -c '^def test_' tests/test_plugin_contract.py
+11
+
+$ GIT_CONFIG_GLOBAL=/dev/null uv run --with pytest pytest tests/test_plugin_contract.py --collect-only -q | rg -c '::test_skill_frontmatter'
+12
+
+$ GIT_CONFIG_GLOBAL=/dev/null uv run --with pytest pytest tests/test_plugin_contract.py --collect-only -q | rg -c '::test_skill_has_trigger_clause'
+12
 ```
 
-The count is 355 on `main` at 44bddbf; the branch carrying this spec reports 359, because four doc-level tests parametrize over every authored markdown file and pick this one up.
+The suite's baseline for this requirement is those three counts, re-run at `22adf5d` and unchanged from `44bddbf`: 11 test functions in the file, of which the two that assert skill frontmatter each collect one case per `skills/*/SKILL.md`, twelve today. All three move only when a test or a skill is added, which is what makes them re-runnable at a later commit. The file's whole-run pass total is not: `test_no_leaked_tool_envelope_tags` and `test_no_conflict_markers` parametrize over every authored markdown file in the tree (`all_authored_markdown()`, `tests/test_plugin_contract.py:83-101`), so each new document - this spec included - raises it by two.
 
 `tests/test_plugin_contract.py` asserts `name` matches the directory and `description` is non-empty (`test_skill_frontmatter`) and that the frontmatter carries `TRIGGER` (`test_skill_has_trigger_clause`). Nothing asserts a tool field, an `argument-hint`, or a script-path form. `scripts/tests/test_integration.py::TestAssessBuild::test_no_skill_dir_reference` asserts the literal `SKILL_DIR` appears in no `.md` inside the assess ZIP; the same class asserts `CLAUDE_PLUGIN_ROOT` is absent. Both run under the required `scripts/ pytest` job.
 

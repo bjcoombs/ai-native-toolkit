@@ -13,9 +13,27 @@ $ git rev-parse HEAD
 44bddbfa68d70685be3d6691bc17445ab98386ed
 ```
 
+Five file sizes and one test-function count are quoted in the prose below. This is the command that produces all six, re-run against `22adf5d`, the commit `main` carries today; every value is unchanged from `44bddbf`:
+
+```
+$ git rev-parse --short HEAD
+22adf5d
+
+$ wc -l -c scripts/floor_check.py .github/workflows/floor.yml FLOOR.md scripts/tests/test_floor_check.py scripts/floor_anchor.py
+     240    9764 scripts/floor_check.py
+     202    9849 .github/workflows/floor.yml
+      58    2947 FLOOR.md
+     248    9242 scripts/tests/test_floor_check.py
+     345   15534 scripts/floor_anchor.py
+    1093   47336 total
+
+$ rg -c '^def test_' scripts/tests/test_floor_check.py
+27
+```
+
 ### The marked set is a hard-coded constant
 
-`scripts/floor_check.py` is 240 lines / 9,764 bytes and holds the marked set, the token list and the clause table as module constants.
+`scripts/floor_check.py` is 240 lines / 9,764 bytes (`wc` block above) and holds the marked set, the token list and the clause table as module constants.
 
 ```
 $ rg -n 'MARKED_FILES|FLOOR_TOKENS|^MARKER =|^INVOCATIONS =|^FLOOR_FILE =|^REQUIRED_CLAUSES' scripts/floor_check.py
@@ -89,7 +107,7 @@ D       skills/marathon/SKILL.md
 
 ### Three more places hard-code the same paths
 
-`.github/workflows/floor.yml` is 202 lines / 9,849 bytes. Its canary path filter carries an eight-alternative regex:
+`.github/workflows/floor.yml` is 202 lines / 9,849 bytes (`wc` block above). Its canary path filter carries an eight-alternative regex:
 
 ```
 $ rg -n 'grep -qE' .github/workflows/floor.yml
@@ -103,7 +121,7 @@ $ git ls-tree -r --name-only 44bddbf | grep -cE '^(skills/marathon/|skills/pr-re
 38
 ```
 
-`FLOOR.md` is 58 lines / 2,947 bytes and names paths in two sections:
+`FLOOR.md` is 58 lines / 2,947 bytes (`wc` block above) and names paths in two sections:
 
 ```
 $ rg -n 'skills/marathon|skills/pr-review-merge|commands/tm|commands/issues|scripts/contract|scripts/canaries|tests/canaries|floor\.yml' FLOOR.md
@@ -130,11 +148,11 @@ def test_real_marathon_anchor_removal_is_flagged():
     base = marathon.read_text(encoding="utf-8")
 ```
 
-`scripts/tests/test_floor_check.py` is 248 lines and holds 27 test functions.
+`scripts/tests/test_floor_check.py` is 248 lines and holds 27 test functions, both from the `wc` and `rg -c` block above.
 
 ### Repo settings
 
-`scripts/floor_anchor.py` is 345 lines / 15,534 bytes. It fails closed on two requirements: both floor contexts required on the default branch, and branch protection readable at all. Six contexts are required today, and each is produced by a job `name:` literal in this repo's workflows:
+`scripts/floor_anchor.py` is 345 lines / 15,534 bytes (`wc` block above). It fails closed on two requirements: both floor contexts required on the default branch, and branch protection readable at all. Six contexts are required today, and each is produced by a job `name:` literal in this repo's workflows:
 
 ```
 $ gh api repos/bjcoombs/ai-native-toolkit/branches/main/protection/required_status_checks | jq '[.checks[].context]'
