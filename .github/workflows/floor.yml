@@ -102,8 +102,11 @@ jobs:
           fetch-depth: 0  # full history so the merge-base is resolvable
           persist-credentials: false
 
+      # NO --depth=1 here. The checkout above is unshallow on purpose, and a
+      # shallow fetch into it writes a graft that truncates the base branch's
+      # ancestry at its tip -- exactly where `git merge-base` below has to walk.
       - name: Fetch the PR base branch
-        run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+        run: git fetch --no-tags origin "${{ github.base_ref }}"
 
       - name: Marker removal detection (base-vs-head)
         run: |
@@ -184,8 +187,11 @@ jobs:
           fetch-depth: 0  # full history so the merge-base is resolvable
           persist-credentials: false
 
+      # NO --depth=1 here. The checkout above is unshallow on purpose, and a
+      # shallow fetch into it writes a graft that truncates the base branch's
+      # ancestry at its tip -- exactly where `git merge-base` below has to walk.
       - name: Fetch the PR base branch
-        run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+        run: git fetch --no-tags origin "${{ github.base_ref }}"
 
       - name: Detect changes to protected paths
         id: filter
