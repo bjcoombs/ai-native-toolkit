@@ -9,7 +9,6 @@ description: >
   handling, merge ordering), or when the user asks to take a PR to green/merge it.
 ---
 
-<!-- floor:cold-verify-completion -->
 
 # PR Review-to-Green + Smart Merge
 
