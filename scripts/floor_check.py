@@ -42,6 +42,26 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
     the floor declares, so a file that moves, a file that arrives, and a token
     that is added are all enforced with no edit to this script.
 
+    A move is *followed* rather than read as a deletion. ``git diff -M50%``
+    maps each base path to its head path, and the comparison for a mapped pair
+    is ``BASE:old`` against ``HEAD:new``, so a byte-identical relocation passes
+    with no floor edit while a relocation that also weakens a token still fails
+    on the token comparison. A mapped destination has to be a plausible
+    component path (``_is_valid_component_path``); a "move" into an archive
+    directory is a deletion wearing a rename and is reported as one, naming the
+    rejected destination.
+
+``protected``
+    Directory-*role* classification of a changed-path list -- the one path
+    decision the CI workflow makes, so the workflow itself carries no path
+    literals to keep in sync. A path is protected when it falls in one of four
+    roles: it lives under the component directory of a marked file (marked at
+    the base ref *or* on the head side, so a component marked in the PR itself
+    is protected from that PR on), it is gate code, it is canary code or
+    fixtures, or it is floor core. Each role is a whole subtree rather than a
+    basename allowlist, so the protected set survives a layout move that a
+    hand-maintained path regex would silently drop.
+
 ``clauses``
     Unconditional integrity check of ``FLOOR.md``: the file must exist, it must
     declare its ``floor-tokens`` block with at least the four tokens the floor
@@ -55,9 +75,10 @@ Paths are relative to the current directory, which is the repository root.
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # ── The one anchor string ────────────────────────────────────────────────────
 #
@@ -86,6 +107,47 @@ REQUIRED_CLAUSES = {
     "iii": ("<!-- floor-clause:iii -->", "out-of-band", "floor-signoff"),
     "iv": ("<!-- floor-clause:iv -->", "immutab"),
 }
+
+# ── Component shapes ─────────────────────────────────────────────────────────
+#
+# The three paths a shipped component can live at. A marked file has to sit at
+# one of them for a rename to read as a relocation rather than a deletion, and
+# for the file to have a component *directory* the `protected` roles can span.
+# The shapes are structural, not a list of names, so a component that is added
+# or moved between them needs no edit here.
+
+VALID_COMPONENT_RE = re.compile(
+    r"^(?:skills/[^/]+/SKILL\.md"
+    r"|plugins/[^/]+/skills/[^/]+/SKILL\.md"
+    r"|commands/[^/]+\.md)$"
+)
+
+# ── Protected roles ──────────────────────────────────────────────────────────
+#
+# Whole subtrees, never basenames: narrowing any of these to the files that
+# happen to live there today would quietly drop the rest on the next move.
+
+ROLE_MARKED_COMPONENT = "marked-component"
+ROLE_GATE_CODE = "gate-code"
+ROLE_CANARY = "canary"
+ROLE_FLOOR_CORE = "floor-core"
+
+ROLES = (ROLE_MARKED_COMPONENT, ROLE_GATE_CODE, ROLE_CANARY, ROLE_FLOOR_CORE)
+
+# The gates the canary suite drives.
+GATE_CODE_PREFIXES = ("scripts/contract/",)
+
+# The canary harness and the fixtures it certifies.
+CANARY_PREFIXES = ("scripts/canaries/", "tests/canaries/")
+
+# The floor's own machinery: the file that declares it, the two scripts that
+# enforce it, and the workflow that runs them.
+FLOOR_CORE_PATHS = (
+    FLOOR_FILE,
+    "scripts/floor_check.py",
+    "scripts/floor_anchor.py",
+    ".github/workflows/floor.yml",
+)
 
 
 class FloorTokenError(ValueError):
@@ -197,6 +259,55 @@ def removed_tokens(
     return removed
 
 
+def _is_valid_component_path(path: str) -> bool:
+    """Is ``path`` one of the three shapes a shipped component can live at?
+
+    Used two ways: to decide whether a rename destination is a relocation or a
+    deletion wearing a rename, and to decide whether a marked file has a
+    component directory the protected roles can span.
+    """
+    return bool(VALID_COMPONENT_RE.match(path))
+
+
+def _component_dir(path: str) -> str | None:
+    """The component ``path`` belongs to, or ``None`` if it is not a component.
+
+    A ``SKILL.md`` component is its parent directory and everything beneath it
+    (``skills/marathon/forge/`` belongs to the marathon component); a
+    ``commands/<x>.md`` component is that single file. A path matching none of
+    the component shapes -- a prose carrier under ``docs/``, say -- has no
+    component directory, so quoting the marker in prose protects nothing.
+    """
+    if not _is_valid_component_path(path):
+        return None
+    if path.endswith("/SKILL.md"):
+        return str(PurePosixPath(path).parent)
+    return path
+
+
+def _is_under(path: str, component: str) -> bool:
+    """Is ``path`` the component itself, or anything beneath it?"""
+    return path == component or path.startswith(f"{component}/")
+
+
+def classify_path(path: str, component_dirs) -> str | None:
+    """The protected role of ``path``, or ``None`` when it is unprotected.
+
+    ``component_dirs`` is the set of marked-component directories in play (see
+    ``_component_dir``). The roles do not overlap on this tree, so the order
+    below is a reading order, not a precedence rule.
+    """
+    if path in FLOOR_CORE_PATHS:
+        return ROLE_FLOOR_CORE
+    if any(path.startswith(prefix) for prefix in GATE_CODE_PREFIXES):
+        return ROLE_GATE_CODE
+    if any(path.startswith(prefix) for prefix in CANARY_PREFIXES):
+        return ROLE_CANARY
+    if any(_is_under(path, component) for component in component_dirs):
+        return ROLE_MARKED_COMPONENT
+    return None
+
+
 def missing_clauses(floor_text: str | None) -> list[str]:
     """Clause ids whose anchor or key phrase is missing from ``FLOOR.md``.
 
@@ -226,12 +337,38 @@ def _git_show(ref: str, path: str, cwd: str | Path | None = None) -> str | None:
     return result.stdout
 
 
-def _read_head(path: str) -> str | None:
+def _read_head(path: str, cwd: str | Path | None = None) -> str | None:
     """Content of ``path`` in the working tree, or ``None`` if absent."""
-    p = Path(path)
+    p = Path(cwd) / path if cwd is not None else Path(path)
     if not p.exists():
         return None
     return p.read_text(encoding="utf-8")
+
+
+def _get_renames(base_ref: str, cwd: str | Path | None = None) -> dict[str, str]:
+    """``{old_path: new_path}`` for every file git maps as a rename.
+
+    ``-M50%`` is the deliberate threshold: a relocation that also edits the file
+    stays mapped (and is then judged on its tokens), while a rewrite past the
+    threshold leaves rename detection and is judged as a deletion. Raising it to
+    ``-M100%`` would make a whitespace change during a move read as a deletion;
+    dropping rename detection entirely would make every move read as one.
+
+    The diff is the working tree against ``base_ref``, which is what CI wants:
+    the checkout there is the PR merge commit.
+    """
+    result = subprocess.run(
+        ["git", "diff", "-M50%", "--name-status", "--diff-filter=R", base_ref],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    renames: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 3 and parts[0].startswith("R"):
+            renames[parts[1]] = parts[2]
+    return renames
 
 
 def _discover_marked_files(
@@ -263,6 +400,71 @@ def _discover_marked_files(
         if standalone_anchor_count(_git_show(base_ref, path, cwd=cwd), marker) > 0:
             discovered.append(path)
     return discovered
+
+
+def _untracked_component_paths(cwd: str | Path | None = None) -> list[str]:
+    """Component-shaped paths present in the working tree but not tracked.
+
+    Deliberately *not* ``--exclude-standard``: the repo's ignore list is not the
+    floor's business. A component that exists on disk carries its obligation
+    whether or not ``.gitignore`` has caught up with the directory it lives in,
+    and a component the ignore list hides is exactly the case where silence
+    would be dangerous. The component-shape filter keeps this cheap -- nothing
+    else in an untracked tree (build output, virtualenvs, caches) can be a
+    component, so nothing else is even opened.
+    """
+    result = subprocess.run(
+        ["git", "ls-files", "--others"],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    return [
+        path
+        for path in result.stdout.splitlines()
+        if path and _is_valid_component_path(path)
+    ]
+
+
+def _discover_marked_files_head(
+    marker: str,
+    cwd: str | Path | None = None,
+) -> list[str]:
+    """The same discovery, run over the working tree instead of a ref.
+
+    A component marked by the PR under review carries no anchor at the base ref,
+    so base-side discovery alone would leave it unprotected on the very PR that
+    marks it. Reading the head side too closes that window: the obligation binds
+    from the commit that declares it, not from the one after.
+    """
+    result = subprocess.run(
+        ["git", "grep", "-l", "-F", marker, "--", f":!{FLOOR_FILE}"],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    candidates = [path for path in result.stdout.splitlines() if path]
+    candidates += _untracked_component_paths(cwd=cwd)
+    return [
+        path
+        for path in dict.fromkeys(candidates)
+        if standalone_anchor_count(_read_head(path, cwd=cwd), marker) > 0
+    ]
+
+
+def _protected_component_dirs(
+    base_ref: str,
+    marker: str = MARKER,
+    cwd: str | Path | None = None,
+) -> set[str]:
+    """Component directories carrying a floor obligation at ``base_ref`` or head."""
+    marked = set(_discover_marked_files(base_ref, marker, cwd=cwd))
+    marked |= set(_discover_marked_files_head(marker, cwd=cwd))
+    return {
+        component
+        for component in (_component_dir(path) for path in marked)
+        if component is not None
+    }
 
 
 # ── Subcommands ──────────────────────────────────────────────────────────────
@@ -301,23 +503,49 @@ def cmd_markers(args: argparse.Namespace) -> int:
     if not files:
         print(f"ok   no marked files at {base}: no floor obligation is armed yet.")
         return 0
+    renames = _get_renames(base)
     failed = False
     for path in files:
         base_text = _git_show(base, path)
-        head_text = _read_head(path)
+        destination = renames.get(path)
+        if destination is not None and not _is_valid_component_path(destination):
+            # A rename git was happy to map, into a path no component can live
+            # at. That is a deletion wearing a rename, so say so and name the
+            # destination that was rejected.
+            failed = True
+            print(
+                f"FAIL {path}: marked file deleted -- renamed to "
+                f"{destination}, which is not a component path "
+                f"(skills/<x>/SKILL.md, plugins/<p>/skills/<x>/SKILL.md or "
+                f"commands/<x>.md), so the floor obligation was dropped, not moved"
+            )
+            continue
+        head_path = destination or path
+        head_text = _read_head(head_path)
+        if head_text is None and destination is None:
+            # Gone from head with nothing mapping it anywhere: a plain deletion.
+            failed = True
+            carried = sum(1 for t in tokens if base_text and t in base_text)
+            print(
+                f"FAIL {path}: marked file deleted between {base} and head "
+                f"({carried} floor obligation(s) lost, and no rename maps it to "
+                f"a new path)"
+            )
+            continue
         removed = removed_tokens(base_text, head_text, tokens)
         if removed:
             failed = True
             for token in removed:
                 print(
-                    f"FAIL {path}: floor token weakened -> {token!r} "
+                    f"FAIL {head_path}: floor token weakened -> {token!r} "
                     f"(occurrences dropped, or its standalone anchor line was "
                     f"removed, between {base} and head)"
                 )
         else:
             carried = [t for t in tokens if base_text and t in base_text]
             state = f"{len(carried)} token(s) intact" if carried else "no floor tokens (ok)"
-            print(f"ok   {path}: {state}")
+            moved = f" (moved from {path})" if destination else ""
+            print(f"ok   {head_path}: {state}{moved}")
     if failed:
         print(
             "\nFloor markers were removed. Restore them, or obtain the "
@@ -325,6 +553,47 @@ def cmd_markers(args: argparse.Namespace) -> int:
         )
         return 1
     print("\nMarker check passed: no floor tokens removed.")
+    return 0
+
+
+def _changed_paths(args: argparse.Namespace) -> list[str]:
+    """The paths to classify: stdin with ``--changed``, else the base diff.
+
+    In diff mode the input is what the working tree changes relative to
+    ``--base``, which is ``git diff --name-only`` plus the component-shaped
+    paths that exist now and are not tracked -- the same reason
+    ``_untracked_component_paths`` exists. In CI the checkout is a merge commit
+    with nothing untracked, so that second half is empty there and the mode is
+    exactly the diff.
+    """
+    if args.changed:
+        paths = sys.stdin.read().splitlines()
+    else:
+        paths = subprocess.run(
+            ["git", "diff", "--name-only", args.base],
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        paths += _untracked_component_paths()
+    return list(dict.fromkeys(path.strip() for path in paths if path.strip()))
+
+
+def cmd_protected(args: argparse.Namespace) -> int:
+    """Print the protected subset of the changed paths, one per line.
+
+    Classification is not a verdict: a protected path is a path that needs the
+    expensive semantic layer and the maintainer's sign-off, not a failure. So
+    this exits 0 whenever it classified its input, and the caller decides what
+    an empty or non-empty answer means.
+    """
+    component_dirs = _protected_component_dirs(args.base)
+    for path in _changed_paths(args):
+        role = classify_path(path, component_dirs)
+        if role is None:
+            continue
+        if args.role and role != args.role:
+            continue
+        print(path)
     return 0
 
 
@@ -370,6 +639,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="override the discovered marked-file set (defaults to discovery)",
     )
     p_markers.set_defaults(func=cmd_markers)
+
+    p_protected = sub.add_parser(
+        "protected", help="classify changed paths by protected directory role"
+    )
+    p_protected.add_argument(
+        "--base", required=True, help="git ref for the merge-base (e.g. origin/main)"
+    )
+    p_protected.add_argument(
+        "--changed",
+        action="store_true",
+        help="read the changed paths from stdin instead of diffing against --base",
+    )
+    p_protected.add_argument(
+        "--role",
+        choices=ROLES,
+        help="print only the paths in this role (default: every protected path)",
+    )
+    p_protected.set_defaults(func=cmd_protected)
 
     p_clauses = sub.add_parser("clauses", help="FLOOR.md four-clause integrity")
     p_clauses.add_argument("--floor", default=FLOOR_FILE, help="path to FLOOR.md")

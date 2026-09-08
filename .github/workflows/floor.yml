@@ -31,11 +31,18 @@
 #   canary suite (E3, semantic layer -- conditional):
 #     Runs scripts/canaries/run_canaries.py, which drives the REAL gates against
 #     the committed and per-run blind fixtures (no mocks). It is the expensive
-#     semantic layer, so it runs only on PRs that touch the workflow skills or the
-#     gate/canary code (skills/marathon/, skills/pr-review-merge/, commands/tm.md,
-#     commands/issues.md, scripts/contract/, scripts/canaries/, tests/canaries/, and
-#     floor.yml itself, so a change to the wiring re-runs the canaries) -- a `canary
-#     path filter` job diffs the PR against its base and gates it. On a
+#     semantic layer, so it runs only on PRs that touch a protected path -- a
+#     `canary path filter` job diffs the PR against its base and asks
+#     scripts/floor_check.py which of the changed paths are protected. This
+#     workflow holds NO path list of its own. Protection is decided by directory
+#     ROLE: a marked component and everything beneath it, the gate code the suite
+#     drives, the canary code and its fixtures, and the floor's own machinery
+#     (this file included, so a change to the wiring re-runs the canaries). The
+#     roles are computed from the floor's own markers and directory layout, so a
+#     component that moves or arrives keeps its coverage with no edit here. The
+#     previous mechanism was a path regex maintained by hand in this file: a
+#     second source of truth that any layout change would silently narrow, and
+#     that named files the floor itself no longer names. On a
 #     non-touching PR the suite job is skipped (neutral, never blocks). On a
 #     touching PR it retries ONCE on failure (a real infra/model flake is re-run)
 #     and then stays red -- it is never auto-skipped. The deterministic internals
@@ -108,12 +115,13 @@ jobs:
         run: python scripts/floor_anchor.py
 
   # ------------------------------------------------------------------------- #
-  # Semantic layer (E3): the canary suite. Expensive, so gated to PRs that
-  # touch the workflow skills or the gate/canary code. The path filter diffs the
-  # PR against its merge-base with the base branch (the same base-vs-head
-  # mechanism the deterministic layer uses -- no new third-party action), rather
-  # than a workflow-level `paths:` trigger, because floor.yml must keep running
-  # on ALL PRs for the two jobs above.
+  # Semantic layer (E3): the canary suite. Expensive, so gated to PRs that touch
+  # a protected path. The path filter diffs the PR against its merge-base with
+  # the base branch (the same base-vs-head mechanism the deterministic layer
+  # uses -- no new third-party action), rather than a workflow-level `paths:`
+  # trigger, because floor.yml must keep running on ALL PRs for the two jobs
+  # above. The classification itself is not made here: it is a call to the same
+  # script the deterministic layer runs.
   canary-changes:
     name: canary path filter
     runs-on: ubuntu-latest
@@ -129,22 +137,24 @@ jobs:
       - name: Fetch the PR base branch
         run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
 
-      - name: Detect changes to workflow-skill / gate paths
+      - name: Detect changes to protected paths
         id: filter
         run: |
           BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
           echo "merge-base: ${BASE_SHA}"
-          # Paths that carry a floor obligation, drive the gates the canary suite
-          # exercises, or wire the suite itself (floor.yml -- so a change to the
-          # canary invocation re-runs the canaries and proves the wiring). This is
-          # the file set FLOOR.md clause iii protects; keep the two in sync.
-          if git diff --name-only "${BASE_SHA}" HEAD \
-            | grep -qE '^(skills/marathon/|skills/pr-review-merge/|commands/tm\.md$|commands/issues\.md$|scripts/contract/|scripts/canaries/|tests/canaries/|\.github/workflows/floor\.yml$)'; then
+          # The one path decision this workflow makes, and it delegates it: the
+          # script classifies each changed path by directory role and echoes back
+          # the protected subset. Whether that subset is empty is the only thing
+          # read here, so this file never learns a path.
+          PROTECTED="$(git diff --name-only "${BASE_SHA}" HEAD \
+            | python scripts/floor_check.py protected --base "${BASE_SHA}" --changed)"
+          if printf '%s\n' "${PROTECTED}" | grep -q .; then
             echo "run_canaries=true" >> "$GITHUB_OUTPUT"
-            echo "Workflow-skill / gate paths changed: canary suite WILL run."
+            echo "Protected paths changed: canary suite WILL run."
+            printf '%s\n' "${PROTECTED}"
           else
             echo "run_canaries=false" >> "$GITHUB_OUTPUT"
-            echo "No workflow-skill / gate paths changed: canary suite will be skipped."
+            echo "No protected paths changed: canary suite will be skipped."
           fi
 
   canary-suite:
@@ -197,6 +207,6 @@ jobs:
             echo "## Floor canary suite (semantic layer): PASS"
             echo ""
             echo "The real freeze / cold-exit / complete gates certified the committed"
-            echo "and per-run blind fixtures. This job ran because the PR touched the"
-            echo "workflow skills or the gate/canary code."
+            echo "and per-run blind fixtures. This job ran because the PR touched a"
+            echo "path the floor classifies as protected."
           } >> "$GITHUB_STEP_SUMMARY"
