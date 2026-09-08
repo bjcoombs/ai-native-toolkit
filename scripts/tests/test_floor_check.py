@@ -1,5 +1,6 @@
 """Unit tests for floor_check.py (base-vs-head removal detection + clause integrity)."""
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -8,9 +9,14 @@ from floor_check import (
     MARKER,
     MINIMUM_TOKEN_COUNT,
     REQUIRED_CLAUSES,
+    ROLE_FLOOR_CORE,
+    ROLE_GATE_CODE,
+    ROLE_MARKED_COMPONENT,
     TOKEN_BLOCK_FENCE,
     FloorTokenError,
+    _component_dir,
     _discover_marked_files,
+    _is_valid_component_path,
     _parse_token_block,
     main,
     missing_clauses,
@@ -462,3 +468,367 @@ def test_markers_fails_when_neither_side_declares_a_token_block(
     rc = main(["markers", "--base", "HEAD"])
     assert rc == 1
     assert TOKEN_BLOCK_FENCE in capsys.readouterr().out
+
+
+# ── Component shapes: what a marked file may be, and what it spans ───────────
+
+def test_valid_component_paths_are_the_three_shapes():
+    assert _is_valid_component_path("skills/marathon/SKILL.md")
+    assert _is_valid_component_path("plugins/delivery/skills/marathon/SKILL.md")
+    assert _is_valid_component_path("commands/tm.md")
+    # An archive path, a nested reference file and a bare skill directory are
+    # not places a component lives.
+    assert not _is_valid_component_path("docs/archive/SKILL.md")
+    assert not _is_valid_component_path("skills/marathon/forge/SKILL.md")
+    assert not _is_valid_component_path("commands/nested/tm.md")
+
+
+def test_component_dir_spans_a_directory_or_a_single_file():
+    assert _component_dir("skills/marathon/SKILL.md") == "skills/marathon"
+    assert (
+        _component_dir("plugins/delivery/skills/marathon/SKILL.md")
+        == "plugins/delivery/skills/marathon"
+    )
+    assert _component_dir("commands/tm.md") == "commands/tm.md"
+    # A prose carrier has no component directory, so quoting the marker in
+    # documentation protects nothing.
+    assert _component_dir("docs/floor-anchor-proof.md") is None
+
+
+# ── Rename mapping: a move is followed, not read as a deletion ───────────────
+
+def _long_marked_body(name: str) -> str:
+    """A marked component big enough that dropping one line stays above -M50%."""
+    filler = "\n".join(f"Step {i}: describe the {name} workflow in detail." for i in range(20))
+    return (
+        f"# {name}\n\n{MARKER}\n\n"
+        "Runs start_gate.py, then spawn_verifier.py, then complete_gate.py.\n\n"
+        f"{filler}\n"
+    )
+
+
+@pytest.fixture()
+def component_repo(tmp_path, monkeypatch):
+    """Scratch repo carrying one directory-shaped and one file-shaped component."""
+    _init_repo(tmp_path)
+    _write_floor(tmp_path)
+    (tmp_path / "skills" / "probe").mkdir(parents=True)
+    (tmp_path / "skills" / "probe" / "SKILL.md").write_text(
+        _long_marked_body("probe"), encoding="utf-8"
+    )
+    (tmp_path / "commands").mkdir()
+    (tmp_path / "commands" / "probe.md").write_text(
+        _long_marked_body("probe command"), encoding="utf-8"
+    )
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "two marked components")
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+def test_bare_move_of_both_component_shapes_passes(component_repo, capsys):
+    # R100 for both: a byte-identical relocation of a directory-shaped and a
+    # file-shaped component costs no floor edit.
+    (component_repo / "plugins" / "pp" / "skills" / "probe").mkdir(parents=True)
+    (component_repo / "plugins" / "pp" / "skills" / "moved").mkdir(parents=True)
+    _git(component_repo, "mv", "skills/probe/SKILL.md",
+         "plugins/pp/skills/probe/SKILL.md")
+    _git(component_repo, "mv", "commands/probe.md",
+         "plugins/pp/skills/moved/SKILL.md")
+    _git(component_repo, "commit", "-q", "-m", "move both components")
+    rc = main(["markers", "--base", "HEAD~1"])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert "ok   plugins/pp/skills/probe/SKILL.md" in out
+    assert "ok   plugins/pp/skills/moved/SKILL.md" in out
+    assert "FAIL" not in out
+
+
+def test_move_that_strips_the_anchor_fails_naming_only_the_marker(
+    component_repo, capsys
+):
+    # R099: the pair stays mapped, so only the weakened token is reported. A
+    # build that read the move as a deletion would report all four tokens here,
+    # which is the discriminator between following a move and losing one.
+    (component_repo / "plugins" / "pp" / "skills" / "probe").mkdir(parents=True)
+    _git(component_repo, "mv", "skills/probe/SKILL.md",
+         "plugins/pp/skills/probe/SKILL.md")
+    moved = component_repo / "plugins" / "pp" / "skills" / "probe" / "SKILL.md"
+    moved.write_text(
+        "\n".join(
+            line
+            for line in moved.read_text(encoding="utf-8").splitlines()
+            if line.strip() != MARKER
+        ),
+        encoding="utf-8",
+    )
+    _git(component_repo, "add", "-A")
+    _git(component_repo, "commit", "-q", "-m", "move and strip the anchor")
+    rc = main(["markers", "--base", "HEAD~1"])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "FAIL plugins/pp/skills/probe/SKILL.md" in out
+    assert MARKER in out
+    for invocation in DECLARED_INVOCATIONS:
+        assert invocation not in out, f"{invocation} reported: the move was read as a deletion"
+
+
+def test_move_past_the_similarity_threshold_fails_as_deleted(component_repo, capsys):
+    # A rewrite big enough to leave rename detection is a D plus an A, and the
+    # marked file is gone with nothing mapping it: a deletion.
+    (component_repo / "plugins" / "pp" / "skills" / "probe").mkdir(parents=True)
+    _git(component_repo, "mv", "skills/probe/SKILL.md",
+         "plugins/pp/skills/probe/SKILL.md")
+    moved = component_repo / "plugins" / "pp" / "skills" / "probe" / "SKILL.md"
+    moved.write_text("# unrelated content entirely\n" * 30, encoding="utf-8")
+    _git(component_repo, "add", "-A")
+    _git(component_repo, "commit", "-q", "-m", "move and rewrite")
+    rc = main(["markers", "--base", "HEAD~1"])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "FAIL skills/probe/SKILL.md" in out
+    assert "deleted" in out
+
+
+def test_move_to_an_archive_destination_fails_naming_both_paths(
+    component_repo, capsys
+):
+    # A rename git is happy to map, into a path no component can live at. The
+    # single FAIL line names the origin and the destination it rejected.
+    (component_repo / "docs" / "archive").mkdir(parents=True)
+    _git(component_repo, "mv", "skills/probe/SKILL.md", "docs/archive/SKILL.md")
+    _git(component_repo, "commit", "-q", "-m", "archive the component")
+    rc = main(["markers", "--base", "HEAD~1"])
+    out = capsys.readouterr().out
+    assert rc == 1
+    archive_lines = [
+        line for line in out.splitlines()
+        if line.startswith("FAIL skills/probe/SKILL.md:")
+    ]
+    assert len(archive_lines) == 1, out
+    assert "deleted" in archive_lines[0]
+    assert "docs/archive/SKILL.md" in archive_lines[0]
+
+
+def test_deleted_marked_file_fails_as_deleted(component_repo, capsys):
+    _git(component_repo, "rm", "-q", "skills/probe/SKILL.md")
+    _git(component_repo, "commit", "-q", "-m", "delete the component")
+    rc = main(["markers", "--base", "HEAD~1"])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "FAIL skills/probe/SKILL.md" in out
+    assert "deleted" in out
+
+
+# ── protected: directory roles replace the path regex ────────────────────────
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+# The four files the floor marks on the tree the fixtures were taken from, and
+# the fifth that only quotes the marker in prose.
+_FIXTURE_MARKED = (
+    "skills/marathon/SKILL.md",
+    "skills/pr-review-merge/SKILL.md",
+    "commands/tm.md",
+    "commands/issues.md",
+)
+_FIXTURE_PROSE_CARRIER = "docs/floor-anchor-proof.md"
+
+# The three files the roles protect that the retired path regex did not: the
+# floor's own machinery, which the sign-off layer needs.
+_FLOOR_CORE_BEYOND_THE_REGEX = {
+    FLOOR_FILE,
+    "scripts/floor_anchor.py",
+    "scripts/floor_check.py",
+}
+
+
+def _fixture_lines(name: str) -> list[str]:
+    text = (FIXTURES / name).read_text(encoding="utf-8")
+    return [line for line in text.splitlines() if line.strip()]
+
+
+def _protected(cwd: Path, paths, *extra_args) -> set[str]:
+    """Run the subcommand as CI runs it: paths on stdin, protected set on stdout."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(Path(__file__).resolve().parents[1] / "floor_check.py"),
+            "protected",
+            "--base",
+            "HEAD",
+            "--changed",
+            *extra_args,
+        ],
+        input="\n".join(paths) + "\n",
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    assert result.returncode == 0, result.stderr
+    return {line for line in result.stdout.splitlines() if line.strip()}
+
+
+def _materialise_tree(root: Path, paths) -> None:
+    for path in paths:
+        target = root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("", encoding="utf-8")
+
+
+@pytest.fixture()
+def roles_repo(tmp_path):
+    """The committed tree fixture, materialised and marked, in a scratch repo.
+
+    Fixture-based rather than pinned to a live SHA: this suite's checkout sets
+    no fetch-depth, so a historical SHA resolves to nothing here.
+    """
+    _init_repo(tmp_path)
+    _materialise_tree(tmp_path, _fixture_lines("floor_roles_tree.txt"))
+    for marked in _FIXTURE_MARKED:
+        (tmp_path / marked).write_text(_marked_body(marked), encoding="utf-8")
+    (tmp_path / _FIXTURE_PROSE_CARRIER).write_text(
+        _prose_body(_FIXTURE_PROSE_CARRIER), encoding="utf-8"
+    )
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "fixture tree with four marked components")
+    return tmp_path
+
+
+def test_protected_roles_match_regex_plus_floor_core(roles_repo):
+    tree = _fixture_lines("floor_roles_tree.txt")
+    regex_set = set(_fixture_lines("floor_roles_regex.txt"))
+    assert len(tree) == 346, "the tree fixture is the whole tree it was taken from"
+    assert len(regex_set) == 38, "the regex fixture is what the retired filter caught"
+
+    protected = _protected(roles_repo, tree)
+
+    # Nothing the regex protected is dropped, and exactly three files are added.
+    assert regex_set - protected == set(), "the roles must lose nothing the regex caught"
+    assert protected - regex_set == _FLOOR_CORE_BEYOND_THE_REGEX
+    assert protected == regex_set | _FLOOR_CORE_BEYOND_THE_REGEX
+
+
+def test_protected_keeps_the_gate_and_canary_files_a_basename_match_would_drop(
+    roles_repo,
+):
+    # The rejected narrowing was matching gate scripts by basename, which drops
+    # every file in those directories that is not one of the three gate names.
+    protected = _protected(roles_repo, _fixture_lines("floor_roles_tree.txt"))
+    assert "scripts/contract/verifier.py" in protected
+    assert "scripts/contract/tiers.py" in protected
+    assert "scripts/canaries/drive_interactive.mjs" in protected
+
+
+def test_protected_excludes_a_prose_only_carrier(roles_repo):
+    # It holds no standalone anchor, so it is no marked component -- and a docs
+    # path has no component directory to span either.
+    protected = _protected(roles_repo, _fixture_lines("floor_roles_tree.txt"))
+    assert _FIXTURE_PROSE_CARRIER not in protected
+
+
+def test_protected_covers_a_plugin_shaped_marked_component(tmp_path):
+    # A shape the floor had never seen becomes a marked component the moment it
+    # carries an anchor, and its whole directory travels with it.
+    _init_repo(tmp_path)
+    _write_floor(tmp_path)
+    component = tmp_path / "plugins" / "pp" / "skills" / "pq"
+    component.mkdir(parents=True)
+    (component / "SKILL.md").write_text(_marked_body("pq"), encoding="utf-8")
+    (tmp_path / "plugins" / "pp" / "skills" / "pr").mkdir(parents=True)
+    (tmp_path / "plugins" / "pp" / "skills" / "pr" / "SKILL.md").write_text(
+        _prose_body("pr"), encoding="utf-8"
+    )
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "plugin-shaped marked component")
+    protected = _protected(
+        tmp_path,
+        [
+            "plugins/pp/skills/pq/refs/x.md",
+            "plugins/pp/skills/pq/SKILL.md",
+            "plugins/pp/skills/pr/SKILL.md",
+        ],
+    )
+    assert protected == {
+        "plugins/pp/skills/pq/refs/x.md",
+        "plugins/pp/skills/pq/SKILL.md",
+    }
+
+
+def test_protected_sees_a_component_marked_only_on_the_head_side(tmp_path):
+    # The obligation binds from the commit that declares it: at --base HEAD the
+    # component is unmarked, and the anchor exists only in the working tree.
+    _init_repo(tmp_path)
+    _write_floor(tmp_path)
+    (tmp_path / "skills" / "probe").mkdir(parents=True)
+    (tmp_path / "skills" / "probe" / "SKILL.md").write_text(
+        _prose_body("probe"), encoding="utf-8"
+    )
+    (tmp_path / "skills" / "other").mkdir(parents=True)
+    (tmp_path / "skills" / "other" / "SKILL.md").write_text("", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "unmarked base")
+    paths = ["skills/probe/notes.md", "skills/other/SKILL.md"]
+    assert _protected(tmp_path, paths) == set()  # unmarked at base and at head
+
+    (tmp_path / "skills" / "probe" / "SKILL.md").write_text(
+        _marked_body("probe"), encoding="utf-8"
+    )
+    assert _protected(tmp_path, paths) == {"skills/probe/notes.md"}
+
+
+def test_protected_without_changed_classifies_the_diff_against_the_base(
+    tmp_path, monkeypatch, capsys
+):
+    # No --changed: the input is git diff --name-only <base>, so the workflow can
+    # hand the subcommand a base ref and nothing else.
+    _init_repo(tmp_path)
+    _write_floor(tmp_path)
+    (tmp_path / "skills" / "probe").mkdir(parents=True)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "notes.md").write_text("unprotected\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base without the component")
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "skills" / "probe" / "SKILL.md").write_text(
+        _marked_body("probe"), encoding="utf-8"
+    )
+    (tmp_path / "docs" / "notes.md").write_text("edited, still unprotected\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "mark the component and edit the docs")
+    rc = main(["protected", "--base", "HEAD~1"])
+    assert rc == 0
+    printed = {line for line in capsys.readouterr().out.splitlines() if line.strip()}
+    assert printed == {"skills/probe/SKILL.md"}
+
+
+def test_protected_role_filter_returns_only_the_floor_core(roles_repo):
+    # The flag the sign-off job keys off: floor core alone, not every protected
+    # path, so touching a marked component does not demand a deployment review.
+    tree = _fixture_lines("floor_roles_tree.txt")
+    assert _protected(roles_repo, tree, "--role", ROLE_FLOOR_CORE) == {
+        FLOOR_FILE,
+        "scripts/floor_anchor.py",
+        "scripts/floor_check.py",
+        ".github/workflows/floor.yml",
+    }
+    assert _protected(roles_repo, tree, "--role", ROLE_GATE_CODE) == {
+        path for path in tree if path.startswith("scripts/contract/")
+    }
+    assert _protected(roles_repo, tree, "--role", ROLE_MARKED_COMPONENT) == {
+        path
+        for path in tree
+        if path.startswith(("skills/marathon/", "skills/pr-review-merge/"))
+        or path in ("commands/tm.md", "commands/issues.md")
+    }
+
+
+def test_protected_exits_zero_on_an_empty_classification(tmp_path):
+    # Classification is not a verdict: an unprotected diff is a successful run
+    # with no output, which is what lets the workflow read emptiness as "skip".
+    _init_repo(tmp_path)
+    _write_floor(tmp_path)
+    (tmp_path / "README.md").write_text("nothing protected here\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "no marked components")
+    assert _protected(tmp_path, ["README.md", "docs/notes.md"]) == set()
