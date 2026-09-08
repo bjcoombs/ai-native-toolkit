@@ -305,9 +305,45 @@ def test_workflow_job_names_reads_job_names_not_step_names(tmp_path):
     names = floor_anchor._workflow_job_names(_workflows(tmp_path))
     # Job names come from the four-space `name:` lines; step names sit deeper
     # behind a `- `, and the workflow's own top-level name is at column zero.
-    # The two-space job ids come too - GitHub names an unnamed job's check run
-    # after its id - and no step name ("Run pytest", "Ruff") leaks in.
-    assert names == {"scripts/ pytest", "ruff + mypy gates", "pytest", "lint"}
+    # Both jobs carry a `name:`, so GitHub uses those literals and never the
+    # ids - `pytest` and `lint` are not check-run names and must not appear,
+    # and no step name ("Run pytest", "Ruff") leaks in either.
+    assert names == {"scripts/ pytest", "ruff + mypy gates"}
+
+
+def test_workflow_job_names_drops_the_id_of_a_named_job(tmp_path):
+    # The id/name pair the caller exists to disambiguate: require the id
+    # `contract-tests` instead of the name `plugin contract pytest` - the
+    # natural confusion when editing branch protection by hand - and a
+    # collector that kept both would print ok while the context never arrives.
+    body = """\
+jobs:
+  contract-tests:
+    name: plugin contract pytest
+    runs-on: ubuntu-latest
+    steps:
+      - run: pytest
+"""
+    names = floor_anchor._workflow_job_names(_workflows(tmp_path, body=body))
+    assert names == {"plugin contract pytest"}
+    assert "contract-tests" not in names
+
+
+def test_named_job_id_is_not_a_valid_required_context(tmp_path):
+    # The end-to-end consequence: requiring the id of a named job fails closed.
+    body = """\
+jobs:
+  contract-tests:
+    name: plugin contract pytest
+    runs-on: ubuntu-latest
+    steps:
+      - run: pytest
+"""
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_contexts_have_workflows(
+            {"contract-tests"}, _workflows(tmp_path, body=body)
+        )
+    assert "contract-tests" in str(exc.value)
 
 
 def test_workflow_job_names_collects_the_id_of_an_unnamed_job(tmp_path):
@@ -315,7 +351,41 @@ def test_workflow_job_names_collects_the_id_of_an_unnamed_job(tmp_path):
     # to the job id. Missing it makes the fail-closed caller a false red the
     # moment such a context is required.
     root = _workflows(tmp_path, body=WORKFLOW_WITH_AN_UNNAMED_JOB, filename="review.yml")
-    assert "claude-review" in floor_anchor._workflow_job_names(root)
+    assert floor_anchor._workflow_job_names(root) == {"claude-review"}
+
+
+def test_workflow_job_names_separates_a_named_job_from_an_unnamed_neighbour(tmp_path):
+    # One pass, two outcomes: the named job resolves to its `name:` and drops
+    # its id; the unnamed job that follows keeps its id. Both shapes coexist in
+    # this repo's own workflows.
+    body = """\
+jobs:
+  contract-tests:
+    name: plugin contract pytest
+    runs-on: ubuntu-latest
+    steps:
+      - run: pytest
+
+  claude-review:
+    runs-on: ubuntu-latest
+    steps:
+      - run: review
+"""
+    names = floor_anchor._workflow_job_names(_workflows(tmp_path, body=body))
+    assert names == {"plugin contract pytest", "claude-review"}
+
+
+def test_workflow_job_names_collects_a_trailing_unnamed_job(tmp_path):
+    # The pending id must still be flushed when the file ends on an unnamed
+    # job - there is no following two-space key to close it.
+    body = """\
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: build
+"""
+    assert floor_anchor._workflow_job_names(_workflows(tmp_path, body=body)) == {"build"}
 
 
 def test_workflow_job_names_reads_yaml_as_well_as_yml(tmp_path):
@@ -348,13 +418,13 @@ jobs:
       - run: pytest
 """
     names = floor_anchor._workflow_job_names(_workflows(tmp_path, body=body))
-    assert names == {"scripts/ pytest", "pytest"}
+    assert names == {"scripts/ pytest"}
 
 
 def test_collected_job_ids_cannot_mask_a_renamed_context(tmp_path):
-    # The permissiveness has a hard bound: every required context carries a
-    # space and no YAML job id can, so a renamed `name:` still orphans its
-    # context even though the job's id is in the set.
+    # A renamed `name:` orphans the context it used to produce: the job is
+    # named, so its id never enters the set and cannot stand in for the old
+    # literal. This is FC13's probe in miniature.
     body = """\
 jobs:
   pytest:

@@ -52,10 +52,10 @@ FLOOR_PATH = ".github/workflows/floor.yml"
 # under ``jobs:``; their ``name:`` sits one level deeper, while steps sit
 # deeper still and behind a ``- ``, so a four-space ``name:`` is unambiguously a
 # job name. A job with no ``name:`` is still a real check context -- GitHub
-# falls back to the job *id* -- so the two-space id key is collected too. This
-# is a regex over lines rather than a YAML parse on purpose: the self-anchor job
-# runs bare ``python`` with no dependency install, so PyYAML is not available to
-# it.
+# falls back to the job *id* -- so the two-space id key is collected for those
+# jobs ONLY (see ``_workflow_job_names``). This is a regex over lines rather
+# than a YAML parse on purpose: the self-anchor job runs bare ``python`` with no
+# dependency install, so PyYAML is not available to it.
 WORKFLOW_DIR = ".github/workflows"
 WORKFLOW_GLOBS = ("*.yml", "*.yaml")
 JOB_NAME_RE = re.compile(r"^\s{4}name: (.+)$")
@@ -290,15 +290,19 @@ def _workflow_files(base: Path) -> list[Path]:
 def _workflow_job_names(root: Path | None = None) -> set[str]:
     """Every check-run name a job in ``.github/workflows`` can produce.
 
-    That is both the job ``name:`` literals and the job *ids*: GitHub names a
-    check run after the job's ``name:`` when it has one and after the job id
-    when it does not, so a collector that reads only ``name:`` lines misses
-    every unnamed job (this repo has two) and would fail the caller closed on a
-    context that is in fact produced fine.
+    GitHub names a check run after the job's ``name:`` when the job has one and
+    after the job *id* when it does not, and never after both. So this is a
+    one-pass state machine over the same line scan, not a union of the two: at a
+    two-space job-id key the id is held pending; a four-space ``name:`` arriving
+    before the next two-space key resolves that job to its name and DROPS the
+    pending id; a job whose next two-space key (or the end of the ``jobs:``
+    block) arrives first is unnamed, so its id is added.
 
-    Collecting ids as well is strictly more permissive and cannot mask a
-    rename: every required context on this repo contains a space and no YAML
-    job id can, so an id never stands in for a renamed ``name:`` literal.
+    Collecting the id of a *named* job would be fail-open in exactly the case
+    the caller exists to catch: require the id ``contract-tests`` instead of the
+    name ``plugin contract pytest`` -- the natural id/name confusion when
+    editing branch protection by hand -- and the anchor would print ok while
+    that context never arrives and the PR sits pending forever.
 
     Read from the checked-out branch, so a rename is seen in the PR that makes
     it rather than after merge. An unreadable or absent workflow directory
@@ -312,22 +316,35 @@ def _workflow_job_names(root: Path | None = None) -> set[str]:
         except OSError:
             continue
         in_jobs = False
+        pending_id: str | None = None
         for line in text.splitlines():
             if JOBS_KEY_RE.match(line):
                 in_jobs = True
+                pending_id = None
                 continue
             # A new top-level key ends the jobs block; comments and blank lines
-            # inside it do not.
+            # inside it do not. The job open at that point had no ``name:``, so
+            # its id is the check-run name.
             if in_jobs and TOP_LEVEL_KEY_RE.match(line):
                 in_jobs = False
-            match = JOB_NAME_RE.match(line)
-            if match:
-                names.add(match.group(1).strip().strip("\"'"))
+                if pending_id is not None:
+                    names.add(pending_id)
+                    pending_id = None
+            if not in_jobs:
                 continue
-            if in_jobs:
-                job_id = JOB_ID_RE.match(line)
-                if job_id:
-                    names.add(job_id.group(1))
+            match = JOB_NAME_RE.match(line)
+            if match and pending_id is not None:
+                # The job is named: GitHub uses this literal, never the id.
+                names.add(match.group(1).strip().strip("\"'"))
+                pending_id = None
+                continue
+            job_id = JOB_ID_RE.match(line)
+            if job_id:
+                if pending_id is not None:
+                    names.add(pending_id)  # the previous job carried no name:
+                pending_id = job_id.group(1)
+        if pending_id is not None:  # last job in the file, unnamed
+            names.add(pending_id)
     return names
 
 
