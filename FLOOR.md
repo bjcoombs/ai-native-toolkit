@@ -32,10 +32,12 @@ door and no free skip door.
 <!-- floor-clause:iii -->
 **iii. Changes to the floor require the maintainer's out-of-band sign-off.** The
 retro, and any other automated learning step, may propose changes to this floor
-but may never self-apply them. A change to `FLOOR.md`, the floor markers, the
-gate invocations, `.github/workflows/floor.yml`, `scripts/contract/`,
-`scripts/canaries/`, or `tests/canaries/` takes effect only with the
-maintainer's explicit, out-of-band approval.
+but may never self-apply them. A change to this file, to the floor tokens it
+declares, to `scripts/floor_check.py`, `scripts/floor_anchor.py`,
+`.github/workflows/floor.yml`, `scripts/contract/`, `scripts/canaries/`, or
+`tests/canaries/` takes effect only with the maintainer's explicit,
+out-of-band approval, recorded as the maintainer's deployment review of the
+`floor-signoff` environment.
 
 <!-- floor-clause:iv -->
 **iv. Immutability covers clauses iii and iv.** The immutability rule in clause
@@ -43,16 +45,40 @@ iii, and this clause that says so, are themselves part of the floor and cannot
 be weakened or removed by any automated step. The floor cannot legislate away
 its own protection.
 
+## Tokens
+
+The floor declares its tokens here, one per line. This block is the only source
+of the token set: the enforcement script holds no token list of its own, so a
+token added below is enforced from the next run onwards, and removing one is a
+floor change that goes red rather than a quiet narrowing of the check.
+
+```floor-tokens
+<!-- floor:cold-verify-completion -->
+start_gate.py
+spawn_verifier.py
+complete_gate.py
+```
+
+The first token is the marker; the rest are the gate invocations a marked file
+must keep naming.
+
 ## Markers
 
-The following literal token marks each file that carries a floor obligation:
+A file carries a floor obligation when it holds the marker on a line of its own:
 
     <!-- floor:cold-verify-completion -->
 
-It appears in `skills/marathon/SKILL.md`, `skills/pr-review-merge/SKILL.md`,
-`commands/tm.md`, and `commands/issues.md`. Alongside it, those files carry the
-literal gate invocations `start_gate.py`, `spawn_verifier.py`, and
-`complete_gate.py`. `.github/workflows/floor.yml` fails any PR that removes a
-marker or an invocation from a file that previously carried it (base-vs-head
-removal detection), so a retro that guts the instructions while leaving the
-marker comment intact still goes red.
+The marked set is not a list anyone maintains. It is discovered at a ref by
+searching the tree for that marker and keeping the files that carry it as a
+standalone line - a backtick-wrapped mention in prose is documentation, not an
+obligation, and this file is excluded because it is where the marker is
+defined. To see the set at any ref:
+
+    python3 scripts/floor_check.py markers --base <ref>
+
+Each discovered file is checked against the tokens above, and
+`.github/workflows/floor.yml` fails any pull request that removes one of them
+from a file that previously carried it (base-vs-head removal detection). So a
+retro that guts the instructions while leaving the marker comment intact still
+goes red, and a marked file that moves is followed to its new path rather than
+read as a deletion.
