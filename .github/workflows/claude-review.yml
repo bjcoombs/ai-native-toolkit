@@ -90,7 +90,8 @@ jobs:
             REASON="step outcome=${{ steps.claude-review.outcome }}, action conclusion=${CONCLUSION:-unset}"
           elif [ -z "$EXEC_FILE" ] || [ ! -s "$EXEC_FILE" ]; then
             REASON="no execution log was produced"
-          elif ! jq -e '[.[] | select(.type == "result")] | last | (. != null) and (.is_error == false)' "$EXEC_FILE" >/dev/null 2>&1; then
+          elif ! jq -es '[.[] | if type == "array" then .[] else . end] | map(select(.type == "result")) | last | (. != null) and (.is_error == false)' "$EXEC_FILE" >/dev/null 2>&1; then
+            # -s slurps every top-level value, so the check accepts the execution log as a JSON array or as JSON lines.
             REASON="final result entry missing or is_error:true"
           fi
           if [ -n "$REASON" ]; then
