@@ -37,7 +37,8 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
     is *discovered* at the base ref (``_discover_marked_files``): every tracked
     file carrying a standalone anchor line, ``FLOOR.md`` excluded because it is
     the file that defines the marker. The token set is read from the
-    ``floor-tokens`` fenced block of ``git show <base>:FLOOR.md``. Both are data
+    ``floor-tokens`` fenced block of ``git show <base>:FLOOR.md``, falling back
+    to the working tree only while the base predates that block. Both are data
     the floor declares, so a file that moves, a file that arrives, and a token
     that is added are all enforced with no edit to this script.
 
@@ -266,13 +267,36 @@ def _discover_marked_files(
 
 # ── Subcommands ──────────────────────────────────────────────────────────────
 
+def _tokens_for_run(base: str) -> tuple[list[str], str | None]:
+    """The token set this run enforces, plus a note when it was not read at
+    ``base``.
+
+    The enforced set is the base ref's declaration: a token added on the head
+    side is not yet enforced by that run, so a PR that widens the floor never
+    fails on its own widening. The one fallback is bootstrap - a base that
+    predates the token block, which is every base until the block lands - where
+    the working-tree declaration is used instead. Raises ``FloorTokenError``
+    when neither side declares a usable block.
+    """
+    try:
+        return _parse_token_block(_git_show(base, FLOOR_FILE)), None
+    except FloorTokenError as at_base:
+        tokens = _parse_token_block(_read_head(FLOOR_FILE))
+        return tokens, str(at_base)
+
+
 def cmd_markers(args: argparse.Namespace) -> int:
     base = args.base
     try:
-        tokens = _parse_token_block(_git_show(base, FLOOR_FILE))
+        tokens, bootstrap = _tokens_for_run(base)
     except FloorTokenError as exc:
-        print(f"FAIL {FLOOR_FILE} at {base}: {exc}")
+        print(f"FAIL {FLOOR_FILE}: {exc}")
         return 1
+    if bootstrap:
+        print(
+            f"note {FLOOR_FILE} at {base}: {bootstrap}; enforcing the "
+            f"working-tree declaration instead (bootstrap)."
+        )
     files = list(args.files) if args.files else _discover_marked_files(base, MARKER)
     if not files:
         print(f"ok   no marked files at {base}: no floor obligation is armed yet.")

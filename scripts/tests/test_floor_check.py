@@ -427,3 +427,38 @@ def test_token_added_only_in_the_working_tree_is_not_enforced(
     rc = main(["markers", "--base", "HEAD"])
     assert rc == 0
     assert "zeta_gate.py" not in capsys.readouterr().out
+
+
+def test_markers_falls_back_to_the_working_tree_when_the_base_predates_the_block(
+    tmp_path, monkeypatch, capsys
+):
+    # Bootstrap: the base ref has no token block at all (every base before the
+    # block landed). The run enforces the working-tree declaration and says so.
+    _init_repo(tmp_path)
+    (tmp_path / FLOOR_FILE).write_text(_intact_floor(), encoding="utf-8")
+    marked = tmp_path / "marked.md"
+    marked.write_text(f"intro\n{MARKER}\nrun start_gate.py\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base with no token block")
+    monkeypatch.chdir(tmp_path)
+    _write_floor(tmp_path)  # the block arrives on the head side
+    marked.write_text("intro\nrun something\n", encoding="utf-8")
+    rc = main(["markers", "--base", "HEAD"])
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "bootstrap" in out
+    assert MARKER in out and "start_gate.py" in out
+
+
+def test_markers_fails_when_neither_side_declares_a_token_block(
+    tmp_path, monkeypatch, capsys
+):
+    _init_repo(tmp_path)
+    (tmp_path / FLOOR_FILE).write_text(_intact_floor(), encoding="utf-8")
+    (tmp_path / "marked.md").write_text(f"{MARKER}\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "no token block anywhere")
+    monkeypatch.chdir(tmp_path)
+    rc = main(["markers", "--base", "HEAD"])
+    assert rc == 1
+    assert TOKEN_BLOCK_FENCE in capsys.readouterr().out
