@@ -48,13 +48,20 @@ ANCHOR_CONTEXT = os.environ.get("ANCHOR_CONTEXT", "floor self-anchor")
 FLOOR_PATH = ".github/workflows/floor.yml"
 
 # Where the workflow definitions live, relative to the repository root, and the
-# line shape a job ``name:`` takes in them. Jobs sit at two levels of two-space
-# indentation under ``jobs:``; steps sit deeper and behind a ``- ``, so a
-# four-space ``name:`` is unambiguously a job name. This is a regex over lines
-# rather than a YAML parse on purpose: the self-anchor job runs bare ``python``
-# with no dependency install, so PyYAML is not available to it.
+# line shapes a job identity takes in them. Jobs sit at two-space indentation
+# under ``jobs:``; their ``name:`` sits one level deeper, while steps sit
+# deeper still and behind a ``- ``, so a four-space ``name:`` is unambiguously a
+# job name. A job with no ``name:`` is still a real check context -- GitHub
+# falls back to the job *id* -- so the two-space id key is collected too. This
+# is a regex over lines rather than a YAML parse on purpose: the self-anchor job
+# runs bare ``python`` with no dependency install, so PyYAML is not available to
+# it.
 WORKFLOW_DIR = ".github/workflows"
+WORKFLOW_GLOBS = ("*.yml", "*.yaml")
 JOB_NAME_RE = re.compile(r"^\s{4}name: (.+)$")
+JOB_ID_RE = re.compile(r"^ {2}([A-Za-z0-9_-]+):\s*$")
+JOBS_KEY_RE = re.compile(r"^jobs:\s*$")
+TOP_LEVEL_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+:")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # --- E2 DESCOPE: floor.yml path lock (maintainer decision, 2026-07-10) --------
@@ -267,8 +274,31 @@ def _ruleset_required_contexts(repo: str, token: str) -> set[str]:
     return contexts
 
 
+def _workflow_files(base: Path) -> list[Path]:
+    """Every workflow definition under ``base``, both ``.yml`` and ``.yaml``.
+
+    GitHub reads either extension, so globbing only one leaves whole workflows
+    -- and every context they produce -- invisible to the subset check below.
+    """
+    directory = base / WORKFLOW_DIR
+    found: set[Path] = set()
+    for pattern in WORKFLOW_GLOBS:
+        found.update(directory.glob(pattern))
+    return sorted(found)
+
+
 def _workflow_job_names(root: Path | None = None) -> set[str]:
-    """Every job ``name:`` literal declared by ``.github/workflows/*.yml``.
+    """Every check-run name a job in ``.github/workflows`` can produce.
+
+    That is both the job ``name:`` literals and the job *ids*: GitHub names a
+    check run after the job's ``name:`` when it has one and after the job id
+    when it does not, so a collector that reads only ``name:`` lines misses
+    every unnamed job (this repo has two) and would fail the caller closed on a
+    context that is in fact produced fine.
+
+    Collecting ids as well is strictly more permissive and cannot mask a
+    rename: every required context on this repo contains a space and no YAML
+    job id can, so an id never stands in for a renamed ``name:`` literal.
 
     Read from the checked-out branch, so a rename is seen in the PR that makes
     it rather than after merge. An unreadable or absent workflow directory
@@ -276,15 +306,28 @@ def _workflow_job_names(root: Path | None = None) -> set[str]:
     """
     base = REPO_ROOT if root is None else Path(root)
     names: set[str] = set()
-    for workflow in sorted((base / WORKFLOW_DIR).glob("*.yml")):
+    for workflow in _workflow_files(base):
         try:
             text = workflow.read_text(encoding="utf-8")
         except OSError:
             continue
+        in_jobs = False
         for line in text.splitlines():
+            if JOBS_KEY_RE.match(line):
+                in_jobs = True
+                continue
+            # A new top-level key ends the jobs block; comments and blank lines
+            # inside it do not.
+            if in_jobs and TOP_LEVEL_KEY_RE.match(line):
+                in_jobs = False
             match = JOB_NAME_RE.match(line)
             if match:
                 names.add(match.group(1).strip().strip("\"'"))
+                continue
+            if in_jobs:
+                job_id = JOB_ID_RE.match(line)
+                if job_id:
+                    names.add(job_id.group(1))
     return names
 
 
@@ -296,8 +339,9 @@ def check_contexts_have_workflows(contexts: set[str], root: Path | None = None) 
     job rename orphans the context and the merge blocks on a check that can
     never turn green, or (where the context is dropped instead) a floor layer
     disarms with nothing red. Comparing the required set against the job
-    ``name:`` literals on the checked-out branch moves that discovery into the
-    PR that renames the job.
+    identities on the checked-out branch -- ``name:`` literals plus the job ids
+    GitHub falls back to for unnamed jobs -- moves that discovery into the PR
+    that renames the job.
     """
     job_names = _workflow_job_names(root)
     orphaned = sorted(ctx for ctx in contexts if ctx not in job_names)
@@ -305,14 +349,15 @@ def check_contexts_have_workflows(contexts: set[str], root: Path | None = None) 
         named = ", ".join(repr(ctx) for ctx in orphaned)
         raise AnchorError(
             f"required status check context(s) {named} are produced by no job "
-            f"name: in {WORKFLOW_DIR}/*.yml on this branch. A required context "
-            "no job emits never arrives, so the check it gates can never turn "
-            f"green. Job names seen: {sorted(job_names) or 'none'}. Rename the "
-            "job back, or update branch protection in the same change."
+            f"name: or job id in {WORKFLOW_DIR}/{{{','.join(WORKFLOW_GLOBS)}}} on "
+            "this branch. A required context no job emits never arrives, so the "
+            "check it gates can never turn green. Job names seen: "
+            f"{sorted(job_names) or 'none'}. Rename the job back, or update "
+            "branch protection in the same change."
         )
     print(
         f"ok   all {len(contexts)} required context(s) are produced by a job "
-        f"name: in {WORKFLOW_DIR}/*.yml."
+        f"name: or job id in {WORKFLOW_DIR}/{{{','.join(WORKFLOW_GLOBS)}}}."
     )
 
 

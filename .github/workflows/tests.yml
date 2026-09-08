@@ -29,8 +29,12 @@ jobs:
       - name: Install ripgrep
         run: sudo apt-get update -q && sudo apt-get install -y -q ripgrep
 
+      # --with pyyaml: eight structural guards in tests/test_action_contract.py
+      # parse action.yml / assess-gate.yml and pytest.skip without PyYAML - a
+      # skipped guard is a decorative guard. skills/assess/pyproject.toml does
+      # not declare it, so the CI invocation supplies it.
       - name: Run pytest
-        run: uv run --with pytest pytest -v
+        run: uv run --with pytest --with pyyaml pytest -v
         working-directory: skills/assess
 
   pipeline-tests:
@@ -60,9 +64,13 @@ jobs:
 
       # fetch-depth: 0 deepens the merge ref, it does not create the base
       # branch ref locally. Fetch it explicitly so `origin/<base>` resolves.
+      # No --depth: a depth-limited fetch into a complete clone writes a
+      # .git/shallow graft at the fetched tip, cutting the base's ancestry so
+      # `git merge-base` cannot resolve past it. fetch-depth: 0 already paid
+      # for the full history.
       - name: Fetch the PR base ref
         if: github.event_name == 'pull_request'
-        run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+        run: git fetch --no-tags origin "${{ github.base_ref }}"
 
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
