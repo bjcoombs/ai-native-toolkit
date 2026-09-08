@@ -13,12 +13,23 @@ from pathlib import Path
 
 import pytest
 
-yaml = pytest.importorskip("yaml")
+try:  # PyYAML is not a declared dependency of this suite.
+    import yaml
+except ImportError:  # pragma: no cover - environment-dependent
+    yaml = None
 
 _ACTION_PATH = Path(__file__).resolve().parents[3] / "action.yml"
 
+# `working-directory: <value>` as a plain scalar, read from the text rather than
+# the parse tree so the guard below still runs where PyYAML is absent - which is
+# every CI run of this suite today, and the reason a module-level importorskip
+# would make that guard decorative.
+_WORKING_DIR_RE = re.compile(r"^\s*working-directory:[ \t]*(\S.*?)\s*$", re.MULTILINE)
+
 
 def _action() -> dict:
+    if yaml is None:
+        pytest.skip("PyYAML is not installed; the structural assertions need a parse tree")
     return yaml.safe_load(_ACTION_PATH.read_text(encoding="utf-8"))
 
 
@@ -151,3 +162,19 @@ def test_action_description_fits_marketplace_limit():
     discovered live on the v1.42.0 release page. Pin publishability."""
     desc = _action()["description"]
     assert len(desc) < 125, f"{len(desc)} chars: {desc}"
+
+
+def test_working_directories_exist():
+    """Every `working-directory` in action.yml must resolve on disk.
+
+    A composite step's `working-directory` is only checked at run time, and a
+    miss there surfaces as a render failure the warn-only contract swallows as
+    a notice. Resolving `${{ github.action_path }}` to the checkout root here
+    turns a moved directory into a red test in the PR that moves it.
+    """
+    action_root = _ACTION_PATH.parent
+    values = _WORKING_DIR_RE.findall(_ACTION_PATH.read_text(encoding="utf-8"))
+    assert values, "expected at least one working-directory in action.yml"
+    for wd in values:
+        resolved = Path(wd.replace("${{ github.action_path }}", str(action_root)))
+        assert resolved.is_dir(), f"working-directory does not exist: {wd}"

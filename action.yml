@@ -40,6 +40,17 @@ inputs:
     required: false
     default: '.assess/config.toml'
 
+outputs:
+  rendered:
+    description: >-
+      Outcome of the composite's snapshot render step: success, failure, or
+      skipped. A caller cannot address a step inside the composite, and this
+      action's own step outcome reports the gate verdict rather than whether
+      the snapshot rendered - so the render result has to be published to be
+      assertable. This repo's self-test asserts on it; consumers stay warn-only
+      because the assertion lives in the workflow, not here.
+    value: ${{ steps.render.outcome }}
+
 runs:
   using: 'composite'
   steps:

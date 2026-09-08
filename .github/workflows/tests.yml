@@ -50,7 +50,19 @@ jobs:
     name: plugin contract pytest
     runs-on: ubuntu-latest
     steps:
+      # Full history: the contract tests reason about the diff against the PR
+      # base (a same-PR version bump, a changelog entry), which a shallow
+      # checkout cannot see. Read-only job, so the token is not persisted.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # fetch-depth: 0 deepens the merge ref, it does not create the base
+      # branch ref locally. Fetch it explicitly so `origin/<base>` resolves.
+      - name: Fetch the PR base ref
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
 
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2

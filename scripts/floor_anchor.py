@@ -30,9 +30,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 API = "https://api.github.com"
 
@@ -44,6 +46,16 @@ FLOOR_CONTEXT = os.environ.get("FLOOR_CONTEXT", "floor enforcement")
 # anchor would go red without gating, and the floor would silently disarm (E2).
 ANCHOR_CONTEXT = os.environ.get("ANCHOR_CONTEXT", "floor self-anchor")
 FLOOR_PATH = ".github/workflows/floor.yml"
+
+# Where the workflow definitions live, relative to the repository root, and the
+# line shape a job ``name:`` takes in them. Jobs sit at two levels of two-space
+# indentation under ``jobs:``; steps sit deeper and behind a ``- ``, so a
+# four-space ``name:`` is unambiguously a job name. This is a regex over lines
+# rather than a YAML parse on purpose: the self-anchor job runs bare ``python``
+# with no dependency install, so PyYAML is not available to it.
+WORKFLOW_DIR = ".github/workflows"
+JOB_NAME_RE = re.compile(r"^\s{4}name: (.+)$")
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # --- E2 DESCOPE: floor.yml path lock (maintainer decision, 2026-07-10) --------
 # The path lock was a third hard requirement: an active push ruleset with a
@@ -104,6 +116,11 @@ Missing configuration (maintainer-only, run out-of-band -- see docs/floor-anchor
   2. Create the anchor read token so this check can query the settings above:
 
      gh secret set FLOOR_ANCHOR_TOKEN --repo "{repo}"   # paste a PAT: Administration: read
+     gh secret set FLOOR_ANCHOR_TOKEN --repo "{repo}" --app dependabot   # the same PAT again: Dependabot runs read a separate secret store
+
+     Both are needed. Actions secrets and Dependabot secrets are separate
+     stores, so a rotation that sets only the first leaves every
+     Dependabot-triggered run without a token and red on this check.
 
 Note: the floor.yml path lock (a push ruleset with file_path_restriction over
 {FLOOR_PATH}) is DESCOPED per the maintainer's PRD-E2 decision \
@@ -165,7 +182,7 @@ def _default_branch(repo: str, token: str) -> str:
     return data.get("default_branch", "main")
 
 
-def check_required_check(repo: str, branch: str, token: str) -> None:
+def check_required_check(repo: str, branch: str, token: str) -> set[str]:
     """Fail unless BOTH floor contexts are required status checks on ``branch``.
 
     The deterministic ``FLOOR_CONTEXT`` job *and* the ``ANCHOR_CONTEXT`` job (this
@@ -177,6 +194,8 @@ def check_required_check(repo: str, branch: str, token: str) -> None:
 
     Checks both classic branch protection and repo rulesets, since either can
     supply a required check. A permission error (admin:read missing) fails closed.
+    Returns every required context it saw, so the caller can check them against
+    the workflows on this branch.
     """
     contexts: set[str] = set()
 
@@ -217,6 +236,7 @@ def check_required_check(repo: str, branch: str, token: str) -> None:
         f"ok   both floor status checks ({FLOOR_CONTEXT!r}, {ANCHOR_CONTEXT!r}) "
         f"are required on {branch!r}."
     )
+    return contexts
 
 
 def _ruleset_required_contexts(repo: str, token: str) -> set[str]:
@@ -245,6 +265,55 @@ def _ruleset_required_contexts(repo: str, token: str) -> set[str]:
                     if chk.get("context"):
                         contexts.add(chk["context"])
     return contexts
+
+
+def _workflow_job_names(root: Path | None = None) -> set[str]:
+    """Every job ``name:`` literal declared by ``.github/workflows/*.yml``.
+
+    Read from the checked-out branch, so a rename is seen in the PR that makes
+    it rather than after merge. An unreadable or absent workflow directory
+    yields an empty set, which the caller turns into a fail-closed error.
+    """
+    base = REPO_ROOT if root is None else Path(root)
+    names: set[str] = set()
+    for workflow in sorted((base / WORKFLOW_DIR).glob("*.yml")):
+        try:
+            text = workflow.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            match = JOB_NAME_RE.match(line)
+            if match:
+                names.add(match.group(1).strip().strip("\"'"))
+    return names
+
+
+def check_contexts_have_workflows(contexts: set[str], root: Path | None = None) -> None:
+    """Fail unless every required context is produced by a job on this branch.
+
+    A required status check that no job emits is never reported, and GitHub
+    treats a context that never arrives as pending rather than failing -- so a
+    job rename orphans the context and the merge blocks on a check that can
+    never turn green, or (where the context is dropped instead) a floor layer
+    disarms with nothing red. Comparing the required set against the job
+    ``name:`` literals on the checked-out branch moves that discovery into the
+    PR that renames the job.
+    """
+    job_names = _workflow_job_names(root)
+    orphaned = sorted(ctx for ctx in contexts if ctx not in job_names)
+    if orphaned:
+        named = ", ".join(repr(ctx) for ctx in orphaned)
+        raise AnchorError(
+            f"required status check context(s) {named} are produced by no job "
+            f"name: in {WORKFLOW_DIR}/*.yml on this branch. A required context "
+            "no job emits never arrives, so the check it gates can never turn "
+            f"green. Job names seen: {sorted(job_names) or 'none'}. Rename the "
+            "job back, or update branch protection in the same change."
+        )
+    print(
+        f"ok   all {len(contexts)} required context(s) are produced by a job "
+        f"name: in {WORKFLOW_DIR}/*.yml."
+    )
 
 
 def _descope_warning() -> str:
@@ -327,7 +396,8 @@ def main() -> int:
         )
     try:
         branch = _default_branch(repo, token)
-        check_required_check(repo, branch, token)
+        contexts = check_required_check(repo, branch, token)
+        check_contexts_have_workflows(contexts)
     except AnchorError as exc:
         return _fail(str(exc), repo)
     # E2 descope: the floor.yml path lock is a documented capability gap on this
