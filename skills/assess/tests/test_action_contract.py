@@ -13,12 +13,23 @@ from pathlib import Path
 
 import pytest
 
-yaml = pytest.importorskip("yaml")
+try:  # PyYAML is not a declared dependency of this suite.
+    import yaml
+except ImportError:  # pragma: no cover - environment-dependent
+    yaml = None
 
 _ACTION_PATH = Path(__file__).resolve().parents[3] / "action.yml"
 
+# `working-directory: <value>` as a plain scalar, read from the text rather than
+# the parse tree so the guard below still runs where PyYAML is absent - which is
+# every CI run of this suite today, and the reason a module-level importorskip
+# would make that guard decorative.
+_WORKING_DIR_RE = re.compile(r"^\s*working-directory:[ \t]*(\S.*?)\s*$", re.MULTILINE)
+
 
 def _action() -> dict:
+    if yaml is None:
+        pytest.skip("PyYAML is not installed; the structural assertions need a parse tree")
     return yaml.safe_load(_ACTION_PATH.read_text(encoding="utf-8"))
 
 
@@ -162,9 +173,7 @@ def test_working_directories_exist():
     turns a moved directory into a red test in the PR that moves it.
     """
     action_root = _ACTION_PATH.parent
-    values = [
-        s["working-directory"] for s in _steps() if s.get("working-directory")
-    ]
+    values = _WORKING_DIR_RE.findall(_ACTION_PATH.read_text(encoding="utf-8"))
     assert values, "expected at least one working-directory in action.yml"
     for wd in values:
         resolved = Path(wd.replace("${{ github.action_path }}", str(action_root)))
