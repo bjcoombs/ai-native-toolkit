@@ -78,8 +78,23 @@ jobs:
             echo "- **PR:** #${{ github.event.pull_request.number }}"
             echo "- **Result:** ${{ steps.claude-review.outcome }}"
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ steps.claude-review.outcome }}" = "failure" ]; then
-            echo "::warning::Claude Code review did not complete for PR #${{ github.event.pull_request.number }} (result is_error, missing CLAUDE_CODE_OAUTH_TOKEN, or an API refusal). Non-blocking: this check is not a required context. It reports red so a green check always means the head was actually reviewed."
+          # The step outcome is not a completion signal: with continue-on-error the
+          # action can exit 0 while its final result carries is_error:true (seen on
+          # four PRs in the 2026-09-04 modernization-spec run). Require all three:
+          # the action's own conclusion, an execution log, and a final result entry
+          # whose is_error is false. Anything else turns this non-required check red.
+          CONCLUSION="${{ steps.claude-review.outputs.conclusion }}"
+          EXEC_FILE="${{ steps.claude-review.outputs.execution_file }}"
+          REASON=""
+          if [ "${{ steps.claude-review.outcome }}" = "failure" ] || [ "$CONCLUSION" != "success" ]; then
+            REASON="step outcome=${{ steps.claude-review.outcome }}, action conclusion=${CONCLUSION:-unset}"
+          elif [ -z "$EXEC_FILE" ] || [ ! -s "$EXEC_FILE" ]; then
+            REASON="no execution log was produced"
+          elif ! jq -e '[.[] | select(.type == "result")] | last | (. != null) and (.is_error == false)' "$EXEC_FILE" >/dev/null 2>&1; then
+            REASON="final result entry missing or is_error:true"
+          fi
+          if [ -n "$REASON" ]; then
+            echo "::warning::Claude Code review did not complete for PR #${{ github.event.pull_request.number }}: ${REASON} (missing CLAUDE_CODE_OAUTH_TOKEN or an API refusal). Non-blocking: this check is not a required context. It reports red so a green check always means the head was actually reviewed."
             exit 1
           fi
           exit 0
