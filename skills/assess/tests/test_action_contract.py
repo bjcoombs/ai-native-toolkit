@@ -151,3 +151,21 @@ def test_action_description_fits_marketplace_limit():
     discovered live on the v1.42.0 release page. Pin publishability."""
     desc = _action()["description"]
     assert len(desc) < 125, f"{len(desc)} chars: {desc}"
+
+
+def test_working_directories_exist():
+    """Every `working-directory` in action.yml must resolve on disk.
+
+    A composite step's `working-directory` is only checked at run time, and a
+    miss there surfaces as a render failure the warn-only contract swallows as
+    a notice. Resolving `${{ github.action_path }}` to the checkout root here
+    turns a moved directory into a red test in the PR that moves it.
+    """
+    action_root = _ACTION_PATH.parent
+    values = [
+        s["working-directory"] for s in _steps() if s.get("working-directory")
+    ]
+    assert values, "expected at least one working-directory in action.yml"
+    for wd in values:
+        resolved = Path(wd.replace("${{ github.action_path }}", str(action_root)))
+        assert resolved.is_dir(), f"working-directory does not exist: {wd}"

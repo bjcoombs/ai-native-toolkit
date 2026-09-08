@@ -66,10 +66,31 @@ def _fm_scalar(fm: str, key: str):
     return m.group(1).strip() if m else None
 
 
+def _ships(path: Path) -> bool:
+    """Is this an authored file that ships, rather than build output or an input?
+
+    Test fixtures are inputs to a test, not components: a deliberately flawed
+    sample skill must not be held to the contract the real skills are held to.
+    """
+    parts = path.relative_to(REPO).parts
+    if {".git", "dist", "node_modules"} & set(parts):
+        return False
+    return "fixtures" not in parts
+
+
+def skill_md_files():
+    """Every shipped SKILL.md, found by walking the repo rather than one level.
+
+    Discovery is by file, not by directory position, so a skill keeps its
+    coverage wherever it lives - ``skills/<x>/`` today, a nested plugin layout
+    tomorrow - and a component that moves out of the one directory this used to
+    read cannot silently drop out of the suite.
+    """
+    return sorted(p for p in REPO.rglob("SKILL.md") if _ships(p))
+
+
 def skill_dirs():
-    if not SKILLS.is_dir():
-        return []
-    return sorted(d for d in SKILLS.iterdir() if (d / "SKILL.md").is_file())
+    return [p.parent for p in skill_md_files()]
 
 
 def command_files():
@@ -77,7 +98,7 @@ def command_files():
 
 
 def shipped_md():
-    return [d / "SKILL.md" for d in skill_dirs()] + command_files()
+    return skill_md_files() + command_files()
 
 
 def all_authored_markdown():
@@ -90,15 +111,7 @@ def all_authored_markdown():
     """
     if not REPO.is_dir():
         return []
-    out = []
-    for p in sorted(REPO.rglob("*.md")):
-        parts = p.relative_to(REPO).parts
-        if {".git", "dist", "node_modules"} & set(parts):
-            continue
-        if "fixtures" in parts:
-            continue
-        out.append(p)
-    return out
+    return [p for p in sorted(REPO.rglob("*.md")) if _ships(p)]
 
 
 def known_skill_names():
@@ -152,13 +165,26 @@ def test_use_the_skill_references_resolve(p):
         assert name in known, f"{p.relative_to(REPO)}: 'Use the {name} skill' references unknown skill"
 
 
-@pytest.mark.parametrize("p", command_files(), ids=lambda p: p.name)
+@pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
 def test_subagent_types_resolve(p):
     known = known_agent_names()
     for name in SUBAGENT_RE.findall(p.read_text(encoding="utf-8")):
         if "<" in name:  # template placeholder like task-<task-id>
             continue
-        assert name in known, f"{p.name}: subagent_type \"{name}\" has no agents/{name}.md"
+        assert name in known, (
+            f"{p.relative_to(REPO)}: subagent_type \"{name}\" has no agents/{name}.md"
+        )
+
+
+def test_subagent_types_has_cases():
+    """Parametrizing over an empty list is a silently green test.
+
+    The subagent check ran over ``commands/*.md`` alone before; a discovery
+    change that returns nothing would make it pass by collecting no cases at
+    all. Pin the floor so the regression is red instead of invisible.
+    """
+    found = shipped_md()
+    assert len(found) >= 20, f"expected >= 20 shipped markdown components, found {len(found)}"
 
 
 @pytest.mark.parametrize("p", all_authored_markdown(), ids=lambda p: str(p.relative_to(REPO)))

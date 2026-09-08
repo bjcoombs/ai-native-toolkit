@@ -251,3 +251,123 @@ def test_main_passes_and_warns_when_both_contexts_present(monkeypatch, capsys):
     assert "::warning::" in captured.err
     assert "DESCOPED" in captured.err
     assert "path lock is descoped" in captured.out
+
+
+# ── check_contexts_have_workflows: a required context no job emits (R19 g3) ───
+
+WORKFLOW_WITH_TWO_JOBS = """\
+name: Tests
+
+on:
+  pull_request:
+
+jobs:
+  pytest:
+    name: scripts/ pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run pytest
+        run: pytest
+
+  lint:
+    name: 'ruff + mypy gates'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ruff
+        run: ruff check .
+"""
+
+
+def _workflows(tmp_path, body=WORKFLOW_WITH_TWO_JOBS, filename="tests.yml"):
+    """Materialize a repo root whose .github/workflows holds one workflow."""
+    wf_dir = tmp_path / ".github" / "workflows"
+    wf_dir.mkdir(parents=True, exist_ok=True)
+    (wf_dir / filename).write_text(body, encoding="utf-8")
+    return tmp_path
+
+
+def test_workflow_job_names_reads_job_names_not_step_names(tmp_path):
+    names = floor_anchor._workflow_job_names(_workflows(tmp_path))
+    # Job names come from the four-space `name:` lines; step names sit deeper
+    # behind a `- `, and the workflow's own top-level name is at column zero.
+    assert names == {"scripts/ pytest", "ruff + mypy gates"}
+
+
+def test_workflow_job_names_reads_every_workflow_file(tmp_path):
+    root = _workflows(tmp_path)
+    _workflows(
+        root,
+        body="jobs:\n  floor:\n    name: floor enforcement\n    runs-on: ubuntu-latest\n",
+        filename="floor.yml",
+    )
+    assert "floor enforcement" in floor_anchor._workflow_job_names(root)
+
+
+def test_contexts_have_workflows_passes_when_every_context_is_a_job(tmp_path, capsys):
+    floor_anchor.check_contexts_have_workflows({"scripts/ pytest"}, _workflows(tmp_path))
+    assert "ok   " in capsys.readouterr().out
+
+
+def test_contexts_have_workflows_fails_closed_on_an_orphaned_context(tmp_path):
+    # A job rename orphans the context branch protection still requires: the
+    # check never arrives, so the PR blocks on a check that cannot go green.
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_contexts_have_workflows(
+            {"scripts/ pytest", "plugin contract pytest"}, _workflows(tmp_path)
+        )
+    msg = str(exc.value)
+    assert "plugin contract pytest" in msg
+    assert "scripts/ pytest" in msg  # named among the job names it did see
+
+
+def test_contexts_have_workflows_fails_closed_without_a_workflow_dir(tmp_path):
+    with pytest.raises(floor_anchor.AnchorError):
+        floor_anchor.check_contexts_have_workflows({"floor enforcement"}, tmp_path)
+
+
+def test_contexts_have_workflows_holds_against_this_repo(capsys):
+    # The live subset check, run against the checked-out workflows: every
+    # context this repo requires today is produced by a job name literal.
+    floor_anchor.check_contexts_have_workflows({
+        "skills/assess pytest",
+        "scripts/ pytest",
+        "plugin contract pytest",
+        "Validate PR title",
+        floor_anchor.FLOOR_CONTEXT,
+        floor_anchor.ANCHOR_CONTEXT,
+    })
+    assert "ok   " in capsys.readouterr().out
+
+
+def test_required_check_returns_the_contexts_it_saw(monkeypatch):
+    # main() feeds this set to the workflow check, so it has to carry every
+    # required context, not just the two floor ones.
+    monkeypatch.setattr(
+        floor_anchor,
+        "_get",
+        _stub_get(
+            {floor_anchor.FLOOR_CONTEXT, floor_anchor.ANCHOR_CONTEXT, "Validate PR title"}
+        ),
+    )
+    contexts = check_required_check(REPO, "main", "tok")
+    assert contexts == {
+        floor_anchor.FLOOR_CONTEXT,
+        floor_anchor.ANCHOR_CONTEXT,
+        "Validate PR title",
+    }
+
+
+def test_main_fails_closed_when_a_required_context_has_no_job(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
+    monkeypatch.setenv("FLOOR_ANCHOR_TOKEN", "tok")
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    monkeypatch.setattr(
+        floor_anchor,
+        "_get",
+        _stub_get_full(
+            {floor_anchor.FLOOR_CONTEXT, floor_anchor.ANCHOR_CONTEXT, "no such job xyz"}
+        ),
+    )
+    rc = main()
+    assert rc == 1
+    assert "no such job xyz" in capsys.readouterr().err

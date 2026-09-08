@@ -175,7 +175,10 @@ gh api "repos/$REPO/rulesets" --method POST --input - <<'JSON'
 JSON
 
 # 3. Create the anchor read token secret (fine-grained PAT, Administration: read).
+#    Actions and Dependabot read separate secret stores, so the same PAT is set
+#    twice; setting only the first leaves every Dependabot PR red on the anchor.
 gh secret set FLOOR_ANCHOR_TOKEN --repo "$REPO"   # paste the PAT when prompted
+gh secret set FLOOR_ANCHOR_TOKEN --repo "$REPO" --app dependabot   # paste the same PAT again
 ```
 
 ## Honest-degrade note (E2)
