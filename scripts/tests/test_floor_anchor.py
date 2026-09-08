@@ -35,13 +35,38 @@ def _stub_get(required_contexts):
     return _get
 
 
-def _stub_get_full(required_contexts, default_branch="main"):
-    """Like ``_stub_get`` but also answers the repo-metadata call so ``main`` can
-    resolve the default branch and run end-to-end offline."""
+OWNER = "bjcoombs"
+
+
+def _environment_payload(reviewers=(OWNER,)):
+    """A GitHub environment body whose required reviewers are ``reviewers``."""
+    return {
+        "name": floor_anchor.SIGNOFF_ENVIRONMENT,
+        "protection_rules": [
+            {
+                "type": "required_reviewers",
+                "reviewers": [
+                    {"type": "User", "reviewer": {"login": login}}
+                    for login in reviewers
+                ],
+            }
+        ],
+    }
+
+
+def _stub_get_full(
+    required_contexts, default_branch="main", environment=None, env_status=200
+):
+    """Like ``_stub_get`` but also answers the repo-metadata and environment
+    calls, so ``main`` can resolve the default branch, the owner and clause
+    iii's sign-off environment and run end-to-end offline."""
+    env_body = _environment_payload() if environment is None else environment
 
     def _get(path, token):
         if path == f"/repos/{REPO}":
-            return 200, {"default_branch": default_branch}
+            return 200, {"default_branch": default_branch, "owner": {"login": OWNER}}
+        if "/environments/" in path:
+            return env_status, env_body
         if "required_status_checks" in path:
             return 200, {"contexts": sorted(required_contexts)}
         if path.endswith("/rulesets"):
@@ -518,3 +543,177 @@ def test_main_fails_closed_when_a_required_context_has_no_job(monkeypatch, capsy
     rc = main()
     assert rc == 1
     assert "no such job xyz" in capsys.readouterr().err
+
+
+# ── clause iii's sign-off artefact: environment + workflow wiring (fail-closed) ─
+#
+# Three disarm paths, each of which leaves the `floor sign-off` job LOOKING
+# present while approving nothing: the environment is deleted, its required
+# reviewer is dropped (an environment with none auto-approves its own
+# deployment), or floor.yml stops wiring the environment into the job the
+# required context needs. Each must fail closed rather than pass quietly.
+
+FLOOR_YML_WIRED = """\
+name: Floor
+
+on:
+  pull_request:
+
+jobs:
+  floor:
+    name: floor enforcement
+    needs: [signoff]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail on a refused sign-off
+        run: exit 1
+
+  signoff:
+    name: floor sign-off
+    needs: [canary-changes]
+    environment: floor-signoff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record the approval
+        run: echo ok
+"""
+
+
+def _floor_yml(tmp_path, body=FLOOR_YML_WIRED):
+    """Materialize a repo root whose .github/workflows holds one floor.yml."""
+    wf_dir = tmp_path / ".github" / "workflows"
+    wf_dir.mkdir(parents=True, exist_ok=True)
+    (wf_dir / "floor.yml").write_text(body, encoding="utf-8")
+    return tmp_path
+
+
+def test_signoff_environment_passes_when_the_owner_is_a_required_reviewer(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(floor_anchor, "_get", _stub_get_full(set()))
+    floor_anchor.check_signoff_environment(REPO, "tok")
+    out = capsys.readouterr().out
+    assert "ok   " in out
+    assert floor_anchor.SIGNOFF_ENVIRONMENT in out
+    assert OWNER in out
+
+
+def test_signoff_environment_fails_closed_when_the_environment_is_absent(monkeypatch):
+    # Disarm path 1: the environment is deleted in repo settings. The job still
+    # names it, GitHub requests no review, and every floor change self-approves.
+    monkeypatch.setattr(
+        floor_anchor, "_get", _stub_get_full(set(), env_status=404, environment={})
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_signoff_environment(REPO, "tok")
+    msg = str(exc.value)
+    assert floor_anchor.SIGNOFF_ENVIRONMENT in msg
+    assert "does not exist" in msg
+
+
+def test_signoff_environment_fails_closed_when_the_owner_is_not_a_reviewer(monkeypatch):
+    # Disarm path 2: the environment survives but its required-reviewer rule no
+    # longer lists the owner, so the deployment approves itself.
+    monkeypatch.setattr(
+        floor_anchor,
+        "_get",
+        _stub_get_full(set(), environment=_environment_payload(reviewers=())),
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_signoff_environment(REPO, "tok")
+    msg = str(exc.value)
+    assert OWNER in msg
+    assert floor_anchor.SIGNOFF_ENVIRONMENT in msg
+
+
+def test_signoff_environment_fails_closed_when_only_a_team_reviews(monkeypatch):
+    # A team is not the maintainer clause iii names, and membership can change
+    # without any floor edit, so a team-only rule is not the artefact.
+    team_rule = {
+        "protection_rules": [
+            {
+                "type": "required_reviewers",
+                "reviewers": [{"type": "Team", "reviewer": {"slug": "maintainers"}}],
+            }
+        ]
+    }
+    monkeypatch.setattr(
+        floor_anchor, "_get", _stub_get_full(set(), environment=team_rule)
+    )
+    with pytest.raises(floor_anchor.AnchorError):
+        floor_anchor.check_signoff_environment(REPO, "tok")
+
+
+def test_signoff_environment_fails_closed_on_an_unreadable_response(monkeypatch):
+    # A 403 (token without the scope) is an inability to confirm, never a pass.
+    monkeypatch.setattr(
+        floor_anchor,
+        "_get",
+        _stub_get_full(set(), env_status=403, environment={"message": "Forbidden"}),
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_signoff_environment(REPO, "tok")
+    assert "403" in str(exc.value)
+
+
+def test_signoff_workflow_wiring_passes_on_a_wired_floor_yml(tmp_path, capsys):
+    floor_anchor.check_workflow_wiring(_floor_yml(tmp_path))
+    out = capsys.readouterr().out
+    assert "ok   " in out
+    assert "signoff" in out
+
+
+def test_signoff_workflow_wiring_fails_closed_without_the_environment_line(tmp_path):
+    # Disarm path 3a: the environment survives in settings but no job names it,
+    # so no deployment review is ever requested.
+    body = FLOOR_YML_WIRED.replace("    environment: floor-signoff\n", "")
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert floor_anchor.SIGNOFF_ENVIRONMENT in msg
+    assert floor_anchor.FLOOR_PATH in msg
+
+
+def test_signoff_workflow_wiring_fails_closed_when_enforcement_drops_needs(tmp_path):
+    # Disarm path 3b: the job still requests the review, but the required
+    # context no longer depends on it, so a refusal cannot turn it red.
+    body = FLOOR_YML_WIRED.replace("    needs: [signoff]\n", "")
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "needs" in msg
+    assert floor_anchor.FLOOR_CONTEXT in msg
+
+
+def test_signoff_workflow_wiring_reads_a_block_list_needs(tmp_path, capsys):
+    # `needs:` takes three YAML shapes; a block list must not read as unwired.
+    body = FLOOR_YML_WIRED.replace(
+        "    needs: [signoff]\n", "    needs:\n      - signoff\n"
+    )
+    floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "ok   " in capsys.readouterr().out
+
+
+def test_signoff_workflow_wiring_fails_closed_without_a_floor_yml(tmp_path):
+    with pytest.raises(floor_anchor.AnchorError):
+        floor_anchor.check_workflow_wiring(tmp_path)
+
+
+def test_signoff_wiring_holds_against_this_repo(capsys):
+    # The live assertion, run against the checked-out floor.yml: this branch
+    # still wires the environment into the job the required context needs.
+    floor_anchor.check_workflow_wiring()
+    assert "ok   " in capsys.readouterr().out
+
+
+def test_signoff_environment_name_is_read_from_the_environment(monkeypatch):
+    # The name is an env var (like FLOOR_CONTEXT/ANCHOR_CONTEXT) so the
+    # fail-closed branch can be driven live against a name that cannot exist.
+    monkeypatch.setattr(floor_anchor, "SIGNOFF_ENVIRONMENT", "no-such-environment-probe")
+    monkeypatch.setattr(
+        floor_anchor, "_get", _stub_get_full(set(), env_status=404, environment={})
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_signoff_environment(REPO, "tok")
+    assert "no-such-environment-probe" in str(exc.value)

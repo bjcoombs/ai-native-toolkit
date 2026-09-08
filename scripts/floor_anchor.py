@@ -7,9 +7,15 @@ This script closes that gap: it queries the live GitHub API on every run and
 HARD-FAILS (fail-closed) unless BOTH of these hold:
 
   1. both floor status checks (``floor enforcement`` and ``floor self-anchor``)
-     are still required on the default branch, and
+     are still required on the default branch,
   2. branch protection is readable at all -- i.e. an anchor token with
-     admin:read is present, so requirement 1 can actually be confirmed.
+     admin:read is present, so requirement 1 can actually be confirmed, and
+  3. clause iii's sign-off artefact is intact: the ``floor-signoff`` deployment
+     environment exists with the repository owner as a required reviewer, and
+     the checked-out ``floor.yml`` still wires that environment into a job the
+     ``floor enforcement`` job needs. Either half alone is decorative -- an
+     environment nothing references never asks for a review, and a job pointing
+     at an environment with no required reviewer approves itself.
 
 These two are fail-CLOSED: any inability to confirm them (missing token,
 insufficient permissions) is a failure, never a pass. Reading branch protection
@@ -46,6 +52,10 @@ FLOOR_CONTEXT = os.environ.get("FLOOR_CONTEXT", "floor enforcement")
 # anchor would go red without gating, and the floor would silently disarm (E2).
 ANCHOR_CONTEXT = os.environ.get("ANCHOR_CONTEXT", "floor self-anchor")
 FLOOR_PATH = ".github/workflows/floor.yml"
+# The deployment environment that carries clause iii's sign-off artefact. Read
+# from the environment like the two contexts above, so the fail-closed branches
+# below can be driven against a name that deliberately does not exist.
+SIGNOFF_ENVIRONMENT = os.environ.get("FLOOR_SIGNOFF_ENVIRONMENT", "floor-signoff")
 
 # Where the workflow definitions live, relative to the repository root, and the
 # line shapes a job identity takes in them. Jobs sit at two-space indentation
@@ -62,6 +72,12 @@ JOB_NAME_RE = re.compile(r"^\s{4}name: (.+)$")
 JOB_ID_RE = re.compile(r"^ {2}([A-Za-z0-9_-]+):\s*$")
 JOBS_KEY_RE = re.compile(r"^jobs:\s*$")
 TOP_LEVEL_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+:")
+# Job-level keys the wiring check reads, at the same four-space depth as
+# ``name:``. ``needs:`` takes three shapes (a bare id, an inline list, or a
+# block list), so its value is captured raw and split below.
+JOB_ENVIRONMENT_RE = re.compile(r"^\s{4}environment:\s*(.+?)\s*$")
+JOB_NEEDS_RE = re.compile(r"^\s{4}needs:\s*(.*?)\s*$")
+BLOCK_LIST_ITEM_RE = re.compile(r"^\s{6}-\s*(.+?)\s*$")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # --- E2 DESCOPE: floor.yml path lock (maintainer decision, 2026-07-10) --------
@@ -95,7 +111,7 @@ class AnchorError(Exception):
 
 
 def remediation(repo: str) -> str:
-    """The two maintainer-only, out-of-band commands that arm the anchor.
+    """The three maintainer-only, out-of-band steps that arm the anchor.
 
     Named verbatim so the red is actionable without opening the proof doc. These
     require owner/admin and a fine-grained PAT with 'Administration: read' -- the
@@ -128,6 +144,21 @@ Missing configuration (maintainer-only, run out-of-band -- see docs/floor-anchor
      Both are needed. Actions secrets and Dependabot secrets are separate
      stores, so a rotation that sets only the first leaves every
      Dependabot-triggered run without a token and red on this check.
+
+  3. Create clause iii's sign-off artefact: a deployment environment named
+     {SIGNOFF_ENVIRONMENT} whose SOLE required reviewer is the repository
+     owner, and no deployment branch policy. It is a settings object, not a
+     file, which is the point -- the approval it records lives outside the diff
+     under review:
+
+     gh api "repos/{repo}/environments/{SIGNOFF_ENVIRONMENT}" --method PUT \\
+       --input - <<'JSON'
+     {{"reviewers": [{{"type": "User", "id": <the owner's numeric user id>}}]}}
+     JSON
+
+     The owner's numeric id comes from: gh api "repos/{repo}" --jq .owner.id
+     An environment with no required reviewer auto-approves its own deployment,
+     so the 'floor sign-off' job would go green with no maintainer click.
 
 Note: the floor.yml path lock (a push ruleset with file_path_restriction over
 {FLOOR_PATH}) is DESCOPED per the maintainer's PRD-E2 decision \
@@ -378,6 +409,202 @@ def check_contexts_have_workflows(contexts: set[str], root: Path | None = None) 
     )
 
 
+def _repo_owner(repo: str, token: str) -> str:
+    """The repository owner's login, or fail closed.
+
+    The owner is the identity clause iii names as the signer, so an inability
+    to resolve it is an inability to confirm the sign-off artefact.
+    """
+    status, data = _get(f"/repos/{repo}", token)
+    if status != 200 or not isinstance(data, dict):
+        raise AnchorError(f"cannot read repo metadata (HTTP {status}): {data}")
+    owner = (data.get("owner") or {}).get("login")
+    if not owner:
+        raise AnchorError(f"repo metadata for {repo!r} names no owner login: {data}")
+    return str(owner)
+
+
+def _required_reviewer_logins(data: dict) -> set[str]:
+    """Every USER login listed by a ``required_reviewers`` protection rule.
+
+    Team reviewers are deliberately ignored: clause iii names the maintainer,
+    and a team the maintainer may later leave is not the same guarantee.
+    """
+    logins: set[str] = set()
+    for rule in data.get("protection_rules", []) or []:
+        if not isinstance(rule, dict) or rule.get("type") != "required_reviewers":
+            continue
+        for entry in rule.get("reviewers", []) or []:
+            if not isinstance(entry, dict) or entry.get("type") != "User":
+                continue
+            login = (entry.get("reviewer") or {}).get("login")
+            if login:
+                logins.add(str(login))
+    return logins
+
+
+def check_signoff_environment(repo: str, token: str) -> None:
+    """Fail unless clause iii's sign-off environment exists and gates on the owner.
+
+    The environment is the artefact clause iii names: a deployment review with
+    an actor and a timestamp GitHub records OUTSIDE the diff, so the pull
+    request under review cannot forge it. Deleting the environment, or dropping
+    the owner from its required reviewers, would turn the ``floor sign-off``
+    job into a no-op that auto-approves every floor change -- green, silent, and
+    exactly the disarm this script exists to catch. So every branch here fails
+    CLOSED: a 404, any other non-200, and an unreadable or owner-less reviewer
+    list are all failures, never passes.
+    """
+    env = SIGNOFF_ENVIRONMENT
+    status, data = _get(f"/repos/{repo}/environments/{env}", token)
+    if status == 404:
+        raise AnchorError(
+            f"the {env!r} deployment environment does not exist on {repo}. "
+            "FLOOR.md clause iii records the maintainer's out-of-band approval "
+            f"as a deployment review of {env!r}; with no such environment the "
+            "'floor sign-off' job requests no review and a floor change "
+            "approves itself."
+        )
+    if status != 200 or not isinstance(data, dict):
+        raise AnchorError(
+            f"cannot read the {env!r} deployment environment (HTTP {status}): "
+            f"{data}. The anchor cannot confirm clause iii's sign-off artefact, "
+            "so it fails closed."
+        )
+    owner = _repo_owner(repo, token)
+    reviewers = _required_reviewer_logins(data)
+    if owner not in reviewers:
+        raise AnchorError(
+            f"the {env!r} environment does not require a review from the "
+            f"repository owner {owner!r}. Required user reviewers seen: "
+            f"{sorted(reviewers) or 'none'}. An environment with no required "
+            "reviewer approves its own deployment, so the 'floor sign-off' job "
+            "would go green with no maintainer click (FLOOR.md clause iii)."
+        )
+    print(
+        f"ok   the {env!r} environment exists and requires a review from the "
+        f"repository owner ({owner!r})."
+    )
+
+
+def _floor_workflow_jobs(text: str) -> dict[str, list[str]]:
+    """Split ``floor.yml`` into ``{job id: its lines}``.
+
+    A line scan rather than a YAML parse, for the same reason
+    ``_workflow_job_names`` is one: the self-anchor job runs bare ``python``
+    with no dependency install, so PyYAML is not available to it.
+    """
+    jobs: dict[str, list[str]] = {}
+    in_jobs = False
+    current: str | None = None
+    for line in text.splitlines():
+        if JOBS_KEY_RE.match(line):
+            in_jobs = True
+            continue
+        if not in_jobs:
+            continue
+        if TOP_LEVEL_KEY_RE.match(line):
+            break  # a new top-level key ends the jobs block
+        job_id = JOB_ID_RE.match(line)
+        if job_id:
+            current = job_id.group(1)
+            jobs[current] = []
+            continue
+        if current is not None:
+            jobs[current].append(line)
+    return jobs
+
+
+def _job_needs(lines: list[str]) -> set[str]:
+    """The job ids a job's ``needs:`` names, across all three YAML shapes."""
+    needs: set[str] = set()
+    for index, line in enumerate(lines):
+        match = JOB_NEEDS_RE.match(line)
+        if not match:
+            continue
+        inline = match.group(1).strip()
+        if inline:
+            needs.update(
+                part.strip().strip("\"'[]")
+                for part in inline.strip("[]").split(",")
+                if part.strip().strip("\"'[]")
+            )
+            continue
+        for follow in lines[index + 1:]:  # a block list under `needs:`
+            item = BLOCK_LIST_ITEM_RE.match(follow)
+            if not item:
+                break
+            needs.add(item.group(1).strip().strip("\"'"))
+    return needs
+
+
+def check_workflow_wiring(root: Path | None = None) -> None:
+    """Fail unless the checked-out ``floor.yml`` still wires the environment in.
+
+    An existing environment proves nothing on its own: if no job carries
+    ``environment: <name>``, no deployment review is ever requested, and if the
+    job that carries it is not in ``floor enforcement``'s ``needs``, a refusal
+    cannot reach the required context. Reading the CHECKED-OUT file (not the
+    default branch) moves that discovery into the pull request that unwires it,
+    which is the same reason ``check_contexts_have_workflows`` reads this branch.
+    """
+    env = SIGNOFF_ENVIRONMENT
+    base = REPO_ROOT if root is None else Path(root)
+    path = base / FLOOR_PATH
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise AnchorError(
+            f"cannot read {FLOOR_PATH} to confirm the {env!r} environment is "
+            f"still wired into the floor jobs ({exc}). Fails closed."
+        ) from exc
+
+    jobs = _floor_workflow_jobs(text)
+    quoted = {env, f"'{env}'", f'"{env}"'}
+    env_jobs = {
+        job_id
+        for job_id, lines in jobs.items()
+        for line in lines
+        if (m := JOB_ENVIRONMENT_RE.match(line)) and m.group(1) in quoted
+    }
+    if not env_jobs:
+        raise AnchorError(
+            f"no job in {FLOOR_PATH} carries `environment: {env}`. Without it "
+            "GitHub requests no deployment review, so a floor change merges "
+            "with no maintainer approval (FLOOR.md clause iii)."
+        )
+
+    enforcement = [
+        job_id
+        for job_id, lines in jobs.items()
+        for line in lines
+        if (m := JOB_NAME_RE.match(line))
+        and m.group(1).strip().strip("\"'") == FLOOR_CONTEXT
+    ]
+    if not enforcement:
+        raise AnchorError(
+            f"no job in {FLOOR_PATH} is named {FLOOR_CONTEXT!r}, so the "
+            f"{env!r} sign-off cannot be wired into the required context. "
+            "Fails closed."
+        )
+    needs = set()
+    for job_id in enforcement:
+        needs |= _job_needs(jobs[job_id])
+    wired = sorted(env_jobs & needs)
+    if not wired:
+        raise AnchorError(
+            f"the {FLOOR_CONTEXT!r} job does not declare any {env!r} job in "
+            f"`needs:` (job(s) carrying the environment: {sorted(env_jobs)}; "
+            f"needs seen: {sorted(needs) or 'none'}). A sign-off the required "
+            "context does not depend on cannot turn a refusal red, and branch "
+            "protection reads an absent context as satisfied."
+        )
+    print(
+        f"ok   {FLOOR_PATH} wires the {env!r} environment into job "
+        f"{wired[0]!r}, which the {FLOOR_CONTEXT!r} job needs."
+    )
+
+
 def _descope_warning() -> str:
     """The loud, non-failing warning for the DESCOPED floor.yml path lock (E2).
 
@@ -460,15 +687,18 @@ def main() -> int:
         branch = _default_branch(repo, token)
         contexts = check_required_check(repo, branch, token)
         check_contexts_have_workflows(contexts)
+        check_signoff_environment(repo, token)
+        check_workflow_wiring()
     except AnchorError as exc:
         return _fail(str(exc), repo)
     # E2 descope: the floor.yml path lock is a documented capability gap on this
     # public, user-owned repo (org-only GitHub feature). Warn loudly, never fail.
     warn_path_lock_descoped()
     print(
-        "\nSelf-anchor check passed: both hard requirements hold (both floor "
-        "checks required + branch protection readable). The floor.yml path lock "
-        "is descoped (see the warning above)."
+        "\nSelf-anchor check passed: all three hard requirements hold (both "
+        "floor checks required + branch protection readable + clause iii's "
+        f"{SIGNOFF_ENVIRONMENT!r} sign-off environment present and wired). The "
+        "floor.yml path lock is descoped (see the warning above)."
     )
     return 0
 
