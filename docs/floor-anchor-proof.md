@@ -227,3 +227,5 @@ HTTP 422
 ```
 
 That evidence is what grounds this descope; it is the same failure quoted above.
+
+Probe sentence: this line exercises the nothing-protected path of the floor sign-off gate; it is never merged.
