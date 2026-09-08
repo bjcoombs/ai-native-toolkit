@@ -12,6 +12,22 @@
 #     2. FLOOR.md four-clause integrity (unconditional -- FLOOR.md exists from the
 #        PR that introduced this workflow onward).
 #
+#   floor sign-off (clause iii, the named approval artefact):
+#     A deployment-review gate on the `floor-signoff` GitHub Environment, whose
+#     sole required reviewer is the repository owner. It is requested only when
+#     the path filter reports that the PR changes the floor's own core -- the
+#     same classification call the canary layer keys off, asked for one role, so
+#     this file still learns no path. The approval is a click in the deployments
+#     UI with an actor and a timestamp GitHub records OUTSIDE the diff, which is
+#     what makes it an artefact the PR under review cannot forge.
+#     It adds no required status check. `floor enforcement` needs it and runs on
+#     every non-cancelled outcome (`if: ${{ !cancelled() }}`, no result
+#     conjunct): a skipped `needs` job would otherwise propagate and let a PR go
+#     green with the deterministic layer never having run, and a `!= 'failure'`
+#     conjunct would do the same in exactly the case the sign-off exists to
+#     stop. So a refusal is converted into a RED required context by the first
+#     step of `floor enforcement` rather than an absent one.
+#
 #   floor self-anchor (E2, fail-closed on repo settings):
 #     Query the live GitHub API and FAIL (fail-closed) if either floor check
 #     (floor enforcement / floor self-anchor) is no longer required on the
@@ -66,16 +82,31 @@ permissions:
 jobs:
   floor:
     name: floor enforcement
+    # The sign-off gate runs first when the floor core changed. `!cancelled()`
+    # alone is deliberate: a skipped or failed sign-off must never skip this
+    # required context, because branch protection reads an absent context as
+    # satisfied. Refusal is turned into a job failure by the first step below.
+    needs: [signoff]
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Fail on a refused sign-off
+        if: needs.signoff.result == 'failure'
+        run: |
+          echo "::error::The maintainer REFUSED the floor sign-off deployment review for this pull request. A change to the floor core takes effect only with that approval (FLOOR.md clause iii), so this required check is red rather than absent."
+          exit 1
+
       - name: Check out the repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           fetch-depth: 0  # full history so the merge-base is resolvable
           persist-credentials: false
 
+      # NO --depth=1 here. The checkout above is unshallow on purpose, and a
+      # shallow fetch into it writes a graft that truncates the base branch's
+      # ancestry at its tip -- exactly where `git merge-base` below has to walk.
       - name: Fetch the PR base branch
-        run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+        run: git fetch --no-tags origin "${{ github.base_ref }}"
 
       - name: Marker removal detection (base-vs-head)
         run: |
@@ -95,6 +126,27 @@ jobs:
             echo "Marker-removal detection and FLOOR.md four-clause integrity both hold."
             echo "The repo-settings anchor is checked separately by the \`floor self-anchor\` job."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ------------------------------------------------------------------------- #
+  # Clause-iii layer: the named sign-off artefact. `environment:` makes GitHub
+  # request a deployment review from that environment's required reviewers (the
+  # repository owner, its sole reviewer) and hold this job until one of them
+  # approves or rejects. The condition comes from the `canary path filter` job
+  # defined below, asked for the floor-core role alone -- so the decision is the
+  # script's, not this file's. On every other pull request this job is skipped
+  # and no review is requested.
+  signoff:
+    name: floor sign-off
+    needs: [canary-changes]
+    if: needs.canary-changes.outputs.floor_core_changed == 'true'
+    environment: floor-signoff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record the approval
+        run: |
+          echo "Floor sign-off APPROVED by the maintainer's deployment review."
+          echo "That review -- its actor and timestamp recorded by GitHub outside"
+          echo "the diff -- is the out-of-band approval FLOOR.md clause iii requires."
 
   self-anchor:
     name: floor self-anchor
@@ -127,6 +179,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run_canaries: ${{ steps.filter.outputs.run_canaries }}
+      floor_core_changed: ${{ steps.filter.outputs.floor_core_changed }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -134,8 +187,11 @@ jobs:
           fetch-depth: 0  # full history so the merge-base is resolvable
           persist-credentials: false
 
+      # NO --depth=1 here. The checkout above is unshallow on purpose, and a
+      # shallow fetch into it writes a graft that truncates the base branch's
+      # ancestry at its tip -- exactly where `git merge-base` below has to walk.
       - name: Fetch the PR base branch
-        run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+        run: git fetch --no-tags origin "${{ github.base_ref }}"
 
       - name: Detect changes to protected paths
         id: filter
@@ -146,8 +202,10 @@ jobs:
           # script classifies each changed path by directory role and echoes back
           # the protected subset. Whether that subset is empty is the only thing
           # read here, so this file never learns a path.
-          PROTECTED="$(git diff --name-only "${BASE_SHA}" HEAD \
-            | python scripts/floor_check.py protected --base "${BASE_SHA}" --changed)"
+          CHANGED="${RUNNER_TEMP}/floor-changed-paths.txt"
+          git diff --name-only "${BASE_SHA}" HEAD > "${CHANGED}"
+          PROTECTED="$(python scripts/floor_check.py protected \
+            --base "${BASE_SHA}" --changed < "${CHANGED}")"
           if printf '%s\n' "${PROTECTED}" | grep -q .; then
             echo "run_canaries=true" >> "$GITHUB_OUTPUT"
             echo "Protected paths changed: canary suite WILL run."
@@ -155,6 +213,19 @@ jobs:
           else
             echo "run_canaries=false" >> "$GITHUB_OUTPUT"
             echo "No protected paths changed: canary suite will be skipped."
+          fi
+          # The same delegated decision, asked for one role: a change to the
+          # floor's own core is what needs the maintainer's sign-off (clause
+          # iii). Same script, same base, so the two answers cannot drift.
+          FLOOR_CORE="$(python scripts/floor_check.py protected \
+            --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"
+          if printf '%s\n' "${FLOOR_CORE}" | grep -q .; then
+            echo "floor_core_changed=true" >> "$GITHUB_OUTPUT"
+            echo "Floor core changed: a maintainer sign-off WILL be requested."
+            printf '%s\n' "${FLOOR_CORE}"
+          else
+            echo "floor_core_changed=false" >> "$GITHUB_OUTPUT"
+            echo "Floor core untouched: no sign-off requested."
           fi
 
   canary-suite:
