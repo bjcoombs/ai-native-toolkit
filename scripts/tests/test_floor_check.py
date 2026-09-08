@@ -832,3 +832,34 @@ def test_protected_exits_zero_on_an_empty_classification(tmp_path):
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "no marked components")
     assert _protected(tmp_path, ["README.md", "docs/notes.md"]) == set()
+
+
+def test_protected_sees_a_component_the_ignore_list_hides(tmp_path, monkeypatch):
+    # This repo's .gitignore is a root allowlist, so a component under a
+    # directory the allowlist has not reached yet is invisible to the index --
+    # `git add -A` skips it silently. The floor's view of a component is the
+    # working tree, not the ignore list, so it is still a marked component and
+    # still shows up in the diff-input mode.
+    _init_repo(tmp_path)
+    _write_floor(tmp_path)
+    (tmp_path / ".gitignore").write_text("/*\n!/.gitignore\n!/FLOOR.md\n!/docs/\n", encoding="utf-8")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "notes.md").write_text("unprotected\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A", "-f")
+    _git(tmp_path, "commit", "-q", "-m", "allowlist that has not reached plugins/")
+
+    hidden = tmp_path / "plugins" / "pp" / "skills" / "pq"
+    hidden.mkdir(parents=True)
+    (hidden / "SKILL.md").write_text(_marked_body("pq"), encoding="utf-8")
+    _git(tmp_path, "add", "-A")  # silently skips the ignored component
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "add the hidden component")
+    assert subprocess.run(
+        ["git", "ls-files", "plugins"], cwd=tmp_path, capture_output=True, text=True
+    ).stdout == "", "the component must really be untracked for this test to mean anything"
+
+    assert _protected(tmp_path, ["plugins/pp/skills/pq/refs/x.md"]) == {
+        "plugins/pp/skills/pq/refs/x.md"
+    }
+    monkeypatch.chdir(tmp_path)
+    rc = main(["protected", "--base", "HEAD~1"])
+    assert rc == 0

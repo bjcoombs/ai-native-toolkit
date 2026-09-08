@@ -402,6 +402,30 @@ def _discover_marked_files(
     return discovered
 
 
+def _untracked_component_paths(cwd: str | Path | None = None) -> list[str]:
+    """Component-shaped paths present in the working tree but not tracked.
+
+    Deliberately *not* ``--exclude-standard``: the repo's ignore list is not the
+    floor's business. A component that exists on disk carries its obligation
+    whether or not ``.gitignore`` has caught up with the directory it lives in,
+    and a component the ignore list hides is exactly the case where silence
+    would be dangerous. The component-shape filter keeps this cheap -- nothing
+    else in an untracked tree (build output, virtualenvs, caches) can be a
+    component, so nothing else is even opened.
+    """
+    result = subprocess.run(
+        ["git", "ls-files", "--others"],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    return [
+        path
+        for path in result.stdout.splitlines()
+        if path and _is_valid_component_path(path)
+    ]
+
+
 def _discover_marked_files_head(
     marker: str,
     cwd: str | Path | None = None,
@@ -411,7 +435,7 @@ def _discover_marked_files_head(
     A component marked by the PR under review carries no anchor at the base ref,
     so base-side discovery alone would leave it unprotected on the very PR that
     marks it. Reading the head side too closes that window: the obligation binds
-    from the commit that declares it.
+    from the commit that declares it, not from the one after.
     """
     result = subprocess.run(
         ["git", "grep", "-l", "-F", marker, "--", f":!{FLOOR_FILE}"],
@@ -419,10 +443,12 @@ def _discover_marked_files_head(
         text=True,
         cwd=cwd,
     )
+    candidates = [path for path in result.stdout.splitlines() if path]
+    candidates += _untracked_component_paths(cwd=cwd)
     return [
         path
-        for path in result.stdout.splitlines()
-        if path and standalone_anchor_count(_read_head(path, cwd=cwd), marker) > 0
+        for path in dict.fromkeys(candidates)
+        if standalone_anchor_count(_read_head(path, cwd=cwd), marker) > 0
     ]
 
 
@@ -531,16 +557,25 @@ def cmd_markers(args: argparse.Namespace) -> int:
 
 
 def _changed_paths(args: argparse.Namespace) -> list[str]:
-    """The paths to classify: stdin with ``--changed``, else the base diff."""
+    """The paths to classify: stdin with ``--changed``, else the base diff.
+
+    In diff mode the input is what the working tree changes relative to
+    ``--base``, which is ``git diff --name-only`` plus the component-shaped
+    paths that exist now and are not tracked -- the same reason
+    ``_untracked_component_paths`` exists. In CI the checkout is a merge commit
+    with nothing untracked, so that second half is empty there and the mode is
+    exactly the diff.
+    """
     if args.changed:
-        source = sys.stdin.read()
+        paths = sys.stdin.read().splitlines()
     else:
-        source = subprocess.run(
+        paths = subprocess.run(
             ["git", "diff", "--name-only", args.base],
             capture_output=True,
             text=True,
-        ).stdout
-    return [line.strip() for line in source.splitlines() if line.strip()]
+        ).stdout.splitlines()
+        paths += _untracked_component_paths()
+    return list(dict.fromkeys(path.strip() for path in paths if path.strip()))
 
 
 def cmd_protected(args: argparse.Namespace) -> int:
