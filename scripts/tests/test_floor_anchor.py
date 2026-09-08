@@ -286,11 +286,88 @@ def _workflows(tmp_path, body=WORKFLOW_WITH_TWO_JOBS, filename="tests.yml"):
     return tmp_path
 
 
+WORKFLOW_WITH_AN_UNNAMED_JOB = """\
+name: Review
+
+on:
+  pull_request:
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Review
+        run: review
+"""
+
+
 def test_workflow_job_names_reads_job_names_not_step_names(tmp_path):
     names = floor_anchor._workflow_job_names(_workflows(tmp_path))
     # Job names come from the four-space `name:` lines; step names sit deeper
     # behind a `- `, and the workflow's own top-level name is at column zero.
-    assert names == {"scripts/ pytest", "ruff + mypy gates"}
+    # The two-space job ids come too - GitHub names an unnamed job's check run
+    # after its id - and no step name ("Run pytest", "Ruff") leaks in.
+    assert names == {"scripts/ pytest", "ruff + mypy gates", "pytest", "lint"}
+
+
+def test_workflow_job_names_collects_the_id_of_an_unnamed_job(tmp_path):
+    # A job with no `name:` still produces a check context - GitHub falls back
+    # to the job id. Missing it makes the fail-closed caller a false red the
+    # moment such a context is required.
+    root = _workflows(tmp_path, body=WORKFLOW_WITH_AN_UNNAMED_JOB, filename="review.yml")
+    assert "claude-review" in floor_anchor._workflow_job_names(root)
+
+
+def test_workflow_job_names_reads_yaml_as_well_as_yml(tmp_path):
+    root = _workflows(
+        tmp_path,
+        body="jobs:\n  build:\n    name: standalone build\n    runs-on: ubuntu-latest\n",
+        filename="build.yaml",
+    )
+    assert "standalone build" in floor_anchor._workflow_job_names(root)
+
+
+def test_workflow_job_names_does_not_collect_keys_outside_the_jobs_block(tmp_path):
+    # Two-space keys under `on:` or `permissions:` are not job ids. Only keys
+    # inside the `jobs:` block are.
+    body = """\
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: scripts/ pytest
+    runs-on: ubuntu-latest
+    steps:
+      - run: pytest
+"""
+    names = floor_anchor._workflow_job_names(_workflows(tmp_path, body=body))
+    assert names == {"scripts/ pytest", "pytest"}
+
+
+def test_collected_job_ids_cannot_mask_a_renamed_context(tmp_path):
+    # The permissiveness has a hard bound: every required context carries a
+    # space and no YAML job id can, so a renamed `name:` still orphans its
+    # context even though the job's id is in the set.
+    body = """\
+jobs:
+  pytest:
+    name: scripts pytest renamed
+    runs-on: ubuntu-latest
+    steps:
+      - run: pytest
+"""
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_contexts_have_workflows(
+            {"scripts/ pytest"}, _workflows(tmp_path, body=body)
+        )
+    assert "scripts/ pytest" in str(exc.value)
 
 
 def test_workflow_job_names_reads_every_workflow_file(tmp_path):
