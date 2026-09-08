@@ -97,7 +97,7 @@ runs:
       continue-on-error: true
       if: steps.ensure-uv.outputs.ok == 'true'
       shell: bash
-      working-directory: ${{ github.action_path }}/skills/assess
+      working-directory: ${{ github.action_path }}/skills/nonexistent
       run: |
         mkdir -p "${GITHUB_WORKSPACE}/.assess"
         uv run scripts/complexity-treemap.py "${GITHUB_WORKSPACE}" \
@@ -121,7 +121,7 @@ runs:
       # failure, warn-only), never a red check.
       if: steps.ensure-uv.outputs.ok == 'true' && steps.render.outcome == 'success'
       shell: bash
-      working-directory: ${{ github.action_path }}/skills/assess
+      working-directory: ${{ github.action_path }}/skills/nonexistent
       # The single step whose exit code can fail the consumer's PR - and only
       # per their own config.toml opt-ins.
       run: |
