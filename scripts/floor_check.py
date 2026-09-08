@@ -33,12 +33,23 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
     arms itself automatically the moment a marker lands and bites only when one
     is taken away -- including when the whole marked file is deleted.
 
+    Neither the marked set nor the token set is a constant here. The marked set
+    is *discovered* at the base ref (``_discover_marked_files``): every tracked
+    file carrying a standalone anchor line, ``FLOOR.md`` excluded because it is
+    the file that defines the marker. The token set is read from the
+    ``floor-tokens`` fenced block of ``git show <base>:FLOOR.md``. Both are data
+    the floor declares, so a file that moves, a file that arrives, and a token
+    that is added are all enforced with no edit to this script.
+
 ``clauses``
-    Unconditional integrity check of ``FLOOR.md``: the file must exist and each
-    of the four clauses must be present, anchor *and* key phrase, so a PR that
-    guts a clause's text while leaving its anchor comment still fails.
+    Unconditional integrity check of ``FLOOR.md``: the file must exist, it must
+    declare its ``floor-tokens`` block with at least the four tokens the floor
+    ships with, and each of the four clauses must be present, anchor *and* key
+    phrase, so a PR that guts a clause's text while leaving its anchor comment
+    still fails.
 
 Stdlib only; runnable as ``python scripts/floor_check.py <subcommand>``.
+Paths are relative to the current directory, which is the repository root.
 """
 from __future__ import annotations
 
@@ -47,33 +58,88 @@ import subprocess
 import sys
 from pathlib import Path
 
-# ── Floor tokens ─────────────────────────────────────────────────────────────
+# ── The one anchor string ────────────────────────────────────────────────────
+#
+# The marker is the single token this script has to know by heart: it is the
+# needle the discovery grep looks for. Every other token is declared by the
+# floor itself, in FLOOR.md's floor-tokens block.
 
 MARKER = "<!-- floor:cold-verify-completion -->"
-INVOCATIONS = ("start_gate.py", "spawn_verifier.py", "complete_gate.py")
-FLOOR_TOKENS = (MARKER, *INVOCATIONS)
 
-# Files that carry a floor obligation (repo-root-relative). The markers are not
-# all present yet -- removal detection is a no-op for a token a file never had.
-MARKED_FILES = (
-    "skills/marathon/SKILL.md",
-    "skills/pr-review-merge/SKILL.md",
-    "commands/tm.md",
-    "commands/issues.md",
-)
-
-# FLOOR.md clause integrity: each clause must carry its anchor AND a distinctive
-# phrase, so gutting the prose while keeping the anchor comment still fails.
 FLOOR_FILE = "FLOOR.md"
+
+# The fenced block in FLOOR.md that declares the floor tokens, one per line.
+TOKEN_BLOCK_FENCE = "```floor-tokens"
+
+# The floor ships with four tokens (the marker plus three gate invocations).
+# Shrinking that set is a floor change, not a refactor, so a block carrying
+# fewer than this is refused.
+MINIMUM_TOKEN_COUNT = 4
+
+# FLOOR.md clause integrity: each clause must carry its anchor AND its
+# distinctive phrases, so gutting the prose while keeping the anchor comment
+# still fails.
 REQUIRED_CLAUSES = {
     "i": ("<!-- floor-clause:i -->", "run-complete"),
     "ii": ("<!-- floor-clause:ii -->", "unamendable"),
-    "iii": ("<!-- floor-clause:iii -->", "out-of-band"),
+    "iii": ("<!-- floor-clause:iii -->", "out-of-band", "floor-signoff"),
     "iv": ("<!-- floor-clause:iv -->", "immutab"),
 }
 
 
+class FloorTokenError(ValueError):
+    """FLOOR.md does not declare a usable floor-tokens block."""
+
+
 # ── Pure logic (unit-tested) ─────────────────────────────────────────────────
+
+def _parse_token_block(floor_text: str | None) -> list[str]:
+    """Floor tokens declared by ``FLOOR.md``, in declaration order.
+
+    The tokens live in exactly one fenced block whose opening fence line is
+    ``TOKEN_BLOCK_FENCE``, one token per line. Raises ``FloorTokenError`` when
+    the block is absent, duplicated, unterminated, or carries fewer than
+    ``MINIMUM_TOKEN_COUNT`` tokens -- shrinking the floor's token set is a floor
+    change and has to go red rather than quietly narrow the check.
+    """
+    if floor_text is None:
+        raise FloorTokenError(
+            f"{FLOOR_FILE} is absent, so its {TOKEN_BLOCK_FENCE!r} token block "
+            f"cannot be read"
+        )
+    lines = floor_text.splitlines()
+    opens = [i for i, line in enumerate(lines) if line.strip() == TOKEN_BLOCK_FENCE]
+    if not opens:
+        raise FloorTokenError(
+            f"no {TOKEN_BLOCK_FENCE!r} token block in {FLOOR_FILE}: the floor "
+            f"must declare its tokens"
+        )
+    if len(opens) > 1:
+        raise FloorTokenError(
+            f"{len(opens)} {TOKEN_BLOCK_FENCE!r} token blocks in {FLOOR_FILE}: "
+            f"the floor must declare exactly one"
+        )
+    tokens: list[str] = []
+    closed = False
+    for line in lines[opens[0] + 1:]:
+        if line.startswith("```"):
+            closed = True
+            break
+        token = line.strip()
+        if token:
+            tokens.append(token)
+    if not closed:
+        raise FloorTokenError(
+            f"the {TOKEN_BLOCK_FENCE!r} token block in {FLOOR_FILE} is never closed"
+        )
+    if len(tokens) < MINIMUM_TOKEN_COUNT:
+        raise FloorTokenError(
+            f"the {TOKEN_BLOCK_FENCE!r} token block in {FLOOR_FILE} declares "
+            f"{len(tokens)} token(s); the floor requires at least "
+            f"{MINIMUM_TOKEN_COUNT}"
+        )
+    return tokens
+
 
 def standalone_anchor_count(text: str | None, marker: str = MARKER) -> int:
     """Number of *standalone* anchor lines: lines whose stripped content is the
@@ -91,9 +157,13 @@ def standalone_anchor_count(text: str | None, marker: str = MARKER) -> int:
 def removed_tokens(
     base_text: str | None,
     head_text: str | None,
-    tokens=FLOOR_TOKENS,
+    tokens,
 ) -> list[str]:
     """Floor tokens *weakened* from ``base_text`` to ``head_text``.
+
+    ``tokens`` is the set the floor declares (see ``_parse_token_block``); it is
+    passed in rather than read from a constant so the enforced set is whatever
+    ``FLOOR.md`` says it is.
 
     A token is flagged when either signal fires (see the module docstring):
 
@@ -142,12 +212,13 @@ def missing_clauses(floor_text: str | None) -> list[str]:
 
 # ── Git plumbing ─────────────────────────────────────────────────────────────
 
-def _git_show(ref: str, path: str) -> str | None:
+def _git_show(ref: str, path: str, cwd: str | Path | None = None) -> str | None:
     """Content of ``path`` at ``ref``, or ``None`` if it did not exist there."""
     result = subprocess.run(
         ["git", "show", f"{ref}:{path}"],
         capture_output=True,
         text=True,
+        cwd=cwd,
     )
     if result.returncode != 0:
         return None
@@ -162,16 +233,55 @@ def _read_head(path: str) -> str | None:
     return p.read_text(encoding="utf-8")
 
 
+def _discover_marked_files(
+    base_ref: str,
+    marker: str,
+    cwd: str | Path | None = None,
+) -> list[str]:
+    """Files carrying a floor obligation at ``base_ref``, discovered by token.
+
+    ``git grep`` finds every tracked file mentioning the marker at that ref;
+    the anchor filter then keeps only those whose content at the ref holds a
+    *standalone* anchor line, which drops the incidental carriers (prose that
+    quotes the marker, source that defines it). ``FLOOR.md`` is excluded outright:
+    it is the file that declares the marker, so its own mention is a definition,
+    not an obligation.
+    """
+    result = subprocess.run(
+        ["git", "grep", "-l", "-F", marker, base_ref, "--", f":!{FLOOR_FILE}"],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
+    prefix = f"{base_ref}:"
+    discovered = []
+    for line in result.stdout.splitlines():
+        path = line[len(prefix):] if line.startswith(prefix) else line.split(":", 1)[-1]
+        if not path:
+            continue
+        if standalone_anchor_count(_git_show(base_ref, path, cwd=cwd), marker) > 0:
+            discovered.append(path)
+    return discovered
+
+
 # ── Subcommands ──────────────────────────────────────────────────────────────
 
 def cmd_markers(args: argparse.Namespace) -> int:
     base = args.base
-    files = args.files or list(MARKED_FILES)
+    try:
+        tokens = _parse_token_block(_git_show(base, FLOOR_FILE))
+    except FloorTokenError as exc:
+        print(f"FAIL {FLOOR_FILE} at {base}: {exc}")
+        return 1
+    files = list(args.files) if args.files else _discover_marked_files(base, MARKER)
+    if not files:
+        print(f"ok   no marked files at {base}: no floor obligation is armed yet.")
+        return 0
     failed = False
     for path in files:
         base_text = _git_show(base, path)
         head_text = _read_head(path)
-        removed = removed_tokens(base_text, head_text)
+        removed = removed_tokens(base_text, head_text, tokens)
         if removed:
             failed = True
             for token in removed:
@@ -181,7 +291,7 @@ def cmd_markers(args: argparse.Namespace) -> int:
                     f"removed, between {base} and head)"
                 )
         else:
-            carried = [t for t in FLOOR_TOKENS if base_text and t in base_text]
+            carried = [t for t in tokens if base_text and t in base_text]
             state = f"{len(carried)} token(s) intact" if carried else "no floor tokens (ok)"
             print(f"ok   {path}: {state}")
     if failed:
@@ -199,12 +309,24 @@ def cmd_clauses(args: argparse.Namespace) -> int:
     if floor_text is None:
         print(f"FAIL {args.floor} does not exist -- the floor file is mandatory.")
         return 1
+    try:
+        tokens = _parse_token_block(floor_text)
+    except FloorTokenError as exc:
+        print(f"FAIL {args.floor}: {exc}")
+        print(
+            "The floor declares its tokens; removing or shrinking that block "
+            "narrows the check and needs the maintainer's out-of-band sign-off."
+        )
+        return 1
     missing = missing_clauses(floor_text)
     if missing:
         print(f"FAIL {args.floor}: clauses not intact -> {', '.join(missing)}")
         print("Each clause needs its anchor comment and its key phrase.")
         return 1
-    print(f"ok   {args.floor}: all four clauses intact.")
+    print(
+        f"ok   {args.floor}: all four clauses intact, "
+        f"{len(tokens)} floor token(s) declared."
+    )
     return 0
 
 
@@ -219,7 +341,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--base", required=True, help="git ref for the merge-base (e.g. origin/main)"
     )
     p_markers.add_argument(
-        "--files", nargs="*", help="override the marked-file list (defaults to all)"
+        "--files",
+        nargs="*",
+        help="override the discovered marked-file set (defaults to discovery)",
     )
     p_markers.set_defaults(func=cmd_markers)
 
