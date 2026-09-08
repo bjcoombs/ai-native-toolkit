@@ -26,8 +26,8 @@ argument-hint: [tag [task-id] | feature description] (optional - derives context
 
 This command supplies the marathon skill's adapter as:
 - **enumerate** — `task-master tags use "<tag>" && task-master list --json`; use `jq` on `tasks.json` for reliable status filtering (`task-master next` can suggest subtask IDs of done parents).
-- **mark in-progress** — `task-master set-status --id=<id> --status=in-progress` (run sequentially inline — never as a parallel background job; concurrent TM writes race the global tag).
-- **close on merge** — `task-master tags use "<tag>" && task-master set-status --id=<id> --status=done`.
+- **mark in-progress** — `cd ~/dev/github.com/<org>/<repo> && task-master set-status --id=<id> --status=in-progress` (run sequentially inline — never as a parallel background job; concurrent TM writes race the global tag). **Every TM write starts with that `cd`**: the shell cwd persists across calls and a `set-status` run from `<repo>-main/` or a worktree prints its banner but writes nothing. Re-read `tasks.json` after each write to confirm.
+- **close on merge** — `cd ~/dev/github.com/<org>/<repo> && task-master tags use "<tag>" && task-master set-status --id=<id> --status=done`.
 - **branch / worktree** — branch `<tag>--<task-id>--<slug>`; worktree `worktree/<tag>/<task-id>--<slug>`.
 
 ---

@@ -42,7 +42,7 @@ jobs:
 
       - name: Run Claude Code Review
         id: claude-review
-        continue-on-error: true  # advisory: a failed/absent review never blocks the PR
+        continue-on-error: true  # advisory: never gates merge (not a required context); the final step turns the check red when the review itself errored so a missed review is visible
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -79,6 +79,7 @@ jobs:
             echo "- **Result:** ${{ steps.claude-review.outcome }}"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ steps.claude-review.outcome }}" = "failure" ]; then
-            echo "::warning::Claude Code review failed for PR #${{ github.event.pull_request.number }} - non-blocking (commonly a missing CLAUDE_CODE_OAUTH_TOKEN secret)."
+            echo "::warning::Claude Code review did not complete for PR #${{ github.event.pull_request.number }} (result is_error, missing CLAUDE_CODE_OAUTH_TOKEN, or an API refusal). Non-blocking: this check is not a required context. It reports red so a green check always means the head was actually reviewed."
+            exit 1
           fi
           exit 0
