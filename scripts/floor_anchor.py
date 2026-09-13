@@ -78,6 +78,11 @@ TOP_LEVEL_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+:")
 JOB_ENVIRONMENT_RE = re.compile(r"^\s{4}environment:\s*(.+?)\s*$")
 JOB_NEEDS_RE = re.compile(r"^\s{4}needs:\s*(.*?)\s*$")
 BLOCK_LIST_ITEM_RE = re.compile(r"^\s{6}-\s*(.+?)\s*$")
+# A job-level ``if:`` sits at the same depth as ``name:``; a step's sits deeper
+# still, behind the ``- `` of the step list. The two must be told apart: the
+# job guard must NOT mention the sign-off result and a step guard MUST.
+JOB_IF_RE = re.compile(r"^\s{4}if:\s*(.+?)\s*$")
+STEP_IF_RE = re.compile(r"^\s{6,}if:\s*(.+?)\s*$")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # --- E2 DESCOPE: floor.yml path lock (maintainer decision, 2026-07-10) --------
@@ -136,9 +141,14 @@ Missing configuration (maintainer-only, run out-of-band -- see docs/floor-anchor
        -f 'checks[][context]={FLOOR_CONTEXT}' \\
        -f 'checks[][context]={ANCHOR_CONTEXT}'
 
-  2. Create the anchor read token so this check can query the settings above:
+  2. Create the anchor read token so this check can query the settings above.
+     The PAT needs BOTH fine-grained repository permissions: 'Administration:
+     read' for branch protection and rulesets, and 'Environments: read' for the
+     {SIGNOFF_ENVIRONMENT} deployment environment. A token carrying only the
+     first reads protection fine and then fails this check with an HTTP 403 on
+     the environment:
 
-     gh secret set FLOOR_ANCHOR_TOKEN --repo "{repo}"   # paste a PAT: Administration: read
+     gh secret set FLOOR_ANCHOR_TOKEN --repo "{repo}"   # paste a PAT: Administration: read + Environments: read
      gh secret set FLOOR_ANCHOR_TOKEN --repo "{repo}" --app dependabot   # the same PAT again: Dependabot runs read a separate secret store
 
      Both are needed. Actions secrets and Dependabot secrets are separate
@@ -424,23 +434,28 @@ def _repo_owner(repo: str, token: str) -> str:
     return str(owner)
 
 
-def _required_reviewer_logins(data: dict) -> set[str]:
-    """Every USER login listed by a ``required_reviewers`` protection rule.
+def _required_reviewers(data: dict) -> tuple[set[str], set[str]]:
+    """The ``(user logins, team slugs)`` a ``required_reviewers`` rule names.
 
-    Team reviewers are deliberately ignored: clause iii names the maintainer,
-    and a team the maintainer may later leave is not the same guarantee.
+    Teams are returned rather than filtered out, because the caller has to
+    REJECT them: an environment review is satisfied by ANY ONE of the listed
+    reviewers, so a team beside the owner is another way for the owner's click
+    to stop being required.
     """
-    logins: set[str] = set()
+    users: set[str] = set()
+    teams: set[str] = set()
     for rule in data.get("protection_rules", []) or []:
         if not isinstance(rule, dict) or rule.get("type") != "required_reviewers":
             continue
         for entry in rule.get("reviewers", []) or []:
-            if not isinstance(entry, dict) or entry.get("type") != "User":
+            if not isinstance(entry, dict):
                 continue
-            login = (entry.get("reviewer") or {}).get("login")
-            if login:
-                logins.add(str(login))
-    return logins
+            reviewer = entry.get("reviewer") or {}
+            if entry.get("type") == "User" and reviewer.get("login"):
+                users.add(str(reviewer["login"]))
+            elif entry.get("type") == "Team":
+                teams.add(str(reviewer.get("slug") or reviewer.get("name") or "?"))
+    return users, teams
 
 
 def check_signoff_environment(repo: str, token: str) -> None:
@@ -472,18 +487,25 @@ def check_signoff_environment(repo: str, token: str) -> None:
             "so it fails closed."
         )
     owner = _repo_owner(repo, token)
-    reviewers = _required_reviewer_logins(data)
-    if owner not in reviewers:
+    users, teams = _required_reviewers(data)
+    # An environment review is satisfied by ANY ONE of the listed reviewers, so
+    # membership is the wrong test: {owner, someone-else} would pass it while
+    # the owner's click is no longer required. Assert the SET.
+    if users != {owner} or teams:
         raise AnchorError(
             f"the {env!r} environment does not require a review from the "
-            f"repository owner {owner!r}. Required user reviewers seen: "
-            f"{sorted(reviewers) or 'none'}. An environment with no required "
-            "reviewer approves its own deployment, so the 'floor sign-off' job "
-            "would go green with no maintainer click (FLOOR.md clause iii)."
+            f"repository owner {owner!r} and no one else. Required user "
+            f"reviewers seen: {sorted(users) or 'none'}; required team "
+            f"reviewers seen: {sorted(teams) or 'none'}. An environment review "
+            "is satisfied by ANY ONE of its reviewers, so an extra user or "
+            "team is another way for the maintainer's click to stop being "
+            "required -- and an environment with no reviewer at all approves "
+            "its own deployment. Either way the 'floor sign-off' job could go "
+            "green with no maintainer click (FLOOR.md clause iii)."
         )
     print(
         f"ok   the {env!r} environment exists and requires a review from the "
-        f"repository owner ({owner!r})."
+        f"repository owner ({owner!r}) and no one else."
     )
 
 
@@ -599,10 +621,59 @@ def check_workflow_wiring(root: Path | None = None) -> None:
             "context does not depend on cannot turn a refusal red, and branch "
             "protection reads an absent context as satisfied."
         )
+    _check_refusal_is_red(jobs, enforcement, env_jobs, env)
     print(
         f"ok   {FLOOR_PATH} wires the {env!r} environment into job "
-        f"{wired[0]!r}, which the {FLOOR_CONTEXT!r} job needs."
+        f"{wired[0]!r}, which the {FLOOR_CONTEXT!r} job needs, and turns a "
+        "refused review into a red required context."
     )
+
+
+def _check_refusal_is_red(
+    jobs: dict[str, list[str]],
+    enforcement: list[str],
+    env_jobs: set[str],
+    env: str,
+) -> None:
+    """Fail unless a refusal still lands as RED rather than as an absent check.
+
+    Wiring alone is not the guarantee: with the refusal step deleted, or with a
+    ``needs.<signoff>.result != 'failure'`` conjunct added to the job guard, the
+    environment, the ``needs`` edge and this anchor all stay exactly as they
+    are while a refused review becomes a no-op (the job passes) or an absent
+    context (the job skips, and branch protection reads a skipped required
+    context as satisfied). That conversion is the half the sign-off rests on,
+    so it is asserted here rather than left to review.
+    """
+    def mentions_signoff(expr: str) -> bool:
+        return any(f"needs.{jid}.result" in expr for jid in env_jobs)
+
+    for job_id in enforcement:
+        lines = jobs[job_id]
+        for line in lines:
+            match = JOB_IF_RE.match(line)
+            if match and mentions_signoff(match.group(1)):
+                raise AnchorError(
+                    f"the {FLOOR_CONTEXT!r} job's `if:` guard references the "
+                    f"sign-off job's result ({match.group(1)!r}). A result "
+                    "conjunct makes this required context SKIP on a refused "
+                    "review, and branch protection reads a skipped required "
+                    "context as satisfied -- the refusal has to make it red, "
+                    "not absent. The guard must be `${{ !cancelled() }}` alone."
+                )
+        guarded = any(
+            (m := STEP_IF_RE.match(line))
+            and mentions_signoff(m.group(1))
+            and "failure" in m.group(1)
+            for line in lines
+        )
+        if not guarded:
+            raise AnchorError(
+                f"no step of the {FLOOR_CONTEXT!r} job guards on the {env!r} "
+                "sign-off job's result being 'failure'. Without it a refused "
+                "review fails only the sign-off job, this required context "
+                "still goes green, and clause iii's approval is advisory."
+            )
 
 
 def _descope_warning() -> str:

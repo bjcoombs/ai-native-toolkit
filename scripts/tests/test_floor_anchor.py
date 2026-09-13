@@ -567,6 +567,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Fail on a refused sign-off
+        if: needs.signoff.result == 'failure'
         run: exit 1
 
   signoff:
@@ -717,3 +718,64 @@ def test_signoff_environment_name_is_read_from_the_environment(monkeypatch):
     with pytest.raises(floor_anchor.AnchorError) as exc:
         floor_anchor.check_signoff_environment(REPO, "tok")
     assert "no-such-environment-probe" in str(exc.value)
+
+
+def test_signoff_environment_fails_closed_when_a_second_user_is_listed(monkeypatch):
+    # An environment review is satisfied by ANY ONE of its reviewers, so
+    # {owner, someone-else} is a disarm, not a safe superset: the owner's click
+    # is no longer required. A membership test would pass this.
+    monkeypatch.setattr(
+        floor_anchor,
+        "_get",
+        _stub_get_full(
+            set(), environment=_environment_payload(reviewers=(OWNER, "someone-else"))
+        ),
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_signoff_environment(REPO, "tok")
+    assert "someone-else" in str(exc.value)
+
+
+def test_signoff_environment_fails_closed_when_a_team_reviews_beside_the_owner(
+    monkeypatch,
+):
+    payload = _environment_payload()
+    payload["protection_rules"][0]["reviewers"].append(
+        {"type": "Team", "reviewer": {"slug": "maintainers"}}
+    )
+    monkeypatch.setattr(
+        floor_anchor, "_get", _stub_get_full(set(), environment=payload)
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_signoff_environment(REPO, "tok")
+    assert "maintainers" in str(exc.value)
+
+
+def test_signoff_wiring_fails_closed_when_the_refusal_step_is_deleted(tmp_path):
+    # Disarm path 4: environment, needs edge and anchor all intact, but the
+    # step that converts a refusal into a red job is gone, so refusal is a
+    # no-op -- the sign-off job fails alone and the required context is green.
+    body = FLOOR_YML_WIRED.replace(
+        "      - name: Fail on a refused sign-off\n"
+        "        if: needs.signoff.result == 'failure'\n"
+        "        run: exit 1\n",
+        "      - name: Check out\n        run: true\n",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "'failure'" in str(exc.value)
+
+
+def test_signoff_wiring_fails_closed_on_a_signoff_result_conjunct(tmp_path):
+    # Disarm path 5: the guard gains `&& needs.signoff.result != 'failure'`, so
+    # a refused review SKIPS the required context -- which branch protection
+    # reads as satisfied. The guard must stay `${{ !cancelled() }}` alone.
+    body = FLOOR_YML_WIRED.replace(
+        "    if: ${{ !cancelled() }}\n",
+        "    if: ${{ !cancelled() && needs.signoff.result != 'failure' }}\n",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "cancelled" in msg
+    assert floor_anchor.FLOOR_CONTEXT in msg

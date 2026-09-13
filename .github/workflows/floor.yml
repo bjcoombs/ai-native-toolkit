@@ -86,7 +86,14 @@ jobs:
     # alone is deliberate: a skipped or failed sign-off must never skip this
     # required context, because branch protection reads an absent context as
     # satisfied. Refusal is turned into a job failure by the first step below.
-    needs: [signoff]
+    # `canary-changes` is in `needs` as well as `signoff`, and for the same
+    # reason the guard is bare: every way the sign-off can fail to happen has
+    # to arrive here as RED, never as absent. A failed filter job would
+    # otherwise leave `signoff` SKIPPED -- not `failure` -- and the refusal
+    # step below would wave it through, so a PR that merely breaks the
+    # classification (dropping a role from floor_check.py is enough) would
+    # delete the sign-off and merge green.
+    needs: [signoff, canary-changes]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
@@ -94,6 +101,12 @@ jobs:
         if: needs.signoff.result == 'failure'
         run: |
           echo "::error::The maintainer REFUSED the floor sign-off deployment review for this pull request. A change to the floor core takes effect only with that approval (FLOOR.md clause iii), so this required check is red rather than absent."
+          exit 1
+
+      - name: Fail on an unclassified path filter
+        if: needs.canary-changes.result != 'success'
+        run: |
+          echo "::error::The path-filter job did not succeed (result: ${{ needs.canary-changes.result }}), so no floor-core sign-off could be requested and the 'floor sign-off' job was skipped rather than refused. A sign-off that never ran is not an approval: this required check is red until the classification runs."
           exit 1
 
       - name: Check out the repository
