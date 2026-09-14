@@ -54,29 +54,195 @@ gh issue list "${FILTER[@]}" --state open --json number,title,body,labels | \
 
 If `$ARGUMENTS` (a scope label) was given, only issues carrying it are considered; routing still applies within that subset.
 
-For each issue, assess whether it is actionable as-is (clear scope, acceptance criteria
-inferable, no open question):
-- **Clear enough** → add the agent-ready label:
-  `gh issue edit <N> --add-label "agent-ready"`
-- **Ambiguous** → post clarifying questions as a comment, then label needs-triage:
-  ```bash
-  gh issue comment <N> --body "$(cat <<'EOF'
-  Triage questions before this can be picked up by an agent:
-  1. <question>
-  2. <question>
-  EOF
-  )"
-  gh issue edit <N> --add-label "needs-triage"
-  ```
+Triage is a planning pass, not a labeling pass. It runs once over the whole issue set, in
+this order, and every write it makes shows up in the report the human approves:
+
+1. **Promote on Confirmation** - fold in answers the human gave since the last run.
+2. **Research Pass** - resolve what the repository can answer before asking anything.
+3. **Overlap Sweep** - hold back issues that collide with open PRs or with each other.
+4. **Size by Judgment** - decide one PR or several, and propose any decomposition.
+5. **Dependency Authoring** - write the ordering as native `blocked_by` edges.
+6. **Triage Report** - render labels, decomposition tree, execution order, overlaps; STOP.
+
+An issue is `agent-ready` only when it survives all of steps 2 to 4: clear after research,
+no unresolved overlap, and sized to one PR (or approved as a decomposed parent). Everything
+else stays or becomes `needs-triage`. Research and sizing read widely, so fan them out with
+subagents (the `Agent` tool); never teammates.
+
+### Promote on Confirmation
+
+Start with issues already labeled `needs-triage` that carry a triage comment with a
+recommended reading. If a human reply after that comment confirms or corrects it ("yes,
+reading A" is enough), fold the confirmed answers into the issue body (edit the body's
+scope and acceptance criteria) or into a pinned comment when the body is the author's to
+keep, so the implementing teammate inherits a clarified contract instead of a thread to
+re-interpret. Then swap the label from `needs-triage` to `agent-ready`, provided the same
+pass's Overlap Sweep and Size by Judgment do not hold it back:
+
+```bash
+gh issue edit <N> --body-file <clarified-body.md>          # or: gh issue comment <N> + pin it in the UI
+gh issue edit <N> --remove-label "needs-triage" --add-label "agent-ready"
+```
+
+A correction that opens a new question is not a confirmation: run the Research Pass on the
+new question and keep `needs-triage`. No reply means no change.
+
+### Research Pass
+
+Before any question reaches a human, research it. For each issue whose scope, acceptance
+criteria, or intent is unclear, run an understand-style pass over what the ambiguity
+touches: the code and tests, open and merged PRs (`gh pr list --state all --search
+"<terms>"`), and the issue history (linked, referenced, and closed issues). The primitive is
+the `/understand` command (`commands/understand.md`, relative to the plugin root): define the
+terms, separate the explicit need from the implicit one, and bound the scope, grounded in
+what the repository shows. Spawn one research subagent per ambiguous issue (or per subsystem
+for a wide one) so the pass runs in parallel.
+
+Any question the repository answers is answered, not asked. What the code does now, whether a
+constraint is real, which reading matches existing behaviour: these are findings with a
+`path:line` reference. Only questions of intent, priority, or product direction survive.
+
+Post a comment that proposes rather than interrogates, findings first:
+
+```bash
+gh issue comment <N> --body "$(cat <<'EOF'
+Triage research before this can be picked up by an agent.
+
+Findings:
+- The code currently does X (`path/to/file.py:42`); PR #M changed it to Y.
+- Reading A implies change P; reading B implies change Q.
+
+Recommended reading: A, because <evidence with file references>. Confirm or correct.
+
+Resolved by research:
+- <question the repository answered> - <answer> (`path:line`)
+
+Needs your call:
+- <question only the author can answer: intent, priority, direction>
+EOF
+)"
+gh issue edit <N> --add-label "needs-triage"
+```
+
+Fail closed: an issue whose ambiguity survives research stays `needs-triage`. Research is never
+a license to guess; a recommended reading is a proposal until a human confirms it. When research
+resolves every question and nothing is left under `Needs your call`, the issue is clear and
+continues to the Overlap Sweep without a comment round-trip.
+
+### Overlap Sweep
+
+List open PRs with their changed files once per triage run:
+
+```bash
+gh pr list --state open --limit 100 --json number,title,headRefName,files | \
+  jq '[.[] | {number, title, headRefName, files: [.files[].path]}]'
+```
+
+For each candidate issue, take the files it targets (paths the body names plus those the
+Research Pass located) and flag any intersection:
+- **File-path intersection** with an open PR's changed files.
+- **Scope intersection** with an open PR's title or body (it partially fixes, obsoletes, or
+  reverses what the issue asks), even with no shared file.
+- **Issue-to-issue intersection** with another issue already labeled `agent-ready` or
+  `needs-triage`, or labeled earlier in this pass.
+
+An issue that overlaps an open PR is labeled `needs-triage`, not `agent-ready`, with a comment
+naming the PR and stating what remains of the issue after that PR merges (or that nothing
+does). A PR cannot be a native `blocked_by` blocker (see PR-as-blocker in the adapter), so this
+label plus comment is the record; the next triage run after the PR merges re-assesses the issue.
+Issue-to-issue overlap is not a hold: resolve it as a hot-file note or a dependency edge
+(Dependency Authoring) and list it in the report.
+
+### Size by Judgment
+
+Sizing runs after clarification: an issue that is not yet clear cannot be sized.
+
+**Size by judgment, record the reasoning.** Decide whether an issue is one PR or several by asking
+two questions: could a reviewer verify the whole change against its acceptance criteria in one
+sitting, and must any part land before another? Story points (1, 2, 3, 5, 8, 13) are the
+vocabulary for stating that judgment, not a trigger for it. Decompose when splitting makes the
+deliverable more reviewable or gives the marathon an ordering it would otherwise discover by
+collision. Leave the issue whole when splitting would only add ceremony. The judgment sits with
+triage because it holds the codebase context; the report makes it legible so the human can veto.
+
+Every split and every deliberate non-split carries a one-line reason in the triage report, a
+reason a reader can disagree with ("one file, one reviewer sitting" or "schema change must land
+before the two consumers"). No hierarchy is created without a reason.
+
+When decomposition is warranted:
+1. **Propose, then wait for approval.** Show the decomposition tree (parent, each child's scope,
+   the reason for the split, and the child order) in the triage report. Nothing is created until
+   the human approves it, by replying to proceed in the session or by confirming on the parent
+   issue before the next triage run. Until then the parent stays unlabeled for the queue.
+2. **Create the children**, each scoped to one reviewable PR, and attach them to the parent:
+   ```bash
+   CHILD=$(gh issue create --title "<child title>" --body "<scope + acceptance criteria; Part of #<parent>>" | sed 's#.*/##')
+   CHILD_ID=$(gh api repos/$ORG/$REPO/issues/$CHILD | jq '.id')     # numeric REST id
+   gh api repos/$ORG/$REPO/issues/<parent>/sub_issues --method POST -F sub_issue_id="$CHILD_ID"
+   gh issue edit "$CHILD" --add-label "agent-ready"
+   ```
+3. **Order the children.** Where one child must land before another, author a `blocked_by` edge
+   between them (Dependency Authoring). Sub-issue position is display order only.
+4. **The parent is QA, not work.** It keeps the deliverable-level acceptance criteria, is labeled
+   `agent-ready` so the marathon sees it as a verification unit, and is never assigned as
+   implementation work. No child PR says `Closes #<parent>`. The parent closes only after every
+   child has merged and the lead-run verification pass confirms the assembled result meets the
+   parent's criteria. Its `sub_issues_summary` (`total`, `completed`, `percent_completed` on
+   `gh api repos/$ORG/$REPO/issues/<parent>`) gives the human the rollup.
+
+### Dependency Authoring
+
+When triage finds an ordering (one issue's change is a prerequisite for another's: schema before
+consumer, contract before enforcement, or a decomposed parent's child sequence), record it as a
+native edge so the marathon DAG inherits it instead of discovering it by merge conflict:
+
+```bash
+BLOCKER_ID=$(gh api repos/$ORG/$REPO/issues/<M> | jq '.id')     # numeric REST id, NOT the node id
+gh api repos/$ORG/$REPO/issues/<N>/dependencies/blocked_by \
+  --method POST -F issue_id="$BLOCKER_ID"                          # issue N is blocked by issue M
+```
+
+Check existing edges first (`gh api repos/$ORG/$REPO/issues/<N>/dependencies/blocked_by`) so the
+pass does not duplicate one, and give each new edge a one-line reason in the report. Sequencing
+behind an open PR is not an edge (PR-as-blocker is unsupported); that is the Overlap Sweep's
+`needs-triage` hold. If the human vetoes an edge, remove it with the adapter's `--method DELETE`
+call. Render the resulting order in the report as waves, so the human approves the sequence and
+not just the membership.
+
+### Triage Report
 
 Then **report and STOP** (mirrors `/tm` planning):
 ```
 ## Issue Triage: <org>/<repo>
 
 Tagged agent-ready: #12, #15, #18
-Tagged needs-triage (questions posted): #20, #21
+Tagged needs-triage:
+- #20, #21: research posted (Needs your call: 1 each)
+- #22: overlaps open PR #40 (both edit commands/issues.md); after it merges: <what remains>
+Promoted on confirmation: #19 (reading A folded into the issue body)
 
-OK to start on the agent-ready issues? Re-run /issues to begin, or reply to proceed.
+Sizing:
+- #12: one PR - single module, reviewable in one sitting
+- #15: one PR - splitting the doc and test changes would only add ceremony
+- #30: decompose (pending approval) - migration must land before the two consumers
+  #30 parent: <deliverable acceptance criteria> (verification unit)
+  ├─ child A: schema migration          (one PR)
+  ├─ child B: consumer X, blocked by A  (one PR)
+  └─ child C: consumer Y, blocked by A  (one PR)
+
+Dependencies authored:
+- #18 blocked by #15 - #15 adds the config key #18 reads
+
+Execution order:
+  Wave 1: #12, #15, child A
+  Wave 2: #18, child B, child C
+  After children merge: #30 parent verification
+
+Overlaps:
+- #22 <-> PR #40: commands/issues.md (held as needs-triage)
+- #12 <-> #15: README.md (additive, left parallel)
+
+Approve the decomposition of #30 and the execution order? Re-run /issues to begin, or reply to proceed.
 ```
 
 Do NOT spawn teammates in triage mode.
@@ -132,6 +298,17 @@ Supply the marathon skill's adapter as:
   open-PR blocker never arrives as a native edge: when an issue must wait for an open PR,
   record that sequencing in the run plan (the wave table) and hold the issue out of any
   wave until the PR merges.
+  Decomposed parents: an enumerated issue whose `sub_issues_summary.total` is above 0
+  (`gh api repos/$ORG/$REPO/issues/<N>`) is a verification unit, not a work unit. Enumerate
+  its leaf issues (children from `.../sub_issues`, plus every undecomposed issue) as the work
+  units; the parent is never handed to an implementing teammate. The parent becomes eligible
+  for verification when its last child merges (`completed == total`), and its closure is gated
+  on the lead-run QA pass over the merged children, not on `Closes #N` in any single PR. That
+  check runs outside `spawn_verifier.py` and adds no per-parent freeze: the run-level contract,
+  its freeze, the custody chokepoint, and the completion gate are unchanged. The lead re-reads
+  the parent's acceptance criteria, checks each against merged `$BASE_BRANCH`, posts the
+  per-criterion result as a comment on the parent, and runs `gh issue close <parent>` only when
+  every criterion holds; otherwise the parent stays open and the gap is reported to the user.
 - **mark in-progress** — `gh issue edit <N> --add-label "in-progress"`.
 - **close on merge** — the teammate's PR body includes `Closes #<N>` (and `Closes #<M>` for
   every combined issue); GitHub auto-closes on merge. After merge, verify with
@@ -176,18 +353,44 @@ PR-as-blocker: unsupported (HTTP 422, "Target issue may only be an issue", obser
 Consequence: an open-PR blocker cannot be a native edge. Record "issue N waits for PR M" as
 sequencing in the run plan and keep N out of every wave until M merges.
 
+### Staleness Check
+
+Labels were curated at triage time; open PRs may have appeared since. At run start, after the
+Entry Gate and before the marathon skill spawns anyone, list open PRs with their changed files:
+
+```bash
+gh pr list --state open --limit 100 --json number,title,headRefName,files | \
+  jq '[.[] | {number, title, headRefName, files: [.files[].path]}]'
+```
+
+For each queued `agent-ready` issue, compare the files it targets (paths named in the body, or
+located by a quick read of the code it describes) against those lists. Ignore PRs on this run's
+own `issue-*` branches. For any issue an open PR touches, surface it in the plan with exactly one
+of three outcomes instead of spawning blind:
+- **Combine** - the PR is unmerged work on the same change: fold the issue into that PR's branch
+  (or its owner's scope) rather than opening a competing PR.
+- **Sequence after the PR** - the issue is still valid but must build on the PR's result: record
+  "issue N waits for PR M" in the wave table and hold N out of every wave until M merges (the
+  open-PR blocker rule above).
+- **Kick back to `needs-triage`** - the PR changes the issue's scope materially (partial fix,
+  obsoletes it, or reverses what it asks): remove `agent-ready`, add `needs-triage` with a comment
+  naming the PR, and drop the issue from this run.
+
+The outcomes appear in the Dependency Analysis plan the marathon skill reports before Wave 1.
+
 ### Run
 
 Use the marathon skill with the GitHub Work-Source Adapter above and the Marathon
 Configuration values. The skill builds the DAG from native `blocked_by` deps plus hot-file
 combining, spawns one teammate per issue or combined group, drives each PR via
 pr-review-merge, and smart-merges in waves. Combined-issue teammates put `Closes #N` for
-every issue they resolve in the PR body.
+every issue they resolve in the PR body. Parents of decomposed issues are verification units:
+no teammate, no `Closes #<parent>`, closed by the lead-run QA pass once the last child merges.
 
 ## Orchestrator Flow
 
 ```
 /issues [label-filter] → detect teams → check agent-ready count → route:
-  ├─ agent-ready exist → MARATHON (marathon skill, GitHub adapter)
-  └─ none exist        → TRIAGE (tag agent-ready / post questions+needs-triage) → report → STOP
+  ├─ agent-ready exist → MARATHON (entry gate → staleness check → marathon skill, GitHub adapter)
+  └─ none exist        → TRIAGE (promote → research → overlap → size → dependencies) → report → STOP
 ```
