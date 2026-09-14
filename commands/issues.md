@@ -80,7 +80,9 @@ PR. Comments, body edits and dependency edges are written where they are decided
 ### Promote on Confirmation
 
 Start with issues already labeled `needs-triage` that carry a triage comment with a
-recommended reading. If a human reply after that comment confirms or corrects it ("yes,
+recommended reading, or a decomposition proposal comment (marker
+`<!-- triage:decomposition-proposal -->`, see Size by Judgment). A human reply approving that
+proposal on the issue counts as approval of the decomposition and triggers its creation phase. If a human reply after that comment confirms or corrects it ("yes,
 reading A" is enough), fold the confirmed answers into the issue body (append a
 `Clarified scope` section with the confirmed scope and acceptance criteria) or, when the body
 is the author's to keep, into a pinned comment: a new comment whose first line is the marker
@@ -154,8 +156,8 @@ the code it describes) and flag any intersection:
 - **File-path intersection** with an open PR's changed files.
 - **Scope intersection** with an open PR's title or body (it partially fixes, obsoletes, or
   reverses what the issue asks), even with no shared file.
-- **Issue-to-issue intersection** with another issue already labeled `agent-ready` or
-  `needs-triage`, or labeled earlier in this pass.
+- **Issue-to-issue intersection** with another issue in this pass's candidate set, compared by
+  its pending verdict (labels are not written until the Triage Report step).
 
 An issue that overlaps an open PR gets the `needs-triage` verdict, not `agent-ready`, and a comment
 naming the PR and stating what remains of the issue after that PR merges (or that nothing
@@ -182,10 +184,12 @@ before the two consumers"). No hierarchy is created without a reason.
 
 When decomposition is warranted:
 1. **Propose, then wait for approval.** Show the decomposition tree (parent, each child's scope,
-   the reason for the split, and the child order) in the triage report. Nothing is created until
-   the human approves it by replying to proceed in the same session; that reply is the only
-   approval path. Until then the parent stays unlabeled for the queue, and an unapproved
-   proposal is simply proposed again on a later triage run.
+   the reason for the split, and the child order) in the triage report, and persist the same
+   tree as a comment on the parent whose first line is `<!-- triage:decomposition-proposal -->`,
+   so the proposal survives the session. The parent's verdict is `needs-triage` until approval.
+   Nothing is created until the human approves, either by replying to proceed in the session or
+   by replying on the parent after the proposal comment (picked up by Promote on Confirmation on
+   the next triage run, which runs once the `agent-ready` queue drains).
 2. **After approval, create the children** (the post-approval phase, outside the single label
    write of the Triage Report step), each scoped to one reviewable PR, and attach them to the parent:
    ```bash
@@ -193,7 +197,7 @@ When decomposition is warranted:
    CHILD_ID=$(gh api repos/$ORG/$REPO/issues/$CHILD | jq '.id')     # numeric REST id
    gh api repos/$ORG/$REPO/issues/<parent>/sub_issues --method POST -F sub_issue_id="$CHILD_ID"
    gh issue edit "$CHILD" --add-label "agent-ready"
-   gh issue edit <parent> --add-label "agent-ready"                  # once, after all children exist
+   gh issue edit <parent> --remove-label "needs-triage" --add-label "agent-ready"   # once, after all children exist
    ```
 3. **Order the children.** Where one child must land before another, author a `blocked_by` edge
    between them (Dependency Authoring). Sub-issue position is display order only.
@@ -238,7 +242,8 @@ gh issue edit <N> --remove-label "needs-triage" --add-label "agent-ready"   # cl
 gh issue edit <N> --add-label "needs-triage"                                # research left a call, or overlap
 ```
 
-An issue proposed for decomposition gets no label until the decomposition is approved and created.
+An issue proposed for decomposition gets `needs-triage` (its proposal comment is the record) until the
+decomposition is approved and created.
 
 ```
 ## Issue Triage: <org>/<repo>
@@ -333,8 +338,12 @@ Supply the marathon skill's adapter as:
   record that sequencing in the run plan (the wave table) and hold the issue out of any
   wave until the PR merges.
   Read the edges and the rollup in the same call rather than one request per issue:
-  `gh issue list ... --json number,title,body,labels,blockedBy,subIssuesSummary` returns both;
-  the per-issue REST paths below stay the reference and the write side.
+  `gh issue list ... --json number,title,body,labels,blockedBy,subIssues,subIssuesSummary,parent`
+  returns the edges, the parent/child graph, and the rollup, so leaf and parent membership is a
+  local lookup. The GraphQL-backed shapes differ from REST: `blockedBy` and `subIssues` arrive as
+  `{nodes: [...], totalCount}`, not the flat array `dependencies/blocked_by` returns, so read
+  `.blockedBy.nodes[].number` (reading the REST shape silently yields zero edges). The per-issue
+  REST paths below stay the reference and the write side.
   Decomposed parents: an enumerated issue whose `sub_issues_summary.total` is above 0 (the
   `subIssuesSummary` field) is decomposed, never a work unit, and never handed to an
   implementing teammate. The work units are the enumerated leaf issues: children from
@@ -342,8 +351,9 @@ Supply the marathon skill's adapter as:
   matching the scope filter), plus every undecomposed enumerated issue. An untagged or
   out-of-scope child is never pulled in by its parent, and a child the Staleness Check dropped
   stays dropped for this run. A child counts as done only when verified `CLOSED` by a merged PR:
-  `gh issue view <child> --json state,closedByPullRequestsReferences` shows `state` `CLOSED` and
-  a non-empty `closedByPullRequestsReferences` list. `sub_issues_summary` counts closures of any
+  `gh issue view <child> --json state,closedByPullRequestsReferences` shows `state` `CLOSED`, and
+  at least one referenced PR number resolves to `MERGED` via `gh pr view <pr> --json state`.
+  The reference list alone is not enough: it includes open PRs and carries no merge state. `sub_issues_summary` counts closures of any
   kind, so it is the human rollup, not the trigger.
   At plan time, compare each decomposed parent's children against the enumerated set. Exactly
   one of two outcomes applies, and the second is a catch-all:
@@ -424,8 +434,9 @@ For each queued `agent-ready` issue, compare the files it targets (paths named i
 located by a quick read of the code it describes) against those lists. Ignore PRs on this run's
 own `issue-*` branches. For any issue an open PR touches, surface it in the plan with exactly one
 of three outcomes instead of spawning blind:
-- **Combine** - the PR is unmerged work on the same change: fold the issue into that PR's branch
-  (or its owner's scope) rather than opening a competing PR.
+- **Combine** - the PR is unmerged work on the same change. The run does not push to another
+  author's branch: combine is a recommendation surfaced to the user in the plan, with the issue
+  held out of every wave (as for Sequence) until the user folds it into that PR or answers.
 - **Sequence after the PR** - the issue is still valid but must build on the PR's result: record
   "issue N waits for PR M" in the wave table and hold N out of every wave until M merges (the
   open-PR blocker rule above).
