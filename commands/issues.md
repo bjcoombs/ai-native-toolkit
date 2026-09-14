@@ -59,7 +59,8 @@ this order, and every write it makes shows up in the report the human approves:
 
 1. **Promote on Confirmation** - fold in answers the human gave since the last run.
 2. **Research Pass** - resolve what the repository can answer before asking anything.
-3. **Overlap Sweep** - hold back issues that collide with open PRs or with each other.
+3. **Overlap Sweep** - hold back issues that collide with open PRs; record issue-to-issue
+   collisions as edges or hot-file notes.
 4. **Size by Judgment** - decide one PR or several, and propose any decomposition.
 5. **Dependency Authoring** - write the ordering as native `blocked_by` edges.
 6. **Triage Report** - apply every label write at once, then render labels, decomposition
@@ -70,7 +71,7 @@ no unresolved overlap, and sized to one PR (or approved as a decomposed parent).
 else stays or becomes `needs-triage`. Research and sizing read widely, so fan them out with
 subagents (the `Agent` tool); never teammates.
 
-Steps 1 to 5 decide the label of each issue that exists at the start of the pass but do not
+Steps 1 to 4 decide the label of each issue that exists at the start of the pass but do not
 write it: the verdict needs all four inputs, so every `agent-ready` / `needs-triage` label change
 on those issues happens in one write at the Triage Report step. Creating an approved
 decomposition is a separate phase after approval that labels its own children and parent (see
@@ -361,7 +362,7 @@ Supply the marathon skill's adapter as:
     eligible when the last one is done, a state rather than only an event: a parent whose
     children were all done before this run is eligible before Wave 1.
   - **Skip** - anything else (a child open but not in this run, a child closed without a merged
-    PR, no child in the run at all). Report it ("#N: 1 of 2 children in this run; verification
+    PR, no child in the run and at least one child not done). Report it ("#N: 1 of 2 children in this run; verification
     deferred", "#N: child #M closed without a merged PR") and swap the parent's label from
     `agent-ready` to `needs-triage` with a comment naming the children at fault, so a parked
     parent never keeps `READY` above 0 and pins `/issues` in Marathon mode. The next triage run

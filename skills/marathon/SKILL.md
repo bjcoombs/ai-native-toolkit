@@ -455,7 +455,7 @@ strength of the earlier REVIEW_CLEAR alone.
 4. Check for newly unblocked tasks. If this merge made a verification unit eligible (its last child merged, per the adapter's rule), spawn that parent's read-only acceptance-check subagent now, continue to the wave transition, and close or report the parent per the adapter when the result returns.
 5. **Wave transition**: Batch-dismiss stale CRs across all eligible PRs before spawning next wave. Review signals from completed wave, adapt next prompts with learnings.
 6. Check ready tasks via the adapter's enumerate operation filtered to `pending` status. Spawn fresh teammates for ready tasks.
-7. If all done → [Completion](#completion--retrospective)
+7. If all done → [Completion](#completion--retrospective). "All done" includes every eligible verification unit: wait for each outstanding parent acceptance-check subagent to return and for its parent to be closed or reported per the adapter before entering Completion.
 
 **If not merge-ready:**
 - BLOCKED → report to user, message teammate
