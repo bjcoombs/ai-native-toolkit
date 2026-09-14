@@ -322,3 +322,41 @@ def test_sibling_test_fallback_hyphenated_stem_and_test_files(tmp_path: Path) ->
     block = compute_test_focus(hot, None, None, repo_root=tmp_path)
     by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
     assert by_path == {path: "sibling_test_only" for path in hot}
+
+
+def test_flat_tests_tree_does_not_credit_every_same_named_file(tmp_path: Path) -> None:
+    """A single root tests/test_mod.py carries no path relationship to either
+    src/a/mod.py or src/b/mod.py, so a bare-name match cannot credit both; this
+    repo's own flat skills/assess/tests layout is still credited alongside."""
+    for rel in ("src/a/mod.py", "src/b/mod.py", "tests/test_mod.py",
+                "skills/assess/scripts/lib/doc_graph.py",
+                "skills/assess/tests/test_doc_graph.py"):
+        _touch(tmp_path, rel)
+    hot = ["src/a/mod.py", "src/b/mod.py", "skills/assess/scripts/lib/doc_graph.py"]
+    block = compute_test_focus(hot, None, None, repo_root=tmp_path)
+    by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
+    credited = [p for p in ("src/a/mod.py", "src/b/mod.py")
+                if by_path[p] == "sibling_test_only"]
+    assert len(credited) <= 1
+    assert by_path["skills/assess/scripts/lib/doc_graph.py"] == "sibling_test_only"
+
+
+def test_flat_tests_tree_bounded_to_package_depth(tmp_path: Path) -> None:
+    """A flat root tests/ tree does not reach a source nested deeper than its
+    top-level package directory, while a mirrored path at the same root and a
+    same-named file with a direct sibling test keep their credit."""
+    for rel in ("pkg/sub/deep/mod.py", "tests/test_mod.py",
+                "pkg/sub/deep/view.py", "tests/sub/deep/test_view.py",
+                "src/x/util.py", "src/x/test_util.py",
+                "src/y/util.py"):
+        _touch(tmp_path, rel)
+    hot = ["pkg/sub/deep/mod.py", "pkg/sub/deep/view.py",
+           "src/x/util.py", "src/y/util.py"]
+    block = compute_test_focus(hot, None, None, repo_root=tmp_path)
+    by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
+    assert by_path == {
+        "pkg/sub/deep/mod.py": "unsupported",
+        "pkg/sub/deep/view.py": "sibling_test_only",
+        "src/x/util.py": "sibling_test_only",
+        "src/y/util.py": "unsupported",
+    }

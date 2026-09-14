@@ -317,6 +317,7 @@ def test_report_renders_where_to_focus_testing_table() -> None:
     assert "sibling_test_only" not in report
     assert "measure_coverage" not in report
     assert "unknown_no_coverage" not in report
+    assert "add_tests" not in report
     # The verbose section lives in a fold, never on the human surface.
     assert "Where to focus testing" not in surface
 

@@ -36,8 +36,10 @@ Signal per file (most to least actionable):
 Sibling-test fallback: with no coverage report and a ``repo_root``, a hot file
 with a sibling test (``<stem>.test.<ext>``, ``<stem>.spec.<ext>``,
 ``<stem>_test.<ext>``, ``test_<stem>.<ext>`` beside it, in an adjacent
-``__tests__/`` / ``tests/`` / ``test/`` directory, or in a ``tests/`` / ``test/``
-tree at any ancestor up to the root, flat or mirroring the source path; a
+``__tests__/`` / ``tests/`` / ``test/`` directory, in a ``tests/`` / ``test/``
+tree at any ancestor up to the root mirroring the source path, or in a flat
+``tests/`` / ``test/`` tree beside the source's directory or its top-level package
+directory when no other hot file shares its bare name; a
 hyphenated stem also matches its underscore spelling) gets ``sibling_test_only``
 rather than a covered bucket, and so does a hot file that is itself a test file:
 the only evidence is a file's existence, so the core never spells it as coverage.
@@ -189,50 +191,73 @@ _TREE_TEST_DIRS = ("tests", "test")
 # Bound on how many ancestor directories the walk visits. Each level costs a
 # couple of directory stats plus a few file stats only where a test dir exists.
 _MAX_ANCESTOR_LEVELS = 16
+# A flat ``tests/`` / ``test/`` tree (test named by bare file name, no path
+# mirrored) is only trusted where it sits beside the source's own directory
+# (one component below the ancestor) or beside its top-level package directory
+# (two components: ``skills/assess/tests`` for ``skills/assess/scripts/lib/``).
+# Further up, a bare-name match carries no path relationship: a root
+# ``tests/test_mod.py`` would credit every ``mod.py`` in the tree.
+_MAX_FLAT_BELOW = 2
+
+# Match strength returned by the sibling-test probe.
+_MATCH_DIRECT = "direct"  # beside, adjacent, mirrored, or the file is a test
+_MATCH_FLAT = "flat"  # only a bounded flat tests/ tree matched the bare name
 
 
-def _test_dirs_for(rel_dir: Path) -> list[Path]:
+def _test_dirs_for(rel_dir: Path) -> list[tuple[Path, bool]]:
     """Repo-relative directories that may hold a test for a source in
-    ``rel_dir``, most local first: the source's own directory, its adjacent test
-    directories, then at each ancestor up to the root a ``tests/`` / ``test/``
-    tree - flat, mirroring the source's path below that ancestor, and mirroring
-    it with the first component (a ``src/``-style root) dropped."""
-    dirs: list[Path] = [rel_dir] + [rel_dir / d for d in _ADJACENT_TEST_DIRS]
+    ``rel_dir``, most local first, each paired with whether it is a flat probe:
+    the source's own directory, its adjacent test directories, then at each
+    ancestor up to the root a ``tests/`` / ``test/`` tree mirroring the source's
+    path below that ancestor, and mirroring it with the first component (a
+    ``src/``-style root) dropped. The flat tree (bare name, no mirror) is probed
+    only within ``_MAX_FLAT_BELOW`` components of the source directory."""
+    dirs: dict[Path, bool] = {rel_dir: False}
+    for d in _ADJACENT_TEST_DIRS:
+        dirs[rel_dir / d] = False
     parts = rel_dir.parts
     for depth in range(len(parts), -1, -1)[:_MAX_ANCESTOR_LEVELS]:
         ancestor = Path(*parts[:depth])
         below = parts[depth:]
         for tree in _TREE_TEST_DIRS:
             base = ancestor / tree
-            dirs.append(base)
             if below:
-                dirs.append(base.joinpath(*below))
+                dirs.setdefault(base.joinpath(*below), False)
                 if len(below) > 1:
-                    dirs.append(base.joinpath(*below[1:]))
-    return list(dict.fromkeys(dirs))
+                    dirs.setdefault(base.joinpath(*below[1:]), False)
+            if len(below) <= _MAX_FLAT_BELOW:
+                dirs.setdefault(base, True)
+    return list(dirs.items())
 
 
-def _has_sibling_test(path: str, repo_root: Path) -> bool:
-    """True when a conventionally named test file for ``path`` exists beside it,
-    in an adjacent ``__tests__/`` / ``tests/`` / ``test/`` directory (where
-    ``__tests__/`` also accepts the bare source name), or in a ``tests/`` /
-    ``test/`` tree at any ancestor up to ``repo_root`` (flat or mirroring the
-    source path). A hot file that is itself a test counts as its own test file.
-    A source that is not on disk (a stale stats entry for a
-    deleted file) is never credited. Never raises."""
+def _sibling_test_match(path: str, repo_root: Path) -> str | None:
+    """How a conventionally named test file for ``path`` was found, or ``None``.
+
+    ``_MATCH_DIRECT``: the test sits beside the source, in an adjacent
+    ``__tests__/`` / ``tests/`` / ``test/`` directory (where ``__tests__/`` also
+    accepts the bare source name), or in a ``tests/`` / ``test/`` tree at any
+    ancestor up to ``repo_root`` mirroring the source path; or the hot file is
+    itself a test. ``_MATCH_FLAT``: only a flat ``tests/`` / ``test/`` tree
+    beside the source directory or its top-level package directory holds the
+    bare name - weaker evidence the caller disambiguates across hot files. A
+    source that is not on disk (a stale stats entry for a deleted file) is never
+    credited. Never raises."""
     try:
         source = repo_root / path
         if not source.is_file():
-            return False
+            return None
         if _is_test_file(source.name) or "__tests__" in Path(path).parts:
-            return True
+            return _MATCH_DIRECT
         names = _sibling_test_names(source.name)
         if not names:
-            return False
+            return None
         rel_dir = Path(path).parent
         if ".." in rel_dir.parts or rel_dir.is_absolute():
-            return False
-        for rel in _test_dirs_for(rel_dir):
+            return None
+        flat_hit = False
+        for rel, is_flat in _test_dirs_for(rel_dir):
+            if is_flat and flat_hit:
+                continue  # already have the weak match; only a direct one helps
             directory = repo_root / rel
             if not directory.is_dir():
                 continue
@@ -240,10 +265,18 @@ def _has_sibling_test(path: str, repo_root: Path) -> bool:
             if rel.name == "__tests__":
                 candidates.append(source.name)
             if any((directory / n).is_file() for n in candidates):
-                return True
-        return False
+                if not is_flat:
+                    return _MATCH_DIRECT
+                flat_hit = True
+        return _MATCH_FLAT if flat_hit else None
     except (OSError, ValueError):
-        return False
+        return None
+
+
+def _name_key(path: str) -> str:
+    """Bare file name with hyphens folded to underscores: two hot files with the
+    same key resolve to the same conventional test names."""
+    return Path(path).name.replace("-", "_")
 
 
 def _hollow_kinds(path: str, cheap_heuristics: dict[str, Any]) -> list[str]:
@@ -272,12 +305,15 @@ def _classify(
     coverage_data: dict[str, Any] | None,
     cheap_heuristics: dict[str, Any],
     repo_root: Path | None = None,
+    shared_names: frozenset[str] = frozenset(),
 ) -> tuple[str, list[str]]:
     """Resolve a file's test signal and the hollow kinds it tripped.
 
     No coverage report and a ``repo_root``: a sibling test credits the file as
     ``sibling_test_only`` (with any hollow kinds it tripped); no sibling test ->
-    ``unsupported``. No report and no ``repo_root`` ->
+    ``unsupported``. A flat-only match does not credit a file whose bare name
+    another hot file shares (``shared_names``): the bare name cannot say which
+    of them the test belongs to. No report and no ``repo_root`` ->
     ``unknown_no_coverage`` (we never claim clean).
     Covered + a hollow hit -> ``covered_but_hollow``. Covered + clean ->
     ``covered_clean``. Present report but file absent / zero rate ->
@@ -286,7 +322,8 @@ def _classify(
     if not coverage_present or coverage_data is None:
         if repo_root is None:
             return "unknown_no_coverage", []
-        if not _has_sibling_test(path, repo_root):
+        match = _sibling_test_match(path, repo_root)
+        if match is None or (match == _MATCH_FLAT and _name_key(path) in shared_names):
             return "unsupported", []
         return "sibling_test_only", _hollow_kinds(path, cheap_heuristics)
     if not _is_covered(path, coverage_data):
@@ -330,6 +367,16 @@ def compute_test_focus(
     entries: list[TestFocusEntry] = []
 
     items = hot_files if isinstance(hot_files, list) else []
+    # Bare names carried by more than one considered hot file: a flat tests/
+    # match on such a name is ambiguous and credits none of them.
+    name_counts: dict[str, int] = {}
+    for item in items[: _LOW_MAX + 1]:
+        hot_path = _entry_path(item)
+        if hot_path is not None:
+            key = _name_key(hot_path)
+            name_counts[key] = name_counts.get(key, 0) + 1
+    shared_names = frozenset(k for k, n in name_counts.items() if n > 1)
+
     for index, item in enumerate(items):
         band = _risk_band(index)
         if band is None:
@@ -340,6 +387,7 @@ def compute_test_focus(
         signal, kinds = _classify(
             path, coverage_present, coverage_data, heuristics,
             Path(repo_root) if repo_root is not None else None,
+            shared_names,
         )
         if signal == "covered_clean":
             continue  # not a focus target
