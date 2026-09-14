@@ -114,15 +114,22 @@ REFUSED_RE = re.compile(
 UNCLASSIFIED_RE = re.compile(
     r"^needs\.([A-Za-z0-9_-]+)\.result\s*!=\s*['\"]success['\"]$"
 )
-# Any ``needs.<job>.result`` in a job-level guard, whichever job it names.
-NEEDS_RESULT_RE = re.compile(r"needs\.[A-Za-z0-9_-]+\.result")
+# The one shape the enforcement job's own guard may take. Anything else -- a
+# ``needs.<job>.result`` conjunct, a branch test, no guard at all -- lets the
+# required context SKIP on some path, and branch protection reads a skipped
+# required context as satisfied.
+ENFORCEMENT_GUARD = "!cancelled()"
+# The filter job must PRODUCE the output the guards read: a job-level
+# ``outputs:`` entry at six spaces, with a value. Without it the consumers'
+# ``needs.<filter>.outputs.floor_core_changed`` is empty on every run.
+JOB_OUTPUT_RE = re.compile(r"^\s{6}" + FLOOR_CORE_OUTPUT + r":\s*\S")
 # A step's shape inside a job: steps start with ``- `` at six spaces, and a
 # ``run:`` inside one is either inline or a ``|``/``>`` block whose body sits
 # deeper than the key. A conversion step must actually exit non-zero -- a guard
 # that fires into ``run: true`` converts nothing -- so its script is read too.
 STEP_START_RE = re.compile(r"^\s{6}-\s")
 STEP_RUN_RE = re.compile(r"^(\s{8,})run:\s*(.*?)\s*$")
-EXIT_NONZERO_RE = re.compile(r"\bexit\s+[1-9]")
+EXIT_NONZERO_RE = re.compile(r"^\s*exit\s+[1-9]\d*\s*$", re.MULTILINE)
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # --- E2 DESCOPE: floor.yml path lock (maintainer decision, 2026-07-10) --------
@@ -741,6 +748,14 @@ def _check_reads_filter(
             "`needs:`. GitHub evaluates an output from a job outside `needs` "
             "as empty, so the guard is never true."
         )
+    if not any(JOB_OUTPUT_RE.match(line) for line in jobs[filter_job]):
+        raise AnchorError(
+            f"{what} {job_id!r} reads `needs.{filter_job}.outputs."
+            f"{FLOOR_CORE_OUTPUT}` but job {filter_job!r} declares no "
+            f"`{FLOOR_CORE_OUTPUT}:` under `outputs:`. An output the producer "
+            "never sets is empty on every run, so the guard is never true and "
+            "the review is never requested."
+        )
 
 
 def _job_steps(lines: list[str]) -> list[list[str]]:
@@ -800,19 +815,18 @@ def _check_refusal_is_red(
     """
     for job_id in enforcement:
         lines = jobs[job_id]
-        for line in lines:
-            match = JOB_IF_RE.match(line)
-            if match and NEEDS_RESULT_RE.search(match.group(1)):
-                raise AnchorError(
-                    f"the {FLOOR_CONTEXT!r} job's `if:` guard references a "
-                    f"needed job's result ({match.group(1)!r}). A result "
-                    "conjunct makes this required context SKIP when that job "
-                    "fails or is skipped -- a refused review, or a path filter "
-                    "that never ran -- and branch protection reads a skipped "
-                    "required context as satisfied. Every such outcome has to "
-                    "arrive here as red, not absent, so the guard must be "
-                    "`${{ !cancelled() }}` alone."
-                )
+        guards = [m.group(1) for line in lines if (m := JOB_IF_RE.match(line))]
+        if not guards or _strip_expression(guards[0]) != ENFORCEMENT_GUARD:
+            seen = guards[0] if guards else "no `if:` at all"
+            raise AnchorError(
+                f"the {FLOOR_CONTEXT!r} job's guard is {seen!r}, not "
+                f"`${{{{ {ENFORCEMENT_GUARD} }}}}` alone. The default guard "
+                "and any `needs.<job>.result` conjunct make this required "
+                "context SKIP when a needed job fails or is skipped -- a "
+                "refused review, or a path filter that never ran -- and branch "
+                "protection reads a skipped required context as satisfied. "
+                "Every such outcome has to arrive here as red, not absent."
+            )
         steps = [
             (guard, _step_run(step))
             for step in _job_steps(lines)

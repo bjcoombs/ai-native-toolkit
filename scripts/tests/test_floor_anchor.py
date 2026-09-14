@@ -1024,3 +1024,43 @@ def test_signoff_wiring_accepts_a_block_run_that_exits_non_zero(tmp_path, capsys
     )
     floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
     assert "ok   " in capsys.readouterr().out
+
+
+def test_signoff_wiring_fails_closed_when_enforcement_has_no_guard(tmp_path):
+    # Disarm path 14: the `if: ${{ !cancelled() }}` line is simply removed.
+    # GitHub's default guard is `success()`, so a refused sign-off SKIPS the
+    # required context -- absent, which branch protection reads as satisfied.
+    body = FLOOR_YML_WIRED.replace("    if: ${{ !cancelled() }}\n", "", 1)
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "no `if:` at all" in msg
+    assert "cancelled" in msg
+
+
+def test_signoff_wiring_fails_closed_when_the_filter_declares_no_output(tmp_path):
+    # Disarm path 15: every consumer still reads floor_core_changed, but the
+    # producer no longer declares it under `outputs:`, so it is empty on
+    # every run and the review is never requested.
+    body = FLOOR_YML_WIRED.replace(
+        "      floor_core_changed: ${{ steps.filter.outputs.floor_core_changed }}\n",
+        "",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "declares no" in msg
+    assert "canary-changes" in msg
+
+
+def test_signoff_wiring_rejects_an_exit_that_is_only_mentioned(tmp_path):
+    # `echo "exit 1"` mentions a non-zero exit without performing one; the
+    # script check wants a line that IS `exit <n>`.
+    body = FLOOR_YML_WIRED.replace(
+        "        if: needs.signoff.result == 'failure'\n        run: exit 1\n",
+        "        if: needs.signoff.result == 'failure'\n"
+        "        run: echo \"would exit 1\"\n",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "never exits non-zero" in str(exc.value)
