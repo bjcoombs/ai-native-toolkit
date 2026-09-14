@@ -30,20 +30,21 @@ The PR is merge-ready only when all six are simultaneously true. Re-check from t
 3. **All inline comments addressed** — see thread resolution rules
 4. **No unaddressed conversation comments** — actionable feedback responded to
 5. **All review threads resolved** — no unresolved threads remain
-6. **Re-reviewing bots have reviewed the head SHA** - every bot the project's Marathon Configuration flags `Re-reviews on push: yes` has completed its review of the current head SHA: its latest review or check run on that commit is dated after the head commit was pushed. A review of an earlier commit does not count; any push restarts the wait. The wait is bounded per bot by that bot's `Max wait for re-review`, measured from the head commit's push. When the max wait expires before the bot completes, the criterion passes with a warning recorded in the merge record (the PR comment or report that accompanies the merge) naming the bot and the head SHA it did not review. Bots without `Re-reviews on push: yes` are never waited on, so a project with no such flags sees no change.
+6. **Re-reviewing bots have reviewed the head SHA** - every bot the project's Marathon Configuration flags `Re-reviews on push: yes` has completed its pass on the current head SHA: either the bot's latest review carries that head SHA as its `commit_id`, or (for a bot configured with `Re-review check name`) a check run of that name on the head SHA has completed with conclusion `success`. A review of an earlier commit does not count, and neither does a check run that is red, cancelled, or still in progress; any push restarts the wait. The wait is bounded per bot by that bot's `Max wait for re-review`, measured from when the head commit was pushed (the earliest check-suite creation on the head SHA, not the commit's committer date, which predates the push and resets on rebase). When the max wait expires before the bot completes, the criterion passes with a warning recorded in the merge record (the PR comment or report that accompanies the merge) naming the bot and the head SHA it did not review. Bots without `Re-reviews on push: yes` are never waited on, so a project with no such flags sees no change.
 
-**Checking criterion 6** (per flagged bot; `<bot-login>` from the Marathon Configuration):
+**Checking criterion 6** (per flagged bot; `<bot-login>` and the optional `<check-name>` from its `Re-review check name` field in the Marathon Configuration):
 ```bash
 HEAD_SHA=$(gh pr view $PR --json headRefOid | jq -r '.headRefOid')
-PUSHED_AT=$(gh api repos/<owner>/<repo>/commits/$HEAD_SHA | jq -r '.commit.committer.date')
-# Reviews by the bot on the head SHA
+# Push time of the head commit: GitHub creates check suites on push
+PUSHED_AT=$(gh api repos/<owner>/<repo>/commits/$HEAD_SHA/check-suites | jq -r '[.check_suites[].created_at] | min')
+# (a) Bot that submits reviews: its reviews whose commit_id is the head SHA
 gh api repos/<owner>/<repo>/pulls/$PR/reviews \
   | jq --arg sha "$HEAD_SHA" --arg bot "<bot-login>" '[.[] | select(.commit_id == $sha and .user.login == $bot) | .submitted_at]'
-# Check runs on the head SHA completed by the bot's app
+# (b) Bot hosted as a check run (Re-review check name set): matched by check-run name, green only
 gh api repos/<owner>/<repo>/commits/$HEAD_SHA/check-runs \
-  | jq '[.check_runs[] | select(.status == "completed") | {name, app: .app.slug, completed_at}]'
+  | jq --arg n "<check-name>" '[.check_runs[] | select(.name == $n and .status == "completed" and .conclusion == "success") | .completed_at]'
 ```
-Complete when a review or completed check run for the bot is dated after `PUSHED_AT`. Waiting when none exists yet and the max wait since `PUSHED_AT` has not expired.
+Complete when path (a) returns at least one review, or, for a bot with `Re-review check name` set, path (b) returns at least one run. Never match check runs by app slug: every GitHub Actions job, the reviewer included, reports as `github-actions`, so an unrelated job completing would pass the criterion. Waiting when neither path returns a match and the max wait since `PUSHED_AT` has not expired. A green reviewer check still warrants the spot-check the marathon skill describes (the reviewer's summary cites the head SHA) before merging on the strength of it.
 
 **Thread resolution rules:**
 Follow bot reviewer rules from the project's CLAUDE.md Marathon Configuration. Generic defaults:

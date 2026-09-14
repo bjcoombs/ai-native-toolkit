@@ -32,12 +32,13 @@ Project-specific settings for `/tm` marathon mode.
 
 <!-- Remove any bots you don't use. Add entries for any custom bots. -->
 
-Two optional per-bot fields drive `pr-review-merge` Ready Criterion 6 (bot re-review of the head SHA):
-- `Re-reviews on push: yes|no` - opt-in. `yes` means the PR is not ready until this bot has completed a review or check run on the current head SHA. Bots without `yes` are never waited on.
-- `Max wait for re-review: <duration>` - upper bound (e.g. `10m`) measured from the head commit's push. When it expires the criterion passes with a warning naming the bot in the merge record.
+Three optional per-bot fields drive `pr-review-merge` Ready Criterion 6 (bot re-review of the head SHA):
+- `Re-reviews on push: yes|no` - opt-in, `no` by default. `yes` means the PR is not ready until this bot has completed its pass on the current head SHA. Bots without `yes` are never waited on. Turn it on only for a bot that reliably re-reviews every push and whose findings you want before merge (for example an AI reviewer on AI-authored changes); leave it `no` for a bot that is rate-limited or often skips re-reviews, or every PR stalls for the full max wait.
+- `Max wait for re-review: <duration>` - upper bound (e.g. `10m`) measured from when the head commit was pushed (its earliest check-suite creation). When it expires the criterion passes with a warning naming the bot in the merge record.
+- `Re-review check name: <check-run name>` - set when the bot's pass shows up as a check run (for example a GitHub Actions reviewer job) rather than a submitted review. The criterion then counts only a check run of that name on the head SHA that completed with conclusion `success`.
 
 **CodeRabbit** (`coderabbitai[bot]`):
-- Re-reviews on push: yes
+- Re-reviews on push: no
 - Max wait for re-review: 10m
 - Fix code and push. CodeRabbit re-reviews automatically and resolves its own threads.
 - **NEVER reply in CodeRabbit threads** - CodeRabbit ignores replies from other bots.

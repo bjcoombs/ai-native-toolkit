@@ -105,7 +105,8 @@ Project-specific settings the `/tm` and `/issues` commands (and the shared `mara
 **claude-review** (`claude[bot]`, the advisory AI review workflow):
 - Re-reviews on push: yes
 - Max wait for re-review: 15m
-- The marathon's hold for the AI review before merging is this setting applied through `pr-review-merge` Ready Criterion 6: the lead waits until `claude[bot]` has reviewed the head SHA (its summary's `Commit:` line cites the head), and after 15m merges with a warning naming `claude-review` in the merge record.
+- Re-review check name: claude-review
+- The marathon's hold for the AI review before merging is this setting applied through `pr-review-merge` Ready Criterion 6: the lead waits until the `claude-review` check run on the head SHA has completed with conclusion `success` and its summary's `Commit:` line cites the head, and after 15m merges with a warning naming `claude-review` in the merge record.
 - Resolve its threads via GraphQL after addressing the feedback.
 
 No human reviewers on this repo.
