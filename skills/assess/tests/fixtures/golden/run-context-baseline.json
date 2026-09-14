@@ -4008,72 +4008,72 @@
       {
         "path": "skills/assess/scripts/assess_core.py",
         "risk_band": "high",
-        "test_signal": "unknown_no_coverage",
+        "test_signal": "sibling_test_only",
         "hollow_heuristic_kinds": [],
-        "suggested_action": "add_tests"
+        "suggested_action": "measure_coverage"
       },
       {
         "path": "skills/assess/scripts/lib/doc_graph.py",
         "risk_band": "high",
-        "test_signal": "unknown_no_coverage",
+        "test_signal": "sibling_test_only",
         "hollow_heuristic_kinds": [],
-        "suggested_action": "add_tests"
+        "suggested_action": "measure_coverage"
       },
       {
         "path": "skills/assess/scripts/complexity-treemap.py",
         "risk_band": "high",
-        "test_signal": "unknown_no_coverage",
+        "test_signal": "sibling_test_only",
         "hollow_heuristic_kinds": [],
-        "suggested_action": "add_tests"
+        "suggested_action": "measure_coverage"
       },
       {
         "path": "skills/assess/tests/test_assess_core.py",
         "risk_band": "medium",
-        "test_signal": "unknown_no_coverage",
+        "test_signal": "sibling_test_only",
         "hollow_heuristic_kinds": [],
-        "suggested_action": "add_tests"
+        "suggested_action": "measure_coverage"
       },
       {
         "path": "skills/assess/scripts/lib/doc_staleness.py",
         "risk_band": "medium",
-        "test_signal": "unknown_no_coverage",
+        "test_signal": "sibling_test_only",
         "hollow_heuristic_kinds": [],
-        "suggested_action": "add_tests"
+        "suggested_action": "measure_coverage"
       },
       {
         "path": "skills/assess/scripts/lib/liveness_scan.py",
         "risk_band": "medium",
-        "test_signal": "unknown_no_coverage",
+        "test_signal": "sibling_test_only",
         "hollow_heuristic_kinds": [],
-        "suggested_action": "add_tests"
+        "suggested_action": "measure_coverage"
       },
       {
         "path": "skills/assess/tests/test_doc_graph.py",
         "risk_band": "medium",
-        "test_signal": "unknown_no_coverage",
+        "test_signal": "sibling_test_only",
         "hollow_heuristic_kinds": [],
-        "suggested_action": "add_tests"
+        "suggested_action": "measure_coverage"
       },
       {
         "path": "skills/assess/scripts/doc-graph-svg.py",
         "risk_band": "low",
-        "test_signal": "unknown_no_coverage",
+        "test_signal": "sibling_test_only",
         "hollow_heuristic_kinds": [],
-        "suggested_action": "add_tests"
+        "suggested_action": "measure_coverage"
       },
       {
         "path": "skills/assess/tests/test_test_pressure.py",
         "risk_band": "low",
-        "test_signal": "unknown_no_coverage",
+        "test_signal": "sibling_test_only",
         "hollow_heuristic_kinds": [],
-        "suggested_action": "add_tests"
+        "suggested_action": "measure_coverage"
       },
       {
         "path": "skills/assess/scripts/lib/agent_instructions_grader.py",
         "risk_band": "low",
-        "test_signal": "unknown_no_coverage",
+        "test_signal": "sibling_test_only",
         "hollow_heuristic_kinds": [],
-        "suggested_action": "add_tests"
+        "suggested_action": "measure_coverage"
       }
     ]
   }

@@ -62,18 +62,18 @@ No hatching visible - mutation analysis was not run. The hatching would mark cov
 
 Coverage data: none found - test signals are heuristic-only.
 
-The cheap, always-on read of which risky files most need test work. No coverage report exists for this repo, so every covered/uncovered call is unknown rather than guessed - each risky file is surfaced for test work, not silently blessed as clean.
+The cheap, always-on read of which risky files most need test work. No coverage report exists for this repo, so no file is called covered: each risky file has a conventionally named test file, and the next step is measuring coverage rather than guessing it.
 
 | File | Risk | Test Signal | Suggested Action |
 |------|------|-------------|------------------|
-| `skills/assess/scripts/assess_core.py` | High | Unknown (no coverage) | Add tests |
-| `skills/assess/scripts/lib/doc_graph.py` | High | Unknown (no coverage) | Add tests |
-| `skills/assess/scripts/complexity-treemap.py` | High | Unknown (no coverage) | Add tests |
-| `skills/assess/tests/test_assess_core.py` | Medium | Unknown (no coverage) | Add tests |
-| `skills/assess/scripts/lib/doc_staleness.py` | Medium | Unknown (no coverage) | Add tests |
-| `skills/assess/scripts/lib/liveness_scan.py` | Medium | Unknown (no coverage) | Add tests |
-| `skills/assess/tests/test_doc_graph.py` | Medium | Unknown (no coverage) | Add tests |
-| `skills/assess/scripts/doc-graph-svg.py` | Low | Unknown (no coverage) | Add tests |
+| `skills/assess/scripts/assess_core.py` | High | Test file present, coverage unmeasured | Measure coverage |
+| `skills/assess/scripts/lib/doc_graph.py` | High | Test file present, coverage unmeasured | Measure coverage |
+| `skills/assess/scripts/complexity-treemap.py` | High | Test file present, coverage unmeasured | Measure coverage |
+| `skills/assess/tests/test_assess_core.py` | Medium | Test file present, coverage unmeasured | Measure coverage |
+| `skills/assess/scripts/lib/doc_staleness.py` | Medium | Test file present, coverage unmeasured | Measure coverage |
+| `skills/assess/scripts/lib/liveness_scan.py` | Medium | Test file present, coverage unmeasured | Measure coverage |
+| `skills/assess/tests/test_doc_graph.py` | Medium | Test file present, coverage unmeasured | Measure coverage |
+| `skills/assess/scripts/doc-graph-svg.py` | Low | Test file present, coverage unmeasured | Measure coverage |
 
 (8 of 10 focus targets shown; the full ranked list is in `run-context.json` under `.test_focus.entries`.)
 

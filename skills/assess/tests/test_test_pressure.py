@@ -684,3 +684,34 @@ def test_thesis_full_scan_separates_hollow_from_honest(fixtures_dir: Path) -> No
     # configures mutation testing, so that signal stays identical across both.
     assert hollow["mutation_config_present"] is False
     assert honest["mutation_config_present"] is False
+
+
+def test_mutation_run_requires_parsed_mutants(tmp_path: Path, monkeypatch) -> None:
+    """A tool that runs and exits 0 but yields no parsed mutants must not claim a
+    run (#317): a stryker spec on a TypeScript repo used to report mutation_run
+    True off an empty parse, lifting the Layer 6 cap with no evidence."""
+    _write(tmp_path, "src/a.ts", "export const a = 1;")
+    monkeypatch.setattr(tp.shutil, "which", lambda t: "/usr/bin/" + t)
+    monkeypatch.setattr(
+        tp.subprocess, "run",
+        lambda cmd, **k: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""))
+    r = run_bounded_mutation(tmp_path, hot_files=["src/a.ts"], opt_in=True)
+    assert r["mutation_run"] is False
+    assert r["available"] is True
+    assert r["tool"] == "stryker"
+    assert r["per_file"] == []
+    assert r["reason"] == "no mutant records recovered from stryker output (exit code 0)"
+
+
+def test_mutation_run_requires_parsed_mutants_true_with_records(
+        tmp_path: Path, monkeypatch) -> None:
+    """The honest path still reports a run when the parser yields mutant data."""
+    _write(tmp_path, "app.py", "def f(): pass")
+    monkeypatch.setattr(tp.shutil, "which", lambda t: "/usr/bin/" + t)
+    monkeypatch.setattr(
+        tp.subprocess, "run",
+        lambda cmd, **k: subprocess.CompletedProcess(
+            cmd, 0, stdout="app.py:3\n", stderr=""))
+    r = run_bounded_mutation(tmp_path, hot_files=["app.py"], opt_in=True)
+    assert r["mutation_run"] is True
+    assert r["per_file"]
