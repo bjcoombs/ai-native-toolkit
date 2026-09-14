@@ -202,6 +202,11 @@ When decomposition is warranted:
    child has merged and the lead-run verification pass confirms the assembled result meets the
    parent's criteria. Its `sub_issues_summary` (`total`, `completed`, `percent_completed` on
    `gh api repos/$ORG/$REPO/issues/<parent>`) gives the human the rollup.
+5. **A parent sent back to `needs-triage`** (a marathon skip or a failed parent check) is
+   re-assessed as a parent, not re-decomposed: resolve the named gap (missing children back to
+   `agent-ready`, or a new child for a failed criterion, proposed for approval like any
+   decomposition), and its verdict returns to `agent-ready` only when every open child is
+   `agent-ready`.
 
 ### Dependency Authoring
 
@@ -265,7 +270,12 @@ Overlaps:
 - #12 <-> #15: README.md (additive, left parallel)
 
 Approve the decomposition of #30 and the execution order? Reply to proceed (this creates the
-sub-issues and edges), or re-run /issues to begin on the agent-ready issues.
+sub-issues), or re-run /issues to begin on the agent-ready issues.
+```
+
+With no decomposition proposed, the report ends instead with:
+```
+OK to start on the agent-ready issues in this execution order? Re-run /issues to begin, or reply to proceed.
 ```
 
 Do NOT spawn teammates in triage mode.
@@ -330,7 +340,10 @@ Supply the marathon skill's adapter as:
   but none is agent-ready"). A parent with any child that is open and not in this run (untagged,
   out of scope, or dropped by the Staleness Check) cannot become eligible this run: its
   enumerated children still run, and the parent is reported as a skip ("#N has 1 of 2 children
-  in this run; verification deferred") rather than carried as a permanently ineligible unit. The work
+  in this run; verification deferred"). Every skip also swaps the parent's label from
+  `agent-ready` to `needs-triage` with a comment naming the missing children, so a parked parent
+  never keeps `READY` above 0 and pins `/issues` in Marathon mode; the next triage run
+  re-assesses it (see Size by Judgment). The work
   units are the enumerated leaf issues: children from `.../sub_issues` count only when they are
   also in the enumerated set (open, `agent-ready`, matching the scope filter), plus every
   undecomposed enumerated issue. An untagged or out-of-scope child is never pulled in by its
@@ -348,7 +361,8 @@ Supply the marathon skill's adapter as:
   its freeze, the custody chokepoint, and the completion gate are unchanged. The lead re-reads
   the parent's acceptance criteria, checks each against merged `$BASE_BRANCH`, posts the
   per-criterion result as a comment on the parent, and runs `gh issue close <parent>` only when
-  every criterion holds; otherwise the parent stays open and the gap is reported to the user.
+  every criterion holds; otherwise the parent stays open, its label swaps from `agent-ready` to
+  `needs-triage` (the per-criterion comment is the record), and the gap is reported to the user.
 - **mark in-progress** — `gh issue edit <N> --add-label "in-progress"`.
 - **close on merge** — the teammate's PR body includes `Closes #<N>` (and `Closes #<M>` for
   every combined issue); GitHub auto-closes on merge. After merge, verify with
