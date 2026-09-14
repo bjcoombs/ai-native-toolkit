@@ -1,8 +1,9 @@
 ---
 name: pr-review-merge
 description: >
-  Drive a single pull request to merge-ready across all five criteria (sync, CI,
-  inline comments, conversation, threads), then smart-merge it. Source-agnostic
+  Drive a single pull request to merge-ready across all six criteria (sync, CI,
+  inline comments, conversation, threads, bot re-review of the head commit), then
+  smart-merge it. Source-agnostic
   library skill invoked by the /tm, /issues, /fix-pr, and /fix-develop commands and
   by marathon teammates. TRIGGER when a command or agent needs the PR review-to-green
   loop or the smart-merge (stale-bot-CR dismissal, auto-merge criteria, UNSTABLE/UNKNOWN
@@ -22,13 +23,27 @@ This skill takes one PR to merge — a **process** signal. A green, merged PR is
 
 ## Ready Criteria (ALL must be true)
 
-The PR is merge-ready only when all five are simultaneously true. Re-check from the top after every push — a fix can reopen an earlier criterion.
+The PR is merge-ready only when all six are simultaneously true. Re-check from the top after every push — a fix can reopen an earlier criterion.
 
 1. **Branch in sync** — no merge conflicts with base branch
 2. **CI passing** — all checks succeed (or skipped)
 3. **All inline comments addressed** — see thread resolution rules
 4. **No unaddressed conversation comments** — actionable feedback responded to
 5. **All review threads resolved** — no unresolved threads remain
+6. **Re-reviewing bots have reviewed the head SHA** - every bot the project's Marathon Configuration flags `Re-reviews on push: yes` has completed its review of the current head SHA: its latest review or check run on that commit is dated after the head commit was pushed. A review of an earlier commit does not count; any push restarts the wait. The wait is bounded per bot by that bot's `Max wait for re-review`, measured from the head commit's push. When the max wait expires before the bot completes, the criterion passes with a warning recorded in the merge record (the PR comment or report that accompanies the merge) naming the bot and the head SHA it did not review. Bots without `Re-reviews on push: yes` are never waited on, so a project with no such flags sees no change.
+
+**Checking criterion 6** (per flagged bot; `<bot-login>` from the Marathon Configuration):
+```bash
+HEAD_SHA=$(gh pr view $PR --json headRefOid | jq -r '.headRefOid')
+PUSHED_AT=$(gh api repos/<owner>/<repo>/commits/$HEAD_SHA | jq -r '.commit.committer.date')
+# Reviews by the bot on the head SHA
+gh api repos/<owner>/<repo>/pulls/$PR/reviews \
+  | jq --arg sha "$HEAD_SHA" --arg bot "<bot-login>" '[.[] | select(.commit_id == $sha and .user.login == $bot) | .submitted_at]'
+# Check runs on the head SHA completed by the bot's app
+gh api repos/<owner>/<repo>/commits/$HEAD_SHA/check-runs \
+  | jq '[.check_runs[] | select(.status == "completed") | {name, app: .app.slug, completed_at}]'
+```
+Complete when a review or completed check run for the bot is dated after `PUSHED_AT`. Waiting when none exists yet and the max wait since `PUSHED_AT` has not expired.
 
 **Thread resolution rules:**
 Follow bot reviewer rules from the project's CLAUDE.md Marathon Configuration. Generic defaults:
@@ -127,10 +142,10 @@ gh pr view $PR --comments
 - Merge conflicts - Resolve using patterns above, or report blocked if ambiguous
 
 **When background agent notification arrives** (CI settled):
-- CI passed + no local fixes staged: evaluate whether all 5 criteria are met
+- CI passed + no local fixes staged: evaluate whether all six criteria are met, including criterion 6 (every bot flagged `Re-reviews on push: yes` has reviewed the head SHA, or its `Max wait for re-review` has expired)
 - CI passed + local fixes staged: push once (batches all thread fixes into one CI cycle)
 - CI failed: fix CI issues too, then push everything together, spawn new background watcher
-- **ALL 5 criteria met** - Report ready, STOP
+- **All six criteria met** - Report ready (name any bot whose max wait expired so the merge record carries the warning), STOP
 
 **This keeps you responsive.** While CI runs, you process threads and comments. When CI settles, you act on the full report. No blocking waits.
 
@@ -165,9 +180,10 @@ gh pr view $PR --json mergeStateStatus,mergedAt,reviews \
 1. `mergeStateStatus` is `"CLEAN"` — OR `"UNSTABLE"` with only non-required checks failing
 2. At least `$REQUIRED_APPROVALS` approvals — OR `$MARKDOWN_APPROVALS` for markdown-only PRs (some bot reviewers skip them)
 3. Zero non-dismissed changes-requested reviews
-4. **Base branch is healthy** — if the PR's CI failures exist on `$BASE_BRANCH` too (pre-existing), do NOT merge and compound the problem. Instead, spawn a separate worktree/PR to fix the failing tests on `$BASE_BRANCH` first, then rebase and merge the original PR.
+4. **Re-review of the head SHA complete** - Ready Criterion 6 holds on the head SHA being merged: every bot flagged `Re-reviews on push: yes` has completed its review of that commit, or its `Max wait for re-review` expired and the merge record names the bot with a warning. Re-check at merge time; a push after the ready report restarts the wait.
+5. **Base branch is healthy** — if the PR's CI failures exist on `$BASE_BRANCH` too (pre-existing), do NOT merge and compound the problem. Instead, spawn a separate worktree/PR to fix the failing tests on `$BASE_BRANCH` first, then rebase and merge the original PR.
 
-**UNSTABLE handling:** If `mergeStateStatus == "UNSTABLE"`, check failing checks against `meta.flaky_checks` and any CI patterns from the project's Marathon Configuration. If ALL failing checks are non-required AND not pre-existing on `$BASE_BRANCH`, treat as merge-eligible. Report: "Merging with UNSTABLE — only non-required checks failing: <names>". If failures ARE pre-existing on `$BASE_BRANCH`, fix it first (criterion 4).
+**UNSTABLE handling:** If `mergeStateStatus == "UNSTABLE"`, check failing checks against `meta.flaky_checks` and any CI patterns from the project's Marathon Configuration. If ALL failing checks are non-required AND not pre-existing on `$BASE_BRANCH`, treat as merge-eligible. Report: "Merging with UNSTABLE — only non-required checks failing: <names>". If failures ARE pre-existing on `$BASE_BRANCH`, fix it first (criterion 5).
 
 **UNKNOWN handling:** GitHub sometimes returns `mergeStateStatus: "UNKNOWN"` even when all checks pass. If UNKNOWN but CI all green and 0 unresolved threads, retry up to 3 times with 30s backoff. If still UNKNOWN after retries, treat as CLEAN and proceed (log the override).
 

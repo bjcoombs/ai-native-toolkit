@@ -310,7 +310,7 @@ Each event is a JSON object whose `event` field names the type. Required fields 
 ## Lifecycle
 1. Implement → push incrementally → create PR → message lead PR_CREATED
 2. Fix any failing **required** checks and any already-posted bot threads; push. Do NOT watch CI - the lead owns that.
-3. Message lead REVIEW_CLEAR (required checks green, threads resolved) and stand down. Do not sit through the slow `claude-review`/AI-review window - that wait is the lead's to hold.
+3. Message lead REVIEW_CLEAR only once all six `pr-review-merge` ready criteria hold (required checks green, threads resolved, and criterion 6: every bot flagged `Re-reviews on push` has reviewed the head SHA or its max wait expired), then stand down. Do not run a CI watch loop for it: check criterion 6 when the required checks settle, and if a flagged bot is still pending, wait no longer than its `Max wait for re-review`. The lead re-verifies criterion 6 on whatever head it merges.
 4. The lead owns the claude-review wait + merge, cleans up, and shuts you down at green. After REVIEW_CLEAR you are not re-woken - if more work surfaces the lead spawns a fresh teammate (one task, one teammate). **Approve the lead's `shutdown_request` promptly when it arrives, and after REVIEW_CLEAR do NOT idle-ping or re-send merge-readiness nudges** — the lead owns the merge; re-nudging an already-cleared PR just churns the lead while it holds the claude-review wait.
 """
 )
@@ -413,7 +413,11 @@ only after confirming `gh pr view $PR --json state --jq '.state' == "MERGED"`. N
 unconditionally after the merge call — a rejected merge with chained cleanup deletes the branch/worktree
 of a PR that never merged (recoverable via the remote branch, but it wastes a recovery cycle every time).
 
-**Don't merge an AI-authored docs/content PR while its AI reviewer is still pending.** Even when the
+**Don't merge an AI-authored docs/content PR while its AI reviewer is still pending.** This hold is
+`pr-review-merge` Ready Criterion 6 applied, not a separate rule: the lead holds the merge for every bot the
+Marathon Configuration flags `Re-reviews on push: yes` until it has reviewed the head SHA, bounded by that bot's
+`Max wait for re-review` (on expiry, merge with a warning naming the bot in the merge record). Configure the AI
+reviewer that way rather than special-casing it here. Even when the
 required checks are green and `mergeStateStatus` is CLEAN, wait for `claude[bot]`/`claude-review` to post —
 AI-written docs are exactly where AI-authoring residue (leaked tool-envelope tags, duplicated sections)
 hides, and the reviewer catches it. The minutes of waiting are cheaper than a follow-up PR + patch release.

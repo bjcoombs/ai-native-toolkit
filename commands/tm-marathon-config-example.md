@@ -32,12 +32,19 @@ Project-specific settings for `/tm` marathon mode.
 
 <!-- Remove any bots you don't use. Add entries for any custom bots. -->
 
+Two optional per-bot fields drive `pr-review-merge` Ready Criterion 6 (bot re-review of the head SHA):
+- `Re-reviews on push: yes|no` - opt-in. `yes` means the PR is not ready until this bot has completed a review or check run on the current head SHA. Bots without `yes` are never waited on.
+- `Max wait for re-review: <duration>` - upper bound (e.g. `10m`) measured from the head commit's push. When it expires the criterion passes with a warning naming the bot in the merge record.
+
 **CodeRabbit** (`coderabbitai[bot]`):
+- Re-reviews on push: yes
+- Max wait for re-review: 10m
 - Fix code and push. CodeRabbit re-reviews automatically and resolves its own threads.
 - **NEVER reply in CodeRabbit threads** - CodeRabbit ignores replies from other bots.
 - If `request_changes_workflow` is enabled: CodeRabbit submits CHANGES_REQUESTED reviews that GitHub does not auto-dismiss on re-review. Every PR needs stale bot CR dismissal before merging.
 
 **claude[bot]** (`claude[bot]`):
+- Re-reviews on push: no
 - Resolve threads via GraphQL after addressing the feedback.
 
 **Human reviewers**:

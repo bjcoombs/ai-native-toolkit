@@ -98,10 +98,17 @@ Project-specific settings the `/tm` and `/issues` commands (and the shared `mara
 ### Bot Reviewers
 
 **CodeRabbit** (`coderabbitai[bot]`):
+- Re-reviews on push: no - on this repo it is rate-limited and its check often reports `null`, so waiting on it would stall every PR; it must never gate merge.
 - Comments only, frequently rate-limited; its check often reports neutral/`null`. It is **not** a required status check and never blocks merge.
 - Fix code and push - CodeRabbit re-reviews and resolves its own threads. **Never reply in CodeRabbit threads** (it ignores replies from other bots).
 
-No human reviewers and no `claude[bot]` on this repo.
+**claude-review** (`claude[bot]`, the advisory AI review workflow):
+- Re-reviews on push: yes
+- Max wait for re-review: 15m
+- The marathon's hold for the AI review before merging is this setting applied through `pr-review-merge` Ready Criterion 6: the lead waits until `claude[bot]` has reviewed the head SHA (its summary's `Commit:` line cites the head), and after 15m merges with a warning naming `claude-review` in the merge record.
+- Resolve its threads via GraphQL after addressing the feedback.
+
+No human reviewers on this repo.
 
 ### CI Patterns
 
