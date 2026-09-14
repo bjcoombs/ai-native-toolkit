@@ -86,16 +86,16 @@ recommended reading, or a decomposition proposal comment (marker
 proposal on the issue counts as approval of the decomposition and triggers its creation phase. If a human reply after that comment confirms or corrects it ("yes,
 reading A" is enough), fold the confirmed answers into the issue body (append a
 `Clarified scope` section with the confirmed scope and acceptance criteria) or, when the body
-is the author's to keep, into a pinned comment: a new comment whose first line is the marker
-`<!-- triage:clarified-scope -->`, pinned through the issue UI where the repository offers
-comment pinning. The marker is what makes it durable: the implementing teammate and every later
+is the author's to keep, into a marker-tagged issue comment: a new comment whose first line is the
+HTML-comment marker `<!-- triage:clarified-scope -->`. The marker, not any UI pinning, is what
+makes it durable: the implementing teammate and every later
 run find the clarified contract by grepping for it, never by re-interpreting the thread. The
 issue's verdict becomes `agent-ready` (label swapped from `needs-triage` at the Triage Report
 step) unless the same pass's Overlap Sweep or Size by Judgment holds it back:
 
 ```bash
 gh issue edit <N> --body-file <body-plus-clarified-scope.md>   # issue body route
-gh issue comment <N> --body-file <clarified-scope.md>          # pinned comment route; first line is the marker
+gh issue comment <N> --body-file <clarified-scope.md>          # marker comment route; first line is the marker
 ```
 
 A correction that opens a new question is not a confirmation: run the Research Pass on the
