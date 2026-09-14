@@ -4,7 +4,7 @@
 The floor markers and clause checks only bite while ``floor.yml`` is a *required*
 status check. A settings change that drops it silently disarms the whole floor.
 This script closes that gap: it queries the live GitHub API on every run and
-HARD-FAILS (fail-closed) unless BOTH of these hold:
+HARD-FAILS (fail-closed) unless ALL THREE of these hold:
 
   1. both floor status checks (``floor enforcement`` and ``floor self-anchor``)
      are still required on the default branch,
@@ -15,9 +15,12 @@ HARD-FAILS (fail-closed) unless BOTH of these hold:
      the checked-out ``floor.yml`` still wires that environment into a job the
      ``floor enforcement`` job needs. Either half alone is decorative -- an
      environment nothing references never asks for a review, and a job pointing
-     at an environment with no required reviewer approves itself.
+     at an environment with no required reviewer approves itself. The wiring
+     check also pins the TRIGGER: the sign-off job's ``if:`` must be exactly
+     the path filter's ``floor_core_changed == 'true'`` answer, and ``floor
+     enforcement`` must turn both a refused and a never-requested review red.
 
-These two are fail-CLOSED: any inability to confirm them (missing token,
+These three are fail-CLOSED: any inability to confirm them (missing token,
 insufficient permissions) is a failure, never a pass. Reading branch protection
 and rulesets requires admin:read, which the default Actions ``GITHUB_TOKEN``
 does not carry -- provide a fine-grained PAT with "Administration: read" as the
@@ -83,6 +86,18 @@ BLOCK_LIST_ITEM_RE = re.compile(r"^\s{6}-\s*(.+?)\s*$")
 # job guard must NOT mention the sign-off result and a step guard MUST.
 JOB_IF_RE = re.compile(r"^\s{4}if:\s*(.+?)\s*$")
 STEP_IF_RE = re.compile(r"^\s{6,}if:\s*(.+?)\s*$")
+# The one shape the sign-off job's guard may take: the path filter's
+# floor-core answer, compared to 'true', and nothing else. The output name is
+# the contract between the filter step and this anchor; the filter job's id is
+# captured so the anchor can confirm the sign-off job actually ``needs`` it
+# (an output read from a job outside ``needs`` is silently empty, which would
+# skip the review on every PR).
+FLOOR_CORE_OUTPUT = "floor_core_changed"
+SIGNOFF_TRIGGER_RE = re.compile(
+    r"^needs\.([A-Za-z0-9_-]+)\.outputs\." + FLOOR_CORE_OUTPUT + r"\s*==\s*['\"]true['\"]$"
+)
+# Any ``needs.<job>.result`` in a job-level guard, whichever job it names.
+NEEDS_RESULT_RE = re.compile(r"needs\.[A-Za-z0-9_-]+\.result")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # --- E2 DESCOPE: floor.yml path lock (maintainer decision, 2026-07-10) --------
@@ -101,8 +116,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # explicit, cited decision -- not a silent removal -- so the gap stays legible.
 # The self-anchor therefore treats the missing path restriction as a DOCUMENTED
 # capability gap: it WARNS loudly (stderr + job summary) instead of failing. The
-# two hard requirements (both floor checks required + branch protection readable)
-# stay fail-closed.
+# three hard requirements (both floor checks required + branch protection
+# readable + clause iii's sign-off environment present and wired) stay
+# fail-closed.
 PATH_LOCK_DESCOPED = True
 PATH_LOCK_DESCOPE_DATE = "2026-07-10"
 PATH_LOCK_DESCOPE_EVIDENCE = (
@@ -621,12 +637,68 @@ def check_workflow_wiring(root: Path | None = None) -> None:
             "context does not depend on cannot turn a refusal red, and branch "
             "protection reads an absent context as satisfied."
         )
+    _check_signoff_trigger(jobs, env_jobs, env)
     _check_refusal_is_red(jobs, enforcement, env_jobs, env)
     print(
         f"ok   {FLOOR_PATH} wires the {env!r} environment into job "
-        f"{wired[0]!r}, which the {FLOOR_CONTEXT!r} job needs, and turns a "
-        "refused review into a red required context."
+        f"{wired[0]!r}, which the {FLOOR_CONTEXT!r} job needs; the job is "
+        f"keyed on the path filter's {FLOOR_CORE_OUTPUT!r} answer alone, and "
+        "a refused or never-requested review lands as a red required context."
     )
+
+
+def _strip_expression(expr: str) -> str:
+    """``${{ x }}`` and bare ``x`` are the same guard to GitHub; compare ``x``."""
+    expr = expr.strip()
+    if expr.startswith("${{") and expr.endswith("}}"):
+        expr = expr[3:-2]
+    return expr.strip()
+
+
+def _check_signoff_trigger(
+    jobs: dict[str, list[str]], env_jobs: set[str], env: str
+) -> None:
+    """Fail unless the sign-off job is keyed on the path filter's answer alone.
+
+    The environment, the ``needs`` edge and the refusal step all survive a PR
+    that edits the sign-off job's ``if:`` -- to a different output, to an extra
+    conjunct, or to nothing at all -- while the review is either skipped on the
+    PRs it exists for or requested on every PR. The trigger is the script's
+    classification (FLOOR.md clause iii names the floor core), so the guard is
+    pinned to that one expression, and the filter job it reads from must be in
+    the sign-off job's ``needs`` or the output is silently empty.
+    """
+    for job_id in sorted(env_jobs):
+        lines = jobs[job_id]
+        guards = [m.group(1) for line in lines if (m := JOB_IF_RE.match(line))]
+        if not guards:
+            raise AnchorError(
+                f"the {env!r} sign-off job {job_id!r} has no job-level `if:`, "
+                "so a deployment review is requested on EVERY pull request "
+                "rather than on a floor-core change. The guard must be "
+                f"`needs.<filter job>.outputs.{FLOOR_CORE_OUTPUT} == 'true'`."
+            )
+        expr = _strip_expression(guards[0])
+        match = SIGNOFF_TRIGGER_RE.match(expr)
+        if not match:
+            raise AnchorError(
+                f"the {env!r} sign-off job {job_id!r} is guarded by "
+                f"{guards[0]!r}, not by the path filter's "
+                f"`{FLOOR_CORE_OUTPUT} == 'true'` answer alone. Any other "
+                "trigger re-decides which changes need the maintainer's review "
+                "inside the pull request under review (FLOOR.md clause iii), "
+                "so the guard must be exactly "
+                f"`needs.<filter job>.outputs.{FLOOR_CORE_OUTPUT} == 'true'`."
+            )
+        filter_job = match.group(1)
+        if filter_job not in _job_needs(lines):
+            raise AnchorError(
+                f"the {env!r} sign-off job {job_id!r} reads "
+                f"`needs.{filter_job}.outputs.{FLOOR_CORE_OUTPUT}` but does not "
+                f"list {filter_job!r} in `needs:`. GitHub evaluates an output "
+                "from a job outside `needs` as empty, so the review would be "
+                "skipped on every pull request."
+            )
 
 
 def _check_refusal_is_red(
@@ -652,20 +724,22 @@ def _check_refusal_is_red(
         lines = jobs[job_id]
         for line in lines:
             match = JOB_IF_RE.match(line)
-            if match and mentions_signoff(match.group(1)):
+            if match and NEEDS_RESULT_RE.search(match.group(1)):
                 raise AnchorError(
-                    f"the {FLOOR_CONTEXT!r} job's `if:` guard references the "
-                    f"sign-off job's result ({match.group(1)!r}). A result "
-                    "conjunct makes this required context SKIP on a refused "
-                    "review, and branch protection reads a skipped required "
-                    "context as satisfied -- the refusal has to make it red, "
-                    "not absent. The guard must be `${{ !cancelled() }}` alone."
+                    f"the {FLOOR_CONTEXT!r} job's `if:` guard references a "
+                    f"needed job's result ({match.group(1)!r}). A result "
+                    "conjunct makes this required context SKIP when that job "
+                    "fails or is skipped -- a refused review, or a path filter "
+                    "that never ran -- and branch protection reads a skipped "
+                    "required context as satisfied. Every such outcome has to "
+                    "arrive here as red, not absent, so the guard must be "
+                    "`${{ !cancelled() }}` alone."
                 )
+        step_guards = [
+            m.group(1) for line in lines if (m := STEP_IF_RE.match(line))
+        ]
         guarded = any(
-            (m := STEP_IF_RE.match(line))
-            and mentions_signoff(m.group(1))
-            and "failure" in m.group(1)
-            for line in lines
+            mentions_signoff(expr) and "failure" in expr for expr in step_guards
         )
         if not guarded:
             raise AnchorError(
@@ -673,6 +747,21 @@ def _check_refusal_is_red(
                 "sign-off job's result being 'failure'. Without it a refused "
                 "review fails only the sign-off job, this required context "
                 "still goes green, and clause iii's approval is advisory."
+            )
+        requested = any(
+            mentions_signoff(expr)
+            and FLOOR_CORE_OUTPUT in expr
+            and "success" in expr
+            for expr in step_guards
+        )
+        if not requested:
+            raise AnchorError(
+                f"no step of the {FLOOR_CONTEXT!r} job guards on "
+                f"`{FLOOR_CORE_OUTPUT} == 'true'` together with the {env!r} "
+                "sign-off job's result not being 'success'. Without it a "
+                "sign-off that was never requested -- the job skipped because "
+                "its trigger was edited -- leaves this required context green, "
+                "and the review lapses without a refusal."
             )
 
 
@@ -708,9 +797,10 @@ def _write_descope_summary(message: str) -> None:
         return
     body = (
         "## Floor self-anchor: floor.yml path lock DESCOPED (PRD E2)\n\n"
-        "Documented capability gap -- a **warning, not a failure**. The two hard "
-        "requirements (both floor checks required + branch protection readable) "
-        "still gate this job fail-closed.\n\n"
+        "Documented capability gap -- a **warning, not a failure**. The three "
+        "hard requirements (both floor checks required + branch protection "
+        "readable + clause iii's sign-off environment present and wired) still "
+        "gate this job fail-closed.\n\n"
         f"> {message}\n"
     )
     try:
@@ -725,8 +815,8 @@ def warn_path_lock_descoped() -> None:
 
     Replaces the former ``check_path_restriction`` hard check. The path lock is a
     documented capability gap (``PATH_LOCK_DESCOPED``), so it is surfaced, not
-    enforced. Returns normally so the anchor job stays green on its two hard,
-    still-fail-closed requirements.
+    enforced. Returns normally so the anchor job stays green on its three
+    hard, still-fail-closed requirements.
     """
     message = _descope_warning()
     # A GitHub Actions ::warning:: annotation on stderr so it is loud in the log.

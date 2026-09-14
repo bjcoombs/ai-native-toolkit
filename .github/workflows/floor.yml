@@ -26,7 +26,13 @@
 #     green with the deterministic layer never having run, and a `!= 'failure'`
 #     conjunct would do the same in exactly the case the sign-off exists to
 #     stop. So a refusal is converted into a RED required context by the first
-#     step of `floor enforcement` rather than an absent one.
+#     step of `floor enforcement` rather than an absent one. A sign-off that
+#     was never REQUESTED is caught the same way: when the filter reports the
+#     floor core changed and the sign-off job's result is anything but
+#     success (skipped, because its `if:` was edited away from that output),
+#     `floor enforcement` goes red instead of letting the review lapse. The
+#     self-anchor pins the trigger from the other side, asserting the sign-off
+#     job's `if:` is exactly the filter's floor_core_changed answer.
 #
 #   floor self-anchor (E2, fail-closed on repo settings):
 #     Query the live GitHub API and FAIL (fail-closed) if either floor check
@@ -107,6 +113,19 @@ jobs:
         if: needs.canary-changes.result != 'success'
         run: |
           echo "::error::The path-filter job did not succeed (result: ${{ needs.canary-changes.result }}), so no floor-core sign-off could be requested and the 'floor sign-off' job was skipped rather than refused. A sign-off that never ran is not an approval: this required check is red until the classification runs."
+          exit 1
+
+      # The filter said the floor core changed, so a review MUST have been
+      # requested and approved. Any other sign-off result here (skipped is the
+      # one this exists for: a PR that re-keys the sign-off job's `if:` away
+      # from floor_core_changed skips the review without refusing it) is the
+      # review lapsing silently, and is converted into RED the same way a
+      # refusal is. The self-anchor asserts this step and the trigger it
+      # mirrors, so neither can be edited away unnoticed.
+      - name: Fail on a floor-core change with no approved sign-off
+        if: needs.canary-changes.outputs.floor_core_changed == 'true' && needs.signoff.result != 'success'
+        run: |
+          echo "::error::The path filter reports the floor core changed, but the 'floor sign-off' job's result is '${{ needs.signoff.result }}', not success. A change to the floor core takes effect only with the maintainer's deployment review (FLOOR.md clause iii); a sign-off that was never requested is not an approval, so this required check is red rather than green."
           exit 1
 
       - name: Check out the repository

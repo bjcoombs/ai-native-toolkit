@@ -246,7 +246,7 @@ def test_main_fails_closed_without_token(monkeypatch, capsys):
 
 
 def test_main_fails_closed_when_required_contexts_missing(monkeypatch, capsys):
-    # Descoping the path lock must NOT weaken the two hard requirements: with a
+    # Descoping the path lock must NOT weaken the three hard requirements: with a
     # token present but the floor contexts absent from protection, main still
     # fails closed rather than passing on the descope warning alone.
     monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
@@ -569,10 +569,14 @@ jobs:
       - name: Fail on a refused sign-off
         if: needs.signoff.result == 'failure'
         run: exit 1
+      - name: Fail on a floor-core change with no approved sign-off
+        if: needs.canary-changes.outputs.floor_core_changed == 'true' && needs.signoff.result != 'success'
+        run: exit 1
 
   signoff:
     name: floor sign-off
     needs: [canary-changes]
+    if: needs.canary-changes.outputs.floor_core_changed == 'true'
     environment: floor-signoff
     runs-on: ubuntu-latest
     steps:
@@ -779,3 +783,121 @@ def test_signoff_wiring_fails_closed_on_a_signoff_result_conjunct(tmp_path):
     msg = str(exc.value)
     assert "cancelled" in msg
     assert floor_anchor.FLOOR_CONTEXT in msg
+
+
+def test_signoff_wiring_fails_closed_on_any_needs_result_conjunct(tmp_path):
+    # Disarm path 5b: the conjunct names the path filter, not the sign-off.
+    # `needs.canary-changes.result == 'success'` skips the required context
+    # when the filter fails -- and a filter that never ran means the sign-off
+    # was never requested. Any `needs.<job>.result` on the guard is rejected.
+    body = FLOOR_YML_WIRED.replace(
+        "    if: ${{ !cancelled() }}\n",
+        "    if: ${{ !cancelled() && needs.canary-changes.result == 'success' }}\n",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "cancelled" in msg
+    assert "needs.canary-changes.result" in msg
+
+
+def test_signoff_wiring_fails_closed_when_the_signoff_trigger_is_absent(tmp_path):
+    # Disarm path 6: the sign-off job loses its `if:`. The review is then
+    # requested on every PR, which drowns the maintainer's click in noise
+    # rather than reserving it for a floor-core change.
+    body = FLOOR_YML_WIRED.replace(
+        "    if: needs.canary-changes.outputs.floor_core_changed == 'true'\n", ""
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "no job-level `if:`" in msg
+    assert floor_anchor.FLOOR_CORE_OUTPUT in msg
+
+
+@pytest.mark.parametrize(
+    "guard",
+    [
+        # re-keyed to a different output: the review is never requested
+        "needs.canary-changes.outputs.run_canaries == 'true'",
+        # an extra conjunct: the PR under review decides who needs the review
+        "needs.canary-changes.outputs.floor_core_changed == 'true' && github.actor != 'bjcoombs'",
+        # compared to the wrong literal: skipped on every PR
+        "needs.canary-changes.outputs.floor_core_changed == 'yes'",
+        # a constant: skipped on every PR while the environment line survives
+        "false",
+    ],
+)
+def test_signoff_wiring_fails_closed_when_the_signoff_trigger_is_rekeyed(
+    tmp_path, guard
+):
+    # Disarm path 7: the `if:` survives but no longer says what the path
+    # filter said. The environment, the needs edge and the refusal step are
+    # all untouched, so only a pinned trigger catches it.
+    body = FLOOR_YML_WIRED.replace(
+        "    if: needs.canary-changes.outputs.floor_core_changed == 'true'\n",
+        f"    if: {guard}\n",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "alone" in msg
+    assert floor_anchor.FLOOR_CORE_OUTPUT in msg
+
+
+@pytest.mark.parametrize(
+    "guard",
+    [
+        "${{ needs.canary-changes.outputs.floor_core_changed == 'true' }}",
+        'needs.canary-changes.outputs.floor_core_changed == "true"',
+        "needs.canary-changes.outputs.floor_core_changed=='true'",
+    ],
+)
+def test_signoff_wiring_accepts_equivalent_spellings_of_the_trigger(
+    tmp_path, guard, capsys
+):
+    # The `${{ }}` wrapper, double quotes and spacing are the same guard to
+    # GitHub; the anchor pins the expression, not its whitespace.
+    body = FLOOR_YML_WIRED.replace(
+        "    if: needs.canary-changes.outputs.floor_core_changed == 'true'\n",
+        f"    if: {guard}\n",
+    )
+    floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert floor_anchor.FLOOR_CORE_OUTPUT in capsys.readouterr().out
+
+
+def test_signoff_wiring_fails_closed_when_the_filter_job_leaves_needs(tmp_path):
+    # Disarm path 8: the trigger still reads the filter's output, but the
+    # filter job is no longer in the sign-off job's `needs`. GitHub evaluates
+    # an output from a job outside `needs` as empty, so the guard is false on
+    # every PR and the review is never requested.
+    body = FLOOR_YML_WIRED.replace(
+        "    needs: [canary-changes]\n    if: needs.canary-changes",
+        "    if: needs.canary-changes",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "canary-changes" in msg
+    assert "`needs:`" in msg
+
+
+def test_signoff_wiring_fails_closed_when_the_never_requested_step_is_deleted(
+    tmp_path,
+):
+    # Disarm path 9: the runtime mirror of the pinned trigger. With this step
+    # gone, a sign-off job that skips instead of refusing (its `if:` edited
+    # in a PR the anchor did not run against, or the filter output renamed)
+    # leaves the required context green.
+    body = FLOOR_YML_WIRED.replace(
+        "      - name: Fail on a floor-core change with no approved sign-off\n"
+        "        if: needs.canary-changes.outputs.floor_core_changed == 'true'"
+        " && needs.signoff.result != 'success'\n"
+        "        run: exit 1\n",
+        "",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "never requested" in msg
+    assert floor_anchor.FLOOR_CORE_OUTPUT in msg
