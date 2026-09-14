@@ -300,7 +300,9 @@ def run_bounded_mutation(repo_root: Path, hot_files: list | None = None,
     a default read-only assessment - ``opt_in`` must be explicitly true. When
     run, it is bounded by ``MUTATION_TIMEOUT`` and ``MAX_FILES_TO_MUTATE``.
     Degrades gracefully: no tool on PATH -> ``{mutation_run: False, available:
-    False}``; a timeout or crash -> the same with a ``reason``.
+    False}``; a timeout or crash -> the same with a ``reason``. ``mutation_run``
+    is True only when the parser recovered mutant records: a tool that runs but
+    yields no parsed mutants returns ``mutation_run: False`` with a ``reason``.
 
     Returns ``{mutation_run, available, tool, scope, per_file, reason}`` (keys
     present as relevant).
@@ -347,6 +349,17 @@ def run_bounded_mutation(repo_root: Path, hot_files: list | None = None,
             xml_per_file = _run_mutmut_junitxml(repo_root, remaining)
             if xml_per_file:
                 per_file = xml_per_file
+
+    # A returned subprocess is not a run: the tool can exit (cleanly or not)
+    # without the parser recovering a single mutant - a stryker spec on a repo
+    # whose runner is not wired, a JSON reporter writing to a file instead of
+    # stdout. Claiming a run off an empty parse would lift the Layer 6 cap with
+    # no evidence behind it, so only parsed mutant data counts.
+    if not per_file:
+        return {"mutation_run": False, "available": True, "tool": spec["tool"],
+                "scope": scope, "per_file": [],
+                "reason": (f"no mutant records recovered from {spec['tool']} "
+                           f"output (exit code {proc.returncode})")}
 
     return {"mutation_run": True, "available": True, "tool": spec["tool"],
             "scope": scope, "per_file": per_file}

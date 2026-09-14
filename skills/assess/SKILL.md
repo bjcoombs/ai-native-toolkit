@@ -327,15 +327,16 @@ jq '.test_focus' "$REPO_ROOT/.assess/run-context.json"
 ```
 
 <!-- chat-replace:mutation-offer-intro -->
-**Only when `test_focus.entries` is non-empty** (at least one non-clean target) is there anything to deepen - if it is empty, every hot file is already covered-and-pinned (or there are no hotspots), so skip straight to Step 3. When it has entries, follow the same detect-or-offer-install pattern as Steps 2a/2b: first detect a mutation tool, then ask the user whether to run the bounded pass.
+**Only when `test_focus.entries` holds at least one entry with test evidence** (`test_signal` of `covered_but_hollow` or `sibling_test_only`, on a hot file that is not itself a test) is there anything to deepen - mutating a file with no test yields all survivors and measures the missing test, not an existing one, so `unsupported` / `no_covering_test` / `unknown_no_coverage` entries stay in the report table but out of the mutation scope. If no entry qualifies, skip straight to Step 3. When it has entries, follow the same detect-or-offer-install pattern as Steps 2a/2b: first detect a mutation tool, then ask the user whether to run the bounded pass.
 
 <!-- chat-skip:start -->
 **Detect a mutation tool for the repo's language.** Mirror the Step 2b heuristic - `mutmut` for Python, `stryker` for TS/JS - and check PATH plus the permanent-decline marker:
 
 ```bash
-# Pick the candidate tool by the dominant focus-file language (Python -> mutmut,
-# TS/JS -> stryker). Fall back to mutmut when the focus files are mixed/Python.
-FOCUS_FILES=$(jq -r '.test_focus.entries[].path' "$REPO_ROOT/.assess/run-context.json" | head -5)
+# Scope: entries with test evidence, ranked, minus test files (the core's mutation_scope;
+# regex mirrors sibling_tests.IS_TEST_RE). Tool by dominant focus-file language
+# (Python -> mutmut, TS/JS -> stryker); mutmut when mixed.
+FOCUS_FILES=$(jq -r '.test_focus.entries[] | select(.test_signal == "covered_but_hollow" or .test_signal == "sibling_test_only") | .path | select(split("/") as $p | (($p[-1] | sub("\\.[^.]*$"; "") | test("(^test_|_test$|\\.test$|\\.spec$|_spec$|Tests?$)")) or any($p[:-1][]; . == "__tests__")) | not)' "$REPO_ROOT/.assess/run-context.json" | head -5)
 case "$FOCUS_FILES" in
   *.ts|*.tsx|*.js|*.jsx) MUT_TOOL=stryker ;;
   *) MUT_TOOL=mutmut ;;
@@ -354,7 +355,7 @@ REOFFER_MUT=$(jq -r '.reoffer_mutation // false' "$REPO_ROOT/.assess/run-context
 - **Skip for now** - continue with the cheap read intact. Don't write a marker; ask again next run.
 - **Skip permanently for this repo** - `write_decline_marker "$MUT_TOOL"` so future runs don't ask. Re-declining restamps the marker at the current version, so the re-offer won't repeat within this major.
 
-**On accept (tool available):** run the opt-in mutation pass, then regenerate the heatmap with the survivor overlay. The core re-run reads the `test_focus` targets itself, runs `scan_test_pressure(..., opt_in=True)` scoped to them, and rewrites the `test_pressure` block in `run-context.json` in place:
+**On accept (tool available):** run the opt-in mutation pass, then regenerate the heatmap with the survivor overlay. The core re-run reads the `test_focus` targets with test evidence itself, runs `scan_test_pressure(..., opt_in=True)` scoped to them, and rewrites the `test_pressure` block in `run-context.json` in place:
 
 <!-- chat-skip:end -->
 ```bash

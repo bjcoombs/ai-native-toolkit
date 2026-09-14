@@ -70,7 +70,8 @@ from lib.structure_drift import (
     SEAM_ALLOWLIST,
     detect_path_existence_drift,
 )
-from lib.test_focus import compute_test_focus
+from lib.sibling_tests import has_sibling_test, shared_name_keys
+from lib.test_focus import compute_test_focus, mutation_scope
 from lib.test_pressure import scan_test_pressure
 from lib.wiki_writer import (
     UNFINALIZED_ACTIONS_POINTER,
@@ -480,56 +481,19 @@ def _tool_version_change_note(
     return None
 
 
-# Co-location test conventions, keyed off a source file's stem + suffix.
-# Each entry is a (filename-builder) applied in the file's own directory; the
-# first existing match wins. Covers the dominant per-language idioms - it is a
-# cheap precision heuristic, not a build-graph analysis, so a project that keeps
-# all tests in a far-away mirror tree still degrades to "unknown" rather than a
-# false "no".
-_TEST_SIBLING_BUILDERS = [
-    lambda stem, ext: f"{stem}_test{ext}",    # Go, Python (pytest co-located)
-    lambda stem, ext: f"{stem}.test{ext}",    # JS/TS (jest)
-    lambda stem, ext: f"{stem}.spec{ext}",    # JS/TS/Angular (jasmine/jest)
-    lambda stem, ext: f"{stem}_spec{ext}",    # Ruby (rspec), some JS
-    lambda stem, ext: f"test_{stem}{ext}",    # Python (unittest)
-    lambda stem, ext: f"{stem}Test{ext}",     # Java/Kotlin/C# (JUnit)
-    lambda stem, ext: f"{stem}Tests{ext}",    # C#/Swift (XCTest)
-]
-# Adjacent directories that conventionally hold co-located tests for the
-# files beside them. Checked for any of the sibling-name patterns above.
-_ADJACENT_TEST_DIRS = ["__tests__", "tests", "test", "spec"]
-# Suffixes/stem markers that mean the file IS itself a test - it doesn't need a
-# separate test file, so it counts as covered.
-_IS_TEST_RE = re.compile(r"(^test_|_test$|\.test$|\.spec$|_spec$|Tests?$)")
+def _has_sibling_test(
+    repo_root: Path, rel_path: str, shared_names: frozenset[str] = frozenset(),
+) -> bool | None:
+    """Best-effort: does this file have a test file?
 
-
-def _has_sibling_test(repo_root: Path, rel_path: str) -> bool | None:
-    """Best-effort: does this source file have a co-located test file?
-
-    Returns True/False from a filesystem check of common co-location idioms
-    (`foo.ts` next to `foo.test.ts`, `foo_test.go`, an adjacent `__tests__/`,
-    etc.). Returns None only when the file isn't on disk (e.g. scanning a stats
-    snapshot for a since-deleted path), which honestly maps to "unknown".
+    Delegates to ``lib.sibling_tests.has_sibling_test``, the one resolver the
+    ``test_focus`` signal also reads, so the hotspot page's ``Has test file`` row
+    and the focus table agree. ``True``/``False`` from a filesystem check of the
+    naming idioms (``foo.ts`` next to ``foo.test.ts``, ``FooTest.java``, an
+    adjacent ``__tests__/``, a mirrored ``tests/`` tree, ...); ``None`` only when
+    the file isn't on disk (a since-deleted path in a stats snapshot).
     """
-    src = (repo_root / rel_path)
-    if not src.is_file():
-        return None
-    stem, ext = src.stem, src.suffix
-    if _IS_TEST_RE.search(stem):
-        return True  # the file is itself a test
-    directory = src.parent
-    candidate_names = [build(stem, ext) for build in _TEST_SIBLING_BUILDERS]
-    for name in candidate_names:
-        if (directory / name).is_file():
-            return True
-    for sub in _ADJACENT_TEST_DIRS:
-        test_dir = directory / sub
-        if not test_dir.is_dir():
-            continue
-        for name in candidate_names + [f"{stem}{ext}"]:
-            if (test_dir / name).is_file():
-                return True
-    return False
+    return has_sibling_test(repo_root, rel_path, shared_names)
 
 
 def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
@@ -804,10 +768,20 @@ def _mutation_not_run_cap(test_pressure_block: dict) -> dict:
     False. When it is False, Layer 6 cannot be scored above Partial and the
     ``annotation`` must be attached; assess_finalize rejects a finalize-input
     that violates this.
+
+    The flag alone is not trusted: a block that claims ``mutation_run`` but
+    carries no parsed mutant record in ``per_file`` is evidence-free, so the cap
+    stays applied (#317).
     """
+    per_file = (
+        test_pressure_block.get("per_file")
+        if isinstance(test_pressure_block, dict) else None
+    )
     mutation_run = bool(
         isinstance(test_pressure_block, dict)
         and test_pressure_block.get("mutation_run", False)
+        and isinstance(per_file, list)
+        and any(isinstance(rec, dict) for rec in per_file)
     )
     return {
         "applies": not mutation_run,
@@ -989,6 +963,9 @@ def build_run_context(
 
     # Wiki: hotspot pages for current top hotspots
     hotspot_entries: list[HotspotEntry] = []
+    # Same flat-tree disambiguation the test_focus block applies to these files.
+    hot_shared_names = shared_name_keys(
+        h["path"] for h in current.get("top_hotspots", []))
     for h in current.get("top_hotspots", []):
         path = h["path"]
         # Preserve the original first_flagged date across runs. A path missing
@@ -1022,7 +999,7 @@ def build_run_context(
             loc=loc,
             ccn=ccn,
             commits=commits,
-            has_tests=_has_sibling_test(repo_root, path),
+            has_tests=_has_sibling_test(repo_root, path, hot_shared_names),
             history_rows=f"| {run_date} | {loc} | {ccn} | {commits} | {status} |",
             briefing=(
                 f"Hotspot ({status}). "
@@ -1360,6 +1337,7 @@ def build_run_context(
         current.get("top_hotspots", []),
         coverage_data,
         ctx["test_pressure"].get("cheap_heuristics"),
+        repo_root=repo_root,
     )
 
     # Promissory markers (stale TODO/FIXME, suppressions, disabled tests):
@@ -1480,8 +1458,9 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     ``build_run_context``. The orchestrator (SKILL.md Step 2d) calls this only
     after the user accepts the mutation offer - it mutates and *runs* code, so it
     is never part of the default pass. It does not recompute the whole context:
-    it reads the existing ``run-context.json``, takes the focus targets from the
-    ``test_focus`` block (the single source of focus files), runs
+    it reads the existing ``run-context.json``, takes the focus targets that carry
+    test evidence from the ``test_focus`` block (``lib.test_focus.mutation_scope``),
+    runs
     ``scan_test_pressure(..., opt_in=True)`` scoped to them, and rewrites only the
     ``test_pressure`` block in place. ``run_bounded_mutation`` itself caps the
     scope at ``MAX_FILES_TO_MUTATE``, so passing every focus path is safe.
@@ -1507,12 +1486,12 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
         print(f"could not read run-context.json: {e}", file=sys.stderr)
         return 1
 
-    focus = ctx.get("test_focus") or {}
-    entries = focus.get("entries") or []
-    focus_files = [e.get("path") for e in entries
-                   if isinstance(e, dict) and e.get("path")]
+    # Only focus entries with test evidence: mutating a file with no test yields
+    # all survivors and would flag it for strengthening tests that do not exist.
+    focus_files = mutation_scope(ctx.get("test_focus"))
     if not focus_files:
-        print("no test_focus targets - nothing to mutate", file=sys.stderr)
+        print("no test_focus targets with test evidence - nothing to mutate",
+              file=sys.stderr)
         return 0
 
     coverage_data = load_coverage_data(repo_root)

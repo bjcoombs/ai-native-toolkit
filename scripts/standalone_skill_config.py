@@ -80,7 +80,9 @@ SKILLS: dict[str, dict] = {
             # run the commands below; otherwise the cheap heuristics stand as the
             # Layer 1 read and the report should say the deep pass was not run.
             "mutation-offer-intro": (
-                "When `test_focus.entries` is non-empty, you can deepen the "
+                "When `test_focus.entries` holds an entry with test evidence "
+                "(`covered_but_hollow` or `sibling_test_only`; files with no "
+                "test stay out of the mutation scope), you can deepen the "
                 "Layer 1 read manually: install a mutation tool (`mutmut` for "
                 "Python, `stryker` for TS/JS) and run the `--test-pressure` step "
                 "manually using the commands below - the bounded mutation pass "

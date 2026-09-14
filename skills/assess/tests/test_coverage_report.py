@@ -141,3 +141,51 @@ def test_load_malformed_report_degrades_to_none(tmp_path: Path) -> None:
     """Detected but unparseable -> None, never an exception."""
     (tmp_path / "coverage.xml").write_text("not xml at all <<<")
     assert load_coverage_data(tmp_path) is None
+
+
+def test_lcov_path_normalised(tmp_path: Path) -> None:
+    """lcov SF: paths are emitted as the runner saw them - absolute, or
+    ./-prefixed. load_coverage_data normalises both to repo-relative POSIX keys
+    so test_focus's exact-key lookup matches (#317). Resolving both sides keeps
+    macOS /var vs /private/var from breaking the relative_to."""
+    root = tmp_path / "repo"
+    (root / "src").mkdir(parents=True)
+    abs_a = (root / "src" / "a.ts").resolve()
+    (root / "lcov.info").write_text(
+        f"SF:{abs_a}\nLF:10\nLH:10\nend_of_record\n"
+        "SF:./src/b.ts\nLF:10\nLH:9\nend_of_record\n"
+        "SF:src/c.ts\nLF:4\nLH:1\nend_of_record\n",
+        encoding="utf-8",
+    )
+    data = load_coverage_data(root)
+    assert data is not None
+    assert data["per_file"] == {"src/a.ts": 1.0, "src/b.ts": 0.9, "src/c.ts": 0.25}
+
+
+def test_lcov_path_normalised_unresolved_root_and_outside_path(tmp_path: Path) -> None:
+    """An unresolved root spelling still matches a resolved SF: path, and an
+    absolute path outside the repo root is kept verbatim (no crash)."""
+    root = tmp_path / "repo"
+    (root / "coverage").mkdir(parents=True)
+    abs_a = (root / "src" / "a.ts").resolve()
+    (root / "coverage" / "lcov.info").write_text(
+        f"SF:{abs_a}\nLF:2\nLH:1\nend_of_record\n"
+        "SF:/elsewhere/x.ts\nLF:2\nLH:2\nend_of_record\n",
+        encoding="utf-8",
+    )
+    data = load_coverage_data(tmp_path / "repo" / ".." / "repo")
+    assert data is not None
+    assert data["per_file"] == {"src/a.ts": 0.5, "/elsewhere/x.ts": 1.0}
+
+
+def test_lcov_path_normalised_windows_relative(tmp_path: Path) -> None:
+    """A Windows runner writes relative SF: paths with backslashes, with or
+    without a .\\ prefix: both normalise to the repo-relative POSIX key."""
+    (tmp_path / "lcov.info").write_text(
+        "SF:.\\src\\a.ts\nLF:10\nLH:10\nend_of_record\n"
+        "SF:src\\b.ts\nLF:10\nLH:9\nend_of_record\n",
+        encoding="utf-8",
+    )
+    data = load_coverage_data(tmp_path)
+    assert data is not None
+    assert data["per_file"] == {"src/a.ts": 1.0, "src/b.ts": 0.9}
