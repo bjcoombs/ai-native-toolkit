@@ -439,31 +439,49 @@ assessment; `assess_core.py` records provenance ("none found" vs. the file/forma
 separately. Stdlib only, imports no orchestrator. Add fixtures + cases in
 `tests/test_coverage_report.py` alongside any change to a parse rule.
 
+**`sibling_tests.py`**
+The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
+`.test`, `.spec`, `_spec`, `test_<stem>`, `<stem>Test`, `<stem>Tests`, with a
+hyphenated stem also matched as underscores), the adjacent test directories
+(`__tests__/` / `tests/` / `test/` / `spec/`), and the is-this-a-test rule, plus a
+layered probe: `find_colocated_test` (beside the source or in an adjacent test
+directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
+ancestor mirroring the source path, then a flat tree within two components),
+and `has_sibling_test` (the yes/no/unknown verdict, dropping a flat-only match
+on a bare name more than one hot file shares). Three consumers read it and must
+agree in one run: the hotspot page's `Has test file` row
+(`assess_core._has_sibling_test`), the E2 test-to-code map
+(`keyhole_signals._find_sibling_test`, co-location layer only, since E2 means
+co-located and co-committed), and the `test_focus` signal. Stdlib only;
+existence checks bounded to 16 ancestor levels; never raises.
+`tests/test_sibling_tests.py` pins the three-way agreement.
+
 **`test_focus.py`**
-Cross-joins three already-collected signals - the hotspot risk band (position in
-`complexity_stats.top_hotspots`), the parsed coverage report, and the
-`test_pressure` cheap heuristics - into one ranked focus list. `compute_test_focus`
-classifies each top-10 hot file (`no_covering_test` / `covered_but_hollow` /
-`covered_clean` / `unknown_no_coverage` / `unsupported` / `sibling_test_only`), filters out
+Cross-joins four inputs - the hotspot risk band (position in
+`complexity_stats.top_hotspots`), the parsed coverage report, the
+`test_pressure` cheap heuristics, and an optional `repo_root` - into one ranked
+focus list. `compute_test_focus` classifies each top-10 hot file
+(`no_covering_test` / `covered_but_hollow` / `covered_clean` /
+`unknown_no_coverage` / `unsupported` / `sibling_test_only`), filters out
 `covered_clean`, and ranks by risk band then signal severity (less tested ranks
 higher: `no_covering_test` > `covered_but_hollow` > `unsupported` >
-`sibling_test_only`). Honest-degrade is the
-contract: with no coverage report, an optional `repo_root` enables a sibling-test
-fallback (`<stem>.test.<ext>`, `<stem>.spec.<ext>`, `<stem>_test.<ext>`,
-`test_<stem>.<ext>`, with a hyphenated stem also matched as underscores; beside
-the file, in an adjacent `__tests__/` / `tests/` / `test/`, or in a `tests/` /
-`test/` tree at any ancestor up to the root, flat or mirroring the source path)
-that marks a file with a test file `sibling_test_only` (test file present,
-coverage unmeasured; never a covered bucket). A hot file that is itself a test
-counts as its own test file; a source no longer on disk is never credited. A file with neither report nor test file is `unsupported`;
-both carry action `measure_coverage`, never `no_covering_test`; without `repo_root` every file is
-`unknown_no_coverage`. It never raises and records `coverage_present: False`. Inputs
-are passed in (`hot_files`, `coverage_data`, `cheap_heuristics`, `repo_root`); the
-only file I/O is the sibling-test existence check; stdlib only,
-imports no orchestrator. This block is the SINGLE source both the report focus
-table and the mutation offer consume - it is the contract, not duplicated
-downstream. Add cases in `tests/test_test_focus.py` alongside any change to a
-classification or ranking rule.
+`sibling_test_only`). Test-file evidence comes from `sibling_tests.has_sibling_test`,
+so the focus table and the hotspot pages agree. With a `repo_root`, a file with a
+test file but no coverage record - no report at all, or a partial report that
+omits it - is `sibling_test_only` (test file present, coverage unmeasured; never
+a covered bucket); a file with no report and no test file is `unsupported`; both
+carry action `measure_coverage`. A report that records a 0 rate, or omits a file
+with no test file, gives `no_covering_test`. Without `repo_root` a no-report file
+is `unknown_no_coverage`. It never raises and records `coverage_present`. The
+only file I/O is the sibling-test probe, and only under `repo_root`; imports no
+orchestrator. This block is the SINGLE source both the report focus table and
+the mutation offer consume. The mutation scope is `mutation_scope(block)`: the
+entries with test evidence (`covered_but_hollow`, `sibling_test_only`) in ranked
+order, so a file with no test never heads the mutation pass and comes back as an
+`untrusted_hotspot` for tests that do not exist; `assess_core --opt-in-mutation`
+and the SKILL.md Step 2d `jq` both apply it. Add cases in
+`tests/test_test_focus.py` alongside any change to a classification, ranking,
+or scope rule.
 
 **`test_pressure/`**
 Layer 1 write-side truth pressure. Two tiers:

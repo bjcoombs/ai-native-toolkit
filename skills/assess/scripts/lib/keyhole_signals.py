@@ -22,7 +22,6 @@ structured data + the named findings; the LLM write-back fills judgement later.
 """
 from __future__ import annotations
 
-import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -42,6 +41,7 @@ from lib.doc_complexity_join import (
 )
 from lib.liveness_scan import STATIC_REACHABILITY_CAVEAT
 from lib.structure_drift import detect_grouping_disagreement
+from lib.sibling_tests import find_colocated_test, is_test_path
 from lib.understanding_analysis import analyze_understanding
 
 # Caps so a pathological repo can't bloat run-context.json. The treemap and
@@ -135,23 +135,6 @@ def mode_for_finding(name: str | None) -> str:
     attribution still gets the conservative characterize-first posture).
     """
     return FINDING_MODES.get(name or "", DEFAULT_FINDING_MODE)
-
-# Source-file suffix/stem markers that mean a file IS itself a test (so it never
-# needs - and never maps to - a separate sibling test). Mirrors the same idiom
-# list assess_core uses for its co-location check, kept self-contained here so
-# the lib layer never imports back up into the orchestrator.
-_TEST_SIBLING_BUILDERS = [
-    lambda stem, ext: f"{stem}_test{ext}",    # Go, Python (pytest co-located)
-    lambda stem, ext: f"{stem}.test{ext}",    # JS/TS (jest)
-    lambda stem, ext: f"{stem}.spec{ext}",    # JS/TS/Angular (jasmine/jest)
-    lambda stem, ext: f"{stem}_spec{ext}",    # Ruby (rspec), some JS
-    lambda stem, ext: f"test_{stem}{ext}",    # Python (unittest)
-    lambda stem, ext: f"{stem}Test{ext}",     # Java/Kotlin/C# (JUnit)
-    lambda stem, ext: f"{stem}Tests{ext}",    # C#/Swift (XCTest)
-]
-_ADJACENT_TEST_DIRS = ["__tests__", "tests", "test", "spec"]
-_IS_TEST_RE = re.compile(r"(^test_|_test$|\.test$|\.spec$|_spec$|Tests?$)")
-
 
 # --------------------------------------------------------------------------
 # B2 - per-directory containment
@@ -546,33 +529,16 @@ def find_untrusted_hotspots(
 def _find_sibling_test(repo_root: Path, rel_path: str) -> Path | None:
     """Return the co-located test file for a source path, or ``None``.
 
-    Mirrors assess_core's ``_has_sibling_test`` co-location idioms but returns
-    the test *path* (not a bool) so the E2 map can pair a test with its source.
-    A file that is itself a test maps to ``None`` - it is not a source needing a
-    sibling. Returns ``None`` when the source isn't on disk or no sibling is
-    found.
+    Uses ``lib.sibling_tests.find_colocated_test``, the co-location layer of
+    the resolver the hotspot page and ``test_focus`` read, so the three share one
+    idiom list. E2 stops at co-location by definition (test and code co-located
+    AND co-committed); a mirrored ``tests/`` tree is out of its scope. A file that
+    is itself a test maps to ``None`` - it is not a source needing a sibling.
+    Returns ``None`` when the source isn't on disk or no sibling is found.
     """
-    src = repo_root / rel_path
-    if not src.is_file():
+    if not (repo_root / rel_path).is_file() or is_test_path(rel_path):
         return None
-    stem, ext = src.stem, src.suffix
-    if _IS_TEST_RE.search(stem):
-        return None  # the file IS a test, not a source needing a sibling
-    directory = src.parent
-    candidate_names = [build(stem, ext) for build in _TEST_SIBLING_BUILDERS]
-    for name in candidate_names:
-        cand = directory / name
-        if cand.is_file():
-            return cand
-    for sub in _ADJACENT_TEST_DIRS:
-        test_dir = directory / sub
-        if not test_dir.is_dir():
-            continue
-        for name in candidate_names + [f"{stem}{ext}"]:
-            cand = test_dir / name
-            if cand.is_file():
-                return cand
-    return None
+    return find_colocated_test(repo_root, rel_path)
 
 
 def build_test_to_code_map(

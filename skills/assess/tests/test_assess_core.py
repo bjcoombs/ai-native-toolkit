@@ -1726,7 +1726,9 @@ def _seed_run_context(repo: Path, *, test_focus: dict) -> Path:
 
 def test_run_opt_in_mutation_rewrites_test_pressure(tmp_path: Path, monkeypatch) -> None:
     """An accepted mutation pass re-runs scan_test_pressure scoped to the
-    test_focus targets with opt_in=True and rewrites the test_pressure block."""
+    test_focus targets that carry test evidence, with opt_in=True, and rewrites
+    the test_pressure block. Entries with no test (no_covering_test,
+    unsupported) stay out of the scope even when they rank first."""
     repo = tmp_path / "repo"
     repo.mkdir()
     ctx_path = _seed_run_context(repo, test_focus={
@@ -1734,9 +1736,11 @@ def test_run_opt_in_mutation_rewrites_test_pressure(tmp_path: Path, monkeypatch)
         "coverage_present": True,
         "entries": [
             {"path": "src/a.py", "risk_band": "high", "test_signal": "no_covering_test"},
+            {"path": "src/u.py", "risk_band": "high", "test_signal": "unsupported"},
             {"path": "src/b.py", "risk_band": "medium", "test_signal": "covered_but_hollow"},
+            {"path": "src/c.py", "risk_band": "low", "test_signal": "sibling_test_only"},
         ],
-        "total_focus_targets": 2,
+        "total_focus_targets": 4,
     })
 
     captured: dict = {}
@@ -1762,7 +1766,7 @@ def test_run_opt_in_mutation_rewrites_test_pressure(tmp_path: Path, monkeypatch)
     assert rc == 0
     # Scoped to the focus targets, with the bounded pass enabled.
     assert captured["opt_in"] is True
-    assert captured["hot_files"] == ["src/a.py", "src/b.py"]
+    assert captured["hot_files"] == ["src/b.py", "src/c.py"]
     # test_pressure block rewritten in place with the mutation results.
     ctx = json.loads(ctx_path.read_text(encoding="utf-8"))
     assert ctx["test_pressure"]["mutation_run"] is True
@@ -1809,7 +1813,7 @@ def test_run_opt_in_mutation_degrades_on_scan_failure(tmp_path: Path, monkeypatc
     ctx_path = _seed_run_context(repo, test_focus={
         "available": True, "coverage_present": True,
         "entries": [{"path": "src/a.py", "risk_band": "high",
-                     "test_signal": "no_covering_test"}],
+                     "test_signal": "covered_but_hollow"}],
         "total_focus_targets": 1,
     })
 

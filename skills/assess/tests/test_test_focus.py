@@ -1,9 +1,11 @@
 """Contract tests for ``lib/test_focus.compute_test_focus``.
 
 Cover each signal classification, the risk-band assignment by hotspot position,
-the ranking order, the ``covered_clean`` filter, and the honest no-coverage
-degrade (``coverage_data=None`` -> every entry ``unknown_no_coverage`` and
-``coverage_present: False``).
+the ranking order, the ``covered_clean`` filter, the honest no-coverage degrade
+(``coverage_data=None`` without ``repo_root`` -> every entry
+``unknown_no_coverage`` and ``coverage_present: False``), the test-file fallback
+under ``repo_root`` (``sibling_test_only`` / ``unsupported``), and the
+``mutation_scope`` filter.
 """
 from __future__ import annotations
 
@@ -13,7 +15,7 @@ from pathlib import Path
 # scripts/ on the path so ``lib`` imports resolve the same way the orchestrator does.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.test_focus import compute_test_focus  # noqa: E402
+from lib.test_focus import compute_test_focus, mutation_scope  # noqa: E402
 
 
 def _hot(*paths: str) -> list[dict]:
@@ -360,3 +362,66 @@ def test_flat_tests_tree_bounded_to_package_depth(tmp_path: Path) -> None:
         "src/x/util.py": "sibling_test_only",
         "src/y/util.py": "unsupported",
     }
+
+
+def test_sibling_test_fallback_jvm_ruby_and_dotnet_spellings(tmp_path: Path) -> None:
+    """The focus signal reads the shared convention list, so JUnit / XCTest /
+    RSpec spellings credit a file, a Ruby spec/ mirror tree credits it, and a hot
+    file that is itself a ``_spec`` / ``Test`` file is test evidence."""
+    for rel in ("src/Foo.java", "src/FooTest.java",
+                "src/Bar.cs", "src/BarTests.cs",
+                "lib/baz.rb", "lib/baz_spec.rb",
+                "app/models/qux.rb", "spec/app/models/qux_spec.rb",
+                "lib/quux_spec.rb", "src/CorgeTest.kt"):
+        _touch(tmp_path, rel)
+    hot = ["src/Foo.java", "src/Bar.cs", "lib/baz.rb", "app/models/qux.rb",
+           "lib/quux_spec.rb", "src/CorgeTest.kt"]
+    block = compute_test_focus(hot, None, None, repo_root=tmp_path)
+    by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
+    assert by_path == {path: "sibling_test_only" for path in hot}
+
+
+def test_sibling_test_fallback_with_partial_coverage_report(tmp_path: Path) -> None:
+    """A present report that omits a file is not evidence of no test: with a
+    sibling test on disk the file reads sibling_test_only / measure_coverage.
+    Without one it stays no_covering_test, and a file the report records at a
+    0 rate stays no_covering_test even with a sibling test (the report measured
+    it)."""
+    for rel in ("src/a.ts", "src/a.test.ts", "src/b.ts",
+                "src/c.ts", "src/c.test.ts"):
+        _touch(tmp_path, rel)
+    cov = _coverage({"src/c.ts": 0.0, "src/other.ts": 0.8})
+    heur = _empty_heuristics()
+    heur["untested_boundaries"] = [{"file": "src/a.ts"}]
+    block = compute_test_focus(["src/a.ts", "src/b.ts", "src/c.ts"], cov, heur,
+                               repo_root=tmp_path)
+    assert block["coverage_present"] is True
+    got = {e["path"]: (e["test_signal"], e["suggested_action"],
+                       e["hollow_heuristic_kinds"]) for e in block["entries"]}
+    assert got == {
+        "src/a.ts": ("sibling_test_only", "measure_coverage", ["untested_boundaries"]),
+        "src/b.ts": ("no_covering_test", "add_tests", []),
+        "src/c.ts": ("no_covering_test", "add_tests", []),
+    }
+
+
+def test_mutation_scope_keeps_only_entries_with_test_evidence(tmp_path: Path) -> None:
+    """The mutation pass skips files with no test: an unsupported head entry
+    (which outranks sibling_test_only in the table) never enters the scope, and
+    the scope keeps the table's ranked order among the rest."""
+    for rel in ("a.py", "b.py", "test_b.py", "c.py", "d.py", "test_d.py"):
+        _touch(tmp_path, rel)
+    block = compute_test_focus(["a.py", "b.py", "c.py", "d.py"], None, None,
+                               repo_root=tmp_path)
+    assert [e["test_signal"] for e in block["entries"]] == [
+        "unsupported", "unsupported", "sibling_test_only", "sibling_test_only"]
+    assert mutation_scope(block) == ["b.py", "d.py"]
+    assert mutation_scope(block["entries"]) == ["b.py", "d.py"]
+    hollow = {"entries": [
+        {"path": "x.py", "test_signal": "no_covering_test"},
+        {"path": "y.py", "test_signal": "covered_but_hollow"},
+        {"path": "z.py", "test_signal": "unknown_no_coverage"},
+    ]}
+    assert mutation_scope(hollow) == ["y.py"]
+    assert mutation_scope(None) == []
+    assert mutation_scope({"entries": "bad"}) == []

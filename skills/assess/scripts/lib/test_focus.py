@@ -10,53 +10,59 @@ ranked list answering the only question that matters for write-side safety:
 
 `compute_test_focus` is the SINGLE source the report table (the focus block) and
 the mutation offer both read - the contract is here, not duplicated downstream.
-It is a pure function: it takes its three inputs as parameters and returns a
-plain dict. No file I/O, no orchestrator import, never raises.
+It takes four inputs as parameters (the ranked hot files, the parsed coverage
+report, the hollow-test heuristics, and an optional ``repo_root``) and returns a
+plain dict. It imports no orchestrator and never raises. Its one file-system
+probe is the sibling-test existence check in `lib/sibling_tests.py`, run only
+when ``repo_root`` is passed and bounded to at most ten hot files and a fixed
+ancestor depth; without ``repo_root`` it does no file I/O at all.
 
 Signal per file (most to least actionable):
-  - ``no_covering_test``      - covered report exists but this file is absent or
-                                its line rate is 0: a risky file with no test.
+  - ``no_covering_test``      - a coverage report exists and it records this file
+                                at a 0 line rate, or omits it with no test file
+                                found: a risky file with no test.
   - ``covered_but_hollow``    - a test covers it, but it trips a hollow-test
                                 heuristic (asserts internals, untested boundary,
                                 duplicate truth).
-  - ``unsupported``           - no coverage report and no sibling test file
-                                maps to it (``repo_root`` given): the core cannot
-                                tell whether a test exists, so it says so rather
+  - ``unsupported``           - no coverage report and no test file found
+                                (``repo_root`` given): the core cannot tell
+                                whether a test exists, so it says so rather
                                 than claim ``no_covering_test``.
-  - ``sibling_test_only``     - no coverage report, but a conventionally named
-                                test file maps to it: a test file is
-                                present, coverage is unmeasured. Carries any
-                                hollow-heuristic kinds it tripped.
+  - ``sibling_test_only``     - a test file maps to it but no coverage record
+                                does (no report, or a partial report that omits
+                                the file): a test file is present, coverage is
+                                unmeasured. Carries any hollow kinds it tripped.
   - ``unknown_no_coverage``   - no coverage report and no ``repo_root`` to look
-                                for a sibling test: we *cannot* say it is
-                                covered, so we do not pretend it is clean.
+                                for a test file: we *cannot* say it is covered,
+                                so we do not pretend it is clean.
   - ``covered_clean``         - covered, no hollow hit. Not a focus target;
                                 filtered out of the output.
 
-Sibling-test fallback: with no coverage report and a ``repo_root``, a hot file
-with a sibling test (``<stem>.test.<ext>``, ``<stem>.spec.<ext>``,
-``<stem>_test.<ext>``, ``test_<stem>.<ext>`` beside it, in an adjacent
-``__tests__/`` / ``tests/`` / ``test/`` directory, in a ``tests/`` / ``test/``
-tree at any ancestor up to the root mirroring the source path, or in a flat
-``tests/`` / ``test/`` tree beside the source's directory or its top-level package
-directory when no other hot file shares its bare name; a
-hyphenated stem also matches its underscore spelling) gets ``sibling_test_only``
-rather than a covered bucket, and so does a hot file that is itself a test file:
-the only evidence is a file's existence, so the core never spells it as coverage.
+Test-file evidence comes from `lib/sibling_tests.has_sibling_test`, the same
+resolver behind the hotspot page's ``Has test file`` row, so the two never
+disagree in one run. The evidence is a file's existence, so the core never
+spells it as coverage.
+
+Mutation scope: `mutation_scope` takes the paths of the entries that carry test
+evidence (``covered_but_hollow``, ``sibling_test_only``). Mutating a file with no
+test yields all survivors and measures the missing test, not an existing one's
+strength, so ``unsupported`` / ``no_covering_test`` / ``unknown_no_coverage``
+entries stay in the table but out of the mutation pass.
 
 Honest degradation is the hard contract: ``coverage_data is None`` never yields
 ``covered_clean`` for an untested file and records ``coverage_present: False``.
 A risky file we know nothing about is surfaced, not silently blessed as clean.
 
-Inward-only imports: stdlib only; imported by the orchestrator (`assess_core.py`),
-never importing one itself. The only file I/O is the sibling-test existence check,
-and only when ``repo_root`` is passed.
+Inward-only imports: stdlib and `lib.sibling_tests`; imported by the orchestrator
+(`assess_core.py`), never importing one itself.
 """
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+from lib.sibling_tests import has_sibling_test, shared_name_keys
 
 # Risk bands by position in the ranked top_hotspots list. Index 0-2 are the
 # sharpest hotspots, 3-6 the next tier, 7-9 the tail; anything past the top 10 is
@@ -74,9 +80,9 @@ _BAND_RANK = {"high": 3, "medium": 2, "low": 1}
 # conventional location) outranks ``sibling_test_only`` (a test file exists).
 # ``sibling_test_only`` and ``unknown_no_coverage`` share the bottom rank; they
 # never appear in the same block (one needs ``repo_root``, the other its absence).
-# The mutation offer reads the head of this same list, and mutation testing a
-# file with no test yields all survivors, so an ``unsupported`` head entry there
-# measures the missing test rather than the strength of an existing one.
+# The mutation pass does not read this order raw: `mutation_scope` keeps only
+# entries with test evidence, since mutating a file with no test measures the
+# missing test rather than the strength of an existing one.
 _SIGNAL_SEVERITY = {
     "no_covering_test": 4,
     "covered_but_hollow": 3,
@@ -95,6 +101,10 @@ _ACTION_BY_SIGNAL = {
     "covered_but_hollow": "strengthen_assertions",
     "covered_clean": "none",
 }
+
+# Signals whose file has test evidence - the only entries a mutation pass can
+# say anything about. Kept in ranked order by `mutation_scope`.
+MUTATION_SCOPE_SIGNALS = frozenset({"covered_but_hollow", "sibling_test_only"})
 
 # The three hollow-test heuristic buckets, in report order. Each bucket entry
 # names the file it flags under either ``file`` (boundary / duplicate-truth, a
@@ -158,125 +168,11 @@ def _is_covered(path: str, coverage_data: dict[str, Any]) -> bool:
         return False
 
 
-def _sibling_test_names(name: str) -> list[str]:
-    """Conventional test-file names for a source file name (``a.ts`` ->
-    ``a.test.ts``, ``a.spec.ts``, ``a_test.ts``, ``test_a.ts``). A hyphenated
-    stem also yields its underscore spelling, since a Python test for the script
-    ``complexity-treemap.py`` has to be importable as
-    ``test_complexity_treemap.py``. A name with no extension has no conventional
-    sibling."""
-    stem, dot, ext = name.rpartition(".")
-    if not dot or not stem:
-        return []
-    stems = [stem] + ([stem.replace("-", "_")] if "-" in stem else [])
-    return [n for s in stems for n in (f"{s}.test.{ext}", f"{s}.spec.{ext}",
-                                        f"{s}_test.{ext}", f"test_{s}.{ext}")]
-
-
-def _is_test_file(name: str) -> bool:
-    """True when the file name itself follows a test naming convention: the
-    file is test evidence, not a source awaiting a sibling test."""
-    stem, dot, _ = name.rpartition(".")
-    if not dot or not stem:
-        return False
-    return stem.startswith("test_") or stem.endswith(("_test", ".test", ".spec"))
-
-
-# Directory names that hold tests beside a source file, and the ones that hold a
-# parallel test tree at some ancestor (``tests/test_<stem>.py`` for
-# ``scripts/lib/<stem>.py``). ``__tests__`` is a JS co-location idiom, never a
-# repo-level tree, so it is only probed beside the source.
-_ADJACENT_TEST_DIRS = ("__tests__", "tests", "test")
-_TREE_TEST_DIRS = ("tests", "test")
-# Bound on how many ancestor directories the walk visits. Each level costs a
-# couple of directory stats plus a few file stats only where a test dir exists.
-_MAX_ANCESTOR_LEVELS = 16
-# A flat ``tests/`` / ``test/`` tree (test named by bare file name, no path
-# mirrored) is only trusted where it sits beside the source's own directory
-# (one component below the ancestor) or beside its top-level package directory
-# (two components: ``skills/assess/tests`` for ``skills/assess/scripts/lib/``).
-# Further up, a bare-name match carries no path relationship: a root
-# ``tests/test_mod.py`` would credit every ``mod.py`` in the tree.
-_MAX_FLAT_BELOW = 2
-
-# Match strength returned by the sibling-test probe.
-_MATCH_DIRECT = "direct"  # beside, adjacent, mirrored, or the file is a test
-_MATCH_FLAT = "flat"  # only a bounded flat tests/ tree matched the bare name
-
-
-def _test_dirs_for(rel_dir: Path) -> list[tuple[Path, bool]]:
-    """Repo-relative directories that may hold a test for a source in
-    ``rel_dir``, most local first, each paired with whether it is a flat probe:
-    the source's own directory, its adjacent test directories, then at each
-    ancestor up to the root a ``tests/`` / ``test/`` tree mirroring the source's
-    path below that ancestor, and mirroring it with the first component (a
-    ``src/``-style root) dropped. The flat tree (bare name, no mirror) is probed
-    only within ``_MAX_FLAT_BELOW`` components of the source directory."""
-    dirs: dict[Path, bool] = {rel_dir: False}
-    for d in _ADJACENT_TEST_DIRS:
-        dirs[rel_dir / d] = False
-    parts = rel_dir.parts
-    for depth in range(len(parts), -1, -1)[:_MAX_ANCESTOR_LEVELS]:
-        ancestor = Path(*parts[:depth])
-        below = parts[depth:]
-        for tree in _TREE_TEST_DIRS:
-            base = ancestor / tree
-            if below:
-                dirs.setdefault(base.joinpath(*below), False)
-                if len(below) > 1:
-                    dirs.setdefault(base.joinpath(*below[1:]), False)
-            if len(below) <= _MAX_FLAT_BELOW:
-                dirs.setdefault(base, True)
-    return list(dirs.items())
-
-
-def _sibling_test_match(path: str, repo_root: Path) -> str | None:
-    """How a conventionally named test file for ``path`` was found, or ``None``.
-
-    ``_MATCH_DIRECT``: the test sits beside the source, in an adjacent
-    ``__tests__/`` / ``tests/`` / ``test/`` directory (where ``__tests__/`` also
-    accepts the bare source name), or in a ``tests/`` / ``test/`` tree at any
-    ancestor up to ``repo_root`` mirroring the source path; or the hot file is
-    itself a test. ``_MATCH_FLAT``: only a flat ``tests/`` / ``test/`` tree
-    beside the source directory or its top-level package directory holds the
-    bare name - weaker evidence the caller disambiguates across hot files. A
-    source that is not on disk (a stale stats entry for a deleted file) is never
-    credited. Never raises."""
-    try:
-        source = repo_root / path
-        if not source.is_file():
-            return None
-        if _is_test_file(source.name) or "__tests__" in Path(path).parts:
-            return _MATCH_DIRECT
-        names = _sibling_test_names(source.name)
-        if not names:
-            return None
-        rel_dir = Path(path).parent
-        if ".." in rel_dir.parts or rel_dir.is_absolute():
-            return None
-        flat_hit = False
-        for rel, is_flat in _test_dirs_for(rel_dir):
-            if is_flat and flat_hit:
-                continue  # already have the weak match; only a direct one helps
-            directory = repo_root / rel
-            if not directory.is_dir():
-                continue
-            candidates = list(names)
-            if rel.name == "__tests__":
-                candidates.append(source.name)
-            if any((directory / n).is_file() for n in candidates):
-                if not is_flat:
-                    return _MATCH_DIRECT
-                flat_hit = True
-        return _MATCH_FLAT if flat_hit else None
-    except (OSError, ValueError):
-        return None
-
-
-def _name_key(path: str) -> str:
-    """Bare file name with hyphens folded to underscores: two hot files with the
-    same key resolve to the same conventional test names."""
-    return Path(path).name.replace("-", "_")
+def _has_record(path: str, coverage_data: dict[str, Any]) -> bool:
+    """True when the parsed coverage report carries any entry for the file,
+    even a zero rate: the report measured it."""
+    per_file = coverage_data.get("per_file")
+    return isinstance(per_file, dict) and path in per_file
 
 
 def _hollow_kinds(path: str, cheap_heuristics: dict[str, Any]) -> list[str]:
@@ -309,24 +205,29 @@ def _classify(
 ) -> tuple[str, list[str]]:
     """Resolve a file's test signal and the hollow kinds it tripped.
 
-    No coverage report and a ``repo_root``: a sibling test credits the file as
-    ``sibling_test_only`` (with any hollow kinds it tripped); no sibling test ->
-    ``unsupported``. A flat-only match does not credit a file whose bare name
-    another hot file shares (``shared_names``): the bare name cannot say which
-    of them the test belongs to. No report and no ``repo_root`` ->
-    ``unknown_no_coverage`` (we never claim clean).
-    Covered + a hollow hit -> ``covered_but_hollow``. Covered + clean ->
-    ``covered_clean``. Present report but file absent / zero rate ->
-    ``no_covering_test``.
+    No coverage report and a ``repo_root``: a test file credits the file as
+    ``sibling_test_only`` (with any hollow kinds it tripped); none ->
+    ``unsupported``. No report and no ``repo_root`` -> ``unknown_no_coverage``
+    (we never claim clean). A report present: covered + a hollow hit ->
+    ``covered_but_hollow``; covered + clean -> ``covered_clean``; a 0 rate ->
+    ``no_covering_test``; absent from the report -> ``sibling_test_only`` when a
+    test file exists (a partial report is not evidence of no test), otherwise
+    ``no_covering_test``. A flat-tree-only test match does not credit a file
+    whose bare name another hot file shares (``shared_names``).
     """
+    def has_test() -> bool:
+        return repo_root is not None and bool(
+            has_sibling_test(repo_root, path, shared_names))
+
     if not coverage_present or coverage_data is None:
         if repo_root is None:
             return "unknown_no_coverage", []
-        match = _sibling_test_match(path, repo_root)
-        if match is None or (match == _MATCH_FLAT and _name_key(path) in shared_names):
+        if not has_test():
             return "unsupported", []
         return "sibling_test_only", _hollow_kinds(path, cheap_heuristics)
     if not _is_covered(path, coverage_data):
+        if not _has_record(path, coverage_data) and has_test():
+            return "sibling_test_only", _hollow_kinds(path, cheap_heuristics)
         return "no_covering_test", []
     kinds = _hollow_kinds(path, cheap_heuristics)
     if kinds:
@@ -353,9 +254,9 @@ def compute_test_focus(
         cheap_heuristics: the ``test_pressure`` block's ``cheap_heuristics`` dict
             (``assertion_on_internal`` / ``untested_boundaries`` /
             ``duplicate_truth`` buckets).
-        repo_root: optional repository root. When given and no coverage report
-            exists, each hot file is checked for a sibling test file instead of
-            degrading straight to ``unknown_no_coverage``.
+        repo_root: optional repository root. When given, a hot file with no
+            coverage record is checked for a test file instead of degrading
+            straight to ``unknown_no_coverage`` / ``no_covering_test``.
 
     Returns:
         ``{available, coverage_present, entries, total_focus_targets}`` where
@@ -369,13 +270,8 @@ def compute_test_focus(
     items = hot_files if isinstance(hot_files, list) else []
     # Bare names carried by more than one considered hot file: a flat tests/
     # match on such a name is ambiguous and credits none of them.
-    name_counts: dict[str, int] = {}
-    for item in items[: _LOW_MAX + 1]:
-        hot_path = _entry_path(item)
-        if hot_path is not None:
-            key = _name_key(hot_path)
-            name_counts[key] = name_counts.get(key, 0) + 1
-    shared_names = frozenset(k for k, n in name_counts.items() if n > 1)
+    shared_names = shared_name_keys(
+        p for p in (_entry_path(i) for i in items[: _LOW_MAX + 1]) if p is not None)
 
     for index, item in enumerate(items):
         band = _risk_band(index)
@@ -414,3 +310,18 @@ def compute_test_focus(
         "entries": [asdict(e) for e in entries],
         "total_focus_targets": len(entries),
     }
+
+
+def mutation_scope(test_focus: Any) -> list[str]:
+    """Paths the bounded mutation pass should mutate, in ranked order: the
+    ``test_focus`` entries whose signal is in ``MUTATION_SCOPE_SIGNALS`` (the
+    file has test evidence). Accepts the block dict or its ``entries`` list;
+    anything malformed yields ``[]``."""
+    entries = test_focus.get("entries") if isinstance(test_focus, dict) else test_focus
+    if not isinstance(entries, list):
+        return []
+    return [
+        e["path"] for e in entries
+        if isinstance(e, dict) and isinstance(e.get("path"), str) and e["path"]
+        and e.get("test_signal") in MUTATION_SCOPE_SIGNALS
+    ]
