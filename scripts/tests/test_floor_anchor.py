@@ -599,7 +599,10 @@ jobs:
     steps:
       - name: Detect changes to protected paths
         id: filter
-        run: echo "floor_core_changed=true" >> "$GITHUB_OUTPUT"
+        run: |
+          FLOOR_CORE="$(python scripts/floor_check.py protected \\
+            --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"
+          echo "floor_core_changed=true" >> "$GITHUB_OUTPUT"
 """
 
 
@@ -1129,3 +1132,68 @@ def test_signoff_wiring_reads_the_output_only_under_outputs(tmp_path):
     with pytest.raises(floor_anchor.AnchorError) as exc:
         floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
     assert "declares no" in str(exc.value)
+
+
+def test_signoff_wiring_fails_closed_on_a_literal_output(tmp_path):
+    # Disarm path 18: the filter job keeps declaring floor_core_changed, but
+    # as a literal rather than a forwarded step output, so every PR is
+    # answered 'false' without the script ever being asked.
+    body = FLOOR_YML_WIRED.replace(
+        "      floor_core_changed: ${{ steps.filter.outputs.floor_core_changed }}\n",
+        "      floor_core_changed: 'false'\n",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "steps.<id>.outputs" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "old, new",
+    [
+        # the producing step no longer runs the classifier
+        (
+            '          FLOOR_CORE="$(python scripts/floor_check.py protected \\\n'
+            '            --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"\n',
+            "",
+        ),
+        # the classifier is asked for a different role
+        ("--role floor-core", "--role canary"),
+        # the output forwards a step that does not exist
+        ("steps.filter.outputs.floor_core_changed", "steps.other.outputs.floor_core_changed"),
+    ],
+)
+def test_signoff_wiring_fails_closed_when_the_producer_skips_the_classifier(
+    tmp_path, old, new
+):
+    # Disarm path 19: the output is forwarded from a step, but that step does
+    # not run `floor_check.py protected --role floor-core`, so the answer is
+    # the step's own, not the script's classification.
+    assert old in FLOOR_YML_WIRED
+    body = FLOOR_YML_WIRED.replace(old, new, 1)
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "floor_check.py protected" in str(exc.value)
+
+
+def test_signoff_wiring_tolerates_a_trailing_comment_on_a_guard(tmp_path, capsys):
+    body = FLOOR_YML_WIRED.replace(
+        "    if: ${{ !cancelled() }}\n",
+        "    if: ${{ !cancelled() }}  # never skip: a skipped required context reads as satisfied\n",
+    ).replace(
+        "    if: needs.canary-changes.outputs.floor_core_changed == 'true'\n",
+        "    if: needs.canary-changes.outputs.floor_core_changed == 'true' # clause iii\n",
+    )
+    floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "ok   " in capsys.readouterr().out
+
+
+def test_signoff_wiring_reads_a_four_space_step_list(tmp_path, capsys):
+    # `steps:` items may sit at four spaces (flush with the key) or six; both
+    # are the same list to YAML, so the step reader must accept both.
+    start = FLOOR_YML_WIRED.index("    steps:\n") + len("    steps:\n")
+    end = FLOOR_YML_WIRED.index("\n  signoff:")
+    block = FLOOR_YML_WIRED[start:end]
+    reindented = "\n".join(line[2:] if line.startswith("  ") else line for line in block.split("\n"))
+    body = FLOOR_YML_WIRED[:start] + reindented + FLOOR_YML_WIRED[end:]
+    floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "ok   " in capsys.readouterr().out

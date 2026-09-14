@@ -123,7 +123,18 @@ ENFORCEMENT_GUARD = "!cancelled()"
 # ``outputs:`` entry at six spaces, with a value. Without it the consumers'
 # ``needs.<filter>.outputs.floor_core_changed`` is empty on every run.
 JOB_OUTPUTS_KEY_RE = re.compile(r"^\s{4}outputs:\s*$")
-JOB_OUTPUT_RE = re.compile(r"^\s{6}" + FLOOR_CORE_OUTPUT + r":\s*\S")
+# The output must be the expression that forwards a STEP's output -- a literal
+# ('false', say) would answer every PR without asking the script -- and that
+# step must be the one that runs the classification: floor_check.py, asked for
+# the floor-core role. The anchor cannot judge the script's answer; it can pin
+# that the answer comes from the script.
+JOB_OUTPUT_RE = re.compile(
+    r"^\s{6}" + FLOOR_CORE_OUTPUT
+    + r":\s*\$\{\{\s*steps\.([A-Za-z0-9_-]+)\.outputs\." + FLOOR_CORE_OUTPUT
+    + r"\s*\}\}\s*$"
+)
+STEP_ID_RE = re.compile(r"^\s{6,}id:\s*(\S+)\s*$")
+CLASSIFIER_INVOCATION = ("floor_check.py protected", "--role floor-core")
 # ``continue-on-error: true`` at step or job level makes a non-zero exit
 # non-fatal, which disarms every conversion step while leaving each guard and
 # script byte-identical. The key is rejected outright in the enforcement job.
@@ -132,8 +143,8 @@ CONTINUE_ON_ERROR_RE = re.compile(r"^\s+continue-on-error:")
 # ``run:`` inside one is either inline or a ``|``/``>`` block whose body sits
 # deeper than the key. A conversion step must actually exit non-zero -- a guard
 # that fires into ``run: true`` converts nothing -- so its script is read too.
-STEP_START_RE = re.compile(r"^\s{6}-\s")
-STEP_RUN_RE = re.compile(r"^(\s{8,})run:\s*(.*?)\s*$")
+STEP_START_RE = re.compile(r"^\s{4,}-\s+[A-Za-z_-]+:")
+STEP_RUN_RE = re.compile(r"^(\s{6,})run:\s*(.*?)\s*$")
 EXIT_NONZERO_RE = re.compile(r"^\s*exit\s+[1-9]\d*\s*$", re.MULTILINE)
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -686,7 +697,7 @@ def check_workflow_wiring(root: Path | None = None) -> None:
 
 def _strip_expression(expr: str) -> str:
     """``${{ x }}`` and bare ``x`` are the same guard to GitHub; compare ``x``."""
-    expr = expr.strip()
+    expr = re.sub(r"\s+#.*$", "", expr.strip())  # a trailing YAML comment
     if expr.startswith("${{") and expr.endswith("}}"):
         expr = expr[3:-2]
     return expr.strip()
@@ -766,13 +777,33 @@ def _check_reads_filter(
             "`needs:`. GitHub evaluates an output from a job outside `needs` "
             "as empty, so the guard is never true."
         )
-    if not any(JOB_OUTPUT_RE.match(line) for line in _job_outputs(jobs[filter_job])):
+    outputs = [
+        m for line in _job_outputs(jobs[filter_job]) if (m := JOB_OUTPUT_RE.match(line))
+    ]
+    if not outputs:
         raise AnchorError(
             f"{what} {job_id!r} reads `needs.{filter_job}.outputs."
             f"{FLOOR_CORE_OUTPUT}` but job {filter_job!r} declares no "
-            f"`{FLOOR_CORE_OUTPUT}:` under `outputs:`. An output the producer "
-            "never sets is empty on every run, so the guard is never true and "
-            "the review is never requested."
+            f"`{FLOOR_CORE_OUTPUT}: ${{{{ steps.<id>.outputs.{FLOOR_CORE_OUTPUT} }}}}` "
+            "under `outputs:`. An output the producer never sets is empty on "
+            "every run, and a literal answers every run without asking the "
+            "script; either way the review is never requested."
+        )
+    step_id = outputs[0].group(1)
+    producer = [
+        step
+        for step in _job_steps(jobs[filter_job])
+        if any((m := STEP_ID_RE.match(line)) and m.group(1) == step_id for line in step)
+    ]
+    script = _step_run(producer[0]) if producer else ""
+    if not all(token in script for token in CLASSIFIER_INVOCATION):
+        raise AnchorError(
+            f"job {filter_job!r} forwards `steps.{step_id}.outputs."
+            f"{FLOOR_CORE_OUTPUT}` but step {step_id!r} does not run "
+            f"`{CLASSIFIER_INVOCATION[0]} ... {CLASSIFIER_INVOCATION[1]}` "
+            f"({'no such step' if not producer else 'its script never invokes it'}). "
+            "The floor-core answer has to come from the script's classification "
+            "(FLOOR.md clause iii), not from a step that decides on its own."
         )
 
 
