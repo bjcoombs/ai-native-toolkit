@@ -105,8 +105,24 @@ NEVER_REQUESTED_RE = re.compile(
     + r"\s*==\s*['\"]true['\"]\s*&&\s*"
     r"needs\.([A-Za-z0-9_-]+)\.result\s*!=\s*['\"]success['\"]$"
 )
+# The other two conversion steps' guards, pinned the same way: a refused review
+# (the sign-off job's result is 'failure') and a path filter that did not run
+# to success (so no sign-off could have been requested at all).
+REFUSED_RE = re.compile(
+    r"^needs\.([A-Za-z0-9_-]+)\.result\s*==\s*['\"]failure['\"]$"
+)
+UNCLASSIFIED_RE = re.compile(
+    r"^needs\.([A-Za-z0-9_-]+)\.result\s*!=\s*['\"]success['\"]$"
+)
 # Any ``needs.<job>.result`` in a job-level guard, whichever job it names.
 NEEDS_RESULT_RE = re.compile(r"needs\.[A-Za-z0-9_-]+\.result")
+# A step's shape inside a job: steps start with ``- `` at six spaces, and a
+# ``run:`` inside one is either inline or a ``|``/``>`` block whose body sits
+# deeper than the key. A conversion step must actually exit non-zero -- a guard
+# that fires into ``run: true`` converts nothing -- so its script is read too.
+STEP_START_RE = re.compile(r"^\s{6}-\s")
+STEP_RUN_RE = re.compile(r"^(\s{8,})run:\s*(.*?)\s*$")
+EXIT_NONZERO_RE = re.compile(r"\bexit\s+[1-9]")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # --- E2 DESCOPE: floor.yml path lock (maintainer decision, 2026-07-10) --------
@@ -727,25 +743,61 @@ def _check_reads_filter(
         )
 
 
+def _job_steps(lines: list[str]) -> list[list[str]]:
+    """Split a job's lines into its steps (the lines before the first are dropped)."""
+    steps: list[list[str]] = []
+    for line in lines:
+        if STEP_START_RE.match(line):
+            steps.append([line])
+        elif steps:
+            steps[-1].append(line)
+    return steps
+
+
+def _step_guard(step: list[str]) -> str | None:
+    """The step's ``if:`` expression, unwrapped, or None when it has none."""
+    for line in step:
+        if m := STEP_IF_RE.match(line):
+            return _strip_expression(m.group(1))
+    return None
+
+
+def _step_run(step: list[str]) -> str:
+    """The step's ``run:`` script, inline or block, or '' when it has none."""
+    for index, line in enumerate(step):
+        m = STEP_RUN_RE.match(line)
+        if not m:
+            continue
+        indent, value = len(m.group(1)), m.group(2)
+        if value and value not in ("|", ">", "|-", ">-", "|+", ">+"):
+            return value
+        body: list[str] = []
+        for follow in step[index + 1:]:
+            if follow.strip() and len(follow) - len(follow.lstrip()) <= indent:
+                break
+            body.append(follow)
+        return "\n".join(body)
+    return ""
+
+
 def _check_refusal_is_red(
     jobs: dict[str, list[str]],
     enforcement: list[str],
     env_jobs: set[str],
     env: str,
 ) -> None:
-    """Fail unless a refusal still lands as RED rather than as an absent check.
+    """Fail unless every way the sign-off can lapse still lands as RED.
 
-    Wiring alone is not the guarantee: with the refusal step deleted, or with a
-    ``needs.<signoff>.result != 'failure'`` conjunct added to the job guard, the
-    environment, the ``needs`` edge and this anchor all stay exactly as they
-    are while a refused review becomes a no-op (the job passes) or an absent
-    context (the job skips, and branch protection reads a skipped required
-    context as satisfied). That conversion is the half the sign-off rests on,
-    so it is asserted here rather than left to review.
+    Wiring alone is not the guarantee: with a conversion step deleted, its
+    guard loosened, its script hollowed to ``run: true``, or a
+    ``needs.<job>.result`` conjunct added to the job guard, the environment,
+    the ``needs`` edge and this anchor all stay exactly as they are while a
+    refused, never-requested or never-classified review becomes a no-op (the
+    job passes) or an absent context (the job skips, and branch protection
+    reads a skipped required context as satisfied). That conversion is the
+    half the sign-off rests on, so all three steps are pinned here -- guard
+    AND script -- rather than left to review.
     """
-    def mentions_signoff(expr: str) -> bool:
-        return any(f"needs.{jid}.result" in expr for jid in env_jobs)
-
     for job_id in enforcement:
         lines = jobs[job_id]
         for line in lines:
@@ -761,38 +813,58 @@ def _check_refusal_is_red(
                     "arrive here as red, not absent, so the guard must be "
                     "`${{ !cancelled() }}` alone."
                 )
-        step_guards = [
-            m.group(1) for line in lines if (m := STEP_IF_RE.match(line))
+        steps = [
+            (guard, _step_run(step))
+            for step in _job_steps(lines)
+            if (guard := _step_guard(step)) is not None
         ]
-        guarded = any(
-            mentions_signoff(expr) and "failure" in expr for expr in step_guards
-        )
-        if not guarded:
-            raise AnchorError(
-                f"no step of the {FLOOR_CONTEXT!r} job guards on the {env!r} "
-                "sign-off job's result being 'failure'. Without it a refused "
-                "review fails only the sign-off job, this required context "
-                "still goes green, and clause iii's approval is advisory."
-            )
-        requested = [
-            m
-            for expr in step_guards
-            if (m := NEVER_REQUESTED_RE.match(_strip_expression(expr)))
-            and m.group(2) in env_jobs
-        ]
-        if not requested:
+
+        def pinned(pattern: re.Pattern[str], accept, what: str, why: str) -> str:
+            """The captured job id of the one step whose guard is exactly
+            ``pattern`` and ``accept``-able, provided its script exits non-zero."""
+            for guard, run in steps:
+                m = pattern.match(guard)
+                if not m or not accept(m):
+                    continue
+                if not EXIT_NONZERO_RE.search(run):
+                    raise AnchorError(
+                        f"the {FLOOR_CONTEXT!r} step guarded by {guard!r} "
+                        f"runs {run.strip()!r}, which never exits non-zero. "
+                        f"A guard that fires into a passing script converts "
+                        f"nothing: {why}"
+                    )
+                return m.group(1)
             raise AnchorError(
                 f"no step of the {FLOOR_CONTEXT!r} job is guarded by exactly "
-                f"`needs.<filter job>.outputs.{FLOOR_CORE_OUTPUT} == 'true' && "
-                f"needs.<sign-off job>.result != 'success'` (sign-off job(s): "
-                f"{sorted(env_jobs)}). Without it a sign-off that was never "
-                "requested -- the job skipped because its trigger was edited "
-                "-- leaves this required context green, and the review lapses "
-                "without a refusal. A looser guard is not accepted: a conjunct "
+                f"`{what}`. {why} A looser guard is not accepted: a conjunct "
                 "that exempts an actor or a branch makes the step a no-op."
             )
-        _check_reads_filter(
-            jobs, job_id, requested[0].group(1), f"the {FLOOR_CONTEXT!r} job"
+
+        pinned(
+            REFUSED_RE,
+            lambda m: m.group(1) in env_jobs,
+            f"needs.<sign-off job>.result == 'failure'",
+            f"Without it a refused {env!r} review fails only the sign-off job, "
+            "this required context still goes green, and clause iii's approval "
+            "is advisory.",
+        )
+        filter_job = pinned(
+            NEVER_REQUESTED_RE,
+            lambda m: m.group(2) in env_jobs,
+            f"needs.<filter job>.outputs.{FLOOR_CORE_OUTPUT} == 'true' && "
+            "needs.<sign-off job>.result != 'success'",
+            "Without it a sign-off that was never requested -- the job skipped "
+            "because its trigger was edited -- leaves this required context "
+            "green, and the review lapses without a refusal.",
+        )
+        _check_reads_filter(jobs, job_id, filter_job, f"the {FLOOR_CONTEXT!r} job")
+        pinned(
+            UNCLASSIFIED_RE,
+            lambda m: m.group(1) == filter_job,
+            f"needs.{filter_job}.result != 'success'",
+            "Without it a path filter that failed or was skipped leaves the "
+            "sign-off job SKIPPED rather than refused, and this required "
+            "context goes green with no classification ever having run.",
         )
 
 

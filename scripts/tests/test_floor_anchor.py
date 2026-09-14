@@ -572,6 +572,11 @@ jobs:
       - name: Fail on a refused sign-off
         if: needs.signoff.result == 'failure'
         run: exit 1
+      - name: Fail on an unclassified path filter
+        if: needs.canary-changes.result != 'success'
+        run: |
+          echo "::error::the filter did not run"
+          exit 1
       - name: Fail on a floor-core change with no approved sign-off
         if: needs.canary-changes.outputs.floor_core_changed == 'true' && needs.signoff.result != 'success'
         run: exit 1
@@ -942,3 +947,80 @@ def test_signoff_wiring_fails_closed_when_the_never_requested_step_is_deleted(
     msg = str(exc.value)
     assert "never requested" in msg
     assert floor_anchor.FLOOR_CORE_OUTPUT in msg
+
+
+def test_signoff_wiring_fails_closed_when_the_unclassified_step_is_deleted(tmp_path):
+    # Disarm path 12: the step that reds a filter that never ran is gone. A
+    # failed filter then leaves the sign-off SKIPPED (not refused) and the
+    # required context green with no classification behind it.
+    body = FLOOR_YML_WIRED.replace(
+        "      - name: Fail on an unclassified path filter\n"
+        "        if: needs.canary-changes.result != 'success'\n"
+        "        run: |\n"
+        '          echo "::error::the filter did not run"\n'
+        "          exit 1\n",
+        "",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "needs.canary-changes.result != 'success'" in msg
+    assert "classification" in msg
+
+
+def test_signoff_wiring_fails_closed_when_the_unclassified_step_names_another_job(
+    tmp_path,
+):
+    # Disarm path 12b: the guard survives but reads a job other than the one
+    # the never-requested step classifies from.
+    body = FLOOR_YML_WIRED.replace(
+        "        if: needs.canary-changes.result != 'success'\n",
+        "        if: needs.signoff.result != 'success'\n",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "needs.canary-changes.result != 'success'" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "        run: exit 1\n",
+        "        run: |\n"
+        '          echo "::error::the filter did not run"\n'
+        "          exit 1\n",
+        "        if: needs.canary-changes.outputs.floor_core_changed == 'true'"
+        " && needs.signoff.result != 'success'\n"
+        "        run: exit 1\n",
+    ],
+)
+def test_signoff_wiring_fails_closed_when_a_conversion_step_runs_true(
+    tmp_path, script
+):
+    # Disarm path 13: every guard is byte-identical, but the script behind it
+    # no longer exits non-zero. `run: true` fires the step into a pass, so a
+    # refusal, a never-requested review or an unclassified filter converts to
+    # nothing. Applied in turn to the refusal step (inline run), the
+    # unclassified step (block run) and the never-requested step.
+    hollow = script.rsplit("        run:", 1)[0] + "        run: true\n"
+    assert script in FLOOR_YML_WIRED
+    body = FLOOR_YML_WIRED.replace(script, hollow, 1)
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "never exits non-zero" in msg
+    assert "'true'" in msg
+
+
+def test_signoff_wiring_accepts_a_block_run_that_exits_non_zero(tmp_path, capsys):
+    # A multi-line `run: |` whose last line is `exit 1` is the real floor.yml
+    # shape; the block reader must find the exit inside it.
+    body = FLOOR_YML_WIRED.replace(
+        "        if: needs.signoff.result == 'failure'\n        run: exit 1\n",
+        "        if: needs.signoff.result == 'failure'\n"
+        "        run: |\n"
+        '          echo "::error::refused"\n'
+        "          exit 1\n",
+    )
+    floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "ok   " in capsys.readouterr().out
