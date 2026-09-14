@@ -250,18 +250,75 @@ def test_unsupported_test_signal_when_no_coverage_and_no_sibling(tmp_path: Path)
 
 
 def test_unsupported_test_signal_ranks_within_band(tmp_path: Path) -> None:
-    """unsupported has its own severity rank: ranking a mixed list never raises
-    and a sibling-tested file outranks an unsupported one in the same band."""
+    """unsupported has its own severity rank: less tested ranks higher, so a file
+    with no test found anywhere outranks a sibling-tested one in the same band,
+    whatever the hotspot order."""
     _touch(tmp_path, "a.py")
+    _touch(tmp_path, "test_a.py")
     _touch(tmp_path, "b.py")
-    _touch(tmp_path, "test_b.py")
     heur = _empty_heuristics()
-    heur["duplicate_truth"] = [{"file": "b.py"}]
+    heur["duplicate_truth"] = [{"file": "a.py"}]
     block = compute_test_focus(["a.py", "b.py"], None, heur, repo_root=tmp_path)
-    assert [e["path"] for e in block["entries"]] == ["b.py", "a.py"]
+    assert [(e["path"], e["test_signal"]) for e in block["entries"]] == [
+        ("b.py", "unsupported"), ("a.py", "sibling_test_only"),
+    ]
+
+
+def test_sibling_test_fallback_skips_deleted_source(tmp_path: Path) -> None:
+    """A stale hotspot entry for a deleted source is never credited by a test
+    file that outlived it."""
+    _touch(tmp_path, "src/a.test.ts")
+    block = compute_test_focus(["src/a.ts"], None, None, repo_root=tmp_path)
+    assert _entry(block, "src/a.ts")["test_signal"] == "unsupported"
+
+
+def test_sibling_test_fallback_parallel_tests_tree(tmp_path: Path) -> None:
+    """The parallel tests/ layout credits: this repo's own convention
+    (skills/assess/tests/test_<stem>.py for skills/assess/scripts/lib/<stem>.py),
+    a root tests/ tree mirroring the source path, a mirror that drops a src/
+    root, an adjacent test/ directory, and a Go-style root test/ tree."""
+    for rel in ("skills/assess/scripts/lib/doc_graph.py",
+                "skills/assess/tests/test_doc_graph.py",
+                "src/pkg/mod.py", "tests/src/pkg/test_mod.py",
+                "src/app/view.ts", "tests/app/view.spec.ts",
+                "lib/util.js", "lib/test/util.test.js",
+                "cmd/run.go", "test/run_test.go"):
+        _touch(tmp_path, rel)
+    hot = ["skills/assess/scripts/lib/doc_graph.py", "src/pkg/mod.py",
+           "src/app/view.ts", "lib/util.js", "cmd/run.go"]
+    block = compute_test_focus(hot, None, None, repo_root=tmp_path)
+    by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
+    assert by_path == {path: "sibling_test_only" for path in hot}
+
+
+def test_sibling_test_fallback_parallel_tree_needs_matching_name(tmp_path: Path) -> None:
+    """A tests/ tree with only unrelated test files does not credit a source."""
+    _touch(tmp_path, "skills/assess/scripts/lib/doc_graph.py")
+    _touch(tmp_path, "skills/assess/tests/test_other.py")
+    _touch(tmp_path, "tests/doc_graph.py")
+    block = compute_test_focus(
+        ["skills/assess/scripts/lib/doc_graph.py"], None, None, repo_root=tmp_path,
+    )
+    assert block["entries"][0]["test_signal"] == "unsupported"
 
 
 def test_no_repo_root_keeps_unknown_no_coverage() -> None:
     """Backward compatible: without repo_root the no-report degrade is unchanged."""
     block = compute_test_focus(["a.py"], None, None)
     assert block["entries"][0]["test_signal"] == "unknown_no_coverage"
+
+
+def test_sibling_test_fallback_hyphenated_stem_and_test_files(tmp_path: Path) -> None:
+    """A hyphenated script matches its underscore test name (this repo's
+    complexity-treemap.py -> tests/test_complexity_treemap.py), and a hot file
+    that is itself a test is test evidence, never 'no test found'."""
+    for rel in ("skills/assess/scripts/complexity-treemap.py",
+                "skills/assess/tests/test_complexity_treemap.py",
+                "src/a.test.ts", "web/__tests__/b.js"):
+        _touch(tmp_path, rel)
+    hot = ["skills/assess/scripts/complexity-treemap.py",
+           "skills/assess/tests/test_complexity_treemap.py",
+           "src/a.test.ts", "web/__tests__/b.js"]
+    block = compute_test_focus(hot, None, None, repo_root=tmp_path)
+    by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
+    assert by_path == {path: "sibling_test_only" for path in hot}

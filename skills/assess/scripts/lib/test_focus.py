@@ -19,14 +19,14 @@ Signal per file (most to least actionable):
   - ``covered_but_hollow``    - a test covers it, but it trips a hollow-test
                                 heuristic (asserts internals, untested boundary,
                                 duplicate truth).
-  - ``sibling_test_only``     - no coverage report, but a conventionally named
-                                test file sits beside it: a test file is
-                                present, coverage is unmeasured. Carries any
-                                hollow-heuristic kinds it tripped.
   - ``unsupported``           - no coverage report and no sibling test file
                                 maps to it (``repo_root`` given): the core cannot
                                 tell whether a test exists, so it says so rather
                                 than claim ``no_covering_test``.
+  - ``sibling_test_only``     - no coverage report, but a conventionally named
+                                test file maps to it: a test file is
+                                present, coverage is unmeasured. Carries any
+                                hollow-heuristic kinds it tripped.
   - ``unknown_no_coverage``   - no coverage report and no ``repo_root`` to look
                                 for a sibling test: we *cannot* say it is
                                 covered, so we do not pretend it is clean.
@@ -35,9 +35,12 @@ Signal per file (most to least actionable):
 
 Sibling-test fallback: with no coverage report and a ``repo_root``, a hot file
 with a sibling test (``<stem>.test.<ext>``, ``<stem>.spec.<ext>``,
-``<stem>_test.<ext>``, ``test_<stem>.<ext>`` beside it or under a sibling
-``__tests__/``) gets ``sibling_test_only`` rather than a covered bucket: the only
-evidence is the file's existence, so the core never spells it as coverage.
+``<stem>_test.<ext>``, ``test_<stem>.<ext>`` beside it, in an adjacent
+``__tests__/`` / ``tests/`` / ``test/`` directory, or in a ``tests/`` / ``test/``
+tree at any ancestor up to the root, flat or mirroring the source path; a
+hyphenated stem also matches its underscore spelling) gets ``sibling_test_only``
+rather than a covered bucket, and so does a hot file that is itself a test file:
+the only evidence is a file's existence, so the core never spells it as coverage.
 
 Honest degradation is the hard contract: ``coverage_data is None`` never yields
 ``covered_clean`` for an untested file and records ``coverage_present: False``.
@@ -62,12 +65,22 @@ _LOW_MAX = 9
 
 # Ranking weights. Risk band dominates; signal severity breaks ties within a band.
 _BAND_RANK = {"high": 3, "medium": 2, "low": 1}
+#
+# The scale ranks "less tested" higher: the list answers which risky files most
+# need test work. ``no_covering_test`` (no test) outranks ``covered_but_hollow``
+# (a weak test), and by the same rule ``unsupported`` (no test file found in any
+# conventional location) outranks ``sibling_test_only`` (a test file exists).
+# ``sibling_test_only`` and ``unknown_no_coverage`` share the bottom rank; they
+# never appear in the same block (one needs ``repo_root``, the other its absence).
+# The mutation offer reads the head of this same list, and mutation testing a
+# file with no test yields all survivors, so an ``unsupported`` head entry there
+# measures the missing test rather than the strength of an existing one.
 _SIGNAL_SEVERITY = {
     "no_covering_test": 4,
     "covered_but_hollow": 3,
-    "sibling_test_only": 2,
+    "unsupported": 2,
+    "sibling_test_only": 1,
     "unknown_no_coverage": 1,
-    "unsupported": 1,
     "covered_clean": 0,
 }
 
@@ -145,29 +158,90 @@ def _is_covered(path: str, coverage_data: dict[str, Any]) -> bool:
 
 def _sibling_test_names(name: str) -> list[str]:
     """Conventional test-file names for a source file name (``a.ts`` ->
-    ``a.test.ts``, ``a.spec.ts``, ``a_test.ts``, ``test_a.ts``). A name with no
-    extension has no conventional sibling."""
+    ``a.test.ts``, ``a.spec.ts``, ``a_test.ts``, ``test_a.ts``). A hyphenated
+    stem also yields its underscore spelling, since a Python test for the script
+    ``complexity-treemap.py`` has to be importable as
+    ``test_complexity_treemap.py``. A name with no extension has no conventional
+    sibling."""
     stem, dot, ext = name.rpartition(".")
     if not dot or not stem:
         return []
-    return [f"{stem}.test.{ext}", f"{stem}.spec.{ext}",
-            f"{stem}_test.{ext}", f"test_{stem}.{ext}"]
+    stems = [stem] + ([stem.replace("-", "_")] if "-" in stem else [])
+    return [n for s in stems for n in (f"{s}.test.{ext}", f"{s}.spec.{ext}",
+                                        f"{s}_test.{ext}", f"test_{s}.{ext}")]
+
+
+def _is_test_file(name: str) -> bool:
+    """True when the file name itself follows a test naming convention: the
+    file is test evidence, not a source awaiting a sibling test."""
+    stem, dot, _ = name.rpartition(".")
+    if not dot or not stem:
+        return False
+    return stem.startswith("test_") or stem.endswith(("_test", ".test", ".spec"))
+
+
+# Directory names that hold tests beside a source file, and the ones that hold a
+# parallel test tree at some ancestor (``tests/test_<stem>.py`` for
+# ``scripts/lib/<stem>.py``). ``__tests__`` is a JS co-location idiom, never a
+# repo-level tree, so it is only probed beside the source.
+_ADJACENT_TEST_DIRS = ("__tests__", "tests", "test")
+_TREE_TEST_DIRS = ("tests", "test")
+# Bound on how many ancestor directories the walk visits. Each level costs a
+# couple of directory stats plus a few file stats only where a test dir exists.
+_MAX_ANCESTOR_LEVELS = 16
+
+
+def _test_dirs_for(rel_dir: Path) -> list[Path]:
+    """Repo-relative directories that may hold a test for a source in
+    ``rel_dir``, most local first: the source's own directory, its adjacent test
+    directories, then at each ancestor up to the root a ``tests/`` / ``test/``
+    tree - flat, mirroring the source's path below that ancestor, and mirroring
+    it with the first component (a ``src/``-style root) dropped."""
+    dirs: list[Path] = [rel_dir] + [rel_dir / d for d in _ADJACENT_TEST_DIRS]
+    parts = rel_dir.parts
+    for depth in range(len(parts), -1, -1)[:_MAX_ANCESTOR_LEVELS]:
+        ancestor = Path(*parts[:depth])
+        below = parts[depth:]
+        for tree in _TREE_TEST_DIRS:
+            base = ancestor / tree
+            dirs.append(base)
+            if below:
+                dirs.append(base.joinpath(*below))
+                if len(below) > 1:
+                    dirs.append(base.joinpath(*below[1:]))
+    return list(dict.fromkeys(dirs))
 
 
 def _has_sibling_test(path: str, repo_root: Path) -> bool:
-    """True when a conventionally named test file sits beside ``path`` or under a
-    sibling ``__tests__/`` directory (where the bare source name also counts).
-    Never raises."""
+    """True when a conventionally named test file for ``path`` exists beside it,
+    in an adjacent ``__tests__/`` / ``tests/`` / ``test/`` directory (where
+    ``__tests__/`` also accepts the bare source name), or in a ``tests/`` /
+    ``test/`` tree at any ancestor up to ``repo_root`` (flat or mirroring the
+    source path). A hot file that is itself a test counts as its own test file.
+    A source that is not on disk (a stale stats entry for a
+    deleted file) is never credited. Never raises."""
     try:
         source = repo_root / path
+        if not source.is_file():
+            return False
+        if _is_test_file(source.name) or "__tests__" in Path(path).parts:
+            return True
         names = _sibling_test_names(source.name)
         if not names:
             return False
-        directory = source.parent
-        tests_dir = directory / "__tests__"
-        candidates = [directory / n for n in names]
-        candidates += [tests_dir / n for n in names] + [tests_dir / source.name]
-        return any(c.is_file() for c in candidates)
+        rel_dir = Path(path).parent
+        if ".." in rel_dir.parts or rel_dir.is_absolute():
+            return False
+        for rel in _test_dirs_for(rel_dir):
+            directory = repo_root / rel
+            if not directory.is_dir():
+                continue
+            candidates = list(names)
+            if rel.name == "__tests__":
+                candidates.append(source.name)
+            if any((directory / n).is_file() for n in candidates):
+                return True
+        return False
     except (OSError, ValueError):
         return False
 

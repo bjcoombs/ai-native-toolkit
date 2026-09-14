@@ -176,3 +176,16 @@ def test_lcov_path_normalised_unresolved_root_and_outside_path(tmp_path: Path) -
     data = load_coverage_data(tmp_path / "repo" / ".." / "repo")
     assert data is not None
     assert data["per_file"] == {"src/a.ts": 0.5, "/elsewhere/x.ts": 1.0}
+
+
+def test_lcov_path_normalised_windows_relative(tmp_path: Path) -> None:
+    """A Windows runner writes relative SF: paths with backslashes, with or
+    without a .\\ prefix: both normalise to the repo-relative POSIX key."""
+    (tmp_path / "lcov.info").write_text(
+        "SF:.\\src\\a.ts\nLF:10\nLH:10\nend_of_record\n"
+        "SF:src\\b.ts\nLF:10\nLH:9\nend_of_record\n",
+        encoding="utf-8",
+    )
+    data = load_coverage_data(tmp_path)
+    assert data is not None
+    assert data["per_file"] == {"src/a.ts": 1.0, "src/b.ts": 0.9}

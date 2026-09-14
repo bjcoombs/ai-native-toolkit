@@ -514,3 +514,25 @@ def test_log_heading_unique_within_minute_no_version(tmp_assess_dir: Path) -> No
     append_log_entry(tmp_assess_dir, entry)
     content = (tmp_assess_dir / "log.md").read_text()
     assert "## 2026-09-14 (run cccc3333)" in content
+
+
+def test_log_heading_unique_within_minute_short_id_collision(tmp_assess_dir: Path) -> None:
+    """Distinct run ids that share the 8-hex suffix still get distinct headings:
+    the clash falls back to the full run id, then a counter."""
+    base = dict(
+        run_date="2026-09-14", files_scored=1, readiness_score=1.0,
+        maturity_label="x", instructions_grade="B",
+        graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
+        top_action="none", plugin_version="9.9.9",
+    )
+    for rid in ("20260914101010-abcd1234", "20260914101011-abcd1234",
+                "20260914101011-abcd1234", "20260914101012-abcd1234"):
+        append_log_entry(tmp_assess_dir, LogEntry(**base, run_id=rid))
+    content = (tmp_assess_dir / "log.md").read_text()
+    headings = [line for line in content.splitlines() if line.startswith("## ")]
+    assert headings == [
+        "## 2026-09-14 (v9.9.9, run abcd1234)",
+        "## 2026-09-14 (v9.9.9, run 20260914101011-abcd1234)",
+        "## 2026-09-14 (v9.9.9, run 20260914101011-abcd1234 #2)",
+        "## 2026-09-14 (v9.9.9, run 20260914101012-abcd1234)",
+    ]

@@ -201,7 +201,9 @@ def _build_log_heading(
 
     When the entry carries a ``run_id`` its short form is always rendered
     (``## YYYY-MM-DD (vX.Y.Z, run <id>)``): ``HH:MM`` cannot separate runs that
-    share a minute (#317), and the run id is unique per run. Without a run id the
+    share a minute (#317), and the run id is unique per run. Two distinct ids can
+    still share the short suffix, so on a clash the full run id is rendered, and
+    a ``#N`` counter follows if even that heading exists. Without a run id the
     legacy behaviour above is unchanged.
     """
     parts = []
@@ -212,9 +214,24 @@ def _build_log_heading(
     base = f"## {run_date} ({', '.join(parts)})" if parts else f"## {run_date}"
     if base not in existing:
         return base
+    if run_id:
+        # A short id is unique per run in practice, but two ids can share an
+        # 8-hex suffix: fall back to the full run id, then a counter, so the
+        # heading is unique by construction rather than by probability.
+        full = base.replace(f"run {_short_run_id(run_id)}", f"run {run_id}", 1)
+        candidate, n = full, 2
+        while _heading_exists(candidate, existing):
+            candidate = f"{full[:-1]} #{n})"
+            n += 1
+        return candidate
     # Already an entry with this exact heading - disambiguate with time.
     stamp = datetime.now().strftime("%H:%M")
     return f"{base[:-1]} {stamp})" if parts else f"{base} {stamp}"
+
+
+def _heading_exists(heading: str, existing: str) -> bool:
+    """True when ``heading`` is already a whole line of ``existing``."""
+    return heading in existing.splitlines()
 
 
 # --- log.md integrity chain (issue: assess-obey-thyself, task 11) -------------

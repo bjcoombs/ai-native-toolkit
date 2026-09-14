@@ -85,11 +85,14 @@ def _normalise_lcov_path(raw: str, root: Path | None) -> str:
     """Map an lcov ``SF:`` path to the repo-relative POSIX key ``per_file`` uses.
 
     lcov records whatever path the runner emitted: absolute (Jest, c8, Vitest
-    usually) or ``./``-prefixed. A raw key never matches the repo-relative path
-    the rest of the core looks files up by (#317), so: an absolute path under
+    usually) or ``./``-prefixed, with backslashes when a Windows runner wrote
+    it. A raw key never matches the repo-relative path the rest of the core
+    looks files up by (#317), so: an absolute path under
     ``root`` becomes relative to it (both sides resolved, so macOS ``/var`` vs
     ``/private/var`` still matches); a leading ``./`` is stripped. An absolute
-    path outside ``root``, or any path when ``root`` is None, keeps its spelling.
+    path outside ``root``, or any path when ``root`` is None, keeps its spelling;
+    a relative path has backslashes converted to ``/`` and a ``.\\`` prefix
+    stripped the same way.
     """
     path = raw
     if root is not None and Path(raw).is_absolute():
@@ -97,9 +100,19 @@ def _normalise_lcov_path(raw: str, root: Path | None) -> str:
             return Path(raw).resolve().relative_to(root).as_posix()
         except (OSError, ValueError):
             return raw
+    # A Windows runner spells a relative path with backslashes (``.\\src\\a.ts``
+    # or ``src\\a.ts``); the repo-relative key is always POSIX.
+    if "\\" in path and not _is_windows_absolute(path):
+        path = path.replace("\\", "/")
     while path.startswith("./"):
         path = path[2:]
     return path
+
+
+def _is_windows_absolute(path: str) -> bool:
+    """True for a drive-letter (``C:\\...``) or UNC (``\\\\host\\...``) path,
+    which keeps its spelling like any other absolute path outside the root."""
+    return path.startswith("\\\\") or (len(path) > 2 and path[1] == ":" and path[0].isalpha())
 
 
 def _parse_lcov(path: Path, repo_root: Path | str | None = None) -> dict[str, Any] | None:
