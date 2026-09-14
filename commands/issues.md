@@ -92,9 +92,10 @@ around the contract, so `/issues` carries the same obligation. The run identifie
 is the issue-queue identifier - the label/milestone slug for this queue, e.g.
 `issues-<label>` (`issues-agent-ready` when no scope filter narrows it).
 
-The contract scripts live in the plugin package (`${CLAUDE_PLUGIN_ROOT}/scripts/contract/`), while the contract artifacts (contract, kill test, completion record) live in the target repository's `.taskmaster/contract/`, the scripts' default `--contract-dir`.
+The contract scripts live in the plugin package (`${CLAUDE_PLUGIN_ROOT}/scripts/contract/`), while the contract artifacts (contract, kill test, completion record) live in the target repository's `.taskmaster/contract/`, the scripts' default `--contract-dir`. When `CLAUDE_PLUGIN_ROOT` is unset (a hand-placed checkout rather than an installed plugin) the guard line before each invocation falls back to the current checkout.
 
 ```bash
+: "${CLAUDE_PLUGIN_ROOT:=.}"   # unset outside an installed plugin: fall back to the current checkout
 python "${CLAUDE_PLUGIN_ROOT}/scripts/contract/start_gate.py" "issues-<label>"
 ```
 

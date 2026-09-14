@@ -350,9 +350,10 @@ Before starting ANY marathon run - Agent Teams or Subagent Fallback, before the
 first task is decomposed - invoke the acceptance-contract start gate. The run
 identifier is the TM tag.
 
-The contract scripts live in the plugin package (`${CLAUDE_PLUGIN_ROOT}/scripts/contract/`), while the contract artifacts (contract, kill test, completion record) live in the target repository's `.taskmaster/contract/`, the scripts' default `--contract-dir`.
+The contract scripts live in the plugin package (`${CLAUDE_PLUGIN_ROOT}/scripts/contract/`), while the contract artifacts (contract, kill test, completion record) live in the target repository's `.taskmaster/contract/`, the scripts' default `--contract-dir`. When `CLAUDE_PLUGIN_ROOT` is unset (a hand-placed checkout rather than an installed plugin) the guard line before each invocation falls back to the current checkout.
 
 ```bash
+: "${CLAUDE_PLUGIN_ROOT:=.}"   # unset outside an installed plugin: fall back to the current checkout
 python "${CLAUDE_PLUGIN_ROOT}/scripts/contract/start_gate.py" "<tag>"
 ```
 
