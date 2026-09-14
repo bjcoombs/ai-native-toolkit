@@ -1981,3 +1981,27 @@ def test_no_override_no_contradiction_finding_end_to_end(git_repo) -> None:
         if f["name"] == "override_contradicts_signals"
     )
     assert finding["paths"] == []
+
+
+def test_mutation_run_requires_parsed_mutants_for_cap_lift() -> None:
+    """_mutation_not_run_cap trusts mutation_run only when per_file carries a real
+    mutant record (#317). An empty per_file keeps the cap; a record lifts it."""
+    from assess_core import _mutation_not_run_cap
+
+    empty = _mutation_not_run_cap(
+        {"mutation_run": True, "mutation_scope": ["src/a.ts"], "per_file": []})
+    assert empty["applies"] is True
+    assert empty["mutation_run"] is False
+    assert empty["max_layer6_band"] == "Partial"
+    assert empty["annotation"] == "truth-pressure unproven (mutation not run)"
+
+    missing = _mutation_not_run_cap({"mutation_run": True})
+    assert missing["applies"] is True
+
+    real = _mutation_not_run_cap({
+        "mutation_run": True, "mutation_scope": ["src/a.ts"],
+        "per_file": [{"path": "src/a.ts", "killed": 3, "survived": 1, "total": 4}],
+    })
+    assert real["applies"] is False
+    assert real["max_layer6_band"] == "Present"
+    assert real["annotation"] is None

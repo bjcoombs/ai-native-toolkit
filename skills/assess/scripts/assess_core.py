@@ -804,10 +804,20 @@ def _mutation_not_run_cap(test_pressure_block: dict) -> dict:
     False. When it is False, Layer 6 cannot be scored above Partial and the
     ``annotation`` must be attached; assess_finalize rejects a finalize-input
     that violates this.
+
+    The flag alone is not trusted: a block that claims ``mutation_run`` but
+    carries no parsed mutant record in ``per_file`` is evidence-free, so the cap
+    stays applied (#317).
     """
+    per_file = (
+        test_pressure_block.get("per_file")
+        if isinstance(test_pressure_block, dict) else None
+    )
     mutation_run = bool(
         isinstance(test_pressure_block, dict)
         and test_pressure_block.get("mutation_run", False)
+        and isinstance(per_file, list)
+        and any(isinstance(rec, dict) for rec in per_file)
     )
     return {
         "applies": not mutation_run,
@@ -1360,6 +1370,7 @@ def build_run_context(
         current.get("top_hotspots", []),
         coverage_data,
         ctx["test_pressure"].get("cheap_heuristics"),
+        repo_root=repo_root,
     )
 
     # Promissory markers (stale TODO/FIXME, suppressions, disabled tests):

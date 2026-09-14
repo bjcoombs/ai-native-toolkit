@@ -190,3 +190,72 @@ def test_malformed_hotspot_entries_are_skipped() -> None:
         _empty_heuristics(),
     )
     assert [e["path"] for e in block["entries"]] == ["a.py"]
+
+
+# ── sibling-test fallback and the unsupported signal (#317) ───────────────────
+
+
+def _touch(root: Path, rel: str) -> None:
+    p = root / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("x\n", encoding="utf-8")
+
+
+def test_sibling_test_fallback_credits_file_with_sibling_test(tmp_path: Path) -> None:
+    """No coverage report, but a sibling test file exists: the file is credited
+    (not unknown/no_covering_test/unsupported, and not add_tests). Covers each
+    naming convention and the sibling __tests__/ directory."""
+    for rel in ("src/a.ts", "src/a.test.ts",
+                "src/b.tsx", "src/b.spec.tsx",
+                "pkg/c.go", "pkg/c_test.go",
+                "lib/d.py", "lib/test_d.py",
+                "web/e.js", "web/__tests__/e.test.js",
+                "web/f.js", "web/__tests__/f.js"):
+        _touch(tmp_path, rel)
+    hot = ["src/a.ts", "src/b.tsx", "pkg/c.go", "lib/d.py", "web/e.js", "web/f.js"]
+    block = compute_test_focus(hot, None, None, repo_root=tmp_path)
+    assert block["coverage_present"] is False
+    # Credited with no hollow hit -> filtered out like covered_clean.
+    assert block["entries"] == []
+    assert block["total_focus_targets"] == 0
+
+
+def test_sibling_test_fallback_keeps_hollow_heuristics(tmp_path: Path) -> None:
+    """A sibling-tested file that trips a hollow heuristic still surfaces as a
+    focus target so the hollow signal is not lost."""
+    _touch(tmp_path, "src/a.py")
+    _touch(tmp_path, "src/test_a.py")
+    heur = _empty_heuristics()
+    heur["untested_boundaries"] = [{"file": "src/a.py"}]
+    block = compute_test_focus(["src/a.py"], None, heur, repo_root=tmp_path)
+    entry = _entry(block, "src/a.py")
+    assert entry["test_signal"] == "covered_but_hollow"
+    assert entry["suggested_action"] == "strengthen_assertions"
+
+
+def test_unsupported_test_signal_when_no_coverage_and_no_sibling(tmp_path: Path) -> None:
+    """No coverage report and no sibling test: the honest signal is unsupported,
+    with its own action and a severity below a known no_covering_test."""
+    _touch(tmp_path, "src/b.ts")
+    block = compute_test_focus(["src/b.ts"], None, None, repo_root=tmp_path)
+    entry = _entry(block, "src/b.ts")
+    assert entry["test_signal"] == "unsupported"
+    assert entry["suggested_action"] == "measure_coverage"
+
+
+def test_unsupported_test_signal_ranks_within_band(tmp_path: Path) -> None:
+    """unsupported has its own severity rank: ranking a mixed list never raises
+    and a hollow sibling-tested file outranks an unsupported one in the same band."""
+    _touch(tmp_path, "a.py")
+    _touch(tmp_path, "b.py")
+    _touch(tmp_path, "test_b.py")
+    heur = _empty_heuristics()
+    heur["duplicate_truth"] = [{"file": "b.py"}]
+    block = compute_test_focus(["a.py", "b.py"], None, heur, repo_root=tmp_path)
+    assert [e["path"] for e in block["entries"]] == ["b.py", "a.py"]
+
+
+def test_no_repo_root_keeps_unknown_no_coverage() -> None:
+    """Backward compatible: without repo_root the no-report degrade is unchanged."""
+    block = compute_test_focus(["a.py"], None, None)
+    assert block["entries"][0]["test_signal"] == "unknown_no_coverage"

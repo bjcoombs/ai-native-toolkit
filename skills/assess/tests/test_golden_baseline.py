@@ -281,10 +281,10 @@ def test_golden_run_context_has_test_focus_and_coverage_shape() -> None:
         assert entry["risk_band"] in {"high", "medium", "low"}
         assert entry["test_signal"] in {
             "no_covering_test", "covered_but_hollow",
-            "unknown_no_coverage", "covered_clean",
+            "unknown_no_coverage", "covered_clean", "unsupported",
         }
         assert entry["suggested_action"] in {
-            "add_tests", "strengthen_assertions", "none",
+            "add_tests", "strengthen_assertions", "measure_coverage", "none",
         }
 
     cov = ctx["coverage_report"]

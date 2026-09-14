@@ -428,7 +428,8 @@ Parses an *existing* coverage report into the shape the `test_pressure` scan's
 Two formats: Cobertura `coverage.xml` (`_overall` from the root `line-rate`,
 per-file from each `<class>` element's `filename`/`line-rate`; one `iter("class")`
 walk handles both the flat and nested `<packages>` schemas) and `lcov.info`
-(per-file `LH/LF`, overall `sum(LH)/sum(LF)`). `/assess` never runs the suite, so a
+(per-file `LH/LF`, overall `sum(LH)/sum(LF)`; `SF:` paths, absolute or `./`-prefixed,
+are normalised to repo-relative POSIX keys so `test_focus` lookups match). `/assess` never runs the suite, so a
 report the project already generated is the only honest line-coverage source - the
 parser reads it without taking a coverage.py runtime dependency. `detect_coverage_report`
 searches the repo root, `./coverage/`, and `./.coverage/` (a `.coverage` SQLite *file*
@@ -443,11 +444,16 @@ Cross-joins three already-collected signals - the hotspot risk band (position in
 `complexity_stats.top_hotspots`), the parsed coverage report, and the
 `test_pressure` cheap heuristics - into one ranked focus list. `compute_test_focus`
 classifies each top-10 hot file (`no_covering_test` / `covered_but_hollow` /
-`covered_clean` / `unknown_no_coverage`), filters out `covered_clean`, and ranks by
-risk band then signal severity. Honest-degrade is the contract: `coverage_data is
-None` makes every file `unknown_no_coverage` (never `covered_clean`) and records
-`coverage_present: False`; it never raises. Pure data - inputs are passed in
-(`hot_files`, `coverage_data`, `cheap_heuristics`), no file I/O, stdlib only,
+`covered_clean` / `unknown_no_coverage` / `unsupported`), filters out
+`covered_clean`, and ranks by risk band then signal severity. Honest-degrade is the
+contract: with no coverage report, an optional `repo_root` enables a sibling-test
+fallback (`<stem>.test.<ext>`, `<stem>.spec.<ext>`, `<stem>_test.<ext>`,
+`test_<stem>.<ext>`, beside the file or under `__tests__/`) that credits a tested
+file, and a file with neither report nor sibling test is `unsupported` (action
+`measure_coverage`), never `no_covering_test`; without `repo_root` every file is
+`unknown_no_coverage`. It never raises and records `coverage_present: False`. Inputs
+are passed in (`hot_files`, `coverage_data`, `cheap_heuristics`, `repo_root`); the
+only file I/O is the sibling-test existence check; stdlib only,
 imports no orchestrator. This block is the SINGLE source both the report focus
 table and the mutation offer consume - it is the contract, not duplicated
 downstream. Add cases in `tests/test_test_focus.py` alongside any change to a

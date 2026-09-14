@@ -175,8 +175,16 @@ def write_index(
     )
 
 
+def _short_run_id(run_id: str) -> str:
+    """The unique tail of a run id: the random suffix of the orchestrator's
+    ``YYYYMMDDHHMMSS-<8 hex>`` form (the date is already in the heading), or the
+    whole id when it has no ``-`` separator."""
+    return run_id.rsplit("-", 1)[-1] or run_id
+
+
 def _build_log_heading(
     *, run_date: str, plugin_version: str | None, existing: str,
+    run_id: str | None = None,
 ) -> str:
     """Build a unique `## ...` heading for a new log.md entry.
 
@@ -190,16 +198,23 @@ def _build_log_heading(
        don't collide and markdownlint MD024 stays quiet. Using local
        time matches `run_date` (which is also local), so a reader
        doesn't see a timezone mismatch.
+
+    When the entry carries a ``run_id`` its short form is always rendered
+    (``## YYYY-MM-DD (vX.Y.Z, run <id>)``): ``HH:MM`` cannot separate runs that
+    share a minute (#317), and the run id is unique per run. Without a run id the
+    legacy behaviour above is unchanged.
     """
+    parts = []
     if plugin_version:
-        base = f"## {run_date} (v{plugin_version})"
-    else:
-        base = f"## {run_date}"
+        parts.append(f"v{plugin_version}")
+    if run_id:
+        parts.append(f"run {_short_run_id(run_id)}")
+    base = f"## {run_date} ({', '.join(parts)})" if parts else f"## {run_date}"
     if base not in existing:
         return base
     # Already an entry with this exact heading - disambiguate with time.
     stamp = datetime.now().strftime("%H:%M")
-    return f"{base[:-1]} {stamp})" if plugin_version else f"{base} {stamp}"
+    return f"{base[:-1]} {stamp})" if parts else f"{base} {stamp}"
 
 
 # --- log.md integrity chain (issue: assess-obey-thyself, task 11) -------------
@@ -314,6 +329,7 @@ def append_log_entry(assess_dir: Path, entry: LogEntry) -> None:
         run_date=entry.run_date,
         plugin_version=entry.plugin_version,
         existing=existing,
+        run_id=entry.run_id,
     )
     snippet = _load_template("log_entry.md.template").format(
         heading=heading,

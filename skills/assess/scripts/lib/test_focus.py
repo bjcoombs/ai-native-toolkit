@@ -19,22 +19,34 @@ Signal per file (most to least actionable):
   - ``covered_but_hollow``    - a test covers it, but it trips a hollow-test
                                 heuristic (asserts internals, untested boundary,
                                 duplicate truth).
-  - ``unknown_no_coverage``   - no coverage report at all: we *cannot* say it is
+  - ``unsupported``           - no coverage report and no sibling test file
+                                maps to it (``repo_root`` given): the core cannot
+                                tell whether a test exists, so it says so rather
+                                than claim ``no_covering_test``.
+  - ``unknown_no_coverage``   - no coverage report and no ``repo_root`` to look
+                                for a sibling test: we *cannot* say it is
                                 covered, so we do not pretend it is clean.
   - ``covered_clean``         - covered, no hollow hit. Not a focus target;
                                 filtered out of the output.
 
-Honest degradation is the hard contract: ``coverage_data is None`` makes every
-file ``unknown_no_coverage`` (never ``covered_clean``) and records
-``coverage_present: False``. A risky file we know nothing about is surfaced for
-test work, not silently blessed as clean.
+Sibling-test fallback: with no coverage report and a ``repo_root``, a hot file
+with a sibling test (``<stem>.test.<ext>``, ``<stem>.spec.<ext>``,
+``<stem>_test.<ext>``, ``test_<stem>.<ext>`` beside it or under a sibling
+``__tests__/``) is credited as tested - ``covered_but_hollow`` when it trips a
+hollow heuristic, otherwise filtered out like ``covered_clean``.
+
+Honest degradation is the hard contract: ``coverage_data is None`` never yields
+``covered_clean`` for an untested file and records ``coverage_present: False``.
+A risky file we know nothing about is surfaced, not silently blessed as clean.
 
 Inward-only imports: stdlib only; imported by the orchestrator (`assess_core.py`),
-never importing one itself.
+never importing one itself. The only file I/O is the sibling-test existence check,
+and only when ``repo_root`` is passed.
 """
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 # Risk bands by position in the ranked top_hotspots list. Index 0-2 are the
@@ -50,6 +62,7 @@ _SIGNAL_SEVERITY = {
     "no_covering_test": 3,
     "covered_but_hollow": 2,
     "unknown_no_coverage": 1,
+    "unsupported": 1,
     "covered_clean": 0,
 }
 
@@ -57,6 +70,7 @@ _SIGNAL_SEVERITY = {
 _ACTION_BY_SIGNAL = {
     "no_covering_test": "add_tests",
     "unknown_no_coverage": "add_tests",
+    "unsupported": "measure_coverage",
     "covered_but_hollow": "strengthen_assertions",
     "covered_clean": "none",
 }
@@ -79,9 +93,11 @@ class TestFocusEntry:
 
     path: str
     risk_band: str  # 'high' | 'medium' | 'low'
-    test_signal: str  # 'no_covering_test'|'covered_but_hollow'|'covered_clean'|'unknown_no_coverage'
+    # 'no_covering_test'|'covered_but_hollow'|'covered_clean'|'unknown_no_coverage'|'unsupported'
+    test_signal: str
     hollow_heuristic_kinds: list[str] = field(default_factory=list)
-    suggested_action: str = "none"  # 'add_tests' | 'strengthen_assertions' | 'none'
+    # 'add_tests' | 'strengthen_assertions' | 'measure_coverage' | 'none'
+    suggested_action: str = "none"
 
 
 def _entry_path(entry: Any) -> str | None:
@@ -120,6 +136,35 @@ def _is_covered(path: str, coverage_data: dict[str, Any]) -> bool:
         return False
 
 
+def _sibling_test_names(name: str) -> list[str]:
+    """Conventional test-file names for a source file name (``a.ts`` ->
+    ``a.test.ts``, ``a.spec.ts``, ``a_test.ts``, ``test_a.ts``). A name with no
+    extension has no conventional sibling."""
+    stem, dot, ext = name.rpartition(".")
+    if not dot or not stem:
+        return []
+    return [f"{stem}.test.{ext}", f"{stem}.spec.{ext}",
+            f"{stem}_test.{ext}", f"test_{stem}.{ext}"]
+
+
+def _has_sibling_test(path: str, repo_root: Path) -> bool:
+    """True when a conventionally named test file sits beside ``path`` or under a
+    sibling ``__tests__/`` directory (where the bare source name also counts).
+    Never raises."""
+    try:
+        source = repo_root / path
+        names = _sibling_test_names(source.name)
+        if not names:
+            return False
+        directory = source.parent
+        tests_dir = directory / "__tests__"
+        candidates = [directory / n for n in names]
+        candidates += [tests_dir / n for n in names] + [tests_dir / source.name]
+        return any(c.is_file() for c in candidates)
+    except (OSError, ValueError):
+        return False
+
+
 def _hollow_kinds(path: str, cheap_heuristics: dict[str, Any]) -> list[str]:
     """Heuristic buckets in which this file appears, in report order. Reads both
     the ``file`` and ``test_file`` keys so a source hot file matches whichever a
@@ -145,16 +190,25 @@ def _classify(
     coverage_present: bool,
     coverage_data: dict[str, Any] | None,
     cheap_heuristics: dict[str, Any],
+    repo_root: Path | None = None,
 ) -> tuple[str, list[str]]:
     """Resolve a file's test signal and the hollow kinds it tripped.
 
-    No coverage report at all -> ``unknown_no_coverage`` (we never claim clean).
+    No coverage report and a ``repo_root``: a sibling test credits the file
+    (``covered_but_hollow`` on a hollow hit, else ``covered_clean``); no sibling
+    test -> ``unsupported``. No report and no ``repo_root`` ->
+    ``unknown_no_coverage`` (we never claim clean).
     Covered + a hollow hit -> ``covered_but_hollow``. Covered + clean ->
     ``covered_clean``. Present report but file absent / zero rate ->
     ``no_covering_test``.
     """
     if not coverage_present or coverage_data is None:
-        return "unknown_no_coverage", []
+        if repo_root is None:
+            return "unknown_no_coverage", []
+        if not _has_sibling_test(path, repo_root):
+            return "unsupported", []
+        kinds = _hollow_kinds(path, cheap_heuristics)
+        return ("covered_but_hollow", kinds) if kinds else ("covered_clean", [])
     if not _is_covered(path, coverage_data):
         return "no_covering_test", []
     kinds = _hollow_kinds(path, cheap_heuristics)
@@ -167,6 +221,8 @@ def compute_test_focus(
     hot_files: Any,
     coverage_data: dict[str, Any] | None,
     cheap_heuristics: dict[str, Any] | None,
+    *,
+    repo_root: Path | None = None,
 ) -> dict[str, Any]:
     """Cross-join the hotspot, coverage, and hollow-test signals into one ranked
     focus block.
@@ -180,6 +236,9 @@ def compute_test_focus(
         cheap_heuristics: the ``test_pressure`` block's ``cheap_heuristics`` dict
             (``assertion_on_internal`` / ``untested_boundaries`` /
             ``duplicate_truth`` buckets).
+        repo_root: optional repository root. When given and no coverage report
+            exists, each hot file is checked for a sibling test file instead of
+            degrading straight to ``unknown_no_coverage``.
 
     Returns:
         ``{available, coverage_present, entries, total_focus_targets}`` where
@@ -198,7 +257,10 @@ def compute_test_focus(
         path = _entry_path(item)
         if path is None:
             continue
-        signal, kinds = _classify(path, coverage_present, coverage_data, heuristics)
+        signal, kinds = _classify(
+            path, coverage_present, coverage_data, heuristics,
+            Path(repo_root) if repo_root is not None else None,
+        )
         if signal == "covered_clean":
             continue  # not a focus target
         entries.append(
