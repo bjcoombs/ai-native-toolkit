@@ -327,7 +327,7 @@ task-master tags use "<tag>" && task-master list --ready --json
 
 ### Mode: Review (PR open)
 
-Use the pr-review-merge skill to drive PR #<number> to merge-ready (5 criteria, thread
+Use the pr-review-merge skill to drive PR #<number> to merge-ready (6 criteria, thread
 rules, background CI watcher). When all criteria are met, output `<promise>PR_READY</promise>`.
 
 ---
