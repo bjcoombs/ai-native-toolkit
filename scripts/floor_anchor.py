@@ -843,7 +843,7 @@ def _check_refusal_is_red(
         pinned(
             REFUSED_RE,
             lambda m: m.group(1) in env_jobs,
-            f"needs.<sign-off job>.result == 'failure'",
+            "needs.<sign-off job>.result == 'failure'",
             f"Without it a refused {env!r} review fails only the sign-off job, "
             "this required context still goes green, and clause iii's approval "
             "is advisory.",
