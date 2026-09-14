@@ -62,12 +62,18 @@ this order, and every write it makes shows up in the report the human approves:
 3. **Overlap Sweep** - hold back issues that collide with open PRs or with each other.
 4. **Size by Judgment** - decide one PR or several, and propose any decomposition.
 5. **Dependency Authoring** - write the ordering as native `blocked_by` edges.
-6. **Triage Report** - render labels, decomposition tree, execution order, overlaps; STOP.
+6. **Triage Report** - apply every label write at once, then render labels, decomposition
+   tree, execution order, overlaps; STOP.
 
 An issue is `agent-ready` only when it survives all of steps 2 to 4: clear after research,
 no unresolved overlap, and sized to one PR (or approved as a decomposed parent). Everything
 else stays or becomes `needs-triage`. Research and sizing read widely, so fan them out with
 subagents (the `Agent` tool); never teammates.
+
+Steps 1 to 5 decide each issue's label but do not write it: the verdict needs all four inputs,
+so every `agent-ready` / `needs-triage` label change happens in one write at the Triage Report
+step. An interrupted pass therefore never leaves an issue `agent-ready` while it overlaps an open
+PR. Comments, body edits and dependency edges are written where they are decided.
 
 ### Promote on Confirmation
 
@@ -78,13 +84,13 @@ reading A" is enough), fold the confirmed answers into the issue body (append a
 is the author's to keep, into a pinned comment: a new comment whose first line is the marker
 `<!-- triage:clarified-scope -->`, pinned through the issue UI where the repository offers
 comment pinning. The marker is what makes it durable: the implementing teammate and every later
-run find the clarified contract by grepping for it, never by re-interpreting the thread. Then swap the label from `needs-triage` to `agent-ready`, provided the same
-pass's Overlap Sweep and Size by Judgment do not hold it back:
+run find the clarified contract by grepping for it, never by re-interpreting the thread. The
+issue's verdict becomes `agent-ready` (label swapped from `needs-triage` at the Triage Report
+step) unless the same pass's Overlap Sweep or Size by Judgment holds it back:
 
 ```bash
 gh issue edit <N> --body-file <body-plus-clarified-scope.md>   # issue body route
 gh issue comment <N> --body-file <clarified-scope.md>          # pinned comment route; first line is the marker
-gh issue edit <N> --remove-label "needs-triage" --add-label "agent-ready"
 ```
 
 A correction that opens a new question is not a confirmation: run the Research Pass on the
@@ -124,10 +130,9 @@ Needs your call:
 - <question only the author can answer: intent, priority, direction>
 EOF
 )"
-gh issue edit <N> --add-label "needs-triage"
 ```
 
-Fail closed: an issue whose ambiguity survives research stays `needs-triage`. Research is never
+Fail closed: an issue whose ambiguity survives research gets the `needs-triage` verdict. Research is never
 a license to guess; a recommended reading is a proposal until a human confirms it. When research
 resolves every question and nothing is left under `Needs your call`, the issue is clear and
 continues to the Overlap Sweep without a comment round-trip.
@@ -149,7 +154,7 @@ Research Pass located) and flag any intersection:
 - **Issue-to-issue intersection** with another issue already labeled `agent-ready` or
   `needs-triage`, or labeled earlier in this pass.
 
-An issue that overlaps an open PR is labeled `needs-triage`, not `agent-ready`, with a comment
+An issue that overlaps an open PR gets the `needs-triage` verdict, not `agent-ready`, and a comment
 naming the PR and stating what remains of the issue after that PR merges (or that nothing
 does). A PR cannot be a native `blocked_by` blocker (see PR-as-blocker in the adapter), so this
 label plus comment is the record; the next triage run after the PR merges re-assesses the issue.
@@ -214,7 +219,16 @@ not just the membership.
 
 ### Triage Report
 
-Then **report and STOP** (mirrors `/tm` planning):
+Apply the label verdicts from steps 1 to 4 in one sequential write per issue (never parallel
+background writes), then **report and STOP** (mirrors `/tm` planning):
+
+```bash
+gh issue edit <N> --remove-label "needs-triage" --add-label "agent-ready"   # clear, no overlap, one PR
+gh issue edit <N> --add-label "needs-triage"                                # research left a call, or overlap
+```
+
+An issue proposed for decomposition gets no label until the decomposition is approved and created.
+
 ```
 ## Issue Triage: <org>/<repo>
 
@@ -302,14 +316,19 @@ Supply the marathon skill's adapter as:
   record that sequencing in the run plan (the wave table) and hold the issue out of any
   wave until the PR merges.
   Decomposed parents: an enumerated issue whose `sub_issues_summary.total` is above 0
-  (`gh api repos/$ORG/$REPO/issues/<N>`) is a verification unit, not a work unit. The work
+  (`gh api repos/$ORG/$REPO/issues/<N>`) is a verification unit, not a work unit, provided at
+  least one child is in the enumerated set or already closed by a merged PR. A parent whose
+  children are all open and outside the enumerated set (sub-issues made by hand as a checklist,
+  none tagged) yields no work unit and no verification: report it in the plan as an explicit
+  skip ("#N has sub-issues but none is agent-ready") rather than carrying it silently. The work
   units are the enumerated leaf issues: children from `.../sub_issues` count only when they are
   also in the enumerated set (open, `agent-ready`, matching the scope filter), plus every
   undecomposed enumerated issue. An untagged or out-of-scope child is never pulled in by its
   parent, and a child the Staleness Check dropped stays dropped for this run. The parent is
   never handed to an implementing teammate. It becomes eligible for verification when every
-  child is verified `CLOSED` after its PR merged (`gh pr list --state merged --search "#<child>"`
-  shows the merged PR); a child closed as not planned or by hand, with no merged PR, keeps the
+  child is verified `CLOSED` by a merged PR: `gh issue view <child> --json
+  state,closedByPullRequestsReferences` shows `state` `CLOSED` and a non-empty
+  `closedByPullRequestsReferences` list. A child closed as not planned or by hand, with no merged PR, keeps the
   parent ineligible and is reported. `sub_issues_summary` counts closures, so it is the human
   rollup, not the trigger. Eligibility is a state, not only an event: at run start, any parent
   already eligible (children merged in an earlier run or externally) gets its check before

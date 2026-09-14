@@ -147,6 +147,12 @@ Enumerate work units via the adapter's **enumerate** operation.
 
    Optimizations:
    - Removed dependency <X> → <Y>: different modules
+
+   Staleness outcomes:
+   - Unit <X> <-> open PR <M>: <combine | sequence after the PR | kicked back> (<shared files>)
+
+   Verification units:
+   - <parent>: children <ids> (<merged>/<total> merged; checked after <last child>, or skipped: <reason>)
    ```
 9. Apply dependency changes via the work source's dependency-update mechanism.
 
