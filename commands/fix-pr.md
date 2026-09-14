@@ -13,10 +13,10 @@ Enter autonomous PR review loop for the current branch's PR. Loops until the PR 
 
 ## What this does
 
-Drive the current branch's PR to merge-ready across all five criteria, then stop for human
+Drive the current branch's PR to merge-ready across all six criteria, then stop for human
 review (this command does not auto-merge).
 
-Use the pr-review-merge skill: it owns the 5 ready criteria, thread-resolution rules, shell
+Use the pr-review-merge skill: it owns the 6 ready criteria, thread-resolution rules, shell
 pitfalls, base-sync-first, and the background CI watcher. Pass the current PR number
 (`gh pr view --json number --jq '.number'`) and the base branch
 (`gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`), plus any bot rules
@@ -27,11 +27,11 @@ from the project's Marathon Configuration.
 ## Protocol
 
 1. **Autonomous Loop** (DO NOT ask for permission between iterations):
-   - Sync base branch, check all 5 criteria, fix issues, push
+   - Sync base branch, check all 6 criteria, fix issues, push
    - Report: "Iteration N: Fixed X issues" or "Iteration N: Waiting for CI"
    - Loop until all green
 
-2. **Stop when ALL 5 criteria met**:
+2. **Stop when ALL 6 criteria met**:
    - Report: "PR #X: All criteria met, ready for human review"
    - Include status footer
    - STOP
@@ -62,7 +62,7 @@ from the project's Marathon Configuration.
    ✅ All threads resolved
    ✅ No unaddressed comments
 
-✅ PR #123: All 5 criteria met, ready for your review!
+✅ PR #123: All 6 criteria met, ready for your review!
 
 ---
 ## 📍 Current Work
@@ -99,5 +99,5 @@ gh run view <run-id> --log-failed
 
 - **NO permission needed** between iterations - keep looping autonomously
 - **Sync base branch FIRST** every iteration - prevents cascade conflicts
-- **Stop criteria**: ALL 5 criteria green (not just CI + comments)
+- **Stop criteria**: ALL 6 criteria green (not just CI + comments)
 - **Max iterations**: 10 (ask for help after that)

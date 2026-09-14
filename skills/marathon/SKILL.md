@@ -387,7 +387,7 @@ If green with 0 unresolved threads, run smart-merge regardless of teammate messa
 ## Smart Merge
 
 The lead runs smart-merge via the pr-review-merge skill (Smart Merge section): dismiss stale
-bot CRs, verify the four auto-merge criteria, handle UNSTABLE/UNKNOWN, merge in hot-file order.
+bot CRs, verify the five auto-merge criteria, handle UNSTABLE/UNKNOWN, merge in hot-file order.
 On a solo-maintainer repo (0 required approvals) merge with `gh pr merge $PR --squash --delete-branch --admin`
 once the *required* checks are green — a plain merge gets bounced when a non-required check (CodeRabbit,
 an advisory AI review, a regression gate that re-runs on base advance) is mid-run at the merge instant.

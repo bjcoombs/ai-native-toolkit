@@ -39,13 +39,14 @@ Three optional per-bot fields drive `pr-review-merge` Ready Criterion 6 (bot re-
 
 **CodeRabbit** (`coderabbitai[bot]`):
 - Re-reviews on push: no
-- Max wait for re-review: 10m
+- Max wait for re-review: 10m (inert while `Re-reviews on push` is `no`; the bound that applies if flipped to `yes`)
 - Fix code and push. CodeRabbit re-reviews automatically and resolves its own threads.
 - **NEVER reply in CodeRabbit threads** - CodeRabbit ignores replies from other bots.
 - If `request_changes_workflow` is enabled: CodeRabbit submits CHANGES_REQUESTED reviews that GitHub does not auto-dismiss on re-review. Every PR needs stale bot CR dismissal before merging.
 
 **claude[bot]** (`claude[bot]`):
 - Re-reviews on push: no
+- Re-review check name: claude-review (example for an Actions-hosted reviewer; set to the reviewer job's check-run name, used once `Re-reviews on push` is `yes`)
 - Resolve threads via GraphQL after addressing the feedback.
 
 **Human reviewers**:
