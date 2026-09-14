@@ -92,8 +92,11 @@ around the contract, so `/issues` carries the same obligation. The run identifie
 is the issue-queue identifier - the label/milestone slug for this queue, e.g.
 `issues-<label>` (`issues-agent-ready` when no scope filter narrows it).
 
+The contract scripts live in the plugin package (`${CLAUDE_PLUGIN_ROOT}/scripts/contract/`), while the contract artifacts (contract, kill test, completion record) live in the target repository's `.taskmaster/contract/`, the scripts' default `--contract-dir`. When `CLAUDE_PLUGIN_ROOT` is unset (a hand-placed checkout rather than an installed plugin) the guard line before each invocation falls back to the current checkout.
+
 ```bash
-python scripts/contract/start_gate.py "issues-<label>"
+: "${CLAUDE_PLUGIN_ROOT:=.}"   # unset outside an installed plugin: fall back to the current checkout
+python "${CLAUDE_PLUGIN_ROOT}/scripts/contract/start_gate.py" "issues-<label>"
 ```
 
 The gate fails closed. Exactly two doors open a run; there is no silent third -
@@ -107,12 +110,12 @@ including for a heterogeneous issue queue:
   is capped, not free - the run is permanently capped at `UNVERIFIED` and can
   NEVER certify `PASS`.
 - **Neither** - non-zero exit. Do NOT start the run: author a contract for the
-  queue's deliverable and freeze it (`scripts/contract/freeze.py`), or record a
+  queue's deliverable and freeze it (`${CLAUDE_PLUGIN_ROOT}/scripts/contract/freeze.py`), or record a
   signed skip first.
 
 The exit-side gates are owned by the marathon skill, not this command. Marathon
-routes every verifier spawn through `scripts/contract/spawn_verifier.py` (the
-custody chokepoint) and blocks run-complete on `scripts/contract/complete_gate.py
+routes every verifier spawn through `${CLAUDE_PLUGIN_ROOT}/scripts/contract/spawn_verifier.py` (the
+custody chokepoint) and blocks run-complete on `${CLAUDE_PLUGIN_ROOT}/scripts/contract/complete_gate.py
 <run-id>`. Start gate here, exit gates there - each fails closed. The
 `<!-- floor:cold-verify-completion -->` marker in this file's header makes this
 invocation un-removable: `floor.yml` reds any PR that drops the marker or any of
@@ -125,12 +128,53 @@ Supply the marathon skill's adapter as:
   (scoped by the optional `$ARGUMENTS` label filter);
   dependencies from `gh api repos/$ORG/$REPO/issues/<N>/dependencies/blocked_by`
   (each blocker issue number is a dependency edge). Complexity: infer from issue body/labels.
+  A pull request cannot be a `blocked_by` blocker (see PR-as-blocker below), so an
+  open-PR blocker never arrives as a native edge: when an issue must wait for an open PR,
+  record that sequencing in the run plan (the wave table) and hold the issue out of any
+  wave until the PR merges.
 - **mark in-progress** — `gh issue edit <N> --add-label "in-progress"`.
 - **close on merge** — the teammate's PR body includes `Closes #<N>` (and `Closes #<M>` for
   every combined issue); GitHub auto-closes on merge. After merge, verify with
   `gh issue view <N> --json state --jq '.state'` == `CLOSED`.
 - **branch / worktree** — branch `issue-<N>--<slug>`; worktree `worktree/issues/<N>--<slug>`.
   For a combined group, use the lowest issue number: `issue-<N>--<slug>`.
+
+### Dependency and Sub-issue API
+
+Paths are relative to `repos/{o}/{r}` (owner and repository). Every id these endpoints
+take is the **numeric REST id** from `gh api repos/{o}/{r}/issues/{n} --jq .id`, NOT the
+GraphQL node id that `gh issue view --json id` returns (that one 422s). Pass ids with typed
+`-F`, not `-f`, so they are sent as integers.
+
+Dependencies (ordering - what the marathon DAG consumes):
+
+```bash
+gh api repos/{o}/{r}/issues/{n}/dependencies/blocked_by                 # list blockers
+gh api repos/{o}/{r}/issues/{n}/dependencies/blocking                   # reverse direction
+BLOCKER_ID=$(gh api repos/{o}/{r}/issues/{m} --jq '.id')                # numeric REST id, NOT node id
+gh api repos/{o}/{r}/issues/{n}/dependencies/blocked_by \
+  --method POST -F issue_id="$BLOCKER_ID"                               # issue n is blocked by m
+gh api repos/{o}/{r}/issues/{n}/dependencies/blocked_by/{id} --method DELETE   # {id} = numeric REST id
+```
+
+Sub-issues (decomposition with rollup, distinct from ordering):
+
+```bash
+gh api repos/{o}/{r}/issues/{n}/sub_issues                              # list children
+gh api repos/{o}/{r}/issues/{n}/sub_issues --method POST -F sub_issue_id={id}
+gh api repos/{o}/{r}/issues/{n}/sub_issue --method DELETE -F sub_issue_id={id}   # singular path
+gh api repos/{o}/{r}/issues/{n}/sub_issues/priority --method PATCH -F sub_issue_id={id} -F after_id={id}
+```
+
+Constraints: one parent per issue, about 8 nesting levels, about 100 children per parent;
+the parent's `sub_issues_summary` field carries the rollup progress.
+
+sub-issues roll up progress; only `blocked_by` edges order the marathon DAG.
+
+PR-as-blocker: unsupported (HTTP 422, "Target issue may only be an issue", observed POSTing a merged PR's numeric REST id as a `blocked_by` blocker)
+
+Consequence: an open-PR blocker cannot be a native edge. Record "issue N waits for PR M" as
+sequencing in the run plan and keep N out of every wave until M merges.
 
 ### Run
 
