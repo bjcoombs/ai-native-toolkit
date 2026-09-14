@@ -444,13 +444,14 @@ Cross-joins three already-collected signals - the hotspot risk band (position in
 `complexity_stats.top_hotspots`), the parsed coverage report, and the
 `test_pressure` cheap heuristics - into one ranked focus list. `compute_test_focus`
 classifies each top-10 hot file (`no_covering_test` / `covered_but_hollow` /
-`covered_clean` / `unknown_no_coverage` / `unsupported`), filters out
+`covered_clean` / `unknown_no_coverage` / `unsupported` / `sibling_test_only`), filters out
 `covered_clean`, and ranks by risk band then signal severity. Honest-degrade is the
 contract: with no coverage report, an optional `repo_root` enables a sibling-test
 fallback (`<stem>.test.<ext>`, `<stem>.spec.<ext>`, `<stem>_test.<ext>`,
-`test_<stem>.<ext>`, beside the file or under `__tests__/`) that credits a tested
-file, and a file with neither report nor sibling test is `unsupported` (action
-`measure_coverage`), never `no_covering_test`; without `repo_root` every file is
+`test_<stem>.<ext>`, beside the file or under `__tests__/`) that marks a file with
+a test file `sibling_test_only` (test file present, coverage unmeasured; never a
+covered bucket), and a file with neither report nor sibling test is `unsupported`;
+both carry action `measure_coverage`, never `no_covering_test`; without `repo_root` every file is
 `unknown_no_coverage`. It never raises and records `coverage_present: False`. Inputs
 are passed in (`hot_files`, `coverage_data`, `cheap_heuristics`, `repo_root`); the
 only file I/O is the sibling-test existence check; stdlib only,

@@ -203,8 +203,9 @@ def _touch(root: Path, rel: str) -> None:
 
 def test_sibling_test_fallback_credits_file_with_sibling_test(tmp_path: Path) -> None:
     """No coverage report, but a sibling test file exists: the file is credited
-    (not unknown/no_covering_test/unsupported, and not add_tests). Covers each
-    naming convention and the sibling __tests__/ directory."""
+    as sibling_test_only / measure_coverage (never a covered bucket, never
+    unknown/no_covering_test/unsupported, never add_tests). Covers each naming
+    convention and the sibling __tests__/ directory."""
     for rel in ("src/a.ts", "src/a.test.ts",
                 "src/b.tsx", "src/b.spec.tsx",
                 "pkg/c.go", "pkg/c_test.go",
@@ -215,22 +216,27 @@ def test_sibling_test_fallback_credits_file_with_sibling_test(tmp_path: Path) ->
     hot = ["src/a.ts", "src/b.tsx", "pkg/c.go", "lib/d.py", "web/e.js", "web/f.js"]
     block = compute_test_focus(hot, None, None, repo_root=tmp_path)
     assert block["coverage_present"] is False
-    # Credited with no hollow hit -> filtered out like covered_clean.
-    assert block["entries"] == []
-    assert block["total_focus_targets"] == 0
+    by_path = {e["path"]: e for e in block["entries"]}
+    assert set(by_path) == set(hot)
+    for path in hot:
+        assert by_path[path]["test_signal"] == "sibling_test_only"
+        assert by_path[path]["suggested_action"] == "measure_coverage"
+        assert by_path[path]["hollow_heuristic_kinds"] == []
 
 
 def test_sibling_test_fallback_keeps_hollow_heuristics(tmp_path: Path) -> None:
-    """A sibling-tested file that trips a hollow heuristic still surfaces as a
-    focus target so the hollow signal is not lost."""
+    """A sibling-tested file that trips a hollow heuristic keeps the
+    sibling_test_only signal (no coverage was measured) but carries the hollow
+    kinds so that evidence is not lost."""
     _touch(tmp_path, "src/a.py")
     _touch(tmp_path, "src/test_a.py")
     heur = _empty_heuristics()
     heur["untested_boundaries"] = [{"file": "src/a.py"}]
     block = compute_test_focus(["src/a.py"], None, heur, repo_root=tmp_path)
     entry = _entry(block, "src/a.py")
-    assert entry["test_signal"] == "covered_but_hollow"
-    assert entry["suggested_action"] == "strengthen_assertions"
+    assert entry["test_signal"] == "sibling_test_only"
+    assert entry["suggested_action"] == "measure_coverage"
+    assert entry["hollow_heuristic_kinds"] == ["untested_boundaries"]
 
 
 def test_unsupported_test_signal_when_no_coverage_and_no_sibling(tmp_path: Path) -> None:
@@ -245,7 +251,7 @@ def test_unsupported_test_signal_when_no_coverage_and_no_sibling(tmp_path: Path)
 
 def test_unsupported_test_signal_ranks_within_band(tmp_path: Path) -> None:
     """unsupported has its own severity rank: ranking a mixed list never raises
-    and a hollow sibling-tested file outranks an unsupported one in the same band."""
+    and a sibling-tested file outranks an unsupported one in the same band."""
     _touch(tmp_path, "a.py")
     _touch(tmp_path, "b.py")
     _touch(tmp_path, "test_b.py")

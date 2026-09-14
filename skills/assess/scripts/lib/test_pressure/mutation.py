@@ -358,8 +358,8 @@ def run_bounded_mutation(repo_root: Path, hot_files: list | None = None,
     if not per_file:
         return {"mutation_run": False, "available": True, "tool": spec["tool"],
                 "scope": scope, "per_file": [],
-                "reason": ("tool ran but produced no parsed mutants "
-                           f"(exit code {proc.returncode})")}
+                "reason": (f"no mutant records recovered from {spec['tool']} "
+                           f"output (exit code {proc.returncode})")}
 
     return {"mutation_run": True, "available": True, "tool": spec["tool"],
             "scope": scope, "per_file": per_file}

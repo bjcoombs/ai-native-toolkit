@@ -19,6 +19,10 @@ Signal per file (most to least actionable):
   - ``covered_but_hollow``    - a test covers it, but it trips a hollow-test
                                 heuristic (asserts internals, untested boundary,
                                 duplicate truth).
+  - ``sibling_test_only``     - no coverage report, but a conventionally named
+                                test file sits beside it: a test file is
+                                present, coverage is unmeasured. Carries any
+                                hollow-heuristic kinds it tripped.
   - ``unsupported``           - no coverage report and no sibling test file
                                 maps to it (``repo_root`` given): the core cannot
                                 tell whether a test exists, so it says so rather
@@ -32,8 +36,8 @@ Signal per file (most to least actionable):
 Sibling-test fallback: with no coverage report and a ``repo_root``, a hot file
 with a sibling test (``<stem>.test.<ext>``, ``<stem>.spec.<ext>``,
 ``<stem>_test.<ext>``, ``test_<stem>.<ext>`` beside it or under a sibling
-``__tests__/``) is credited as tested - ``covered_but_hollow`` when it trips a
-hollow heuristic, otherwise filtered out like ``covered_clean``.
+``__tests__/``) gets ``sibling_test_only`` rather than a covered bucket: the only
+evidence is the file's existence, so the core never spells it as coverage.
 
 Honest degradation is the hard contract: ``coverage_data is None`` never yields
 ``covered_clean`` for an untested file and records ``coverage_present: False``.
@@ -59,8 +63,9 @@ _LOW_MAX = 9
 # Ranking weights. Risk band dominates; signal severity breaks ties within a band.
 _BAND_RANK = {"high": 3, "medium": 2, "low": 1}
 _SIGNAL_SEVERITY = {
-    "no_covering_test": 3,
-    "covered_but_hollow": 2,
+    "no_covering_test": 4,
+    "covered_but_hollow": 3,
+    "sibling_test_only": 2,
     "unknown_no_coverage": 1,
     "unsupported": 1,
     "covered_clean": 0,
@@ -71,6 +76,7 @@ _ACTION_BY_SIGNAL = {
     "no_covering_test": "add_tests",
     "unknown_no_coverage": "add_tests",
     "unsupported": "measure_coverage",
+    "sibling_test_only": "measure_coverage",
     "covered_but_hollow": "strengthen_assertions",
     "covered_clean": "none",
 }
@@ -93,7 +99,8 @@ class TestFocusEntry:
 
     path: str
     risk_band: str  # 'high' | 'medium' | 'low'
-    # 'no_covering_test'|'covered_but_hollow'|'covered_clean'|'unknown_no_coverage'|'unsupported'
+    # 'no_covering_test'|'covered_but_hollow'|'covered_clean'|'unknown_no_coverage'
+    # |'unsupported'|'sibling_test_only'
     test_signal: str
     hollow_heuristic_kinds: list[str] = field(default_factory=list)
     # 'add_tests' | 'strengthen_assertions' | 'measure_coverage' | 'none'
@@ -194,9 +201,9 @@ def _classify(
 ) -> tuple[str, list[str]]:
     """Resolve a file's test signal and the hollow kinds it tripped.
 
-    No coverage report and a ``repo_root``: a sibling test credits the file
-    (``covered_but_hollow`` on a hollow hit, else ``covered_clean``); no sibling
-    test -> ``unsupported``. No report and no ``repo_root`` ->
+    No coverage report and a ``repo_root``: a sibling test credits the file as
+    ``sibling_test_only`` (with any hollow kinds it tripped); no sibling test ->
+    ``unsupported``. No report and no ``repo_root`` ->
     ``unknown_no_coverage`` (we never claim clean).
     Covered + a hollow hit -> ``covered_but_hollow``. Covered + clean ->
     ``covered_clean``. Present report but file absent / zero rate ->
@@ -207,8 +214,7 @@ def _classify(
             return "unknown_no_coverage", []
         if not _has_sibling_test(path, repo_root):
             return "unsupported", []
-        kinds = _hollow_kinds(path, cheap_heuristics)
-        return ("covered_but_hollow", kinds) if kinds else ("covered_clean", [])
+        return "sibling_test_only", _hollow_kinds(path, cheap_heuristics)
     if not _is_covered(path, coverage_data):
         return "no_covering_test", []
     kinds = _hollow_kinds(path, cheap_heuristics)

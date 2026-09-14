@@ -700,7 +700,7 @@ def test_mutation_run_requires_parsed_mutants(tmp_path: Path, monkeypatch) -> No
     assert r["available"] is True
     assert r["tool"] == "stryker"
     assert r["per_file"] == []
-    assert isinstance(r["reason"], str) and r["reason"]
+    assert r["reason"] == "no mutant records recovered from stryker output (exit code 0)"
 
 
 def test_mutation_run_requires_parsed_mutants_true_with_records(
