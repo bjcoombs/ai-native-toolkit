@@ -1064,3 +1064,61 @@ def test_signoff_wiring_rejects_an_exit_that_is_only_mentioned(tmp_path):
     with pytest.raises(floor_anchor.AnchorError) as exc:
         floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
     assert "never exits non-zero" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "where, line",
+    [
+        ("step", "        continue-on-error: true\n"),
+        ("job", "    continue-on-error: true\n"),
+    ],
+)
+def test_signoff_wiring_fails_closed_on_continue_on_error(tmp_path, where, line):
+    # Disarm path 16: every guard and script is byte-identical, but a
+    # `continue-on-error: true` (on one step, or on the whole job) makes the
+    # `exit 1` non-fatal, so the conversion fires into a passing job.
+    if where == "step":
+        anchor = "        if: needs.signoff.result == 'failure'\n"
+    else:
+        anchor = "    if: ${{ !cancelled() }}\n"
+    body = FLOOR_YML_WIRED.replace(anchor, anchor + line, 1)
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "continue-on-error" in str(exc.value)
+
+
+def test_signoff_wiring_fails_closed_on_a_decoy_filter_job(tmp_path):
+    # Disarm path 17: the sign-off stays keyed on the real filter, but the
+    # never-requested step reads a second job that always answers false, so
+    # the step never fires. Both consumers must read the SAME producer.
+    body = FLOOR_YML_WIRED.replace(
+        "    needs: [signoff, canary-changes]\n",
+        "    needs: [signoff, canary-changes, decoy]\n",
+    ).replace(
+        "        if: needs.canary-changes.outputs.floor_core_changed == 'true'"
+        " && needs.signoff.result != 'success'\n",
+        "        if: needs.decoy.outputs.floor_core_changed == 'true'"
+        " && needs.signoff.result != 'success'\n",
+    ) + (
+        "\n  decoy:\n    runs-on: ubuntu-latest\n    outputs:\n"
+        "      floor_core_changed: ${{ steps.f.outputs.floor_core_changed }}\n"
+        "    steps:\n      - id: f\n"
+        '        run: echo "floor_core_changed=false" >> "$GITHUB_OUTPUT"\n'
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "needs.canary-changes.outputs.floor_core_changed" in msg
+
+
+def test_signoff_wiring_reads_the_output_only_under_outputs(tmp_path):
+    # A six-space `floor_core_changed:` line elsewhere in the filter job (an
+    # `env:` entry, say) is not a declared output.
+    body = FLOOR_YML_WIRED.replace(
+        "    outputs:\n"
+        "      floor_core_changed: ${{ steps.filter.outputs.floor_core_changed }}\n",
+        "    env:\n      floor_core_changed: true\n",
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "declares no" in str(exc.value)

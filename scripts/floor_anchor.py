@@ -122,7 +122,12 @@ ENFORCEMENT_GUARD = "!cancelled()"
 # The filter job must PRODUCE the output the guards read: a job-level
 # ``outputs:`` entry at six spaces, with a value. Without it the consumers'
 # ``needs.<filter>.outputs.floor_core_changed`` is empty on every run.
+JOB_OUTPUTS_KEY_RE = re.compile(r"^\s{4}outputs:\s*$")
 JOB_OUTPUT_RE = re.compile(r"^\s{6}" + FLOOR_CORE_OUTPUT + r":\s*\S")
+# ``continue-on-error: true`` at step or job level makes a non-zero exit
+# non-fatal, which disarms every conversion step while leaving each guard and
+# script byte-identical. The key is rejected outright in the enforcement job.
+CONTINUE_ON_ERROR_RE = re.compile(r"^\s+continue-on-error:")
 # A step's shape inside a job: steps start with ``- `` at six spaces, and a
 # ``run:`` inside one is either inline or a ``|``/``>`` block whose body sits
 # deeper than the key. A conversion step must actually exit non-zero -- a guard
@@ -669,8 +674,8 @@ def check_workflow_wiring(root: Path | None = None) -> None:
             "context does not depend on cannot turn a refusal red, and branch "
             "protection reads an absent context as satisfied."
         )
-    _check_signoff_trigger(jobs, env_jobs, env)
-    _check_refusal_is_red(jobs, enforcement, env_jobs, env)
+    filter_job = _check_signoff_trigger(jobs, env_jobs, env)
+    _check_refusal_is_red(jobs, enforcement, env_jobs, env, filter_job)
     print(
         f"ok   {FLOOR_PATH} wires the {env!r} environment into job "
         f"{wired[0]!r}, which the {FLOOR_CONTEXT!r} job needs; the job is "
@@ -689,8 +694,12 @@ def _strip_expression(expr: str) -> str:
 
 def _check_signoff_trigger(
     jobs: dict[str, list[str]], env_jobs: set[str], env: str
-) -> None:
+) -> str:
     """Fail unless the sign-off job is keyed on the path filter's answer alone.
+
+    Returns the filter job's id, so the enforcement job's steps can be held
+    to the SAME filter: two jobs answering the same question is how a decoy
+    that always says ``false`` would slip in.
 
     The environment, the ``needs`` edge and the refusal step all survive a PR
     that edits the sign-off job's ``if:`` -- to a different output, to an extra
@@ -700,6 +709,7 @@ def _check_signoff_trigger(
     pinned to that one expression, and the filter job it reads from must be in
     the sign-off job's ``needs`` or the output is silently empty.
     """
+    filters: set[str] = set()
     for job_id in sorted(env_jobs):
         lines = jobs[job_id]
         guards = [m.group(1) for line in lines if (m := JOB_IF_RE.match(line))]
@@ -723,6 +733,14 @@ def _check_signoff_trigger(
                 f"`needs.<filter job>.outputs.{FLOOR_CORE_OUTPUT} == 'true'`."
             )
         _check_reads_filter(jobs, job_id, match.group(1), f"the {env!r} sign-off job")
+        filters.add(match.group(1))
+    if len(filters) != 1:
+        raise AnchorError(
+            f"the {env!r} sign-off jobs read {FLOOR_CORE_OUTPUT!r} from "
+            f"different filter jobs ({sorted(filters)}). One classification, "
+            "one producer."
+        )
+    return filters.pop()
 
 
 def _check_reads_filter(
@@ -748,7 +766,7 @@ def _check_reads_filter(
             "`needs:`. GitHub evaluates an output from a job outside `needs` "
             "as empty, so the guard is never true."
         )
-    if not any(JOB_OUTPUT_RE.match(line) for line in jobs[filter_job]):
+    if not any(JOB_OUTPUT_RE.match(line) for line in _job_outputs(jobs[filter_job])):
         raise AnchorError(
             f"{what} {job_id!r} reads `needs.{filter_job}.outputs."
             f"{FLOOR_CORE_OUTPUT}` but job {filter_job!r} declares no "
@@ -795,11 +813,27 @@ def _step_run(step: list[str]) -> str:
     return ""
 
 
+def _job_outputs(lines: list[str]) -> list[str]:
+    """The lines of a job's ``outputs:`` block (six-space entries under the key)."""
+    block: list[str] = []
+    inside = False
+    for line in lines:
+        if JOB_OUTPUTS_KEY_RE.match(line):
+            inside = True
+            continue
+        if inside:
+            if line.strip() and not line.startswith(" " * 6):
+                break
+            block.append(line)
+    return block
+
+
 def _check_refusal_is_red(
     jobs: dict[str, list[str]],
     enforcement: list[str],
     env_jobs: set[str],
     env: str,
+    signoff_filter: str,
 ) -> None:
     """Fail unless every way the sign-off can lapse still lands as RED.
 
@@ -815,6 +849,15 @@ def _check_refusal_is_red(
     """
     for job_id in enforcement:
         lines = jobs[job_id]
+        for line in lines:
+            if CONTINUE_ON_ERROR_RE.match(line):
+                raise AnchorError(
+                    f"the {FLOOR_CONTEXT!r} job carries `{line.strip()}`. "
+                    "`continue-on-error` makes a non-zero exit non-fatal, so "
+                    "every conversion step below it fires into a passing job "
+                    "with its guard and script unchanged. The key is not "
+                    "allowed anywhere in this job."
+                )
         guards = [m.group(1) for line in lines if (m := JOB_IF_RE.match(line))]
         if not guards or _strip_expression(guards[0]) != ENFORCEMENT_GUARD:
             seen = guards[0] if guards else "no `if:` at all"
@@ -864,8 +907,8 @@ def _check_refusal_is_red(
         )
         filter_job = pinned(
             NEVER_REQUESTED_RE,
-            lambda m: m.group(2) in env_jobs,
-            f"needs.<filter job>.outputs.{FLOOR_CORE_OUTPUT} == 'true' && "
+            lambda m: m.group(1) == signoff_filter and m.group(2) in env_jobs,
+            f"needs.{signoff_filter}.outputs.{FLOOR_CORE_OUTPUT} == 'true' && "
             "needs.<sign-off job>.result != 'success'",
             "Without it a sign-off that was never requested -- the job skipped "
             "because its trigger was edited -- leaves this required context "
