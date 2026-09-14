@@ -547,11 +547,14 @@ def test_main_fails_closed_when_a_required_context_has_no_job(monkeypatch, capsy
 
 # ── clause iii's sign-off artefact: environment + workflow wiring (fail-closed) ─
 #
-# Three disarm paths, each of which leaves the `floor sign-off` job LOOKING
-# present while approving nothing: the environment is deleted, its required
-# reviewer is dropped (an environment with none auto-approves its own
+# Disarm paths, each of which leaves the `floor sign-off` job LOOKING present
+# while approving nothing. The first three: the environment is deleted, its
+# required reviewer is dropped (an environment with none auto-approves its own
 # deployment), or floor.yml stops wiring the environment into the job the
-# required context needs. Each must fail closed rather than pass quietly.
+# required context needs. The rest (numbered in the tests below) edit the
+# guards around that wiring: the refusal step, the enforcement job's `if:`,
+# the sign-off trigger, the filter job's place in `needs`, and the
+# never-requested step. Each must fail closed rather than pass quietly.
 
 FLOOR_YML_WIRED = """\
 name: Floor
@@ -562,7 +565,7 @@ on:
 jobs:
   floor:
     name: floor enforcement
-    needs: [signoff]
+    needs: [signoff, canary-changes]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
@@ -582,6 +585,16 @@ jobs:
     steps:
       - name: Record the approval
         run: echo ok
+
+  canary-changes:
+    name: canary path filter
+    runs-on: ubuntu-latest
+    outputs:
+      floor_core_changed: ${{ steps.filter.outputs.floor_core_changed }}
+    steps:
+      - name: Detect changes to protected paths
+        id: filter
+        run: echo "floor_core_changed=true" >> "$GITHUB_OUTPUT"
 """
 
 
@@ -680,10 +693,37 @@ def test_signoff_workflow_wiring_fails_closed_without_the_environment_line(tmp_p
     assert floor_anchor.FLOOR_PATH in msg
 
 
+def test_signoff_wiring_fails_closed_when_enforcement_drops_the_filter_job(tmp_path):
+    # Disarm path 10: `floor enforcement` keeps the sign-off edge but drops
+    # the filter job from `needs`. Its never-requested step then reads an
+    # empty output, compares it to 'true', and never fires.
+    body = FLOOR_YML_WIRED.replace(
+        "    needs: [signoff, canary-changes]\n", "    needs: [signoff]\n"
+    )
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert floor_anchor.FLOOR_CONTEXT in msg
+    assert "canary-changes" in msg
+    assert "`needs:`" in msg
+
+
+def test_signoff_wiring_fails_closed_when_the_filter_job_does_not_exist(tmp_path):
+    # Disarm path 11: both guards still name `canary-changes`, but the job
+    # itself is gone (renamed, say). GitHub reads its output as empty rather
+    # than erroring, so the review is never requested and the step never
+    # fires.
+    body = FLOOR_YML_WIRED.replace("  canary-changes:\n", "  path-filter:\n")
+    with pytest.raises(floor_anchor.AnchorError) as exc:
+        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    msg = str(exc.value)
+    assert "no job 'canary-changes'" in msg
+
+
 def test_signoff_workflow_wiring_fails_closed_when_enforcement_drops_needs(tmp_path):
     # Disarm path 3b: the job still requests the review, but the required
     # context no longer depends on it, so a refusal cannot turn it red.
-    body = FLOOR_YML_WIRED.replace("    needs: [signoff]\n", "")
+    body = FLOOR_YML_WIRED.replace("    needs: [signoff, canary-changes]\n", "")
     with pytest.raises(floor_anchor.AnchorError) as exc:
         floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
     msg = str(exc.value)
@@ -694,7 +734,8 @@ def test_signoff_workflow_wiring_fails_closed_when_enforcement_drops_needs(tmp_p
 def test_signoff_workflow_wiring_reads_a_block_list_needs(tmp_path, capsys):
     # `needs:` takes three YAML shapes; a block list must not read as unwired.
     body = FLOOR_YML_WIRED.replace(
-        "    needs: [signoff]\n", "    needs:\n      - signoff\n"
+        "    needs: [signoff, canary-changes]\n",
+        "    needs:\n      - signoff\n      - canary-changes\n",
     )
     floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
     assert "ok   " in capsys.readouterr().out

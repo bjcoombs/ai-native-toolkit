@@ -96,6 +96,15 @@ FLOOR_CORE_OUTPUT = "floor_core_changed"
 SIGNOFF_TRIGGER_RE = re.compile(
     r"^needs\.([A-Za-z0-9_-]+)\.outputs\." + FLOOR_CORE_OUTPUT + r"\s*==\s*['\"]true['\"]$"
 )
+# The one shape the never-requested step's guard may take: the same filter
+# answer, conjoined with the sign-off job's result being anything but success.
+# Pinned exactly, like the trigger, so a crafted guard cannot satisfy a looser
+# substring test while no-op'ing the step for a chosen actor or branch.
+NEVER_REQUESTED_RE = re.compile(
+    r"^needs\.([A-Za-z0-9_-]+)\.outputs\." + FLOOR_CORE_OUTPUT
+    + r"\s*==\s*['\"]true['\"]\s*&&\s*"
+    r"needs\.([A-Za-z0-9_-]+)\.result\s*!=\s*['\"]success['\"]$"
+)
 # Any ``needs.<job>.result`` in a job-level guard, whichever job it names.
 NEEDS_RESULT_RE = re.compile(r"needs\.[A-Za-z0-9_-]+\.result")
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -690,15 +699,32 @@ def _check_signoff_trigger(
                 "so the guard must be exactly "
                 f"`needs.<filter job>.outputs.{FLOOR_CORE_OUTPUT} == 'true'`."
             )
-        filter_job = match.group(1)
-        if filter_job not in _job_needs(lines):
-            raise AnchorError(
-                f"the {env!r} sign-off job {job_id!r} reads "
-                f"`needs.{filter_job}.outputs.{FLOOR_CORE_OUTPUT}` but does not "
-                f"list {filter_job!r} in `needs:`. GitHub evaluates an output "
-                "from a job outside `needs` as empty, so the review would be "
-                "skipped on every pull request."
-            )
+        _check_reads_filter(jobs, job_id, match.group(1), f"the {env!r} sign-off job")
+
+
+def _check_reads_filter(
+    jobs: dict[str, list[str]], job_id: str, filter_job: str, what: str
+) -> None:
+    """Fail unless ``job_id`` can actually read the filter job it names.
+
+    GitHub evaluates ``needs.<job>.outputs.*`` for a job outside ``needs`` (or
+    one that does not exist) as empty, never as an error, so the comparison
+    to ``'true'`` is quietly false on every pull request.
+    """
+    if filter_job not in jobs:
+        raise AnchorError(
+            f"{what} {job_id!r} reads `needs.{filter_job}.outputs."
+            f"{FLOOR_CORE_OUTPUT}` but no job {filter_job!r} exists in "
+            f"{FLOOR_PATH}. The output is empty on every pull request, so the "
+            "guard is never true."
+        )
+    if filter_job not in _job_needs(jobs[job_id]):
+        raise AnchorError(
+            f"{what} {job_id!r} reads `needs.{filter_job}.outputs."
+            f"{FLOOR_CORE_OUTPUT}` but does not list {filter_job!r} in "
+            "`needs:`. GitHub evaluates an output from a job outside `needs` "
+            "as empty, so the guard is never true."
+        )
 
 
 def _check_refusal_is_red(
@@ -748,21 +774,26 @@ def _check_refusal_is_red(
                 "review fails only the sign-off job, this required context "
                 "still goes green, and clause iii's approval is advisory."
             )
-        requested = any(
-            mentions_signoff(expr)
-            and FLOOR_CORE_OUTPUT in expr
-            and "success" in expr
+        requested = [
+            m
             for expr in step_guards
-        )
+            if (m := NEVER_REQUESTED_RE.match(_strip_expression(expr)))
+            and m.group(2) in env_jobs
+        ]
         if not requested:
             raise AnchorError(
-                f"no step of the {FLOOR_CONTEXT!r} job guards on "
-                f"`{FLOOR_CORE_OUTPUT} == 'true'` together with the {env!r} "
-                "sign-off job's result not being 'success'. Without it a "
-                "sign-off that was never requested -- the job skipped because "
-                "its trigger was edited -- leaves this required context green, "
-                "and the review lapses without a refusal."
+                f"no step of the {FLOOR_CONTEXT!r} job is guarded by exactly "
+                f"`needs.<filter job>.outputs.{FLOOR_CORE_OUTPUT} == 'true' && "
+                f"needs.<sign-off job>.result != 'success'` (sign-off job(s): "
+                f"{sorted(env_jobs)}). Without it a sign-off that was never "
+                "requested -- the job skipped because its trigger was edited "
+                "-- leaves this required context green, and the review lapses "
+                "without a refusal. A looser guard is not accepted: a conjunct "
+                "that exempts an actor or a branch makes the step a no-op."
             )
+        _check_reads_filter(
+            jobs, job_id, requested[0].group(1), f"the {FLOOR_CONTEXT!r} job"
+        )
 
 
 def _descope_warning() -> str:
