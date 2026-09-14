@@ -314,7 +314,7 @@ Each event is a JSON object whose `event` field names the type. Required fields 
 ## Lifecycle
 1. Implement → push incrementally → create PR → message lead PR_CREATED
 2. Fix any failing **required** checks and any already-posted bot threads; push. Do NOT watch CI - the lead owns that.
-3. Message lead REVIEW_CLEAR (required checks green, threads resolved) and stand down. Do not sit through the slow `claude-review`/AI-review window - that wait is the lead's to hold.
+3. Message lead REVIEW_CLEAR once `pr-review-merge` ready criteria 1-5 hold on your head (required checks green, threads resolved) and stand down. Criterion 6 (every bot flagged `Re-reviews on push` has reviewed the head SHA, or its `Max wait for re-review` expired) is the lead's to apply at merge time in marathon mode - do not sit through a flagged bot's review window, and do not run a CI watch loop for it. The lead re-verifies criterion 6 on whatever head it merges, and any push after REVIEW_CLEAR re-opens that check.
 4. The lead owns the claude-review wait + merge, cleans up, and shuts you down at green. After REVIEW_CLEAR you are not re-woken - if more work surfaces the lead spawns a fresh teammate (one task, one teammate). **Approve the lead's `shutdown_request` promptly when it arrives, and after REVIEW_CLEAR do NOT idle-ping or re-send merge-readiness nudges** — the lead owns the merge; re-nudging an already-cleared PR just churns the lead while it holds the claude-review wait.
 """
 )
@@ -391,7 +391,7 @@ If green with 0 unresolved threads, run smart-merge regardless of teammate messa
 ## Smart Merge
 
 The lead runs smart-merge via the pr-review-merge skill (Smart Merge section): dismiss stale
-bot CRs, verify the four auto-merge criteria, handle UNSTABLE/UNKNOWN, merge in hot-file order.
+bot CRs, verify the five auto-merge criteria, handle UNSTABLE/UNKNOWN, merge in hot-file order.
 On a solo-maintainer repo (0 required approvals) merge with `gh pr merge $PR --squash --delete-branch --admin`
 once the *required* checks are green — a plain merge gets bounced when a non-required check (CodeRabbit,
 an advisory AI review, a regression gate that re-runs on base advance) is mid-run at the merge instant.
@@ -417,12 +417,22 @@ only after confirming `gh pr view $PR --json state --jq '.state' == "MERGED"`. N
 unconditionally after the merge call — a rejected merge with chained cleanup deletes the branch/worktree
 of a PR that never merged (recoverable via the remote branch, but it wastes a recovery cycle every time).
 
-**Don't merge an AI-authored docs/content PR while its AI reviewer is still pending.** Even when the
-required checks are green and `mergeStateStatus` is CLEAN, wait for `claude[bot]`/`claude-review` to post —
+**Don't merge an AI-authored docs/content PR while its AI reviewer is still pending.** This hold is
+`pr-review-merge` Ready Criterion 6 applied, not a separate rule: the lead holds the merge for every bot the
+Marathon Configuration flags `Re-reviews on push: yes` until it has reviewed the head SHA, bounded by that bot's
+`Max wait for re-review` (15m when absent). For a bot with `Re-review check name` its check run on the head SHA has
+three states: in progress, keep waiting until the max wait expires; completed with conclusion `success`, the
+criterion is satisfied and the `Commit:`-line spot check below applies; completed with any other conclusion
+(failure, cancelled, skipped, neutral, timed_out), a settled verdict that the bot did not complete a green pass, so
+take the warning path at once. On expiry or a settled non-success run, merge with a warning in the merge record
+naming the bot, the head SHA, the run's conclusion, and whether the reviews endpoint shows a review of that head
+SHA anyway; nothing holds forever on an advisory bot. Configure the AI reviewer that way rather than
+special-casing it here. Even when the
+required checks are green and `mergeStateStatus` is CLEAN, wait for `claude[bot]`/`claude-review` to settle -
 AI-written docs are exactly where AI-authoring residue (leaked tool-envelope tags, duplicated sections)
 hides, and the reviewer catches it. The minutes of waiting are cheaper than a follow-up PR + patch release.
 
-**A green `claude-review` check is not evidence the review ran.** The reviewer can end with `is_error: true` at zero cost and post nothing while the check still reports success. Before merging on the strength of a review, confirm the reviewer's sticky summary comment cites the PR **head sha** in its `Commit:` line (or that `claude[bot]` resolved threads on that head). If the summary still cites an older sha, the head was not reviewed: re-run the workflow once, and if it fails the same way, stand up a cold local reviewer per PR (a fresh agent with no authoring context, read-only, re-running the PR's measurements and verifying each open thread), post a comment disclosing that substitution, and resolve threads on that evidence.
+**A green `claude-review` check is evidence the reviewer completed, not that it reviewed the right head.** The workflow's final-status step now turns the check red when the action exits with `is_error: true`, an empty execution log, or a missing result entry (the silent-success failure seen on four PRs in 2026-09-04), which is why criterion 6 keys on the check run for this bot. Before merging on the strength of a review, confirm the reviewer's sticky summary comment cites the PR **head sha** in its `Commit:` line (or that `claude[bot]` resolved threads on that head). If the check is green but the summary still cites an older sha, the head was not reviewed: re-run the workflow once, and if it fails the same way, stand up a cold local reviewer per PR (a fresh agent with no authoring context, read-only, re-running the PR's measurements and verifying each open thread), post a comment disclosing that substitution, and resolve threads on that evidence. A red or otherwise non-success `claude-review` run is not this case: it is criterion 6's settled non-success state, which merges with a warning at once.
 
 **Any push after REVIEW_CLEAR re-opens the verify gate.** A lead conflict-resolution, a base-advance
 re-trigger, or a late fix all produce a new head, and bots re-review that new commit — a reviewer that
