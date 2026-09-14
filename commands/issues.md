@@ -70,9 +70,11 @@ no unresolved overlap, and sized to one PR (or approved as a decomposed parent).
 else stays or becomes `needs-triage`. Research and sizing read widely, so fan them out with
 subagents (the `Agent` tool); never teammates.
 
-Steps 1 to 5 decide each issue's label but do not write it: the verdict needs all four inputs,
-so every `agent-ready` / `needs-triage` label change happens in one write at the Triage Report
-step. An interrupted pass therefore never leaves an issue `agent-ready` while it overlaps an open
+Steps 1 to 5 decide the label of each issue that exists at the start of the pass but do not
+write it: the verdict needs all four inputs, so every `agent-ready` / `needs-triage` label change
+on those issues happens in one write at the Triage Report step. Creating an approved
+decomposition is a separate phase after approval that labels its own children and parent (see
+Size by Judgment). An interrupted pass therefore never leaves an issue `agent-ready` while it overlaps an open
 PR. Comments, body edits and dependency edges are written where they are decided.
 
 ### Promote on Confirmation
@@ -180,14 +182,17 @@ before the two consumers"). No hierarchy is created without a reason.
 When decomposition is warranted:
 1. **Propose, then wait for approval.** Show the decomposition tree (parent, each child's scope,
    the reason for the split, and the child order) in the triage report. Nothing is created until
-   the human approves it, by replying to proceed in the session or by confirming on the parent
-   issue before the next triage run. Until then the parent stays unlabeled for the queue.
-2. **Create the children**, each scoped to one reviewable PR, and attach them to the parent:
+   the human approves it by replying to proceed in the same session; that reply is the only
+   approval path. Until then the parent stays unlabeled for the queue, and an unapproved
+   proposal is simply proposed again on a later triage run.
+2. **After approval, create the children** (the post-approval phase, outside the single label
+   write of the Triage Report step), each scoped to one reviewable PR, and attach them to the parent:
    ```bash
    CHILD=$(gh issue create --title "<child title>" --body "<scope + acceptance criteria; Part of #<parent>>" | sed 's#.*/##')
    CHILD_ID=$(gh api repos/$ORG/$REPO/issues/$CHILD | jq '.id')     # numeric REST id
    gh api repos/$ORG/$REPO/issues/<parent>/sub_issues --method POST -F sub_issue_id="$CHILD_ID"
    gh issue edit "$CHILD" --add-label "agent-ready"
+   gh issue edit <parent> --add-label "agent-ready"                  # once, after all children exist
    ```
 3. **Order the children.** Where one child must land before another, author a `blocked_by` edge
    between them (Dependency Authoring). Sub-issue position is display order only.
@@ -259,7 +264,8 @@ Overlaps:
 - #22 <-> PR #40: commands/issues.md (held as needs-triage)
 - #12 <-> #15: README.md (additive, left parallel)
 
-Approve the decomposition of #30 and the execution order? Re-run /issues to begin, or reply to proceed.
+Approve the decomposition of #30 and the execution order? Reply to proceed (this creates the
+sub-issues and edges), or re-run /issues to begin on the agent-ready issues.
 ```
 
 Do NOT spawn teammates in triage mode.
@@ -317,10 +323,14 @@ Supply the marathon skill's adapter as:
   wave until the PR merges.
   Decomposed parents: an enumerated issue whose `sub_issues_summary.total` is above 0
   (`gh api repos/$ORG/$REPO/issues/<N>`) is a verification unit, not a work unit, provided at
-  least one child is in the enumerated set or already closed by a merged PR. A parent whose
-  children are all open and outside the enumerated set (sub-issues made by hand as a checklist,
-  none tagged) yields no work unit and no verification: report it in the plan as an explicit
-  skip ("#N has sub-issues but none is agent-ready") rather than carrying it silently. The work
+  least one child is in the enumerated set or already closed by a merged PR. Compare the
+  parent's child set against the enumerated set at plan time. A parent whose children are all
+  open and outside the enumerated set (sub-issues made by hand as a checklist, none tagged)
+  yields no work unit and no verification: report it as an explicit skip ("#N has sub-issues
+  but none is agent-ready"). A parent with any child that is open and not in this run (untagged,
+  out of scope, or dropped by the Staleness Check) cannot become eligible this run: its
+  enumerated children still run, and the parent is reported as a skip ("#N has 1 of 2 children
+  in this run; verification deferred") rather than carried as a permanently ineligible unit. The work
   units are the enumerated leaf issues: children from `.../sub_issues` count only when they are
   also in the enumerated set (open, `agent-ready`, matching the scope filter), plus every
   undecomposed enumerated issue. An untagged or out-of-scope child is never pulled in by its
