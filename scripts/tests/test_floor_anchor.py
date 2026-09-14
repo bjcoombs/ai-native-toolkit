@@ -1197,3 +1197,12 @@ def test_signoff_wiring_reads_a_four_space_step_list(tmp_path, capsys):
     body = FLOOR_YML_WIRED[:start] + reindented + FLOOR_YML_WIRED[end:]
     floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
     assert "ok   " in capsys.readouterr().out
+
+
+def test_signoff_wiring_accepts_an_explicit_continue_on_error_false(tmp_path, capsys):
+    # `continue-on-error: false` is the default spelled out; only a value
+    # that could make a failure non-fatal is rejected.
+    anchor = "    if: ${{ !cancelled() }}\n"
+    body = FLOOR_YML_WIRED.replace(anchor, anchor + "    continue-on-error: false\n", 1)
+    floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
+    assert "ok   " in capsys.readouterr().out

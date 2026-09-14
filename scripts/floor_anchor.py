@@ -31,7 +31,7 @@ The floor.yml *path lock* (a push ruleset with ``file_path_restriction``) that a
 third check once required is DESCOPED -- see ``PATH_LOCK_DESCOPED`` below. GitHub
 refuses push rulesets on public, user-owned repos, so it is a documented
 capability gap that this script WARNS about (loudly, non-failing) rather than
-enforcing. The two requirements above remain fail-closed.
+enforcing. The three requirements above remain fail-closed.
 
 Stdlib only.
 """
@@ -138,7 +138,7 @@ CLASSIFIER_INVOCATION = ("floor_check.py protected", "--role floor-core")
 # ``continue-on-error: true`` at step or job level makes a non-zero exit
 # non-fatal, which disarms every conversion step while leaving each guard and
 # script byte-identical. The key is rejected outright in the enforcement job.
-CONTINUE_ON_ERROR_RE = re.compile(r"^\s+continue-on-error:")
+CONTINUE_ON_ERROR_RE = re.compile(r"^\s+continue-on-error:(?!\s*false\s*$)")
 # A step's shape inside a job: steps start with ``- `` at six spaces, and a
 # ``run:`` inside one is either inline or a ``|``/``>`` block whose body sits
 # deeper than the key. A conversion step must actually exit non-zero -- a guard
@@ -915,7 +915,9 @@ def _check_refusal_is_red(
 
         def pinned(pattern: re.Pattern[str], accept, what: str, why: str) -> str:
             """The captured job id of the one step whose guard is exactly
-            ``pattern`` and ``accept``-able, provided its script exits non-zero."""
+            ``pattern`` and ``accept``-able, provided its script carries a
+            line that is an ``exit <n>`` with n > 0 (the shape the real steps
+            use; the anchor reads the line, it does not run the script)."""
             for guard, run in steps:
                 m = pattern.match(guard)
                 if not m or not accept(m):
