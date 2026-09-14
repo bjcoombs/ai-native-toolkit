@@ -92,8 +92,11 @@ around the contract, so `/issues` carries the same obligation. The run identifie
 is the issue-queue identifier - the label/milestone slug for this queue, e.g.
 `issues-<label>` (`issues-agent-ready` when no scope filter narrows it).
 
+The contract scripts live in the plugin package (`${CLAUDE_PLUGIN_ROOT}/scripts/contract/`), while the contract artifacts (contract, kill test, completion record) live in the target repository's `.taskmaster/contract/`, the scripts' default `--contract-dir`. When `CLAUDE_PLUGIN_ROOT` is unset (a hand-placed checkout rather than an installed plugin) the guard line before each invocation falls back to the current checkout.
+
 ```bash
-python scripts/contract/start_gate.py "issues-<label>"
+: "${CLAUDE_PLUGIN_ROOT:=.}"   # unset outside an installed plugin: fall back to the current checkout
+python "${CLAUDE_PLUGIN_ROOT}/scripts/contract/start_gate.py" "issues-<label>"
 ```
 
 The gate fails closed. Exactly two doors open a run; there is no silent third -
@@ -107,12 +110,12 @@ including for a heterogeneous issue queue:
   is capped, not free - the run is permanently capped at `UNVERIFIED` and can
   NEVER certify `PASS`.
 - **Neither** - non-zero exit. Do NOT start the run: author a contract for the
-  queue's deliverable and freeze it (`scripts/contract/freeze.py`), or record a
+  queue's deliverable and freeze it (`${CLAUDE_PLUGIN_ROOT}/scripts/contract/freeze.py`), or record a
   signed skip first.
 
 The exit-side gates are owned by the marathon skill, not this command. Marathon
-routes every verifier spawn through `scripts/contract/spawn_verifier.py` (the
-custody chokepoint) and blocks run-complete on `scripts/contract/complete_gate.py
+routes every verifier spawn through `${CLAUDE_PLUGIN_ROOT}/scripts/contract/spawn_verifier.py` (the
+custody chokepoint) and blocks run-complete on `${CLAUDE_PLUGIN_ROOT}/scripts/contract/complete_gate.py
 <run-id>`. Start gate here, exit gates there - each fails closed. The
 `<!-- floor:cold-verify-completion -->` marker in this file's header makes this
 invocation un-removable: `floor.yml` reds any PR that drops the marker or any of
