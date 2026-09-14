@@ -1067,24 +1067,31 @@ def test_signoff_wiring_rejects_an_exit_that_is_only_mentioned(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "where, line",
+    "where, anchor, line",
     [
-        ("step", "        continue-on-error: true\n"),
-        ("job", "    continue-on-error: true\n"),
+        # the enforcement job: a conversion step's exit 1 stops failing it
+        ("step", "        if: needs.signoff.result == 'failure'\n",
+         "        continue-on-error: true\n"),
+        ("floor", "    if: ${{ !cancelled() }}\n", "    continue-on-error: true\n"),
+        # the jobs it reads: their result arrives as 'success' after a failure
+        ("signoff", "    environment: floor-signoff\n", "    continue-on-error: true\n"),
+        ("canary-changes", "    name: canary path filter\n",
+         "    continue-on-error: true\n"),
     ],
 )
-def test_signoff_wiring_fails_closed_on_continue_on_error(tmp_path, where, line):
+def test_signoff_wiring_fails_closed_on_continue_on_error(
+    tmp_path, where, anchor, line
+):
     # Disarm path 16: every guard and script is byte-identical, but a
-    # `continue-on-error: true` (on one step, or on the whole job) makes the
-    # `exit 1` non-fatal, so the conversion fires into a passing job.
-    if where == "step":
-        anchor = "        if: needs.signoff.result == 'failure'\n"
-    else:
-        anchor = "    if: ${{ !cancelled() }}\n"
+    # `continue-on-error: true` -- on a conversion step, on the enforcement
+    # job, or on a job whose result it reads -- turns a failure into a pass.
     body = FLOOR_YML_WIRED.replace(anchor, anchor + line, 1)
     with pytest.raises(floor_anchor.AnchorError) as exc:
         floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
-    assert "continue-on-error" in str(exc.value)
+    msg = str(exc.value)
+    assert "continue-on-error" in msg
+    if where not in ("step", "floor"):
+        assert f"job '{where}'" in msg
 
 
 def test_signoff_wiring_fails_closed_on_a_decoy_filter_job(tmp_path):

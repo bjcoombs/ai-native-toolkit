@@ -847,17 +847,23 @@ def _check_refusal_is_red(
     half the sign-off rests on, so all three steps are pinned here -- guard
     AND script -- rather than left to review.
     """
-    for job_id in enforcement:
-        lines = jobs[job_id]
-        for line in lines:
+    # The key is fatal in the enforcement job (a non-zero exit stops being
+    # one) and in the jobs it reads: a job with `continue-on-error: true`
+    # reports `result: success` to `needs` even when it failed, so a refused
+    # review or a broken filter would arrive here looking approved.
+    for job_id in sorted(set(enforcement) | env_jobs | {signoff_filter}):
+        for line in jobs.get(job_id, []):
             if CONTINUE_ON_ERROR_RE.match(line):
                 raise AnchorError(
-                    f"the {FLOOR_CONTEXT!r} job carries `{line.strip()}`. "
-                    "`continue-on-error` makes a non-zero exit non-fatal, so "
-                    "every conversion step below it fires into a passing job "
-                    "with its guard and script unchanged. The key is not "
-                    "allowed anywhere in this job."
+                    f"job {job_id!r} carries `{line.strip()}`. "
+                    "`continue-on-error` makes a failure non-fatal -- in the "
+                    f"{FLOOR_CONTEXT!r} job a conversion step's `exit 1` no "
+                    "longer fails it, and in a job it reads the result arrives "
+                    "as 'success' even after a refusal or a failed filter. The "
+                    "key is not allowed in any of these jobs."
                 )
+    for job_id in enforcement:
+        lines = jobs[job_id]
         guards = [m.group(1) for line in lines if (m := JOB_IF_RE.match(line))]
         if not guards or _strip_expression(guards[0]) != ENFORCEMENT_GUARD:
             seen = guards[0] if guards else "no `if:` at all"
