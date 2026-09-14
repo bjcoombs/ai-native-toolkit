@@ -148,8 +148,9 @@ gh pr list --state open --limit 100 --json number,title,headRefName,files | \
   jq '[.[] | {number, title, headRefName, files: [.files[].path]}]'
 ```
 
-For each candidate issue, take the files it targets (paths the body names plus those the
-Research Pass located) and flag any intersection:
+For each candidate issue, take the files it targets (paths named in the body, those the
+Research Pass located, or, for an issue that skipped research, those located by a quick read of
+the code it describes) and flag any intersection:
 - **File-path intersection** with an open PR's changed files.
 - **Scope intersection** with an open PR's title or body (it partially fixes, obsoletes, or
   reverses what the issue asks), even with no shared file.
@@ -331,38 +332,40 @@ Supply the marathon skill's adapter as:
   open-PR blocker never arrives as a native edge: when an issue must wait for an open PR,
   record that sequencing in the run plan (the wave table) and hold the issue out of any
   wave until the PR merges.
-  Decomposed parents: an enumerated issue whose `sub_issues_summary.total` is above 0
-  (`gh api repos/$ORG/$REPO/issues/<N>`) is a verification unit, not a work unit, provided at
-  least one child is in the enumerated set or already closed by a merged PR. Compare the
-  parent's child set against the enumerated set at plan time. A parent whose children are all
-  open and outside the enumerated set (sub-issues made by hand as a checklist, none tagged)
-  yields no work unit and no verification: report it as an explicit skip ("#N has sub-issues
-  but none is agent-ready"). A parent with any child that is open and not in this run (untagged,
-  out of scope, or dropped by the Staleness Check) cannot become eligible this run: its
-  enumerated children still run, and the parent is reported as a skip ("#N has 1 of 2 children
-  in this run; verification deferred"). Every skip also swaps the parent's label from
-  `agent-ready` to `needs-triage` with a comment naming the missing children, so a parked parent
-  never keeps `READY` above 0 and pins `/issues` in Marathon mode; the next triage run
-  re-assesses it (see Size by Judgment). The work
-  units are the enumerated leaf issues: children from `.../sub_issues` count only when they are
-  also in the enumerated set (open, `agent-ready`, matching the scope filter), plus every
-  undecomposed enumerated issue. An untagged or out-of-scope child is never pulled in by its
-  parent, and a child the Staleness Check dropped stays dropped for this run. The parent is
-  never handed to an implementing teammate. It becomes eligible for verification when every
-  child is verified `CLOSED` by a merged PR: `gh issue view <child> --json
-  state,closedByPullRequestsReferences` shows `state` `CLOSED` and a non-empty
-  `closedByPullRequestsReferences` list. A child closed as not planned or by hand, with no merged PR, keeps the
-  parent ineligible and is reported. `sub_issues_summary` counts closures, so it is the human
-  rollup, not the trigger. Eligibility is a state, not only an event: at run start, any parent
-  already eligible (children merged in an earlier run or externally) gets its check before
-  Wave 1. Parent closure is gated on the lead-run QA pass over the merged children, not on
-  `Closes #N` in any single PR. That
-  check runs outside `spawn_verifier.py` and adds no per-parent freeze: the run-level contract,
-  its freeze, the custody chokepoint, and the completion gate are unchanged. The lead re-reads
-  the parent's acceptance criteria, checks each against merged `$BASE_BRANCH`, posts the
-  per-criterion result as a comment on the parent, and runs `gh issue close <parent>` only when
-  every criterion holds; otherwise the parent stays open, its label swaps from `agent-ready` to
-  `needs-triage` (the per-criterion comment is the record), and the gap is reported to the user.
+  Read the edges and the rollup in the same call rather than one request per issue:
+  `gh issue list ... --json number,title,body,labels,blockedBy,subIssuesSummary` returns both;
+  the per-issue REST paths below stay the reference and the write side.
+  Decomposed parents: an enumerated issue whose `sub_issues_summary.total` is above 0 (the
+  `subIssuesSummary` field) is decomposed, never a work unit, and never handed to an
+  implementing teammate. The work units are the enumerated leaf issues: children from
+  `.../sub_issues` count only when they are also in the enumerated set (open, `agent-ready`,
+  matching the scope filter), plus every undecomposed enumerated issue. An untagged or
+  out-of-scope child is never pulled in by its parent, and a child the Staleness Check dropped
+  stays dropped for this run. A child counts as done only when verified `CLOSED` by a merged PR:
+  `gh issue view <child> --json state,closedByPullRequestsReferences` shows `state` `CLOSED` and
+  a non-empty `closedByPullRequestsReferences` list. `sub_issues_summary` counts closures of any
+  kind, so it is the human rollup, not the trigger.
+  At plan time, compare each decomposed parent's children against the enumerated set. Exactly
+  one of two outcomes applies, and the second is a catch-all:
+  - **Verification unit** - every child is either in this run or done. The parent becomes
+    eligible when the last one is done, a state rather than only an event: a parent whose
+    children were all done before this run is eligible before Wave 1.
+  - **Skip** - anything else (a child open but not in this run, a child closed without a merged
+    PR, no child in the run at all). Report it ("#N: 1 of 2 children in this run; verification
+    deferred", "#N: child #M closed without a merged PR") and swap the parent's label from
+    `agent-ready` to `needs-triage` with a comment naming the children at fault, so a parked
+    parent never keeps `READY` above 0 and pins `/issues` in Marathon mode. The next triage run
+    re-assesses it (see Size by Judgment); its in-run children still run.
+  Parent closure is gated on the lead-run QA pass over the merged children, not on `Closes #N`
+  in any single PR. That check runs outside `spawn_verifier.py` and adds no per-parent freeze:
+  the run-level contract, its freeze, the custody chokepoint, and the completion gate are
+  unchanged. "Lead-run" means the lead owns it, not that the lead executes it inline: the lead
+  spawns one read-only subagent (the `Agent` tool, never a teammate) with the parent's
+  acceptance criteria and the merged `$BASE_BRANCH`, carries on with the merge loop, and acts on
+  the returned per-criterion result. It posts that result as a comment on the parent and runs
+  `gh issue close <parent>` only when every criterion holds; otherwise the parent stays open, its
+  label swaps from `agent-ready` to `needs-triage` (the comment is the record), and the gap is
+  reported to the user.
 - **mark in-progress** — `gh issue edit <N> --add-label "in-progress"`.
 - **close on merge** — the teammate's PR body includes `Closes #<N>` (and `Closes #<M>` for
   every combined issue); GitHub auto-closes on merge. After merge, verify with
