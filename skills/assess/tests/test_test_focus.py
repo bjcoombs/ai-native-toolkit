@@ -425,3 +425,34 @@ def test_mutation_scope_keeps_only_entries_with_test_evidence(tmp_path: Path) ->
     assert mutation_scope(hollow) == ["y.py"]
     assert mutation_scope(None) == []
     assert mutation_scope({"entries": "bad"}) == []
+
+
+def test_mutation_scope_excludes_hot_file_that_is_itself_a_test(tmp_path: Path) -> None:
+    """A hot test file counts as its own test (sibling_test_only, never
+    unsupported) and keeps its table row, but nothing tests it, so mutating it
+    measures nothing: it never enters the mutation scope."""
+    for rel in ("src/a.py", "src/test_a.py", "web/b.ts", "web/b.test.ts",
+                "web/__tests__/c.ts"):
+        _touch(tmp_path, rel)
+    hot = ["src/test_a.py", "web/b.test.ts", "web/__tests__/c.ts", "src/a.py", "web/b.ts"]
+    block = compute_test_focus(hot, None, None, repo_root=tmp_path)
+    by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
+    assert by_path == {path: "sibling_test_only" for path in hot}
+    assert mutation_scope(block) == ["src/a.py", "web/b.ts"]
+    hollow = {"entries": [
+        {"path": "tests/test_x.py", "test_signal": "covered_but_hollow"},
+        {"path": "x.py", "test_signal": "covered_but_hollow"},
+    ]}
+    assert mutation_scope(hollow) == ["x.py"]
+
+
+def test_skill_md_mutation_scope_jq_mirrors_test_path_rule() -> None:
+    """SKILL.md Step 2d re-derives the mutation scope in jq; its test-file regex
+    must stay the same pattern as ``sibling_tests.IS_TEST_RE`` so the offer and
+    the core never disagree about which hot files are tests."""
+    from lib.sibling_tests import IS_TEST_RE
+
+    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text()
+    focus_line = next(line for line in skill.splitlines() if line.startswith("FOCUS_FILES="))
+    assert IS_TEST_RE.pattern.replace("\\", "\\\\") in focus_line
+    assert '"__tests__"' in focus_line

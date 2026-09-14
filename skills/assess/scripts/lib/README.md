@@ -477,8 +477,9 @@ only file I/O is the sibling-test probe, and only under `repo_root`; imports no
 orchestrator. This block is the SINGLE source both the report focus table and
 the mutation offer consume. The mutation scope is `mutation_scope(block)`: the
 entries with test evidence (`covered_but_hollow`, `sibling_test_only`) in ranked
-order, so a file with no test never heads the mutation pass and comes back as an
-`untrusted_hotspot` for tests that do not exist; `assess_core --opt-in-mutation`
+order, minus any hot file that is itself a test (`sibling_tests.is_test_path`),
+so neither a file with no test nor a test file heads the mutation pass and comes
+back as an `untrusted_hotspot` for tests that do not exist; `assess_core --opt-in-mutation`
 and the SKILL.md Step 2d `jq` both apply it. Add cases in
 `tests/test_test_focus.py` alongside any change to a classification, ranking,
 or scope rule.

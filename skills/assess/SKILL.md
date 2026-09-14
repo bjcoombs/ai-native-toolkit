@@ -327,16 +327,16 @@ jq '.test_focus' "$REPO_ROOT/.assess/run-context.json"
 ```
 
 <!-- chat-replace:mutation-offer-intro -->
-**Only when `test_focus.entries` holds at least one entry with test evidence** (`test_signal` of `covered_but_hollow` or `sibling_test_only`) is there anything to deepen - mutating a file with no test yields all survivors and measures the missing test, not an existing one, so `unsupported` / `no_covering_test` / `unknown_no_coverage` entries stay in the report table but out of the mutation scope. If no entry qualifies, skip straight to Step 3. When it has entries, follow the same detect-or-offer-install pattern as Steps 2a/2b: first detect a mutation tool, then ask the user whether to run the bounded pass.
+**Only when `test_focus.entries` holds at least one entry with test evidence** (`test_signal` of `covered_but_hollow` or `sibling_test_only`, on a hot file that is not itself a test) is there anything to deepen - mutating a file with no test yields all survivors and measures the missing test, not an existing one, so `unsupported` / `no_covering_test` / `unknown_no_coverage` entries stay in the report table but out of the mutation scope. If no entry qualifies, skip straight to Step 3. When it has entries, follow the same detect-or-offer-install pattern as Steps 2a/2b: first detect a mutation tool, then ask the user whether to run the bounded pass.
 
 <!-- chat-skip:start -->
 **Detect a mutation tool for the repo's language.** Mirror the Step 2b heuristic - `mutmut` for Python, `stryker` for TS/JS - and check PATH plus the permanent-decline marker:
 
 ```bash
-# Scope: entries with test evidence, ranked (the core's mutation_scope filter).
-# Pick the candidate tool by the dominant focus-file language (Python -> mutmut,
-# TS/JS -> stryker). Fall back to mutmut when the focus files are mixed/Python.
-FOCUS_FILES=$(jq -r '.test_focus.entries[] | select(.test_signal == "covered_but_hollow" or .test_signal == "sibling_test_only") | .path' "$REPO_ROOT/.assess/run-context.json" | head -5)
+# Scope: entries with test evidence, ranked, minus test files (the core's mutation_scope;
+# regex mirrors sibling_tests.IS_TEST_RE). Tool by dominant focus-file language
+# (Python -> mutmut, TS/JS -> stryker); mutmut when mixed.
+FOCUS_FILES=$(jq -r '.test_focus.entries[] | select(.test_signal == "covered_but_hollow" or .test_signal == "sibling_test_only") | .path | select(split("/") as $p | (($p[-1] | sub("\\.[^.]*$"; "") | test("(^test_|_test$|\\.test$|\\.spec$|_spec$|Tests?$)")) or any($p[:-1][]; . == "__tests__")) | not)' "$REPO_ROOT/.assess/run-context.json" | head -5)
 case "$FOCUS_FILES" in
   *.ts|*.tsx|*.js|*.jsx) MUT_TOOL=stryker ;;
   *) MUT_TOOL=mutmut ;;

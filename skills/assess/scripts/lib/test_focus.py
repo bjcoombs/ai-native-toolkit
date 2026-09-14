@@ -47,7 +47,10 @@ Mutation scope: `mutation_scope` takes the paths of the entries that carry test
 evidence (``covered_but_hollow``, ``sibling_test_only``). Mutating a file with no
 test yields all survivors and measures the missing test, not an existing one's
 strength, so ``unsupported`` / ``no_covering_test`` / ``unknown_no_coverage``
-entries stay in the table but out of the mutation pass.
+entries stay in the table but out of the mutation pass. A hot file that is
+itself a test (`sibling_tests.is_test_path`) keeps its ``sibling_test_only`` row
+but never enters the scope: nothing tests a test file, so mutating it measures
+nothing and would come back as an ``untrusted_hotspot``.
 
 Honest degradation is the hard contract: ``coverage_data is None`` never yields
 ``covered_clean`` for an untested file and records ``coverage_present: False``.
@@ -62,7 +65,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from lib.sibling_tests import has_sibling_test, shared_name_keys
+from lib.sibling_tests import has_sibling_test, is_test_path, shared_name_keys
 
 # Risk bands by position in the ranked top_hotspots list. Index 0-2 are the
 # sharpest hotspots, 3-6 the next tier, 7-9 the tail; anything past the top 10 is
@@ -103,7 +106,10 @@ _ACTION_BY_SIGNAL = {
 }
 
 # Signals whose file has test evidence - the only entries a mutation pass can
-# say anything about. Kept in ranked order by `mutation_scope`.
+# say anything about. Kept in ranked order by `mutation_scope`, which also drops
+# any hot file that is itself a test: it counts as its own test (so it reads
+# ``sibling_test_only``, never ``unsupported``), but no test exercises it, so
+# mutating it measures nothing.
 MUTATION_SCOPE_SIGNALS = frozenset({"covered_but_hollow", "sibling_test_only"})
 
 # The three hollow-test heuristic buckets, in report order. Each bucket entry
@@ -315,8 +321,8 @@ def compute_test_focus(
 def mutation_scope(test_focus: Any) -> list[str]:
     """Paths the bounded mutation pass should mutate, in ranked order: the
     ``test_focus`` entries whose signal is in ``MUTATION_SCOPE_SIGNALS`` (the
-    file has test evidence). Accepts the block dict or its ``entries`` list;
-    anything malformed yields ``[]``."""
+    file has test evidence), minus any path that is itself a test file. Accepts
+    the block dict or its ``entries`` list; anything malformed yields ``[]``."""
     entries = test_focus.get("entries") if isinstance(test_focus, dict) else test_focus
     if not isinstance(entries, list):
         return []
@@ -324,4 +330,5 @@ def mutation_scope(test_focus: Any) -> list[str]:
         e["path"] for e in entries
         if isinstance(e, dict) and isinstance(e.get("path"), str) and e["path"]
         and e.get("test_signal") in MUTATION_SCOPE_SIGNALS
+        and not is_test_path(e["path"])
     ]
