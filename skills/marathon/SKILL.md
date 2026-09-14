@@ -104,6 +104,7 @@ Enumerate work units via the adapter's **enumerate** operation.
 **Analyze dependency tree for maximum concurrency:**
 
 1. Map the dependency tree — which tasks block which?
+   - An open-PR blocker (a unit that must wait for an already-open pull request) is treated per the adapter's recorded answer. Where the source cannot express it as a native edge (GitHub: `PR-as-blocker` is unsupported), the adapter reports it as run-plan sequencing: treat it as an unsatisfied dependency and hold the unit out of every wave until that PR merges.
 2. Identify the critical path (longest sequential chain)
 3. **Challenge unnecessary dependencies** — different files/modules may not need sequencing
 4. Look for tasks chained sequentially that could run in parallel

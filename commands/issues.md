@@ -128,12 +128,53 @@ Supply the marathon skill's adapter as:
   (scoped by the optional `$ARGUMENTS` label filter);
   dependencies from `gh api repos/$ORG/$REPO/issues/<N>/dependencies/blocked_by`
   (each blocker issue number is a dependency edge). Complexity: infer from issue body/labels.
+  A pull request cannot be a `blocked_by` blocker (see PR-as-blocker below), so an
+  open-PR blocker never arrives as a native edge: when an issue must wait for an open PR,
+  record that sequencing in the run plan (the wave table) and hold the issue out of any
+  wave until the PR merges.
 - **mark in-progress** — `gh issue edit <N> --add-label "in-progress"`.
 - **close on merge** — the teammate's PR body includes `Closes #<N>` (and `Closes #<M>` for
   every combined issue); GitHub auto-closes on merge. After merge, verify with
   `gh issue view <N> --json state --jq '.state'` == `CLOSED`.
 - **branch / worktree** — branch `issue-<N>--<slug>`; worktree `worktree/issues/<N>--<slug>`.
   For a combined group, use the lowest issue number: `issue-<N>--<slug>`.
+
+### Dependency and Sub-issue API
+
+Paths are relative to `repos/{o}/{r}` (owner and repository). Every id these endpoints
+take is the **numeric REST id** from `gh api repos/{o}/{r}/issues/{n} --jq .id`, NOT the
+GraphQL node id that `gh issue view --json id` returns (that one 422s). Pass ids with typed
+`-F`, not `-f`, so they are sent as integers.
+
+Dependencies (ordering - what the marathon DAG consumes):
+
+```bash
+gh api repos/{o}/{r}/issues/{n}/dependencies/blocked_by                 # list blockers
+gh api repos/{o}/{r}/issues/{n}/dependencies/blocking                   # reverse direction
+BLOCKER_ID=$(gh api repos/{o}/{r}/issues/{m} --jq '.id')                # numeric REST id, NOT node id
+gh api repos/{o}/{r}/issues/{n}/dependencies/blocked_by \
+  --method POST -F issue_id="$BLOCKER_ID"                               # issue n is blocked by m
+gh api repos/{o}/{r}/issues/{n}/dependencies/blocked_by/{id} --method DELETE   # {id} = numeric REST id
+```
+
+Sub-issues (decomposition with rollup, distinct from ordering):
+
+```bash
+gh api repos/{o}/{r}/issues/{n}/sub_issues                              # list children
+gh api repos/{o}/{r}/issues/{n}/sub_issues --method POST -F sub_issue_id={id}
+gh api repos/{o}/{r}/issues/{n}/sub_issue --method DELETE -F sub_issue_id={id}   # singular path
+gh api repos/{o}/{r}/issues/{n}/sub_issues/priority --method PATCH -F sub_issue_id={id} -F after_id={id}
+```
+
+Constraints: one parent per issue, about 8 nesting levels, about 100 children per parent;
+the parent's `sub_issues_summary` field carries the rollup progress.
+
+sub-issues roll up progress; only `blocked_by` edges order the marathon DAG.
+
+PR-as-blocker: unsupported (HTTP 422, "Target issue may only be an issue", observed POSTing a merged PR's numeric REST id as a `blocked_by` blocker)
+
+Consequence: an open-PR blocker cannot be a native edge. Record "issue N waits for PR M" as
+sequencing in the run plan and keep N out of every wave until M merges.
 
 ### Run
 
