@@ -73,14 +73,17 @@ subagents (the `Agent` tool); never teammates.
 
 Start with issues already labeled `needs-triage` that carry a triage comment with a
 recommended reading. If a human reply after that comment confirms or corrects it ("yes,
-reading A" is enough), fold the confirmed answers into the issue body (edit the body's
-scope and acceptance criteria) or into a pinned comment when the body is the author's to
-keep, so the implementing teammate inherits a clarified contract instead of a thread to
-re-interpret. Then swap the label from `needs-triage` to `agent-ready`, provided the same
+reading A" is enough), fold the confirmed answers into the issue body (append a
+`Clarified scope` section with the confirmed scope and acceptance criteria) or, when the body
+is the author's to keep, into a pinned comment: a new comment whose first line is the marker
+`<!-- triage:clarified-scope -->`, pinned through the issue UI where the repository offers
+comment pinning. The marker is what makes it durable: the implementing teammate and every later
+run find the clarified contract by grepping for it, never by re-interpreting the thread. Then swap the label from `needs-triage` to `agent-ready`, provided the same
 pass's Overlap Sweep and Size by Judgment do not hold it back:
 
 ```bash
-gh issue edit <N> --body-file <clarified-body.md>          # or: gh issue comment <N> + pin it in the UI
+gh issue edit <N> --body-file <body-plus-clarified-scope.md>   # issue body route
+gh issue comment <N> --body-file <clarified-scope.md>          # pinned comment route; first line is the marker
 gh issue edit <N> --remove-label "needs-triage" --add-label "agent-ready"
 ```
 
@@ -299,11 +302,19 @@ Supply the marathon skill's adapter as:
   record that sequencing in the run plan (the wave table) and hold the issue out of any
   wave until the PR merges.
   Decomposed parents: an enumerated issue whose `sub_issues_summary.total` is above 0
-  (`gh api repos/$ORG/$REPO/issues/<N>`) is a verification unit, not a work unit. Enumerate
-  its leaf issues (children from `.../sub_issues`, plus every undecomposed issue) as the work
-  units; the parent is never handed to an implementing teammate. The parent becomes eligible
-  for verification when its last child merges (`completed == total`), and its closure is gated
-  on the lead-run QA pass over the merged children, not on `Closes #N` in any single PR. That
+  (`gh api repos/$ORG/$REPO/issues/<N>`) is a verification unit, not a work unit. The work
+  units are the enumerated leaf issues: children from `.../sub_issues` count only when they are
+  also in the enumerated set (open, `agent-ready`, matching the scope filter), plus every
+  undecomposed enumerated issue. An untagged or out-of-scope child is never pulled in by its
+  parent, and a child the Staleness Check dropped stays dropped for this run. The parent is
+  never handed to an implementing teammate. It becomes eligible for verification when every
+  child is verified `CLOSED` after its PR merged (`gh pr list --state merged --search "#<child>"`
+  shows the merged PR); a child closed as not planned or by hand, with no merged PR, keeps the
+  parent ineligible and is reported. `sub_issues_summary` counts closures, so it is the human
+  rollup, not the trigger. Eligibility is a state, not only an event: at run start, any parent
+  already eligible (children merged in an earlier run or externally) gets its check before
+  Wave 1. Parent closure is gated on the lead-run QA pass over the merged children, not on
+  `Closes #N` in any single PR. That
   check runs outside `spawn_verifier.py` and adds no per-parent freeze: the run-level contract,
   its freeze, the custody chokepoint, and the completion gate are unchanged. The lead re-reads
   the parent's acceptance criteria, checks each against merged `$BASE_BRANCH`, posts the

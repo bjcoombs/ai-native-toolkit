@@ -101,7 +101,7 @@ Never run source-of-truth write commands as parallel background jobs — concurr
 
 Enumerate work units via the adapter's **enumerate** operation.
 
-**Verification units.** An adapter may mark some enumerated units as a `verification unit` (a decomposed parent whose children are the real work units, e.g. a GitHub issue with sub-issues). Never spawn an implementing teammate for a verification unit and never place it in a wave. It becomes eligible only when its last child merges. The lead then runs the parent's acceptance check itself, as a lead-run step over the merged children, outside the custody chokepoint: it does not go through `spawn_verifier.py`, adds no freeze, and does not replace the run-level contract verification gate in Completion. The adapter's rule decides how the parent closes.
+**Verification units.** An adapter may mark some enumerated units as a `verification unit` (a decomposed parent whose children are the real work units, e.g. a GitHub issue with sub-issues). Never spawn an implementing teammate for a verification unit and never place it in a wave. Its children enter the run only through the adapter's own enumerate filter, never by expansion from the parent. It becomes eligible only when its last child merges, a state the adapter defines; check it at enumerate time too, so a parent whose children all merged before this run is verified before Wave 1 rather than never. The lead then runs the parent's acceptance check itself, as a lead-run step over the merged children, outside the custody chokepoint: it does not go through `spawn_verifier.py`, adds no freeze, and does not replace the run-level contract verification gate in Completion. The adapter's rule decides how the parent closes.
 
 **Analyze dependency tree for maximum concurrency:**
 
@@ -436,7 +436,7 @@ strength of the earlier REVIEW_CLEAR alone.
 1. Report to user
 2. Confirm the teammate is already down — you stood it down at REVIEW_CLEAR; this is a confirm-pane-dead check, not a second shutdown, and is **not** gated on the merge. The verified-`MERGED` gate below guards *cleanup* (step 3 onward), not the shutdown.
 3. Mark internal task completed
-4. Check for newly unblocked tasks. If this merge completed the last child of a verification unit, run that parent's lead-run acceptance check now and close or report it per the adapter.
+4. Check for newly unblocked tasks. If this merge made a verification unit eligible (its last child merged, per the adapter's rule), run that parent's lead-run acceptance check now and close or report it per the adapter.
 5. **Wave transition**: Batch-dismiss stale CRs across all eligible PRs before spawning next wave. Review signals from completed wave, adapt next prompts with learnings.
 6. Check ready tasks via the adapter's enumerate operation filtered to `pending` status. Spawn fresh teammates for ready tasks.
 7. If all done → [Completion](#completion--retrospective)
