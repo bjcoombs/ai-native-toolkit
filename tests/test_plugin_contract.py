@@ -27,7 +27,9 @@ PLACEHOLDER_RE = re.compile(r"\b(TODO|TBD|FIXME)\b")
 FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
 # No trailing \b: bash reads $1x and $10 as $1 followed by text.
 BARE_POSITIONAL_RE = re.compile(r"\$[1-9]")
-FENCE_OPEN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+# Any indent: substitution ignores markdown structure, so a fence nested in a
+# list item is corrupted the same way.
+FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
 INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 USE_SKILL_RE = re.compile(r"[Uu]se the ([a-z0-9][a-z0-9-]*) skill")
@@ -147,7 +149,7 @@ def test_no_placeholder_tokens(p):
 
 
 def fenced_blocks(text):
-    """Yield (start line, body) per fenced block, CommonMark-style: a closer
+    """Yield (start line, body) per fenced block at any indent: a closer
     uses the opener's character, is at least as long, and has nothing after it
     but whitespace, so a ``` inside a ```` fence stays part of the body. An
     unclosed fence runs to the end of the file."""
@@ -181,7 +183,10 @@ def test_no_bare_positional_in_fences(p):
     # Claude Code substitutes the invocation's arguments into bare $1..$9
     # before the model reads the text, whatever the fence's language, so a
     # shell function or awk field reference runs with argument words in place
-    # of its parameters. Brace form (${1}) is left alone.
+    # of its parameters. Brace form (${1}) is left alone. Commands are exempt:
+    # there $1..$9 is the documented per-argument placeholder, used on purpose.
+    if p.name != "SKILL.md":
+        pytest.skip("commands use $1..$9 as intended argument placeholders")
     for start, block in fenced_blocks(p.read_text(encoding="utf-8")):
         m = BARE_POSITIONAL_RE.search(block)
         assert not m, (
