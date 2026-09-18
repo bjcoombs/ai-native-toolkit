@@ -116,6 +116,54 @@ def test_no_published_tag_with_action_keeps_running_and_warns(tmp_path, monkeypa
     assert "unverified" in capsys.readouterr().err.lower()
 
 
+def test_happy_path_skips_tag_listing(tmp_path, monkeypatch, running):
+    # The running tag ships action.yml: one gh call, no git ls-remote round trip.
+    calls: list[str] = []
+    fake = _fake_remote([f"v{RUNNING}"], {f"v{RUNNING}"})
+
+    def run(cmd):
+        calls.append(cmd[0])
+        return fake(cmd)
+
+    monkeypatch.setattr(emit, "_run", run)
+    assert main([str(tmp_path), "--branch", "main", "--tools", "lizard"]) == 0
+    assert _pins(_workflow(tmp_path)) == {RUNNING}
+    assert calls == ["gh"]
+
+
+def test_gh_failing_mid_walk_pins_published_tag(tmp_path, monkeypatch, running, capsys):
+    # gh answers the running tag with a definite 404, then degrades (a secondary
+    # rate limit): the newest published release after action.yml shipped is
+    # pinned, never the running tag gh just said does not exist.
+    gh_calls = 0
+    tags = ["v1.41.0", "v1.57.0", "v1.58.2"]
+    fake = _fake_remote(tags, set())
+
+    def run(cmd):
+        nonlocal gh_calls
+        if cmd[0] == "gh":
+            gh_calls += 1
+            if gh_calls > 1:
+                return 1, "", "gh: You have exceeded a secondary rate limit (HTTP 403)"
+        return fake(cmd)
+
+    monkeypatch.setattr(emit, "_run", run)
+    assert main([str(tmp_path), "--branch", "main", "--tools", "lizard"]) == 0
+    assert _pins(_workflow(tmp_path)) == {"1.58.2"}
+    assert "v1.58.2" in capsys.readouterr().err
+
+
+def test_unknown_running_version_without_fallback_refuses(tmp_path, monkeypatch, capsys):
+    # No readable plugin.json and no published tag: a guessed ref (vlatest) can
+    # never resolve, so nothing is written and the exit code is non-zero.
+    monkeypatch.setattr(emit, "_running_version", lambda: None)
+    monkeypatch.setattr(emit, "_run", _fake_remote(None, set(), gh_up=False))
+    assert main([str(tmp_path), "--branch", "main", "--tools", "lizard"]) == 1
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
+    err = capsys.readouterr().err
+    assert "version is unknown" in err and "--version" in err
+
+
 def test_running_version_reads_plugin_json():
     root = Path(emit.__file__).resolve().parents[3]
     expected = json.loads((root / ".claude-plugin" / "plugin.json").read_text())["version"]
