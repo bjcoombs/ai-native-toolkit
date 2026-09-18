@@ -329,7 +329,13 @@ ts-prune for TS, staticcheck for Go) to a *capability-driven detect-or-propose* 
 proven on one capability (liveness) in one build system (Maven). Reports each capability
 in one of four states - `served`, `offer` (with a run-or-install `consent` shape),
 `credited` (a configured pom.xml plugin already serves it), or `honest_degrade` (nothing
-serves it yet; the report names the capability and a candidate tool). Imported by
+serves it yet; the report names the capability and a candidate tool). A build file
+counts only when at least one `.java`, `.kt` or `.scala` file exists outside
+platform-wrapper directories: an `android/` beside a `pubspec.yaml`, or beside a
+`package.json` whose `dependencies` or `devDependencies` name `react-native`,
+`@capacitor/android` or `cordova-android`, at any depth. Build files and source under
+a wrapper are both skipped, in one `os.walk` that also prunes the shared excludes, so a
+Flutter app never reads as Gradle while a real JVM service beside it still does. Imported by
 `liveness_scan.py`, never by the orchestrator - it is an inward dependency of the
 liveness tier.
 

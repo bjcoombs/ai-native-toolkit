@@ -8,7 +8,10 @@ for the real Helidon repo CI cannot reach.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+import pytest
 
 from lib.jvm_capabilities import (
     count_used_undeclared,
@@ -87,6 +90,7 @@ def test_detect_gradle(tmp_path: Path) -> None:
 def test_maven_wins_over_gradle_when_both_present(tmp_path: Path) -> None:
     _write(tmp_path, "pom.xml", "<project/>")
     _write(tmp_path, "build.gradle", "plugins {}")
+    _write(tmp_path, "src/main/java/A.java", "class A {}")
     system, _ = detect_build_system(tmp_path)
     assert system == "maven"
 
@@ -104,6 +108,92 @@ def test_fixture_pom_excluded_when_under_tests_fixtures(tmp_path: Path) -> None:
     _write(tmp_path, "tests/fixtures/sample/pom.xml", "<project/>")
     system, _ = detect_build_system(tmp_path)
     assert system is None
+
+
+# ── JVM source threshold and platform wrappers ──────────────────────────────
+
+def _flutter_app(root: Path, prefix: str = "") -> None:
+    _write(root, f"{prefix}pubspec.yaml", "name: demo")
+    _write(root, f"{prefix}lib/main.dart", "void main() {}")
+    _write(root, f"{prefix}android/build.gradle.kts", "plugins {}")
+    _write(root, f"{prefix}android/app/build.gradle.kts", "plugins {}")
+    _write(root, f"{prefix}android/app/src/main/kotlin/MainActivity.kt",
+           "class MainActivity")
+
+
+def test_requires_jvm_source_pom_alone_is_not_maven(tmp_path: Path) -> None:
+    _write(tmp_path, "pom.xml", "<project/>")
+    assert detect_build_system(tmp_path) == (None, [])
+
+
+def test_requires_jvm_source_one_file_meets_threshold(tmp_path: Path) -> None:
+    _write(tmp_path, "build.gradle", "plugins {}")
+    _write(tmp_path, "src/main/scala/App.scala", "object App")
+    assert detect_build_system(tmp_path) == ("gradle", ["build.gradle"])
+
+
+def test_requires_jvm_source_outside_wrapper_not_inside(tmp_path: Path) -> None:
+    # A root build file does not make a JVM codebase when the only JVM source
+    # sits inside the Flutter wrapper.
+    _flutter_app(tmp_path)
+    _write(tmp_path, "build.gradle", "plugins {}")
+    assert detect_build_system(tmp_path) == (None, [])
+
+
+def test_platform_wrapper_flutter_android_is_not_jvm(tmp_path: Path) -> None:
+    _flutter_app(tmp_path)
+    assert detect_build_system(tmp_path) == (None, [])
+    assert scan_jvm_capabilities(tmp_path, mvn_on_path=False) == {
+        "available": False, "build_system": None, "build_files": []}
+
+
+def test_platform_wrapper_nested_flutter_app_is_not_jvm(tmp_path: Path) -> None:
+    _flutter_app(tmp_path, "apps/shop/")
+    assert detect_build_system(tmp_path) == (None, [])
+
+
+@pytest.mark.parametrize("section, package", [
+    ("dependencies", "react-native"),
+    ("dependencies", "@capacitor/android"),
+    ("devDependencies", "cordova-android"),
+])
+def test_platform_wrapper_package_json_android_is_not_jvm(
+        tmp_path: Path, section: str, package: str) -> None:
+    _write(tmp_path, "package.json", json.dumps({section: {package: "1.0.0"}}))
+    _write(tmp_path, "android/build.gradle", "buildscript {}")
+    _write(tmp_path, "android/app/src/main/java/MainActivity.java",
+           "class MainActivity {}")
+    assert detect_build_system(tmp_path) == (None, [])
+
+
+def test_platform_wrapper_package_json_without_wrapper_dep_counts(
+        tmp_path: Path) -> None:
+    # A package.json that names no wrapper dependency leaves android/ counted.
+    _write(tmp_path, "package.json", json.dumps({"dependencies": {"left-pad": "1"}}))
+    _write(tmp_path, "android/build.gradle", "buildscript {}")
+    _write(tmp_path, "android/app/src/main/java/MainActivity.java",
+           "class MainActivity {}")
+    assert detect_build_system(tmp_path) == ("gradle", ["android/build.gradle"])
+
+
+def test_platform_wrapper_does_not_hide_backend_jvm_source(tmp_path: Path) -> None:
+    _flutter_app(tmp_path, "mobile/")
+    _write(tmp_path, "backend/build.gradle.kts", "plugins {}")
+    _write(tmp_path, "backend/src/main/kotlin/demo/App.kt", "fun main() {}")
+    result = scan_jvm_capabilities(tmp_path, mvn_on_path=False)
+    assert result["build_system"] == "gradle"
+    assert result["build_files"] == ["backend/build.gradle.kts"]
+    assert {k: v["state"] for k, v in result["capabilities"].items()} == {
+        c: "honest_degrade" for c in
+        ("liveness", "module_graph", "linting", "modernization")}
+
+
+def test_platform_wrapper_scan_liveness_has_no_java_tool(tmp_path: Path) -> None:
+    _flutter_app(tmp_path)
+    result = scan_liveness(tmp_path, run_dead_code=False)
+    assert "jvm_capabilities" not in result
+    assert not [t for t in result["dead_code"]["tools"]
+                if t.get("language") == "java"]
 
 
 # ── plugin crediting ───────────────────────────────────────────────────────
