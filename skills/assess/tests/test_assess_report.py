@@ -181,6 +181,30 @@ def test_exclusion_disclosure_empty_without_excludes() -> None:
     ) == ""
 
 
+def test_archive_paths_excluded_disclosed_in_report() -> None:
+    """Archive paths left out of attention are named under the keyhole summary."""
+    disclosure = render_exclusion_disclosure({
+        "excluded_as_archive": {
+            "affected_finding_paths": ["docs/archive/PLAN.md"], "count": 1,
+        }
+    })
+    assert disclosure == (
+        "_1 archived path left out of the attention list: docs/archive/PLAN.md._"
+    )
+    both = render_exclusion_disclosure({
+        "excluded_by_config": {"dirs": ["vendor"], "patterns": [], "count": 1},
+        "excluded_as_archive": {"affected_finding_paths": ["a/attic/x.py", "b/archive/y.py"],
+                                "count": 2},
+    })
+    assert both.split("\n\n") == [
+        "_1 finding suppressed by config excludes (dirs: vendor; patterns: none)._",
+        "_2 archived paths left out of the attention list: a/attic/x.py, b/archive/y.py._",
+    ]
+    assert render_exclusion_disclosure(
+        {"excluded_as_archive": {"affected_finding_paths": [], "count": 0}}
+    ) == ""
+
+
 def test_report_includes_exclusion_disclosure() -> None:
     ctx = _full_ctx()
     ctx["excluded_by_config"] = {

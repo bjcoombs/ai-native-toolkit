@@ -375,8 +375,8 @@ churn) stays below a threshold - growth with almost no deletion pressure, the
 fingerprint of pure append-only accretion rather than ordinary maintenance. A
 multi-commit gate drops single-touch rename artifacts; binary files (numstat
 `-`) are skipped, and documentation files (`DOC_SUFFIXES`: `.md`, `.markdown`, `.mdx`,
-`.rst`, `.txt`, `.adoc`) are never flagged, since an appended-to document carries no change
-risk. Compensates the *Accretion* contributor tendency named in the
+`.rst`, `.adoc`; not `.txt`, which covers `CMakeLists.txt` and `requirements.txt`) are never
+flagged, since an appended-to document carries no change risk. Compensates the *Accretion* contributor tendency named in the
 repo north star. Degrades to `available: False` on git failure and
 `reliable: False` on degenerate history (same verdict as `git_churn`). Reuses
 `git_churn`'s `GIT_TIMEOUT_SECONDS` and `churn_is_degenerate`; imports no

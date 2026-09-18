@@ -717,7 +717,9 @@ def test_accretion_skips_documentation_every_doc_suffix() -> None:
     hist = _FileHistory(additions=900, deletions=0, commit_count=3,
                         first_time=0, last_time=86_400,
                         net_sequence=[300, 600, 900])
-    for path in ("a.md", "b.MD", "c.markdown", "d.mdx", "e.rst", "f.txt", "g.adoc"):
+    for path in ("a.md", "b.MD", "c.markdown", "d.mdx", "e.rst", "g.adoc"):
         assert _build_accretion_file(path, hist, DELETION_FRACTION_THRESHOLD) is None
-    for path in ("a.py", "b.dart", "c.js", "Makefile"):
+    # .txt is not documentation here: build logic and manifests accrete for real.
+    for path in ("a.py", "b.dart", "c.js", "Makefile", "CMakeLists.txt",
+                 "requirements.txt"):
         assert _build_accretion_file(path, hist, DELETION_FRACTION_THRESHOLD) is not None

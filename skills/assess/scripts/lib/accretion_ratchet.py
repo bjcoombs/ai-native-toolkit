@@ -73,7 +73,9 @@ MIN_COMMITS_FOR_ACCRETION = 3
 # markdown, so a long document lands in the top size band on LOC alone. Matched
 # case-insensitively on the final suffix. Filtered by extension rather than by the
 # stats row's ``source``: scc-only languages (Dart) have no lizard row either.
-DOC_SUFFIXES = frozenset({".md", ".markdown", ".mdx", ".rst", ".txt", ".adoc"})
+# ``.txt`` is deliberately absent: it covers CMakeLists.txt (build logic) and
+# requirements.txt (a manifest whose growth is a real accretion signal).
+DOC_SUFFIXES = frozenset({".md", ".markdown", ".mdx", ".rst", ".adoc"})
 
 # Average days per month for the time-span readout (Gregorian mean).
 DAYS_PER_MONTH = 30.44
