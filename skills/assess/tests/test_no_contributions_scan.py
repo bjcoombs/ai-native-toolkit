@@ -47,10 +47,17 @@ def _run_scan(repo_root: Path, var: str = "NO_CONTRIBUTIONS") -> str:
         ({"README.md": "# App\nWe cannot accept contributions.\n"}, "1"),
         ({"README.md": "# App\nSorry, we can't accept pull requests.\n"}, "1"),
         ({"README.md": "# App\nThe team is unable to accept external contributions.\n"}, "1"),
+        ({"README.md": "# App\nWe don\u2019t accept pull requests.\n"}, "1"),
+        ({"README.md": "# App\nThis project does not accept unsolicited pull requests.\n"}, "1"),
+        ({"CONTRIBUTING.md": "Please do not open a pull request without first opening an issue.\n"}, "0"),
+        ({"CONTRIBUTING.md": "Do not submit a PR until all tests pass locally.\n"}, "0"),
+        ({"CONTRIBUTING.md": "Please don't open a PR directly against main.\n"}, "0"),
+        ({"CONTRIBUTING.md": "PRs are not accepted without a linked issue.\n"}, "0"),
         ({}, "0"),
     ],
     ids=["readme", "contributing", "welcome", "not-accepting-prs", "prs-not-accepted",
-         "prs-welcome", "cannot", "cant", "unable-to", "no-docs"],
+         "prs-welcome", "cannot", "cant", "unable-to", "curly-apostrophe", "unsolicited",
+         "cond-without", "cond-until", "cond-directly", "cond-accepted-without", "no-docs"],
 )
 def test_scan_sets_no_contributions(tmp_path: Path, files: dict[str, str], expected: str) -> None:
     for name, body in files.items():
@@ -76,6 +83,40 @@ def test_push_capable_user_is_told_about_the_statement() -> None:
     step5 = text.split("## Step 5", 1)[1].split("## Step 6", 1)[0]
     direct = next(line for line in step5.splitlines() if line.startswith("- `CAN_PUSH=1`"))
     assert "NO_CONTRIBUTIONS=1" in direct and "NO_CONTRIBUTIONS_SOURCE" in direct
+
+
+def _step5() -> str:
+    text = ASSESS_PR_SKILL.read_text(encoding="utf-8")
+    return text.split("## Step 5", 1)[1].split("## Step 6", 1)[0]
+
+
+def test_no_contributions_offer_needs_a_github_permission() -> None:
+    # CAN_PUSH is 0 both for READ/TRIAGE and when gh returned nothing; only the
+    # former can fork, so the no-contributions bullet must name the permission.
+    bullet = next(line for line in _step5().splitlines()
+                  if line.startswith("- `CAN_PUSH=0`") and "NO_CONTRIBUTIONS=1" in line)
+    assert "`READ` / `TRIAGE`" in bullet
+    no_remote = next(line for line in _step5().splitlines() if "`$PUSH_INFO` empty" in line)
+    assert "every PR offer" in no_remote
+
+
+def test_pr_body_template_is_shared_by_every_flow() -> None:
+    step5 = _step5()
+    flows = [m.start() for m in re.finditer(r"If the user \*\*selected the PR offer\*\*", step5)]
+    assert len(flows) == 3
+    footer = step5.index("plugin reference at the bottom")
+    assert footer > flows[-1]
+    footer_line = step5[: footer].rsplit("\n", 1)[1]
+    assert not re.match(r"\s*\d+\.", footer_line), "template must not be a step of one flow"
+    for name in ("direct", "fork", "no-contributions"):
+        assert name in step5[step5.rfind("\n", 0, footer) : step5.index("\n", footer)]
+
+
+def test_each_flow_numbers_its_steps_once() -> None:
+    step5 = _step5()
+    for block in re.split(r"If the user \*\*selected the PR offer\*\*", step5)[1:]:
+        numbers = [int(n) for n in re.findall(r"^(\d+)\. ", block.split("\n\n", 1)[0], re.M)]
+        assert numbers == list(range(1, len(numbers) + 1)), numbers
 
 
 def test_scan_sits_in_step_5_before_the_offer_text() -> None:

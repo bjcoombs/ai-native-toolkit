@@ -91,10 +91,13 @@ Then check whether the target turns away outside contributions. A fork PR agains
 NO_CONTRIBUTIONS=0
 NO_CONTRIBUTIONS_SOURCE=""
 NO_CONTRIBUTIONS_STATEMENT=""
-_nc_re="(does not|do not|doesn't|don't|not|can't|unable to) accept(ing)? (any |outside |external )?(contributions|pull requests|prs)|(do not|don't|please don't) (send|open|submit) (a |any |us )?(pull requests?|prs?)([^a-z]|$)|(pull requests|contributions|prs) (are|will) not (be )?accepted"
+_nc_re="(not|n't|n’t|unable to) accept(ing)? (any |outside |external |unsolicited |third-party )?(contributions|pull requests|prs)|(not|n't|n’t) (send|open|submit) (a |any |us )?(pull requests?|prs?)([^a-z]|$)|(pull requests|contributions|prs) (are|will) not (be )?accepted"
+# A qualifier right after the noun ("without an issue", "until tests pass",
+# "directly against main") is a house rule for contributors, not a refusal.
+_nc_cond="(pull requests?|prs?|contributions|accepted) (without|until|unless|before|directly|against|that|which)"
 for _nc_doc in "$REPO_ROOT/README.md" "$REPO_ROOT/CONTRIBUTING.md" "$REPO_ROOT/.github/CONTRIBUTING.md"; do
   [ -f "$_nc_doc" ] || continue
-  _nc_line=$(grep -Ei -e "$_nc_re" "$_nc_doc" | head -n 1)
+  _nc_line=$(grep -Ei -e "$_nc_re" "$_nc_doc" | grep -Eiv -e "$_nc_cond" | head -n 1)
   if [ -n "$_nc_line" ]; then
     NO_CONTRIBUTIONS=1
     NO_CONTRIBUTIONS_SOURCE=${_nc_doc#"$REPO_ROOT"/}
@@ -109,8 +112,8 @@ Interpret the result:
 
 - `CAN_PUSH=1` (viewerPermission is `WRITE` / `MAINTAIN` / `ADMIN`, or the remote is a push-eligible fork): offer the direct PR flow below. This holds even when `NO_CONTRIBUTIONS=1`: a user with push access maintains the repo, so the statement addresses outsiders, not them, and GitHub will not fork a repo into the account that owns it. Still quote `$NO_CONTRIBUTIONS_STATEMENT` and name `$NO_CONTRIBUTIONS_SOURCE` beside the offer so the maintainer decides knowingly.
 - `CAN_PUSH=0`, viewerPermission is `READ` / `TRIAGE`, and `NO_CONTRIBUTIONS=0`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
-- `CAN_PUSH=0` and `NO_CONTRIBUTIONS=1`: the target says it takes no contributions, so never offer a PR against `<owner>/<repo>`. Quote `$NO_CONTRIBUTIONS_STATEMENT` and name `$NO_CONTRIBUTIONS_SOURCE`, then offer the no-contributions flow instead: "open the PR inside your fork, against the fork's default branch, and share the link?" Pair it with the Actions hint (see the flow below).
-- `gh` unavailable / not a GitHub remote / not authenticated (`$PUSH_INFO` empty): skip both PR offers entirely and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
+- `CAN_PUSH=0`, viewerPermission is `READ` / `TRIAGE`, and `NO_CONTRIBUTIONS=1`: the target says it takes no contributions, so never offer a PR against `<owner>/<repo>`. Quote `$NO_CONTRIBUTIONS_STATEMENT` and name `$NO_CONTRIBUTIONS_SOURCE`, then offer the no-contributions flow instead: "open the PR inside your fork, against the fork's default branch, and share the link?" Pair it with the Actions hint (see the flow below).
+- `gh` unavailable / not a GitHub remote / not authenticated (`$PUSH_INFO` empty), whatever `NO_CONTRIBUTIONS` says: skip every PR offer (direct, fork, and no-contributions) and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
 
 If `$REDIRECT_NOTICE` is non-empty, output it verbatim on its own line before the batched Phase 2 question.
 
@@ -127,11 +130,12 @@ If the user **selected the PR offer** (fork flow, `CAN_PUSH=0` on the upstream, 
 3. Commit message, PR title, and body are unchanged from the direct flow.
 
 If the user **selected the PR offer** (no-contributions flow, `CAN_PUSH=0` and `NO_CONTRIBUTIONS=1`): the PR stays inside your fork; nothing is opened against upstream.
-1. Fork and push exactly as steps 1-2 of the fork flow, but open the PR against the fork's default branch: `FORK_BRANCH=$(gh repo view <fork-owner>/<repo> --json defaultBranchRef | jq -r '.defaultBranchRef.name')`, then `gh pr create --repo <fork-owner>/<repo> --base "$FORK_BRANCH" --head <branch>`.
+1. Fork and push exactly as steps 1-2 of the fork flow (fork creation is asynchronous: if `gh repo view <fork-owner>/<repo>` fails straight after `gh repo fork`, retry it a few times, a few seconds apart, before giving up), but open the PR against the fork's default branch: `FORK_BRANCH=$(gh repo view <fork-owner>/<repo> --json defaultBranchRef | jq -r '.defaultBranchRef.name')`, then `gh pr create --repo <fork-owner>/<repo> --base "$FORK_BRANCH" --head <branch>`.
 2. Share the link: print the fork PR's URL so the user can pass it on to whoever wants the assessment.
-3. Suggest disabling Actions on the fork: a fork inherits the upstream workflows, so the PR can start CI runs billed to the user's account. Offer the command, never run it unasked: `gh api -X PUT repos/<fork-owner>/<repo>/actions/permissions -F enabled=false`.
+3. Suggest disabling Actions on the fork: the fork carries the upstream's workflow files, so if the user ever enables Actions there, this PR and later pushes would start CI runs the fork's owner pays for on a private fork or self-hosted runners. Disabling them up front keeps the fork an inert place to share the report. Offer the command, never run it unasked: `gh api -X PUT repos/<fork-owner>/<repo>/actions/permissions -F enabled=false`.
 4. Commit message, PR title, and body are unchanged from the direct flow.
-4. **PR body must include the plugin reference at the bottom** so reviewers can install the tool that generated the report. Use this body template:
+
+**Every flow (direct, fork, and no-contributions): the PR body must include the plugin reference at the bottom** so reviewers can install the tool that generated the report. Use this body template:
 
    ```markdown
    ## Summary
