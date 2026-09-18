@@ -39,10 +39,13 @@ _HEADER_MARKERS = re.compile(
 # A generator declaration is always a comment, so the marker line must open
 # with a comment leader: # // -- /* <!-- ; % {- (* or a docstring quote. A bare
 # `*` counts only when indented (a JSDoc / block-comment continuation), so a
-# Markdown bullet at column 0 is not read as a comment.
+# Markdown bullet at column 0 is not read as a comment. In Markdown, `#` opens
+# a heading (prose), so only `<!--` counts there.
 _COMMENT_LEADER = re.compile(
     r"""^(\s*(#|//|--|/\*|<!--|;|%|\{-|\(\*|"{3}|'{3})|\s+\*)"""
 )
+_MARKDOWN_COMMENT_LEADER = re.compile(r"^\s*<!--")
+_MARKDOWN_SUFFIXES = {".md", ".mdx", ".markdown"}
 
 # Bytes the long-line check averages over. The cap bounds IO and memory on
 # large files; the average only has to separate payloads (~20,000 characters
@@ -51,8 +54,11 @@ _LONG_LINE_READ_BYTES = 1024 * 1024
 
 # Average characters per line above which a file is a payload, not source.
 # Calibrated against real files: a Playwright HTML report averages ~16,000 and
-# a base64 font module ~20,000, while a JSONL fixture averages 296 and a
-# hand-built HTML explainer page 3,817. 1,000 sits between the two groups.
+# a base64 font module ~20,000; a JSONL fixture averages 296 and stays scored.
+# A hand-built HTML explainer page with inline data (this repository's
+# docs/huddle-explainer/visualization.html, ~3,800) is excluded on purpose:
+# its bulk is the embedded payload, not code a reader maintains line by line.
+# The threshold is kept above 296 and at or below that page's average.
 LONG_LINE_THRESHOLD = 1000
 
 REASON_HEADER = "generated-header"
@@ -67,9 +73,13 @@ def has_generated_header(path: Path, lines: int = HEADER_SNIFF_LINES) -> bool:
             head = fh.read(_HEADER_READ_BYTES)
     except OSError:
         return False
-    text = head.decode("utf-8", errors="ignore")
+    # A UTF-8 BOM (routine in .NET / PowerShell codegen) would defeat the
+    # line-start anchor, so strip it before matching.
+    text = head.decode("utf-8", errors="ignore").removeprefix("\ufeff")
+    leader = (_MARKDOWN_COMMENT_LEADER
+              if path.suffix.lower() in _MARKDOWN_SUFFIXES else _COMMENT_LEADER)
     return any(
-        _COMMENT_LEADER.match(line) is not None
+        leader.match(line) is not None
         and _HEADER_MARKERS.search(line) is not None
         for line in text.splitlines()[:lines]
     )
