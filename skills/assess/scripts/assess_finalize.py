@@ -127,19 +127,21 @@ def _validate_no_earlier_same_date_placeholders(assess_dir: Path, target: int | 
     if day is None:
         return
     for content in entries[:target]:
+        stale_id = log_entry_run_id(content)
+        # An entry written before run-id stamps existed cannot be addressed by
+        # --drop-entry, so refusing on it would block finalize for good; such an
+        # entry keeps the pre-#355 treatment (left in place as history).
+        if stale_id is None:
+            continue
         if log_entry_date(content) == day and log_entry_is_unfinalized(content):
             heading = next(
                 (ln for ln in content.splitlines() if ln.startswith("## ")), "?"
             )
-            stale_id = log_entry_run_id(content)
-            remedy = (
-                f"drop it with: assess_finalize.py <repo_root> --drop-entry {stale_id}"
-                if stale_id else "it carries no run id stamp, so it cannot be dropped by id"
-            )
             raise FinalizeValidationError(
                 f"log.md entry run_id={stale_id} ({heading}) for {day} still "
                 "carries unfilled placeholders; an earlier same-date run was "
-                f"never finalized. Its run-context is gone, so {remedy}, then "
+                "never finalized. Its run-context is gone, so drop it with: "
+                f"assess_finalize.py <repo_root> --drop-entry {stale_id}, then "
                 "re-run finalize. Deleting it by hand breaks the log chain."
             )
 

@@ -251,3 +251,25 @@ def test_drop_entry_refuses_span_holding_pre_chain_history(repo: Path) -> None:
     with pytest.raises(FinalizeValidationError, match="before the integrity chain"):
         drop_unfinalized_entry(assess_dir=assess_dir, run_id=first["run_id"])
     assert (assess_dir / "log.md").read_text(encoding="utf-8") == before
+
+
+def test_earlier_same_date_placeholder_without_run_id_does_not_block_finalize(repo: Path) -> None:
+    """An unstamped earlier entry cannot be dropped by id; refusing on it would
+    leave finalize with no way out, so it stays as history and finalize fills
+    this run's entry."""
+    from lib.wiki_writer import LogEntry, append_log_entry
+
+    assess_dir = repo / ".assess"
+    append_log_entry(assess_dir, LogEntry(
+        run_date=DAY, files_scored=1, readiness_score=0.0,
+        maturity_label=LOG_PLACEHOLDER, instructions_grade=None,
+        graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
+        top_action="Deterministic ranker not yet wired (LLM picks Top 3)",
+    ))
+    ctx = _run(repo)
+    _stage_finalize(assess_dir, ctx["run_id"])
+    finalize_run(assess_dir=assess_dir)
+    log = (assess_dir / "log.md").read_text(encoding="utf-8")
+    assert log.count(LOG_PLACEHOLDER) == 1
+    assert "fixture action" in log
+    assert verify_log_chain(assess_dir) == (True, None)
