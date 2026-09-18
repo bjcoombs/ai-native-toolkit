@@ -262,7 +262,7 @@ This offer only makes sense when the repo can actually run the workflow. Apply t
 
 If the user **did not select** the CI-gate offer: skip. The deterministic report and findings already shipped in `.assess/`.
 
-If the user **selected** it, emit the workflow. The generator bakes in the plugin version this run used (read from `run-context.json`) and the discovered toolchain, so the frozen core matches the snapshot you just produced:
+If the user **selected** it, emit the workflow. The generator pins the running plugin's version (never the one recorded in the target's `.assess/` files, which can be months old) and bakes in the discovered toolchain, so the frozen core matches the snapshot you just produced:
 
 ````bash
 <!-- chat-skip:start -->
@@ -277,7 +277,7 @@ uv run "$SKILL_DIR/scripts/assess_emit_workflow.py" "$REPO_ROOT"
 
 This writes `.github/workflows/assess-gate.yml` (relative to the repo root). The script auto-detects the default branch and the discovered tools; override with `--branch <name>` or `--tools lizard,scc,...` when the run found a different toolchain (e.g. a per-language dead-code tool).
 
-**Heads-up on the toolkit version pin.** The emitted workflow clones `ai-native-toolkit` at the tag `v<version>` matching this run. That tag must exist upstream before the first gated PR runs - it is published by the marathon's release step, so a workflow emitted in the same minute the version was bumped has nothing to fetch until the release lands. Until then the fetch step skips the assessment with a notice instead of failing the PR - infra failures (a missing tag, a rate limit, a network blip) never red the check. The workflow's supply chain is pinned end to end: actions ride commit SHAs and tools exact releases, so the snapshot stays reproducible run over run. A repo running a fork of the toolkit must edit the clone URL in the generated workflow.
+**Heads-up on the toolkit version pin.** The emitted workflow runs the toolkit's action through one `uses: bjcoombs/ai-native-toolkit@v<version>` line, and the header comment names the same version. An unresolvable `uses:` reference fails the job at setup, before any step of the action runs, so the generator checks the pin before writing it: `git ls-remote --tags` lists the published tags and `gh api` confirms the tag ships `action.yml`. When the running version's tag is not published yet (releases are cut once per batch of merges, so this is the common case), it pins the newest published tag that ships `action.yml` and prints which tag it chose and why. With no network it pins the running version and prints a warning naming the unverified tag - relay that line to the user and have them confirm the tag before committing. Past setup, infra failures (a tool install, a rate limit, a network blip) degrade to a skip notice inside the action and never red the check. The workflow's supply chain is pinned end to end: actions ride commit SHAs and tools exact releases, so the snapshot stays reproducible run over run. A repo running a fork of the toolkit must edit the `uses:` line in the generated workflow.
 
 **Tell the user about the gate config.** The emitted workflow runs `assess_gate.py`, which reads the optional `[gate]` section of `.assess/config.toml` (relative to the repo root) and is **warn-only by default** - it reports every finding but fails nothing until the repo opts in. The gate has two kinds of check: **floors** (absolute, on the current snapshot) and a **regression** check (cross-run, against the prior committed snapshot). Point them at the knobs:
 
