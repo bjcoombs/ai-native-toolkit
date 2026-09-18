@@ -417,6 +417,25 @@ fixture-tested. Also exposes `maturity_band`
 single source of truth `assess_finalize` reconciles the LLM's `maturity_label`
 against. Both producers accept an optional `run_id` provenance stamp.
 
+**`evidence_check.py`**
+Deterministic re-check of the evidence a layer verdict cites (issue #360). The
+scorer is a model and can cite a file that is not there or a wiring that does not
+exist; `evidence_check` re-checks each cited fact with `exists()` or a literal
+substring search, no model. Input is a flat array of entries, each with `layer`,
+`kind` and the kind's arguments: `path_exists` / `path_absent` take `path`;
+`referenced_in` / `not_referenced_in` take `needle` and `path` (one file, or a
+directory searched recursively); `file_contains` takes `path` (one file) and
+`needle`. Every `path` is relative to the repository root; one that resolves
+outside it is rejected. `check_evidence` splits the list into `evidence` (verified,
+returned as given) and `evidence_rejected` (copies carrying a `reason`); unknown
+keys pass through. The reference search is the public
+`is_referenced_in(repo_root, needle, path)`, so a check outside this module can
+reuse it. CLI, run from `skills/assess/scripts`:
+`uv run python -m lib.evidence_check <repo_root> <evidence.json> --json <out.json>`
+(exit 0 all verified, 1 any rejected, 2 malformed input). Stdlib only, imports no
+orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kind
+or change to a check rule.
+
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
 CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts and
