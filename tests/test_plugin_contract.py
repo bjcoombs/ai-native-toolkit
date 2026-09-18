@@ -24,7 +24,6 @@ EXTERNAL_SKILLS = {
 BUILTIN_AGENTS = {"general-purpose", "Explore", "Plan", "statusline-setup"}
 
 PLACEHOLDER_RE = re.compile(r"\b(TODO|TBD|FIXME)\b")
-FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
 # No trailing \b: bash reads $1x and $10 as $1 followed by text.
 BARE_POSITIONAL_RE = re.compile(r"\$[1-9]")
 # Any indent: substitution ignores markdown structure, so a fence nested in a
@@ -142,40 +141,55 @@ def test_skill_has_trigger_clause(d):
     assert fm and "TRIGGER" in fm, f"{d.name}: description must include a TRIGGER clause"
 
 
-@pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
-def test_no_placeholder_tokens(p):
-    body = INLINE_CODE_RE.sub("", FENCE_RE.sub("", p.read_text(encoding="utf-8")))
-    assert not PLACEHOLDER_RE.search(body), f"{p.relative_to(REPO)}: placeholder token outside code fence"
-
-
-def fenced_blocks(text):
-    """Yield (start line, body) per fenced block at any indent: a closer
-    uses the opener's character, is at least as long, and has nothing after it
-    but whitespace, so a ``` inside a ```` fence stays part of the body. An
-    unclosed fence runs to the end of the file."""
-    lines = text.splitlines()
+def _fence_spans(lines):
+    """Yield (opener index, closer index) per fenced block at any indent: a
+    closer uses the opener's character, is at least as long, and has nothing
+    after it but whitespace, so a ``` inside a ```` fence stays part of the
+    body. An unclosed fence runs to the end of the file (closer = len)."""
     i = 0
     while i < len(lines):
         m = FENCE_OPEN_RE.match(lines[i])
         if not m or (m.group(1)[0] == "`" and "`" in lines[i][m.end():]):
             i += 1
             continue
-        marker, start, body = m.group(1), i + 1, []
+        marker, opener = m.group(1), i
         i += 1
         while i < len(lines):
             c = FENCE_OPEN_RE.match(lines[i])
             if (c and c.group(1)[0] == marker[0] and len(c.group(1)) >= len(marker)
                     and not lines[i][c.end():].strip()):
                 break
-            body.append(lines[i])
             i += 1
+        yield opener, i
         i += 1
-        yield start, "\n".join(body)
+
+
+def fenced_blocks(text):
+    """Yield (1-based opener line, body) per fenced block."""
+    lines = text.splitlines()
+    for opener, closer in _fence_spans(lines):
+        yield opener + 1, "\n".join(lines[opener + 1:closer])
+
+
+def strip_fences(text):
+    """The text with every fenced block, fence lines included, removed."""
+    lines = text.splitlines()
+    fenced = set()
+    for opener, closer in _fence_spans(lines):
+        fenced.update(range(opener, closer + 1))
+    return "\n".join(l for i, l in enumerate(lines) if i not in fenced)
+
+
+@pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
+def test_no_placeholder_tokens(p):
+    body = INLINE_CODE_RE.sub("", strip_fences(p.read_text(encoding="utf-8")))
+    assert not PLACEHOLDER_RE.search(body), f"{p.relative_to(REPO)}: placeholder token outside code fence"
 
 
 def test_fenced_blocks_parser():
     text = "a\n````bash\n```\nx $1\n```\n````\n~~~\ny\n~~~\n```\nz\n"
     assert list(fenced_blocks(text)) == [(2, "```\nx $1\n```"), (7, "y"), (10, "z")]
+    assert strip_fences(text) == "a"
 
 
 @pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
