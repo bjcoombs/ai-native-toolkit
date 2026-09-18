@@ -846,3 +846,74 @@ def test_write_stats_stamps_run_id_and_schema_version(treemap, tmp_path):
     out2 = root / "stats2.json"
     treemap.write_stats([(f, 100, 5.0, "lizard")], None, None, root, out2)
     assert json.loads(out2.read_text())["run_id"] != run_id
+
+
+# --- generated-file exclusion (header sniff, long lines, filename globs) -----
+
+@pytest.mark.parametrize("name", [
+    "types.generated.ts", "schema.generated.sql", "client.gen.ts",
+    "database.types.ts",
+])
+def test_generated_header_free_filename_globs_are_filtered(treemap, name):
+    assert treemap._is_build_artifact(Path("src") / name) is True
+
+
+def _fake_scorers(treemap, monkeypatch, paths):
+    monkeypatch.setattr(
+        treemap, "lizard_scores",
+        lambda root, **kw: {p: (10, 3.0, [3.0]) for p in paths},
+    )
+    monkeypatch.setattr(treemap, "scc_scores", lambda root, **kw: {})
+
+
+def test_collect_drops_generated_header_and_long_line_files(
+        treemap, tmp_path, monkeypatch):
+    root = tmp_path
+    (root / "db").mkdir()
+    (root / "src").mkdir()
+    schema = root / "db" / "schema.sql"
+    schema.write_text("-- GENERATED FILE - DO NOT EDIT\nCREATE TABLE t (id int);\n")
+    font = root / "src" / "font.ts"
+    font.write_text('export const F = "' + "A" * 40000 + '";\n')
+    hand = root / "src" / "hand.py"
+    hand.write_text("def f():\n    return 1\n" + "# x\n" * 196
+                    + "# do not edit the table above\n")
+    _fake_scorers(treemap, monkeypatch, [schema, font, hand])
+
+    excluded: list[dict] = []
+    files, *_rest, fn_ccn = treemap.collect(
+        root, by="complexity", excluded_generated=excluded)
+    assert [f[0] for f in files] == [hand]
+    assert set(fn_ccn) == {hand}
+    assert excluded == [
+        {"path": "db/schema.sql", "reason": "generated-header"},
+        {"path": "src/font.ts", "reason": "long-lines"},
+    ]
+
+
+def test_collect_include_artifacts_keeps_generated_header_files(
+        treemap, tmp_path, monkeypatch):
+    schema = tmp_path / "schema.sql"
+    schema.write_text("-- @generated\nCREATE TABLE t (id int);\n")
+    _fake_scorers(treemap, monkeypatch, [schema])
+    excluded: list[dict] = []
+    files, *_ = treemap.collect(tmp_path, by="complexity",
+                                include_artifacts=True,
+                                excluded_generated=excluded)
+    assert [f[0] for f in files] == [schema]
+    assert excluded == []
+
+
+def test_write_stats_carries_generated_header_exclusions(treemap, tmp_path):
+    root = tmp_path
+    f = root / "a.py"
+    f.write_text("x = 1\n")
+    out = root / "stats.json"
+    listed = [{"path": "db/schema.sql", "reason": "generated-header"}]
+    treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, root, out,
+                        excluded_generated=listed)
+    stats = json.loads(out.read_text())
+    assert stats["excluded_generated"] == listed
+    assert isinstance(stats["schema_version"], int) and stats["schema_version"] > 1
+    treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, root, out)
+    assert json.loads(out.read_text())["excluded_generated"] == []

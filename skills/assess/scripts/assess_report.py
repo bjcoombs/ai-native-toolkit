@@ -166,6 +166,25 @@ def render_exclusion_disclosure(ctx: dict) -> str:
     )
 
 
+def render_generated_disclosure(ctx: dict) -> str:
+    """Name each file the treemap excluded as generated, with its reason.
+
+    One line per file (``- `path` (reason)``) under a count line, or ``""`` when
+    ``excluded_generated`` is empty or absent, so a run with nothing excluded
+    renders exactly as before.
+    """
+    rows = [
+        r for r in (ctx.get("excluded_generated") or [])
+        if isinstance(r, dict) and r.get("path") and r.get("reason")
+    ]
+    if not rows:
+        return ""
+    noun = "file" if len(rows) == 1 else "files"
+    lines = [f"_{len(rows)} {noun} excluded from scoring as generated:_"]
+    lines.extend(f"- `{r['path']}` ({r['reason']})" for r in rows)
+    return "\n".join(lines)
+
+
 def render_findings_section(ctx: dict) -> str:
     """Return the pre-rendered cross-layer findings section, verbatim.
 
@@ -406,6 +425,9 @@ def render_report(ctx: dict, repo_name: str) -> str:
     disclosure = render_exclusion_disclosure(ctx)
     if disclosure:
         keyhole_summary = f"{keyhole_summary}\n\n{disclosure}"
+    generated = render_generated_disclosure(ctx)
+    if generated:
+        keyhole_summary = f"{keyhole_summary}\n\n{generated}"
     report = REPORT_TEMPLATE.substitute(
         repo_name=repo_name,
         run_date=ctx.get("run_date", "unknown"),

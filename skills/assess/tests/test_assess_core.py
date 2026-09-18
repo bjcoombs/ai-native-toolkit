@@ -2009,3 +2009,36 @@ def test_mutation_run_requires_parsed_mutants_for_cap_lift() -> None:
     assert real["applies"] is False
     assert real["max_layer6_band"] == "Present"
     assert real["annotation"] is None
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Generated-file disclosure (excluded_generated pass-through)
+# ════════════════════════════════════════════════════════════════════════════
+
+def test_excluded_generated_header_list_copied_from_stats(git_repo) -> None:
+    """The treemap's excluded_generated list reaches run-context.json unchanged,
+    with malformed rows dropped."""
+    repo, commit = git_repo
+    assess = repo / ".assess"
+    assess.mkdir()
+    rows = [{"path": "db/schema.sql", "reason": "generated-header"}]
+    (assess / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+        "excluded_generated": rows + [{"path": "x"}, "junk"],
+    }))
+    (repo / "README.md").write_text("# Repo\n")
+    commit("init")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["excluded_generated"] == rows
+
+
+def test_excluded_generated_header_list_empty_for_old_stats(git_repo) -> None:
+    repo, commit = git_repo
+    (repo / ".assess").mkdir()
+    _write_min_stats(repo / ".assess")
+    (repo / "README.md").write_text("# Repo\n")
+    commit("init")
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["excluded_generated"] == []

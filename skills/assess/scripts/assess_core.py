@@ -547,6 +547,25 @@ def _write_badge(
 MAX_ACCRETION_FILES = 12
 
 
+def _excluded_generated(complexity_stats: dict) -> list[dict[str, str]]:
+    """The stats file's ``excluded_generated`` list, keeping well-formed rows.
+
+    Each row is ``{"path", "reason"}`` with non-empty strings; anything else
+    (an older stats file without the key, a malformed row) is dropped, so the
+    run-context key is always a list.
+    """
+    rows = complexity_stats.get("excluded_generated")
+    if not isinstance(rows, list):
+        return []
+    return [
+        {"path": r["path"], "reason": r["reason"]}
+        for r in rows
+        if isinstance(r, dict)
+        and isinstance(r.get("path"), str) and r["path"]
+        and isinstance(r.get("reason"), str) and r["reason"]
+    ]
+
+
 def _top_band_paths(complexity_stats: dict) -> set[str]:
     """Paths already in the top complexity/size band of this run's stats.
 
@@ -1400,6 +1419,11 @@ def build_run_context(
         "affected_finding_paths": excluded_finding_paths,
         "count": len(excluded_finding_paths),
     }
+    # Generated-file disclosure: the treemap drops files that declare
+    # themselves generated (header marker) or carry payload-length lines, and
+    # lists them in the stats file. Copied through so the report and gate name
+    # each one with its reason rather than letting it vanish from the ranking.
+    ctx["excluded_generated"] = _excluded_generated(current)
 
     # Structure drift (third write-side tendency surface: a declared ownership
     # map that no longer matches where the code lives). Tier 0 is the cheap
