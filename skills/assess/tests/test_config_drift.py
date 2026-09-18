@@ -324,3 +324,32 @@ def test_untracked_snapshot_is_ignored(world) -> None:
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps(_ruleset(False)))
     assert find_snapshots(world.root) == []
+
+
+def test_key_omitted_live_is_absent_not_null() -> None:
+    tracked = {"required_status_checks": {"strict": True},
+               "required_pull_request_reviews": {"required_approving_review_count": 1}}
+    live = {"required_status_checks": {"strict": True}}
+    assert diff_values(tracked, live) == [("required_pull_request_reviews", "present", "absent")]
+    assert diff_values({"a": {"b": False}}, {"a": {}}) == [("a.b", False, "absent")]
+    assert diff_values({"a": None}, {"a": None}) == []
+
+
+def test_ruleset_list_excludes_inherited_rulesets(world) -> None:
+    world.track(".github/rulesets/main.json", _ruleset(False))
+    world.serve("rulesets.json", [{"id": 7, "name": "main"}])
+    world.serve("ruleset.json", _ruleset(False))
+    scan_config_drift(world.root)
+    listing = [c for c in world.calls() if "rulesets" in c and "rulesets/" not in c]
+    assert listing and all("includes_parents=false" in c for c in listing)
+
+
+def test_json_without_a_snapshot_key_is_not_parsed(world, monkeypatch) -> None:
+    import lib.config_drift as cd
+
+    world.track("data/big.json", {"items": list(range(100))})
+    parsed: list[str] = []
+    real = cd.json.loads
+    monkeypatch.setattr(cd.json, "loads", lambda t: parsed.append(t) or real(t))
+    assert find_snapshots(world.root) == []
+    assert parsed == []

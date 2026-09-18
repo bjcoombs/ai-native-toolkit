@@ -25,9 +25,13 @@ Ids, timestamps and links are never reported. Lists are sets, not sequences:
 scalar lists compare sorted, and lists of objects pair items by identity
 (``type``, ``context``, ``actor_type``/``actor_id``, ``name``) in both
 directions, so an item added or dropped live is drift and a reorder is not. An
-item present on one side only is recorded as ``"present"`` / ``"absent"``, never
-as the live object, so live org configuration does not land in the committed
-wiki. A missing live ruleset, an unprotected branch and a branch that no longer
+item present on one side only - and a snapshot key the live response omits (the
+protection read drops ``required_pull_request_reviews`` once reviews are turned
+off) - is recorded as ``"present"`` / ``"absent"``, never as the live object, so
+live org configuration does not land in the committed wiki. The item's identity
+does travel in the ``key`` (``bypass_actors[Team:4821]``); that much is needed
+to say which item moved. Repository-level snapshots are matched only against
+repository-level rulesets (``includes_parents=false``). A missing live ruleset, an unprotected branch and a branch that no longer
 exists are drift entries, not outages.
 
 Block: ``{"available", "entries": [{"file", "key", "tracked", "live"}],
@@ -62,11 +66,21 @@ MAX_SNAPSHOT_BYTES = 1_000_000
 _BRANCH_FROM_URL = re.compile(r"/branches/(?P<branch>.+)/protection/?$")
 
 
+# A snapshot must name one of these keys; a file whose text holds none of them
+# is skipped without a JSON parse, so a repo with many tracked JSON files pays
+# a substring probe per file, not a parse.
+_PROBE_KEYS = ('"rules"', '"required_status_checks"', '"enforce_admins"',
+               '"required_pull_request_reviews"')
+
+
 def _load_json(path: Path) -> Any:
     try:
         if path.stat().st_size > MAX_SNAPSHOT_BYTES:
             return None
-        return json.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        if not any(k in text for k in _PROBE_KEYS):
+            return None
+        return json.loads(text)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
 
@@ -135,7 +149,13 @@ def diff_values(tracked: Any, live: Any, key: str = "") -> list[tuple[str, Any, 
             if k in IGNORED_KEYS:
                 continue
             sub = f"{key}.{k}" if key else k
-            out += diff_values(tracked[k], live.get(k), sub)
+            if k not in live:
+                # The live response omits the key entirely (e.g. a requirement
+                # switched off): removed, not "compared against null".
+                gone = "present" if isinstance(tracked[k], (dict, list)) else tracked[k]
+                out.append((sub, gone, "absent"))
+                continue
+            out += diff_values(tracked[k], live[k], sub)
         return out
     if isinstance(tracked, list) and isinstance(live, list):
         return _diff_lists(tracked, live, key)
@@ -246,7 +266,14 @@ def scan_config_drift(repo_root: Path) -> dict[str, Any]:
         for snap in snapshots:
             if snap["kind"] == "ruleset":
                 if summaries is None:
-                    got = gh_api(f"repos/{repo.slug}/rulesets?per_page=100")
+                    # Repository-level rulesets only: an inherited org ruleset
+                    # is not what a repo snapshot mirrors, and its id does not
+                    # resolve on the repo-scoped detail endpoint. 100 is the
+                    # API's page maximum and a deliberate ceiling - a repo with
+                    # more rulesets of its own than that is out of scope.
+                    got = gh_api(
+                        f"repos/{repo.slug}/rulesets?per_page=100&includes_parents=false"
+                    )
                     summaries = [s for s in got if isinstance(s, dict)] if isinstance(got, list) else []
                 found = _live_ruleset(repo.slug, snap["doc"], summaries)
                 name = snap["doc"].get("name") or snap["doc"].get("id")

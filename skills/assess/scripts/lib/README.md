@@ -392,8 +392,12 @@ else the file stem). The diff is snapshot-driven (keys only the API returns are
 not drift), ignores ids, timestamps and links, and folds the `{"enabled": X}` read
 shape into `X`. Lists are sets: scalar lists compare sorted; object lists pair by
 identity (`type`, `context`, `actor_type:actor_id`, `name`) in both directions, and a
-one-sided item is recorded as `"present"`/`"absent"`, never as the live object, so
-live org configuration stays out of the committed wiki. A missing live ruleset, an
+one-sided item, or a snapshot key the live response omits, is recorded as
+`"present"`/`"absent"`, never as the live object, so live org configuration stays
+out of the committed wiki (the item's identity does travel in `key`). Live rulesets
+are listed with `includes_parents=false`, so a repo snapshot never pairs with an
+inherited org ruleset. Tracked JSON holding none of the snapshot keys is skipped by
+a substring probe before any parse. A missing live ruleset, an
 unprotected branch and a deleted branch are drift entries, not outages. Emits
 `config_drift: {available, entries: [{file, key, tracked, live}], snapshots}`;
 with no snapshots it calls nothing and reports `entries: []`. Any refused or
