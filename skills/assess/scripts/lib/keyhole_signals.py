@@ -447,9 +447,10 @@ def apply_config_excludes(
     return filtered, sorted(dropped)
 
 
-# A path under a directory with one of these names (case-insensitive) is kept
-# out of attention ranking: archived material is finished, so a finding on it is
-# never the first place to look. The finding itself still names the path.
+# A path with any component of one of these names (case-insensitive) is kept out
+# of attention ranking: archived material is finished, so a finding on it is
+# never the first place to look. The final component counts too, so a directory
+# finding on `tools/archive` itself is excluded. The finding still names the path.
 ARCHIVE_DIR_NAMES = frozenset({"archive", "archived", "attic"})
 
 
