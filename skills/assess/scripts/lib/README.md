@@ -361,6 +361,34 @@ rule (an uncommitted settings file reaches no clone). Deliberately excludes
 two layers never double-count. Pure stdlib JSON/filesystem reads plus
 `git_churn.tracked_files`.
 
+**`gh_cli.py`**
+The one way the core reaches GitHub, shared by every scan that reads live
+platform state. Runs the `gh` binary on `PATH` as a subprocess (no direct HTTP,
+no token read, JSON parsed in Python, never `--jq`/`--template`). Order of work:
+`resolve_github_remote` (pure git; `origin`, else the sole remote; github.com
+only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
+`gh_json(args)` calls. Every failure raises `GhUnavailable` with a reason that
+`unavailable()` turns into `{"available": False, "reason"}`: `no_remote`,
+`gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403), `not_found`
+(HTTP 404), `gh_timeout`, `gh_error`, `gh_bad_json`. A scan must degrade on it,
+never report a clean result. Tests fake `gh` with a script first on `PATH`
+(`tests/test_config_drift.py`).
+
+**`config_drift.py`**
+Layer 5 lying signal: tracked GitHub configuration snapshots diffed against the
+live setting via `gh_cli`. Snapshots are `.github/rulesets/*.json` or any tracked
+JSON with a top-level `rules` array of `type` entries (matched to a live ruleset
+by `id`, else `name`), and classic branch-protection exports - tracked JSON under
+`.github/` with `required_status_checks`, `enforce_admins` or
+`required_pull_request_reviews` at the top level (branch from the export's `url`,
+else the file stem). The diff is snapshot-driven (keys only the API returns are
+not drift), ignores ids, timestamps and links, compares rules by `type` in both
+directions, and folds the `{"enabled": X}` read shape into `X`. Emits
+`config_drift: {available, entries: [{file, key, tracked, live}], snapshots}`;
+with no snapshots it calls nothing and reports `entries: []`. Any refused or
+failed read degrades the whole block, never a partial clean result. Add a case
+in `tests/test_config_drift.py` alongside any change to discovery or the diff.
+
 **`accretion_ratchet.py`**
 Write-side accretion instrument: detects files that only ever grow. Walks each
 file's full numstat history in author-time order (one `git log --no-merges

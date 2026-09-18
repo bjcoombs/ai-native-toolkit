@@ -55,6 +55,7 @@ from lib.badge import (
     write_badge,
 )
 from lib.assess_config import load_excludes, load_structure_config
+from lib.config_drift import scan_config_drift
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
 from lib.interactivity import build_offers_block
@@ -1352,6 +1353,12 @@ def build_run_context(
     # excludes .claude/agents/ and .claude/skills/ (Layer 0's evidence) so the
     # two layers never double-count the same artifact.
     ctx["agent_ops"] = _safe("agent_ops", lambda: scan_agent_ops(repo_root))
+
+    # Configuration drift (Layer 5 lying signal): tracked ruleset and
+    # branch-protection snapshots diffed against the live GitHub setting via
+    # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
+    # available: false with the reason, never a clean result.
+    ctx["config_drift"] = _safe("config_drift", lambda: scan_config_drift(repo_root))
 
     # Accretion ratchet (write-side tendency: files that only ever grow). The
     # scan measured every file above; here it is filtered to files already in the
