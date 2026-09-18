@@ -365,7 +365,8 @@ def pin_changes(diff_text: str) -> list[tuple[str, str, str]] | None:
     ``<commit> <version comment>``. Every changed line must be a pin, and every
     action must carry as many removed pins as added ones: an action added,
     dropped or swapped for another changes what the workflow runs, so it is
-    not a pin-only change.
+    not a pin-only change.  A diff whose pins all keep their commit (a
+    reorder or re-indent) bumps nothing and is not one either.
     """
     removed: dict[str, list[str]] = {}
     added: dict[str, list[str]] = {}
@@ -395,9 +396,10 @@ def pin_changes(diff_text: str) -> list[tuple[str, str, str]] | None:
         if len(olds) != len(news):
             return None
         for old, new in zip(olds, news):
-            if (action, old, new) not in changes:
+            # An unchanged pin is a moved or re-indented line, not a bump.
+            if old != new and (action, old, new) not in changes:
                 changes.append((action, old, new))
-    return changes
+    return changes or None
 
 
 def render_signoff_summary(

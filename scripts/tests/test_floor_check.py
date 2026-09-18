@@ -1094,3 +1094,18 @@ def test_signoff_summary_counts_the_other_changed_paths(signoff_repo, capsys):
     assert "nothing else changed" not in out
     action = _line_with(out, "astral-sh/setup-uv")
     assert action is not None and f"`{_OLD_PIN} v10.0.1`" in action
+
+
+def test_signoff_summary_reordered_pins_are_not_pin_only(signoff_repo, capsys):
+    # Moving or re-indenting `uses:` lines with unchanged commits produces a
+    # balanced -/+ pair per action; with no commit changed it is not a bump.
+    second = f"      - uses: actions/cache@{_NEW_PIN}  # v5.0.0\n"
+    (signoff_repo / _WORKFLOW).write_text(_workflow_text() + second, encoding="utf-8")
+    _commit_all(signoff_repo, "two pins at base")
+    first = f"      - uses: astral-sh/setup-uv@{_OLD_PIN}  # v10.0.1\n"
+    (signoff_repo / _WORKFLOW).write_text(
+        _workflow_text().replace(first, second + first), encoding="utf-8"
+    )
+    _commit_all(signoff_repo, "swap the two steps")
+
+    assert "pin-only" not in _summary(capsys).lower()

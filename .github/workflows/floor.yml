@@ -232,7 +232,19 @@ jobs:
           BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
           echo "merge-base: ${BASE_SHA}"
           SUMMARY="${RUNNER_TEMP}/floor-signoff-summary.md"
-          python scripts/floor_check.py signoff-summary \
+          # Render with the BASE copy of the script: the head copy is floor
+          # core this pull request may itself change, and the approver should
+          # not read an account of a change written by that change. The head
+          # copy runs only when the base predates the subcommand.
+          RENDERER="${RUNNER_TEMP}/floor_check_base.py"
+          if git show "${BASE_SHA}:scripts/floor_check.py" > "${RENDERER}" 2> /dev/null \
+              && python "${RENDERER}" signoff-summary --help > /dev/null 2>&1; then
+            echo "Rendering with scripts/floor_check.py at the base ${BASE_SHA}."
+          else
+            RENDERER="scripts/floor_check.py"
+            echo "::warning::The base ${BASE_SHA} has no signoff-summary subcommand, so the pull request's own scripts/floor_check.py renders the explanation."
+          fi
+          python "${RENDERER}" signoff-summary \
             --base "${BASE_SHA}" --head-commit "${HEAD_COMMIT}" > "${SUMMARY}"
           cat "${SUMMARY}"
           cat "${SUMMARY}" >> "$GITHUB_STEP_SUMMARY"
