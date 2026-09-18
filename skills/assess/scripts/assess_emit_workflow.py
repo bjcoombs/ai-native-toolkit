@@ -180,8 +180,9 @@ def _path_filters(repo_root: Path, paths: list[str], paths_ignore: list[str]) ->
     globs = ", ".join(DEFAULT_PATHS_IGNORE)
     print(
         f"Applied the default paths-ignore ({globs}): {source.relative_to(repo_root)} "
-        "already filters pull requests by path, so docs-only and .assess/-only PRs skip "
-        "the gate too. Pass --paths or --paths-ignore to override.",
+        "already filters by path, so docs-only and .assess/-only PRs skip the gate, and "
+        "doc-truth findings (lying_map, orphaned_understanding) no longer gate them. "
+        "Pass --paths or --paths-ignore to override.",
         file=sys.stderr,
     )
     return [], list(DEFAULT_PATHS_IGNORE)

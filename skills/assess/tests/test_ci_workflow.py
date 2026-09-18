@@ -182,6 +182,11 @@ def test_render_paths_flag_repeatable_keeps_order():
     assert _pull_request(out) == {"branches": ["main"], "paths": ["src/**", "lib/**", "it's/**"]}
 
 
+def test_render_rejects_paths_with_paths_ignore():
+    with pytest.raises(ValueError):
+        render_ci_workflow(plugin_version="1.23.0", paths=["src/**"], paths_ignore=["**/*.md"])
+
+
 def test_render_without_path_filters_is_unchanged():
     out = render_ci_workflow(plugin_version="1.23.0")
     assert "paths" not in out

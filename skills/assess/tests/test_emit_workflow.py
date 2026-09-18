@@ -185,6 +185,7 @@ def test_path_filter_default_applied(tmp_path, capsys, body):
     notice = [line for line in capsys.readouterr().err.splitlines() if _NOTICE in line]
     assert len(notice) == 1
     assert "**/*.md" in notice[0] and ".assess/" in notice[0] and "ci.yml" in notice[0]
+    assert "lying_map" in notice[0]  # names what the default stops gating
 
 
 def test_path_filter_default_not_applied_without_filtered_workflow(tmp_path, capsys):

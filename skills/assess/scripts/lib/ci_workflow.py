@@ -90,8 +90,11 @@ def _render_tool_steps(discovered_tools: list[str]) -> str:
 
 
 # The ignore list written when neither --paths nor --paths-ignore is given and an
-# existing workflow already filters on paths: docs-only and /assess-output-only
-# PRs skip the gate the same way they skip the repo's other path-filtered checks.
+# existing workflow already filters on paths (under any event): docs-only PRs skip
+# the gate the way they skip the repo's other path-filtered checks, and a PR that
+# only refreshes the committed .assess/ snapshot does not gate against itself.
+# The cost: doc-truth findings (lying_map, orphaned_understanding) no longer gate
+# docs-only PRs, so the CLI's notice says so.
 DEFAULT_PATHS_IGNORE = ["**/*.md", ".assess/**"]
 
 # A ``paths:`` / ``paths-ignore:`` key on any line, or a dorny/paths-filter step.
@@ -120,7 +123,7 @@ def _render_path_filters(paths: list[str] | None, paths_ignore: list[str] | None
 
 
 def find_path_filtered_workflow(repo_root: Path) -> Path | None:
-    """The first existing workflow that filters pull requests by path, else None.
+    """The first existing workflow that filters by path (under any event), else None.
 
     Scans ``.github/workflows/*.yml`` and ``*.yaml`` in name order, skipping the
     gate's own ``assess-gate.yml`` so a regenerated gate never detects its own
@@ -155,8 +158,12 @@ def render_ci_workflow(
 
     Pure: no disk writes. ``discovered_tools`` are the binaries this run found
     (e.g. ``["lizard", "scc"]``); only the external ones get an install step.
-    ``paths`` / ``paths-ignore`` become lists under ``on.pull_request``.
+    ``paths`` / ``paths-ignore`` become lists under ``on.pull_request``. Passing
+    both raises ``ValueError``: GitHub rejects the two on one event, and the gate
+    would then never run.
     """
+    if paths and paths_ignore:
+        raise ValueError("paths and paths_ignore cannot both be set on one pull_request trigger")
     template = Template(_TEMPLATE_PATH.read_text(encoding="utf-8"))
     return template.substitute(
         plugin_version=plugin_version,
