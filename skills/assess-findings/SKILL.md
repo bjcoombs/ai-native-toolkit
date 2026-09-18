@@ -159,7 +159,7 @@ Then the table, one row per entry, mapping the raw `.test_focus.entries` values 
 | `<path>` | High/Medium/Low | <test_signal label> | <suggested_action label> |
 
 - **Risk** ← `risk_band`: `high` → High, `medium` → Medium, `low` → Low.
-- **Test Signal** ← `test_signal`: `no_covering_test` → "No covering test", `covered_but_hollow` → "Covered but hollow", `unknown_no_coverage` → "Unknown (no coverage)", `unsupported` → "Unsupported (no report, no test file found)", `sibling_test_only` → "Test file present, coverage unmeasured".
+- **Test Signal** ← `test_signal`: `no_covering_test` → "No covering test", `covered_but_hollow` → "Covered but hollow", `unknown_no_coverage` → "Unknown (no coverage)", `unsupported` → "Unsupported (no report; no sibling or parallel-tree test found)", `sibling_test_only` → "Test file present, coverage unmeasured".
 - **Suggested Action** ← `suggested_action`: `add_tests` → "Add tests", `strengthen_assertions` → "Strengthen assertions", `measure_coverage` → "Measure coverage".
 
 **Cross-reference, don't duplicate.** This table surfaces the **cheap** signals - risk band, coverage presence, and the hollow-test heuristics. The **expensive** confirmation lives elsewhere and is referenced, not repeated: the `untrusted_hotspot` finding confirms which files mutation testing proved hollow, and the Layer 6 green-but-hollow row in the Lying Signals table pairs a file's coverage against its mutation score. A file flagged `covered_but_hollow` here and confirmed by `untrusted_hotspot` there is the same file seen through the cheap then the expensive lens - so point at the finding, don't restate it.

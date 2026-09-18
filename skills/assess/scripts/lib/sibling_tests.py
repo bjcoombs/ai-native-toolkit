@@ -17,19 +17,36 @@ Layers, narrowest first:
   mirror tree is out of its scope by definition.
 - :func:`sibling_test_match` - co-location, then a ``tests/`` / ``test/`` /
   ``spec/`` tree at any ancestor mirroring the source path (``MATCH_DIRECT``),
+  then a conventionally named test anywhere in the repository that shares a
+  directory with the source (``MATCH_BASENAME``: parallel trees such as
+  ``app/unit-tests/`` or Dart's ``test/unit/`` that do not mirror the path),
   then a bounded flat tree holding the bare name (``MATCH_FLAT``, weaker).
 - :func:`has_sibling_test` - the yes/no/unknown verdict the hotspot page and the
   focus signal both read, with a flat-only match dropped for a bare name that
   more than one hot file shares (:func:`shared_name_keys`).
 
-Inward-only: stdlib only, imports no orchestrator. File I/O is existence checks
-(``is_file`` / ``is_dir``) bounded by :data:`MAX_ANCESTOR_LEVELS`. Never raises.
+The basename tier reads a :class:`TestIndex` of the repository's files, built
+once per run by :func:`build_test_index` (``git ls-files`` when the root is a
+git repository, a pruned walk otherwise; built-in excluded trees such as
+``node_modules`` and ``tests/fixtures`` skipped). A test found this way belongs
+to the same-named source whose directory shares the deepest common ancestor
+with it; a tie across sources (two ``index.js`` equally close) credits none, and
+a common ancestor of only the repository root credits nothing.
+
+Inward-only: stdlib plus ``lib.git_churn`` / ``lib.doc_graph``, imports no
+orchestrator. Beyond the index, file I/O is existence checks (``is_file`` /
+``is_dir``) bounded by :data:`MAX_ANCESTOR_LEVELS`. Never raises.
 """
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from lib.doc_graph import EXCLUDE_DIRS, is_excluded_path
+from lib.git_churn import tracked_files
 
 # Test-file name builders keyed off a source file's stem + suffix (``.ext``
 # including the dot, or empty). A cheap precision heuristic, not a build graph.
@@ -59,8 +76,25 @@ MAX_ANCESTOR_LEVELS = 16
 # relationship: a root ``tests/test_mod.py`` would credit every ``mod.py``.
 MAX_FLAT_BELOW = 2
 
+# Bound on the files a non-git walk indexes; past it the index stops growing
+# (a missed parallel test degrades to ``unsupported``, never a false credit).
+MAX_INDEX_FILES = 200_000
+
 MATCH_DIRECT = "direct"  # co-located, mirrored, or the file is itself a test
+MATCH_BASENAME = "basename"  # a same-named test elsewhere, closest source wins
 MATCH_FLAT = "flat"  # only a bounded flat tree held the bare name
+
+
+@dataclass(frozen=True)
+class TestIndex:
+    """The repository's files split for the basename tier: test files keyed by
+    file name, other files keyed by :func:`name_key`, each value the directory
+    parts of every repo-relative path carrying that name."""
+
+    __test__ = False  # not a pytest class, despite the name
+
+    tests_by_name: dict[str, list[tuple[str, ...]]] = field(default_factory=dict)
+    sources_by_key: dict[str, list[tuple[str, ...]]] = field(default_factory=dict)
 
 
 def sibling_test_names(name: str) -> list[str]:
@@ -97,6 +131,78 @@ def shared_name_keys(paths: Iterable[str]) -> frozenset[str]:
         key = name_key(path)
         counts[key] = counts.get(key, 0) + 1
     return frozenset(k for k, n in counts.items() if n > 1)
+
+
+def _repo_files(repo_root: Path) -> list[Path]:
+    """Repo-relative file paths: the git-tracked files under ``repo_root`` when
+    it is in a git repository, else a walk pruned of :data:`EXCLUDE_DIRS` and
+    capped at :data:`MAX_INDEX_FILES`."""
+    root = repo_root.resolve()
+    tracked = tracked_files(root)
+    if tracked is not None:
+        out: list[Path] = []
+        for path in tracked:
+            try:
+                out.append(path.relative_to(root))
+            except ValueError:
+                continue  # tracked, but outside the assessed root
+        return out
+    walked: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS)
+        rel_dir = Path(dirpath).relative_to(root)
+        for name in sorted(filenames):
+            walked.append(rel_dir / name)
+            if len(walked) >= MAX_INDEX_FILES:
+                return walked
+    return walked
+
+
+def build_test_index(repo_root: Path) -> TestIndex:
+    """Index the repository once for the basename tier. An empty index when the
+    root cannot be read. Never raises."""
+    index = TestIndex()
+    try:
+        files = _repo_files(Path(repo_root))
+    except (OSError, ValueError):
+        return index
+    for rel in files:
+        if is_excluded_path(rel):
+            continue
+        dirs = rel.parts[:-1]
+        if is_test_path(rel.as_posix()):
+            index.tests_by_name.setdefault(rel.name, []).append(dirs)
+        else:
+            index.sources_by_key.setdefault(name_key(rel.as_posix()), []).append(dirs)
+    return index
+
+
+def _common_depth(a: tuple[str, ...], b: tuple[str, ...]) -> int:
+    depth = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        depth += 1
+    return depth
+
+
+def _basename_match(index: TestIndex, rel_path: str) -> bool:
+    """True when some conventionally named test in the index belongs to this
+    source: they share at least one directory, and no other same-named source
+    shares as deep a common ancestor with that test."""
+    src_dirs = Path(rel_path).parts[:-1]
+    peers = list(index.sources_by_key.get(name_key(rel_path), []))
+    if src_dirs not in peers:
+        peers.append(src_dirs)  # an untracked source still competes for its test
+    for name in sibling_test_names(Path(rel_path).name):
+        for test_dirs in index.tests_by_name.get(name, []):
+            depth = _common_depth(src_dirs, test_dirs)
+            if depth == 0:
+                continue  # only the root in common: no path relationship
+            rivals = sum(1 for p in peers if _common_depth(p, test_dirs) >= depth)
+            if rivals == 1:  # this source alone is the closest
+                return True
+    return False
 
 
 def find_colocated_test(repo_root: Path, rel_path: str) -> Path | None:
@@ -146,14 +252,19 @@ def _tree_dirs_for(rel_dir: Path) -> list[tuple[Path, bool]]:
     return [(d, flat) for d, flat in dirs.items() if d not in adjacent]
 
 
-def sibling_test_match(repo_root: Path, rel_path: str) -> str | None:
+def sibling_test_match(
+    repo_root: Path, rel_path: str, index: TestIndex | None = None,
+) -> str | None:
     """How a conventionally named test for ``rel_path`` was found, or ``None``.
 
     ``MATCH_DIRECT``: the file is itself a test, a test is co-located, or a test
-    tree at an ancestor mirrors the source path. ``MATCH_FLAT``: only a bounded
-    flat tree holds a builder name - weaker evidence the caller disambiguates
-    with :func:`shared_name_keys`. A source not on disk (a stale stats entry for
-    a deleted file) is never credited. Never raises."""
+    tree at an ancestor mirrors the source path. ``MATCH_BASENAME``: a test in
+    the repository index (``index``, built here when not passed) shares a
+    directory with the source and no same-named source sits closer to it.
+    ``MATCH_FLAT``: only a bounded flat tree holds a builder name - weaker
+    evidence the caller disambiguates with :func:`shared_name_keys`. A source
+    not on disk (a stale stats entry for a deleted file) is never credited.
+    Never raises."""
     try:
         source = repo_root / rel_path
         if not source.is_file():
@@ -177,6 +288,10 @@ def sibling_test_match(repo_root: Path, rel_path: str) -> str | None:
                 if not is_flat:
                     return MATCH_DIRECT
                 flat_hit = True
+        if index is None:
+            index = build_test_index(repo_root)
+        if _basename_match(index, Path(rel_path).as_posix()):
+            return MATCH_BASENAME
         return MATCH_FLAT if flat_hit else None
     except (OSError, ValueError):
         return None
@@ -184,16 +299,18 @@ def sibling_test_match(repo_root: Path, rel_path: str) -> str | None:
 
 def has_sibling_test(
     repo_root: Path, rel_path: str, shared_names: frozenset[str] = frozenset(),
+    index: TestIndex | None = None,
 ) -> bool | None:
     """Does this file have a test file? ``None`` when the file is not on disk
-    (honestly unknown), ``True`` for a direct match or a flat match on a name no
-    other considered file shares, otherwise ``False``."""
+    (honestly unknown), ``True`` for a direct or basename match or a flat match
+    on a name no other considered file shares, otherwise ``False``. Callers
+    probing several files pass one ``index`` from :func:`build_test_index`."""
     try:
         if not (repo_root / rel_path).is_file():
             return None
     except (OSError, ValueError):
         return None
-    match = sibling_test_match(repo_root, rel_path)
-    if match == MATCH_DIRECT:
+    match = sibling_test_match(repo_root, rel_path, index)
+    if match in (MATCH_DIRECT, MATCH_BASENAME):
         return True
     return match == MATCH_FLAT and name_key(rel_path) not in shared_names

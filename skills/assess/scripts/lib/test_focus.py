@@ -13,9 +13,10 @@ the mutation offer both read - the contract is here, not duplicated downstream.
 It takes four inputs as parameters (the ranked hot files, the parsed coverage
 report, the hollow-test heuristics, and an optional ``repo_root``) and returns a
 plain dict. It imports no orchestrator and never raises. Its one file-system
-probe is the sibling-test existence check in `lib/sibling_tests.py`, run only
-when ``repo_root`` is passed and bounded to at most ten hot files and a fixed
-ancestor depth; without ``repo_root`` it does no file I/O at all.
+probe is the sibling-test check in `lib/sibling_tests.py`, run only when
+``repo_root`` is passed: one repository index (``build_test_index``) plus
+existence checks for at most ten hot files at a fixed ancestor depth; without
+``repo_root`` it does no file I/O at all.
 
 Signal per file (most to least actionable):
   - ``no_covering_test``      - a coverage report exists and it records this file
@@ -24,8 +25,9 @@ Signal per file (most to least actionable):
   - ``covered_but_hollow``    - a test covers it, but it trips a hollow-test
                                 heuristic (asserts internals, untested boundary,
                                 duplicate truth).
-  - ``unsupported``           - no coverage report and no test file found
-                                (``repo_root`` given): the core cannot tell
+  - ``unsupported``           - no coverage report and no sibling or
+                                parallel-tree test file found (``repo_root``
+                                given): the core cannot tell
                                 whether a test exists, so it says so rather
                                 than claim ``no_covering_test``.
   - ``sibling_test_only``     - a test file maps to it but no coverage record
@@ -65,7 +67,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from lib.sibling_tests import has_sibling_test, is_test_path, shared_name_keys
+from lib.sibling_tests import (
+    TestIndex,
+    build_test_index,
+    has_sibling_test,
+    is_test_path,
+    shared_name_keys,
+)
 
 # Risk bands by position in the ranked top_hotspots list. Index 0-2 are the
 # sharpest hotspots, 3-6 the next tier, 7-9 the tail; anything past the top 10 is
@@ -208,6 +216,7 @@ def _classify(
     cheap_heuristics: dict[str, Any],
     repo_root: Path | None = None,
     shared_names: frozenset[str] = frozenset(),
+    index: TestIndex | None = None,
 ) -> tuple[str, list[str]]:
     """Resolve a file's test signal and the hollow kinds it tripped.
 
@@ -223,7 +232,7 @@ def _classify(
     """
     def has_test() -> bool:
         return repo_root is not None and bool(
-            has_sibling_test(repo_root, path, shared_names))
+            has_sibling_test(repo_root, path, shared_names, index))
 
     if not coverage_present or coverage_data is None:
         if repo_root is None:
@@ -278,6 +287,9 @@ def compute_test_focus(
     # match on such a name is ambiguous and credits none of them.
     shared_names = shared_name_keys(
         p for p in (_entry_path(i) for i in items[: _LOW_MAX + 1]) if p is not None)
+    root = Path(repo_root) if repo_root is not None else None
+    # One repository index for every hot file's parallel-tree (basename) probe.
+    test_index = build_test_index(root) if root is not None and items else None
 
     for index, item in enumerate(items):
         band = _risk_band(index)
@@ -288,8 +300,7 @@ def compute_test_focus(
             continue
         signal, kinds = _classify(
             path, coverage_present, coverage_data, heuristics,
-            Path(repo_root) if repo_root is not None else None,
-            shared_names,
+            root, shared_names, test_index,
         )
         if signal == "covered_clean":
             continue  # not a focus target
