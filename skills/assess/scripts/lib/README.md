@@ -108,7 +108,13 @@ directory anywhere under `repo_root`, not just at the root - a vault kept as a s
 (`repo/notes/.obsidian/`) sits below the `git rev-parse --show-toplevel` scan target and was
 previously reported as no vault, silently disabling downstream vault accommodations (#179).
 Pruning `EXCLUDE_DIRS` keeps a vendored or build-artifact `.obsidian/` from tripping a false
-positive.
+positive. Every doc-to-doc edge carries a `kind`: `link` for markdown links, wikilinks and
+vault query edges, `reference` for a backticked token outside a fence that resolves to an
+existing doc (path tokens via `ownership_parser._extract_path_refs`, resolution doc-relative
+first, then `ownership_parser._resolve_ref`). A `.claude/` doc a reference names joins the
+graph and is parsed in turn; an uncited one stays excluded. The headline `orphan_rate` and
+`reachability_pct` count both kinds; `link_only_orphan_rate` / `link_only_reachability_pct`
+report links alone. A reference edge also clears the pair from `missing_xrefs` (#353).
 
 **`raw_source.py`**
 Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:

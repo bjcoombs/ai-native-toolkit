@@ -671,3 +671,98 @@ def test_isolated_curated_folder_not_excluded(tmp_path: Path) -> None:
     r = build_doc_graph(tmp_path)
     assert r.excluded_raw_trees == []
     assert any(o.startswith("notes/") for o in r.orphans)
+
+
+# --- Reference edges (backticked doc paths) --------------------------------
+
+
+def _edges(r) -> list[list]:
+    return sorted([u, v, d.get("kind")] for u, v, d in r.graph.edges(data=True))
+
+
+def test_reference_edge_from_backticked_existing_path(tmp_path: Path) -> None:
+    """A backticked token that resolves to an existing doc is a reference edge;
+    one that resolves to nothing adds no edge and no node. Markdown links keep
+    kind link."""
+    _write(
+        tmp_path, "CLAUDE.md",
+        "# Entry\nSee `docs/arch.md` and `docs/missing.md` and `not-a-path`, "
+        "then [guide](guide.md).\n",
+    )
+    _write(tmp_path, "docs/arch.md", "# Arch")
+    _write(tmp_path, "guide.md", "# Guide")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == [
+        ["CLAUDE.md", "docs/arch.md", "reference"],
+        ["CLAUDE.md", "guide.md", "link"],
+    ]
+    assert "docs/missing.md" not in r.graph
+
+
+def test_reference_edge_resolves_relative_to_the_citing_doc(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "[docs](docs/index.md)")
+    _write(tmp_path, "docs/index.md", "Read `setup.md` next.")
+    _write(tmp_path, "docs/setup.md", "# Setup")
+    r = build_doc_graph(tmp_path)
+    assert ["docs/index.md", "docs/setup.md", "reference"] in _edges(r)
+
+
+def test_reference_inside_fence_adds_no_edge(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "```\n`guide.md`\n```\n")
+    _write(tmp_path, "guide.md", "# Guide")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == []
+
+
+def test_link_kind_wins_when_a_doc_both_links_and_cites(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "Read `guide.md`, or [the guide](guide.md).")
+    _write(tmp_path, "guide.md", "# Guide")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == [["README.md", "guide.md", "link"]]
+
+
+def test_cited_claude_file_becomes_a_reachable_node(tmp_path: Path) -> None:
+    """A `.claude/` doc that a reference names is a node and reachable; an
+    uncited one stays excluded. The headline figures count reference edges;
+    the link-only figures sit beside them."""
+    _write(tmp_path, "CLAUDE.md", "# Entry\nOpen `.claude/skills/x/SKILL.md` first.\n")
+    _write(tmp_path, ".claude/skills/x/SKILL.md", "# x")
+    _write(tmp_path, ".claude/skills/y/SKILL.md", "# y")
+    _write(tmp_path, "docs/lonely.md", "# lonely")
+    r = build_doc_graph(tmp_path)
+    d = r.as_dict()
+    assert sorted(r.graph.nodes()) == [
+        ".claude/skills/x/SKILL.md", "CLAUDE.md", "docs/lonely.md",
+    ]
+    assert d["unreachable"] == ["docs/lonely.md"]
+    assert d["doc_count"] == 3
+    assert d["orphan_rate"] == 0.333
+    assert d["reachability_pct"] == 0.667
+    assert d["link_only_reachability_pct"] < d["reachability_pct"]
+    assert d["link_only_orphan_rate"] > d["orphan_rate"]
+
+
+def test_cited_claude_doc_is_parsed_for_its_own_edges(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "Open `.claude/skills/x/SKILL.md`.")
+    _write(tmp_path, ".claude/skills/x/SKILL.md", "See [ref](../../../docs/ref.md).")
+    _write(tmp_path, "docs/ref.md", "# Ref")
+    r = build_doc_graph(tmp_path)
+    assert [".claude/skills/x/SKILL.md", "docs/ref.md", "link"] in _edges(r)
+    assert r.unreachable == []
+
+
+def test_reference_edge_clears_missing_xref(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "# Entry\nRead `guide.md` before editing.\n")
+    _write(tmp_path, "guide.md", "# Guide")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == [["CLAUDE.md", "guide.md", "reference"]]
+    assert r.as_dict()["missing_xrefs"] == []
+
+
+def test_link_only_figures_equal_headline_without_references(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "[a](a.md)")
+    _write(tmp_path, "a.md", "# A")
+    _write(tmp_path, "b.md", "# B")
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["link_only_orphan_rate"] == d["orphan_rate"]
+    assert d["link_only_reachability_pct"] == d["reachability_pct"]

@@ -197,6 +197,11 @@ class DocGraphResult:
     curated_doc_count: int = 0          # docs in the curated layer (== doc_count)
     raw_source_orphan_rate: float = 0.0  # orphan rate within the raw layer
     raw_source_broken_links: int = 0     # broken links originating in the raw layer
+    # Link-only figures (issue #353). The headline orphan_rate and
+    # reachability_pct count reference edges (a backticked doc path) as well as
+    # links; these two are the same figures over link edges alone.
+    link_only_orphan_rate: float = 0.0
+    link_only_reachability_pct: float = 0.0
     # Missing cross-references: a doc names another doc but never links to it
     # (Karpathy Lint). [{from, to}].
     missing_xrefs: list[dict] = field(default_factory=list)
@@ -239,6 +244,8 @@ class DocGraphResult:
             "curated_doc_count": self.curated_doc_count,
             "raw_source_orphan_rate": round(self.raw_source_orphan_rate, 3),
             "raw_source_broken_links": self.raw_source_broken_links,
+            "link_only_orphan_rate": round(self.link_only_orphan_rate, 3),
+            "link_only_reachability_pct": round(self.link_only_reachability_pct, 3),
         }
 
 
@@ -488,6 +495,58 @@ def _target_exists(raw: str, source: Path, repo_root: Path) -> bool:
     return True
 
 
+def _cited_excluded_doc(
+    rel_path: str, repo_root: Path, tracked, scope: Path | None,
+    extra_dirs: set[str], extra_pats: list[str],
+) -> Path | None:
+    """The `.claude/` doc at `rel_path`, if a reference may bring it in.
+
+    `.claude` stays in `EXCLUDE_DIRS` for the walk, so an uncited agent file is
+    never a node; a cited one is navigation an agent follows and joins the
+    graph. Every other exclusion (built-in, user, untracked, out of scope)
+    still applies.
+    """
+    from lib.assess_config import is_user_excluded
+    parts = Path(rel_path).parts
+    if ".claude" not in parts or ".." in parts:
+        return None
+    if Path(rel_path).suffix.lower() not in DOC_EXTENSIONS:
+        return None
+    if is_excluded_path(Path(*[x for x in parts if x != ".claude"])):
+        return None
+    if is_user_excluded(Path(rel_path), extra_dirs, extra_pats):
+        return None
+    path = repo_root / rel_path
+    if not path.is_file() or not is_repo_file(path, repo_root, tracked):
+        return None
+    if scope is not None and not path.resolve().is_relative_to(scope.resolve()):
+        return None
+    return path.resolve()
+
+
+def _reference_paths(text: str, source_rel: str) -> list[tuple[str, str]]:
+    """Doc paths named by backticked tokens outside fences, as
+    `(raw_ref, doc_relative_candidate)` pairs, in document order.
+
+    Reuses the ownership parser's path-token rules. A span that holds link
+    syntax (`[[x]]`, `[x](y)`) is a teaching sample, not a citation, so it is
+    skipped here just as the link pass strips it.
+    """
+    from lib.ownership_parser import _extract_path_refs
+    out: list[tuple[str, str]] = []
+    for m in _INLINE_CODE_RE.finditer(_FENCE_RE.sub("", text)):
+        span = m.group(0)
+        if "[[" in span or "](" in span:
+            continue
+        for ref in sorted(_extract_path_refs(span)):
+            if Path(ref).suffix.lower() not in DOC_EXTENSIONS:
+                continue
+            local = ref.lstrip("/") if ref.startswith("/") else posixpath.normpath(
+                posixpath.join(posixpath.dirname(source_rel), ref))
+            out.append((ref, local))
+    return out
+
+
 def _missing_xrefs(docs, texts: dict, graph, repo_root: Path, rel) -> list[dict]:
     """Docs that name another doc's filename in prose but never link to it
     (Karpathy Lint: "missing cross-references").
@@ -628,6 +687,34 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
             _broken_seen.add(key)
             broken.append({"from": rel(src), "target": target, "kind": kind})
 
+    discovered = list(docs)  # the walked set; `docs` grows with cited .claude docs
+    doc_by_rel = {rel(x): x for x in docs}
+    doc_rels = set(doc_by_rel)
+    tracked = tracked_files(repo_root)
+
+    def _resolve_references(text: str, src: Path) -> list[Path]:
+        """Docs named by backticked paths in `text`: doc-relative first, then
+        the ownership parser's resolver (repo-root path or unique basename),
+        then a cited `.claude/` doc at the literal path."""
+        from lib.ownership_parser import _resolve_ref
+        found: list[Path] = []
+        for ref, local in _reference_paths(text, rel(src)):
+            hits = {Path(local)} if local in doc_rels else _resolve_ref(ref, repo_root, doc_rels)
+            if len(hits) == 1:
+                found.append(doc_by_rel[str(next(iter(hits)))])
+                continue
+            for cand in dict.fromkeys((local, ref.lstrip("/"))):
+                cited = _cited_excluded_doc(
+                    cand, repo_root, tracked, scope,
+                    extra_exclude_dirs or set(), extra_exclude_patterns or [],
+                )
+                if cited is not None:
+                    doc_by_rel[rel(cited)] = cited
+                    doc_rels.add(rel(cited))
+                    found.append(cited)
+                    break
+        return found
+
     for d in docs:
         try:
             text = d.read_text(encoding="utf-8", errors="ignore")
@@ -660,7 +747,7 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
                 _add_broken(d, wikilink_target, "wikilink")
                 continue
             if tgt in doc_set and tgt != d:
-                graph.add_edge(rel(d), rel(tgt))
+                graph.add_edge(rel(d), rel(tgt), kind="link")
         # CommonMark links resolve relative to the doc's directory.
         for m in _MDLINK_RE.finditer(link_text):
             raw = m.group(1)
@@ -680,11 +767,21 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
                 continue
             if tgt.suffix.lower() in DOC_EXTENSIONS and tgt in doc_set:
                 if tgt != d:
-                    graph.add_edge(rel(d), rel(tgt))
+                    graph.add_edge(rel(d), rel(tgt), kind="link")
             elif tgt.suffix.lower() in CODE_EXTENSIONS:
                 doc_to_code.append({"doc": rel(d), "code": rel(tgt)})
+        # Reference edges (issue #353): a backticked token naming an existing
+        # doc. A cited `.claude/` doc is appended to `docs`, so this loop
+        # parses it in turn. A link between the same pair keeps kind link.
+        for tgt in _resolve_references(text, d):
+            if tgt not in doc_set:
+                doc_set.add(tgt)
+                docs.append(tgt)
+                graph.add_node(rel(tgt))
+            if tgt != d and not graph.has_edge(rel(d), rel(tgt)):
+                graph.add_edge(rel(d), rel(tgt), kind="reference")
 
-    missing = _missing_xrefs(docs, texts, graph, repo_root, rel)
+    missing = _missing_xrefs(discovered, texts, graph, repo_root, rel)
 
     # Vault-native navigation: `.base` view hubs + ```dataview``` query blocks
     # surface notes dynamically, so a static-link-only graph scores a navigable
@@ -720,6 +817,18 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
         doc_to_code=doc_to_code, dangling=len(curated_broken), ambiguous=ambiguous,
         vault=vault, obs=obs, base_hubs=base_hubs,
     )
+    link_graph = nx.DiGraph()
+    link_graph.add_nodes_from(curated_graph)
+    link_graph.add_edges_from(
+        (u, v) for u, v, k in curated_graph.edges(data="kind") if k != "reference"
+    )
+    link_only = _derive_signals(
+        graph=link_graph, docs=curated_docs, repo_root=repo_root, rel=rel,
+        doc_to_code=doc_to_code, dangling=0, ambiguous=0,
+        vault=vault, obs=obs, base_hubs=base_hubs,
+    )
+    result.link_only_orphan_rate = link_only.orphan_rate
+    result.link_only_reachability_pct = link_only.reachability_pct
     result.broken_links = curated_broken[:MAX_BROKEN_LINKS]
     result.missing_xrefs = curated_missing[:MAX_MISSING_XREFS]
 
@@ -808,7 +917,7 @@ def _apply_vault_edges(
         for query in parse_dataview_queries(text):
             for tgt in select_notes(query, doc_rels, frontmatter_of):
                 if tgt != d:
-                    graph.add_edge(rel(d), rel(tgt))
+                    graph.add_edge(rel(d), rel(tgt), kind="link")
 
     # `.base` hubs: a new hub node with edges to every note its query selects.
     base_hubs: list[str] = []
@@ -829,7 +938,7 @@ def _apply_vault_edges(
             graph.add_node(hub)
         base_hubs.append(hub)
         for tgt in targets:
-            graph.add_edge(hub, rel(tgt))
+            graph.add_edge(hub, rel(tgt), kind="link")
     return base_hubs
 
 
