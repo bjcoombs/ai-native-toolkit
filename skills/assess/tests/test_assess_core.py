@@ -1617,6 +1617,58 @@ def test_accretion_ratchet_files_sorted_worst_first(git_repo) -> None:
     assert files[0]["path"] == "src/big.py"
 
 
+def test_accretion_skips_documentation_and_archive_paths_excluded_end_to_end(git_repo) -> None:
+    """End to end: an append-only markdown plan in the top size band earns no
+    accretion row, and an accreting file under archive/ stays out of attention
+    and prescribed_actions, disclosed in excluded_as_archive rather than dropped
+    silently. Append-only code outside archive/ still leads."""
+    repo, commit = git_repo
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    _accreting_history(repo, commit, "notes/PLAN.md")
+    _accreting_history(repo, commit, "src/big.py")
+    _accreting_history(repo, commit, "tools/archive/legacy.py")
+
+    rows = [
+        {"path": "notes/PLAN.md", "loc": 3000, "ccn": 0.0, "max_fn_ccn": None,
+         "commits": 5, "source": "scc"},
+        {"path": "src/big.py", "loc": 50, "ccn": 5.0, "commits": 5, "source": "lizard"},
+        {"path": "tools/archive/legacy.py", "loc": 50, "ccn": 5.0, "commits": 5,
+         "source": "lizard"},
+    ]
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 3, "loc": {"total": 3100}, "ccn": {"max": 5},
+        "top_hotspots": rows, "top_complex": rows, "top_large": rows,
+    }))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    acc_paths = [f["path"] for f in ctx["accretion_ratchet"]["files"]]
+    assert "notes/PLAN.md" not in acc_paths
+    assert "src/big.py" in acc_paths
+    attention = [u["path"] for u in ctx["attention"]]
+    prescribed = [p["path"] for p in ctx["prescribed_actions"]]
+    for ranked in (attention, prescribed):
+        assert "src/big.py" in ranked
+        assert "notes/PLAN.md" not in ranked
+        assert "tools/archive/legacy.py" not in ranked
+    block = ctx["excluded_as_archive"]
+    assert "tools/archive/legacy.py" in block["affected_finding_paths"]
+    assert block["affected_finding_paths"] == sorted(block["affected_finding_paths"])
+    assert block["count"] == len(block["affected_finding_paths"])
+
+
+def test_archive_paths_excluded_block_empty_without_archive(git_repo) -> None:
+    """A repo with no archive path carries an empty excluded_as_archive block."""
+    repo, commit = git_repo
+    (repo / ".assess").mkdir()
+    _write_min_stats(repo / ".assess")
+    (repo / "README.md").write_text("# Repo\n")
+    commit("init")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["excluded_as_archive"] == {"affected_finding_paths": [], "count": 0}
+
+
 # --- structure_drift block (Tier 0 + Tier 1 orchestration) -------------------
 
 def test_structure_drift_block_omitted_without_ownership_map(git_repo) -> None:
