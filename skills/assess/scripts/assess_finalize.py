@@ -50,6 +50,7 @@ from lib.wiki_writer import (
     find_log_entry,
     log_entry_date,
     log_entry_is_unfinalized,
+    log_entry_owns_span,
     log_entry_run_id,
     read_log_entries,
     rewrite_log_entry,
@@ -594,6 +595,12 @@ def drop_unfinalized_entry(*, assess_dir: Path, run_id: str) -> None:
     if idx is None:
         raise FinalizeValidationError(f"log.md has no entry stamped run_id={run_id}")
     content = read_log_entries(assess_dir)[idx]
+    if not log_entry_owns_span(content, run_id):
+        raise FinalizeValidationError(
+            f"log.md entry run_id={run_id} shares its span with log history written "
+            "before the integrity chain existed; dropping it would drop that history "
+            "too. Leave it in place."
+        )
     if not log_entry_is_unfinalized(content):
         raise FinalizeValidationError(
             f"log.md entry run_id={run_id} is finalized; finalized entries are history "

@@ -286,7 +286,9 @@ every later one (stopping at an entry that was already broken); `find_log_entry`
 `read_log_entries` and `log_entry_is_unfinalized` (placeholder `(LLM fills in)`)
 address entries by their `assess:run_id` stamp, and
 `supersede_unfinalized_log_entry` drops a same-date, same-commit run's unfilled
-last entry before the core appends its own. Both are additive and back-compat -
+last entry before the core appends its own; it and `--drop-entry` act only on an
+entry that starts with its own stamp (`log_entry_owns_span`), never on a span that
+also holds pre-chain history. Both are additive and back-compat -
 a legacy wiki (no markers, live files) is untouched and reads valid.
 
 **`treemap_render.py`**

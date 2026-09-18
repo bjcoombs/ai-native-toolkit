@@ -216,3 +216,38 @@ def test_core_replaces_superseded_same_day_entry_without_git(tmp_path: Path) -> 
     assert _day_headings(assess_dir) == 1
     assert second["run_id"] in (assess_dir / "log.md").read_text(encoding="utf-8")
     assert verify_log_chain(assess_dir) == (True, None)
+
+
+_LEGACY_LOG = (
+    "# Assess Log\n\n"
+    "## 2026-05-01\n\n"
+    "- **Files scored:** 80\n"
+    "- **AI Readiness:** 5.0 / 8 (Solid)\n\n"
+    "---\n"
+)
+
+
+def test_superseded_same_day_entry_keeps_pre_chain_history(repo: Path) -> None:
+    """A pre-chain log's body and the first chained entry parse as one span;
+    superseding must not remove it, or the legacy history goes with it."""
+    assess_dir = repo / ".assess"
+    (assess_dir / "log.md").write_text(_LEGACY_LOG, encoding="utf-8")
+    first = _run(repo)
+    _run(repo)
+    log = (assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "## 2026-05-01" in log
+    assert first["run_id"] in log
+    assert _day_headings(assess_dir) == 2
+    assert verify_log_chain(assess_dir) == (True, None)
+
+
+def test_drop_entry_refuses_span_holding_pre_chain_history(repo: Path) -> None:
+    from assess_finalize import drop_unfinalized_entry
+
+    assess_dir = repo / ".assess"
+    (assess_dir / "log.md").write_text(_LEGACY_LOG, encoding="utf-8")
+    first = _run(repo)
+    before = (assess_dir / "log.md").read_text(encoding="utf-8")
+    with pytest.raises(FinalizeValidationError, match="before the integrity chain"):
+        drop_unfinalized_entry(assess_dir=assess_dir, run_id=first["run_id"])
+    assert (assess_dir / "log.md").read_text(encoding="utf-8") == before

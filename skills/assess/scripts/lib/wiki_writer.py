@@ -356,6 +356,18 @@ def log_entry_run_id(content: str) -> str | None:
     return m.group(1) if m else None
 
 
+def log_entry_owns_span(content: str, run_id: str) -> bool:
+    """True when the entry text begins with ``run_id``'s own stamp.
+
+    On a log written before the chain existed, the unchained legacy body and the
+    first chained entry parse as one span (see ``_chain_tail``). Such a span
+    carries the run's stamp but not at its start; removing or replacing it would
+    take the whole legacy history with it, so callers that drop an entry require
+    this to hold.
+    """
+    return content.startswith(f"<!-- assess:run_id={run_id} ")
+
+
 def log_entry_date(content: str) -> str | None:
     """The ``YYYY-MM-DD`` date of an entry's first ``## `` heading, or None."""
     m = _HEADING_DATE_RE.search(content)
@@ -426,13 +438,14 @@ def supersede_unfinalized_log_entry(assess_dir: Path, run_id: str) -> bool:
     The caller decides the run is superseded (same date, same measured commit);
     this only acts when the log's last entry is that run's and carries unfilled
     placeholders. A finalized entry, or any entry that is not the last, is never
-    removed. Returns True when an entry was removed.
+    removed, and neither is a span that also holds unchained legacy history.
+    Returns True when an entry was removed.
     """
     entries = read_log_entries(assess_dir)
     if not entries:
         return False
     last = entries[-1]
-    if log_entry_run_id(last) != run_id or not log_entry_is_unfinalized(last):
+    if not log_entry_owns_span(last, run_id) or not log_entry_is_unfinalized(last):
         return False
     rewrite_log_entry(assess_dir, len(entries) - 1, None)
     return True
