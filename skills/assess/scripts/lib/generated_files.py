@@ -2,19 +2,20 @@
 
 Filename globs (``EXCLUDE_FILE_PATTERNS`` in ``complexity-treemap.py``) miss
 machine-written files with ordinary names, such as a schema dump or a font
-embedded as a base64 string. (This docstring keeps the markers below out of its
-first lines, or the sniff would exclude this module.) Two content checks catch
-them:
+embedded as a base64 string. Two content checks catch them:
 
-- **Header sniff** (reason ``generated-header``): the first
-  ``HEADER_SNIFF_LINES`` lines carry a conventional generator marker (the
-  Go / protobuf convention most generators follow). A marker further down the
-  file is ignored, so a hand-written comment on line 200 never excludes it.
-- **Long lines** (reason ``long-lines``): the average line length exceeds
-  ``LONG_LINE_THRESHOLD`` characters, the shape of a base64 or minified payload.
+- **Header sniff** (reason ``generated-header``): one of the first
+  ``HEADER_SNIFF_LINES`` lines is a comment carrying a conventional generator
+  marker (the Go / protobuf convention most generators follow). A marker
+  further down the file is ignored, so a hand-written comment on line 200 never
+  excludes it; so is a marker in prose (a docstring continuation line about
+  codegen), because the line does not open with a comment leader.
+- **Long lines** (reason ``long-lines``): the average line length over the
+  first 1 MB exceeds ``LONG_LINE_THRESHOLD`` characters, the shape of a base64
+  or minified payload.
 
-Both are pure stdlib and read at most the head of the file (header) or the
-whole file once (long lines). An unreadable file is never excluded.
+Both are pure stdlib and read a bounded head of the file. An unreadable file is
+never excluded.
 """
 from __future__ import annotations
 
@@ -35,6 +36,15 @@ _HEADER_MARKERS = re.compile(
     re.IGNORECASE,
 )
 
+# A generator declaration is always a comment, so the marker line must open
+# with a comment leader: # // -- /* * <!-- ; % {- (* or a docstring quote.
+_COMMENT_LEADER = re.compile(r"""^\s*(#|//|--|/\*|\*|<!--|;|%|\{-|\(\*|"{3}|'{3})""")
+
+# Bytes the long-line check averages over. The cap bounds IO and memory on
+# large files; the average only has to separate payloads (~20,000 characters
+# per line) from hand-written code, which a 1 MB sample does.
+_LONG_LINE_READ_BYTES = 1024 * 1024
+
 # Average characters per line above which a file is a payload, not source.
 # Calibrated against real files: a Playwright HTML report averages ~16,000 and
 # a base64 font module ~20,000, while a JSONL fixture averages 296 and a
@@ -46,23 +56,30 @@ REASON_LONG_LINES = "long-lines"
 
 
 def has_generated_header(path: Path, lines: int = HEADER_SNIFF_LINES) -> bool:
-    """True when one of the first ``lines`` lines carries a generator marker."""
+    """True when one of the first ``lines`` lines is a comment carrying a
+    generator marker."""
     try:
         with path.open("rb") as fh:
             head = fh.read(_HEADER_READ_BYTES)
     except OSError:
         return False
     text = head.decode("utf-8", errors="ignore")
-    return any(_HEADER_MARKERS.search(line) for line in text.splitlines()[:lines])
+    return any(
+        _COMMENT_LEADER.match(line) is not None
+        and _HEADER_MARKERS.search(line) is not None
+        for line in text.splitlines()[:lines]
+    )
 
 
 def average_line_length(path: Path) -> float:
-    """Mean characters per line; 0.0 for an empty or unreadable file.
+    """Mean characters per line over the first 1 MB; 0.0 for an empty or
+    unreadable file.
 
     A final line without a trailing newline still counts as a line.
     """
     try:
-        data = path.read_bytes()
+        with path.open("rb") as fh:
+            data = fh.read(_LONG_LINE_READ_BYTES)
     except OSError:
         return 0.0
     if not data:

@@ -601,3 +601,15 @@ def test_generated_header_disclosure_silent_when_empty() -> None:
     assert render_generated_disclosure({}) == ""
     assert render_generated_disclosure({"excluded_generated": []}) == ""
     assert "excluded from scoring as generated" not in render_report(_full_ctx(), "demo")
+
+
+def test_generated_header_disclosure_folds_rows_past_the_cap() -> None:
+    rows = [{"path": f"gen/f{i:02}.sql", "reason": "generated-header"} for i in range(13)]
+    out = render_generated_disclosure({"excluded_generated": rows})
+    head, fold = out.split("<details>")
+    assert "gen/f09.sql` (generated-header)" in head
+    assert "gen/f10.sql" not in head
+    assert "3 more</summary>" in fold
+    for i in (10, 11, 12):
+        assert f"- `gen/f{i}.sql` (generated-header)" in fold
+    assert fold.rstrip().endswith("</details>")

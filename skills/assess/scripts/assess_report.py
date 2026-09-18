@@ -166,12 +166,18 @@ def render_exclusion_disclosure(ctx: dict) -> str:
     )
 
 
+# Generated-file rows shown on the report surface before the rest are folded.
+GENERATED_DISCLOSURE_VISIBLE = 10
+
+
 def render_generated_disclosure(ctx: dict) -> str:
     """Name each file the treemap excluded as generated, with its reason.
 
     One line per file (``- `path` (reason)``) under a count line, or ``""`` when
     ``excluded_generated`` is empty or absent, so a run with nothing excluded
-    renders exactly as before.
+    renders exactly as before. The first ``GENERATED_DISCLOSURE_VISIBLE`` rows
+    sit on the report surface; the rest go in a ``<details>`` fold, so every
+    path stays named without hundreds of bullets displacing the findings.
     """
     rows = [
         r for r in (ctx.get("excluded_generated") or [])
@@ -180,8 +186,14 @@ def render_generated_disclosure(ctx: dict) -> str:
     if not rows:
         return ""
     noun = "file" if len(rows) == 1 else "files"
-    lines = [f"_{len(rows)} {noun} excluded from scoring as generated:_"]
-    lines.extend(f"- `{r['path']}` ({r['reason']})" for r in rows)
+    lines = [f"_{len(rows)} {noun} excluded from scoring as generated:_", ""]
+    visible = rows[:GENERATED_DISCLOSURE_VISIBLE]
+    rest = rows[GENERATED_DISCLOSURE_VISIBLE:]
+    lines.extend(f"- `{r['path']}` ({r['reason']})" for r in visible)
+    if rest:
+        lines += ["", f"<details><summary>{len(rest)} more</summary>", ""]
+        lines.extend(f"- `{r['path']}` ({r['reason']})" for r in rest)
+        lines += ["", "</details>"]
     return "\n".join(lines)
 
 
