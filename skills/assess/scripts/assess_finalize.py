@@ -14,7 +14,8 @@ utility past the run that produced it, and leaving it in the working tree
 caused noisy diffs when users committed `.assess/` (issue #39).
 
 Updates:
-    {repo_root}/.assess/log.md           (last entry's placeholders)
+    {repo_root}/.assess/log.md           (this run's entry, by assess:run_id,
+                                          then the chain re-computed)
     {repo_root}/.assess/hotspots/*.md    (Suggested actions sections)
 
 Writes (when the input carries an ``actions`` array):
@@ -42,7 +43,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.badge import maturity_band
 from lib.keyhole_signals import mode_for_finding
-from lib.wiki_writer import slug_for_path
+from lib.wiki_writer import (
+    find_log_entry,
+    log_entry_date,
+    log_entry_is_unfinalized,
+    log_entry_run_id,
+    read_log_entries,
+    rewrite_log_entry,
+    slug_for_path,
+)
 
 
 class FinalizeValidationError(Exception):
@@ -74,31 +83,73 @@ _MATURITY_KEYWORDS = ("AI-Native", "Not Ready", "Solid", "Basic")
 MUTATION_NOT_RUN_ANNOTATION = "truth-pressure unproven (mutation not run)"
 
 
+def _log_target(assess_dir: Path, run_id: str | None) -> int | None:
+    """Index of the log entry finalize fills, or None when there is none.
+
+    The entry stamped with this run's ``assess:run_id`` wins. A legacy log or
+    context with no run id falls back to the last entry still carrying
+    placeholders, which was the pre-#355 behaviour.
+    """
+    if run_id:
+        idx = find_log_entry(assess_dir, run_id)
+        if idx is not None:
+            return idx
+    entries = read_log_entries(assess_dir)
+    for i in range(len(entries) - 1, -1, -1):
+        if log_entry_is_unfinalized(entries[i]):
+            return i
+    return None
+
+
+def _validate_no_earlier_same_date_placeholders(assess_dir: Path, target: int | None) -> None:
+    """Refuse when an earlier entry for the target's date is still unfinalized.
+
+    Two unfinalized entries on one date mean a run was superseded without its
+    entry being replaced (a different commit, or a stale run-context): filling
+    only the later one would leave a same-day placeholder entry that reads as a
+    finished run. The error names the earlier entry so the operator can find it.
+    """
+    if target is None:
+        return
+    entries = read_log_entries(assess_dir)
+    day = log_entry_date(entries[target])
+    if day is None:
+        return
+    for content in entries[:target]:
+        if log_entry_date(content) == day and log_entry_is_unfinalized(content):
+            heading = next(
+                (ln for ln in content.splitlines() if ln.startswith("## ")), "?"
+            )
+            raise FinalizeValidationError(
+                f"log.md entry run_id={log_entry_run_id(content)} ({heading}) for "
+                f"{day} still carries unfilled placeholders; an earlier same-date "
+                "run was never finalized. Finalize or remove that entry first."
+            )
+
+
 def _finalize_log(
     assess_dir: Path,
     *,
+    target: int | None,
     score: float,
     maturity_label: str,
     top_action: str,
     denominator: int = 8,
 ) -> None:
-    """Replace placeholders in the latest log.md entry.
+    """Fill the placeholders of log entry ``target`` and re-chain the log.
 
-    Only the most recent entry (top of file after the heading) is updated.
-    Prior entries are immutable historical records. ``denominator`` is 8 for a
-    software repo and the applicable-layer count for a knowledge base (#224),
-    so the finalised line reads ``2.5 / 3`` rather than ``2.5 / 8``.
+    Only that entry is updated; other entries are immutable historical records.
+    The rewrite recomputes the chain marker of the filled entry and every later
+    one, so ``verify_log_chain`` stays valid after finalize (#355).
+    ``denominator`` is 8 for a software repo and the applicable-layer count for
+    a knowledge base (#224), so the finalised line reads ``2.5 / 3`` rather
+    than ``2.5 / 8``.
     """
-    log_path = assess_dir / "log.md"
-    if not log_path.exists():
+    if target is None:
         return
-
-    text = log_path.read_text(encoding="utf-8")
-    # Replace the LAST occurrence of each placeholder - log entries are appended
-    # (newest at the bottom of the file), and we want to finalize the latest run.
-    # An unfinalized older entry stays untouched as historical evidence. The
-    # placeholder the core writes is always "/ 8"; the finalised denominator may
-    # differ for a knowledge base, so the replacement carries it explicitly.
+    text = read_log_entries(assess_dir)[target]
+    # The placeholder the core writes is always "/ 8"; the finalised
+    # denominator may differ for a knowledge base, so the replacement carries it.
     text = _replace_last(
         text,
         pattern=r"\*\*AI Readiness:\*\* [\d.]+ / 8 \(\(LLM fills in\)\)",
@@ -109,7 +160,7 @@ def _finalize_log(
         pattern=r"\*\*Top action:\*\* Deterministic ranker not yet wired \(LLM picks Top 3\)",
         replacement=f"**Top action:** {top_action}",
     )
-    log_path.write_text(text, encoding="utf-8")
+    rewrite_log_entry(assess_dir, target, text)
 
 
 def _replace_last(text: str, *, pattern: str, replacement: str) -> str:
@@ -480,8 +531,11 @@ def finalize_run(*, assess_dir: Path) -> None:
     # pre-archetype finalize-input.json finalises exactly as before.
     denominator = int(data.get("denominator", 8))
     _validate_finalize_input(data, ctx, denominator=denominator)
+    target = _log_target(assess_dir, ctx.get("run_id") or data.get("run_id"))
+    _validate_no_earlier_same_date_placeholders(assess_dir, target)
     _finalize_log(
         assess_dir,
+        target=target,
         score=data["score"],
         maturity_label=data["maturity_label"],
         top_action=data["top_action"],

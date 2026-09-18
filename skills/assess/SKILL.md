@@ -465,8 +465,8 @@ uv run "$SKILL_DIR/scripts/assess_finalize.py" "$REPO_ROOT"
 ````
 
 This replaces:
-- `log.md`'s last entry placeholder `**AI Readiness:** 0.0 / 8 ((LLM fills in))` with your actual score and maturity label.
-- `log.md`'s last entry placeholder `**Top action:** Deterministic ranker not yet wired ...` with your actual Top 1 action.
+- The placeholder in `log.md`'s entry for this run (matched by its `assess:run_id` stamp, chain re-computed; refused while an earlier same-date entry is unfilled) `**AI Readiness:** 0.0 / 8 ((LLM fills in))` with your actual score and maturity label.
+- That entry's placeholder `**Top action:** Deterministic ranker not yet wired ...` with your actual Top 1 action.
 - Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file.
 
 The optional `denominator` field is **8** for a software repo (the default when omitted) or the applicable-layer count for a detected archetype (3 for a knowledge base - see "Repository archetype" above). `assess_finalize.py` renormalises the `log.md` AI-Readiness line over it, so a KB reads `2.5 / 3` rather than a misleading `2.5 / 8`.
