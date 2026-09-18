@@ -9,7 +9,9 @@ into the entries that hold (``evidence``) and the entries that do not
 
 Evidence entry format (a flat JSON array of objects):
 
-- ``layer``: integer 0-8, the layer whose verdict cites the entry.
+- ``layer``: integer 0-8, the layer whose verdict cites the entry. Carried
+  through unchecked: this module checks facts about the filesystem, and the
+  caller owns the rest of the schema.
 - ``kind``: one of ``path_exists``, ``path_absent``, ``referenced_in``,
   ``not_referenced_in``, ``file_contains``.
 - ``path``: relative to the repository root under check. For the two reference
@@ -19,6 +21,12 @@ Evidence entry format (a flat JSON array of objects):
 
 Keys the checker does not know pass through unchanged. A rejected entry keeps
 its kind and arguments and gains a ``reason`` string.
+
+Every check fails closed: a malformed entry (including a needle that is not
+encodable text) is rejected, not raised on, and a claim whose check could not
+read everything it needed - ``referenced_in``, ``not_referenced_in`` or
+``file_contains`` - is rejected as incomplete rather than decided on the part
+that was read.
 
 CLI (run from ``skills/assess/scripts``)::
 
@@ -39,7 +47,13 @@ _NEEDLE_KINDS = frozenset({"referenced_in", "not_referenced_in", "file_contains"
 
 # VCS metadata is not repository content: a needle found only in .git/ (a
 # commit message, a reflog) is not a reference an agent or CI would follow.
-_SKIP_DIRS = frozenset({".git"})
+_GIT_DIR = ".git"
+# Directories the recursive walk does not enter. .assess/ holds this tool's own
+# previous output, which quotes repository paths in prose; reading it as
+# evidence would let one run's report decide the next (lib/doc_graph.py and
+# lib/structure_graph.py exclude it for the same reason). Only the walk skips
+# these: a path that names .assess/ directly is still searched.
+_SKIP_DIRS = frozenset({_GIT_DIR, ".assess"})
 
 
 def _resolve(repo_root: Path, rel: str) -> Path | None:
@@ -58,7 +72,16 @@ def _resolve(repo_root: Path, rel: str) -> Path | None:
 
 
 def _in_git_metadata(rel: str) -> bool:
-    return any(part in _SKIP_DIRS for part in Path(rel).parts)
+    return _GIT_DIR in Path(rel).parts
+
+
+def _encode(needle: str) -> bytes | None:
+    """UTF-8 bytes of ``needle``; None when it holds a lone surrogate (which
+    ``json.loads`` accepts from a ``\\udXXX`` escape)."""
+    try:
+        return needle.encode("utf-8")
+    except UnicodeEncodeError:
+        return None
 
 
 _CHUNK = 1 << 20  # read files in 1 MiB chunks so one large asset cannot set peak memory
@@ -84,34 +107,82 @@ def _file_has(path: Path, needle: bytes) -> bool | None:
     return False
 
 
-def _search(repo_root: Path | str, needle: str, path: str) -> bool | None:
-    """True when found; False when a complete search found nothing; None when
-    nothing was found but some file or directory could not be searched."""
-    if not needle or _in_git_metadata(path):
-        return False
-    target = _resolve(Path(repo_root), path)
-    if target is None:
-        return False
-    raw = needle.encode("utf-8")
-    if target.is_file():
-        return _file_has(target, raw)
-    if not target.is_dir():
-        return False
+def _link_target(root: Path, link: Path) -> Path | None:
+    """Where a symlink met in the walk leads, when that is repository content;
+    None for a link out of the root or a dangling one (not repository content).
+    A link that cannot be resolved (a loop) is raised as OSError."""
+    try:
+        dest = link.resolve(strict=True)
+    except FileNotFoundError:
+        return None
+    except RuntimeError as exc:  # symlink loop on older Pythons
+        raise OSError(str(link)) from exc
+    return dest if dest == root or dest.is_relative_to(root) else None
+
+
+def _walk(root: Path, target: Path, raw: bytes) -> bool | None:
+    """Search the directory ``target`` recursively; see ``_search``.
+
+    Nothing met in the walk is skipped silently unless it is not repository
+    content. A symlink out of the root, or a dangling one, is skipped. A symlink
+    to a file inside the root is read at its target. A symlink to a directory
+    inside the root, unless that directory is already under ``target``, and any
+    FIFO, socket or device, is content this search did not read, so it marks the
+    result incomplete.
+    """
     errors: list[OSError] = []
     for dirpath, dirnames, filenames in os.walk(target, onerror=errors.append):
         dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
+        for name in list(dirnames):
+            child = Path(dirpath) / name
+            if not child.is_symlink():
+                continue  # os.walk descends into it
+            dirnames.remove(name)  # os.walk does not follow it; decide here
+            try:
+                dest = _link_target(root, child)
+            except OSError as exc:
+                errors.append(exc)
+                continue
+            if dest is not None and not (dest == target or dest.is_relative_to(target)):
+                errors.append(OSError(str(child)))
         for name in sorted(filenames):
             child = Path(dirpath) / name
-            # Regular files only: a FIFO would block the read forever, and a
-            # symlink could point outside the repository.
-            if child.is_symlink() or not child.is_file():
+            read = child
+            if child.is_symlink():
+                try:
+                    dest = _link_target(root, child)
+                except OSError as exc:
+                    errors.append(exc)
+                    continue
+                if dest is None:
+                    continue
+                read = dest
+            # Regular files only: a FIFO would block the read forever.
+            if not read.is_file():
+                errors.append(OSError(str(child)))
                 continue
-            hit = _file_has(child, raw)
+            hit = _file_has(read, raw)
             if hit:
                 return True
             if hit is None:
                 errors.append(OSError(name))
     return None if errors else False
+
+
+def _search(repo_root: Path | str, needle: str, path: str) -> bool | None:
+    """True when found; False when a complete search found nothing; None when
+    nothing was found but some file or directory could not be searched."""
+    if not needle or _in_git_metadata(path):
+        return False
+    raw = _encode(needle)
+    target = _resolve(Path(repo_root), path)
+    if raw is None or target is None:
+        return False
+    if target.is_file():
+        return _file_has(target, raw)
+    if not target.is_dir():
+        return False
+    return _walk(Path(repo_root).resolve(), target, raw)
 
 
 def is_referenced_in(repo_root: Path | str, needle: str, path: str) -> bool:
@@ -121,9 +192,10 @@ def is_referenced_in(repo_root: Path | str, needle: str, path: str) -> bool:
     ``path`` is relative to ``repo_root``. A path that does not exist, that
     resolves outside ``repo_root``, or that lies inside ``.git/`` holds no
     reference and returns False, as does a search that found nothing because
-    a file or directory could not be read. The directory walk reads regular
-    files only: symlinks (to files or directories) and FIFOs are skipped, and
-    so is ``.git/``.
+    something under ``path`` could not be read. The directory walk does not
+    enter ``.git/`` or ``.assess/``, skips symlinks that lead out of the root,
+    reads a symlinked file inside the root at its target, and treats a FIFO,
+    socket, device or symlinked directory it did not search as unread.
     """
     return _search(repo_root, needle, path) is True
 
@@ -141,8 +213,11 @@ def _malformed(repo_root: Path | str, entry: Any) -> str | None:
     if not isinstance(rel, str) or not rel:
         return "missing path"
     needle = entry.get("needle")
-    if kind in _NEEDLE_KINDS and (not isinstance(needle, str) or not needle):
-        return "missing needle"
+    if kind in _NEEDLE_KINDS:
+        if not isinstance(needle, str) or not needle:
+            return "missing needle"
+        if _encode(needle) is None:
+            return "needle is not valid text (a lone surrogate cannot be encoded)"
     return None
 
 
@@ -180,7 +255,7 @@ def check_entry(repo_root: Path | str, entry: Any) -> str | None:
     if kind == "file_contains":
         if not target.is_file():
             return "path is not a file"
-        hit = _file_has(target, needle.encode("utf-8"))
+        hit = _file_has(target, needle.encode("utf-8"))  # encodable: _malformed checked
         if hit is None:
             return "file could not be read"
         return None if hit else "needle not found in file"

@@ -426,9 +426,17 @@ substring search, no model. Input is a flat array of entries, each with `layer`,
 `referenced_in` / `not_referenced_in` take `needle` and `path` (one file, or a
 directory searched recursively); `file_contains` takes `path` (one file) and
 `needle`. Every `path` is relative to the repository root; one that resolves
-outside it, or cannot be resolved, is rejected. The reference search reads regular
-files only, in 1 MiB chunks (symlinks, FIFOs and `.git/` are skipped), and fails closed: a `not_referenced_in` claim is rejected when any file or directory
-under `path` could not be read, since the unread part could hold the reference. `check_evidence` splits the list into `evidence` (verified,
+outside it, or cannot be resolved, is rejected. The reference search reads files in
+1 MiB chunks and does not enter `.git/` or `.assess/` (the tool's own previous
+output) when walking a directory; naming `.assess/` directly still searches it.
+A symlink out of the root, or a dangling one, is not repository content and is
+skipped; a symlinked file inside the root is read at its target. Every check fails
+closed: a `referenced_in`, `not_referenced_in` or `file_contains` claim is rejected
+as incomplete when anything it needed could not be read (an unreadable file or
+directory, a FIFO, socket or device, a symlinked directory inside the root that
+the walk did not search), since the unread part could hold the reference; a needle
+that cannot be encoded (a lone surrogate) is rejected, not raised on. `layer` is
+carried through unchecked. `check_evidence` splits the list into `evidence` (verified,
 returned as given) and `evidence_rejected` (copies carrying a `reason`); unknown
 keys pass through. The reference search is the public
 `is_referenced_in(repo_root, needle, path)`, so a check outside this module can
