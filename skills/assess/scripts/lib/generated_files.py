@@ -37,8 +37,12 @@ _HEADER_MARKERS = re.compile(
 )
 
 # A generator declaration is always a comment, so the marker line must open
-# with a comment leader: # // -- /* * <!-- ; % {- (* or a docstring quote.
-_COMMENT_LEADER = re.compile(r"""^\s*(#|//|--|/\*|\*|<!--|;|%|\{-|\(\*|"{3}|'{3})""")
+# with a comment leader: # // -- /* <!-- ; % {- (* or a docstring quote. A bare
+# `*` counts only when indented (a JSDoc / block-comment continuation), so a
+# Markdown bullet at column 0 is not read as a comment.
+_COMMENT_LEADER = re.compile(
+    r"""^(\s*(#|//|--|/\*|<!--|;|%|\{-|\(\*|"{3}|'{3})|\s+\*)"""
+)
 
 # Bytes the long-line check averages over. The cap bounds IO and memory on
 # large files; the average only has to separate payloads (~20,000 characters

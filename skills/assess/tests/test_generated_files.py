@@ -46,6 +46,13 @@ def test_generated_header_prose_without_comment_leader_is_ignored(tmp_path, line
     assert has_generated_header(f) is False
 
 
+def test_generated_header_markdown_bullet_is_not_a_comment(tmp_path):
+    f = tmp_path / "CHANGELOG.md"
+    f.write_text("Release notes\n\n* Auto-generated release notes now include PRs\n"
+                 "* Do not edit this table by hand\n")
+    assert has_generated_header(f) is False
+
+
 def test_generated_header_jsdoc_and_docstring_leaders_match(tmp_path):
     js = tmp_path / "a.js"
     js.write_text("/**\n * @generated\n */\nexport const a = 1;\n")
