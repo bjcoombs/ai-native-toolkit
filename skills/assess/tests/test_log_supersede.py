@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -144,3 +145,55 @@ def test_rewrite_log_entry_keeps_an_earlier_break_detectable(repo: Path) -> None
     entries = read_log_entries(assess_dir)
     rewrite_log_entry(assess_dir, 0, entries[0] + "\n")
     assert verify_log_chain(assess_dir) == (False, 2)
+
+
+def test_drop_entry_clears_earlier_same_date_placeholder_refusal(repo: Path) -> None:
+    """The refusal names a supported recovery; following it lets finalize run
+    and leaves a chain that verifies."""
+    assess_dir = repo / ".assess"
+    first = _run(repo)
+    (repo / "src" / "warm.py").write_text("def warm(a):\n    return a\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "c2")
+    second = _run(repo)
+    _stage_finalize(assess_dir, second["run_id"])
+    with pytest.raises(FinalizeValidationError, match=f"--drop-entry {first['run_id']}"):
+        finalize_run(assess_dir=assess_dir)
+
+    script = Path(__file__).resolve().parents[1] / "scripts" / "assess_finalize.py"
+    done = subprocess.run(
+        [sys.executable, str(script), str(repo), "--drop-entry", first["run_id"]],
+        capture_output=True, text=True,
+    )
+    assert done.returncode == 0, done.stderr
+    assert first["run_id"] not in (assess_dir / "log.md").read_text(encoding="utf-8")
+    assert verify_log_chain(assess_dir) == (True, None)
+    finalize_run(assess_dir=assess_dir)
+    assert _day_headings(assess_dir) == 1
+    assert verify_log_chain(assess_dir) == (True, None)
+
+    # A finalized entry is history: --drop-entry refuses it.
+    refused = subprocess.run(
+        [sys.executable, str(script), str(repo), "--drop-entry", second["run_id"]],
+        capture_output=True, text=True,
+    )
+    assert refused.returncode == 1
+    assert "finalized" in refused.stderr
+
+
+def test_finalize_refuses_stamped_log_without_this_runs_entry(repo: Path) -> None:
+    """In a stamped log, a run whose entry is missing must not fall back to
+    filling another run's unfilled entry."""
+    assess_dir = repo / ".assess"
+    other = _run(repo)
+    before = (assess_dir / "log.md").read_text(encoding="utf-8")
+    _stage_finalize(assess_dir, other["run_id"])
+    ctx_path = assess_dir / "run-context.json"
+    ctx = json.loads(ctx_path.read_text(encoding="utf-8"))
+    ctx["run_id"] = "20260918000000-deadbeef"
+    ctx_path.write_text(json.dumps(ctx), encoding="utf-8")
+    fi = assess_dir / ".cache" / "finalize-input.json"
+    fi.write_text(fi.read_text(encoding="utf-8").replace(other["run_id"], ctx["run_id"]), encoding="utf-8")
+    with pytest.raises(FinalizeValidationError, match="no entry stamped"):
+        finalize_run(assess_dir=assess_dir)
+    assert (assess_dir / "log.md").read_text(encoding="utf-8") == before

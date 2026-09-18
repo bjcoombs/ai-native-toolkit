@@ -26,6 +26,9 @@ Writes (when the input carries an ``actions`` array):
 
 Run:
     uv run assess_finalize.py <repo_root>
+    uv run assess_finalize.py <repo_root> --drop-entry <run_id>
+        (removes a never-finalized log entry that blocks finalize, re-chaining
+        the log; finalized entries are refused)
 """
 # /// script
 # requires-python = ">=3.11"
@@ -86,15 +89,22 @@ MUTATION_NOT_RUN_ANNOTATION = "truth-pressure unproven (mutation not run)"
 def _log_target(assess_dir: Path, run_id: str | None) -> int | None:
     """Index of the log entry finalize fills, or None when there is none.
 
-    The entry stamped with this run's ``assess:run_id`` wins. A legacy log or
-    context with no run id falls back to the last entry still carrying
-    placeholders, which was the pre-#355 behaviour.
+    The entry stamped with this run's ``assess:run_id`` wins. A legacy log
+    (no entry carries a run id stamp) or a context with no run id falls back to
+    the last entry still carrying placeholders, the pre-#355 behaviour. In a
+    stamped log a missing entry refuses: falling back there would write this
+    run's score into another run's entry and re-sign it.
     """
+    entries = read_log_entries(assess_dir)
     if run_id:
         idx = find_log_entry(assess_dir, run_id)
         if idx is not None:
             return idx
-    entries = read_log_entries(assess_dir)
+        if any(log_entry_run_id(e) for e in entries):
+            raise FinalizeValidationError(
+                f"log.md has no entry stamped run_id={run_id}; refusing to fill "
+                "another run's entry. Re-run the core to write this run's entry."
+            )
     for i in range(len(entries) - 1, -1, -1):
         if log_entry_is_unfinalized(entries[i]):
             return i
@@ -120,10 +130,16 @@ def _validate_no_earlier_same_date_placeholders(assess_dir: Path, target: int | 
             heading = next(
                 (ln for ln in content.splitlines() if ln.startswith("## ")), "?"
             )
+            stale_id = log_entry_run_id(content)
+            remedy = (
+                f"drop it with: assess_finalize.py <repo_root> --drop-entry {stale_id}"
+                if stale_id else "it carries no run id stamp, so it cannot be dropped by id"
+            )
             raise FinalizeValidationError(
-                f"log.md entry run_id={log_entry_run_id(content)} ({heading}) for "
-                f"{day} still carries unfilled placeholders; an earlier same-date "
-                "run was never finalized. Finalize or remove that entry first."
+                f"log.md entry run_id={stale_id} ({heading}) for {day} still "
+                "carries unfilled placeholders; an earlier same-date run was "
+                f"never finalized. Its run-context is gone, so {remedy}, then "
+                "re-run finalize. Deleting it by hand breaks the log chain."
             )
 
 
@@ -564,14 +580,38 @@ def finalize_run(*, assess_dir: Path) -> None:
             pass
 
 
+def drop_unfinalized_entry(*, assess_dir: Path, run_id: str) -> None:
+    """Remove the never-finalized log entry stamped ``run_id`` and re-chain.
+
+    The supported way out of the earlier-same-date refusal: the entry's own
+    run-context has been overwritten, so it can never be finalized, and deleting
+    it by hand breaks the chain for every later entry. A finalized entry is
+    history and is refused.
+    """
+    idx = find_log_entry(assess_dir, run_id)
+    if idx is None:
+        raise FinalizeValidationError(f"log.md has no entry stamped run_id={run_id}")
+    if not log_entry_is_unfinalized(read_log_entries(assess_dir)[idx]):
+        raise FinalizeValidationError(
+            f"log.md entry run_id={run_id} is finalized; finalized entries are history "
+            "and are not removed"
+        )
+    rewrite_log_entry(assess_dir, idx, None)
+
+
 def main() -> int:
-    if len(sys.argv) < 2:
-        print("Usage: assess_finalize.py <repo_root>", file=sys.stderr)
+    args = sys.argv[1:]
+    usage = "Usage: assess_finalize.py <repo_root> [--drop-entry <run_id>]"
+    if len(args) not in (1, 3) or (len(args) == 3 and args[1] != "--drop-entry"):
+        print(usage, file=sys.stderr)
         return 2
-    repo_root = Path(sys.argv[1]).resolve()
+    repo_root = Path(args[0]).resolve()
     assess_dir = repo_root / ".assess"
     try:
-        finalize_run(assess_dir=assess_dir)
+        if len(args) == 3:
+            drop_unfinalized_entry(assess_dir=assess_dir, run_id=args[2])
+        else:
+            finalize_run(assess_dir=assess_dir)
     except FinalizeValidationError as e:
         # Fail-closed: a violated invariant means finalize wrote nothing. Name
         # the specific violation and exit non-zero so the run surfaces it.
