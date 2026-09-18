@@ -863,3 +863,159 @@ def test_protected_sees_a_component_the_ignore_list_hides(tmp_path, monkeypatch)
     monkeypatch.chdir(tmp_path)
     rc = main(["protected", "--base", "HEAD~1"])
     assert rc == 0
+
+
+# ── signoff-summary: what the maintainer is asked to approve ─────────────────
+
+_OLD_PIN = "20cfd1bf00000000000000000000000000000000"
+_NEW_PIN = "bec219d200000000000000000000000000000000"
+_WORKFLOW = ".github/workflows/floor.yml"
+
+
+def _workflow_text(pin: str = _OLD_PIN, version: str = "v10.0.1") -> str:
+    return (
+        "name: Floor\non:\n  pull_request:\njobs:\n  t:\n"
+        "    runs-on: ubuntu-latest\n    steps:\n"
+        f"      - uses: astral-sh/setup-uv@{pin}  # {version}\n"
+    )
+
+
+@pytest.fixture()
+def signoff_repo(tmp_path, monkeypatch):
+    """A base commit holding floor core files and one unprotected file."""
+    _init_repo(tmp_path)
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / _WORKFLOW).write_text(_workflow_text(), encoding="utf-8")
+    (tmp_path / FLOOR_FILE).write_text("# Floor\none\n", encoding="utf-8")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "notes.md").write_text("notes\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+def _commit_all(root: Path, message: str) -> str:
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", message)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def _summary(capsys, *extra: str) -> str:
+    assert main(["signoff-summary", "--base", "HEAD~1", *extra]) == 0
+    return capsys.readouterr().out
+
+
+def _line_with(text: str, *needles: str) -> str | None:
+    return next(
+        (line for line in text.splitlines() if all(n in line for n in needles)), None
+    )
+
+
+def _assert_explains_the_request(out: str, head: str) -> None:
+    assert "Floor sign-off requested" in out
+    assert "FLOOR.md clause iii" in out
+    assert head in out and len(head) == 40
+    assert "these changes to the floor's own enforcement are intended" in out
+    assert "floor enforcement" in out and "red" in out
+
+
+def test_signoff_summary_one_path(signoff_repo, capsys):
+    with (signoff_repo / _WORKFLOW).open("a", encoding="utf-8") as fh:
+        fh.write("# trailing comment\n")
+    head = _commit_all(signoff_repo, "one floor-core path")
+
+    out = _summary(capsys)
+
+    _assert_explains_the_request(out, head)
+    assert _line_with(out, _WORKFLOW, "+1", "-0") is not None
+    assert "pin-only" not in out.lower()
+    assert FLOOR_FILE + "`" not in out  # FLOOR.md itself did not change
+
+
+def test_signoff_summary_several_paths(signoff_repo, capsys):
+    with (signoff_repo / FLOOR_FILE).open("a", encoding="utf-8") as fh:
+        fh.write("two\nthree\nfour\n")
+    with (signoff_repo / _WORKFLOW).open("a", encoding="utf-8") as fh:
+        fh.write("# trailing comment\n")
+    with (signoff_repo / "docs" / "notes.md").open("a", encoding="utf-8") as fh:
+        fh.write("more\n")
+    head = _commit_all(signoff_repo, "several paths")
+
+    out = _summary(capsys)
+
+    _assert_explains_the_request(out, head)
+    assert _line_with(out, "`FLOOR.md`", "+3", "-0") is not None
+    assert _line_with(out, _WORKFLOW, "+1", "-0") is not None
+    assert "docs/notes.md" not in out
+    assert "pin-only" not in out.lower()
+
+
+def test_signoff_summary_pin_only(signoff_repo, capsys):
+    (signoff_repo / _WORKFLOW).write_text(
+        _workflow_text(_NEW_PIN, "v10.1.0"), encoding="utf-8"
+    )
+    head = _commit_all(signoff_repo, "bump one pin")
+
+    out = _summary(capsys)
+
+    _assert_explains_the_request(out, head)
+    assert _line_with(out, _WORKFLOW, "+1", "-1") is not None
+    assert "pin-only" in out.lower()
+    action = _line_with(out, "astral-sh/setup-uv", _OLD_PIN[:8], _NEW_PIN[:8])
+    assert action is not None
+    assert action.index(_OLD_PIN[:8]) < action.index("v10.0.1") < action.index(
+        _NEW_PIN[:8]
+    ) < action.index("v10.1.0")
+
+
+def test_signoff_summary_pin_plus_other_line_is_not_pin_only(signoff_repo, capsys):
+    (signoff_repo / _WORKFLOW).write_text(
+        _workflow_text(_NEW_PIN, "v10.1.0") + "      - run: echo extra\n",
+        encoding="utf-8",
+    )
+    _commit_all(signoff_repo, "pin and a step")
+
+    out = _summary(capsys)
+
+    assert _line_with(out, _WORKFLOW, "+2", "-1") is not None
+    assert "pin-only" not in out.lower()
+
+
+def test_signoff_summary_is_silent_when_no_floor_core_path_changed(
+    signoff_repo, capsys
+):
+    with (signoff_repo / "docs" / "notes.md").open("a", encoding="utf-8") as fh:
+        fh.write("again\n")
+    _commit_all(signoff_repo, "unprotected only")
+
+    assert _summary(capsys) == ""
+
+
+def test_signoff_summary_cites_the_head_commit_override(signoff_repo, capsys):
+    # In CI the checkout is the merge commit; the approval covers the pull
+    # request's head, which the workflow passes in.
+    with (signoff_repo / _WORKFLOW).open("a", encoding="utf-8") as fh:
+        fh.write("# trailing comment\n")
+    head = _commit_all(signoff_repo, "one floor-core path")
+    override = "a" * 40
+
+    out = _summary(capsys, "--head-commit", override)
+
+    assert override in out
+    assert head not in out
+
+
+def test_signoff_summary_names_the_clause_purpose_from_floor_md(signoff_repo, capsys):
+    (signoff_repo / FLOOR_FILE).write_text(
+        "# Floor\n<!-- floor-clause:iii -->\n**iii. Custom purpose of the\n"
+        "clause.** Body text.\n",
+        encoding="utf-8",
+    )
+    _commit_all(signoff_repo, "clause text")
+
+    out = _summary(capsys)
+
+    assert _line_with(out, "clause iii", "Custom purpose of the clause.") is not None

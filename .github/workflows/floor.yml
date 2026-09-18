@@ -33,6 +33,13 @@
 #     `floor enforcement` goes red instead of letting the review lapse. The
 #     self-anchor pins the trigger from the other side, asserting the sign-off
 #     job's `if:` is exactly the filter's floor_core_changed answer.
+#     Before the review is requested, the `floor sign-off summary` job tells
+#     the maintainer what the approval covers: clause iii, each floor-core
+#     path with its line counts, the pull request's head commit, and, for a
+#     pin-only change, each action's old and new commit. The text comes from
+#     scripts/floor_check.py (the same classification as the trigger) and goes
+#     to the run's step summary and to one pull-request comment, updated in
+#     place. A read-only token (Dependabot, forks) skips the comment only.
 #
 #   floor self-anchor (E2, fail-closed on repo settings):
 #     Query the live GitHub API and FAIL (fail-closed) if either floor check
@@ -169,7 +176,7 @@ jobs:
   # and no review is requested.
   signoff:
     name: floor sign-off
-    needs: [canary-changes]
+    needs: [canary-changes, signoff-summary]
     if: needs.canary-changes.outputs.floor_core_changed == 'true'
     environment: floor-signoff
     runs-on: ubuntu-latest
@@ -179,6 +186,77 @@ jobs:
           echo "Floor sign-off APPROVED by the maintainer's deployment review."
           echo "That review -- its actor and timestamp recorded by GitHub outside"
           echo "the diff -- is the out-of-band approval FLOOR.md clause iii requires."
+
+  # ------------------------------------------------------------------------- #
+  # What the maintainer is asked to approve. Runs on the same trigger as the
+  # sign-off and sits in its `needs`, so the explanation is on the run summary
+  # (and the pull request) before the deployment review is requested. The text
+  # is the script's, from the same classification the trigger uses, so the two
+  # cannot disagree and this file still names no path. It cites the pull
+  # request's head commit: the checkout is the merge commit, which is not what
+  # the maintainer approves.
+  signoff-summary:
+    name: floor sign-off summary
+    needs: [canary-changes]
+    if: needs.canary-changes.outputs.floor_core_changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0  # full history so the merge-base is resolvable
+          persist-credentials: false
+
+      # NO --depth=1 here, for the same reason as the path filter's fetch.
+      - name: Fetch the PR base branch
+        run: git fetch --no-tags origin "${{ github.base_ref }}"
+
+      - name: Write the sign-off explanation to the step summary
+        env:
+          HEAD_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: |
+          BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          echo "merge-base: ${BASE_SHA}"
+          SUMMARY="${RUNNER_TEMP}/floor-signoff-summary.md"
+          python scripts/floor_check.py signoff-summary \
+            --base "${BASE_SHA}" --head-commit "${HEAD_COMMIT}" > "${SUMMARY}"
+          cat "${SUMMARY}"
+          cat "${SUMMARY}" >> "$GITHUB_STEP_SUMMARY"
+
+      # One comment per pull request, found by its hidden marker and author and
+      # updated in place on later pushes and re-runs. A failed read posts
+      # nothing (a blind POST is how a second comment appears); a refused write
+      # is the read-only token Dependabot and fork pull requests run with, and
+      # the step summary above stands alone. Neither fails the job: the review
+      # is what gates, and it must still be requested.
+      - name: Post or update the sign-off comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          MARKER="<!-- floor-signoff-summary -->"
+          BODY="${RUNNER_TEMP}/floor-signoff-comment.md"
+          { echo "${MARKER}"; cat "${RUNNER_TEMP}/floor-signoff-summary.md"; } > "${BODY}"
+          if ! EXISTING="$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+              | jq -s -r --arg m "${MARKER}" 'add // [] | map(select(.user.login == "github-actions[bot]" and (.body | contains($m)))) | .[0].id // empty')"; then
+            echo "::warning::Could not read the pull request's comments, so the sign-off comment was skipped; the step summary stands alone."
+            exit 0
+          fi
+          if [ -n "${EXISTING}" ]; then
+            if gh api --method PATCH "repos/${REPO}/issues/comments/${EXISTING}" -F body=@"${BODY}" > /dev/null; then
+              echo "Updated the sign-off comment ${EXISTING} in place."
+            else
+              echo "::warning::The sign-off comment was skipped: the token is read-only (Dependabot or fork pull request). The step summary stands alone."
+            fi
+          elif gh api --method POST "repos/${REPO}/issues/${PR_NUMBER}/comments" -F body=@"${BODY}" > /dev/null; then
+            echo "Posted the sign-off comment."
+          else
+            echo "::warning::The sign-off comment was skipped: the token is read-only (Dependabot or fork pull request). The step summary stands alone."
+          fi
 
   self-anchor:
     name: floor self-anchor

@@ -62,6 +62,16 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
     basename allowlist, so the protected set survives a layout move that a
     hand-maintained path regex would silently drop.
 
+``signoff-summary``
+    The explanation shown to the maintainer when the floor-core sign-off is
+    requested: why (clause iii), which floor-core paths changed and by how many
+    lines, the head commit the approval covers, and what approving and
+    rejecting mean. The paths come from the same ``floor-core`` role the
+    trigger asks for, so the explanation and the trigger cannot disagree. When
+    every changed floor-core line is a ``uses:`` pin the section says so and
+    lists each action's old and new commit. Prints nothing when the floor core
+    is untouched.
+
 ``clauses``
     Unconditional integrity check of ``FLOOR.md``: the file must exist, it must
     declare its ``floor-tokens`` block with at least the four tokens the floor
@@ -147,6 +157,22 @@ FLOOR_CORE_PATHS = (
     "scripts/floor_check.py",
     "scripts/floor_anchor.py",
     ".github/workflows/floor.yml",
+)
+
+
+# The sign-off explanation. The heading is what the workflow finds its own
+# pull-request comment by; the clause purpose is read from FLOOR.md and falls
+# back to this sentence when the file does not carry the clause.
+SIGNOFF_HEADING = "Floor sign-off requested"
+CLAUSE_III_PURPOSE = "Changes to the floor require the maintainer's out-of-band sign-off."
+CLAUSE_III_HEADING_RE = re.compile(
+    r"<!-- floor-clause:iii -->\s*\*\*iii\.\s+(.+?)\*\*", re.DOTALL
+)
+
+# One changed workflow line that is only an action pin:
+# ``- uses: owner/action@<sha>  # <version>`` (the list dash is optional).
+USES_PIN_RE = re.compile(
+    r"^\s*(?:-\s+)?uses:\s*([^@\s]+)@([0-9a-fA-F]{7,40})\s*(?:#\s*(.*?))?\s*$"
 )
 
 
@@ -320,6 +346,90 @@ def missing_clauses(floor_text: str | None) -> list[str]:
         if any(token not in floor_text for token in required):
             missing.append(clause_id)
     return missing
+
+
+def clause_iii_purpose(floor_text: str | None) -> str:
+    """Clause iii's bold one-sentence purpose, as ``FLOOR.md`` states it."""
+    match = CLAUSE_III_HEADING_RE.search(floor_text or "")
+    if match is None:
+        return CLAUSE_III_PURPOSE
+    return " ".join(match.group(1).split())
+
+
+def pin_changes(diff_text: str) -> list[tuple[str, str, str]] | None:
+    """The ``uses:`` pin changes in a ``-U0`` diff, or ``None`` when the diff
+    changes anything else (or nothing).
+
+    Each entry is ``(action, old, new)`` where ``old`` and ``new`` read
+    ``<commit> <version comment>``, or ``(none)`` for a pin only one side has.
+    """
+    removed: dict[str, list[str]] = {}
+    added: dict[str, list[str]] = {}
+    for line in diff_text.splitlines():
+        if line.startswith(("+++", "---")) or not line.startswith(("+", "-")):
+            continue
+        match = USES_PIN_RE.match(line[1:])
+        if match is None:
+            return None
+        action, commit, version = match.groups()
+        side = added if line.startswith("+") else removed
+        side.setdefault(action, []).append(f"{commit} {version or ''}".strip())
+    if not removed and not added:
+        return None
+    changes: list[tuple[str, str, str]] = []
+    for action in dict.fromkeys([*removed, *added]):
+        olds, news = removed.get(action, []), added.get(action, [])
+        for index in range(max(len(olds), len(news))):
+            old = olds[index] if index < len(olds) else "(none)"
+            new = news[index] if index < len(news) else "(none)"
+            if (action, old, new) not in changes:
+                changes.append((action, old, new))
+    return changes
+
+
+def render_signoff_summary(
+    paths: list[tuple[str, str, str]],
+    head_commit: str,
+    clause_purpose: str,
+    pins: list[tuple[str, str, str]] | None,
+) -> str:
+    """The markdown section the maintainer reads before approving.
+
+    ``paths`` is ``(path, added, removed)`` per changed floor-core path.
+    """
+    lines = [
+        f"## {SIGNOFF_HEADING}",
+        "",
+        "This pull request changes the floor's own enforcement, so it waits on "
+        "the maintainer's deployment review of the `floor-signoff` environment.",
+        "",
+        f"**Why:** FLOOR.md clause iii. {clause_purpose}",
+        "",
+        f"**Head commit the approval covers:** `{head_commit}`",
+        "",
+        "**Floor-core paths changed:**",
+        "",
+    ]
+    lines += [f"- `{path}` +{added} -{removed}" for path, added, removed in paths]
+    if pins:
+        lines += [
+            "",
+            "**pin-only change:** every changed floor-core line is a `uses:` "
+            "pin, so this is a dependency bump of the actions below "
+            "(old commit and version -> new commit and version):",
+            "",
+        ]
+        lines += [f"- `{action}`: {old} -> {new}" for action, old, new in pins]
+    lines += [
+        "",
+        "**Approving** asserts that these changes to the floor's own "
+        "enforcement are intended.",
+        "",
+        "**Rejecting** turns the required `floor enforcement` check red, so "
+        "the pull request cannot merge.",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 # ── Git plumbing ─────────────────────────────────────────────────────────────
@@ -597,6 +707,47 @@ def cmd_protected(args: argparse.Namespace) -> int:
     return 0
 
 
+def _git_out(*args: str) -> str:
+    return subprocess.run(
+        ["git", *args], capture_output=True, text=True, check=True
+    ).stdout
+
+
+def cmd_signoff_summary(args: argparse.Namespace) -> int:
+    """Print the sign-off explanation, or nothing when the floor core is untouched.
+
+    The changed paths are ``git diff --name-only <base> HEAD`` classified with
+    the same roles ``protected --role floor-core`` uses, which is the trigger.
+    ``--head-commit`` only changes the commit the text cites: in CI ``HEAD`` is
+    the merge commit, and the approval covers the pull request's head.
+    """
+    base = args.base
+    component_dirs = _protected_component_dirs(base)
+    floor_core = [
+        path
+        for path in dict.fromkeys(_git_out("diff", "--name-only", base, "HEAD").splitlines())
+        if path and classify_path(path, component_dirs) == ROLE_FLOOR_CORE
+    ]
+    if not floor_core:
+        return 0
+    counts: list[tuple[str, str, str]] = []
+    for path in floor_core:
+        numstat = _git_out("diff", "--numstat", "--no-renames", base, "HEAD", "--", path)
+        added, removed = "0", "0"
+        for line in numstat.splitlines():
+            parts = line.split("\t")
+            if len(parts) == 3:
+                added, removed = parts[0], parts[1]  # "-" for a binary file
+        counts.append((path, added, removed))
+    pins = pin_changes(
+        _git_out("diff", "-U0", "--no-renames", base, "HEAD", "--", *floor_core)
+    )
+    head = args.head_commit or _git_out("rev-parse", "HEAD").strip()
+    purpose = clause_iii_purpose(_read_head(FLOOR_FILE))
+    sys.stdout.write(render_signoff_summary(counts, head, purpose, pins))
+    return 0
+
+
 def cmd_clauses(args: argparse.Namespace) -> int:
     floor_text = _read_head(args.floor)
     if floor_text is None:
@@ -657,6 +808,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="print only the paths in this role (default: every protected path)",
     )
     p_protected.set_defaults(func=cmd_protected)
+
+    p_signoff = sub.add_parser(
+        "signoff-summary",
+        help="explain a floor-core sign-off request (prints nothing when none is due)",
+    )
+    p_signoff.add_argument(
+        "--base", required=True, help="git ref for the merge-base (e.g. origin/main)"
+    )
+    p_signoff.add_argument(
+        "--head-commit",
+        help="commit the approval covers (default: git rev-parse HEAD); CI passes "
+        "the pull request's head because HEAD there is the merge commit",
+    )
+    p_signoff.set_defaults(func=cmd_signoff_summary)
 
     p_clauses = sub.add_parser("clauses", help="FLOOR.md four-clause integrity")
     p_clauses.add_argument("--floor", default=FLOOR_FILE, help="path to FLOOR.md")
