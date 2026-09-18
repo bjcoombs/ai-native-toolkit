@@ -139,3 +139,63 @@ def test_main_emits_with_explicit_flags(tmp_path, monkeypatch):
 def test_main_no_args_usage_error(capsys):
     assert main([]) == 2
     assert "Usage" in capsys.readouterr().err
+
+
+def _pull_request(tmp_path: Path) -> dict:
+    yaml = pytest.importorskip("yaml")
+    doc = yaml.safe_load(_workflow(tmp_path))
+    on = doc.get("on", doc.get(True))  # PyYAML reads a bare `on:` key as True
+    return on["pull_request"]
+
+
+_FLAGS = ["--version", "9.9.9", "--branch", "main", "--tools", "lizard"]
+_NOTICE = "Applied the default paths-ignore"
+
+
+def _existing_workflow(tmp_path: Path, body: str) -> None:
+    wf = tmp_path / ".github" / "workflows"
+    wf.mkdir(parents=True)
+    (wf / "ci.yml").write_text(body)
+
+
+_FILTERED = "on:\n  pull_request:\n    paths:\n      - src/**\n"
+
+
+def test_main_paths_ignore_flag(tmp_path):
+    assert main([str(tmp_path), *_FLAGS, "--paths-ignore", "**/*.md"]) == 0
+    assert _pull_request(tmp_path) == {"branches": ["main"], "paths-ignore": ["**/*.md"]}
+
+
+def test_main_paths_flag_repeatable(tmp_path):
+    assert main([str(tmp_path), *_FLAGS, "--paths", "src/**", "--paths", "lib/**"]) == 0
+    assert _pull_request(tmp_path) == {"branches": ["main"], "paths": ["src/**", "lib/**"]}
+
+
+def test_main_paths_and_paths_ignore_together_is_usage_error(tmp_path, capsys):
+    assert main([str(tmp_path), *_FLAGS, "--paths", "src/**", "--paths-ignore", "**/*.md"]) == 2
+    assert "--paths" in capsys.readouterr().err
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
+
+
+@pytest.mark.parametrize("body", [_FILTERED, "jobs:\n  t:\n    steps:\n      - uses: dorny/paths-filter@v3\n"])
+def test_path_filter_default_applied(tmp_path, capsys, body):
+    _existing_workflow(tmp_path, body)
+    assert main([str(tmp_path), *_FLAGS]) == 0
+    assert _pull_request(tmp_path) == {"branches": ["main"], "paths-ignore": ["**/*.md", ".assess/**"]}
+    notice = [line for line in capsys.readouterr().err.splitlines() if _NOTICE in line]
+    assert len(notice) == 1
+    assert "**/*.md" in notice[0] and ".assess/" in notice[0] and "ci.yml" in notice[0]
+
+
+def test_path_filter_default_not_applied_without_filtered_workflow(tmp_path, capsys):
+    _existing_workflow(tmp_path, "on:\n  pull_request:\njobs:\n  t:\n    steps:\n      - run: true\n")
+    assert main([str(tmp_path), *_FLAGS]) == 0
+    assert _pull_request(tmp_path) == {"branches": ["main"]}
+    assert _NOTICE not in capsys.readouterr().err
+
+
+def test_path_filter_default_not_applied_over_explicit_flag(tmp_path, capsys):
+    _existing_workflow(tmp_path, _FILTERED)
+    assert main([str(tmp_path), *_FLAGS, "--paths", "src/**"]) == 0
+    assert _pull_request(tmp_path) == {"branches": ["main"], "paths": ["src/**"]}
+    assert _NOTICE not in capsys.readouterr().err

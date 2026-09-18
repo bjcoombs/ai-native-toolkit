@@ -13,6 +13,7 @@ testable without touching disk.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from string import Template
 
@@ -88,16 +89,73 @@ def _render_tool_steps(discovered_tools: list[str]) -> str:
     return "\n" + "".join(steps)
 
 
+# The ignore list written when neither --paths nor --paths-ignore is given and an
+# existing workflow already filters on paths: docs-only and /assess-output-only
+# PRs skip the gate the same way they skip the repo's other path-filtered checks.
+DEFAULT_PATHS_IGNORE = ["**/*.md", ".assess/**"]
+
+# A ``paths:`` / ``paths-ignore:`` key on any line, or a dorny/paths-filter step.
+# A line scan, not a YAML parse: the deterministic core carries no YAML dependency,
+# and a false positive only adds the conservative docs-only ignore.
+_PATH_FILTER_RE = re.compile(r"^\s*paths(?:-ignore)?\s*:|dorny/paths-filter", re.MULTILINE)
+
+
+def _yaml_quote(value: str) -> str:
+    """Single-quoted YAML scalar: globs start with ``*`` (an alias) otherwise."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _render_path_filters(paths: list[str] | None, paths_ignore: list[str] | None) -> str:
+    """Render ``paths:`` / ``paths-ignore:`` lists for the ``on.pull_request`` block.
+
+    Each list keeps its given order. Returns lines ending in a newline, or an empty
+    string when neither list has entries.
+    """
+    lines: list[str] = []
+    for key, globs in (("paths", paths), ("paths-ignore", paths_ignore)):
+        if globs:
+            lines.append(f"    {key}:\n")
+            lines.extend(f"      - {_yaml_quote(g)}\n" for g in globs)
+    return "".join(lines)
+
+
+def find_path_filtered_workflow(repo_root: Path) -> Path | None:
+    """The first existing workflow that filters pull requests by path, else None.
+
+    Scans ``.github/workflows/*.yml`` and ``*.yaml`` in name order, skipping the
+    gate's own ``assess-gate.yml`` so a regenerated gate never detects its own
+    default. A file counts when it has a ``paths:`` or ``paths-ignore:`` key or
+    uses ``dorny/paths-filter``.
+    """
+    workflows = repo_root / ".github" / "workflows"
+    if not workflows.is_dir():
+        return None
+    candidates = sorted(p for p in workflows.iterdir() if p.suffix in {".yml", ".yaml"} and p.is_file())
+    for path in candidates:
+        if path.name == "assess-gate.yml":
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if _PATH_FILTER_RE.search(text):
+            return path
+    return None
+
+
 def render_ci_workflow(
     plugin_version: str,
     default_branch: str = "main",
     discovered_tools: list[str] | None = None,
     generated_date: str = "an /assess run",
+    paths: list[str] | None = None,
+    paths_ignore: list[str] | None = None,
 ) -> str:
     """Render the assess-gate workflow YAML as a string.
 
     Pure: no disk writes. ``discovered_tools`` are the binaries this run found
     (e.g. ``["lizard", "scc"]``); only the external ones get an install step.
+    ``paths`` / ``paths-ignore`` become lists under ``on.pull_request``.
     """
     template = Template(_TEMPLATE_PATH.read_text(encoding="utf-8"))
     return template.substitute(
@@ -105,6 +163,7 @@ def render_ci_workflow(
         default_branch=default_branch,
         generated_date=generated_date,
         tool_steps=_render_tool_steps(discovered_tools or []),
+        path_filters=_render_path_filters(paths, paths_ignore),
     )
 
 
@@ -114,6 +173,8 @@ def emit_ci_workflow(
     plugin_version: str,
     default_branch: str = "main",
     generated_date: str = "an /assess run",
+    paths: list[str] | None = None,
+    paths_ignore: list[str] | None = None,
 ) -> Path:
     """Write ``.github/workflows/assess-gate.yml`` with the discovered tools baked in.
 
@@ -124,6 +185,8 @@ def emit_ci_workflow(
         default_branch=default_branch,
         discovered_tools=discovered_tools,
         generated_date=generated_date,
+        paths=paths,
+        paths_ignore=paths_ignore,
     )
     workflow_path = repo_root / ".github" / "workflows" / "assess-gate.yml"
     workflow_path.parent.mkdir(parents=True, exist_ok=True)
