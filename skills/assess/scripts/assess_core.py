@@ -1400,6 +1400,14 @@ def build_run_context(
         "affected_finding_paths": excluded_finding_paths,
         "count": len(excluded_finding_paths),
     }
+    # Archive disclosure: paths under archive/, archived/ or attic/ are kept out
+    # of attention and prescribed_actions; this block names and counts them so
+    # the exclusion is visible. Mirrors excluded_by_config's path/count shape.
+    archived_finding_paths = keyhole.get("archived_finding_paths", [])
+    ctx["excluded_as_archive"] = {
+        "affected_finding_paths": archived_finding_paths,
+        "count": len(archived_finding_paths),
+    }
 
     # Structure drift (third write-side tendency surface: a declared ownership
     # map that no longer matches where the code lives). Tier 0 is the cheap
