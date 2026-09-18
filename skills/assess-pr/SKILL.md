@@ -19,7 +19,7 @@ Each offer is independent (uninstall excepted - it's mutually exclusive with the
 
 These are the **write-back phase** of the consent lifecycle (Phase 2; Phase 1 was the tool installs, Phase 3 the mutation pass - see the assess SKILL.md). Do not serialise them into back-to-back modals. Present them as **one batched, multi-select AskUserQuestion**: "Now that the report is written, which of these should I do?" with the options (open a PR, track the Top 3 Actions, freeze a CI gate, file feedback, and - the mutually-exclusive escape hatch - uninstall `/assess` from this repo), pre-filtered by feasibility:
 
-- Drop the **PR** option when the push-capability / remote check below (Step 5) shows no direct or fork PR is possible; on a read-only target, offer the fork variant instead.
+- Drop the **PR** option when the push-capability / remote check below (Step 5) shows no direct or fork PR is possible; on a read-only target, offer the fork variant instead. When the target states it takes no contributions (Step 5's no-contributions scan), offer the **no-contributions** variant instead: a PR inside the user's fork, never one against upstream.
 - Drop the **CI gate** option when the workflow could never run (no GitHub remote).
 - Keep **issue tracking** and **feedback** always (feedback needs no repo write).
 - **Uninstall** (Step 8) always appears: it removes what this run wrote. It doesn't compose with the write-back offers (no point opening a PR *and* deleting the report), so treat selecting it as "skip the others and clean up".
@@ -82,25 +82,46 @@ else
 fi
 ```
 
+Then check whether the target turns away outside contributions. A fork PR against a repo whose README or CONTRIBUTING says "do not send a pull request" is noise for its maintainers, so the scan runs before any upstream offer is framed:
+
+```bash
+# no-contributions scan: start
+NO_CONTRIBUTIONS=0
+for _nc_doc in "$REPO_ROOT/README.md" "$REPO_ROOT/CONTRIBUTING.md" "$REPO_ROOT/.github/CONTRIBUTING.md"; do
+  [ -f "$_nc_doc" ] || continue
+  if grep -Eiq "(does not|do not|doesn't|don't|not) accept(ing)? (any |outside |external )?(contributions|pull requests|prs)|(do not|don't|please don't) (send|open|submit) (a |any |us )?(pull requests?|prs?)([^a-z]|$)|(pull requests|contributions|prs) (are|will) not (be )?accepted" "$_nc_doc"; then
+    NO_CONTRIBUTIONS=1
+  fi
+done
+# no-contributions scan: end
+```
+
 Interpret the result:
 
 - `CAN_PUSH=1` (viewerPermission is `WRITE` / `MAINTAIN` / `ADMIN`, or the remote is a push-eligible fork): offer the direct PR flow below.
-- `CAN_PUSH=0` and viewerPermission is `READ` / `TRIAGE`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
+- `CAN_PUSH=0`, viewerPermission is `READ` / `TRIAGE`, and `NO_CONTRIBUTIONS=0`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
+- `CAN_PUSH=0` and `NO_CONTRIBUTIONS=1`: the target says it takes no contributions, so never offer a PR against `<owner>/<repo>`. Name the statement and the file it came from, then offer the no-contributions flow instead: "open the PR inside your fork, against the fork's default branch, and share the link?" Pair it with the Actions hint (see the flow below).
 - `gh` unavailable / not a GitHub remote / not authenticated (`$PUSH_INFO` empty): skip both PR offers entirely and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
 
 If `$REDIRECT_NOTICE` is non-empty, output it verbatim on its own line before the batched Phase 2 question.
 
-The push-capability result decides **how the PR option appears in the batched Phase 2 question** (it is not a separate prompt): use "open a PR in this repo" on a push-capable target, "fork and open a PR from your fork" on a read-only target, and drop the PR option entirely when no GitHub remote is detected. Frame the batched question with the written artifacts, e.g. _"Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Which of these should I do?"_ followed by the feasible offers.
+The push-capability result decides **how the PR option appears in the batched Phase 2 question** (it is not a separate prompt): use "open a PR in this repo" on a push-capable target, "fork and open a PR from your fork" on a read-only target, "open a PR inside your fork and share the link" on a read-only target with `NO_CONTRIBUTIONS=1`, and drop the PR option entirely when no GitHub remote is detected. Frame the batched question with the written artifacts, e.g. _"Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Which of these should I do?"_ followed by the feasible offers.
 
 If the user **selected the PR offer** (direct flow, `CAN_PUSH=1`):
 1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
 2. Stage and commit the report, the complexity heatmap, and the doc graph. Commit message: `docs: Add AI-readiness assessment + complexity and doc-navigability snapshots`.
 3. Push the branch and open a PR. Title: `docs: Codebase assessment - <YYYY-MM-DD>`.
 
-If the user **selected the PR offer** (fork flow, `CAN_PUSH=0` on the upstream):
+If the user **selected the PR offer** (fork flow, `CAN_PUSH=0` on the upstream, `NO_CONTRIBUTIONS=0`):
 1. `gh repo fork <owner>/<repo> --clone=false --remote=true` (creates the fork under the user's account and adds it as a remote named `origin` or similar; the upstream becomes `upstream` if the original was already `origin`).
 2. Create the branch as above, push to the **fork** (`git push -u <fork-remote> <branch>`), and open the PR via `gh pr create --repo <owner>/<repo>` (head defaults to the fork).
 3. Commit message, PR title, and body are unchanged from the direct flow.
+
+If the user **selected the PR offer** (no-contributions flow, `CAN_PUSH=0` and `NO_CONTRIBUTIONS=1`): the PR stays inside your fork; nothing is opened against upstream.
+1. Fork and push exactly as steps 1-2 of the fork flow, but open the PR against the fork's default branch: `FORK_BRANCH=$(gh repo view <fork-owner>/<repo> --json defaultBranchRef | jq -r '.defaultBranchRef.name')`, then `gh pr create --repo <fork-owner>/<repo> --base "$FORK_BRANCH" --head <branch>`.
+2. Share the link: print the fork PR's URL so the user can pass it on to whoever wants the assessment.
+3. Suggest disabling Actions on the fork: a fork inherits the upstream workflows, so the PR can start CI runs billed to the user's account. Offer the command, never run it unasked: `gh api -X PUT repos/<fork-owner>/<repo>/actions/permissions -F enabled=false`.
+4. Commit message, PR title, and body are unchanged from the direct flow.
 4. **PR body must include the plugin reference at the bottom** so reviewers can install the tool that generated the report. Use this body template:
 
    ```markdown
