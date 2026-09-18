@@ -524,6 +524,28 @@ def _cited_excluded_doc(
     return path.resolve()
 
 
+_FENCE_OPEN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+
+
+def _strip_fenced_lines(text: str) -> str:
+    """Drop CommonMark fenced blocks line by line: backtick or tilde fences,
+    closed only by the same marker at least as long as the opener. An
+    unclosed fence runs to the end of the document."""
+    out: list[str] = []
+    fence = ""
+    for line in text.splitlines():
+        m = _FENCE_OPEN_RE.match(line)
+        if not fence:
+            if m and not (m.group(1)[0] == "`" and "`" in line[m.end():]):
+                fence = m.group(1)
+            else:
+                out.append(line)
+        elif m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) \
+                and not line[m.end():].strip():
+            fence = ""
+    return "\n".join(out)
+
+
 def _reference_paths(text: str, source_rel: str) -> list[tuple[str, str]]:
     """Doc paths named by backticked tokens outside fences, as
     `(raw_ref, doc_relative_candidate)` pairs, in document order.
@@ -534,7 +556,7 @@ def _reference_paths(text: str, source_rel: str) -> list[tuple[str, str]]:
     """
     from lib.ownership_parser import _extract_path_refs
     out: list[tuple[str, str]] = []
-    for m in _INLINE_CODE_RE.finditer(_FENCE_RE.sub("", text)):
+    for m in _INLINE_CODE_RE.finditer(_strip_fenced_lines(text)):
         span = m.group(0)
         if "[[" in span or "](" in span:
             continue

@@ -766,3 +766,16 @@ def test_link_only_figures_equal_headline_without_references(tmp_path: Path) -> 
     d = build_doc_graph(tmp_path).as_dict()
     assert d["link_only_orphan_rate"] == d["orphan_rate"]
     assert d["link_only_reachability_pct"] == d["reachability_pct"]
+
+
+def test_reference_inside_tilde_or_long_fence_adds_no_edge(tmp_path: Path) -> None:
+    """CommonMark fences: a tilde fence, and a four-backtick fence holding a
+    shorter backtick run, both hide their content from the reference pass."""
+    _write(
+        tmp_path, "README.md",
+        "~~~\n`a.md`\n~~~\n\n````\n```\n`b.md`\n```\n````\n",
+    )
+    _write(tmp_path, "a.md", "# A")
+    _write(tmp_path, "b.md", "# B")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == []
