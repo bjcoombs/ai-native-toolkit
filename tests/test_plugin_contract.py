@@ -175,7 +175,7 @@ def fenced_blocks(text):
 
 def test_fenced_blocks_parser():
     text = "a\n````bash\n```\nx $1\n```\n````\n~~~\ny\n~~~\n```\nz\n"
-    assert [b for _, b in fenced_blocks(text)] == ["```\nx $1\n```", "y", "z"]
+    assert list(fenced_blocks(text)) == [(2, "```\nx $1\n```"), (7, "y"), (10, "z")]
 
 
 @pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
