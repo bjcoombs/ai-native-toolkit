@@ -687,3 +687,39 @@ def test_cli_returns_nonzero_when_unavailable(tmp_path: Path, capsys, monkeypatc
     rc = ar.main()
     assert rc == 1
     assert "unavailable" in capsys.readouterr().out
+
+
+# --- Documentation files are not accretion -----------------------------------
+
+def test_accretion_skips_documentation_append_only_markdown(tmp_path: Path) -> None:
+    """A 3,000-line append-only markdown plan earns no accretion entry.
+
+    ``notes/PLAN.md`` grows by 1,000 lines in each of three commits with no
+    deletions (fraction 0.0, monotonic), the exact accretion fingerprint. A plan
+    that grows by appending carries no change risk, so the scanner skips
+    documentation extensions. ``src/big.py`` grows the same way and is still
+    flagged, so the filter is by file type, not by growth shape.
+    """
+    repo = _init_repo(tmp_path)
+    clock = _Clock()
+    for i in range(1, 4):
+        _commit(repo, "notes/PLAN.md", _lines(1000 * i), clock)
+        _commit(repo, "src/big.py", _lines(100 * i, start=50000), clock)
+
+    assert (repo / "notes" / "PLAN.md").read_text().count("\n") == 3000
+    flagged = _flagged_paths(repo)
+    assert "notes/PLAN.md" not in flagged
+    assert "src/big.py" in flagged
+
+
+def test_accretion_skips_documentation_every_doc_suffix() -> None:
+    """Every documentation suffix is rejected, case-insensitively; code is not."""
+    hist = _FileHistory(additions=900, deletions=0, commit_count=3,
+                        first_time=0, last_time=86_400,
+                        net_sequence=[300, 600, 900])
+    for path in ("a.md", "b.MD", "c.markdown", "d.mdx", "e.rst", "g.adoc"):
+        assert _build_accretion_file(path, hist, DELETION_FRACTION_THRESHOLD) is None
+    # .txt is not documentation here: build logic and manifests accrete for real.
+    for path in ("a.py", "b.dart", "c.js", "Makefile", "CMakeLists.txt",
+                 "requirements.txt"):
+        assert _build_accretion_file(path, hist, DELETION_FRACTION_THRESHOLD) is not None
