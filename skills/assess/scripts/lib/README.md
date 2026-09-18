@@ -233,7 +233,11 @@ the deterministic signals - fed the `archetype` block), and the one positive
 user config exclude (`exclude_dirs`/`exclude_patterns`) covers - the git-log-derived
 findings never saw the scan-level filter - and returns the dropped paths as
 `excluded_finding_paths` so `assess_core` can serialise the `excluded_by_config`
-disclosure (a suppressed finding is counted and named, never silently vanished). Each
+disclosure (a suppressed finding is counted and named, never silently vanished).
+`exclude_archive_from_attention` then builds the attention list with any path under an
+`archive/`, `archived/` or `attic/` directory left out (so it never becomes a prescribed
+action) and returns those paths as `archived_finding_paths` for the `excluded_as_archive`
+disclosure; the findings themselves still name them. Each
 block build is wrapped in a catch-all so one signal's failure degrades that block to
 `available: False` rather than crashing the run. It also runs `structure_drift.py`'s Tier 1
 grouping disagreement (fed the behaviour block's co-change pairs so no second git-log parse
@@ -370,7 +374,9 @@ net-delta is non-decreasing *and* its deletion fraction (deletions over total
 churn) stays below a threshold - growth with almost no deletion pressure, the
 fingerprint of pure append-only accretion rather than ordinary maintenance. A
 multi-commit gate drops single-touch rename artifacts; binary files (numstat
-`-`) are skipped. Compensates the *Accretion* contributor tendency named in the
+`-`) are skipped, and documentation files (`DOC_SUFFIXES`: `.md`, `.markdown`, `.mdx`,
+`.rst`, `.adoc`; not `.txt`, which covers `CMakeLists.txt` and `requirements.txt`) are never
+flagged, since an appended-to document carries no change risk. Compensates the *Accretion* contributor tendency named in the
 repo north star. Degrades to `available: False` on git failure and
 `reliable: False` on degenerate history (same verdict as `git_churn`). Reuses
 `git_churn`'s `GIT_TIMEOUT_SECONDS` and `churn_is_degenerate`; imports no
