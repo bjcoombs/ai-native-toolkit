@@ -68,6 +68,15 @@ DELETION_FRACTION_THRESHOLD = 0.15
 # those single-touch artifacts: accretion is a property of repeated growth.
 MIN_COMMITS_FOR_ACCRETION = 3
 
+# Documentation is never accretion. A plan or changelog that grows by appending
+# is the normal life of a document and carries no change risk, yet scc scores
+# markdown, so a long document lands in the top size band on LOC alone. Matched
+# case-insensitively on the final suffix. Filtered by extension rather than by the
+# stats row's ``source``: scc-only languages (Dart) have no lizard row either.
+# ``.txt`` is deliberately absent: it covers CMakeLists.txt (build logic) and
+# requirements.txt (a manifest whose growth is a real accretion signal).
+DOC_SUFFIXES = frozenset({".md", ".markdown", ".mdx", ".rst", ".adoc"})
+
 # Average days per month for the time-span readout (Gregorian mean).
 DAYS_PER_MONTH = 30.44
 
@@ -247,8 +256,11 @@ def _build_accretion_file(
     commits, its running net-delta never came back down, and its deletions stayed
     below ``deletion_threshold`` share of total churn. The threshold is the
     caller's value (see :func:`scan_accretion_ratchet`) so the cut applied is the
-    one reported, with no second filter downstream.
+    one reported, with no second filter downstream. Documentation files
+    (:data:`DOC_SUFFIXES`) are never promoted.
     """
+    if Path(path).suffix.lower() in DOC_SUFFIXES:
+        return None
     if hist.commit_count < MIN_COMMITS_FOR_ACCRETION:
         return None
 
