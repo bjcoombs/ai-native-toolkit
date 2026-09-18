@@ -69,6 +69,7 @@ COLOR_ORPHAN = "#D55E00"     # Okabe-Ito vermillion
 EDGE_COLOR = "#9aa0a6"
 ENTRY_RING = "#0072B2"       # blue ring marks the entry node when colour = staleness
 ORPHAN_RING = "#1a1a1a"      # dark dashed ring marks orphans when colour = staleness
+UNMEASURED_FILL = "#d9d9d9"  # neutral grey: a doc with no staleness measurement
 GHOST_COLOR = "#CC79A7"      # Okabe-Ito reddish-purple: broken-link "ghost" nodes
 
 W, H = 1600.0, 1000.0
@@ -222,15 +223,18 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  
     cmap = plt.get_cmap(STALENESS_CMAP)
     days = {x: float(staleness.get(x, {}).get("last_commit_days") or 0) for x in nodes}
     churn = {x: float(staleness.get(x, {}).get("code_churn_in_window") or 0) for x in nodes}
-    day_cap, _ = adaptive_cap(list(days.values()))
-    churn_cap, _ = adaptive_cap(list(churn.values()))
+    # A node the staleness scan never measured (a `.claude/` doc a reference
+    # brought in) is drawn neutral, not painted fresh with a made-up 0d.
+    unmeasured = {x: UNMEASURED_FILL for x in nodes if staleness and x not in staleness}
+    day_cap, _ = adaptive_cap([days[x] for x in nodes if x not in unmeasured])
+    churn_cap, _ = adaptive_cap([churn[x] for x in nodes if x not in unmeasured])
 
     def fill(node: str) -> str:
         if colour == "status":
             return _STATUS_COLOR[classify_node(node, entries, unreachable, orphans)]
         base = cmap(min(days[node] / day_cap, 1.0) if day_cap else 0.0)
         sat = (churn[node] / churn_cap) if churn_cap else 0.0
-        return rgba_to_hex(blend_to_grey(base, sat))
+        return unmeasured.get(node) or rgba_to_hex(blend_to_grey(base, sat))
 
     # Canvas: square-ish for the radial layout (it's circular, so a wide canvas
     # wastes the sides); wide for the web two-panel. Header = centred title;
@@ -332,11 +336,13 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  
             stroke, sw, dash = ORPHAN_RING, 1.8, ' stroke-dasharray="3,2"'
         else:
             stroke, sw = "#b8b8b8", 1.0
-        days_txt = f"{days[node]:.0f}d stale" if colour == "staleness" else ""
+        days_txt = "" if colour != "staleness" else (
+            "staleness not measured" if node in unmeasured
+            else f"{days[node]:.0f}d stale, subject churn {churn[node]:.0f}")
         tip = html.escape(
             f"{node}\n{size_text(node)} · in {in_deg.get(node, 0)} · "
             f"out {out_deg.get(node, 0)} · {status}"
-            + (f" · {days_txt}, subject churn {churn[node]:.0f}" if days_txt else ""),
+            + (f" · {days_txt}" if days_txt else ""),
             quote=False)
         parts.append(
             f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{fill(node)}" '
@@ -358,7 +364,7 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  
     parts.append('</svg>')
     out_path.write_text("\n".join(parts), encoding="utf-8")
 
-    print(f"wrote {out_path}  ({n} docs, {graph.number_of_edges()} links, "
+    print(f"wrote {out_path}  ({n} docs, {graph.number_of_edges()} edges, "
           f"{result.island_count} islands)")
     print(f"orphan-rate {result.orphan_rate:.0%}  reachable-from-entry "
           f"{result.reachability_pct:.0%}  entries={sorted(entries)}")
@@ -380,7 +386,7 @@ def _title(result, n: int, cw: float) -> str:
     return "\n".join([
         f'<text x="{mid:.0f}" y="40" font-size="24" font-weight="600" '
         f'text-anchor="middle">Doc map — {n} docs, {result.graph.number_of_edges()} '
-        f'links, {result.island_count} islands</text>',
+        f'edges, {result.island_count} islands</text>',
         f'<text x="{mid:.0f}" y="66" font-size="14" fill="#555" text-anchor="middle">'
         f'{result.orphan_rate:.0%} orphaned · {result.reachability_pct:.0%} '
         f'reachable from the entry point'

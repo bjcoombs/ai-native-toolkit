@@ -289,7 +289,7 @@ def _extract_path_refs(segment: str) -> set[str]:
     refs: set[str] = set()
     for m in _INLINE_CODE_RE.finditer(segment):
         token = _strip_anchor(m.group(1))
-        if "/" in token or token.endswith(".md") or token.endswith(".py"):
+        if "/" in token or token.endswith((".md", ".mdx", ".markdown", ".py")):
             refs.add(token.rstrip("/.,;:)"))
     for m in _WIKILINK_RE.finditer(segment):
         token = _strip_anchor(m.group(1))

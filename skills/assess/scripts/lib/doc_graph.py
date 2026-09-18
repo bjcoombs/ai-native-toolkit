@@ -32,6 +32,7 @@ import os
 import posixpath
 import re
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 
 try:  # networkx is the core dep; degrade rather than crash if it is missing.
@@ -132,7 +133,6 @@ _MDLINK_RE = re.compile(r"(?<!\!)\[(?:[^\]]*)\]\(([^)]+)\)")
 # stable as new schemes appear and avoids the specific-scheme gap that caused
 # `sms:` and `skype:` to be misclassified as broken file references (issue #227).
 _EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
-_FENCE_RE = re.compile(r"```.*?\n.*?```", re.DOTALL)  # fenced code blocks
 # Inline-code spans: backtick-delimited segments on a single logical line. A
 # link target inside `[[foo]]` or `[text](./foo.md)` is documentation syntax
 # (an Obsidian skill teaching wikilinks, a FORMAT-spec showing a sample), not
@@ -151,7 +151,7 @@ def _strip_code_spans(text: str) -> str:
     """
     # Strip fenced blocks first so an inline-code regex can't snag content
     # inside a fence that legitimately contains backticks of its own.
-    return _INLINE_CODE_RE.sub("", _FENCE_RE.sub("", text))
+    return _INLINE_CODE_RE.sub("", _strip_fenced_lines(text))
 
 # Caps so a pathological repo can't bloat run-context.json.
 MAX_BROKEN_LINKS = 60
@@ -524,7 +524,8 @@ def _cited_excluded_doc(
     return path.resolve()
 
 
-_FENCE_OPEN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+# Any indentation: a fence nested under a list item sits four or more spaces in.
+_FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
 
 
 def _strip_fenced_lines(text: str) -> str:
@@ -569,6 +570,64 @@ def _reference_paths(text: str, source_rel: str) -> list[tuple[str, str]]:
     return out
 
 
+def _read_doc(path: Path) -> str | None:
+    """A doc's text, or None when it cannot be read (Layer 0 is best-effort)."""
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+
+
+def _resolve_references(
+    text: str, source_rel: str, repo_root: Path,
+    doc_by_rel: dict[str, Path], doc_rels: set[str], cite,
+) -> list[Path]:
+    """Docs named by backticked paths in `text`, exact paths before guesses:
+    the doc-relative path (walked doc or cited `.claude/` doc), then the
+    ownership parser's resolver over the walked docs (repo-root path or a
+    basename that names exactly one doc), then a cited `.claude/` doc at the
+    literal path. `cite` is `_cited_excluded_doc` bound to the run's excludes.
+
+    `doc_by_rel` / `doc_rels` hold the walked docs only and never grow, so a
+    doc's references depend on its own text and the walk, not on read order.
+    """
+    from lib.ownership_parser import _resolve_ref
+    found: list[Path] = []
+    for ref, local in _reference_paths(text, source_rel):
+        hit = doc_by_rel.get(local) or cite(local)
+        if hit is None:
+            hits = _resolve_ref(ref, repo_root, doc_rels)
+            hit = doc_by_rel[str(next(iter(hits)))] if len(hits) == 1 else cite(ref.lstrip("/"))
+        if hit is not None:
+            found.append(hit)
+    return found
+
+
+def _settle_references(
+    docs: list[Path], texts: dict[Path, str], rel, resolve,
+) -> list[tuple[Path, Path]]:
+    """First pass: read every doc into `texts` and resolve its reference edges.
+
+    A cited `.claude/` doc is appended to `docs` and read in turn, so the link
+    pass that follows sees the final doc set (and name index) whatever order
+    the walk produced. Returns `(source, target)` pairs, self-citations dropped.
+    """
+    seen = set(docs)
+    pairs: list[tuple[Path, Path]] = []
+    for d in docs:  # grows while iterating: cited .claude docs join the queue
+        text = _read_doc(d)
+        if text is None:
+            continue
+        texts[d] = text
+        for tgt in resolve(text, rel(d)):
+            if tgt not in seen:
+                seen.add(tgt)
+                docs.append(tgt)
+            if tgt != d:
+                pairs.append((d, tgt))
+    return pairs
+
+
 def _missing_xrefs(docs, texts: dict, graph, repo_root: Path, rel) -> list[dict]:
     """Docs that name another doc's filename in prose but never link to it
     (Karpathy Lint: "missing cross-references").
@@ -590,7 +649,7 @@ def _missing_xrefs(docs, texts: dict, graph, repo_root: Path, rel) -> list[dict]
         text = texts.get(d)
         if not text:
             continue
-        body = _FENCE_RE.sub("", text)
+        body = _strip_fenced_lines(text)
         seen: set[Path] = set()
         for m in pattern.finditer(body):
             t = name_to_doc.get(m.group(1).lower())
@@ -642,7 +701,7 @@ def classify_node(node: str, entries: set, unreachable: set, orphans: set) -> st
     return "island"
 
 
-def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, ratchet target
+def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, ratchet target
     repo_root: Path, doc_files: list[Path] | None = None,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
@@ -683,11 +742,27 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
             vault_detected=vault, obsidiantools_available=obs,
         )
 
-    by_relpath, by_name, by_stem = _build_name_index(docs, repo_root)
-    doc_set = set(docs)
-
     def rel(p: Path) -> str:
         return str(p.relative_to(repo_root))
+
+    # Reference edges (issue #353) settle first: a backticked token naming an
+    # existing doc. A cited `.claude/` doc joins `docs` here, before the name
+    # index and the link pass, so links and wikilinks reach it from any doc.
+    texts: dict[Path, str] = {}
+    discovered = list(docs)  # the walked set; `docs` grows with cited .claude docs
+    doc_by_rel = {rel(x): x for x in discovered}
+    cite = partial(
+        _cited_excluded_doc, repo_root=repo_root, tracked=tracked_files(repo_root),
+        scope=scope, extra_dirs=extra_exclude_dirs or set(),
+        extra_pats=extra_exclude_patterns or [],
+    )
+    ref_pairs = _settle_references(docs, texts, rel, partial(
+        _resolve_references, repo_root=repo_root, doc_by_rel=doc_by_rel,
+        doc_rels=set(doc_by_rel), cite=cite,
+    ))
+
+    by_relpath, by_name, by_stem = _build_name_index(docs, repo_root)
+    doc_set = set(docs)
 
     graph = nx.DiGraph()
     for d in docs:
@@ -697,7 +772,6 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
     ambiguous = 0
     broken: list[dict] = []
     _broken_seen: set[tuple[str, str]] = set()
-    texts: dict[Path, str] = {}
     # Per-doc count of non-navigational URI-scheme links (mailto:/tel:/external
     # http) - the machine-extraction fingerprint a converted document carries.
     # Feeds raw-source-tree detection (issue #225).
@@ -709,42 +783,10 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
             _broken_seen.add(key)
             broken.append({"from": rel(src), "target": target, "kind": kind})
 
-    discovered = list(docs)  # the walked set; `docs` grows with cited .claude docs
-    doc_by_rel = {rel(x): x for x in docs}
-    doc_rels = set(doc_by_rel)
-    tracked = tracked_files(repo_root)
-
-    def _resolve_references(text: str, src: Path) -> list[Path]:
-        """Docs named by backticked paths in `text`: doc-relative first, then
-        the ownership parser's resolver (repo-root path or unique basename),
-        then a cited `.claude/` doc at the literal path."""
-        from lib.ownership_parser import _resolve_ref
-        found: list[Path] = []
-        for ref, local in _reference_paths(text, rel(src)):
-            hits = {Path(local)} if local in doc_rels else _resolve_ref(ref, repo_root, doc_rels)
-            if len(hits) == 1:
-                found.append(doc_by_rel[str(next(iter(hits)))])
-                continue
-            for cand in dict.fromkeys((local, ref.lstrip("/"))):
-                cited = _cited_excluded_doc(
-                    cand, repo_root, tracked, scope,
-                    extra_exclude_dirs or set(), extra_exclude_patterns or [],
-                )
-                if cited is not None:
-                    doc_by_rel[rel(cited)] = cited
-                    doc_rels.add(rel(cited))
-                    found.append(cited)
-                    break
-        return found
-
     for d in docs:
-        try:
-            text = d.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            # Best-effort scan: skip an unreadable doc rather than aborting the
-            # whole graph build (Layer 0 stays best-effort).
+        text = texts.get(d)
+        if text is None:  # unreadable: skipped, Layer 0 stays best-effort
             continue
-        texts[d] = text
         # Strip code spans before harvesting links: a link target inside a
         # fence or backtick span is a documentation sample (FORMAT specs,
         # wikilink-syntax demos), not a navigation edge.
@@ -792,16 +834,11 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 19, 
                     graph.add_edge(rel(d), rel(tgt), kind="link")
             elif tgt.suffix.lower() in CODE_EXTENSIONS:
                 doc_to_code.append({"doc": rel(d), "code": rel(tgt)})
-        # Reference edges (issue #353): a backticked token naming an existing
-        # doc. A cited `.claude/` doc is appended to `docs`, so this loop
-        # parses it in turn. A link between the same pair keeps kind link.
-        for tgt in _resolve_references(text, d):
-            if tgt not in doc_set:
-                doc_set.add(tgt)
-                docs.append(tgt)
-                graph.add_node(rel(tgt))
-            if tgt != d and not graph.has_edge(rel(d), rel(tgt)):
-                graph.add_edge(rel(d), rel(tgt), kind="reference")
+    # A link between the same pair keeps kind link.
+    graph.add_edges_from([
+        (rel(src), rel(tgt)) for src, tgt in ref_pairs
+        if not graph.has_edge(rel(src), rel(tgt))
+    ], kind="reference")
 
     missing = _missing_xrefs(discovered, texts, graph, repo_root, rel)
 

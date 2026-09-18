@@ -526,7 +526,7 @@ def render(files: list[tuple[Path, int, float, str]],
 # *layout* for diff comparability). Mirrors assess_core's
 # ARTIFACT_SCHEMA_VERSION - the treemap runs as a separate process, so the
 # constant is duplicated rather than imported (no dependency on assess_core).
-ARTIFACT_SCHEMA_VERSION = "1.0.0"
+ARTIFACT_SCHEMA_VERSION = "1.1.0"
 
 
 def _new_run_id() -> str:
@@ -558,8 +558,7 @@ def _read_plugin_version() -> str:
 # is a structural change to the sidecar shape (a metric added/removed/redefined)
 # that voids the diff against an older snapshot until the next clean run
 # re-seeds the baseline (assess_core._diff_is_reliable reads it).
-# 2: doc-graph orphan_rate / reachability_pct count reference edges (#353).
-STATS_SCHEMA_VERSION = 2
+STATS_SCHEMA_VERSION = 1
 
 
 def _lizard_version() -> str:

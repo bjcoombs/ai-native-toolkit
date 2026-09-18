@@ -298,3 +298,25 @@ def test_doc_graph_staleness_maps_to_red_hue(doc_graph_svg):
     assert circles["old.md"]["fill"] == "#7f0000"
     assert circles["README.md"]["fill"] == "#fff7ec"
     assert circles["guide.md"]["fill"] == "#fff7ec"
+
+
+def test_doc_graph_unmeasured_node_is_neutral_not_fresh(tmp_path):
+    """A `.claude/` doc brought in by a reference has no staleness row (the
+    staleness scan keeps excluding `.claude/`). It is drawn neutral grey and
+    labelled unmeasured, not painted the freshest colour with a made-up 0d."""
+    env = _git_env()
+    repo = tmp_path / "repo"
+    (repo / ".claude").mkdir(parents=True)
+    (repo / "README.md").write_text("# Entry\nOpen `.claude/notes.md`.\n", encoding="utf-8")
+    (repo / ".claude" / "notes.md").write_text("# Notes\n", encoding="utf-8")
+    _init_repo(repo, env)
+    _git(repo, "add", "-A", env=env)
+    _git(repo, "commit", "-q", "-m", "docs", env=env)
+    svg = _run_script("doc-graph-svg.py", repo, tmp_path / "doc.svg", env)
+    circles = _parse_circles(svg)
+    assert circles["notes.md"]["fill"] == "#d9d9d9"
+    assert "staleness not measured" in circles["notes.md"]["title"]
+    assert "0d stale" not in circles["notes.md"]["title"]
+    assert "stale" in circles["README.md"]["title"]  # measured docs keep the scale
+    assert circles["README.md"]["fill"] != "#d9d9d9"
+    assert "2 docs, 1 edges" in svg
