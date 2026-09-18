@@ -25,6 +25,7 @@ BUILTIN_AGENTS = {"general-purpose", "Explore", "Plan", "statusline-setup"}
 
 PLACEHOLDER_RE = re.compile(r"\b(TODO|TBD|FIXME)\b")
 FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+BARE_POSITIONAL_RE = re.compile(r"\$[1-9]\b")
 INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 USE_SKILL_RE = re.compile(r"[Uu]se the ([a-z0-9][a-z0-9-]*) skill")
@@ -141,6 +142,16 @@ def test_skill_has_trigger_clause(d):
 def test_no_placeholder_tokens(p):
     body = INLINE_CODE_RE.sub("", FENCE_RE.sub("", p.read_text(encoding="utf-8")))
     assert not PLACEHOLDER_RE.search(body), f"{p.relative_to(REPO)}: placeholder token outside code fence"
+
+
+@pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
+def test_no_bare_positional_in_fences(p):
+    # Claude Code substitutes a skill's arguments into bare $1..$9 before the
+    # model reads the text, so a shell function using them runs with argument
+    # words in place of its parameters. Brace form (${1}) is left alone.
+    for block in FENCE_RE.findall(p.read_text(encoding="utf-8")):
+        m = BARE_POSITIONAL_RE.search(block)
+        assert not m, f"{p.relative_to(REPO)}: bare positional {m.group(0)} in code fence; use ${{{m.group(0)[1:]}}}"
 
 
 @pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
