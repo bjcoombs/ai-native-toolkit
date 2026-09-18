@@ -1037,3 +1037,24 @@ def test_archive_paths_excluded_noop_without_archive() -> None:
     attention, archived = ks.exclude_archive_from_attention(findings)
     assert attention == ks.build_attention_list(findings)
     assert archived == []
+
+
+# --- prune_missing_finding_paths (renamed / deleted history) -----------------
+
+def test_pruned_finding_paths_only_git_history_findings(tmp_path: Path) -> None:
+    """A git-history finding path absent from disk is dropped and returned
+    sorted; paths that exist, and findings read from the working tree, are
+    untouched."""
+    (tmp_path / "live").mkdir()
+    findings = ks.assemble_findings({
+        "hidden_coupling": ["live", "gone", "also_gone"],
+        "refactor_boundary": ["gone_island"],
+        "unactioned_intent": ["not/on/disk.py"],
+    })
+    pruned, dropped = ks.prune_missing_finding_paths(findings, tmp_path)
+    by_name = {f["name"]: f["paths"] for f in pruned}
+    assert by_name["hidden_coupling"] == ["live"]
+    assert by_name["refactor_boundary"] == []
+    assert by_name["unactioned_intent"] == ["not/on/disk.py"]
+    assert dropped == ["also_gone", "gone", "gone_island"]
+    assert [f["name"] for f in pruned] == [f["name"] for f in findings]

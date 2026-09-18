@@ -11,9 +11,11 @@ from pathlib import Path
 
 from lib.change_coupling import (
     authorship_analysis,
+    build_rename_map,
     change_coupling_pairs,
     containment_ratio,
     find_self_referential_tests,
+    fold_renames,
     parse_commit_file_sets,
 )
 
@@ -333,3 +335,46 @@ def test_self_referential_test_reuses_passed_commit_sets(tmp_path: Path) -> None
         repo, {"test_m.py": "m.py"}, commit_sets=commit_sets
     )
     assert [r["source_file"] for r in result] == ["m.py"]
+
+
+# --- build_rename_map / fold_renames (renamed paths) --------------------------
+
+def test_rename_map_folds_history_onto_current_paths(tmp_path: Path) -> None:
+    """a/x.py and a/y.py co-change 3 times, then a/ -> b/ -> c/. The map
+    resolves the chain to c/, and folding counts the pre-rename history under
+    the current names: 3 edits + 2 rename commits = 5 co-changes."""
+    repo = _init_repo(tmp_path)
+    for i in range(3):
+        _commit(repo, {"a/x.py": f"x = {i}\n" * 5, "a/y.py": f"y = {i}\n" * 5})
+    _git(repo, "mv", "a", "b")
+    _commit(repo, {}, "rename a -> b")
+    _git(repo, "mv", "b", "c")
+    _commit(repo, {}, "rename b -> c")
+
+    rename_map = build_rename_map(repo)
+    assert rename_map == {
+        "a/x.py": "c/x.py", "a/y.py": "c/y.py",
+        "b/x.py": "c/x.py", "b/y.py": "c/y.py",
+    }
+    pairs = change_coupling_pairs(
+        fold_renames(parse_commit_file_sets(repo), rename_map), min_support=1,
+    )
+    assert [(p["file_a"], p["file_b"], p["co_change_count"]) for p in pairs] == [
+        ("c/x.py", "c/y.py", 5),
+    ]
+
+
+def test_rename_map_skips_path_reused_at_head(tmp_path: Path) -> None:
+    """A name that exists again at HEAD keeps its own history, so it is left
+    out of the map; outside a git repo the map is empty."""
+    repo = _init_repo(tmp_path)
+    _commit(repo, {"old.py": "v = 1\n" * 5})
+    _git(repo, "mv", "old.py", "new.py")
+    _commit(repo, {}, "rename")
+    _commit(repo, {"old.py": "fresh = 1\n"}, "reuse the name")
+
+    assert build_rename_map(repo) == {}
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    assert build_rename_map(plain) == {}
+    assert fold_renames([{Path("a.py")}], {}) == [{Path("a.py")}]

@@ -55,6 +55,7 @@ from lib.badge import (
     write_badge,
 )
 from lib.assess_config import load_excludes, load_structure_config
+from lib.change_coupling import build_rename_map
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
 from lib.interactivity import build_offers_block
@@ -507,6 +508,24 @@ def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
     return json.loads(state_file.read_text(encoding="utf-8"))
 
 
+def _rekey_first_flagged(
+    first_flagged: dict[str, str], rename_map: dict[str, str],
+) -> dict[str, str]:
+    """Move each first-flagged entry for a renamed path onto its current path.
+
+    The date travels with the file. When the current path already has an entry,
+    the earlier known date wins, so a rename never makes a file look newer.
+    """
+    rekeyed = {k: v for k, v in first_flagged.items() if k not in rename_map}
+    for old, date in first_flagged.items():
+        new = rename_map.get(old)
+        if new is None:
+            continue
+        known = sorted(d for d in (date, rekeyed.get(new)) if d and d != "unknown")
+        rekeyed[new] = known[0] if known else "unknown"
+    return rekeyed
+
+
 def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None:
     """Persist the first-flagged date map to .assess/first-flagged.json."""
     (assess_dir / "first-flagged.json").write_text(
@@ -912,8 +931,14 @@ def build_run_context(
     instruction_files, instructions_grade, untracked_instr, dangling_instr, skills_info, \
         sensitive_instr = _grade_instruction_files(repo_root)
 
-    # Load (and later update) the persistent first-flagged date map
-    first_flagged_map = _load_first_flagged(assess_dir)
+    # Historical path -> current path, from git's rename detection. Built once:
+    # it re-keys the first-flagged map here and folds co-change history onto
+    # current paths in the keyhole integrate below.
+    rename_map = build_rename_map(repo_root)
+
+    # Load (and later update) the persistent first-flagged date map, with any
+    # entry for a renamed file moved to its current path.
+    first_flagged_map = _rekey_first_flagged(_load_first_flagged(assess_dir), rename_map)
 
     # User-supplied excludes (`.assess/config.toml`), loaded once and threaded
     # into every read-side scan (heatmap parity, doc graph, staleness, liveness,
@@ -1373,6 +1398,7 @@ def build_run_context(
         exclude_dirs=extra_exclude_dirs,
         exclude_patterns=extra_exclude_patterns,
         scope=scope_abs,
+        rename_map=rename_map,
     )
     ctx["structure"] = keyhole["structure"]
     ctx["behaviour"] = keyhole["behaviour"]
@@ -1407,6 +1433,14 @@ def build_run_context(
     ctx["excluded_as_archive"] = {
         "affected_finding_paths": archived_finding_paths,
         "count": len(archived_finding_paths),
+    }
+    # Dead-path disclosure: a git-history finding path that no longer exists
+    # (deleted, with no rename to follow) is dropped from the findings,
+    # attention, prescribed actions and markdown; this block names and counts it.
+    pruned_finding_paths = keyhole.get("pruned_finding_paths", [])
+    ctx["pruned_finding_paths"] = {
+        "paths": pruned_finding_paths,
+        "count": len(pruned_finding_paths),
     }
 
     # Structure drift (third write-side tendency surface: a declared ownership

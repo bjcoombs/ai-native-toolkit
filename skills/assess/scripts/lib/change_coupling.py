@@ -79,7 +79,9 @@ def parse_commit_file_sets(repo_root: Path, since: str | None = None) -> list[se
 
     Pass ``since`` as a git date expression (e.g. ``"12 months ago"``) to window
     the history; ``None`` (default) means full history reachable from HEAD.
-    Renames are not followed - a file appears only under its current name.
+    Renames are not followed: a commit made before a rename lists the file under
+    its old path. Pass the sets through :func:`fold_renames` with
+    :func:`build_rename_map`'s output to count that history under current paths.
     """
     repo_top = _repo_top(repo_root)
     if repo_top is None:
@@ -110,6 +112,65 @@ def parse_commit_file_sets(repo_root: Path, since: str | None = None) -> list[se
                 files.add(Path(line))
         commit_sets.append(files)
     return commit_sets
+
+
+def build_rename_map(repo_root: Path) -> dict[str, str]:
+    """Map each historical path that git saw renamed to its current path.
+
+    Parsed from ``git log --name-status -M --diff-filter=R``. Chains resolve to
+    their final name (``a -> b`` then ``b -> c`` maps ``a`` to ``c``). A path
+    that exists again at HEAD is left out, so a name reused after a rename keeps
+    its own history. Paths are repo-relative, as :func:`parse_commit_file_sets`
+    prints them. Returns ``{}`` outside a git repo or on any git failure.
+    """
+    repo_top = _repo_top(repo_root)
+    if repo_top is None:
+        return {}
+    cmd = ["git", "-C", repo_top, "log", "--name-status", "-M",
+           "--diff-filter=R", "--pretty=format:"]
+    try:
+        raw = subprocess.run(
+            cmd, capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return {}
+
+    # git log is newest first; replay oldest first so a later rename of the same
+    # path wins.
+    step: dict[str, str] = {}
+    for line in reversed(raw.splitlines()):
+        parts = line.split("\t")
+        if len(parts) == 3 and parts[0].startswith("R"):
+            step[parts[1]] = parts[2]
+    top = Path(repo_top)
+    step = {old: new for old, new in step.items() if not (top / old).exists()}
+
+    resolved: dict[str, str] = {}
+    for old in step:
+        seen = {old}
+        cur = step[old]
+        while cur in step and cur not in seen:
+            seen.add(cur)
+            cur = step[cur]
+        resolved[old] = cur
+    return resolved
+
+
+def fold_renames(
+    commit_sets: list[set[Path]], rename_map: dict[str, str],
+) -> list[set[Path]]:
+    """Rewrite each commit's paths through ``rename_map`` (see :func:`build_rename_map`).
+
+    History recorded under an old path is counted under the current one, so a
+    pair of files renamed after they co-changed keeps its co-change count under
+    the new names. Returns ``commit_sets`` unchanged when the map is empty.
+    """
+    if not rename_map:
+        return commit_sets
+    return [
+        {Path(rename_map.get(f.as_posix(), f.as_posix())) for f in files}
+        for files in commit_sets
+    ]
 
 
 def change_coupling_pairs(
