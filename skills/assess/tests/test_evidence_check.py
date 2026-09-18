@@ -7,6 +7,7 @@ A false entry lands in ``evidence_rejected`` with its kind and arguments intact
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -172,3 +173,52 @@ def test_cli_refuses_input_that_is_not_a_flat_array(repo: Path, tmp_path_factory
     )
     assert proc.returncode == 2
     assert not (out_dir / "out.json").exists()
+
+
+def test_path_with_nul_is_rejected_not_raised(repo: Path) -> None:
+    entries = [
+        {"layer": 0, "kind": "path_exists", "path": "docs/\0guide.md"},
+        {"layer": 7, "kind": "referenced_in", "needle": "x", "path": ".github\0"},
+    ]
+    result = check_evidence(repo, entries)
+    assert result["evidence"] == []
+    assert len(result["evidence_rejected"]) == 2
+    assert is_referenced_in(repo, "x", ".github\0") is False
+
+
+def test_reference_search_does_not_enter_git_metadata(repo: Path) -> None:
+    (repo / ".git").mkdir()
+    (repo / ".git" / "config").write_text("scripts/check-x.sh\n")
+    assert is_referenced_in(repo, "scripts/check-x.sh", ".git") is False
+    assert is_referenced_in(repo, "scripts/check-x.sh", ".git/config") is False
+    for kind in ("referenced_in", "not_referenced_in"):
+        result = check_evidence(
+            repo, [{"layer": 7, "kind": kind, "needle": "x", "path": ".git/config"}]
+        )
+        assert result["evidence"] == [], kind
+
+
+@pytest.mark.skipif(sys.platform == "win32" or not hasattr(os, "geteuid") or os.geteuid() == 0,
+                    reason="permission bits do not restrict root or Windows")
+def test_not_referenced_in_is_rejected_when_the_search_is_incomplete(repo: Path) -> None:
+    hidden = repo / ".github" / "workflows" / "locked"
+    hidden.mkdir()
+    (hidden / "ci.yml").write_text("run: scripts/other.sh\n")
+    unreadable = repo / ".github" / "workflows" / "unreadable.yml"
+    unreadable.write_text("run: scripts/third.sh\n")
+    hidden.chmod(0)
+    unreadable.chmod(0)
+    try:
+        for needle in ("scripts/other.sh", "scripts/third.sh"):
+            entry = {"layer": 7, "kind": "not_referenced_in", "needle": needle,
+                     "path": ".github/workflows"}
+            result = check_evidence(repo, [entry])
+            assert result["evidence"] == [], needle
+            assert "could not be searched" in result["evidence_rejected"][0]["reason"]
+        # A match found elsewhere still verifies a positive claim.
+        ok = {"layer": 7, "kind": "referenced_in", "needle": "scripts/check-x.sh",
+              "path": ".github/workflows"}
+        assert check_evidence(repo, [ok])["evidence"] == [ok]
+    finally:
+        hidden.chmod(0o755)
+        unreadable.chmod(0o644)

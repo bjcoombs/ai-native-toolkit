@@ -426,7 +426,9 @@ substring search, no model. Input is a flat array of entries, each with `layer`,
 `referenced_in` / `not_referenced_in` take `needle` and `path` (one file, or a
 directory searched recursively); `file_contains` takes `path` (one file) and
 `needle`. Every `path` is relative to the repository root; one that resolves
-outside it is rejected. `check_evidence` splits the list into `evidence` (verified,
+outside it, or cannot be resolved, is rejected. The reference search skips `.git/`
+and fails closed: a `not_referenced_in` claim is rejected when any file or directory
+under `path` could not be read, since the unread part could hold the reference. `check_evidence` splits the list into `evidence` (verified,
 returned as given) and `evidence_rejected` (copies carrying a `reason`); unknown
 keys pass through. The reference search is the public
 `is_referenced_in(repo_root, needle, path)`, so a check outside this module can

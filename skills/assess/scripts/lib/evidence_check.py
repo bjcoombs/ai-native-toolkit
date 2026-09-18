@@ -43,30 +43,36 @@ _SKIP_DIRS = frozenset({".git"})
 
 
 def _resolve(repo_root: Path, rel: str) -> Path | None:
-    """Resolve ``rel`` under ``repo_root``; None when it escapes the root."""
-    root = Path(repo_root).resolve()
-    target = (root / rel).resolve()
+    """Resolve ``rel`` under ``repo_root``; None when it escapes the root or
+    cannot be resolved (an embedded NUL, a symlink loop)."""
+    if "\0" in rel:
+        return None
+    try:
+        root = Path(repo_root).resolve()
+        target = (root / rel).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None
     if target != root and not target.is_relative_to(root):
         return None
     return target
 
 
-def _file_has(path: Path, needle: bytes) -> bool:
+def _in_git_metadata(rel: str) -> bool:
+    return any(part in _SKIP_DIRS for part in Path(rel).parts)
+
+
+def _file_has(path: Path, needle: bytes) -> bool | None:
+    """True/False for a completed read; None when the file cannot be read."""
     try:
         return needle in path.read_bytes()
     except OSError:
-        return False
+        return None
 
 
-def is_referenced_in(repo_root: Path | str, needle: str, path: str) -> bool:
-    """True when the literal ``needle`` occurs in the file at ``path``, or in
-    any file under the directory ``path`` (searched recursively).
-
-    ``path`` is relative to ``repo_root``. A path that does not exist, or that
-    resolves outside ``repo_root``, holds no reference and returns False.
-    Symlinked directories are not followed; ``.git/`` is skipped.
-    """
-    if not needle:
+def _search(repo_root: Path | str, needle: str, path: str) -> bool | None:
+    """True when found; False when a complete search found nothing; None when
+    nothing was found but some file or directory could not be searched."""
+    if not needle or _in_git_metadata(path):
         return False
     target = _resolve(Path(repo_root), path)
     if target is None:
@@ -76,12 +82,29 @@ def is_referenced_in(repo_root: Path | str, needle: str, path: str) -> bool:
         return _file_has(target, raw)
     if not target.is_dir():
         return False
-    for dirpath, dirnames, filenames in os.walk(target):
+    errors: list[OSError] = []
+    for dirpath, dirnames, filenames in os.walk(target, onerror=errors.append):
         dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
         for name in sorted(filenames):
-            if _file_has(Path(dirpath) / name, raw):
+            hit = _file_has(Path(dirpath) / name, raw)
+            if hit:
                 return True
-    return False
+            if hit is None:
+                errors.append(OSError(name))
+    return None if errors else False
+
+
+def is_referenced_in(repo_root: Path | str, needle: str, path: str) -> bool:
+    """True when the literal ``needle`` occurs in the file at ``path``, or in
+    any file under the directory ``path`` (searched recursively).
+
+    ``path`` is relative to ``repo_root``. A path that does not exist, that
+    resolves outside ``repo_root``, or that lies inside ``.git/`` holds no
+    reference and returns False, as does a search that found nothing because
+    a file or directory could not be read. Symlinked directories are not
+    followed; ``.git/`` is skipped.
+    """
+    return _search(repo_root, needle, path) is True
 
 
 def check_entry(repo_root: Path | str, entry: Any) -> str | None:
@@ -100,7 +123,7 @@ def check_entry(repo_root: Path | str, entry: Any) -> str | None:
         return "missing needle"
     target = _resolve(Path(repo_root), rel)
     if target is None:
-        return "path resolves outside the repository root"
+        return "path resolves outside the repository root or cannot be resolved"
 
     if kind == "path_exists":
         return None if target.exists() else "path does not exist"
@@ -109,15 +132,22 @@ def check_entry(repo_root: Path | str, entry: Any) -> str | None:
     if kind == "file_contains":
         if not target.is_file():
             return "path is not a file"
-        return None if _file_has(target, needle.encode("utf-8")) else "needle not found in file"
+        hit = _file_has(target, needle.encode("utf-8"))
+        if hit is None:
+            return "file could not be read"
+        return None if hit else "needle not found in file"
     # referenced_in / not_referenced_in: the place searched must exist, or the
     # claim is about nothing (use path_absent to claim the place is missing).
+    if _in_git_metadata(rel):
+        return "path is inside .git/, which the reference search does not enter"
     if not target.exists():
         return "path does not exist"
-    found = is_referenced_in(repo_root, needle, rel)
-    if kind == "referenced_in":
-        return None if found else "needle not found under path"
-    return "needle found under path" if found else None
+    found = _search(repo_root, needle, rel)
+    if found is True:
+        return None if kind == "referenced_in" else "needle found under path"
+    if found is None:
+        return "part of path could not be searched, so the result is incomplete"
+    return "needle not found under path" if kind == "referenced_in" else None
 
 
 def check_evidence(repo_root: Path | str, entries: list[Any]) -> dict[str, list[Any]]:
