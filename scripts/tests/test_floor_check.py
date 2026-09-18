@@ -1008,14 +1008,43 @@ def test_signoff_summary_cites_the_head_commit_override(signoff_repo, capsys):
     assert head not in out
 
 
-def test_signoff_summary_names_the_clause_purpose_from_floor_md(signoff_repo, capsys):
-    (signoff_repo / FLOOR_FILE).write_text(
-        "# Floor\n<!-- floor-clause:iii -->\n**iii. Custom purpose of the\n"
+def test_signoff_summary_names_the_clause_purpose_from_the_base_floor_md(
+    signoff_repo, capsys
+):
+    # The Why line quotes clause iii as the base declares it: a pull request
+    # that rewrites the clause must not supply its own justification.
+    floor = signoff_repo / FLOOR_FILE
+    floor.write_text(
+        "# Floor\n<!-- floor-clause:iii -->\n**iii. Base purpose of the\n"
         "clause.** Body text.\n",
         encoding="utf-8",
     )
-    _commit_all(signoff_repo, "clause text")
+    _commit_all(signoff_repo, "clause text at base")
+    floor.write_text(
+        floor.read_text(encoding="utf-8").replace("Base purpose", "Rewritten purpose"),
+        encoding="utf-8",
+    )
+    _commit_all(signoff_repo, "rewrite the clause")
 
     out = _summary(capsys)
 
-    assert _line_with(out, "clause iii", "Custom purpose of the clause.") is not None
+    assert _line_with(out, "clause iii", "Base purpose of the clause.") is not None
+    assert "Rewritten purpose" not in out
+
+
+def test_signoff_summary_removed_dash_line_vetoes_pin_only(signoff_repo, capsys):
+    # A removed content line that starts with `---` (a markdown rule) is a
+    # change like any other, not a diff header.
+    floor = signoff_repo / FLOOR_FILE
+    floor.write_text("# Floor\n--- rule\none\n", encoding="utf-8")
+    _commit_all(signoff_repo, "rule at base")
+    floor.write_text("# Floor\none\n", encoding="utf-8")
+    (signoff_repo / _WORKFLOW).write_text(
+        _workflow_text(_NEW_PIN, "v10.1.0"), encoding="utf-8"
+    )
+    _commit_all(signoff_repo, "drop the rule and bump the pin")
+
+    out = _summary(capsys)
+
+    assert _line_with(out, "`FLOOR.md`", "+0", "-1") is not None
+    assert "pin-only" not in out.lower()

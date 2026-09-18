@@ -160,9 +160,10 @@ FLOOR_CORE_PATHS = (
 )
 
 
-# The sign-off explanation. The heading is what the workflow finds its own
-# pull-request comment by; the clause purpose is read from FLOOR.md and falls
-# back to this sentence when the file does not carry the clause.
+# The sign-off explanation's section title. (The workflow finds its own
+# pull-request comment by a hidden marker it adds, not by this title.) The
+# clause purpose is read from FLOOR.md at the base ref and falls back to this
+# sentence when the file there does not carry the clause.
 SIGNOFF_HEADING = "Floor sign-off requested"
 CLAUSE_III_PURPOSE = "Changes to the floor require the maintainer's out-of-band sign-off."
 CLAUSE_III_HEADING_RE = re.compile(
@@ -365,8 +366,17 @@ def pin_changes(diff_text: str) -> list[tuple[str, str, str]] | None:
     """
     removed: dict[str, list[str]] = {}
     added: dict[str, list[str]] = {}
+    in_hunk = False
     for line in diff_text.splitlines():
-        if line.startswith(("+++", "---")) or not line.startswith(("+", "-")):
+        # Track hunk state rather than prefix-match headers: inside a hunk a
+        # leading `+`/`-` is always content, even a removed `---` rule.
+        if line.startswith("diff --git"):
+            in_hunk = False
+            continue
+        if line.startswith("@@"):
+            in_hunk = True
+            continue
+        if not in_hunk or not line.startswith(("+", "-")):
             continue
         match = USES_PIN_RE.match(line[1:])
         if match is None:
@@ -415,8 +425,9 @@ def render_signoff_summary(
         lines += [
             "",
             "**pin-only change:** every changed floor-core line is a `uses:` "
-            "pin, so this is a dependency bump of the actions below "
-            "(old commit and version -> new commit and version):",
+            "action pin, and nothing else changed. Each action below shows its "
+            "old commit and version -> its new commit and version (`(none)` "
+            "where a pin was added or removed):",
             "",
         ]
         lines += [f"- `{action}`: {old} -> {new}" for action, old, new in pins]
@@ -743,7 +754,9 @@ def cmd_signoff_summary(args: argparse.Namespace) -> int:
         _git_out("diff", "-U0", "--no-renames", base, "HEAD", "--", *floor_core)
     )
     head = args.head_commit or _git_out("rev-parse", "HEAD").strip()
-    purpose = clause_iii_purpose(_read_head(FLOOR_FILE))
+    # Quote the clause as the base declares it, so a pull request that
+    # rewrites clause iii does not supply its own justification.
+    purpose = clause_iii_purpose(_git_show(base, FLOOR_FILE))
     sys.stdout.write(render_signoff_summary(counts, head, purpose, pins))
     return 0
 

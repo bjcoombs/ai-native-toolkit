@@ -195,6 +195,10 @@ jobs:
   # cannot disagree and this file still names no path. It cites the pull
   # request's head commit: the checkout is the merge commit, which is not what
   # the maintainer approves.
+  # This is the one floor job with a write scope. On the `pull_request` event
+  # a fork's GITHUB_TOKEN is read-only whatever `permissions:` says, so the
+  # write is reachable only from a branch in this repository (a collaborator);
+  # there is no `pull_request_target` and no secret in the job.
   signoff-summary:
     name: floor sign-off summary
     needs: [canary-changes]
@@ -238,9 +242,19 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          # A step with no `shell:` runs as `bash -e` without pipefail, which
+          # would hide a failed `gh api` behind jq's exit 0 and reach the POST.
+          set -o pipefail
+          SUMMARY="${RUNNER_TEMP}/floor-signoff-summary.md"
+          if [ ! -s "${SUMMARY}" ]; then
+            # The base advanced between the path filter and this job and the
+            # floor-core set came back empty: post nothing rather than a blank.
+            echo "::warning::The sign-off explanation is empty, so the comment was skipped."
+            exit 0
+          fi
           MARKER="<!-- floor-signoff-summary -->"
           BODY="${RUNNER_TEMP}/floor-signoff-comment.md"
-          { echo "${MARKER}"; cat "${RUNNER_TEMP}/floor-signoff-summary.md"; } > "${BODY}"
+          { echo "${MARKER}"; cat "${SUMMARY}"; } > "${BODY}"
           if ! EXISTING="$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" \
               | jq -s -r --arg m "${MARKER}" 'add // [] | map(select(.user.login == "github-actions[bot]" and (.body | contains($m)))) | .[0].id // empty')"; then
             echo "::warning::Could not read the pull request's comments, so the sign-off comment was skipped; the step summary stands alone."
