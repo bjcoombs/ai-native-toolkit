@@ -1419,6 +1419,14 @@ def build_run_context(
         "affected_finding_paths": excluded_finding_paths,
         "count": len(excluded_finding_paths),
     }
+    # Archive disclosure: paths under archive/, archived/ or attic/ are kept out
+    # of attention and prescribed_actions; this block names and counts them so
+    # the exclusion is visible. Mirrors excluded_by_config's path/count shape.
+    archived_finding_paths = keyhole.get("archived_finding_paths", [])
+    ctx["excluded_as_archive"] = {
+        "affected_finding_paths": archived_finding_paths,
+        "count": len(archived_finding_paths),
+    }
     # Generated-file disclosure: the treemap drops files that declare
     # themselves generated (header marker) or carry payload-length lines, and
     # lists them in the stats file. Copied through so the report and gate name
