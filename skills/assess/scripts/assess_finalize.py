@@ -27,8 +27,8 @@ Writes (when the input carries an ``actions`` array):
 Run:
     uv run assess_finalize.py <repo_root>
     uv run assess_finalize.py <repo_root> --drop-entry <run_id>
-        (removes a never-finalized log entry that blocks finalize, re-chaining
-        the log; finalized entries are refused)
+        (replaces a never-finalized log entry that blocks finalize with a
+        one-line tombstone and re-chains the log; finalized entries are refused)
 """
 # /// script
 # requires-python = ">=3.11"
@@ -581,22 +581,30 @@ def finalize_run(*, assess_dir: Path) -> None:
 
 
 def drop_unfinalized_entry(*, assess_dir: Path, run_id: str) -> None:
-    """Remove the never-finalized log entry stamped ``run_id`` and re-chain.
+    """Replace the never-finalized log entry stamped ``run_id`` with a tombstone.
 
     The supported way out of the earlier-same-date refusal: the entry's own
     run-context has been overwritten, so it can never be finalized, and deleting
-    it by hand breaks the chain for every later entry. A finalized entry is
-    history and is refused.
+    it by hand breaks the chain for every later entry. The entry becomes a
+    one-line chained note (no heading, no stamp, no placeholders) so the log
+    still records that the run existed; the chain is recomputed from there. A
+    finalized entry is history and is refused.
     """
     idx = find_log_entry(assess_dir, run_id)
     if idx is None:
         raise FinalizeValidationError(f"log.md has no entry stamped run_id={run_id}")
-    if not log_entry_is_unfinalized(read_log_entries(assess_dir)[idx]):
+    content = read_log_entries(assess_dir)[idx]
+    if not log_entry_is_unfinalized(content):
         raise FinalizeValidationError(
             f"log.md entry run_id={run_id} is finalized; finalized entries are history "
             "and are not removed"
         )
-    rewrite_log_entry(assess_dir, idx, None)
+    day = log_entry_date(content) or "unknown date"
+    tombstone = (
+        f"> Dropped run {run_id} ({day}): never finalized, its run-context was "
+        "superseded; removed with assess_finalize.py --drop-entry.\n\n---\n"
+    )
+    rewrite_log_entry(assess_dir, idx, tombstone)
 
 
 def main() -> int:

@@ -166,7 +166,11 @@ def test_drop_entry_clears_earlier_same_date_placeholder_refusal(repo: Path) -> 
         capture_output=True, text=True,
     )
     assert done.returncode == 0, done.stderr
-    assert first["run_id"] not in (assess_dir / "log.md").read_text(encoding="utf-8")
+    log = (assess_dir / "log.md").read_text(encoding="utf-8")
+    # The run is recorded as a tombstone, not erased: no heading, no placeholders.
+    assert f"> Dropped run {first['run_id']} ({DAY})" in log
+    assert log.count(LOG_PLACEHOLDER) == 1
+    assert _day_headings(assess_dir) == 1
     assert verify_log_chain(assess_dir) == (True, None)
     finalize_run(assess_dir=assess_dir)
     assert _day_headings(assess_dir) == 1
@@ -197,3 +201,18 @@ def test_finalize_refuses_stamped_log_without_this_runs_entry(repo: Path) -> Non
     with pytest.raises(FinalizeValidationError, match="no entry stamped"):
         finalize_run(assess_dir=assess_dir)
     assert (assess_dir / "log.md").read_text(encoding="utf-8") == before
+
+
+def test_core_replaces_superseded_same_day_entry_without_git(tmp_path: Path) -> None:
+    """A target with no git has no commit to key on; two same-day runs still
+    replace rather than stack, so finalize is not blocked."""
+    root = tmp_path / "plain"
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "hot.py").write_text("def hot(a):\n    return a\n", encoding="utf-8")
+    first = build_run_context(repo_root=root, run_date=DAY, non_interactive=True)
+    assert first["measured_commit"]["available"] is False
+    second = build_run_context(repo_root=root, run_date=DAY, non_interactive=True)
+    assess_dir = root / ".assess"
+    assert _day_headings(assess_dir) == 1
+    assert second["run_id"] in (assess_dir / "log.md").read_text(encoding="utf-8")
+    assert verify_log_chain(assess_dir) == (True, None)

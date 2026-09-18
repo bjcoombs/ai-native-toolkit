@@ -509,7 +509,7 @@ def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
 
 
 def _supersede_same_commit_log_entry(
-    assess_dir: Path, *, run_date: str, head_sha: str | None
+    assess_dir: Path, *, run_date: str, measured_commit: dict
 ) -> bool:
     """Drop the prior run's unfinalized log entry when this run supersedes it.
 
@@ -518,16 +518,31 @@ def _supersede_same_commit_log_entry(
     run writes its own later), so it names the entry's run id and commit. The
     wiki writer only removes that entry if it is the log's last and still
     carries placeholders; a finalized entry is history and stays (#355).
+
+    A target with no git (``available`` false on both runs) has no commit to
+    key on, so the date and the prior run id are the whole identity: two such
+    runs on one day count as the same measurement.
     """
     try:
         prior = json.loads((assess_dir / "run-context.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
-    if not isinstance(prior, dict) or not head_sha or not prior.get("run_id"):
+    if not isinstance(prior, dict) or not prior.get("run_id"):
+        return False
+    if prior.get("run_date") != run_date:
         return False
     prior_commit = prior.get("measured_commit")
-    prior_sha = prior_commit.get("head_sha") if isinstance(prior_commit, dict) else None
-    if prior.get("run_date") != run_date or prior_sha != head_sha:
+    if not isinstance(prior_commit, dict):
+        return False
+    head_sha = measured_commit.get("head_sha")
+    if head_sha:
+        same = prior_commit.get("head_sha") == head_sha
+    else:
+        same = (
+            measured_commit.get("available") is False
+            and prior_commit.get("available") is False
+        )
+    if not same:
         return False
     return supersede_unfinalized_log_entry(assess_dir, prior["run_id"])
 
@@ -1111,7 +1126,7 @@ def build_run_context(
     )
     measured_commit = git_commit_info(repo_root)
     _supersede_same_commit_log_entry(
-        assess_dir, run_date=run_date, head_sha=measured_commit.get("head_sha"),
+        assess_dir, run_date=run_date, measured_commit=measured_commit,
     )
     append_log_entry(assess_dir, log_entry)
 
