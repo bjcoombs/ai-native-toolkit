@@ -105,9 +105,26 @@ def test_detect_none_for_non_jvm(tmp_path: Path) -> None:
 def test_fixture_pom_excluded_when_under_tests_fixtures(tmp_path: Path) -> None:
     # A pom under tests/fixtures/ must not make a repo look like a Maven project
     # (the auto-exclude that keeps the assess run-context baseline stable).
+    # JVM source outside the fixture meets the source threshold, so a null
+    # result here can only come from the fixture exclusion.
     _write(tmp_path, "tests/fixtures/sample/pom.xml", "<project/>")
+    _write(tmp_path, "src/main/java/A.java", "class A {}")
     system, _ = detect_build_system(tmp_path)
     assert system is None
+
+
+def test_user_exclude_dir_prunes_build_file(tmp_path: Path) -> None:
+    _write(tmp_path, "legacy/pom.xml", "<project/>")
+    _write(tmp_path, "src/main/java/A.java", "class A {}")
+    assert detect_build_system(tmp_path)[0] == "maven"
+    assert detect_build_system(tmp_path, extra_exclude_dirs={"legacy"}) == (None, [])
+
+
+def test_requires_jvm_source_groovy_counts(tmp_path: Path) -> None:
+    # Grails apps, Jenkins plugins and Gradle plugin projects hold Groovy only.
+    _write(tmp_path, "build.gradle", "plugins { id 'groovy' }")
+    _write(tmp_path, "src/main/groovy/Plugin.groovy", "class Plugin {}")
+    assert detect_build_system(tmp_path) == ("gradle", ["build.gradle"])
 
 
 # ── JVM source threshold and platform wrappers ──────────────────────────────
@@ -174,6 +191,40 @@ def test_platform_wrapper_package_json_without_wrapper_dep_counts(
     _write(tmp_path, "android/app/src/main/java/MainActivity.java",
            "class MainActivity {}")
     assert detect_build_system(tmp_path) == ("gradle", ["android/build.gradle"])
+
+
+def _cordova_app(root: Path, prefix: str = "", package: str | None = None) -> None:
+    # `cordova platform add android` layout: config.xml and package.json at the
+    # app root, the generated Android project under platforms/android/.
+    _write(root, f"{prefix}config.xml",
+           '<widget xmlns:cdv="http://cordova.apache.org/ns/1.0"></widget>')
+    deps = {"devDependencies": {package: "13.0.0"}} if package else {}
+    _write(root, f"{prefix}package.json", json.dumps(deps))
+    _write(root, f"{prefix}platforms/android/build.gradle", "buildscript {}")
+    _write(root, f"{prefix}platforms/android/app/build.gradle", "apply plugin: 'x'")
+    _write(root, f"{prefix}platforms/android/app/src/main/java/MainActivity.java",
+           "class MainActivity {}")
+
+
+@pytest.mark.parametrize("package", [None, "cordova-android"])
+def test_platform_wrapper_cordova_platforms_android_is_not_jvm(
+        tmp_path: Path, package: str | None) -> None:
+    _cordova_app(tmp_path, package=package)
+    assert detect_build_system(tmp_path) == (None, [])
+
+
+def test_platform_wrapper_nested_cordova_app_is_not_jvm(tmp_path: Path) -> None:
+    _cordova_app(tmp_path, "apps/hybrid/")
+    assert detect_build_system(tmp_path) == (None, [])
+
+
+def test_platform_wrapper_platforms_android_without_cordova_counts(
+        tmp_path: Path) -> None:
+    # platforms/android/ with no Cordova marker beside platforms/ stays counted.
+    _write(tmp_path, "platforms/android/build.gradle", "buildscript {}")
+    _write(tmp_path, "platforms/android/src/main/java/A.java", "class A {}")
+    assert detect_build_system(tmp_path) == (
+        "gradle", ["platforms/android/build.gradle"])
 
 
 def test_platform_wrapper_does_not_hide_backend_jvm_source(tmp_path: Path) -> None:

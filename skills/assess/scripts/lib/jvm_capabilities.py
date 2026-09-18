@@ -36,9 +36,13 @@ at runtime (SKILL.md Step 2); that choice is human-judged, not CI-tested. CI
 tests SIGNAL CONSUMPTION - given a tool's output, the scorecard feeds correctly.
 
 Detection (issue #351): a build file counts only when the repository holds at
-least one ``.java``, ``.kt`` or ``.scala`` file outside platform-wrapper
-``android/`` directories (Flutter, React Native, Capacitor, Cordova), so a
-mobile app's generated Gradle shell never reads as a JVM codebase.
+least one ``.java``, ``.kt``, ``.scala`` or ``.groovy`` file outside
+platform-wrapper ``android/`` directories (Flutter, React Native, Capacitor, and
+Cordova's ``platforms/android/``), so a mobile app's generated Gradle shell never
+reads as a JVM codebase. The prune also covers a Flutter *plugin* package: its
+``android/src/main/kotlin/`` holds real Kotlin beside the plugin's own
+``pubspec.yaml``, but that code is the plugin's Android platform implementation,
+not a JVM codebase, so it is skipped with the app wrapper.
 
 Out of scope for v1 (fast-follow): healing the module graph (``jdeps``), linting,
 and modernization; Gradle plugin reading and a served Gradle path; non-JVM
@@ -117,7 +121,7 @@ _COORD_RE = re.compile(
 # A JVM codebase needs at least one of these source files outside a platform
 # wrapper; a build file alone (a stray pom.xml, a Flutter android/ shell) does not
 # make a repository a JVM project.
-_JVM_SOURCE_SUFFIXES = (".java", ".kt", ".scala")
+_JVM_SOURCE_SUFFIXES = (".java", ".kt", ".scala", ".groovy")
 _MAVEN_FILES = frozenset({"pom.xml"})
 _GRADLE_FILES = frozenset({"build.gradle", "build.gradle.kts"})
 
@@ -150,6 +154,16 @@ def _is_platform_wrapper_parent(dirpath: Path, filenames: list[str]) -> bool:
             and _package_json_names_wrapper(dirpath / "package.json"))
 
 
+def _is_cordova_root(dirpath: Path, filenames: list[str]) -> bool:
+    """True when ``dirpath`` is a Cordova app root, whose generated Android
+    project sits at ``platforms/android/``: a ``config.xml`` in the Cordova
+    namespace, or a ``package.json`` naming ``cordova-android``."""
+    if "config.xml" in filenames and "cordova.apache.org" in _read(dirpath / "config.xml"):
+        return True
+    return ("package.json" in filenames
+            and _package_json_names_wrapper(dirpath / "package.json"))
+
+
 def _scan_jvm_tree(repo_root: Path,
                    extra_exclude_dirs: set[str] | None = None,
                    extra_exclude_patterns: list[str] | None = None,
@@ -159,7 +173,8 @@ def _scan_jvm_tree(repo_root: Path,
     Skips vendored / build / fixture dirs, any user-supplied exclude (so a
     fixture ``pom.xml`` under ``tests/fixtures/`` never makes a Python repo look
     like a Maven project), and every platform-wrapper ``android/`` directory,
-    whose build files and source both belong to a non-JVM app.
+    whose build files and source both belong to a non-JVM app: an ``android/``
+    beside the app manifest, or Cordova's ``platforms/android/``.
     """
     from lib.assess_config import is_user_excluded
     extra_dirs = extra_exclude_dirs or set()
@@ -167,14 +182,17 @@ def _scan_jvm_tree(repo_root: Path,
     poms: list[str] = []
     gradles: list[str] = []
     has_source = False
+    wrappers: set[Path] = set()
     for dirpath, dirnames, filenames in os.walk(repo_root):
         here = Path(dirpath)
         rel_dir = here.relative_to(repo_root)
-        wrapper_parent = ("android" in dirnames
-                          and _is_platform_wrapper_parent(here, filenames))
+        if "android" in dirnames and _is_platform_wrapper_parent(here, filenames):
+            wrappers.add(rel_dir / "android")
+        if "platforms" in dirnames and _is_cordova_root(here, filenames):
+            wrappers.add(rel_dir / "platforms" / "android")
         dirnames[:] = [
             d for d in dirnames
-            if not (wrapper_parent and d == "android")
+            if rel_dir / d not in wrappers
             and not is_excluded_path(rel_dir / d)
             and not is_user_excluded(rel_dir / d, extra_dirs, [])
         ]
@@ -203,10 +221,11 @@ def detect_build_system(repo_root: Path,
     """Return ``(build_system, sorted_relative_build_files)``.
 
     A ``pom.xml`` or Gradle build file counts only when the repository holds at
-    least one ``.java``, ``.kt`` or ``.scala`` file outside platform-wrapper
-    directories (an ``android/`` beside a ``pubspec.yaml``, or beside a
-    ``package.json`` naming ``react-native``, ``@capacitor/android`` or
-    ``cordova-android``). Build files under a wrapper are never listed.
+    least one ``.java``, ``.kt``, ``.scala`` or ``.groovy`` file outside
+    platform-wrapper directories (an ``android/`` beside a ``pubspec.yaml``, or
+    beside a ``package.json`` naming ``react-native``, ``@capacitor/android`` or
+    ``cordova-android``; or Cordova's ``platforms/android/``). Build files under a
+    wrapper are never listed.
 
     Maven wins when both are present - it is the served path in v1, so a
     polyglot repo with a ``pom.xml`` still gets the liveness offer. Gradle is
