@@ -917,3 +917,16 @@ def test_write_stats_carries_generated_header_exclusions(treemap, tmp_path):
     assert isinstance(stats["schema_version"], int) and stats["schema_version"] > 1
     treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, root, out)
     assert json.loads(out.read_text())["excluded_generated"] == []
+
+
+def test_generated_header_all_excluded_error_names_the_exclusion(
+        treemap, tmp_path, monkeypatch, capsys):
+    schema = tmp_path / "schema.sql"
+    schema.write_text("-- GENERATED FILE - DO NOT EDIT\nCREATE TABLE t (id int);\n")
+    _fake_scorers(treemap, monkeypatch, [schema])
+    monkeypatch.setattr(sys, "argv", ["complexity-treemap.py", str(tmp_path)])
+    assert treemap.main() == 1
+    err = capsys.readouterr().err
+    assert "no scoreable files found" in err
+    assert "1 excluded as generated" in err
+    assert "--include-artifacts" in err

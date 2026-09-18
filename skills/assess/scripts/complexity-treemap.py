@@ -1085,7 +1085,14 @@ def main() -> int:
     )
     if not files:
         where = f" under {scope}" if scope is not None else ""
-        print(f"error: no scoreable files found{where}", file=sys.stderr)
+        # Content excludes can drop every file (an all-generated SDK subtree
+        # under --scope); name them so the dead end explains itself.
+        why = (
+            f" ({len(excluded_generated)} excluded as generated - pass "
+            f"--include-artifacts to score them)"
+            if excluded_generated else ""
+        )
+        print(f"error: no scoreable files found{where}{why}", file=sys.stderr)
         return 1
 
     _warn_if_dominated_by_one_file(files)
