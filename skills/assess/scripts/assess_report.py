@@ -145,25 +145,41 @@ def render_keyhole_summary(ctx: dict) -> str:
 
 
 def render_exclusion_disclosure(ctx: dict) -> str:
-    """One line disclosing findings suppressed by config excludes, or ``""``.
+    """Lines disclosing config-excluded findings and archive paths, or ``""``.
 
     Config excludes silently drop paths from every scan; when at least one path
     that would have been a finding is filtered out, this makes the suppression
     visible - a reader must never mistake a filtered report for a clean one.
     Returns ``""`` when nothing was suppressed, so a clean run's report is byte
-    identical to before this disclosure existed.
+    identical to before this disclosure existed. A second line names the paths
+    kept out of the attention list because they sit under an ``archive/``,
+    ``archived/`` or ``attic/`` directory (``excluded_as_archive``).
     """
+    lines: list[str] = []
     block = ctx.get("excluded_by_config") or {}
     count = block.get("count", 0)
-    if not isinstance(count, int) or count <= 0:
-        return ""
-    dirs = ", ".join(block.get("dirs", [])) or "none"
-    patterns = ", ".join(block.get("patterns", [])) or "none"
-    noun = "finding" if count == 1 else "findings"
-    return (
-        f"_{count} {noun} suppressed by config excludes "
-        f"(dirs: {dirs}; patterns: {patterns})._"
-    )
+    if isinstance(count, int) and count > 0:
+        dirs = ", ".join(block.get("dirs", [])) or "none"
+        patterns = ", ".join(block.get("patterns", [])) or "none"
+        noun = "finding" if count == 1 else "findings"
+        lines.append(
+            f"_{count} {noun} suppressed by config excludes "
+            f"(dirs: {dirs}; patterns: {patterns})._"
+        )
+    archived = ctx.get("excluded_as_archive") or {}
+    a_count = archived.get("count", 0)
+    if isinstance(a_count, int) and a_count > 0:
+        # Name at most five, as assess_gate does; the full list stays in
+        # run-context.json.
+        named = list(archived.get("affected_finding_paths", []))
+        paths = ", ".join(named[:5])
+        if len(named) > 5:
+            paths += f" +{len(named) - 5} more"
+        noun = "path" if a_count == 1 else "paths"
+        lines.append(
+            f"_{a_count} archived {noun} left out of the attention list: {paths}._"
+        )
+    return "\n\n".join(lines)
 
 
 def render_findings_section(ctx: dict) -> str:

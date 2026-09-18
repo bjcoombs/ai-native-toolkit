@@ -181,6 +181,38 @@ def test_exclusion_disclosure_empty_without_excludes() -> None:
     ) == ""
 
 
+def test_archive_paths_excluded_disclosed_in_report() -> None:
+    """Archive paths left out of attention are named under the keyhole summary."""
+    disclosure = render_exclusion_disclosure({
+        "excluded_as_archive": {
+            "affected_finding_paths": ["docs/archive/PLAN.md"], "count": 1,
+        }
+    })
+    assert disclosure == (
+        "_1 archived path left out of the attention list: docs/archive/PLAN.md._"
+    )
+    both = render_exclusion_disclosure({
+        "excluded_by_config": {"dirs": ["vendor"], "patterns": [], "count": 1},
+        "excluded_as_archive": {"affected_finding_paths": ["a/attic/x.py", "b/archive/y.py"],
+                                "count": 2},
+    })
+    assert both.split("\n\n") == [
+        "_1 finding suppressed by config excludes (dirs: vendor; patterns: none)._",
+        "_2 archived paths left out of the attention list: a/attic/x.py, b/archive/y.py._",
+    ]
+    assert render_exclusion_disclosure(
+        {"excluded_as_archive": {"affected_finding_paths": [], "count": 0}}
+    ) == ""
+    many = [f"archive/f{i}.py" for i in range(7)]
+    capped = render_exclusion_disclosure(
+        {"excluded_as_archive": {"affected_finding_paths": many, "count": 7}}
+    )
+    assert capped == (
+        "_7 archived paths left out of the attention list: archive/f0.py, "
+        "archive/f1.py, archive/f2.py, archive/f3.py, archive/f4.py +2 more._"
+    )
+
+
 def test_report_includes_exclusion_disclosure() -> None:
     ctx = _full_ctx()
     ctx["excluded_by_config"] = {
