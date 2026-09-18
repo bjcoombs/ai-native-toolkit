@@ -426,15 +426,16 @@ substring search, no model. Input is a flat array of entries, each with `layer`,
 `referenced_in` / `not_referenced_in` take `needle` and `path` (one file, or a
 directory searched recursively); `file_contains` takes `path` (one file) and
 `needle`. Every `path` is relative to the repository root; one that resolves
-outside it, or cannot be resolved, is rejected. The reference search skips `.git/`
-and fails closed: a `not_referenced_in` claim is rejected when any file or directory
+outside it, or cannot be resolved, is rejected. The reference search reads regular
+files only, in 1 MiB chunks (symlinks, FIFOs and `.git/` are skipped), and fails closed: a `not_referenced_in` claim is rejected when any file or directory
 under `path` could not be read, since the unread part could hold the reference. `check_evidence` splits the list into `evidence` (verified,
 returned as given) and `evidence_rejected` (copies carrying a `reason`); unknown
 keys pass through. The reference search is the public
 `is_referenced_in(repo_root, needle, path)`, so a check outside this module can
 reuse it. CLI, run from `skills/assess/scripts`:
 `uv run python -m lib.evidence_check <repo_root> <evidence.json> --json <out.json>`
-(exit 0 all verified, 1 any rejected, 2 malformed input). Stdlib only, imports no
+(exit 0 all verified, 1 any rejected, 2 malformed input or a `repo_root` that is not a
+directory; a missing root would otherwise verify every `path_absent` claim). Stdlib only, imports no
 orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kind
 or change to a check rule.
 

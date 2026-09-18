@@ -222,3 +222,45 @@ def test_not_referenced_in_is_rejected_when_the_search_is_incomplete(repo: Path)
     finally:
         hidden.chmod(0o755)
         unreadable.chmod(0o644)
+
+
+def test_walk_skips_fifos_and_symlinks_out_of_the_repo(repo: Path, tmp_path_factory) -> None:
+    outside = tmp_path_factory.mktemp("outside") / "hosts"
+    outside.write_text("scripts/secret.sh\n")
+    (repo / ".github" / "workflows" / "link.yml").symlink_to(outside)
+    if hasattr(os, "mkfifo"):
+        os.mkfifo(repo / ".github" / "workflows" / "pipe")
+    assert is_referenced_in(repo, "scripts/secret.sh", ".github/workflows") is False
+    entry = {"layer": 7, "kind": "not_referenced_in", "needle": "scripts/secret.sh",
+             "path": ".github/workflows"}
+    assert check_evidence(repo, [entry])["evidence"] == [entry]
+
+
+def test_needle_spanning_a_read_chunk_boundary_is_found(repo: Path) -> None:
+    from lib import evidence_check
+
+    needle = "scripts/boundary.sh"
+    pad = "x" * (evidence_check._CHUNK - 5)
+    (repo / "docs" / "big.txt").write_text(pad + needle + "\n")
+    assert is_referenced_in(repo, needle, "docs") is True
+    assert is_referenced_in(repo, needle, "docs/big.txt") is True
+
+
+def test_root_that_is_not_a_directory_verifies_nothing(tmp_path: Path) -> None:
+    missing = tmp_path / "no-such-root"
+    entry = {"layer": 0, "kind": "path_absent", "path": "docs/guide.md"}
+    result = check_evidence(missing, [entry])
+    assert result["evidence"] == []
+    assert "not a directory" in result["evidence_rejected"][0]["reason"]
+
+
+def test_cli_refuses_a_root_that_is_not_a_directory(tmp_path: Path) -> None:
+    ev = tmp_path / "ev.json"
+    ev.write_text(json.dumps([{"layer": 0, "kind": "path_absent", "path": "x"}]))
+    proc = subprocess.run(
+        [sys.executable, "-m", "lib.evidence_check", str(tmp_path / "nope"), str(ev),
+         "--json", str(tmp_path / "out.json")],
+        cwd=SCRIPTS_DIR, capture_output=True, text=True, timeout=30,
+    )
+    assert proc.returncode == 2
+    assert not (tmp_path / "out.json").exists()
