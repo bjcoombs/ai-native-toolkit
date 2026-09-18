@@ -1048,3 +1048,49 @@ def test_signoff_summary_removed_dash_line_vetoes_pin_only(signoff_repo, capsys)
 
     assert _line_with(out, "`FLOOR.md`", "+0", "-1") is not None
     assert "pin-only" not in out.lower()
+
+
+@pytest.mark.parametrize(
+    "new_steps",
+    [
+        # replacement: a different action at the same step
+        f"      - uses: someone-else/setup-uv@{_NEW_PIN}  # v10.1.0\n",
+        # addition: the old pin kept and a new action added
+        f"      - uses: astral-sh/setup-uv@{_OLD_PIN}  # v10.0.1\n"
+        f"      - uses: actions/cache@{_NEW_PIN}  # v5.0.0\n",
+        # removal: the only pin dropped
+        "",
+    ],
+    ids=["replacement", "addition", "removal"],
+)
+def test_signoff_summary_unmatched_action_is_not_pin_only(
+    signoff_repo, capsys, new_steps
+):
+    # Only a like-for-like bump of the same actions is a pin-only change; a
+    # new, dropped or swapped action changes what the floor workflow runs.
+    text = _workflow_text().replace(
+        f"      - uses: astral-sh/setup-uv@{_OLD_PIN}  # v10.0.1\n", new_steps
+    )
+    (signoff_repo / _WORKFLOW).write_text(text, encoding="utf-8")
+    _commit_all(signoff_repo, "unmatched action change")
+
+    assert "pin-only" not in _summary(capsys).lower()
+
+
+def test_signoff_summary_counts_the_other_changed_paths(signoff_repo, capsys):
+    # The verdict covers the floor core only; the rest of the diff is on the
+    # screen as a count, never as a list.
+    (signoff_repo / _WORKFLOW).write_text(
+        _workflow_text(_NEW_PIN, "v10.1.0"), encoding="utf-8"
+    )
+    with (signoff_repo / "docs" / "notes.md").open("a", encoding="utf-8") as fh:
+        fh.write("more\n")
+    _commit_all(signoff_repo, "pin plus an unprotected file")
+
+    out = _summary(capsys)
+
+    assert _line_with(out, "Other paths changed", "1") is not None
+    assert "docs/notes.md" not in out
+    assert "nothing else changed" not in out
+    action = _line_with(out, "astral-sh/setup-uv")
+    assert action is not None and f"`{_OLD_PIN} v10.0.1`" in action

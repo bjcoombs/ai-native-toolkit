@@ -359,10 +359,13 @@ def clause_iii_purpose(floor_text: str | None) -> str:
 
 def pin_changes(diff_text: str) -> list[tuple[str, str, str]] | None:
     """The ``uses:`` pin changes in a ``-U0`` diff, or ``None`` when the diff
-    changes anything else (or nothing).
+    is anything other than a like-for-like bump (or changes nothing).
 
     Each entry is ``(action, old, new)`` where ``old`` and ``new`` read
-    ``<commit> <version comment>``, or ``(none)`` for a pin only one side has.
+    ``<commit> <version comment>``. Every changed line must be a pin, and every
+    action must carry as many removed pins as added ones: an action added,
+    dropped or swapped for another changes what the workflow runs, so it is
+    not a pin-only change.
     """
     removed: dict[str, list[str]] = {}
     added: dict[str, list[str]] = {}
@@ -389,9 +392,9 @@ def pin_changes(diff_text: str) -> list[tuple[str, str, str]] | None:
     changes: list[tuple[str, str, str]] = []
     for action in dict.fromkeys([*removed, *added]):
         olds, news = removed.get(action, []), added.get(action, [])
-        for index in range(max(len(olds), len(news))):
-            old = olds[index] if index < len(olds) else "(none)"
-            new = news[index] if index < len(news) else "(none)"
+        if len(olds) != len(news):
+            return None
+        for old, new in zip(olds, news):
             if (action, old, new) not in changes:
                 changes.append((action, old, new))
     return changes
@@ -402,10 +405,13 @@ def render_signoff_summary(
     head_commit: str,
     clause_purpose: str,
     pins: list[tuple[str, str, str]] | None,
+    other_count: int = 0,
 ) -> str:
     """The markdown section the maintainer reads before approving.
 
-    ``paths`` is ``(path, added, removed)`` per changed floor-core path.
+    ``paths`` is ``(path, added, removed)`` per changed floor-core path;
+    ``other_count`` is how many other paths the diff changes, shown as a count
+    so the verdict below is never read as covering them.
     """
     lines = [
         f"## {SIGNOFF_HEADING}",
@@ -421,16 +427,21 @@ def render_signoff_summary(
         "",
     ]
     lines += [f"- `{path}` +{added} -{removed}" for path, added, removed in paths]
+    lines += [
+        "",
+        f"Other paths changed in this pull request (not floor core, not listed "
+        f"here): {other_count}",
+    ]
     if pins:
         lines += [
             "",
             "**pin-only change:** every changed floor-core line is a `uses:` "
-            "action pin, and nothing else changed. Each action below shows its "
-            "old commit and version -> its new commit and version (`(none)` "
-            "where a pin was added or removed):",
+            "action pin bumped in place, and no other floor-core line changed. "
+            "Each action shows its old commit and version -> its new commit and "
+            "version:",
             "",
         ]
-        lines += [f"- `{action}`: {old} -> {new}" for action, old, new in pins]
+        lines += [f"- `{action}`: `{old}` -> `{new}`" for action, old, new in pins]
     lines += [
         "",
         "**Approving** asserts that these changes to the floor's own "
@@ -734,10 +745,13 @@ def cmd_signoff_summary(args: argparse.Namespace) -> int:
     """
     base = args.base
     component_dirs = _protected_component_dirs(base)
-    floor_core = [
+    changed = [
         path
         for path in dict.fromkeys(_git_out("diff", "--name-only", base, "HEAD").splitlines())
-        if path and classify_path(path, component_dirs) == ROLE_FLOOR_CORE
+        if path
+    ]
+    floor_core = [
+        path for path in changed if classify_path(path, component_dirs) == ROLE_FLOOR_CORE
     ]
     if not floor_core:
         return 0
@@ -757,7 +771,8 @@ def cmd_signoff_summary(args: argparse.Namespace) -> int:
     # Quote the clause as the base declares it, so a pull request that
     # rewrites clause iii does not supply its own justification.
     purpose = clause_iii_purpose(_git_show(base, FLOOR_FILE))
-    sys.stdout.write(render_signoff_summary(counts, head, purpose, pins))
+    other_count = len(changed) - len(floor_core)
+    sys.stdout.write(render_signoff_summary(counts, head, purpose, pins, other_count))
     return 0
 
 

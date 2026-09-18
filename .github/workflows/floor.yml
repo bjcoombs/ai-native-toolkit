@@ -204,6 +204,13 @@ jobs:
     needs: [canary-changes]
     if: needs.canary-changes.outputs.floor_core_changed == 'true'
     runs-on: ubuntu-latest
+    # One comment writer per pull request at a time, so two runs cannot both
+    # find no comment and both post, or an older run overwrite a newer head.
+    # Job-level, not workflow-level: a run held at the deployment review must
+    # not queue the next push's floor jobs behind it.
+    concurrency:
+      group: floor-signoff-comment-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
     permissions:
       contents: read
       pull-requests: write
@@ -233,9 +240,10 @@ jobs:
       # One comment per pull request, found by its hidden marker and author and
       # updated in place on later pushes and re-runs. A failed read posts
       # nothing (a blind POST is how a second comment appears); a refused write
-      # is the read-only token Dependabot and fork pull requests run with, and
-      # the step summary above stands alone. Neither fails the job: the review
-      # is what gates, and it must still be requested.
+      # (most often the read-only token Dependabot and fork pull requests run
+      # with) is logged with its error, and the step summary above stands
+      # alone. Neither fails the job: the review is what gates, and it must
+      # still be requested.
       - name: Post or update the sign-off comment
         env:
           GH_TOKEN: ${{ github.token }}
@@ -260,16 +268,17 @@ jobs:
             echo "::warning::Could not read the pull request's comments, so the sign-off comment was skipped; the step summary stands alone."
             exit 0
           fi
+          ERR="${RUNNER_TEMP}/floor-signoff-comment.err"
           if [ -n "${EXISTING}" ]; then
-            if gh api --method PATCH "repos/${REPO}/issues/comments/${EXISTING}" -F body=@"${BODY}" > /dev/null; then
+            if gh api --method PATCH "repos/${REPO}/issues/comments/${EXISTING}" -F body=@"${BODY}" > /dev/null 2> "${ERR}"; then
               echo "Updated the sign-off comment ${EXISTING} in place."
             else
-              echo "::warning::The sign-off comment was skipped: the token is read-only (Dependabot or fork pull request). The step summary stands alone."
+              echo "::warning::Updating the sign-off comment ${EXISTING} failed, so it was skipped and the step summary stands alone: $(tr '\n' ' ' < "${ERR}")"
             fi
-          elif gh api --method POST "repos/${REPO}/issues/${PR_NUMBER}/comments" -F body=@"${BODY}" > /dev/null; then
+          elif gh api --method POST "repos/${REPO}/issues/${PR_NUMBER}/comments" -F body=@"${BODY}" > /dev/null 2> "${ERR}"; then
             echo "Posted the sign-off comment."
           else
-            echo "::warning::The sign-off comment was skipped: the token is read-only (Dependabot or fork pull request). The step summary stands alone."
+            echo "::warning::Posting the sign-off comment failed, so it was skipped and the step summary stands alone. The likely cause is a read-only token (Dependabot or fork pull request): $(tr '\n' ' ' < "${ERR}")"
           fi
 
   self-anchor:
