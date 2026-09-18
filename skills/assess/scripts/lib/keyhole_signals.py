@@ -27,7 +27,7 @@ from pathlib import Path
 
 from lib.assess_config import is_user_excluded
 from lib.change_coupling import (
-    _repo_top,
+    RenameMap,
     authorship_analysis,
     build_rename_map,
     change_coupling_pairs,
@@ -35,6 +35,7 @@ from lib.change_coupling import (
     find_self_referential_tests,
     fold_renames,
     parse_commit_file_sets,
+    repo_top,
 )
 from lib.coupling_analysis import detect_hidden_coupling, find_refactor_boundaries
 from lib.doc_complexity_join import (
@@ -1026,7 +1027,7 @@ def integrate(
     exclude_dirs: set[str] | None = None,
     exclude_patterns: list[str] | None = None,
     scope: Path | None = None,
-    rename_map: dict[str, str] | None = None,
+    rename_map: RenameMap | None = None,
 ) -> dict:
     """Build the five run-context blocks + derived findings + attention list.
 
@@ -1048,19 +1049,22 @@ def integrate(
     ``change_coupling.build_rename_map``, built here when None) folds history
     recorded under a renamed path onto its current path; a git-history finding
     path that still does not exist is pruned and reported in
-    ``pruned_finding_paths``.
+    ``pruned_finding_paths``. When the map is incomplete (git failed) nothing is
+    pruned: an unfolded old path is not evidence of a deletion.
     Every block is built defensively - a failure in one degrades that block to
     ``available: False`` and leaves the rest intact.
     """
     repo_root = Path(repo_root)
+    # Resolved once and shared by the git-log parse, the rename map and the prune.
+    top = repo_top(repo_root)
     if commit_sets is None:
         try:
-            commit_sets = parse_commit_file_sets(repo_root)
+            commit_sets = parse_commit_file_sets(repo_root, top=top)
         except Exception:  # noqa: BLE001 - degrade to no-history
             commit_sets = []
     if rename_map is None:
-        rename_map = build_rename_map(repo_root)
-    commit_sets = fold_renames(commit_sets, rename_map)
+        rename_map = build_rename_map(repo_root, top=top)
+    commit_sets = fold_renames(commit_sets, rename_map.paths)
 
     # `/assess <path>` monorepo scoping: confine the change-history file-sets to
     # the subtree so the behaviour block (coupling, containment, hidden-seam)
@@ -1227,11 +1231,11 @@ def integrate(
     # Dead-path pruning: a git-history finding path absent from the working tree
     # (deleted, no rename to follow) never reaches the report; the dropped paths
     # are carried out for the `pruned_finding_paths` disclosure.
-    # Outside a git repo there is no history to go stale, so nothing is pruned.
-    repo_top = _repo_top(repo_root)
+    # Outside a git repo there is no history to go stale, and with an incomplete
+    # rename map a missing path may just be unfolded, so nothing is pruned.
     findings, pruned_finding_paths = (
-        prune_missing_finding_paths(findings, Path(repo_top))
-        if repo_top else (findings, [])
+        prune_missing_finding_paths(findings, Path(top))
+        if top and rename_map.complete else (findings, [])
     )
 
     # Config-based suppression: drop any finding path the user's config excludes

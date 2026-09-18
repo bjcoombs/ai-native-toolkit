@@ -77,10 +77,13 @@ Three signals derived from `git log`:
   deliberately conservative (never labels a human's work "agent" on weak evidence).
 
 `parse_commit_file_sets` lists each commit's files under the names they had then.
-`build_rename_map` reads `git log --name-status -M --diff-filter=R` into a
-historical-path to current-path map (chains resolved; a name that exists again at HEAD
-is left out), and `fold_renames` rewrites the commit sets through it, so history made
-before a rename counts under the current path.
+`build_rename_map` reads `git log --name-status -M --diff-filter=R` into a `RenameMap`:
+`paths`, a historical-path to current-path map (chains resolved; a name that exists again
+at HEAD is left out), and `complete`, False when git could not be read so an empty map is
+never mistaken for "no renames". `fold_renames` rewrites the commit sets through `paths`,
+so history made before a rename counts under the current path. `repo_top` is the shared
+`git rev-parse --show-toplevel` helper; the git-log readers take an optional `top` so a
+caller that already resolved it skips the extra subprocess.
 
 All results are JSON-serialisable so `assess_core` can drop them straight into
 `run-context.json`.
@@ -247,7 +250,9 @@ disclosure; the findings themselves still name them. Before either filter, the c
 sets are folded through the rename map (so a renamed directory's history lands on its
 current name), and `prune_missing_finding_paths` drops any `hidden_coupling` or
 `refactor_boundary` path absent from the working tree, returning them as
-`pruned_finding_paths` for the run-context block of that name (`paths`, `count`). Each
+`pruned_finding_paths` for the run-context block of that name (`paths`, `count`). The
+prune stands down when the rename map is incomplete, since an unfolded old path is not
+evidence of a deletion. Each
 block build is wrapped in a catch-all so one signal's failure degrades that block to
 `available: False` rather than crashing the run. It also runs `structure_drift.py`'s Tier 1
 grouping disagreement (fed the behaviour block's co-change pairs so no second git-log parse

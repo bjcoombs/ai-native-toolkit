@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 from lib.change_coupling import (
+    RenameMap,
     authorship_analysis,
     build_rename_map,
     change_coupling_pairs,
@@ -352,12 +353,13 @@ def test_rename_map_folds_history_onto_current_paths(tmp_path: Path) -> None:
     _commit(repo, {}, "rename b -> c")
 
     rename_map = build_rename_map(repo)
-    assert rename_map == {
+    assert rename_map.complete
+    assert rename_map.paths == {
         "a/x.py": "c/x.py", "a/y.py": "c/y.py",
         "b/x.py": "c/x.py", "b/y.py": "c/y.py",
     }
     pairs = change_coupling_pairs(
-        fold_renames(parse_commit_file_sets(repo), rename_map), min_support=1,
+        fold_renames(parse_commit_file_sets(repo), rename_map.paths), min_support=1,
     )
     assert [(p["file_a"], p["file_b"], p["co_change_count"]) for p in pairs] == [
         ("c/x.py", "c/y.py", 5),
@@ -366,15 +368,33 @@ def test_rename_map_folds_history_onto_current_paths(tmp_path: Path) -> None:
 
 def test_rename_map_skips_path_reused_at_head(tmp_path: Path) -> None:
     """A name that exists again at HEAD keeps its own history, so it is left
-    out of the map; outside a git repo the map is empty."""
+    out of the map; outside a git repo the map is empty and marked incomplete,
+    so callers never read "no renames" into a failed read."""
     repo = _init_repo(tmp_path)
     _commit(repo, {"old.py": "v = 1\n" * 5})
     _git(repo, "mv", "old.py", "new.py")
     _commit(repo, {}, "rename")
     _commit(repo, {"old.py": "fresh = 1\n"}, "reuse the name")
 
-    assert build_rename_map(repo) == {}
+    assert build_rename_map(repo) == RenameMap({}, complete=True)
     plain = tmp_path / "plain"
     plain.mkdir()
-    assert build_rename_map(plain) == {}
+    assert build_rename_map(plain) == RenameMap({}, complete=False)
     assert fold_renames([{Path("a.py")}], {}) == [{Path("a.py")}]
+
+
+def test_rename_map_incomplete_when_git_log_times_out(tmp_path: Path, monkeypatch) -> None:
+    """A git timeout yields an empty, incomplete map rather than an empty map
+    that reads as "nothing was renamed"."""
+    import lib.change_coupling as cc
+
+    repo = _init_repo(tmp_path)
+    _commit(repo, {"a.py": "v = 1\n"})
+    top = cc.repo_top(repo)
+    assert top is not None
+
+    def boom(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="git log", timeout=cc.GIT_TIMEOUT_SECONDS)
+
+    monkeypatch.setattr(cc.subprocess, "run", boom)
+    assert cc.build_rename_map(repo, top=top) == RenameMap({}, complete=False)

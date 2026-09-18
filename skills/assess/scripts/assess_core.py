@@ -938,7 +938,8 @@ def build_run_context(
 
     # Load (and later update) the persistent first-flagged date map, with any
     # entry for a renamed file moved to its current path.
-    first_flagged_map = _rekey_first_flagged(_load_first_flagged(assess_dir), rename_map)
+    first_flagged_map = _rekey_first_flagged(
+        _load_first_flagged(assess_dir), rename_map.paths)
 
     # User-supplied excludes (`.assess/config.toml`), loaded once and threaded
     # into every read-side scan (heatmap parity, doc graph, staleness, liveness,
