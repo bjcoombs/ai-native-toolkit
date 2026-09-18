@@ -145,7 +145,7 @@ def render_keyhole_summary(ctx: dict) -> str:
 
 
 def render_exclusion_disclosure(ctx: dict) -> str:
-    """One line disclosing findings suppressed by config excludes, or ``""``.
+    """Lines disclosing config-excluded findings and archive paths, or ``""``.
 
     Config excludes silently drop paths from every scan; when at least one path
     that would have been a finding is filtered out, this makes the suppression
@@ -169,7 +169,12 @@ def render_exclusion_disclosure(ctx: dict) -> str:
     archived = ctx.get("excluded_as_archive") or {}
     a_count = archived.get("count", 0)
     if isinstance(a_count, int) and a_count > 0:
-        paths = ", ".join(archived.get("affected_finding_paths", []))
+        # Name at most five, as assess_gate does; the full list stays in
+        # run-context.json.
+        named = list(archived.get("affected_finding_paths", []))
+        paths = ", ".join(named[:5])
+        if len(named) > 5:
+            paths += f" +{len(named) - 5} more"
         noun = "path" if a_count == 1 else "paths"
         lines.append(
             f"_{a_count} archived {noun} left out of the attention list: {paths}._"

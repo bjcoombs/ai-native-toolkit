@@ -203,6 +203,14 @@ def test_archive_paths_excluded_disclosed_in_report() -> None:
     assert render_exclusion_disclosure(
         {"excluded_as_archive": {"affected_finding_paths": [], "count": 0}}
     ) == ""
+    many = [f"archive/f{i}.py" for i in range(7)]
+    capped = render_exclusion_disclosure(
+        {"excluded_as_archive": {"affected_finding_paths": many, "count": 7}}
+    )
+    assert capped == (
+        "_7 archived paths left out of the attention list: archive/f0.py, "
+        "archive/f1.py, archive/f2.py, archive/f3.py, archive/f4.py +2 more._"
+    )
 
 
 def test_report_includes_exclusion_disclosure() -> None:
