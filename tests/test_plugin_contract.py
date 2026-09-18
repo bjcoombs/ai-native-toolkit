@@ -25,7 +25,9 @@ BUILTIN_AGENTS = {"general-purpose", "Explore", "Plan", "statusline-setup"}
 
 PLACEHOLDER_RE = re.compile(r"\b(TODO|TBD|FIXME)\b")
 FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
-BARE_POSITIONAL_RE = re.compile(r"\$[1-9]\b")
+# No trailing \b: bash reads $1x and $10 as $1 followed by text.
+BARE_POSITIONAL_RE = re.compile(r"\$[1-9]")
+FENCE_OPEN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 USE_SKILL_RE = re.compile(r"[Uu]se the ([a-z0-9][a-z0-9-]*) skill")
@@ -144,14 +146,49 @@ def test_no_placeholder_tokens(p):
     assert not PLACEHOLDER_RE.search(body), f"{p.relative_to(REPO)}: placeholder token outside code fence"
 
 
+def fenced_blocks(text):
+    """Yield (start line, body) per fenced block, CommonMark-style: a closer
+    uses the opener's character, is at least as long, and has nothing after it
+    but whitespace, so a ``` inside a ```` fence stays part of the body. An
+    unclosed fence runs to the end of the file."""
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        m = FENCE_OPEN_RE.match(lines[i])
+        if not m or (m.group(1)[0] == "`" and "`" in lines[i][m.end():]):
+            i += 1
+            continue
+        marker, start, body = m.group(1), i + 1, []
+        i += 1
+        while i < len(lines):
+            c = FENCE_OPEN_RE.match(lines[i])
+            if (c and c.group(1)[0] == marker[0] and len(c.group(1)) >= len(marker)
+                    and not lines[i][c.end():].strip()):
+                break
+            body.append(lines[i])
+            i += 1
+        i += 1
+        yield start, "\n".join(body)
+
+
+def test_fenced_blocks_parser():
+    text = "a\n````bash\n```\nx $1\n```\n````\n~~~\ny\n~~~\n```\nz\n"
+    assert [b for _, b in fenced_blocks(text)] == ["```\nx $1\n```", "y", "z"]
+
+
 @pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
 def test_no_bare_positional_in_fences(p):
-    # Claude Code substitutes a skill's arguments into bare $1..$9 before the
-    # model reads the text, so a shell function using them runs with argument
-    # words in place of its parameters. Brace form (${1}) is left alone.
-    for block in FENCE_RE.findall(p.read_text(encoding="utf-8")):
+    # Claude Code substitutes the invocation's arguments into bare $1..$9
+    # before the model reads the text, whatever the fence's language, so a
+    # shell function or awk field reference runs with argument words in place
+    # of its parameters. Brace form (${1}) is left alone.
+    for start, block in fenced_blocks(p.read_text(encoding="utf-8")):
         m = BARE_POSITIONAL_RE.search(block)
-        assert not m, f"{p.relative_to(REPO)}: bare positional {m.group(0)} in code fence; use ${{{m.group(0)[1:]}}}"
+        assert not m, (
+            f"{p.relative_to(REPO)}: bare positional {m.group(0)} in the code fence "
+            f"opening at line {start}; brace it (${{{m.group(0)[1]}}}) or restructure "
+            f"the snippet so it takes no positional parameters"
+        )
 
 
 @pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
