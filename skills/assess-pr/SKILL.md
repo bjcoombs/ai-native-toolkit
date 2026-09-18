@@ -86,11 +86,20 @@ Then check whether the target turns away outside contributions. A fork PR agains
 
 ```bash
 # no-contributions scan: start
+# Sets NO_CONTRIBUTIONS (1/0) plus the first matching file (relative to the
+# repo root) and line, so the offer can quote the statement back to the user.
 NO_CONTRIBUTIONS=0
+NO_CONTRIBUTIONS_SOURCE=""
+NO_CONTRIBUTIONS_STATEMENT=""
+_nc_re="(does not|do not|doesn't|don't|not|can't|unable to) accept(ing)? (any |outside |external )?(contributions|pull requests|prs)|(do not|don't|please don't) (send|open|submit) (a |any |us )?(pull requests?|prs?)([^a-z]|$)|(pull requests|contributions|prs) (are|will) not (be )?accepted"
 for _nc_doc in "$REPO_ROOT/README.md" "$REPO_ROOT/CONTRIBUTING.md" "$REPO_ROOT/.github/CONTRIBUTING.md"; do
   [ -f "$_nc_doc" ] || continue
-  if grep -Eiq "(does not|do not|doesn't|don't|not) accept(ing)? (any |outside |external )?(contributions|pull requests|prs)|(do not|don't|please don't) (send|open|submit) (a |any |us )?(pull requests?|prs?)([^a-z]|$)|(pull requests|contributions|prs) (are|will) not (be )?accepted" "$_nc_doc"; then
+  _nc_line=$(grep -Ei -e "$_nc_re" "$_nc_doc" | head -n 1)
+  if [ -n "$_nc_line" ]; then
     NO_CONTRIBUTIONS=1
+    NO_CONTRIBUTIONS_SOURCE=${_nc_doc#"$REPO_ROOT"/}
+    NO_CONTRIBUTIONS_STATEMENT=$(printf '%s\n' "$_nc_line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    break
   fi
 done
 # no-contributions scan: end
@@ -98,9 +107,9 @@ done
 
 Interpret the result:
 
-- `CAN_PUSH=1` (viewerPermission is `WRITE` / `MAINTAIN` / `ADMIN`, or the remote is a push-eligible fork): offer the direct PR flow below.
+- `CAN_PUSH=1` (viewerPermission is `WRITE` / `MAINTAIN` / `ADMIN`, or the remote is a push-eligible fork): offer the direct PR flow below. This holds even when `NO_CONTRIBUTIONS=1`: a user with push access maintains the repo, so the statement addresses outsiders, not them, and GitHub will not fork a repo into the account that owns it. Still quote `$NO_CONTRIBUTIONS_STATEMENT` and name `$NO_CONTRIBUTIONS_SOURCE` beside the offer so the maintainer decides knowingly.
 - `CAN_PUSH=0`, viewerPermission is `READ` / `TRIAGE`, and `NO_CONTRIBUTIONS=0`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
-- `CAN_PUSH=0` and `NO_CONTRIBUTIONS=1`: the target says it takes no contributions, so never offer a PR against `<owner>/<repo>`. Name the statement and the file it came from, then offer the no-contributions flow instead: "open the PR inside your fork, against the fork's default branch, and share the link?" Pair it with the Actions hint (see the flow below).
+- `CAN_PUSH=0` and `NO_CONTRIBUTIONS=1`: the target says it takes no contributions, so never offer a PR against `<owner>/<repo>`. Quote `$NO_CONTRIBUTIONS_STATEMENT` and name `$NO_CONTRIBUTIONS_SOURCE`, then offer the no-contributions flow instead: "open the PR inside your fork, against the fork's default branch, and share the link?" Pair it with the Actions hint (see the flow below).
 - `gh` unavailable / not a GitHub remote / not authenticated (`$PUSH_INFO` empty): skip both PR offers entirely and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
 
 If `$REDIRECT_NOTICE` is non-empty, output it verbatim on its own line before the batched Phase 2 question.

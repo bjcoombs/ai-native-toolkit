@@ -26,8 +26,8 @@ def _scan_block() -> str:
     return "\n".join(lines[start : end + 1]) + "\n"
 
 
-def _run_scan(repo_root: Path) -> str:
-    script = f'REPO_ROOT="{repo_root}"\n{_scan_block()}printf %s "$NO_CONTRIBUTIONS"\n'
+def _run_scan(repo_root: Path, var: str = "NO_CONTRIBUTIONS") -> str:
+    script = f'REPO_ROOT="{repo_root}"\n{_scan_block()}printf %s "${var}"\n'
     result = subprocess.run(
         ["sh", "-c", script], capture_output=True, text=True, check=True
     )
@@ -44,15 +44,38 @@ def _run_scan(repo_root: Path) -> str:
         ({"README.md": "# App\nWe are not accepting pull requests at this time.\n"}, "1"),
         ({"README.md": "# App\nPull requests are not accepted.\n"}, "1"),
         ({"README.md": "# App\nPRs welcome! See CONTRIBUTING.md.\n"}, "0"),
+        ({"README.md": "# App\nWe cannot accept contributions.\n"}, "1"),
+        ({"README.md": "# App\nSorry, we can't accept pull requests.\n"}, "1"),
+        ({"README.md": "# App\nThe team is unable to accept external contributions.\n"}, "1"),
         ({}, "0"),
     ],
     ids=["readme", "contributing", "welcome", "not-accepting-prs", "prs-not-accepted",
-         "prs-welcome", "no-docs"],
+         "prs-welcome", "cannot", "cant", "unable-to", "no-docs"],
 )
 def test_scan_sets_no_contributions(tmp_path: Path, files: dict[str, str], expected: str) -> None:
     for name, body in files.items():
         (tmp_path / name).write_text(body, encoding="utf-8")
     assert _run_scan(tmp_path) == expected
+
+
+def test_scan_keeps_the_matching_file_and_statement(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("# App\n", encoding="utf-8")
+    (tmp_path / "CONTRIBUTING.md").write_text(f"# Contributing\n{STATEMENT}\n", encoding="utf-8")
+    assert _run_scan(tmp_path, "NO_CONTRIBUTIONS_SOURCE") == "CONTRIBUTING.md"
+    assert _run_scan(tmp_path, "NO_CONTRIBUTIONS_STATEMENT") == STATEMENT
+
+
+def test_scan_leaves_source_empty_without_a_statement(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("# App\nPRs welcome!\n", encoding="utf-8")
+    assert _run_scan(tmp_path, "NO_CONTRIBUTIONS_SOURCE") == ""
+    assert _run_scan(tmp_path, "NO_CONTRIBUTIONS_STATEMENT") == ""
+
+
+def test_push_capable_user_is_told_about_the_statement() -> None:
+    text = ASSESS_PR_SKILL.read_text(encoding="utf-8")
+    step5 = text.split("## Step 5", 1)[1].split("## Step 6", 1)[0]
+    direct = next(line for line in step5.splitlines() if line.startswith("- `CAN_PUSH=1`"))
+    assert "NO_CONTRIBUTIONS=1" in direct and "NO_CONTRIBUTIONS_SOURCE" in direct
 
 
 def test_scan_sits_in_step_5_before_the_offer_text() -> None:
