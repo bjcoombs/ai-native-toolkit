@@ -1001,3 +1001,39 @@ def test_mode_for_finding_defaults_for_unknown_or_missing() -> None:
     assert ks.mode_for_finding(None) == ks.DEFAULT_FINDING_MODE
     assert ks.mode_for_finding("not_a_real_finding") == ks.DEFAULT_FINDING_MODE
     assert ks.DEFAULT_FINDING_MODE == "characterize_first"
+
+
+# --- archive exclusion from attention ------------------------------------------
+
+def test_archive_paths_excluded_from_attention_and_disclosed() -> None:
+    """A path with an archive/archived/attic component never ranks in attention.
+
+    The archived plan scores 2 (two negative findings) and would lead the list;
+    it is excluded from attention and prescribed actions, and returned for the
+    disclosure. A file whose name merely contains "archive" is not excluded.
+    """
+    findings = ks.assemble_findings({
+        "accretion_ratchet": ["docs/archive/PLAN.md", "src/app.py"],
+        "unactioned_intent": ["docs/archive/PLAN.md", "old/Attic/x.py"],
+        "lying_map": ["legacy/archived/notes.py", "src/archive_writer.py"],
+        "refactor_boundary": ["archive"],
+    })
+    attention, archived = ks.exclude_archive_from_attention(findings)
+    ranked = [u["path"] for u in attention]
+    assert ranked == ["src/app.py", "src/archive_writer.py"]
+    assert archived == [
+        "docs/archive/PLAN.md", "legacy/archived/notes.py", "old/Attic/x.py",
+    ]
+    prescribed = ks.build_prescribed_actions(attention, findings)
+    assert [p["path"] for p in prescribed] == ["src/app.py", "src/archive_writer.py"]
+    # The findings themselves still name the archived path (a true observation).
+    acc = next(f for f in findings if f["name"] == "accretion_ratchet")
+    assert "docs/archive/PLAN.md" in acc["paths"]
+
+
+def test_archive_paths_excluded_noop_without_archive() -> None:
+    """No archive path -> attention equals build_attention_list, nothing disclosed."""
+    findings = ks.assemble_findings({"accretion_ratchet": ["src/a.py"]})
+    attention, archived = ks.exclude_archive_from_attention(findings)
+    assert attention == ks.build_attention_list(findings)
+    assert archived == []

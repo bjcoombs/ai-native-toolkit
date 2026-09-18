@@ -447,6 +447,41 @@ def apply_config_excludes(
     return filtered, sorted(dropped)
 
 
+# A path with any component of one of these names (case-insensitive) is kept out
+# of attention ranking: archived material is finished, so a finding on it is
+# never the first place to look. The final component counts too, so a directory
+# finding on `tools/archive` itself is excluded. The finding still names the path.
+ARCHIVE_DIR_NAMES = frozenset({"archive", "archived", "attic"})
+
+
+def is_archive_path(path: str) -> bool:
+    """True when any component of ``path`` is an archive directory name."""
+    return any(part.lower() in ARCHIVE_DIR_NAMES for part in Path(path).parts)
+
+
+def exclude_archive_from_attention(
+    findings: list[dict],
+) -> tuple[list[dict], list[str]]:
+    """Build the attention list with archive paths left out, returning ``(attention, dropped)``.
+
+    ``dropped`` is the sorted list of archive paths that a negative finding
+    names, the raw material for the run-context ``excluded_as_archive``
+    disclosure, so the exclusion is counted rather than silent. The findings are
+    not modified.
+    """
+    dropped = sorted({
+        p for f in findings if f["name"] != "refactor_boundary"
+        for p in f["paths"] if is_archive_path(p)
+    })
+    if not dropped:
+        return build_attention_list(findings), []
+    ranked = [
+        {**f, "paths": [p for p in f["paths"] if not is_archive_path(p)]}
+        for f in findings
+    ]
+    return build_attention_list(ranked), dropped
+
+
 def build_attention_list(
     findings: list[dict], max_units: int = MAX_ATTENTION_UNITS,
 ) -> list[dict]:
@@ -1159,7 +1194,10 @@ def integrate(
     findings, excluded_finding_paths = apply_config_excludes(
         findings, exclude_dirs or set(), exclude_patterns or [],
     )
-    attention = build_attention_list(findings)
+    # Archive exclusion: a path under archive/, archived/ or attic/ never ranks
+    # in attention (so never becomes a prescribed action); the dropped paths are
+    # carried out for the `excluded_as_archive` disclosure.
+    attention, archived_finding_paths = exclude_archive_from_attention(findings)
 
     return {
         "structure": structure,
@@ -1175,6 +1213,9 @@ def integrate(
         # Paths dropped from the findings because a config exclude covered them -
         # the raw material for the run-context `excluded_by_config` disclosure.
         "excluded_finding_paths": excluded_finding_paths,
+        # Archive paths a negative finding names but attention leaves out - the
+        # raw material for the run-context `excluded_as_archive` disclosure.
+        "archived_finding_paths": archived_finding_paths,
         # The Tier 1 grouping disagreement, computed once here from the behaviour
         # block's co-change pairs, so the orchestrator can build the run-context
         # structure_drift tier_1 sub-block from it without a second computation.
