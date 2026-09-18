@@ -2,8 +2,10 @@
 
 Deterministic library modules for the `/assess` engine. No LLM calls anywhere in this
 package - every function is a pure transform of filesystem, git, or pre-computed signal
-data. The LLM reads `run-context.json` after the core finishes; it does not call into
-these modules.
+data, with one bounded exception: live GitHub reads, confined to `gh_cli.py`, which are
+optional (they need a github.com remote and an authenticated `gh`) and degrade to
+`available: False` with a reason, never to a clean result. The LLM reads
+`run-context.json` after the core finishes; it does not call into these modules.
 
 ## The assess_core.py -> lib seam
 
@@ -376,14 +378,19 @@ never report a clean result. Tests fake `gh` with a script first on `PATH`
 
 **`config_drift.py`**
 Layer 5 lying signal: tracked GitHub configuration snapshots diffed against the
-live setting via `gh_cli`. Snapshots are `.github/rulesets/*.json` or any tracked
-JSON with a top-level `rules` array of `type` entries (matched to a live ruleset
-by `id`, else `name`), and classic branch-protection exports - tracked JSON under
+live setting via `gh_cli`. Snapshots are ruleset exports - tracked JSON with a
+`name` or `id` and a top-level `rules` array of `type` entries, in
+`.github/rulesets/` or anywhere (matched to a live ruleset by `id`, else `name`);
+a file missing either is skipped, never reported - and classic branch-protection exports - tracked JSON under
 `.github/` with `required_status_checks`, `enforce_admins` or
 `required_pull_request_reviews` at the top level (branch from the export's `url`,
 else the file stem). The diff is snapshot-driven (keys only the API returns are
-not drift), ignores ids, timestamps and links, compares rules by `type` in both
-directions, and folds the `{"enabled": X}` read shape into `X`. Emits
+not drift), ignores ids, timestamps and links, and folds the `{"enabled": X}` read
+shape into `X`. Lists are sets: scalar lists compare sorted; object lists pair by
+identity (`type`, `context`, `actor_type:actor_id`, `name`) in both directions, and a
+one-sided item is recorded as `"present"`/`"absent"`, never as the live object, so
+live org configuration stays out of the committed wiki. A missing live ruleset, an
+unprotected branch and a deleted branch are drift entries, not outages. Emits
 `config_drift: {available, entries: [{file, key, tracked, live}], snapshots}`;
 with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case

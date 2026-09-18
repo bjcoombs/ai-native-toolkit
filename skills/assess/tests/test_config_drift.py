@@ -193,11 +193,77 @@ def test_ruleset_matched_by_name_outside_rulesets_dir(world) -> None:
     assert [e["file"] for e in block["entries"]] == ["infra/github/protect-main.json"]
 
 
-def test_rule_dropped_live_is_drift() -> None:
+def test_rule_dropped_or_added_live_is_drift_without_the_live_object() -> None:
     tracked = _ruleset(False)
     live = _ruleset(False)
-    live["rules"] = live["rules"][1:]
-    assert diff_values(tracked, live) == [("rules[deletion]", {"type": "deletion"}, None)]
+    live["rules"] = live["rules"][1:] + [{"type": "non_fast_forward", "parameters": {"x": 1}}]
+    assert diff_values(tracked, live) == [
+        ("rules[deletion]", "present", "absent"),
+        ("rules[non_fast_forward]", "absent", "present"),
+    ]
+
+
+def test_reordered_lists_are_not_drift() -> None:
+    tracked = {"required_status_checks": {"contexts": ["ci", "lint"]},
+               "bypass_actors": [{"actor_id": 1, "actor_type": "Team"},
+                                 {"actor_id": 2, "actor_type": "Integration"}]}
+    live = {"required_status_checks": {"contexts": ["lint", "ci"]},
+            "bypass_actors": [{"actor_id": 2, "actor_type": "Integration", "bypass_mode": "always"},
+                              {"actor_id": 1, "actor_type": "Team", "bypass_mode": "always"}]}
+    assert diff_values(tracked, live) == []
+
+
+def test_changed_scalar_list_is_one_entry() -> None:
+    tracked = {"required_status_checks": {"contexts": ["ci"]}}
+    live = {"required_status_checks": {"contexts": ["lint", "ci"]}}
+    assert diff_values(tracked, live) == [
+        ("required_status_checks.contexts", ["ci"], ["ci", "lint"])]
+
+
+def test_identity_less_object_list_reports_counts_only() -> None:
+    tracked = {"x": [{"a": 1}]}
+    live = {"x": [{"a": 1}, {"a": 2, "secret_ish": "org detail"}]}
+    assert diff_values(tracked, live) == [("x.count", 1, 2)]
+
+
+@pytest.mark.parametrize("doc", [
+    {"description": "not an export"},                       # no rules at all
+    {"rules": [{"type": "lint-rule"}]},                     # rules but no name/id
+])
+def test_non_export_json_is_not_a_snapshot(world, doc) -> None:
+    world.track(".github/rulesets/schema.json", doc)
+    world.track("config/eslint-ish.json", doc)
+    assert find_snapshots(world.root) == []
+    assert scan_config_drift(world.root)["entries"] == []
+    assert world.calls() == []
+
+
+def test_deleted_branch_is_drift_not_outage(world) -> None:
+    world.track(".github/branch-protection/old.json", _protection(True) | {"url": ""})
+    world.track(".github/rulesets/main.json", _ruleset(False))
+    world.serve("rulesets.json", [{"id": 7, "name": "main"}])
+    world.serve("ruleset.json", _ruleset(True))
+    world.fail_with("gh: Branch not found (HTTP 404)")
+    block = scan_config_drift(world.root)
+    assert block["available"] is True
+    assert {"file": ".github/branch-protection/old.json", "key": "branch",
+            "tracked": "old", "live": "absent"} in block["entries"]
+    assert any(e["file"] == ".github/rulesets/main.json" for e in block["entries"])
+
+
+def test_unprotected_branch_is_drift(world) -> None:
+    world.track(".github/branch-protection/main.json", _protection(True))
+    world.fail_with("gh: Branch not protected (HTTP 404)")
+    block = scan_config_drift(world.root)
+    assert block["entries"] == [{"file": ".github/branch-protection/main.json",
+                                 "key": "branch_protection", "tracked": "present",
+                                 "live": "absent"}]
+
+
+def test_other_404_degrades_the_block(world) -> None:
+    world.track(".github/branch-protection/main.json", _protection(True))
+    block = scan_config_drift(world.root)  # default fail: "gh: Not Found (HTTP 404)"
+    assert block["available"] is False and block["reason"].startswith("not_found")
 
 
 def test_missing_live_ruleset_is_drift(world) -> None:
@@ -205,7 +271,7 @@ def test_missing_live_ruleset_is_drift(world) -> None:
     world.serve("rulesets.json", [])
     block = scan_config_drift(world.root)
     assert block["entries"] == [{"file": ".github/rulesets/main.json", "key": "ruleset",
-                                 "tracked": "main", "live": None}]
+                                 "tracked": "main", "live": "absent"}]
 
 
 def test_branch_protection_export_drift(world) -> None:

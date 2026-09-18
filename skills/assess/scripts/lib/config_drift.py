@@ -9,9 +9,11 @@ parameter. It is a JSON diff; no judgement is involved.
 
 Snapshots (git-tracked only, paths relative to ``repo_root``):
 
-- **Ruleset**: any ``.github/rulesets/*.json`` file, or any tracked JSON whose
-  top-level object holds a ``rules`` array of ``{"type": ...}`` entries.
-  Matched to a live ruleset by ``id``, else by ``name``.
+- **Ruleset**: a tracked JSON object with a ``name`` or ``id`` and a top-level
+  ``rules`` array of ``{"type": ...}`` entries (the ``.github/rulesets/*.json``
+  convention, or anywhere else). A file missing either is not a ruleset export
+  and is skipped, never reported. Matched to a live ruleset by ``id``, else by
+  ``name``.
 - **Classic branch protection**: a JSON file under ``.github/`` whose top-level
   object has any of ``required_status_checks``, ``enforce_admins``,
   ``required_pull_request_reviews``. The branch comes from the export's ``url``
@@ -19,8 +21,14 @@ Snapshots (git-tracked only, paths relative to ``repo_root``):
 
 The diff is driven by the snapshot: every key it records is compared; keys only
 the live API returns (metadata, fields the export left out) are not drift.
-Ids, timestamps and links are never reported. Rules are compared by ``type``,
-in both directions - a rule added or dropped live is drift.
+Ids, timestamps and links are never reported. Lists are sets, not sequences:
+scalar lists compare sorted, and lists of objects pair items by identity
+(``type``, ``context``, ``actor_type``/``actor_id``, ``name``) in both
+directions, so an item added or dropped live is drift and a reorder is not. An
+item present on one side only is recorded as ``"present"`` / ``"absent"``, never
+as the live object, so live org configuration does not land in the committed
+wiki. A missing live ruleset, an unprotected branch and a branch that no longer
+exists are drift entries, not outages.
 
 Block: ``{"available", "entries": [{"file", "key", "tracked", "live"}],
 "snapshots"}``. No snapshots, or none that differ, gives ``available: True``
@@ -64,7 +72,9 @@ def _load_json(path: Path) -> Any:
 
 
 def _is_ruleset(doc: Any) -> bool:
-    rules = doc.get("rules") if isinstance(doc, dict) else None
+    if not isinstance(doc, dict) or not (doc.get("name") or doc.get("id") is not None):
+        return False
+    rules = doc.get("rules")
     return (
         isinstance(rules, list) and bool(rules)
         and all(isinstance(r, dict) and "type" in r for r in rules)
@@ -94,11 +104,10 @@ def find_snapshots(repo_root: Path) -> list[dict[str, Any]]:
         except ValueError:
             continue
         under_github = rel.startswith(".github/")
-        in_rulesets_dir = rel.startswith(".github/rulesets/") and rel.count("/") == 2
         doc = _load_json(path)
         if doc is None:
             continue
-        if (in_rulesets_dir and isinstance(doc, dict)) or _is_ruleset(doc):
+        if _is_ruleset(doc):
             out.append({"file": rel, "kind": "ruleset", "doc": doc})
         elif under_github and _is_protection(doc):
             m = _BRANCH_FROM_URL.search(str(doc.get("url") or ""))
@@ -126,33 +135,70 @@ def diff_values(tracked: Any, live: Any, key: str = "") -> list[tuple[str, Any, 
             if k in IGNORED_KEYS:
                 continue
             sub = f"{key}.{k}" if key else k
-            if k == "rules" and isinstance(tracked[k], list) and isinstance(live.get(k), list):
-                out += _diff_rules(tracked[k], live[k], sub)
-            else:
-                out += diff_values(tracked[k], live.get(k), sub)
+            out += diff_values(tracked[k], live.get(k), sub)
         return out
-    if isinstance(tracked, list) and isinstance(live, list) and len(tracked) == len(live):
-        out = []
-        for i, (t, lv) in enumerate(zip(tracked, live)):
-            out += diff_values(t, lv, f"{key}[{i}]")
-        return out
+    if isinstance(tracked, list) and isinstance(live, list):
+        return _diff_lists(tracked, live, key)
     return [] if tracked == live else [(key, tracked, live)]
 
 
-def _diff_rules(tracked: list, live: list, key: str) -> list[tuple[str, Any, Any]]:
-    by_type_t = {r.get("type"): r for r in tracked if isinstance(r, dict)}
-    by_type_l = {r.get("type"): r for r in live if isinstance(r, dict)}
+def _identity(item: Any) -> str | None:
+    """The name a list item is paired by, or None when it has none."""
+    if not isinstance(item, dict):
+        return None
+    for fields in (("type",), ("context",), ("actor_type", "actor_id"), ("name",)):
+        if all(item.get(f) is not None for f in fields):
+            return ":".join(str(item[f]) for f in fields)
+    return None
+
+
+def _canonical(item: Any) -> str:
+    return json.dumps(item, sort_keys=True, default=str)
+
+
+def _diff_lists(tracked: list, live: list, key: str) -> list[tuple[str, Any, Any]]:
+    """Lists in GitHub configuration are sets: compare without regard to order."""
+    if all(not isinstance(x, (dict, list)) for x in [*tracked, *live]):
+        t_sorted, l_sorted = sorted(tracked, key=_canonical), sorted(live, key=_canonical)
+        return [] if t_sorted == l_sorted else [(key, t_sorted, l_sorted)]
+    t_ids = [_identity(x) for x in tracked]
+    l_ids = [_identity(x) for x in live]
+    ids_usable = (
+        None not in t_ids and None not in l_ids
+        and len(set(t_ids)) == len(t_ids) and len(set(l_ids)) == len(l_ids)
+    )
+    if not ids_usable:
+        # No identity to pair by: compare as a multiset of normalised items and
+        # report only the counts, never the live objects themselves.
+        t_set = sorted(_canonical(_strip(x)) for x in tracked)
+        l_set = sorted(_canonical(_strip(x)) for x in live)
+        if t_set == l_set:
+            return []
+        return [(f"{key}.count", len(tracked), len(live))] if len(tracked) != len(live) \
+            else [(f"{key}.items", "differs", "differs")]
+    by_t = dict(zip(t_ids, tracked))
+    by_l = dict(zip(l_ids, live))
     out: list[tuple[str, Any, Any]] = []
-    for rtype, rule in by_type_t.items():
-        sub = f"{key}[{rtype}]"
-        if rtype not in by_type_l:
-            out.append((sub, rule, None))
+    for ident, item in by_t.items():
+        sub = f"{key}[{ident}]"
+        if ident not in by_l:
+            out.append((sub, "present", "absent"))
         else:
-            out += diff_values(rule, by_type_l[rtype], sub)
-    for rtype, rule in by_type_l.items():
-        if rtype not in by_type_t:
-            out.append((f"{key}[{rtype}]", None, rule))
+            out += diff_values(item, by_l[ident], sub)
+    for ident in by_l:
+        if ident not in by_t:
+            out.append((f"{key}[{ident}]", "absent", "present"))
     return out
+
+
+def _strip(value: Any) -> Any:
+    """Drop ignored metadata keys at every depth, for multiset comparison."""
+    value = _normalize(value)
+    if isinstance(value, dict):
+        return {k: _strip(v) for k, v in value.items() if k not in IGNORED_KEYS}
+    if isinstance(value, list):
+        return [_strip(v) for v in value]
+    return value
 
 
 def _live_ruleset(slug: str, doc: dict, summaries: list) -> dict | None:
@@ -166,16 +212,25 @@ def _live_ruleset(slug: str, doc: dict, summaries: list) -> dict | None:
     return detail if isinstance(detail, dict) else None
 
 
-def _live_protection(slug: str, branch: str) -> dict | None:
+# A (key, tracked, live) drift entry for a snapshot with nothing live to diff.
+Missing = tuple[str, Any, Any]
+
+
+def _live_protection(slug: str, branch: str) -> dict | Missing:
     try:
         live = gh_api(f"repos/{slug}/branches/{quote(branch, safe='')}/protection")
     except GhUnavailable as e:
         # GitHub answers 404 "Branch not protected" for an unprotected branch;
         # the snapshot says it is protected, so that is drift, not an outage.
-        if e.reason.startswith("not_found") and "not protected" in e.reason.lower():
-            return None
+        reason = e.reason.lower()
+        if reason.startswith("not_found") and "not protected" in reason:
+            return ("branch_protection", "present", "absent")
+        # A deleted or renamed branch: the snapshot protects a branch that is
+        # not there - drift for this snapshot, not an outage for the scan.
+        if reason.startswith("not_found") and "branch not found" in reason:
+            return ("branch", branch, "absent")
         raise
-    return live if isinstance(live, dict) else None
+    return live if isinstance(live, dict) else ("branch_protection", "present", "absent")
 
 
 def scan_config_drift(repo_root: Path) -> dict[str, Any]:
@@ -193,12 +248,12 @@ def scan_config_drift(repo_root: Path) -> dict[str, Any]:
                 if summaries is None:
                     got = gh_api(f"repos/{repo.slug}/rulesets?per_page=100")
                     summaries = [s for s in got if isinstance(s, dict)] if isinstance(got, list) else []
-                live = _live_ruleset(repo.slug, snap["doc"], summaries)
-                missing = ("ruleset", snap["doc"].get("name") or snap["doc"].get("id"), None)
+                found = _live_ruleset(repo.slug, snap["doc"], summaries)
+                name = snap["doc"].get("name") or snap["doc"].get("id")
+                live: dict | Missing = ("ruleset", name, "absent") if found is None else found
             else:
                 live = _live_protection(repo.slug, snap["branch"])
-                missing = ("branch_protection", True, None)
-            diffs = [missing] if live is None else diff_values(snap["doc"], live)
+            diffs = [live] if isinstance(live, tuple) else diff_values(snap["doc"], live)
             entries += [
                 {"file": snap["file"], "key": k, "tracked": t, "live": lv}
                 for k, t, lv in diffs
