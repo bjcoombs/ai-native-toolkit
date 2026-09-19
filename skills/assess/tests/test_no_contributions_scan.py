@@ -101,7 +101,27 @@ def test_no_contributions_flow_never_references_the_upstream_pr_step() -> None:
     assert "steps 1-2" not in flow
     assert "gh pr create --repo <owner>/<repo>" not in flow
     # The PR is created on the fork's own endpoint, never via a base-repo lookup.
-    assert "repos/<fork-owner>/<repo>/pulls" in flow
+    assert "repos/$FORK_SLUG/pulls" in flow
+
+
+def test_fork_slug_is_derived_not_guessed() -> None:
+    step5 = _step5()
+    assert "<fork-owner>" not in step5
+    flow = step5.split("(no-contributions flow,", 1)[1].split("\n\n", 1)[0]
+    assert "FORK_SLUG=" in flow
+    assert "repos/$FORK_SLUG/actions/permissions" in flow
+
+
+def test_fork_clone_of_a_no_contributions_repo_stays_in_the_fork() -> None:
+    # In a clone of the user's own fork, viewerPermission is ADMIN (CAN_PUSH=1)
+    # and a bare `gh pr create` targets the parent: the statement must still win.
+    step5 = _step5()
+    assert "isFork" in step5.split("PUSH_INFO=", 1)[1].split("\n", 1)[0]
+    assert "IS_FORK=" in step5
+    direct = next(line for line in step5.splitlines() if line.startswith("- `CAN_PUSH=1`"))
+    assert "IS_FORK=true" in direct and "no-contributions flow" in direct
+    flow_head = step5.split("(no-contributions flow,", 1)[1].split("\n", 1)[0]
+    assert "IS_FORK=true" in flow_head
 
 
 def test_scan_leaves_source_empty_without_a_statement(tmp_path: Path) -> None:
