@@ -1438,10 +1438,13 @@ def build_run_context(
     # Dead-path disclosure: a git-history finding path that no longer exists
     # (deleted, with no rename to follow) is dropped from the findings,
     # attention, prescribed actions and markdown; this block names and counts it.
+    # rename_map_complete False means git history could not be read for renames:
+    # nothing was folded or pruned, and a finding may still name an old path.
     pruned_finding_paths = keyhole.get("pruned_finding_paths", [])
     ctx["pruned_finding_paths"] = {
         "paths": pruned_finding_paths,
         "count": len(pruned_finding_paths),
+        "rename_map_complete": keyhole.get("rename_map_complete", True),
     }
 
     # Structure drift (third write-side tendency surface: a declared ownership

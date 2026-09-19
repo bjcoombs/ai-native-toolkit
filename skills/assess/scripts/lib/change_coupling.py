@@ -96,7 +96,10 @@ def parse_commit_file_sets(
     # split unambiguously; the name-only file list follows on its own lines.
     # -M pinned so a rename commit lists only the new name whatever the user's
     # diff.renames setting, matching build_rename_map's detection.
-    cmd = ["git", "-C", top, "log", "--name-only", "-M", "--pretty=format:\x1e%H"]
+    # core.quotepath=false keeps non-ASCII paths literal, not octal-escaped, so
+    # they match files on disk.
+    cmd = ["git", "-c", "core.quotepath=false", "-C", top, "log", "--name-only", "-M",
+           "--pretty=format:\x1e%H"]
     if since:
         cmd.append(f"--since={since}")
     try:
@@ -125,8 +128,9 @@ def parse_commit_file_sets(
 class RenameMap:
     """Historical path -> current path, and whether git history was read.
 
-    ``complete`` is False when the map could not be built (not a git repo, git
-    failed or timed out). An empty ``paths`` then means "unknown", not "no
+    ``complete`` is False when git history exists but could not be read (git
+    failed or timed out). Outside a git repo there is no history to rename, so
+    the empty map is complete. An empty ``paths`` then means "unknown", not "no
     renames", so a caller must not treat an unmapped old path as deleted.
     """
 
@@ -138,16 +142,16 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
     """Map each historical path that git saw renamed to its current path.
 
     Parsed from ``git log --name-status -M --diff-filter=R``. Chains resolve to
-    their final name (``a -> b`` then ``b -> c`` maps ``a`` to ``c``). A path
-    that exists again at HEAD is left out, so a name reused after a rename keeps
-    its own history. Paths are repo-relative, as :func:`parse_commit_file_sets`
-    prints them. Outside a git repo or on any git failure the result is empty
-    and ``complete`` is False. ``top`` is as for :func:`parse_commit_file_sets`.
+    their final name (``a -> b`` then ``b -> c`` maps ``a`` to ``c``). A source
+    path that exists again in the working tree is left out, so a name reused
+    after a rename keeps its own history. Paths are repo-relative, as :func:`parse_commit_file_sets`
+    prints them. Outside a git repo the result is empty and complete; on a git
+    failure it is empty and ``complete`` is False. ``top`` is as for :func:`parse_commit_file_sets`.
     """
     top = top or repo_top(repo_root)
     if top is None:
-        return RenameMap({}, complete=False)
-    cmd = ["git", "-C", top, "log", "--name-status", "-M",
+        return RenameMap({}, complete=True)
+    cmd = ["git", "-c", "core.quotepath=false", "-C", top, "log", "--name-status", "-M",
            "--diff-filter=R", "--pretty=format:"]
     try:
         raw = subprocess.run(
@@ -163,9 +167,9 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
         parts = line.split("\t")
         if len(parts) == 3 and parts[0].startswith("R"):
             step[parts[1]] = parts[2]
-    top_path = Path(top)
-    step = {old: new for old, new in step.items() if not (top_path / old).exists()}
-
+    # Resolve chains over every rename first, then drop sources that exist again
+    # in the working tree. Filtering first would cut a chain at a reused
+    # intermediate name (a -> b, b -> c, then a fresh b) and point a at b.
     resolved: dict[str, str] = {}
     for old in step:
         seen = {old}
@@ -174,7 +178,11 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
             seen.add(cur)
             cur = step[cur]
         resolved[old] = cur
-    return RenameMap(resolved, complete=True)
+    top_path = Path(top)
+    return RenameMap(
+        {old: new for old, new in resolved.items() if not (top_path / old).exists()},
+        complete=True,
+    )
 
 
 def fold_renames(

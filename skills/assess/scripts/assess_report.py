@@ -193,6 +193,11 @@ def render_exclusion_disclosure(ctx: dict) -> str:
         lines.append(
             f"_{p_count} git-history {verbs} left out of the findings: {paths}._"
         )
+    if pruned.get("rename_map_complete") is False:
+        lines.append(
+            "_Renames could not be read from git history: findings may name "
+            "pre-rename paths, and none were pruned._"
+        )
     return "\n\n".join(lines)
 
 

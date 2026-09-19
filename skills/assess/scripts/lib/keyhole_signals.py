@@ -1268,9 +1268,13 @@ def integrate(
         # Archive paths a negative finding names but attention leaves out - the
         # raw material for the run-context `excluded_as_archive` disclosure.
         "archived_finding_paths": archived_finding_paths,
-        # Git-history finding paths with no file at HEAD - the raw material for
-        # the run-context `pruned_finding_paths` disclosure.
+        # Git-history finding paths absent from the working tree (not HEAD: an
+        # uncommitted delete counts) - the raw material for the run-context
+        # `pruned_finding_paths` disclosure.
         "pruned_finding_paths": pruned_finding_paths,
+        # False when the rename map could not be built: renames were not folded
+        # and the prune stood down, so the disclosure can say so.
+        "rename_map_complete": rename_map.complete,
         # The Tier 1 grouping disagreement, computed once here from the behaviour
         # block's co-change pairs, so the orchestrator can build the run-context
         # structure_drift tier_1 sub-block from it without a second computation.

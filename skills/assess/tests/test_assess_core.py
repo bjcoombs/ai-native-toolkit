@@ -1712,7 +1712,8 @@ def test_pruned_finding_paths_block_after_rename_and_delete(git_repo) -> None:
     pair = [p["co_change_count"] for p in ctx["behaviour"]["change_coupling_pairs"]
             if (p["file_a"], p["file_b"]) == ("new/x.py", "new/y.py")]
     assert pair and pair[0] >= 6
-    assert ctx["pruned_finding_paths"] == {"paths": ["gone"], "count": 1}
+    assert ctx["pruned_finding_paths"] == {
+        "paths": ["gone"], "count": 1, "rename_map_complete": True}
 
 
 def test_pruned_finding_paths_block_empty_without_dead_paths(git_repo) -> None:
@@ -1724,7 +1725,8 @@ def test_pruned_finding_paths_block_empty_without_dead_paths(git_repo) -> None:
     commit("init")
 
     ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
-    assert ctx["pruned_finding_paths"] == {"paths": [], "count": 0}
+    assert ctx["pruned_finding_paths"] == {
+        "paths": [], "count": 0, "rename_map_complete": True}
 
 
 def test_first_flagged_rekeyed_through_rename_map(git_repo) -> None:

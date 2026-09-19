@@ -1086,6 +1086,7 @@ def test_pruned_finding_paths_stand_down_when_rename_map_incomplete(tmp_path: Pa
     stood_down = run(complete=False)
     assert _finding_paths(stood_down, "hidden_coupling")
     assert stood_down["pruned_finding_paths"] == []
+    assert stood_down["rename_map_complete"] is False
     pruned = run(complete=True)
     assert _finding_paths(pruned, "hidden_coupling") == []
     assert pruned["pruned_finding_paths"] == sorted(

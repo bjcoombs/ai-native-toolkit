@@ -623,3 +623,15 @@ def test_main_corrupt_context_skips_not_fails(tmp_path: Path,
     rc = main([str(tmp_path)])
     assert rc == 0
     assert "infrastructure failure" in capsys.readouterr().err
+
+
+def test_pruned_finding_paths_disclosure_names_incomplete_rename_map() -> None:
+    """A run whose rename map could not be built says so instead of reading
+    like a run with nothing dead."""
+    assert render_exclusion_disclosure({"pruned_finding_paths": {
+        "paths": [], "count": 0, "rename_map_complete": False}}) == (
+        "_Renames could not be read from git history: findings may name "
+        "pre-rename paths, and none were pruned._"
+    )
+    assert render_exclusion_disclosure({"pruned_finding_paths": {
+        "paths": [], "count": 0, "rename_map_complete": True}}) == ""

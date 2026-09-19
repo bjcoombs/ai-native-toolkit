@@ -368,8 +368,8 @@ def test_rename_map_folds_history_onto_current_paths(tmp_path: Path) -> None:
 
 def test_rename_map_skips_path_reused_at_head(tmp_path: Path) -> None:
     """A name that exists again at HEAD keeps its own history, so it is left
-    out of the map; outside a git repo the map is empty and marked incomplete,
-    so callers never read "no renames" into a failed read."""
+    out of the map; outside a git repo there is no history, so the map is
+    empty and complete (only a failed git read marks it incomplete)."""
     repo = _init_repo(tmp_path)
     _commit(repo, {"old.py": "v = 1\n" * 5})
     _git(repo, "mv", "old.py", "new.py")
@@ -379,7 +379,7 @@ def test_rename_map_skips_path_reused_at_head(tmp_path: Path) -> None:
     assert build_rename_map(repo) == RenameMap({}, complete=True)
     plain = tmp_path / "plain"
     plain.mkdir()
-    assert build_rename_map(plain) == RenameMap({}, complete=False)
+    assert build_rename_map(plain) == RenameMap({}, complete=True)
     assert fold_renames([{Path("a.py")}], {}) == [{Path("a.py")}]
 
 
@@ -398,3 +398,33 @@ def test_rename_map_incomplete_when_git_log_times_out(tmp_path: Path, monkeypatc
 
     monkeypatch.setattr(cc.subprocess, "run", boom)
     assert cc.build_rename_map(repo, top=top) == RenameMap({}, complete=False)
+
+
+def test_rename_map_resolves_chain_through_reused_intermediate(tmp_path: Path) -> None:
+    """a -> b, b -> c, then a fresh b. The chain resolves before the reused-name
+    filter, so a maps to c (its real successor), and b, which exists again,
+    is left out."""
+    repo = _init_repo(tmp_path)
+    _commit(repo, {"a.py": "orig = 1\n" * 5})
+    _git(repo, "mv", "a.py", "b.py")
+    _commit(repo, {}, "a -> b")
+    _git(repo, "mv", "b.py", "c.py")
+    _commit(repo, {}, "b -> c")
+    _commit(repo, {"b.py": "fresh = 1\n"}, "fresh b")
+
+    assert build_rename_map(repo) == RenameMap({"a.py": "c.py"}, complete=True)
+
+
+def test_rename_map_keeps_non_ascii_paths_literal(tmp_path: Path) -> None:
+    """A non-ASCII path comes back as written, not octal-escaped, in both the
+    rename map and the commit file sets, so it matches the file on disk."""
+    repo = _init_repo(tmp_path)
+    for i in range(2):
+        _commit(repo, {"caf\u00e9/x.py": f"x = {i}\n" * 5})
+    _git(repo, "mv", "caf\u00e9", "cr\u00e8me")
+    _commit(repo, {}, "rename")
+
+    assert build_rename_map(repo).paths == {"caf\u00e9/x.py": "cr\u00e8me/x.py"}
+    files = set().union(*parse_commit_file_sets(repo))
+    assert Path("cr\u00e8me/x.py") in files
+    assert all((repo / f).exists() or f.parts[0] == "caf\u00e9" for f in files)
