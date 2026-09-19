@@ -278,18 +278,21 @@ def _declares_boundaries(text: str) -> bool:
     return bool(_BOUNDARY_VOCAB_RE.search(text))
 
 
-def _extract_path_refs(segment: str) -> set[str]:
+def _extract_path_refs(
+    segment: str, suffixes: tuple[str, ...] = (".md", ".py"),
+) -> set[str]:
     """All path references in a prose segment: inline code, wikilinks, bare paths.
 
     Reads code spans rather than stripping them (the opposite of the doc graph),
     because a path written as code is exactly the boundary declaration we want.
     Returns raw, repo-relative-looking path strings; resolution to real files is
-    the caller's job.
+    the caller's job. A slash-free code span counts only when it ends in one of
+    ``suffixes`` (the doc graph passes every doc extension it walks).
     """
     refs: set[str] = set()
     for m in _INLINE_CODE_RE.finditer(segment):
         token = _strip_anchor(m.group(1))
-        if "/" in token or token.endswith(".md") or token.endswith(".py"):
+        if "/" in token or token.endswith(suffixes):
             refs.add(token.rstrip("/.,;:)"))
     for m in _WIKILINK_RE.finditer(segment):
         token = _strip_anchor(m.group(1))
