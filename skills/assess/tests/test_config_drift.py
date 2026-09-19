@@ -383,3 +383,12 @@ def test_type_mismatch_never_emits_the_live_object() -> None:
                    ("restrictions", None, "present")]
     assert "zz" not in json.dumps(out)
     assert diff_values({"a": {"b": 1}}, {"a": 3}) == [("a", "present", 3)]
+
+
+def test_tracked_null_against_omitted_live_key_is_not_drift() -> None:
+    tracked = {"required_status_checks": {"strict": True},
+               "required_pull_request_reviews": None, "restrictions": None}
+    live = {"required_status_checks": {"strict": True}}
+    assert diff_values(tracked, live) == []
+    live_flip = {"required_status_checks": {"strict": False}}
+    assert diff_values(tracked, live_flip) == [("required_status_checks.strict", True, False)]

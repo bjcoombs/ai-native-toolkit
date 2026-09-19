@@ -154,6 +154,10 @@ def diff_values(tracked: Any, live: Any, key: str = "") -> list[tuple[str, Any, 
                 # The live response omits the key entirely (e.g. a requirement
                 # switched off): removed, not "compared against null".
                 was = _normalize(tracked[k])
+                if was is None:
+                    # A write-shape export disables a block with null; the live
+                    # read omits it. Same state - not drift.
+                    continue
                 gone = "present" if isinstance(was, (dict, list)) else was
                 out.append((sub, gone, "absent"))
                 continue
