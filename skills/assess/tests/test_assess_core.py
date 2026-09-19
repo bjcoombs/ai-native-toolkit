@@ -1669,6 +1669,97 @@ def test_archive_paths_excluded_block_empty_without_archive(git_repo) -> None:
     assert ctx["excluded_as_archive"] == {"affected_finding_paths": [], "count": 0}
 
 
+
+# --- renamed and deleted history (rename map, pruned_finding_paths) ----------
+
+def _renamed_and_deleted_history(repo: Path, commit) -> None:
+    """old/, other/ and gone/ co-change six times; then old/ -> new/ and gone/
+    is deleted, so the history names two directories that no longer exist."""
+    import subprocess
+    for i in range(1, 7):
+        for d, stem in (("old", "x"), ("old", "y"), ("other", "z"), ("gone", "k")):
+            f = repo / d / f"{stem}.py"
+            f.parent.mkdir(parents=True, exist_ok=True)
+            with f.open("a", encoding="utf-8") as fh:
+                fh.write(f"def {stem}{i}(): return {i}\n")
+        commit(f"c{i}")
+    subprocess.run(["git", "-C", str(repo), "mv", "old", "new"], check=True)
+    commit("rename")
+    subprocess.run(["git", "-C", str(repo), "rm", "-rq", "gone"], check=True)
+    commit("remove")
+
+
+def test_pruned_finding_paths_block_after_rename_and_delete(git_repo) -> None:
+    """Co-change history folds onto new/, gone/ is pruned from every finding
+    surface and disclosed in pruned_finding_paths, and no surface names a path
+    that is missing on disk."""
+    repo, commit = git_repo
+    _renamed_and_deleted_history(repo, commit)
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    hidden = next(f["paths"] for f in ctx["derived_findings"]
+                  if f["name"] == "hidden_coupling")
+    assert "new" in hidden
+    assert not {"old", "gone"} & set(hidden)
+    named = {p for f in ctx["derived_findings"] for p in f["paths"]}
+    named |= {u["path"] for u in ctx["attention"]}
+    named |= {a["path"] for a in ctx["prescribed_actions"]}
+    assert named and all((repo / p).exists() for p in named)
+    items = [line[2:].split(" (")[0] for line in ctx["findings_markdown"].splitlines()
+             if line.startswith("- ")]
+    assert "new" in items
+    assert not [i for i in items if i.split("/")[0] in ("old", "gone")]
+    pair = [p["co_change_count"] for p in ctx["behaviour"]["change_coupling_pairs"]
+            if (p["file_a"], p["file_b"]) == ("new/x.py", "new/y.py")]
+    assert pair and pair[0] >= 6
+    assert ctx["pruned_finding_paths"] == {
+        "paths": ["gone"], "count": 1, "rename_map_complete": True}
+
+
+def test_pruned_finding_paths_block_empty_without_dead_paths(git_repo) -> None:
+    """A repo whose history names only live paths carries an empty block."""
+    repo, commit = git_repo
+    (repo / ".assess").mkdir()
+    _write_min_stats(repo / ".assess")
+    (repo / "README.md").write_text("# Repo\n")
+    commit("init")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["pruned_finding_paths"] == {
+        "paths": [], "count": 0, "rename_map_complete": True}
+
+
+def test_first_flagged_rekeyed_through_rename_map(git_repo) -> None:
+    """A first-flagged entry recorded under a renamed path moves to the current
+    path with its original date, beating the 'new hotspot, stamp today' default;
+    an unrenamed entry is untouched."""
+    repo, commit = git_repo
+    _renamed_and_deleted_history(repo, commit)
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "first-flagged.json").write_text(json.dumps(
+        {"old/x.py": "2026-01-01", "other/z.py": "2026-02-02"}))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 2, "loc": {"total": 12}, "ccn": {"max": 6, "mean": 6},
+        "top_hotspots": [{"path": "new/x.py", "loc": 6, "ccn": 6, "commits": 7},
+                         {"path": "other/z.py", "loc": 6, "ccn": 6, "commits": 6}],
+        "top_complex": [], "top_large": [],
+    }))
+
+    build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert json.loads((assess_dir / "first-flagged.json").read_text()) == {
+        "new/x.py": "2026-01-01", "other/z.py": "2026-02-02",
+    }
+
+
+def test_first_flagged_rekeyed_keeps_earliest_known_date() -> None:
+    rename_map = {"a.py": "b.py", "c.py": "d.py"}
+    assert assess_core._rekey_first_flagged(
+        {"a.py": "2026-03-01", "b.py": "2026-01-01", "c.py": "2026-02-02",
+         "d.py": "unknown", "e.py": "2026-04-04"},
+        rename_map,
+    ) == {"b.py": "2026-01-01", "d.py": "2026-02-02", "e.py": "2026-04-04"}
+
 # --- structure_drift block (Tier 0 + Tier 1 orchestration) -------------------
 
 def test_structure_drift_block_omitted_without_ownership_map(git_repo) -> None:
