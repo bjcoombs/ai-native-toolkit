@@ -10,8 +10,9 @@ Merged pull requests come from ``gh pr list --state merged`` through
 commits, so git history reads zero there.
 
 Block on success: ``{"available": True, "runs_per_month", "minutes_per_run",
-"minutes_per_month", "assumption", "private"}``. ``private`` is ``None`` when
-``gh`` cannot say. No remote, no ``gh``, no auth, a failed read or zero merged
+"minutes_per_month", "assumption", "capped", "private"}``. ``capped`` is True
+when the listing hit ``PR_LIMIT``, so the counts are lower bounds. ``private``
+is ``None`` when ``gh`` cannot say. No remote, no ``gh``, no auth, a failed read or zero merged
 pull requests degrade to ``{"available": False, "reason"}``.
 """
 from __future__ import annotations
@@ -79,7 +80,7 @@ def estimate_gate_cost(repo_root: Path, now: datetime | None = None) -> dict[str
             f"no_merge_history: no pull requests merged in the last {WINDOW_DAYS} days"
         )
 
-    capped = "at least " if len(prs) >= PR_LIMIT else ""
+    capped = len(prs) >= PR_LIMIT
     return {
         "available": True,
         "runs_per_month": runs,
@@ -88,8 +89,9 @@ def estimate_gate_cost(repo_root: Path, now: datetime | None = None) -> dict[str
         "assumption": (
             f"Assumes {MINUTES_PER_RUN} minutes per gate run (a fixed figure, not "
             f"measured on this repository) and one run per merged pull request: "
-            f"{capped}{runs} merged in the last {WINDOW_DAYS} days. Re-pushes to an "
+            f"{'at least ' if capped else ''}{runs} merged in the last {WINDOW_DAYS} days. Re-pushes to an "
             f"open pull request add runs, so the run count is a floor."
         ),
+        "capped": capped,
         "private": _is_private(repo.slug),
     }

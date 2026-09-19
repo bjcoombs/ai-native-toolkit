@@ -141,3 +141,29 @@ def test_gate_cost_private_unknown_when_repo_view_fails(world) -> None:
     block = estimate_gate_cost(world.root, now=NOW)
     assert block["available"] is True
     assert block["private"] is None
+
+
+def test_gate_cost_capped_at_listing_limit(world, monkeypatch: pytest.MonkeyPatch) -> None:
+    import lib.gate_cost as gate_cost
+
+    monkeypatch.setattr(gate_cost, "PR_LIMIT", 3)
+    world.serve("prs.json", _merged(3, NOW))
+    block = estimate_gate_cost(world.root, now=NOW)
+    assert block["capped"] is True
+    assert "at least 3 merged" in block["assumption"]
+    pr_call = next(c for c in world.calls() if c.startswith("pr list"))
+    assert "--limit 3" in pr_call
+
+
+def test_gate_cost_not_capped_below_limit(world) -> None:
+    world.serve("prs.json", _merged(2, NOW))
+    block = estimate_gate_cost(world.root, now=NOW)
+    assert block["capped"] is False
+    assert "at least" not in block["assumption"]
+
+
+def test_gate_cost_non_list_answer_degrades(world) -> None:
+    world.serve("prs.json", {"message": "unexpected"})
+    block = estimate_gate_cost(world.root, now=NOW)
+    assert block["available"] is False
+    assert block["reason"].startswith("gh_bad_json")
