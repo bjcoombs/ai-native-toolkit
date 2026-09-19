@@ -5,8 +5,8 @@ unmerged branch's `SKILL.md` + bundled scripts the way a real user would, instal
 from a local checkout. There are two surfaces worth testing:
 
 1. **The deterministic scripts** - fast, no install, catches logic regressions.
-2. **The full plugin install** - exercises skill routing, the `$CLAUDE_PLUGIN_ROOT`
-   script-path resolution, and the LLM following `SKILL.md`.
+2. **The full plugin install** - exercises skill routing, the `${CLAUDE_SKILL_DIR}`
+   script-path substitution, and the LLM following `SKILL.md`.
 
 ## 1. Run the scripts directly (no install)
 
@@ -80,19 +80,24 @@ the staged cache dir - harmless to leave.)
 
 A plugin skill loads from the **version cache** -
 `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<name>/SKILL.md` - **not**
-from `~/.claude/skills/`. So a skill must resolve its own scripts via
-`$CLAUDE_PLUGIN_ROOT` (Claude Code sets it to the plugin root for Bash run in a plugin
-context). `SKILL.md` does this with a fallback to a hand-placed `~/.claude/skills/assess/`
-copy:
+from `~/.claude/skills/`. So a skill names its bundled scripts with the literal token
+`${CLAUDE_SKILL_DIR}`, which Claude Code replaces with the skill's own directory in the
+skill text before the model reads it:
 
 ```bash
-SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"
-SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"
+uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT"
 ```
 
-(That whole block is inside `<!-- chat-skip -->` so it's stripped from the standalone
-ZIP, which uses bare `scripts/...` paths instead. The build's integration tests assert
-neither `SKILL_DIR` nor `CLAUDE_PLUGIN_ROOT` leaks into a standalone build.)
+The substitution happens in the loaded skill text, not in the shell: `CLAUDE_PLUGIN_ROOT`
+is exported to hooks and MCP servers but is unset in the Bash tool calls a skill makes,
+so a lookup through it resolves to nothing. A skill that runs a sibling skill's script
+goes through the sibling directory (`${CLAUDE_SKILL_DIR}/../assess/scripts/...` in
+`skills/assess-pr/SKILL.md`). Reference files under `references/` are read with the Read
+tool and get no substitution; the model applies the directory the skill text named.
+
+(Each such `uv run` line carries a `<!-- chat-replace -->` marker, so the standalone ZIP
+build swaps it for a bare `scripts/...` path. The build's integration tests assert neither
+`SKILL_DIR` nor `CLAUDE_PLUGIN_ROOT` leaks into a standalone build.)
 
 ## Gotchas
 

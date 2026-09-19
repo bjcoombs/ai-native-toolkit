@@ -37,8 +37,10 @@ are resolved once, repo-wide, and stay comparable across scopes):
 
 <!-- chat-skip:start -->
 ```bash
+# This file is read, not loaded as the skill, so ${CLAUDE_SKILL_DIR} below is not
+# substituted: use the skill directory SKILL.md's own `uv run` lines name.
 # Heatmap - scores only files under the scope; title + default SVG name carry it
-uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" \
+uv run "${CLAUDE_SKILL_DIR}/scripts/complexity-treemap.py" "$REPO_ROOT" \
   --scope "$SCOPE" -o "$ASSESS_DIR/complexity-heatmap.svg" \
   --stats "$ASSESS_DIR/complexity-stats.json"
 
@@ -46,7 +48,7 @@ uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" \
 # doc graph, doc staleness, dead-code, promissory-marker and change-coupling
 # scans to the subtree, routes every artifact under .assess/<slug>/, and records
 # `scope` / `scope_slug` in run-context.json for the report and badge.
-uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT" --scope "$SCOPE"
+uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT" --scope "$SCOPE"
 ```
 <!-- chat-skip:end -->
 

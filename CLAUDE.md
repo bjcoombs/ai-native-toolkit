@@ -157,7 +157,7 @@ When several PRs share one marathon, the standalone build fires on the **first**
 
 ## Testing a branch before merging
 
-`/plugin install` only sees `main`. To test an unmerged branch's `SKILL.md` + scripts as a real plugin - or to run the scripts directly against a target repo - see [`docs/testing-a-branch-locally.md`](docs/testing-a-branch-locally.md). Key point: plugin skills resolve their bundled scripts via `$CLAUDE_PLUGIN_ROOT` (the version cache dir), not `~/.claude/skills/`.
+`/plugin install` only sees `main`. To test an unmerged branch's `SKILL.md` + scripts as a real plugin - or to run the scripts directly against a target repo - see [`docs/testing-a-branch-locally.md`](docs/testing-a-branch-locally.md). Key point: plugin skills reach their bundled scripts through the `${CLAUDE_SKILL_DIR}` token, which Claude Code replaces with the skill's directory in the version cache when it loads the skill text. `CLAUDE_PLUGIN_ROOT` is unset in the Bash tool calls a skill makes, and `~/.claude/skills/` holds no plugin skill.
 
 ## Standalone skill pipeline
 

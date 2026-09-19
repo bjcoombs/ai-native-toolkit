@@ -1538,7 +1538,7 @@ def build_run_context(
     ctx["offers"] = offers_block["offers"]
 
     # Where the end-of-run uninstall guide lives, relative to the assess skill
-    # directory (resolved by the orchestrator via $SKILL_DIR). A machine-stable
+    # directory (which the harness substitutes for ${CLAUDE_SKILL_DIR}). A machine-stable
     # pointer so an agent can Read the removal steps without hunting for them.
     ctx["uninstall_instructions_path"] = "references/uninstall.md"
 

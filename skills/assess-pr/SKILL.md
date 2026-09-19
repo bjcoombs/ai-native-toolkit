@@ -265,14 +265,8 @@ If the user **did not select** the CI-gate offer: skip. The deterministic report
 If the user **selected** it, emit the workflow. The generator reads the running plugin's version (never the one recorded in the target's `.assess/` files, which can be months old), bakes in the discovered toolchain, and pins the newest published toolkit release that ships the action - the running version when its tag is already cut, otherwise the closest older release:
 
 ````bash
-<!-- chat-skip:start -->
-# Re-resolve the skill dir in case this runs in a fresh shell (the env var
-# $CLAUDE_PLUGIN_ROOT survives; Step 2's shell var won't have).
-SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"
-SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"
-<!-- chat-skip:end -->
 <!-- chat-replace:uv-emit-workflow -->
-uv run "$SKILL_DIR/scripts/assess_emit_workflow.py" "$REPO_ROOT"
+uv run "${CLAUDE_SKILL_DIR}/../assess/scripts/assess_emit_workflow.py" "$REPO_ROOT"
 ````
 
 This writes `.github/workflows/assess-gate.yml` (relative to the repo root). The script auto-detects the default branch and the discovered tools; override with `--branch <name>` or `--tools lizard,scc,...` when the run found a different toolchain (e.g. a per-language dead-code tool).
