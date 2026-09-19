@@ -107,7 +107,7 @@ def test_step4_hands_rejected_entries_on_to_the_findings_step():
 
 def _evidence_cell_rule() -> str:
     text = FINDINGS_SKILL.read_text(encoding="utf-8")
-    return next(p for p in text.split("\n\n") if "cite only verified" in p.lower())
+    return next(p for p in text.split("\n\n") if "`(unverified)`" in p)
 
 
 def test_evidence_cell_marks_only_unoffered_evidence_unverified():
@@ -116,6 +116,23 @@ def test_evidence_cell_marks_only_unoffered_evidence_unverified():
     unverified = next(s for s in rule.split(". ") if "`(unverified)`" in s)
     assert "offered no" in unverified
     assert "rejected" not in unverified and "held" not in unverified
+
+
+def test_evidence_cell_gives_na_layer_no_unverified_marker():
+    # An N/A layer is scored with no entries by design (the scorer skips
+    # `na_layers`), so it must not fall into the no-entries-offered state.
+    rule = _evidence_cell_rule()
+    na = next(s for s in rule.split(". ") if "N/A layer" in s)
+    assert "`(unverified)`" not in na
+    assert "archetype rule" in na and "no marker" in na
+
+
+def test_evidence_cell_rule_sits_beside_archetype_rule():
+    # The two rules govern the same cell; kept apart they contradicted each other.
+    text = FINDINGS_SKILL.read_text(encoding="utf-8")
+    paras = text.split("\n\n")
+    archetype = next(i for i, p in enumerate(paras) if "Archetype-aware Status" in p)
+    assert "`(unverified)`" in paras[archetype + 1]
 
 
 def test_evidence_cell_renders_refuted_claims_as_a_gap():
