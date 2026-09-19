@@ -70,11 +70,13 @@ EDGE_COLOR = "#9aa0a6"
 # Edge kinds. A link is a markdown link; a reference is a backticked doc path
 # that names a file on disk. A reference is drawn dotted: dashes already mean the
 # ghost tether (4,3) and the orphan and ghost rings (3,2), so a dot pattern is
-# the one line style left that collides with neither.
+# the one line style left that collides with neither. Round caps add half the
+# stroke width to each end of a dash, so a near-zero dash paints a round dot and
+# the 4-unit gap keeps a visible break after the caps take their 1.6 units.
 _EDGE_STYLE = {
     "link": {"stroke": EDGE_COLOR, "stroke-dasharray": None,
              "stroke-width": "1.2", "opacity": "0.6"},
-    "reference": {"stroke": EDGE_COLOR, "stroke-dasharray": "1,3",
+    "reference": {"stroke": EDGE_COLOR, "stroke-dasharray": "0.1,4",
                   "stroke-width": "1.6", "opacity": "0.8"},
 }
 ENTRY_RING = "#0072B2"       # blue ring marks the entry node when colour = staleness

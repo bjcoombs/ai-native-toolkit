@@ -136,6 +136,12 @@ def test_reference_edge_drawn_distinct_from_link_with_legend(svg, tmp_path, monk
     assert len(styles["reference"]) == 1
     assert styles["link"][0] != styles["reference"][0]
     assert styles["reference"][0][1] not in ("4,3", "3,2")
+    # The dots must survive the round caps: each cap adds half the stroke width
+    # to both ends of a dash, so the painted bead is dash + width and the painted
+    # gap is gap - width. A gap no wider than the bead washes out when scaled down.
+    dash, gap = (float(v) for v in styles["reference"][0][1].split(","))
+    width = float(styles["reference"][0][2])
+    assert gap - width >= dash + width
     legend = sorted({e.get("data-legend-kind") for e in els if e.get("data-legend-kind")})
     assert legend == ["link", "reference"]
     # Legend samples are drawn in the same style as the edges they explain.
