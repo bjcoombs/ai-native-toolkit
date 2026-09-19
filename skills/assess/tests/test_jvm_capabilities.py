@@ -120,6 +120,16 @@ def test_user_exclude_dir_prunes_build_file(tmp_path: Path) -> None:
     assert detect_build_system(tmp_path, extra_exclude_dirs={"legacy"}) == (None, [])
 
 
+def test_user_exclude_pattern_on_source_drops_threshold(tmp_path: Path) -> None:
+    # A basename pattern applies to source files too: excluding the only JVM
+    # source leaves the build file below the source threshold.
+    _write(tmp_path, "pom.xml", "<project/>")
+    _write(tmp_path, "src/main/java/Generated.java", "class Generated {}")
+    assert detect_build_system(tmp_path)[0] == "maven"
+    assert detect_build_system(
+        tmp_path, extra_exclude_patterns=["Generated*.java"]) == (None, [])
+
+
 def test_requires_jvm_source_groovy_counts(tmp_path: Path) -> None:
     # Grails apps, Jenkins plugins and Gradle plugin projects hold Groovy only.
     _write(tmp_path, "build.gradle", "plugins { id 'groovy' }")
@@ -193,11 +203,13 @@ def test_platform_wrapper_package_json_without_wrapper_dep_counts(
     assert detect_build_system(tmp_path) == ("gradle", ["android/build.gradle"])
 
 
-def _cordova_app(root: Path, prefix: str = "", package: str | None = None) -> None:
+def _cordova_app(root: Path, prefix: str = "", package: str | None = None,
+                 config_xml: bool = True) -> None:
     # `cordova platform add android` layout: config.xml and package.json at the
     # app root, the generated Android project under platforms/android/.
-    _write(root, f"{prefix}config.xml",
-           '<widget xmlns:cdv="http://cordova.apache.org/ns/1.0"></widget>')
+    if config_xml:
+        _write(root, f"{prefix}config.xml",
+               '<widget xmlns:cdv="http://cordova.apache.org/ns/1.0"></widget>')
     deps = {"devDependencies": {package: "13.0.0"}} if package else {}
     _write(root, f"{prefix}package.json", json.dumps(deps))
     _write(root, f"{prefix}platforms/android/build.gradle", "buildscript {}")
@@ -211,6 +223,22 @@ def test_platform_wrapper_cordova_platforms_android_is_not_jvm(
         tmp_path: Path, package: str | None) -> None:
     _cordova_app(tmp_path, package=package)
     assert detect_build_system(tmp_path) == (None, [])
+
+
+def test_platform_wrapper_cordova_package_json_alone_is_not_jvm(
+        tmp_path: Path) -> None:
+    # No config.xml: the cordova-android package.json alone marks the root.
+    _cordova_app(tmp_path, package="cordova-android", config_xml=False)
+    assert detect_build_system(tmp_path) == (None, [])
+
+
+@pytest.mark.parametrize("package", ["react-native", "@capacitor/android"])
+def test_platform_wrapper_platforms_android_other_wrapper_package_counts(
+        tmp_path: Path, package: str) -> None:
+    # Only cordova-android marks platforms/android/; other wrapper packages
+    # mark a sibling android/ and nothing else.
+    _cordova_app(tmp_path, package=package, config_xml=False)
+    assert detect_build_system(tmp_path)[0] == "gradle"
 
 
 def test_platform_wrapper_nested_cordova_app_is_not_jvm(tmp_path: Path) -> None:

@@ -128,9 +128,13 @@ _GRADLE_FILES = frozenset({"build.gradle", "build.gradle.kts"})
 # package.json dependencies whose presence makes a sibling ``android/`` directory
 # a generated platform wrapper rather than a JVM codebase.
 _WRAPPER_NPM_PACKAGES = frozenset({"react-native", "@capacitor/android", "cordova-android"})
+# The package that marks a Cordova app root, whose wrapper is platforms/android/.
+_CORDOVA_NPM_PACKAGES = frozenset({"cordova-android"})
 
 
-def _package_json_names_wrapper(path: Path) -> bool:
+def _package_json_names_wrapper(path: Path,
+                                packages: frozenset[str] = _WRAPPER_NPM_PACKAGES,
+                                ) -> bool:
     try:
         data = json.loads(_read(path))
     except ValueError:
@@ -139,7 +143,7 @@ def _package_json_names_wrapper(path: Path) -> bool:
         return False
     for section in ("dependencies", "devDependencies"):
         deps = data.get(section)
-        if isinstance(deps, dict) and _WRAPPER_NPM_PACKAGES.intersection(deps):
+        if isinstance(deps, dict) and packages.intersection(deps):
             return True
     return False
 
@@ -161,7 +165,8 @@ def _is_cordova_root(dirpath: Path, filenames: list[str]) -> bool:
     if "config.xml" in filenames and "cordova.apache.org" in _read(dirpath / "config.xml"):
         return True
     return ("package.json" in filenames
-            and _package_json_names_wrapper(dirpath / "package.json"))
+            and _package_json_names_wrapper(dirpath / "package.json",
+                                            _CORDOVA_NPM_PACKAGES))
 
 
 def _scan_jvm_tree(repo_root: Path,
