@@ -12,7 +12,9 @@ The deterministic parts are not yours to invent - you paste them. You write the 
 ## Inputs
 
 - `$REPO_ROOT/.assess/run-context.json` - the data bus (findings, attention, keyhole summary, prescribed actions, stats, diff).
-- The scorecard returned by the `assess-layer-scorer` agent (the 0-8 score, per-layer verdicts, maturity label).
+- The scorecard returned by the `assess-layer-scorer` agent (the 0-8 score, per-layer verdicts, maturity label), with its `evidence` list already re-checked by `lib/evidence_check.py`: only entries that held on disk remain; the rejected ones were removed before you received it.
+
+**Existence and wiring claims cite only verified evidence.** A report sentence saying a file or directory exists or is missing, or that something is or is not wired in (a workflow runs the linter, no CI job calls the script), must rest on an entry in the scorecard's `evidence` list and name the path that entry cites. When no verified entry backs such a claim, leave it out rather than restating it from the scorer's prose. The deterministic findings you paste verbatim are already grounded and need no entry.
 
 ## Read the cross-layer findings first
 

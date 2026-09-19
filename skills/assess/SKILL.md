@@ -412,7 +412,7 @@ The wiki files at `.assess/index.md` and `.assess/hotspots/*.md` are already upd
 
 ## Step 4: Write the Report
 
-Assembling `.assess/assess-report.md` - the scorecard, the snapshots, the verbatim cross-layer findings, the lying signals, and the mandatory Top 3 Actions - is a reusable, mostly-deterministic procedure. It runs as a sub-skill.
+**Verify the scorecard's evidence first** - this is the only point where a false claim can still be kept out of the report. Write the scorer's `evidence` list to `$REPO_ROOT/.assess/.cache/evidence.json` and, from this skill's `scripts/` directory, run `uv run python -m lib.evidence_check "$REPO_ROOT" "$REPO_ROOT/.assess/.cache/evidence.json" --json "$REPO_ROOT/.assess/.cache/evidence-checked.json"` (exit 1 means an entry was rejected, not that the check failed). The output's `evidence` (entries that hold) replaces the scorer's list in the scorecard handed on; entries under `evidence_rejected` (each with a `reason`) are removed from the report input, and a verdict left with no verified entry is re-scored from what holds. Delete both files once read. Assembling `.assess/assess-report.md` - the scorecard, the snapshots, the verbatim cross-layer findings, the lying signals, and the mandatory Top 3 Actions - is a reusable, mostly-deterministic procedure. It runs as a sub-skill.
 
 <!-- chat-replace:findings-delegate -->
 Use the assess-findings skill, handing it the scorecard the layer-scorer returned. It assembles `.assess/assess-report.md` from the data bus plus the scorecard: the verbatim findings section, the lying signals, and the Top 3 Actions (the attention list is mandatory). Then continue to Step 7.5.
