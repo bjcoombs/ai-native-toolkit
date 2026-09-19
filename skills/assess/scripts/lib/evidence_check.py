@@ -34,7 +34,7 @@ CLI (run from ``skills/assess/scripts``)::
 
 Exit 0 when every entry verifies, 1 when any is rejected, 2 when the evidence
 file cannot be read, is not UTF-8 JSON, or is not a JSON array, or ``repo_root`` is not
-a directory (no output is written then).
+a directory (no output is written then), or the ``--json`` file cannot be written.
 """
 from __future__ import annotations
 
@@ -74,8 +74,17 @@ def _resolve(repo_root: Path, rel: str) -> Path | None:
     return target
 
 
-def _in_git_metadata(rel: str) -> bool:
-    return _GIT_DIR in Path(rel).parts
+def _under(path: Path, top: Path) -> bool:
+    return path == top or path.is_relative_to(top)
+
+
+def _in_git_metadata(rel: str, repo_root: Path | str) -> bool:
+    """True when ``rel`` names ``.git/`` or anything in it, literally or through
+    a symlink that resolves there."""
+    if _GIT_DIR in Path(rel).parts:
+        return True
+    target = _resolve(Path(repo_root), rel)
+    return target is not None and _under(target, Path(repo_root).resolve() / _GIT_DIR)
 
 
 def _encode(needle: str) -> bytes | None:
@@ -112,15 +121,18 @@ def _file_has(path: Path, needle: bytes) -> bool | None:
 
 def _link_target(root: Path, link: Path) -> Path | None:
     """Where a symlink met in the walk leads, when that is repository content;
-    None for a link out of the root or a dangling one (not repository content).
-    A link that cannot be resolved (a loop) is raised as OSError."""
+    None for a link out of the root, a dangling one, or one into a directory the
+    walk does not enter (``.git/``, ``.assess/``) - none of those is content the
+    walk would read. A link that cannot be resolved (a loop) is raised as OSError."""
     try:
         dest = link.resolve(strict=True)
     except FileNotFoundError:
         return None
     except RuntimeError as exc:  # symlink loop on older Pythons
         raise OSError(str(link)) from exc
-    return dest if dest == root or dest.is_relative_to(root) else None
+    if not _under(dest, root) or any(_under(dest, root / d) for d in _SKIP_DIRS):
+        return None
+    return dest
 
 
 def _walk(root: Path, target: Path, raw: bytes) -> bool | None:
@@ -175,7 +187,7 @@ def _walk(root: Path, target: Path, raw: bytes) -> bool | None:
 def _search(repo_root: Path | str, needle: str, path: str) -> bool | None:
     """True when found; False when a complete search found nothing; None when
     nothing was found but some file or directory could not be searched."""
-    if not needle or _in_git_metadata(path):
+    if not needle or _in_git_metadata(path, repo_root):
         return False
     raw = _encode(needle)
     target = _resolve(Path(repo_root), path)
@@ -231,7 +243,7 @@ def _malformed(repo_root: Path | str, entry: Any) -> str | None:
 def _check_reference(repo_root: Path | str, kind: str, needle: str, rel: str, target: Path) -> str | None:
     # The place searched must exist, or the claim is about nothing (use
     # path_absent to claim the place is missing).
-    if _in_git_metadata(rel):
+    if _in_git_metadata(rel, repo_root):
         return "path is inside .git/, which the reference search does not enter"
     if not target.exists():
         return "path does not exist"
@@ -324,7 +336,12 @@ def main() -> int:
 
     result = check_evidence(args.repo_root, entries)
     if args.json:
-        args.json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        try:
+            args.json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        except OSError as exc:
+            # Exit 1 means "an entry was rejected"; a failed write must not read as that.
+            print(f"evidence_check: cannot write {args.json}: {exc}", file=sys.stderr)
+            return 2
 
     print(f"verified {len(result['evidence'])}, rejected {len(result['evidence_rejected'])}")
     for entry in result["evidence_rejected"]:

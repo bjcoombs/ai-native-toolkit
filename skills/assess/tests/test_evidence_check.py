@@ -379,3 +379,34 @@ def test_cli_refuses_evidence_that_is_not_utf8(repo: Path, tmp_path_factory) -> 
     assert proc.returncode == 2, proc.stderr
     assert "Traceback" not in proc.stderr
     assert not (out_dir / "out.json").exists()
+
+
+def test_symlinks_into_git_metadata_are_not_searched(repo: Path) -> None:
+    (repo / ".git").mkdir()
+    (repo / ".git" / "config").write_text("scripts/hidden.sh\n")
+    (repo / "docs" / "gitlink").symlink_to(repo / ".git", target_is_directory=True)
+    (repo / "config-link").symlink_to(repo / ".git" / "config")
+    (repo / ".github" / "workflows" / "cfg.yml").symlink_to(repo / ".git" / "config")
+    for path in ("docs/gitlink", "config-link", ".github/workflows"):
+        assert is_referenced_in(repo, "scripts/hidden.sh", path) is False, path
+    named = check_evidence(repo, [
+        {"layer": 7, "kind": "referenced_in", "needle": "x", "path": "docs/gitlink"},
+        {"layer": 7, "kind": "not_referenced_in", "needle": "x", "path": "config-link"},
+    ])
+    assert named["evidence"] == []
+    assert all(".git/" in e["reason"] for e in named["evidence_rejected"])
+    walked = _not_referenced("scripts/hidden.sh")
+    assert check_evidence(repo, [walked])["evidence"] == [walked]
+
+
+def test_cli_exits_2_when_the_json_output_cannot_be_written(repo: Path, tmp_path_factory) -> None:
+    out_dir = tmp_path_factory.mktemp("out")
+    ev = out_dir / "ev.json"
+    ev.write_text(json.dumps([{"layer": 0, "kind": "path_absent", "path": "docs/guide.md"}]))
+    proc = subprocess.run(
+        [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
+         "--json", str(out_dir / "missing-dir" / "out.json")],
+        cwd=SCRIPTS_DIR, capture_output=True, text=True, timeout=30,
+    )
+    assert proc.returncode == 2, proc.stderr
+    assert "Traceback" not in proc.stderr
