@@ -109,6 +109,16 @@ def test_scan_reads_github_contributing_with_its_relative_path(tmp_path: Path) -
     assert _run_scan(tmp_path, "NO_CONTRIBUTIONS_SOURCE") == ".github/CONTRIBUTING.md"
 
 
+def test_scan_reads_docs_contributing_with_its_relative_path(tmp_path: Path) -> None:
+    # GitHub also recognises docs/CONTRIBUTING.md; a refusal stated only there
+    # must still suppress the fork-to-upstream offer.
+    (tmp_path / "README.md").write_text("# App\n", encoding="utf-8")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "CONTRIBUTING.md").write_text(f"{STATEMENT}\n", encoding="utf-8")
+    assert _run_scan(tmp_path) == "1"
+    assert _run_scan(tmp_path, "NO_CONTRIBUTIONS_SOURCE") == "docs/CONTRIBUTING.md"
+
+
 def test_phase_2_variant_is_scoped_to_read_only_targets() -> None:
     text = ASSESS_PR_SKILL.read_text(encoding="utf-8")
     phase2 = text.split("## Phase 2", 1)[1].split("## Step 5", 1)[0]

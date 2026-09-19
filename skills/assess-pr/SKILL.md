@@ -126,7 +126,7 @@ _nc_re="${_nc_accept}|${_nc_imperative}|${_nc_passive}"
 # issue") is a condition on contributing, not a refusal, and is dropped. This
 # errs towards 0, which keeps today's fork-to-upstream offer.
 _nc_cond="(^|[^a-z])(${_nc_noun}|accepted) (without|until|unless|before|directly|against|that|which)"
-for _nc_doc in "$REPO_ROOT/README.md" "$REPO_ROOT/CONTRIBUTING.md" "$REPO_ROOT/.github/CONTRIBUTING.md"; do
+for _nc_doc in "$REPO_ROOT/README.md" "$REPO_ROOT/CONTRIBUTING.md" "$REPO_ROOT/.github/CONTRIBUTING.md" "$REPO_ROOT/docs/CONTRIBUTING.md"; do
   [ -f "$_nc_doc" ] || continue
   _nc_line=$(grep -Ei -e "$_nc_re" "$_nc_doc" | grep -Eiv -e "$_nc_cond" | head -n 1)
   if [ -n "$_nc_line" ]; then
