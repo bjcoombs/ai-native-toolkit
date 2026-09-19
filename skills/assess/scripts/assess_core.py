@@ -1461,6 +1461,7 @@ def build_run_context(
     ctx["runtime"] = keyhole["runtime"]
     ctx["derived_findings"] = keyhole["derived_findings"]
     ctx["attention"] = keyhole["attention"]
+    ctx["attention_low_signal"] = keyhole["attention_low_signal"]
     # Deterministic report-skeleton products (assess-dogfooded Part 1): the
     # pre-rendered findings section the LLM copies verbatim, the keyhole
     # readiness summary reported alongside (never merged into) the 0-8 score, and

@@ -264,7 +264,10 @@ disclosure; the findings themselves still name them. Rows of equal score are ord
 `promissory_markers.top_offenders[].severity` for an `unactioned_intent` file, divided by
 the run's highest so it shares the 0-1 scale of `1 - containment_ratio` for a
 `hidden_coupling` directory; neither finding type outranks the other by scale alone),
-then path. Before either filter, the commit
+then path. `is_attention_low_signal` marks the list low-signal when its top score is 1
+(no row lands in two negative findings; `False` for an empty list), and `integrate` then
+caps `prescribed_actions` at the rank-1 row instead of three; the flag is serialised as the
+run-context `attention_low_signal`. Before either filter, the commit
 sets are folded through the rename map (so a renamed directory's history lands on its
 current name), and `prune_missing_finding_paths` drops any `hidden_coupling` or
 `refactor_boundary` path absent from the working tree, returning them as
