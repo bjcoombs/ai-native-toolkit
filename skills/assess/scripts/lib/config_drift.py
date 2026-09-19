@@ -161,7 +161,16 @@ def diff_values(tracked: Any, live: Any, key: str = "") -> list[tuple[str, Any, 
         return out
     if isinstance(tracked, list) and isinstance(live, list):
         return _diff_lists(tracked, live, key)
-    return [] if tracked == live else [(key, tracked, live)]
+    if tracked == live:
+        return []
+    # Scalar-vs-container mismatch (a PUT-shape export disables a block with
+    # null; live has the block set): record presence, never the live object,
+    # so live org configuration does not reach the committed wiki.
+    return [(key, _presence(tracked), _presence(live))]
+
+
+def _presence(value: Any) -> Any:
+    return "present" if isinstance(value, (dict, list)) else value
 
 
 def _identity(item: Any) -> str | None:

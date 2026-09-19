@@ -371,3 +371,15 @@ def test_entries_rank_worst_first(world) -> None:
 def test_absent_key_reports_the_normalised_tracked_value() -> None:
     tracked = {"enforce_admins": {"url": "u", "enabled": False}}
     assert diff_values(tracked, {}) == [("enforce_admins", False, "absent")]
+
+
+def test_type_mismatch_never_emits_the_live_object() -> None:
+    tracked = {"required_pull_request_reviews": None, "restrictions": None}
+    live = {"required_pull_request_reviews": {"dismissal_restrictions": {
+                "users": [{"login": "zzuser"}], "teams": [{"slug": "zzteam"}]}},
+            "restrictions": {"users": [], "teams": [{"slug": "zzteam"}]}}
+    out = diff_values(tracked, live)
+    assert out == [("required_pull_request_reviews", None, "present"),
+                   ("restrictions", None, "present")]
+    assert "zz" not in json.dumps(out)
+    assert diff_values({"a": {"b": 1}}, {"a": 3}) == [("a", "present", 3)]
