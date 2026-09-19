@@ -173,7 +173,7 @@ jq '.dead_code, .observability' "$REPO_ROOT/.assess/run-context.json"
 
 Two `tools[].status` values need handling in the report: `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it - surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `timeout` / `tool_absent` likewise degrade, not penalise.
 
-**Capability-driven JVM offers (`capability_offers`).** When the repo is a Maven or Gradle project, `run-context.json` carries a `capability_offers` block and the `dead_code.tools` list includes a `java` entry. This is the capability-driven flow (SKILL.md Step 2b) surfaced to the scorer:
+**Capability-driven JVM offers (`capability_offers`).** When the repo is a Maven or Gradle project (a build file plus JVM source outside platform-wrapper `android/` directories, Cordova's `platforms/android/` included), `run-context.json` carries a `capability_offers` block and the `dead_code.tools` list includes a `java` entry. This is the capability-driven flow (SKILL.md Step 2b) surfaced to the scorer. A Flutter, React Native, Capacitor or Cordova app whose only Gradle files and Kotlin/Java sit under its generated `android/` wrapper gets neither, so never name a JVM candidate tool for it:
 
 ```bash
 jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"
