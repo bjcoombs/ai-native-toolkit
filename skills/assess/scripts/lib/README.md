@@ -148,19 +148,24 @@ Its second classifier, `classify_working_notes_trees` (issue #366), finds
 working-notes trees: at least `WORKING_NOTES_MIN_FILES` docs, most named in a
 small set of sequence families (a date, or a word then an integer that ends the
 name: `plan_07`, `PROJ-123`; a counter followed by a title such as
-`adr-0001-use-postgres`, a dotted version, or a shared word alone like `how-to-*`
-is no family), most with
-in-degree <= 1, and one or two index docs linking to most of the tree (coverage
-of the tree, not a share of whatever edges exist, so one stray link into an
-unlinked pile does not qualify it) - an agent's plans or session logs hung off a
-backlog index. The whole directory, the
-index included, is the tree. A qualifying parent absorbs qualifying
-subdirectories that themselves absorb (decided deepest first) only when every
-other doc in it is their index, one of the top sources of their inbound links
-rather than a page citing one note (`notes/backlog.md` over `notes/2025/` and
-`notes/2026/`); otherwise the subdirectories win, so curated siblings stay
-counted, including a curated page inside a subdirectory that refused to absorb. Only docs are classified, never a `.base` hub. It runs on the headline graph (link and reference edges)
-after the raw pass. `doc_graph.py` excludes these trees too and reports
+`adr-0001-use-postgres`, a dotted version, or a shared word alone like
+`how-to-*` is no family), most with in-degree <= 1, and one or two index docs
+linking to most of the tree (coverage of the tree, not a share of whatever edges
+exist, so one stray link into an unlinked pile does not qualify it) - an agent's
+plans or session logs hung off a backlog index. One invariant bounds the
+exclusion: a doc leaves the headline only if it is itself a positional note (a
+name family, or a member of a deeper tree already accepted) or an index whose
+links go into such notes, one of the top sources of their inbound links rather
+than a page citing one note. The tree is those docs: a subdirectory holding no
+note stays counted whole (a `docs/guides/` of curated pages beside 50 notes in
+`docs/`), and any other curated doc refuses the directory, leaving its deeper
+trees to stand alone (`docs/guide.md` beside `docs/notes/`). `notes/backlog.md`
+over `notes/2025/` and `notes/2026/` is one tree. Subdirectories are decided
+deepest first, and the tree must still pass the three legs on its own. No config
+key keeps a misclassified series (`chapter-01` to `chapter-20` under a contents
+page) counted yet; that is separate, later work. Only docs are classified, never
+a `.base` hub. It runs on the headline graph (link and reference edges) after
+the raw pass. `doc_graph.py` excludes these trees too and reports
 `excluded_working_notes_trees`, `working_notes_doc_count`,
 `working_notes_orphan_rate` and `working_notes_broken_links`.
 

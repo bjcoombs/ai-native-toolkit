@@ -350,6 +350,22 @@ def test_non_absorbing_subdirectory_shields_its_curated_page() -> None:
     assert [(t["path"], t["file_count"]) for t in trees] == [("docs/team/notes", 50)]
 
 
+def test_curated_subdirectory_below_the_floor_stays_counted() -> None:
+    # docs/ holds 50 notes directly and docs/guides/ (9 pages and a README,
+    # under the size floor, so it never qualifies). docs clears every leg over
+    # all 61 docs, but the guides carry no name family and are no index into
+    # the notes: only the notes and their index leave the headline.
+    signals = {f"docs/plan_{i:02d}.md": _wn_signal(["docs/index.md"]) for i in range(1, 51)}
+    signals["docs/index.md"] = _wn_signal(["README.md"])
+    guides = "architecture billing caching deploy events glossary logging metrics onboarding".split()
+    for g in guides:
+        signals[f"docs/guides/{g}.md"] = _wn_signal(["docs/guides/README.md"])
+    signals["docs/guides/README.md"] = _wn_signal(["docs/index.md"])
+    trees = classify_working_notes_trees(signals)
+    assert [(t["path"], t["file_count"]) for t in trees] == [("docs", 51)]
+    assert not any(r.startswith("docs/guides/") for r in trees[0]["docs"])
+
+
 def test_working_notes_thresholds_are_precision_first() -> None:
     assert WORKING_NOTES_MIN_FILES >= 10
     assert 0.5 < WORKING_NOTES_NAME_DENSITY <= 1.0

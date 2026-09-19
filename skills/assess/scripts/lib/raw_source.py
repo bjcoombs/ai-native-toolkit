@@ -51,7 +51,9 @@ inbound link (from the index), so it is not an orphan and the raw-source test
 never fires, yet the tree swamps the curated wiki's doc count and hub ranking.
 The tendency is the same accretion: every task leaves a note, nothing ever
 consolidates them. :func:`classify_working_notes_trees` names such trees so
-``build_doc_graph`` excludes them the same way it excludes raw trees.
+``build_doc_graph`` excludes them the same way it excludes raw trees. One
+invariant bounds what such a tree takes out of the headline: a doc leaves only
+if it is itself a positional note, or an index whose links go into such notes.
 """
 from __future__ import annotations
 
@@ -152,8 +154,8 @@ def classify_raw_trees(
 
 # Working-notes thresholds (issue #366), precision-first for the same reason as
 # the raw-tree ones: excluding a curated folder hides real navigability gaps,
-# while missing a notes tree only keeps today's figures (and `.assess/config.toml`
-# can name the tree). All three legs must hold.
+# while missing a notes tree only keeps today's figures. All three legs must
+# hold, and the tree takes out only notes and their index (see `_tree_docs`).
 #
 # A working-notes name family is a series whose names are positions, not
 # subjects: every name is a date (2026-01-31-standup) or a word and a counter
@@ -164,7 +166,10 @@ def classify_raw_trees(
 # are curated, as is a shared word with no counter (how-to-deploy). The rule
 # separates shape, not intent: a numbered series under its own table of
 # contents (chapter-01 .. chapter-20) passes all three legs exactly as plan_NN
-# does, and only `.assess/config.toml` can keep it counted. A cross-linked wiki
+# does and is excluded. No override keeps such a series counted yet:
+# `.assess/config.toml` has no key for it (`exclude_dirs` does the opposite,
+# dropping the tree from every figure), and config keys to force or suppress a
+# notes tree are separate, later work. A cross-linked wiki
 # fails on in-degree (several inbound links per page) and on the index (no one
 # or two pages link to most of it).
 WORKING_NOTES_MIN_FILES = 20  # a pile, not a small wiki section
@@ -214,24 +219,40 @@ def _is_working_notes(docs: list[str], doc_signals: dict[str, dict]) -> bool:
     return held >= WORKING_NOTES_INDEX_SHARE * n
 
 
-def _absorbs(directory: str, qualifying: dict[str, list[str]], doc_signals: dict[str, dict],
-             absorbing: set[str]) -> bool:
-    """True when ``directory`` can stand as one tree over its absorbing
-    qualifying subdirectories: each doc outside them is their index, one of
-    the top ``WORKING_NOTES_INDEX_FILES`` sources of their inbound links
-    holding at least an equal part of ``WORKING_NOTES_INDEX_SHARE``. A curated
-    page that cites one note is a source, not an index. ``absorbing`` holds the
-    verdicts for every deeper directory: a subdirectory that refused to absorb
-    does not hand its curated docs to an ancestor as nested notes."""
-    inner = [o for o in absorbing if o != directory and _is_ancestor_path(directory, o)]
-    if not inner:
-        return True
-    nested = {r for o in inner for r in qualifying[o]}
-    sources = Counter(s for r in nested for s in doc_signals[r].get("inbound_sources", ()))
-    total = sum(sources.values())
-    floor = total * WORKING_NOTES_INDEX_SHARE / WORKING_NOTES_INDEX_FILES
+def _tree_docs(directory: str, docs: list[str], doc_signals: dict[str, dict],
+               trees: dict[str, list[str]]) -> list[str] | None:
+    """The docs ``directory`` takes out of the headline, or None to refuse.
+
+    Invariant: a doc leaves the headline only if it is itself a positional
+    note, or an index whose links go into such notes. A note is a doc with a
+    name family, or a member of a deeper tree already accepted (``trees``,
+    decided deepest first). An index is one of the top
+    ``WORKING_NOTES_INDEX_FILES`` sources of the notes' inbound links, each
+    holding at least an equal part of ``WORKING_NOTES_INDEX_SHARE``; a curated
+    page citing one note is a source, not an index. Any other doc stays
+    counted: a subdirectory holding no note at all is left out of the tree
+    whole, and any other curated doc refuses the directory, so its notes are
+    decided by their own subdirectories instead."""
+    nested = {r for o, t in trees.items() if _is_ancestor_path(directory, o) for r in t}
+    notes = {r for r in docs if r in nested or _name_key(r) is not None}
+    sources = Counter(s for r in notes for s in doc_signals[r].get("inbound_sources", ()))
+    floor = sum(sources.values()) * WORKING_NOTES_INDEX_SHARE / WORKING_NOTES_INDEX_FILES
     indexes = {s for s, c in sources.most_common(WORKING_NOTES_INDEX_FILES) if c >= floor}
-    return all(r in indexes for r in qualifying[directory] if r not in nested)
+
+    def child(rel: str) -> str | None:
+        head, sep, _ = rel[len(directory) + 1:].partition("/")
+        return head if sep else None
+
+    noted = {child(r) for r in notes}
+    tree = []
+    for r in docs:
+        if r in notes or r in indexes:
+            tree.append(r)
+        elif child(r) is None or child(r) in noted:
+            return None
+    if len(tree) < WORKING_NOTES_MIN_FILES or not _is_working_notes(tree, doc_signals):
+        return None
+    return tree
 
 
 def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
@@ -242,15 +263,13 @@ def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
     referring to it). A directory qualifies when it holds at least
     ``WORKING_NOTES_MIN_FILES`` docs, most named in a small set of families,
     most with in-degree <= 1, and one or two docs link to most of the tree.
-    The whole directory is the tree, its index file included.
+    The tree is its notes and their index (``_tree_docs``): a subdirectory
+    holding no note stays counted whole, and any other curated doc refuses the
+    directory, leaving its deeper trees to stand alone.
 
-    Returns ``{"path", "file_count", "docs"}`` per tree, sorted by path. A
-    qualifying parent absorbs its qualifying subdirectories only when every doc
-    it holds outside the ones that themselves absorb is an index linking into
-    them (``notes/backlog.md`` over ``notes/2025/`` and ``notes/2026/``);
-    otherwise the subdirectories win,
-    so a parent that qualifies only because a notes tree dominates it does not
-    take its curated siblings out of the headline.
+    Returns ``{"path", "file_count", "docs"}`` per outermost tree, sorted by
+    path. ``notes/backlog.md`` over ``notes/2025/`` and ``notes/2026/`` is one
+    tree; ``docs/guide.md`` beside ``docs/notes/`` leaves ``docs/notes`` alone.
     """
     by_dir: dict[str, list[str]] = {}
     for rel in doc_signals:
@@ -261,15 +280,13 @@ def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
         d: docs for d, docs in by_dir.items()
         if len(docs) >= WORKING_NOTES_MIN_FILES and _is_working_notes(docs, doc_signals)
     }
-    candidates: set[str] = set()
+    trees: dict[str, list[str]] = {}
     for d in sorted(qualifying, key=lambda x: -x.count("/")):  # deepest first
-        if _absorbs(d, qualifying, doc_signals, candidates):
-            candidates.add(d)
-    kept = [
-        d for d in candidates
-        if not any(o != d and _is_ancestor_path(o, d) for o in candidates)
-    ]
+        tree = _tree_docs(d, qualifying[d], doc_signals, trees)
+        if tree is not None:
+            trees[d] = tree
+    kept = [d for d in trees if not any(o != d and _is_ancestor_path(o, d) for o in trees)]
     return [
-        {"path": d, "file_count": len(qualifying[d]), "docs": sorted(qualifying[d])}
+        {"path": d, "file_count": len(trees[d]), "docs": sorted(trees[d])}
         for d in sorted(kept)
     ]
