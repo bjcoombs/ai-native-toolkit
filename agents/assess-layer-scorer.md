@@ -45,6 +45,8 @@ The list is one flat JSON array. Each entry has `layer` (0-8, the layer whose ve
 | `not_referenced_in` | `needle`, `path` | `path` exists and `needle` occurs nowhere in it |
 | `file_contains` | `path`, `needle` | the one file `path` contains `needle` |
 
+Every check fails closed: an entry whose search could not read everything under `path` (an unreadable file, a FIFO, a symlinked directory outside the walk) is rejected as incomplete, not decided on the part it read.
+
 One example per kind, each true of the toolkit's own repository:
 
 ```json
