@@ -691,6 +691,8 @@ def test_run_context_has_deterministic_keyhole_products(tmp_path: Path) -> None:
     # Task 4: prescribed actions array exists (possibly empty for a clean repo).
     assert "prescribed_actions" in ctx
     assert isinstance(ctx["prescribed_actions"], list)
+    # The low-signal marker is always emitted as a boolean beside attention.
+    assert isinstance(ctx["attention_low_signal"], bool)
     # Task 5: derived findings now carry the nine named axes in fixed order.
     names = [f["name"] for f in ctx["derived_findings"]]
     assert names == [
