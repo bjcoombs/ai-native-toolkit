@@ -32,7 +32,8 @@ git repository, a pruned walk otherwise; built-in excluded trees such as
 to the same-named source whose directory shares the deepest common ancestor
 with it; a tie across sources (two ``index.js`` equally close) credits none, and
 a common ancestor of only the repository root credits nothing. A non-git walk
-past :data:`MAX_INDEX_FILES` yields an empty index, so the tier credits nothing.
+past :data:`MAX_INDEX_FILES`, or one that cannot read a directory, yields an
+empty index, so the tier credits nothing.
 
 Two stated limits of the basename tier:
 
@@ -154,20 +155,26 @@ def shared_name_keys(paths: Iterable[str]) -> frozenset[str]:
 
 def _repo_files(repo_root: Path) -> list[Path] | None:
     """Repo-relative file paths: the git-tracked files under ``repo_root`` when
-    it is in a git repository, else a walk pruned of :data:`EXCLUDE_DIRS`;
-    ``None`` when that walk finds more than :data:`MAX_INDEX_FILES` files."""
+    it is in a git repository and still on disk, else a walk pruned of
+    :data:`EXCLUDE_DIRS`; ``None`` when that walk finds more than
+    :data:`MAX_INDEX_FILES` files. A directory the walk cannot read raises."""
     root = repo_root.resolve()
     tracked = tracked_files(root)
     if tracked is not None:
         out: list[Path] = []
         for path in tracked:
             try:
-                out.append(path.relative_to(root))
+                rel = path.relative_to(root)
             except ValueError:
                 continue  # tracked, but outside the assessed root
+            if (root / rel).is_file():  # a deletion not yet staged is gone
+                out.append(rel)
         return out
     walked: list[Path] = []
-    for dirpath, dirnames, filenames in os.walk(root):
+    def fail_closed(error: OSError) -> None:
+        raise error  # an unread subtree may hold a rival source
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=fail_closed):
         dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS)
         rel_dir = Path(dirpath).relative_to(root)
         for name in sorted(filenames):
@@ -179,8 +186,8 @@ def _repo_files(repo_root: Path) -> list[Path] | None:
 
 def build_test_index(repo_root: Path) -> TestIndex:
     """Index the repository once for the basename tier. An empty index when the
-    root cannot be read or the walk passed :data:`MAX_INDEX_FILES`. Never
-    raises."""
+    root or any directory under it cannot be read, or the walk passed
+    :data:`MAX_INDEX_FILES`. Never raises."""
     index = TestIndex()
     try:
         files = _repo_files(Path(repo_root))

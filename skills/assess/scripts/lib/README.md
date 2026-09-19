@@ -473,8 +473,9 @@ co-located and co-committed), and the `test_focus` signal. The parallel-tree
 (`git ls-files`, or a walk pruned of `doc_graph.EXCLUDE_DIRS` outside git): a
 test belongs to the same-named source sharing the deepest common directory with
 it, a tie between sources (two `index.js` equally close) credits none, and a
-root-only common ancestor credits nothing. A walk past 200,000 files yields an
-empty index (fail closed: the dropped files may hold a rival source). The module
+root-only common ancestor credits nothing. Tracked files deleted from disk are
+left out. A walk past 200,000 files, or one that cannot read a directory, yields
+an empty index (fail closed: the missed files may hold a rival source). The module
 docstring names two limits: an untracked parallel test is invisible to this tier
 while the path probes see untracked files, and a helper named like a test
 (`test_utils.py`) can credit a lone `utils.py`. Imports `git_churn` and `doc_graph`;

@@ -239,3 +239,42 @@ def test_parallel_tree_basename_index_is_built_only_when_a_probe_reads_it(
     assert block["entries"][0]["test_signal"] == "sibling_test_only"
     compute_test_focus(["app/functions/foo.js"], None, None, repo_root=tmp_path)
     assert built == [tmp_path]
+
+
+def test_parallel_tree_basename_skips_tracked_files_deleted_from_disk(
+    tmp_path: Path,
+) -> None:
+    """A tracked file deleted from the working tree (deletion not yet staged)
+    is not evidence: ``git ls-files`` still lists it, the index does not."""
+    import subprocess
+
+    for rel in ("app/functions/foo.js", "app/unit-tests/functions/foo.test.js"):
+        _touch(tmp_path, rel)
+    git = ["git", "-C", str(tmp_path), "-c", "user.email=t@example.com",
+           "-c", "user.name=t"]
+    subprocess.run([*git, "init", "-q"], check=True)
+    subprocess.run([*git, "add", "-A"], check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "init"], check=True)
+    (tmp_path / "app/unit-tests/functions/foo.test.js").unlink()
+    assert tc.build_test_index(tmp_path).tests_by_name == {}
+    assert tc.sibling_test_match(tmp_path, "app/functions/foo.js") is None
+
+
+def test_parallel_tree_basename_unreadable_subtree_credits_nothing(
+    tmp_path: Path,
+) -> None:
+    """A walk that cannot read a directory may have missed a rival source, so
+    it yields an empty index, the same fail-closed rule as truncation."""
+    import os
+
+    for rel in ("svc/a/util.js", "svc/a-tests/util.test.js", "svc/b/util.js"):
+        _touch(tmp_path, rel)
+    locked = tmp_path / "svc/b"
+    locked.chmod(0)
+    try:
+        if os.access(locked, os.R_OK):
+            import pytest
+            pytest.skip("running with privileges that ignore file modes")
+        assert tc.build_test_index(tmp_path) == tc.TestIndex()
+    finally:
+        locked.chmod(0o755)
