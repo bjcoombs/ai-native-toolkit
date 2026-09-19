@@ -551,7 +551,9 @@ def _validate_evidence(data: dict, repo_root: Path) -> list[dict]:
     An input with no ``evidence`` key is accepted unchecked, as an input with
     no ``layer_scores`` skips the Layer 6 cap. A malformed list (not a list, or
     an entry naming no layer 0-8) cannot be attributed to a verdict, so it
-    fails closed.
+    fails closed. An entry that names its layer but is otherwise malformed
+    (unknown kind, missing path or needle) is one the library rejects, so it
+    counts as a rejected entry of that layer under the rule above.
     """
     if "evidence" not in data:
         return []

@@ -500,7 +500,9 @@ rejected refuses finalize (`FinalizeValidationError`, naming each entry by kind,
 path and needle); a layer with at least one verified entry keeps its verdict,
 and each rejected entry of it is printed to stderr as a warning. An input with no
 `evidence` key is not checked; a non-list value, or an entry naming no layer 0-8,
-is refused.
+is refused. An entry that names its layer but is otherwise malformed (unknown
+kind, missing path or needle) is rejected by `check_evidence` and counts under
+the per-layer rule like any other rejected entry.
 
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
