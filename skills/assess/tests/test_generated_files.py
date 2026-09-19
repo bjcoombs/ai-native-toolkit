@@ -47,6 +47,28 @@ def test_generated_header_prose_without_comment_leader_is_ignored(tmp_path, line
     assert has_generated_header(f) is False
 
 
+@pytest.mark.parametrize("first_line,expected", [
+    ('"""Writes the generated file for the API client."""', False),
+    ("# Loads the generated file and patches it", False),
+    ("-- GENERATED FILE - regenerate with make schema", True),
+    ("/* Generated file */", True),
+    ("# === GENERATED FILE ===", True),
+])
+def test_generated_header_generated_file_only_as_banner(tmp_path, first_line, expected):
+    f = tmp_path / "x.py"
+    f.write_text(first_line + "\nA = 1\n")
+    assert has_generated_header(f) is expected
+
+
+def test_long_line_small_file_skips_read(tmp_path, monkeypatch):
+    f = tmp_path / "small.py"
+    f.write_text("x = 1\n")
+    import lib.generated_files as mod
+    monkeypatch.setattr(mod, "average_line_length",
+                        lambda p: (_ for _ in ()).throw(AssertionError("read")))
+    assert mod.is_long_line_artifact(f) is False
+
+
 def test_generated_header_markdown_bullet_is_not_a_comment(tmp_path):
     f = tmp_path / "CHANGELOG.md"
     f.write_text("Release notes\n\n* Auto-generated release notes now include PRs\n"

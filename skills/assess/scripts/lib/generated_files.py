@@ -33,9 +33,14 @@ _HEADER_READ_BYTES = 1024 * 1024
 # convention) is covered by the bare "do not edit" alternative, and
 # "This file is auto-generated" by "auto-generated" (also spaced or unhyphenated).
 _HEADER_MARKERS = re.compile(
-    r"generated file|do not edit|@generated|auto[-\s]?generated",
+    r"do not edit|@generated|auto[-\s]?generated",
     re.IGNORECASE,
 )
+# "GENERATED FILE" is common in prose ("writes the generated file"), so it
+# counts only when it opens the comment body: `-- GENERATED FILE - ...`,
+# `/* Generated file */`, `# === GENERATED FILE ===`.
+_BANNER_PUNCTUATION = " \t-=*#/!<>"
+_BANNER_MARKER = "generated file"
 
 # A generator declaration is always a comment, so the marker line must open
 # with a comment leader: # // -- /* <!-- ; % {- (* or a docstring quote. A bare
@@ -94,11 +99,16 @@ def has_generated_header(path: Path, lines: int = HEADER_SNIFF_LINES) -> bool:
     text = b"".join(head).decode("utf-8", errors="ignore").removeprefix("\ufeff")
     leader = (_MARKDOWN_COMMENT_LEADER
               if path.suffix.lower() in _MARKDOWN_SUFFIXES else _COMMENT_LEADER)
-    return any(
-        leader.match(line) is not None
-        and _HEADER_MARKERS.search(line) is not None
-        for line in text.splitlines()[:lines]
-    )
+    for line in text.splitlines()[:lines]:
+        m = leader.match(line)
+        if m is None:
+            continue
+        if _HEADER_MARKERS.search(line) is not None:
+            return True
+        body = line[m.end():].lstrip(_BANNER_PUNCTUATION).lower()
+        if body.startswith(_BANNER_MARKER):
+            return True
+    return False
 
 
 def average_line_length(path: Path) -> float:
@@ -121,7 +131,16 @@ def average_line_length(path: Path) -> float:
 
 def is_long_line_artifact(path: Path,
                           threshold: float = LONG_LINE_THRESHOLD) -> bool:
-    """True when the file's average line length exceeds ``threshold``."""
+    """True when the file's average line length exceeds ``threshold``.
+
+    A file no larger than ``threshold`` bytes cannot qualify (characters <=
+    bytes and there is at least one line), so it is rejected without a read.
+    """
+    try:
+        if path.stat().st_size <= threshold:
+            return False
+    except OSError:
+        return False
     return average_line_length(path) > threshold
 
 

@@ -81,7 +81,7 @@ All results are JSON-serialisable so `assess_core` can drop them straight into
 
 **`generated_files.py`**
 Content checks for files that are not hand-written source but carry an ordinary name:
-`has_generated_header` sniffs the first 5 lines for a comment line carrying a generator marker (`GENERATED FILE`,
+`has_generated_header` sniffs the first 5 lines for a comment line carrying a generator marker (`GENERATED FILE` only when it opens the comment,
 `DO NOT EDIT`, `@generated`, `auto-generated` spaced, hyphenated or joined; matched
 case-insensitively; a marker further down is ignored), and `is_long_line_artifact` flags an
 average line length over the first 1 MB above `LONG_LINE_THRESHOLD` (1,000 characters, the shape of a base64 or
