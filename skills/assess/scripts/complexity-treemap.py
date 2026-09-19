@@ -58,7 +58,7 @@ so compiled bundles and protoc-emitted bindings don't dominate the "most
 complex" lists with code nobody wrote by hand. If a single remaining file
 still holds >30% of total LOC, a warning prints to stderr suggesting it
 might be a build artifact that needs .gitignore; if the 5 largest files are
-all scc-scored with complexity 0 (data or reports, not code), a hint names
+all scc-scored data files with complexity 0, a hint names
 .assess/config.toml as the place to exclude them. Pass --include-artifacts
 to disable the filter entirely.
 
@@ -486,26 +486,30 @@ SCC_ONLY_HINT_TOP_N = 5  # the largest blocks a reader sees first
 def _hint_if_largest_files_scc_only(
     files: list[tuple[Path, int, float, str]],
     tokens: dict[Path, int],
+    languages: dict[Path, str],
     n: int = SCC_ONLY_HINT_TOP_N,
 ) -> None:
     """Hint at config excludes when the ``n`` largest files by estimated tokens
-    are all scc-scored with complexity 0.
+    are all scc-scored data files (``DATA_LANGUAGES``) with complexity 0.
 
-    That shape is data, reports or generated output, not code: no single file
-    need pass the dominance threshold for the treemap's biggest blocks to be
-    files an agent never edits (issue #336). Silent below ``n`` files and when
-    any of the ``n`` is lizard-scored or carries complexity.
+    No single file need pass the dominance threshold for the treemap's biggest
+    blocks to be data an agent never edits (issue #336). Scoped to data
+    languages because scc also reports complexity 0 for Markdown, HTML and CSS:
+    on a docs-first repository those blocks are the deliverable, and advising
+    to exclude them would be wrong. Silent below ``n`` files and when any of
+    the ``n`` is lizard-scored, carries complexity, or is not a data language.
     """
     if len(files) < n:
         return
     largest = sorted(files, key=lambda f: -tokens.get(f[0], f[1]))[:n]
-    if any(f[3] != "scc" or f[2] > 0 for f in largest):
+    if any(f[3] != "scc" or f[2] > 0
+           or languages.get(f[0]) not in DATA_LANGUAGES for f in largest):
         return
     names = ", ".join(f[0].name for f in largest)
     print(
-        f"hint: the {n} largest files by estimated tokens are all scored by "
-        f"scc with complexity 0\n"
-        f"      (data, reports or generated output, not code): {names}.\n"
+        f"hint: the {n} largest files by estimated tokens are all data files "
+        f"(JSON / YAML / JSONL)\n"
+        f"      scored by scc with complexity 0: {names}.\n"
         f"      If agents never edit them, add their directories or globs to "
         f".assess/config.toml\n"
         f"      (`exclude_dirs` / `exclude_patterns`) and re-run.",
@@ -1223,7 +1227,9 @@ def main() -> int:
     # treemap (block area) and the stats sidecar (size unit + keyhole budget) so
     # both views agree and no file is read twice.
     tokens = est_tokens_by_path(files)
-    _hint_if_largest_files_scc_only(files, tokens)
+    if not args.include_artifacts:
+        # The user asked to see artifacts; do not advise excluding them.
+        _hint_if_largest_files_scc_only(files, tokens, scc_languages)
     survivor_density = (
         load_survivor_density(args.test_pressure, root)
         if args.test_pressure else {}

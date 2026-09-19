@@ -1042,12 +1042,20 @@ def _scc_row(tmp_path, name, loc, ccn=0.0, src="scc"):
     return (p, loc, ccn, src)
 
 
+_LANG_BY_SUFFIX = {".json": "JSON", ".py": "Python", ".ex": "Elixir",
+                   ".md": "Markdown"}
+
+
+def _langs(files):
+    return {f[0]: _LANG_BY_SUFFIX[f[0].suffix] for f in files}
+
+
 def test_scc_only_hint_fires_when_largest_files_are_scc_ccn_zero(
         treemap, tmp_path, capsys):
     files = [_scc_row(tmp_path, f"d{i}.json", 200) for i in range(12)]
     files.append(_scc_row(tmp_path, "tiny.py", 2, 1.0, "lizard"))
     tokens = {f[0]: f[1] * 10 for f in files}
-    treemap._hint_if_largest_files_scc_only(files, tokens)
+    treemap._hint_if_largest_files_scc_only(files, tokens, _langs(files))
     err = capsys.readouterr().err
     assert ".assess/config.toml" in err
     assert "d0.json" in err
@@ -1058,7 +1066,7 @@ def test_scc_only_hint_silent_when_largest_file_is_code(
     files = [_scc_row(tmp_path, f"d{i}.json", 200) for i in range(12)]
     files.append(_scc_row(tmp_path, "big.py", 1200, 600.0, "lizard"))
     tokens = {f[0]: f[1] * 10 for f in files}
-    treemap._hint_if_largest_files_scc_only(files, tokens)
+    treemap._hint_if_largest_files_scc_only(files, tokens, _langs(files))
     assert capsys.readouterr().err == ""
 
 
@@ -1067,7 +1075,16 @@ def test_scc_only_hint_silent_on_scored_scc_code(treemap, tmp_path, capsys):
     module), so it keeps the hint quiet."""
     files = [_scc_row(tmp_path, f"m{i}.ex", 200, 3.0) for i in range(12)]
     tokens = {f[0]: f[1] * 10 for f in files}
-    treemap._hint_if_largest_files_scc_only(files, tokens)
+    treemap._hint_if_largest_files_scc_only(files, tokens, _langs(files))
+    assert capsys.readouterr().err == ""
+
+
+def test_scc_only_hint_silent_on_markdown(treemap, tmp_path, capsys):
+    """scc gives Markdown complexity 0 too, but on a docs-first repo those
+    blocks are the deliverable, not data to exclude."""
+    files = [_scc_row(tmp_path, f"s{i}.md", 200) for i in range(12)]
+    tokens = {f[0]: f[1] * 10 for f in files}
+    treemap._hint_if_largest_files_scc_only(files, tokens, _langs(files))
     assert capsys.readouterr().err == ""
 
 
@@ -1075,5 +1092,30 @@ def test_scc_only_hint_silent_below_top_n(treemap, tmp_path, capsys):
     files = [_scc_row(tmp_path, f"d{i}.json", 200)
              for i in range(treemap.SCC_ONLY_HINT_TOP_N - 1)]
     tokens = {f[0]: f[1] * 10 for f in files}
-    treemap._hint_if_largest_files_scc_only(files, tokens)
+    treemap._hint_if_largest_files_scc_only(files, tokens, _langs(files))
     assert capsys.readouterr().err == ""
+
+
+@pytest.mark.parametrize("include_artifacts", [False, True])
+def test_scc_only_hint_skipped_under_include_artifacts(
+        treemap, tmp_path, monkeypatch, capsys, include_artifacts):
+    paths = []
+    for i in range(treemap.SCC_ONLY_HINT_TOP_N):
+        p = tmp_path / f"d{i}.json"
+        p.write_text('{"k": 1}\n' * 50)
+        paths.append(p)
+
+    def fake_collect(root, **kw):
+        kw["scc_languages"].update({p: "JSON" for p in paths})
+        return [(p, 50, 0.0, "scc") for p in paths], "hotspot", None, None, {}
+
+    monkeypatch.setattr(treemap, "collect", fake_collect)
+    monkeypatch.setattr(treemap, "render", lambda *a, **k: None)
+    argv = ["complexity-treemap.py", str(tmp_path), "-o",
+            str(tmp_path / "out.svg")]
+    if include_artifacts:
+        argv.append("--include-artifacts")
+    monkeypatch.setattr(sys, "argv", argv)
+    assert treemap.main() == 0
+    hinted = ".assess/config.toml" in capsys.readouterr().err
+    assert hinted is not include_artifacts

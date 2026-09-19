@@ -59,6 +59,7 @@ from lib.change_coupling import build_rename_map
 from lib.config_drift import scan_config_drift
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
+from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
 from lib.interactivity import build_offers_block
 from lib.doc_graph import build_doc_graph, is_repo_file
@@ -1569,6 +1570,7 @@ def build_run_context(
     # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
     # available: false with the reason, never a clean result.
     ctx["config_drift"] = _safe("config_drift", lambda: scan_config_drift(repo_root))
+    ctx["gate_cost_estimate"] = _safe("gate_cost_estimate", lambda: estimate_gate_cost(repo_root))
 
     # Accretion ratchet (write-side tendency: files that only ever grow). The
     # scan measured every file above; here it is filtered to files already in the
