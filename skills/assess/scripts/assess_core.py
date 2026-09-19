@@ -29,7 +29,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 import uuid
 from datetime import datetime
@@ -62,7 +61,7 @@ from lib.decline_markers import build_decline_block
 from lib.instruction_claims import scan_instruction_claims
 from lib.interactivity import build_offers_block
 from lib.doc_graph import build_doc_graph, is_repo_file
-from lib.doc_staleness import analyze_doc_staleness
+from lib.doc_staleness import analyze_doc_staleness, content_clock
 from lib.generated_files import matches_generated_name
 from lib.git_churn import git_commit_info, tracked_files
 from lib.keyhole_signals import integrate as integrate_keyhole_signals
@@ -136,23 +135,15 @@ INSTRUCTION_FILE_PATHS = [
 GRADE_RANK = {"A": 7, "A-": 6, "B+": 5, "B": 4, "C": 3, "D": 2, "F": 1}
 
 
-def _file_freshness_days(file_path: Path) -> int:
-    """Days since file_path was last touched in git. Returns 0 if not in git."""
-    try:
-        out = subprocess.run(
-            ["git", "log", "-1", "--format=%ct", "--", str(file_path)],
-            cwd=file_path.parent if file_path.parent.exists() else Path.cwd(),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        ts = int(out.stdout.strip()) if out.stdout.strip() else 0
-        if ts == 0:
-            return 0
-        delta = datetime.now().timestamp() - ts
-        return max(0, int(delta // 86400))
-    except (ValueError, FileNotFoundError):
-        return 0
+def _file_freshness_days(file_path: Path, repo_root: Path) -> int:
+    """Days since file_path's last content change in git. 0 if not in git.
+
+    Same clock as `.doc_staleness` (author time, bulk mechanical commits
+    skipped - issue #333), so a licence-header sweep cannot make a stale
+    instruction file read as fresh.
+    """
+    days = content_clock(repo_root).days(file_path)
+    return days if days is not None else 0
 
 
 def _grade_instruction_files(
@@ -217,7 +208,7 @@ def _grade_instruction_files(
             untracked.append(rel_path)
             continue
         text = disk_text
-        freshness = _file_freshness_days(candidate)
+        freshness = _file_freshness_days(candidate, repo_root)
         grade = grade_instructions(
             text, freshness_days=freshness, skills_present=skills_present
         )

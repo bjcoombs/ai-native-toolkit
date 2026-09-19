@@ -33,8 +33,10 @@ from lib.doc_graph import (
 )
 from lib.doc_provenance import resolve_doc_sources, source_is_newer
 from lib.git_churn import (
+    GIT_TIMEOUT_SECONDS,
+    ContentClock,
     churn_is_degenerate,
-    file_last_commit_days,
+    content_commit_clock,
     pick_churn_window,
     tracked_files,
 )
@@ -159,6 +161,29 @@ def discover_doc_files(repo_root: Path,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
         scope=scope,
+    )
+
+
+def content_clock(repo_root: Path) -> ContentClock:
+    """The repo's bulk-commit-aware last-change clock (issue #333).
+
+    The bulk-share denominator is every doc under the built-in exclusions for
+    the whole repo, independent of `/assess <path>` scope and user excludes, so
+    the doc-staleness metric and the instruction grader agree on which commits
+    are bulk. Both calls hit the same cached git pass.
+    """
+    import subprocess
+
+    repo_root = repo_root.resolve()
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout.strip() or None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        head = None
+    return content_commit_clock(
+        repo_root, frozenset(discover_doc_files(repo_root)), head
     )
 
 
@@ -306,6 +331,9 @@ def analyze_doc_staleness(
         churn_map.get(c, 0) for c in code_files
     )
 
+    # Last content change per doc, skipping bulk mechanical commits (#333).
+    clock = content_clock(repo_root)
+
     base_doc_dirs = _build_base_doc_dirs(repo_root, docs)
     code_dirs = {c.parent for c in code_files}
 
@@ -394,7 +422,7 @@ def analyze_doc_staleness(
 
         results.append(DocStaleness(
             path=rel(d),
-            last_commit_days=file_last_commit_days(d),
+            last_commit_days=clock.days(d),
             doc_churn_in_window=doc_churn,
             code_churn_in_window=code_churn,
             subject_code_count=subject_count,
@@ -439,6 +467,13 @@ def analyze_doc_staleness(
         # be discounted - see `lib.git_churn.churn_is_degenerate`.
         "churn_degenerate": churn_degenerate,
         "docs": [r.as_dict() for r in sorted(results, key=lambda r: -r.ratio)],
+        # Bulk mechanical commits (a commit touching more than half of the
+        # repo's docs, and at least ten) that `last_commit_days` skipped:
+        # newest first, capped; the total sits beside it. `complete` False means
+        # git history could not be read and the plain newest-commit clock ran.
+        "bulk_commits_skipped": list(clock.skipped),
+        "bulk_commits_skipped_total": clock.skipped_total,
+        "bulk_commit_scan_complete": clock.complete,
         "association": {
             "code_file_count": len(code_files),
             "doc_count": len(docs),

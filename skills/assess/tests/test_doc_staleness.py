@@ -322,3 +322,119 @@ def test_ordinary_doc_has_no_provenance_block(tmp_path: Path) -> None:
     r = analyze_doc_staleness(tmp_path)
     readme = next(d for d in r["docs"] if d["path"] == "README.md")
     assert "provenance" not in readme
+
+
+# --- Bulk mechanical commits (issue #333) -----------------------------------
+
+_BULK_DOCS = [
+    "CLAUDE.md", "docs/architecture.md", "docs/billing.md", "docs/caching.md",
+    "docs/deploy.md", "docs/events.md", "docs/glossary.md", "docs/logging.md",
+    "docs/metrics.md", "docs/onboarding.md", "docs/releases.md",
+    "docs/security.md",
+]
+
+
+def _bulk_fixture(repo: Path, commit) -> None:
+    """Twelve docs written 300..190 days ago, one licence-header commit 8 days
+    ago touching all twelve, then a genuine one-doc edit 3 days ago."""
+    days = 300
+    for rel in _BULK_DOCS:
+        _write(repo, rel, f"Original text of {rel}.\n")
+        commit(f"docs: write {rel}", days_ago=days)
+        days -= 10
+    for rel in _BULK_DOCS:
+        p = repo / rel
+        p.write_text("<!-- SPDX-License-Identifier: MIT -->\n" + p.read_text(), encoding="utf-8")
+    commit("chore: licence headers", days_ago=8)
+    p = repo / "docs/caching.md"
+    p.write_text(p.read_text() + "A genuine closing section.\n", encoding="utf-8")
+    commit("docs: caching invalidation", days_ago=3)
+
+
+def _head_sha(repo: Path, rev: str) -> str:
+    import subprocess
+    return subprocess.run(["git", "-C", str(repo), "rev-parse", rev],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def test_bulk_commit_does_not_reset_doc_staleness(git_repo) -> None:
+    repo, commit = git_repo
+    _bulk_fixture(repo, commit)
+    r = analyze_doc_staleness(repo)
+    days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
+    expected = {rel: 300 - 10 * i for i, rel in enumerate(_BULK_DOCS)}
+    expected["docs/caching.md"] = 3
+    # One day of slack: the fixture stamps naive local time, so a DST change
+    # between then and now moves a 300-day-old commit by an hour.
+    assert set(days) == set(expected)
+    assert all(abs(days[k] - v) <= 1 for k, v in expected.items()), days
+    assert days["docs/caching.md"] == 3
+
+
+def test_bulk_commit_is_recorded_with_full_sha(git_repo) -> None:
+    repo, commit = git_repo
+    _bulk_fixture(repo, commit)
+    r = analyze_doc_staleness(repo)
+    bulk_sha = _head_sha(repo, "HEAD~1")
+    skipped = r["bulk_commits_skipped"]
+    assert [s["sha"] for s in skipped] == [bulk_sha]
+    assert len(skipped[0]["sha"]) == 40
+    assert skipped[0]["docs_touched"] == 12
+    assert skipped[0]["doc_count"] == 12
+    assert r["bulk_commits_skipped_total"] == 1
+    assert r["bulk_commit_scan_complete"] is True
+
+
+def test_single_doc_commit_is_not_bulk(git_repo) -> None:
+    repo, commit = git_repo
+    _bulk_fixture(repo, commit)
+    r = analyze_doc_staleness(repo)
+    caching_edit = _head_sha(repo, "HEAD")
+    assert caching_edit not in {s["sha"] for s in r["bulk_commits_skipped"]}
+
+
+def test_doc_created_in_bulk_commit_keeps_its_creation_date(git_repo) -> None:
+    """A bulk import that adds every doc is the docs' content creation: a later
+    bulk sweep falls back to it, not to the sweep and not to None."""
+    repo, commit = git_repo
+    for rel in _BULK_DOCS:
+        _write(repo, rel, f"Imported {rel}.\n")
+    commit("import docs", days_ago=100)
+    for rel in _BULK_DOCS:
+        p = repo / rel
+        p.write_text("<!-- header -->\n" + p.read_text(), encoding="utf-8")
+    commit("chore: headers", days_ago=5)
+    r = analyze_doc_staleness(repo)
+    assert {d["last_commit_days"] for d in r["docs"]} == {100}
+    assert [s["sha"] for s in r["bulk_commits_skipped"]] == [_head_sha(repo, "HEAD")]
+
+
+def test_small_repo_all_docs_commit_is_not_bulk(git_repo) -> None:
+    """Below the minimum-docs floor, editing every doc at once is ordinary work."""
+    repo, commit = git_repo
+    for rel in ("README.md", "docs/a.md", "docs/b.md"):
+        _write(repo, rel, "v1\n")
+    commit("docs", days_ago=50)
+    for rel in ("README.md", "docs/a.md", "docs/b.md"):
+        _write(repo, rel, "v2\n")
+    commit("docs: rewrite", days_ago=4)
+    r = analyze_doc_staleness(repo)
+    assert {d["last_commit_days"] for d in r["docs"]} == {4}
+    assert r["bulk_commits_skipped"] == []
+
+
+def test_no_git_reports_no_bulk_commits(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "doc")
+    r = analyze_doc_staleness(tmp_path)
+    assert r["bulk_commits_skipped"] == []
+    assert r["bulk_commits_skipped_total"] == 0
+
+
+def test_instruction_freshness_skips_bulk_commit(git_repo) -> None:
+    """The instruction grader's clock shares the bulk-commit skip."""
+    from assess_core import _grade_instruction_files
+
+    repo, commit = git_repo
+    _bulk_fixture(repo, commit)
+    files = _grade_instruction_files(repo)[0]
+    assert files["CLAUDE.md"]["freshness_days"] in (299, 300)  # DST slack
