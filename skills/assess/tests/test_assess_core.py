@@ -2154,3 +2154,103 @@ def test_mutation_run_requires_parsed_mutants_for_cap_lift() -> None:
     assert real["applies"] is False
     assert real["max_layer6_band"] == "Present"
     assert real["annotation"] is None
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Generated-file disclosure (excluded_generated pass-through)
+# ════════════════════════════════════════════════════════════════════════════
+
+def test_excluded_generated_header_list_copied_from_stats(git_repo) -> None:
+    """The treemap's excluded_generated list reaches run-context.json unchanged,
+    with malformed rows dropped."""
+    repo, commit = git_repo
+    assess = repo / ".assess"
+    assess.mkdir()
+    rows = [{"path": "db/schema.sql", "reason": "generated-header"}]
+    (assess / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+        "excluded_generated": rows + [{"path": "x"}, "junk"],
+    }))
+    (repo / "README.md").write_text("# Repo\n")
+    commit("init")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["excluded_generated"] == rows
+
+
+def test_excluded_generated_header_list_empty_for_old_stats(git_repo) -> None:
+    repo, commit = git_repo
+    (repo / ".assess").mkdir()
+    _write_min_stats(repo / ".assess")
+    (repo / "README.md").write_text("# Repo\n")
+    commit("init")
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["excluded_generated"] == []
+
+
+def test_generated_header_exclusion_is_not_recorded_as_graduation(tmp_path: Path) -> None:
+    """A prior hotspot that left the ranking because this run excluded it as
+    generated did not graduate: it is dropped from diff.graduated, while a real
+    graduation in the same run is still counted."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    prior_stats = {
+        "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "db/schema.sql", "loc": 900, "ccn": 40, "commits": 30},
+            {"path": "src/legacy.go", "loc": 500, "ccn": 20, "commits": 5},
+        ],
+        "top_complex": [], "top_large": [],
+    }
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+    current_stats = {
+        "files_scored": 49, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/new.go", "loc": 400, "ccn": 18, "commits": 4}],
+        "top_complex": [], "top_large": [],
+        "excluded_generated": [{"path": "db/schema.sql", "reason": "generated-header"}],
+    }
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["diff"]["graduated"] == 1
+    assert ctx["excluded_generated"] == [
+        {"path": "db/schema.sql", "reason": "generated-header"}
+    ]
+    index = (assess_dir / "index.md").read_text()
+    assert "src/legacy.go" in index
+    assert "db/schema.sql" not in index
+
+
+def test_generated_header_free_name_glob_is_not_recorded_as_graduation(tmp_path: Path) -> None:
+    """A prior hotspot now excluded by a generated-name glob (silent, so not in
+    excluded_generated) is also kept out of diff.graduated."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    prior_stats = {
+        "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "web/src/database.types.ts", "loc": 8000, "ccn": 5, "commits": 130},
+            {"path": "web/src/api.generated.ts", "loc": 3000, "ccn": 9, "commits": 40},
+            {"path": "src/legacy.go", "loc": 500, "ccn": 20, "commits": 5},
+        ],
+        "top_complex": [], "top_large": [],
+    }
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+    current_stats = {
+        "files_scored": 49, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/new.go", "loc": 400, "ccn": 18, "commits": 4}],
+        "top_complex": [], "top_large": [], "excluded_generated": [],
+    }
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-19")
+    assert ctx["diff"]["graduated"] == 1
+    index = (assess_dir / "index.md").read_text()
+    assert "src/legacy.go" in index
+    assert "database.types.ts" not in index
+    assert "api.generated.ts" not in index
