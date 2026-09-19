@@ -80,8 +80,11 @@ Three signals derived from `git log`:
 
 `parse_commit_file_sets` lists each commit's files under the names they had then.
 `build_rename_map` reads `git log --name-status -M --diff-filter=R` into a `RenameMap`:
-`paths`, a historical-path to current-path map (chains resolved first, then any source name
-that exists again in the working tree is left out), and `complete`, False when git could not be read so an empty map is
+`paths`, a historical-path to current-path map (chains resolved first: a path starts from its
+first rename and moves on only through a rename in a commit that descends from the one
+before, checked with `git merge-base --is-ancestor`, so a freed-and-refilled name is not
+chained through in sequence or across sibling branches; then any source name that exists
+again in the working tree is left out), and `complete`, False when git could not be read so an empty map is
 never mistaken for "no renames". `fold_renames` rewrites the commit sets through `paths`,
 so history made before a rename counts under the current path. `repo_top` is the shared
 `git rev-parse --show-toplevel` helper; the git-log readers take an optional `top` so a
@@ -330,6 +333,20 @@ hidden coupling (looks modular, bleeds historically), bleeding modules (no stati
 available), and refactor boundaries (high containment + low external coupling, a safe
 zone for keyhole edits). Looks-coupled-but-never-co-changes is suppressed - the static
 graph already surfaces it.
+
+**`gap_actions.py`**
+Builds the run-context `gap_actions` list: Top 3 candidates for the slots
+`prescribed_actions` leaves free, read from two blocks `assess_core` already holds. Each
+entry is `{signal, action, paths}`. A `coverage_report` entry fires when no coverage
+report was found in a repo whose archetype is `software` and names up to three
+`top_hotspots` to measure, skipping `archive/`, `archived/` and `attic/` paths (via
+`keyhole_signals.is_archive_path`); it is silent on a knowledge base (test layers N/A)
+and when no hotspot remains, and when it fires it comes first.
+A `doc_graph` entry fires when `reachability_pct` is below `REACHABILITY_FLOOR` (0.5, with
+its rationale beside it) and names up to ten unreachable docs. A repo with no markdown
+reports reachability 0.0, but nothing is unreachable there, so no `doc_graph` entry fires.
+`[]` when neither fires. There is no lint complexity-rule gap: the core has no detector
+for it, and the layer scorer owns that check.
 
 **`understanding_analysis.py`**
 Signals B4 + D2. Per module: human anchor (has a confirmed human authored it?), intent
