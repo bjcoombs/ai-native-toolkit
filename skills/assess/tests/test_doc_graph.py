@@ -673,6 +673,68 @@ def test_isolated_curated_folder_not_excluded(tmp_path: Path) -> None:
     assert any(o.startswith("notes/") for o in r.orphans)
 
 
+def _notes_and_wiki(root: Path) -> None:
+    """50 plan notes under one backlog index, beside a nine-page wiki the
+    README links seven of."""
+    for i in range(1, 51):
+        _write(root, f"notes/plan_{i:02d}.md", f"# plan {i:02d}\n")
+    _write(root, "notes/backlog.md", "".join(
+        f"- [plan {i:02d}](plan_{i:02d}.md)\n" for i in range(1, 51)
+    ))
+    pages = "architecture deploy testing security glossary onboarding releases attic scratch".split()
+    for w in pages:
+        _write(root, f"wiki/{w}.md", f"# {w}\n")
+    _write(root, "README.md", "# Home\n[backlog](notes/backlog.md)\n" + "".join(
+        f"[{w}](wiki/{w}.md)\n" for w in pages[:7]
+    ))
+
+
+def test_working_notes_tree_excluded_from_headline(tmp_path: Path) -> None:
+    _notes_and_wiki(tmp_path)
+    _write(tmp_path, "notes/plan_03.md", "[ghost](./missing.md)\n")
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["excluded_working_notes_trees"] == [{"path": "notes", "file_count": 51}]
+    assert d["working_notes_doc_count"] == 51
+    assert (d["doc_count"], d["orphan_rate"], d["reachability_pct"]) == (10, 0.2, 0.8)
+    assert not any(h["path"].startswith("notes/") for h in d["hubs"])
+    # The notes layer's own figures are reported beside the headline.
+    assert d["working_notes_orphan_rate"] == 0.0
+    assert d["working_notes_broken_links"] == 1
+    assert d["dangling_links"] == 0
+    assert d["excluded_raw_trees"] == []
+
+
+def test_base_hub_beside_notes_is_not_a_notes_member(tmp_path: Path) -> None:
+    # A vault-wide .base stored in notes/ selects the wiki pages. It is not a
+    # doc, so it neither joins the tree's count nor leaves the headline graph,
+    # and the wiki pages it surfaces keep their inbound edge.
+    _notes_and_wiki(tmp_path)
+    _write(tmp_path, "notes/pages.base",
+           'filters:\n  and:\n    - file.inFolder("wiki")\n    - file.ext == "md"\n'
+           'views:\n  - type: table\n    name: All\n')
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["excluded_working_notes_trees"] == [{"path": "notes", "file_count": 51}]
+    assert d["working_notes_doc_count"] == 51
+    assert not any(o.startswith("wiki/") for o in d["orphans"])
+
+
+def test_no_working_notes_tree_keys_present_and_empty(tmp_path: Path) -> None:
+    _curated_wiki(tmp_path)
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["excluded_working_notes_trees"] == []
+    assert d["working_notes_doc_count"] == 0
+    assert d["working_notes_orphan_rate"] == 0.0
+    assert d["working_notes_broken_links"] == 0
+
+
+def test_raw_tree_is_not_also_a_working_notes_tree(tmp_path: Path) -> None:
+    _curated_wiki(tmp_path)
+    _raw_export(tmp_path, "sar-export", 30)
+    r = build_doc_graph(tmp_path)
+    assert r.excluded_raw_trees == [{"path": "sar-export", "file_count": 30}]
+    assert r.excluded_working_notes_trees == []
+
+
 # --- Reference edges (backticked doc paths) --------------------------------
 
 

@@ -327,6 +327,43 @@ def test_verdict_no_disclosure_when_block_absent():
     assert "suppressed by config excludes" not in out
 
 
+# --- generated-file disclosure --------------------------------------------
+
+
+def test_verdict_names_each_generated_header_reason():
+    ctx = _ctx([])
+    ctx["excluded_generated"] = [
+        {"path": "db/schema.sql", "reason": "generated-header"},
+        {"path": "db/other.sql", "reason": "generated-header"},
+        {"path": "assets/font.ts", "reason": "long-lines"},
+    ]
+    out = format_verdict(evaluate(ctx, {"enabled": True, "fail_on": [], "warn_on": []}))
+    line = next(ln for ln in out.splitlines() if "generated-header" in ln)
+    assert "3 files excluded from scoring as generated" in line
+    assert "long-lines" in line
+    assert line.count("generated-header") == 1
+    assert "    db/schema.sql (generated-header)" in out
+    assert "    assets/font.ts (long-lines)" in out
+    assert "RESULT: PASS" in out
+
+
+def test_verdict_caps_generated_header_path_lines():
+    ctx = _ctx([])
+    ctx["excluded_generated"] = [
+        {"path": f"gen/f{i:02}.sql", "reason": "generated-header"} for i in range(13)
+    ]
+    out = format_verdict(evaluate(ctx, {"enabled": True, "fail_on": [], "warn_on": []}))
+    assert "gen/f09.sql (generated-header)" in out
+    assert "gen/f10.sql" not in out
+    assert "+3 more" in out
+
+
+def test_verdict_generated_header_disclosure_silent_when_empty():
+    for ctx in (_ctx([]), {**_ctx([]), "excluded_generated": []}):
+        out = format_verdict(evaluate(ctx, {"enabled": True, "fail_on": [], "warn_on": []}))
+        assert "excluded from scoring as generated" not in out
+
+
 # --- CLI ------------------------------------------------------------------
 
 
