@@ -43,9 +43,20 @@ with machine-extracted, non-navigational content". Requiring the
 machine-extraction share keeps a folder of genuinely standalone *curated* notes
 (isolated, but written by hand with no machine links) from being mistaken for a
 raw dump.
+
+A second fingerprint, **working notes** (issue #366), catches the other tree
+that drowns the curated signal: an agent's plans, session logs or tickets,
+hundreds of pattern-named files hung off one backlog index. Each file has one
+inbound link (from the index), so it is not an orphan and the raw-source test
+never fires, yet the tree swamps the curated wiki's doc count and hub ranking.
+The tendency is the same accretion: every task leaves a note, nothing ever
+consolidates them. :func:`classify_working_notes_trees` names such trees so
+``build_doc_graph`` excludes them the same way it excludes raw trees.
 """
 from __future__ import annotations
 
+import re
+from collections import Counter
 from typing import Any
 
 # Conservative, precision-first thresholds. A false positive (excluding a
@@ -136,4 +147,89 @@ def classify_raw_trees(
             "docs": sorted(qualifying[directory]),
         }
         for directory in sorted(kept)
+    ]
+
+
+# Working-notes thresholds (issue #366), precision-first for the same reason as
+# the raw-tree ones: excluding a curated folder hides real navigability gaps,
+# while missing a notes tree only keeps today's figures (and `.assess/config.toml`
+# can name the tree). All three legs must hold, so a curated wiki fails on names
+# (varied), on in-degree (cross-linked pages have several inbound links) or on
+# the index (its inbound links are spread across many pages).
+WORKING_NOTES_MIN_FILES = 20  # a pile, not a small wiki section; no fixture pins a lower bound
+WORKING_NOTES_PREFIX_SET = 3  # "a small set of prefixes": plan_/spike_/retro_ at most
+WORKING_NOTES_NAME_DENSITY = 0.8  # >= this fraction share a prefix, date or ticket name
+WORKING_NOTES_LOW_INDEGREE_DENSITY = 0.8  # >= this fraction have in-degree <= 1
+WORKING_NOTES_INDEX_FILES = 2  # "one or two index files"
+WORKING_NOTES_INDEX_SHARE = 0.6  # the top index files hold >= this share of inbound links
+
+# 2026-01-31, 20260131, 2026_01_31 anywhere in the stem.
+_DATE_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}[-_.]?(?:0[1-9]|1[0-2])[-_.]?(?:0[1-9]|[12]\d|3[01])(?!\d)")
+# PROJ-123, gh-42: a tracker key and a number.
+_TICKET_RE = re.compile(r"(?<![A-Za-z])[A-Za-z]{2,10}-\d+(?!\d)")
+_WORD_RE = re.compile(r"[a-z]+")
+
+
+def _name_key(rel: str) -> str:
+    """The naming family a doc belongs to: a date, a ticket, or its first word.
+
+    ``plan_07.md`` -> ``plan``; ``2026-01-31-standup.md`` -> ``<date>``;
+    ``PROJ-12.md`` -> ``<ticket>``; ``0001-use-postgres.md`` -> ``use``.
+    """
+    stem = rel.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    if _DATE_RE.search(stem):
+        return "<date>"
+    if _TICKET_RE.search(stem):
+        return "<ticket>"
+    word = _WORD_RE.search(stem.lower())
+    return word.group(0) if word else "<numeric>"
+
+
+def _is_working_notes(docs: list[str], doc_signals: dict[str, dict]) -> bool:
+    """All three legs of the working-notes fingerprint over one directory."""
+    n = len(docs)
+    families = Counter(_name_key(r) for r in docs)
+    shared = sorted((c for c in families.values() if c > 1), reverse=True)
+    if sum(shared[:WORKING_NOTES_PREFIX_SET]) / n < WORKING_NOTES_NAME_DENSITY:
+        return False
+    low = sum(1 for r in docs if int(doc_signals[r].get("in_degree", 0)) <= 1)
+    if low / n < WORKING_NOTES_LOW_INDEGREE_DENSITY:
+        return False
+    sources = Counter(s for r in docs for s in doc_signals[r].get("inbound_sources", ()))
+    total = sum(sources.values())
+    held = sum(c for _, c in sources.most_common(WORKING_NOTES_INDEX_FILES))
+    return total > 0 and held / total >= WORKING_NOTES_INDEX_SHARE
+
+
+def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
+    """Identify working-notes subtrees from per-doc graph signals.
+
+    ``doc_signals`` maps a doc's repo-relative posix path to a dict with
+    ``in_degree`` and ``inbound_sources`` (the paths of the docs linking or
+    referring to it). A directory qualifies when it holds at least
+    ``WORKING_NOTES_MIN_FILES`` docs, most named in a small set of families,
+    most with in-degree <= 1, and one or two docs hold most of their inbound
+    links. The whole directory is the tree, its index file included.
+
+    Returns ``{"path", "file_count", "docs"}`` per tree, sorted by path. Unlike
+    raw trees, the *innermost* qualifying directory wins: a parent that
+    qualifies only because a notes tree dominates it would otherwise take its
+    curated siblings out of the headline with it.
+    """
+    by_dir: dict[str, list[str]] = {}
+    for rel in doc_signals:
+        for d in _ancestor_dirs(rel):
+            by_dir.setdefault(d, []).append(rel)
+
+    qualifying = {
+        d: docs for d, docs in by_dir.items()
+        if len(docs) >= WORKING_NOTES_MIN_FILES and _is_working_notes(docs, doc_signals)
+    }
+    kept = [
+        d for d in qualifying
+        if not any(o != d and _is_ancestor_path(d, o) for o in qualifying)
+    ]
+    return [
+        {"path": d, "file_count": len(qualifying[d]), "docs": sorted(qualifying[d])}
+        for d in sorted(kept)
     ]

@@ -133,6 +133,17 @@ the curated-wiki signal isn't drowned. Pure - no `doc_graph` import - so
 `doc_graph.py` owns the graph and consumes this module's verdict. Co-changes with
 `doc_graph.py` (its consumer) and its test `tests/test_raw_source.py`.
 
+Its second classifier, `classify_working_notes_trees` (issue #366), finds
+working-notes trees: at least `WORKING_NOTES_MIN_FILES` docs, most named in a
+small set of families (a shared first word, a date, or a ticket key), most with
+in-degree <= 1, and one or two docs holding most of their inbound links - an
+agent's plans or session logs hung off a backlog index. The whole directory, the
+index included, is the tree; the innermost qualifying directory wins so curated
+siblings stay counted. It runs on the headline graph (link and reference edges)
+after the raw pass. `doc_graph.py` excludes these trees too and reports
+`excluded_working_notes_trees`, `working_notes_doc_count`,
+`working_notes_orphan_rate` and `working_notes_broken_links`.
+
 **`vault_queries.py`**
 Static parser for Obsidian dynamic-navigation hubs: `.base` view files and
 `dataview` query blocks. Resolves the folder / tag / frontmatter-field

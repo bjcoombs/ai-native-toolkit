@@ -12,7 +12,12 @@ from lib.raw_source import (
     RAW_TREE_ISOLATION_DENSITY,
     RAW_TREE_MACHINE_DENSITY,
     RAW_TREE_MIN_FILES,
+    WORKING_NOTES_INDEX_SHARE,
+    WORKING_NOTES_LOW_INDEGREE_DENSITY,
+    WORKING_NOTES_MIN_FILES,
+    WORKING_NOTES_NAME_DENSITY,
     classify_raw_trees,
+    classify_working_notes_trees,
 )
 
 
@@ -142,3 +147,103 @@ def test_isolation_density_threshold() -> None:
             machine_links=1,
         )
     assert classify_raw_trees(signals) == []
+
+
+# --- Working-notes trees (issue #366) ---------------------------------------
+
+
+def _wn_signal(sources: list[str]) -> dict:
+    return {"in_degree": len(sources), "inbound_sources": sources}
+
+
+def _notes_tree(prefix: str, n: int, stem: str = "plan_{i:02d}") -> dict[str, dict]:
+    """``n`` pattern-named notes each linked once from ``<prefix>/backlog.md``,
+    and the backlog index linked once from the README."""
+    signals = {
+        f"{prefix}/{stem.format(i=i)}.md": _wn_signal([f"{prefix}/backlog.md"])
+        for i in range(1, n + 1)
+    }
+    signals[f"{prefix}/backlog.md"] = _wn_signal(["README.md"])
+    return signals
+
+
+def test_working_notes_tree_counts_the_index_too() -> None:
+    signals = _notes_tree("notes", 50)
+    signals["README.md"] = _wn_signal([])
+    trees = classify_working_notes_trees(signals)
+    assert [(t["path"], t["file_count"]) for t in trees] == [("notes", 51)]
+    assert "notes/backlog.md" in trees[0]["docs"]
+
+
+def test_working_notes_date_and_ticket_names_match() -> None:
+    dated = {
+        f"journal/2026-01-{d:02d}-standup.md": _wn_signal(["journal/log.md"])
+        for d in range(1, 29)
+    }
+    tickets = {
+        f"tickets/PROJ-{i}.md": _wn_signal(["tickets/board.md"]) for i in range(100, 130)
+    }
+    trees = classify_working_notes_trees({**dated, **tickets})
+    assert [t["path"] for t in trees] == ["journal", "tickets"]
+
+
+def test_varied_cross_linked_wiki_is_not_working_notes() -> None:
+    names = [f"topic{chr(97 + i % 26)}{chr(97 + i // 26)}" for i in range(50)]
+    words = ["auth", "billing", "cache", "deploy", "events"] * 10
+    stems = [f"{w}{n}" for w, n in zip(words, names)]
+    signals = {
+        f"wiki/{s}.md": _wn_signal([f"wiki/{stems[(i + k) % 50]}.md" for k in (1, 7, 13)])
+        for i, s in enumerate(stems)
+    }
+    assert classify_working_notes_trees(signals) == []
+
+
+def test_small_curated_wiki_does_not_match() -> None:
+    names = "architecture billing caching deploy events glossary logging metrics onboarding"
+    stems = names.split()
+    signals = {
+        f"docs/{s}.md": _wn_signal([f"docs/{stems[(i + 1) % 9]}.md", f"docs/{stems[(i + 4) % 9]}.md"])
+        for i, s in enumerate(stems)
+    }
+    assert classify_working_notes_trees(signals) == []
+
+
+def test_working_notes_below_size_threshold_not_classified() -> None:
+    signals = _notes_tree("notes", WORKING_NOTES_MIN_FILES - 2)
+    assert classify_working_notes_trees(signals) == []
+
+
+def test_pattern_named_notes_without_an_index_hub_not_classified() -> None:
+    # Same names, but every note is linked from a different source: no index
+    # holds the inbound links, so the index leg fails.
+    signals = {
+        f"notes/plan_{i:02d}.md": _wn_signal([f"docs/page{i}.md"]) for i in range(40)
+    }
+    assert classify_working_notes_trees(signals) == []
+
+
+def test_heavily_linked_pattern_names_not_classified() -> None:
+    # Pattern names under one index, but each page has several inbound links:
+    # a curated series (release notes cross-linked), not working notes.
+    signals = {
+        f"notes/plan_{i:02d}.md": _wn_signal(
+            ["notes/index.md", f"notes/plan_{(i + 1) % 40:02d}.md", f"notes/plan_{(i + 2) % 40:02d}.md"]
+        )
+        for i in range(40)
+    }
+    assert classify_working_notes_trees(signals) == []
+
+
+def test_working_notes_nested_tree_keeps_curated_siblings() -> None:
+    # A notes tree inside docs/ must not pull its curated siblings with it.
+    signals = _notes_tree("docs/notes", 50)
+    signals["docs/guide.md"] = _wn_signal(["README.md"])
+    trees = classify_working_notes_trees(signals)
+    assert [t["path"] for t in trees] == ["docs/notes"]
+
+
+def test_working_notes_thresholds_are_precision_first() -> None:
+    assert WORKING_NOTES_MIN_FILES >= 10
+    assert 0.5 < WORKING_NOTES_NAME_DENSITY <= 1.0
+    assert 0.5 < WORKING_NOTES_LOW_INDEGREE_DENSITY <= 1.0
+    assert 0.5 < WORKING_NOTES_INDEX_SHARE <= 1.0
