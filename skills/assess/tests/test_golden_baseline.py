@@ -10,6 +10,7 @@ decomposition work depends on it.
 from __future__ import annotations
 
 import golden
+from lib import keyhole_signals as ks
 
 # Blocks the report's prose sections read from run-context.json. The test
 # strategy for task 1 names these explicitly: a golden missing any of them would
@@ -346,3 +347,22 @@ def test_agent_assess_block_is_not_duplicated() -> None:
     """
     report = golden.load_golden_report()
     assert report.count("the `.assess/` directory is actionable feedback written for you") == 1
+
+
+def test_golden_attention_tie_break_order() -> None:
+    """The stored attention rows follow the tie-break: equal scores order by
+    top_hotspots rank, then finding severity, then path. The golden's rows are
+    five score-1 hidden_coupling directories (none a hotspot); the lowest
+    containment_ratio leads, so skills/assess/tests (0.0357) stays last and the
+    stored order did not move."""
+    ctx = golden.load_golden_run_context()
+    rows = ctx["attention"]
+    assert rows
+    tie_break = ks.attention_tie_break(
+        ctx["stats_summary"], ctx.get("promissory_markers"), ctx["behaviour"],
+    )
+    assert rows == sorted(rows, key=tie_break.key)
+    hot = {h["path"] for h in ctx["stats_summary"]["top_hotspots"]}
+    for above, below in zip(rows, rows[1:]):
+        if above["score"] == below["score"]:
+            assert above["path"] in hot or below["path"] not in hot
