@@ -102,6 +102,8 @@ def command_files():
 
 
 def shipped_md():
+    # references/*.md is left out on purpose: a skill opens those by path, so
+    # Claude Code never argument-substitutes them and a bare $1 there is safe.
     return skill_md_files() + command_files()
 
 
@@ -145,7 +147,8 @@ def _fence_spans(lines):
     """Yield (opener index, closer index) per fenced block at any indent: a
     closer uses the opener's character, is at least as long, and has nothing
     after it but whitespace, so a ``` inside a ```` fence stays part of the
-    body. An unclosed fence runs to the end of the file (closer = len)."""
+    body. An opener with no closer yields nothing, so the text after it stays
+    in scope for the checks that skip fenced content."""
     i = 0
     while i < len(lines):
         m = FENCE_OPEN_RE.match(lines[i])
@@ -160,15 +163,11 @@ def _fence_spans(lines):
                     and not lines[i][c.end():].strip()):
                 break
             i += 1
+        if i == len(lines):
+            i = opener + 1
+            continue
         yield opener, i
         i += 1
-
-
-def fenced_blocks(text):
-    """Yield (1-based opener line, body) per fenced block."""
-    lines = text.splitlines()
-    for opener, closer in _fence_spans(lines):
-        yield opener + 1, "\n".join(lines[opener + 1:closer])
 
 
 def strip_fences(text):
@@ -186,26 +185,33 @@ def test_no_placeholder_tokens(p):
     assert not PLACEHOLDER_RE.search(body), f"{p.relative_to(REPO)}: placeholder token outside code fence"
 
 
-def test_fenced_blocks_parser():
-    text = "a\n````bash\n```\nx $1\n```\n````\n~~~\ny\n~~~\n```\nz\n"
-    assert list(fenced_blocks(text)) == [(2, "```\nx $1\n```"), (7, "y"), (10, "z")]
-    assert strip_fences(text) == "a"
+def test_fence_spans_parser():
+    text = "a\n````bash\n```\nx $1\n```\n````\n~~~\ny\n~~~\nb\n"
+    assert list(_fence_spans(text.splitlines())) == [(1, 5), (6, 8)]
+    assert strip_fences(text) == "a\nb"
+
+
+def test_unclosed_fence_leaves_the_tail_in_scope():
+    text = "a\n```bash\nTODO\n~~~\ny\n~~~\n"
+    assert list(_fence_spans(text.splitlines())) == [(3, 5)]
+    assert strip_fences(text) == "a\n```bash\nTODO"
 
 
 @pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
-def test_no_bare_positional_in_fences(p):
+def test_no_bare_positional_in_skill_md(p):
     # Claude Code substitutes the invocation's arguments into bare $1..$9
-    # before the model reads the text, whatever the fence's language, so a
+    # anywhere in a SKILL.md before the model reads it, fenced or not, so a
     # shell function or awk field reference runs with argument words in place
-    # of its parameters. Brace form (${1}) is left alone. Commands are exempt:
-    # there $1..$9 is the documented per-argument placeholder, used on purpose.
+    # of its parameters. Brace form (${1}) and awk's $(1) are left alone.
+    # Commands are exempt: there $1..$9 is the documented per-argument
+    # placeholder, used on purpose.
     if p.name != "SKILL.md":
         pytest.skip("commands use $1..$9 as intended argument placeholders")
-    for start, block in fenced_blocks(p.read_text(encoding="utf-8")):
-        m = BARE_POSITIONAL_RE.search(block)
+    for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+        m = BARE_POSITIONAL_RE.search(line)
         assert not m, (
-            f"{p.relative_to(REPO)}: bare positional {m.group(0)} in the code fence "
-            f"opening at line {start}; brace it (${{{m.group(0)[1]}}}) or restructure "
+            f"{p.relative_to(REPO)}:{n}: bare positional {m.group(0)}; write "
+            f"${{{m.group(0)[1]}}} in shell or $({m.group(0)[1]}) in awk, or restructure "
             f"the snippet so it takes no positional parameters"
         )
 
