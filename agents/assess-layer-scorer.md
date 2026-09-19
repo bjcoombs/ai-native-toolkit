@@ -480,11 +480,12 @@ fd -t f '(mutation|survivor|mutant)' "$REPO_ROOT" --extension json --extension x
 ls -la "$REPO_ROOT"/{.coderabbit.yaml,.coderabbit.yml,.github/copilot-review.yml} 2>/dev/null
 # Check for review bot in CI
 rg 'coderabbit|copilot|codeclimate|sonarqube|sonarcloud' "$REPO_ROOT"/.github/workflows/*.yml 2>/dev/null | head -5
-# Check if bots are active on recent PRs
-gh pr list --limit 5 --json number --jq '.[].number' 2>/dev/null | head -3 | while read PR; do
-  gh api repos/{owner}/{repo}/pulls/$PR/comments --jq '.[].user.login' 2>/dev/null | sort -u | head -5
-done
 ```
+
+**Read whether review happens from `run-context.json` `review_reality`** (the core samples the last 30 merged pull requests through `gh`; do not sample them by hand): `merged_count`, `reviewed_share` (a review from an account other than the author), `bot_review_share` (a comment from a bot other than `github-actions`), `self_merged_share`, `review_required` (a ruleset `pull_request` rule or classic protection requiring one or more approvals) and `hollow_required_review` (review required and `reviewed_share` under 0.2). A null share or flag means that part could not be read. `available: false` means no sample (`reason` says why: no GitHub remote, `gh` absent or not logged in, `no_access` on a refused read) - score from the configuration evidence alone and say the review activity was not observed.
+
+- `bot_review_share` above 0 is the evidence that a configured bot is active; 0 with a bot configured is the Partial case.
+- `hollow_required_review: true` caps the layer at Partial whatever is configured, and cite it: required review that merges bypass is a gate that reads Present and is hollow. The report writer adds it as a Layer 7 lying signal.
 
 **Scoring:**
 - Present: Automated review bot active on PRs, providing design-level feedback

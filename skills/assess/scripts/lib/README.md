@@ -517,6 +517,27 @@ with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` alongside any change to discovery or the diff.
 
+**`review_reality.py`**
+Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
+`gh_cli`. Samples the last `DEFAULT_LIMIT` (30) merged pull requests with
+`gh pr list --state merged --json author,mergedBy,reviews,reviewDecision,comments`
+and emits `review_reality: {available, merged_count, reviewed_share,
+bot_review_share, self_merged_share, review_required, hollow_required_review}`.
+`reviewed_share` counts a review by any account other than the author;
+`bot_review_share` counts a comment by a bot other than `github-actions` (nothing
+in `reviews`). `gh pr list` drops a comment author's `[bot]` suffix, so an author
+object without `is_bot`/`type` is classified by one `gh api users/<login>[bot]`
+probe per distinct login (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot,
+404 is a person, anything else is unknown and withholds the share (null).
+`review_required` reads the default branch's effective rules
+(`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
+classic protection, each needing `required_approving_review_count` of 1 or more;
+null when neither says yes and one was refused. `hollow_required_review` is
+`review_required` and `reviewed_share` under `HOLLOW_THRESHOLD` (0.2), null when
+either is unknown. Counts, shares and booleans only: no title or login reaches
+the block. A failed pull-request read degrades the whole block to `available:
+False`. Tests: `tests/test_review_reality.py`.
+
 **`accretion_ratchet.py`**
 Write-side accretion instrument: detects files that only ever grow. Walks each
 file's full numstat history in author-time order (one `git log --no-merges
