@@ -557,6 +557,20 @@ with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` alongside any change to discovery or the diff.
 
+**`gate_cost.py`**
+Actions cost of the CI gate the assess-pr skill offers, so the offer can state it.
+Counts pull requests merged in the last `WINDOW_DAYS` (30) days with `gh pr list
+--state merged` via `gh_cli` (not `git log --merges`, which reads zero on a
+squash-merging repository), filtering `mergedAt` in Python because the search
+qualifier is day-granular, and multiplies by `MINUTES_PER_RUN` (5, an assumption
+from one measured run, not a measurement of the target). Emits `gate_cost_estimate:
+{available, runs_per_month, minutes_per_run, minutes_per_month, assumption, capped, private}`
+(`capped` true when the listing hit `PR_LIMIT`, so the counts are lower bounds);
+`private` comes from `gh repo view` and is `null` when that read fails. No remote,
+no `gh`, no auth, a failed read or zero merged pull requests degrade to `{available:
+false, reason}` (`no_merge_history` for the last). Only the counts are stored.
+Tests: `tests/test_gate_cost.py`.
+
 **`accretion_ratchet.py`**
 Write-side accretion instrument: detects files that only ever grow. Walks each
 file's full numstat history in author-time order (one `git log --no-merges
