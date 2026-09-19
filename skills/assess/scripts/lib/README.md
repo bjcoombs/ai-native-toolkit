@@ -258,7 +258,13 @@ disclosure (a suppressed finding is counted and named, never silently vanished).
 `exclude_archive_from_attention` then builds the attention list with any path under an
 `archive/`, `archived/` or `attic/` directory left out (so it never becomes a prescribed
 action) and returns those paths as `archived_finding_paths` for the `excluded_as_archive`
-disclosure; the findings themselves still name them. Before either filter, the commit
+disclosure; the findings themselves still name them. Rows of equal score are ordered by
+`attention_tie_break` (an `AttentionTieBreak` built from data the run already holds):
+`top_hotspots` members first in hotspot rank order, then descending severity (the highest
+`promissory_markers.top_offenders[].severity` for an `unactioned_intent` file, divided by
+the run's highest so it shares the 0-1 scale of `1 - containment_ratio` for a
+`hidden_coupling` directory; neither finding type outranks the other by scale alone),
+then path. Before either filter, the commit
 sets are folded through the rename map (so a renamed directory's history lands on its
 current name), and `prune_missing_finding_paths` drops any `hidden_coupling` or
 `refactor_boundary` path absent from the working tree, returning them as
@@ -369,7 +375,15 @@ ts-prune for TS, staticcheck for Go) to a *capability-driven detect-or-propose* 
 proven on one capability (liveness) in one build system (Maven). Reports each capability
 in one of four states - `served`, `offer` (with a run-or-install `consent` shape),
 `credited` (a configured pom.xml plugin already serves it), or `honest_degrade` (nothing
-serves it yet; the report names the capability and a candidate tool). Imported by
+serves it yet; the report names the capability and a candidate tool). A build file
+counts only when at least one `.java`, `.kt`, `.scala` or `.groovy` file exists outside
+platform-wrapper directories: an `android/` beside a `pubspec.yaml`, or beside a
+`package.json` whose `dependencies` or `devDependencies` name `react-native`,
+`@capacitor/android` or `cordova-android`, or a Cordova app's `platforms/android/`
+(beside a Cordova-namespace `config.xml` or a `cordova-android` `package.json`), at
+any depth. A Flutter plugin's own `android/` Kotlin is skipped the same way. Build files and source under
+a wrapper are both skipped, in one `os.walk` that also prunes the shared excludes, so a
+Flutter app never reads as Gradle while a real JVM service beside it still does. Imported by
 `liveness_scan.py`, never by the orchestrator - it is an inward dependency of the
 liveness tier.
 
