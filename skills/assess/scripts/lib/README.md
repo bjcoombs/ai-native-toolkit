@@ -258,7 +258,13 @@ disclosure (a suppressed finding is counted and named, never silently vanished).
 `exclude_archive_from_attention` then builds the attention list with any path under an
 `archive/`, `archived/` or `attic/` directory left out (so it never becomes a prescribed
 action) and returns those paths as `archived_finding_paths` for the `excluded_as_archive`
-disclosure; the findings themselves still name them. Before either filter, the commit
+disclosure; the findings themselves still name them. Rows of equal score are ordered by
+`attention_tie_break` (an `AttentionTieBreak` built from data the run already holds):
+`top_hotspots` members first in hotspot rank order, then descending severity (the highest
+`promissory_markers.top_offenders[].severity` for an `unactioned_intent` file, divided by
+the run's highest so it shares the 0-1 scale of `1 - containment_ratio` for a
+`hidden_coupling` directory; neither finding type outranks the other by scale alone),
+then path. Before either filter, the commit
 sets are folded through the rename map (so a renamed directory's history lands on its
 current name), and `prune_missing_finding_paths` drops any `hidden_coupling` or
 `refactor_boundary` path absent from the working tree, returning them as
