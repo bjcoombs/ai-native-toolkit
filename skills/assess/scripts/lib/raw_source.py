@@ -274,7 +274,9 @@ def classify_working_notes_trees(
     tree at that path whatever its size or fingerprint, and no doc under an
     ``ignore`` directory joins any tree, so ``ignore`` wins where they overlap.
     Ignored docs are removed from the fingerprint's trees, not from its input,
-    so ignoring a directory never qualifies its parent.
+    so ignoring a directory never qualifies its parent; a fingerprint tree
+    whose remaining docs no longer pass the size and fingerprint tests is
+    dropped whole, so its index returns to the headline with the ignored notes.
     A forced directory holding no doc is not reported.
 
     Returns ``{"path", "file_count", "docs"}`` per outermost tree, sorted by
@@ -283,13 +285,17 @@ def classify_working_notes_trees(
     ``docs/guide.md`` beside ``docs/notes/`` leaves ``docs/notes`` alone.
     """
     # Ignore only ever subtracts: the fingerprint runs on every doc, so removing
-    # ignored docs can never tip a parent directory over a threshold.
+    # ignored docs can never tip a parent directory over a threshold. What a
+    # fingerprint tree keeps must still be a working-notes tree on its own, or
+    # the rest of it (an index whose notes were ignored) returns to the headline.
     kept_docs = {
         r for r in doc_signals if not any(_is_ancestor_path(d, r) for d in ignore)
     }
-    trees = {
-        d: set(docs) & kept_docs for d, docs in _fingerprint_trees(doc_signals).items()
-    }
+    trees = {}
+    for d, docs in _fingerprint_trees(doc_signals).items():
+        left = sorted(set(docs) & kept_docs)
+        if len(left) >= WORKING_NOTES_MIN_FILES and _is_working_notes(left, doc_signals):
+            trees[d] = set(left)
     for d in force:
         trees[d] = trees.get(d, set()) | {r for r in kept_docs if _is_ancestor_path(d, r)}
     trees = {d: docs for d, docs in trees.items() if docs}

@@ -127,3 +127,23 @@ def test_working_notes_ignore_never_qualifies_a_parent(tmp_path: Path) -> None:
     d = _graph(tmp_path)
     assert d["excluded_working_notes_trees"] == []
     assert d["doc_count"] == 36
+
+
+def test_working_notes_ignore_leaves_no_rump_tree(tmp_path: Path) -> None:
+    # A chapter series under its contents page qualifies as one tree, docs/.
+    # Ignoring the series must return the contents page too, not report a
+    # one-file docs tree.
+    for i in range(1, 21):
+        _write(tmp_path, f"docs/chapters/chapter-{i:02d}.md", f"# chapter {i}\n")
+    _write(tmp_path, "docs/contents.md", "".join(
+        f"- [chapter {i}](chapters/chapter-{i:02d}.md)\n" for i in range(1, 21)
+    ))
+    _write(tmp_path, "README.md", "# Home\n[contents](docs/contents.md)\n")
+    assert _graph(tmp_path)["excluded_working_notes_trees"] == [
+        {"path": "docs", "file_count": 21}
+    ]
+
+    _config(tmp_path, 'working_notes_ignore = ["docs/chapters"]\n')
+    d = _graph(tmp_path)
+    assert d["excluded_working_notes_trees"] == []
+    assert d["doc_count"] == 22
