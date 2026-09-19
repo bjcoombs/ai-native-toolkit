@@ -444,7 +444,11 @@ a file missing either is skipped, never reported - and classic branch-protection
 `required_pull_request_reviews` at the top level (branch from the export's `url`,
 else the file stem). The diff is snapshot-driven (keys only the API returns are
 not drift), ignores ids, timestamps and links, and folds the `{"enabled": X}` read
-shape into `X`. Lists are sets: scalar lists compare sorted; object lists pair by
+shape into `X`. Lists are sets. Write-shape restriction lists (plain user, team
+and app names) compare against the read shape's objects projected onto
+`login`/`slug`/`name`. A changed scalar list is one entry: `tracked` is
+`{count, removed, sample}`, `live` is `{count, added, sample}`, with at most
+`MAX_SAMPLE` (3) names per sample, never the whole live list. Object lists pair by
 identity (`login`, `slug`, `type`, `context`, `actor_type:actor_id`, `name`; users and
 teams carry `type` as a shared discriminator, so `login`/`slug` are tried first) in both directions, and a
 one-sided item, or a snapshot key the live response omits, is recorded as
@@ -454,9 +458,12 @@ are listed with `includes_parents=false`, so a repo snapshot never pairs with an
 inherited org ruleset. Tracked JSON holding none of the snapshot keys is skipped by
 a substring probe before any parse. A missing live ruleset, an
 unprotected branch and a deleted branch are drift entries, not outages. Emits
-`config_drift: {available, entries: [{file, key, tracked, live}], snapshots}`, entries
+`config_drift: {available, entries: [{file, key, tracked, live}], dropped, snapshots}`, entries
 ranked worst first (one-sided `"absent"`, then boolean flips, then other changes) because
-the report renders only `entries[0]`;
+the report renders only `entries[0]`, then capped at `MAX_ENTRIES` (10) with `dropped`
+counting the rest. Stored in the committed wiki: changed scalar settings, list-item
+identities in `key`, and up to three added names per changed list; never a live
+object or a whole live list;
 with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` alongside any change to discovery or the diff.

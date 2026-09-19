@@ -179,7 +179,7 @@ def test_identical_ruleset_gives_empty_entries(world) -> None:
     world.serve("ruleset.json", _ruleset(False, updated_at="2026-08-01T00:00:00Z",
                                          node_id="X", _links={"self": {"href": "h"}}))
     block = scan_config_drift(world.root)
-    assert block == {"available": True, "entries": [],
+    assert block == {"available": True, "entries": [], "dropped": 0,
                      "snapshots": [{"file": ".github/rulesets/main.json", "kind": "ruleset"}]}
 
 
@@ -213,11 +213,24 @@ def test_reordered_lists_are_not_drift() -> None:
     assert diff_values(tracked, live) == []
 
 
-def test_changed_scalar_list_is_one_entry() -> None:
+def test_changed_scalar_list_is_one_bounded_entry() -> None:
     tracked = {"required_status_checks": {"contexts": ["ci"]}}
     live = {"required_status_checks": {"contexts": ["lint", "ci"]}}
     assert diff_values(tracked, live) == [
-        ("required_status_checks.contexts", ["ci"], ["ci", "lint"])]
+        ("required_status_checks.contexts",
+         {"count": 1, "removed": 0, "sample": []},
+         {"count": 2, "added": 1, "sample": ["lint"]})]
+
+
+def test_scalar_list_drift_never_stores_the_whole_live_list() -> None:
+    tracked = {"required_status_checks": {"contexts": ["ci", "old-a", "old-b", "old-c", "old-d"]}}
+    live_names = ["ci"] + [f"zzlive-{i:02d}" for i in range(30)]
+    live = {"required_status_checks": {"contexts": live_names}}
+    [(key, was, now)] = diff_values(tracked, live)
+    assert key == "required_status_checks.contexts"
+    assert was == {"count": 5, "removed": 4, "sample": ["old-a", "old-b", "old-c"]}
+    assert now == {"count": 31, "added": 30, "sample": ["zzlive-00", "zzlive-01", "zzlive-02"]}
+    assert json.dumps(now).count("zzlive") == 3
 
 
 def test_identity_less_object_list_reports_counts_only() -> None:
@@ -315,7 +328,8 @@ def test_no_remote_degrades_without_calling_gh(world) -> None:
 
 def test_no_snapshots_is_clean_without_calling_gh(world) -> None:
     world.track("package.json", {"name": "x", "rules": "not a ruleset"})
-    assert scan_config_drift(world.root) == {"available": True, "entries": [], "snapshots": []}
+    assert scan_config_drift(world.root) == {"available": True, "entries": [], "dropped": 0,
+                                              "snapshots": []}
     assert world.calls() == []
 
 
@@ -366,6 +380,30 @@ def test_entries_rank_worst_first(world) -> None:
     keys = [e["key"] for e in scan_config_drift(world.root)["entries"]]
     assert keys == ["required_pull_request_reviews", "enforce_admins",
                     "required_status_checks.contexts"]
+
+
+def test_entries_are_capped_with_a_dropped_count(world) -> None:
+    from lib.config_drift import MAX_ENTRIES
+    n = MAX_ENTRIES + 7
+    tracked = _ruleset(False)
+    tracked["rules"] = [{"type": f"rule-{i:02d}", "parameters": {"v": 1}} for i in range(n)]
+    live = json.loads(json.dumps(tracked))
+    for rule in live["rules"]:
+        rule["parameters"]["v"] = 2
+    world.track(".github/rulesets/main.json", tracked)
+    world.serve("rulesets.json", [{"id": 7, "name": "main"}])
+    world.serve("ruleset.json", live)
+    block = scan_config_drift(world.root)
+    assert len(block["entries"]) == MAX_ENTRIES
+    assert block["dropped"] == 7
+
+
+def test_no_drift_reports_zero_dropped(world) -> None:
+    world.track(".github/rulesets/main.json", _ruleset(False))
+    world.serve("rulesets.json", [{"id": 7, "name": "main"}])
+    world.serve("ruleset.json", _ruleset(False))
+    block = scan_config_drift(world.root)
+    assert block["entries"] == [] and block["dropped"] == 0
 
 
 def test_absent_key_reports_the_normalised_tracked_value() -> None:
@@ -430,3 +468,49 @@ def test_ruleset_rules_still_pair_on_type() -> None:
                        "parameters": {"required_approving_review_count": 2}}]}
     assert diff_values(tracked, live) == [
         ("rules[pull_request].parameters.required_approving_review_count", 1, 2)]
+
+
+_WRITE_VS_READ = [
+    ("restrictions.users", ["octocat"], [_user("octocat", 1)]),
+    ("restrictions.teams", ["core"],
+     [{"slug": "core", "name": "Core", "id": 1, "type": "organization"}]),
+    ("restrictions.apps", ["deploy-bot"],
+     [{"slug": "deploy-bot", "name": "Deploy Bot", "id": 9, "owner": {"login": "acme"}}]),
+    ("required_pull_request_reviews.dismissal_restrictions.users", ["octocat"],
+     [_user("octocat", 1)]),
+    ("required_pull_request_reviews.dismissal_restrictions.teams", ["core"],
+     [{"slug": "core", "name": "Core", "id": 1, "type": "organization"}]),
+]
+
+
+def _nest(path: str, value: object) -> dict:
+    doc: object = value
+    for part in reversed(path.split(".")):
+        doc = {part: doc}
+    assert isinstance(doc, dict)
+    return doc
+
+
+@pytest.mark.parametrize("path,write,read", _WRITE_VS_READ)
+def test_write_shape_names_match_read_shape_objects(path: str, write: list, read: list) -> None:
+    assert diff_values(_nest(path, write), _nest(path, read)) == []
+
+
+@pytest.mark.parametrize("path,write,read", _WRITE_VS_READ)
+def test_write_shape_names_report_a_real_change(path: str, write: list, read: list) -> None:
+    [(key, was, now)] = diff_values(_nest(path, ["someone-else"]), _nest(path, read))
+    assert key == path
+    assert was["removed"] == 1 and now["added"] == 1
+
+
+def test_write_shape_protection_snapshot_is_clean_against_the_read(world) -> None:
+    doc = _protection(True)
+    doc["restrictions"] = {"users": ["octocat"], "teams": ["core"], "apps": ["deploy-bot"]}
+    live = _protection(True)
+    live["restrictions"] = {"users": [_user("octocat", 1)],
+                            "teams": [{"slug": "core", "name": "Core", "id": 1}],
+                            "apps": [{"slug": "deploy-bot", "name": "Deploy Bot", "id": 9}]}
+    world.track(".github/branch-protection/main.json", doc)
+    world.serve("protection.json", live)
+    block = scan_config_drift(world.root)
+    assert block["available"] is True and block["entries"] == []

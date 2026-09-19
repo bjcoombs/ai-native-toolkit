@@ -21,8 +21,14 @@ Snapshots (git-tracked only, paths relative to ``repo_root``):
 
 The diff is driven by the snapshot: every key it records is compared; keys only
 the live API returns (metadata, fields the export left out) are not drift.
-Ids, timestamps and links are never reported. Lists are sets, not sequences:
-scalar lists compare sorted, and lists of objects pair items by identity
+Ids, timestamps and links are never reported. Lists are sets, not sequences.
+A write-shape payload lists restricted users, teams and apps as plain names
+(``"users": ["octocat"]``) where the read returns objects; the objects are
+projected onto ``login`` / ``slug`` / ``name`` and both sides compare as names.
+A changed scalar list is one entry whose ``tracked`` is ``{"count", "removed",
+"sample"}`` and whose ``live`` is ``{"count", "added", "sample"}``: counts of the
+list and of the names that left or joined it, plus at most ``MAX_SAMPLE`` of
+those names, never the whole live list. Lists of objects pair items by identity
 (``login``, ``slug``, ``type``, ``context``, ``actor_type``/``actor_id``,
 ``name``; a user's or team's ``type`` is a discriminator, so ``login``/``slug`` win) in both
 directions, so an item added or dropped live is drift and a reorder is not. An
@@ -35,10 +41,16 @@ to say which item moved. Repository-level snapshots are matched only against
 repository-level rulesets (``includes_parents=false``). A missing live ruleset, an unprotected branch and a branch that no longer
 exists are drift entries, not outages.
 
+What is stored, then: scalar values of changed settings (booleans, counts,
+enforcement modes), the identity of a paired or one-sided list item in ``key``,
+and up to ``MAX_SAMPLE`` added names per changed scalar list. Never stored: a
+live object, a whole live list, or more than ``MAX_ENTRIES`` entries.
+
 Block: ``{"available", "entries": [{"file", "key", "tracked", "live"}],
-"snapshots"}``. Entries are ranked worst first: one-sided (``"absent"``) entries,
-then boolean flips, then other value changes. No snapshots, or none that differ, gives ``available: True``
-with ``entries: []``. Any GitHub read that fails degrades the whole block to
+"dropped", "snapshots"}``. Entries are ranked worst first: one-sided
+(``"absent"``) entries, then boolean flips, then other value changes; only the
+first ``MAX_ENTRIES`` are kept and ``dropped`` counts the rest. No snapshots, or
+none that differ, gives ``available: True`` with ``entries: []``. Any GitHub read that fails degrades the whole block to
 ``{"available": False, "reason"}`` (``no_access`` on HTTP 403) - never a
 partial clean result. GitHub access goes through ``gh_cli``.
 """
@@ -46,6 +58,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -64,6 +77,15 @@ PROTECTION_KEYS = ("required_status_checks", "enforce_admins", "required_pull_re
 
 # A snapshot bigger than this is not a hand-kept config export.
 MAX_SNAPSHOT_BYTES = 1_000_000
+
+# Entries kept in the block after ranking; the rest are counted in ``dropped``.
+MAX_ENTRIES = 10
+# Names kept per side of a scalar-list change; the rest are counted only.
+MAX_SAMPLE = 3
+
+# The field a read-shape object carries that a write-shape payload lists as a
+# plain string: users by ``login``, teams and apps by ``slug``.
+_NAME_FIELDS = ("login", "slug", "name")
 
 _BRANCH_FROM_URL = re.compile(r"/branches/(?P<branch>.+)/protection/?$")
 
@@ -195,11 +217,51 @@ def _canonical(item: Any) -> str:
     return json.dumps(item, sort_keys=True, default=str)
 
 
+def _as_names(items: list) -> list | None:
+    """Project read-shape objects onto the name a write-shape payload lists
+    (``restrictions.users: ["octocat"]`` against ``[{"login": "octocat", ...}]``);
+    None when an item carries none of the name fields."""
+    out = []
+    for item in items:
+        name = next((item.get(f) for f in _NAME_FIELDS
+                     if isinstance(item, dict) and isinstance(item.get(f), str)), None)
+        if name is None:
+            return None
+        out.append(name)
+    return out
+
+
+def _scalar_list_change(tracked: list, live: list, key: str) -> list[tuple[str, Any, Any]]:
+    """Scalar lists as multisets. A change is recorded as what was removed from
+    and added to the tracked list - counts plus a sorted sample of at most
+    ``MAX_SAMPLE`` names per side - never the whole live list."""
+    t, lv = Counter(map(_canonical, tracked)), Counter(map(_canonical, live))
+    if t == lv:
+        return []
+    removed = sorted((t - lv).elements())
+    added = sorted((lv - t).elements())
+    def sample(xs: list[str]) -> list[Any]:
+        return [json.loads(x) for x in xs[:MAX_SAMPLE]]
+
+    return [(key,
+             {"count": len(tracked), "removed": len(removed), "sample": sample(removed)},
+             {"count": len(live), "added": len(added), "sample": sample(added)})]
+
+
+def _is_scalar(x: Any) -> bool:
+    return not isinstance(x, (dict, list))
+
+
 def _diff_lists(tracked: list, live: list, key: str) -> list[tuple[str, Any, Any]]:
     """Lists in GitHub configuration are sets: compare without regard to order."""
-    if all(not isinstance(x, (dict, list)) for x in [*tracked, *live]):
-        t_sorted, l_sorted = sorted(tracked, key=_canonical), sorted(live, key=_canonical)
-        return [] if t_sorted == l_sorted else [(key, t_sorted, l_sorted)]
+    if all(_is_scalar(x) for x in [*tracked, *live]):
+        return _scalar_list_change(tracked, live, key)
+    # Write shape (plain names) on one side, read shape (objects) on the other.
+    t_names = tracked if all(isinstance(x, str) for x in tracked) else _as_names(tracked)
+    l_names = live if all(isinstance(x, str) for x in live) else _as_names(live)
+    mixed = (all(_is_scalar(x) for x in tracked) or all(_is_scalar(x) for x in live))
+    if mixed and t_names is not None and l_names is not None:
+        return _scalar_list_change(t_names, l_names, key)
     t_ids = [_identity(x) for x in tracked]
     l_ids = [_identity(x) for x in live]
     ids_usable = (
@@ -277,7 +339,7 @@ def scan_config_drift(repo_root: Path) -> dict[str, Any]:
     snapshots = find_snapshots(repo_root)
     listed = [{"file": s["file"], "kind": s["kind"]} for s in snapshots]
     if not snapshots:
-        return {"available": True, "entries": [], "snapshots": []}
+        return {"available": True, "entries": [], "dropped": 0, "snapshots": []}
     try:
         repo = open_github(repo_root)
         summaries: list | None = None
@@ -306,7 +368,9 @@ def scan_config_drift(repo_root: Path) -> dict[str, Any]:
             ]
     except GhUnavailable as e:
         return {**unavailable(e.reason), "snapshots": listed}
-    return {"available": True, "entries": rank_entries(entries), "snapshots": listed}
+    ranked = rank_entries(entries)
+    return {"available": True, "entries": ranked[:MAX_ENTRIES],
+            "dropped": max(0, len(ranked) - MAX_ENTRIES), "snapshots": listed}
 
 
 def _severity(entry: dict[str, Any]) -> int:
