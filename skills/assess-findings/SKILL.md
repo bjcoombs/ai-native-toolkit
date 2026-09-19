@@ -90,7 +90,7 @@ _Note: Mutation testing was not run. Layer 6 (Coverage) is capped at Partial and
 
 **Scope fence** names what the action must NOT touch: the files, behaviours, or conventions out of bounds ("only `.golangci.yml`; no source edits", "extract the one function; no drive-by reformatting of the rest of the file"). Smaller models over-extend without an explicit fence.
 
-**Keyhole-size the action.** When an action targets code (not config), prefer the *function* over the *file*: the stats sidecar carries per-function data (`max_fn_ccn` and the worst function's name), so "extract the dispatch branch of `parseLine` (fn ccn 41), characterization test first" fits one context window where "refactor parser.go (ccn 67)" does not. An action a fresh agent cannot complete inside one keyhole is two actions.
+**Keyhole-size the action.** When an action targets code (not config), prefer the *function* over the *file*: the stats sidecar carries per-function data on each ranked row (`max_fn_ccn` and `max_fn_name`, the worst function's name, filled for files a per-function backend scored - lizard today; both are null for files scc scored at file level only), so "extract the dispatch branch of `parseLine` (fn ccn 41), characterization test first" fits one context window where "refactor parser.go (ccn 67)" does not. An action a fresh agent cannot complete inside one keyhole is two actions.
 
 ### Why these three?
 
@@ -120,9 +120,10 @@ _Note: Mutation testing was not run. Layer 6 (Coverage) is capped at Partial and
 - **Churn window chosen:** <last 12mo | last 24mo | last 5y | all-time>
 - **Complexity profile:** per-function ccn p95 <N> (max <M>); file-aggregate ccn p95 <N> (max <M>); p95 est. tokens <N> (max <M>; code <C>, data <D>); p95 LOC <N> (max <M>; code <C>, data <D>). The code and data maxima come from `max_code` / `max_data` in the `est_tokens` and `loc` blocks (data is scc's JSON, YAML and JSONL); omit a split its snapshot lacks
 - **Top hotspots** (composite `sqrt(ccn) × sqrt(1 + commits) × sqrt(est_tokens)` - a sub-linear blend of complexity, recent churn, and context-window size, so a file high on *multiple* axes - big AND complex AND churning - is the worst keyhole and leads; a frozen-but-complex file ranks below an equally-sized active one; a churny-but-trivial file can't top on churn alone; and a big-but-simple-stable file can't top on size alone). `est_tokens` is the char-based estimate (~chars/4), `ccn` here is the **file aggregate**; the worst single function per file is in parentheses:
-  1. `<path>` - <est_tokens> est. tokens (<loc> LOC), aggregate ccn <N> (worst function <max_fn_ccn>), <M> commits in window
+  1. `<path>` - <est_tokens> est. tokens (<loc> LOC), aggregate ccn <N> (worst function `<max_fn_name>` <max_fn_ccn>), <M> commits in window
   2. ...
   3. ...
+- **Per-function coverage:** list every language that `fn_ccn.backend_by_language` maps to `null` in one line, once per run: _"no per-function data for <Language>, <Language> (scored at file level only)."_ A row whose `max_fn_ccn` is null then drops the "worst function" parenthesis rather than printing null. Omit the line when no language maps to `null`; name any backend `fn_ccn.source` marks `approximate: true` as approximate.
 
 - **Keyhole budget** (`stats_summary.est_tokens.budget`): state the repo total estimated tokens and how many files / top-level subtrees exceed one context-window keyhole (the documented `budget`, an estimate). This is the literal "does the relevant slice fit one keyhole?" measure. e.g. _"Repo is ~<total> est. tokens; <N> subtree(s) exceed the ~200k keyhole budget: `<name>` (~<tokens>)."_ When `est_tokens` is absent (pre-token snapshot), omit this line.
 

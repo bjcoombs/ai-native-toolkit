@@ -238,8 +238,12 @@ def lizard_scores(
     root: Path, include_artifacts: bool = False,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
+    fn_names: dict[Path, str] | None = None,
 ) -> dict[Path, tuple[int, float, list[float]]]:
     """Return ``{abs_path: (loc, ccn_sum, fn_ccns)}`` for scoreable files.
+
+    ``fn_names``, when a dict, receives the name of each file's worst function
+    (the first with the highest ccn) for every file with at least one function.
 
     Two distinct complexity signals come out of lizard, and conflating them is
     exactly the failure mode issue #58 reported:
@@ -273,6 +277,8 @@ def lizard_scores(
         fn_ccns = [float(fn.cyclomatic_complexity) for fn in f.function_list]
         ccn_sum = sum(fn_ccns) or 1.0
         scores[path] = (f.nloc, float(ccn_sum), fn_ccns)
+        if fn_names is not None and fn_ccns:
+            fn_names[path] = f.function_list[fn_ccns.index(max(fn_ccns))].name
     return scores
 
 
@@ -351,6 +357,7 @@ def collect(root: Path, by: str = "complexity",
             scope: Path | None = None,
             excluded_generated: list[dict] | None = None,
             scc_languages: dict[Path, str] | None = None,
+            fn_names: dict[Path, str] | None = None,
             ) -> tuple[list[tuple[Path, int, float, str]], str,
                        dict[Path, int] | None, str | None,
                        dict[Path, list[float]]]:
@@ -380,11 +387,15 @@ def collect(root: Path, by: str = "complexity",
 
     `scc_languages`, when a dict, receives scc's language name per scc-scored
     path (see `scc_scores`); `write_stats` uses it to split code from data.
+
+    `fn_names`, when a dict, receives the worst function's name per lizard path
+    (see `lizard_scores`); `write_stats` writes it as each row's `max_fn_name`.
     """
     lz = lizard_scores(
         root, include_artifacts=include_artifacts,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
+        fn_names=fn_names,
     )
     sc = scc_scores(
         root, include_artifacts=include_artifacts,
@@ -679,13 +690,19 @@ def _read_plugin_version() -> str:
 # is a structural change to the sidecar shape (a metric added/removed/redefined)
 # that voids the diff against an older snapshot until the next clean run
 # re-seeds the baseline (assess_core._diff_is_reliable reads it).
-STATS_SCHEMA_VERSION = 3  # 2: generated-file content excludes + excluded_generated
+STATS_SCHEMA_VERSION = 4  # 2: generated-file content excludes + excluded_generated
                           # 3: generated test-report excludes + loc/est_tokens max_code/max_data
+                          # 4: fn_ccn.source list + backend_by_language, rows max_fn_name
 
 # scc language names counted as data, not code, for the `max_code` / `max_data`
 # split in the stats file. Data files stay in the treemap: a large hand-kept
 # fixture is weight an agent may have to read.
 DATA_LANGUAGES = frozenset({"JSON", "YAML", "JSONL"})
+
+# Per-function complexity backends, by name, with whether their counts are
+# approximate. `fn_ccn.source` in the stats file lists the ones that scored a
+# file in the run; a path's backend defaults to lizard (see `write_stats`).
+FN_BACKENDS = {"lizard": False}
 
 
 def _lizard_version() -> str:
@@ -859,7 +876,9 @@ def write_stats(files: list[tuple[Path, int, float, str]],
                 tokens_by_path: dict[Path, int] | None = None,
                 churn_degenerate: bool = False,
                 excluded_generated: list[dict] | None = None,
-                languages_by_path: dict[Path, str] | None = None) -> None:
+                languages_by_path: dict[Path, str] | None = None,
+                fn_name_by_path: dict[Path, str] | None = None,
+                fn_backend_by_path: dict[Path, str] | None = None) -> None:
     """Write a JSON stats sidecar summarising the treemap data.
 
     Consumed by the /assess skill: percentiles drive Layer 3 (linter) scoring,
@@ -896,8 +915,22 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     splits the ``loc`` and ``est_tokens`` maxima into ``max_code`` and
     ``max_data``: a file whose language is in ``DATA_LANGUAGES`` is data,
     everything else code. A side with no files reports 0.
+
+    ``fn_name_by_path`` gives each row's ``max_fn_name`` (null wherever
+    ``max_fn_ccn`` is null). ``fn_backend_by_path`` names the per-function
+    backend of each path in ``fn_ccn_by_path`` (lizard when omitted);
+    ``fn_ccn.source`` lists the backends that scored a file, as
+    ``{name, approximate}`` objects from ``FN_BACKENDS``, and
+    ``fn_ccn.backend_by_language`` maps each scc language to its backend, or to
+    null when any of its files with decision points was scored by scc at file
+    level only (so partial coverage reads as null). A language gets a key when a
+    backend scored one of its files or scc counted a decision point in one;
+    data and markup (JSON, YAML, Markdown), where scc counts none, get no key.
     """
     fn_ccn_by_path = fn_ccn_by_path or {}
+    fn_names = fn_name_by_path or {}
+    backend_of = {p: (fn_backend_by_path or {}).get(p, "lizard")
+                  for p in fn_ccn_by_path}
     tokens = tokens_by_path if tokens_by_path is not None else est_tokens_by_path(files)
     locs = [f[1] for f in files]
     token_vals = [tokens.get(f[0], est_token_count(f[0], f[1])) for f in files]
@@ -933,6 +966,25 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         vals = fn_ccn_by_path.get(path)
         return float(max(vals)) if vals else None
 
+    backends_used = sorted({backend_of[f[0]] for f in files
+                            if f[0] in backend_of})
+    covered: dict[str, str] = {}
+    uncovered: set[str] = set()
+    for path, _loc, metric, _src in files:
+        lang = langs.get(path)
+        if not lang:
+            continue
+        if path in backend_of:
+            covered[lang] = backend_of[path]
+        elif metric > 0 and lang not in DATA_LANGUAGES:
+            uncovered.add(lang)
+    # A language counts as covered only when no file of it with decision points
+    # fell back to scc: partial coverage reads as null, not as the backend.
+    backend_by_language: dict[str, str | None] = {
+        lang: (None if lang in uncovered else covered[lang])
+        for lang in covered.keys() | uncovered
+    }
+
     enriched = []
     for path, loc, ccn, src in files:
         churn = float(aux_data.get(path, 0)) if aux_data else 0.0
@@ -949,6 +1001,9 @@ def write_stats(files: list[tuple[Path, int, float, str]],
             "ccn": float(ccn),
             "ccn_basis": "file-aggregate",
             "max_fn_ccn": max_fn(path),
+            # Name of the function whose ccn is max_fn_ccn; null with it.
+            "max_fn_name": (fn_names.get(path)
+                            if max_fn(path) is not None else None),
             # Named `commits` to match what every consumer reads (stats_diff,
             # assess_core, the hotspot template). None when churn is unavailable
             # (no git), so a missing value is distinct from a real 0.
@@ -1035,11 +1090,14 @@ def write_stats(files: list[tuple[Path, int, float, str]],
             "max": float(max(ccns)) if ccns else 0.0,
         },
         # Per-function complexity distribution (the unit a linter threshold like
-        # cyclop:15 actually gates). lizard files only; scc files contribute no
-        # function breakdown. `function_count` is 0 when only scc scored the repo.
+        # cyclop:15 actually gates). Per-function backends only; scc files
+        # contribute no function breakdown. `function_count` is 0 when only scc
+        # scored the repo. `backend_by_language` null = no per-function data.
         "fn_ccn": {
             "basis": "per-function",
-            "source": "lizard-only",
+            "source": [{"name": n, "approximate": FN_BACKENDS.get(n, False)}
+                       for n in backends_used],
+            "backend_by_language": dict(sorted(backend_by_language.items())),
             "function_count": len(fn_population),
             "p50": pct(fn_population, 50),
             "p95": pct(fn_population, 95),
@@ -1194,6 +1252,7 @@ def main() -> int:
 
     excluded_generated: list[dict] = []
     scc_languages: dict[Path, str] = {}
+    fn_names: dict[Path, str] = {}
     files, effective_by, aux_data, aux_label, fn_ccn_by_path = collect(
         root, by="hotspot", include_artifacts=args.include_artifacts,
         extra_exclude_dirs=extra_dirs,
@@ -1201,6 +1260,7 @@ def main() -> int:
         scope=scope,
         excluded_generated=excluded_generated,
         scc_languages=scc_languages,
+        fn_names=fn_names,
     )
     if not files:
         where = f" under {scope}" if scope is not None else ""
@@ -1257,7 +1317,8 @@ def main() -> int:
                     fn_ccn_by_path=fn_ccn_by_path, tokens_by_path=tokens,
                     churn_degenerate=churn_degenerate,
                     excluded_generated=excluded_generated,
-                    languages_by_path=scc_languages)
+                    languages_by_path=scc_languages,
+                    fn_name_by_path=fn_names)
     return 0
 
 
