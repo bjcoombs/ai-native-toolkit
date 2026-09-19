@@ -195,8 +195,9 @@ jobs:
   # is the script's, so this file still names no path. It is rendered by the
   # base ref's copy while the trigger runs the head copy: the two agree unless
   # the pull request edits the classification itself, and then the section
-  # still appears (floor_check.py is floor core in both) and at worst counts a
-  # newly floor-core path among the other paths, by role. It cites the pull
+  # still appears (floor_check.py is floor core in the base copy that renders
+  # it) and at worst counts a newly floor-core path among the other paths,
+  # by role. It cites the pull
   # request's head commit: the checkout is the merge commit, which is not what
   # the maintainer approves.
   # This is the one floor job with a write scope. On the `pull_request` event

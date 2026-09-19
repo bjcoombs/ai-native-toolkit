@@ -69,9 +69,9 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
     rejecting mean. The paths come from the ``floor-core`` role the trigger
     asks for; CI renders with the base ref's copy, so the two agree unless the
     pull request edits the classification itself, and then the section still
-    appears (this script is floor core in every copy) and at worst counts a
-    newly floor-core path among the other changed paths, which it breaks down
-    by role. When the floor core changes only by like-for-like ``uses:`` pin
+    appears (this script is floor core in the base copy that renders it)
+    and at worst counts a newly floor-core path among the other changed
+    paths, which it breaks down by role. When the floor core changes only by like-for-like ``uses:`` pin
     bumps the section says so and lists each action's old and new commit.
     Prints nothing when the floor core is untouched.
 
@@ -772,19 +772,36 @@ _ROLE_LABELS = {
 }
 
 
+def _mode_changed(base: str, path: str) -> bool:
+    """Did ``path``'s file mode change? ``--numstat`` counts lines only, and
+    the mode header sits before the first hunk, so it is read from ``--raw``
+    (``:<old mode> <new mode> <old sha> <new sha> <status>``)."""
+    raw = _git_out("diff", "--raw", "--no-renames", base, "HEAD", "--", path)
+    for line in raw.splitlines():
+        fields = line.lstrip(":").split()
+        if len(fields) >= 2 and "000000" not in fields[:2] and fields[0] != fields[1]:
+            return True
+    return False
+
+
 def _path_detail(base: str, path: str) -> tuple[str, bool]:
-    """``+<added> -<removed>`` for a text change, else ``mode change`` or
-    ``binary change``; the flag says whether the path has a content hunk."""
+    """``+<added> -<removed>`` for a text change, ``binary change`` for a
+    binary one, with ``mode change`` named alongside either or on its own.
+    The flag is True only for a pure text change: anything else vetoes the
+    pin-only verdict, since a pin diff cannot show it."""
     numstat = _git_out("diff", "--numstat", "--no-renames", base, "HEAD", "--", path)
     added, removed = "0", "0"
     for line in numstat.splitlines():
         parts = line.split("\t")
         if len(parts) == 3:
             added, removed = parts[0], parts[1]
+    mode = _mode_changed(base, path)
     if added == "-":
-        return "binary change", False
+        return "binary change" + (", mode change" if mode else ""), False
     if added == "0" and removed == "0":
         return "mode change", False
+    if mode:
+        return f"+{added} -{removed}, mode change", False
     return f"+{added} -{removed}", True
 
 

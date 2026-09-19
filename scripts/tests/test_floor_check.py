@@ -1172,3 +1172,29 @@ def test_signoff_summary_breaks_other_paths_down_by_role(signoff_repo, capsys):
     assert _line_with(out, "Other paths changed", "2", "1 canary", "1 unprotected")
     assert "scripts/canaries/run.py" not in out
     assert "docs/notes.md" not in out
+
+
+def test_clause_iii_purpose_reads_the_shipped_floor_md_without_the_fallback():
+    # Every other clause test builds a synthetic FLOOR.md; the shipped file is
+    # the one production input. A reformat that keeps `clauses` green but
+    # breaks this regex would silently swap in the fallback sentence.
+    from floor_check import CLAUSE_III_HEADING_RE, clause_iii_purpose
+
+    text = (REPO_ROOT / FLOOR_FILE).read_text(encoding="utf-8")
+    assert CLAUSE_III_HEADING_RE.search(text) is not None
+    assert "out-of-band sign-off" in clause_iii_purpose(text)
+
+
+def test_signoff_summary_mode_change_with_content_is_named_and_vetoes_pin_only(
+    signoff_repo, capsys
+):
+    (signoff_repo / _WORKFLOW).write_text(
+        _workflow_text(_NEW_PIN, "v10.1.0"), encoding="utf-8"
+    )
+    (signoff_repo / _WORKFLOW).chmod(0o755)
+    _commit_all(signoff_repo, "pin bump plus chmod on the same file")
+
+    out = _summary(capsys)
+
+    assert _line_with(out, _WORKFLOW, "+1", "-1", "mode change") is not None
+    assert "pin-only" not in out.lower()
