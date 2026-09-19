@@ -863,3 +863,54 @@ def test_root_level_mdx_citation_is_a_reference_edge(tmp_path: Path) -> None:
         ["README.md", "docs/intro.markdown", "reference"],
         ["README.md", "guide.mdx", "reference"],
     ]
+
+
+def test_reference_inside_container_prefixed_fence_adds_no_edge(tmp_path: Path) -> None:
+    """A fence behind a blockquote or list-item marker hides its body, and its
+    indented closer does not reopen a fence that swallows the rest of the doc."""
+    _write(
+        tmp_path, "README.md",
+        "> ```\n> `a.md` [[nowhere]]\n> ```\n\n"
+        "- ~~~\n  `b.md`\n  ~~~\n\n"
+        "Then [c](c.md).\n",
+    )
+    for name in ("a.md", "b.md", "c.md"):
+        _write(tmp_path, name, "# x")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == [["README.md", "c.md", "link"]]
+    assert r.as_dict()["dangling_links"] == 0
+
+
+def test_root_level_exact_name_beats_a_same_named_doc_elsewhere(tmp_path: Path) -> None:
+    """A bare name that is a root-level doc resolves there, even when a doc of
+    the same name sits deeper in the tree."""
+    _write(tmp_path, "docs/x/index.md", "See `CHANGELOG.md`.")
+    _write(tmp_path, "CHANGELOG.md", "# root")
+    _write(tmp_path, "pkg/CHANGELOG.md", "# pkg")
+    r = build_doc_graph(tmp_path)
+    assert ["docs/x/index.md", "CHANGELOG.md", "reference"] in _edges(r)
+    assert not any(e[1] == "pkg/CHANGELOG.md" for e in _edges(r))
+
+
+def test_link_only_figures_share_the_headline_entry_points(tmp_path: Path, monkeypatch) -> None:
+    """The link-only pass is handed the headline's entry points instead of
+    re-picking them from link-only PageRank, so the two figures differ only in
+    their edge set. Without it, a repo with no conventional entry doc could
+    measure the two from different roots."""
+    calls: list = []
+    real = doc_graph._derive_signals
+
+    def spy(**kw):
+        out = real(**kw)
+        calls.append((kw.get("entries"), out.entry_points))
+        return out
+
+    monkeypatch.setattr(doc_graph, "_derive_signals", spy)
+    _write(tmp_path, "hub-a.md", "`n1.md` `n2.md`")
+    _write(tmp_path, "hub-b.md", "[1](m1.md)")
+    for name in ("n1.md", "n2.md", "m1.md"):
+        _write(tmp_path, name, "# x")
+    build_doc_graph(tmp_path)
+    (headline_in, headline_entries), (link_only_in, link_only_entries) = calls
+    assert headline_in is None
+    assert link_only_in == headline_entries == link_only_entries

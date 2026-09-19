@@ -524,8 +524,12 @@ def _cited_excluded_doc(
     return path.resolve()
 
 
-# Any indentation: a fence nested under a list item sits four or more spaces in.
-_FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
+# Any indentation (a fence nested under a list item sits four or more spaces
+# in), behind any CommonMark container prefix: blockquote `>` markers and a
+# list-item marker (`- ~~~`, `1. ~~~`).
+_FENCE_OPEN_RE = re.compile(
+    r"^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|\d+[.)])[ \t]+)?(`{3,}|~{3,})"
+)
 
 
 def _strip_fenced_lines(text: str) -> str:
@@ -561,7 +565,7 @@ def _reference_paths(text: str, source_rel: str) -> list[tuple[str, str]]:
         span = m.group(0)
         if "[[" in span or "](" in span:
             continue
-        for ref in sorted(_extract_path_refs(span)):
+        for ref in sorted(_extract_path_refs(span, tuple(DOC_EXTENSIONS))):
             if Path(ref).suffix.lower() not in DOC_EXTENSIONS:
                 continue
             local = ref.lstrip("/") if ref.startswith("/") else posixpath.normpath(
@@ -578,9 +582,18 @@ def _read_doc(path: Path) -> str | None:
         return None
 
 
+def _basename_index(rels) -> dict[str, list[str]]:
+    """Repo-relative doc paths grouped by basename, built once per graph."""
+    out: dict[str, list[str]] = {}
+    for r in rels:
+        out.setdefault(posixpath.basename(r), []).append(r)
+    return out
+
+
 def _resolve_references(
     text: str, source_rel: str, repo_root: Path,
-    doc_by_rel: dict[str, Path], doc_rels: set[str], cite,
+    doc_by_rel: dict[str, Path], doc_rels: set[str], by_basename: dict[str, list[str]],
+    cite,
 ) -> list[Path]:
     """Docs named by backticked paths in `text`, exact paths before guesses:
     the doc-relative path (walked doc or cited `.claude/` doc), then the
@@ -596,8 +609,12 @@ def _resolve_references(
     for ref, local in _reference_paths(text, source_rel):
         hit = doc_by_rel.get(local) or cite(local)
         if hit is None:
-            hits = _resolve_ref(ref, repo_root, doc_rels)
-            hit = doc_by_rel[str(next(iter(hits)))] if len(hits) == 1 else cite(ref.lstrip("/"))
+            # A bare basename reads the prebuilt index instead of the resolver's
+            # per-call sweep of every doc; a path (or a root-level exact name,
+            # which the resolver prefers over a basename match) goes through it.
+            hits = (set(by_basename.get(ref, [])) if "/" not in ref and ref not in doc_rels
+                    else {str(x) for x in _resolve_ref(ref, repo_root, doc_rels)})
+            hit = doc_by_rel[next(iter(hits))] if len(hits) == 1 else cite(ref.lstrip("/"))
         if hit is not None:
             found.append(hit)
     return found
@@ -758,7 +775,7 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     )
     ref_pairs = _settle_references(docs, texts, rel, partial(
         _resolve_references, repo_root=repo_root, doc_by_rel=doc_by_rel,
-        doc_rels=set(doc_by_rel), cite=cite,
+        doc_rels=set(doc_by_rel), by_basename=_basename_index(doc_by_rel), cite=cite,
     ))
 
     by_relpath, by_name, by_stem = _build_name_index(docs, repo_root)
@@ -884,7 +901,7 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     link_only = _derive_signals(
         graph=link_graph, docs=curated_docs, repo_root=repo_root, rel=rel,
         doc_to_code=doc_to_code, dangling=0, ambiguous=0,
-        vault=vault, obs=obs, base_hubs=base_hubs,
+        vault=vault, obs=obs, base_hubs=base_hubs, entries=result.entry_points,
     )
     result.link_only_orphan_rate = link_only.orphan_rate
     result.link_only_reachability_pct = link_only.reachability_pct
@@ -1077,6 +1094,7 @@ def _derive_signals(
     *, graph, docs: list[Path], repo_root: Path, rel,
     doc_to_code: list[dict], dangling: int, ambiguous: int,
     vault: bool, obs: bool, base_hubs: list[str] | None = None,
+    entries: list[str] | None = None,
 ) -> DocGraphResult:
     nodes = list(graph.nodes())
     n = len(nodes)
@@ -1088,7 +1106,10 @@ def _derive_signals(
 
     # `.base` hubs are dynamic navigation surfaces, so they seed reachability
     # alongside the README/AGENTS/MOC entry points (issue #176).
-    entry_set = set(_pick_entry_points(docs, repo_root, pagerank, rel, base_hubs))
+    # `entries` pins the roots (the link-only pass reuses the headline's, so the
+    # two figures differ only in their edge set).
+    entry_set = set(entries if entries is not None
+                    else _pick_entry_points(docs, repo_root, pagerank, rel, base_hubs))
 
     orphans = sorted(
         x for x in nodes if in_deg.get(x, 0) == 0 and x not in entry_set

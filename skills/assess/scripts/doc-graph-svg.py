@@ -69,7 +69,14 @@ COLOR_ORPHAN = "#D55E00"     # Okabe-Ito vermillion
 EDGE_COLOR = "#9aa0a6"
 ENTRY_RING = "#0072B2"       # blue ring marks the entry node when colour = staleness
 ORPHAN_RING = "#1a1a1a"      # dark dashed ring marks orphans when colour = staleness
-UNMEASURED_FILL = "#d9d9d9"  # neutral grey: a doc with no staleness measurement
+# A doc with no staleness measurement: white with grey hatching, outside the
+# OrRd ramp and the churn-blend grey, so it never reads as a measured value.
+UNMEASURED_FILL = "url(#unmeasured)"
+_UNMEASURED_PATTERN = (
+    '<pattern id="unmeasured" width="5" height="5" patternUnits="userSpaceOnUse" '
+    'patternTransform="rotate(45)"><rect width="5" height="5" fill="#ffffff"/>'
+    '<line x1="0" y1="0" x2="0" y2="5" stroke="#8c8c8c" stroke-width="1.6"/></pattern>'
+)
 GHOST_COLOR = "#CC79A7"      # Okabe-Ito reddish-purple: broken-link "ghost" nodes
 
 W, H = 1600.0, 1000.0
@@ -224,7 +231,7 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  
     days = {x: float(staleness.get(x, {}).get("last_commit_days") or 0) for x in nodes}
     churn = {x: float(staleness.get(x, {}).get("code_churn_in_window") or 0) for x in nodes}
     # A node the staleness scan never measured (a `.claude/` doc a reference
-    # brought in) is drawn neutral, not painted fresh with a made-up 0d.
+    # brought in) is hatched, not painted as if a 0d / zero-churn value were known.
     unmeasured = {x: UNMEASURED_FILL for x in nodes if staleness and x not in staleness}
     day_cap, _ = adaptive_cap([days[x] for x in nodes if x not in unmeasured])
     churn_cap, _ = adaptive_cap([churn[x] for x in nodes if x not in unmeasured])
@@ -408,15 +415,20 @@ def _legend(size_label: str, layout: str, colour: str, cw: float, ch: float,
         out.append(
             '<defs><linearGradient id="stalegrad" x1="0" y1="0" x2="1" y2="0">'
             '<stop offset="0" stop-color="#fff7ec"/><stop offset="0.5" stop-color="#fc8d59"/>'
-            '<stop offset="1" stop-color="#7f0000"/></linearGradient></defs>'
+            '<stop offset="1" stop-color="#7f0000"/></linearGradient>'
+            + _UNMEASURED_PATTERN + '</defs>'
         )
         # Row 1, centred: gradient (flanked by plain words, no arrow glyph that
         # some SVG renderers tofu) + entry + orphan markers.
-        gx = mid - 250
+        gx = mid - 330
         out.append(f'<text x="{gx - 6:.0f}" y="{y - 16:.0f}" font-size="12" fill="#555" '
                    'text-anchor="end">stable</text>')
         out.append(f'<rect x="{gx:.0f}" y="{y - 27:.0f}" width="110" height="12" rx="3" fill="url(#stalegrad)"/>')
         out.append(f'<text x="{gx + 116:.0f}" y="{y - 16:.0f}" font-size="12" fill="#555">lying map</text>')
+        ux = mid - 125
+        out.append(f'<circle cx="{ux:.0f}" cy="{y - 20:.0f}" r="8" fill="{UNMEASURED_FILL}" '
+                   'stroke="#b8b8b8" stroke-width="1"/>')
+        out.append(f'<text x="{ux + 14:.0f}" y="{y - 16:.0f}" font-size="13">not measured</text>')
         ex = mid + 10
         out.append(f'<circle cx="{ex:.0f}" cy="{y - 20:.0f}" r="8" fill="#dddddd" stroke="{ENTRY_RING}" stroke-width="3"/>')
         out.append(f'<text x="{ex + 14:.0f}" y="{y - 16:.0f}" font-size="13">entry</text>')
