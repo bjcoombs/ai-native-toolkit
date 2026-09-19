@@ -89,3 +89,59 @@ def test_svg_threads_config_and_cli_excludes(svg, tmp_path, monkeypatch, capsys)
     # so colour and structure speak about the same doc set.
     assert captured["stale_dirs"] == captured["graph_dirs"]
     assert captured["stale_patterns"] == captured["graph_patterns"]
+
+
+def _render_two_kinds(svg, tmp_path, monkeypatch, colour: str) -> list:
+    """Render one link edge and one reference edge; return the parsed elements.
+
+    numpy and matplotlib are stubbed here, so the colour map and the radial
+    layout (``nx.shell_layout`` needs numpy) are replaced with fixed stand-ins;
+    the edge and legend markup under test is the real code."""
+    import xml.etree.ElementTree as ET
+
+    import networkx as nx
+
+    graph = nx.DiGraph()
+    graph.add_edge("CLAUDE.md", "docs/linked.md", kind="link")
+    graph.add_edge("CLAUDE.md", "docs/ref.md", kind="reference")
+    result = _FakeResult()
+    result.graph = graph
+    result.entry_points = ["CLAUDE.md"]
+    result.pagerank = {}
+    fixed = {"CLAUDE.md": (500.0, 500.0), "docs/linked.md": (300.0, 300.0),
+             "docs/ref.md": (700.0, 300.0)}
+    monkeypatch.setattr(svg, "_radial_positions", lambda *a, **k: dict(fixed))
+    monkeypatch.setattr(svg.plt, "get_cmap", lambda _name: (lambda _v: (1.0, 1.0, 1.0, 1.0)),
+                        raising=False)
+    out = tmp_path / "out.svg"
+    svg.render(result, out, tmp_path, colour=colour)
+    return list(ET.parse(out).iter())
+
+
+_STYLE_KEYS = ("stroke", "stroke-dasharray", "stroke-width", "opacity")
+
+
+@pytest.mark.parametrize("colour", ["staleness", "status"])
+def test_reference_edge_drawn_distinct_from_link_with_legend(svg, tmp_path, monkeypatch, colour):
+    """A reference edge (a backticked doc path) and a link edge render in two
+    styles told apart by presentation attributes, and the legend names both.
+    The reference dash must not reuse the ghost tether (4,3) or the orphan and
+    ghost rings (3,2), which already carry meaning."""
+    els = _render_two_kinds(svg, tmp_path, monkeypatch, colour)
+    styles = {
+        kind: [[e.get(k) for k in _STYLE_KEYS] for e in els if e.get("data-edge-kind") == kind]
+        for kind in ("link", "reference")
+    }
+    assert len(styles["link"]) == 1
+    assert len(styles["reference"]) == 1
+    assert styles["link"][0] != styles["reference"][0]
+    assert styles["reference"][0][1] not in ("4,3", "3,2")
+    legend = sorted({e.get("data-legend-kind") for e in els if e.get("data-legend-kind")})
+    assert legend == ["link", "reference"]
+    # Legend samples are drawn in the same style as the edges they explain.
+    for kind in ("link", "reference"):
+        sample = next(e for e in els if e.get("data-legend-kind") == kind)
+        assert [sample.get(k) for k in _STYLE_KEYS] == styles[kind][0]
+    texts = [" ".join(e.itertext()).lower() for e in els if e.tag.endswith("text")]
+    assert any("reference" in t for t in texts)
+    assert any("link" in t for t in texts)
