@@ -54,20 +54,25 @@ from lib.badge import (
     fallback_badge,
     write_badge,
 )
-from lib.assess_config import is_user_excluded, load_excludes, load_structure_config
+from lib.assess_config import (
+    is_user_excluded, load_excludes, load_structure_config, load_working_notes_config,
+)
 from lib.change_coupling import build_rename_map
 from lib.config_drift import scan_config_drift
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
+from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
 from lib.interactivity import build_offers_block
 from lib.doc_graph import build_doc_graph, is_repo_file
+from lib.gap_actions import build_gap_actions
 from lib.doc_staleness import analyze_doc_staleness
 from lib.generated_files import matches_generated_name
 from lib.git_churn import git_commit_info, tracked_files
 from lib.keyhole_signals import integrate as integrate_keyhole_signals
 from lib.liveness_scan import scan_liveness
 from lib.promissory_markers import scan_promissory_markers
+from lib.review_reality import scan_review_reality
 from lib.structure_graph import analyze_structure
 from lib.stats_diff import StatsDiff, diff_stats, hotspot_commits, load_stats
 from lib.structure_drift import (
@@ -1376,11 +1381,14 @@ def build_run_context(
 
     # Read-side foundation signals (Layer 0 navigability + Layer 1 liveness).
     # Each is best-effort and degrades rather than blocking the assessment.
+    working_notes = load_working_notes_config(repo_root)
     doc_graph = _safe("doc_graph", lambda: build_doc_graph(
         repo_root,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
         scope=scope_abs,
+        working_notes_dirs=working_notes.dirs,
+        working_notes_ignore=working_notes.ignore,
     ).as_dict())
     doc_to_code = (doc_graph.get("doc_to_code_edges", [])
                    if doc_graph.get("available") else [])
@@ -1478,6 +1486,11 @@ def build_run_context(
     # offer-layer turns into an AskUserQuestion.
     if liveness_ok and isinstance(liveness.get("jvm_capabilities"), dict):
         ctx["capability_offers"] = liveness["jvm_capabilities"]
+    # Non-JVM capability entries keyed by language (issue #352), present only
+    # when a language is detected; capability_offers stays JVM-only.
+    if liveness_ok and isinstance(liveness.get("dart_capabilities"), dict):
+        ctx["language_capabilities"] = {
+            "dart": liveness["dart_capabilities"]["capabilities"]}
 
     # Keyhole-readiness signals (PRD 2026-05-29): the static-structure,
     # behaviour (change-coupling / containment / static-vs-historical),
@@ -1568,6 +1581,8 @@ def build_run_context(
     # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
     # available: false with the reason, never a clean result.
     ctx["config_drift"] = _safe("config_drift", lambda: scan_config_drift(repo_root))
+    ctx["review_reality"] = _safe("review_reality", lambda: scan_review_reality(repo_root))
+    ctx["gate_cost_estimate"] = _safe("gate_cost_estimate", lambda: estimate_gate_cost(repo_root))
 
     # Accretion ratchet (write-side tendency: files that only ever grow). The
     # scan measured every file above; here it is filtered to files already in the
@@ -1606,6 +1621,12 @@ def build_run_context(
     ctx["findings_markdown"] = keyhole["findings_markdown"]
     ctx["keyhole_summary"] = keyhole["keyhole_summary"]
     ctx["prescribed_actions"] = keyhole["prescribed_actions"]
+    # Gap actions: Top 3 candidates read from the coverage and doc-graph
+    # signals, which the report writer uses for free slots before judgement.
+    ctx["gap_actions"] = build_gap_actions(
+        ctx["coverage_report"], doc_graph, current.get("top_hotspots"),
+        ctx["archetype"] if isinstance(ctx.get("archetype"), dict) else None,
+    )
     # Config-exclusion disclosure: config excludes silently drop paths from every
     # scan, so a finding suppressed by an exclude must be counted and named rather
     # than vanish. keyhole_signals filtered the excluded finding paths; this block

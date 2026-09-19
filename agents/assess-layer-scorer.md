@@ -216,6 +216,12 @@ jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"
 - `state == "credited"` (linting/modernization) - a configured pom.xml plugin (`served_by`) already serves it. Credit it in the relevant layer; do **not** report it as missing.
 - `state == "honest_degrade"` - nothing serves the capability yet (module graph, unconfigured linting/modernization, all Gradle capabilities in v1). **Name the capability and its `candidate_tool` in the report** - this is a deliverable, distinct from a silent miss. Never report a honest-degraded capability as simply "absent".
 
+**Language capabilities (`language_capabilities`).** Non-JVM ecosystems get a sibling block keyed by language, present only when that language is detected (`capability_offers` stays JVM-only). Dart is the first key: a repo with a `pubspec.yaml` carries `language_capabilities.dart.linting` and `.liveness`, in the same fields and states as above, and one `dart` entry in `dead_code.tools`. Linting `credited` (`served_by` names `dart analyze` or `flutter analyze`) means the nearest `analysis_options.yaml` enables lint rules (a top-level `include:` or a `linter: rules:` list); credit it in Layer 3, skip only the Dart existence probe below, and still read the file in the "assess AI-relevant rules" step. Linting `honest_degrade` (no file, or one that enables no rules) names `dart analyze / flutter analyze` as the candidate. Liveness is always `honest_degrade`: the scan does not run the analyzer, and the candidate is its built-in `unused_*` diagnostics, which cover private declarations, imports and locals but not unused public members. Name that candidate and its limit; never recommend a third-party Dart dead-code package.
+
+```bash
+jq '.language_capabilities' "$REPO_ROOT/.assess/run-context.json"
+```
+
 **Observability tier (the decisive one) - three rungs (`observability.rung`, 0-3):**
 
 1. **Instrumented** - telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging). Necessary, not sufficient.
@@ -511,11 +517,12 @@ fd -t f '(mutation|survivor|mutant)' "$REPO_ROOT" --extension json --extension x
 ls -la "$REPO_ROOT"/{.coderabbit.yaml,.coderabbit.yml,.github/copilot-review.yml} 2>/dev/null
 # Check for review bot in CI
 rg 'coderabbit|copilot|codeclimate|sonarqube|sonarcloud' "$REPO_ROOT"/.github/workflows/*.yml 2>/dev/null | head -5
-# Check if bots are active on recent PRs
-gh pr list --limit 5 --json number --jq '.[].number' 2>/dev/null | head -3 | while read PR; do
-  gh api repos/{owner}/{repo}/pulls/$PR/comments --jq '.[].user.login' 2>/dev/null | sort -u | head -5
-done
 ```
+
+**Read whether review happens from `run-context.json` `review_reality`** (the core samples the 30 most recently opened merged pull requests through `gh`; do not sample them by hand): `merged_count`, `oldest_merged_days_ago`, `reviewed_share` (any review from an account other than the author, a bot's included), `approved_share` (an `APPROVED` review from an account other than the author), `bot_review_share` (a comment from a bot other than `github-actions`), `self_merged_share`, `review_required` (a ruleset `pull_request` rule or classic protection requiring one or more approvals) `hollow_required_review` (review required and `reviewed_share` under 0.2: nobody looked) and `required_approval_bypassed` (review required and `approved_share` under 0.2: the required approval does not happen, even where a bot reviews every change). A null share or flag means that part could not be read; both flags are null under 5 merged pull requests. The rules are read as they stand now, so weigh `oldest_merged_days_ago` against a rule that may be recent. `available: false` means no sample (`reason` says why: no GitHub remote, `gh` absent or not logged in, `no_access` on a refused read) - score from the configuration evidence alone and say the review activity was not observed.
+
+- Evidence of review is `reviewed_share` and `approved_share`; a bot that submits reviews moves them. `bot_review_share` is weak corroboration that some bot comments on pull requests, never on its own evidence of review: deploy-preview, coverage and dependency bots comment without reviewing. A configured review bot with `reviewed_share` near 0 is the Partial case.
+- `hollow_required_review: true` or `required_approval_bypassed: true` caps the layer at Partial whatever is configured; cite the flag that fired: required review that merges bypass is a gate that reads Present and is hollow. The report writer adds it as a Layer 7 lying signal.
 
 **Scoring:**
 - Present: Automated review bot active on PRs, providing design-level feedback

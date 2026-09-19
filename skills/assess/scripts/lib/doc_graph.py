@@ -156,6 +156,9 @@ def _strip_code_spans(text: str) -> str:
 # Caps so a pathological repo can't bloat run-context.json.
 MAX_BROKEN_LINKS = 60
 MAX_MISSING_XREFS = 60
+# directory_breakdown keeps the rows with the largest gaps; directory_count
+# carries the full total so a truncated list still says how many there were.
+MAX_DIRECTORY_BREAKDOWN = 30
 # Conventional filenames that get mentioned all the time and don't need a
 # cross-reference every time they're named - excluded from the missing-xref scan.
 _XREF_SKIP_NAMES = {
@@ -209,6 +212,13 @@ class DocGraphResult:
     # links; these two are the same figures over link edges alone.
     link_only_orphan_rate: float = 0.0
     link_only_reachability_pct: float = 0.0
+    # Per-top-level-directory counts (issue #365) over the same curated layer
+    # as the headline. While len(directory_breakdown) == directory_count the
+    # rows sum to doc_count, len(unreachable) and dangling_links; a list cut
+    # at MAX_DIRECTORY_BREAKDOWN sums to less.
+    # [{path, doc_count, unreachable_count, broken_link_count}]
+    directory_breakdown: list[dict] = field(default_factory=list)
+    directory_count: int = 0
     # Missing cross-references: a doc names another doc but never links to it
     # (Karpathy Lint). [{from, to}].
     missing_xrefs: list[dict] = field(default_factory=list)
@@ -257,6 +267,8 @@ class DocGraphResult:
             "working_notes_broken_links": self.working_notes_broken_links,
             "link_only_orphan_rate": round(self.link_only_orphan_rate, 3),
             "link_only_reachability_pct": round(self.link_only_reachability_pct, 3),
+            "directory_breakdown": self.directory_breakdown,
+            "directory_count": self.directory_count,
         }
 
 
@@ -734,6 +746,8 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
     scope: Path | None = None,
+    working_notes_dirs: list[str] | None = None,
+    working_notes_ignore: list[str] | None = None,
 ) -> DocGraphResult:
     """Parse docs, build the link graph, and derive navigability signals.
 
@@ -741,6 +755,9 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     within a subtree for `/assess <path>` monorepo scoping; omit it for a
     whole-repo run. `.base` hub discovery honours the same scope so a scoped
     graph carries no navigation signal from a sibling directory.
+    `working_notes_dirs` / `working_notes_ignore` are the `.assess/config.toml`
+    overrides (`lib.assess_config.load_working_notes_config`) that force or
+    suppress working-notes classification for repo-relative directories.
     """
     repo_root = repo_root.resolve()
     vault = _vault_detected(repo_root)
@@ -893,6 +910,7 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     # what the raw pass leaves so no doc belongs to both layers.
     notes_docs, notes_trees = _detect_working_notes_trees(
         graph, {rel(d) for d in docs} - raw_docs,
+        force=working_notes_dirs or [], ignore=working_notes_ignore or [],
     )
     excluded_docs = raw_docs | notes_docs
     curated_docs = [d for d in docs if rel(d) not in excluded_docs]
@@ -923,6 +941,9 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     result.link_only_reachability_pct = link_only.reachability_pct
     result.broken_links = curated_broken[:MAX_BROKEN_LINKS]
     result.missing_xrefs = curated_missing[:MAX_MISSING_XREFS]
+    rows = _directory_breakdown(curated_nodes, result.unreachable, curated_broken)
+    result.directory_breakdown = rows[:MAX_DIRECTORY_BREAKDOWN]
+    result.directory_count = len(rows)
 
     # Excluded-layer figures, reported separately so the exclusion stays legible.
     result.curated_doc_count = result.doc_count
@@ -933,6 +954,32 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
      result.working_notes_orphan_rate, result.working_notes_broken_links,
      ) = _layer_figures(graph, broken, notes_docs, notes_trees)
     return result
+
+
+def _top_dir(rel_path: str) -> str:
+    """First path segment of a doc's rel path; root-level docs key as ``.``."""
+    head, sep, _ = rel_path.partition("/")
+    return head if sep else "."
+
+
+def _directory_breakdown(
+    nodes, unreachable: list[str], broken: list[dict],
+) -> list[dict]:
+    """Doc, unreachable and broken-link counts per top-level directory, largest
+    gap first. A broken link counts toward the directory of the doc it is
+    written in (``from``)."""
+    counts: dict[str, list[int]] = {}
+    for n in nodes:
+        counts.setdefault(_top_dir(n), [0, 0, 0])[0] += 1
+    for n in unreachable:
+        counts[_top_dir(n)][1] += 1
+    for b in broken:
+        counts.setdefault(_top_dir(b.get("from", "")), [0, 0, 0])[2] += 1
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1][1], -kv[1][2], -kv[1][0], kv[0]))
+    return [
+        {"path": d, "doc_count": c[0], "unreachable_count": c[1], "broken_link_count": c[2]}
+        for d, c in ranked
+    ]
 
 
 def _layer_figures(
@@ -951,7 +998,9 @@ def _layer_figures(
     )
 
 
-def _detect_working_notes_trees(graph, doc_rels: set[str]) -> tuple[set[str], list[dict]]:
+def _detect_working_notes_trees(
+    graph, doc_rels: set[str], *, force: list[str], ignore: list[str],
+) -> tuple[set[str], list[dict]]:
     """Detect working-notes subtrees and return (excluded_doc_rels, trees).
 
     ``doc_rels`` is the doc set minus raw-source docs; like the raw pass it
@@ -959,7 +1008,8 @@ def _detect_working_notes_trees(graph, doc_rels: set[str]) -> tuple[set[str], li
     headline graph (link and reference edges) restricted to those docs: each doc's in-degree and the docs its inbound
     edges come from, so the classifier can tell one index holding the links
     from a wiki whose links are spread out. The verdict is
-    ``lib.raw_source.classify_working_notes_trees``.
+    ``lib.raw_source.classify_working_notes_trees``; ``force`` / ``ignore``
+    are the config overrides, passed through.
     """
     from lib.raw_source import classify_working_notes_trees
 
@@ -967,7 +1017,7 @@ def _detect_working_notes_trees(graph, doc_rels: set[str]) -> tuple[set[str], li
     for r in sorted(doc_rels):
         sources = [u for u in graph.predecessors(r) if u in doc_rels]
         signals[r] = {"in_degree": len(sources), "inbound_sources": sources}
-    trees = classify_working_notes_trees(signals)
+    trees = classify_working_notes_trees(signals, force=force, ignore=ignore)
     return {r for t in trees for r in t["docs"]}, trees
 
 

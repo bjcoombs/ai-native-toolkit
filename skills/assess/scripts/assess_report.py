@@ -88,7 +88,7 @@ _Generated $run_date by `/assess` v$plugin_version.${commit_note}_
 
 - **Files scored:** $files_scored
 - **Total LOC:** $loc_total
-- **Complexity profile:** p95 LOC $loc_p95 (max $loc_max), p95 CCN $ccn_p95 (max $ccn_max)
+- **Complexity profile:** p95 LOC $loc_p95 (max $loc_max$loc_split), p95 CCN $ccn_p95 (max $ccn_max)
 - **Churn window:** $churn_window
 
 ### Top Hotspots
@@ -461,6 +461,16 @@ def _render_churn_window(ctx: dict) -> str:
     return label
 
 
+def _render_loc_split(loc: dict) -> str:
+    """The code and data LOC maxima (scc language split in the stats file), as
+    ``; code N, data M`` after the overall max, so a large JSON fixture is not
+    read as the largest source file. Empty on a snapshot written before the
+    split, which leaves the line in its older shape."""
+    if "max_code" not in loc or "max_data" not in loc:
+        return ""
+    return f"; code {_fmt(loc['max_code'])}, data {_fmt(loc['max_data'])}"
+
+
 def render_report(ctx: dict, repo_name: str) -> str:
     """Render the full deterministic Markdown report from a run-context dict.
 
@@ -490,6 +500,7 @@ def render_report(ctx: dict, repo_name: str) -> str:
         loc_total=_fmt(loc.get("total")),
         loc_p95=_fmt(loc.get("p95")),
         loc_max=_fmt(loc.get("max")),
+        loc_split=_render_loc_split(loc),
         ccn_p95=_fmt(ccn.get("p95")),
         ccn_max=_fmt(ccn.get("max")),
         churn_window=_render_churn_window(ctx),

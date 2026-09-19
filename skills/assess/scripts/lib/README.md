@@ -149,6 +149,14 @@ reach it from any doc; an uncited one stays excluded. The headline `orphan_rate`
 `reachability_pct` count both kinds; `link_only_orphan_rate` / `link_only_reachability_pct`
 report links alone over the same node set, so a doc only a reference brought in counts as
 an orphan there. A reference edge also clears the pair from `missing_xrefs` (#353).
+`directory_breakdown` lists `{path, doc_count, unreachable_count, broken_link_count}`
+per top-level directory (`path` is the first segment; root-level docs key as `.`), over
+the same curated layer as the headline: raw-source and working-notes trees are left out.
+A broken link counts toward the directory of the doc it is written in. Rows are ordered by
+unreachable count, then broken links, then doc count, and capped at
+`MAX_DIRECTORY_BREAKDOWN`; `directory_count` carries the uncapped total. Only an uncut
+list (`len(directory_breakdown) == directory_count`) sums to `doc_count`,
+`len(unreachable)` and `dangling_links`; a cut one sums to less (#365).
 
 **`raw_source.py`**
 Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:
@@ -180,9 +188,13 @@ note stays counted whole (a `docs/guides/` of curated pages beside 50 notes in
 `docs/`), and any other curated doc refuses the directory, leaving its deeper
 trees to stand alone (`docs/guide.md` beside `docs/notes/`). `notes/backlog.md`
 over `notes/2025/` and `notes/2026/` is one tree. Subdirectories are decided
-deepest first, and the tree must still pass the three legs on its own. No config
-key keeps a misclassified series (`chapter-01` to `chapter-20` under a contents
-page) counted yet; that is separate, later work. Only docs are classified, never
+deepest first, and the tree must still pass the three legs on its own. Two
+`.assess/config.toml` keys override the verdict (issue #367), passed in as the
+`force` / `ignore` arguments: every doc under a `working_notes_dirs` directory
+joins a tree at that path whatever its size or fingerprint, and no doc under a
+`working_notes_ignore` directory joins any tree (a misclassified `chapter-01` to
+`chapter-20` series stays counted); ignore wins where they overlap, and an outer
+tree absorbs any tree inside it. Only docs are classified, never
 a `.base` hub. It runs on the headline graph (link and reference edges) after
 the raw pass. `doc_graph.py` excludes these trees too and reports
 `excluded_working_notes_trees`, `working_notes_doc_count`,
@@ -334,6 +346,20 @@ available), and refactor boundaries (high containment + low external coupling, a
 zone for keyhole edits). Looks-coupled-but-never-co-changes is suppressed - the static
 graph already surfaces it.
 
+**`gap_actions.py`**
+Builds the run-context `gap_actions` list: Top 3 candidates for the slots
+`prescribed_actions` leaves free, read from two blocks `assess_core` already holds. Each
+entry is `{signal, action, paths}`. A `coverage_report` entry fires when no coverage
+report was found in a repo whose archetype is `software` and names up to three
+`top_hotspots` to measure, skipping `archive/`, `archived/` and `attic/` paths (via
+`keyhole_signals.is_archive_path`); it is silent on a knowledge base (test layers N/A)
+and when no hotspot remains, and when it fires it comes first.
+A `doc_graph` entry fires when `reachability_pct` is below `REACHABILITY_FLOOR` (0.5, with
+its rationale beside it) and names up to ten unreachable docs. A repo with no markdown
+reports reachability 0.0, but nothing is unreachable there, so no `doc_graph` entry fires.
+`[]` when neither fires. There is no lint complexity-rule gap: the core has no detector
+for it, and the layer scorer owns that check.
+
 **`understanding_analysis.py`**
 Signals B4 + D2. Per module: human anchor (has a confirmed human authored it?), intent
 source (is there an externalised spec/doc?), authorship class, and the velocity clock
@@ -348,7 +374,10 @@ conservative agent/human classification is defined one way.
 Reads the optional per-repo `.assess/config.toml`: `exclude_dirs` / `exclude_patterns`
 (the same two lists feed every scan - heatmap, doc graph, staleness, liveness - so
 exclusion is consistent), the `[gate]` and `[structure]` sections, and the `[[generated]]`
-folder->source provenance map (issue #178) consumed by `doc_provenance.py`. `resolve_excludes`
+folder->source provenance map (issue #178) consumed by `doc_provenance.py`, and the
+`working_notes_dirs` / `working_notes_ignore` directory lists (issue #367), which
+`load_working_notes_config` returns as a typed `WorkingNotesConfig` pair for both
+`assess_core.py` and `doc-graph-svg.py`. `resolve_excludes`
 is the single shared path that combines config excludes with CLI `--exclude`; both the treemap
 CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.
 Degrades silently on missing or malformed config rather than blocking the run.
@@ -432,7 +461,8 @@ Layer 1 liveness inputs, three tiers:
   systems and report, per analysis capability, whether a serving tool is already
   configured, could be run/installed in-session, or honest-degrades with a named
   candidate. Surfaced so a non-enumerated ecosystem proposes a tool rather than
-  silently reading "absent".
+  silently reading "absent". Also delegates to `dart_capabilities.py`, whose
+  liveness entry lands in `dead_code.tools` as `dart` / `honest_degrade`.
 
 **`jvm_capabilities.py`**
 JVM/Maven capability-driven analysis offers (issue #113, v1 bounded). Generalises
@@ -452,6 +482,22 @@ a wrapper are both skipped, in one `os.walk` that also prunes the shared exclude
 Flutter app never reads as Gradle while a real JVM service beside it still does. Imported by
 `liveness_scan.py`, never by the orchestrator - it is an inward dependency of the
 liveness tier.
+
+**`dart_capabilities.py`**
+Dart capability entries (issue #352), the detect-or-propose flow applied beyond the
+JVM. A repository is Dart when it holds a `pubspec.yaml` outside the shared and
+user-supplied excludes. Two capabilities, in the JVM entry fields (`state`,
+`candidate_tool`, `gloss`, `note`, `served_by` when credited): `linting` is
+`credited` to `dart analyze` (or `flutter analyze` when a package depends on the
+Flutter SDK) when a package's nearest `analysis_options.yaml` (its directory or the
+closest ancestor) enables lint rules through a top-level `include:` or a
+`linter: rules:` list, and `honest_degrade` naming `dart analyze` otherwise, an
+exclude-only file included; `liveness` is always
+`honest_degrade`, naming the analyzer's built-in `unused_*` diagnostics and no
+third-party package. Runs no tool. `liveness_scan.py` adds the Dart `dead_code.tools`
+entry and returns the block as `dart_capabilities`; the orchestrator publishes it as
+`run-context.json` `language_capabilities.dart`, a sibling of the JVM-only
+`capability_offers`. Imported by `liveness_scan.py`, never by the orchestrator.
 
 **`promissory_markers.py`**
 Write-side erosion instrument: detects the four families of promissory markers
@@ -532,6 +578,49 @@ object or a whole live list;
 with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` alongside any change to discovery or the diff.
+
+**`review_reality.py`**
+Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
+`gh_cli`. Samples the `DEFAULT_LIMIT` (30) most recently opened merged pull
+requests (`gh pr list` orders by creation, not merge) with
+`gh pr list --state merged --json author,mergedBy,mergedAt,reviews,reviewDecision,comments`
+and emits `review_reality: {available, merged_count, oldest_merged_days_ago,
+reviewed_share, approved_share, bot_review_share, self_merged_share,
+review_required, hollow_required_review, required_approval_bypassed}`.
+`reviewed_share` counts a review in any state by any account other than the
+author; `approved_share` counts only `APPROVED` ones;
+`bot_review_share` counts a comment by a bot other than `github-actions` (nothing
+in `reviews`). `gh pr list` drops a comment author's `[bot]` suffix, so an author
+object without `is_bot`/`type` is classified by one `gh api users/<login>[bot]`
+probe per distinct login (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot,
+404 is a person, anything else is unknown, as is a comment with no author
+login. An unknown author withholds the share (null) only when it decides a pull
+request: one with a confirmed bot comment counts regardless.
+`review_required` reads the default branch's effective rules
+(`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
+classic protection, each needing `required_approving_review_count` of 1 or more;
+null when neither says yes and one was refused. `hollow_required_review` is
+`review_required` and `reviewed_share` under `HOLLOW_THRESHOLD` (0.2);
+`required_approval_bypassed` is the same test on `approved_share`, so it fires
+where an AI reviewer comments on every change but nobody approves. Both are null
+when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
+rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
+the block. A failed pull-request read degrades the whole block to `available:
+False`. Tests: `tests/test_review_reality.py`.
+
+**`gate_cost.py`**
+Actions cost of the CI gate the assess-pr skill offers, so the offer can state it.
+Counts pull requests merged in the last `WINDOW_DAYS` (30) days with `gh pr list
+--state merged` via `gh_cli` (not `git log --merges`, which reads zero on a
+squash-merging repository), filtering `mergedAt` in Python because the search
+qualifier is day-granular, and multiplies by `MINUTES_PER_RUN` (5, an assumption
+from one measured run, not a measurement of the target). Emits `gate_cost_estimate:
+{available, runs_per_month, minutes_per_run, minutes_per_month, assumption, capped, private}`
+(`capped` true when the listing hit `PR_LIMIT`, so the counts are lower bounds);
+`private` comes from `gh repo view` and is `null` when that read fails. No remote,
+no `gh`, no auth, a failed read or zero merged pull requests degrade to `{available:
+false, reason}` (`no_merge_history` for the last). Only the counts are stored.
+Tests: `tests/test_gate_cost.py`.
 
 **`accretion_ratchet.py`**
 Write-side accretion instrument: detects files that only ever grow. Walks each
