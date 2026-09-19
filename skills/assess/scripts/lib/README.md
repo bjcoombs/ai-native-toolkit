@@ -508,9 +508,14 @@ pass). A marker that survived many edits to an actively-maintained file is
 unactioned intent; calendar age alone can't tell that from dormancy. Classifies
 markers as tracked (issue/ticket/URL/date reference, or a justified suppression)
 vs bare, and each introducing commit as agent/human (reusing `change_coupling`'s
-conservative B4 identity rules). Honours the shared excludes and the generated-file
-filter (codegen `ignore_for_file` boilerplate is not debt), and degrades aging to
-`aging_reliable: False` on degenerate history (same verdict as `git_churn`).
+conservative B4 identity rules). A justified suppression (inline `-- reason` or
+trailing comment) is never stale and is counted in each family row's `justified`
+(0 outside suppressions); other tracked markers still age, since an issue or a
+deadline can go stale too. The `unactioned_intent` action states the
+`stale_touches_threshold` it applied. Honours the shared excludes and the
+generated-file filter (codegen `ignore_for_file` boilerplate is not debt), and
+degrades aging to `aging_reliable: False` on degenerate history (same verdict as
+`git_churn`).
 Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
 sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
@@ -573,6 +578,35 @@ object or a whole live list;
 with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` alongside any change to discovery or the diff.
+
+**`review_reality.py`**
+Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
+`gh_cli`. Samples the `DEFAULT_LIMIT` (30) most recently opened merged pull
+requests (`gh pr list` orders by creation, not merge) with
+`gh pr list --state merged --json author,mergedBy,mergedAt,reviews,reviewDecision,comments`
+and emits `review_reality: {available, merged_count, oldest_merged_days_ago,
+reviewed_share, approved_share, bot_review_share, self_merged_share,
+review_required, hollow_required_review, required_approval_bypassed}`.
+`reviewed_share` counts a review in any state by any account other than the
+author; `approved_share` counts only `APPROVED` ones;
+`bot_review_share` counts a comment by a bot other than `github-actions` (nothing
+in `reviews`). `gh pr list` drops a comment author's `[bot]` suffix, so an author
+object without `is_bot`/`type` is classified by one `gh api users/<login>[bot]`
+probe per distinct login (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot,
+404 is a person, anything else is unknown, as is a comment with no author
+login. An unknown author withholds the share (null) only when it decides a pull
+request: one with a confirmed bot comment counts regardless.
+`review_required` reads the default branch's effective rules
+(`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
+classic protection, each needing `required_approving_review_count` of 1 or more;
+null when neither says yes and one was refused. `hollow_required_review` is
+`review_required` and `reviewed_share` under `HOLLOW_THRESHOLD` (0.2);
+`required_approval_bypassed` is the same test on `approved_share`, so it fires
+where an AI reviewer comments on every change but nobody approves. Both are null
+when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
+rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
+the block. A failed pull-request read degrades the whole block to `available:
+False`. Tests: `tests/test_review_reality.py`.
 
 **`gate_cost.py`**
 Actions cost of the CI gate the assess-pr skill offers, so the offer can state it.

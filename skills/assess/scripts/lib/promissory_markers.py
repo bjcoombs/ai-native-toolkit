@@ -15,8 +15,12 @@ Families and the layer each one wounds:
 - ``disabled_test``  pytest.mark.skip / it.skip / @Disabled   -> Layer 5 (CI integrity)
 
 A marker is *tracked* (pressure exists) when it cites an issue, ticket, URL, or
-deadline date - or, for suppressions, when it carries a trailing justification
-(``//nolint:x // reason``). The bare remainder is the debt. Each marker's
+deadline date - or, for suppressions, when it carries an inline justification
+(``//nolint:x // reason``, ``eslint-disable-line x -- reason``). A justified
+suppression is never stale, however many edits it survived: the reason is the
+record, and there is no promise left to keep. Other tracked markers still age,
+because an issue or a deadline can go stale while the marker stays. The bare
+remainder is the debt. Each marker's
 introducing commit is also classified agent/human (reusing the conservative B4
 identity rules from ``change_coupling``), so "agent-introduced unactioned
 intent" is a measured quantity, not an article of faith.
@@ -90,12 +94,19 @@ FAMILY_PATTERNS = {
 # an issue, a ticket, a URL, or a deadline date.
 LINKED_RE = re.compile(r"#\d+|\b[A-Z][A-Z0-9]+-\d+\b|https?://|\b\d{4}-\d{2}-\d{2}\b")
 
-# A suppression with a trailing justification is tracked: recorded reasoning is
+# A suppression with an inline justification is tracked: recorded reasoning is
 # pressure (nolintlint-style). Matched as a second comment segment after the
-# directive, e.g. ``//nolint:nilerr // error conveyed via response status``.
+# directive, e.g. ``//nolint:nilerr // error conveyed via response status``, or
+# as ESLint's documented ``-- reason`` description, e.g.
+# ``// eslint-disable-line no-console -- CLI prints by design``. The ``--`` must
+# follow whitespace, so a hyphenated rule name is not read as a reason, and a
+# block directive's reason must sit inside its own ``/* ... */`` or in a
+# trailing ``//`` comment - code after ``*/`` is not a reason.
 JUSTIFIED_SUPPRESSION_RE = re.compile(
-    r"(nolint[^/]*//|noqa[^#]*#|eslint-disable[^*]*\*/|"
+    r"(nolint[^/]*//|noqa[^#]*#|eslint-disable[^*]*\*/\s*//|"
     r"//\s*ignore:[^/]*//|@SuppressWarnings\(.+\)\s*//)\s*\S"
+    r"|/\*\s*eslint-disable[^*]*?\s--\s*[^\s*]"
+    r"|//\s*eslint-disable\S*\s.*?\s--\s*\S"
 )
 
 # Comment leaders; a todo/deprecation hit must sit after one of these on its
@@ -129,6 +140,7 @@ class Marker:
     family: str
     text: str
     linked: bool
+    justified: bool = False  # suppression carrying an inline justification
     commit: str = ""
     author_time: int = 0
     agent_introduced: bool | None = None  # None = could not classify
@@ -142,6 +154,7 @@ class Marker:
             "family": self.family,
             "text": self.text[:160],
             "linked": self.linked,
+            "justified": self.justified,
             "commit": self.commit[:12],
             "agent_introduced": self.agent_introduced,
             "survived_touches": self.survived_touches,
@@ -157,13 +170,21 @@ class MarkerScan:
     markers: list[Marker] = field(default_factory=list)
     aging_reliable: bool = True  # False when history is too thin to age markers
 
+    def is_stale(self, m: Marker) -> bool:
+        """Stale = survived at least the threshold of edits, unless justified.
+
+        Only a justified suppression is exempt. A marker linked to an issue or a
+        date still ages: ``remove after 2019-06-01`` surviving 65 edits is the
+        broken promise, not tracked intent.
+        """
+        return (
+            not m.justified
+            and m.survived_touches >= self.stale_touches_threshold
+        )
+
     @property
     def stale(self) -> list[Marker]:
-        return [
-            m
-            for m in self.markers
-            if m.survived_touches >= self.stale_touches_threshold
-        ]
+        return [m for m in self.markers if self.is_stale(m)]
 
     def stale_by_file(self) -> dict[str, dict[str, Any]]:
         """Per-file rollup of stale markers, for hotspot pages and findings."""
@@ -181,14 +202,17 @@ class MarkerScan:
 
     def summary(self) -> dict[str, Any]:
         fam: dict[str, dict[str, int]] = defaultdict(
-            lambda: {"total": 0, "stale": 0, "linked": 0, "agent_introduced": 0}
+            lambda: {
+                "total": 0, "stale": 0, "linked": 0, "justified": 0,
+                "agent_introduced": 0,
+            }
         )
         for m in self.markers:
             fam[m.family]["total"] += 1
             fam[m.family]["linked"] += int(m.linked)
+            fam[m.family]["justified"] += int(m.justified)
             fam[m.family]["agent_introduced"] += int(bool(m.agent_introduced))
-            if m.survived_touches >= self.stale_touches_threshold:
-                fam[m.family]["stale"] += 1
+            fam[m.family]["stale"] += int(self.is_stale(m))
         bare = sum(1 for m in self.markers if m.family == "todo" and not m.linked)
         linked = sum(1 for m in self.markers if m.family == "todo" and m.linked)
         stale = self.stale
@@ -257,16 +281,17 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
                 is_prose, text, pattern
             ):
                 continue
-            linked = bool(LINKED_RE.search(text))
-            if family == "suppression" and not linked:
-                linked = bool(JUSTIFIED_SUPPRESSION_RE.search(text))
+            justified = family == "suppression" and bool(
+                JUSTIFIED_SUPPRESSION_RE.search(text)
+            )
             markers.append(
                 Marker(
                     path=path,
                     line=int(line_s),
                     family=family,
                     text=text.strip(),
-                    linked=linked,
+                    linked=justified or bool(LINKED_RE.search(text)),
+                    justified=justified,
                 )
             )
     return markers

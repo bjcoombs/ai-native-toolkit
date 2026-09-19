@@ -72,6 +72,7 @@ from lib.git_churn import git_commit_info, tracked_files
 from lib.keyhole_signals import integrate as integrate_keyhole_signals
 from lib.liveness_scan import scan_liveness
 from lib.promissory_markers import scan_promissory_markers
+from lib.review_reality import scan_review_reality
 from lib.structure_graph import analyze_structure
 from lib.stats_diff import StatsDiff, diff_stats, hotspot_commits, load_stats
 from lib.structure_drift import (
@@ -1580,6 +1581,7 @@ def build_run_context(
     # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
     # available: false with the reason, never a clean result.
     ctx["config_drift"] = _safe("config_drift", lambda: scan_config_drift(repo_root))
+    ctx["review_reality"] = _safe("review_reality", lambda: scan_review_reality(repo_root))
     ctx["gate_cost_estimate"] = _safe("gate_cost_estimate", lambda: estimate_gate_cost(repo_root))
 
     # Accretion ratchet (write-side tendency: files that only ever grow). The
