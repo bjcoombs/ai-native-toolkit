@@ -53,11 +53,19 @@ def _run_scan(repo_root: Path, var: str = "NO_CONTRIBUTIONS") -> str:
         ({"CONTRIBUTING.md": "Do not submit a PR until all tests pass locally.\n"}, "0"),
         ({"CONTRIBUTING.md": "Please don't open a PR directly against main.\n"}, "0"),
         ({"CONTRIBUTING.md": "PRs are not accepted without a linked issue.\n"}, "0"),
+        ({"CONTRIBUTING.md": "Please do not open a pull request for trivial typo fixes.\n"}, "0"),
+        ({"CONTRIBUTING.md": "Do not submit a PR with unrelated changes.\n"}, "0"),
+        ({"CONTRIBUTING.md": "Do not open a pull request from a fork of a fork.\n"}, "0"),
+        ({"CONTRIBUTING.md": "Do not open PRs to the release branch.\n"}, "0"),
+        ({"CONTRIBUTING.md": "Do not open a pull request if you have not signed the CLA.\n"}, "0"),
+        ({"README.md": "# App\nDo not open a pull request; open an issue instead.\n"}, "1"),
+        ({"README.md": "# App\nPlease don't send PRs\n"}, "1"),
         ({}, "0"),
     ],
     ids=["readme", "contributing", "welcome", "not-accepting-prs", "prs-not-accepted",
          "prs-welcome", "cannot", "cant", "unable-to", "curly-apostrophe", "unsolicited",
-         "cond-without", "cond-until", "cond-directly", "cond-accepted-without", "no-docs"],
+         "cond-without", "cond-until", "cond-directly", "cond-accepted-without", "cond-for", "cond-with", "cond-from", "cond-to", "cond-if",
+         "imperative-semicolon", "imperative-eol", "no-docs"],
 )
 def test_scan_sets_no_contributions(tmp_path: Path, files: dict[str, str], expected: str) -> None:
     for name, body in files.items():
@@ -70,6 +78,30 @@ def test_scan_keeps_the_matching_file_and_statement(tmp_path: Path) -> None:
     (tmp_path / "CONTRIBUTING.md").write_text(f"# Contributing\n{STATEMENT}\n", encoding="utf-8")
     assert _run_scan(tmp_path, "NO_CONTRIBUTIONS_SOURCE") == "CONTRIBUTING.md"
     assert _run_scan(tmp_path, "NO_CONTRIBUTIONS_STATEMENT") == STATEMENT
+
+
+def test_scan_reads_github_contributing_with_its_relative_path(tmp_path: Path) -> None:
+    (tmp_path / ".github").mkdir()
+    (tmp_path / ".github" / "CONTRIBUTING.md").write_text(f"{STATEMENT}\n", encoding="utf-8")
+    assert _run_scan(tmp_path) == "1"
+    assert _run_scan(tmp_path, "NO_CONTRIBUTIONS_SOURCE") == ".github/CONTRIBUTING.md"
+
+
+def test_phase_2_variant_is_scoped_to_read_only_targets() -> None:
+    text = ASSESS_PR_SKILL.read_text(encoding="utf-8")
+    phase2 = text.split("## Phase 2", 1)[1].split("## Step 5", 1)[0]
+    bullet = next(line for line in phase2.splitlines() if "no-contributions" in line)
+    tail = bullet.split("offer the fork variant instead.", 1)[1]
+    assert "read-only" in tail
+
+
+def test_no_contributions_flow_never_references_the_upstream_pr_step() -> None:
+    step5 = _step5()
+    flow = step5.split("(no-contributions flow,", 1)[1].split("\n\n", 1)[0]
+    assert "steps 1-2" not in flow
+    assert "gh pr create --repo <owner>/<repo>" not in flow
+    # The PR is created on the fork's own endpoint, never via a base-repo lookup.
+    assert "repos/<fork-owner>/<repo>/pulls" in flow
 
 
 def test_scan_leaves_source_empty_without_a_statement(tmp_path: Path) -> None:
