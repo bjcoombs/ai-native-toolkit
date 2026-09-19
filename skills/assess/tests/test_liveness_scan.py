@@ -395,8 +395,11 @@ def test_dominant_language_javascript_names_knip_when_absent(
     r = scan_dead_code(tmp_path).as_dict()
     assert r["available"] is False
     assert all(t["status"] != "ran" for t in r["tools"])
-    ts_prune = [t for t in r["tools"] if t["tool"] == "ts-prune"]
-    assert all(t["status"] == "not_applicable" and t["reason"] for t in ts_prune)
+    typescript = [t for t in r["tools"] if t["language"] == "typescript"]
+    assert [(t["tool"], t["status"]) for t in typescript] == [
+        ("ts-prune", "not_applicable"),
+    ]
+    assert "1 TypeScript file(s) are not analysed" in typescript[0]["reason"]
     knip = [t for t in r["tools"] if t["tool"] == "knip"]
     assert len(knip) == 1
     assert knip[0]["language"] == "javascript"
@@ -419,7 +422,10 @@ def test_dominant_language_typescript_keeps_ts_prune_despite_some_js(
     r = scan_dead_code(tmp_path).as_dict()
     assert [(t["language"], t["tool"], t["status"]) for t in r["tools"]] == [
         ("typescript", "ts-prune", "ran"),
+        ("javascript", "knip", "not_applicable"),
     ]
+    js = r["tools"][1]
+    assert "1 JavaScript file(s) are not analysed" in js["reason"]
 
 
 def test_dominant_language_javascript_knip_present_is_available_not_run(

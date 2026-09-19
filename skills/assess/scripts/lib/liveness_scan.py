@@ -31,6 +31,7 @@ import json
 import re
 import shutil
 import subprocess
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -63,7 +64,7 @@ def _count_ext(repo_root: Path, exts: set[str],
 
 def _iter_ext(repo_root: Path, exts: set[str],
               extra_exclude_dirs: set[str] | None,
-              extra_exclude_patterns: list[str] | None):
+              extra_exclude_patterns: list[str] | None) -> Iterator[Path]:
     """Yield in-scope files under `repo_root` whose suffix is in `exts`."""
     from lib.assess_config import is_user_excluded
     extra_dirs = extra_exclude_dirs or set()
@@ -242,8 +243,9 @@ class DeadCodeResult:
 
 def _js_ts_dominant(repo_root: Path, extra_dirs: set[str],
                     extra_pats: list[str]) -> tuple[str, int, int]:
-    """(dominant language, .ts/.tsx count, .js/.jsx/.mjs/.cjs count); a tie goes
-    to TypeScript, whose tools also read JavaScript."""
+    """(dominant language, .ts/.tsx count, .js/.jsx/.mjs/.cjs count). A tie goes
+    to TypeScript; either way the losing language's files are not analysed, and
+    the scan records that as a `not_applicable` entry."""
     ts = _count_ext(repo_root, _TS_EXTS, extra_dirs, extra_pats)
     js = _count_ext(repo_root, _JS_EXTS, extra_dirs, extra_pats)
     return ("javascript" if js > ts else "typescript"), ts, js
@@ -310,13 +312,18 @@ def scan_dead_code(repo_root: Path, run: bool = True,
         tool = spec["tool"]
         requires = spec.get("requires")
         if lang in ("javascript", "typescript") and lang != js_ts:
-            if requires:
-                result.tools.append({
-                    "language": lang, "tool": tool, "status": "not_applicable",
-                    "reason": (f"{js_count} JavaScript file(s) outnumber {ts_count} "
-                               f"TypeScript file(s); {tool} analyses TypeScript "
-                               "projects, so JavaScript liveness is judged instead"),
-                })
+            # The losing language is reported once, so a not-analysed half of
+            # the code never hides behind the winner's "ran" entry.
+            seen_languages.add(lang)
+            win, lose = ((f"{js_count} JavaScript", f"{ts_count} TypeScript")
+                         if js_ts == "javascript"
+                         else (f"{ts_count} TypeScript", f"{js_count} JavaScript"))
+            result.tools.append({
+                "language": lang, "tool": tool, "status": "not_applicable",
+                "reason": (f"{win} file(s) against {lose} file(s); the dominant "
+                           f"language's tool is used, so {tool} is not run and "
+                           f"the {lose} file(s) are not analysed"),
+            })
             continue
         if requires and not (repo_root / requires).is_file():
             result.tools.append({

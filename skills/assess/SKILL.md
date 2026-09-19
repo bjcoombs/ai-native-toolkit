@@ -175,7 +175,7 @@ OFFERS=()  # each entry: "language|tool|install_cmd"
   && { [ "${CODE_FILES:-0}" -lt "${NONCODE_FILES:-0}" ] || [ "${CODE_FILES:-0}" -lt 10 ]; } \
   && OFFERS+=("coverage|scc|brew install scc (or apt/dnf/go install - see Step 2a)")
 needs_offer vulture "$PY_FILES"      && OFFERS+=("python|vulture|pip install vulture (or 'uv tool install vulture')")
-needs_offer ts-prune "$TS_FILES"     && OFFERS+=("typescript|ts-prune|npm install -g ts-prune")
+needs_offer ts-prune "$TS_FILES" && [ -f "$REPO_ROOT/tsconfig.json" ] && OFFERS+=("typescript|ts-prune|npm install -g ts-prune")
 needs_offer staticcheck "$GO_FILES"  && OFFERS+=("go|staticcheck|go install honnef.co/go/tools/cmd/staticcheck@latest (or 'brew install staticcheck')")
 ```
 
