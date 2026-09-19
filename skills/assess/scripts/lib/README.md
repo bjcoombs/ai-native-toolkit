@@ -2,8 +2,10 @@
 
 Deterministic library modules for the `/assess` engine. No LLM calls anywhere in this
 package - every function is a pure transform of filesystem, git, or pre-computed signal
-data. The LLM reads `run-context.json` after the core finishes; it does not call into
-these modules.
+data, with one bounded exception: live GitHub reads, confined to `gh_cli.py`, which are
+optional (they need a github.com remote and an authenticated `gh`) and degrade to
+`available: False` with a reason, never to a clean result. The LLM reads
+`run-context.json` after the core finishes; it does not call into these modules.
 
 ## The assess_core.py -> lib seam
 
@@ -90,6 +92,20 @@ non-ASCII paths come back literal, matching the files on disk.
 All results are JSON-serialisable so `assess_core` can drop them straight into
 `run-context.json`.
 
+**`generated_files.py`**
+Content checks for files that are not hand-written source but carry an ordinary name:
+`has_generated_header` sniffs the first 5 lines for a comment line carrying a generator marker (`GENERATED FILE` only when it opens the comment,
+`DO NOT EDIT`, `@generated`, `auto-generated` spaced, hyphenated or joined; matched
+case-insensitively; a marker further down is ignored), and `is_long_line_artifact` flags an
+average line length over the first 1 MB above `LONG_LINE_THRESHOLD` (1,000 characters, the shape of a base64 or
+minified payload). `generated_reason` returns `generated-header`, `long-lines` or None. The
+treemap's `collect` drops matching files unless `--include-artifacts` is passed and lists them
+in the stats file's `excluded_generated`, which `assess_core` copies into `run-context.json`
+for the report and gate to disclose. `GENERATED_NAME_PATTERNS` (`*.generated.*`, `*.gen.ts`,
+`database.types.ts`) is the shared list of generated-name globs: the treemap adds it to its filename
+excludes, and `assess_core` calls `matches_generated_name` so a file those globs newly exclude is never
+recorded as a graduated hotspot. Pure stdlib; an unreadable file is never excluded.
+
 ### Static analysis
 
 **`structure_graph.py`**
@@ -143,6 +159,31 @@ metrics (orphan rate, reachability, broken links), reporting them separately so
 the curated-wiki signal isn't drowned. Pure - no `doc_graph` import - so
 `doc_graph.py` owns the graph and consumes this module's verdict. Co-changes with
 `doc_graph.py` (its consumer) and its test `tests/test_raw_source.py`.
+
+Its second classifier, `classify_working_notes_trees` (issue #366), finds
+working-notes trees: at least `WORKING_NOTES_MIN_FILES` docs, most named in a
+small set of sequence families (a date, or a word then an integer that ends the
+name: `plan_07`, `PROJ-123`; a counter followed by a title such as
+`adr-0001-use-postgres`, a dotted version, or a shared word alone like
+`how-to-*` is no family), most with in-degree <= 1, and one or two index docs
+linking to most of the tree (coverage of the tree, not a share of whatever edges
+exist, so one stray link into an unlinked pile does not qualify it) - an agent's
+plans or session logs hung off a backlog index. One invariant bounds the
+exclusion: a doc leaves the headline only if it is itself a positional note (a
+name family, or a member of a deeper tree already accepted) or an index whose
+links go into such notes, one of the top sources of their inbound links rather
+than a page citing one note. The tree is those docs: a subdirectory holding no
+note stays counted whole (a `docs/guides/` of curated pages beside 50 notes in
+`docs/`), and any other curated doc refuses the directory, leaving its deeper
+trees to stand alone (`docs/guide.md` beside `docs/notes/`). `notes/backlog.md`
+over `notes/2025/` and `notes/2026/` is one tree. Subdirectories are decided
+deepest first, and the tree must still pass the three legs on its own. No config
+key keeps a misclassified series (`chapter-01` to `chapter-20` under a contents
+page) counted yet; that is separate, later work. Only docs are classified, never
+a `.base` hub. It runs on the headline graph (link and reference edges) after
+the raw pass. `doc_graph.py` excludes these trees too and reports
+`excluded_working_notes_trees`, `working_notes_doc_count`,
+`working_notes_orphan_rate` and `working_notes_broken_links`.
 
 **`vault_queries.py`**
 Static parser for Obsidian dynamic-navigation hubs: `.base` view files and
@@ -318,7 +359,13 @@ An optional `run_id`/`schema_version` prepends a non-rendering HTML-comment
 provenance stamp to each file (omitted -> byte-identical legacy output).
 Also guards wiki integrity: `prune_orphan_hotspots(assess_dir, repo_root)` stamps
 any hotspot page whose source file left the tree as `retired - file deleted`
-(history preserved, no active page lies about a live file); `append_log_entry`
+(history preserved, no active page lies about a live file), and
+`retire_excluded_hotspots(assess_dir, paths)` stamps `retired - excluded before
+finalize` on the pages of files the core found first flagged only by a superseded,
+never-finalized run and now excluded by `.assess/config.toml`, returning the paths
+it retired and those whose page had no status token to stamp. Every retired status
+begins `retired`; `is_retired_status` is the one predicate for that, used by the
+pruner (which skips any retired page) and the orphan-invariant tests; `append_log_entry`
 chains each `log.md` entry with a `<!-- chain:<hash> -->` marker and
 `verify_log_chain(assess_dir)` returns `(valid, broken_at_entry)` so a later edit
 of a prior entry is detected and disclosed. The tool's own edits go through
@@ -327,7 +374,8 @@ every later one (stopping at an entry that was already broken); `find_log_entry`
 `read_log_entries` and `log_entry_is_unfinalized` (placeholder `(LLM fills in)`)
 address entries by their `assess:run_id` stamp, and
 `supersede_unfinalized_log_entry` drops a same-date, same-commit run's unfilled
-last entry before the core appends its own; it and `--drop-entry` act only on an
+last entry before the core appends its own (`last_log_entry_is_unfinalized_run` is
+the condition it acts under, which the core also reads before writing the wiki); it and `--drop-entry` act only on an
 entry that starts with its own stamp (`log_entry_owns_span`), never on a span that
 also holds pre-chain history. Both are additive and back-compat -
 a legacy wiki (no markers, live files) is untouched and reads valid.
@@ -430,6 +478,53 @@ rule (an uncommitted settings file reaches no clone). Deliberately excludes
 two layers never double-count. Pure stdlib JSON/filesystem reads plus
 `git_churn.tracked_files`.
 
+**`gh_cli.py`**
+The one way the core reaches GitHub, shared by every scan that reads live
+platform state. Runs the `gh` binary on `PATH` as a subprocess (no direct HTTP,
+no token read, JSON parsed in Python, never `--jq`/`--template`). Order of work:
+`resolve_github_remote` (pure git; `origin`, else the sole remote; github.com
+only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
+`gh_json(args)` calls. Every failure raises `GhUnavailable` with a reason that
+`unavailable()` turns into `{"available": False, "reason"}`: `no_remote`,
+`gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403), `not_found`
+(HTTP 404), `gh_timeout`, `gh_error`, `gh_bad_json`. A scan must degrade on it,
+never report a clean result. Tests fake `gh` with a script first on `PATH`
+(`tests/test_config_drift.py`).
+
+**`config_drift.py`**
+Layer 5 lying signal: tracked GitHub configuration snapshots diffed against the
+live setting via `gh_cli`. Snapshots are ruleset exports - tracked JSON with a
+`name` or `id` and a top-level `rules` array of `type` entries, in
+`.github/rulesets/` or anywhere (matched to a live ruleset by `id`, else `name`);
+a file missing either is skipped, never reported - and classic branch-protection exports - tracked JSON under
+`.github/` with `required_status_checks`, `enforce_admins` or
+`required_pull_request_reviews` at the top level (branch from the export's `url`,
+else the file stem). The diff is snapshot-driven (keys only the API returns are
+not drift), ignores ids, timestamps and links, and folds the `{"enabled": X}` read
+shape into `X`. Lists are sets. Write-shape restriction lists (plain user, team
+and app names) compare against the read shape's objects projected onto
+`login`/`slug`/`name`. A changed scalar list is one entry: `tracked` is
+`{count, removed, sample}`, `live` is `{count, added, sample}`, with at most
+`MAX_SAMPLE` (3) names per sample, never the whole live list. Object lists pair by
+identity (`login`, `slug`, `type`, `context`, `actor_type:actor_id`, `name`; users and
+teams carry `type` as a shared discriminator, so `login`/`slug` are tried first) in both directions, and a
+one-sided item, or a snapshot key the live response omits, is recorded as
+`"present"`/`"absent"`, never as the live object, so live org configuration stays
+out of the committed wiki (the item's identity does travel in `key`). Live rulesets
+are listed with `includes_parents=false`, so a repo snapshot never pairs with an
+inherited org ruleset. Tracked JSON holding none of the snapshot keys is skipped by
+a substring probe before any parse. A missing live ruleset, an
+unprotected branch and a deleted branch are drift entries, not outages. Emits
+`config_drift: {available, entries: [{file, key, tracked, live}], dropped, snapshots}`, entries
+ranked worst first (one-sided `"absent"`, then boolean flips, then other changes) because
+the report renders only `entries[0]`, then capped at `MAX_ENTRIES` (10) with `dropped`
+counting the rest. Stored in the committed wiki: changed scalar settings, list-item
+identities in `key`, and up to three added names per changed list; never a live
+object or a whole live list;
+with no snapshots it calls nothing and reports `entries: []`. Any refused or
+failed read degrades the whole block, never a partial clean result. Add a case
+in `tests/test_config_drift.py` alongside any change to discovery or the diff.
+
 **`accretion_ratchet.py`**
 Write-side accretion instrument: detects files that only ever grow. Walks each
 file's full numstat history in author-time order (one `git log --no-merges
@@ -521,6 +616,27 @@ reuse it. CLI, run from `skills/assess/scripts`:
 directory, or a `--json` file that cannot be written; a missing root would otherwise verify every `path_absent` claim). Stdlib only, imports no
 orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kind
 or change to a check rule.
+
+**`instruction_claims.py`**
+Verifies the checkable claims an agent instruction file makes (issue #368), no
+model. `scan_instruction_claims(repo_root, files)` reads each graded instruction
+file (the keys of `instruction_files`; two keys resolving to one file are read
+once), splits prose into sentences per paragraph (fenced code skipped, a wrapped
+sentence reported at the line it starts on) and extracts two kinds: `enforcement`
+(a backticked shell script, or any script under `scripts/`, `bin/`, `tools/`,
+`ci/` or `hack/`, in a sentence with "enforced", "runs in", "checked by" or "CI";
+verified when the path occurs in any CI configuration or in a task runner CI
+calls through such as `Makefile` or `package.json`; skipped when the repo has no
+CI configuration, since nothing can confirm or refute it) and `pin` ("pinned in"
+a backticked file plus exactly one dotted version in the sentence, verified when
+the file exists and contains the version as a substring). Each failure carries a
+`reason`. Both checks use
+`evidence_check.is_referenced_in`, so the search is the same fail-closed one.
+The core writes the result as the run-context block `instruction_claims`
+(`{total, verified, failed, failures[{file, line, kind, path, reason, ...}]}`, zeros when
+nothing matched); failures feed Layer 0 evidence and a Lying Signals row. A new
+claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
+(which returns the extra failure fields). Tests: `tests/test_instruction_claims.py`.
 
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible

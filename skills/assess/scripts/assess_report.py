@@ -207,6 +207,37 @@ def render_exclusion_disclosure(ctx: dict) -> str:
     return "\n\n".join(lines)
 
 
+# Generated-file rows shown on the report surface before the rest are folded.
+GENERATED_DISCLOSURE_VISIBLE = 10
+
+
+def render_generated_disclosure(ctx: dict) -> str:
+    """Name each file the treemap excluded as generated, with its reason.
+
+    One line per file (``- `path` (reason)``) under a count line, or ``""`` when
+    ``excluded_generated`` is empty or absent, so a run with nothing excluded
+    renders exactly as before. The first ``GENERATED_DISCLOSURE_VISIBLE`` rows
+    sit on the report surface; the rest go in a ``<details>`` fold, so every
+    path stays named without hundreds of bullets displacing the findings.
+    """
+    rows = [
+        r for r in (ctx.get("excluded_generated") or [])
+        if isinstance(r, dict) and r.get("path") and r.get("reason")
+    ]
+    if not rows:
+        return ""
+    noun = "file" if len(rows) == 1 else "files"
+    lines = [f"_{len(rows)} {noun} excluded from scoring as generated:_", ""]
+    visible = rows[:GENERATED_DISCLOSURE_VISIBLE]
+    rest = rows[GENERATED_DISCLOSURE_VISIBLE:]
+    lines.extend(f"- `{r['path']}` ({r['reason']})" for r in visible)
+    if rest:
+        lines += ["", f"<details><summary>{len(rest)} more</summary>", ""]
+        lines.extend(f"- `{r['path']}` ({r['reason']})" for r in rest)
+        lines += ["", "</details>"]
+    return "\n".join(lines)
+
+
 def render_findings_section(ctx: dict) -> str:
     """Return the pre-rendered cross-layer findings section, verbatim.
 
@@ -440,13 +471,16 @@ def render_report(ctx: dict, repo_name: str) -> str:
     stats = ctx.get("stats_summary", {})
     loc = stats.get("loc", {})
     ccn = stats.get("ccn", {})
-    # The keyhole summary line, with a config-exclusion disclosure appended when
-    # any finding was suppressed by config excludes (empty otherwise, so a clean
-    # run renders exactly as before).
+    # The keyhole summary line, with two disclosures appended when they apply:
+    # findings suppressed by config excludes, and files excluded from scoring as
+    # generated (each empty otherwise, so a clean run renders exactly as before).
     keyhole_summary = render_keyhole_summary(ctx)
     disclosure = render_exclusion_disclosure(ctx)
     if disclosure:
         keyhole_summary = f"{keyhole_summary}\n\n{disclosure}"
+    generated = render_generated_disclosure(ctx)
+    if generated:
+        keyhole_summary = f"{keyhole_summary}\n\n{generated}"
     report = REPORT_TEMPLATE.substitute(
         repo_name=repo_name,
         run_date=ctx.get("run_date", "unknown"),

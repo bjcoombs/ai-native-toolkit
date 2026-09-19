@@ -67,6 +67,18 @@ COLOR_REACHABLE = "#009E73"  # Okabe-Ito bluish-green
 COLOR_ISLAND = "#E69F00"     # Okabe-Ito orange
 COLOR_ORPHAN = "#D55E00"     # Okabe-Ito vermillion
 EDGE_COLOR = "#9aa0a6"
+# Edge kinds. A link is a markdown link; a reference is a backticked doc path
+# that names a file on disk. A reference is drawn dotted: dashes already mean the
+# ghost tether (4,3) and the orphan and ghost rings (3,2), so a dot pattern is
+# the one line style left that collides with neither. Round caps add half the
+# stroke width to each end of a dash, so a near-zero dash paints a round dot and
+# the 4-unit gap keeps a visible break after the caps take their 1.6 units.
+_EDGE_STYLE = {
+    "link": {"stroke": EDGE_COLOR, "stroke-dasharray": None,
+             "stroke-width": "1.2", "opacity": "0.6"},
+    "reference": {"stroke": EDGE_COLOR, "stroke-dasharray": "0.1,4",
+                  "stroke-width": "1.6", "opacity": "0.8"},
+}
 ENTRY_RING = "#0072B2"       # blue ring marks the entry node when colour = staleness
 ORPHAN_RING = "#1a1a1a"      # dark dashed ring marks orphans when colour = staleness
 # A doc with no staleness measurement: white with grey hatching, outside the
@@ -199,6 +211,32 @@ def _render_ghosts(broken_links: list[dict], pos: dict, radius,
     return "\n".join(out)
 
 
+def _normalize_edge_kind(kind: str) -> str:
+    """An edge with no kind, or an unknown one, draws as a link."""
+    return kind if kind in _EDGE_STYLE else "link"
+
+
+def _edge_attrs(kind: str) -> str:
+    """Presentation attributes for one edge kind; an unknown kind draws as a link."""
+    kind = _normalize_edge_kind(kind)
+    style = " ".join(f'{k}="{v}"' for k, v in _EDGE_STYLE[kind].items() if v is not None)
+    cap = ' stroke-linecap="round"' if _EDGE_STYLE[kind]["stroke-dasharray"] else ""
+    return f'{style}{cap}'
+
+
+def _edge_legend(mid: float, y: float) -> list[str]:
+    """One centred row with a sample line per edge kind, styled as the edges."""
+    items = [("link", "link"), ("reference", "reference (backticked path)")]
+    out: list[str] = []
+    x = mid - 150
+    for kind, label in items:
+        out.append(f'<line data-legend-kind="{kind}" x1="{x:.0f}" y1="{y - 4:.0f}" '
+                   f'x2="{x + 28:.0f}" y2="{y - 4:.0f}" {_edge_attrs(kind)}/>')
+        out.append(f'<text x="{x + 34:.0f}" y="{y:.0f}" font-size="13">{label}</text>')
+        x += 110
+    return out
+
+
 def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  # noqa: C901  # SVG layout + colour-mode branching; ccn 18, ratchet target
            size_mode: str = "lines", colour: str = "staleness",
            staleness: dict | None = None, show_labels: bool = False) -> None:
@@ -308,7 +346,7 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  
         )
 
     # Edges (drawn first, under the nodes). Pull the arrow back to the target rim.
-    for u, v in graph.edges():
+    for u, v, kind in graph.edges(data="kind", default="link"):
         if u not in pos or v not in pos:
             continue
         x1, y1 = pos[u]
@@ -318,8 +356,9 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  
         rt = radius(v) + 3
         ex, ey = x2 - dx / dist * rt, y2 - dy / dist * rt
         parts.append(
-            f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{ex:.1f}" y2="{ey:.1f}" '
-            f'stroke="{EDGE_COLOR}" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>'
+            f'<line data-edge-kind="{_normalize_edge_kind(kind)}" '
+            f'x1="{x1:.1f}" y1="{y1:.1f}" x2="{ex:.1f}" y2="{ey:.1f}" '
+            f'{_edge_attrs(kind)} marker-end="url(#arrow)"/>'
         )
 
     def size_text(node: str) -> str:
@@ -440,6 +479,7 @@ def _legend(size_label: str, layout: str, colour: str, cw: float, ch: float,
         out.append(f'<circle cx="{gh:.0f}" cy="{y - 20:.0f}" r="8" fill="#ffffff" stroke="{GHOST_COLOR}" '
                    'stroke-width="1.8" stroke-dasharray="3,2"/>')
         out.append(f'<text x="{gh + 14:.0f}" y="{y - 16:.0f}" font-size="13">ghost (broken link)</text>')
+        out.extend(_edge_legend(mid, y + 3))
         out.append(f'<text x="{mid:.0f}" y="{y + 20:.0f}" font-size="12" fill="#555" '
                    f'text-anchor="middle">colour = staleness · size = {size_label} · {struct}</text>')
         return "\n".join(out)
@@ -452,6 +492,7 @@ def _legend(size_label: str, layout: str, colour: str, cw: float, ch: float,
         out.append(f'<circle cx="{x + 6:.0f}" cy="{y - 4:.0f}" r="7" fill="{color}"/>')
         out.append(f'<text x="{x + 20:.0f}" y="{y:.0f}" font-size="13">{label}</text>')
         x += 34 + len(label) * 7.2
+    out.extend(_edge_legend(mid, y + 24))
     return "\n".join(out)
 
 
