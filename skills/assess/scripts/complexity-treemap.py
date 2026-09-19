@@ -395,7 +395,7 @@ def collect(root: Path, by: str = "complexity",
         root, include_artifacts=include_artifacts,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
-        **({"fn_names": fn_names} if fn_names is not None else {}),
+        fn_names=fn_names,
     )
     sc = scc_scores(
         root, include_artifacts=include_artifacts,
@@ -922,7 +922,8 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     ``fn_ccn.source`` lists the backends that scored a file, as
     ``{name, approximate}`` objects from ``FN_BACKENDS``, and
     ``fn_ccn.backend_by_language`` maps each scc language to its backend, or to
-    null when only scc scored it at file level. A language gets a key when a
+    null when any of its files with decision points was scored by scc at file
+    level only (so partial coverage reads as null). A language gets a key when a
     backend scored one of its files or scc counted a decision point in one;
     data and markup (JSON, YAML, Markdown), where scc counts none, get no key.
     """
@@ -967,15 +968,22 @@ def write_stats(files: list[tuple[Path, int, float, str]],
 
     backends_used = sorted({backend_of[f[0]] for f in files
                             if f[0] in backend_of})
-    backend_by_language: dict[str, str | None] = {}
+    covered: dict[str, str] = {}
+    uncovered: set[str] = set()
     for path, _loc, metric, _src in files:
         lang = langs.get(path)
         if not lang:
             continue
         if path in backend_of:
-            backend_by_language[lang] = backend_of[path]
+            covered[lang] = backend_of[path]
         elif metric > 0 and lang not in DATA_LANGUAGES:
-            backend_by_language.setdefault(lang, None)
+            uncovered.add(lang)
+    # A language counts as covered only when no file of it with decision points
+    # fell back to scc: partial coverage reads as null, not as the backend.
+    backend_by_language: dict[str, str | None] = {
+        lang: (None if lang in uncovered else covered[lang])
+        for lang in covered.keys() | uncovered
+    }
 
     enriched = []
     for path, loc, ccn, src in files:

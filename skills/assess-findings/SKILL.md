@@ -123,7 +123,7 @@ _Note: Mutation testing was not run. Layer 6 (Coverage) is capped at Partial and
   1. `<path>` - <est_tokens> est. tokens (<loc> LOC), aggregate ccn <N> (worst function `<max_fn_name>` <max_fn_ccn>), <M> commits in window
   2. ...
   3. ...
-- **Per-function coverage:** list every language that `fn_ccn.backend_by_language` maps to `null` in one line, once per run: _"no per-function data for <Language>, <Language> (scored at file level only)."_ A row in one of those languages then drops the "worst function" parenthesis rather than printing null. Omit the line when no language maps to `null`; name any backend `fn_ccn.source` marks `approximate: true` as approximate.
+- **Per-function coverage:** list every language that `fn_ccn.backend_by_language` maps to `null` in one line, once per run: _"no per-function data for <Language>, <Language> (scored at file level only)."_ A row whose `max_fn_ccn` is null then drops the "worst function" parenthesis rather than printing null. Omit the line when no language maps to `null`; name any backend `fn_ccn.source` marks `approximate: true` as approximate.
 
 - **Keyhole budget** (`stats_summary.est_tokens.budget`): state the repo total estimated tokens and how many files / top-level subtrees exceed one context-window keyhole (the documented `budget`, an estimate). This is the literal "does the relevant slice fit one keyhole?" measure. e.g. _"Repo is ~<total> est. tokens; <N> subtree(s) exceed the ~200k keyhole budget: `<name>` (~<tokens>)."_ When `est_tokens` is absent (pre-token snapshot), omit this line.
 

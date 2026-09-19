@@ -1150,6 +1150,27 @@ def test_write_stats_backend_by_language_maps_lizard_and_null(treemap, tmp_path)
     assert fn["backend_by_language"] == {"Python": "lizard", "Elixir": None}
 
 
+def test_write_stats_backend_by_language_partial_coverage_is_null(
+        treemap, tmp_path):
+    """A language a backend covers only in part maps to null: one lizard file
+    must not make the language's scc-only files read as covered. A file with
+    no decision points loses no per-function figure and does not downgrade."""
+    root = tmp_path
+    cpp, ipp = root / "a.cpp", root / "a.ipp"
+    js, mjs = root / "a.js", root / "b.mjs"
+    out = root / "stats.json"
+    treemap.write_stats(
+        [(cpp, 20, 8.0, "lizard"), (ipp, 30, 4.0, "scc"),
+         (js, 20, 3.0, "lizard"), (mjs, 5, 0.0, "scc")],
+        None, None, root, out,
+        fn_ccn_by_path={cpp: [8.0], js: [3.0]},
+        languages_by_path={cpp: "C++", ipp: "C++",
+                           js: "JavaScript", mjs: "JavaScript"},
+    )
+    fn = json.loads(out.read_text())["fn_ccn"]
+    assert fn["backend_by_language"] == {"C++": None, "JavaScript": "lizard"}
+
+
 def test_write_stats_backend_by_language_empty_source_when_no_backend(
         treemap, tmp_path):
     """An scc-only run lists no backend rather than claiming lizard."""
