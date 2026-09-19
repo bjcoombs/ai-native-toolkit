@@ -437,3 +437,20 @@ def test_dominant_language_javascript_knip_present_is_available_not_run(
     assert [(t["language"], t["tool"], t["status"]) for t in r["tools"]] == [
         ("javascript", "knip", "available_not_run"),
     ]
+
+
+def test_scorer_doc_names_every_dead_code_status() -> None:
+    """Every `tools[].status` the scan can emit is named in the layer-scorer
+    agent's guidance, so a new status never reaches the report unhandled (a
+    skipped tool read as "no language tool present")."""
+    import re
+
+    lib_dir = Path(liveness.__file__).resolve().parent
+    source = (lib_dir / "liveness_scan.py").read_text()
+    emitted = set(re.findall(r'"(?:absent_)?status":\s*"(\w+)"', source))
+    emitted |= set(re.findall(r'get\("absent_status",\s*"(\w+)"\)', source))
+    assert {"not_applicable", "honest_degrade", "tool_absent"} <= emitted
+    repo_root = lib_dir.parents[3]
+    doc = (repo_root / "agents" / "assess-layer-scorer.md").read_text()
+    missing = sorted(s for s in emitted if f"`{s}`" not in doc)
+    assert not missing, f"assess-layer-scorer.md does not name: {missing}"
