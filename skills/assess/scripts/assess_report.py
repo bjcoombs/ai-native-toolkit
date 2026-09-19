@@ -153,7 +153,9 @@ def render_exclusion_disclosure(ctx: dict) -> str:
     Returns ``""`` when nothing was suppressed, so a clean run's report is byte
     identical to before this disclosure existed. A second line names the paths
     kept out of the attention list because they sit under an ``archive/``,
-    ``archived/`` or ``attic/`` directory (``excluded_as_archive``).
+    ``archived/`` or ``attic/`` directory (``excluded_as_archive``), and a
+    third the git-history paths pruned because they no longer exist
+    (``pruned_finding_paths``).
     """
     lines: list[str] = []
     block = ctx.get("excluded_by_config") or {}
@@ -178,6 +180,23 @@ def render_exclusion_disclosure(ctx: dict) -> str:
         noun = "path" if a_count == 1 else "paths"
         lines.append(
             f"_{a_count} archived {noun} left out of the attention list: {paths}._"
+        )
+    pruned = ctx.get("pruned_finding_paths") or {}
+    p_count = pruned.get("count", 0)
+    if isinstance(p_count, int) and p_count > 0:
+        named = list(pruned.get("paths", []))
+        paths = ", ".join(named[:5])
+        if len(named) > 5:
+            paths += f" +{len(named) - 5} more"
+        verbs = "path no longer exists and was" if p_count == 1 else (
+            "paths no longer exist and were")
+        lines.append(
+            f"_{p_count} git-history {verbs} left out of the findings: {paths}._"
+        )
+    if pruned.get("rename_map_complete") is False:
+        lines.append(
+            "_Renames could not be read from git history: findings may name "
+            "pre-rename paths, and none were pruned._"
         )
     return "\n\n".join(lines)
 

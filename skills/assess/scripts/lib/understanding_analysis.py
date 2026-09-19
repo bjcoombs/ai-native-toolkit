@@ -51,7 +51,7 @@ from pathlib import Path, PurePosixPath
 from lib.change_coupling import (
     GIT_TIMEOUT_SECONDS,
     _identity_is_agent,
-    _repo_top,
+    repo_top,
 )
 
 # McCabe's classic "moderate risk" line, used as the floor for "high
@@ -203,7 +203,7 @@ def analyze_understanding(
     ``run-context.json``'s ``understanding`` block (a later task's job to place).
     """
     repo_root = Path(repo_root)
-    repo_top = _repo_top(repo_root)
+    top = repo_top(repo_root)
 
     file_ccn = _extract_file_ccn(complexity_stats)
     threshold = _high_ccn_threshold(complexity_stats)
@@ -220,8 +220,8 @@ def analyze_understanding(
         is_high_complexity = file_ccn.get(path, 0.0) >= threshold
 
         days_since = (
-            _days_since_last_human_commit(repo_top, path)
-            if repo_top is not None
+            _days_since_last_human_commit(top, path)
+            if top is not None
             else None
         )
 

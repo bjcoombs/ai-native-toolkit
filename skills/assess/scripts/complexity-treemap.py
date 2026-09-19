@@ -526,7 +526,7 @@ def render(files: list[tuple[Path, int, float, str]],
 # *layout* for diff comparability). Mirrors assess_core's
 # ARTIFACT_SCHEMA_VERSION - the treemap runs as a separate process, so the
 # constant is duplicated rather than imported (no dependency on assess_core).
-ARTIFACT_SCHEMA_VERSION = "1.0.0"
+ARTIFACT_SCHEMA_VERSION = "1.1.0"
 
 
 def _new_run_id() -> str:
