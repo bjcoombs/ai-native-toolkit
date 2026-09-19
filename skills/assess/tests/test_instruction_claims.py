@@ -52,10 +52,40 @@ def test_enforcement_claim_verifies_when_a_workflow_calls_the_script(repo: Path)
     assert block == {"total": 1, "verified": 1, "failed": 0, "failures": []}
 
 
-def test_enforcement_claim_fails_when_there_is_no_workflow_directory(tmp_path: Path) -> None:
+def test_enforcement_claim_is_skipped_when_the_repo_has_no_ci_config(tmp_path: Path) -> None:
+    # Nothing to check against: unverifiable, not false - no accusation.
     (tmp_path / "AGENTS.md").write_text(ENFORCED)
+    assert scan_instruction_claims(tmp_path, ["AGENTS.md"])["total"] == 0
+
+
+def test_enforcement_failure_carries_a_reason(repo: Path) -> None:
+    (repo / "AGENTS.md").write_text(ENFORCED)
+    (repo / ".github" / "workflows" / "ci.yml").write_text(WORKFLOW_WITHOUT)
+    reason = scan_instruction_claims(repo, ["AGENTS.md"])["failures"][0]["reason"]
+    assert "references the script" in reason
+
+
+@pytest.mark.parametrize("ci_file", [".gitlab-ci.yml", "Jenkinsfile", ".circleci/config.yml"])
+def test_enforcement_claim_verifies_against_non_github_ci(tmp_path: Path, ci_file: str) -> None:
+    (tmp_path / "AGENTS.md").write_text(ENFORCED)
+    (tmp_path / ci_file).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / ci_file).write_text("lint:\n  script: bash scripts/check-x.sh\n")
     block = scan_instruction_claims(tmp_path, ["AGENTS.md"])
-    assert _failures(block) == [["AGENTS.md", 5, "enforcement"]]
+    assert (block["total"], block["verified"]) == (1, 1)
+
+
+@pytest.mark.parametrize("runner, body", [
+    ("Makefile", "lint:\n\tbash scripts/check-x.sh\n"),
+    ("package.json", '{"scripts": {"lint": "scripts/check-x.sh"}}\n'),
+    (".pre-commit-config.yaml", "- id: x\n  entry: scripts/check-x.sh\n"),
+])
+def test_enforcement_claim_verifies_through_a_task_runner(repo: Path, runner: str, body: str) -> None:
+    # The workflow calls `make lint` / `npm run lint` / pre-commit, not the path.
+    (repo / "AGENTS.md").write_text(ENFORCED)
+    (repo / ".github" / "workflows" / "ci.yml").write_text(WORKFLOW_WITHOUT)
+    (repo / runner).write_text(body)
+    block = scan_instruction_claims(repo, ["AGENTS.md"])
+    assert (block["total"], block["verified"]) == (1, 1)
 
 
 def test_file_with_no_matching_pattern_yields_zero_claims(repo: Path) -> None:
@@ -88,7 +118,9 @@ def test_pin_claims_verify_on_version_either_side_of_pinned_in(tmp_path: Path) -
     assert sorted(_failures(block)) == [["AGENTS.md", 3, "pin"], ["AGENTS.md", 7, "pin"]]
     by_line = {f["line"]: f for f in block["failures"]}
     assert (by_line[3]["path"], by_line[3]["version"]) == (".nvmrc", "20.11.0")
+    assert by_line[3]["reason"] == "pinned file does not contain the version"
     assert by_line[7]["path"] == ".ruby-version"
+    assert by_line[7]["reason"] == "pinned file does not exist"
 
 
 def test_pin_sentence_without_a_version_is_skipped() -> None:
@@ -120,6 +152,22 @@ def test_enforcement_needs_a_trigger_phrase_and_a_script_path() -> None:
     assert extract_claims("CI runs `.github/workflows/ci.yml`.\n") == []
 
 
+@pytest.mark.parametrize("sentence", [
+    "Do not edit `src/db/env.py`; CI will fail if you do.",
+    "`src/index.ts` must compile before CI passes.",
+    "`lib/scripts_helper.rb` is checked by the linter.",
+])
+def test_ordinary_source_files_are_not_enforcement_claims(sentence: str) -> None:
+    assert extract_claims(sentence + "\n") == []
+
+
+@pytest.mark.parametrize("path", ["scripts/gate.py", "bin/check.js", "tools/ci/lint.ts",
+                                  "hack/verify.rb", "ops/deploy.sh"])
+def test_script_paths_that_ci_invokes_are_enforcement_claims(path: str) -> None:
+    claims = extract_claims(f"`{path}` is enforced in CI.\n")
+    assert [c.path for c in claims] == [path]
+
+
 @pytest.mark.parametrize("phrase", ["is enforced by the pipeline", "runs in the lint job",
                                     "is checked by the gate", "gates CI"])
 def test_each_enforcement_trigger_phrase_makes_a_claim(phrase: str) -> None:
@@ -143,6 +191,8 @@ def test_build_run_context_carries_the_block(tmp_path: Path) -> None:
     from assess_core import build_run_context
 
     (tmp_path / "AGENTS.md").write_text(ENFORCED)
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text(WORKFLOW_WITHOUT)
     ctx = build_run_context(repo_root=tmp_path, run_date="2026-09-18")
     assert _failures(ctx["instruction_claims"]) == [["AGENTS.md", 5, "enforcement"]]
     written = json.loads((tmp_path / ".assess" / "run-context.json").read_text())

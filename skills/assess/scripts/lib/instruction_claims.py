@@ -8,17 +8,25 @@ repository, no model: a failed claim is a lying signal with a file and a line.
 
 Claim kinds:
 
-- ``enforcement``: a backticked script path (``.sh``, ``.py``, ``.js`` ...) in a
-  sentence holding "enforced", "runs in", "checked by" or the word "CI". Verified
-  when the path occurs in any file under ``.github/workflows/`` (the reference
-  search of ``lib.evidence_check``). The whole directory is searched even when
-  the sentence names a job or workflow: naming parses poorly, and a script that
-  no workflow calls is the failure worth catching.
+- ``enforcement``: a backticked script path in a sentence holding "enforced",
+  "runs in", "checked by" or the word "CI". A script path is a shell script
+  (``.sh``, ``.bash``, ``.zsh``, ``.ps1``) anywhere, or any script extension
+  (``.py``, ``.js``, ``.ts`` ...) under a ``scripts/``, ``bin/``, ``tools/``,
+  ``ci/`` or ``hack/`` directory; ordinary source files such as ``src/index.ts``
+  are not something CI invokes by path. Verified when the path occurs in any
+  CI configuration (``.github/workflows/``, ``.github/actions/``, GitLab,
+  Jenkins, CircleCI, Azure, Buildkite, Bitbucket, Travis, Drone) or in a task
+  runner CI commonly calls through (``Makefile``, ``package.json``,
+  ``.pre-commit-config.yaml``, ``justfile``, ``Taskfile.yml``, ``tox.ini``,
+  ``noxfile.py``), using the reference search of ``lib.evidence_check``. A repo
+  with no CI configuration at all yields no enforcement claim: there is
+  nothing to check against, so the claim is unverifiable, not false.
 - ``pin``: a sentence holding "pinned in" followed by a backticked file, plus
   exactly one dotted numeric version (``20.11.0``) on either side of the phrase.
-  Verified when the file exists and contains the version string. A missing file
-  is a failed claim; a sentence with no version, or with two different
-  versions, is skipped.
+  Verified when the file exists and contains the version as a substring (so
+  ``3.11`` verifies against a file holding ``3.11.9``: the check under-reports
+  rather than accuse). A missing file is a failed claim; a sentence with no
+  version, or with two different versions, is skipped.
 
 A sentence that fits no kind is skipped silently. Adding a kind means one
 extractor in ``_EXTRACTORS`` (sentence -> claims) and one verifier in
@@ -38,12 +46,31 @@ from typing import Any
 
 from lib.evidence_check import is_referenced_in
 
-WORKFLOWS_DIR = ".github/workflows"
+# Where CI is configured. The enforcement check needs at least one to exist.
+CI_CONFIG_PATHS = (
+    ".github/workflows", ".github/actions", ".gitlab-ci.yml", ".gitlab-ci.yaml",
+    "Jenkinsfile", ".circleci", "azure-pipelines.yml", ".azure-pipelines",
+    ".buildkite", "bitbucket-pipelines.yml", ".travis.yml", ".drone.yml",
+)
+# Task runners CI calls through (`make lint`, `npm run lint`, `pre-commit run`):
+# a script referenced here counts as wired in, which fails open rather than
+# accusing a repo whose workflow invokes the script indirectly.
+TASK_RUNNER_PATHS = (
+    "Makefile", "makefile", "GNUmakefile", "package.json", ".pre-commit-config.yaml",
+    "justfile", "Justfile", "Taskfile.yml", "Taskfile.yaml", "tox.ini", "noxfile.py",
+)
 
-_SCRIPT_EXTENSIONS = "sh|bash|zsh|py|js|mjs|cjs|ts|rb|pl|ps1"
+_SHELL_EXTENSIONS = "sh|bash|zsh|ps1"
+_SCRIPT_EXTENSIONS = "sh|bash|zsh|ps1|py|js|mjs|cjs|ts|rb|pl"
+_SCRIPT_DIRS = "scripts|bin|tools|ci|hack"
 # A script path inside a backticked span: `scripts/check-x.sh` or the path in
-# `bash scripts/check-x.sh --fix`.
-_SCRIPT_IN_SPAN = re.compile(rf"(?<![\w./-])([\w./-]*\w\.(?:{_SCRIPT_EXTENSIONS}))(?![\w/-])")
+# `bash scripts/check-x.sh --fix`. Shell scripts anywhere; other script
+# extensions only under a scripts-like directory.
+_SCRIPT_IN_SPAN = re.compile(
+    rf"(?<![\w./-])((?:\./)?(?:[\w.-]+/)*[\w.-]*\w\.(?:{_SHELL_EXTENSIONS})"
+    rf"|(?:\./)?(?:[\w.-]+/)*(?:{_SCRIPT_DIRS})/(?:[\w.-]+/)*[\w.-]*\w\.(?:{_SCRIPT_EXTENSIONS}))"
+    rf"(?![\w/-])"
+)
 _BACKTICK_SPAN = re.compile(r"`([^`]+)`")
 _ENFORCEMENT_TRIGGER = re.compile(r"(?i:\benforced\b|\bruns in\b|\bchecked by\b)|\bCI\b")
 
@@ -145,13 +172,24 @@ def _pin_claims(sentence: str, line: int) -> list[Claim]:
     return [Claim("pin", line, pins[0], {"version": versions.pop()})]
 
 
+def _has_ci_config(repo_root: Path) -> bool:
+    return any((repo_root / rel).exists() for rel in CI_CONFIG_PATHS)
+
+
 def _verify_enforcement(repo_root: Path, claim: Claim) -> dict[str, Any] | None:
-    return None if is_referenced_in(repo_root, claim.path, WORKFLOWS_DIR) else {}
+    for rel in CI_CONFIG_PATHS + TASK_RUNNER_PATHS:
+        if is_referenced_in(repo_root, claim.path, rel):
+            return None
+    return {"reason": "no CI configuration or task runner references the script"}
 
 
 def _verify_pin(repo_root: Path, claim: Claim) -> dict[str, Any] | None:
     version = claim.fields["version"]
-    return None if is_referenced_in(repo_root, version, claim.path) else {}
+    if is_referenced_in(repo_root, version, claim.path):
+        return None
+    if not (repo_root / claim.path).exists():
+        return {"reason": "pinned file does not exist"}
+    return {"reason": "pinned file does not contain the version"}
 
 
 _EXTRACTORS: tuple[Callable[[str, int], list[Claim]], ...] = (
@@ -165,7 +203,8 @@ _VERIFIERS: dict[str, Callable[[Path, Claim], dict[str, Any] | None]] = {
 
 
 def extract_claims(text: str) -> list[Claim]:
-    """Every checkable claim in ``text``, in document order."""
+    """Every claim pattern in ``text``, in document order (before any
+    repository-dependent skip, such as enforcement with no CI configured)."""
     claims: list[Claim] = []
     for block in _paragraphs(text):
         for line, sentence in _sentences(block):
@@ -187,12 +226,13 @@ def scan_instruction_claims(repo_root: Path | str, files: Iterable[str]) -> dict
     ``CLAUDE.md``) are scanned once, under the first key.
 
     Returns ``{total, verified, failed, failures}``; each failure carries
-    ``file``, ``line``, ``kind`` and ``path`` (the script or pinned file), plus
-    the kind's own fields (``version`` for a pin).
+    ``file``, ``line``, ``kind``, ``path`` (the script or pinned file) and
+    ``reason``, plus the kind's own fields (``version`` for a pin).
     """
     root = Path(repo_root)
     block = empty_block()
     seen: set[Path] = set()
+    ci_configured = _has_ci_config(root)
     for rel in files:
         candidate = root / rel
         try:
@@ -204,6 +244,8 @@ def scan_instruction_claims(repo_root: Path | str, files: Iterable[str]) -> dict
             continue
         seen.add(real)
         for claim in extract_claims(text):
+            if claim.kind == "enforcement" and not ci_configured:
+                continue  # nothing to check against: unverifiable, not false
             detail = _VERIFIERS[claim.kind](root, claim)
             block["total"] += 1
             if detail is None:
