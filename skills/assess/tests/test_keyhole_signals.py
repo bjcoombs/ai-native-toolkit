@@ -339,6 +339,32 @@ def test_attention_tie_break_hidden_coupling_lower_containment_first() -> None:
     assert ranked == ["d", "b", "a", "c"]
 
 
+def test_attention_tie_break_mixed_marker_and_coupling_rows_share_one_scale() -> None:
+    """Marker severity (at least 5 for a stale marker) and coupling severity
+    (0-1) meet in one sort. On a shared 0-1 scale a fully bleeding seam ranks
+    with the worst marker file instead of below every marker file, and at the
+    attention cap coupling rows are not all evicted by marker rows."""
+    markers = [f"m{i}.py" for i in range(10)]
+    findings = ks.assemble_findings({
+        "unactioned_intent": markers,
+        "hidden_coupling": ["bleeds", "tight"],
+    })
+    tie_break = ks.attention_tie_break(
+        {"top_hotspots": []},
+        {"top_offenders": [
+            {"path": p, "severity": 50.0 - i} for i, p in enumerate(markers)
+        ]},
+        {"hidden_coupling_findings": [
+            {"path": "bleeds", "containment_ratio": 0.0},
+            {"path": "tight", "containment_ratio": 0.9},
+        ]},
+    )
+    ranked = [u["path"] for u in ks.build_attention_list(findings, tie_break=tie_break)]
+    assert ranked[:2] == ["bleeds", "m0.py"]  # both 1.0; path breaks the tie
+    assert len(ranked) == ks.MAX_ATTENTION_UNITS
+    assert "bleeds" in ranked and "tight" not in ranked  # 0.1 sits below m8.py (0.84)
+
+
 def test_attention_tie_break_absent_falls_back_to_path() -> None:
     findings = ks.assemble_findings({"unactioned_intent": ["b.py", "a.py"]})
     assert [u["path"] for u in ks.build_attention_list(findings)] == ["a.py", "b.py"]

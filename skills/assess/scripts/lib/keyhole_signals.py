@@ -552,6 +552,12 @@ def attention_tie_break(
     bleed outside it, the worse seam (``coupling_analysis`` sorts ascending for
     the same reason). A structure-drift directory with no hidden-coupling row
     falls back to ``containment_by_dir``.
+
+    Both severities meet in one sort, so each is on a 0-1 scale: coupling is
+    already, and marker severity (unbounded, at least 5 for a stale marker) is
+    divided by the run's highest. Without that, every stale-marker file would
+    outrank every coupling directory at equal score, and at the attention cap
+    would evict them.
     """
     rank: dict[str, int] = {}
     for h in complexity_stats.get("top_hotspots") or []:
@@ -563,6 +569,9 @@ def attention_tie_break(
         path, sev = m.get("path"), m.get("severity")
         if path and isinstance(sev, (int, float)):
             markers[path] = max(markers.get(path, 0.0), float(sev))
+    top_marker = max(markers.values(), default=0.0)
+    if top_marker > 0:
+        markers = {p: v / top_marker for p, v in markers.items()}
     containment: dict[str, float] = {
         d: float(r) for d, r in (behaviour.get("containment_by_dir") or {}).items()
         if isinstance(r, (int, float))

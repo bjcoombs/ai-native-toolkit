@@ -350,17 +350,16 @@ def test_agent_assess_block_is_not_duplicated() -> None:
 
 
 def test_golden_attention_tie_break_order() -> None:
-    """The stored attention rows follow the tie-break: equal scores order by
-    top_hotspots rank, then finding severity, then path. The golden's rows are
-    five score-1 hidden_coupling directories (none a hotspot); the lowest
-    containment_ratio leads, so skills/assess/tests (0.0357) stays last and the
-    stored order did not move."""
+    """The stored attention rows agree with the tie-break key, and no
+    non-hotspot row sits directly above a hotspot row of equal score. The
+    golden's rows are five score-1 hidden_coupling directories (none a hotspot),
+    so this pins the coupling arm only: skills/assess/tests (containment 0.0357)
+    stays last and the stored order did not move. The marker arm is covered by
+    the unit tests; run-context carries no marker scan to feed it here."""
     ctx = golden.load_golden_run_context()
     rows = ctx["attention"]
     assert rows
-    tie_break = ks.attention_tie_break(
-        ctx["stats_summary"], ctx.get("promissory_markers"), ctx["behaviour"],
-    )
+    tie_break = ks.attention_tie_break(ctx["stats_summary"], None, ctx["behaviour"])
     assert rows == sorted(rows, key=tie_break.key)
     hot = {h["path"] for h in ctx["stats_summary"]["top_hotspots"]}
     for above, below in zip(rows, rows[1:]):
