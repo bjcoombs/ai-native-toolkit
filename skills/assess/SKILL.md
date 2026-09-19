@@ -9,7 +9,7 @@ Three artefacts in one pass against a target repo:
 
 1. **Layered contract assessment** - 0-8 score across navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, and AI project management.
 2. **Complexity hotspot SVG** - Codecov-style treemap of the code. Size = LOC. Colour = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = riskiest to change.
-3. **Doc navigability SVG** - a node-graph of the docs. Structure = connectivity (centre = entry, rim = unreachable, dashed ring = orphan); colour = staleness (vivid red = a frozen doc beside churning code = a *lying map*); size = file length. Folds navigability and the decaying-map signal into one artifact.
+3. **Doc navigability SVG** - a node-graph of the docs. Structure = connectivity (centre = entry, rim = unreachable, dashed ring = orphan, solid edge = link, dotted edge = reference); colour = staleness (vivid red = a frozen doc beside churning code = a *lying map*); size = file length. Folds navigability and the decaying-map signal into one artifact.
 
 Both SVGs are colour-blind-safe by default (OrRd ramp, no red-green).
 
@@ -86,7 +86,7 @@ Artefacts will land at:
 This step produces **two** views of the codebase, both colour-blind-safe (OrRd ramp, no red-green):
 
 - **Complexity heatmap** (`complexity-heatmap.svg`) - a treemap of the *code*. Size = LOC, colour = cyclomatic complexity, saturation = recent churn. Vivid red = complex AND active = "hard to change safely".
-- **Doc navigability graph** (`doc-graph.svg`) - a node-graph of the *docs*. Structure shows connectivity (centre = entry point, rings = link-distance, rim = unreachable; orphans carry a dashed ring); colour shows staleness in the same grammar as the code heatmap (vivid red = a frozen doc beside churning code = a lying map); size = file length. It folds both Layer 0 doc signals - navigability and the decaying-map - into one artifact. Beyond static wikilinks and CommonMark links, it counts a backticked path to an existing doc as a reference edge (a cited `.claude/` file included) and recognises Obsidian vault-native navigation - `.base` view hubs and `dataview` query blocks - as edges (resolved statically by folder / tag / frontmatter predicate), so a vault navigated by dynamic queries isn't mis-scored as orphaned. The SVG and the scored signal compute over the identical doc set: both honour the same excludes (`.assess/config.toml`).
+- **Doc navigability graph** (`doc-graph.svg`) - a node-graph of the *docs*. Structure shows connectivity (centre = entry point, rings = link-distance, rim = unreachable; orphans carry a dashed ring; solid edges are links, dotted edges references); colour shows staleness in the same grammar as the code heatmap (vivid red = a frozen doc beside churning code = a lying map); size = file length. It folds both Layer 0 doc signals - navigability and the decaying-map - into one artifact. Beyond static wikilinks and CommonMark links, it counts a backticked path to an existing doc as a reference edge (a cited `.claude/` file included) and recognises Obsidian vault-native navigation - `.base` view hubs and `dataview` query blocks - as edges (resolved statically by folder / tag / frontmatter predicate), so a vault navigated by dynamic queries isn't mis-scored as orphaned. The SVG and the scored signal compute over the identical doc set: both honour the same excludes (`.assess/config.toml`).
 
 Feed the complexity stats into the linter/complexity layer (Layer 3) and the `doc_graph` / `doc_staleness` blocks of `run-context.json` into **Layer 0** (the graph SVG is the visual; the score reads the structured blocks).
 
@@ -160,8 +160,8 @@ GO_FILES=$(fd -t f -e go . "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
 # `knip` for TS, `staticcheck` over `deadcode` for Go - so the user isn't asked
 # twice for the same job and the chosen tool doesn't need to build the project.
 needs_offer() {
-  # $1 = tool; $2 = file count for the language; returns 0 if we should ask.
-  local tool="$1" count="$2" min="${3:-5}"
+  # Args: tool, file count, min; 0 = ask. Braced: skill-arg substitution skips them.
+  local tool="${1}" count="${2}" min="${3:-5}"
   [ "$count" -ge "$min" ] || return 1
   command -v "$tool" >/dev/null 2>&1 && return 1     # already installed
   [ -f "$REPO_ROOT/.assess/.no-$tool" ] && return 1  # user declined permanently
@@ -195,7 +195,7 @@ When the user picks **Install <tool>**, run the platform-appropriate command fro
 
 #### JVM / Maven capability offers (v1)
 
-When the deterministic core detects a Maven or Gradle project it emits a `capability_offers` block in `run-context.json` - the first proof of the capability-driven flow on a non-enumerated ecosystem. Read it after Step 2c's core run, before scoring, and act on each capability's `state`:
+When the deterministic core detects a Maven or Gradle project (a build file plus at least one `.java`, `.kt`, `.scala` or `.groovy` file outside platform-wrapper `android/` directories, Cordova's `platforms/android/` included: a Flutter, React Native, Capacitor or Cordova shell is not a JVM codebase) it emits a `capability_offers` block in `run-context.json` - the first proof of the capability-driven flow on a non-enumerated ecosystem. Read it after Step 2c's core run, before scoring, and act on each capability's `state`:
 
 ```bash
 jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"
@@ -218,7 +218,7 @@ The script prints a one-line summary (file count, lizard vs scc coverage, churn 
 **Build artifacts and generated code are filtered by default.** The script excludes two classes of files:
 
 - **Build artifacts**: `main.dart.js`, Flutter canvaskit/skwasm runtime bundles (`canvaskit.js`, `skwasm*.js`), `*.min.js`, `*.bundle.js`, `*.chunk.js`, `*.map`, sourcemaps, service workers, and files under `node_modules/`, `dist/`, `build/`, `.next/`, `.nuxt/`, `.output/`, `coverage/`, etc.
-- **Generated code**: protobuf bindings (`*.pb.go`, `*_grpc.pb.go`, `*.pb.gw.go`, `*.connect.go`, `*_pb.ts`, `*_pb.d.ts`, `*_pb2.py`, `*.pb.cc`, `*.pb.h`), Go generators (`*.gen.go`, `wire_gen.go`, `zz_generated_*.go`, `bindata.go`), .NET source generators (`*.designer.cs`, `*.g.cs`), Dart/Flutter codegen (`*.freezed.dart`, `*.g.dart`, `*.gr.dart`).
+- **Generated code**: protobuf bindings (`*.pb.go`, `*_grpc.pb.go`, `*.pb.gw.go`, `*.connect.go`, `*_pb.ts`, `*_pb.d.ts`, `*_pb2.py`, `*.pb.cc`, `*.pb.h`), Go generators (`*.gen.go`, `wire_gen.go`, `zz_generated_*.go`, `bindata.go`), .NET source generators (`*.designer.cs`, `*.g.cs`), Dart/Flutter codegen (`*.freezed.dart`, `*.g.dart`, `*.gr.dart`), `*.generated.*`, `*.gen.ts`, `database.types.ts`, and any file with a comment in its first 5 lines carrying a generator marker (`DO NOT EDIT`, `@generated`, etc.; reason `generated-header`) or whose average line exceeds 1,000 characters (reason `long-lines`). Content-matched files are listed in `excluded_generated` (stats file and `run-context.json`), which the report and gate disclose.
 
 Full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS`. If you specifically want to score these (e.g., to visualise how much of the repo is generated), pass `--include-artifacts`.
 
@@ -269,7 +269,7 @@ Full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS
 
 The script's own output directory `.assess/` is excluded automatically - prior runs' `run-context.json` and SVGs never feed the next run's heatmap, the doc graph, or the dead-code scan. Test fixtures under `**/tests/fixtures/**` are likewise excluded automatically - they are inputs that exercise the scanners (sample `CLAUDE.md` / monolithic-instruction files), not navigational docs or live code, so counting them would inflate the orphan rate and depress the Layer 0 navigability read.
 
-**Raw-source-tree exclusion.** The read-side metrics (orphan rate, reachability, broken links) describe the **curated wiki** - the navigable layer an agent traverses. A repo can also track trees of raw, machine-extracted source documents (a disclosure / SAR export of hundreds of `.msg`/`.pdf`/`.docx` files converted to markdown). Those are immutable raw sources: they legitimately have no inbound wiki links and carry machine-extracted, non-navigational links (`mailto:`/`tel:`/footer URLs), so counting them as orphans / broken links inflates the figures and masks the curated signal. The doc graph auto-detects such subtrees - threshold-based: a large subtree that is almost entirely link-isolated *and* carries the machine-extraction fingerprint (`lib/raw_source.py`) - and **excludes** them from the headline metrics, reporting each excluded tree + its file count (`doc_graph.excluded_raw_trees`) and the raw layer's own figures separately (`raw_source_doc_count` / `raw_source_orphan_rate` / `raw_source_broken_links`). A repo with no raw-source tree is unaffected. The detection reuses the link graph already built, so there is no second parse.
+**Raw-source-tree exclusion.** The read-side metrics (orphan rate, reachability, broken links) describe the **curated wiki** - the navigable layer an agent traverses. A repo can also track trees of raw, machine-extracted source documents (a disclosure / SAR export of hundreds of `.msg`/`.pdf`/`.docx` files converted to markdown). Those are immutable raw sources: they legitimately have no inbound wiki links and carry machine-extracted, non-navigational links (`mailto:`/`tel:`/footer URLs), so counting them as orphans / broken links inflates the figures and masks the curated signal. The doc graph auto-detects such subtrees - threshold-based: a large subtree that is almost entirely link-isolated *and* carries the machine-extraction fingerprint (`lib/raw_source.py`) - and **excludes** them from the headline metrics, reporting each excluded tree + its file count (`doc_graph.excluded_raw_trees`) and the raw layer's own figures separately (`raw_source_doc_count` / `raw_source_orphan_rate` / `raw_source_broken_links`). A second fingerprint excludes working-notes trees the same way: pattern-named notes (plans, session logs, tickets) mostly linked once from one or two index files, reported as `excluded_working_notes_trees` / `working_notes_doc_count`. A repo with neither tree is unaffected. The detection reuses the link graph already built, so there is no second parse.
 
 **If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated - <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
 
