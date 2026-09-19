@@ -88,12 +88,16 @@ skill text before the model reads it:
 uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT"
 ```
 
-The substitution happens in the loaded skill text, not in the shell: `CLAUDE_PLUGIN_ROOT`
-is exported to hooks and MCP servers but is unset in the Bash tool calls a skill makes,
-so a lookup through it resolves to nothing. A skill that runs a sibling skill's script
+The substitution happens in the loaded skill text, not in the shell. The literal tokens
+`${CLAUDE_SKILL_DIR}` and `${CLAUDE_PLUGIN_ROOT}` are both filled in before the model reads
+the skill (the marathon contract gates rely on the second), but neither is set as an
+environment variable in the Bash tool calls a skill makes. A shell-expansion form such as
+`${CLAUDE_PLUGIN_ROOT:-...}` is not the literal token, so it is left for the shell, which
+sees an unset variable: that is why the old two-line bootstrap resolved to nothing. A skill that runs a sibling skill's script
 goes through the sibling directory (`${CLAUDE_SKILL_DIR}/../assess/scripts/...` in
-`skills/assess-pr/SKILL.md`). Reference files under `references/` are read with the Read
-tool and get no substitution; the model applies the directory the skill text named.
+`skills/assess-pr/SKILL.md`). Reference files under `references/` are read on demand, and
+the documentation does not say whether they are substituted, so they name the directory
+with a placeholder and the model uses the path the skill text gave it.
 
 (Each such `uv run` line carries a `<!-- chat-replace -->` marker, so the standalone ZIP
 build swaps it for a bare `scripts/...` path. The build's integration tests assert neither
