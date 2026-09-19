@@ -1474,6 +1474,7 @@ def build_run_context(
     # signals, which the report writer uses for free slots before judgement.
     ctx["gap_actions"] = build_gap_actions(
         ctx["coverage_report"], doc_graph, current.get("top_hotspots"),
+        ctx["archetype"] if isinstance(ctx.get("archetype"), dict) else None,
     )
     # Config-exclusion disclosure: config excludes silently drop paths from every
     # scan, so a finding suppressed by an exclude must be counted and named rather
