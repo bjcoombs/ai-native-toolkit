@@ -44,7 +44,10 @@ def _journal(root: Path) -> None:
 
 
 def _graph(root: Path) -> dict:
-    return build_doc_graph(root, **load_working_notes_config(root)).as_dict()
+    cfg = load_working_notes_config(root)
+    return build_doc_graph(
+        root, working_notes_dirs=cfg.dirs, working_notes_ignore=cfg.ignore,
+    ).as_dict()
 
 
 def test_working_notes_dirs_forces_classification(tmp_path: Path) -> None:
@@ -101,14 +104,8 @@ def test_working_notes_ignore_covers_subdirectories_and_wins_over_dirs(tmp_path:
 
 
 def test_working_notes_config_degrades_silently(tmp_path: Path) -> None:
-    assert load_working_notes_config(tmp_path) == {
-        "working_notes_dirs": [], "working_notes_ignore": [],
-    }
+    assert load_working_notes_config(tmp_path) == ([], [])
     _config(tmp_path, 'working_notes_dirs = "journal"\nworking_notes_ignore = ["", "/", 7, "a/b/"]\n')
-    assert load_working_notes_config(tmp_path) == {
-        "working_notes_dirs": [], "working_notes_ignore": ["a/b"],
-    }
+    assert load_working_notes_config(tmp_path) == ([], ["a/b"])
     _config(tmp_path, "working_notes_dirs = [\n")  # malformed TOML
-    assert load_working_notes_config(tmp_path) == {
-        "working_notes_dirs": [], "working_notes_ignore": [],
-    }
+    assert load_working_notes_config(tmp_path) == ([], [])

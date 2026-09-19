@@ -500,8 +500,8 @@ def main() -> int:
         root,
         extra_exclude_dirs=extra_dirs,
         extra_exclude_patterns=extra_patterns,
-        working_notes_dirs=working_notes["working_notes_dirs"],
-        working_notes_ignore=working_notes["working_notes_ignore"],
+        working_notes_dirs=working_notes.dirs,
+        working_notes_ignore=working_notes.ignore,
     )
     if not result.available:
         print(f"error: doc graph unavailable - {result.reason}", file=sys.stderr)

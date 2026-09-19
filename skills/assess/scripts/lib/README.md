@@ -349,7 +349,7 @@ Reads the optional per-repo `.assess/config.toml`: `exclude_dirs` / `exclude_pat
 exclusion is consistent), the `[gate]` and `[structure]` sections, and the `[[generated]]`
 folder->source provenance map (issue #178) consumed by `doc_provenance.py`, and the
 `working_notes_dirs` / `working_notes_ignore` directory lists (issue #367), which
-`load_working_notes_config` returns as `build_doc_graph` keywords for both
+`load_working_notes_config` returns as a typed `WorkingNotesConfig` pair for both
 `assess_core.py` and `doc-graph-svg.py`. `resolve_excludes`
 is the single shared path that combines config excludes with CLI `--exclude`; both the treemap
 CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.

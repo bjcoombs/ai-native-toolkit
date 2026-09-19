@@ -1283,8 +1283,8 @@ def build_run_context(
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
         scope=scope_abs,
-        working_notes_dirs=working_notes["working_notes_dirs"],
-        working_notes_ignore=working_notes["working_notes_ignore"],
+        working_notes_dirs=working_notes.dirs,
+        working_notes_ignore=working_notes.ignore,
     ).as_dict())
     doc_to_code = (doc_graph.get("doc_to_code_edges", [])
                    if doc_graph.get("available") else [])

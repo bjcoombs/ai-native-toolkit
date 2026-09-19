@@ -50,6 +50,7 @@ import fnmatch
 import sys
 import tomllib
 from pathlib import Path
+from typing import NamedTuple
 
 
 CONFIG_FILE = "config.toml"
@@ -337,8 +338,15 @@ def _dir_list(config: dict, key: str) -> list[str]:
     return out
 
 
-def load_working_notes_config(repo_root: Path) -> dict[str, list[str]]:
-    """Return the working-notes overrides as ``build_doc_graph`` keywords.
+class WorkingNotesConfig(NamedTuple):
+    """The working-notes overrides, as repo-relative directory paths."""
+
+    dirs: list[str]
+    ignore: list[str]
+
+
+def load_working_notes_config(repo_root: Path) -> WorkingNotesConfig:
+    """Return the working-notes overrides for ``build_doc_graph``.
 
     ``working_notes_dirs`` forces each listed directory to be reported as a
     working-notes tree whatever its size or fingerprint (issue #367);
@@ -348,10 +356,10 @@ def load_working_notes_config(repo_root: Path) -> dict[str, list[str]]:
     silently" contract as the other loaders.
     """
     cfg = load_config(repo_root)
-    return {
-        "working_notes_dirs": _dir_list(cfg, "working_notes_dirs"),
-        "working_notes_ignore": _dir_list(cfg, "working_notes_ignore"),
-    }
+    return WorkingNotesConfig(
+        dirs=_dir_list(cfg, "working_notes_dirs"),
+        ignore=_dir_list(cfg, "working_notes_ignore"),
+    )
 
 
 def split_cli_excludes(cli_excludes: list[str]) -> tuple[set[str], list[str]]:
