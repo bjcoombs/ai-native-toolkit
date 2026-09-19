@@ -269,14 +269,14 @@ These artefacts look true but aren't - the most dangerous failure mode for an ag
 | Layer | Signal Type | Instance | Why it lies |
 |-------|-------------|----------|-------------|
 | 0 | Stale hub doc | `<path>` (<N>d stale; subject churned <M> commits in window) | A central doc agents anchor on, frozen while its subject code moves - reads as the map, describes terrain that no longer exists |
-| 0 | False instruction claim | `<file>:<line>` - `<path>` (<kind>) | The agent instruction file states enforcement or a pin the repo does not back - an agent trusts the rule as guarded when nothing checks it |
+| 0 | False instruction claim | `<file>:<line>` - `<path>` (<kind>) | The agent instruction file states enforcement, a pin or a file count the repo does not back - an agent trusts the rule as guarded when nothing checks it |
 | 1 | Dead-but-present | `<path>` - `<symbol>` (<kind>) | Compiles and reads as live, but nothing in *this* repo calls it - an agent extends or trusts a path that is never exercised |
 | 6 | Green-but-hollow | `<path>` (coverage <C>% vs mutation <K>%) | Tests execute the file (green coverage) but don't constrain it (mutants survive) - the gate says "tested" while behaviour is unpinned |
 
 **Populate each row from `run-context.json`; omit any row whose signal is absent or below threshold, and omit the entire Lying Signals subsection when no row qualifies:**
 
 - **L0 - stale hub doc:** take `stale_hubs[0]` only when its `ratio > 2.0` **and** `confidence != "low"` (a `repo-baseline` subject is `confidence: low` - its "subject churn" is the whole repo's churn, too coarse to call a lie). Fill from `path`, `last_commit_days`, `code_churn_in_window`.
-- **L0 - false instruction claim:** take `instruction_claims.failures[0]` when `instruction_claims.failed > 0`; fill from `file`, `line`, `path`, `kind` and `reason` (`enforcement`: no CI configuration or task runner references the script; `pin`: the pinned file lacks `version` or does not exist). Use only a failure the scorer confirmed and cited in Layer 0 evidence; when it dropped them all, no row. Name the count when more than one was confirmed ("and <n - 1> more").
+- **L0 - false instruction claim:** when `instruction_claims.failed > 0`, take the first entry of `instruction_claims.failures` that the scorer confirmed and cited in Layer 0 evidence; when it confirmed none, no row. Fill from `file`, `line`, `path`, `kind` and `reason` (`enforcement`: no CI configuration or task runner references the script; `pin`: the pinned file lacks `version` or does not exist; `count`: the sentence claims `claimed` files for the pattern and `actual` match - print both numbers). Name the count when more than one was confirmed ("and <n - 1> more").
 - **L1 - dead-but-present:** take `dead_code.candidates[0]`; fill from `path`, `symbol`, `kind`. Keep the `dead_code.caveat` in mind - static reachability proves "nothing in this repo calls it," never "no external consumer calls it" - so frame it as a candidate, not a verdict.
 - **L6 - green-but-hollow:** take `test_pressure.survivor_clusters[0]` only when `test_pressure.survivor_density.overall > 0.3`; fill the file from the cluster's `file`. State the mutation score as `1 - survivor_density.overall` and pair it with the file's line coverage when you have it. This is the hollow-gate pattern Layer 6 scores Partial for.
 

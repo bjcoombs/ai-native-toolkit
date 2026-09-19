@@ -27,6 +27,16 @@ Claim kinds:
   ``3.11`` verifies against a file holding ``3.11.9``: the check under-reports
   rather than accuse). A missing file is a failed claim; a sentence with no
   version, or with two different versions, is skipped.
+- ``count``: an integer followed by a word ("43 pgTAP suites") in a sentence
+  that also names one backticked glob pattern (``supabase/tests/*.sql``). The
+  pattern is matched relative to the repository root and the matching files
+  (not directories) are counted. Verified when the two numbers differ by no
+  more than the larger of 10% (of the larger number) or 2. There is no noun
+  table: the backticked pattern is the only thing that makes a number
+  checkable, so a sentence with no pattern, a pattern with no wildcard (a
+  directory may hold files or subdirectories), two integers or two patterns
+  (which counts which is a guess), or a pattern that leaves the repository is
+  skipped.
 
 A sentence that fits no kind is skipped silently. Adding a kind means one
 extractor in ``_EXTRACTORS`` (sentence -> claims) and one verifier in
@@ -77,9 +87,17 @@ _ENFORCEMENT_TRIGGER = re.compile(r"(?i:\benforced\b|\bruns in\b|\bchecked by\b)
 _PINNED_IN = re.compile(r"pinned in\s+`([^`\s]+)`", re.IGNORECASE)
 _VERSION = re.compile(r"(?<![\d.])(\d+(?:\.\d+)+)(?!\.?\d)")
 
+# A count: an integer, not part of a version, decimal, list or percentage,
+# followed by a word. Read with backticked spans removed.
+_COUNT = re.compile(r"(?<![\w.,%$/-])(\d+)(?=\s+[A-Za-z])")
+_GLOB_CHARS = re.compile(r"[*?]")
+COUNT_TOLERANCE = 0.10
+COUNT_MIN_DELTA = 2
+
 _FENCE = re.compile(r"^\s*(```|~~~)")
 # A line that starts its own block rather than continuing the paragraph above.
 _BLOCK_START = re.compile(r"^\s*(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|\||>)")
+_HEADING = re.compile(r"^\s*#{1,6}\s")
 _SENTENCE_END = re.compile(r"[.!?](?=\s|$)")
 
 
@@ -105,7 +123,15 @@ def _paragraphs(text: str) -> Iterable[list[tuple[int, str]]]:
         if fenced or not line.strip() or _BLOCK_START.match(line):
             if block:
                 yield block
-            block = [] if fenced or not line.strip() else [(number, line)]
+            if fenced or not line.strip():
+                block = []
+            elif _HEADING.match(line):
+                # A heading is its own block: the prose under it, blank line
+                # or not, must not borrow its words or report its line.
+                yield [(number, line)]
+                block = []
+            else:
+                block = [(number, line)]  # a list item or table row seeds its block
             continue
         block.append((number, line))
     if block:
@@ -172,6 +198,36 @@ def _pin_claims(sentence: str, line: int) -> list[Claim]:
     return [Claim("pin", line, pins[0], {"version": versions.pop()})]
 
 
+def _count_claims(sentence: str, line: int) -> list[Claim]:
+    spans = _BACKTICK_SPAN.findall(sentence)
+    patterns = [s for s in spans if _GLOB_CHARS.search(s) and not re.search(r"\s", s)]
+    if len(patterns) != 1:
+        return []
+    pattern = patterns[0].removeprefix("./")
+    if pattern.startswith(("/", "~")) or ".." in Path(pattern).parts:
+        return []
+    numbers = _COUNT.findall(_BACKTICK_SPAN.sub(" ", sentence))
+    if len(numbers) != 1:
+        return []
+    return [Claim("count", line, pattern, {"claimed": int(numbers[0])})]
+
+
+def count_within_tolerance(claimed: int, actual: int) -> bool:
+    """True when the difference is at most the larger of 10% or 2."""
+    allowed = max(COUNT_TOLERANCE * max(claimed, actual), COUNT_MIN_DELTA)
+    return abs(claimed - actual) <= allowed
+
+
+def _count_matches(repo_root: Path, pattern: str) -> int:
+    root = repo_root.resolve()
+    try:
+        matches = [p for p in root.glob(pattern)
+                   if ".git" not in p.relative_to(root).parts and p.is_file()]
+    except (OSError, ValueError, NotImplementedError):
+        return 0
+    return len(matches)
+
+
 def _has_ci_config(repo_root: Path) -> bool:
     return any((repo_root / rel).exists() for rel in CI_CONFIG_PATHS)
 
@@ -192,13 +248,23 @@ def _verify_pin(repo_root: Path, claim: Claim) -> dict[str, Any] | None:
     return {"reason": "pinned file does not contain the version"}
 
 
+def _verify_count(repo_root: Path, claim: Claim) -> dict[str, Any] | None:
+    actual = _count_matches(repo_root, claim.path)
+    if count_within_tolerance(claim.fields["claimed"], actual):
+        return None
+    return {"actual": actual,
+            "reason": "the number of files matching the pattern differs from the claim"}
+
+
 _EXTRACTORS: tuple[Callable[[str, int], list[Claim]], ...] = (
     _enforcement_claims,
     _pin_claims,
+    _count_claims,
 )
 _VERIFIERS: dict[str, Callable[[Path, Claim], dict[str, Any] | None]] = {
     "enforcement": _verify_enforcement,
     "pin": _verify_pin,
+    "count": _verify_count,
 }
 
 
@@ -226,8 +292,9 @@ def scan_instruction_claims(repo_root: Path | str, files: Iterable[str]) -> dict
     ``CLAUDE.md``) are scanned once, under the first key.
 
     Returns ``{total, verified, failed, failures}``; each failure carries
-    ``file``, ``line``, ``kind``, ``path`` (the script or pinned file) and
-    ``reason``, plus the kind's own fields (``version`` for a pin).
+    ``file``, ``line``, ``kind``, ``path`` (the script, pinned file or counted
+    pattern) and ``reason``, plus the kind's own fields (``version`` for a pin,
+    ``claimed`` and ``actual`` for a count).
     """
     root = Path(repo_root)
     block = empty_block()

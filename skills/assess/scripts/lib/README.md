@@ -515,19 +515,24 @@ orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kin
 or change to a check rule.
 
 **`instruction_claims.py`**
-Verifies the checkable claims an agent instruction file makes (issue #368), no
+Verifies the checkable claims an agent instruction file makes (issues #368, #369), no
 model. `scan_instruction_claims(repo_root, files)` reads each graded instruction
 file (the keys of `instruction_files`; two keys resolving to one file are read
 once), splits prose into sentences per paragraph (fenced code skipped, a wrapped
-sentence reported at the line it starts on) and extracts two kinds: `enforcement`
+sentence reported at the line it starts on, a heading its own block) and extracts three kinds: `enforcement`
 (a backticked shell script, or any script under `scripts/`, `bin/`, `tools/`,
 `ci/` or `hack/`, in a sentence with "enforced", "runs in", "checked by" or "CI";
 verified when the path occurs in any CI configuration or in a task runner CI
 calls through such as `Makefile` or `package.json`; skipped when the repo has no
 CI configuration, since nothing can confirm or refute it) and `pin` ("pinned in"
 a backticked file plus exactly one dotted version in the sentence, verified when
-the file exists and contains the version as a substring). Each failure carries a
-`reason`. Both checks use
+the file exists and contains the version as a substring) and `count` (an
+integer followed by a word, plus exactly one backticked glob pattern, in the
+sentence; the pattern is globbed from the repo root and matching files counted;
+verified when the difference is at most the larger of 10% or 2, a failure adding
+`claimed` and `actual`; no noun table, so a sentence with no pattern, no wildcard,
+two integers or two patterns is skipped). Each failure carries a `reason`. The
+enforcement and pin checks use
 `evidence_check.is_referenced_in`, so the search is the same fail-closed one.
 The core writes the result as the run-context block `instruction_claims`
 (`{total, verified, failed, failures[{file, line, kind, path, reason, ...}]}`, zeros when

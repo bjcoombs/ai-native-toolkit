@@ -197,3 +197,99 @@ def test_build_run_context_carries_the_block(tmp_path: Path) -> None:
     assert _failures(ctx["instruction_claims"]) == [["AGENTS.md", 5, "enforcement"]]
     written = json.loads((tmp_path / ".assess" / "run-context.json").read_text())
     assert written["instruction_claims"]["failed"] == 1
+
+
+def test_heading_directly_above_prose_does_not_lend_its_words_or_line() -> None:
+    # No blank line under the heading: the `CI` in it must not trigger the
+    # sentence below, and a claim there reports its own line, not the heading's.
+    assert extract_claims("## CI\n`scripts/lint.sh` must pass.\n") == []
+    claims = extract_claims("# Agents\n## Lint\n`scripts/lint.sh` is enforced in CI.\n")
+    assert [(c.kind, c.line) for c in claims] == [("enforcement", 3)]
+
+
+@pytest.fixture
+def counted(tmp_path: Path) -> Path:
+    (tmp_path / "supabase" / "tests").mkdir(parents=True)
+    for i in range(177):
+        (tmp_path / "supabase" / "tests" / f"t{i}.sql").write_text("")
+    (tmp_path / "cmds").mkdir()
+    for i in range(7):
+        (tmp_path / "cmds" / f"c{i}.md").write_text("# cmd\n")
+    return tmp_path
+
+
+def test_count_claim_far_from_the_pattern_fails_with_both_numbers(counted: Path) -> None:
+    (counted / "AGENTS.md").write_text(
+        "# Agents\n\nThere are 43 pgTAP suites matching `supabase/tests/*.sql`.\n")
+    block = scan_instruction_claims(counted, ["AGENTS.md"])
+    assert (block["total"], block["verified"], block["failed"]) == (1, 0, 1)
+    failure = block["failures"][0]
+    assert [failure["file"], failure["line"], failure["kind"]] == ["AGENTS.md", 3, "count"]
+    assert (failure["claimed"], failure["actual"]) == (43, 177)
+    assert failure["path"] == "supabase/tests/*.sql"
+
+
+def test_count_sentence_without_a_backticked_pattern_is_no_claim(counted: Path) -> None:
+    (counted / "AGENTS.md").write_text("# Agents\n\nWe maintain 43 pgTAP suites.\n")
+    assert scan_instruction_claims(counted, ["AGENTS.md"]) == {
+        "total": 0, "verified": 0, "failed": 0, "failures": []}
+
+
+def test_count_within_ten_percent_or_two_verifies(counted: Path) -> None:
+    # 170 vs 177 is inside 10%; 5 vs 7 is a difference of exactly 2; 150 vs 177 is not.
+    (counted / "AGENTS.md").write_text(
+        "# Agents\n\nThere are 170 pgTAP files matching `supabase/tests/*.sql`.\n\n"
+        "The plugin ships 5 commands in `cmds/*.md`.\n\n"
+        "The 150 migrations live in `supabase/tests/*.sql`.\n")
+    block = scan_instruction_claims(counted, ["AGENTS.md"])
+    assert (block["total"], block["verified"], block["failed"]) == (3, 2, 1)
+    failure = block["failures"][0]
+    assert (failure["line"], failure["claimed"], failure["actual"]) == (7, 150, 177)
+
+
+def test_count_tolerance_is_the_larger_of_ten_percent_or_two() -> None:
+    from lib.instruction_claims import count_within_tolerance
+
+    assert count_within_tolerance(5, 7)
+    assert not count_within_tolerance(4, 7)
+    assert count_within_tolerance(100, 110)
+    assert not count_within_tolerance(100, 112)
+
+
+def test_count_pattern_matching_nothing_fails_with_actual_zero(tmp_path: Path) -> None:
+    (tmp_path / "AGENTS.md").write_text("There are 12 suites in `tests/*.sql`.\n")
+    failure = scan_instruction_claims(tmp_path, ["AGENTS.md"])["failures"][0]
+    assert (failure["kind"], failure["claimed"], failure["actual"]) == ("count", 12, 0)
+
+
+def test_count_recursive_glob_counts_files_not_directories(tmp_path: Path) -> None:
+    for sub in ("a", "b/c"):
+        (tmp_path / "docs" / sub).mkdir(parents=True)
+        (tmp_path / "docs" / sub / "x.md").write_text("")
+    (tmp_path / "AGENTS.md").write_text("The 2 pages under `docs/**/*.md` are the map.\n")
+    assert scan_instruction_claims(tmp_path, ["AGENTS.md"])["verified"] == 1
+
+
+@pytest.mark.parametrize("sentence", [
+    # A path with no wildcard: a directory may hold files or subdirectories.
+    "The 12 skills live in `skills/`.",
+    # Two numbers: which one is the count is a guess.
+    "Keep 5 of the 7 commands in `cmds/*.md`.",
+    # Two patterns: which one the number counts is a guess.
+    "There are 7 commands in `cmds/*.md` and `extra/*.md`.",
+    # A version, a percentage or a number inside the backticks is not a count.
+    "Node 20.11.0 builds `cmds/*.md`.",
+    "Keep 80% coverage in `cmds/*.md`.",
+    "Run `ls cmds/*.md | head -3` first.",
+    # A pattern that leaves the repository is not counted.
+    "There are 3 files in `../other/*.md`.",
+    "There are 3 files in `/etc/*.conf`.",
+])
+def test_count_claim_is_skipped_when_the_sentence_is_ambiguous(sentence: str) -> None:
+    assert [c for c in extract_claims(sentence + "\n") if c.kind == "count"] == []
+
+
+def test_count_claim_is_extracted_with_its_number_and_pattern() -> None:
+    claims = extract_claims("# Agents\n\nThe plugin ships 5 commands in `cmds/*.md`.\n")
+    assert [(c.kind, c.line, c.path, c.fields) for c in claims] == [
+        ("count", 3, "cmds/*.md", {"claimed": 5})]
