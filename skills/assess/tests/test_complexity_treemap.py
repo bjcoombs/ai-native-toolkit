@@ -930,3 +930,19 @@ def test_generated_header_all_excluded_error_names_the_exclusion(
     assert "no scoreable files found" in err
     assert "1 excluded as generated" in err
     assert "--include-artifacts" in err
+
+
+def test_write_stats_paths_match_generated_header_list_separator(treemap, tmp_path):
+    """Row paths use forward slashes on every host, the same form as
+    excluded_generated, so assess_core can intersect the two sets on Windows
+    (where str() of a relative path would use backslashes)."""
+    (tmp_path / "db").mkdir()
+    f = tmp_path / "db" / "a.py"
+    f.write_text("x = 1\n")
+    out = tmp_path / "stats.json"
+    treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, tmp_path, out)
+    paths = [r["path"] for r in json.loads(out.read_text())["top_large"]]
+    assert paths == ["db/a.py"]
+    src = (Path(treemap.__file__)).read_text()
+    rel_body = src[src.index("    def rel(p: Path) -> str:"):][:400]
+    assert "as_posix()" in rel_body and "str(p" not in rel_body

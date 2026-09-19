@@ -816,10 +816,12 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         return float(np.percentile(values, q)) if values else 0.0
 
     def rel(p: Path) -> str:
+        # Forward slashes on every host, matching `excluded_generated` (built
+        # in `collect`), so assess_core can compare the two path sets on Windows.
         try:
-            return str(p.relative_to(root))
+            return p.relative_to(root).as_posix()
         except ValueError:
-            return str(p)
+            return p.as_posix()
 
     def max_fn(path: Path) -> float | None:
         vals = fn_ccn_by_path.get(path)
