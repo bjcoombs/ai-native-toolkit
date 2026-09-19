@@ -284,7 +284,15 @@ any hotspot page whose source file left the tree as `retired - file deleted`
 (history preserved, no active page lies about a live file); `append_log_entry`
 chains each `log.md` entry with a `<!-- chain:<hash> -->` marker and
 `verify_log_chain(assess_dir)` returns `(valid, broken_at_entry)` so a later edit
-of a prior entry is detected and disclosed. Both are additive and back-compat -
+of a prior entry is detected and disclosed. The tool's own edits go through
+`rewrite_log_entry(assess_dir, index, new_content)`, which re-chains the entry and
+every later one (stopping at an entry that was already broken); `find_log_entry`,
+`read_log_entries` and `log_entry_is_unfinalized` (placeholder `(LLM fills in)`)
+address entries by their `assess:run_id` stamp, and
+`supersede_unfinalized_log_entry` drops a same-date, same-commit run's unfilled
+last entry before the core appends its own; it and `--drop-entry` act only on an
+entry that starts with its own stamp (`log_entry_owns_span`), never on a span that
+also holds pre-chain history. Both are additive and back-compat -
 a legacy wiki (no markers, live files) is untouched and reads valid.
 
 **`treemap_render.py`**
