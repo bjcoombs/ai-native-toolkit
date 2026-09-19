@@ -43,11 +43,12 @@ def _git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=env)
 
 
-def _pr(n: int, *, merger=PERSON, reviews=(), comments=()) -> dict:
+def _pr(n: int, *, merger=PERSON, reviews=(), comments=(), state="APPROVED",
+        merged_at="2026-09-01T00:00:00Z") -> dict:
     return {
         "number": n, "title": f"SECRET-TITLE-{n}", "reviewDecision": "",
-        "author": PERSON, "mergedBy": merger,
-        "reviews": [{"author": a, "state": "APPROVED"} for a in reviews],
+        "author": PERSON, "mergedBy": merger, "mergedAt": merged_at,
+        "reviews": [{"author": a, "state": state} for a in reviews],
         "comments": [{"author": a, "body": "SECRET-BODY"} for a in comments],
     }
 
@@ -96,10 +97,12 @@ def test_review_reality_unreviewed_required_review_is_hollow(world) -> None:
     _require_by_ruleset(world)
     world.serve("prs.json", [_pr(n) for n in range(10)])
     block = scan_review_reality(world.root)
+    del block["oldest_merged_days_ago"]
     assert block == {
         "available": True, "merged_count": 10, "reviewed_share": 0.0,
-        "bot_review_share": 0.0, "self_merged_share": 1.0,
+        "approved_share": 0.0, "bot_review_share": 0.0, "self_merged_share": 1.0,
         "review_required": True, "hollow_required_review": True,
+        "required_approval_bypassed": True,
     }
     # The ruleset already said yes: the protection read is skipped.
     assert not any("/protection" in c for c in world.calls())
@@ -208,3 +211,35 @@ def test_review_reality_writes_no_title_or_login(world) -> None:
     text = json.dumps(scan_review_reality(world.root)).lower()
     for secret in ("secret", "alice", "bob", "reviewbot"):
         assert secret not in text
+
+
+def test_review_reality_bot_comment_reviews_are_not_approvals(world) -> None:
+    # An AI reviewer leaves a COMMENTED review on every PR; nobody approves.
+    _require_by_ruleset(world)
+    world.serve("prs.json", [_pr(n, reviews=[REVIEWER], state="COMMENTED") for n in range(10)])
+    block = scan_review_reality(world.root)
+    assert block["reviewed_share"] == 1.0
+    assert block["approved_share"] == 0.0
+    assert block["hollow_required_review"] is False
+    assert block["required_approval_bypassed"] is True
+
+
+def test_review_reality_small_sample_withholds_both_flags(world) -> None:
+    _require_by_ruleset(world)
+    world.serve("prs.json", [_pr(n) for n in range(4)])
+    block = scan_review_reality(world.root)
+    assert block["reviewed_share"] == 0.0
+    assert block["hollow_required_review"] is None
+    assert block["required_approval_bypassed"] is None
+
+
+def test_review_reality_reports_age_of_oldest_merge() -> None:
+    from datetime import datetime, timezone
+
+    from lib.review_reality import summarize
+
+    now = datetime(2026, 9, 19, tzinfo=timezone.utc)
+    prs = [_pr(0, merged_at="2026-09-18T12:00:00Z"), _pr(1, merged_at="2026-08-20T00:00:00Z"),
+           _pr(2, merged_at=None)]
+    assert summarize(prs, True, now=now)["oldest_merged_days_ago"] == 30
+    assert summarize([_pr(0, merged_at=None)], True, now=now)["oldest_merged_days_ago"] is None

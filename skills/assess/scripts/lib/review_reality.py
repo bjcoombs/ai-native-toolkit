@@ -10,12 +10,24 @@ next to whether the default branch requires an approving review.
 Block (``review_reality`` in run-context.json)::
 
     {"available": True, "merged_count": int,
+     "oldest_merged_days_ago": int | None,  # age of the oldest sampled merge
      "reviewed_share": float | None,      # a review by an account other than the author
+     "approved_share": float | None,      # an APPROVED review by an account other than the author
      "bot_review_share": float | None,    # a comment by a bot other than github-actions
      "self_merged_share": float | None,   # author and merger the same account
      "review_required": bool | None,      # ruleset pull_request rule or classic protection,
                                           # each with required_approving_review_count >= 1
-     "hollow_required_review": bool | None}  # review_required and reviewed_share < 0.2
+     "hollow_required_review": bool | None,  # review_required and reviewed_share < 0.2
+     "required_approval_bypassed": bool | None}  # review_required and approved_share < 0.2
+
+The two flags answer different questions. ``hollow_required_review``: did anyone
+other than the author look at the change at all (an advisory bot's review
+counts). ``required_approval_bypassed``: did the approval the rule demands
+happen; it fires on a repo where an AI reviewer comments on every pull request
+while merges land without an approval. Both are null below ``MIN_SAMPLE``
+merged pull requests. The rules are read as they stand now and the sample may
+predate them, so ``oldest_merged_days_ago`` lets a reader weigh a rule added
+recently against older merges.
 
 Shares are floats in [0, 1], None when nothing was sampled. ``review_required``
 is None when the rules could not be read (a refused protection read on a branch
@@ -39,6 +51,7 @@ goes through ``gh_cli``.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -51,16 +64,20 @@ DEFAULT_LIMIT = 30
 # Under this share of reviewed merges, a required-review rule is hollow.
 HOLLOW_THRESHOLD = 0.2
 
+# Fewer merged pull requests than this are too few to call a rule bypassed:
+# both flags are null below it.
+MIN_SAMPLE = 5
+
 # Distinct unmarked comment logins probed for a bot account per run.
 MAX_LOGIN_PROBES = 20
 
 # Status-comment bot; its comments are not review.
 _STATUS_BOTS = frozenset({"github-actions", "github-actions[bot]"})
 
-# The issue's field list. reviewDecision is fetched for parity with it but not
-# scored: it reflects the current rule, not whether anyone other than the author
-# reviewed.
-PR_FIELDS = "author,mergedBy,reviews,reviewDecision,comments"
+# The issue's field list plus mergedAt (for the sample's age). reviewDecision is
+# fetched because the issue names it but is not scored: it reflects the current
+# rule, not whether anyone other than the author reviewed.
+PR_FIELDS = "author,mergedBy,mergedAt,reviews,reviewDecision,comments"
 
 
 def _login(actor: Any) -> str | None:
@@ -120,10 +137,16 @@ def _has_bot_comment(pr: dict, bots: _BotClassifier) -> bool | None:
     return None if unknown else False
 
 
-def _reviewed_by_other(pr: dict) -> bool:
+def _reviewed_by_other(pr: dict, approving: bool = False) -> bool:
+    """A review by an account other than the author; ``approving`` counts only
+    reviews in the ``APPROVED`` state."""
     author = _login(pr.get("author"))
     for review in pr.get("reviews") or []:
-        reviewer = _login(review.get("author")) if isinstance(review, dict) else None
+        if not isinstance(review, dict):
+            continue
+        if approving and review.get("state") != "APPROVED":
+            continue
+        reviewer = _login(review.get("author"))
         if reviewer is not None and reviewer != author:
             return True
     return False
@@ -192,28 +215,56 @@ def review_required(slug: str) -> bool | None:
     return False
 
 
+def _flag(required: bool | None, share: float | None, total: int) -> bool | None:
+    """True when review is required and ``share`` is under the threshold.
+
+    False when review is not required; None when the requirement is unknown or
+    fewer than ``MIN_SAMPLE`` merges were sampled (too few to call a bypass)."""
+    if required is False:
+        return False
+    if required is None or share is None or total < MIN_SAMPLE:
+        return None
+    return share < HOLLOW_THRESHOLD
+
+
+def _days_ago(stamp: Any, now: datetime) -> int | None:
+    if not isinstance(stamp, str) or not stamp:
+        return None
+    try:
+        when = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0, (now - when).days)
+
+
 def summarize(prs: list[dict], required: bool | None,
-              bots: _BotClassifier | None = None) -> dict[str, Any]:
+              bots: _BotClassifier | None = None,
+              now: datetime | None = None) -> dict[str, Any]:
     """The available block from sampled pull requests (pure except bot probes)."""
     bots = bots or _BotClassifier()
+    now = now or datetime.now(timezone.utc)
     total = len(prs)
     reviewed = sum(_reviewed_by_other(pr) for pr in prs)
+    approved = sum(_reviewed_by_other(pr, approving=True) for pr in prs)
     self_merged = sum(_self_merged(pr) for pr in prs)
     verdicts = [_has_bot_comment(pr, bots) for pr in prs]
     bot_share = None if None in verdicts else _share(sum(bool(v) for v in verdicts), total)
     reviewed_share = _share(reviewed, total)
-    if required is None or reviewed_share is None:
-        hollow: bool | None = None if required is not False else False
-    else:
-        hollow = required and reviewed_share < HOLLOW_THRESHOLD
+    approved_share = _share(approved, total)
+    ages = [d for d in (_days_ago(pr.get("mergedAt"), now) for pr in prs) if d is not None]
     return {
         "available": True,
         "merged_count": total,
+        "oldest_merged_days_ago": max(ages) if ages else None,
         "reviewed_share": reviewed_share,
+        "approved_share": approved_share,
         "bot_review_share": bot_share,
         "self_merged_share": _share(self_merged, total),
         "review_required": required,
-        "hollow_required_review": hollow,
+        "hollow_required_review": _flag(required, reviewed_share, total),
+        "required_approval_bypassed": _flag(required, approved_share, total),
     }
 
 
