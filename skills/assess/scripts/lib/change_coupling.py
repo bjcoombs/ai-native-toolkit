@@ -142,17 +142,19 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
     """Map each historical path that git saw renamed to its current path.
 
     Parsed from ``git log --name-status -M --diff-filter=R``. Chains resolve to
-    their final name (``a -> b`` then ``b -> c`` maps ``a`` to ``c``). A source
-    path that exists again in the working tree is left out, so a name reused
-    after a rename keeps its own history. Paths are repo-relative, as :func:`parse_commit_file_sets`
-    prints them. Outside a git repo the result is empty and complete; on a git
+    their final name through renames in later commits only (``a -> b`` then
+    ``b -> c`` maps ``a`` to ``c``; ``b -> c`` then ``a -> b`` maps ``a`` to
+    ``b``). A source path that exists again in the working tree is left out, so
+    a name reused after a rename keeps its own history. Paths are repo-relative,
+    as :func:`parse_commit_file_sets` prints them. Outside a git repo the result is empty and complete; on a git
     failure it is empty and ``complete`` is False. ``top`` is as for :func:`parse_commit_file_sets`.
     """
     top = top or repo_top(repo_root)
     if top is None:
         return RenameMap({}, complete=True)
+    # \x1e marks each commit so renames can be ordered in time.
     cmd = ["git", "-c", "core.quotepath=false", "-C", top, "log", "--name-status", "-M",
-           "--diff-filter=R", "--pretty=format:"]
+           "--diff-filter=R", "--pretty=format:\x1e"]
     try:
         raw = subprocess.run(
             cmd, capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
@@ -160,23 +162,32 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return RenameMap({}, complete=False)
 
-    # git log is newest first; replay oldest first so a later rename of the same
-    # path wins.
-    step: dict[str, str] = {}
-    for line in reversed(raw.splitlines()):
-        parts = line.split("\t")
-        if len(parts) == 3 and parts[0].startswith("R"):
-            step[parts[1]] = parts[2]
-    # Resolve chains over every rename first, then drop sources that exist again
-    # in the working tree. Filtering first would cut a chain at a reused
-    # intermediate name (a -> b, b -> c, then a fresh b) and point a at b.
+    # git log is newest first; number commits oldest first, so a larger index is
+    # a later commit. edges[src] lists (index, dst) in time order.
+    edges: dict[str, list[tuple[int, str]]] = {}
+    for index, chunk in enumerate(reversed(raw.split("\x1e"))):
+        for line in chunk.splitlines():
+            parts = line.split("\t")
+            if len(parts) == 3 and parts[0].startswith("R"):
+                edges.setdefault(parts[1], []).append((index, parts[2]))
+
+    def next_edge(path: str, after: int) -> tuple[int, str] | None:
+        """The first rename of ``path`` in a commit later than ``after``."""
+        return next(((i, dst) for i, dst in edges.get(path, []) if i > after), None)
+
+    # A historical path maps to where its latest rename leads. The walk follows
+    # an edge only when it is later in time than the one that arrived, so a name
+    # freed by one rename and refilled by a later one (b -> c, then a -> b) is
+    # not chained through: a maps to b, not c. Chains resolve before sources that
+    # exist again in the working tree are dropped, so a reused intermediate name
+    # (a -> b, b -> c, then a fresh b) still leads a to c.
     resolved: dict[str, str] = {}
-    for old in step:
-        seen = {old}
-        cur = step[old]
-        while cur in step and cur not in seen:
-            seen.add(cur)
-            cur = step[cur]
+    for old, outgoing in edges.items():
+        at, cur = outgoing[-1]
+        hop = next_edge(cur, at)
+        while hop is not None:
+            at, cur = hop
+            hop = next_edge(cur, at)
         resolved[old] = cur
     top_path = Path(top)
     return RenameMap(

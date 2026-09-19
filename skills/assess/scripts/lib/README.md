@@ -78,8 +78,9 @@ Three signals derived from `git log`:
 
 `parse_commit_file_sets` lists each commit's files under the names they had then.
 `build_rename_map` reads `git log --name-status -M --diff-filter=R` into a `RenameMap`:
-`paths`, a historical-path to current-path map (chains resolved first, then any source name
-that exists again in the working tree is left out), and `complete`, False when git could not be read so an empty map is
+`paths`, a historical-path to current-path map (chains resolved first, following only renames
+made in later commits so a freed-and-refilled name is not chained through, then any source
+name that exists again in the working tree is left out), and `complete`, False when git could not be read so an empty map is
 never mistaken for "no renames". `fold_renames` rewrites the commit sets through `paths`,
 so history made before a rename counts under the current path. `repo_top` is the shared
 `git rev-parse --show-toplevel` helper; the git-log readers take an optional `top` so a
