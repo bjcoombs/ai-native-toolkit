@@ -21,9 +21,17 @@ Defaults are derived so the common case is a single argument:
   can't be detected).
 - ``--tools`` defaults to auto-detecting ``scc`` on PATH plus ``lizard`` (the
   always-present complexity backend); pass a comma list to override.
+- ``--paths <glob>`` / ``--paths-ignore <glob>`` (each repeatable, order kept)
+  become ``paths:`` / ``paths-ignore:`` under ``on.pull_request``. GitHub rejects
+  both on one event, so passing both is a usage error. With neither, when an
+  existing workflow under ``.github/workflows/`` filters pull requests by path (a
+  ``paths:`` or ``paths-ignore:`` key on a ``pull_request`` trigger, or
+  ``dorny/paths-filter``), the gate gets
+  ``paths-ignore: ['**/*.md', '.assess/**']`` and a line saying so is printed.
 
 Run:
     uv run assess_emit_workflow.py <repo_root> [--version V] [--branch B] [--tools a,b]
+        [--paths GLOB ... | --paths-ignore GLOB ...]
 """
 # /// script
 # requires-python = ">=3.11"
@@ -37,7 +45,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from lib.ci_workflow import emit_ci_workflow
+from lib.ci_workflow import DEFAULT_PATHS_IGNORE, emit_ci_workflow, find_path_filtered_workflow
 
 
 _REPO = "bjcoombs/ai-native-toolkit"
@@ -171,26 +179,71 @@ def _opt(args: list[str], name: str) -> str | None:
     return None
 
 
+def _opt_all(args: list[str], name: str) -> list[str]:
+    """Every value of a repeatable flag, in the order given."""
+    return [args[i + 1] for i, arg in enumerate(args[:-1]) if arg == name]
+
+
+def _path_filters(repo_root: Path, paths: list[str], paths_ignore: list[str]) -> tuple[list[str], list[str]]:
+    """The explicit filters, or the docs-only default when the repo already filters by path."""
+    if paths or paths_ignore:
+        return paths, paths_ignore
+    source = find_path_filtered_workflow(repo_root)
+    if source is None:
+        return [], []
+    globs = ", ".join(DEFAULT_PATHS_IGNORE)
+    print(
+        f"Applied the default paths-ignore ({globs}): {source.relative_to(repo_root)} "
+        "already filters pull requests by path, so docs-only and .assess/-only PRs skip "
+        "the gate, and doc-truth findings (lying_map, orphaned_understanding) no longer "
+        "gate them. A skipped PR reports no gate check at all, so a required status check "
+        "on the gate would stay pending on it. Pass --paths or --paths-ignore to override.",
+        file=sys.stderr,
+    )
+    return [], list(DEFAULT_PATHS_IGNORE)
+
+
+_USAGE = (
+    "Usage: assess_emit_workflow.py <repo_root> [--version V] [--branch B] [--tools a,b] "
+    "[--paths GLOB ... | --paths-ignore GLOB ...]"
+)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    flags = {"--version", "--branch", "--tools"}
+    flags = {"--version", "--branch", "--tools", "--paths", "--paths-ignore"}
     positional: list[str] = []
     i = 0
     while i < len(args):
         if args[i] in flags:
+            if i + 1 >= len(args) or args[i + 1] in flags:
+                print(f"{args[i]} needs a value.", file=sys.stderr)
+                print(_USAGE, file=sys.stderr)
+                return 2
+            if args[i] in {"--paths", "--paths-ignore"} and not args[i + 1].strip():
+                print(f"{args[i]} needs a non-empty value.", file=sys.stderr)
+                print(_USAGE, file=sys.stderr)
+                return 2
             i += 2
             continue
         if args[i].startswith("-"):
-            i += 1
-            continue
+            print(f"Unknown option {args[i]}: pass a flag and its value as two arguments.", file=sys.stderr)
+            print(_USAGE, file=sys.stderr)
+            return 2
         positional.append(args[i])
         i += 1
-    if not positional:
-        print(
-            "Usage: assess_emit_workflow.py <repo_root> "
-            "[--version V] [--branch B] [--tools a,b]",
-            file=sys.stderr,
-        )
+    if len(positional) != 1:
+        if len(positional) > 1:
+            print(
+                f"Unexpected arguments {positional[1:]}: quote globs so the shell does not expand them.",
+                file=sys.stderr,
+            )
+        print(_USAGE, file=sys.stderr)
+        return 2
+    paths, paths_ignore = _opt_all(args, "--paths"), _opt_all(args, "--paths-ignore")
+    if paths and paths_ignore:
+        print("GitHub rejects --paths and --paths-ignore on the same event; pass one.", file=sys.stderr)
+        print(_USAGE, file=sys.stderr)
         return 2
     repo_root = Path(positional[0]).resolve()
     version = _opt(args, "--version")
@@ -206,7 +259,10 @@ def main(argv: list[str] | None = None) -> int:
         if tools_arg is not None
         else _detect_tools()
     )
-    path = emit_ci_workflow(repo_root, tools, version, default_branch=branch)
+    paths, paths_ignore = _path_filters(repo_root, paths, paths_ignore)
+    path = emit_ci_workflow(
+        repo_root, tools, version, default_branch=branch, paths=paths, paths_ignore=paths_ignore,
+    )
     print(str(path))
     return 0
 

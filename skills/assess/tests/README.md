@@ -31,7 +31,7 @@ The two highest-frequency co-change pairs in the git history are:
 | `test_assess_finalize.py` | `scripts/assess_finalize.py` - LLM write-back; placeholder substitution in `log.md` and `hotspots/*.md` |
 | `test_assess_gate.py` | `scripts/assess_gate.py` - CI regression gate; complexity and containment threshold checks and exit codes |
 | `test_assess_report.py` | `scripts/assess_report.py` - deterministic report renderer; template substitution, section renderers, conditional fallbacks |
-| `test_emit_workflow.py` | `scripts/assess_emit_workflow.py` - CLI wrapper for the frozen-harness workflow emitter; default derivation and arg parsing |
+| `test_emit_workflow.py` | `scripts/assess_emit_workflow.py` - CLI wrapper for the frozen-harness workflow emitter; default derivation, arg parsing, path filters and the path-filter default |
 | `test_decomposition_parity.py` | `scripts/assess_core.py` + `scripts/assess_report.py` - parity harness; guards that the deterministic pipeline produces byte-for-byte identical output after the Part 3 SKILL.md decomposition |
 | `test_complexity_treemap.py` | `scripts/complexity-treemap.py` - build-artifact filter, plugin version stamp, and stats-sidecar enrichment (heavy deps are stubbed) |
 
@@ -49,7 +49,7 @@ The two highest-frequency co-change pairs in the git history are:
 | `test_understanding_analysis.py` | `lib/understanding_analysis.py` - B4 human anchor + intent source, velocity clock (D2), orphaned-understanding classification; both pure-logic (mocked) and git-integration variants |
 | `test_liveness_scan.py` | `lib/liveness_scan.py` - dead-code tool output parsers, observability rungs, graceful degradation when tools are absent |
 | `test_test_pressure.py` | `lib/test_pressure/` - mutation tier output parsing, cheap heuristics (test/source ratio, assertion density, gap signal) |
-| `test_ci_workflow.py` | `lib/ci_workflow.py` - template substitution (version, branch, tool steps), literal-dollar escaping, YAML well-formedness |
+| `test_ci_workflow.py` | `lib/ci_workflow.py` - template substitution (version, branch, tool steps, path filters), path-filtered workflow detection, literal-dollar escaping, YAML well-formedness |
 | `test_stats_diff.py` | `lib/stats_diff.py` - hotspot transition classification (graduated, regressed, new, persistent) and sidecar loading |
 | `test_wiki_writer.py` | `lib/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
 | `test_git_commit_info.py` | `lib/git_churn.py` (`git_commit_info`) - commit snapshot with SHA/timestamp for staleness warnings |
