@@ -12,7 +12,7 @@ import re
 
 import pytest
 
-from lib.ci_workflow import emit_ci_workflow, render_ci_workflow
+from lib.ci_workflow import emit_ci_workflow, find_path_filtered_workflow, render_ci_workflow
 
 # Every external tool the emitter knows how to install - renders the maximal
 # workflow so the supply-chain assertions cover all recipes.
@@ -163,3 +163,69 @@ def test_emit_creates_nested_dirs(tmp_path):
     """No pre-existing .github/ - the emitter creates the full path."""
     path = emit_ci_workflow(tmp_path, [], "1.23.0")
     assert path.is_file()
+
+
+def _pull_request(out: str) -> dict:
+    yaml = pytest.importorskip("yaml")
+    doc = yaml.safe_load(out)
+    on = doc.get("on", doc.get(True))  # PyYAML reads a bare `on:` key as True
+    return on["pull_request"]
+
+
+def test_render_paths_ignore_flag_yields_valid_yaml():
+    out = render_ci_workflow(plugin_version="1.23.0", paths_ignore=["**/*.md"])
+    assert _pull_request(out) == {"branches": ["main"], "paths-ignore": ["**/*.md"]}
+
+
+def test_render_paths_flag_repeatable_keeps_order():
+    out = render_ci_workflow(plugin_version="1.23.0", paths=["src/**", "lib/**", "it's/**"])
+    assert _pull_request(out) == {"branches": ["main"], "paths": ["src/**", "lib/**", "it's/**"]}
+
+
+def test_render_rejects_paths_with_paths_ignore():
+    with pytest.raises(ValueError):
+        render_ci_workflow(plugin_version="1.23.0", paths=["src/**"], paths_ignore=["**/*.md"])
+
+
+def test_render_without_path_filters_is_unchanged():
+    out = render_ci_workflow(plugin_version="1.23.0")
+    assert "paths" not in out
+    assert "    branches: [main]\n\npermissions:" in out
+
+
+def _workflows(tmp_path, files: dict[str, str]):
+    wf = tmp_path / ".github" / "workflows"
+    wf.mkdir(parents=True)
+    for name, body in files.items():
+        (wf / name).write_text(body)
+    return wf
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "on:\n  pull_request:\n    paths:\n      - src/**\n",
+        "on:\n  push:\n  pull_request_target:\n    branches: [main]\n    # docs\n\n    paths-ignore: ['docs/**']\n",
+        "on:\n  pull_request: {branches: [main], paths: ['src/**']}\n",
+        "jobs:\n  t:\n    steps:\n      - uses: dorny/paths-filter@v3\n",
+    ],
+)
+def test_path_filter_default_applied_detects_filtered_workflow(tmp_path, body):
+    wf = _workflows(tmp_path, {"a-plain.yml": "on: push\n", "ci.yaml": body})
+    assert find_path_filtered_workflow(tmp_path) == wf / "ci.yaml"
+
+
+def test_path_filter_default_not_applied_without_filtered_workflow(tmp_path):
+    assert find_path_filtered_workflow(tmp_path) is None  # no .github/workflows at all
+    _workflows(
+        tmp_path,
+        {
+            "ci.yml": "on:\n  pull_request:\njobs:\n  t:\n    steps:\n      - uses: actions/cache@v4\n        with:\n          path: ~/.cache\n",
+            # The gate's own file is excluded, so a regenerated gate never detects its own default.
+            "assess-gate.yml": "on:\n  pull_request:\n    paths-ignore:\n      - '**/*.md'\n",
+            "notes.txt": "paths: [src]\n",
+            # A paths: filter on push only (a publish trigger) says nothing about PR checks.
+            "publish.yml": "on:\n  push:\n    paths: [.claude-plugin/plugin.json]\n  pull_request:\n    branches: [main]\njobs:\n  t:\n    steps:\n      - uses: actions/upload-artifact@v4\n        with:\n          paths: dist\n",
+        },
+    )
+    assert find_path_filtered_workflow(tmp_path) is None
