@@ -90,6 +90,20 @@ non-ASCII paths come back literal, matching the files on disk.
 All results are JSON-serialisable so `assess_core` can drop them straight into
 `run-context.json`.
 
+**`generated_files.py`**
+Content checks for files that are not hand-written source but carry an ordinary name:
+`has_generated_header` sniffs the first 5 lines for a comment line carrying a generator marker (`GENERATED FILE` only when it opens the comment,
+`DO NOT EDIT`, `@generated`, `auto-generated` spaced, hyphenated or joined; matched
+case-insensitively; a marker further down is ignored), and `is_long_line_artifact` flags an
+average line length over the first 1 MB above `LONG_LINE_THRESHOLD` (1,000 characters, the shape of a base64 or
+minified payload). `generated_reason` returns `generated-header`, `long-lines` or None. The
+treemap's `collect` drops matching files unless `--include-artifacts` is passed and lists them
+in the stats file's `excluded_generated`, which `assess_core` copies into `run-context.json`
+for the report and gate to disclose. `GENERATED_NAME_PATTERNS` (`*.generated.*`, `*.gen.ts`,
+`database.types.ts`) is the shared list of generated-name globs: the treemap adds it to its filename
+excludes, and `assess_core` calls `matches_generated_name` so a file those globs newly exclude is never
+recorded as a graduated hotspot. Pure stdlib; an unreadable file is never excluded.
+
 ### Static analysis
 
 **`structure_graph.py`**
@@ -289,7 +303,10 @@ disclosure; the findings themselves still name them. Rows of equal score are ord
 `promissory_markers.top_offenders[].severity` for an `unactioned_intent` file, divided by
 the run's highest so it shares the 0-1 scale of `1 - containment_ratio` for a
 `hidden_coupling` directory; neither finding type outranks the other by scale alone),
-then path. Before either filter, the commit
+then path. `is_attention_low_signal` marks the list low-signal when its top score is 1
+(no row lands in two negative findings; `False` for an empty list), and `integrate` then
+caps `prescribed_actions` at the rank-1 row instead of three; the flag is serialised as the
+run-context `attention_low_signal`. Before either filter, the commit
 sets are folded through the rename map (so a renamed directory's history lands on its
 current name), and `prune_missing_finding_paths` drops any `hidden_coupling` or
 `refactor_boundary` path absent from the working tree, returning them as
@@ -535,6 +552,27 @@ reuse it. CLI, run from `skills/assess/scripts`:
 directory, or a `--json` file that cannot be written; a missing root would otherwise verify every `path_absent` claim). Stdlib only, imports no
 orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kind
 or change to a check rule.
+
+**`instruction_claims.py`**
+Verifies the checkable claims an agent instruction file makes (issue #368), no
+model. `scan_instruction_claims(repo_root, files)` reads each graded instruction
+file (the keys of `instruction_files`; two keys resolving to one file are read
+once), splits prose into sentences per paragraph (fenced code skipped, a wrapped
+sentence reported at the line it starts on) and extracts two kinds: `enforcement`
+(a backticked shell script, or any script under `scripts/`, `bin/`, `tools/`,
+`ci/` or `hack/`, in a sentence with "enforced", "runs in", "checked by" or "CI";
+verified when the path occurs in any CI configuration or in a task runner CI
+calls through such as `Makefile` or `package.json`; skipped when the repo has no
+CI configuration, since nothing can confirm or refute it) and `pin` ("pinned in"
+a backticked file plus exactly one dotted version in the sentence, verified when
+the file exists and contains the version as a substring). Each failure carries a
+`reason`. Both checks use
+`evidence_check.is_referenced_in`, so the search is the same fail-closed one.
+The core writes the result as the run-context block `instruction_claims`
+(`{total, verified, failed, failures[{file, line, kind, path, reason, ...}]}`, zeros when
+nothing matched); failures feed Layer 0 evidence and a Lying Signals row. A new
+claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
+(which returns the extra failure fields). Tests: `tests/test_instruction_claims.py`.
 
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
