@@ -460,8 +460,10 @@ JVM. A repository is Dart when it holds a `pubspec.yaml` outside the shared and
 user-supplied excludes. Two capabilities, in the JVM entry fields (`state`,
 `candidate_tool`, `gloss`, `note`, `served_by` when credited): `linting` is
 `credited` to `dart analyze` (or `flutter analyze` when a package depends on the
-Flutter SDK) when an `analysis_options.yaml` sits in a package directory or an
-ancestor, and `honest_degrade` naming `dart analyze` otherwise; `liveness` is always
+Flutter SDK) when a package's nearest `analysis_options.yaml` (its directory or the
+closest ancestor) enables lint rules through a top-level `include:` or a
+`linter: rules:` list, and `honest_degrade` naming `dart analyze` otherwise, an
+exclude-only file included; `liveness` is always
 `honest_degrade`, naming the analyzer's built-in `unused_*` diagnostics and no
 third-party package. Runs no tool. `liveness_scan.py` adds the Dart `dead_code.tools`
 entry and returns the block as `dart_capabilities`; the orchestrator publishes it as

@@ -1,8 +1,8 @@
 """Dart capability entries (#352): linting and liveness for a Dart/Flutter repo.
 
 A repository is Dart when it holds a ``pubspec.yaml`` outside excluded paths.
-Linting is credited to the analyzer when an ``analysis_options.yaml`` configures
-it and honest-degrades naming ``dart analyze`` otherwise. Liveness always
+Linting is credited to the analyzer when the nearest ``analysis_options.yaml``
+enables lint rules and honest-degrades naming ``dart analyze`` otherwise. Liveness always
 honest-degrades naming the analyzer's built-in ``unused_*`` diagnostics, never a
 third-party package, and ``dead_code.tools`` carries a matching Dart entry.
 """
@@ -80,7 +80,7 @@ def test_linting_credits_flutter_analyze_for_a_flutter_package(tmp_path: Path) -
 def test_analysis_options_in_an_ancestor_directory_credits_linting(tmp_path: Path) -> None:
     # The analyzer resolves analysis_options.yaml by walking up from each file,
     # so a monorepo root config serves a nested package.
-    _write(tmp_path, "analysis_options.yaml", "linter: {}\n")
+    _write(tmp_path, "analysis_options.yaml", "include: package:lints/core.yaml\n")
     _write(tmp_path, "packages/core/pubspec.yaml", "name: core\n")
     linting = scan_dart_capabilities(tmp_path)["capabilities"]["linting"]
     assert linting["state"] == "credited"
@@ -88,7 +88,38 @@ def test_analysis_options_in_an_ancestor_directory_credits_linting(tmp_path: Pat
 
 def test_analysis_options_outside_every_package_does_not_credit(tmp_path: Path) -> None:
     _write(tmp_path, "pubspec.yaml", "name: demo\n")
-    _write(tmp_path, "tool/analysis_options.yaml", "linter: {}\n")
+    _write(tmp_path, "tool/analysis_options.yaml", "include: package:lints/core.yaml\n")
+    linting = scan_dart_capabilities(tmp_path)["capabilities"]["linting"]
+    assert linting["state"] == "honest_degrade"
+
+
+def test_analysis_options_that_enables_no_rules_does_not_credit(tmp_path: Path) -> None:
+    # Dart lints are opt-in: an exclude-only file (the usual codegen workaround)
+    # enables no rule, so it must not read as served linting.
+    _write(tmp_path, "pubspec.yaml", "name: demo\n")
+    _write(tmp_path, "analysis_options.yaml",
+           "# include: package:lints/recommended.yaml\n"
+           "analyzer:\n  exclude:\n    - \"**/*.g.dart\"\n")
+    linting = scan_dart_capabilities(tmp_path)["capabilities"]["linting"]
+    assert linting["state"] == "honest_degrade"
+    assert "enables no lint rules" in linting["note"]
+
+
+def test_analysis_options_with_linter_rules_credits(tmp_path: Path) -> None:
+    _write(tmp_path, "pubspec.yaml", "name: demo\n")
+    _write(tmp_path, "analysis_options.yaml",
+           "analyzer:\n  exclude: []\nlinter:\n  rules:\n    - avoid_print\n")
+    linting = scan_dart_capabilities(tmp_path)["capabilities"]["linting"]
+    assert linting["state"] == "credited"
+
+
+def test_nearest_analysis_options_decides(tmp_path: Path) -> None:
+    # The analyzer uses the nearest file only: a package-level file that enables
+    # nothing shadows a root file that does.
+    _write(tmp_path, "analysis_options.yaml", "include: package:lints/core.yaml\n")
+    _write(tmp_path, "packages/core/pubspec.yaml", "name: core\n")
+    _write(tmp_path, "packages/core/analysis_options.yaml",
+           "analyzer:\n  exclude: []\n")
     linting = scan_dart_capabilities(tmp_path)["capabilities"]["linting"]
     assert linting["state"] == "honest_degrade"
 

@@ -691,7 +691,8 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
     are reported as available-but-not-run / offer rather than executed.
     `extra_exclude_dirs` and `extra_exclude_patterns` come from
     `.assess/config.toml` / `--exclude` and apply to the dead-code scan, the
-    observability tree walk, and JVM build-file detection alike.
+    observability tree walk, JVM build-file detection and Dart `pubspec.yaml`
+    detection alike.
 
     `scope` (an absolute path under `repo_root`) confines the dead-code
     candidates to a subtree for `/assess <path>` monorepo scoping; the
