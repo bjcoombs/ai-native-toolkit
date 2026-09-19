@@ -54,15 +54,18 @@ def test_svg_threads_config_and_cli_excludes(svg, tmp_path, monkeypatch, capsys)
     # A repo with a durable config exclude plus an ad-hoc CLI exclude.
     (tmp_path / ".assess").mkdir()
     (tmp_path / ".assess" / "config.toml").write_text(
-        'exclude_dirs = ["_archive"]\nexclude_patterns = ["*.csv"]\n',
+        'exclude_dirs = ["_archive"]\nexclude_patterns = ["*.csv"]\n'
+        'working_notes_dirs = ["journal"]\nworking_notes_ignore = ["docs/chapters"]\n',
         encoding="utf-8",
     )
 
     captured: dict = {}
 
-    def fake_build(root, *, extra_exclude_dirs=None, extra_exclude_patterns=None):
+    def fake_build(root, *, extra_exclude_dirs=None, extra_exclude_patterns=None,
+                   working_notes_dirs=None, working_notes_ignore=None):
         captured["graph_dirs"] = extra_exclude_dirs
         captured["graph_patterns"] = extra_exclude_patterns
+        captured["notes"] = (working_notes_dirs, working_notes_ignore)
         return _FakeResult()
 
     def fake_staleness(root, *, doc_to_code_edges=None,
@@ -85,6 +88,8 @@ def test_svg_threads_config_and_cli_excludes(svg, tmp_path, monkeypatch, capsys)
     # config dir + CLI dir merged; config glob + CLI glob merged.
     assert captured["graph_dirs"] == {"_archive", "_jira"}
     assert captured["graph_patterns"] == ["*.csv", "*.tmp"]
+    # The working-notes overrides reach the graph, as in assess_core.
+    assert captured["notes"] == (["journal"], ["docs/chapters"])
     # The staleness scan (drives the SVG's colour) gets the identical excludes,
     # so colour and structure speak about the same doc set.
     assert captured["stale_dirs"] == captured["graph_dirs"]

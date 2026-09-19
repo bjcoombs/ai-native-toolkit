@@ -14,6 +14,11 @@ under `.assess/`):
 exclude_dirs = ["regulatory-raw", "vetted-context"]
 exclude_patterns = ["*.csv", "*.parquet"]
 
+# Working-notes overrides (issue #367): force or suppress the doc graph's
+# working-notes classification for a directory, relative to the repo root.
+working_notes_dirs = ["journal"]
+working_notes_ignore = ["docs/chapters"]
+
 # Provenance for generated-doc trees (issue #178): doc-staleness for docs
 # under `path` is measured against `source` (newer source = stale) instead of
 # the doc's own file age. `source` may be a string or a list. Paths are
@@ -317,6 +322,36 @@ def load_excludes(repo_root: Path) -> tuple[set[str], list[str]]:
     dirs = set(_string_list(cfg, "exclude_dirs"))
     pats = _string_list(cfg, "exclude_patterns")
     return dirs, pats
+
+
+def _dir_list(config: dict, key: str) -> list[str]:
+    """``_string_list`` normalised to repo-relative posix directory paths:
+    ``./journal/`` -> ``journal``; an entry that names no directory is dropped."""
+    out = []
+    for raw in _string_list(config, key):
+        path = raw.strip().replace("\\", "/").strip("/")
+        while path.startswith("./"):
+            path = path[2:]
+        if path and path != ".":
+            out.append(path)
+    return out
+
+
+def load_working_notes_config(repo_root: Path) -> dict[str, list[str]]:
+    """Return the working-notes overrides as ``build_doc_graph`` keywords.
+
+    ``working_notes_dirs`` forces each listed directory to be reported as a
+    working-notes tree whatever its size or fingerprint (issue #367);
+    ``working_notes_ignore`` keeps each listed directory, and everything under
+    it, out of every working-notes tree even when the fingerprint matches.
+    Both are lists of repo-relative directory paths. Honours the same "degrade
+    silently" contract as the other loaders.
+    """
+    cfg = load_config(repo_root)
+    return {
+        "working_notes_dirs": _dir_list(cfg, "working_notes_dirs"),
+        "working_notes_ignore": _dir_list(cfg, "working_notes_ignore"),
+    }
 
 
 def split_cli_excludes(cli_excludes: list[str]) -> tuple[set[str], list[str]]:

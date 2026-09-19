@@ -175,9 +175,13 @@ note stays counted whole (a `docs/guides/` of curated pages beside 50 notes in
 `docs/`), and any other curated doc refuses the directory, leaving its deeper
 trees to stand alone (`docs/guide.md` beside `docs/notes/`). `notes/backlog.md`
 over `notes/2025/` and `notes/2026/` is one tree. Subdirectories are decided
-deepest first, and the tree must still pass the three legs on its own. No config
-key keeps a misclassified series (`chapter-01` to `chapter-20` under a contents
-page) counted yet; that is separate, later work. Only docs are classified, never
+deepest first, and the tree must still pass the three legs on its own. Two
+`.assess/config.toml` keys override the verdict (issue #367), passed in as the
+`force` / `ignore` arguments: every doc under a `working_notes_dirs` directory
+joins a tree at that path whatever its size or fingerprint, and no doc under a
+`working_notes_ignore` directory joins any tree (a misclassified `chapter-01` to
+`chapter-20` series stays counted); ignore wins where they overlap, and an outer
+tree absorbs any tree inside it. Only docs are classified, never
 a `.base` hub. It runs on the headline graph (link and reference edges) after
 the raw pass. `doc_graph.py` excludes these trees too and reports
 `excluded_working_notes_trees`, `working_notes_doc_count`,
@@ -343,7 +347,10 @@ conservative agent/human classification is defined one way.
 Reads the optional per-repo `.assess/config.toml`: `exclude_dirs` / `exclude_patterns`
 (the same two lists feed every scan - heatmap, doc graph, staleness, liveness - so
 exclusion is consistent), the `[gate]` and `[structure]` sections, and the `[[generated]]`
-folder->source provenance map (issue #178) consumed by `doc_provenance.py`. `resolve_excludes`
+folder->source provenance map (issue #178) consumed by `doc_provenance.py`, and the
+`working_notes_dirs` / `working_notes_ignore` directory lists (issue #367), which
+`load_working_notes_config` returns as `build_doc_graph` keywords for both
+`assess_core.py` and `doc-graph-svg.py`. `resolve_excludes`
 is the single shared path that combines config excludes with CLI `--exclude`; both the treemap
 CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.
 Degrades silently on missing or malformed config rather than blocking the run.
