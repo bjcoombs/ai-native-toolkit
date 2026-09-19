@@ -32,9 +32,9 @@ from assess_core import build_run_context
 from assess_finalize import _write_actions_contract
 from lib.keyhole_signals import FINDING_MODE_VALUES, mode_for_finding
 from lib.wiki_writer import (
-    RETIRED_STATUS,
     hotspot_page_source_path,
     hotspot_page_status,
+    is_retired_status,
     verify_log_chain,
 )
 
@@ -247,7 +247,7 @@ def test_no_orphan_hotspot_pages(dogfood_run: dict) -> None:
         path = hotspot_page_source_path(content)
         if path is None:
             continue
-        if hotspot_page_status(content) == RETIRED_STATUS:
+        if is_retired_status(hotspot_page_status(content)):
             continue
         active_referenced += 1
         if not (repo / path).exists():

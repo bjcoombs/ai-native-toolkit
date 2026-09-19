@@ -126,7 +126,7 @@ A stats sidecar (`complexity-stats.json`) accompanies the report with percentile
 
 A single `main.dart.js` or thousands of lines of `.pb.go` shouldn't dominate the treemap. The filter catches minified bundles (`*.min.js`, `*.bundle.js`, `main.dart.js`), sourcemaps, protobuf bindings (`*.pb.go`, `*.connect.go`, `*_pb.ts`), Go generators (`wire_gen.go`, `zz_generated_*.go`), .NET source generators (`*.designer.cs`, `*.g.cs`), Dart codegen (`*.freezed.dart`, `*.g.dart`), `*.generated.*` and `database.types.ts`, files whose first 5 lines declare them generated (`DO NOT EDIT`, `@generated`), payload files whose average line exceeds 1,000 characters, and files under build dirs (`dist/`, `build/`, `.next/`, `.nuxt/`, `node_modules/`, etc.). Pass `--include-artifacts` to disable. If a single file still holds >30% of total LOC after filtering, the script warns - usually that's a build artifact that needs `.gitignore`.
 
-The skill runs locally - lizard, optional scc, and git log do the analysis in your Claude Code session. No data leaves the machine.
+The skill runs locally - lizard, optional scc, and git log do the analysis in your Claude Code session. No data leaves the machine, with one bounded exception: when the repo tracks GitHub ruleset or branch-protection snapshots, the scan makes read-only GitHub API calls through your own authenticated `gh` (sending the repo name, ruleset ids and branch names) to compare them with the live settings, and reports the comparison as unavailable when `gh` is missing or signed out.
 
 ### Use as a GitHub Action
 
