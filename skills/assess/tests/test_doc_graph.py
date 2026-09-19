@@ -976,3 +976,60 @@ def test_link_only_figures_share_the_headline_entry_points(tmp_path: Path, monke
     (headline_in, headline_entries), (link_only_in, link_only_entries) = calls
     assert headline_in is None
     assert link_only_in == headline_entries == link_only_entries
+
+
+# --- directory_breakdown (issue #365) ----------------------------------------
+
+
+def _two_doc_dirs(root: Path) -> None:
+    _write(root, "README.md", "# Home\n[a](docs/a.md) [g1](guides/g1.md)\n")
+    _write(root, "docs/a.md", "# a\n")
+    _write(root, "docs/b.md", "# b\n[gone](missing.md)\n")
+    for n in (1, 2, 3):
+        _write(root, f"guides/g{n}.md", f"# g{n}\n")
+
+
+def test_directory_breakdown_counts_per_top_level_directory(tmp_path: Path) -> None:
+    _two_doc_dirs(tmp_path)
+    d = build_doc_graph(tmp_path).as_dict()
+    rows = {r["path"]: r for r in d["directory_breakdown"]}
+    assert rows["docs"] == {"path": "docs", "doc_count": 2,
+                            "unreachable_count": 1, "broken_link_count": 1}
+    assert rows["guides"] == {"path": "guides", "doc_count": 3,
+                              "unreachable_count": 2, "broken_link_count": 0}
+    # Root-level docs group under ".".
+    assert rows["."] == {"path": ".", "doc_count": 1,
+                         "unreachable_count": 0, "broken_link_count": 0}
+    assert d["directory_count"] == 3
+
+
+def test_directory_breakdown_reconciles_with_headline(tmp_path: Path) -> None:
+    # A working-notes tree leaves the headline, so it leaves the breakdown too:
+    # the rows sum to the headline doc_count, unreachable list and dangling_links.
+    _notes_and_wiki(tmp_path)
+    _write(tmp_path, "notes/plan_03.md", "[ghost](./missing.md)\n")
+    _write(tmp_path, "wiki/scratch.md", "[ghost](./nowhere.md)\n")
+    d = build_doc_graph(tmp_path).as_dict()
+    rows = d["directory_breakdown"]
+    assert "notes" not in {r["path"] for r in rows}
+    assert sum(r["doc_count"] for r in rows) == d["doc_count"]
+    assert sum(r["unreachable_count"] for r in rows) == len(d["unreachable"])
+    assert sum(r["broken_link_count"] for r in rows) == d["dangling_links"] == 1
+
+
+def test_directory_breakdown_is_capped_gap_first(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(doc_graph, "MAX_DIRECTORY_BREAKDOWN", 2)
+    _write(tmp_path, "README.md", "# Home\n[a](a/x.md) [b](b/x.md)\n")
+    _write(tmp_path, "a/x.md", "# a\n")
+    _write(tmp_path, "b/x.md", "# b\n")
+    _write(tmp_path, "c/x.md", "# c orphan\n")
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["directory_count"] == 4
+    # The directory holding the unreachable doc outranks the healthy ones.
+    assert [r["path"] for r in d["directory_breakdown"]] == ["c", "."]
+
+
+def test_directory_breakdown_empty_repo(tmp_path: Path) -> None:
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["directory_breakdown"] == []
+    assert d["directory_count"] == 0
