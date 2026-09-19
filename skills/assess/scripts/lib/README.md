@@ -493,6 +493,15 @@ directory, or a `--json` file that cannot be written; a missing root would other
 orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kind
 or change to a check rule.
 
+`assess_finalize.py` re-runs `check_evidence` on the finalize input's optional
+`evidence` list before any write (issue #362), with each `path` resolved against
+the parent of `.assess/`. The rule is per layer: a layer whose entries are all
+rejected refuses finalize (`FinalizeValidationError`, naming each entry by kind,
+path and needle); a layer with at least one verified entry keeps its verdict,
+and each rejected entry of it is printed to stderr as a warning. An input with no
+`evidence` key is not checked; a non-list value, or an entry naming no layer 0-8,
+is refused.
+
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
 CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts and
