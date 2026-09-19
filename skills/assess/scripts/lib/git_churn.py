@@ -222,12 +222,17 @@ class ContentClock(NamedTuple):
     ``epochs`` maps a resolved doc path to the author time (``%at``) of its
     newest non-bulk commit, or of its oldest commit when every commit touching
     it is bulk (a bulk import that created it is its content creation).
+    ``creation_fallback`` names the docs that took that oldest-commit fallback:
+    for a doc regenerated in bulk on every release the value is its creation
+    date, not a content age, so callers disclose it and discount it.
     ``bulk_shas`` holds every bulk commit, so :meth:`epoch` can apply the same
     skip to a non-doc file (``.cursorrules``). ``skipped`` lists, newest first
     and capped, the bulk commits that were newer than some doc's chosen commit.
-    ``complete`` is False when git history exists but could not be read (a
-    failure or timeout): the maps are empty and :meth:`epoch` falls back to the
-    plain newest-commit read, the behaviour before this clock existed.
+    ``complete`` is False when the full history was not read. On a git
+    failure or timeout the maps are empty and :meth:`epoch` falls back to the
+    plain newest-commit read, the behaviour before this clock existed. In a
+    shallow clone the maps are filled from the visible history, which can omit
+    older content commits and bulk commits.
     """
 
     epochs: dict[Path, int]
@@ -236,6 +241,7 @@ class ContentClock(NamedTuple):
     skipped_total: int
     doc_count: int
     complete: bool
+    creation_fallback: frozenset[Path] = frozenset()
 
     def epoch(self, path: Path) -> int | None:
         path = path.resolve()
@@ -275,7 +281,10 @@ def _file_content_epoch(path: Path, bulk_shas: frozenset[str]) -> int | None:
 
 @lru_cache(maxsize=4)
 def content_commit_clock(
-    repo_root: Path, docs: frozenset[Path], head: str | None = None
+    repo_root: Path,
+    docs: frozenset[Path],
+    head: str | None = None,
+    renames: tuple[tuple[str, str], ...] = (),
 ) -> ContentClock:
     """One ``git log`` pass over the docs' history, skipping bulk commits.
 
@@ -285,6 +294,9 @@ def content_commit_clock(
     clock is empty and complete; on a git failure it is empty and incomplete.
     Cached so the doc-staleness metric and the instruction grader share one pass;
     `head` (the HEAD sha) is only a cache key, so a new commit gets a fresh clock.
+    `renames` maps historical repo-relative paths to current ones (as
+    ``change_coupling.build_rename_map`` gives them), so a doc's commits under an
+    old name still count after a mass rename.
     """
     empty = ContentClock({}, frozenset(), (), 0, len(docs), True)
     try:
@@ -308,17 +320,23 @@ def content_commit_clock(
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return ContentClock({}, frozenset(), (), 0, len(docs), False)
+    shallow = subprocess.run(
+        ["git", "-C", top, "rev-parse", "--is-shallow-repository"],
+        capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
+    ).stdout.strip() == "true"
+    rename_to = dict(renames)
 
     # Parse newest first: (sha, epoch, docs in `docs` the commit touched).
-    commits: list[tuple[str, int, list[Path]]] = []
+    commits: list[tuple[str, int, set[Path]]] = []
     for ln in raw.splitlines():
         if ln.startswith("\x01"):
             sha, _, at_raw = ln[1:].partition(" ")
-            commits.append((sha, int(at_raw), []))
+            commits.append((sha, int(at_raw), set()))
         elif ln.strip() and commits:
-            p = top_path / ln.strip()
+            rel = ln.strip()
+            p = top_path / rename_to.get(rel, rel)
             if p in docs:
-                commits[-1][2].append(p)
+                commits[-1][2].add(p)
 
     need = max(BULK_COMMIT_MIN_DOCS, int(BULK_COMMIT_DOC_SHARE * len(docs)) + 1)
     bulk = {sha for sha, _, touched in commits if len(touched) >= need}
@@ -355,7 +373,8 @@ def content_commit_clock(
         skipped=tuple(records[:BULK_COMMITS_SKIPPED_CAP]),
         skipped_total=len(records),
         doc_count=len(docs),
-        complete=True,
+        complete=not shallow,
+        creation_fallback=frozenset(pending),
     )
 
 

@@ -63,7 +63,7 @@ from lib.interactivity import build_offers_block
 from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.doc_staleness import analyze_doc_staleness, content_clock
 from lib.generated_files import matches_generated_name
-from lib.git_churn import git_commit_info, tracked_files
+from lib.git_churn import ContentClock, git_commit_info, tracked_files
 from lib.keyhole_signals import integrate as integrate_keyhole_signals
 from lib.liveness_scan import scan_liveness
 from lib.promissory_markers import scan_promissory_markers
@@ -135,14 +135,14 @@ INSTRUCTION_FILE_PATHS = [
 GRADE_RANK = {"A": 7, "A-": 6, "B+": 5, "B": 4, "C": 3, "D": 2, "F": 1}
 
 
-def _file_freshness_days(file_path: Path, repo_root: Path) -> int:
+def _file_freshness_days(file_path: Path, clock: ContentClock) -> int:
     """Days since file_path's last content change in git. 0 if not in git.
 
     Same clock as `.doc_staleness` (author time, bulk mechanical commits
     skipped - issue #333), so a licence-header sweep cannot make a stale
     instruction file read as fresh.
     """
-    days = content_clock(repo_root).days(file_path)
+    days = clock.days(file_path)
     return days if days is not None else 0
 
 
@@ -177,6 +177,7 @@ def _grade_instruction_files(
     # large instruction file is not penalized as bloat (see compute_bloat_penalty).
     skills_info = detect_skills_dir(repo_root)
     skills_present = skills_info["skills_dirs_present"]
+    clock = content_clock(repo_root)  # one build for every candidate
     found: dict[str, dict] = {}
     untracked: list[str] = []
     dangling_refs: list[dict] = []
@@ -208,7 +209,7 @@ def _grade_instruction_files(
             untracked.append(rel_path)
             continue
         text = disk_text
-        freshness = _file_freshness_days(candidate, repo_root)
+        freshness = _file_freshness_days(candidate, clock)
         grade = grade_instructions(
             text, freshness_days=freshness, skills_present=skills_present
         )

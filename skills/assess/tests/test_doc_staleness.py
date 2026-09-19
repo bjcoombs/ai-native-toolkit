@@ -438,3 +438,118 @@ def test_instruction_freshness_skips_bulk_commit(git_repo) -> None:
     _bulk_fixture(repo, commit)
     files = _grade_instruction_files(repo)[0]
     assert files["CLAUDE.md"]["freshness_days"] in (299, 300)  # DST slack
+
+
+def _sweep(repo: Path, commit, tag: str, days_ago: int, extra=()) -> None:
+    for rel in list(_BULK_DOCS) + list(extra):
+        p = repo / rel
+        p.write_text(f"<!-- {tag} -->\n" + p.read_text(), encoding="utf-8")
+    commit(f"chore: {tag}", days_ago=days_ago)
+
+
+def test_doc_regenerated_only_in_bulk_is_flagged_as_creation_date(git_repo) -> None:
+    """Docs regenerated in bulk every release have no content commit: the
+    creation-date fallback is disclosed and discounted, not passed off as age."""
+    repo, commit = git_repo
+    for rel in _BULK_DOCS:
+        _write(repo, rel, f"Generated {rel}.\n")
+    commit("docs: generate", days_ago=400)
+    for n, days in enumerate((200, 30, 2)):
+        _sweep(repo, commit, f"regen {n}", days)
+    r = analyze_doc_staleness(repo)
+    assert r["creation_date_fallback_count"] == 12
+    for d in r["docs"]:
+        assert d["last_change_basis"] == "creation"
+        assert d["confidence"] == "low"
+
+
+def test_content_dated_doc_has_no_basis_key(git_repo) -> None:
+    repo, commit = git_repo
+    _bulk_fixture(repo, commit)
+    r = analyze_doc_staleness(repo)
+    assert r["creation_date_fallback_count"] == 0
+    assert all("last_change_basis" not in d for d in r["docs"])
+
+
+def test_skipped_list_is_capped_and_total_is_kept(git_repo) -> None:
+    from lib.git_churn import BULK_COMMITS_SKIPPED_CAP
+
+    repo, commit = git_repo
+    _bulk_fixture(repo, commit)
+    sweeps = BULK_COMMITS_SKIPPED_CAP + 1
+    for n in range(sweeps):
+        _sweep(repo, commit, f"sweep {n}", days_ago=2)
+    r = analyze_doc_staleness(repo)
+    assert len(r["bulk_commits_skipped"]) == BULK_COMMITS_SKIPPED_CAP
+    assert r["bulk_commits_skipped_total"] == sweeps + 1
+    assert r["bulk_commits_skipped"][0]["sha"] == _head_sha(repo, "HEAD")
+
+
+def test_mass_rename_keeps_pre_rename_content_dates(git_repo) -> None:
+    import subprocess
+
+    repo, commit = git_repo
+    _bulk_fixture(repo, commit)
+    subprocess.run(["git", "-C", str(repo), "mv", "docs", "guide"], check=True)
+    commit("chore: move docs to guide", days_ago=1)
+    r = analyze_doc_staleness(repo)
+    days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
+    assert days["guide/caching.md"] == 3
+    assert days["guide/security.md"] in (189, 190)  # DST slack
+
+
+def test_scan_incomplete_when_git_log_times_out(git_repo, monkeypatch) -> None:
+    """A timed-out history read degrades to the plain newest-commit clock and
+    says so, rather than reading as "no bulk commits"."""
+    import subprocess
+
+    import lib.git_churn as gc
+
+    repo, commit = git_repo
+    _bulk_fixture(repo, commit)
+    real_run = subprocess.run
+
+    def fake_run(cmd, *a, **k):
+        if "--no-renames" in cmd:
+            raise subprocess.TimeoutExpired(cmd, 1)
+        return real_run(cmd, *a, **k)
+
+    gc.content_commit_clock.cache_clear()
+    monkeypatch.setattr(gc.subprocess, "run", fake_run)
+    r = analyze_doc_staleness(repo)
+    gc.content_commit_clock.cache_clear()
+    assert r["bulk_commit_scan_complete"] is False
+    assert r["bulk_commits_skipped"] == []
+    days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
+    assert days["CLAUDE.md"] == 8  # plain newest-commit read
+
+
+def test_shallow_clone_marks_scan_incomplete(git_repo, tmp_path: Path) -> None:
+    import subprocess
+
+    repo, commit = git_repo
+    _bulk_fixture(repo, commit)
+    clone = tmp_path / "shallow"
+    subprocess.run(["git", "clone", "-q", "--depth", "2", f"file://{repo}", str(clone)],
+                   check=True)
+    r = analyze_doc_staleness(clone)
+    assert r["bulk_commit_scan_complete"] is False
+
+
+def test_non_doc_instruction_file_skips_bulk_commit(git_repo) -> None:
+    """`.cursorrules` is outside the docs' pathspec; the per-file route applies
+    the same bulk skip."""
+    from assess_core import _grade_instruction_files
+
+    repo, commit = git_repo
+    _write(repo, ".cursorrules", "Prefer small functions.\n")
+    commit("add cursor rules", days_ago=400)
+    _bulk_fixture(repo, commit)
+    rules = repo / ".cursorrules"
+    rules.write_text("# header\n" + rules.read_text(), encoding="utf-8")
+    for rel in _BULK_DOCS:
+        p = repo / rel
+        p.write_text("<!-- again -->\n" + p.read_text(), encoding="utf-8")
+    commit("chore: headers everywhere", days_ago=5)
+    files = _grade_instruction_files(repo)[0]
+    assert files[".cursorrules"]["freshness_days"] in (399, 400)  # DST slack
