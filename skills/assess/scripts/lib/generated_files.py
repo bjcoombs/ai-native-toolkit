@@ -58,7 +58,7 @@ _LONG_LINE_READ_BYTES = 1024 * 1024
 # A hand-built HTML explainer page with inline data (this repository's
 # docs/huddle-explainer/visualization.html, ~3,800) is excluded on purpose:
 # its bulk is the embedded payload, not code a reader maintains line by line.
-# The threshold is kept above 296 and at or below that page's average.
+# The threshold is kept above 296 and below that page's average.
 LONG_LINE_THRESHOLD = 1000
 
 REASON_HEADER = "generated-header"

@@ -120,9 +120,9 @@ def test_long_line_threshold_keeps_wide_hand_written_code(tmp_path):
 
 
 def test_long_line_threshold_calibration_band():
-    # Above a JSONL fixture (296 chars/line, kept), at or below a hand-built
+    # Above a JSONL fixture (296 chars/line, kept), below a hand-built
     # HTML explainer page with inline data (3,817 chars/line, excluded).
-    assert 296 < LONG_LINE_THRESHOLD <= 3817
+    assert 296 < LONG_LINE_THRESHOLD < 3817  # strict: is_long_line_artifact uses >
 
 
 def test_long_line_measures_characters_not_bytes(tmp_path):

@@ -928,6 +928,13 @@ def build_run_context(
     )
 
     diff = diff_stats(prior=prior, current=current)
+    # A hotspot that left the ranking because this run excluded it as generated
+    # did not graduate: the filter changed, not the file. Drop it from the
+    # graduated list so the append-only log and index never record it as one;
+    # the run's excluded_generated block discloses it instead.
+    generated_paths = {r["path"] for r in _excluded_generated(current)}
+    if generated_paths:
+        diff.graduated = [h for h in diff.graduated if h.path not in generated_paths]
     instruction_files, instructions_grade, untracked_instr, dangling_instr, skills_info, \
         sensitive_instr = _grade_instruction_files(repo_root)
 

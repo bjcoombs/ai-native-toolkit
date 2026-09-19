@@ -2094,3 +2094,38 @@ def test_excluded_generated_header_list_empty_for_old_stats(git_repo) -> None:
     commit("init")
     ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
     assert ctx["excluded_generated"] == []
+
+
+def test_generated_header_exclusion_is_not_recorded_as_graduation(tmp_path: Path) -> None:
+    """A prior hotspot that left the ranking because this run excluded it as
+    generated did not graduate: it is dropped from diff.graduated, while a real
+    graduation in the same run is still counted."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    prior_stats = {
+        "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "db/schema.sql", "loc": 900, "ccn": 40, "commits": 30},
+            {"path": "src/legacy.go", "loc": 500, "ccn": 20, "commits": 5},
+        ],
+        "top_complex": [], "top_large": [],
+    }
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+    current_stats = {
+        "files_scored": 49, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/new.go", "loc": 400, "ccn": 18, "commits": 4}],
+        "top_complex": [], "top_large": [],
+        "excluded_generated": [{"path": "db/schema.sql", "reason": "generated-header"}],
+    }
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["diff"]["graduated"] == 1
+    assert ctx["excluded_generated"] == [
+        {"path": "db/schema.sql", "reason": "generated-header"}
+    ]
+    index = (assess_dir / "index.md").read_text()
+    assert "src/legacy.go" in index
+    assert "db/schema.sql" not in index
