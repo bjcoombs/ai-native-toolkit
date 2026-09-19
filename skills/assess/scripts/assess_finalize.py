@@ -14,7 +14,8 @@ utility past the run that produced it, and leaving it in the working tree
 caused noisy diffs when users committed `.assess/` (issue #39).
 
 Updates:
-    {repo_root}/.assess/log.md           (last entry's placeholders)
+    {repo_root}/.assess/log.md           (this run's entry, by assess:run_id,
+                                          then the chain re-computed)
     {repo_root}/.assess/hotspots/*.md    (Suggested actions sections)
 
 Writes (when the input carries an ``actions`` array):
@@ -25,6 +26,9 @@ Writes (when the input carries an ``actions`` array):
 
 Run:
     uv run assess_finalize.py <repo_root>
+    uv run assess_finalize.py <repo_root> --drop-entry <run_id>
+        (replaces a never-finalized log entry that blocks finalize with a
+        one-line tombstone and re-chains the log; finalized entries are refused)
 """
 # /// script
 # requires-python = ">=3.11"
@@ -42,7 +46,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.badge import maturity_band
 from lib.keyhole_signals import mode_for_finding
-from lib.wiki_writer import slug_for_path
+from lib.wiki_writer import (
+    find_log_entry,
+    log_entry_date,
+    log_entry_is_unfinalized,
+    log_entry_owns_span,
+    log_entry_run_id,
+    read_log_entries,
+    rewrite_log_entry,
+    slug_for_path,
+)
 
 
 class FinalizeValidationError(Exception):
@@ -74,31 +87,88 @@ _MATURITY_KEYWORDS = ("AI-Native", "Not Ready", "Solid", "Basic")
 MUTATION_NOT_RUN_ANNOTATION = "truth-pressure unproven (mutation not run)"
 
 
+def _log_target(assess_dir: Path, run_id: str | None) -> int | None:
+    """Index of the log entry finalize fills, or None when there is none.
+
+    The entry stamped with this run's ``assess:run_id`` wins. A legacy log
+    (no entry carries a run id stamp) or a context with no run id falls back to
+    the last entry still carrying placeholders, the pre-#355 behaviour. In a
+    stamped log a missing entry refuses: falling back there would write this
+    run's score into another run's entry and re-sign it.
+    """
+    entries = read_log_entries(assess_dir)
+    if run_id:
+        idx = find_log_entry(assess_dir, run_id)
+        if idx is not None:
+            return idx
+        if any(log_entry_run_id(e) for e in entries):
+            raise FinalizeValidationError(
+                f"log.md has no entry stamped run_id={run_id}; refusing to fill "
+                "another run's entry. Re-run the core to write this run's entry."
+            )
+    for i in range(len(entries) - 1, -1, -1):
+        if log_entry_is_unfinalized(entries[i]):
+            return i
+    return None
+
+
+def _validate_no_earlier_same_date_placeholders(assess_dir: Path, target: int | None) -> None:
+    """Refuse when an earlier entry for the target's date is still unfinalized.
+
+    Two unfinalized entries on one date mean a run was superseded without its
+    entry being replaced (a different commit, or a stale run-context): filling
+    only the later one would leave a same-day placeholder entry that reads as a
+    finished run. The error names the earlier entry so the operator can find it.
+    """
+    if target is None:
+        return
+    entries = read_log_entries(assess_dir)
+    day = log_entry_date(entries[target])
+    if day is None:
+        return
+    for content in entries[:target]:
+        stale_id = log_entry_run_id(content)
+        # An entry written before run-id stamps existed cannot be addressed by
+        # --drop-entry, so refusing on it would block finalize for good; such an
+        # entry keeps the pre-#355 treatment (left in place as history).
+        if stale_id is None:
+            continue
+        if log_entry_date(content) == day and log_entry_is_unfinalized(content):
+            heading = next(
+                (ln for ln in content.splitlines() if ln.startswith("## ")), "?"
+            )
+            raise FinalizeValidationError(
+                f"log.md entry run_id={stale_id} ({heading}) for {day} still "
+                "carries unfilled placeholders; an earlier same-date run was "
+                "never finalized. Its run-context is gone, so drop it with: "
+                f"assess_finalize.py <repo_root> --drop-entry {stale_id}, then "
+                "re-run finalize. Deleting it by hand breaks the log chain."
+            )
+
+
 def _finalize_log(
     assess_dir: Path,
     *,
+    target: int | None,
     score: float,
     maturity_label: str,
     top_action: str,
     denominator: int = 8,
 ) -> None:
-    """Replace placeholders in the latest log.md entry.
+    """Fill the placeholders of log entry ``target`` and re-chain the log.
 
-    Only the most recent entry (top of file after the heading) is updated.
-    Prior entries are immutable historical records. ``denominator`` is 8 for a
-    software repo and the applicable-layer count for a knowledge base (#224),
-    so the finalised line reads ``2.5 / 3`` rather than ``2.5 / 8``.
+    Only that entry is updated; other entries are immutable historical records.
+    The rewrite recomputes the chain marker of the filled entry and every later
+    one, so ``verify_log_chain`` stays valid after finalize (#355).
+    ``denominator`` is 8 for a software repo and the applicable-layer count for
+    a knowledge base (#224), so the finalised line reads ``2.5 / 3`` rather
+    than ``2.5 / 8``.
     """
-    log_path = assess_dir / "log.md"
-    if not log_path.exists():
+    if target is None:
         return
-
-    text = log_path.read_text(encoding="utf-8")
-    # Replace the LAST occurrence of each placeholder - log entries are appended
-    # (newest at the bottom of the file), and we want to finalize the latest run.
-    # An unfinalized older entry stays untouched as historical evidence. The
-    # placeholder the core writes is always "/ 8"; the finalised denominator may
-    # differ for a knowledge base, so the replacement carries it explicitly.
+    text = read_log_entries(assess_dir)[target]
+    # The placeholder the core writes is always "/ 8"; the finalised
+    # denominator may differ for a knowledge base, so the replacement carries it.
     text = _replace_last(
         text,
         pattern=r"\*\*AI Readiness:\*\* [\d.]+ / 8 \(\(LLM fills in\)\)",
@@ -109,7 +179,7 @@ def _finalize_log(
         pattern=r"\*\*Top action:\*\* Deterministic ranker not yet wired \(LLM picks Top 3\)",
         replacement=f"**Top action:** {top_action}",
     )
-    log_path.write_text(text, encoding="utf-8")
+    rewrite_log_entry(assess_dir, target, text)
 
 
 def _replace_last(text: str, *, pattern: str, replacement: str) -> str:
@@ -480,8 +550,11 @@ def finalize_run(*, assess_dir: Path) -> None:
     # pre-archetype finalize-input.json finalises exactly as before.
     denominator = int(data.get("denominator", 8))
     _validate_finalize_input(data, ctx, denominator=denominator)
+    target = _log_target(assess_dir, ctx.get("run_id") or data.get("run_id"))
+    _validate_no_earlier_same_date_placeholders(assess_dir, target)
     _finalize_log(
         assess_dir,
+        target=target,
         score=data["score"],
         maturity_label=data["maturity_label"],
         top_action=data["top_action"],
@@ -510,14 +583,52 @@ def finalize_run(*, assess_dir: Path) -> None:
             pass
 
 
+def drop_unfinalized_entry(*, assess_dir: Path, run_id: str) -> None:
+    """Replace the never-finalized log entry stamped ``run_id`` with a tombstone.
+
+    The supported way out of the earlier-same-date refusal: the entry's own
+    run-context has been overwritten, so it can never be finalized, and deleting
+    it by hand breaks the chain for every later entry. The entry becomes a
+    one-line chained note (no heading, no stamp, no placeholders) so the log
+    still records that the run existed; the chain is recomputed from there. A
+    finalized entry is history and is refused.
+    """
+    idx = find_log_entry(assess_dir, run_id)
+    if idx is None:
+        raise FinalizeValidationError(f"log.md has no entry stamped run_id={run_id}")
+    content = read_log_entries(assess_dir)[idx]
+    if not log_entry_owns_span(content, run_id):
+        raise FinalizeValidationError(
+            f"log.md entry run_id={run_id} shares its span with log history written "
+            "before the integrity chain existed; dropping it would drop that history "
+            "too. Leave it in place."
+        )
+    if not log_entry_is_unfinalized(content):
+        raise FinalizeValidationError(
+            f"log.md entry run_id={run_id} is finalized; finalized entries are history "
+            "and are not removed"
+        )
+    day = log_entry_date(content) or "unknown date"
+    tombstone = (
+        f"> Dropped run {run_id} ({day}): never finalized, its run-context was "
+        "superseded; removed with assess_finalize.py --drop-entry.\n\n---\n"
+    )
+    rewrite_log_entry(assess_dir, idx, tombstone)
+
+
 def main() -> int:
-    if len(sys.argv) < 2:
-        print("Usage: assess_finalize.py <repo_root>", file=sys.stderr)
+    args = sys.argv[1:]
+    usage = "Usage: assess_finalize.py <repo_root> [--drop-entry <run_id>]"
+    if len(args) not in (1, 3) or (len(args) == 3 and args[1] != "--drop-entry"):
+        print(usage, file=sys.stderr)
         return 2
-    repo_root = Path(sys.argv[1]).resolve()
+    repo_root = Path(args[0]).resolve()
     assess_dir = repo_root / ".assess"
     try:
-        finalize_run(assess_dir=assess_dir)
+        if len(args) == 3:
+            drop_unfinalized_entry(assess_dir=assess_dir, run_id=args[2])
+        else:
+            finalize_run(assess_dir=assess_dir)
     except FinalizeValidationError as e:
         # Fail-closed: a violated invariant means finalize wrote nothing. Name
         # the specific violation and exit non-zero so the run surfaces it.
