@@ -640,7 +640,7 @@ def test_pruned_finding_paths_disclosure_names_incomplete_rename_map() -> None:
 def test_attention_low_signal_disclosed_in_report() -> None:
     """A low-signal ranking says why only rank 1 is prescribed; false says nothing."""
     assert render_exclusion_disclosure({"attention_low_signal": True}) == (
-        "_Attention ranking is low signal (no path lands in more than one "
+        "_Attention ranking is low signal (no attention row lands in more than one "
         "finding): only rank 1 is prescribed._"
     )
     assert render_exclusion_disclosure({"attention_low_signal": False}) == ""

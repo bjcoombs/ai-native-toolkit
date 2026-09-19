@@ -201,7 +201,7 @@ def render_exclusion_disclosure(ctx: dict) -> str:
         )
     if ctx.get("attention_low_signal") is True:
         lines.append(
-            "_Attention ranking is low signal (no path lands in more than one "
+            "_Attention ranking is low signal (no attention row lands in more than one "
             "finding): only rank 1 is prescribed._"
         )
     return "\n\n".join(lines)
