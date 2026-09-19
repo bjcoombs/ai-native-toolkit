@@ -25,10 +25,41 @@ A scorecard the orchestrator forwards to the `assess-findings` step:
 
 - the **score** (one point per layer that is Present; half for Partial - see the scoring rule in the methodology) **and its denominator** (8 for a software repo; the applicable-layer count for a knowledge base - see Step 0),
 - the **per-layer verdict** (Present / Partial / Missing, or **N/A** for a layer the archetype excludes) with a one-line evidence note each,
-- the **maturity label** the score maps to (for a non-software archetype it **names the archetype and the applicable-layer count** - see Step 0), and
-- any layer-specific observations the report should lead with (e.g. "Layer 3 linter exists but no complexity gate").
+- the **maturity label** the score maps to (for a non-software archetype it **names the archetype and the applicable-layer count** - see Step 0),
+- any layer-specific observations the report should lead with (e.g. "Layer 3 linter exists but no complexity gate"), and
+- the **`evidence`** list: every existence or wiring fact a verdict rests on, as structured entries in the schema below.
 
 Return this as a compact structured summary (not the full report prose). The `assess-findings` step renders it into the report template alongside the deterministic findings.
+
+### Evidence schema
+
+Prose evidence is a claim; an `evidence` entry is a claim a script can re-check. Before the report is written the orchestrator runs every entry through `lib/evidence_check.py` (`exists()` plus a literal substring search, no model): entries that hold stay in `evidence`, the rest move to `evidence_rejected` and never reach the report. So cite a fact only as it literally stands on disk, and give each scored layer's verdict at least one entry.
+
+The list is one flat JSON array. Each entry has `layer` (0-8, the layer whose verdict cites it), `kind`, and the kind's arguments. Every `path` is relative to the repository root. `needle` is a literal string, not a regex or glob.
+
+| `kind` | Arguments | Holds when |
+|---|---|---|
+| `path_exists` | `path` | the file or directory exists |
+| `path_absent` | `path` | nothing exists at `path` |
+| `referenced_in` | `needle`, `path` | `needle` occurs in the file `path`, or in any file under the directory `path` (searched recursively, skipping `.git/` and `.assess/`) |
+| `not_referenced_in` | `needle`, `path` | `path` exists and `needle` occurs nowhere in it |
+| `file_contains` | `path`, `needle` | the one file `path` contains `needle` |
+
+Every check fails closed: an entry whose search could not read everything under `path` (an unreadable file, a FIFO, a symlinked directory outside the walk) is rejected as incomplete, not decided on the part it read.
+
+One example per kind, each true of the toolkit's own repository:
+
+```json
+[
+  {"layer": 0, "kind": "path_exists", "path": "CLAUDE.md"},
+  {"layer": 3, "kind": "path_absent", "path": ".eslintrc.json"},
+  {"layer": 5, "kind": "referenced_in", "needle": "pytest", "path": ".github/workflows"},
+  {"layer": 6, "kind": "not_referenced_in", "needle": "mutmut", "path": ".github/workflows"},
+  {"layer": 3, "kind": "file_contains", "path": ".github/workflows/tests.yml", "needle": "ruff check"}
+]
+```
+
+Existence claims are `path_exists` / `path_absent`; wiring claims ("CI runs the linter", "no workflow calls the script") are `referenced_in` / `not_referenced_in` against the file or directory that would do the calling. A Missing verdict cites its gap with `path_absent` or `not_referenced_in`.
 
 ---
 
@@ -134,7 +165,7 @@ Recognise the full range of navigability artefacts (not just README/ADR/API spec
 
 Score navigability from these signals:
 
-- **Connectivity / reachability (a wayfinding signal - read it as *curation*, not *access*).** A *good* doc set is one connected island, fully reachable from the entry points (README / `AGENTS.md` / top MOC). `doc_graph.island_count == 1` and `reachability_pct` near 1.0 is navigable (the headline counts reference edges - a backticked path to an existing doc - beside links; `link_only_reachability_pct` / `link_only_orphan_rate` are the link-only view); a high `orphan_rate` or many islands weakens wayfinding for both humans and agents. **Keep the claim honest:** reachability (and `link_only_reachability_pct` alike) measures whether the docs are *curated into a navigable map*, not whether content is *reachable at all* - an agent can always `ls docs/` and open any file by path. So low reachability means **uncurated** (poor signal-vs-noise / weak wayfinding), not **inaccessible**. Weight it accordingly - an index/MOC is worth adding, but a directory-organised docs tree with low reachability is not the emergency "an agent can only discover 9%" makes it sound. Name the orphan docs.
+- **Connectivity / reachability (a wayfinding signal - read it as *curation*, not *access*).** A *good* doc set is one connected island, fully reachable from the entry points (README / `AGENTS.md` / top MOC). `doc_graph.island_count == 1` and `reachability_pct` near 1.0 is navigable (the headline counts reference edges - a backticked path to an existing doc - beside links; `link_only_reachability_pct` / `link_only_orphan_rate` are the link-only view); a high `orphan_rate` or many islands weakens wayfinding for both humans and agents. **Keep the claim honest:** reachability (and `link_only_reachability_pct` alike) measures whether the docs are *curated into a navigable map*, not whether content is *reachable at all* - an agent can always `ls docs/` and open any file by path. So low reachability means **uncurated** (poor signal-vs-noise / weak wayfinding), not **inaccessible**. Weight it accordingly - an index/MOC is worth adding, but a directory-organised docs tree with low reachability is not the emergency "an agent can only discover 9%" makes it sound. Name the orphan docs. The headline figures cover the curated layer only: trees in `excluded_raw_trees` (raw exports) and `excluded_working_notes_trees` (pattern-named working notes under an index, counted in `working_notes_doc_count`) are left out, so score navigability on the curated figures and cite each excluded tree with its file count.
 - **Hubs / MOCs by centrality.** `doc_graph.hubs` are the load-bearing docs (highest PageRank). A stale hub is the most dangerous lying map - everything routes through it.
 - **MOC validation (declared vs structural).** `doc_graph.moc_named_but_not_wired` lists docs *named* like a map (`index.md`, "MOC") that aren't structural hubs - named but not wired. Flag each as a finding: the graph shows the map isn't actually built.
 - **Broken links / ghost files.** `doc_graph.broken_links` lists links whose target file doesn't exist - `{from, target, kind}`. The doc graph draws each as a labelled "ghost" node, and the missing name *is* the suggested fix (create the file or correct the link). Name a few and recommend the fix; `dangling_links` is the count. `ambiguous_wikilinks` (a bare `[[name]]` matching several files) is a milder smell worth noting.
@@ -170,9 +201,9 @@ Read both tiers from `run-context.json`:
 jq '.dead_code, .observability' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-**Deterministic tier - intra-repo dead code (`dead_code`).** A best-effort scan (`vulture`/`ts-prune`/`knip`/`staticcheck`/`deadcode`) flags unused exports / unreferenced symbols. `dead_code.tools` reports per-language status; `candidate_count` and `candidates` list the findings (already filtered to *this* repo - vendored/build dirs are excluded). Surface them in the report **with the explicit caveat** from `dead_code.caveat`: static reachability proves "nothing in *this* repo calls it," never "no external consumer calls it." Cross-boundary liveness needs the next tier. When `available: false`, report "intra-repo dead-code scan not run (no language tool present)" - degrade, don't penalise.
+**Deterministic tier - intra-repo dead code (`dead_code`).** A best-effort scan (`vulture`/`ts-prune`/`knip`/`staticcheck`/`deadcode`) flags unused exports / unreferenced symbols. `dead_code.tools` reports per-language status; `candidate_count` and `candidates` list the findings (already filtered to *this* repo - vendored/build dirs are excluded). Surface them in the report **with the explicit caveat** from `dead_code.caveat`: static reachability proves "nothing in *this* repo calls it," never "no external consumer calls it." Cross-boundary liveness needs the next tier. When `available: false`, no tool ran: report "intra-repo dead-code scan not run" followed by each `tools[]` entry's `reason`, and add "no language tool present" only when every entry is `tool_absent` (a tool on PATH can be skipped as inapplicable) - degrade, don't penalise.
 
-Two `tools[].status` values need handling in the report: `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it - surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `timeout` / `tool_absent` likewise degrade, not penalise.
+`tools[].status` is one of `ran`, `available_not_run`, `not_applicable`, `honest_degrade`, `timeout`, `tool_absent`, `error`. `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it - surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `not_applicable` means the tool was skipped because it does not fit the repo: the losing language of a mixed JavaScript/TypeScript tree (the reason names its unanalysed file count), or ts-prune with no root `tsconfig.json`; surface the `reason` so the unanalysed code is named. `honest_degrade` means no tool serving the language is on PATH and the entry names the one that would (JavaScript names `knip`); surface the `reason` as that named follow-up, never as plain "absent". `timeout` / `tool_absent` / `error` likewise degrade, not penalise.
 
 **Capability-driven JVM offers (`capability_offers`).** When the repo is a Maven or Gradle project (a build file plus JVM source outside platform-wrapper `android/` directories, Cordova's `platforms/android/` included), `run-context.json` carries a `capability_offers` block and the `dead_code.tools` list includes a `java` entry. This is the capability-driven flow (SKILL.md Step 2b) surfaced to the scorer. A Flutter, React Native, Capacitor or Cordova app whose only Gradle files and Kotlin/Java sit under its generated `android/` wrapper gets neither, so never name a JVM candidate tool for it:
 

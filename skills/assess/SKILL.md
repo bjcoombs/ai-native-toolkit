@@ -9,7 +9,7 @@ Three artefacts in one pass against a target repo:
 
 1. **Layered contract assessment** - 0-8 score across navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, and AI project management.
 2. **Complexity hotspot SVG** - Codecov-style treemap of the code. Size = LOC. Colour = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = riskiest to change.
-3. **Doc navigability SVG** - a node-graph of the docs. Structure = connectivity (centre = entry, rim = unreachable, dashed ring = orphan); colour = staleness (vivid red = a frozen doc beside churning code = a *lying map*); size = file length. Folds navigability and the decaying-map signal into one artifact.
+3. **Doc navigability SVG** - a node-graph of the docs. Structure = connectivity (centre = entry, rim = unreachable, dashed ring = orphan, solid edge = link, dotted edge = reference); colour = staleness (vivid red = a frozen doc beside churning code = a *lying map*); size = file length. Folds navigability and the decaying-map signal into one artifact.
 
 Both SVGs are colour-blind-safe by default (OrRd ramp, no red-green).
 
@@ -86,7 +86,7 @@ Artefacts will land at:
 This step produces **two** views of the codebase, both colour-blind-safe (OrRd ramp, no red-green):
 
 - **Complexity heatmap** (`complexity-heatmap.svg`) - a treemap of the *code*. Size = LOC, colour = cyclomatic complexity, saturation = recent churn. Vivid red = complex AND active = "hard to change safely".
-- **Doc navigability graph** (`doc-graph.svg`) - a node-graph of the *docs*. Structure shows connectivity (centre = entry point, rings = link-distance, rim = unreachable; orphans carry a dashed ring); colour shows staleness in the same grammar as the code heatmap (vivid red = a frozen doc beside churning code = a lying map); size = file length. It folds both Layer 0 doc signals - navigability and the decaying-map - into one artifact. Beyond static wikilinks and CommonMark links, it counts a backticked path to an existing doc as a reference edge (a cited `.claude/` file included) and recognises Obsidian vault-native navigation - `.base` view hubs and `dataview` query blocks - as edges (resolved statically by folder / tag / frontmatter predicate), so a vault navigated by dynamic queries isn't mis-scored as orphaned. The SVG and the scored signal compute over the identical doc set: both honour the same excludes (`.assess/config.toml`).
+- **Doc navigability graph** (`doc-graph.svg`) - a node-graph of the *docs*. Structure shows connectivity (centre = entry point, rings = link-distance, rim = unreachable; orphans carry a dashed ring; solid edges are links, dotted edges references); colour shows staleness in the same grammar as the code heatmap (vivid red = a frozen doc beside churning code = a lying map); size = file length. It folds both Layer 0 doc signals - navigability and the decaying-map - into one artifact. Beyond static wikilinks and CommonMark links, it counts a backticked path to an existing doc as a reference edge (a cited `.claude/` file included) and recognises Obsidian vault-native navigation - `.base` view hubs and `dataview` query blocks - as edges (resolved statically by folder / tag / frontmatter predicate), so a vault navigated by dynamic queries isn't mis-scored as orphaned. The SVG and the scored signal compute over the identical doc set: both honour the same excludes (`.assess/config.toml`).
 
 Feed the complexity stats into the linter/complexity layer (Layer 3) and the `doc_graph` / `doc_staleness` blocks of `run-context.json` into **Layer 0** (the graph SVG is the visual; the score reads the structured blocks).
 
@@ -175,7 +175,7 @@ OFFERS=()  # each entry: "language|tool|install_cmd"
   && { [ "${CODE_FILES:-0}" -lt "${NONCODE_FILES:-0}" ] || [ "${CODE_FILES:-0}" -lt 10 ]; } \
   && OFFERS+=("coverage|scc|brew install scc (or apt/dnf/go install - see Step 2a)")
 needs_offer vulture "$PY_FILES"      && OFFERS+=("python|vulture|pip install vulture (or 'uv tool install vulture')")
-needs_offer ts-prune "$TS_FILES"     && OFFERS+=("typescript|ts-prune|npm install -g ts-prune")
+needs_offer ts-prune "$TS_FILES" && [ -f "$REPO_ROOT/tsconfig.json" ] && OFFERS+=("typescript|ts-prune|npm install -g ts-prune")
 needs_offer staticcheck "$GO_FILES"  && OFFERS+=("go|staticcheck|go install honnef.co/go/tools/cmd/staticcheck@latest (or 'brew install staticcheck')")
 ```
 
@@ -268,7 +268,7 @@ The script prints a one-line summary (file count, lizard vs scc coverage, churn 
 
 The script's own output directory `.assess/` is excluded automatically - prior runs' `run-context.json` and SVGs never feed the next run's heatmap, the doc graph, or the dead-code scan. Test fixtures under `**/tests/fixtures/**` are likewise excluded automatically - they are inputs that exercise the scanners (sample `CLAUDE.md` / monolithic-instruction files), not navigational docs or live code, so counting them would inflate the orphan rate and depress the Layer 0 navigability read.
 
-**Raw-source-tree exclusion.** The read-side metrics (orphan rate, reachability, broken links) describe the **curated wiki** - the navigable layer an agent traverses. A repo can also track trees of raw, machine-extracted source documents (a disclosure / SAR export of hundreds of `.msg`/`.pdf`/`.docx` files converted to markdown). Those are immutable raw sources: they legitimately have no inbound wiki links and carry machine-extracted, non-navigational links (`mailto:`/`tel:`/footer URLs), so counting them as orphans / broken links inflates the figures and masks the curated signal. The doc graph auto-detects such subtrees - threshold-based: a large subtree that is almost entirely link-isolated *and* carries the machine-extraction fingerprint (`lib/raw_source.py`) - and **excludes** them from the headline metrics, reporting each excluded tree + its file count (`doc_graph.excluded_raw_trees`) and the raw layer's own figures separately (`raw_source_doc_count` / `raw_source_orphan_rate` / `raw_source_broken_links`). A repo with no raw-source tree is unaffected. The detection reuses the link graph already built, so there is no second parse.
+**Raw-source-tree exclusion.** The read-side metrics (orphan rate, reachability, broken links) describe the **curated wiki** - the navigable layer an agent traverses. A repo can also track trees of raw, machine-extracted source documents (a disclosure / SAR export of hundreds of `.msg`/`.pdf`/`.docx` files converted to markdown). Those are immutable raw sources: they legitimately have no inbound wiki links and carry machine-extracted, non-navigational links (`mailto:`/`tel:`/footer URLs), so counting them as orphans / broken links inflates the figures and masks the curated signal. The doc graph auto-detects such subtrees - threshold-based: a large subtree that is almost entirely link-isolated *and* carries the machine-extraction fingerprint (`lib/raw_source.py`) - and **excludes** them from the headline metrics, reporting each excluded tree + its file count (`doc_graph.excluded_raw_trees`) and the raw layer's own figures separately (`raw_source_doc_count` / `raw_source_orphan_rate` / `raw_source_broken_links`). A second fingerprint excludes working-notes trees the same way: pattern-named notes (plans, session logs, tickets) mostly linked once from one or two index files, reported as `excluded_working_notes_trees` / `working_notes_doc_count`. A repo with neither tree is unaffected. The detection reuses the link graph already built, so there is no second parse.
 
 **If the script fails** (no `uv`, no scoreable files, etc.), record the error in the report under "Hotspot snapshot" as "could not be generated - <reason>" and continue with the layered assessment. The treemap is additive; assessment still runs without it.
 
@@ -387,7 +387,7 @@ The deterministic core has written the data bus (`.assess/run-context.json`). As
 **Layer 6 (truth pressure) is capped at Partial when mutation testing did not run.** Read `mutation_not_run_cap` from `run-context.json`: when `applies` is true (the default read-only pass leaves it true - mutation only runs on the opt-in Step 2d accept), Layer 6 **cannot** be scored Present. A Present verdict there claims the suite *proves* behaviour, which only a mutation run substantiates - absent it, the strongest honest verdict is Partial, annotated with `mutation_not_run_cap.annotation` (`truth-pressure unproven (mutation not run)`). This is enforced deterministically: `assess_finalize.py` refuses a finalize-input whose Layer 6 score exceeds Partial while `mutation_run` is false, so scoring it Present will fail the finalize step, not merely read wrong.
 
 <!-- chat-replace:layer-scorer-delegate -->
-Spawn the `assess-layer-scorer` agent (`subagent_type: "assess-layer-scorer"`), passing `REPO_ROOT`. It reads `.assess/run-context.json`, scores every layer, and returns the 0-8 score, the per-layer verdicts with evidence, and the maturity label. Hold that scorecard for Step 4.
+Spawn the `assess-layer-scorer` agent (`subagent_type: "assess-layer-scorer"`), passing `REPO_ROOT`. It reads `.assess/run-context.json`, scores every layer, and returns the 0-8 score, the per-layer verdicts with evidence, the maturity label, and the structured `evidence` list Step 4 re-checks. Hold that scorecard for Step 4.
 
 ## Step 3.5: Read Cross-Run Context
 
@@ -408,10 +408,10 @@ If `prior` was None (first run), skip this section in the report.
 
 The wiki files at `.assess/index.md` and `.assess/hotspots/*.md` are already updated by `assess_core.py` - you don't need to write them. You only write the prose summary in `assess-report.md`.
 
-
 ## Step 4: Write the Report
 
-Assembling `.assess/assess-report.md` - the scorecard, the snapshots, the verbatim cross-layer findings, the lying signals, and the mandatory Top 3 Actions - is a reusable, mostly-deterministic procedure. It runs as a sub-skill.
+<!-- chat-replace:evidence-check -->
+**Verify the scorecard's evidence first** - the only point where a false claim can still be kept out of the report. Write the scorer's `evidence` list to `$REPO_ROOT/.assess/.cache/evidence.json` (after `mkdir -p "$REPO_ROOT/.assess/.cache"`), then re-resolve the skill dir (Step 2's shell variable will not have survived; `$CLAUDE_PLUGIN_ROOT` will) and run the check in the same Bash call: `SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"; SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"; uv run "$SKILL_DIR/scripts/lib/evidence_check.py" "$REPO_ROOT" "$REPO_ROOT/.assess/.cache/evidence.json" --json "$REPO_ROOT/.assess/.cache/evidence-checked.json"`. It prints `verified N, rejected M` and exits 0 (all hold) or 1 (some rejected); without that line, or with no `evidence-checked.json`, the check did not run - fix it before writing, never read it as a pass. The output's `evidence` replaces the scorer's list in the scorecard handed on; entries under `evidence_rejected` (each with a `reason`) are handed on beside it as the record of refuted claims, never cited as fact. When every entry a layer cited was rejected, re-score that layer yourself from `run-context.json` and its remaining verified entries, not from the scorer's prose. Delete both files once read. Assembling `.assess/assess-report.md` - the scorecard, the snapshots, the verbatim cross-layer findings, the lying signals, and the mandatory Top 3 Actions - is a reusable, mostly-deterministic procedure. It runs as a sub-skill.
 
 <!-- chat-replace:findings-delegate -->
 Use the assess-findings skill, handing it the scorecard the layer-scorer returned. It assembles `.assess/assess-report.md` from the data bus plus the scorecard: the verbatim findings section, the lying signals, and the Top 3 Actions (the attention list is mandatory). Then continue to Step 7.5.
@@ -430,7 +430,7 @@ cat > "$REPO_ROOT/.assess/.cache/finalize-input.json" <<'EOF'
   "score": 6.0,
   "maturity_label": "Solid",
   "denominator": 8,
-  "layer_scores": {"0": 1.0, "1": 0.5, "2": 1.0, "3": 0.5, "4": 1.0, "5": 0.5, "6": 0.5, "7": 1.0, "8": 0.5},
+  "layer_scores": {"0": 1.0, "1": 0.5, "2": 1.0, "3": 0.5, "4": 1.0, "5": 0.5, "6": 0.5, "7": 1.0, "8": 0.5}, "evidence": [{"layer": 0, "kind": "path_exists", "path": "CLAUDE.md"}],
   "top_action": "Add cyclop rule (threshold 15) to .golangci.yml",
   "hotspot_actions": {
     "src/foo.go": [
@@ -474,7 +474,7 @@ The optional `denominator` field is **8** for a software repo (the default when 
 - `denominator` must equal `archetype.denominator` in `run-context.json`.
 - `score` must not exceed `denominator`, and `maturity_label` must name the tier the score earns (≥0.875 AI-Native, ≥0.625 Solid, ≥0.375 Basic, else Not Ready over the denominator) - a label that overstates the score is rejected.
 - Every key in `hotspot_actions` must be a real top hotspot from `stats_summary.top_hotspots` - a fabricated path is rejected, naming the path.
-- `layer_scores` maps each layer id to its band (Missing 0.0 / Partial 0.5 / Present 1.0). Layer 6 must not exceed **0.5** when `mutation_not_run_cap.applies` is true (see Step 3). Include it so the cap is enforced; a legacy input omitting it skips only the Layer 6 check.
+- `layer_scores` maps each layer id to its band (Missing 0.0 / Partial 0.5 / Present 1.0). Layer 6 must not exceed **0.5** when `mutation_not_run_cap.applies` is true (see Step 3). Include it so the cap is enforced; a legacy input omitting it skips only the Layer 6 check. Set `evidence` to the verified list the pre-report `evidence_check` run kept (flat `{layer, kind, path[, needle]}` entries), never the scorer's raw list; finalize re-checks it against the repository: a layer whose entries are all rejected is refused, naming each entry by kind, path and needle; a layer with at least one verified entry finalises, and each rejected entry prints a `finalize: warning:` line on stderr, which you relay to the user. An input without `evidence` skips the check.
 
 The live README badge (`.assess/badge.json`, shields.io endpoint schema) is deterministic: `assess_core.py` writes the findings-count form on every run and links it to `assess-report.md`. Your LLM-derived score is *not* written to the badge - it appears inside the report the badge links to, so the badge only ever claims what a deterministic run can reproduce. When offering the PR (assess-pr), include the embed snippet if the repo's README has no badge yet:
 

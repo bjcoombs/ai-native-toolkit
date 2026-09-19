@@ -432,6 +432,23 @@ def rewrite_log_entry(assess_dir: Path, index: int, new_content: str | None) -> 
     log_path.write_text(header + "".join(out), encoding="utf-8")
 
 
+def last_log_entry_is_unfinalized_run(assess_dir: Path, run_id: str) -> bool:
+    """True when the log's last entry is ``run_id``'s own and still unfinalized.
+
+    This is the condition under which ``supersede_unfinalized_log_entry`` acts,
+    exposed so the core can learn before it writes the wiki that the previous
+    run was never finalized (#356).
+    """
+    return _last_entry_is_unfinalized_run(read_log_entries(assess_dir), run_id)
+
+
+def _last_entry_is_unfinalized_run(entries: list[str], run_id: str) -> bool:
+    if not entries:
+        return False
+    last = entries[-1]
+    return log_entry_owns_span(last, run_id) and log_entry_is_unfinalized(last)
+
+
 def supersede_unfinalized_log_entry(assess_dir: Path, run_id: str) -> bool:
     """Remove the last log entry when it is ``run_id``'s and still unfinalized.
 
@@ -442,10 +459,7 @@ def supersede_unfinalized_log_entry(assess_dir: Path, run_id: str) -> bool:
     Returns True when an entry was removed.
     """
     entries = read_log_entries(assess_dir)
-    if not entries:
-        return False
-    last = entries[-1]
-    if not log_entry_owns_span(last, run_id) or not log_entry_is_unfinalized(last):
+    if not _last_entry_is_unfinalized_run(entries, run_id):
         return False
     rewrite_log_entry(assess_dir, len(entries) - 1, None)
     return True
@@ -574,6 +588,11 @@ def write_hotspot_page(
 # graduated-hotspot idiom (a page that survives after the file leaves the top
 # list) rather than the deletion idiom, which the wiki has none of.
 RETIRED_STATUS = "retired - file deleted"
+# A file first flagged by a run that was never finalized, then excluded by
+# `.assess/config.toml` before the superseding run (#356). The file may still be
+# on disk, so this is a separate wording; every retired status begins "retired".
+RETIRED_EXCLUDED_STATUS = "retired - excluded before finalize"
+_RETIRED_PREFIX = "retired"
 
 # The source path a hotspot page describes lives in its `# Hotspot: `<path>``
 # heading (there is no YAML frontmatter). The status lives in the italic
@@ -611,19 +630,63 @@ def prune_orphan_hotspots(assess_dir: Path, repo_root: Path) -> list[str]:
         path = hotspot_page_source_path(content)
         if path is None:
             continue  # not a recognisable hotspot page - leave it alone
-        if hotspot_page_status(content) == RETIRED_STATUS:
-            continue  # already retired - idempotent
+        if is_retired_status(hotspot_page_status(content)):
+            continue  # already retired (for any reason) - idempotent
         if (repo_root / path).exists():
             continue  # source still on disk - a legitimate hotspot, untouched
-        banner = (
-            "\n> **Retired:** the source file was absent from disk at the latest "
+        _stamp_retired(page, content, RETIRED_STATUS, (
+            "the source file was absent from disk at the latest "
             "run (deleted, moved, or renamed). This page is preserved for history "
             "and no longer describes a live file."
-        )
-        stamped = _HOTSPOT_STATUS_RE.sub(
-            lambda m: f"{m.group('prefix')}{RETIRED_STATUS}{m.group('suffix')}{banner}",
-            content, count=1,
-        )
-        page.write_text(stamped, encoding="utf-8")
+        ))
         retired.append(path)
     return sorted(retired)
+
+
+def retire_excluded_hotspots(
+    assess_dir: Path, paths: list[str],
+) -> tuple[list[str], list[str]]:
+    """Stamp the pages of ``paths`` retired as excluded before finalize (#356).
+
+    The caller picks the paths: excluded by config and first flagged only by a
+    run that was never finalized. Returns ``(retired, unstamped)``, both sorted:
+    the paths whose page this call retired, and the paths whose page exists but
+    carries no status token to stamp (left as-is, so the caller can keep their
+    first-flagged entries). A path with no page, or whose page is already
+    retired, is in neither list.
+    """
+    retired: list[str] = []
+    unstamped: list[str] = []
+    for path in sorted(set(paths)):
+        page = assess_dir / "hotspots" / f"{slug_for_path(path)}.md"
+        if not page.exists():
+            continue
+        content = page.read_text(encoding="utf-8")
+        status = hotspot_page_status(content)
+        if status is None:
+            unstamped.append(path)
+            continue
+        if is_retired_status(status):
+            continue
+        _stamp_retired(page, content, RETIRED_EXCLUDED_STATUS, (
+            "this file was first flagged by a run that was never finalized and "
+            "is now excluded by `.assess/config.toml`. This page is preserved for "
+            "history and no longer describes a live hotspot."
+        ))
+        retired.append(path)
+    return retired, unstamped
+
+
+def is_retired_status(status: str | None) -> bool:
+    """True for any retired status token: every one begins with ``retired``."""
+    return status is not None and status.startswith(_RETIRED_PREFIX)
+
+
+def _stamp_retired(page: Path, content: str, status: str, reason: str) -> None:
+    """Flip the page's status token to ``status`` and add a retirement banner."""
+    banner = f"\n> **Retired:** {reason}"
+    stamped = _HOTSPOT_STATUS_RE.sub(
+        lambda m: f"{m.group('prefix')}{status}{m.group('suffix')}{banner}",
+        content, count=1,
+    )
+    page.write_text(stamped, encoding="utf-8")
