@@ -58,6 +58,7 @@ from lib.assess_config import load_excludes, load_structure_config
 from lib.change_coupling import build_rename_map
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
+from lib.instruction_claims import scan_instruction_claims
 from lib.interactivity import build_offers_block
 from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.doc_staleness import analyze_doc_staleness
@@ -1491,6 +1492,7 @@ def build_run_context(
     ctx["runtime"] = keyhole["runtime"]
     ctx["derived_findings"] = keyhole["derived_findings"]
     ctx["attention"] = keyhole["attention"]
+    ctx["attention_low_signal"] = keyhole["attention_low_signal"]
     # Deterministic report-skeleton products (assess-dogfooded Part 1): the
     # pre-rendered findings section the LLM copies verbatim, the keyhole
     # readiness summary reported alongside (never merged into) the 0-8 score, and
@@ -1576,6 +1578,11 @@ def build_run_context(
     # directory (resolved by the orchestrator via $SKILL_DIR). A machine-stable
     # pointer so an agent can Read the removal steps without hunting for them.
     ctx["uninstall_instructions_path"] = "references/uninstall.md"
+
+    # Checkable claims in the graded instruction files ("`x.sh` is enforced in
+    # CI", "Node 20.11.0 is pinned in `.nvmrc`"), verified against the repo; a
+    # failed claim is a Layer 0 lying signal. Always present, zeros when none.
+    ctx["instruction_claims"] = scan_instruction_claims(repo_root, instruction_files)
 
     ctx["anomalies"] = [
         {"code": a.code, "description": a.description, "detail": a.detail}

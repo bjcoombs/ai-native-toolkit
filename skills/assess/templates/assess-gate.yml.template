@@ -30,7 +30,7 @@ name: Assess Gate
 on:
   pull_request:
     branches: [$default_branch]
-
+$path_filters
 permissions:
   contents: read
 

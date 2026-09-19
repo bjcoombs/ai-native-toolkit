@@ -272,7 +272,16 @@ disclosure (a suppressed finding is counted and named, never silently vanished).
 `exclude_archive_from_attention` then builds the attention list with any path under an
 `archive/`, `archived/` or `attic/` directory left out (so it never becomes a prescribed
 action) and returns those paths as `archived_finding_paths` for the `excluded_as_archive`
-disclosure; the findings themselves still name them. Before either filter, the commit
+disclosure; the findings themselves still name them. Rows of equal score are ordered by
+`attention_tie_break` (an `AttentionTieBreak` built from data the run already holds):
+`top_hotspots` members first in hotspot rank order, then descending severity (the highest
+`promissory_markers.top_offenders[].severity` for an `unactioned_intent` file, divided by
+the run's highest so it shares the 0-1 scale of `1 - containment_ratio` for a
+`hidden_coupling` directory; neither finding type outranks the other by scale alone),
+then path. `is_attention_low_signal` marks the list low-signal when its top score is 1
+(no row lands in two negative findings; `False` for an empty list), and `integrate` then
+caps `prescribed_actions` at the rank-1 row instead of three; the flag is serialised as the
+run-context `attention_low_signal`. Before either filter, the commit
 sets are folded through the rename map (so a renamed directory's history lands on its
 current name), and `prune_missing_finding_paths` drops any `hidden_coupling` or
 `refactor_boundary` path absent from the working tree, returning them as
@@ -348,7 +357,11 @@ using `string.Template`. Bakes in the toolchain discovered during the current ru
 the workflow is a reproducible contract, not a norm. The emitted workflow pins its
 supply chain (actions to commit SHAs, tools to exact releases) and degrades infra
 failures - toolkit fetch, tool installs, uv setup - to a skip notice so the gate's
-warn-only contract survives a flaky network or a missing tag.
+warn-only contract survives a flaky network or a missing tag. `paths` / `paths_ignore`
+render as lists under `on.pull_request`; `find_path_filtered_workflow` line-scans the
+repo's other workflows for a `paths:` / `paths-ignore:` key under a `pull_request`
+trigger or a `dorny/paths-filter` step,
+which is when the CLI applies `DEFAULT_PATHS_IGNORE` (`**/*.md`, `.assess/**`).
 
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
@@ -383,7 +396,15 @@ ts-prune for TS, staticcheck for Go) to a *capability-driven detect-or-propose* 
 proven on one capability (liveness) in one build system (Maven). Reports each capability
 in one of four states - `served`, `offer` (with a run-or-install `consent` shape),
 `credited` (a configured pom.xml plugin already serves it), or `honest_degrade` (nothing
-serves it yet; the report names the capability and a candidate tool). Imported by
+serves it yet; the report names the capability and a candidate tool). A build file
+counts only when at least one `.java`, `.kt`, `.scala` or `.groovy` file exists outside
+platform-wrapper directories: an `android/` beside a `pubspec.yaml`, or beside a
+`package.json` whose `dependencies` or `devDependencies` name `react-native`,
+`@capacitor/android` or `cordova-android`, or a Cordova app's `platforms/android/`
+(beside a Cordova-namespace `config.xml` or a `cordova-android` `package.json`), at
+any depth. A Flutter plugin's own `android/` Kotlin is skipped the same way. Build files and source under
+a wrapper are both skipped, in one `os.walk` that also prunes the shared excludes, so a
+Flutter app never reads as Gradle while a real JVM service beside it still does. Imported by
 `liveness_scan.py`, never by the orchestrator - it is an inward dependency of the
 liveness tier.
 
@@ -472,6 +493,61 @@ fixture-tested. Also exposes `maturity_band`
 (the same score/denominator fraction mapped to the named tier ladder), the
 single source of truth `assess_finalize` reconciles the LLM's `maturity_label`
 against. Both producers accept an optional `run_id` provenance stamp.
+
+**`evidence_check.py`**
+Deterministic re-check of the evidence a layer verdict cites (issue #360). The
+scorer is a model and can cite a file that is not there or a wiring that does not
+exist; `evidence_check` re-checks each cited fact with `exists()` or a literal
+substring search, no model. Input is a flat array of entries, each with `layer`,
+`kind` and the kind's arguments: `path_exists` / `path_absent` take `path`;
+`referenced_in` / `not_referenced_in` take `needle` and `path` (one file, or a
+directory searched recursively); `file_contains` takes `path` (one file) and
+`needle`. Every `path` is relative to the repository root; one that resolves
+outside it, or cannot be resolved, is rejected. The reference search reads files in
+1 MiB chunks and does not enter `.git/` or `.assess/` (the tool's own previous
+output) when walking a directory; naming `.assess/` directly still searches it.
+The reference kinds reject a `path` inside `.git/` (literally or through a
+symlink), and a symlink met in the walk that leads into `.git/` or `.assess/` is
+skipped like one out of the root, while `file_contains`, a claim
+about one named file, may read one (e.g. `.git/config`).
+A symlink out of the root, or a dangling one, is not repository content and is
+skipped; a symlinked file inside the root is read at its target. Every check fails
+closed: a `referenced_in`, `not_referenced_in` or `file_contains` claim is rejected
+as incomplete when anything it needed could not be read (an unreadable file or
+directory, a FIFO, socket or device, a symlinked directory inside the root that
+the walk did not search), since the unread part could hold the reference; a needle
+that cannot be encoded (a lone surrogate) is rejected, not raised on. `layer` is
+carried through unchecked. `check_evidence` splits the list into `evidence` (verified,
+returned as given) and `evidence_rejected` (copies carrying a `reason`); unknown
+keys pass through. The reference search is the public
+`is_referenced_in(repo_root, needle, path)`, so a check outside this module can
+reuse it. CLI, run from `skills/assess/scripts`:
+`uv run python -m lib.evidence_check <repo_root> <evidence.json> --json <out.json>`
+(exit 0 all verified, 1 any rejected, 2 an evidence file that cannot be read or is not a UTF-8 JSON array, a `repo_root` that is not a
+directory, or a `--json` file that cannot be written; a missing root would otherwise verify every `path_absent` claim). Stdlib only, imports no
+orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kind
+or change to a check rule.
+
+**`instruction_claims.py`**
+Verifies the checkable claims an agent instruction file makes (issue #368), no
+model. `scan_instruction_claims(repo_root, files)` reads each graded instruction
+file (the keys of `instruction_files`; two keys resolving to one file are read
+once), splits prose into sentences per paragraph (fenced code skipped, a wrapped
+sentence reported at the line it starts on) and extracts two kinds: `enforcement`
+(a backticked shell script, or any script under `scripts/`, `bin/`, `tools/`,
+`ci/` or `hack/`, in a sentence with "enforced", "runs in", "checked by" or "CI";
+verified when the path occurs in any CI configuration or in a task runner CI
+calls through such as `Makefile` or `package.json`; skipped when the repo has no
+CI configuration, since nothing can confirm or refute it) and `pin` ("pinned in"
+a backticked file plus exactly one dotted version in the sentence, verified when
+the file exists and contains the version as a substring). Each failure carries a
+`reason`. Both checks use
+`evidence_check.is_referenced_in`, so the search is the same fail-closed one.
+The core writes the result as the run-context block `instruction_claims`
+(`{total, verified, failed, failures[{file, line, kind, path, reason, ...}]}`, zeros when
+nothing matched); failures feed Layer 0 evidence and a Lying Signals row. A new
+claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
+(which returns the extra failure fields). Tests: `tests/test_instruction_claims.py`.
 
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible

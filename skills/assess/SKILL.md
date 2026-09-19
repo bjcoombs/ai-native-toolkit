@@ -160,8 +160,8 @@ GO_FILES=$(fd -t f -e go . "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
 # `knip` for TS, `staticcheck` over `deadcode` for Go - so the user isn't asked
 # twice for the same job and the chosen tool doesn't need to build the project.
 needs_offer() {
-  # $1 = tool; $2 = file count for the language; returns 0 if we should ask.
-  local tool="$1" count="$2" min="${3:-5}"
+  # Args: tool, file count, min; 0 = ask. Braced: skill-arg substitution skips them.
+  local tool="${1}" count="${2}" min="${3:-5}"
   [ "$count" -ge "$min" ] || return 1
   command -v "$tool" >/dev/null 2>&1 && return 1     # already installed
   [ -f "$REPO_ROOT/.assess/.no-$tool" ] && return 1  # user declined permanently
@@ -195,7 +195,7 @@ When the user picks **Install <tool>**, run the platform-appropriate command fro
 
 #### JVM / Maven capability offers (v1)
 
-When the deterministic core detects a Maven or Gradle project it emits a `capability_offers` block in `run-context.json` - the first proof of the capability-driven flow on a non-enumerated ecosystem. Read it after Step 2c's core run, before scoring, and act on each capability's `state`:
+When the deterministic core detects a Maven or Gradle project (a build file plus at least one `.java`, `.kt`, `.scala` or `.groovy` file outside platform-wrapper `android/` directories, Cordova's `platforms/android/` included: a Flutter, React Native, Capacitor or Cordova shell is not a JVM codebase) it emits a `capability_offers` block in `run-context.json` - the first proof of the capability-driven flow on a non-enumerated ecosystem. Read it after Step 2c's core run, before scoring, and act on each capability's `state`:
 
 ```bash
 jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"

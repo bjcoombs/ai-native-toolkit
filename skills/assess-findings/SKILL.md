@@ -20,7 +20,7 @@ The deterministic parts are not yours to invent - you paste them. You write the 
 The layers above each measure one axis. The deterministic core also crosses those axes against each other and emits ten named findings - the "where to look" signals no single layer surfaces. Read them once, after the per-layer scans:
 
 ```bash
-jq '.derived_findings, .attention, .keyhole_summary, .prescribed_actions' "$REPO_ROOT/.assess/run-context.json"
+jq '.derived_findings, .attention, .attention_low_signal, .keyhole_summary, .prescribed_actions' "$REPO_ROOT/.assess/run-context.json"
 ```
 
 `derived_findings` is a fixed-order list of ten `{name, paths, action}` objects - all ten always present, `paths` may be empty. Omit a finding from the report when its `paths` is empty. Each pairs an axis-crossing with the action it implies:
@@ -36,11 +36,11 @@ jq '.derived_findings, .attention, .keyhole_summary, .prescribed_actions' "$REPO
 - **`candidate_dead_weight`** - high complexity with no runtime evidence it is live. The bias is to **keep** (static reachability can't see external callers - Layer 1's caveat applies). Action: verify liveness, then delete only if confirmed dead.
 - **`refactor_boundary`** (positive) - high containment: edits stay local. A safe zone, never an attention row. Action: safe to hand an agent in isolation; cite these paths in Strengths.
 
-`attention` ranks the few units landing in the most *negative* findings (`refactor_boundary` never counts) - the "look here first" list, each row carrying its `findings` and `score`. Lead the report's findings with the top of this list.
+`attention` ranks the few units landing in the most *negative* findings (`refactor_boundary` never counts) - the "look here first" list, each row carrying its `findings` and `score`. Equal scores order by `stats_summary.top_hotspots` rank (members first), then finding severity (stale-marker severity, or lower `containment_ratio` for `hidden_coupling`), then path, so the order is already the priority. Lead the report's findings with the top of this list. The sibling boolean `attention_low_signal` is true when the top `score` is 1; the ranking is then weak, and only its first row is prescribed.
 
 **Copy `findings_markdown` verbatim.** `run-context.json` carries a pre-rendered `findings_markdown` string - the deterministic findings section (the ten findings with their paths and actions, then the attention list). Paste it into the report **verbatim, inside the `🔎 Cross-layer findings` fold below** - do not paraphrase, summarise, reorder, or drop findings. You write framing prose (the "why these matter here") *inside* the block, directly under its `## Cross-Layer Findings (Keyhole Readiness)` heading - the block already opens with that heading, so **never add your own heading above or around it**; the heading must appear exactly once in the report. The section itself is the deterministic core's product, not yours. This is what makes the findings impossible to omit regardless of which LLM drives the run.
 
-`keyhole_summary` rolls the same findings into a one-line readiness summary (`summary_text`), reported alongside the 0-8 score - see the **score headline** in the report template below. `prescribed_actions` lists the attention-derived Top-3 actions the report MUST include - see the **Mandatory attention rule** in the Top 3 Actions section below.
+`keyhole_summary` rolls the same findings into a one-line readiness summary (`summary_text`), reported alongside the 0-8 score - see the **score headline** in the report template below. `prescribed_actions` lists the attention-derived actions the report MUST include (up to three; one when `attention_low_signal` is true) - see the **Mandatory attention rule** in the Top 3 Actions section below.
 
 
 ## Score and Write the Report
@@ -269,12 +269,14 @@ These artefacts look true but aren't - the most dangerous failure mode for an ag
 | Layer | Signal Type | Instance | Why it lies |
 |-------|-------------|----------|-------------|
 | 0 | Stale hub doc | `<path>` (<N>d stale; subject churned <M> commits in window) | A central doc agents anchor on, frozen while its subject code moves - reads as the map, describes terrain that no longer exists |
+| 0 | False instruction claim | `<file>:<line>` - `<path>` (<kind>) | The agent instruction file states enforcement or a pin the repo does not back - an agent trusts the rule as guarded when nothing checks it |
 | 1 | Dead-but-present | `<path>` - `<symbol>` (<kind>) | Compiles and reads as live, but nothing in *this* repo calls it - an agent extends or trusts a path that is never exercised |
 | 6 | Green-but-hollow | `<path>` (coverage <C>% vs mutation <K>%) | Tests execute the file (green coverage) but don't constrain it (mutants survive) - the gate says "tested" while behaviour is unpinned |
 
-**Populate each row from `run-context.json`; omit any row whose signal is absent or below threshold, and omit the entire Lying Signals subsection if all three are empty:**
+**Populate each row from `run-context.json`; omit any row whose signal is absent or below threshold, and omit the entire Lying Signals subsection when no row qualifies:**
 
 - **L0 - stale hub doc:** take `stale_hubs[0]` only when its `ratio > 2.0` **and** `confidence != "low"` (a `repo-baseline` subject is `confidence: low` - its "subject churn" is the whole repo's churn, too coarse to call a lie). Fill from `path`, `last_commit_days`, `code_churn_in_window`.
+- **L0 - false instruction claim:** take `instruction_claims.failures[0]` when `instruction_claims.failed > 0`; fill from `file`, `line`, `path`, `kind` and `reason` (`enforcement`: no CI configuration or task runner references the script; `pin`: the pinned file lacks `version` or does not exist). Use only a failure the scorer confirmed and cited in Layer 0 evidence; when it dropped them all, no row. Name the count when more than one was confirmed ("and <n - 1> more").
 - **L1 - dead-but-present:** take `dead_code.candidates[0]`; fill from `path`, `symbol`, `kind`. Keep the `dead_code.caveat` in mind - static reachability proves "nothing in this repo calls it," never "no external consumer calls it" - so frame it as a candidate, not a verdict.
 - **L6 - green-but-hollow:** take `test_pressure.survivor_clusters[0]` only when `test_pressure.survivor_density.overall > 0.3`; fill the file from the cluster's `file`. State the mutation score as `1 - survivor_density.overall` and pair it with the file's line coverage when you have it. This is the hollow-gate pattern Layer 6 scores Partial for.
 
@@ -347,7 +349,7 @@ _Report generated by [`/ai-native-toolkit:assess`](https://github.com/bjcoombs/a
 
 Prioritize by leverage: agent instructions and CI first, then linters and coverage, then architecture tests and retro loops. Each action should be completable in a single session and reference **specific files** from the hotspot snapshot wherever possible - generic advice is the failure mode this report exists to prevent.
 
-**Mandatory attention rule (hard, not a suggestion).** If `attention` in run-context.json is non-empty, its top entries MUST appear in this Top 3 Actions table. The `prescribed_actions` array lists them with their finding-derived action text, their `rank`, and their `path` (pre-rendered as table rows you can paste - see `prescribed_actions` and `render_prescribed_actions`). You MAY add context, combine an attention path with a related gap, or fill the deterministic `?` cells (layer, effort, command) with judgement - but you may NOT omit an attention-list path from the Top 3 unless that path has already been addressed in this repo. When `attention` is empty, prioritise by leverage as above. This rule exists because the attention list is the deterministic core's "look here first" ranking; letting the LLM silently drop it would reintroduce exactly the non-determinism Part 1 removes.
+**Mandatory attention rule (hard, not a suggestion).** If `attention` in run-context.json is non-empty, its top entries MUST appear in this Top 3 Actions table. The `prescribed_actions` array lists them with their finding-derived action text, their `rank`, and their `path` (pre-rendered as table rows you can paste - see `prescribed_actions` and `render_prescribed_actions`). You MAY add context, combine an attention path with a related gap, or fill the deterministic `?` cells (layer, effort, command) with judgement - but you may NOT omit an attention-list path from the Top 3 unless that path has already been addressed in this repo. When `attention` is empty, prioritise by leverage as above. When `attention_low_signal` is true (no row scores above 1, so the ranking separates nothing), `prescribed_actions` holds rank 1 alone: only that path is mandatory, the two freed slots are filled with judgement, and one line under the table says the attention ranking was low signal. This rule exists because the attention list is the deterministic core's "look here first" ranking; letting the LLM silently drop it would reintroduce exactly the non-determinism Part 1 removes.
 
 The `Issue` column is filled in later by the `assess-pr` step if the user opts to create tracking issues. Leave as `-` initially - that step mutates this table in place via the `assess-report.md` artifact, so the column is the explicit contract between the two units.
 

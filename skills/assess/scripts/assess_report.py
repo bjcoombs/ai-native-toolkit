@@ -155,7 +155,8 @@ def render_exclusion_disclosure(ctx: dict) -> str:
     kept out of the attention list because they sit under an ``archive/``,
     ``archived/`` or ``attic/`` directory (``excluded_as_archive``), and a
     third the git-history paths pruned because they no longer exist
-    (``pruned_finding_paths``).
+    (``pruned_finding_paths``), and a last one says when ``attention_low_signal``
+    cut the prescribed actions to rank 1.
     """
     lines: list[str] = []
     block = ctx.get("excluded_by_config") or {}
@@ -197,6 +198,11 @@ def render_exclusion_disclosure(ctx: dict) -> str:
         lines.append(
             "_Renames could not be read from git history: findings may name "
             "pre-rename paths, and none were pruned._"
+        )
+    if ctx.get("attention_low_signal") is True:
+        lines.append(
+            "_Attention ranking is low signal (no attention row lands in more than one "
+            "finding): only rank 1 is prescribed._"
         )
     return "\n\n".join(lines)
 
