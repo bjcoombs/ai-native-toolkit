@@ -71,7 +71,7 @@ from lib.structure_drift import (
     SEAM_ALLOWLIST,
     detect_path_existence_drift,
 )
-from lib.sibling_tests import has_sibling_test, shared_name_keys
+from lib.sibling_tests import TestIndex, build_test_index, has_sibling_test, shared_name_keys
 from lib.test_focus import compute_test_focus, mutation_scope
 from lib.test_pressure import scan_test_pressure
 from lib.wiki_writer import (
@@ -489,6 +489,7 @@ def _tool_version_change_note(
 
 def _has_sibling_test(
     repo_root: Path, rel_path: str, shared_names: frozenset[str] = frozenset(),
+    index: TestIndex | None = None,
 ) -> bool | None:
     """Best-effort: does this file have a test file?
 
@@ -499,7 +500,7 @@ def _has_sibling_test(
     adjacent ``__tests__/``, a mirrored ``tests/`` tree, ...); ``None`` only when
     the file isn't on disk (a since-deleted path in a stats snapshot).
     """
-    return has_sibling_test(repo_root, rel_path, shared_names)
+    return has_sibling_test(repo_root, rel_path, shared_names, index)
 
 
 def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
@@ -1036,6 +1037,8 @@ def build_run_context(
     # Same flat-tree disambiguation the test_focus block applies to these files.
     hot_shared_names = shared_name_keys(
         h["path"] for h in current.get("top_hotspots", []))
+    # One repository index for every hot file's parallel-tree (basename) probe.
+    hot_test_index = build_test_index(repo_root) if current.get("top_hotspots") else None
     for h in current.get("top_hotspots", []):
         path = h["path"]
         # Preserve the original first_flagged date across runs. A path missing
@@ -1069,7 +1072,8 @@ def build_run_context(
             loc=loc,
             ccn=ccn,
             commits=commits,
-            has_tests=_has_sibling_test(repo_root, path, hot_shared_names),
+            has_tests=_has_sibling_test(repo_root, path, hot_shared_names,
+                                        hot_test_index),
             history_rows=f"| {run_date} | {loc} | {ccn} | {commits} | {status} |",
             briefing=(
                 f"Hotspot ({status}). "
@@ -1412,6 +1416,7 @@ def build_run_context(
         coverage_data,
         ctx["test_pressure"].get("cheap_heuristics"),
         repo_root=repo_root,
+        index=hot_test_index,
     )
 
     # Promissory markers (stale TODO/FIXME, suppressions, disabled tests):
