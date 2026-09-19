@@ -552,7 +552,8 @@ in `tests/test_config_drift.py` alongside any change to discovery or the diff.
 
 **`review_reality.py`**
 Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
-`gh_cli`. Samples the last `DEFAULT_LIMIT` (30) merged pull requests with
+`gh_cli`. Samples the `DEFAULT_LIMIT` (30) most recently opened merged pull
+requests (`gh pr list` orders by creation, not merge) with
 `gh pr list --state merged --json author,mergedBy,mergedAt,reviews,reviewDecision,comments`
 and emits `review_reality: {available, merged_count, oldest_merged_days_ago,
 reviewed_share, approved_share, bot_review_share, self_merged_share,
@@ -563,7 +564,9 @@ author; `approved_share` counts only `APPROVED` ones;
 in `reviews`). `gh pr list` drops a comment author's `[bot]` suffix, so an author
 object without `is_bot`/`type` is classified by one `gh api users/<login>[bot]`
 probe per distinct login (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot,
-404 is a person, anything else is unknown and withholds the share (null).
+404 is a person, anything else is unknown, as is a comment with no author
+login. An unknown author withholds the share (null) only when it decides a pull
+request: one with a confirmed bot comment counts regardless.
 `review_required` reads the default branch's effective rules
 (`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
 classic protection, each needing `required_approving_review_count` of 1 or more;
@@ -575,6 +578,20 @@ when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
 rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
 the block. A failed pull-request read degrades the whole block to `available:
 False`. Tests: `tests/test_review_reality.py`.
+
+**`gate_cost.py`**
+Actions cost of the CI gate the assess-pr skill offers, so the offer can state it.
+Counts pull requests merged in the last `WINDOW_DAYS` (30) days with `gh pr list
+--state merged` via `gh_cli` (not `git log --merges`, which reads zero on a
+squash-merging repository), filtering `mergedAt` in Python because the search
+qualifier is day-granular, and multiplies by `MINUTES_PER_RUN` (5, an assumption
+from one measured run, not a measurement of the target). Emits `gate_cost_estimate:
+{available, runs_per_month, minutes_per_run, minutes_per_month, assumption, capped, private}`
+(`capped` true when the listing hit `PR_LIMIT`, so the counts are lower bounds);
+`private` comes from `gh repo view` and is `null` when that read fails. No remote,
+no `gh`, no auth, a failed read or zero merged pull requests degrade to `{available:
+false, reason}` (`no_merge_history` for the last). Only the counts are stored.
+Tests: `tests/test_gate_cost.py`.
 
 **`accretion_ratchet.py`**
 Write-side accretion instrument: detects files that only ever grow. Walks each

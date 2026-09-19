@@ -2,7 +2,8 @@
 
 Layer 7 asks whether every change gets design-level feedback. A required-review
 rule that every merge bypasses reads as Present and is hollow. This scan samples
-the last ``DEFAULT_LIMIT`` merged pull requests through ``gh`` and reports, as
+the ``DEFAULT_LIMIT`` most recently opened merged pull requests through ``gh``
+(``gh pr list`` orders by creation, not merge) and reports, as
 counts and shares only, how many carried a review from someone other than the
 author, a comment from a review bot, and an author who merged their own change,
 next to whether the default branch requires an approving review.
@@ -40,7 +41,8 @@ a bot's ``[bot]`` suffix dropped. An author object that carries ``is_bot`` or
 ``type`` is classified from it; a login ending ``[bot]`` is a bot; any other
 login is probed once with ``gh api users/<login>[bot]`` (a GitHub App's bot
 account; ``[`` cannot appear in a person's login): an answer of type ``Bot``
-is a bot, a 404 is a person, anything else leaves it unknown. At most
+is a bot, a 404 is a person, anything else leaves it unknown, as does a
+comment with no author login. At most
 ``MAX_LOGIN_PROBES`` distinct logins are probed. ``github-actions`` comments are
 status comments and never count; neither does anything in ``reviews``.
 
@@ -100,7 +102,8 @@ class _BotClassifier:
     def is_bot(self, actor: Any) -> bool | None:
         login = _login(actor)
         if login is None:
-            return False
+            # No author login (a deleted account, a malformed entry): unknown.
+            return None
         if isinstance(actor.get("is_bot"), bool):
             return actor["is_bot"]
         if isinstance(actor.get("type"), str):
