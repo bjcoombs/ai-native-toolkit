@@ -195,7 +195,7 @@ When the user picks **Install <tool>**, run the platform-appropriate command fro
 
 #### JVM / Maven capability offers (v1)
 
-When the deterministic core detects a Maven or Gradle project it emits a `capability_offers` block in `run-context.json` - the first proof of the capability-driven flow on a non-enumerated ecosystem. Read it after Step 2c's core run, before scoring, and act on each capability's `state`:
+When the deterministic core detects a Maven or Gradle project (a build file plus at least one `.java`, `.kt`, `.scala` or `.groovy` file outside platform-wrapper `android/` directories, Cordova's `platforms/android/` included: a Flutter, React Native, Capacitor or Cordova shell is not a JVM codebase) it emits a `capability_offers` block in `run-context.json` - the first proof of the capability-driven flow on a non-enumerated ecosystem. Read it after Step 2c's core run, before scoring, and act on each capability's `state`:
 
 ```bash
 jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"
