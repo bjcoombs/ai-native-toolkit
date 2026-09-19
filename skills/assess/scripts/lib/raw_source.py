@@ -166,10 +166,9 @@ def classify_raw_trees(
 # are curated, as is a shared word with no counter (how-to-deploy). The rule
 # separates shape, not intent: a numbered series under its own table of
 # contents (chapter-01 .. chapter-20) passes all three legs exactly as plan_NN
-# does and is excluded. No override keeps such a series counted yet:
-# `.assess/config.toml` has no key for it (`exclude_dirs` does the opposite,
-# dropping the tree from every figure), and config keys to force or suppress a
-# notes tree are separate, later work. A cross-linked wiki
+# does and is excluded. `.assess/config.toml` `working_notes_ignore` keeps
+# such a series counted, and `working_notes_dirs` forces a tree the
+# fingerprint misses (issue #367). A cross-linked wiki
 # fails on in-degree (several inbound links per page) and on the index (no one
 # or two pages link to most of it).
 WORKING_NOTES_MIN_FILES = 20  # a pile, not a small wiki section
@@ -255,7 +254,10 @@ def _tree_docs(directory: str, docs: list[str], doc_signals: dict[str, dict],
     return tree
 
 
-def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
+def classify_working_notes_trees(
+    doc_signals: dict[str, dict], *,
+    force: list[str] | tuple[str, ...] = (), ignore: list[str] | tuple[str, ...] = (),
+) -> list[dict]:
     """Identify working-notes subtrees from per-doc graph signals.
 
     ``doc_signals`` maps a doc's repo-relative posix path to a dict with
@@ -267,10 +269,48 @@ def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
     holding no note stays counted whole, and any other curated doc refuses the
     directory, leaving its deeper trees to stand alone.
 
+    Two overrides from ``.assess/config.toml`` (issue #367), both lists of
+    repo-relative directories: every doc under a ``force`` directory joins a
+    tree at that path whatever its size or fingerprint, and no doc under an
+    ``ignore`` directory joins any tree, so ``ignore`` wins where they overlap.
+    Ignored docs are removed from the fingerprint's trees, not from its input,
+    so ignoring a directory never qualifies its parent; a fingerprint tree
+    whose remaining docs no longer pass the size and fingerprint tests is
+    dropped whole, so its index returns to the headline with the ignored notes.
+    A forced directory holding no doc is not reported.
+
     Returns ``{"path", "file_count", "docs"}`` per outermost tree, sorted by
-    path. ``notes/backlog.md`` over ``notes/2025/`` and ``notes/2026/`` is one
-    tree; ``docs/guide.md`` beside ``docs/notes/`` leaves ``docs/notes`` alone.
+    path; an outer tree absorbs the docs of any tree inside it.
+    ``notes/backlog.md`` over ``notes/2025/`` and ``notes/2026/`` is one tree;
+    ``docs/guide.md`` beside ``docs/notes/`` leaves ``docs/notes`` alone.
     """
+    # Ignore only ever subtracts: the fingerprint runs on every doc, so removing
+    # ignored docs can never tip a parent directory over a threshold. What a
+    # fingerprint tree keeps must still be a working-notes tree on its own, or
+    # the rest of it (an index whose notes were ignored) returns to the headline.
+    kept_docs = {
+        r for r in doc_signals if not any(_is_ancestor_path(d, r) for d in ignore)
+    }
+    trees = {}
+    for d, docs in _fingerprint_trees(doc_signals).items():
+        left = sorted(set(docs) & kept_docs)
+        if len(left) >= WORKING_NOTES_MIN_FILES and _is_working_notes(left, doc_signals):
+            trees[d] = set(left)
+    for d in force:
+        trees[d] = trees.get(d, set()) | {r for r in kept_docs if _is_ancestor_path(d, r)}
+    trees = {d: docs for d, docs in trees.items() if docs}
+    kept = [d for d in trees if not any(o != d and _is_ancestor_path(o, d) for o in trees)]
+    out = []
+    for d in sorted(kept):
+        docs = sorted(set().union(*(t for o, t in trees.items() if _is_ancestor_path(d, o))))
+        out.append({"path": d, "file_count": len(docs), "docs": docs})
+    return out
+
+
+def _fingerprint_trees(doc_signals: dict[str, dict]) -> dict[str, list[str]]:
+    """The directories the fingerprint alone classifies, each mapped to the
+    docs it takes out of the headline. Nested trees are all returned; the
+    caller keeps the outermost."""
     by_dir: dict[str, list[str]] = {}
     for rel in doc_signals:
         for d in _ancestor_dirs(rel):
@@ -285,8 +325,4 @@ def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
         tree = _tree_docs(d, qualifying[d], doc_signals, trees)
         if tree is not None:
             trees[d] = tree
-    kept = [d for d in trees if not any(o != d and _is_ancestor_path(o, d) for o in trees)]
-    return [
-        {"path": d, "file_count": len(trees[d]), "docs": sorted(trees[d])}
-        for d in sorted(kept)
-    ]
+    return trees

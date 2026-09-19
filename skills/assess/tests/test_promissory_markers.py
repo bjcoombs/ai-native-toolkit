@@ -127,6 +127,101 @@ def test_justified_suppression_counts_as_linked(tmp_path: Path) -> None:
     assert by_path["b.go"].linked is False
 
 
+# One justified form per recognised syntax (issue #335), a bare suppression,
+# and a bare TODO. Each file's marker line stays put while a second line
+# changes on every commit, so every marker survives the later edits.
+_JUSTIFIED_FORMS = {
+    "src/sim.js": (
+        "const pick = () => words[0]; // eslint-disable-line "
+        "sonarjs/pseudo-random -- simulator only, not security-sensitive"
+    ),
+    "src/cli.js": "/* eslint-disable no-console -- CLI entry point prints by design */",
+    "src/url.py": "URL = 1  # noqa: E501  # long URL kept on one line",
+    "src/h.go": "x := run() //nolint:errcheck // error conveyed via response status",
+    "src/G.java": '@SuppressWarnings("unchecked") // generic array creation is safe here',
+}
+_BARE_FORMS = {
+    "src/bare.js": "console.log(1); // eslint-disable-line no-console",
+    "src/todo.py": "# TODO tidy this up",
+}
+
+
+def _aged_marker_repo(repo: Path, lines: dict[str, str], *, edits: int) -> None:
+    _init_repo(repo)
+    for i in range(edits + 1):
+        _commit(repo, {p: f"{t}\nv = {i}\n" for p, t in lines.items()}, day=1 + i)
+
+
+def test_justified_not_stale_counts_each_recognised_form(tmp_path: Path) -> None:
+    """Five justified suppressions survive 6 edits: all five are counted in
+    ``families.suppression.justified`` and none is stale. The bare suppression
+    and the bare TODO of the same age stay stale."""
+    repo = tmp_path / "repo"
+    _aged_marker_repo(repo, {**_JUSTIFIED_FORMS, **_BARE_FORMS}, edits=6)
+    summary = _scan(repo).summary()
+    suppression = summary["families"]["suppression"]
+    assert suppression["total"] == 6
+    assert suppression["justified"] == 5
+    assert suppression["stale"] == 1
+    assert set(summary["stale_by_file"]) == {"src/bare.js", "src/todo.py"}
+    assert all(
+        m["path"] not in _JUSTIFIED_FORMS for m in summary["top_offenders"]
+    )
+
+
+def test_justified_not_stale_keeps_file_out_of_unactioned_intent(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    _aged_marker_repo(repo, {**_JUSTIFIED_FORMS, **_BARE_FORMS}, edits=6)
+    result = integrate(
+        repo_root=repo, complexity_stats={}, doc_staleness={},
+        dead_code={}, observability={}, structure={},
+        promissory_markers=_scan(repo).summary(),
+    )
+    findings = {f["name"]: f for f in result["derived_findings"]}
+    assert findings["unactioned_intent"]["paths"] == ["src/bare.js", "src/todo.py"]
+    assert not {a["path"] for a in result["attention"]} & set(_JUSTIFIED_FORMS)
+
+
+def test_linked_markers_of_other_families_still_go_stale(tmp_path: Path) -> None:
+    """Only a justified suppression is exempt. A ticketed TODO, an expired
+    dated deprecation and a ticketed skip still age: the promise can go stale
+    while the reference stays, and the Layer 5 cap reads disabled_test.stale."""
+    repo = tmp_path / "repo"
+    _aged_marker_repo(repo, {
+        "a.py": "# TODO(#123) tracked",
+        "d.py": "# DEPRECATED: use v2, deadline 2019-06-01",
+        "s.test.js": "it.skip('see JIRA-42', () => {});",
+    }, edits=6)
+    summary = _scan(repo).summary()
+    fams = summary["families"]
+    assert set(summary["stale_by_file"]) == {"a.py", "d.py", "s.test.js"}
+    assert fams["todo"]["linked"] == fams["todo"]["stale"] >= 1
+    assert fams["deprecation"]["linked"] == fams["deprecation"]["stale"] == 1
+    assert fams["disabled_test"]["linked"] == fams["disabled_test"]["stale"] == 1
+    assert all(row["justified"] == 0 for row in fams.values())
+
+
+def test_bare_suppression_rule_names_with_hyphens_are_not_justified() -> None:
+    """A hyphenated rule name is not a ``-- reason`` separator."""
+    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE
+    assert not JUSTIFIED_SUPPRESSION_RE.search(
+        "x; // eslint-disable-line @typescript-eslint/no-explicit-any"
+    )
+    assert not JUSTIFIED_SUPPRESSION_RE.search("/* eslint-disable no-console */")
+    # Code after the block comment closes is not the directive's reason.
+    assert not JUSTIFIED_SUPPRESSION_RE.search(
+        '/* eslint-disable no-console */ const s = "a -- b";'
+    )
+    assert JUSTIFIED_SUPPRESSION_RE.search(
+        "/* eslint-disable no-console */ // CLI prints by design"
+    )
+    assert JUSTIFIED_SUPPRESSION_RE.search(
+        "// eslint-disable-next-line no-alert -- confirm is the UX here"
+    )
+
+
 def test_generated_and_prose_exclusions(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)
@@ -237,6 +332,24 @@ def test_unactioned_intent_finding_in_integrate(tmp_path: Path) -> None:
     findings = {f["name"]: f for f in result["derived_findings"]}
     assert "unactioned_intent" in findings
     assert findings["unactioned_intent"]["paths"] == ["app.py"]
+
+
+def test_unactioned_intent_action_states_stale_threshold(tmp_path: Path) -> None:
+    """The finding says how many edits a marker must survive to count as stale,
+    so a reader can weigh a 6-edit suppression against a 65-edit TODO."""
+    repo = tmp_path / "repo"
+    _busy_repo_with_marker(repo, edits_after=6)
+    summary = scan_promissory_markers(repo, stale_touches=4).summary()
+    result = integrate(
+        repo_root=repo, complexity_stats={}, doc_staleness={},
+        dead_code={}, observability={}, structure={},
+        promissory_markers=summary,
+    )
+    findings = {f["name"]: f for f in result["derived_findings"]}
+    assert "survived 4 or more edits" in findings["unactioned_intent"]["action"]
+    md = result["findings_markdown"]
+    section = md.split("### unactioned_intent", 1)[1].split("### ", 1)[0]
+    assert "survived 4 or more edits" in section
 
 
 def test_unactioned_intent_silent_without_reliable_aging(tmp_path: Path) -> None:

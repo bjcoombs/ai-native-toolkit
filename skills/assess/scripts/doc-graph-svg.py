@@ -52,7 +52,7 @@ from lib.doc_graph import (  # noqa: E402
     group_broken_links,
     radial_shells,
 )
-from lib.assess_config import resolve_excludes  # noqa: E402
+from lib.assess_config import load_working_notes_config, resolve_excludes  # noqa: E402
 from lib.doc_staleness import analyze_doc_staleness  # noqa: E402
 from lib.treemap_render import adaptive_cap, blend_to_grey, rgba_to_hex  # noqa: E402
 
@@ -535,11 +535,14 @@ def main() -> int:
     # any `--exclude`) so the SVG and `lib.doc_graph` compute over the identical
     # doc set rather than reporting different doc counts for one run (issue #177).
     extra_dirs, extra_patterns = resolve_excludes(root, args.exclude)
+    working_notes = load_working_notes_config(root)
 
     result = build_doc_graph(
         root,
         extra_exclude_dirs=extra_dirs,
         extra_exclude_patterns=extra_patterns,
+        working_notes_dirs=working_notes.dirs,
+        working_notes_ignore=working_notes.ignore,
     )
     if not result.available:
         print(f"error: doc graph unavailable - {result.reason}", file=sys.stderr)

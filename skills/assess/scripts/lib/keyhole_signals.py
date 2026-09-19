@@ -419,6 +419,23 @@ def assemble_findings(paths_by_name: dict[str, list[str]]) -> list[dict]:
     ]
 
 
+def _state_stale_threshold(findings: list[dict], promissory_markers: dict) -> None:
+    """Append the scan's stale threshold to the ``unactioned_intent`` action.
+
+    A reader weighing a marker that survived 6 edits against one that survived
+    65 needs the bar both cleared. No-op when the scan carries no threshold.
+    """
+    threshold = promissory_markers.get("stale_touches_threshold")
+    if not promissory_markers.get("available") or not threshold:
+        return
+    for f in findings:
+        if f["name"] == "unactioned_intent":
+            f["action"] = (
+                f"{f['action']} (stale: an untracked marker that survived "
+                f"{threshold} or more edits to its own file)"
+            )
+
+
 def apply_config_excludes(
     findings: list[dict],
     exclude_dirs: set[str],
@@ -1316,6 +1333,7 @@ def integrate(
         "override_contradicts_signals": override_contradiction_paths,
         "refactor_boundary": [b["path"] for b in behaviour.get("refactor_boundaries", [])],
     })
+    _state_stale_threshold(findings, pm)
 
     # Dead-path pruning: a git-history finding path absent from the working tree
     # (deleted, no rename to follow) never reaches the report; the dropped paths

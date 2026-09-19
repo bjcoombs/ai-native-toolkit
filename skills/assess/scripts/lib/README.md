@@ -188,9 +188,13 @@ note stays counted whole (a `docs/guides/` of curated pages beside 50 notes in
 `docs/`), and any other curated doc refuses the directory, leaving its deeper
 trees to stand alone (`docs/guide.md` beside `docs/notes/`). `notes/backlog.md`
 over `notes/2025/` and `notes/2026/` is one tree. Subdirectories are decided
-deepest first, and the tree must still pass the three legs on its own. No config
-key keeps a misclassified series (`chapter-01` to `chapter-20` under a contents
-page) counted yet; that is separate, later work. Only docs are classified, never
+deepest first, and the tree must still pass the three legs on its own. Two
+`.assess/config.toml` keys override the verdict (issue #367), passed in as the
+`force` / `ignore` arguments: every doc under a `working_notes_dirs` directory
+joins a tree at that path whatever its size or fingerprint, and no doc under a
+`working_notes_ignore` directory joins any tree (a misclassified `chapter-01` to
+`chapter-20` series stays counted); ignore wins where they overlap, and an outer
+tree absorbs any tree inside it. Only docs are classified, never
 a `.base` hub. It runs on the headline graph (link and reference edges) after
 the raw pass. `doc_graph.py` excludes these trees too and reports
 `excluded_working_notes_trees`, `working_notes_doc_count`,
@@ -370,7 +374,10 @@ conservative agent/human classification is defined one way.
 Reads the optional per-repo `.assess/config.toml`: `exclude_dirs` / `exclude_patterns`
 (the same two lists feed every scan - heatmap, doc graph, staleness, liveness - so
 exclusion is consistent), the `[gate]` and `[structure]` sections, and the `[[generated]]`
-folder->source provenance map (issue #178) consumed by `doc_provenance.py`. `resolve_excludes`
+folder->source provenance map (issue #178) consumed by `doc_provenance.py`, and the
+`working_notes_dirs` / `working_notes_ignore` directory lists (issue #367), which
+`load_working_notes_config` returns as a typed `WorkingNotesConfig` pair for both
+`assess_core.py` and `doc-graph-svg.py`. `resolve_excludes`
 is the single shared path that combines config excludes with CLI `--exclude`; both the treemap
 CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.
 Degrades silently on missing or malformed config rather than blocking the run.
@@ -501,9 +508,14 @@ pass). A marker that survived many edits to an actively-maintained file is
 unactioned intent; calendar age alone can't tell that from dormancy. Classifies
 markers as tracked (issue/ticket/URL/date reference, or a justified suppression)
 vs bare, and each introducing commit as agent/human (reusing `change_coupling`'s
-conservative B4 identity rules). Honours the shared excludes and the generated-file
-filter (codegen `ignore_for_file` boilerplate is not debt), and degrades aging to
-`aging_reliable: False` on degenerate history (same verdict as `git_churn`).
+conservative B4 identity rules). A justified suppression (inline `-- reason` or
+trailing comment) is never stale and is counted in each family row's `justified`
+(0 outside suppressions); other tracked markers still age, since an issue or a
+deadline can go stale too. The `unactioned_intent` action states the
+`stale_touches_threshold` it applied. Honours the shared excludes and the
+generated-file filter (codegen `ignore_for_file` boilerplate is not debt), and
+degrades aging to `aging_reliable: False` on degenerate history (same verdict as
+`git_churn`).
 Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
 sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
@@ -566,6 +578,35 @@ object or a whole live list;
 with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` alongside any change to discovery or the diff.
+
+**`review_reality.py`**
+Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
+`gh_cli`. Samples the `DEFAULT_LIMIT` (30) most recently opened merged pull
+requests (`gh pr list` orders by creation, not merge) with
+`gh pr list --state merged --json author,mergedBy,mergedAt,reviews,reviewDecision,comments`
+and emits `review_reality: {available, merged_count, oldest_merged_days_ago,
+reviewed_share, approved_share, bot_review_share, self_merged_share,
+review_required, hollow_required_review, required_approval_bypassed}`.
+`reviewed_share` counts a review in any state by any account other than the
+author; `approved_share` counts only `APPROVED` ones;
+`bot_review_share` counts a comment by a bot other than `github-actions` (nothing
+in `reviews`). `gh pr list` drops a comment author's `[bot]` suffix, so an author
+object without `is_bot`/`type` is classified by one `gh api users/<login>[bot]`
+probe per distinct login (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot,
+404 is a person, anything else is unknown, as is a comment with no author
+login. An unknown author withholds the share (null) only when it decides a pull
+request: one with a confirmed bot comment counts regardless.
+`review_required` reads the default branch's effective rules
+(`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
+classic protection, each needing `required_approving_review_count` of 1 or more;
+null when neither says yes and one was refused. `hollow_required_review` is
+`review_required` and `reviewed_share` under `HOLLOW_THRESHOLD` (0.2);
+`required_approval_bypassed` is the same test on `approved_share`, so it fires
+where an AI reviewer comments on every change but nobody approves. Both are null
+when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
+rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
+the block. A failed pull-request read degrades the whole block to `available:
+False`. Tests: `tests/test_review_reality.py`.
 
 **`gate_cost.py`**
 Actions cost of the CI gate the assess-pr skill offers, so the offer can state it.
