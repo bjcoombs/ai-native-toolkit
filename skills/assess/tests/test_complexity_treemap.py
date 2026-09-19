@@ -835,7 +835,7 @@ def test_write_stats_stamps_run_id_and_schema_version(treemap, tmp_path):
     out = root / "stats.json"
     treemap.write_stats([(f, 100, 5.0, "lizard")], None, None, root, out)
     stats = json.loads(out.read_text())
-    assert stats["artifact_schema_version"] == treemap.ARTIFACT_SCHEMA_VERSION == "1.0.0"
+    assert stats["artifact_schema_version"] == treemap.ARTIFACT_SCHEMA_VERSION == "1.1.0"
     # The stats-layout schema_version (from #244) still coexists as an int.
     assert stats["schema_version"] == treemap.STATS_SCHEMA_VERSION
     run_id = stats["run_id"]
