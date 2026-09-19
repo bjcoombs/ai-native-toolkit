@@ -284,3 +284,35 @@ def test_decline_marker_provenance_shape(dogfood_run: dict) -> None:
     assert mutmut["declined_at"] == "2026-07-01"
     assert mutmut["version"] == "1.55.5"
     assert isinstance(mutmut["reoffer"], bool)
+
+
+def test_log_chain_verifies_after_finalize(dogfood_run: dict, tmp_path: Path) -> None:
+    """Finalize fills the run's log entry in place; the chain must still verify.
+
+    Finalize runs on a copy so the shared module fixture stays unfinalized for
+    the other invariants. Before #355 finalize rewrote the entry text but kept
+    its old chain marker, so every finalized log failed verification and the
+    next core run disclosed a broken history.
+    """
+    import shutil
+
+    from assess_finalize import finalize_run
+    from lib.badge import maturity_band
+
+    assess_dir = tmp_path / ".assess"
+    shutil.copytree(dogfood_run["assess_dir"], assess_dir)
+    assert verify_log_chain(assess_dir) == (True, None)
+    (assess_dir / ".cache").mkdir(exist_ok=True)
+    (assess_dir / ".cache" / "finalize-input.json").write_text(json.dumps({
+        "run_id": dogfood_run["ctx"]["run_id"],
+        "score": 4.0,
+        "denominator": 8,
+        "maturity_label": maturity_band(4.0, 8),
+        "top_action": "dogfood finalize action",
+        "hotspot_actions": {},
+    }), encoding="utf-8")
+    finalize_run(assess_dir=assess_dir)
+    log = (assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "dogfood finalize action" in log
+    assert "(LLM fills in)" not in log
+    assert verify_log_chain(assess_dir) == (True, None)
