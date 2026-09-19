@@ -256,18 +256,59 @@ def test_count_tolerance_is_the_larger_of_ten_percent_or_two() -> None:
     assert not count_within_tolerance(100, 112)
 
 
-def test_count_pattern_matching_nothing_fails_with_actual_zero(tmp_path: Path) -> None:
+def test_count_pattern_matching_nothing_in_an_existing_directory_fails_with_actual_zero(
+        tmp_path: Path) -> None:
+    (tmp_path / "tests").mkdir()
     (tmp_path / "AGENTS.md").write_text("There are 12 suites in `tests/*.sql`.\n")
     failure = scan_instruction_claims(tmp_path, ["AGENTS.md"])["failures"][0]
     assert (failure["kind"], failure["claimed"], failure["actual"]) == ("count", 12, 0)
 
 
+def test_count_pattern_whose_directory_is_missing_is_unverifiable_not_failed(
+        tmp_path: Path) -> None:
+    (tmp_path / "AGENTS.md").write_text("There are 12 suites in `tests/*.sql`.\n")
+    assert scan_instruction_claims(tmp_path, ["AGENTS.md"])["total"] == 0
+
+
+def _thirty_pages(root: Path) -> None:
+    for i in range(30):
+        sub = root / "docs" / ("a" if i % 2 else "b/c")
+        sub.mkdir(parents=True, exist_ok=True)
+        (sub / f"p{i}.md").write_text("")
+
+
 def test_count_recursive_glob_counts_files_not_directories(tmp_path: Path) -> None:
-    for sub in ("a", "b/c"):
-        (tmp_path / "docs" / sub).mkdir(parents=True)
-        (tmp_path / "docs" / sub / "x.md").write_text("")
-    (tmp_path / "AGENTS.md").write_text("The 2 pages under `docs/**/*.md` are the map.\n")
-    assert scan_instruction_claims(tmp_path, ["AGENTS.md"])["verified"] == 1
+    _thirty_pages(tmp_path)
+    for i in range(10):  # directories whose names match the pattern
+        (tmp_path / "docs" / f"legacy{i}.md").mkdir()
+        (tmp_path / "docs" / f"legacy{i}.md" / "keep").write_text("")
+    (tmp_path / "AGENTS.md").write_text("The 30 pages under `docs/**/*.md` are the map.\n")
+    block = scan_instruction_claims(tmp_path, ["AGENTS.md"])
+    assert (block["total"], block["verified"]) == (1, 1)
+
+
+def test_count_skips_git_metadata_and_matches_outside_the_repo(tmp_path: Path) -> None:
+    repo, outside = tmp_path / "repo", tmp_path / "outside"
+    _thirty_pages(repo)
+    (repo / "docs" / ".git").mkdir()
+    outside.mkdir()
+    for i in range(10):
+        (repo / "docs" / ".git" / f"g{i}.md").write_text("")
+        (outside / f"o{i}.md").write_text("")
+    (repo / "docs" / "vendor").symlink_to(outside)
+    (repo / "AGENTS.md").write_text("The 30 pages under `docs/**/*.md` are the map.\n")
+    block = scan_instruction_claims(repo, ["AGENTS.md"])
+    assert (block["total"], block["verified"]) == (1, 1)
+
+
+def test_count_glob_error_is_unverifiable_not_a_zero_count(
+        counted: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(self: Path, pattern: str) -> list[Path]:
+        raise ValueError("Invalid pattern")
+
+    monkeypatch.setattr(Path, "glob", broken)
+    (counted / "AGENTS.md").write_text("There are 43 suites in `supabase/tests/*.sql`.\n")
+    assert scan_instruction_claims(counted, ["AGENTS.md"])["total"] == 0
 
 
 @pytest.mark.parametrize("sentence", [
@@ -284,6 +325,13 @@ def test_count_recursive_glob_counts_files_not_directories(tmp_path: Path) -> No
     # A pattern that leaves the repository is not counted.
     "There are 3 files in `../other/*.md`.",
     "There are 3 files in `/etc/*.conf`.",
+    # Not path-shaped: code, placeholders, flags.
+    "All 3 helpers take `**kwargs`.",
+    "All 3 helpers take `*args`.",
+    "Write `?` for 3 unless known.",
+    "Pass `--only=*` to run 5 checks.",
+    # A year is not a count.
+    "Since 2024 every migration lives in `supabase/migrations/*.sql`.",
 ])
 def test_count_claim_is_skipped_when_the_sentence_is_ambiguous(sentence: str) -> None:
     assert [c for c in extract_claims(sentence + "\n") if c.kind == "count"] == []

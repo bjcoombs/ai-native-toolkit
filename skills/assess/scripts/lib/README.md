@@ -531,7 +531,10 @@ integer followed by a word, plus exactly one backticked glob pattern, in the
 sentence; the pattern is globbed from the repo root and matching files counted;
 verified when the difference is at most the larger of 10% or 2, a failure adding
 `claimed` and `actual`; no noun table, so a sentence with no pattern, no wildcard,
-two integers or two patterns is skipped). Each failure carries a `reason`. The
+two integers, two patterns, a year as its number, a pattern that is not
+path-shaped (`**kwargs`) or one that is absolute or holds `..` is skipped, as is
+a claim whose wildcard-free directory is missing or whose glob cannot be
+evaluated, since that is unverifiable rather than false). Each failure carries a `reason`. The
 enforcement and pin checks use
 `evidence_check.is_referenced_in`, so the search is the same fail-closed one.
 The core writes the result as the run-context block `instruction_claims`

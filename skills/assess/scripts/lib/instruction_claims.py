@@ -36,11 +36,19 @@ Claim kinds:
   checkable, so a sentence with no pattern, a pattern with no wildcard (a
   directory may hold files or subdirectories), two integers or two patterns
   (which counts which is a guess), or a pattern that leaves the repository is
-  skipped.
+  skipped. The pattern must also look like a path (a ``/``, or a last
+  segment ending in a plain extension such as ``*.md``), so ``**kwargs`` or a
+  ``?`` placeholder is not a pattern, and a four-digit year is not a count.
+  When the pattern's wildcard-free directory does not exist, or the glob
+  cannot be evaluated, the claim is unverifiable and skipped; a directory
+  that exists with no match fails with ``actual`` 0. Matching follows
+  ``pathlib``, where ``*`` also matches dotfiles (a shell would not); matches
+  that resolve outside the repository (through a symlink) are not counted.
 
 A sentence that fits no kind is skipped silently. Adding a kind means one
 extractor in ``_EXTRACTORS`` (sentence -> claims) and one verifier in
-``_VERIFIERS`` (claim -> None when it holds, else extra fields for the failure).
+``_VERIFIERS`` (claim -> None when it holds, else extra fields for the failure;
+it raises ``Unverifiable`` when the repository cannot settle the claim).
 
 Sentences are read per paragraph, so a claim wrapped across lines is still
 found; its ``line`` is the 1-based line the sentence starts on. Fenced code is
@@ -89,8 +97,11 @@ _VERSION = re.compile(r"(?<![\d.])(\d+(?:\.\d+)+)(?!\.?\d)")
 
 # A count: an integer, not part of a version, decimal, list or percentage,
 # followed by a word. Read with backticked spans removed.
-_COUNT = re.compile(r"(?<![\w.,%$/-])(\d+)(?=\s+[A-Za-z])")
+# A year (1900-2099) is skipped: far more often a date than a file count.
+_COUNT = re.compile(r"(?<![\w.,%$/-])(?!(?:19|20)\d\d(?!\d))(\d+)(?=\s+[A-Za-z])")
 _GLOB_CHARS = re.compile(r"[*?]")
+# A path shape: a directory separator, or a last segment with a plain extension.
+_PLAIN_EXTENSION = re.compile(r"\.[A-Za-z0-9]+$")
 COUNT_TOLERANCE = 0.10
 COUNT_MIN_DELTA = 2
 
@@ -99,6 +110,10 @@ _FENCE = re.compile(r"^\s*(```|~~~)")
 _BLOCK_START = re.compile(r"^\s*(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|\||>)")
 _HEADING = re.compile(r"^\s*#{1,6}\s")
 _SENTENCE_END = re.compile(r"[.!?](?=\s|$)")
+
+
+class Unverifiable(Exception):
+    """The repository cannot settle the claim either way: skip it, never fail it."""
 
 
 @dataclass
@@ -206,6 +221,8 @@ def _count_claims(sentence: str, line: int) -> list[Claim]:
     pattern = patterns[0].removeprefix("./")
     if pattern.startswith(("/", "~")) or ".." in Path(pattern).parts:
         return []
+    if "/" not in pattern and not _PLAIN_EXTENSION.search(pattern):
+        return []  # `**kwargs`, `*args`, a `?` placeholder: not a path
     numbers = _COUNT.findall(_BACKTICK_SPAN.sub(" ", sentence))
     if len(numbers) != 1:
         return []
@@ -219,13 +236,25 @@ def count_within_tolerance(claimed: int, actual: int) -> bool:
 
 
 def _count_matches(repo_root: Path, pattern: str) -> int:
+    """Files matching ``pattern`` under the root. Raises ``Unverifiable`` when
+    the wildcard-free directory is missing or the glob cannot be evaluated, so
+    an error or a moved tree never reads as a count of zero."""
     root = repo_root.resolve()
+    parts = Path(pattern).parts
+    fixed = parts[:next(i for i, part in enumerate(parts) if _GLOB_CHARS.search(part))]
+    base = root.joinpath(*fixed)
     try:
-        matches = [p for p in root.glob(pattern)
-                   if ".git" not in p.relative_to(root).parts and p.is_file()]
-    except (OSError, ValueError, NotImplementedError):
-        return 0
-    return len(matches)
+        if not base.is_dir() or not base.resolve().is_relative_to(root):
+            raise Unverifiable
+        count = 0
+        for match in root.glob(pattern):
+            if ".git" in match.relative_to(root).parts or not match.is_file():
+                continue
+            if match.resolve().is_relative_to(root):
+                count += 1
+    except (OSError, ValueError, NotImplementedError, RuntimeError) as error:
+        raise Unverifiable from error
+    return count
 
 
 def _has_ci_config(repo_root: Path) -> bool:
@@ -313,7 +342,10 @@ def scan_instruction_claims(repo_root: Path | str, files: Iterable[str]) -> dict
         for claim in extract_claims(text):
             if claim.kind == "enforcement" and not ci_configured:
                 continue  # nothing to check against: unverifiable, not false
-            detail = _VERIFIERS[claim.kind](root, claim)
+            try:
+                detail = _VERIFIERS[claim.kind](root, claim)
+            except Unverifiable:
+                continue  # the repository cannot settle it: skipped, not false
             block["total"] += 1
             if detail is None:
                 block["verified"] += 1
