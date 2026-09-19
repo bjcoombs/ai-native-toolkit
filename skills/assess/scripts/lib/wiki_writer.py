@@ -332,6 +332,125 @@ def verify_log_chain(assess_dir: Path) -> tuple[bool, int | None]:
     return _verify_chain_text(log_path.read_text(encoding="utf-8"))
 
 
+# --- log entry targeting and re-chain (issue #355) ----------------------------
+#
+# The core writes each entry with placeholders the LLM finalize fills later. An
+# entry that still carries LOG_PLACEHOLDER belongs to a run that was never
+# finalized. Entries are addressed by the ``assess:run_id`` stamp they carry, and
+# any in-place change goes through ``rewrite_log_entry`` so the chain markers of
+# the changed entry and every later one are recomputed: an edit made by the tool
+# itself must not read as tampering on the next verify.
+LOG_PLACEHOLDER = "(LLM fills in)"
+_RUN_ID_STAMP_RE = re.compile(r"<!-- assess:run_id=(\S+) ")
+_HEADING_DATE_RE = re.compile(r"^## (\d{4}-\d{2}-\d{2})", re.MULTILINE)
+
+
+def log_entry_is_unfinalized(content: str) -> bool:
+    """True when a log entry still carries the core's unfilled placeholders."""
+    return LOG_PLACEHOLDER in content
+
+
+def log_entry_run_id(content: str) -> str | None:
+    """The run id an entry's ``assess:run_id`` stamp names, or None (legacy)."""
+    m = _RUN_ID_STAMP_RE.search(content)
+    return m.group(1) if m else None
+
+
+def log_entry_owns_span(content: str, run_id: str) -> bool:
+    """True when the entry text begins with ``run_id``'s own stamp.
+
+    On a log written before the chain existed, the unchained legacy body and the
+    first chained entry parse as one span (see ``_chain_tail``). Such a span
+    carries the run's stamp but not at its start; removing or replacing it would
+    take the whole legacy history with it, so callers that drop an entry require
+    this to hold.
+    """
+    return content.startswith(f"<!-- assess:run_id={run_id} ")
+
+
+def log_entry_date(content: str) -> str | None:
+    """The ``YYYY-MM-DD`` date of an entry's first ``## `` heading, or None."""
+    m = _HEADING_DATE_RE.search(content)
+    return m.group(1) if m else None
+
+
+def read_log_entries(assess_dir: Path) -> list[str]:
+    """The entry texts of log.md in file order (chain markers stripped).
+
+    An index into this list is what ``rewrite_log_entry`` takes. A legacy log
+    with no chain markers reads as a single entry.
+    """
+    log_path = assess_dir / "log.md"
+    if not log_path.exists():
+        return []
+    return [c for c, _ in _parse_log_entries(log_path.read_text(encoding="utf-8"))]
+
+
+def find_log_entry(assess_dir: Path, run_id: str) -> int | None:
+    """Index of the log entry stamped with ``run_id``, or None."""
+    for i, content in enumerate(read_log_entries(assess_dir)):
+        if log_entry_run_id(content) == run_id:
+            return i
+    return None
+
+
+def rewrite_log_entry(assess_dir: Path, index: int, new_content: str | None) -> None:
+    """Replace (or, with ``None``, remove) log entry ``index`` and re-chain.
+
+    The chain is recomputed from the entry's predecessor: the rewritten entry and
+    every later one get fresh markers. Only entries whose stored marker verified
+    before the rewrite are re-stamped; the walk stops at the first entry that was
+    already broken, so a pre-existing break stays detectable rather than being
+    blessed by the re-chain.
+    """
+    log_path = assess_dir / "log.md"
+    text = log_path.read_text(encoding="utf-8")
+    entries = _parse_log_entries(text)
+    # Local validity before the rewrite: entry k verifies against entry k-1 alone.
+    prev = _GENESIS
+    was_valid: list[bool] = []
+    for content, stored in entries:
+        was_valid.append(stored is None or stored == _chain_hash(prev, content))
+        prev = stored if stored is not None else _chain_hash(prev, content)
+    if new_content is None:
+        del entries[index]
+        del was_valid[index]
+    else:
+        entries[index] = (new_content, entries[index][1])
+    out: list[str] = []
+    prev = _GENESIS
+    rechaining = True
+    for k, (content, stored) in enumerate(entries):
+        if k >= index and rechaining:
+            if not was_valid[k]:
+                rechaining = False
+            elif stored is not None:
+                stored = _chain_hash(prev, content)
+        out.append(content if stored is None else f"{content}<!-- chain:{stored} -->\n")
+        prev = stored if stored is not None else _chain_hash(prev, content)
+    header = _LOG_HEADER if text.startswith(_LOG_HEADER) else ""
+    log_path.write_text(header + "".join(out), encoding="utf-8")
+
+
+def supersede_unfinalized_log_entry(assess_dir: Path, run_id: str) -> bool:
+    """Remove the last log entry when it is ``run_id``'s and still unfinalized.
+
+    The caller decides the run is superseded (same date, same measured commit);
+    this only acts when the log's last entry is that run's and carries unfilled
+    placeholders. A finalized entry, or any entry that is not the last, is never
+    removed, and neither is a span that also holds unchained legacy history.
+    Returns True when an entry was removed.
+    """
+    entries = read_log_entries(assess_dir)
+    if not entries:
+        return False
+    last = entries[-1]
+    if not log_entry_owns_span(last, run_id) or not log_entry_is_unfinalized(last):
+        return False
+    rewrite_log_entry(assess_dir, len(entries) - 1, None)
+    return True
+
+
 def append_log_entry(assess_dir: Path, entry: LogEntry) -> None:
     """Append a dated entry to log.md (create the file if absent).
 
