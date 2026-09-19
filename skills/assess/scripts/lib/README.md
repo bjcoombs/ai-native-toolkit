@@ -88,7 +88,10 @@ average line length over the first 1 MB above `LONG_LINE_THRESHOLD` (1,000 chara
 minified payload). `generated_reason` returns `generated-header`, `long-lines` or None. The
 treemap's `collect` drops matching files unless `--include-artifacts` is passed and lists them
 in the stats file's `excluded_generated`, which `assess_core` copies into `run-context.json`
-for the report and gate to disclose. Pure stdlib; an unreadable file is never excluded.
+for the report and gate to disclose. `GENERATED_NAME_PATTERNS` (`*.generated.*`, `*.gen.ts`,
+`database.types.ts`) is the shared list of generated-name globs: the treemap adds it to its filename
+excludes, and `assess_core` calls `matches_generated_name` so a file those globs newly exclude is never
+recorded as a graduated hotspot. Pure stdlib; an unreadable file is never excluded.
 
 ### Static analysis
 

@@ -446,9 +446,9 @@ def render_report(ctx: dict, repo_name: str) -> str:
     stats = ctx.get("stats_summary", {})
     loc = stats.get("loc", {})
     ccn = stats.get("ccn", {})
-    # The keyhole summary line, with a config-exclusion disclosure appended when
-    # any finding was suppressed by config excludes (empty otherwise, so a clean
-    # run renders exactly as before).
+    # The keyhole summary line, with two disclosures appended when they apply:
+    # findings suppressed by config excludes, and files excluded from scoring as
+    # generated (each empty otherwise, so a clean run renders exactly as before).
     keyhole_summary = render_keyhole_summary(ctx)
     disclosure = render_exclusion_disclosure(ctx)
     if disclosure:

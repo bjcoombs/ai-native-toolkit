@@ -19,6 +19,7 @@ never excluded.
 """
 from __future__ import annotations
 
+import fnmatch
 import re
 from pathlib import Path
 
@@ -60,6 +61,12 @@ _LONG_LINE_READ_BYTES = 1024 * 1024
 # its bulk is the embedded payload, not code a reader maintains line by line.
 # The threshold is kept above 296 and below that page's average.
 LONG_LINE_THRESHOLD = 1000
+
+# Filename globs for generated code, matched on the basename with no header
+# needed. The treemap adds them to its EXCLUDE_FILE_PATTERNS; assess_core uses
+# them to keep a file these globs newly exclude from being recorded as a
+# graduated hotspot.
+GENERATED_NAME_PATTERNS = ("*.generated.*", "*.gen.ts", "database.types.ts")
 
 REASON_HEADER = "generated-header"
 REASON_LONG_LINES = "long-lines"
@@ -116,6 +123,12 @@ def is_long_line_artifact(path: Path,
                           threshold: float = LONG_LINE_THRESHOLD) -> bool:
     """True when the file's average line length exceeds ``threshold``."""
     return average_line_length(path) > threshold
+
+
+def matches_generated_name(path: str | Path) -> bool:
+    """True when the basename matches one of ``GENERATED_NAME_PATTERNS``."""
+    name = Path(path).name
+    return any(fnmatch.fnmatch(name, pat) for pat in GENERATED_NAME_PATTERNS)
 
 
 def generated_reason(path: Path) -> str | None:

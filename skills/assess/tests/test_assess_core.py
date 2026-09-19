@@ -2129,3 +2129,35 @@ def test_generated_header_exclusion_is_not_recorded_as_graduation(tmp_path: Path
     index = (assess_dir / "index.md").read_text()
     assert "src/legacy.go" in index
     assert "db/schema.sql" not in index
+
+
+def test_generated_header_free_name_glob_is_not_recorded_as_graduation(tmp_path: Path) -> None:
+    """A prior hotspot now excluded by a generated-name glob (silent, so not in
+    excluded_generated) is also kept out of diff.graduated."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    prior_stats = {
+        "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "web/src/database.types.ts", "loc": 8000, "ccn": 5, "commits": 130},
+            {"path": "web/src/api.generated.ts", "loc": 3000, "ccn": 9, "commits": 40},
+            {"path": "src/legacy.go", "loc": 500, "ccn": 20, "commits": 5},
+        ],
+        "top_complex": [], "top_large": [],
+    }
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+    current_stats = {
+        "files_scored": 49, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/new.go", "loc": 400, "ccn": 18, "commits": 4}],
+        "top_complex": [], "top_large": [], "excluded_generated": [],
+    }
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-19")
+    assert ctx["diff"]["graduated"] == 1
+    index = (assess_dir / "index.md").read_text()
+    assert "src/legacy.go" in index
+    assert "database.types.ts" not in index
+    assert "api.generated.ts" not in index

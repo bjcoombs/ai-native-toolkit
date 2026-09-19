@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from lib.generated_files import (  # noqa: E402
     LONG_LINE_THRESHOLD,
+    matches_generated_name,
     average_line_length,
     generated_reason,
     has_generated_header,
@@ -151,3 +152,16 @@ def test_long_line_average_uses_capped_head(tmp_path):
     # ~1.6 MB: a short-line first 1 MB followed by one enormous final line.
     f.write_text(("y" * 99 + "\n") * 10500 + "z" * 600000)
     assert average_line_length(f) < LONG_LINE_THRESHOLD
+
+
+
+@pytest.mark.parametrize("path,expected", [
+    ("web/src/database.types.ts", True),
+    ("api.generated.ts", True),
+    ("schema.generated.sql", True),
+    ("client.gen.ts", True),
+    ("src/types.ts", False),
+    ("generated/readme.md", False),
+])
+def test_generated_header_free_name_patterns(path, expected):
+    assert matches_generated_name(path) is expected

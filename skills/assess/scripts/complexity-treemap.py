@@ -89,7 +89,10 @@ from lib.git_churn import (  # noqa: E402
     git_churn_scores,
     pick_churn_window,
 )
-from lib.generated_files import generated_reason  # noqa: E402
+from lib.generated_files import (  # noqa: E402
+    GENERATED_NAME_PATTERNS,
+    generated_reason,
+)
 from lib.treemap_render import (  # noqa: E402
     adaptive_cap,
     blend_to_grey,
@@ -159,7 +162,7 @@ EXCLUDE_FILE_PATTERNS = [
     "*.gen.go", "*.generated.go",
     # Any-language generator naming, and Supabase/GraphQL codegen outputs
     # (`supabase gen types` writes database.types.ts).
-    "*.generated.*", "*.gen.ts", "database.types.ts",
+    *GENERATED_NAME_PATTERNS,
     "wire_gen.go",
     "zz_generated_*.go",
     "bindata.go", "bindata_assetfs.go",
