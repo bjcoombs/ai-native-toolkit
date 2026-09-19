@@ -80,8 +80,11 @@ Three signals derived from `git log`:
 
 `parse_commit_file_sets` lists each commit's files under the names they had then.
 `build_rename_map` reads `git log --name-status -M --diff-filter=R` into a `RenameMap`:
-`paths`, a historical-path to current-path map (chains resolved first, then any source name
-that exists again in the working tree is left out), and `complete`, False when git could not be read so an empty map is
+`paths`, a historical-path to current-path map (chains resolved first: a path starts from its
+first rename and moves on only through a rename in a commit that descends from the one
+before, checked with `git merge-base --is-ancestor`, so a freed-and-refilled name is not
+chained through in sequence or across sibling branches; then any source name that exists
+again in the working tree is left out), and `complete`, False when git could not be read so an empty map is
 never mistaken for "no renames". `fold_renames` rewrites the commit sets through `paths`,
 so history made before a rename counts under the current path. `repo_top` is the shared
 `git rev-parse --show-toplevel` helper; the git-log readers take an optional `top` so a
@@ -414,6 +417,14 @@ outcomes, and freshness. Pure regex + arithmetic, filename-agnostic.
 Layer 1 liveness inputs, three tiers:
 - Dead-code tier: runs a language-appropriate static dead-code tool (vulture, ts-prune,
   staticcheck, etc.) to flag candidate-dead exports within the repo boundary.
+  JavaScript and TypeScript share one choice, made by the dominant language of the
+  in-scope files (`.ts`/`.tsx`/`.mts`/`.cts` against `.js`/`.jsx`/`.mjs`/`.cjs`; a
+  scoped run counts only the scope's files); the losing
+  language gets one `not_applicable` entry naming its unanalysed file count. ts-prune
+  also needs a root `tsconfig.json`; without one it is recorded `not_applicable` and
+  not run. A JavaScript-dominant repo with no `knip` on PATH
+  records `javascript` / `knip` / `honest_degrade`, so "not analysed" never reads as
+  "0 candidates".
 - Observability tier: scores three rungs - instrumented (telemetry emitted), discoverable
   (runbook present), reachable (agent has an invokable path to runtime state). The
   reachability rung decides the Layer 1 score.
@@ -629,6 +640,17 @@ reuse it. CLI, run from `skills/assess/scripts`:
 directory, or a `--json` file that cannot be written; a missing root would otherwise verify every `path_absent` claim). Stdlib only, imports no
 orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kind
 or change to a check rule.
+
+`assess_finalize.py` re-runs `check_evidence` on the finalize input's optional
+`evidence` list before any write (issue #362), with each `path` resolved against
+the parent of `.assess/`. The rule is per layer: a layer whose entries are all
+rejected refuses finalize (`FinalizeValidationError`, naming each entry by kind,
+path and needle); a layer with at least one verified entry keeps its verdict,
+and each rejected entry of it is printed to stderr as a warning. An input with no
+`evidence` key is not checked; a non-list value, or an entry naming no layer 0-8,
+is refused. An entry that names its layer but is otherwise malformed (unknown
+kind, missing path or needle) is rejected by `check_evidence` and counts under
+the per-layer rule like any other rejected entry.
 
 **`instruction_claims.py`**
 Verifies the checkable claims an agent instruction file makes (issue #368), no

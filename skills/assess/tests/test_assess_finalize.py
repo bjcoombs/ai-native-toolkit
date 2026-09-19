@@ -782,3 +782,206 @@ def test_finalize_layer6_partial_without_mutation_allowed(tmp_assess_dir: Path) 
     _write_input(tmp_assess_dir, {**_base_input(), "layer_scores": {"6": 0.5}})
 
     finalize_run(assess_dir=tmp_assess_dir)  # must not raise
+
+
+# --- #362: finalize re-checks the evidence a layer verdict cites -------------
+
+
+def _seed_evidence_repo(assess_dir: Path) -> Path:
+    """The repository root around ``assess_dir``: a doc, and a script a CI
+    workflow calls. Returns the root (the parent of ``.assess/``)."""
+    root = assess_dir.parent
+    (root / "docs").mkdir(exist_ok=True)
+    (root / "docs" / "guide.md").write_text("# guide\n", encoding="utf-8")
+    (root / "scripts").mkdir(exist_ok=True)
+    (root / "scripts" / "check-x.sh").write_text("echo ok\n", encoding="utf-8")
+    wf = root / ".github" / "workflows"
+    wf.mkdir(parents=True, exist_ok=True)
+    (wf / "ci.yml").write_text(
+        "on: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
+        "    steps:\n      - run: bash scripts/check-x.sh\n",
+        encoding="utf-8",
+    )
+    return root
+
+
+def _evidence_input(evidence: list | None) -> dict:
+    data = {**_base_input(), "layer_scores": {"0": 1.0, "7": 1.0}}
+    if evidence is not None:
+        data["evidence"] = evidence
+    return data
+
+
+def _assert_nothing_written(assess_dir: Path) -> None:
+    assert "((LLM fills in))" in (assess_dir / "log.md").read_text(encoding="utf-8")
+    assert (assess_dir / "finalize-input.json").exists()  # not consumed
+
+
+def test_finalize_evidence_path_absent_for_existing_file_refuses(tmp_assess_dir: Path) -> None:
+    """A layer resting only on "docs/guide.md is absent", when it exists, is
+    refused before any write, and the message names the entry."""
+    _seed_evidence_repo(tmp_assess_dir)
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    _write_input(tmp_assess_dir, _evidence_input(
+        [{"layer": 0, "kind": "path_absent", "path": "docs/guide.md"}]
+    ))
+
+    with pytest.raises(FinalizeValidationError, match=r"path_absent docs/guide\.md") as exc:
+        finalize_run(assess_dir=tmp_assess_dir)
+    assert "layer 0" in str(exc.value)
+    _assert_nothing_written(tmp_assess_dir)
+
+
+def test_finalize_evidence_not_referenced_in_called_script_refuses(tmp_assess_dir: Path) -> None:
+    """"No workflow calls scripts/check-x.sh", when ci.yml calls it, is refused;
+    the message names the kind, the searched path and the needle."""
+    _seed_evidence_repo(tmp_assess_dir)
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    _write_input(tmp_assess_dir, _evidence_input([{
+        "layer": 7, "kind": "not_referenced_in",
+        "needle": "scripts/check-x.sh", "path": ".github/workflows",
+    }]))
+
+    with pytest.raises(FinalizeValidationError) as exc:
+        finalize_run(assess_dir=tmp_assess_dir)
+    msg = str(exc.value)
+    assert "not_referenced_in" in msg
+    assert ".github/workflows" in msg
+    assert "scripts/check-x.sh" in msg
+    _assert_nothing_written(tmp_assess_dir)
+
+
+def test_finalize_evidence_all_true_finalizes(tmp_assess_dir: Path) -> None:
+    """Every entry verifies: finalize writes exactly as it does without evidence."""
+    _seed_evidence_repo(tmp_assess_dir)
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    _write_input(tmp_assess_dir, _evidence_input([
+        {"layer": 7, "kind": "referenced_in",
+         "needle": "scripts/check-x.sh", "path": ".github/workflows"},
+        {"layer": 0, "kind": "path_absent", "path": "docs/missing.md"},
+        {"layer": 0, "kind": "file_contains", "path": "docs/guide.md", "needle": "guide"},
+    ]))
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "**AI Readiness:** 6.0 / 8 (Solid)" in log
+    assert "((LLM fills in))" not in log
+    assert not (tmp_assess_dir / "finalize-input.json").exists()
+
+
+def test_finalize_without_evidence_key_finalizes(tmp_assess_dir: Path) -> None:
+    """An input with no evidence key (every input before #362) is accepted,
+    as a legacy input without layer_scores is."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    _write_input(tmp_assess_dir, _evidence_input(None))
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    assert "**AI Readiness:** 6.0 / 8 (Solid)" in (tmp_assess_dir / "log.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_finalize_evidence_mixed_layer_finalizes_and_warns(
+    tmp_assess_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A layer with at least one verified entry keeps its verdict: finalize
+    writes, and names each rejected entry on stderr as a warning."""
+    _seed_evidence_repo(tmp_assess_dir)
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    _write_input(tmp_assess_dir, _evidence_input([
+        {"layer": 0, "kind": "path_exists", "path": "docs/guide.md"},
+        {"layer": 0, "kind": "path_exists", "path": "docs/invented.md"},
+    ]))
+
+    finalize_run(assess_dir=tmp_assess_dir)
+
+    assert "((LLM fills in))" not in (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    err = capsys.readouterr().err
+    assert "warning" in err
+    assert "path_exists docs/invented.md" in err
+    assert "docs/guide.md" not in err
+
+
+def test_finalize_evidence_one_layer_all_rejected_refuses_despite_other_layers(
+    tmp_assess_dir: Path,
+) -> None:
+    """The rule is per layer: layer 7 verifying does not carry a layer 0 whose
+    only entry is false."""
+    _seed_evidence_repo(tmp_assess_dir)
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    _write_input(tmp_assess_dir, _evidence_input([
+        {"layer": 7, "kind": "referenced_in",
+         "needle": "scripts/check-x.sh", "path": ".github/workflows"},
+        {"layer": 0, "kind": "path_exists", "path": "docs/invented.md"},
+    ]))
+
+    with pytest.raises(FinalizeValidationError, match=r"layer 0.*path_exists docs/invented\.md"):
+        finalize_run(assess_dir=tmp_assess_dir)
+    _assert_nothing_written(tmp_assess_dir)
+
+
+@pytest.mark.parametrize(
+    ("evidence", "match"),
+    [
+        ({"layer": 0}, "must be a list"),
+        (["docs/guide.md"], "not an object"),
+        ([{"kind": "path_exists", "path": "docs/guide.md"}], "layer"),
+        ([{"layer": 9, "kind": "path_exists", "path": "docs/guide.md"}], "layer"),
+        ([{"layer": True, "kind": "path_exists", "path": "docs/guide.md"}], "layer"),
+    ],
+)
+def test_finalize_malformed_evidence_refuses(
+    tmp_assess_dir: Path, evidence: object, match: str
+) -> None:
+    """A malformed evidence value cannot be attributed to a layer, so it fails
+    closed rather than being skipped."""
+    _seed_evidence_repo(tmp_assess_dir)
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    _write_input(tmp_assess_dir, {**_base_input(), "evidence": evidence})
+
+    with pytest.raises(FinalizeValidationError, match=match):
+        finalize_run(assess_dir=tmp_assess_dir)
+    _assert_nothing_written(tmp_assess_dir)
+
+
+def test_finalize_evidence_refusal_through_core_and_cli(tmp_path: Path) -> None:
+    """End to end: the log comes from the real core, and the CLI prints
+    "finalize refused" naming the entry on stderr, exits 1, and writes nothing."""
+    import subprocess
+    import sys
+
+    from assess_core import build_run_context
+
+    root = tmp_path / "repo"
+    (root / ".assess").mkdir(parents=True)
+    _seed_evidence_repo(root / ".assess")
+    ctx = build_run_context(repo_root=root, run_date="2026-09-18", non_interactive=True)
+    den = int(ctx["archetype"].get("denominator") or 8)
+    cache = root / ".assess" / ".cache"
+    cache.mkdir(exist_ok=True)
+    (cache / "finalize-input.json").write_text(json.dumps({
+        "run_id": ctx["run_id"], "score": den * 0.75, "maturity_label": "Solid",
+        "denominator": den, "top_action": "Add a gate",
+        "layer_scores": {"0": 1.0, "7": 1.0},
+        "evidence": [{"layer": 0, "kind": "path_absent", "path": "docs/guide.md"}],
+    }), encoding="utf-8")
+
+    script = Path(__file__).resolve().parents[1] / "scripts" / "assess_finalize.py"
+    proc = subprocess.run(
+        [sys.executable, str(script), str(root)], capture_output=True, text=True
+    )
+
+    assert proc.returncode == 1
+    assert "finalize refused" in proc.stderr
+    assert "path_absent docs/guide.md" in proc.stderr
+    assert "((LLM fills in))" in (root / ".assess" / "log.md").read_text(encoding="utf-8")
+    assert (cache / "finalize-input.json").exists()
