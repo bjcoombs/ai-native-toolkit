@@ -957,6 +957,7 @@ def test_write_stats_paths_match_generated_header_list_separator(treemap, tmp_pa
     "web/accessibility/lighthouse-results.json",
     "security/zap-report.html",
     "security/zap-report.json",
+    "security/zap_report.html",
     "mcp/test/fixtures/big/lines.jsonl",
     "a/fixtures/lines.jsonl",
 ])
@@ -972,6 +973,7 @@ def test_report_default_excludes_drop_generated_reports(treemap, rel):
     "fixtures/taxonomy/concepts.json",
     "mcp/test/fixtures/big/case.json",  # only .jsonl leaves nested fixtures/
     "src/report.html",
+    "security/zap_report.py",  # the script that runs ZAP, not its output
 ])
 def test_report_default_excludes_keep_hand_kept_files(treemap, rel):
     path = Path(rel)

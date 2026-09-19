@@ -180,16 +180,23 @@ EXCLUDE_FILE_PATTERNS = [
 
     # --- generated test-tool reports ---
     # Lighthouse and OWASP ZAP output committed beside the tests (issue #336).
+    # `zap-report.*` is ZAP's default report name in every output format; the
+    # underscore spelling is pinned to report formats so a hand-written
+    # `zap_report.py` that runs the scan stays scored.
     "lighthouse-report.html", "lighthouse-results.json",
-    "zap-report.*", "zap_report.*",
+    "zap-report.*",
+    "zap_report.html", "zap_report.json", "zap_report.xml", "zap_report.md",
 ]
 
 # Path-aware defaults: (directory name, basename glob). A file matches when the
 # glob fits its basename and the directory name is one of its parent
 # directories below the repo root. A same-named directory at the top level
 # does not count: a bare top-level `fixtures/` often holds hand-kept reference
-# data, while a nested `test/fixtures/` holds recorded tool output (the
-# `EXCLUDE_PATH_SEQUENCES` precedent in lib/doc_graph.py draws the same line).
+# data, while a nested `fixtures/` (`test/fixtures/`, `mcp/test/fixtures/`)
+# holds recorded tool output. Path-aware like `EXCLUDE_PATH_SEQUENCES` in
+# lib/doc_graph.py, but broader: any `fixtures` component below the top level
+# matches, whatever its parent, since recorded JSONL sits under `mcp/test/`,
+# `src/` or `e2e/` as often as under `tests/`.
 EXCLUDE_NESTED_PATH_PATTERNS: tuple[tuple[str, str], ...] = (
     # Recorded JSONL fixtures (API captures, event logs), issue #336.
     ("fixtures", "*.jsonl"),
