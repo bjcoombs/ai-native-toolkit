@@ -981,8 +981,10 @@ def is_attention_low_signal(attention: list[dict]) -> bool:
 
     A top score of 1 means the ranking separates nothing across axes, so its
     rows 2-3 carry no more signal than any other score-1 path; prescribing them
-    would crowd out actions the report writer can justify. Empty attention is
-    ``False``: there is nothing to prescribe, so nothing to cap.
+    would crowd out actions the report writer can justify. Only the fully flat
+    ranking is capped: once any row scores 2 or more the list keeps its usual
+    three prescribed actions, since its top already separates. Empty attention
+    is ``False``: there is nothing to prescribe, so nothing to cap.
     """
     return bool(attention) and max(unit["score"] for unit in attention) <= 1
 
