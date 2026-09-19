@@ -8,6 +8,7 @@ surfaces as a failure with its file and line.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -301,6 +302,61 @@ def test_count_skips_git_metadata_and_matches_outside_the_repo(tmp_path: Path) -
     assert (block["total"], block["verified"]) == (1, 1)
 
 
+def test_count_does_not_count_a_symlinked_file_outside_the_repo(tmp_path: Path) -> None:
+    repo, outside = tmp_path / "repo", tmp_path / "outside"
+    _thirty_pages(repo)
+    outside.mkdir()
+    for i in range(10):
+        (outside / f"o{i}.md").write_text("")
+        (repo / "docs" / "a" / f"link{i}.md").symlink_to(outside / f"o{i}.md")
+    (repo / "AGENTS.md").write_text("The 30 pages under `docs/**/*.md` are the map.\n")
+    block = scan_instruction_claims(repo, ["AGENTS.md"])
+    assert (block["total"], block["verified"]) == (1, 1)
+
+
+@pytest.mark.parametrize("pattern", ["skills/*", "skills/*/"])
+def test_count_of_directories_is_unverifiable_not_a_zero_count(tmp_path: Path, pattern: str) -> None:
+    for i in range(12):
+        (tmp_path / "skills" / f"s{i}").mkdir(parents=True)
+        (tmp_path / "skills" / f"s{i}" / "SKILL.md").write_text("")
+    (tmp_path / "AGENTS.md").write_text(f"The 12 skills live in `{pattern}`.\n")
+    assert scan_instruction_claims(tmp_path, ["AGENTS.md"])["total"] == 0
+
+
+def test_count_ignores_tool_output_and_dependency_trees_below_the_pattern(tmp_path: Path) -> None:
+    _thirty_pages(tmp_path)
+    for tree in (".assess/hotspots", "node_modules/pkg", ".venv/lib"):
+        (tmp_path / tree).mkdir(parents=True)
+        for i in range(10):
+            (tmp_path / tree / f"x{i}.md").write_text("")
+    (tmp_path / "AGENTS.md").write_text("The 30 pages under `**/*.md` are the map.\n")
+    # AGENTS.md itself is the 31st page; within tolerance.
+    block = scan_instruction_claims(tmp_path, ["AGENTS.md"])
+    assert (block["total"], block["verified"]) == (1, 1)
+
+
+def test_count_inside_an_excluded_directory_named_on_purpose_still_counts(tmp_path: Path) -> None:
+    (tmp_path / "vendor" / "docs").mkdir(parents=True)
+    for i in range(30):
+        (tmp_path / "vendor" / "docs" / f"v{i}.md").write_text("")
+    (tmp_path / "AGENTS.md").write_text("We vendor 12 pages in `vendor/docs/*.md`.\n")
+    failure = scan_instruction_claims(tmp_path, ["AGENTS.md"])["failures"][0]
+    assert (failure["claimed"], failure["actual"]) == (12, 30)
+
+
+@pytest.mark.skipif(not hasattr(os, "geteuid") or os.geteuid() == 0,
+                    reason="root reads a directory whatever its mode")
+def test_count_with_an_unreadable_subtree_is_unverifiable(tmp_path: Path) -> None:
+    _thirty_pages(tmp_path)
+    locked = tmp_path / "docs" / "b"
+    locked.chmod(0)
+    try:
+        (tmp_path / "AGENTS.md").write_text("The 30 pages under `docs/**/*.md` are the map.\n")
+        assert scan_instruction_claims(tmp_path, ["AGENTS.md"])["total"] == 0
+    finally:
+        locked.chmod(0o755)
+
+
 def test_count_glob_error_is_unverifiable_not_a_zero_count(
         counted: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     def broken(self: Path, pattern: str) -> list[Path]:
@@ -325,6 +381,7 @@ def test_count_glob_error_is_unverifiable_not_a_zero_count(
     # A pattern that leaves the repository is not counted.
     "There are 3 files in `../other/*.md`.",
     "There are 3 files in `/etc/*.conf`.",
+    "There are 3 files in `C:\\logs\\*.txt`.",
     # Not path-shaped: code, placeholders, flags.
     "All 3 helpers take `**kwargs`.",
     "All 3 helpers take `*args`.",

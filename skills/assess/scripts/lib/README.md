@@ -664,8 +664,11 @@ verified when the difference is at most the larger of 10% or 2, a failure adding
 `claimed` and `actual`; no noun table, so a sentence with no pattern, no wildcard,
 two integers, two patterns, a year as its number, a pattern that is not
 path-shaped (`**kwargs`) or one that is absolute or holds `..` is skipped, as is
-a claim whose wildcard-free directory is missing or whose glob cannot be
-evaluated, since that is unverifiable rather than false). Each failure carries a `reason`. The
+a Windows drive or UNC path, and a claim whose wildcard-free directory is
+missing, whose glob cannot be evaluated, whose subtree cannot be read, or whose
+pattern matches only directories, since that is unverifiable rather than false;
+below the fixed prefix, `doc_graph.is_excluded_path` trees such as `.assess/`
+and `node_modules/` are not counted). Each failure carries a `reason`. The
 enforcement and pin checks use
 `evidence_check.is_referenced_in`, so the search is the same fail-closed one.
 The core writes the result as the run-context block `instruction_claims`

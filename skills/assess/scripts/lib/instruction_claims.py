@@ -43,7 +43,11 @@ Claim kinds:
   cannot be evaluated, the claim is unverifiable and skipped; a directory
   that exists with no match fails with ``actual`` 0. Matching follows
   ``pathlib``, where ``*`` also matches dotfiles (a shell would not); matches
-  that resolve outside the repository (through a symlink) are not counted.
+  that resolve outside the repository (through a symlink) are not counted,
+  nor, below the pattern's fixed prefix, the trees every scan excludes
+  (``.git``, ``.assess``, ``node_modules``, ``.venv`` ...). A pattern that
+  matches only directories, or a subtree the walk cannot read, is also
+  unverifiable rather than a wrong count; so is a Windows drive or UNC path.
 
 A sentence that fits no kind is skipped silently. Adding a kind means one
 extractor in ``_EXTRACTORS`` (sentence -> claims) and one verifier in
@@ -56,12 +60,14 @@ not prose and is not read.
 """
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
+from lib.doc_graph import is_excluded_path
 from lib.evidence_check import is_referenced_in
 
 # Where CI is configured. The enforcement check needs at least one to exist.
@@ -219,7 +225,8 @@ def _count_claims(sentence: str, line: int) -> list[Claim]:
     if len(patterns) != 1:
         return []
     pattern = patterns[0].removeprefix("./")
-    if pattern.startswith(("/", "~")) or ".." in Path(pattern).parts:
+    if (pattern.startswith(("/", "~")) or ".." in Path(pattern).parts
+            or PureWindowsPath(pattern).drive):
         return []
     if "/" not in pattern and not _PLAIN_EXTENSION.search(pattern):
         return []  # `**kwargs`, `*args`, a `?` placeholder: not a path
@@ -235,25 +242,50 @@ def count_within_tolerance(claimed: int, actual: int) -> bool:
     return abs(claimed - actual) <= allowed
 
 
+def _unreadable_below(base: Path, rest: tuple[str, ...]) -> bool:
+    """True when a directory the pattern would descend into cannot be listed.
+    ``Path.glob`` drops such a subtree silently, which would read as a low count."""
+    depth = None if "**" in rest else len(rest) - 1
+    errors: list[OSError] = []
+    for dirpath, dirnames, _ in os.walk(base, onerror=errors.append):
+        rel = Path(dirpath).relative_to(base)
+        if depth is not None and len(rel.parts) >= depth:
+            dirnames[:] = []
+        dirnames[:] = [d for d in dirnames if not is_excluded_path(rel / d)]
+    return bool(errors)
+
+
 def _count_matches(repo_root: Path, pattern: str) -> int:
-    """Files matching ``pattern`` under the root. Raises ``Unverifiable`` when
-    the wildcard-free directory is missing or the glob cannot be evaluated, so
-    an error or a moved tree never reads as a count of zero."""
+    """Files matching ``pattern`` under the root.
+
+    Below the pattern's wildcard-free prefix, the trees every scan excludes
+    (``doc_graph.is_excluded_path``: ``.git``, ``.assess``, ``node_modules``,
+    ``.venv`` ...) are not counted; a prefix that names one on purpose still
+    counts. Raises ``Unverifiable`` when the prefix directory is missing, the
+    glob cannot be evaluated, a subtree cannot be read, or the pattern matched
+    only directories, so none of those reads as a wrong count. ``_count_claims``
+    guarantees a wildcard in the pattern, so the prefix search always ends.
+    """
     root = repo_root.resolve()
     parts = Path(pattern).parts
-    fixed = parts[:next(i for i, part in enumerate(parts) if _GLOB_CHARS.search(part))]
-    base = root.joinpath(*fixed)
+    split = next(i for i, part in enumerate(parts) if _GLOB_CHARS.search(part))
+    base = root.joinpath(*parts[:split])
     try:
         if not base.is_dir() or not base.resolve().is_relative_to(root):
             raise Unverifiable
-        count = 0
+        if _unreadable_below(base, parts[split:]):
+            raise Unverifiable
+        matched = count = 0
         for match in root.glob(pattern):
-            if ".git" in match.relative_to(root).parts or not match.is_file():
+            if is_excluded_path(match.relative_to(base).parent):
                 continue
-            if match.resolve().is_relative_to(root):
+            matched += 1
+            if match.is_file() and match.resolve().is_relative_to(root):
                 count += 1
     except (OSError, ValueError, NotImplementedError, RuntimeError) as error:
         raise Unverifiable from error
+    if matched and not count:
+        raise Unverifiable  # the sentence counts directories: not this kind
     return count
 
 
