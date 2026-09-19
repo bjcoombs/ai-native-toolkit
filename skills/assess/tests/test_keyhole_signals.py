@@ -282,6 +282,112 @@ def test_attention_list_ranks_by_cross_axis_count() -> None:
     assert "single" in paths
 
 
+def test_attention_tie_break_orders_hotspot_rank_then_severity_then_path() -> None:
+    """Five score-1 rows: top_hotspots members lead in hotspot rank order (here
+    the reverse of path order), then descending marker severity, then path."""
+    findings = ks.assemble_findings({
+        "unactioned_intent": [
+            "src/zeta.py", "src/mid.py", "src/beta.py", "src/gamma.py", "src/alpha.py",
+        ],
+    })
+    tie_break = ks.attention_tie_break(
+        {"top_hotspots": [{"path": "src/zeta.py"}, {"path": "src/mid.py"}]},
+        {"top_offenders": [
+            {"path": "src/alpha.py", "severity": 6.0},
+            {"path": "src/beta.py", "severity": 11.0},
+            {"path": "src/gamma.py", "severity": 3.0},
+            {"path": "src/gamma.py", "severity": 9.0},  # the file's highest counts
+        ]},
+        {},
+    )
+    attention = ks.build_attention_list(findings, tie_break=tie_break)
+    assert [(u["path"], u["score"]) for u in attention] == [
+        ("src/zeta.py", 1), ("src/mid.py", 1),
+        ("src/beta.py", 1), ("src/gamma.py", 1), ("src/alpha.py", 1),
+    ]
+
+
+def test_attention_tie_break_never_outranks_score() -> None:
+    """The tie-break only orders equal scores: a score-2 row still leads."""
+    findings = ks.assemble_findings({
+        "unactioned_intent": ["hot.py", "cold.py"],
+        "lying_map": ["cold.py"],
+    })
+    tie_break = ks.attention_tie_break({"top_hotspots": [{"path": "hot.py"}]}, None, {})
+    ranked = [u["path"] for u in ks.build_attention_list(findings, tie_break=tie_break)]
+    assert ranked == ["cold.py", "hot.py"]
+
+
+def test_attention_tie_break_hidden_coupling_lower_containment_first() -> None:
+    """Hidden-coupling severity is 1 - containment_ratio: the directory whose
+    commits bleed out most leads; a drift-only directory falls back to
+    containment_by_dir, and equal severity falls through to path."""
+    findings = ks.assemble_findings({"hidden_coupling": ["a", "b", "c", "d"]})
+    tie_break = ks.attention_tie_break(
+        {"top_hotspots": []},
+        None,
+        {
+            "hidden_coupling_findings": [
+                {"path": "a", "containment_ratio": 0.4},
+                {"path": "b", "containment_ratio": 0.1},
+                {"path": "c", "containment_ratio": 0.4},
+            ],
+            "containment_by_dir": {"d": 0.0},
+        },
+    )
+    ranked = [u["path"] for u in ks.build_attention_list(findings, tie_break=tie_break)]
+    assert ranked == ["d", "b", "a", "c"]
+
+
+def test_attention_tie_break_mixed_marker_and_coupling_rows_share_one_scale() -> None:
+    """Marker severity (at least 5 for a stale marker) and coupling severity
+    (0-1) meet in one sort. On a shared 0-1 scale a fully bleeding seam ranks
+    with the worst marker file instead of below every marker file, and at the
+    attention cap coupling rows are not all evicted by marker rows."""
+    markers = [f"m{i}.py" for i in range(10)]
+    findings = ks.assemble_findings({
+        "unactioned_intent": markers,
+        "hidden_coupling": ["bleeds", "tight"],
+    })
+    tie_break = ks.attention_tie_break(
+        {"top_hotspots": []},
+        {"top_offenders": [
+            {"path": p, "severity": 50.0 - i} for i, p in enumerate(markers)
+        ]},
+        {"hidden_coupling_findings": [
+            {"path": "bleeds", "containment_ratio": 0.0},
+            {"path": "tight", "containment_ratio": 0.9},
+        ]},
+    )
+    ranked = [u["path"] for u in ks.build_attention_list(findings, tie_break=tie_break)]
+    assert ranked[:2] == ["bleeds", "m0.py"]  # both 1.0; path breaks the tie
+    assert len(ranked) == ks.MAX_ATTENTION_UNITS
+    assert "bleeds" in ranked and "tight" not in ranked  # 0.1 sits below m8.py (0.84)
+
+
+def test_attention_tie_break_absent_falls_back_to_path() -> None:
+    findings = ks.assemble_findings({"unactioned_intent": ["b.py", "a.py"]})
+    assert [u["path"] for u in ks.build_attention_list(findings)] == ["a.py", "b.py"]
+
+
+def test_integrate_attention_tie_break_uses_top_hotspots(tmp_path: Path) -> None:
+    """integrate threads top_hotspots and marker severity into the ranking."""
+    pm = {
+        "available": True, "aging_reliable": True,
+        "stale_by_file": {"a.py": {}, "b.py": {}, "c.py": {}},
+        "top_offenders": [
+            {"path": "a.py", "severity": 1.0}, {"path": "b.py", "severity": 5.0},
+        ],
+    }
+    out = ks.integrate(
+        repo_root=tmp_path,
+        complexity_stats={"top_hotspots": [{"path": "c.py"}]},
+        doc_staleness={}, dead_code={}, observability={}, structure={},
+        promissory_markers=pm,
+    )
+    assert [u["path"] for u in out["attention"]] == ["c.py", "b.py", "a.py"]
+
+
 # --- Task 2: render_findings_markdown ----------------------------------------
 
 def _sample_findings() -> list[dict]:
@@ -522,6 +628,54 @@ def test_build_prescribed_actions_caps_at_three() -> None:
 
 def test_build_prescribed_actions_empty_attention() -> None:
     assert ks.build_prescribed_actions([], ks.assemble_findings({})) == []
+
+
+def test_attention_low_signal_when_top_score_is_one() -> None:
+    """Every row in one finding only: the ranking is weak, so it is flagged."""
+    findings = ks.assemble_findings({"lying_map": [f"u{i}" for i in range(5)]})
+    attention = ks.build_attention_list(findings)
+    assert ks.is_attention_low_signal(attention) is True
+
+
+def test_attention_low_signal_false_when_any_row_scores_two() -> None:
+    findings = ks.assemble_findings({
+        "hidden_coupling": ["worst"],
+        "lying_map": ["worst", "u1", "u2", "u3"],
+    })
+    assert ks.is_attention_low_signal(ks.build_attention_list(findings)) is False
+
+
+def test_attention_low_signal_false_on_empty_attention() -> None:
+    """No rows means nothing to cap: the flag stays false."""
+    assert ks.is_attention_low_signal([]) is False
+
+
+def test_integrate_attention_low_signal_caps_prescribed_at_one(tmp_path: Path) -> None:
+    """Five score-1 rows: flag true, one prescribed action (rank 1), attention intact."""
+    pm = {
+        "available": True, "aging_reliable": True,
+        "stale_by_file": {f"u{i}.py": {} for i in range(5)},
+        "top_offenders": [],
+    }
+    out = ks.integrate(
+        repo_root=tmp_path, complexity_stats={"top_hotspots": [{"path": "u3.py"}]},
+        doc_staleness={}, dead_code={}, observability={}, structure={},
+        promissory_markers=pm,
+    )
+    assert out["attention_low_signal"] is True
+    assert len(out["attention"]) == 5
+    assert [(p["path"], p["rank"]) for p in out["prescribed_actions"]] == [("u3.py", 1)]
+
+
+def test_build_prescribed_actions_attention_low_signal_false_keeps_three() -> None:
+    """One score-2 row: flag false, prescribed_actions built as before (three)."""
+    findings = ks.assemble_findings({
+        "hidden_coupling": ["u0.py"],
+        "unactioned_intent": [f"u{i}.py" for i in range(5)],
+    })
+    attention = ks.build_attention_list(findings)
+    assert ks.is_attention_low_signal(attention) is False
+    assert len(ks.build_prescribed_actions(attention, findings)) == 3
 
 
 def test_render_prescribed_actions_rows_and_empty() -> None:
@@ -1037,3 +1191,106 @@ def test_archive_paths_excluded_noop_without_archive() -> None:
     attention, archived = ks.exclude_archive_from_attention(findings)
     assert attention == ks.build_attention_list(findings)
     assert archived == []
+
+
+# --- prune_missing_finding_paths (renamed / deleted history) -----------------
+
+def test_pruned_finding_paths_only_git_history_findings(tmp_path: Path) -> None:
+    """A git-history finding path absent from disk is dropped and returned
+    sorted; paths that exist, and findings read from the working tree, are
+    untouched."""
+    (tmp_path / "live").mkdir()
+    findings = ks.assemble_findings({
+        "hidden_coupling": ["live", "gone", "also_gone"],
+        "refactor_boundary": ["gone_island"],
+        "unactioned_intent": ["not/on/disk.py"],
+    })
+    pruned, dropped = ks.prune_missing_finding_paths(findings, tmp_path)
+    by_name = {f["name"]: f["paths"] for f in pruned}
+    assert by_name["hidden_coupling"] == ["live"]
+    assert by_name["refactor_boundary"] == []
+    assert by_name["unactioned_intent"] == ["not/on/disk.py"]
+    assert dropped == ["also_gone", "gone", "gone_island"]
+    assert [f["name"] for f in pruned] == [f["name"] for f in findings]
+
+
+def test_pruned_finding_paths_stand_down_when_rename_map_incomplete(tmp_path: Path) -> None:
+    """With git history read, a hidden_coupling dir absent from disk is pruned.
+    When the rename map could not be built (git failed), a missing path may be
+    an unfolded old name rather than a deletion, so nothing is pruned."""
+    import subprocess
+
+    from lib.change_coupling import RenameMap
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+
+    def run(complete: bool) -> dict:
+        return ks.integrate(
+            repo_root=tmp_path,
+            complexity_stats=_COMPLEXITY_STATS,
+            doc_staleness=_stale_doc_staleness(churn_degenerate=False),
+            dead_code={"available": False, "candidate_count": 0,
+                       "candidates": [], "tools": []},
+            observability={"rung": None, "reachable": {"present": False}},
+            structure=_MODULAR_STRUCTURE,
+            commit_sets=_BLEEDING_COMMIT_SETS,
+            rename_map=RenameMap({}, complete=complete),
+        )
+
+    stood_down = run(complete=False)
+    assert _finding_paths(stood_down, "hidden_coupling")
+    assert stood_down["pruned_finding_paths"] == []
+    assert stood_down["rename_map_complete"] is False
+    pruned = run(complete=True)
+    assert _finding_paths(pruned, "hidden_coupling") == []
+    assert pruned["pruned_finding_paths"] == sorted(
+        _finding_paths(stood_down, "hidden_coupling"))
+
+
+def test_rename_map_incomplete_when_ancestry_check_fails(tmp_path: Path, monkeypatch) -> None:
+    """A chain hop needs `git merge-base --is-ancestor`. Exit 128 (an object git
+    cannot resolve, as at a shallow boundary) is a failure, not "unrelated": the
+    map comes back empty and incomplete, and the prune stands down, so a live
+    finding is never reported as deleted."""
+    import subprocess
+
+    import lib.change_coupling as cc
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@example.com",
+                        "-c", "user.name=T", *args], check=True, capture_output=True)
+
+    git("init", "-q")
+    (tmp_path / "a.py").write_text("a = 1\n" * 5)
+    git("add", "-A")
+    git("commit", "-q", "-m", "a")
+    git("mv", "a.py", "b.py")
+    git("commit", "-q", "-m", "a -> b")
+    git("mv", "b.py", "c.py")
+    git("commit", "-q", "-m", "b -> c")
+
+    real_run = subprocess.run
+
+    def fake_run(cmd, *args, **kwargs):
+        if "--is-ancestor" in cmd:
+            return subprocess.CompletedProcess(cmd, 128, b"", b"fatal: bad object")
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(cc.subprocess, "run", fake_run)
+    rename_map = cc.build_rename_map(tmp_path)
+    assert rename_map == cc.RenameMap({}, complete=False)
+
+    result = ks.integrate(
+        repo_root=tmp_path,
+        complexity_stats=_COMPLEXITY_STATS,
+        doc_staleness=_stale_doc_staleness(churn_degenerate=False),
+        dead_code={"available": False, "candidate_count": 0,
+                   "candidates": [], "tools": []},
+        observability={"rung": None, "reachable": {"present": False}},
+        structure=_MODULAR_STRUCTURE,
+        commit_sets=_BLEEDING_COMMIT_SETS,
+        rename_map=rename_map,
+    )
+    assert _finding_paths(result, "hidden_coupling")
+    assert result["pruned_finding_paths"] == []
+    assert result["rename_map_complete"] is False

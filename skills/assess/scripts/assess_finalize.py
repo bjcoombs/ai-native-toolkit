@@ -45,6 +45,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.badge import maturity_band
+from lib.evidence_check import check_evidence, describe
 from lib.keyhole_signals import mode_for_finding
 from lib.wiki_writer import (
     find_log_entry,
@@ -70,7 +71,8 @@ class FinalizeValidationError(Exception):
     contract that lets a downstream reader trust the finalised wiki: the score
     fits its denominator, the maturity label matches the score band, every
     hotspot action names a real hotspot, the input came from *this* run (run_id),
-    and Layer 6 never claims proof (Present) the run never gathered (no mutation).
+    Layer 6 never claims proof (Present) the run never gathered (no mutation),
+    and no layer verdict rests only on evidence that fails its re-check.
     """
 
 
@@ -522,9 +524,75 @@ def _validate_layer6_cap(data: dict, ctx: dict) -> None:
         )
 
 
-def _validate_finalize_input(data: dict, ctx: dict, *, denominator: int) -> None:
+def _evidence_layer(entry: object) -> int | None:
+    """The layer an evidence entry cites, or None when it names no layer 0-8."""
+    if not isinstance(entry, dict):
+        return None
+    layer = entry.get("layer")
+    if isinstance(layer, bool) or not isinstance(layer, int) or not 0 <= layer <= 8:
+        return None
+    return layer
+
+
+def _validate_evidence(data: dict, repo_root: Path) -> list[dict]:
+    """Re-check the input's ``evidence`` list against the repository (#362).
+
+    The scorer is a model, and the facts it cites ("docs/guide.md is absent",
+    "no workflow calls scripts/check-x.sh") are checked again here with the
+    deterministic ``lib.evidence_check``, each ``path`` resolved against
+    ``repo_root`` (the parent of ``.assess/``). Grouped by ``layer``:
+
+    - every entry of a layer rejected: the verdict rests on nothing true, so
+      finalize refuses, naming each rejected entry by kind, path and needle;
+    - some entries of a layer rejected (a mixed layer): the verdict still rests
+      on a verified fact, so finalize proceeds, and the rejected entries are
+      returned for the caller to print as warnings.
+
+    An input with no ``evidence`` key is accepted unchecked, as an input with
+    no ``layer_scores`` skips the Layer 6 cap. A malformed list (not a list, or
+    an entry naming no layer 0-8) cannot be attributed to a verdict, so it
+    fails closed. An entry that names its layer but is otherwise malformed
+    (unknown kind, missing path or needle) is one the library rejects, so it
+    counts as a rejected entry of that layer under the rule above.
+    """
+    if "evidence" not in data:
+        return []
+    entries = data["evidence"]
+    if not isinstance(entries, list):
+        raise FinalizeValidationError(
+            "evidence must be a list of entries "
+            f"({{layer, kind, path[, needle]}}), got {type(entries).__name__}"
+        )
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise FinalizeValidationError(f"evidence entry {entry!r} is not an object")
+        if _evidence_layer(entry) is None:
+            raise FinalizeValidationError(
+                f"evidence entry {describe(entry)} names no layer 0-8 "
+                f"(layer={entry.get('layer')!r})"
+            )
+    result = check_evidence(repo_root, entries)
+    verified_layers = {_evidence_layer(e) for e in result["evidence"]}
+    unsupported = [e for e in result["evidence_rejected"] if e["layer"] not in verified_layers]
+    if unsupported:
+        named = "; ".join(
+            f"layer {e['layer']}: {describe(e)} ({e['reason']})" for e in unsupported
+        )
+        raise FinalizeValidationError(
+            f"a layer verdict rests only on rejected evidence: {named}. "
+            "Correct the verdict or its evidence, then re-run finalize."
+        )
+    return result["evidence_rejected"]
+
+
+def _validate_finalize_input(
+    data: dict, ctx: dict, *, denominator: int, repo_root: Path
+) -> list[dict]:
     """Run every finalize invariant. Raises FinalizeValidationError on the first
     violation, before any write - so a bad input reaches nothing.
+
+    Returns the rejected evidence entries of mixed layers, which do not block
+    finalize but are reported as warnings.
     """
     _validate_run_id_match(data, ctx)
     _validate_denominator(denominator, ctx)
@@ -532,6 +600,7 @@ def _validate_finalize_input(data: dict, ctx: dict, *, denominator: int) -> None
     _validate_maturity(float(data["score"]), denominator, data["maturity_label"])
     _validate_hotspot_actions(data, ctx)
     _validate_layer6_cap(data, ctx)
+    return _validate_evidence(data, repo_root)
 
 
 def finalize_run(*, assess_dir: Path) -> None:
@@ -539,8 +608,9 @@ def finalize_run(*, assess_dir: Path) -> None:
     to log.md and hotspot pages, then delete the input file.
 
     Fail-closed: run-context.json is read and every invariant checked *before*
-    any write. Any violation raises ``FinalizeValidationError`` and nothing is
-    written.
+    any write, including the re-check of any ``evidence`` list against the
+    repository root (the parent of ``assess_dir``). Any violation raises
+    ``FinalizeValidationError`` and nothing is written.
     """
     input_path = _locate_input(assess_dir)
     data = json.loads(input_path.read_text(encoding="utf-8"))
@@ -549,7 +619,9 @@ def finalize_run(*, assess_dir: Path) -> None:
     # applicable layers for a knowledge base (issue #224). Defaults to 8 so a
     # pre-archetype finalize-input.json finalises exactly as before.
     denominator = int(data.get("denominator", 8))
-    _validate_finalize_input(data, ctx, denominator=denominator)
+    tolerated = _validate_finalize_input(
+        data, ctx, denominator=denominator, repo_root=assess_dir.parent
+    )
     target = _log_target(assess_dir, ctx.get("run_id") or data.get("run_id"))
     _validate_no_earlier_same_date_placeholders(assess_dir, target)
     _finalize_log(
@@ -564,6 +636,12 @@ def finalize_run(*, assess_dir: Path) -> None:
     actions = data.get("actions")
     if isinstance(actions, list) and actions:
         _write_actions_contract(assess_dir, actions, run_id=ctx.get("run_id"))
+    for e in tolerated:
+        print(
+            f"finalize: warning: layer {e['layer']} evidence rejected, verdict kept on "
+            f"its verified entries: {describe(e)} ({e['reason']})",
+            file=sys.stderr,
+        )
     # The shipped badge stays deterministic: assess_core wrote the findings-count
     # badge.json (linking to this report). Finalize deliberately does NOT
     # overwrite it with the LLM-derived score - that grade appears inside

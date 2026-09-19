@@ -5,7 +5,7 @@ rather than ever blocking the assessment.
 
 **Dead-code tier (cheap, traditional).** Flags *intra-repo* candidate-dead code
 (unused exports / unreferenced symbols) using a language-appropriate tool when
-one is on PATH (``vulture`` for Python, ``ts-prune``/``knip`` for TS,
+one is on PATH (``vulture`` for Python, ``ts-prune``/``knip`` for TS/JS,
 ``staticcheck``/``deadcode`` for Go, clippy for Rust). The hard limit, stated in
 the report: static reachability proves "nothing in *this* repo calls it", never
 "no external consumer calls it." Cross-boundary liveness needs the next tier.
@@ -31,6 +31,7 @@ import json
 import re
 import shutil
 import subprocess
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -50,20 +51,39 @@ STATIC_REACHABILITY_CAVEAT = (
 
 def _has_ext(repo_root: Path, exts: set[str],
              extra_exclude_dirs: set[str] | None = None,
-             extra_exclude_patterns: list[str] | None = None) -> bool:
+             extra_exclude_patterns: list[str] | None = None,
+             scope: Path | None = None) -> bool:
+    return any(_iter_ext(repo_root, exts, extra_exclude_dirs,
+                         extra_exclude_patterns, scope))
+
+
+def _count_ext(repo_root: Path, exts: set[str],
+               extra_exclude_dirs: set[str] | None = None,
+               extra_exclude_patterns: list[str] | None = None,
+               scope: Path | None = None) -> int:
+    return sum(1 for _ in _iter_ext(
+        repo_root, exts, extra_exclude_dirs, extra_exclude_patterns, scope))
+
+
+def _iter_ext(repo_root: Path, exts: set[str],
+              extra_exclude_dirs: set[str] | None,
+              extra_exclude_patterns: list[str] | None,
+              scope: Path | None = None) -> Iterator[Path]:
+    """Yield in-scope files under `scope` (default `repo_root`) whose suffix is
+    in `exts`. Excludes match paths relative to `repo_root` either way."""
     from lib.assess_config import is_user_excluded
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
-    for path in repo_root.rglob("*"):
+    root = repo_root.resolve()
+    for path in (scope or root).resolve().rglob("*"):
         if not path.is_file() or path.suffix.lower() not in exts:
             continue
-        rel = path.relative_to(repo_root)
+        rel = path.relative_to(root)
         if is_excluded_path(rel):
             continue
         if is_user_excluded(rel, extra_dirs, extra_pats):
             continue
-        return True
-    return False
+        yield path
 
 
 def _parse_vulture(stdout: str) -> list[dict]:
@@ -156,17 +176,30 @@ def _vulture_excludes(extra_exclude_dirs: set[str] | None = None) -> str:
 # `extra_dirs` (it accepts a comma-separated `--exclude` list); the other
 # tools take their excludes from external config files or honour the
 # post-scan filter in `_under_excluded`.
+# JavaScript and TypeScript share one tool choice, made by the dominant language
+# (`_js_ts_dominant`), so a stray `.ts` file cannot put ts-prune on a JavaScript
+# repository. `requires` names a root file the tool needs to have a project to
+# analyse; without it the tool is `not_applicable`. `absent_status` and
+# `absent_reason` replace `tool_absent` when no other tool serves the language.
+_TS_EXTS = {".ts", ".tsx", ".mts", ".cts"}
+_JS_EXTS = {".js", ".jsx", ".mjs", ".cjs"}
 _DEAD_CODE_TOOLS: list[dict] = [
     {"language": "python", "tool": "vulture", "exts": {".py"}, "builds": False,
      "cmd": lambda root, extra_dirs: [
          "vulture", ".", "--exclude", _vulture_excludes(extra_dirs),
      ],
      "parser": _parse_vulture},
-    {"language": "typescript", "tool": "ts-prune", "exts": {".ts", ".tsx"},
-     "builds": False,
+    {"language": "typescript", "tool": "ts-prune", "exts": _TS_EXTS,
+     "builds": False, "requires": "tsconfig.json",
      "cmd": lambda root, extra_dirs: ["ts-prune"], "parser": _parse_ts_prune},
-    {"language": "typescript", "tool": "knip", "exts": {".ts", ".tsx", ".js", ".jsx"},
+    {"language": "typescript", "tool": "knip", "exts": _TS_EXTS,
      "builds": True,
+     "cmd": lambda root, extra_dirs: ["knip", "--reporter", "json"],
+     "parser": _parse_knip},
+    {"language": "javascript", "tool": "knip", "exts": _JS_EXTS,
+     "builds": True, "absent_status": "honest_degrade",
+     "absent_reason": ("JavaScript liveness is unserved; knip would provide it "
+                       "(npm install -g knip)"),
      "cmd": lambda root, extra_dirs: ["knip", "--reporter", "json"],
      "parser": _parse_knip},
     {"language": "go", "tool": "deadcode", "exts": {".go"}, "builds": True,
@@ -214,6 +247,18 @@ class DeadCodeResult:
         }
 
 
+def _js_ts_dominant(repo_root: Path, extra_dirs: set[str],
+                    extra_pats: list[str],
+                    scope: Path | None = None) -> tuple[str, int, int]:
+    """(dominant language, TypeScript count, JavaScript count) over the files
+    under `scope` (default `repo_root`). A tie goes to TypeScript; either way the
+    losing language's files are not analysed, and the scan records that as a
+    `not_applicable` entry."""
+    ts = _count_ext(repo_root, _TS_EXTS, extra_dirs, extra_pats, scope)
+    js = _count_ext(repo_root, _JS_EXTS, extra_dirs, extra_pats, scope)
+    return ("javascript" if js > ts else "typescript"), ts, js
+
+
 def _candidate_in_scope(repo_root: Path, rel_path: str, scope: Path | None) -> bool:
     """True if a tool-reported candidate path lies within `scope`.
 
@@ -239,6 +284,9 @@ def scan_dead_code(repo_root: Path, run: bool = True,
     Static tools (vulture, ts-prune) run by default. Tools that resolve/compile
     the project (`builds: True` - deadcode, staticcheck, knip) are skipped
     unless `run_build_tools` is set, so the default scan stays read-only.
+    JavaScript and TypeScript get one tool choice, by the dominant language of
+    the in-scope files; ts-prune also needs a root `tsconfig.json`, and without
+    one it is recorded `not_applicable` rather than run against no project.
 
     `extra_exclude_dirs` and `extra_exclude_patterns` come from
     `.assess/config.toml` / `--exclude` and apply at three points: the
@@ -248,15 +296,18 @@ def scan_dead_code(repo_root: Path, run: bool = True,
 
     `scope` (an absolute path under `repo_root`) restricts the candidates to a
     subtree for `/assess <path>` monorepo scoping, so a scoped run carries no
-    dead-code signal from a sibling directory. The tool still runs over the repo
-    (it needs the whole import graph to judge liveness) and only its reported
-    candidates are confined. Omit it for a whole-repo run.
+    dead-code signal from a sibling directory. The language-presence probe and
+    the dominant-language choice count only the in-scope files. The tool still
+    runs over the repo (it needs the whole import graph to judge liveness) and
+    only its reported candidates are confined. Omit it for a whole-repo run.
     """
     repo_root = repo_root.resolve()
     result = DeadCodeResult()
     seen_languages: set[str] = set()
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
+    js_ts, ts_count, js_count = _js_ts_dominant(
+        repo_root, extra_dirs, extra_pats, scope)
 
     for spec in _DEAD_CODE_TOOLS:
         lang = spec["language"]
@@ -266,13 +317,39 @@ def scan_dead_code(repo_root: Path, run: bool = True,
             repo_root, spec["exts"],
             extra_exclude_dirs=extra_dirs,
             extra_exclude_patterns=extra_pats,
+            scope=scope,
         ):
             continue
         tool = spec["tool"]
+        requires = spec.get("requires")
+        if lang in ("javascript", "typescript") and lang != js_ts:
+            # The losing language is reported once, so a not-analysed half of
+            # the code never hides behind the winner's "ran" entry.
+            seen_languages.add(lang)
+            win, lose = ((f"{js_count} JavaScript", f"{ts_count} TypeScript")
+                         if js_ts == "javascript"
+                         else (f"{ts_count} TypeScript", f"{js_count} JavaScript"))
+            result.tools.append({
+                "language": lang, "tool": tool, "status": "not_applicable",
+                "reason": (f"{win} file(s) against {lose} file(s); the dominant "
+                           f"language's tool is used, so {tool} is not run and "
+                           f"the {lose} file(s) are not analysed"),
+            })
+            continue
+        if requires and not (repo_root / requires).is_file():
+            result.tools.append({
+                "language": lang, "tool": tool, "status": "not_applicable",
+                "reason": (f"no root {requires}; {tool} runs from the repository "
+                           "root and would have no project to analyse"),
+            })
+            continue
         if shutil.which(tool) is None:
+            reason = f"{tool} not on PATH"
+            if spec.get("absent_reason"):
+                reason += f"; {spec['absent_reason']}"
             result.tools.append({"language": lang, "tool": tool,
-                                 "status": "tool_absent",
-                                 "reason": f"{tool} not on PATH"})
+                                 "status": spec.get("absent_status", "tool_absent"),
+                                 "reason": reason})
             continue
         seen_languages.add(lang)
         if not run:
@@ -582,6 +659,23 @@ def _merge_jvm_liveness(dead_code: dict, jvm: dict) -> None:
         })
 
 
+def _merge_dart_liveness(dead_code: dict, dart: dict) -> None:
+    """Record Dart liveness in ``dead_code.tools`` as one ``honest_degrade`` entry.
+
+    Built here rather than as a ``_DEAD_CODE_TOOLS`` spec because the scan never
+    runs the analyzer: a spec would try to run ``dart`` whenever it is on PATH,
+    and no parser reads analyzer output. The entry keeps the non-JVM shape
+    (``language``, ``tool``, ``status``, ``reason``) and adds no candidates.
+    """
+    liveness = dart.get("capabilities", {}).get("liveness", {})
+    if liveness.get("state") != "honest_degrade":
+        return
+    dead_code.setdefault("tools", []).append({
+        "language": "dart", "tool": liveness.get("candidate_tool"),
+        "status": "honest_degrade", "reason": liveness.get("note"),
+    })
+
+
 def scan_liveness(repo_root: Path, run_dead_code: bool = True,
                   run_build_tools: bool = False,
                   extra_exclude_dirs: set[str] | None = None,
@@ -589,19 +683,22 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
                   scope: Path | None = None,
                   ) -> dict:
     """Top-level Layer 1 scan: dead-code candidates + observability rungs, plus
-    the capability-driven JVM offer block when a Maven/Gradle project is found.
+    the capability-driven JVM offer block when a Maven/Gradle project is found
+    and the Dart capability block when a ``pubspec.yaml`` is found.
 
     `run_build_tools` defaults to False so the scan stays read-only - build-
     mutating dead-code tools (and `mvn dependency:analyze`, a run-consent goal)
     are reported as available-but-not-run / offer rather than executed.
     `extra_exclude_dirs` and `extra_exclude_patterns` come from
     `.assess/config.toml` / `--exclude` and apply to the dead-code scan, the
-    observability tree walk, and JVM build-file detection alike.
+    observability tree walk, JVM build-file detection and Dart `pubspec.yaml`
+    detection alike.
 
     `scope` (an absolute path under `repo_root`) confines the dead-code
     candidates to a subtree for `/assess <path>` monorepo scoping; the
     observability rungs stay repo-level (telemetry is a whole-repo property).
     """
+    from lib.dart_capabilities import scan_dart_capabilities
     from lib.jvm_capabilities import scan_jvm_capabilities
 
     dead_code = scan_dead_code(
@@ -617,6 +714,13 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
     )
     if jvm.get("available"):
         _merge_jvm_liveness(dead_code, jvm)
+    dart = scan_dart_capabilities(
+        repo_root,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    )
+    if dart.get("available"):
+        _merge_dart_liveness(dead_code, dart)
     result = {
         "dead_code": dead_code,
         "observability": scan_observability(
@@ -627,4 +731,6 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
     }
     if jvm.get("available"):
         result["jvm_capabilities"] = jvm
+    if dart.get("available"):
+        result["dart_capabilities"] = dart
     return result

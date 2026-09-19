@@ -673,6 +673,68 @@ def test_isolated_curated_folder_not_excluded(tmp_path: Path) -> None:
     assert any(o.startswith("notes/") for o in r.orphans)
 
 
+def _notes_and_wiki(root: Path) -> None:
+    """50 plan notes under one backlog index, beside a nine-page wiki the
+    README links seven of."""
+    for i in range(1, 51):
+        _write(root, f"notes/plan_{i:02d}.md", f"# plan {i:02d}\n")
+    _write(root, "notes/backlog.md", "".join(
+        f"- [plan {i:02d}](plan_{i:02d}.md)\n" for i in range(1, 51)
+    ))
+    pages = "architecture deploy testing security glossary onboarding releases attic scratch".split()
+    for w in pages:
+        _write(root, f"wiki/{w}.md", f"# {w}\n")
+    _write(root, "README.md", "# Home\n[backlog](notes/backlog.md)\n" + "".join(
+        f"[{w}](wiki/{w}.md)\n" for w in pages[:7]
+    ))
+
+
+def test_working_notes_tree_excluded_from_headline(tmp_path: Path) -> None:
+    _notes_and_wiki(tmp_path)
+    _write(tmp_path, "notes/plan_03.md", "[ghost](./missing.md)\n")
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["excluded_working_notes_trees"] == [{"path": "notes", "file_count": 51}]
+    assert d["working_notes_doc_count"] == 51
+    assert (d["doc_count"], d["orphan_rate"], d["reachability_pct"]) == (10, 0.2, 0.8)
+    assert not any(h["path"].startswith("notes/") for h in d["hubs"])
+    # The notes layer's own figures are reported beside the headline.
+    assert d["working_notes_orphan_rate"] == 0.0
+    assert d["working_notes_broken_links"] == 1
+    assert d["dangling_links"] == 0
+    assert d["excluded_raw_trees"] == []
+
+
+def test_base_hub_beside_notes_is_not_a_notes_member(tmp_path: Path) -> None:
+    # A vault-wide .base stored in notes/ selects the wiki pages. It is not a
+    # doc, so it neither joins the tree's count nor leaves the headline graph,
+    # and the wiki pages it surfaces keep their inbound edge.
+    _notes_and_wiki(tmp_path)
+    _write(tmp_path, "notes/pages.base",
+           'filters:\n  and:\n    - file.inFolder("wiki")\n    - file.ext == "md"\n'
+           'views:\n  - type: table\n    name: All\n')
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["excluded_working_notes_trees"] == [{"path": "notes", "file_count": 51}]
+    assert d["working_notes_doc_count"] == 51
+    assert not any(o.startswith("wiki/") for o in d["orphans"])
+
+
+def test_no_working_notes_tree_keys_present_and_empty(tmp_path: Path) -> None:
+    _curated_wiki(tmp_path)
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["excluded_working_notes_trees"] == []
+    assert d["working_notes_doc_count"] == 0
+    assert d["working_notes_orphan_rate"] == 0.0
+    assert d["working_notes_broken_links"] == 0
+
+
+def test_raw_tree_is_not_also_a_working_notes_tree(tmp_path: Path) -> None:
+    _curated_wiki(tmp_path)
+    _raw_export(tmp_path, "sar-export", 30)
+    r = build_doc_graph(tmp_path)
+    assert r.excluded_raw_trees == [{"path": "sar-export", "file_count": 30}]
+    assert r.excluded_working_notes_trees == []
+
+
 # --- Reference edges (backticked doc paths) --------------------------------
 
 
@@ -914,3 +976,60 @@ def test_link_only_figures_share_the_headline_entry_points(tmp_path: Path, monke
     (headline_in, headline_entries), (link_only_in, link_only_entries) = calls
     assert headline_in is None
     assert link_only_in == headline_entries == link_only_entries
+
+
+# --- directory_breakdown (issue #365) ----------------------------------------
+
+
+def _two_doc_dirs(root: Path) -> None:
+    _write(root, "README.md", "# Home\n[a](docs/a.md) [g1](guides/g1.md)\n")
+    _write(root, "docs/a.md", "# a\n")
+    _write(root, "docs/b.md", "# b\n[gone](missing.md)\n")
+    for n in (1, 2, 3):
+        _write(root, f"guides/g{n}.md", f"# g{n}\n")
+
+
+def test_directory_breakdown_counts_per_top_level_directory(tmp_path: Path) -> None:
+    _two_doc_dirs(tmp_path)
+    d = build_doc_graph(tmp_path).as_dict()
+    rows = {r["path"]: r for r in d["directory_breakdown"]}
+    assert rows["docs"] == {"path": "docs", "doc_count": 2,
+                            "unreachable_count": 1, "broken_link_count": 1}
+    assert rows["guides"] == {"path": "guides", "doc_count": 3,
+                              "unreachable_count": 2, "broken_link_count": 0}
+    # Root-level docs group under ".".
+    assert rows["."] == {"path": ".", "doc_count": 1,
+                         "unreachable_count": 0, "broken_link_count": 0}
+    assert d["directory_count"] == 3
+
+
+def test_directory_breakdown_reconciles_with_headline(tmp_path: Path) -> None:
+    # A working-notes tree leaves the headline, so it leaves the breakdown too:
+    # the rows sum to the headline doc_count, unreachable list and dangling_links.
+    _notes_and_wiki(tmp_path)
+    _write(tmp_path, "notes/plan_03.md", "[ghost](./missing.md)\n")
+    _write(tmp_path, "wiki/scratch.md", "[ghost](./nowhere.md)\n")
+    d = build_doc_graph(tmp_path).as_dict()
+    rows = d["directory_breakdown"]
+    assert "notes" not in {r["path"] for r in rows}
+    assert sum(r["doc_count"] for r in rows) == d["doc_count"]
+    assert sum(r["unreachable_count"] for r in rows) == len(d["unreachable"])
+    assert sum(r["broken_link_count"] for r in rows) == d["dangling_links"] == 1
+
+
+def test_directory_breakdown_is_capped_gap_first(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(doc_graph, "MAX_DIRECTORY_BREAKDOWN", 2)
+    _write(tmp_path, "README.md", "# Home\n[a](a/x.md) [b](b/x.md)\n")
+    _write(tmp_path, "a/x.md", "# a\n")
+    _write(tmp_path, "b/x.md", "# b\n")
+    _write(tmp_path, "c/x.md", "# c orphan\n")
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["directory_count"] == 4
+    # The directory holding the unreachable doc outranks the healthy ones.
+    assert [r["path"] for r in d["directory_breakdown"]] == ["c", "."]
+
+
+def test_directory_breakdown_empty_repo(tmp_path: Path) -> None:
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["directory_breakdown"] == []
+    assert d["directory_count"] == 0

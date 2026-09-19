@@ -846,3 +846,502 @@ def test_write_stats_stamps_run_id_and_schema_version(treemap, tmp_path):
     out2 = root / "stats2.json"
     treemap.write_stats([(f, 100, 5.0, "lizard")], None, None, root, out2)
     assert json.loads(out2.read_text())["run_id"] != run_id
+
+
+# --- generated-file exclusion (header sniff, long lines, filename globs) -----
+
+@pytest.mark.parametrize("name", [
+    "types.generated.ts", "schema.generated.sql", "client.gen.ts",
+    "database.types.ts",
+])
+def test_generated_header_free_filename_globs_are_filtered(treemap, name):
+    assert treemap._is_build_artifact(Path("src") / name) is True
+
+
+def _fake_scorers(treemap, monkeypatch, paths):
+    monkeypatch.setattr(
+        treemap, "lizard_scores",
+        lambda root, **kw: {p: (10, 3.0, [3.0]) for p in paths},
+    )
+    monkeypatch.setattr(treemap, "scc_scores", lambda root, **kw: {})
+
+
+def test_collect_drops_generated_header_and_long_line_files(
+        treemap, tmp_path, monkeypatch):
+    root = tmp_path
+    (root / "db").mkdir()
+    (root / "src").mkdir()
+    schema = root / "db" / "schema.sql"
+    schema.write_text("-- GENERATED FILE - DO NOT EDIT\nCREATE TABLE t (id int);\n")
+    font = root / "src" / "font.ts"
+    font.write_text('export const F = "' + "A" * 40000 + '";\n')
+    hand = root / "src" / "hand.py"
+    hand.write_text("def f():\n    return 1\n" + "# x\n" * 196
+                    + "# do not edit the table above\n")
+    _fake_scorers(treemap, monkeypatch, [schema, font, hand])
+
+    excluded: list[dict] = []
+    files, *_rest, fn_ccn = treemap.collect(
+        root, by="complexity", excluded_generated=excluded)
+    assert [f[0] for f in files] == [hand]
+    assert set(fn_ccn) == {hand}
+    assert excluded == [
+        {"path": "db/schema.sql", "reason": "generated-header"},
+        {"path": "src/font.ts", "reason": "long-lines"},
+    ]
+
+
+def test_collect_include_artifacts_keeps_generated_header_files(
+        treemap, tmp_path, monkeypatch):
+    schema = tmp_path / "schema.sql"
+    schema.write_text("-- @generated\nCREATE TABLE t (id int);\n")
+    _fake_scorers(treemap, monkeypatch, [schema])
+    excluded: list[dict] = []
+    files, *_ = treemap.collect(tmp_path, by="complexity",
+                                include_artifacts=True,
+                                excluded_generated=excluded)
+    assert [f[0] for f in files] == [schema]
+    assert excluded == []
+
+
+def test_write_stats_carries_generated_header_exclusions(treemap, tmp_path):
+    root = tmp_path
+    f = root / "a.py"
+    f.write_text("x = 1\n")
+    out = root / "stats.json"
+    listed = [{"path": "db/schema.sql", "reason": "generated-header"}]
+    treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, root, out,
+                        excluded_generated=listed)
+    stats = json.loads(out.read_text())
+    assert stats["excluded_generated"] == listed
+    assert isinstance(stats["schema_version"], int) and stats["schema_version"] > 1
+    treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, root, out)
+    assert json.loads(out.read_text())["excluded_generated"] == []
+
+
+def test_generated_header_all_excluded_error_names_the_exclusion(
+        treemap, tmp_path, monkeypatch, capsys):
+    schema = tmp_path / "schema.sql"
+    schema.write_text("-- GENERATED FILE - DO NOT EDIT\nCREATE TABLE t (id int);\n")
+    _fake_scorers(treemap, monkeypatch, [schema])
+    monkeypatch.setattr(sys, "argv", ["complexity-treemap.py", str(tmp_path)])
+    assert treemap.main() == 1
+    err = capsys.readouterr().err
+    assert "no scoreable files found" in err
+    assert "1 excluded as generated" in err
+    assert "--include-artifacts" in err
+
+
+def test_write_stats_paths_match_generated_header_list_separator(treemap, tmp_path):
+    """Row paths use forward slashes on every host, the same form as
+    excluded_generated, so assess_core can intersect the two sets on Windows
+    (where str() of a relative path would use backslashes)."""
+    (tmp_path / "db").mkdir()
+    f = tmp_path / "db" / "a.py"
+    f.write_text("x = 1\n")
+    out = tmp_path / "stats.json"
+    treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, tmp_path, out)
+    paths = [r["path"] for r in json.loads(out.read_text())["top_large"]]
+    assert paths == ["db/a.py"]
+    src = (Path(treemap.__file__)).read_text()
+    rel_body = src[src.index("    def rel(p: Path) -> str:"):][:400]
+    assert "as_posix()" in rel_body and "str(p" not in rel_body
+
+
+# --- generated test reports, code/data maxima, scc-only hint -----------------
+
+@pytest.mark.parametrize("rel", [
+    "web/tests/html-report/index.html",
+    "e2e/playwright-report/index.html",
+    "web/accessibility/lighthouse-report.html",
+    "web/accessibility/lighthouse-results.json",
+    "security/zap-report.html",
+    "security/zap-report.json",
+    "security/zap_report.html",
+    "mcp/test/fixtures/big/lines.jsonl",
+    "a/fixtures/lines.jsonl",
+])
+def test_report_default_excludes_drop_generated_reports(treemap, rel):
+    path = Path(rel)
+    in_dir = any(part in treemap.EXCLUDE_DIRS for part in path.parts)
+    assert in_dir or treemap._is_build_artifact(path)
+
+
+@pytest.mark.parametrize("rel", [
+    "data/events.jsonl",           # .jsonl outside any fixtures/ directory
+    "fixtures/lines.jsonl",        # bare top-level fixtures/ stays scored
+    "fixtures/taxonomy/concepts.json",
+    "mcp/test/fixtures/big/case.json",  # only .jsonl leaves nested fixtures/
+    "src/report.html",
+    "security/zap_report.py",  # the script that runs ZAP, not its output
+])
+def test_report_default_excludes_keep_hand_kept_files(treemap, rel):
+    path = Path(rel)
+    assert not any(part in treemap.EXCLUDE_DIRS for part in path.parts)
+    assert treemap._is_build_artifact(path) is False
+
+
+def test_report_default_excludes_bypassed_by_include_artifacts(
+        treemap, tmp_path, monkeypatch):
+    """The nested-fixture .jsonl rule is a filename default like the globs, so
+    --include-artifacts scores it."""
+    import subprocess as sp
+
+    nested = tmp_path / "mcp" / "fixtures" / "lines.jsonl"
+    nested.parent.mkdir(parents=True)
+    nested.write_text('{"a": 1}\n')
+    payload = json.dumps([{"Name": "JSONL", "Files": [
+        {"Location": str(nested), "Code": 1, "Complexity": 0}]}])
+    monkeypatch.setattr(treemap.shutil, "which", lambda _: "/usr/bin/scc")
+    monkeypatch.setattr(treemap.subprocess, "run", lambda *a, **k:
+                        sp.CompletedProcess(a, 0, stdout=payload))
+    assert treemap.scc_scores(tmp_path) == {}
+    langs: dict = {}
+    assert treemap.scc_scores(tmp_path, include_artifacts=True,
+                              languages=langs) == {nested.resolve(): (1, 0.0)}
+    assert langs == {nested.resolve(): "JSONL"}
+
+
+def test_code_data_maxima_split_by_scc_language(treemap, tmp_path):
+    root = tmp_path
+    code = root / "app.py"
+    code.write_text("x = 1\n" * 30)
+    data = root / "big.json"
+    data.write_text('{"k": 1}\n' * 500)
+    conf = root / "settings.yaml"
+    conf.write_text("k: 1\n" * 100)
+    out = root / "stats.json"
+    langs = {data: "JSON", conf: "YAML"}
+    treemap.write_stats(
+        [(code, 30, 4.0, "lizard"), (data, 500, 0.0, "scc"),
+         (conf, 100, 0.0, "scc")],
+        None, None, root, out, languages_by_path=langs)
+    stats = json.loads(out.read_text())
+    rows = {r["path"]: r for r in stats["top_large"]}
+    assert stats["loc"]["max"] == 500
+    assert stats["loc"]["max_code"] == rows["app.py"]["loc"] == 30
+    assert stats["loc"]["max_data"] == rows["big.json"]["loc"] == 500
+    assert stats["est_tokens"]["max_code"] == rows["app.py"]["est_tokens"]
+    assert stats["est_tokens"]["max_data"] == rows["big.json"]["est_tokens"]
+    assert stats["schema_version"] >= 3
+
+
+def test_code_data_maxima_empty_side_reports_zero(treemap, tmp_path):
+    f = tmp_path / "a.py"
+    f.write_text("x = 1\n")
+    out = tmp_path / "stats.json"
+    treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, tmp_path, out)
+    stats = json.loads(out.read_text())
+    assert stats["loc"]["max_code"] == 1
+    assert stats["loc"]["max_data"] == 0
+    assert stats["est_tokens"]["max_data"] == 0
+
+
+def _scc_row(tmp_path, name, loc, ccn=0.0, src="scc"):
+    p = tmp_path / name
+    return (p, loc, ccn, src)
+
+
+_LANG_BY_SUFFIX = {".json": "JSON", ".py": "Python", ".ex": "Elixir",
+                   ".md": "Markdown"}
+
+
+def _langs(files):
+    return {f[0]: _LANG_BY_SUFFIX[f[0].suffix] for f in files}
+
+
+def test_scc_only_hint_fires_when_largest_files_are_scc_ccn_zero(
+        treemap, tmp_path, capsys):
+    files = [_scc_row(tmp_path, f"d{i}.json", 200) for i in range(12)]
+    files.append(_scc_row(tmp_path, "tiny.py", 2, 1.0, "lizard"))
+    tokens = {f[0]: f[1] * 10 for f in files}
+    treemap._hint_if_largest_files_scc_only(files, tokens, _langs(files))
+    err = capsys.readouterr().err
+    assert ".assess/config.toml" in err
+    assert "d0.json" in err
+
+
+def test_scc_only_hint_silent_when_largest_file_is_code(
+        treemap, tmp_path, capsys):
+    files = [_scc_row(tmp_path, f"d{i}.json", 200) for i in range(12)]
+    files.append(_scc_row(tmp_path, "big.py", 1200, 600.0, "lizard"))
+    tokens = {f[0]: f[1] * 10 for f in files}
+    treemap._hint_if_largest_files_scc_only(files, tokens, _langs(files))
+    assert capsys.readouterr().err == ""
+
+
+def test_scc_only_hint_silent_on_scored_scc_code(treemap, tmp_path, capsys):
+    """An scc-scored file with complexity above 0 is code (an Elixir or Dart
+    module), so it keeps the hint quiet."""
+    files = [_scc_row(tmp_path, f"m{i}.ex", 200, 3.0) for i in range(12)]
+    tokens = {f[0]: f[1] * 10 for f in files}
+    treemap._hint_if_largest_files_scc_only(files, tokens, _langs(files))
+    assert capsys.readouterr().err == ""
+
+
+def test_scc_only_hint_silent_on_markdown(treemap, tmp_path, capsys):
+    """scc gives Markdown complexity 0 too, but on a docs-first repo those
+    blocks are the deliverable, not data to exclude."""
+    files = [_scc_row(tmp_path, f"s{i}.md", 200) for i in range(12)]
+    tokens = {f[0]: f[1] * 10 for f in files}
+    treemap._hint_if_largest_files_scc_only(files, tokens, _langs(files))
+    assert capsys.readouterr().err == ""
+
+
+def test_scc_only_hint_silent_below_top_n(treemap, tmp_path, capsys):
+    files = [_scc_row(tmp_path, f"d{i}.json", 200)
+             for i in range(treemap.SCC_ONLY_HINT_TOP_N - 1)]
+    tokens = {f[0]: f[1] * 10 for f in files}
+    treemap._hint_if_largest_files_scc_only(files, tokens, _langs(files))
+    assert capsys.readouterr().err == ""
+
+
+@pytest.mark.parametrize("include_artifacts", [False, True])
+def test_scc_only_hint_skipped_under_include_artifacts(
+        treemap, tmp_path, monkeypatch, capsys, include_artifacts):
+    paths = []
+    for i in range(treemap.SCC_ONLY_HINT_TOP_N):
+        p = tmp_path / f"d{i}.json"
+        p.write_text('{"k": 1}\n' * 50)
+        paths.append(p)
+
+    def fake_collect(root, **kw):
+        kw["scc_languages"].update({p: "JSON" for p in paths})
+        return [(p, 50, 0.0, "scc") for p in paths], "hotspot", None, None, {}
+
+    monkeypatch.setattr(treemap, "collect", fake_collect)
+    monkeypatch.setattr(treemap, "render", lambda *a, **k: None)
+    argv = ["complexity-treemap.py", str(tmp_path), "-o",
+            str(tmp_path / "out.svg")]
+    if include_artifacts:
+        argv.append("--include-artifacts")
+    monkeypatch.setattr(sys, "argv", argv)
+    assert treemap.main() == 0
+    hinted = ".assess/config.toml" in capsys.readouterr().err
+    assert hinted is not include_artifacts
+
+
+# --------------------------------------------------------------------------
+# Per-function backend per language and the worst function's name (issue #363)
+
+
+def test_write_stats_backend_by_language_maps_lizard_and_null(treemap, tmp_path):
+    """fn_ccn.source lists the backends that scored a file, as objects, and
+    backend_by_language maps each programming language to its backend or to
+    null when only scc scored it at file level. Data and markup languages,
+    where scc counts no decision points, carry no key."""
+    root = tmp_path
+    py = root / "src" / "app.py"
+    ex = root / "lib" / "router.ex"
+    js = root / "data.json"
+    md = root / "README.md"
+    out = root / "stats.json"
+    treemap.write_stats(
+        [(py, 20, 8.0, "lizard"), (ex, 9, 2.0, "scc"),
+         (js, 50, 0.0, "scc"), (md, 30, 0.0, "scc")],
+        None, None, root, out,
+        fn_ccn_by_path={py: [1.0, 7.0]},
+        fn_name_by_path={py: "gnarly"},
+        languages_by_path={py: "Python", ex: "Elixir",
+                           js: "JSON", md: "Markdown"},
+    )
+    fn = json.loads(out.read_text())["fn_ccn"]
+    assert fn["source"] == [{"name": "lizard", "approximate": False}]
+    assert fn["backend_by_language"] == {"Python": "lizard", "Elixir": None}
+
+
+def test_write_stats_backend_by_language_partial_coverage_is_null(
+        treemap, tmp_path):
+    """A language a backend covers only in part maps to null: one lizard file
+    must not make the language's scc-only files read as covered. A file with
+    no decision points loses no per-function figure and does not downgrade."""
+    root = tmp_path
+    cpp, ipp = root / "a.cpp", root / "a.ipp"
+    js, mjs = root / "a.js", root / "b.mjs"
+    out = root / "stats.json"
+    treemap.write_stats(
+        [(cpp, 20, 8.0, "lizard"), (ipp, 30, 4.0, "scc"),
+         (js, 20, 3.0, "lizard"), (mjs, 5, 0.0, "scc")],
+        None, None, root, out,
+        fn_ccn_by_path={cpp: [8.0], js: [3.0]},
+        languages_by_path={cpp: "C++", ipp: "C++",
+                           js: "JavaScript", mjs: "JavaScript"},
+    )
+    fn = json.loads(out.read_text())["fn_ccn"]
+    assert fn["backend_by_language"] == {"C++": None, "JavaScript": "lizard"}
+
+
+def test_write_stats_backend_by_language_empty_source_when_no_backend(
+        treemap, tmp_path):
+    """An scc-only run lists no backend rather than claiming lizard."""
+    root = tmp_path
+    ex = root / "router.ex"
+    out = root / "stats.json"
+    treemap.write_stats([(ex, 9, 2.0, "scc")], None, None, root, out,
+                        languages_by_path={ex: "Elixir"})
+    fn = json.loads(out.read_text())["fn_ccn"]
+    assert fn["source"] == []
+    assert fn["backend_by_language"] == {"Elixir": None}
+
+
+def test_write_stats_max_fn_name_names_worst_function(treemap, tmp_path):
+    """Every ranked row carries max_fn_name beside max_fn_ccn; it is null
+    wherever max_fn_ccn is null (an scc-scored file, or a lizard file with no
+    functions)."""
+    root = tmp_path
+    py = root / "app.py"
+    flat = root / "flat.py"
+    ex = root / "router.ex"
+    out = root / "stats.json"
+    treemap.write_stats(
+        [(py, 20, 8.0, "lizard"), (flat, 5, 1.0, "lizard"),
+         (ex, 9, 2.0, "scc")],
+        None, None, root, out,
+        fn_ccn_by_path={py: [1.0, 7.0], flat: []},
+        fn_name_by_path={py: "gnarly"},
+    )
+    stats = json.loads(out.read_text())
+    for key in ("top_hotspots", "top_complex", "top_large"):
+        rows = {r["path"]: r for r in stats[key]}
+        assert rows["app.py"]["max_fn_ccn"] == 7.0
+        assert rows["app.py"]["max_fn_name"] == "gnarly"
+        assert rows["flat.py"]["max_fn_ccn"] is None
+        assert rows["flat.py"]["max_fn_name"] is None
+        assert rows["router.ex"]["max_fn_name"] is None
+
+
+def test_lizard_scores_fills_max_fn_name_with_worst_function(
+        treemap, tmp_path, monkeypatch):
+    """lizard_scores records the name of each file's highest-ccn function in
+    the optional fn_names map, and collect threads it through."""
+    src = tmp_path / "app.py"
+    src.write_text("def simple(a):\n    return a\n")
+
+    def fn(name, ccn):
+        return types.SimpleNamespace(name=name, cyclomatic_complexity=ccn)
+
+    fake = types.SimpleNamespace(
+        filename=str(src), nloc=10,
+        function_list=[fn("simple", 1), fn("gnarly", 7), fn("tie", 7)],
+    )
+    monkeypatch.setattr(treemap.lizard, "analyze",
+                        lambda **kw: [fake], raising=False)
+    monkeypatch.setattr(treemap, "scc_scores", lambda root, **kw: {})
+    names: dict = {}
+    scores = treemap.lizard_scores(tmp_path, fn_names=names)
+    assert scores[src.resolve()][2] == [1.0, 7.0, 7.0]
+    assert names == {src.resolve(): "gnarly"}
+
+    via_collect: dict = {}
+    treemap.collect(tmp_path, by="complexity", fn_names=via_collect)
+    assert via_collect == {src.resolve(): "gnarly"}
+
+
+def test_stats_schema_version_raised_for_backend_by_language(treemap):
+    assert treemap.STATS_SCHEMA_VERSION >= 4
+
+
+# Approximate per-function backend for Dart (issue #364)
+
+
+def test_collect_dart_scanner_scores_scc_dart_files(
+        treemap, tmp_path, monkeypatch):
+    """collect adds the Dart scanner's per-function figures to scc-scored
+    .dart files, names the worst function and records the backend; other
+    scc files stay without a breakdown."""
+    dart = tmp_path / "lib" / "order.dart"
+    dart.parent.mkdir()
+    dart.write_text("int a(x) { if (x) {} return 1; }\nint b() => 2;\n")
+    ex = tmp_path / "router.ex"
+    ex.write_text("defmodule R do\nend\n")
+    monkeypatch.setattr(treemap, "lizard_scores", lambda root, **kw: {})
+    monkeypatch.setattr(
+        treemap, "scc_scores",
+        lambda root, **kw: {dart.resolve(): (2, 3.0), ex.resolve(): (2, 1.0)})
+    names: dict = {}
+    backends: dict = {}
+    *_, fn_ccn = treemap.collect(tmp_path, by="complexity",
+                                 fn_names=names, fn_backends=backends)
+    assert fn_ccn == {dart.resolve(): [2.0, 1.0]}
+    assert names == {dart.resolve(): "a"}
+    assert backends == {dart.resolve(): "dart-scanner"}
+
+
+def test_write_stats_dart_scanner_marked_approximate(treemap, tmp_path):
+    """The Dart scanner appears in fn_ccn.source with approximate true, maps
+    Dart in backend_by_language, and fills the Dart row's max_fn_ccn and
+    max_fn_name."""
+    root = tmp_path
+    py = root / "app.py"
+    dart = root / "order.dart"
+    out = root / "stats.json"
+    treemap.write_stats(
+        [(py, 20, 8.0, "lizard"), (dart, 40, 30.0, "scc")],
+        None, None, root, out,
+        fn_ccn_by_path={py: [7.0], dart: [1.0, 12.0]},
+        fn_name_by_path={py: "gnarly", dart: "routeOrder"},
+        languages_by_path={py: "Python", dart: "Dart"},
+        fn_backend_by_path={dart: "dart-scanner"},
+    )
+    stats = json.loads(out.read_text())
+    fn = stats["fn_ccn"]
+    assert fn["source"] == [{"name": "dart-scanner", "approximate": True},
+                            {"name": "lizard", "approximate": False}]
+    assert fn["backend_by_language"] == {"Dart": "dart-scanner",
+                                         "Python": "lizard"}
+    row = {r["path"]: r for r in stats["top_hotspots"]}["order.dart"]
+    assert (row["max_fn_ccn"], row["max_fn_name"]) == (12.0, "routeOrder")
+
+
+def test_write_stats_version_keys_are_tool_versions_or_listed_non_tools(
+        treemap, tmp_path, monkeypatch):
+    """Every `*_version` key write_stats emits is either a tool version that
+    assess_core._stats_tool_versions reads or a stamp listed in
+    _NON_TOOL_VERSION_KEYS, so the writer and the reader cannot drift."""
+    import assess_core
+
+    monkeypatch.setattr(treemap, "_scc_version", lambda: "3.7.0")
+    root = tmp_path
+    py, dart = root / "app.py", root / "order.dart"
+    out = root / "stats.json"
+    treemap.write_stats(
+        [(py, 20, 8.0, "lizard"), (dart, 40, 30.0, "scc")],
+        None, None, root, out,
+        fn_ccn_by_path={py: [7.0], dart: [12.0]},
+        fn_backend_by_path={dart: "dart-scanner"},
+    )
+    stats = json.loads(out.read_text())
+    version_keys = {k for k in stats if k.endswith("_version")}
+    tools = {f"{t}_version" for t in assess_core._stats_tool_versions(stats)}
+    assert tools == {"lizard_version", "scc_version"}
+    assert version_keys - tools == set(assess_core._NON_TOOL_VERSION_KEYS)
+
+
+def test_collect_dart_scanner_skips_files_with_no_function(
+        treemap, tmp_path, monkeypatch):
+    """A Dart file the scanner finds no function in stays scc-only, so it
+    records no backend and cannot make Dart read as covered."""
+    dart = tmp_path / "consts.dart"
+    dart.write_text("const a = 1;\n")
+    monkeypatch.setattr(treemap, "lizard_scores", lambda root, **kw: {})
+    monkeypatch.setattr(treemap, "scc_scores",
+                        lambda root, **kw: {dart.resolve(): (1, 1.0)})
+    backends: dict = {}
+    *_, fn_ccn = treemap.collect(tmp_path, by="complexity",
+                                 fn_backends=backends)
+    assert fn_ccn == {} and backends == {}
+
+
+def test_effective_ccn_clamps_dart_scanner_max_to_scc_aggregate(treemap):
+    """A Dart row takes ccn from scc and max_fn_ccn from the scanner; a
+    scanner figure above the aggregate must not lift the effective value
+    past it. Lizard rows, where max <= aggregate, are unchanged."""
+    assert treemap._effective_ccn(1.0, 5.0) == 1.0
+    assert treemap._effective_ccn(0.0, 3.0) == 0.0
+    w = treemap.PER_FUNCTION_WEIGHT
+    expected = 10.0 ** w * 100.0 ** (1 - w)
+    assert abs(treemap._effective_ccn(100.0, 10.0) - expected) < 1e-9
+
+
+def test_stats_schema_version_raised_for_dart_scanner(treemap):
+    assert treemap.STATS_SCHEMA_VERSION >= 5

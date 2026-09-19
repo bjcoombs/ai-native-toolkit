@@ -18,6 +18,7 @@ import sys
 from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
+from typing import NamedTuple
 
 # Cap every git call so a stuck invocation (huge repo, lock contention, a hung
 # credential prompt) degrades to "no churn data" rather than blocking the run.
@@ -198,6 +199,195 @@ def file_last_commit_days(path: Path) -> int | None:
         return None
     delta = _dt.datetime.now().timestamp() - ts
     return max(0, int(delta // 86400))
+
+
+# Bulk mechanical commits (issue #333). A licence-header sweep, formatter run or
+# mass rename touches most of a repository's docs without changing what any of
+# them says; counting it as each doc's last change resets every staleness clock
+# to the sweep's date and hides the lying maps the metric exists to find.
+# Precision first: a commit is bulk only when it touches MORE than this share of
+# the repository's docs...
+BULK_COMMIT_DOC_SHARE = 0.5
+# ...and at least this many of them. Below the floor, editing every doc at once
+# is ordinary work on a small doc set (a README and two guides), not a sweep.
+BULK_COMMIT_MIN_DOCS = 10
+# Bound on the skipped-commit list written to run-context.json; the total is
+# reported beside it.
+BULK_COMMITS_SKIPPED_CAP = 20
+
+
+class ContentClock(NamedTuple):
+    """Last content-change time per doc, with bulk mechanical commits skipped.
+
+    ``epochs`` maps a resolved doc path to the author time (``%at``) of its
+    newest non-bulk commit, or of its oldest commit when every commit touching
+    it is bulk (a bulk import that created it is its content creation).
+    ``creation_fallback`` names the docs that took that oldest-commit fallback:
+    for a doc regenerated in bulk on every release the value is its creation
+    date, not a content age, so callers disclose it and discount it.
+    ``bulk_shas`` holds every bulk commit, so :meth:`epoch` can apply the same
+    skip to a non-doc file (``.cursorrules``). ``skipped`` lists, newest first
+    and capped, the bulk commits that were newer than some doc's chosen commit.
+    ``complete`` is False when the full history was not read. On a git
+    failure or timeout the maps are empty and :meth:`epoch` falls back to the
+    plain newest-commit read, the behaviour before this clock existed. In a
+    shallow clone the maps are filled from the visible history, which can omit
+    older content commits and bulk commits.
+    """
+
+    epochs: dict[Path, int]
+    bulk_shas: frozenset[str]
+    skipped: tuple[dict, ...]
+    skipped_total: int
+    doc_count: int
+    complete: bool
+    creation_fallback: frozenset[Path] = frozenset()
+
+    def epoch(self, path: Path) -> int | None:
+        path = path.resolve()
+        if path in self.epochs:
+            return self.epochs[path]
+        return _file_content_epoch(path, self.bulk_shas)
+
+    def days(self, path: Path) -> int | None:
+        import datetime as _dt
+
+        ts = self.epoch(path)
+        if ts is None:
+            return None
+        return max(0, int((_dt.datetime.now().timestamp() - ts) // 86400))
+
+
+def _file_content_epoch(path: Path, bulk_shas: frozenset[str]) -> int | None:
+    """Per-file fallback: newest commit to `path` not in `bulk_shas`, else its
+    oldest commit. None if untracked or git fails."""
+    if not bulk_shas:
+        return file_last_commit_epoch(path)
+    try:
+        out = subprocess.run(
+            ["git", "log", "--format=%H %at", "--", str(path)],
+            cwd=path.parent if path.parent.exists() else Path.cwd(),
+            capture_output=True, text=True, check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    rows = [ln.split() for ln in out.splitlines() if len(ln.split()) == 2]
+    for sha, at in rows:
+        if sha not in bulk_shas:
+            return int(at)
+    return int(rows[-1][1]) if rows else None
+
+
+@lru_cache(maxsize=4)
+def content_commit_clock(
+    repo_root: Path,
+    docs: frozenset[Path],
+    head: str | None = None,
+    renames: tuple[tuple[str, str], ...] = (),
+) -> ContentClock:
+    """One ``git log`` pass over the docs' history, skipping bulk commits.
+
+    `docs` (resolved paths) is both the denominator for the bulk share and the
+    set the clock covers. The log is restricted to the docs' extensions, so its
+    cost scales with doc history, not the whole tree. Outside a git repo the
+    clock is empty and complete; on a git failure it is empty and incomplete.
+    Cached so the doc-staleness metric and the instruction grader share one pass;
+    `head` (the HEAD sha) is only a cache key, so a new commit gets a fresh clock.
+    `renames` maps historical repo-relative paths to current ones (as
+    ``change_coupling.build_rename_map`` gives them), so a doc's commits under an
+    old name still count after a mass rename.
+    """
+    empty = ContentClock({}, frozenset(), (), 0, len(docs), True)
+    try:
+        top = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return empty
+    top_path = Path(top).resolve()
+    exts = sorted({d.suffix.lower() for d in docs if d.suffix})
+    if not exts:
+        return empty
+    cmd = ["git", "-C", top, "-c", "core.quotepath=off", "log",
+           "--format=%x01%H %at", "--name-only", "--no-renames", "--"]
+    cmd += [f":(glob,icase)**/*{e}" for e in exts]
+    try:
+        raw = subprocess.run(
+            cmd, capture_output=True, text=True, check=True,
+            timeout=GIT_TIMEOUT_SECONDS, errors="replace",
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return ContentClock({}, frozenset(), (), 0, len(docs), False)
+    # Complete only when git confirms the history is not shallow; a failed or
+    # timed-out probe cannot vouch for it.
+    try:
+        probe = subprocess.run(
+            ["git", "-C", top, "rev-parse", "--is-shallow-repository"],
+            capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
+        )
+        full_history = probe.returncode == 0 and probe.stdout.strip() == "false"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        full_history = False
+    rename_to = dict(renames)
+
+    # Parse newest first: (sha, epoch, docs in `docs` the commit touched).
+    commits: list[tuple[str, int, set[Path]]] = []
+    for ln in raw.splitlines():
+        if ln.startswith("\x01"):
+            sha, _, at_raw = ln[1:].partition(" ")
+            commits.append((sha, int(at_raw), set()))
+        elif ln.strip() and commits:
+            rel = ln.strip()
+            p = top_path / rename_to.get(rel, rel)
+            if p in docs:
+                commits[-1][2].add(p)
+
+    need = max(BULK_COMMIT_MIN_DOCS, int(BULK_COMMIT_DOC_SHARE * len(docs)) + 1)
+    bulk = {sha for sha, _, touched in commits if len(touched) >= need}
+    epochs: dict[Path, int] = {}
+    pending: dict[Path, list[str]] = {}  # bulk commits seen before a doc resolves
+    oldest: dict[Path, tuple[str, int]] = {}
+    skipped: set[str] = set()
+    for sha, at, touched in commits:
+        for p in touched:
+            oldest[p] = (sha, at)
+            if p in epochs:
+                continue
+            if sha in bulk:
+                pending.setdefault(p, []).append(sha)
+            else:
+                epochs[p] = at
+                skipped.update(pending.pop(p, []))
+    # A doc whose every commit is bulk falls back to its oldest (its creation);
+    # the bulk commits newer than that were still skipped.
+    for p, shas in pending.items():
+        epochs[p] = oldest[p][1]
+        skipped.update(s for s in shas if s != oldest[p][0])
+
+    records = [
+        {"sha": sha,
+         "date": _dt_date(at),
+         "docs_touched": len(touched),
+         "doc_count": len(docs)}
+        for sha, at, touched in commits if sha in skipped
+    ]
+    return ContentClock(
+        epochs=epochs,
+        bulk_shas=frozenset(bulk),
+        skipped=tuple(records[:BULK_COMMITS_SKIPPED_CAP]),
+        skipped_total=len(records),
+        doc_count=len(docs),
+        complete=full_history,
+        creation_fallback=frozenset(pending),
+    )
+
+
+def _dt_date(epoch: int) -> str:
+    import datetime as _dt
+
+    return _dt.datetime.fromtimestamp(epoch, tz=_dt.timezone.utc).strftime("%Y-%m-%d")
 
 
 @lru_cache(maxsize=8)

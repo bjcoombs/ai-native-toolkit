@@ -691,6 +691,8 @@ def test_run_context_has_deterministic_keyhole_products(tmp_path: Path) -> None:
     # Task 4: prescribed actions array exists (possibly empty for a clean repo).
     assert "prescribed_actions" in ctx
     assert isinstance(ctx["prescribed_actions"], list)
+    # The low-signal marker is always emitted as a boolean beside attention.
+    assert isinstance(ctx["attention_low_signal"], bool)
     # Task 5: derived findings now carry the nine named axes in fixed order.
     names = [f["name"] for f in ctx["derived_findings"]]
     assert names == [
@@ -1669,6 +1671,97 @@ def test_archive_paths_excluded_block_empty_without_archive(git_repo) -> None:
     assert ctx["excluded_as_archive"] == {"affected_finding_paths": [], "count": 0}
 
 
+
+# --- renamed and deleted history (rename map, pruned_finding_paths) ----------
+
+def _renamed_and_deleted_history(repo: Path, commit) -> None:
+    """old/, other/ and gone/ co-change six times; then old/ -> new/ and gone/
+    is deleted, so the history names two directories that no longer exist."""
+    import subprocess
+    for i in range(1, 7):
+        for d, stem in (("old", "x"), ("old", "y"), ("other", "z"), ("gone", "k")):
+            f = repo / d / f"{stem}.py"
+            f.parent.mkdir(parents=True, exist_ok=True)
+            with f.open("a", encoding="utf-8") as fh:
+                fh.write(f"def {stem}{i}(): return {i}\n")
+        commit(f"c{i}")
+    subprocess.run(["git", "-C", str(repo), "mv", "old", "new"], check=True)
+    commit("rename")
+    subprocess.run(["git", "-C", str(repo), "rm", "-rq", "gone"], check=True)
+    commit("remove")
+
+
+def test_pruned_finding_paths_block_after_rename_and_delete(git_repo) -> None:
+    """Co-change history folds onto new/, gone/ is pruned from every finding
+    surface and disclosed in pruned_finding_paths, and no surface names a path
+    that is missing on disk."""
+    repo, commit = git_repo
+    _renamed_and_deleted_history(repo, commit)
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    hidden = next(f["paths"] for f in ctx["derived_findings"]
+                  if f["name"] == "hidden_coupling")
+    assert "new" in hidden
+    assert not {"old", "gone"} & set(hidden)
+    named = {p for f in ctx["derived_findings"] for p in f["paths"]}
+    named |= {u["path"] for u in ctx["attention"]}
+    named |= {a["path"] for a in ctx["prescribed_actions"]}
+    assert named and all((repo / p).exists() for p in named)
+    items = [line[2:].split(" (")[0] for line in ctx["findings_markdown"].splitlines()
+             if line.startswith("- ")]
+    assert "new" in items
+    assert not [i for i in items if i.split("/")[0] in ("old", "gone")]
+    pair = [p["co_change_count"] for p in ctx["behaviour"]["change_coupling_pairs"]
+            if (p["file_a"], p["file_b"]) == ("new/x.py", "new/y.py")]
+    assert pair and pair[0] >= 6
+    assert ctx["pruned_finding_paths"] == {
+        "paths": ["gone"], "count": 1, "rename_map_complete": True}
+
+
+def test_pruned_finding_paths_block_empty_without_dead_paths(git_repo) -> None:
+    """A repo whose history names only live paths carries an empty block."""
+    repo, commit = git_repo
+    (repo / ".assess").mkdir()
+    _write_min_stats(repo / ".assess")
+    (repo / "README.md").write_text("# Repo\n")
+    commit("init")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["pruned_finding_paths"] == {
+        "paths": [], "count": 0, "rename_map_complete": True}
+
+
+def test_first_flagged_rekeyed_through_rename_map(git_repo) -> None:
+    """A first-flagged entry recorded under a renamed path moves to the current
+    path with its original date, beating the 'new hotspot, stamp today' default;
+    an unrenamed entry is untouched."""
+    repo, commit = git_repo
+    _renamed_and_deleted_history(repo, commit)
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "first-flagged.json").write_text(json.dumps(
+        {"old/x.py": "2026-01-01", "other/z.py": "2026-02-02"}))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 2, "loc": {"total": 12}, "ccn": {"max": 6, "mean": 6},
+        "top_hotspots": [{"path": "new/x.py", "loc": 6, "ccn": 6, "commits": 7},
+                         {"path": "other/z.py", "loc": 6, "ccn": 6, "commits": 6}],
+        "top_complex": [], "top_large": [],
+    }))
+
+    build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert json.loads((assess_dir / "first-flagged.json").read_text()) == {
+        "new/x.py": "2026-01-01", "other/z.py": "2026-02-02",
+    }
+
+
+def test_first_flagged_rekeyed_keeps_earliest_known_date() -> None:
+    rename_map = {"a.py": "b.py", "c.py": "d.py"}
+    assert assess_core._rekey_first_flagged(
+        {"a.py": "2026-03-01", "b.py": "2026-01-01", "c.py": "2026-02-02",
+         "d.py": "unknown", "e.py": "2026-04-04"},
+        rename_map,
+    ) == {"b.py": "2026-01-01", "d.py": "2026-02-02", "e.py": "2026-04-04"}
+
 # --- structure_drift block (Tier 0 + Tier 1 orchestration) -------------------
 
 def test_structure_drift_block_omitted_without_ownership_map(git_repo) -> None:
@@ -2061,3 +2154,162 @@ def test_mutation_run_requires_parsed_mutants_for_cap_lift() -> None:
     assert real["applies"] is False
     assert real["max_layer6_band"] == "Present"
     assert real["annotation"] is None
+
+
+def _gap_repo(tmp_path: Path, *, lcov: bool, linked_docs: int) -> Path:
+    """Two hotspots, nine docs of which README links the first ``linked_docs``."""
+    repo = tmp_path / "repo"
+    (repo / "src").mkdir(parents=True)
+    (repo / "docs").mkdir()
+    for name in ("zeta", "mid"):
+        (repo / "src" / f"{name}.py").write_text("v = 1\n")
+    readme = ["# Fixture", ""]
+    for n in range(9):
+        (repo / "docs" / f"d{n}.md").write_text(f"# d{n}\n")
+        if n < linked_docs:
+            readme.append(f"- [d{n}](docs/d{n}.md)")
+    (repo / "README.md").write_text("\n".join(readme) + "\n")
+    if lcov:
+        (repo / "lcov.info").write_text("SF:src/zeta.py\nLF:1\nLH:1\nend_of_record\n")
+    (repo / ".assess").mkdir()
+    (repo / ".assess" / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 2, "loc": {}, "ccn": {}, "top_complex": [], "top_large": [],
+        "top_hotspots": [{"path": f"src/{n}.py", "loc": 1, "ccn": 1.0, "commits": 1}
+                         for n in ("zeta", "mid")],
+    }))
+    return repo
+
+
+def test_run_context_gap_actions_coverage_first_names_hotspots(tmp_path: Path) -> None:
+    ctx = build_run_context(repo_root=_gap_repo(tmp_path, lcov=False, linked_docs=9),
+                            run_date="2026-05-22")
+    assert [g["signal"] for g in ctx["gap_actions"]] == ["coverage_report"]
+    assert sorted(ctx["gap_actions"][0]["paths"]) == ["src/mid.py", "src/zeta.py"]
+
+
+def test_run_context_gap_actions_empty_with_coverage_and_reachable_docs(tmp_path: Path) -> None:
+    ctx = build_run_context(repo_root=_gap_repo(tmp_path, lcov=True, linked_docs=9),
+                            run_date="2026-05-22")
+    assert ctx["gap_actions"] == []
+
+
+def test_run_context_gap_actions_flags_low_doc_reachability(tmp_path: Path) -> None:
+    ctx = build_run_context(repo_root=_gap_repo(tmp_path, lcov=True, linked_docs=2),
+                            run_date="2026-05-22")
+    assert ctx["doc_graph"]["reachability_pct"] == 0.3
+    gaps = ctx["gap_actions"]
+    assert [g["signal"] for g in gaps] == ["doc_graph"]
+    assert "docs/d8.md" in gaps[0]["paths"]
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Generated-file disclosure (excluded_generated pass-through)
+# ════════════════════════════════════════════════════════════════════════════
+
+def test_excluded_generated_header_list_copied_from_stats(git_repo) -> None:
+    """The treemap's excluded_generated list reaches run-context.json unchanged,
+    with malformed rows dropped."""
+    repo, commit = git_repo
+    assess = repo / ".assess"
+    assess.mkdir()
+    rows = [{"path": "db/schema.sql", "reason": "generated-header"}]
+    (assess / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+        "excluded_generated": rows + [{"path": "x"}, "junk"],
+    }))
+    (repo / "README.md").write_text("# Repo\n")
+    commit("init")
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["excluded_generated"] == rows
+
+
+def test_excluded_generated_header_list_empty_for_old_stats(git_repo) -> None:
+    repo, commit = git_repo
+    (repo / ".assess").mkdir()
+    _write_min_stats(repo / ".assess")
+    (repo / "README.md").write_text("# Repo\n")
+    commit("init")
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["excluded_generated"] == []
+
+
+def test_generated_header_exclusion_is_not_recorded_as_graduation(tmp_path: Path) -> None:
+    """A prior hotspot that left the ranking because this run excluded it as
+    generated did not graduate: it is dropped from diff.graduated, while a real
+    graduation in the same run is still counted."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    prior_stats = {
+        "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "db/schema.sql", "loc": 900, "ccn": 40, "commits": 30},
+            {"path": "src/legacy.go", "loc": 500, "ccn": 20, "commits": 5},
+        ],
+        "top_complex": [], "top_large": [],
+    }
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+    current_stats = {
+        "files_scored": 49, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/new.go", "loc": 400, "ccn": 18, "commits": 4}],
+        "top_complex": [], "top_large": [],
+        "excluded_generated": [{"path": "db/schema.sql", "reason": "generated-header"}],
+    }
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    assert ctx["diff"]["graduated"] == 1
+    assert ctx["excluded_generated"] == [
+        {"path": "db/schema.sql", "reason": "generated-header"}
+    ]
+    index = (assess_dir / "index.md").read_text()
+    assert "src/legacy.go" in index
+    assert "db/schema.sql" not in index
+
+
+def test_generated_header_free_name_glob_is_not_recorded_as_graduation(tmp_path: Path) -> None:
+    """A prior hotspot now excluded by a generated-name glob (silent, so not in
+    excluded_generated) is also kept out of diff.graduated."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    prior_stats = {
+        "files_scored": 50, "loc": {}, "ccn": {},
+        "top_hotspots": [
+            {"path": "web/src/database.types.ts", "loc": 8000, "ccn": 5, "commits": 130},
+            {"path": "web/src/api.generated.ts", "loc": 3000, "ccn": 9, "commits": 40},
+            {"path": "src/legacy.go", "loc": 500, "ccn": 20, "commits": 5},
+        ],
+        "top_complex": [], "top_large": [],
+    }
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+    current_stats = {
+        "files_scored": 49, "loc": {}, "ccn": {},
+        "top_hotspots": [{"path": "src/new.go", "loc": 400, "ccn": 18, "commits": 4}],
+        "top_complex": [], "top_large": [], "excluded_generated": [],
+    }
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-09-19")
+    assert ctx["diff"]["graduated"] == 1
+    index = (assess_dir / "index.md").read_text()
+    assert "src/legacy.go" in index
+    assert "database.types.ts" not in index
+    assert "api.generated.ts" not in index
+
+
+def test_stats_tool_versions_reads_every_backend_by_language_tool() -> None:
+    """_stats_tool_versions reads any `<tool>_version` stamp, not a fixed
+    lizard/scc tuple, so a per-function backend added later is compared too;
+    the layout and plugin stamps are not tools."""
+    got = assess_core._stats_tool_versions({
+        "lizard_version": "1.23.0", "scc_version": "3.7.0",
+        "dart-scanner_version": "1", "schema_version": 4,
+        "artifact_schema_version": "1", "plugin_version": "1.80.0",
+        "tool_versions": {"x": "y"}, "scc_version_extra": "no",
+    })
+    assert got == {"lizard": "1.23.0", "scc": "3.7.0", "dart-scanner": "1"}

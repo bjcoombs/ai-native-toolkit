@@ -23,15 +23,20 @@ structured data + the named findings; the LLM write-back fills judgement later.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from lib.assess_config import is_user_excluded
 from lib.change_coupling import (
+    RenameMap,
     authorship_analysis,
+    build_rename_map,
     change_coupling_pairs,
     containment_ratio,
     find_self_referential_tests,
+    fold_renames,
     parse_commit_file_sets,
+    repo_top,
 )
 from lib.coupling_analysis import detect_hidden_coupling, find_refactor_boundaries
 from lib.doc_complexity_join import (
@@ -414,6 +419,23 @@ def assemble_findings(paths_by_name: dict[str, list[str]]) -> list[dict]:
     ]
 
 
+def _state_stale_threshold(findings: list[dict], promissory_markers: dict) -> None:
+    """Append the scan's stale threshold to the ``unactioned_intent`` action.
+
+    A reader weighing a marker that survived 6 edits against one that survived
+    65 needs the bar both cleared. No-op when the scan carries no threshold.
+    """
+    threshold = promissory_markers.get("stale_touches_threshold")
+    if not promissory_markers.get("available") or not threshold:
+        return
+    for f in findings:
+        if f["name"] == "unactioned_intent":
+            f["action"] = (
+                f"{f['action']} (stale: an untracked marker that survived "
+                f"{threshold} or more edits to its own file)"
+            )
+
+
 def apply_config_excludes(
     findings: list[dict],
     exclude_dirs: set[str],
@@ -447,6 +469,33 @@ def apply_config_excludes(
     return filtered, sorted(dropped)
 
 
+# Findings built from git-log path strings. Only these can name a path that no
+# longer exists: every other finding reads the working tree or the stats file.
+GIT_HISTORY_FINDINGS = frozenset({"hidden_coupling", "refactor_boundary"})
+
+
+def prune_missing_finding_paths(
+    findings: list[dict], base: Path,
+) -> tuple[list[dict], list[str]]:
+    """Drop git-history finding paths absent under ``base``, returning ``(filtered, dropped)``.
+
+    Renamed paths were already folded onto their current names, so a path still
+    missing here was deleted with no current equivalent. ``dropped`` is the
+    sorted list for the run-context ``pruned_finding_paths`` disclosure, so the
+    pruning is counted rather than silent.
+    """
+    dropped: set[str] = set()
+    filtered: list[dict] = []
+    for f in findings:
+        if f["name"] not in GIT_HISTORY_FINDINGS:
+            filtered.append(f)
+            continue
+        kept = [p for p in f["paths"] if (base / p).exists()]
+        dropped.update(p for p in f["paths"] if p not in kept)
+        filtered.append({**f, "paths": kept})
+    return filtered, sorted(dropped)
+
+
 # A path with any component of one of these names (case-insensitive) is kept out
 # of attention ranking: archived material is finished, so a finding on it is
 # never the first place to look. The final component counts too, so a directory
@@ -460,7 +509,7 @@ def is_archive_path(path: str) -> bool:
 
 
 def exclude_archive_from_attention(
-    findings: list[dict],
+    findings: list[dict], tie_break: AttentionTieBreak | None = None,
 ) -> tuple[list[dict], list[str]]:
     """Build the attention list with archive paths left out, returning ``(attention, dropped)``.
 
@@ -474,22 +523,99 @@ def exclude_archive_from_attention(
         for p in f["paths"] if is_archive_path(p)
     })
     if not dropped:
-        return build_attention_list(findings), []
+        return build_attention_list(findings, tie_break=tie_break), []
     ranked = [
         {**f, "paths": [p for p in f["paths"] if not is_archive_path(p)]}
         for f in findings
     ]
-    return build_attention_list(ranked), dropped
+    return build_attention_list(ranked, tie_break=tie_break), dropped
+
+
+@dataclass(frozen=True)
+class AttentionTieBreak:
+    """Data that orders attention rows of equal score.
+
+    ``hotspot_rank`` maps a ``top_hotspots`` path to its position in that list
+    (composite rank order). ``severity`` maps a finding name to ``{path:
+    severity}``, higher meaning worse; a row takes the highest severity among
+    its findings, and a path with no entry counts as 0.
+    """
+
+    hotspot_rank: dict[str, int] = field(default_factory=dict)
+    severity: dict[str, dict[str, float]] = field(default_factory=dict)
+
+    def key(self, unit: dict) -> tuple:
+        """Sort key: score desc, hotspot rank (members first), severity desc, path."""
+        path = unit["path"]
+        severity = max(
+            (self.severity.get(name, {}).get(path, 0.0) for name in unit["findings"]),
+            default=0.0,
+        )
+        rank = self.hotspot_rank.get(path, len(self.hotspot_rank))
+        return (-unit["score"], rank, -severity, path)
+
+
+def attention_tie_break(
+    complexity_stats: dict,
+    promissory_markers: dict | None,
+    behaviour: dict,
+) -> AttentionTieBreak:
+    """Build the attention tie-break from data the run already holds.
+
+    Hotspot rank is the ``top_hotspots`` list order. Severity for
+    ``unactioned_intent`` is the highest ``top_offenders[].severity`` among the
+    file's stale markers. Severity for ``hidden_coupling`` is ``1 -
+    containment_ratio``: a lower ratio means more of the directory's commits
+    bleed outside it, the worse seam (``coupling_analysis`` sorts ascending for
+    the same reason). A structure-drift directory with no hidden-coupling row
+    falls back to ``containment_by_dir``.
+
+    Both severities meet in one sort, so each is on a 0-1 scale: coupling is
+    already, and marker severity (unbounded, at least 5 for a stale marker) is
+    divided by the run's highest. Without that, every stale-marker file would
+    outrank every coupling directory at equal score, and at the attention cap
+    would evict them.
+    """
+    rank: dict[str, int] = {}
+    for h in complexity_stats.get("top_hotspots") or []:
+        path = h.get("path") if isinstance(h, dict) else None
+        if path and path not in rank:
+            rank[path] = len(rank)
+    markers: dict[str, float] = {}
+    for m in (promissory_markers or {}).get("top_offenders") or []:
+        path, sev = m.get("path"), m.get("severity")
+        if path and isinstance(sev, (int, float)):
+            markers[path] = max(markers.get(path, 0.0), float(sev))
+    top_marker = max(markers.values(), default=0.0)
+    if top_marker > 0:
+        markers = {p: v / top_marker for p, v in markers.items()}
+    containment: dict[str, float] = {
+        d: float(r) for d, r in (behaviour.get("containment_by_dir") or {}).items()
+        if isinstance(r, (int, float))
+    }
+    for h in behaviour.get("hidden_coupling_findings") or []:
+        if isinstance(h.get("containment_ratio"), (int, float)):
+            containment[h["path"]] = float(h["containment_ratio"])
+    return AttentionTieBreak(
+        hotspot_rank=rank,
+        severity={
+            "unactioned_intent": markers,
+            "hidden_coupling": {d: 1.0 - r for d, r in containment.items()},
+        },
+    )
 
 
 def build_attention_list(
     findings: list[dict], max_units: int = MAX_ATTENTION_UNITS,
+    tie_break: AttentionTieBreak | None = None,
 ) -> list[dict]:
     """Rank the few units worst across axes - the "where to look" list.
 
     A unit's score is how many *negative* findings name it (the one positive
     finding, ``refactor_boundary``, is a safe zone, never an attention row).
-    Higher score = worse across more axes = look here first.
+    Higher score = worse across more axes = look here first. Equal scores order
+    by ``tie_break`` (hotspot rank, then severity, then path); without one they
+    fall through to path.
     """
     reasons: dict[str, list[str]] = defaultdict(list)
     for f in findings:
@@ -501,9 +627,7 @@ def build_attention_list(
         {"path": path, "findings": sorted(set(names)), "score": len(set(names))}
         for path, names in reasons.items()
     ]
-    # dict values are heterogeneous (str | list | int), so mypy types the
-    # lookup as ``object``; the negation is valid at runtime (score is int).
-    units.sort(key=lambda u: (-u["score"], u["path"]))  # type: ignore[operator]
+    units.sort(key=(tie_break or AttentionTieBreak()).key)
     return units[:max_units]
 
 
@@ -869,6 +993,19 @@ def build_keyhole_summary(findings: list[dict]) -> dict:
 MAX_PRESCRIBED_ACTIONS = 3
 
 
+def is_attention_low_signal(attention: list[dict]) -> bool:
+    """True when no attention row lands in more than one negative finding.
+
+    A top score of 1 means the ranking separates nothing across axes, so its
+    rows 2-3 carry no more signal than any other score-1 path; prescribing them
+    would crowd out actions the report writer can justify. Only the fully flat
+    ranking is capped: once any row scores 2 or more the list keeps its usual
+    three prescribed actions, since its top already separates. Empty attention
+    is ``False``: there is nothing to prescribe, so nothing to cap.
+    """
+    return bool(attention) and max(unit["score"] for unit in attention) <= 1
+
+
 def build_prescribed_actions(
     attention: list[dict],
     findings: list[dict],
@@ -996,6 +1133,7 @@ def integrate(
     exclude_dirs: set[str] | None = None,
     exclude_patterns: list[str] | None = None,
     scope: Path | None = None,
+    rename_map: RenameMap | None = None,
 ) -> dict:
     """Build the five run-context blocks + derived findings + attention list.
 
@@ -1013,16 +1151,26 @@ def integrate(
     finding fires against the marker's source file. ``exclude_dirs`` /
     ``exclude_patterns`` are the user-supplied config excludes; a finding path
     matching them is filtered out and reported in ``excluded_finding_paths`` so the
-    suppression is disclosed rather than silent.
+    suppression is disclosed rather than silent. ``rename_map`` (from
+    ``change_coupling.build_rename_map``, built here when None) folds history
+    recorded under a renamed path onto its current path; a git-history finding
+    path that still does not exist is pruned and reported in
+    ``pruned_finding_paths``. When the map is incomplete (git failed) nothing is
+    pruned: an unfolded old path is not evidence of a deletion.
     Every block is built defensively - a failure in one degrades that block to
     ``available: False`` and leaves the rest intact.
     """
     repo_root = Path(repo_root)
+    # Resolved once and shared by the git-log parse, the rename map and the prune.
+    top = repo_top(repo_root)
     if commit_sets is None:
         try:
-            commit_sets = parse_commit_file_sets(repo_root)
+            commit_sets = parse_commit_file_sets(repo_root, top=top)
         except Exception:  # noqa: BLE001 - degrade to no-history
             commit_sets = []
+    if rename_map is None:
+        rename_map = build_rename_map(repo_root, top=top)
+    commit_sets = fold_renames(commit_sets, rename_map.paths)
 
     # `/assess <path>` monorepo scoping: confine the change-history file-sets to
     # the subtree so the behaviour block (coupling, containment, hidden-seam)
@@ -1185,6 +1333,17 @@ def integrate(
         "override_contradicts_signals": override_contradiction_paths,
         "refactor_boundary": [b["path"] for b in behaviour.get("refactor_boundaries", [])],
     })
+    _state_stale_threshold(findings, pm)
+
+    # Dead-path pruning: a git-history finding path absent from the working tree
+    # (deleted, no rename to follow) never reaches the report; the dropped paths
+    # are carried out for the `pruned_finding_paths` disclosure.
+    # Outside a git repo there is no history to go stale, and with an incomplete
+    # rename map a missing path may just be unfolded, so nothing is pruned.
+    findings, pruned_finding_paths = (
+        prune_missing_finding_paths(findings, Path(top))
+        if top and rename_map.complete else (findings, [])
+    )
 
     # Config-based suppression: drop any finding path the user's config excludes
     # cover (the git-log-derived findings never saw the scan-level filter), and
@@ -1197,7 +1356,13 @@ def integrate(
     # Archive exclusion: a path under archive/, archived/ or attic/ never ranks
     # in attention (so never becomes a prescribed action); the dropped paths are
     # carried out for the `excluded_as_archive` disclosure.
-    attention, archived_finding_paths = exclude_archive_from_attention(findings)
+    # Equal-score rows order by hotspot rank, then finding severity, then path.
+    attention, archived_finding_paths = exclude_archive_from_attention(
+        findings,
+        attention_tie_break(complexity_stats, promissory_markers, behaviour),
+    )
+    # A top score of 1 is a weak ranking: prescribe only its rank-1 row.
+    attention_low_signal = is_attention_low_signal(attention)
 
     return {
         "structure": structure,
@@ -1209,13 +1374,23 @@ def integrate(
         "attention": attention,
         "findings_markdown": render_findings_markdown(findings, attention),
         "keyhole_summary": build_keyhole_summary(findings),
-        "prescribed_actions": build_prescribed_actions(attention, findings),
+        "attention_low_signal": attention_low_signal,
+        "prescribed_actions": build_prescribed_actions(
+            attention, findings, 1 if attention_low_signal else MAX_PRESCRIBED_ACTIONS,
+        ),
         # Paths dropped from the findings because a config exclude covered them -
         # the raw material for the run-context `excluded_by_config` disclosure.
         "excluded_finding_paths": excluded_finding_paths,
         # Archive paths a negative finding names but attention leaves out - the
         # raw material for the run-context `excluded_as_archive` disclosure.
         "archived_finding_paths": archived_finding_paths,
+        # Git-history finding paths absent from the working tree (not HEAD: an
+        # uncommitted delete counts) - the raw material for the run-context
+        # `pruned_finding_paths` disclosure.
+        "pruned_finding_paths": pruned_finding_paths,
+        # False when the rename map could not be built: renames were not folded
+        # and the prune stood down, so the disclosure can say so.
+        "rename_map_complete": rename_map.complete,
         # The Tier 1 grouping disagreement, computed once here from the behaviour
         # block's co-change pairs, so the orchestrator can build the run-context
         # structure_drift tier_1 sub-block from it without a second computation.
