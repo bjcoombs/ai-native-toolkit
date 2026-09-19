@@ -52,12 +52,15 @@ Output is a single self-contained SVG with hover tooltips on every block
 Build artifacts (main.dart.js, *.min.js, *.bundle.js, *.map, files under
 node_modules/dist/build/.next/.nuxt/etc.) and generated code (*.pb.go,
 *.connect.go, *_pb.ts, wire_gen.go, zz_generated_*.go, *.freezed.dart,
-*.designer.cs, etc.) are filtered by default so compiled bundles and
-protoc-emitted bindings don't dominate the "most complex" lists with
-code nobody wrote by hand. If a single remaining file still holds >30%
-of total LOC, a warning prints to stderr suggesting it might be a build
-artifact that needs .gitignore. Pass --include-artifacts to disable the
-filter entirely.
+*.designer.cs, etc.), and generated test reports (Playwright html-report/,
+Lighthouse, ZAP, *.jsonl under a nested fixtures/) are filtered by default
+so compiled bundles and protoc-emitted bindings don't dominate the "most
+complex" lists with code nobody wrote by hand. If a single remaining file
+still holds >30% of total LOC, a warning prints to stderr suggesting it
+might be a build artifact that needs .gitignore; if the 5 largest files are
+all scc-scored data files with complexity 0, a hint names
+.assess/config.toml as the place to exclude them. Pass --include-artifacts
+to disable the filter entirely.
 
 Usage:
     uv run skills/assess/scripts/complexity-treemap.py <path> [-o out.svg] [--labels] [--include-artifacts]
@@ -116,7 +119,11 @@ EXCLUDE_DIRS = {".git", "node_modules", "dist", "build", "target", "vendor",
                 # iOS/Xcode
                 "Pods", "DerivedData",
                 # Flutter web build output (lives under web/ or public/)
-                "flutter_assets"}
+                "flutter_assets",
+                # Playwright HTML test reports: a few lines holding a base64
+                # bundle, committed under web/public/tests/... they took the
+                # largest treemap blocks on a real repo (issue #336)
+                "html-report", "playwright-report"}
 
 # Filenames that match these glob patterns are treated as build artifacts
 # or generated code and excluded from scoring. Two motivations:
@@ -170,13 +177,43 @@ EXCLUDE_FILE_PATTERNS = [
     "*.designer.cs", "*.g.cs", "*.g.i.cs",
     # Dart/Flutter codegen (freezed, json_serializable, riverpod, get_it)
     "*.freezed.dart", "*.g.dart", "*.gr.dart", "*.config.dart",
+
+    # --- generated test-tool reports ---
+    # Lighthouse and OWASP ZAP output committed beside the tests (issue #336).
+    # `zap-report.*` is ZAP's default report name in every output format; the
+    # underscore spelling is pinned to report formats so a hand-written
+    # `zap_report.py` that runs the scan stays scored.
+    "lighthouse-report.html", "lighthouse-results.json",
+    "zap-report.*",
+    "zap_report.html", "zap_report.json", "zap_report.xml", "zap_report.md",
 ]
+
+# Path-aware defaults: (directory name, basename glob). A file matches when the
+# glob fits its basename and the directory name is one of its parent
+# directories below the repo root. A same-named directory at the top level
+# does not count: a bare top-level `fixtures/` often holds hand-kept reference
+# data, while a nested `fixtures/` (`test/fixtures/`, `mcp/test/fixtures/`)
+# holds recorded tool output. Path-aware like `EXCLUDE_PATH_SEQUENCES` in
+# lib/doc_graph.py, but broader: any `fixtures` component below the top level
+# matches, whatever its parent, since recorded JSONL sits under `mcp/test/`,
+# `src/` or `e2e/` as often as under `tests/`.
+EXCLUDE_NESTED_PATH_PATTERNS: tuple[tuple[str, str], ...] = (
+    # Recorded JSONL fixtures (API captures, event logs), issue #336.
+    ("fixtures", "*.jsonl"),
+)
 
 
 def _is_build_artifact(rel: Path) -> bool:
-    """True if rel matches any EXCLUDE_FILE_PATTERNS glob (basename match)."""
+    """True if repo-relative ``rel`` matches an EXCLUDE_FILE_PATTERNS glob
+    (basename match) or an EXCLUDE_NESTED_PATH_PATTERNS rule."""
     name = rel.name
-    return any(fnmatch.fnmatch(name, pat) for pat in EXCLUDE_FILE_PATTERNS)
+    if any(fnmatch.fnmatch(name, pat) for pat in EXCLUDE_FILE_PATTERNS):
+        return True
+    nested_dirs = rel.parts[1:-1]
+    return any(
+        d in nested_dirs and fnmatch.fnmatch(name, pat)
+        for d, pat in EXCLUDE_NESTED_PATH_PATTERNS
+    )
 
 
 def _is_user_excluded(rel: Path, extra_dirs: set[str],
@@ -243,7 +280,13 @@ def scc_scores(
     root: Path, include_artifacts: bool = False,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
+    languages: dict[Path, str] | None = None,
 ) -> dict[Path, tuple[int, float]]:
+    """Return ``{abs_path: (loc, complexity)}`` for the files scc scores.
+
+    ``languages``, when a dict, receives scc's per-language ``Name`` (``JSON``,
+    ``YAML``, ``Python``) for every returned path.
+    """
     if shutil.which("scc") is None:
         return {}
     extra_dirs = extra_exclude_dirs or set()
@@ -283,6 +326,8 @@ def scc_scores(
             if _is_user_excluded(rel, set(), extra_pats):
                 continue
             scores[path] = (int(f["Code"]), float(f["Complexity"]))
+            if languages is not None:
+                languages[path] = str(lang_block.get("Name", ""))
     return scores
 
 
@@ -305,6 +350,7 @@ def collect(root: Path, by: str = "complexity",
             extra_exclude_patterns: list[str] | None = None,
             scope: Path | None = None,
             excluded_generated: list[dict] | None = None,
+            scc_languages: dict[Path, str] | None = None,
             ) -> tuple[list[tuple[Path, int, float, str]], str,
                        dict[Path, int] | None, str | None,
                        dict[Path, list[float]]]:
@@ -331,6 +377,9 @@ def collect(root: Path, by: str = "complexity",
     dropped: a generator header in the first lines (``generated-header``) or a
     payload-length average line (``long-lines``). ``include_artifacts`` skips
     those checks as it skips the filename globs.
+
+    `scc_languages`, when a dict, receives scc's language name per scc-scored
+    path (see `scc_scores`); `write_stats` uses it to split code from data.
     """
     lz = lizard_scores(
         root, include_artifacts=include_artifacts,
@@ -341,6 +390,7 @@ def collect(root: Path, by: str = "complexity",
         root, include_artifacts=include_artifacts,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
+        languages=scc_languages,
     )
     files: list[tuple[Path, int, float, str]] = []
     fn_ccn_by_path: dict[Path, list[float]] = {}
@@ -426,6 +476,43 @@ def _warn_if_dominated_by_one_file(
         f"generated file.\n"
         f"         If so, add it to .gitignore and re-run. To score it "
         f"anyway, pass --include-artifacts.",
+        file=sys.stderr,
+    )
+
+
+SCC_ONLY_HINT_TOP_N = 5  # the largest blocks a reader sees first
+
+
+def _hint_if_largest_files_scc_only(
+    files: list[tuple[Path, int, float, str]],
+    tokens: dict[Path, int],
+    languages: dict[Path, str],
+    n: int = SCC_ONLY_HINT_TOP_N,
+) -> None:
+    """Hint at config excludes when the ``n`` largest files by estimated tokens
+    are all scc-scored data files (``DATA_LANGUAGES``) with complexity 0.
+
+    No single file need pass the dominance threshold for the treemap's biggest
+    blocks to be data an agent never edits (issue #336). Scoped to data
+    languages because scc also reports complexity 0 for Markdown, HTML and CSS:
+    on a docs-first repository those blocks are the deliverable, and advising
+    to exclude them would be wrong. Silent below ``n`` files and when any of
+    the ``n`` is lizard-scored, carries complexity, or is not a data language.
+    """
+    if len(files) < n:
+        return
+    largest = sorted(files, key=lambda f: -tokens.get(f[0], f[1]))[:n]
+    if any(f[3] != "scc" or f[2] > 0
+           or languages.get(f[0]) not in DATA_LANGUAGES for f in largest):
+        return
+    names = ", ".join(f[0].name for f in largest)
+    print(
+        f"hint: the {n} largest files by estimated tokens are all data files "
+        f"(JSON / YAML / JSONL)\n"
+        f"      scored by scc with complexity 0: {names}.\n"
+        f"      If agents never edit them, add their directories or globs to "
+        f".assess/config.toml\n"
+        f"      (`exclude_dirs` / `exclude_patterns`) and re-run.",
         file=sys.stderr,
     )
 
@@ -592,7 +679,13 @@ def _read_plugin_version() -> str:
 # is a structural change to the sidecar shape (a metric added/removed/redefined)
 # that voids the diff against an older snapshot until the next clean run
 # re-seeds the baseline (assess_core._diff_is_reliable reads it).
-STATS_SCHEMA_VERSION = 2  # 2: generated-file content excludes + excluded_generated
+STATS_SCHEMA_VERSION = 3  # 2: generated-file content excludes + excluded_generated
+                          # 3: generated test-report excludes + loc/est_tokens max_code/max_data
+
+# scc language names counted as data, not code, for the `max_code` / `max_data`
+# split in the stats file. Data files stay in the treemap: a large hand-kept
+# fixture is weight an agent may have to read.
+DATA_LANGUAGES = frozenset({"JSON", "YAML", "JSONL"})
 
 
 def _lizard_version() -> str:
@@ -765,7 +858,8 @@ def write_stats(files: list[tuple[Path, int, float, str]],
                 fn_ccn_by_path: dict[Path, list[float]] | None = None,
                 tokens_by_path: dict[Path, int] | None = None,
                 churn_degenerate: bool = False,
-                excluded_generated: list[dict] | None = None) -> None:
+                excluded_generated: list[dict] | None = None,
+                languages_by_path: dict[Path, str] | None = None) -> None:
     """Write a JSON stats sidecar summarising the treemap data.
 
     Consumed by the /assess skill: percentiles drive Layer 3 (linter) scoring,
@@ -797,12 +891,24 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     ``excluded_generated`` (the list ``collect`` filled) is written as the
     top-level ``excluded_generated`` key, always present and empty when nothing
     was dropped, so the exclusion stays visible downstream.
+
+    ``languages_by_path`` (scc's language name per path, from ``collect``)
+    splits the ``loc`` and ``est_tokens`` maxima into ``max_code`` and
+    ``max_data``: a file whose language is in ``DATA_LANGUAGES`` is data,
+    everything else code. A side with no files reports 0.
     """
     fn_ccn_by_path = fn_ccn_by_path or {}
     tokens = tokens_by_path if tokens_by_path is not None else est_tokens_by_path(files)
     locs = [f[1] for f in files]
     token_vals = [tokens.get(f[0], est_token_count(f[0], f[1])) for f in files]
     ccns = [f[2] for f in files]
+    langs = languages_by_path or {}
+    is_data = [langs.get(f[0]) in DATA_LANGUAGES for f in files]
+
+    def side_max(values: list, data: bool) -> float:
+        side = [v for v, d in zip(values, is_data) if d is data]
+        return float(max(side)) if side else 0.0
+
     churns = ([float(aux_data.get(f[0], 0)) for f in files]
               if aux_data is not None else [])
     # Per-function population, lizard files only. scc paths are absent from
@@ -901,6 +1007,10 @@ def write_stats(files: list[tuple[Path, int, float, str]],
             "p50": pct(locs, 50),
             "p95": pct(locs, 95),
             "max": float(max(locs)) if locs else 0.0,
+            # The maxima split by scc language (DATA_LANGUAGES), so a large
+            # JSON fixture cannot pass for the largest source file.
+            "max_code": side_max(locs, False),
+            "max_data": side_max(locs, True),
             "total": sum(locs),
         },
         # Estimated tokens (~chars/4) - the keyhole size unit. Sized the treemap
@@ -910,6 +1020,8 @@ def write_stats(files: list[tuple[Path, int, float, str]],
             "p50": pct(token_vals, 50),
             "p95": pct(token_vals, 95),
             "max": float(max(token_vals)) if token_vals else 0.0,
+            "max_code": side_max(token_vals, False),
+            "max_data": side_max(token_vals, True),
             "total": sum(token_vals),
             "budget": _keyhole_budget_rollup(tokens, root),
         },
@@ -1081,12 +1193,14 @@ def main() -> int:
     extra_dirs, extra_patterns = resolve_excludes(root, args.exclude)
 
     excluded_generated: list[dict] = []
+    scc_languages: dict[Path, str] = {}
     files, effective_by, aux_data, aux_label, fn_ccn_by_path = collect(
         root, by="hotspot", include_artifacts=args.include_artifacts,
         extra_exclude_dirs=extra_dirs,
         extra_exclude_patterns=extra_patterns,
         scope=scope,
         excluded_generated=excluded_generated,
+        scc_languages=scc_languages,
     )
     if not files:
         where = f" under {scope}" if scope is not None else ""
@@ -1113,6 +1227,9 @@ def main() -> int:
     # treemap (block area) and the stats sidecar (size unit + keyhole budget) so
     # both views agree and no file is read twice.
     tokens = est_tokens_by_path(files)
+    if not args.include_artifacts:
+        # The user asked to see artifacts; do not advise excluding them.
+        _hint_if_largest_files_scc_only(files, tokens, scc_languages)
     survivor_density = (
         load_survivor_density(args.test_pressure, root)
         if args.test_pressure else {}
@@ -1139,7 +1256,8 @@ def main() -> int:
         write_stats(files, aux_data, aux_label, root, args.stats,
                     fn_ccn_by_path=fn_ccn_by_path, tokens_by_path=tokens,
                     churn_degenerate=churn_degenerate,
-                    excluded_generated=excluded_generated)
+                    excluded_generated=excluded_generated,
+                    languages_by_path=scc_languages)
     return 0
 
 

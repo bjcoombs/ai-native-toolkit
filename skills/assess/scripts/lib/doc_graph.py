@@ -746,6 +746,8 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
     scope: Path | None = None,
+    working_notes_dirs: list[str] | None = None,
+    working_notes_ignore: list[str] | None = None,
 ) -> DocGraphResult:
     """Parse docs, build the link graph, and derive navigability signals.
 
@@ -753,6 +755,9 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     within a subtree for `/assess <path>` monorepo scoping; omit it for a
     whole-repo run. `.base` hub discovery honours the same scope so a scoped
     graph carries no navigation signal from a sibling directory.
+    `working_notes_dirs` / `working_notes_ignore` are the `.assess/config.toml`
+    overrides (`lib.assess_config.load_working_notes_config`) that force or
+    suppress working-notes classification for repo-relative directories.
     """
     repo_root = repo_root.resolve()
     vault = _vault_detected(repo_root)
@@ -905,6 +910,7 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     # what the raw pass leaves so no doc belongs to both layers.
     notes_docs, notes_trees = _detect_working_notes_trees(
         graph, {rel(d) for d in docs} - raw_docs,
+        force=working_notes_dirs or [], ignore=working_notes_ignore or [],
     )
     excluded_docs = raw_docs | notes_docs
     curated_docs = [d for d in docs if rel(d) not in excluded_docs]
@@ -992,7 +998,9 @@ def _layer_figures(
     )
 
 
-def _detect_working_notes_trees(graph, doc_rels: set[str]) -> tuple[set[str], list[dict]]:
+def _detect_working_notes_trees(
+    graph, doc_rels: set[str], *, force: list[str], ignore: list[str],
+) -> tuple[set[str], list[dict]]:
     """Detect working-notes subtrees and return (excluded_doc_rels, trees).
 
     ``doc_rels`` is the doc set minus raw-source docs; like the raw pass it
@@ -1000,7 +1008,8 @@ def _detect_working_notes_trees(graph, doc_rels: set[str]) -> tuple[set[str], li
     headline graph (link and reference edges) restricted to those docs: each doc's in-degree and the docs its inbound
     edges come from, so the classifier can tell one index holding the links
     from a wiki whose links are spread out. The verdict is
-    ``lib.raw_source.classify_working_notes_trees``.
+    ``lib.raw_source.classify_working_notes_trees``; ``force`` / ``ignore``
+    are the config overrides, passed through.
     """
     from lib.raw_source import classify_working_notes_trees
 
@@ -1008,7 +1017,7 @@ def _detect_working_notes_trees(graph, doc_rels: set[str]) -> tuple[set[str], li
     for r in sorted(doc_rels):
         sources = [u for u in graph.predecessors(r) if u in doc_rels]
         signals[r] = {"in_degree": len(sources), "inbound_sources": sources}
-    trees = classify_working_notes_trees(signals)
+    trees = classify_working_notes_trees(signals, force=force, ignore=ignore)
     return {r for t in trees for r in t["docs"]}, trees
 
 

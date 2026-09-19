@@ -54,7 +54,9 @@ from lib.badge import (
     fallback_badge,
     write_badge,
 )
-from lib.assess_config import is_user_excluded, load_excludes, load_structure_config
+from lib.assess_config import (
+    is_user_excluded, load_excludes, load_structure_config, load_working_notes_config,
+)
 from lib.change_coupling import build_rename_map
 from lib.config_drift import scan_config_drift
 from lib.coverage_report import detect_coverage_report, load_coverage_data
@@ -1379,11 +1381,14 @@ def build_run_context(
 
     # Read-side foundation signals (Layer 0 navigability + Layer 1 liveness).
     # Each is best-effort and degrades rather than blocking the assessment.
+    working_notes = load_working_notes_config(repo_root)
     doc_graph = _safe("doc_graph", lambda: build_doc_graph(
         repo_root,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
         scope=scope_abs,
+        working_notes_dirs=working_notes.dirs,
+        working_notes_ignore=working_notes.ignore,
     ).as_dict())
     doc_to_code = (doc_graph.get("doc_to_code_edges", [])
                    if doc_graph.get("available") else [])
@@ -1481,6 +1486,11 @@ def build_run_context(
     # offer-layer turns into an AskUserQuestion.
     if liveness_ok and isinstance(liveness.get("jvm_capabilities"), dict):
         ctx["capability_offers"] = liveness["jvm_capabilities"]
+    # Non-JVM capability entries keyed by language (issue #352), present only
+    # when a language is detected; capability_offers stays JVM-only.
+    if liveness_ok and isinstance(liveness.get("dart_capabilities"), dict):
+        ctx["language_capabilities"] = {
+            "dart": liveness["dart_capabilities"]["capabilities"]}
 
     # Keyhole-readiness signals (PRD 2026-05-29): the static-structure,
     # behaviour (change-coupling / containment / static-vs-historical),
