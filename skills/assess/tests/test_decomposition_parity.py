@@ -108,7 +108,7 @@ def test_attention_low_signal_is_read_before_the_rule_that_uses_it():
     body = (REPO_ROOT / "skills" / "assess-findings" / "SKILL.md").read_text()
     read = next(line for line in body.splitlines() if line.startswith("jq ") and ".prescribed_actions" in line)
     rule = next(line for line in body.splitlines() if line.startswith("**Mandatory attention rule"))
-    for key in ("attention", "attention_low_signal", "prescribed_actions"):
+    for key in ("attention", "attention_low_signal", "prescribed_actions", "gap_actions"):
         assert f"`{key}`" in rule
         assert f".{key}," in read or read.rstrip().split("'")[1].endswith(f".{key}")
 

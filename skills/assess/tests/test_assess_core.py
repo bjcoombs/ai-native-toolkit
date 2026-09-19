@@ -2156,6 +2156,52 @@ def test_mutation_run_requires_parsed_mutants_for_cap_lift() -> None:
     assert real["annotation"] is None
 
 
+def _gap_repo(tmp_path: Path, *, lcov: bool, linked_docs: int) -> Path:
+    """Two hotspots, nine docs of which README links the first ``linked_docs``."""
+    repo = tmp_path / "repo"
+    (repo / "src").mkdir(parents=True)
+    (repo / "docs").mkdir()
+    for name in ("zeta", "mid"):
+        (repo / "src" / f"{name}.py").write_text("v = 1\n")
+    readme = ["# Fixture", ""]
+    for n in range(9):
+        (repo / "docs" / f"d{n}.md").write_text(f"# d{n}\n")
+        if n < linked_docs:
+            readme.append(f"- [d{n}](docs/d{n}.md)")
+    (repo / "README.md").write_text("\n".join(readme) + "\n")
+    if lcov:
+        (repo / "lcov.info").write_text("SF:src/zeta.py\nLF:1\nLH:1\nend_of_record\n")
+    (repo / ".assess").mkdir()
+    (repo / ".assess" / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 2, "loc": {}, "ccn": {}, "top_complex": [], "top_large": [],
+        "top_hotspots": [{"path": f"src/{n}.py", "loc": 1, "ccn": 1.0, "commits": 1}
+                         for n in ("zeta", "mid")],
+    }))
+    return repo
+
+
+def test_run_context_gap_actions_coverage_first_names_hotspots(tmp_path: Path) -> None:
+    ctx = build_run_context(repo_root=_gap_repo(tmp_path, lcov=False, linked_docs=9),
+                            run_date="2026-05-22")
+    assert [g["signal"] for g in ctx["gap_actions"]] == ["coverage_report"]
+    assert sorted(ctx["gap_actions"][0]["paths"]) == ["src/mid.py", "src/zeta.py"]
+
+
+def test_run_context_gap_actions_empty_with_coverage_and_reachable_docs(tmp_path: Path) -> None:
+    ctx = build_run_context(repo_root=_gap_repo(tmp_path, lcov=True, linked_docs=9),
+                            run_date="2026-05-22")
+    assert ctx["gap_actions"] == []
+
+
+def test_run_context_gap_actions_flags_low_doc_reachability(tmp_path: Path) -> None:
+    ctx = build_run_context(repo_root=_gap_repo(tmp_path, lcov=True, linked_docs=2),
+                            run_date="2026-05-22")
+    assert ctx["doc_graph"]["reachability_pct"] == 0.3
+    gaps = ctx["gap_actions"]
+    assert [g["signal"] for g in gaps] == ["doc_graph"]
+    assert "docs/d8.md" in gaps[0]["paths"]
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # Generated-file disclosure (excluded_generated pass-through)
 # ════════════════════════════════════════════════════════════════════════════
