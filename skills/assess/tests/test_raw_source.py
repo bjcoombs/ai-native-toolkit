@@ -8,6 +8,8 @@ of which LLM is driving the surrounding assessment.
 """
 from __future__ import annotations
 
+import pytest
+
 from lib.raw_source import (
     RAW_TREE_ISOLATION_DENSITY,
     RAW_TREE_MACHINE_DENSITY,
@@ -16,6 +18,7 @@ from lib.raw_source import (
     WORKING_NOTES_LOW_INDEGREE_DENSITY,
     WORKING_NOTES_MIN_FILES,
     WORKING_NOTES_NAME_DENSITY,
+    _name_key,
     classify_raw_trees,
     classify_working_notes_trees,
 )
@@ -255,14 +258,64 @@ def test_prefix_named_indexed_section_is_not_working_notes() -> None:
     assert classify_working_notes_trees(signals) == []
 
 
-def test_versioned_release_pages_are_not_working_notes() -> None:
-    signals = {
-        f"releases/v1.{i}.0.md": _wn_signal(["releases/index.md"]) for i in range(30)
-    }
-    signals.update({
-        f"releases/release-2.{i}.1.md": _wn_signal(["releases/index.md"]) for i in range(30)
-    })
+def _indexed_section(prefix: str, stems: list[str]) -> dict[str, dict]:
+    """Pages each linked once from ``<prefix>/README.md``, linked from the root."""
+    signals = {f"{prefix}/{s}.md": _wn_signal([f"{prefix}/README.md"]) for s in stems}
+    signals[f"{prefix}/README.md"] = _wn_signal(["README.md"])
+    return signals
+
+
+def test_dotted_release_pages_are_not_working_notes() -> None:
+    signals = _indexed_section("releases", [f"release-2.{i}.1" for i in range(30)])
     assert classify_working_notes_trees(signals) == []
+
+
+def test_v_prefixed_version_pages_are_not_working_notes() -> None:
+    signals = _indexed_section("releases", [f"v1.{i}.0" for i in range(30)])
+    assert classify_working_notes_trees(signals) == []
+
+
+def test_titled_decision_records_are_not_working_notes() -> None:
+    adrs = _indexed_section("docs/adr", [f"adr-{i:04d}-decision-{i}x" for i in range(1, 25)])
+    rfcs = _indexed_section("docs/rfc", [f"rfc-{i:03d}-proposal" for i in range(1, 25)])
+    assert classify_working_notes_trees(adrs) == []
+    assert classify_working_notes_trees(rfcs) == []
+
+
+@pytest.mark.parametrize(
+    ("rel", "key"),
+    [
+        ("notes/plan_07.md", "plan"),
+        ("notes/plan-07.md", "plan"),
+        ("tickets/PROJ-123.md", "proj"),
+        ("tickets/gh-42.md", "gh"),
+        ("journal/2026-01-31-standup.md", "<date>"),
+        ("releases/release-2.1.0.md", None),
+        ("releases/v1.2.3.md", None),
+        ("docs/adr/adr-0001-use-postgres.md", None),
+        ("docs/rfc/rfc-042-streaming.md", None),
+        ("docs/how-to/how-to-deploy.md", None),
+        ("docs/adr/0001-use-postgres.md", None),
+    ],
+)
+def test_name_key_families(rel: str, key: str | None) -> None:
+    assert _name_key(rel) == key
+
+
+def test_mixed_hyphen_series_count_as_separate_families() -> None:
+    # plan-/spike-/retro-/audit- are four families: over the three-prefix
+    # ceiling, so no three of them reach the name density.
+    stems = [f"{w}-{i:02d}" for w in ("plan", "spike", "retro", "audit") for i in range(1, 7)]
+    signals = _indexed_section("notes", stems)
+    assert classify_working_notes_trees(signals) == []
+
+
+def test_curated_sibling_citing_one_note_stays_in_headline() -> None:
+    signals = _notes_tree("docs/notes", 50)
+    signals["docs/notes/plan_01.md"] = _wn_signal(["docs/notes/backlog.md", "docs/guide.md"])
+    signals["docs/guide.md"] = _wn_signal(["README.md"])
+    trees = classify_working_notes_trees(signals)
+    assert [t["path"] for t in trees] == ["docs/notes"]
 
 
 def test_notes_split_by_period_keep_their_index_in_the_tree() -> None:

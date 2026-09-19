@@ -153,13 +153,20 @@ def classify_raw_trees(
 # Working-notes thresholds (issue #366), precision-first for the same reason as
 # the raw-tree ones: excluding a curated folder hides real navigability gaps,
 # while missing a notes tree only keeps today's figures (and `.assess/config.toml`
-# can name the tree). All three legs must hold. The name leg counts only names
-# that carry a sequence (a date, a ticket key, or a word then a separator and an
-# integer: plan_07), so a curated section of same-prefixed pages under its own
-# index (how-to-deploy.md, runbook-restart-db.md, v1.2.3.md) fails it even
-# though it passes the in-degree and index legs. A cross-linked wiki also fails
-# on in-degree (several inbound links per page) and on the index (inbound links
-# spread across many pages).
+# can name the tree). All three legs must hold.
+#
+# A working-notes name family is a series whose names are positions, not
+# subjects: every name is a date (2026-01-31-standup) or a word and a counter
+# with nothing after it (plan_07, PROJ-123), so the name says when or which
+# entry and never what the page is about. A counter followed by a title
+# (adr-0001-use-postgres, rfc-042-streaming, step-1-install) names a subject,
+# and a dotted version (release-2.1.0, v1.2.3) is a release, not a counter; both
+# are curated, as is a shared word with no counter (how-to-deploy). The rule
+# separates shape, not intent: a numbered series under its own table of
+# contents (chapter-01 .. chapter-20) passes all three legs exactly as plan_NN
+# does, and only `.assess/config.toml` can keep it counted. A cross-linked wiki
+# fails on in-degree (several inbound links per page) and on the index (inbound
+# links spread across many pages).
 WORKING_NOTES_MIN_FILES = 20  # a pile, not a small wiki section
 WORKING_NOTES_PREFIX_SET = 3  # "a small set of prefixes": plan_/spike_/retro_ at most
 WORKING_NOTES_NAME_DENSITY = 0.8  # >= this fraction carry a sequence name in a shared family
@@ -169,25 +176,22 @@ WORKING_NOTES_INDEX_SHARE = 0.6  # the top index files hold >= this share of inb
 
 # 2026-01-31, 20260131, 2026_01_31 anywhere in the stem.
 _DATE_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}[-_.]?(?:0[1-9]|1[0-2])[-_.]?(?:0[1-9]|[12]\d|3[01])(?!\d)")
-# PROJ-123, gh-42: a tracker key and a number.
-_TICKET_RE = re.compile(r"(?<![A-Za-z])[A-Za-z]{2,10}-\d+(?!\d)")
-# plan_07, spike-3-auth: a word prefix, a separator, then an integer that ends
-# the stem or is followed by another separator (not a dotted version: 1.2.3).
-_SEQUENCE_RE = re.compile(r"^([a-z]+(?:[-_ ][a-z]+)*)[-_ ]\d+(?:$|[-_ ])")
+# plan_07, plan-07, PROJ-123: a word prefix, a separator, then an integer that
+# ends the stem. The stem is lowercased first, so a ticket key is the family of
+# its tracker (PROJ-1 and proj-2 are both ``proj``).
+_SEQUENCE_RE = re.compile(r"^([a-z]+(?:[-_ ][a-z]+)*)[-_ ]\d+$")
 
 
 def _name_key(rel: str) -> str | None:
     """The sequence family a doc's name belongs to, or None when it has none.
 
-    ``plan_07.md`` -> ``plan``; ``2026-01-31-standup.md`` -> ``<date>``;
-    ``PROJ-12.md`` -> ``<ticket>``; ``how-to-deploy.md``, ``v1.2.3.md`` and
-    ``0001-use-postgres.md`` -> None (a shared word is not a sequence).
+    ``plan_07.md`` and ``plan-07.md`` -> ``plan``; ``PROJ-12.md`` -> ``proj``;
+    ``2026-01-31-standup.md`` -> ``<date>``; ``how-to-deploy.md``,
+    ``adr-0001-use-postgres.md``, ``release-2.1.0.md`` and ``v1.2.3.md`` -> None.
     """
     stem = rel.rsplit("/", 1)[-1].rsplit(".", 1)[0]
     if _DATE_RE.search(stem):
         return "<date>"
-    if _TICKET_RE.search(stem):
-        return "<ticket>"
     seq = _SEQUENCE_RE.match(stem.lower())
     return seq.group(1) if seq else None
 
@@ -210,12 +214,18 @@ def _is_working_notes(docs: list[str], doc_signals: dict[str, dict]) -> bool:
 
 def _absorbs(directory: str, qualifying: dict[str, list[str]], doc_signals: dict[str, dict]) -> bool:
     """True when ``directory`` can stand as one tree over its qualifying
-    subdirectories: each doc outside them links into them (is their index)."""
+    subdirectories: each doc outside them is their index, one of the top
+    ``WORKING_NOTES_INDEX_FILES`` sources of their inbound links holding at
+    least an equal part of ``WORKING_NOTES_INDEX_SHARE``. A curated page that
+    cites one note is a source, not an index."""
     inner = [o for o in qualifying if o != directory and _is_ancestor_path(directory, o)]
     if not inner:
         return True
     nested = {r for o in inner for r in qualifying[o]}
-    indexes = {s for r in nested for s in doc_signals[r].get("inbound_sources", ())}
+    sources = Counter(s for r in nested for s in doc_signals[r].get("inbound_sources", ()))
+    total = sum(sources.values())
+    floor = total * WORKING_NOTES_INDEX_SHARE / WORKING_NOTES_INDEX_FILES
+    indexes = {s for s, c in sources.most_common(WORKING_NOTES_INDEX_FILES) if c >= floor}
     return all(r in indexes for r in qualifying[directory] if r not in nested)
 
 
