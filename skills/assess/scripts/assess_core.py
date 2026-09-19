@@ -92,7 +92,11 @@ from lib.wiki_writer import (
 # for diff comparability: this one versions the run_id provenance envelope.
 # Bumped when the cross-artifact provenance schema changes shape in a way a
 # consumer must adapt to.
-ARTIFACT_SCHEMA_VERSION = "1.0.0"
+# 1.1.0: run-context.json doc_graph gains link_only_orphan_rate /
+# link_only_reachability_pct, and its orphan_rate / reachability_pct now count
+# reference edges (#353). complexity-stats.json is unchanged, so its layout
+# STATS_SCHEMA_VERSION stays put and the cross-run diff stays armed.
+ARTIFACT_SCHEMA_VERSION = "1.1.0"
 
 
 def _new_run_id() -> str:
