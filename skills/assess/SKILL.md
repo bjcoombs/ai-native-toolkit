@@ -160,8 +160,8 @@ GO_FILES=$(fd -t f -e go . "$REPO_ROOT" 2>/dev/null | wc -l | tr -d ' ')
 # `knip` for TS, `staticcheck` over `deadcode` for Go - so the user isn't asked
 # twice for the same job and the chosen tool doesn't need to build the project.
 needs_offer() {
-  # $1 = tool; $2 = file count for the language; returns 0 if we should ask.
-  local tool="$1" count="$2" min="${3:-5}"
+  # Args: tool, file count, min; 0 = ask. Braced: skill-arg substitution skips them.
+  local tool="${1}" count="${2}" min="${3:-5}"
   [ "$count" -ge "$min" ] || return 1
   command -v "$tool" >/dev/null 2>&1 && return 1     # already installed
   [ -f "$REPO_ROOT/.assess/.no-$tool" ] && return 1  # user declined permanently

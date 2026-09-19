@@ -459,6 +459,40 @@ fixture-tested. Also exposes `maturity_band`
 single source of truth `assess_finalize` reconciles the LLM's `maturity_label`
 against. Both producers accept an optional `run_id` provenance stamp.
 
+**`evidence_check.py`**
+Deterministic re-check of the evidence a layer verdict cites (issue #360). The
+scorer is a model and can cite a file that is not there or a wiring that does not
+exist; `evidence_check` re-checks each cited fact with `exists()` or a literal
+substring search, no model. Input is a flat array of entries, each with `layer`,
+`kind` and the kind's arguments: `path_exists` / `path_absent` take `path`;
+`referenced_in` / `not_referenced_in` take `needle` and `path` (one file, or a
+directory searched recursively); `file_contains` takes `path` (one file) and
+`needle`. Every `path` is relative to the repository root; one that resolves
+outside it, or cannot be resolved, is rejected. The reference search reads files in
+1 MiB chunks and does not enter `.git/` or `.assess/` (the tool's own previous
+output) when walking a directory; naming `.assess/` directly still searches it.
+The reference kinds reject a `path` inside `.git/` (literally or through a
+symlink), and a symlink met in the walk that leads into `.git/` or `.assess/` is
+skipped like one out of the root, while `file_contains`, a claim
+about one named file, may read one (e.g. `.git/config`).
+A symlink out of the root, or a dangling one, is not repository content and is
+skipped; a symlinked file inside the root is read at its target. Every check fails
+closed: a `referenced_in`, `not_referenced_in` or `file_contains` claim is rejected
+as incomplete when anything it needed could not be read (an unreadable file or
+directory, a FIFO, socket or device, a symlinked directory inside the root that
+the walk did not search), since the unread part could hold the reference; a needle
+that cannot be encoded (a lone surrogate) is rejected, not raised on. `layer` is
+carried through unchecked. `check_evidence` splits the list into `evidence` (verified,
+returned as given) and `evidence_rejected` (copies carrying a `reason`); unknown
+keys pass through. The reference search is the public
+`is_referenced_in(repo_root, needle, path)`, so a check outside this module can
+reuse it. CLI, run from `skills/assess/scripts`:
+`uv run python -m lib.evidence_check <repo_root> <evidence.json> --json <out.json>`
+(exit 0 all verified, 1 any rejected, 2 an evidence file that cannot be read or is not a UTF-8 JSON array, a `repo_root` that is not a
+directory, or a `--json` file that cannot be written; a missing root would otherwise verify every `path_absent` claim). Stdlib only, imports no
+orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kind
+or change to a check rule.
+
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
 CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts and
