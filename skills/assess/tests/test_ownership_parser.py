@@ -383,3 +383,13 @@ def test_integration_parses_lib_readme_seam_declaration() -> None:
     # The seam map names doc_graph.py; it resolves to the real module file.
     resolved = {p.as_posix() for files in lib_sections.values() for p in files}
     assert "skills/assess/scripts/lib/doc_graph.py" in resolved
+
+
+def test_extract_path_refs_suffixes_default_and_widened() -> None:
+    """Slash-free spans count only with a listed suffix: the default keeps
+    `.md` / `.py` (so prose naming `.mdx` is no stale-reference finding), and
+    the doc graph widens it to every doc extension."""
+    from lib.ownership_parser import _extract_path_refs
+    seg = "we render `.mdx` pages; see `guide.mdx` and `notes.md`"
+    assert _extract_path_refs(seg) == {"notes.md"}
+    assert _extract_path_refs(seg, (".md", ".mdx")) == {".mdx", "guide.mdx", "notes.md"}
