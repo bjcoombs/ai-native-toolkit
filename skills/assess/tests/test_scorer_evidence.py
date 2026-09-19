@@ -94,6 +94,11 @@ def test_step4_resolves_skill_dir_itself_before_the_check():
     call = '"$SKILL_DIR/scripts/lib/evidence_check.py"'
     assert resolve in para and fallback in para
     assert para.index(resolve) < para.index(fallback) < para.index(call)
+    # One code span, not three: an agent that issues each span as its own Bash
+    # call loses SKILL_DIR between them and runs the check against "/scripts".
+    span = next(s for s in para.split("`")[1::2] if call in s)
+    assert resolve in span and fallback in span
+    assert span.index(resolve) < span.index(fallback) < span.index(call)
     assert "as in Step 2" not in para
 
 
@@ -142,3 +147,22 @@ def test_evidence_cell_renders_refuted_claims_as_a_gap():
     assert "no verified evidence - N claim(s) rejected" in rule
     assert "drop the scorer's note" in rule
     assert "`reason`" in rule
+
+
+def test_evidence_cell_strikes_refuted_claims_when_only_some_entries_fail():
+    # The common case is neither empty state: a layer cites three entries, two
+    # hold, one is refuted. Rendering the note verbatim publishes the refuted claim.
+    rule = _evidence_cell_rule()
+    partial = next(s for s in rule.split(". ") if "only some" in s)
+    assert "strike the refuted claims" in partial
+    assert "N of M claim(s) rejected" in partial
+    assert "`(unverified)`" not in partial
+
+
+def test_cite_only_verified_exempts_only_the_empty_evidence_cell_states():
+    # Exempting the whole Evidence cell let a partly refuted note through verbatim.
+    text = FINDINGS_SKILL.read_text(encoding="utf-8")
+    para = next(p for p in text.split("\n\n") if "cite only verified evidence" in p)
+    cell = next(s for s in para.split(". ") if "Evidence cell" in s)
+    assert "exempt only in its two empty states" in cell
+    assert "some verified entries" in cell
