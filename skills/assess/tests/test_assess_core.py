@@ -2300,3 +2300,16 @@ def test_generated_header_free_name_glob_is_not_recorded_as_graduation(tmp_path:
     assert "src/legacy.go" in index
     assert "database.types.ts" not in index
     assert "api.generated.ts" not in index
+
+
+def test_stats_tool_versions_reads_every_backend_by_language_tool() -> None:
+    """_stats_tool_versions reads any `<tool>_version` stamp, not a fixed
+    lizard/scc tuple, so a per-function backend added later is compared too;
+    the layout and plugin stamps are not tools."""
+    got = assess_core._stats_tool_versions({
+        "lizard_version": "1.23.0", "scc_version": "3.7.0",
+        "dart-scanner_version": "1", "schema_version": 4,
+        "artifact_schema_version": "1", "plugin_version": "1.80.0",
+        "tool_versions": {"x": "y"}, "scc_version_extra": "no",
+    })
+    assert got == {"lizard": "1.23.0", "scc": "3.7.0", "dart-scanner": "1"}
