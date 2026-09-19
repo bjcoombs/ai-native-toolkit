@@ -465,11 +465,10 @@ uv run "$SKILL_DIR/scripts/assess_finalize.py" "$REPO_ROOT"
 ````
 
 This replaces:
-- `log.md`'s last entry placeholder `**AI Readiness:** 0.0 / 8 ((LLM fills in))` with your actual score and maturity label.
-- `log.md`'s last entry placeholder `**Top action:** Deterministic ranker not yet wired ...` with your actual Top 1 action.
+- The `**AI Readiness:** 0.0 / 8 ((LLM fills in))` and `**Top action:** Deterministic ranker not yet wired ...` placeholders in this run's `log.md` entry (found by its `assess:run_id` stamp) with your score, maturity label and Top 1 action; the log chain is re-computed.
 - Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file.
 
-The optional `denominator` field is **8** for a software repo (the default when omitted) or the applicable-layer count for a detected archetype (3 for a knowledge base - see "Repository archetype" above). `assess_finalize.py` renormalises the `log.md` AI-Readiness line over it, so a KB reads `2.5 / 3` rather than a misleading `2.5 / 8`.
+The optional `denominator` field is **8** for a software repo (the default when omitted) or the applicable-layer count for a detected archetype (3 for a knowledge base - see "Repository archetype" above). `assess_finalize.py` renormalises the `log.md` AI-Readiness line over it, so a KB reads `2.5 / 3` rather than a misleading `2.5 / 8`. If finalize exits 1 because an earlier same-date entry is still unfilled (a run on an older commit that was never finalized), run the `--drop-entry <run_id>` command its message prints (it leaves a one-line tombstone), then re-run finalize. Never delete a log entry by hand: it breaks the chain.
 
 **`assess_finalize.py` reconciles this input against `run-context.json` before writing anything, and refuses (writing nothing, exiting non-zero) on any violation.** So the fields must be internally honest:
 - `run_id` - **copy it verbatim** from `run-context.json`. It proves the input was authored against *this* run; a mismatch is treated as a torn write and rejected.
