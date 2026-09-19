@@ -22,8 +22,9 @@ Defaults are derived so the common case is a single argument:
 - ``--paths <glob>`` / ``--paths-ignore <glob>`` (each repeatable, order kept)
   become ``paths:`` / ``paths-ignore:`` under ``on.pull_request``. GitHub rejects
   both on one event, so passing both is a usage error. With neither, when an
-  existing workflow under ``.github/workflows/`` filters by path (a ``paths:`` or
-  ``paths-ignore:`` key, or ``dorny/paths-filter``), the gate gets
+  existing workflow under ``.github/workflows/`` filters pull requests by path (a
+  ``paths:`` or ``paths-ignore:`` key on a ``pull_request`` trigger, or
+  ``dorny/paths-filter``), the gate gets
   ``paths-ignore: ['**/*.md', '.assess/**']`` and a line saying so is printed.
 
 Run:
@@ -180,9 +181,10 @@ def _path_filters(repo_root: Path, paths: list[str], paths_ignore: list[str]) ->
     globs = ", ".join(DEFAULT_PATHS_IGNORE)
     print(
         f"Applied the default paths-ignore ({globs}): {source.relative_to(repo_root)} "
-        "already filters by path, so docs-only and .assess/-only PRs skip the gate, and "
-        "doc-truth findings (lying_map, orphaned_understanding) no longer gate them. "
-        "Pass --paths or --paths-ignore to override.",
+        "already filters pull requests by path, so docs-only and .assess/-only PRs skip "
+        "the gate, and doc-truth findings (lying_map, orphaned_understanding) no longer "
+        "gate them. A skipped PR reports no gate check at all, so a required status check "
+        "on the gate would stay pending on it. Pass --paths or --paths-ignore to override.",
         file=sys.stderr,
     )
     return [], list(DEFAULT_PATHS_IGNORE)
@@ -201,6 +203,10 @@ def main(argv: list[str] | None = None) -> int:
     i = 0
     while i < len(args):
         if args[i] in flags:
+            if i + 1 >= len(args):
+                print(f"{args[i]} needs a value.", file=sys.stderr)
+                print(_USAGE, file=sys.stderr)
+                return 2
             i += 2
             continue
         if args[i].startswith("-"):
@@ -208,7 +214,12 @@ def main(argv: list[str] | None = None) -> int:
             continue
         positional.append(args[i])
         i += 1
-    if not positional:
+    if len(positional) != 1:
+        if len(positional) > 1:
+            print(
+                f"Unexpected arguments {positional[1:]}: quote globs so the shell does not expand them.",
+                file=sys.stderr,
+            )
         print(_USAGE, file=sys.stderr)
         return 2
     paths, paths_ignore = _opt_all(args, "--paths"), _opt_all(args, "--paths-ignore")

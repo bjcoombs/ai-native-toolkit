@@ -300,7 +300,8 @@ supply chain (actions to commit SHAs, tools to exact releases) and degrades infr
 failures - toolkit fetch, tool installs, uv setup - to a skip notice so the gate's
 warn-only contract survives a flaky network or a missing tag. `paths` / `paths_ignore`
 render as lists under `on.pull_request`; `find_path_filtered_workflow` line-scans the
-repo's other workflows for a `paths:` / `paths-ignore:` key or `dorny/paths-filter`,
+repo's other workflows for a `paths:` / `paths-ignore:` key under a `pull_request`
+trigger or a `dorny/paths-filter` step,
 which is when the CLI applies `DEFAULT_PATHS_IGNORE` (`**/*.md`, `.assess/**`).
 
 **`stats_diff.py`**

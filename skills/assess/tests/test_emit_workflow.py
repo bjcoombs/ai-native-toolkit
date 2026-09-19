@@ -186,6 +186,7 @@ def test_path_filter_default_applied(tmp_path, capsys, body):
     assert len(notice) == 1
     assert "**/*.md" in notice[0] and ".assess/" in notice[0] and "ci.yml" in notice[0]
     assert "lying_map" in notice[0]  # names what the default stops gating
+    assert "required status check" in notice[0]  # a skipped PR reports no gate check
 
 
 def test_path_filter_default_not_applied_without_filtered_workflow(tmp_path, capsys):
@@ -200,3 +201,18 @@ def test_path_filter_default_not_applied_over_explicit_flag(tmp_path, capsys):
     assert main([str(tmp_path), *_FLAGS, "--paths", "src/**"]) == 0
     assert _pull_request(tmp_path) == {"branches": ["main"], "paths": ["src/**"]}
     assert _NOTICE not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("flag", ["--paths", "--paths-ignore", "--branch"])
+def test_main_flag_without_value_is_usage_error(tmp_path, capsys, flag):
+    _existing_workflow(tmp_path, _FILTERED)
+    assert main([str(tmp_path), "--version", "9.9.9", "--tools", "lizard", flag]) == 2
+    assert f"{flag} needs a value" in capsys.readouterr().err
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
+
+
+def test_main_unquoted_glob_expansion_is_usage_error(tmp_path, capsys):
+    # `--paths src/*` unquoted: the shell hands over src/a and src/b.
+    assert main([str(tmp_path), *_FLAGS, "--paths", "src/a", "src/b"]) == 2
+    assert "src/b" in capsys.readouterr().err
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()

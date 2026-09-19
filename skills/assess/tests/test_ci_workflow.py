@@ -205,7 +205,8 @@ def _workflows(tmp_path, files: dict[str, str]):
     "body",
     [
         "on:\n  pull_request:\n    paths:\n      - src/**\n",
-        "on:\n  push:\n    paths-ignore: ['docs/**']\n",
+        "on:\n  push:\n  pull_request_target:\n    branches: [main]\n    # docs\n\n    paths-ignore: ['docs/**']\n",
+        "on:\n  pull_request: {branches: [main], paths: ['src/**']}\n",
         "jobs:\n  t:\n    steps:\n      - uses: dorny/paths-filter@v3\n",
     ],
 )
@@ -223,6 +224,8 @@ def test_path_filter_default_not_applied_without_filtered_workflow(tmp_path):
             # The gate's own file is excluded, so a regenerated gate never detects its own default.
             "assess-gate.yml": "on:\n  pull_request:\n    paths-ignore:\n      - '**/*.md'\n",
             "notes.txt": "paths: [src]\n",
+            # A paths: filter on push only (a publish trigger) says nothing about PR checks.
+            "publish.yml": "on:\n  push:\n    paths: [.claude-plugin/plugin.json]\n  pull_request:\n    branches: [main]\njobs:\n  t:\n    steps:\n      - uses: actions/upload-artifact@v4\n        with:\n          paths: dist\n",
         },
     )
     assert find_path_filtered_workflow(tmp_path) is None

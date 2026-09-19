@@ -90,17 +90,47 @@ def _render_tool_steps(discovered_tools: list[str]) -> str:
 
 
 # The ignore list written when neither --paths nor --paths-ignore is given and an
-# existing workflow already filters on paths (under any event): docs-only PRs skip
+# existing workflow already filters pull requests by path: docs-only PRs skip
 # the gate the way they skip the repo's other path-filtered checks, and a PR that
 # only refreshes the committed .assess/ snapshot does not gate against itself.
 # The cost: doc-truth findings (lying_map, orphaned_understanding) no longer gate
 # docs-only PRs, so the CLI's notice says so.
 DEFAULT_PATHS_IGNORE = ["**/*.md", ".assess/**"]
 
-# A ``paths:`` / ``paths-ignore:`` key on any line, or a dorny/paths-filter step.
-# A line scan, not a YAML parse: the deterministic core carries no YAML dependency,
-# and a false positive only adds the conservative docs-only ignore.
-_PATH_FILTER_RE = re.compile(r"^\s*paths(?:-ignore)?\s*:|dorny/paths-filter", re.MULTILINE)
+# A line scan, not a YAML parse: the deterministic core carries no YAML dependency.
+# Only a pull-request trigger counts as evidence that PR checks are path-scoped; a
+# ``paths:`` on ``push`` (a publish trigger, say) says nothing about PR checks.
+_PR_TRIGGER_RE = re.compile(r"^(\s*)pull_request(?:_target)?\s*:(.*)$")
+_PATHS_KEY_RE = re.compile(r"^\s*paths(?:-ignore)?\s*:")
+_FLOW_PATHS_RE = re.compile(r"[{,]\s*paths(?:-ignore)?\s*:")
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _filters_pull_requests_by_path(text: str) -> bool:
+    """True when a ``pull_request`` / ``pull_request_target`` trigger carries a
+    ``paths:`` or ``paths-ignore:`` key, or a step uses ``dorny/paths-filter``
+    (which only has a diff to filter on pull-request-shaped events)."""
+    if "dorny/paths-filter" in text:
+        return True
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        m = _PR_TRIGGER_RE.match(line)
+        if m is None:
+            continue
+        if _FLOW_PATHS_RE.search(m[2]):  # pull_request: {paths: [...]}
+            return True
+        depth = len(m[1])
+        for child in lines[i + 1:]:
+            if not child.strip() or child.lstrip().startswith("#"):
+                continue
+            if _indent(child) <= depth:
+                break
+            if _PATHS_KEY_RE.match(child):
+                return True
+    return False
 
 
 def _yaml_quote(value: str) -> str:
@@ -123,12 +153,13 @@ def _render_path_filters(paths: list[str] | None, paths_ignore: list[str] | None
 
 
 def find_path_filtered_workflow(repo_root: Path) -> Path | None:
-    """The first existing workflow that filters by path (under any event), else None.
+    """The first existing workflow that filters pull requests by path, else None.
 
     Scans ``.github/workflows/*.yml`` and ``*.yaml`` in name order, skipping the
     gate's own ``assess-gate.yml`` so a regenerated gate never detects its own
-    default. A file counts when it has a ``paths:`` or ``paths-ignore:`` key or
-    uses ``dorny/paths-filter``.
+    default. A file counts when its ``pull_request`` or ``pull_request_target``
+    trigger has a ``paths:`` or ``paths-ignore:`` key, or it uses
+    ``dorny/paths-filter``.
     """
     workflows = repo_root / ".github" / "workflows"
     if not workflows.is_dir():
@@ -141,7 +172,7 @@ def find_path_filtered_workflow(repo_root: Path) -> Path | None:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        if _PATH_FILTER_RE.search(text):
+        if _filters_pull_requests_by_path(text):
             return path
     return None
 
