@@ -325,3 +325,180 @@ def test_vendored_dead_code_is_filtered(tmp_path: Path, monkeypatch) -> None:
     r = scan_dead_code(tmp_path).as_dict()
     paths = {c["path"] for c in r["candidates"]}
     assert paths == {"app.py"}  # vendored candidate dropped
+
+
+# ── JavaScript / TypeScript tool choice ────────────────────────────────────
+
+def _which_without(*hidden: str):
+    return lambda t, *a, **k: None if t in hidden else "/usr/bin/" + t
+
+
+def test_ts_prune_requires_tsconfig_not_applicable_without_one(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """ts-prune run bare from the root needs a root tsconfig.json; without one
+    it has no project to analyse, so it is recorded not_applicable, not run,
+    and never reads as a clean '0 candidate(s)'."""
+    for i in range(6):
+        _write(tmp_path, f"src/m{i}.ts", f"export const v{i} = {i};")
+    monkeypatch.setattr(liveness.shutil, "which", _which_without("knip"))
+
+    def fake_run(cmd, **kwargs):
+        raise AssertionError(f"{cmd[0]} ran without a tsconfig.json")
+
+    monkeypatch.setattr(liveness.subprocess, "run", fake_run)
+    r = scan_dead_code(tmp_path).as_dict()
+    ts_prune = [t for t in r["tools"] if t["tool"] == "ts-prune"]
+    assert [t["status"] for t in ts_prune] == ["not_applicable"]
+    assert "tsconfig.json" in ts_prune[0]["reason"]
+    assert r["available"] is False
+    assert r["candidate_count"] == 0
+
+
+def test_ts_prune_requires_tsconfig_runs_with_root_tsconfig(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    for i in range(6):
+        _write(tmp_path, f"src/m{i}.ts", f"export const v{i} = {i};")
+    _write(tmp_path, "tsconfig.json", '{"include": ["src"]}')
+    monkeypatch.setattr(liveness.shutil, "which", _which_without("knip"))
+    monkeypatch.setattr(
+        liveness.subprocess, "run",
+        lambda cmd, **kw: subprocess.CompletedProcess(
+            cmd, 0, stdout="src/m1.ts:1 - v1\n", stderr=""),
+    )
+    r = scan_dead_code(tmp_path).as_dict()
+    ts_prune = next(t for t in r["tools"] if t["tool"] == "ts-prune")
+    assert ts_prune["status"] == "ran"
+    assert r["available"] is True
+    assert r["candidate_count"] == 1
+
+
+def test_dominant_language_javascript_names_knip_when_absent(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """A JavaScript-dominant repository with a stray TypeScript subproject
+    (its own nested tsconfig.json) is judged by its JavaScript: ts-prune does
+    not run, and JavaScript liveness honest-degrades with knip named."""
+    for i in range(6):
+        _write(tmp_path, f"src/m{i}.js", f"export const v{i} = {i};")
+    _write(tmp_path, "src/esm.mjs", "export const e = 1;")
+    _write(tmp_path, "jsconfig.json", "{}")
+    _write(tmp_path, "cdk/stack.ts", "export const c = 1;")
+    _write(tmp_path, "cdk/tsconfig.json", "{}")
+    monkeypatch.setattr(liveness.shutil, "which", _which_without("knip"))
+
+    def fake_run(cmd, **kwargs):
+        raise AssertionError(f"{cmd[0]} ran on a JavaScript-dominant repo")
+
+    monkeypatch.setattr(liveness.subprocess, "run", fake_run)
+    r = scan_dead_code(tmp_path).as_dict()
+    assert r["available"] is False
+    assert all(t["status"] != "ran" for t in r["tools"])
+    typescript = [t for t in r["tools"] if t["language"] == "typescript"]
+    assert [(t["tool"], t["status"]) for t in typescript] == [
+        ("ts-prune", "not_applicable"),
+    ]
+    assert "1 TypeScript file(s) are not analysed" in typescript[0]["reason"]
+    knip = [t for t in r["tools"] if t["tool"] == "knip"]
+    assert len(knip) == 1
+    assert knip[0]["language"] == "javascript"
+    assert knip[0]["status"] == "honest_degrade"
+    assert "knip" in knip[0]["reason"]
+
+
+def test_dominant_language_typescript_keeps_ts_prune_despite_some_js(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    for i in range(4):
+        _write(tmp_path, f"src/m{i}.ts", f"export const v{i} = {i};")
+    _write(tmp_path, "scripts/build.js", "module.exports = {};")
+    _write(tmp_path, "tsconfig.json", "{}")
+    monkeypatch.setattr(liveness.shutil, "which", _which_without("knip"))
+    monkeypatch.setattr(
+        liveness.subprocess, "run",
+        lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
+    )
+    r = scan_dead_code(tmp_path).as_dict()
+    assert [(t["language"], t["tool"], t["status"]) for t in r["tools"]] == [
+        ("typescript", "ts-prune", "ran"),
+        ("javascript", "knip", "not_applicable"),
+    ]
+    js = r["tools"][1]
+    assert "1 JavaScript file(s) are not analysed" in js["reason"]
+
+
+def test_dominant_language_follows_scope_not_sibling_subtree(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """A run scoped to a TypeScript package picks its tool from the in-scope
+    files, not from a larger JavaScript sibling package elsewhere in the repo.
+    The tool still runs repo-wide; only the language choice and candidates
+    follow the scope."""
+    for i in range(4):
+        _write(tmp_path, f"packages/web/m{i}.ts", f"export const v{i} = {i};")
+    for i in range(8):
+        _write(tmp_path, f"packages/legacy/m{i}.js", f"export const v{i} = {i};")
+    _write(tmp_path, "tsconfig.json", "{}")
+    monkeypatch.setattr(liveness.shutil, "which", _which_without("knip"))
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(kwargs["cwd"])
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout="packages/web/m1.ts:1 - v1\n", stderr="")
+
+    monkeypatch.setattr(liveness.subprocess, "run", fake_run)
+    r = scan_dead_code(tmp_path, scope=tmp_path / "packages" / "web").as_dict()
+    assert [(t["language"], t["tool"], t["status"]) for t in r["tools"]] == [
+        ("typescript", "ts-prune", "ran"),
+    ]
+    assert calls == [str(tmp_path.resolve())]
+    assert r["candidate_count"] == 1
+
+
+def test_dominant_language_counts_mts_and_cts_as_typescript(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    _write(tmp_path, "src/a.mts", "export const a = 1;")
+    _write(tmp_path, "src/b.cts", "export const b = 1;")
+    _write(tmp_path, "scripts/build.js", "module.exports = {};")
+    _write(tmp_path, "tsconfig.json", "{}")
+    monkeypatch.setattr(liveness.shutil, "which", _which_without("knip"))
+    monkeypatch.setattr(
+        liveness.subprocess, "run",
+        lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
+    )
+    r = scan_dead_code(tmp_path).as_dict()
+    assert [(t["language"], t["tool"], t["status"]) for t in r["tools"]] == [
+        ("typescript", "ts-prune", "ran"),
+        ("javascript", "knip", "not_applicable"),
+    ]
+
+
+def test_dominant_language_javascript_knip_present_is_available_not_run(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    _write(tmp_path, "index.js", "module.exports = {};")
+    monkeypatch.setattr(liveness.shutil, "which", _which_without())
+    r = scan_dead_code(tmp_path).as_dict()
+    assert [(t["language"], t["tool"], t["status"]) for t in r["tools"]] == [
+        ("javascript", "knip", "available_not_run"),
+    ]
+
+
+def test_scorer_doc_names_every_dead_code_status() -> None:
+    """Every `tools[].status` the scan can emit is named in the layer-scorer
+    agent's guidance, so a new status never reaches the report unhandled (a
+    skipped tool read as "no language tool present")."""
+    import re
+
+    lib_dir = Path(liveness.__file__).resolve().parent
+    source = (lib_dir / "liveness_scan.py").read_text()
+    emitted = set(re.findall(r'"(?:absent_)?status":\s*"(\w+)"', source))
+    emitted |= set(re.findall(r'get\("absent_status",\s*"(\w+)"\)', source))
+    assert {"not_applicable", "honest_degrade", "tool_absent"} <= emitted
+    repo_root = lib_dir.parents[3]
+    doc = (repo_root / "agents" / "assess-layer-scorer.md").read_text()
+    missing = sorted(s for s in emitted if f"`{s}`" not in doc)
+    assert not missing, f"assess-layer-scorer.md does not name: {missing}"
