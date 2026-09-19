@@ -233,7 +233,7 @@ The script prints a one-line summary (file count, lizard vs scc coverage, churn 
 
    ```bash
    <!-- chat-replace:treemap-exclude-example -->
-   uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" --exclude regulatory-raw --exclude vetted-context --exclude '*.csv'
+   uv run "${CLAUDE_SKILL_DIR}/scripts/complexity-treemap.py" "$REPO_ROOT" --exclude regulatory-raw --exclude vetted-context --exclude '*.csv'
    ```
 
 2. **Per-repo config** `.assess/config.toml` (durable, version-controllable, applies to **every** scan via the orchestrator). Recommended for any exclude the user will want to apply every run:
@@ -280,31 +280,22 @@ if [ -f "$REPO_ROOT/.assess/complexity-stats.json" ]; then
   cp "$REPO_ROOT/.assess/complexity-stats.json" "$REPO_ROOT/.assess/complexity-stats.prior.json" 2>/dev/null || true
 fi
 
-<!-- chat-skip:start -->
-# Resolve this skill's own directory so we can run its bundled scripts. A
-# plugin install exposes $CLAUDE_PLUGIN_ROOT (the plugin root in the version
-# cache, e.g. ~/.claude/plugins/cache/<mp>/<plugin>/<ver>/); fall back to a
-# hand-placed ~/.claude/skills/assess/ copy when it isn't set. CLAUDE_PLUGIN_ROOT
-# is an environment variable, so it stays valid across later steps' shells too.
-SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"
-SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"
-<!-- chat-skip:end -->
 
 # Run the complexity treemap (produces fresh complexity-stats.json)
 # (single line: the standalone transform replaces the marker + one following line)
 <!-- chat-replace:uv-treemap -->
-uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/complexity-heatmap.svg" --stats "$REPO_ROOT/.assess/complexity-stats.json"
+uv run "${CLAUDE_SKILL_DIR}/scripts/complexity-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/complexity-heatmap.svg" --stats "$REPO_ROOT/.assess/complexity-stats.json"
 
 # Run the doc navigability graph (connectivity + staleness in one SVG; feeds Layer 0)
 <!-- chat-replace:uv-doc-graph -->
-uv run "$SKILL_DIR/scripts/doc-graph-svg.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/doc-graph.svg"
+uv run "${CLAUDE_SKILL_DIR}/scripts/doc-graph-svg.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/doc-graph.svg"
 
 # Run the deterministic core (instruction grading, doc link-graph, doc staleness,
 # liveness/dead-code, observability rungs, stats diff, wiki files, run-context.json)
 # On a headless/CI run (as in Phase 1), append `--non-interactive` so every consent
 # offer records as skipped; a normal interactive /assess omits the flag.
 <!-- chat-replace:uv-core -->
-uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT"
+uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT"
 ```
 
 Either SVG is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated - <reason>" in the report and continue. The doc graph shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
@@ -358,20 +349,14 @@ REOFFER_MUT=$(jq -r '.reoffer_mutation // false' "$REPO_ROOT/.assess/run-context
 
 <!-- chat-skip:end -->
 ```bash
-<!-- chat-skip:start -->
-# Re-resolve the skill dir (Step 2's shell var won't survive a fresh shell;
-# the env var $CLAUDE_PLUGIN_ROOT will).
-SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"
-SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"
-<!-- chat-skip:end -->
 # 1. Re-run the test-pressure scan with the bounded mutation pass enabled
 <!-- chat-replace:uv-core-mutation -->
-uv run "$SKILL_DIR/scripts/assess_core.py" "$REPO_ROOT" --opt-in-mutation
+uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT" --opt-in-mutation
 
 # 2. Regenerate the heatmap with the survivor overlay so covered-but-unpinned
 #    files get hatched and stop reading as safe green
 <!-- chat-replace:uv-treemap-overlay -->
-uv run "$SKILL_DIR/scripts/complexity-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/complexity-heatmap.svg" --stats "$REPO_ROOT/.assess/complexity-stats.json" --test-pressure "$REPO_ROOT/.assess/run-context.json"
+uv run "${CLAUDE_SKILL_DIR}/scripts/complexity-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/complexity-heatmap.svg" --stats "$REPO_ROOT/.assess/complexity-stats.json" --test-pressure "$REPO_ROOT/.assess/run-context.json"
 ```
 
 <!-- chat-skip:start -->
@@ -411,7 +396,7 @@ The wiki files at `.assess/index.md` and `.assess/hotspots/*.md` are already upd
 ## Step 4: Write the Report
 
 <!-- chat-replace:evidence-check -->
-**Verify the scorecard's evidence first** - the only point where a false claim can still be kept out of the report. Write the scorer's `evidence` list to `$REPO_ROOT/.assess/.cache/evidence.json` (after `mkdir -p "$REPO_ROOT/.assess/.cache"`), then re-resolve the skill dir (Step 2's shell variable will not have survived; `$CLAUDE_PLUGIN_ROOT` will) and run the check in the same Bash call: `SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"; SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"; uv run "$SKILL_DIR/scripts/lib/evidence_check.py" "$REPO_ROOT" "$REPO_ROOT/.assess/.cache/evidence.json" --json "$REPO_ROOT/.assess/.cache/evidence-checked.json"`. It prints `verified N, rejected M` and exits 0 (all hold) or 1 (some rejected); without that line, or with no `evidence-checked.json`, the check did not run - fix it before writing, never read it as a pass. The output's `evidence` replaces the scorer's list in the scorecard handed on; entries under `evidence_rejected` (each with a `reason`) are handed on beside it as the record of refuted claims, never cited as fact. When every entry a layer cited was rejected, re-score that layer yourself from `run-context.json` and its remaining verified entries, not from the scorer's prose. Delete both files once read. Assembling `.assess/assess-report.md` - the scorecard, the snapshots, the verbatim cross-layer findings, the lying signals, and the mandatory Top 3 Actions - is a reusable, mostly-deterministic procedure. It runs as a sub-skill.
+**Verify the scorecard's evidence first** - the only point where a false claim can still be kept out of the report. Write the scorer's `evidence` list to `$REPO_ROOT/.assess/.cache/evidence.json` (after `mkdir -p "$REPO_ROOT/.assess/.cache"`), then run the check: `uv run "${CLAUDE_SKILL_DIR}/scripts/lib/evidence_check.py" "$REPO_ROOT" "$REPO_ROOT/.assess/.cache/evidence.json" --json "$REPO_ROOT/.assess/.cache/evidence-checked.json"`. It prints `verified N, rejected M` and exits 0 (all hold) or 1 (some rejected); without that line, or with no `evidence-checked.json`, the check did not run - fix it before writing, never read it as a pass. The output's `evidence` replaces the scorer's list in the scorecard handed on; entries under `evidence_rejected` (each with a `reason`) are handed on beside it as the record of refuted claims, never cited as fact. When every entry a layer cited was rejected, re-score that layer yourself from `run-context.json` and its remaining verified entries, not from the scorer's prose. Delete both files once read. Assembling `.assess/assess-report.md` - the scorecard, the snapshots, the verbatim cross-layer findings, the lying signals, and the mandatory Top 3 Actions - is a reusable, mostly-deterministic procedure. It runs as a sub-skill.
 
 <!-- chat-replace:findings-delegate -->
 Use the assess-findings skill, handing it the scorecard the layer-scorer returned. It assembles `.assess/assess-report.md` from the data bus plus the scorecard: the verbatim findings section, the lying signals, and the Top 3 Actions (the attention list is mandatory). Then continue to Step 7.5.
@@ -453,14 +438,8 @@ cat > "$REPO_ROOT/.assess/.cache/finalize-input.json" <<'EOF'
 }
 EOF
 
-<!-- chat-skip:start -->
-# Re-resolve the skill dir in case this runs in a fresh shell (Step 2's shell
-# var won't have survived; the env var $CLAUDE_PLUGIN_ROOT will).
-SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"
-SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"
-<!-- chat-skip:end -->
 <!-- chat-replace:uv-finalize -->
-uv run "$SKILL_DIR/scripts/assess_finalize.py" "$REPO_ROOT"
+uv run "${CLAUDE_SKILL_DIR}/scripts/assess_finalize.py" "$REPO_ROOT"
 ````
 
 This replaces:

@@ -8,15 +8,9 @@ A user can permanently decline any optional tool (`scc`, a dead-code linter, the
 
 ```bash
 # Resolve the plugin version for provenance stamping (degrades to "unknown").
+# The deterministic core records the running version in run-context.json.
 assess_plugin_version() {
-  local pj=""
-<!-- chat-skip:start -->
-  # Plugin install: read the version from the installed plugin.json.
-  pj="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json}"
-<!-- chat-skip:end -->
-  if [ -n "$pj" ] && [ -f "$pj" ]; then
-    jq -r '.version // "unknown"' "$pj" 2>/dev/null || echo unknown
-  elif [ -f "$REPO_ROOT/.assess/run-context.json" ]; then
+  if [ -f "$REPO_ROOT/.assess/run-context.json" ]; then
     jq -r '.plugin_version // "unknown"' "$REPO_ROOT/.assess/run-context.json" 2>/dev/null || echo unknown
   else
     echo unknown

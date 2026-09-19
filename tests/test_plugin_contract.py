@@ -216,6 +216,58 @@ def test_no_bare_positional_in_skill_md(p):
         )
 
 
+SKILL_DIR_TOKEN_RE = re.compile(r"\$\{CLAUDE_SKILL_DIR\}(/[^\s\"'`)]*)")
+LEGACY_SKILL_DIR_RE = re.compile(r"CLAUDE_PLUGIN_ROOT:\+|realpath ~/\.claude/skills")
+
+
+def skill_dir_token_targets(skill_md: Path):
+    """(line, target) for each ${CLAUDE_SKILL_DIR}/<path> in a SKILL.md.
+
+    Claude Code replaces the token with the directory holding that SKILL.md, so
+    the target is resolved against the file's own directory, `..` hops included.
+    """
+    for n, line in enumerate(skill_md.read_text(encoding="utf-8").splitlines(), 1):
+        for m in SKILL_DIR_TOKEN_RE.finditer(line):
+            yield n, (skill_md.parent / m.group(1).lstrip("/")).resolve()
+
+
+def test_skill_dir_token_targets_resolve_relative_to_the_skill(tmp_path):
+    (tmp_path / "a" / "scripts").mkdir(parents=True)
+    (tmp_path / "a" / "scripts" / "x.py").write_text("")
+    (tmp_path / "b").mkdir()
+    md = tmp_path / "b" / "SKILL.md"
+    md.write_text('uv run "${CLAUDE_SKILL_DIR}/../a/scripts/x.py"\n'
+                  'uv run "${CLAUDE_SKILL_DIR}/scripts/x.py" "$REPO_ROOT"\n')
+    got = [(n, t.exists()) for n, t in skill_dir_token_targets(md)]
+    # The sibling hop resolves; the same script named under b's own dir does not.
+    assert got == [(1, True), (2, False)]
+
+
+@pytest.mark.parametrize("p", skill_md_files(), ids=lambda p: str(p.relative_to(REPO)))
+def test_skill_dir_token_paths_exist(p):
+    # ${CLAUDE_SKILL_DIR} is the only way a plugin skill reaches its bundled
+    # scripts (#329): the env var CLAUDE_PLUGIN_ROOT is unset in Bash tool
+    # calls. A path that names a missing file fails only in a live run.
+    for n, target in skill_dir_token_targets(p):
+        assert target.exists(), (
+            f"{p.relative_to(REPO)}:{n}: ${{CLAUDE_SKILL_DIR}} path -> "
+            f"{target.relative_to(REPO) if target.is_relative_to(REPO) else target} "
+            f"does not exist (the token is this skill's own directory)"
+        )
+
+
+@pytest.mark.parametrize("p", skill_md_files(), ids=lambda p: str(p.relative_to(REPO)))
+def test_no_legacy_skill_dir_bootstrap(p):
+    # The shell-expansion bootstrap resolved to nothing on a plugin install
+    # (#329); ${CLAUDE_SKILL_DIR} replaced it and it must not come back.
+    for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+        m = LEGACY_SKILL_DIR_RE.search(line)
+        assert not m, (
+            f"{p.relative_to(REPO)}:{n}: {m.group(0)!r} is the retired skill-dir "
+            f"bootstrap; write \"${{CLAUDE_SKILL_DIR}}/scripts/<script>\" instead"
+        )
+
+
 @pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
 def test_internal_links_resolve(p):
     for target in LINK_RE.findall(p.read_text(encoding="utf-8")):

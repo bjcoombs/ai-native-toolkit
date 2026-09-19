@@ -73,7 +73,7 @@ def test_orchestrator_runs_the_check_by_script_path():
     # rejected". The call must name the script by path, like every sibling call.
     text = ASSESS_SKILL.read_text(encoding="utf-8")
     window = text.split("## Step 3: Score the Layers\n", 1)[1].split("## Step 7.5", 1)[0]
-    assert '"$SKILL_DIR/scripts/lib/evidence_check.py"' in window
+    assert '"${CLAUDE_SKILL_DIR}/scripts/lib/evidence_check.py"' in window
     assert "-m lib.evidence_check" not in window
     assert "<!-- chat-replace:evidence-check -->" in window
 
@@ -84,21 +84,16 @@ def _step4_check_paragraph() -> str:
     return next(p for p in step4.split("\n\n") if "evidence_check.py" in p)
 
 
-def test_step4_resolves_skill_dir_itself_before_the_check():
-    # Step 2's SKILL_DIR is a plain shell variable; Step 3's subagent sits in
-    # between, so a Step 4 that leans on it runs `uv run "/scripts/lib/..."` and
-    # never checks anything. Step 4 must re-resolve it, as Step 7.5 does.
+def test_step4_names_the_check_by_the_substituted_skill_dir():
+    # Step 2's shell variables do not survive to Step 4 (Step 3's subagent sits
+    # in between), so the check must not lean on one. ${CLAUDE_SKILL_DIR} is
+    # substituted into the skill text before the model reads it, so the call
+    # carries an absolute path and needs no re-resolution in the shell.
     para = _step4_check_paragraph()
-    resolve = 'SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"'
-    fallback = 'SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"'
-    call = '"$SKILL_DIR/scripts/lib/evidence_check.py"'
-    assert resolve in para and fallback in para
-    assert para.index(resolve) < para.index(fallback) < para.index(call)
-    # One code span, not three: an agent that issues each span as its own Bash
-    # call loses SKILL_DIR between them and runs the check against "/scripts".
-    span = next(s for s in para.split("`")[1::2] if call in s)
-    assert resolve in span and fallback in span
-    assert span.index(resolve) < span.index(fallback) < span.index(call)
+    assert '"${CLAUDE_SKILL_DIR}/scripts/lib/evidence_check.py"' in para
+    assert "SKILL_DIR=" not in para
+    assert "$SKILL_DIR" not in para
+    assert "CLAUDE_PLUGIN_ROOT" not in para
     assert "as in Step 2" not in para
 
 

@@ -11,7 +11,7 @@ so a non-interactive run completes with zero interactive prompts and an audit
 trail of what was skipped and why.
 
 **Why not `isatty()`.** The core (`assess_core.py`) is launched via
-`uv run "$SKILL_DIR/scripts/assess_core.py"` from a Bash tool, so it runs as a
+`uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py"` from a Bash tool, so it runs as a
 tool-invoked subprocess with **no controlling terminal** - `sys.stdin.isatty()`
 is False even in a perfectly normal interactive `/assess`. A subprocess stdin
 TTY says nothing about whether the orchestrator (the agent running SKILL.md) can

@@ -157,7 +157,7 @@ When several PRs share one marathon, the standalone build fires on the **first**
 
 ## Testing a branch before merging
 
-`/plugin install` only sees `main`. To test an unmerged branch's `SKILL.md` + scripts as a real plugin - or to run the scripts directly against a target repo - see [`docs/testing-a-branch-locally.md`](docs/testing-a-branch-locally.md). Key point: plugin skills resolve their bundled scripts via `$CLAUDE_PLUGIN_ROOT` (the version cache dir), not `~/.claude/skills/`.
+`/plugin install` only sees `main`. To test an unmerged branch's `SKILL.md` + scripts as a real plugin - or to run the scripts directly against a target repo - see [`docs/testing-a-branch-locally.md`](docs/testing-a-branch-locally.md). Key point: plugin skills reach their bundled scripts through the `${CLAUDE_SKILL_DIR}` token, which Claude Code replaces with the skill's directory in the version cache when it loads the skill text. The substitution is textual: the literal `${CLAUDE_SKILL_DIR}` and `${CLAUDE_PLUGIN_ROOT}` tokens are filled in, but neither is an environment variable in the Bash tool calls a skill makes, so shell-expansion forms such as `${CLAUDE_PLUGIN_ROOT:-...}` see an unset variable. `~/.claude/skills/` holds no plugin skill.
 
 ## Standalone skill pipeline
 
@@ -188,7 +188,7 @@ bash scripts/build-standalone-skills.sh --dest ~/Desktop  # custom output dir
 - Markers must be balanced; keep them at line start (the transformer handles indented markers via `.strip()`, but line-start is cleaner)
 - Run `cd scripts && uv run --with pytest pytest -v` to validate after any marker changes
 
-**When to add markers:** any new skill content that references `SKILL_DIR`, `$ARGUMENTS`, a namespaced slash command (`/ai-native-toolkit:*`), or a Claude Code-only tool (`Agent`, `SendMessage`, a `run_in_background` teammate spawn).
+**When to add markers:** any new skill content that references `${CLAUDE_SKILL_DIR}`, `$ARGUMENTS`, a namespaced slash command (`/ai-native-toolkit:*`), or a Claude Code-only tool (`Agent`, `SendMessage`, a `run_in_background` teammate spawn).
 
 ## /assess architecture
 

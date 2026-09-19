@@ -4,7 +4,9 @@ Absolute doc age is not the signal -- a two-year-old doc beside two-year-old
 code is fine. The signal is a doc that has *frozen while its subject moves*: a
 stale map of a churning module. So for every doc we compute three things:
 
-  - ``last_commit_days``     -- days since the doc itself last changed
+  - ``last_commit_days``     -- days since the doc's last content change: its
+                                newest commit that is not a bulk mechanical
+                                commit (see ``git_churn.content_commit_clock``)
   - ``code_churn_in_window`` -- commits to the *code the doc describes*
   - ``ratio``                -- code churn per unit of doc maintenance
                                 (``code_churn / max(doc_churn, 1)``); high = decaying map
@@ -23,6 +25,7 @@ uses, so churn is computed one way across the whole skill.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from lib.doc_graph import (
@@ -33,8 +36,10 @@ from lib.doc_graph import (
 )
 from lib.doc_provenance import resolve_doc_sources, source_is_newer
 from lib.git_churn import (
+    GIT_TIMEOUT_SECONDS,
+    ContentClock,
     churn_is_degenerate,
-    file_last_commit_days,
+    content_commit_clock,
     pick_churn_window,
     tracked_files,
 )
@@ -72,13 +77,20 @@ class DocStaleness:
     provenance_sources: tuple[str, ...] = ()
     provenance_generated_by: str | None = None
     source_newer: bool | None = None
+    # "creation" when every commit touching the doc is a bulk commit, so
+    # `last_commit_days` is the doc's creation date, not a content age (a doc
+    # regenerated in bulk on every release). "content" otherwise.
+    last_change_basis: str = "content"
 
     @property
     def confidence(self) -> str:
         # repo-baseline uses repo-wide churn (no derivable subject), so a
         # stale-ratio computed against it is a coarse proxy. Mark it low so a
-        # reader knows to discount before acting on the ranking.
-        return "low" if self.subject_method == "repo-baseline" else "high"
+        # reader knows to discount before acting on the ranking. A creation-date
+        # fallback is low for the same reason: its age is not a content age.
+        if self.subject_method == "repo-baseline" or self.last_change_basis == "creation":
+            return "low"
+        return "high"
 
     def as_dict(self) -> dict:
         d: dict = {
@@ -91,6 +103,8 @@ class DocStaleness:
             "ratio": round(self.ratio, 2),
             "confidence": self.confidence,
         }
+        if self.last_change_basis != "content":
+            d["last_change_basis"] = self.last_change_basis
         if self.provenance_method:
             d["provenance"] = {
                 "method": self.provenance_method,
@@ -160,6 +174,43 @@ def discover_doc_files(repo_root: Path,
         extra_exclude_patterns=extra_exclude_patterns,
         scope=scope,
     )
+
+
+def content_clock(repo_root: Path) -> ContentClock:
+    """The repo's bulk-commit-aware last-change clock (issue #333).
+
+    The bulk-share denominator is every doc under the built-in exclusions for
+    the whole repo, independent of `/assess <path>` scope and user excludes, so
+    the doc-staleness metric and the instruction grader agree on which commits
+    are bulk. Both calls share one build per HEAD (see `_clock_at`).
+    """
+    import subprocess
+
+    repo_root = repo_root.resolve()
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout.strip() or None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        head = None
+    return _clock_at(repo_root, head)
+
+
+@lru_cache(maxsize=4)
+def _clock_at(repo_root: Path, head: str | None) -> ContentClock:
+    """Build the clock once per (repo, HEAD): doc discovery, rename map, git pass."""
+    from lib.change_coupling import build_rename_map
+
+    # A rename map that could not be read leaves renames unfollowed, so the scan
+    # is not complete: a renamed doc whose only visible commit is a bulk rename
+    # falls back to a creation date.
+    rename_map = build_rename_map(repo_root)
+    renames = tuple(sorted(rename_map.paths.items()))
+    clock = content_commit_clock(
+        repo_root, frozenset(discover_doc_files(repo_root)), head, renames
+    )
+    return clock if rename_map.complete else clock._replace(complete=False)
 
 
 def _safe_rel(path: Path, repo_root: Path) -> str:
@@ -306,6 +357,9 @@ def analyze_doc_staleness(
         churn_map.get(c, 0) for c in code_files
     )
 
+    # Last content change per doc, skipping bulk mechanical commits (#333).
+    clock = content_clock(repo_root)
+
     base_doc_dirs = _build_base_doc_dirs(repo_root, docs)
     code_dirs = {c.parent for c in code_files}
 
@@ -394,7 +448,8 @@ def analyze_doc_staleness(
 
         results.append(DocStaleness(
             path=rel(d),
-            last_commit_days=file_last_commit_days(d),
+            last_commit_days=clock.days(d),
+            last_change_basis="creation" if d in clock.creation_fallback else "content",
             doc_churn_in_window=doc_churn,
             code_churn_in_window=code_churn,
             subject_code_count=subject_count,
@@ -439,6 +494,19 @@ def analyze_doc_staleness(
         # be discounted - see `lib.git_churn.churn_is_degenerate`.
         "churn_degenerate": churn_degenerate,
         "docs": [r.as_dict() for r in sorted(results, key=lambda r: -r.ratio)],
+        # Bulk mechanical commits (a commit touching more than half of the
+        # repo's docs, and at least ten) that `last_commit_days` skipped:
+        # newest first, capped; the total sits beside it. `complete` False means
+        # the full history was not read: a git failure (the plain newest-commit
+        # clock ran) or a shallow clone (only the visible history was read).
+        "bulk_commits_skipped": list(clock.skipped),
+        "bulk_commits_skipped_total": clock.skipped_total,
+        "bulk_commit_scan_complete": clock.complete,
+        # Docs whose every commit is bulk: `last_commit_days` is a creation
+        # date, marked `last_change_basis: "creation"` and confidence "low".
+        "creation_date_fallback_count": sum(
+            1 for d in docs if d in clock.creation_fallback
+        ),
         "association": {
             "code_file_count": len(code_files),
             "doc_count": len(docs),

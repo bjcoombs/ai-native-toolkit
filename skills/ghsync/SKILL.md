@@ -24,18 +24,15 @@ repos included when it's your own account).
 
 ## How to run it
 
-The script lives next to this file. Resolve its directory the same way the
-other skills do (works whether installed as a plugin or hand-placed under
-`~/.claude/skills/`):
+The script lives next to this file. Claude Code writes this skill's directory
+into the script paths below when it loads the skill, so each path is already
+absolute:
 
 ```bash
-SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/ghsync}"
-SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/ghsync/SKILL.md)")}"
-
 # Org is derived from the directory you run in. To mirror the "meridianhub"
 # org, run from a directory named meridianhub:
 cd ~/dev/github.com/meridianhub
-bash "$SKILL_DIR/scripts/ghsync.sh"
+bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh"
 ```
 
 The org defaults to the **basename of the directory you launch from**. So
@@ -44,7 +41,7 @@ that directory. Override the org name or target directory explicitly when they
 differ:
 
 ```bash
-bash "$SKILL_DIR/scripts/ghsync.sh" --org meridianhub --root ~/dev/github.com/meridianhub
+bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org meridianhub --root ~/dev/github.com/meridianhub
 ```
 
 ## What to do when invoked

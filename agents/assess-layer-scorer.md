@@ -110,7 +110,7 @@ jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .brok
 - `subscores.path_references` - count of file path references
 - `subscores.line_count` / `subscores.word_count` - file size (feeds the bloat penalty below)
 - `subscores.bloat_penalty` - points subtracted for an oversized monolith with no skills factoring (0 when lean or when the repo delegates to skills)
-- `freshness_days` - days since last edit
+- `freshness_days` - days since the last content edit (bulk mechanical commits that touch most of the repo's docs, such as a licence-header sweep, are skipped; when `.doc_staleness.bulk_commit_scan_complete` is false the history was unreadable or shallow and the value may still count one)
 - `is_alias: true` / `alias_target` - this file is a thin alias (symlink or stub) to a canonical instruction file; it has **inherited** that file's grade. Report it as an alias to `<alias_target>`, not as a standalone doc to rewrite (see "AGENTS.md as an alias" below).
 
 `.skills_present` / `.skills_count` / `.skill_files` describe whether the repo factors guidance into on-demand skills (`.claude/skills/`, `skills/`). `.instruction_file_size` mirrors the per-file `line_count` / `word_count` / `bloat_penalty` for quick reference.
