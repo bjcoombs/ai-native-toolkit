@@ -23,7 +23,8 @@ The diff is driven by the snapshot: every key it records is compared; keys only
 the live API returns (metadata, fields the export left out) are not drift.
 Ids, timestamps and links are never reported. Lists are sets, not sequences:
 scalar lists compare sorted, and lists of objects pair items by identity
-(``type``, ``context``, ``actor_type``/``actor_id``, ``name``) in both
+(``login``, ``slug``, ``type``, ``context``, ``actor_type``/``actor_id``,
+``name``; a user's or team's ``type`` is a discriminator, so ``login``/``slug`` win) in both
 directions, so an item added or dropped live is drift and a reorder is not. An
 item present on one side only - and a snapshot key the live response omits (the
 protection read drops ``required_pull_request_reviews`` once reviews are turned
@@ -181,7 +182,10 @@ def _identity(item: Any) -> str | None:
     """The name a list item is paired by, or None when it has none."""
     if not isinstance(item, dict):
         return None
-    for fields in (("type",), ("context",), ("actor_type", "actor_id"), ("name",)):
+    # login/slug first: users and teams carry `type` too ("User", "organization"),
+    # but there it is a class discriminator shared by every item, not an identity.
+    for fields in (("login",), ("slug",), ("type",), ("context",),
+                   ("actor_type", "actor_id"), ("name",)):
         if all(item.get(f) is not None for f in fields):
             return ":".join(str(item[f]) for f in fields)
     return None

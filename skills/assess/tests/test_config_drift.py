@@ -392,3 +392,41 @@ def test_tracked_null_against_omitted_live_key_is_not_drift() -> None:
     assert diff_values(tracked, live) == []
     live_flip = {"required_status_checks": {"strict": False}}
     assert diff_values(tracked, live_flip) == [("required_status_checks.strict", True, False)]
+
+
+def _user(login: str, uid: int) -> dict:
+    # A GitHub simple-user object: `type` is the class discriminator, not an identity.
+    return {"login": login, "id": uid, "type": "User", "site_admin": False}
+
+
+@pytest.mark.parametrize("path", ["restrictions", "required_pull_request_reviews.dismissal_restrictions"])
+def test_single_user_swap_is_one_removed_and_one_added(path: str) -> None:
+    def shape(user: dict) -> dict:
+        doc: dict = {"users": [user], "teams": []}
+        for part in reversed(path.split(".")):
+            doc = {part: doc}
+        return doc
+    out = diff_values(shape(_user("alice", 1)), shape(_user("bob", 2)))
+    assert out == [(f"{path}.users[alice]", "present", "absent"),
+                   (f"{path}.users[bob]", "absent", "present")]
+    assert all(v in ("present", "absent") for _, was, now in out for v in (was, now))
+
+
+def test_single_team_swap_is_one_removed_and_one_added() -> None:
+    # Team objects carry `type` ("organization" / "enterprise") as a discriminator.
+    tracked = {"restrictions": {"users": [], "teams": [
+        {"slug": "core", "name": "Core", "id": 1, "type": "organization"}]}}
+    live = {"restrictions": {"users": [], "teams": [
+        {"slug": "infra", "name": "Infra", "id": 2, "type": "organization"}]}}
+    assert diff_values(tracked, live) == [
+        ("restrictions.teams[core]", "present", "absent"),
+        ("restrictions.teams[infra]", "absent", "present")]
+
+
+def test_ruleset_rules_still_pair_on_type() -> None:
+    tracked = {"rules": [{"type": "pull_request",
+                          "parameters": {"required_approving_review_count": 1}}]}
+    live = {"rules": [{"type": "pull_request",
+                       "parameters": {"required_approving_review_count": 2}}]}
+    assert diff_values(tracked, live) == [
+        ("rules[pull_request].parameters.required_approving_review_count", 1, 2)]

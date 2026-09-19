@@ -441,7 +441,8 @@ a file missing either is skipped, never reported - and classic branch-protection
 else the file stem). The diff is snapshot-driven (keys only the API returns are
 not drift), ignores ids, timestamps and links, and folds the `{"enabled": X}` read
 shape into `X`. Lists are sets: scalar lists compare sorted; object lists pair by
-identity (`type`, `context`, `actor_type:actor_id`, `name`) in both directions, and a
+identity (`login`, `slug`, `type`, `context`, `actor_type:actor_id`, `name`; users and
+teams carry `type` as a shared discriminator, so `login`/`slug` are tried first) in both directions, and a
 one-sided item, or a snapshot key the live response omits, is recorded as
 `"present"`/`"absent"`, never as the live object, so live org configuration stays
 out of the committed wiki (the item's identity does travel in `key`). Live rulesets
