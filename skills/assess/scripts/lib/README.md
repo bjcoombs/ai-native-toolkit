@@ -499,6 +499,19 @@ entry and returns the block as `dart_capabilities`; the orchestrator publishes i
 `run-context.json` `language_capabilities.dart`, a sibling of the JVM-only
 `capability_offers`. Imported by `liveness_scan.py`, never by the orchestrator.
 
+**`dart_complexity.py`**
+Approximate per-function cyclomatic complexity for Dart (issue #364), because lizard
+has no Dart reader. `scan_dart_functions` is a brace-and-keyword scanner: one forward
+pass that skips `//` and nesting `/* */` comments and single-, double-, triple-quoted
+and raw strings (scanning `${...}` interpolations as code), and counts `if`, `for`,
+`while`, `case`, `catch`, `&&`, `||`, `??` and a ternary `?` per function body.
+Functions are `name(...)` / `name<T>(...)` bodies (`{` or `=>`) and getters; anonymous
+closures fold into their enclosing function. `dart_function_scores` reads at most 1 MB
+of a file (the `generated_files.py` bound) and returns the per-function values and the
+worst function's name. The treemap's `collect` runs it on scc-scored `.dart` files and
+registers it in `FN_BACKENDS` as `dart-scanner` with `approximate: true`. No regex has a
+nested quantifier, so a pathological file costs linear time. Pure stdlib.
+
 **`promissory_markers.py`**
 Write-side erosion instrument: detects the four families of promissory markers
 (TODO/FIXME, deprecations, lint suppressions, disabled tests) via one rg pass per

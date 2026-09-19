@@ -35,6 +35,9 @@ Scoring tiers (size + complexity):
                   TS, Go, C/C++, C#, Scala, Kotlin, Ruby, Swift, Rust, PHP).
   2. scc       -> keyword-heuristic complexity, covers 200+ languages.
                   Skipped for files lizard already scored. Optional.
+     Dart files scc scored also get an approximate per-function breakdown
+     from lib/dart_complexity.py (the `dart-scanner` backend), since lizard
+     has no Dart reader.
 
 Churn window auto-widens (12mo -> 24mo -> 5y -> all-time) until at least
 10% of files have any activity. If the path isn't inside a git repo, the
@@ -87,6 +90,10 @@ import numpy as np
 # implementation. Only the colour mapping differs per heatmap and stays local.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.assess_config import resolve_excludes  # noqa: E402
+from lib.dart_complexity import (  # noqa: E402
+    BACKEND_NAME as DART_BACKEND,
+    dart_function_scores,
+)
 from lib.git_churn import (  # noqa: E402
     churn_is_degenerate,
     git_churn_scores,
@@ -350,6 +357,26 @@ def _git_not_found_warning(root: Path) -> None:
     )
 
 
+def _add_dart_scores(files: list[tuple[Path, int, float, str]],
+                     fn_ccn_by_path: dict[Path, list[float]],
+                     fn_names: dict[Path, str] | None,
+                     fn_backends: dict[Path, str] | None) -> None:
+    """Give scc-scored ``.dart`` files the approximate per-function breakdown.
+
+    lizard has no Dart reader, so scc scores Dart at file level only; the
+    ``dart-scanner`` backend (lib/dart_complexity.py) fills ``fn_ccn_by_path``,
+    the worst function's name and the backend name for each such file.
+    """
+    for path, _loc, _metric, src in files:
+        if src != "scc" or path.suffix != ".dart":
+            continue
+        fn_ccn_by_path[path], worst = dart_function_scores(path)
+        if fn_names is not None and worst is not None:
+            fn_names[path] = worst
+        if fn_backends is not None:
+            fn_backends[path] = DART_BACKEND
+
+
 def collect(root: Path, by: str = "complexity",
             include_artifacts: bool = False,
             extra_exclude_dirs: set[str] | None = None,
@@ -358,6 +385,7 @@ def collect(root: Path, by: str = "complexity",
             excluded_generated: list[dict] | None = None,
             scc_languages: dict[Path, str] | None = None,
             fn_names: dict[Path, str] | None = None,
+            fn_backends: dict[Path, str] | None = None,
             ) -> tuple[list[tuple[Path, int, float, str]], str,
                        dict[Path, int] | None, str | None,
                        dict[Path, list[float]]]:
@@ -367,9 +395,10 @@ def collect(root: Path, by: str = "complexity",
     - effective_by: may differ from `by` if we fell back (e.g. no git)
     - aux_data: secondary per-file signal (hotspot mode only); None otherwise
     - aux_label: human label for aux signal in tooltips
-    - fn_ccn_by_path: per-function cyclomatic-complexity lists, lizard files
-      only (scc reports file-level complexity with no function breakdown, so
-      its paths are absent here). Threaded to `write_stats` so the report can
+    - fn_ccn_by_path: per-function cyclomatic-complexity lists for the files a
+      per-function backend scored: lizard, and the approximate Dart scanner for
+      scc-scored ``.dart`` files (scc reports file-level complexity with no
+      function breakdown, so its other paths are absent here). Threaded to `write_stats` so the report can
       separate per-function violations from file-level aggregates (issue #58).
 
     `scope` (an absolute path under `root`) restricts scoring to a subtree for
@@ -388,8 +417,12 @@ def collect(root: Path, by: str = "complexity",
     `scc_languages`, when a dict, receives scc's language name per scc-scored
     path (see `scc_scores`); `write_stats` uses it to split code from data.
 
-    `fn_names`, when a dict, receives the worst function's name per lizard path
-    (see `lizard_scores`); `write_stats` writes it as each row's `max_fn_name`.
+    `fn_names`, when a dict, receives the worst function's name per path a
+    per-function backend scored (see `lizard_scores`); `write_stats` writes it
+    as each row's `max_fn_name`.
+
+    `fn_backends`, when a dict, receives the backend name of every path scored
+    by a backend other than lizard (`write_stats` defaults the rest to lizard).
     """
     lz = lizard_scores(
         root, include_artifacts=include_artifacts,
@@ -436,6 +469,9 @@ def collect(root: Path, by: str = "complexity",
         files = kept
         if excluded_generated is not None:
             excluded_generated.sort(key=lambda e: e["path"])
+
+    # After the scope and generated-file filters, so it reads only kept files.
+    _add_dart_scores(files, fn_ccn_by_path, fn_names, fn_backends)
 
     effective_by = by
     aux_data: dict[Path, int] | None = None
@@ -690,9 +726,10 @@ def _read_plugin_version() -> str:
 # is a structural change to the sidecar shape (a metric added/removed/redefined)
 # that voids the diff against an older snapshot until the next clean run
 # re-seeds the baseline (assess_core._diff_is_reliable reads it).
-STATS_SCHEMA_VERSION = 4  # 2: generated-file content excludes + excluded_generated
+STATS_SCHEMA_VERSION = 5  # 2: generated-file content excludes + excluded_generated
                           # 3: generated test-report excludes + loc/est_tokens max_code/max_data
                           # 4: fn_ccn.source list + backend_by_language, rows max_fn_name
+                          # 5: dart-scanner fills max_fn_ccn for Dart rows, moving their score
 
 # scc language names counted as data, not code, for the `max_code` / `max_data`
 # split in the stats file. Data files stay in the treemap: a large hand-kept
@@ -702,7 +739,7 @@ DATA_LANGUAGES = frozenset({"JSON", "YAML", "JSONL"})
 # Per-function complexity backends, by name, with whether their counts are
 # approximate. `fn_ccn.source` in the stats file lists the ones that scored a
 # file in the run; a path's backend defaults to lizard (see `write_stats`).
-FN_BACKENDS = {"lizard": False}
+FN_BACKENDS = {"lizard": False, DART_BACKEND: True}
 
 
 def _lizard_version() -> str:
@@ -925,7 +962,8 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     null when any of its files with decision points was scored by scc at file
     level only (so partial coverage reads as null). A language gets a key when a
     backend scored one of its files or scc counted a decision point in one;
-    data and markup (JSON, YAML, Markdown), where scc counts none, get no key.
+    data and markup (JSON, YAML, Markdown), where scc counts none, get no key,
+    but CSS maps to null because scc counts decision points in it.
     """
     fn_ccn_by_path = fn_ccn_by_path or {}
     fn_names = fn_name_by_path or {}
@@ -944,9 +982,9 @@ def write_stats(files: list[tuple[Path, int, float, str]],
 
     churns = ([float(aux_data.get(f[0], 0)) for f in files]
               if aux_data is not None else [])
-    # Per-function population, lizard files only. scc paths are absent from
-    # fn_ccn_by_path, so they simply don't contribute - the block self-labels
-    # its source so a reader knows it omits scc-scored files.
+    # Per-function population, per-function backends only. Other scc paths are
+    # absent from fn_ccn_by_path, so they don't contribute - the block
+    # self-labels its sources so a reader knows what it omits.
     fn_population: list[float] = []
     for vals in fn_ccn_by_path.values():
         fn_population.extend(vals)
@@ -1253,6 +1291,7 @@ def main() -> int:
     excluded_generated: list[dict] = []
     scc_languages: dict[Path, str] = {}
     fn_names: dict[Path, str] = {}
+    fn_backends: dict[Path, str] = {}
     files, effective_by, aux_data, aux_label, fn_ccn_by_path = collect(
         root, by="hotspot", include_artifacts=args.include_artifacts,
         extra_exclude_dirs=extra_dirs,
@@ -1261,6 +1300,7 @@ def main() -> int:
         excluded_generated=excluded_generated,
         scc_languages=scc_languages,
         fn_names=fn_names,
+        fn_backends=fn_backends,
     )
     if not files:
         where = f" under {scope}" if scope is not None else ""
@@ -1318,7 +1358,8 @@ def main() -> int:
                     churn_degenerate=churn_degenerate,
                     excluded_generated=excluded_generated,
                     languages_by_path=scc_languages,
-                    fn_name_by_path=fn_names)
+                    fn_name_by_path=fn_names,
+                    fn_backend_by_path=fn_backends)
     return 0
 
 
