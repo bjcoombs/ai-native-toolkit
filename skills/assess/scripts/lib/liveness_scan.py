@@ -51,28 +51,34 @@ STATIC_REACHABILITY_CAVEAT = (
 
 def _has_ext(repo_root: Path, exts: set[str],
              extra_exclude_dirs: set[str] | None = None,
-             extra_exclude_patterns: list[str] | None = None) -> bool:
-    return any(_iter_ext(repo_root, exts, extra_exclude_dirs, extra_exclude_patterns))
+             extra_exclude_patterns: list[str] | None = None,
+             scope: Path | None = None) -> bool:
+    return any(_iter_ext(repo_root, exts, extra_exclude_dirs,
+                         extra_exclude_patterns, scope))
 
 
 def _count_ext(repo_root: Path, exts: set[str],
                extra_exclude_dirs: set[str] | None = None,
-               extra_exclude_patterns: list[str] | None = None) -> int:
+               extra_exclude_patterns: list[str] | None = None,
+               scope: Path | None = None) -> int:
     return sum(1 for _ in _iter_ext(
-        repo_root, exts, extra_exclude_dirs, extra_exclude_patterns))
+        repo_root, exts, extra_exclude_dirs, extra_exclude_patterns, scope))
 
 
 def _iter_ext(repo_root: Path, exts: set[str],
               extra_exclude_dirs: set[str] | None,
-              extra_exclude_patterns: list[str] | None) -> Iterator[Path]:
-    """Yield in-scope files under `repo_root` whose suffix is in `exts`."""
+              extra_exclude_patterns: list[str] | None,
+              scope: Path | None = None) -> Iterator[Path]:
+    """Yield in-scope files under `scope` (default `repo_root`) whose suffix is
+    in `exts`. Excludes match paths relative to `repo_root` either way."""
     from lib.assess_config import is_user_excluded
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
-    for path in repo_root.rglob("*"):
+    root = repo_root.resolve()
+    for path in (scope or root).resolve().rglob("*"):
         if not path.is_file() or path.suffix.lower() not in exts:
             continue
-        rel = path.relative_to(repo_root)
+        rel = path.relative_to(root)
         if is_excluded_path(rel):
             continue
         if is_user_excluded(rel, extra_dirs, extra_pats):
@@ -175,7 +181,7 @@ def _vulture_excludes(extra_exclude_dirs: set[str] | None = None) -> str:
 # repository. `requires` names a root file the tool needs to have a project to
 # analyse; without it the tool is `not_applicable`. `absent_status` and
 # `absent_reason` replace `tool_absent` when no other tool serves the language.
-_TS_EXTS = {".ts", ".tsx"}
+_TS_EXTS = {".ts", ".tsx", ".mts", ".cts"}
 _JS_EXTS = {".js", ".jsx", ".mjs", ".cjs"}
 _DEAD_CODE_TOOLS: list[dict] = [
     {"language": "python", "tool": "vulture", "exts": {".py"}, "builds": False,
@@ -242,12 +248,14 @@ class DeadCodeResult:
 
 
 def _js_ts_dominant(repo_root: Path, extra_dirs: set[str],
-                    extra_pats: list[str]) -> tuple[str, int, int]:
-    """(dominant language, .ts/.tsx count, .js/.jsx/.mjs/.cjs count). A tie goes
-    to TypeScript; either way the losing language's files are not analysed, and
-    the scan records that as a `not_applicable` entry."""
-    ts = _count_ext(repo_root, _TS_EXTS, extra_dirs, extra_pats)
-    js = _count_ext(repo_root, _JS_EXTS, extra_dirs, extra_pats)
+                    extra_pats: list[str],
+                    scope: Path | None = None) -> tuple[str, int, int]:
+    """(dominant language, TypeScript count, JavaScript count) over the files
+    under `scope` (default `repo_root`). A tie goes to TypeScript; either way the
+    losing language's files are not analysed, and the scan records that as a
+    `not_applicable` entry."""
+    ts = _count_ext(repo_root, _TS_EXTS, extra_dirs, extra_pats, scope)
+    js = _count_ext(repo_root, _JS_EXTS, extra_dirs, extra_pats, scope)
     return ("javascript" if js > ts else "typescript"), ts, js
 
 
@@ -288,16 +296,18 @@ def scan_dead_code(repo_root: Path, run: bool = True,
 
     `scope` (an absolute path under `repo_root`) restricts the candidates to a
     subtree for `/assess <path>` monorepo scoping, so a scoped run carries no
-    dead-code signal from a sibling directory. The tool still runs over the repo
-    (it needs the whole import graph to judge liveness) and only its reported
-    candidates are confined. Omit it for a whole-repo run.
+    dead-code signal from a sibling directory. The language-presence probe and
+    the dominant-language choice count only the in-scope files. The tool still
+    runs over the repo (it needs the whole import graph to judge liveness) and
+    only its reported candidates are confined. Omit it for a whole-repo run.
     """
     repo_root = repo_root.resolve()
     result = DeadCodeResult()
     seen_languages: set[str] = set()
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
-    js_ts, ts_count, js_count = _js_ts_dominant(repo_root, extra_dirs, extra_pats)
+    js_ts, ts_count, js_count = _js_ts_dominant(
+        repo_root, extra_dirs, extra_pats, scope)
 
     for spec in _DEAD_CODE_TOOLS:
         lang = spec["language"]
@@ -307,6 +317,7 @@ def scan_dead_code(repo_root: Path, run: bool = True,
             repo_root, spec["exts"],
             extra_exclude_dirs=extra_dirs,
             extra_exclude_patterns=extra_pats,
+            scope=scope,
         ):
             continue
         tool = spec["tool"]

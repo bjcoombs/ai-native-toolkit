@@ -428,6 +428,54 @@ def test_dominant_language_typescript_keeps_ts_prune_despite_some_js(
     assert "1 JavaScript file(s) are not analysed" in js["reason"]
 
 
+def test_dominant_language_follows_scope_not_sibling_subtree(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """A run scoped to a TypeScript package picks its tool from the in-scope
+    files, not from a larger JavaScript sibling package elsewhere in the repo.
+    The tool still runs repo-wide; only the language choice and candidates
+    follow the scope."""
+    for i in range(4):
+        _write(tmp_path, f"packages/web/m{i}.ts", f"export const v{i} = {i};")
+    for i in range(8):
+        _write(tmp_path, f"packages/legacy/m{i}.js", f"export const v{i} = {i};")
+    _write(tmp_path, "tsconfig.json", "{}")
+    monkeypatch.setattr(liveness.shutil, "which", _which_without("knip"))
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(kwargs["cwd"])
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout="packages/web/m1.ts:1 - v1\n", stderr="")
+
+    monkeypatch.setattr(liveness.subprocess, "run", fake_run)
+    r = scan_dead_code(tmp_path, scope=tmp_path / "packages" / "web").as_dict()
+    assert [(t["language"], t["tool"], t["status"]) for t in r["tools"]] == [
+        ("typescript", "ts-prune", "ran"),
+    ]
+    assert calls == [str(tmp_path.resolve())]
+    assert r["candidate_count"] == 1
+
+
+def test_dominant_language_counts_mts_and_cts_as_typescript(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    _write(tmp_path, "src/a.mts", "export const a = 1;")
+    _write(tmp_path, "src/b.cts", "export const b = 1;")
+    _write(tmp_path, "scripts/build.js", "module.exports = {};")
+    _write(tmp_path, "tsconfig.json", "{}")
+    monkeypatch.setattr(liveness.shutil, "which", _which_without("knip"))
+    monkeypatch.setattr(
+        liveness.subprocess, "run",
+        lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
+    )
+    r = scan_dead_code(tmp_path).as_dict()
+    assert [(t["language"], t["tool"], t["status"]) for t in r["tools"]] == [
+        ("typescript", "ts-prune", "ran"),
+        ("javascript", "knip", "not_applicable"),
+    ]
+
+
 def test_dominant_language_javascript_knip_present_is_available_not_run(
     tmp_path: Path, monkeypatch,
 ) -> None:
