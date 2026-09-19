@@ -454,3 +454,54 @@ def test_rename_map_orders_chain_edges_in_time(tmp_path: Path) -> None:
     assert build_rename_map(chained) == RenameMap(
         {"a.py": "c.py", "b.py": "c.py"}, complete=True)
 
+
+
+def test_rename_map_starts_chain_from_first_rename(tmp_path: Path) -> None:
+    """a -> b, then an unrelated a is created and later renamed a -> c. The
+    original a's history belongs to b, so the chain starts from a's first
+    rename, the same rule the rest of the walk follows."""
+    repo = _init_repo(tmp_path)
+    _commit(repo, {"a.py": "original = 1\n" * 5})
+    _git(repo, "mv", "a.py", "b.py")
+    _commit(repo, {}, "a -> b")
+    _commit(repo, {"a.py": "unrelated = 2\n" * 5}, "a fresh a")
+    _git(repo, "mv", "a.py", "c.py")
+    _commit(repo, {}, "second a -> c")
+    assert build_rename_map(repo) == RenameMap({"a.py": "b.py"}, complete=True)
+
+
+def _sibling_rename_merge(repo: Path, into: str, other: str) -> None:
+    """Branch ``refill`` frees b.py and renames a.py -> b.py; ``main`` renames
+    b.py -> c.py. Merge ``other`` into ``into`` and keep both files."""
+    _commit(repo, {"a.py": "a = 1\n" * 5, "b.py": "b = 2\n" * 5}, "base")
+    _git(repo, "branch", "-M", "main")
+    _git(repo, "checkout", "-q", "-b", "refill")
+    _git(repo, "rm", "-q", "b.py")
+    _commit(repo, {}, "free b")
+    _git(repo, "mv", "a.py", "b.py")
+    _commit(repo, {}, "a -> b")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "mv", "b.py", "c.py")
+    _commit(repo, {}, "b -> c")
+    _git(repo, "checkout", "-q", into)
+    subprocess.run(["git", "-C", str(repo), "merge", "-q", "--no-edit", other],
+                   capture_output=True, text=True)
+    for leftover in ("a.py",):
+        if (repo / leftover).exists():
+            (repo / leftover).unlink()
+    _write(repo, "b.py", "a = 1\n" * 5)
+    _write(repo, "c.py", "b = 2\n" * 5)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "merge")
+
+
+def test_rename_map_does_not_chain_across_sibling_branches(tmp_path: Path) -> None:
+    """One branch renames b -> c while a sibling frees b and renames a -> b.
+    After the merge both b and c exist; the two renames are unrelated, so a maps
+    to b, never through to c. Merged both ways, so either branch can be the one
+    git log lists first."""
+    for into, other in (("main", "refill"), ("refill", "main")):
+        (tmp_path / into).mkdir()
+        repo = _init_repo(tmp_path / into)
+        _sibling_rename_merge(repo, into, other)
+        assert build_rename_map(repo) == RenameMap({"a.py": "b.py"}, complete=True), into
