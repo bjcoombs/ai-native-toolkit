@@ -454,7 +454,8 @@ Layer 1 liveness inputs, three tiers:
   systems and report, per analysis capability, whether a serving tool is already
   configured, could be run/installed in-session, or honest-degrades with a named
   candidate. Surfaced so a non-enumerated ecosystem proposes a tool rather than
-  silently reading "absent".
+  silently reading "absent". Also delegates to `dart_capabilities.py`, whose
+  liveness entry lands in `dead_code.tools` as `dart` / `honest_degrade`.
 
 **`jvm_capabilities.py`**
 JVM/Maven capability-driven analysis offers (issue #113, v1 bounded). Generalises
@@ -474,6 +475,22 @@ a wrapper are both skipped, in one `os.walk` that also prunes the shared exclude
 Flutter app never reads as Gradle while a real JVM service beside it still does. Imported by
 `liveness_scan.py`, never by the orchestrator - it is an inward dependency of the
 liveness tier.
+
+**`dart_capabilities.py`**
+Dart capability entries (issue #352), the detect-or-propose flow applied beyond the
+JVM. A repository is Dart when it holds a `pubspec.yaml` outside the shared and
+user-supplied excludes. Two capabilities, in the JVM entry fields (`state`,
+`candidate_tool`, `gloss`, `note`, `served_by` when credited): `linting` is
+`credited` to `dart analyze` (or `flutter analyze` when a package depends on the
+Flutter SDK) when a package's nearest `analysis_options.yaml` (its directory or the
+closest ancestor) enables lint rules through a top-level `include:` or a
+`linter: rules:` list, and `honest_degrade` naming `dart analyze` otherwise, an
+exclude-only file included; `liveness` is always
+`honest_degrade`, naming the analyzer's built-in `unused_*` diagnostics and no
+third-party package. Runs no tool. `liveness_scan.py` adds the Dart `dead_code.tools`
+entry and returns the block as `dart_capabilities`; the orchestrator publishes it as
+`run-context.json` `language_capabilities.dart`, a sibling of the JVM-only
+`capability_offers`. Imported by `liveness_scan.py`, never by the orchestrator.
 
 **`promissory_markers.py`**
 Write-side erosion instrument: detects the four families of promissory markers

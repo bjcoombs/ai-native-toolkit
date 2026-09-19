@@ -1480,6 +1480,11 @@ def build_run_context(
     # offer-layer turns into an AskUserQuestion.
     if liveness_ok and isinstance(liveness.get("jvm_capabilities"), dict):
         ctx["capability_offers"] = liveness["jvm_capabilities"]
+    # Non-JVM capability entries keyed by language (issue #352), present only
+    # when a language is detected; capability_offers stays JVM-only.
+    if liveness_ok and isinstance(liveness.get("dart_capabilities"), dict):
+        ctx["language_capabilities"] = {
+            "dart": liveness["dart_capabilities"]["capabilities"]}
 
     # Keyhole-readiness signals (PRD 2026-05-29): the static-structure,
     # behaviour (change-coupling / containment / static-vs-historical),
