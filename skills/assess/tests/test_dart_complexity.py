@@ -96,6 +96,15 @@ void main() {
     assert scan_dart_functions(src) == [("main", 3.0), ("inner", 2.0)]
 
 
+def test_dart_scanner_scores_top_level_closures_as_anonymous() -> None:
+    src = """
+final isReady = (x) => x > 0 && ready;
+final handler = (req) { if (req.ok) {} };
+"""
+    assert scan_dart_functions(src) == [
+        ("<anonymous>", 2.0), ("<anonymous>", 2.0)]
+
+
 def test_dart_scanner_names_getters_generics_and_arrow_bodies() -> None:
     src = """
 class A<T> extends B<T> {

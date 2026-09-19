@@ -15,7 +15,7 @@ whose ``(`` follows a plain identifier (``name(...)``, ``name<T>(...)``, with
 ``async`` / ``sync*`` allowed before the body), and a getter (``get name {`` or
 ``get name =>``). An anonymous closure (a parameter list after ``=``, ``(`` or
 ``,``) is folded into the function that encloses it, so its decision points
-count toward the parent. A closure outside any function, a constructor body
+count toward the parent. A closure (``{`` or ``=>`` body) outside any function, a constructor body
 after an initializer list (``: super(x) {``) and an ``operator`` overload are
 each scored on their own as ``<anonymous>``.
 
@@ -223,11 +223,6 @@ class _Scanner:
         if self.interps:
             self.interps[-1][2] += 1
         name = self._body_name()
-        if (name is None and self.closed_head is not None and not self.fns
-                and self.closed_head not in _CONTROL_HEADS):
-            # A closure, a constructor body after an initializer list or an
-            # operator overload, outside any function.
-            name = "<anonymous>"
         self.braces.append(self._open(name, start) if name else None)
 
     def _on_close_brace(self, _start: int) -> None:
@@ -257,11 +252,17 @@ class _Scanner:
         self.prev, self.closed_head, self.getter = prev, None, None
 
     def _body_name(self) -> str | None:
-        """The function name a body opened now would take, or None."""
+        """The function name a `{` or `=>` body opened now would take, or None
+        for a block or a closure folded into its enclosing function."""
         if self.getter is not None:
             return self.getter
-        if self.closed_head is not None and _is_name(self.closed_head):
-            return self.closed_head
+        head = self.closed_head
+        if head is not None and _is_name(head):
+            return head
+        if head is not None and not self.fns and head not in _CONTROL_HEADS:
+            # A closure, a constructor body after an initializer list or an
+            # operator overload, outside any function.
+            return "<anonymous>"
         return None
 
     def _open(self, name: str, start: int) -> _Fn:
