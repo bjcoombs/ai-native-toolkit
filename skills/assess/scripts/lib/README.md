@@ -151,11 +151,12 @@ report links alone over the same node set, so a doc only a reference brought in 
 an orphan there. A reference edge also clears the pair from `missing_xrefs` (#353).
 `directory_breakdown` lists `{path, doc_count, unreachable_count, broken_link_count}`
 per top-level directory (`path` is the first segment; root-level docs key as `.`), over
-the same curated layer as the headline: raw-source and working-notes trees are left out,
-so the rows sum to `doc_count`, `len(unreachable)` and `dangling_links`. A broken link
-counts toward the directory of the doc it is written in. Rows are ordered by unreachable
-count, then broken links, then doc count, and capped at `MAX_DIRECTORY_BREAKDOWN`;
-`directory_count` carries the uncapped total (#365).
+the same curated layer as the headline: raw-source and working-notes trees are left out.
+A broken link counts toward the directory of the doc it is written in. Rows are ordered by
+unreachable count, then broken links, then doc count, and capped at
+`MAX_DIRECTORY_BREAKDOWN`; `directory_count` carries the uncapped total. Only an uncut
+list (`len(directory_breakdown) == directory_count`) sums to `doc_count`,
+`len(unreachable)` and `dangling_links`; a cut one sums to less (#365).
 
 **`raw_source.py`**
 Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:

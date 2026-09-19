@@ -213,8 +213,10 @@ class DocGraphResult:
     link_only_orphan_rate: float = 0.0
     link_only_reachability_pct: float = 0.0
     # Per-top-level-directory counts (issue #365) over the same curated layer
-    # as the headline, so the rows sum to doc_count, len(unreachable) and
-    # dangling_links. [{path, doc_count, unreachable_count, broken_link_count}]
+    # as the headline. While len(directory_breakdown) == directory_count the
+    # rows sum to doc_count, len(unreachable) and dangling_links; a list cut
+    # at MAX_DIRECTORY_BREAKDOWN sums to less.
+    # [{path, doc_count, unreachable_count, broken_link_count}]
     directory_breakdown: list[dict] = field(default_factory=list)
     directory_count: int = 0
     # Missing cross-references: a doc names another doc but never links to it
