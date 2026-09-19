@@ -285,3 +285,23 @@ def test_main_unquoted_glob_expansion_is_usage_error(tmp_path, capsys):
     assert main([str(tmp_path), *_FLAGS, "--paths", "src/a", "src/b"]) == 2
     assert "src/b" in capsys.readouterr().err
     assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
+
+
+@pytest.mark.parametrize("flag", ["--paths", "--paths-ignore"])
+@pytest.mark.parametrize("value", ["", "  "])
+def test_main_empty_filter_value_is_usage_error(tmp_path, capsys, flag, value):
+    # `--paths ""` must not emit a `paths:` list holding one empty scalar, a
+    # filter that parses but never fires.
+    assert main([str(tmp_path), *_FLAGS, flag, value]) == 2
+    assert f"{flag} needs a non-empty value" in capsys.readouterr().err
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
+
+
+@pytest.mark.parametrize("arg", ["--paths=src/**", "--paths-ignore=**/*.md", "--bogus"])
+def test_main_unknown_option_is_usage_error(tmp_path, capsys, arg):
+    # The equals form was skipped silently, so the default paths-ignore was
+    # written: the inverse of `--paths=src/**`.
+    _existing_workflow(tmp_path, _FILTERED)
+    assert main([str(tmp_path), *_FLAGS, arg]) == 2
+    assert f"Unknown option {arg}" in capsys.readouterr().err
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()

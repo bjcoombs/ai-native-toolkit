@@ -220,11 +220,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{args[i]} needs a value.", file=sys.stderr)
                 print(_USAGE, file=sys.stderr)
                 return 2
+            if args[i] in {"--paths", "--paths-ignore"} and not args[i + 1].strip():
+                print(f"{args[i]} needs a non-empty value.", file=sys.stderr)
+                print(_USAGE, file=sys.stderr)
+                return 2
             i += 2
             continue
         if args[i].startswith("-"):
-            i += 1
-            continue
+            print(f"Unknown option {args[i]}: pass a flag and its value as two arguments.", file=sys.stderr)
+            print(_USAGE, file=sys.stderr)
+            return 2
         positional.append(args[i])
         i += 1
     if len(positional) != 1:
