@@ -76,6 +76,17 @@ Three signals derived from `git log`:
 - B4 authorship: human/agent/mixed/unknown classification, e-mail-based and
   deliberately conservative (never labels a human's work "agent" on weak evidence).
 
+`parse_commit_file_sets` lists each commit's files under the names they had then.
+`build_rename_map` reads `git log --name-status -M --diff-filter=R` into a `RenameMap`:
+`paths`, a historical-path to current-path map (chains resolved first, then any source name
+that exists again in the working tree is left out), and `complete`, False when git could not be read so an empty map is
+never mistaken for "no renames". `fold_renames` rewrites the commit sets through `paths`,
+so history made before a rename counts under the current path. `repo_top` is the shared
+`git rev-parse --show-toplevel` helper; the git-log readers take an optional `top` so a
+caller that already resolved it skips the extra subprocess. Both readers pin `-M` and
+`core.quotepath=false`, so rename detection ignores the user's `diff.renames` and
+non-ASCII paths come back literal, matching the files on disk.
+
 All results are JSON-serialisable so `assess_core` can drop them straight into
 `run-context.json`.
 
@@ -247,7 +258,14 @@ disclosure (a suppressed finding is counted and named, never silently vanished).
 `exclude_archive_from_attention` then builds the attention list with any path under an
 `archive/`, `archived/` or `attic/` directory left out (so it never becomes a prescribed
 action) and returns those paths as `archived_finding_paths` for the `excluded_as_archive`
-disclosure; the findings themselves still name them. Each
+disclosure; the findings themselves still name them. Before either filter, the commit
+sets are folded through the rename map (so a renamed directory's history lands on its
+current name), and `prune_missing_finding_paths` drops any `hidden_coupling` or
+`refactor_boundary` path absent from the working tree, returning them as
+`pruned_finding_paths` for the run-context block of that name (`paths`, `count`). The
+prune stands down when the rename map is incomplete, since an unfolded old path is not
+evidence of a deletion, and `rename_map_complete` carries that state into the block so
+the report can say renames were not read. Each
 block build is wrapped in a catch-all so one signal's failure degrades that block to
 `available: False` rather than crashing the run. It also runs `structure_drift.py`'s Tier 1
 grouping disagreement (fed the behaviour block's co-change pairs so no second git-log parse
@@ -470,13 +488,25 @@ hyphenated stem also matched as underscores), the adjacent test directories
 (`__tests__/` / `tests/` / `test/` / `spec/`), and the is-this-a-test rule, plus a
 layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
-ancestor mirroring the source path, then a flat tree within two components),
+ancestor mirroring the source path, then a conventionally named test anywhere in
+the repository - a parallel tree such as `app/unit-tests/` or Dart's
+`test/unit/` - then a flat tree within two components),
 and `has_sibling_test` (the yes/no/unknown verdict, dropping a flat-only match
 on a bare name more than one hot file shares). Three consumers read it and must
 agree in one run: the hotspot page's `Has test file` row
 (`assess_core._has_sibling_test`), the E2 test-to-code map
 (`keyhole_signals._find_sibling_test`, co-location layer only, since E2 means
-co-located and co-committed), and the `test_focus` signal. Stdlib only;
+co-located and co-committed), and the `test_focus` signal. The parallel-tree
+(basename) tier reads a `TestIndex` built once per run by `build_test_index`
+(`git ls-files`, or a walk pruned of `doc_graph.EXCLUDE_DIRS` outside git): a
+test belongs to the same-named source sharing the deepest common directory with
+it, a tie between sources (two `index.js` equally close) credits none, and a
+root-only common ancestor credits nothing. Tracked files deleted from disk are
+left out. A walk past 200,000 files, or one that cannot read a directory, yields
+an empty index (fail closed: the missed files may hold a rival source). The module
+docstring names two limits: an untracked parallel test is invisible to this tier
+while the path probes see untracked files, and a helper named like a test
+(`test_utils.py`) can credit a lone `utils.py`. Imports `git_churn` and `doc_graph`;
 existence checks bounded to 16 ancestor levels; never raises.
 `tests/test_sibling_tests.py` pins the three-way agreement.
 
@@ -493,11 +523,14 @@ higher: `no_covering_test` > `covered_but_hollow` > `unsupported` >
 so the focus table and the hotspot pages agree. With a `repo_root`, a file with a
 test file but no coverage record - no report at all, or a partial report that
 omits it - is `sibling_test_only` (test file present, coverage unmeasured; never
-a covered bucket); a file with no report and no test file is `unsupported`; both
+a covered bucket); a file with no report and no sibling or parallel-tree test
+file is `unsupported`; both
 carry action `measure_coverage`. A report that records a 0 rate, or omits a file
 with no test file, gives `no_covering_test`. Without `repo_root` a no-report file
 is `unknown_no_coverage`. It never raises and records `coverage_present`. The
-only file I/O is the sibling-test probe, and only under `repo_root`; imports no
+only file I/O is the sibling-test probe (one repository index plus existence
+checks), and only under `repo_root`; the index is built on first use, or passed
+in as `index` (`assess_core` hands over the one its hotspot pages built); imports no
 orchestrator. This block is the SINGLE source both the report focus table and
 the mutation offer consume. The mutation scope is `mutation_scope(block)`: the
 entries with test evidence (`covered_but_hollow`, `sibling_test_only`) in ranked
