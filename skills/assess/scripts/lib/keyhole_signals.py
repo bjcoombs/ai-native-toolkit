@@ -976,6 +976,19 @@ def build_keyhole_summary(findings: list[dict]) -> dict:
 MAX_PRESCRIBED_ACTIONS = 3
 
 
+def is_attention_low_signal(attention: list[dict]) -> bool:
+    """True when no attention row lands in more than one negative finding.
+
+    A top score of 1 means the ranking separates nothing across axes, so its
+    rows 2-3 carry no more signal than any other score-1 path; prescribing them
+    would crowd out actions the report writer can justify. Only the fully flat
+    ranking is capped: once any row scores 2 or more the list keeps its usual
+    three prescribed actions, since its top already separates. Empty attention
+    is ``False``: there is nothing to prescribe, so nothing to cap.
+    """
+    return bool(attention) and max(unit["score"] for unit in attention) <= 1
+
+
 def build_prescribed_actions(
     attention: list[dict],
     findings: list[dict],
@@ -1330,6 +1343,8 @@ def integrate(
         findings,
         attention_tie_break(complexity_stats, promissory_markers, behaviour),
     )
+    # A top score of 1 is a weak ranking: prescribe only its rank-1 row.
+    attention_low_signal = is_attention_low_signal(attention)
 
     return {
         "structure": structure,
@@ -1341,7 +1356,10 @@ def integrate(
         "attention": attention,
         "findings_markdown": render_findings_markdown(findings, attention),
         "keyhole_summary": build_keyhole_summary(findings),
-        "prescribed_actions": build_prescribed_actions(attention, findings),
+        "attention_low_signal": attention_low_signal,
+        "prescribed_actions": build_prescribed_actions(
+            attention, findings, 1 if attention_low_signal else MAX_PRESCRIBED_ACTIONS,
+        ),
         # Paths dropped from the findings because a config exclude covered them -
         # the raw material for the run-context `excluded_by_config` disclosure.
         "excluded_finding_paths": excluded_finding_paths,

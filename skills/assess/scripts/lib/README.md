@@ -264,7 +264,10 @@ disclosure; the findings themselves still name them. Rows of equal score are ord
 `promissory_markers.top_offenders[].severity` for an `unactioned_intent` file, divided by
 the run's highest so it shares the 0-1 scale of `1 - containment_ratio` for a
 `hidden_coupling` directory; neither finding type outranks the other by scale alone),
-then path. Before either filter, the commit
+then path. `is_attention_low_signal` marks the list low-signal when its top score is 1
+(no row lands in two negative findings; `False` for an empty list), and `integrate` then
+caps `prescribed_actions` at the rank-1 row instead of three; the flag is serialised as the
+run-context `attention_low_signal`. Before either filter, the commit
 sets are folded through the rename map (so a renamed directory's history lands on its
 current name), and `prune_missing_finding_paths` drops any `hidden_coupling` or
 `refactor_boundary` path absent from the working tree, returning them as
@@ -340,7 +343,11 @@ using `string.Template`. Bakes in the toolchain discovered during the current ru
 the workflow is a reproducible contract, not a norm. The emitted workflow pins its
 supply chain (actions to commit SHAs, tools to exact releases) and degrades infra
 failures - toolkit fetch, tool installs, uv setup - to a skip notice so the gate's
-warn-only contract survives a flaky network or a missing tag.
+warn-only contract survives a flaky network or a missing tag. `paths` / `paths_ignore`
+render as lists under `on.pull_request`; `find_path_filtered_workflow` line-scans the
+repo's other workflows for a `paths:` / `paths-ignore:` key under a `pull_request`
+trigger or a `dorny/paths-filter` step,
+which is when the CLI applies `DEFAULT_PATHS_IGNORE` (`**/*.md`, `.assess/**`).
 
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
@@ -375,7 +382,15 @@ ts-prune for TS, staticcheck for Go) to a *capability-driven detect-or-propose* 
 proven on one capability (liveness) in one build system (Maven). Reports each capability
 in one of four states - `served`, `offer` (with a run-or-install `consent` shape),
 `credited` (a configured pom.xml plugin already serves it), or `honest_degrade` (nothing
-serves it yet; the report names the capability and a candidate tool). Imported by
+serves it yet; the report names the capability and a candidate tool). A build file
+counts only when at least one `.java`, `.kt`, `.scala` or `.groovy` file exists outside
+platform-wrapper directories: an `android/` beside a `pubspec.yaml`, or beside a
+`package.json` whose `dependencies` or `devDependencies` name `react-native`,
+`@capacitor/android` or `cordova-android`, or a Cordova app's `platforms/android/`
+(beside a Cordova-namespace `config.xml` or a `cordova-android` `package.json`), at
+any depth. A Flutter plugin's own `android/` Kotlin is skipped the same way. Build files and source under
+a wrapper are both skipped, in one `os.walk` that also prunes the shared excludes, so a
+Flutter app never reads as Gradle while a real JVM service beside it still does. Imported by
 `liveness_scan.py`, never by the orchestrator - it is an inward dependency of the
 liveness tier.
 
