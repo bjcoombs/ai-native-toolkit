@@ -10,10 +10,13 @@ import subprocess
 from pathlib import Path
 
 from lib.change_coupling import (
+    RenameMap,
     authorship_analysis,
+    build_rename_map,
     change_coupling_pairs,
     containment_ratio,
     find_self_referential_tests,
+    fold_renames,
     parse_commit_file_sets,
 )
 
@@ -333,3 +336,95 @@ def test_self_referential_test_reuses_passed_commit_sets(tmp_path: Path) -> None
         repo, {"test_m.py": "m.py"}, commit_sets=commit_sets
     )
     assert [r["source_file"] for r in result] == ["m.py"]
+
+
+# --- build_rename_map / fold_renames (renamed paths) --------------------------
+
+def test_rename_map_folds_history_onto_current_paths(tmp_path: Path) -> None:
+    """a/x.py and a/y.py co-change 3 times, then a/ -> b/ -> c/. The map
+    resolves the chain to c/, and folding counts the pre-rename history under
+    the current names: 3 edits + 2 rename commits = 5 co-changes."""
+    repo = _init_repo(tmp_path)
+    for i in range(3):
+        _commit(repo, {"a/x.py": f"x = {i}\n" * 5, "a/y.py": f"y = {i}\n" * 5})
+    _git(repo, "mv", "a", "b")
+    _commit(repo, {}, "rename a -> b")
+    _git(repo, "mv", "b", "c")
+    _commit(repo, {}, "rename b -> c")
+
+    rename_map = build_rename_map(repo)
+    assert rename_map.complete
+    assert rename_map.paths == {
+        "a/x.py": "c/x.py", "a/y.py": "c/y.py",
+        "b/x.py": "c/x.py", "b/y.py": "c/y.py",
+    }
+    pairs = change_coupling_pairs(
+        fold_renames(parse_commit_file_sets(repo), rename_map.paths), min_support=1,
+    )
+    assert [(p["file_a"], p["file_b"], p["co_change_count"]) for p in pairs] == [
+        ("c/x.py", "c/y.py", 5),
+    ]
+
+
+def test_rename_map_skips_path_reused_at_head(tmp_path: Path) -> None:
+    """A name that exists again at HEAD keeps its own history, so it is left
+    out of the map; outside a git repo there is no history, so the map is
+    empty and complete (only a failed git read marks it incomplete)."""
+    repo = _init_repo(tmp_path)
+    _commit(repo, {"old.py": "v = 1\n" * 5})
+    _git(repo, "mv", "old.py", "new.py")
+    _commit(repo, {}, "rename")
+    _commit(repo, {"old.py": "fresh = 1\n"}, "reuse the name")
+
+    assert build_rename_map(repo) == RenameMap({}, complete=True)
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    assert build_rename_map(plain) == RenameMap({}, complete=True)
+    assert fold_renames([{Path("a.py")}], {}) == [{Path("a.py")}]
+
+
+def test_rename_map_incomplete_when_git_log_times_out(tmp_path: Path, monkeypatch) -> None:
+    """A git timeout yields an empty, incomplete map rather than an empty map
+    that reads as "nothing was renamed"."""
+    import lib.change_coupling as cc
+
+    repo = _init_repo(tmp_path)
+    _commit(repo, {"a.py": "v = 1\n"})
+    top = cc.repo_top(repo)
+    assert top is not None
+
+    def boom(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="git log", timeout=cc.GIT_TIMEOUT_SECONDS)
+
+    monkeypatch.setattr(cc.subprocess, "run", boom)
+    assert cc.build_rename_map(repo, top=top) == RenameMap({}, complete=False)
+
+
+def test_rename_map_resolves_chain_through_reused_intermediate(tmp_path: Path) -> None:
+    """a -> b, b -> c, then a fresh b. The chain resolves before the reused-name
+    filter, so a maps to c (its real successor), and b, which exists again,
+    is left out."""
+    repo = _init_repo(tmp_path)
+    _commit(repo, {"a.py": "orig = 1\n" * 5})
+    _git(repo, "mv", "a.py", "b.py")
+    _commit(repo, {}, "a -> b")
+    _git(repo, "mv", "b.py", "c.py")
+    _commit(repo, {}, "b -> c")
+    _commit(repo, {"b.py": "fresh = 1\n"}, "fresh b")
+
+    assert build_rename_map(repo) == RenameMap({"a.py": "c.py"}, complete=True)
+
+
+def test_rename_map_keeps_non_ascii_paths_literal(tmp_path: Path) -> None:
+    """A non-ASCII path comes back as written, not octal-escaped, in both the
+    rename map and the commit file sets, so it matches the file on disk."""
+    repo = _init_repo(tmp_path)
+    for i in range(2):
+        _commit(repo, {"caf\u00e9/x.py": f"x = {i}\n" * 5})
+    _git(repo, "mv", "caf\u00e9", "cr\u00e8me")
+    _commit(repo, {}, "rename")
+
+    assert build_rename_map(repo).paths == {"caf\u00e9/x.py": "cr\u00e8me/x.py"}
+    files = set().union(*parse_commit_file_sets(repo))
+    assert Path("cr\u00e8me/x.py") in files
+    assert all((repo / f).exists() or f.parts[0] == "caf\u00e9" for f in files)

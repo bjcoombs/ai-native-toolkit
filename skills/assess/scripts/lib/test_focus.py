@@ -11,11 +11,13 @@ ranked list answering the only question that matters for write-side safety:
 `compute_test_focus` is the SINGLE source the report table (the focus block) and
 the mutation offer both read - the contract is here, not duplicated downstream.
 It takes four inputs as parameters (the ranked hot files, the parsed coverage
-report, the hollow-test heuristics, and an optional ``repo_root``) and returns a
-plain dict. It imports no orchestrator and never raises. Its one file-system
-probe is the sibling-test existence check in `lib/sibling_tests.py`, run only
-when ``repo_root`` is passed and bounded to at most ten hot files and a fixed
-ancestor depth; without ``repo_root`` it does no file I/O at all.
+report, the hollow-test heuristics, and an optional ``repo_root``, plus an
+optional prebuilt repository ``index``) and returns a plain dict. It imports no
+orchestrator and never raises. Its one file-system probe is the sibling-test
+check in `lib/sibling_tests.py`, run only when ``repo_root`` is passed and a hot
+file lacks a coverage record: one repository index (``build_test_index``, built
+on first use when not passed) plus existence checks for at most ten hot files at a fixed ancestor depth; without
+``repo_root`` it does no file I/O at all.
 
 Signal per file (most to least actionable):
   - ``no_covering_test``      - a coverage report exists and it records this file
@@ -24,8 +26,9 @@ Signal per file (most to least actionable):
   - ``covered_but_hollow``    - a test covers it, but it trips a hollow-test
                                 heuristic (asserts internals, untested boundary,
                                 duplicate truth).
-  - ``unsupported``           - no coverage report and no test file found
-                                (``repo_root`` given): the core cannot tell
+  - ``unsupported``           - no coverage report and no sibling or
+                                parallel-tree test file found (``repo_root``
+                                given): the core cannot tell
                                 whether a test exists, so it says so rather
                                 than claim ``no_covering_test``.
   - ``sibling_test_only``     - a test file maps to it but no coverage record
@@ -61,11 +64,18 @@ Inward-only imports: stdlib and `lib.sibling_tests`; imported by the orchestrato
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from lib.sibling_tests import has_sibling_test, is_test_path, shared_name_keys
+from lib.sibling_tests import (
+    TestIndex,
+    build_test_index,
+    has_sibling_test,
+    is_test_path,
+    shared_name_keys,
+)
 
 # Risk bands by position in the ranked top_hotspots list. Index 0-2 are the
 # sharpest hotspots, 3-6 the next tier, 7-9 the tail; anything past the top 10 is
@@ -208,6 +218,7 @@ def _classify(
     cheap_heuristics: dict[str, Any],
     repo_root: Path | None = None,
     shared_names: frozenset[str] = frozenset(),
+    get_index: Callable[[], TestIndex] | None = None,
 ) -> tuple[str, list[str]]:
     """Resolve a file's test signal and the hollow kinds it tripped.
 
@@ -223,7 +234,8 @@ def _classify(
     """
     def has_test() -> bool:
         return repo_root is not None and bool(
-            has_sibling_test(repo_root, path, shared_names))
+            has_sibling_test(repo_root, path, shared_names,
+                             get_index() if get_index is not None else None))
 
     if not coverage_present or coverage_data is None:
         if repo_root is None:
@@ -247,6 +259,7 @@ def compute_test_focus(
     cheap_heuristics: dict[str, Any] | None,
     *,
     repo_root: Path | None = None,
+    index: TestIndex | None = None,
 ) -> dict[str, Any]:
     """Cross-join the hotspot, coverage, and hollow-test signals into one ranked
     focus block.
@@ -263,6 +276,10 @@ def compute_test_focus(
         repo_root: optional repository root. When given, a hot file with no
             coverage record is checked for a test file instead of degrading
             straight to ``unknown_no_coverage`` / ``no_covering_test``.
+        index: optional repository index from ``build_test_index`` for that
+            probe, so a caller that already built one does not walk the tree
+            again. Absent, it is built on the first probe that reads it, and
+            never when the coverage report records every hot file.
 
     Returns:
         ``{available, coverage_present, entries, total_focus_targets}`` where
@@ -278,9 +295,18 @@ def compute_test_focus(
     # match on such a name is ambiguous and credits none of them.
     shared_names = shared_name_keys(
         p for p in (_entry_path(i) for i in items[: _LOW_MAX + 1]) if p is not None)
+    root = Path(repo_root) if repo_root is not None else None
+    # One repository index for every hot file's parallel-tree (basename) probe,
+    # built on first use: a report that records every hot file never needs it.
+    built: list[TestIndex] = [index] if index is not None else []
 
-    for index, item in enumerate(items):
-        band = _risk_band(index)
+    def get_index() -> TestIndex:
+        if not built and root is not None:
+            built.append(build_test_index(root))
+        return built[0] if built else TestIndex()
+
+    for position, item in enumerate(items):
+        band = _risk_band(position)
         if band is None:
             break  # past the top 10 - no longer a hotspot
         path = _entry_path(item)
@@ -288,8 +314,7 @@ def compute_test_focus(
             continue
         signal, kinds = _classify(
             path, coverage_present, coverage_data, heuristics,
-            Path(repo_root) if repo_root is not None else None,
-            shared_names,
+            root, shared_names, get_index,
         )
         if signal == "covered_clean":
             continue  # not a focus target

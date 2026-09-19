@@ -55,6 +55,7 @@ from lib.badge import (
     write_badge,
 )
 from lib.assess_config import load_excludes, load_structure_config
+from lib.change_coupling import build_rename_map
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
 from lib.interactivity import build_offers_block
@@ -70,7 +71,7 @@ from lib.structure_drift import (
     SEAM_ALLOWLIST,
     detect_path_existence_drift,
 )
-from lib.sibling_tests import has_sibling_test, shared_name_keys
+from lib.sibling_tests import TestIndex, build_test_index, has_sibling_test, shared_name_keys
 from lib.test_focus import compute_test_focus, mutation_scope
 from lib.test_pressure import scan_test_pressure
 from lib.wiki_writer import (
@@ -92,7 +93,11 @@ from lib.wiki_writer import (
 # for diff comparability: this one versions the run_id provenance envelope.
 # Bumped when the cross-artifact provenance schema changes shape in a way a
 # consumer must adapt to.
-ARTIFACT_SCHEMA_VERSION = "1.0.0"
+# 1.1.0: run-context.json doc_graph gains link_only_orphan_rate /
+# link_only_reachability_pct, and its orphan_rate / reachability_pct now count
+# reference edges (#353). complexity-stats.json is unchanged, so its layout
+# STATS_SCHEMA_VERSION stays put and the cross-run diff stays armed.
+ARTIFACT_SCHEMA_VERSION = "1.1.0"
 
 
 def _new_run_id() -> str:
@@ -484,6 +489,7 @@ def _tool_version_change_note(
 
 def _has_sibling_test(
     repo_root: Path, rel_path: str, shared_names: frozenset[str] = frozenset(),
+    index: TestIndex | None = None,
 ) -> bool | None:
     """Best-effort: does this file have a test file?
 
@@ -494,7 +500,7 @@ def _has_sibling_test(
     adjacent ``__tests__/``, a mirrored ``tests/`` tree, ...); ``None`` only when
     the file isn't on disk (a since-deleted path in a stats snapshot).
     """
-    return has_sibling_test(repo_root, rel_path, shared_names)
+    return has_sibling_test(repo_root, rel_path, shared_names, index)
 
 
 def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
@@ -506,6 +512,24 @@ def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
     if not state_file.exists():
         return {}
     return json.loads(state_file.read_text(encoding="utf-8"))
+
+
+def _rekey_first_flagged(
+    first_flagged: dict[str, str], rename_map: dict[str, str],
+) -> dict[str, str]:
+    """Move each first-flagged entry for a renamed path onto its current path.
+
+    The date travels with the file. When the current path already has an entry,
+    the earlier known date wins, so a rename never makes a file look newer.
+    """
+    rekeyed = {k: v for k, v in first_flagged.items() if k not in rename_map}
+    for old, date in first_flagged.items():
+        new = rename_map.get(old)
+        if new is None:
+            continue
+        known = sorted(d for d in (date, rekeyed.get(new)) if d and d != "unknown")
+        rekeyed[new] = known[0] if known else "unknown"
+    return rekeyed
 
 
 def _supersede_same_commit_log_entry(
@@ -952,8 +976,15 @@ def build_run_context(
     instruction_files, instructions_grade, untracked_instr, dangling_instr, skills_info, \
         sensitive_instr = _grade_instruction_files(repo_root)
 
-    # Load (and later update) the persistent first-flagged date map
-    first_flagged_map = _load_first_flagged(assess_dir)
+    # Historical path -> current path, from git's rename detection. Built once:
+    # it re-keys the first-flagged map here and folds co-change history onto
+    # current paths in the keyhole integrate below.
+    rename_map = build_rename_map(repo_root)
+
+    # Load (and later update) the persistent first-flagged date map, with any
+    # entry for a renamed file moved to its current path.
+    first_flagged_map = _rekey_first_flagged(
+        _load_first_flagged(assess_dir), rename_map.paths)
 
     # User-supplied excludes (`.assess/config.toml`), loaded once and threaded
     # into every read-side scan (heatmap parity, doc graph, staleness, liveness,
@@ -1006,6 +1037,8 @@ def build_run_context(
     # Same flat-tree disambiguation the test_focus block applies to these files.
     hot_shared_names = shared_name_keys(
         h["path"] for h in current.get("top_hotspots", []))
+    # One repository index for every hot file's parallel-tree (basename) probe.
+    hot_test_index = build_test_index(repo_root) if current.get("top_hotspots") else None
     for h in current.get("top_hotspots", []):
         path = h["path"]
         # Preserve the original first_flagged date across runs. A path missing
@@ -1039,7 +1072,8 @@ def build_run_context(
             loc=loc,
             ccn=ccn,
             commits=commits,
-            has_tests=_has_sibling_test(repo_root, path, hot_shared_names),
+            has_tests=_has_sibling_test(repo_root, path, hot_shared_names,
+                                        hot_test_index),
             history_rows=f"| {run_date} | {loc} | {ccn} | {commits} | {status} |",
             briefing=(
                 f"Hotspot ({status}). "
@@ -1382,6 +1416,7 @@ def build_run_context(
         coverage_data,
         ctx["test_pressure"].get("cheap_heuristics"),
         repo_root=repo_root,
+        index=hot_test_index,
     )
 
     # Promissory markers (stale TODO/FIXME, suppressions, disabled tests):
@@ -1417,6 +1452,7 @@ def build_run_context(
         exclude_dirs=extra_exclude_dirs,
         exclude_patterns=extra_exclude_patterns,
         scope=scope_abs,
+        rename_map=rename_map,
     )
     ctx["structure"] = keyhole["structure"]
     ctx["behaviour"] = keyhole["behaviour"]
@@ -1451,6 +1487,17 @@ def build_run_context(
     ctx["excluded_as_archive"] = {
         "affected_finding_paths": archived_finding_paths,
         "count": len(archived_finding_paths),
+    }
+    # Dead-path disclosure: a git-history finding path that no longer exists
+    # (deleted, with no rename to follow) is dropped from the findings,
+    # attention, prescribed actions and markdown; this block names and counts it.
+    # rename_map_complete False means git history could not be read for renames:
+    # nothing was folded or pruned, and a finding may still name an old path.
+    pruned_finding_paths = keyhole.get("pruned_finding_paths", [])
+    ctx["pruned_finding_paths"] = {
+        "paths": pruned_finding_paths,
+        "count": len(pruned_finding_paths),
+        "rename_map_complete": keyhole.get("rename_map_complete", True),
     }
 
     # Structure drift (third write-side tendency surface: a declared ownership
