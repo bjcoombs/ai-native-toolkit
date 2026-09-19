@@ -284,6 +284,29 @@ def test_excluded_after_unfinalized_run_on_new_commit_is_kept(excl_repo: Path) -
     assert status is not None and not status.startswith("retired")
 
 
+def test_excluded_after_unfinalized_run_ignores_pre_upgrade_run_context(excl_repo: Path) -> None:
+    """A superseded run-context without provisional_first_flagged (written
+    before the key existed) retires nothing, even for a path it lists as new."""
+    assess = excl_repo / ".assess"
+    _stats(assess, ["gen/big.py", "src/hot.py"])
+    _core(excl_repo)
+    ctx_path = assess / "run-context.json"
+    prior = json.loads(ctx_path.read_text(encoding="utf-8"))
+    assert "gen/big.py" in [h["path"] for h in prior["diff_detail"]["new"]]
+    del prior["provisional_first_flagged"]
+    ctx_path.write_text(json.dumps(prior), encoding="utf-8")
+    _exclude(excl_repo, ["gen"])
+    _stats(assess, ["src/hot.py"])
+    ctx = _core(excl_repo)
+
+    assert ctx["retired_excluded_hotspots"] == []
+    assert ctx["dropped_first_flagged"] == []
+    status = _status(assess, "gen/big.py")
+    assert status is not None and not status.startswith("retired")
+    flagged = json.loads((assess / "first-flagged.json").read_text(encoding="utf-8"))
+    assert flagged["gen/big.py"] == _EXCLUDE_DAY
+
+
 def test_prune_leaves_excluded_retired_page_alone(tmp_path: Path) -> None:
     """A page already retired for another reason is not re-stamped when its
     file is later deleted."""

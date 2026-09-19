@@ -559,9 +559,12 @@ def _inherited_provisional_paths(
     Empty unless the superseded run's log entry is still unfinalized. Each run
     records ``provisional_first_flagged``: the paths it first flagged plus those
     it inherited this way, so a chain of unfinalized same-day runs carries a
-    file forward after it stops being "new". A run-context from before the key
-    existed falls back to its ``diff_detail.new`` paths. Only paths whose
-    first-flagged date is still that run's date qualify.
+    file forward after it stops being "new". A run-context written before the
+    key existed yields nothing: its ``diff_detail.new`` cannot tell a file first
+    flagged there from one first flagged by a finalized run earlier that day
+    that graduated and returned, and retiring the latter would delete a
+    finalized date. Only paths whose first-flagged date is still that run's
+    date qualify.
     """
     if superseded is None or not last_log_entry_is_unfinalized_run(
         assess_dir, superseded["run_id"],
@@ -569,8 +572,7 @@ def _inherited_provisional_paths(
         return set()
     paths = superseded.get("provisional_first_flagged")
     if not isinstance(paths, list):
-        new = (superseded.get("diff_detail") or {}).get("new") or []
-        paths = [h.get("path") for h in new if isinstance(h, dict)]
+        return set()
     return {
         p for p in paths
         if isinstance(p, str) and first_flagged_map.get(p) == superseded.get("run_date")
