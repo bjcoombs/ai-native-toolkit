@@ -68,6 +68,15 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+`content_commit_clock` is the last-content-change clock (issue #333): one `git log` pass
+over the docs' history that skips bulk mechanical commits (more than
+`BULK_COMMIT_DOC_SHARE` of the docs and at least `BULK_COMMIT_MIN_DOCS` of them, such as
+a licence-header sweep), so one sweep cannot reset every doc's staleness. A doc whose
+every commit is bulk falls back to its oldest commit and is flagged (`creation_fallback`),
+since that is a creation date rather than a content age. Historical paths are mapped
+through `change_coupling.build_rename_map`, so a mass rename keeps each doc's earlier
+content dates. On a git failure the clock is marked incomplete and degrades to the plain
+newest-commit read; a shallow clone is also marked incomplete.
 
 **`change_coupling.py`**
 Three signals derived from `git log`:
@@ -214,6 +223,12 @@ nearest-ancestor base-doc rules, computes code churn relative to doc maintenance
 emits a signed ratio (high = decaying map). The association logic reuses `doc_graph`'s
 code-link edges. For *generated* docs it reads `doc_provenance` (per-doc and via the
 `[[generated]]` config map) and replaces the churn ratio with a source-vs-doc verdict.
+`last_commit_days` and the instruction grader's `freshness_days` (via `content_clock`)
+both read `git_churn.content_commit_clock`, and the skipped bulk commits are reported as
+`bulk_commits_skipped` (newest first, capped) with `bulk_commits_skipped_total`. A doc
+dated by the creation fallback carries `last_change_basis: "creation"` and confidence
+`low`, which keeps it out of the stale-hub finding; `creation_date_fallback_count` counts
+them.
 
 **`doc_provenance.py`**
 Provenance-aware staleness for generated docs (issue #178). Parses a doc's YAML
