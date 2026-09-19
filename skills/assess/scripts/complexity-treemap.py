@@ -89,6 +89,10 @@ from lib.git_churn import (  # noqa: E402
     git_churn_scores,
     pick_churn_window,
 )
+from lib.generated_files import (  # noqa: E402
+    GENERATED_NAME_PATTERNS,
+    generated_reason,
+)
 from lib.treemap_render import (  # noqa: E402
     adaptive_cap,
     blend_to_grey,
@@ -122,6 +126,9 @@ EXCLUDE_DIRS = {".git", "node_modules", "dist", "build", "target", "vendor",
 #     lists with machine-emitted switch statements and getters that
 #     nobody wrote by hand (see meridian PR #2212 - 8/10 most-complex
 #     files were protobuf bindings).
+# Files that match no glob but declare themselves generated (a header marker)
+# or carry payload-length lines are caught by content in `collect`, via
+# lib.generated_files, and listed in the stats file's `excluded_generated`.
 # Pass --include-artifacts to disable.
 EXCLUDE_FILE_PATTERNS = [
     # --- build artifacts ---
@@ -153,6 +160,9 @@ EXCLUDE_FILE_PATTERNS = [
     "*.pb.cc", "*.pb.h",
     # Go generators (wire, controller-gen, mockgen, bindata)
     "*.gen.go", "*.generated.go",
+    # Any-language generator naming, and Supabase/GraphQL codegen outputs
+    # (`supabase gen types` writes database.types.ts).
+    *GENERATED_NAME_PATTERNS,
     "wire_gen.go",
     "zz_generated_*.go",
     "bindata.go", "bindata_assetfs.go",
@@ -294,6 +304,7 @@ def collect(root: Path, by: str = "complexity",
             extra_exclude_dirs: set[str] | None = None,
             extra_exclude_patterns: list[str] | None = None,
             scope: Path | None = None,
+            excluded_generated: list[dict] | None = None,
             ) -> tuple[list[tuple[Path, int, float, str]], str,
                        dict[Path, int] | None, str | None,
                        dict[Path, list[float]]]:
@@ -314,6 +325,12 @@ def collect(root: Path, by: str = "complexity",
     list, dominance check, and churn axis then see only the subtree - so a scoped
     treemap carries no complexity or churn signal from a sibling directory. Omit
     it (the default) for a whole-repo run.
+
+    `excluded_generated`, when a list, receives one ``{"path", "reason"}`` entry
+    (repo-relative path) per file the content checks in lib.generated_files
+    dropped: a generator header in the first lines (``generated-header``) or a
+    payload-length average line (``long-lines``). ``include_artifacts`` skips
+    those checks as it skips the filename globs.
     """
     lz = lizard_scores(
         root, include_artifacts=include_artifacts,
@@ -341,6 +358,23 @@ def collect(root: Path, by: str = "complexity",
             p: v for p, v in fn_ccn_by_path.items()
             if p.resolve().is_relative_to(scope_abs)
         }
+    if not include_artifacts:
+        kept: list[tuple[Path, int, float, str]] = []
+        for f in files:
+            reason = generated_reason(f[0])
+            if reason is None:
+                kept.append(f)
+                continue
+            fn_ccn_by_path.pop(f[0], None)
+            if excluded_generated is not None:
+                try:
+                    rel = f[0].relative_to(root).as_posix()
+                except ValueError:
+                    rel = f[0].as_posix()
+                excluded_generated.append({"path": rel, "reason": reason})
+        files = kept
+        if excluded_generated is not None:
+            excluded_generated.sort(key=lambda e: e["path"])
 
     effective_by = by
     aux_data: dict[Path, int] | None = None
@@ -558,7 +592,7 @@ def _read_plugin_version() -> str:
 # is a structural change to the sidecar shape (a metric added/removed/redefined)
 # that voids the diff against an older snapshot until the next clean run
 # re-seeds the baseline (assess_core._diff_is_reliable reads it).
-STATS_SCHEMA_VERSION = 1
+STATS_SCHEMA_VERSION = 2  # 2: generated-file content excludes + excluded_generated
 
 
 def _lizard_version() -> str:
@@ -730,7 +764,8 @@ def write_stats(files: list[tuple[Path, int, float, str]],
                 root: Path, out_path: Path,
                 fn_ccn_by_path: dict[Path, list[float]] | None = None,
                 tokens_by_path: dict[Path, int] | None = None,
-                churn_degenerate: bool = False) -> None:
+                churn_degenerate: bool = False,
+                excluded_generated: list[dict] | None = None) -> None:
     """Write a JSON stats sidecar summarising the treemap data.
 
     Consumed by the /assess skill: percentiles drive Layer 3 (linter) scoring,
@@ -758,6 +793,10 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     files with no function breakdown), and the top-level ``fn_ccn`` block reports
     the per-function distribution. Layer 3 compares the linter threshold against
     ``fn_ccn`` / ``max_fn_ccn``, never the aggregate (issue #58).
+
+    ``excluded_generated`` (the list ``collect`` filled) is written as the
+    top-level ``excluded_generated`` key, always present and empty when nothing
+    was dropped, so the exclusion stays visible downstream.
     """
     fn_ccn_by_path = fn_ccn_by_path or {}
     tokens = tokens_by_path if tokens_by_path is not None else est_tokens_by_path(files)
@@ -777,10 +816,12 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         return float(np.percentile(values, q)) if values else 0.0
 
     def rel(p: Path) -> str:
+        # Forward slashes on every host, matching `excluded_generated` (built
+        # in `collect`), so assess_core can compare the two path sets on Windows.
         try:
-            return str(p.relative_to(root))
+            return p.relative_to(root).as_posix()
         except ValueError:
-            return str(p)
+            return p.as_posix()
 
     def max_fn(path: Path) -> float | None:
         vals = fn_ccn_by_path.get(path)
@@ -842,6 +883,9 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         "lizard_version": tool_versions["lizard"],
         **({"scc_version": tool_versions["scc"]} if "scc" in tool_versions else {}),
         "files_scored": len(files),
+        # Files dropped by content (generator header, payload-length lines):
+        # [{path, reason}]. assess_core copies it into run-context.json.
+        "excluded_generated": list(excluded_generated or []),
         "scoring_coverage": {
             "lizard": sum(1 for f in files if f[3] == "lizard"),
             "scc": sum(1 for f in files if f[3] == "scc"),
@@ -972,7 +1016,9 @@ def main() -> int:
     ap.add_argument(
         "--include-artifacts", action="store_true",
         help=("Score known build artifacts that are normally filtered "
-              "(main.dart.js, *.min.js, *.bundle.js, *.map, etc.). "
+              "(main.dart.js, *.min.js, *.bundle.js, *.map, etc.) and "
+              "files excluded as generated by content (a generator "
+              "header in the first 5 lines, or payload-length lines). "
               "Use this only when you specifically want to visualise "
               "the build output - typically you'd .gitignore these instead."),
     )
@@ -1034,15 +1080,24 @@ def main() -> int:
     # read-side scans via the same config - see `assess_core.build_run_context`.
     extra_dirs, extra_patterns = resolve_excludes(root, args.exclude)
 
+    excluded_generated: list[dict] = []
     files, effective_by, aux_data, aux_label, fn_ccn_by_path = collect(
         root, by="hotspot", include_artifacts=args.include_artifacts,
         extra_exclude_dirs=extra_dirs,
         extra_exclude_patterns=extra_patterns,
         scope=scope,
+        excluded_generated=excluded_generated,
     )
     if not files:
         where = f" under {scope}" if scope is not None else ""
-        print(f"error: no scoreable files found{where}", file=sys.stderr)
+        # Content excludes can drop every file (an all-generated SDK subtree
+        # under --scope); name them so the dead end explains itself.
+        why = (
+            f" ({len(excluded_generated)} excluded as generated - pass "
+            f"--include-artifacts to score them)"
+            if excluded_generated else ""
+        )
+        print(f"error: no scoreable files found{where}{why}", file=sys.stderr)
         return 1
 
     _warn_if_dominated_by_one_file(files)
@@ -1083,7 +1138,8 @@ def main() -> int:
     if args.stats:
         write_stats(files, aux_data, aux_label, root, args.stats,
                     fn_ccn_by_path=fn_ccn_by_path, tokens_by_path=tokens,
-                    churn_degenerate=churn_degenerate)
+                    churn_degenerate=churn_degenerate,
+                    excluded_generated=excluded_generated)
     return 0
 
 
