@@ -101,3 +101,14 @@ def test_orchestrator_is_thin():
     """The monolith was ~1290 lines; the thin orchestrator must stay well under."""
     lines = ASSESS_SKILL.read_text(encoding="utf-8").splitlines()
     assert len(lines) < 500, f"orchestrator grew to {len(lines)} lines - re-check the seams"
+
+
+def test_attention_low_signal_is_read_before_the_rule_that_uses_it():
+    """The findings sub-skill's run-context read loads every key its Top 3 rule branches on."""
+    body = (REPO_ROOT / "skills" / "assess-findings" / "SKILL.md").read_text()
+    read = next(line for line in body.splitlines() if line.startswith("jq ") and ".prescribed_actions" in line)
+    rule = next(line for line in body.splitlines() if line.startswith("**Mandatory attention rule"))
+    for key in ("attention", "attention_low_signal", "prescribed_actions", "gap_actions"):
+        assert f"`{key}`" in rule
+        assert f".{key}," in read or read.rstrip().split("'")[1].endswith(f".{key}")
+

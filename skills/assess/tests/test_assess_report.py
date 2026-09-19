@@ -21,6 +21,7 @@ from assess_report import (
     render_diff_section,
     render_exclusion_disclosure,
     render_findings_section,
+    render_generated_disclosure,
     render_hotspots_table,
     render_keyhole_summary,
     render_report,
@@ -625,6 +626,42 @@ def test_main_corrupt_context_skips_not_fails(tmp_path: Path,
     assert "infrastructure failure" in capsys.readouterr().err
 
 
+# --------------------------------------------------------------------------
+# Generated-file disclosure (excluded_generated)
+# --------------------------------------------------------------------------
+
+
+def test_generated_header_exclusion_named_with_reason_on_one_line() -> None:
+    ctx = _full_ctx()
+    ctx["excluded_generated"] = [
+        {"path": "db/schema.sql", "reason": "generated-header"},
+        {"path": "assets/font.ts", "reason": "long-lines"},
+    ]
+    report = render_report(ctx, "demo")
+    lines = report.splitlines()
+    assert any("db/schema.sql" in ln and "generated-header" in ln for ln in lines)
+    assert any("assets/font.ts" in ln and "long-lines" in ln for ln in lines)
+    assert "2 files excluded from scoring as generated" in report
+
+
+def test_generated_header_disclosure_silent_when_empty() -> None:
+    assert render_generated_disclosure({}) == ""
+    assert render_generated_disclosure({"excluded_generated": []}) == ""
+    assert "excluded from scoring as generated" not in render_report(_full_ctx(), "demo")
+
+
+def test_generated_header_disclosure_folds_rows_past_the_cap() -> None:
+    rows = [{"path": f"gen/f{i:02}.sql", "reason": "generated-header"} for i in range(13)]
+    out = render_generated_disclosure({"excluded_generated": rows})
+    head, fold = out.split("<details>")
+    assert "gen/f09.sql` (generated-header)" in head
+    assert "gen/f10.sql" not in head
+    assert "3 more</summary>" in fold
+    for i in (10, 11, 12):
+        assert f"- `gen/f{i}.sql` (generated-header)" in fold
+    assert fold.rstrip().endswith("</details>")
+
+
 def test_pruned_finding_paths_disclosure_names_incomplete_rename_map() -> None:
     """A run whose rename map could not be built says so instead of reading
     like a run with nothing dead."""
@@ -635,3 +672,33 @@ def test_pruned_finding_paths_disclosure_names_incomplete_rename_map() -> None:
     )
     assert render_exclusion_disclosure({"pruned_finding_paths": {
         "paths": [], "count": 0, "rename_map_complete": True}}) == ""
+
+
+def test_attention_low_signal_disclosed_in_report() -> None:
+    """A low-signal ranking says why only rank 1 is prescribed; false says nothing."""
+    assert render_exclusion_disclosure({"attention_low_signal": True}) == (
+        "_Attention ranking is low signal (no attention row lands in more than one "
+        "finding): only rank 1 is prescribed._"
+    )
+    assert render_exclusion_disclosure({"attention_low_signal": False}) == ""
+
+
+def test_report_code_data_maxima_quoted_separately() -> None:
+    ctx = _full_ctx()
+    ctx["stats_summary"]["loc"].update({"max_code": 761.0, "max_data": 7137.0})
+    ctx["stats_summary"]["loc"]["max"] = 7137.0
+    lines = [ln for ln in render_report(ctx, "repo").splitlines()
+             if "**Complexity profile:**" in ln]
+    assert len(lines) == 1
+    line = lines[0]
+    assert "code 761" in line and "data 7137" in line
+    assert "(max 7137;" in line
+
+
+def test_report_code_data_maxima_absent_on_older_snapshot() -> None:
+    """A pre-split stats snapshot has no max_code / max_data; the line keeps
+    its old shape rather than printing '?' placeholders."""
+    line = next(ln for ln in render_report(_full_ctx(), "repo").splitlines()
+                if "**Complexity profile:**" in ln)
+    assert line == ("- **Complexity profile:** p95 LOC 483.6 (max 761), "
+                    "p95 CCN 107.3 (max 169)")

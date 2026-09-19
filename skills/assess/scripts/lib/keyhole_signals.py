@@ -23,6 +23,7 @@ structured data + the named findings; the LLM write-back fills judgement later.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from lib.assess_config import is_user_excluded
@@ -418,6 +419,23 @@ def assemble_findings(paths_by_name: dict[str, list[str]]) -> list[dict]:
     ]
 
 
+def _state_stale_threshold(findings: list[dict], promissory_markers: dict) -> None:
+    """Append the scan's stale threshold to the ``unactioned_intent`` action.
+
+    A reader weighing a marker that survived 6 edits against one that survived
+    65 needs the bar both cleared. No-op when the scan carries no threshold.
+    """
+    threshold = promissory_markers.get("stale_touches_threshold")
+    if not promissory_markers.get("available") or not threshold:
+        return
+    for f in findings:
+        if f["name"] == "unactioned_intent":
+            f["action"] = (
+                f"{f['action']} (stale: an untracked marker that survived "
+                f"{threshold} or more edits to its own file)"
+            )
+
+
 def apply_config_excludes(
     findings: list[dict],
     exclude_dirs: set[str],
@@ -491,7 +509,7 @@ def is_archive_path(path: str) -> bool:
 
 
 def exclude_archive_from_attention(
-    findings: list[dict],
+    findings: list[dict], tie_break: AttentionTieBreak | None = None,
 ) -> tuple[list[dict], list[str]]:
     """Build the attention list with archive paths left out, returning ``(attention, dropped)``.
 
@@ -505,22 +523,99 @@ def exclude_archive_from_attention(
         for p in f["paths"] if is_archive_path(p)
     })
     if not dropped:
-        return build_attention_list(findings), []
+        return build_attention_list(findings, tie_break=tie_break), []
     ranked = [
         {**f, "paths": [p for p in f["paths"] if not is_archive_path(p)]}
         for f in findings
     ]
-    return build_attention_list(ranked), dropped
+    return build_attention_list(ranked, tie_break=tie_break), dropped
+
+
+@dataclass(frozen=True)
+class AttentionTieBreak:
+    """Data that orders attention rows of equal score.
+
+    ``hotspot_rank`` maps a ``top_hotspots`` path to its position in that list
+    (composite rank order). ``severity`` maps a finding name to ``{path:
+    severity}``, higher meaning worse; a row takes the highest severity among
+    its findings, and a path with no entry counts as 0.
+    """
+
+    hotspot_rank: dict[str, int] = field(default_factory=dict)
+    severity: dict[str, dict[str, float]] = field(default_factory=dict)
+
+    def key(self, unit: dict) -> tuple:
+        """Sort key: score desc, hotspot rank (members first), severity desc, path."""
+        path = unit["path"]
+        severity = max(
+            (self.severity.get(name, {}).get(path, 0.0) for name in unit["findings"]),
+            default=0.0,
+        )
+        rank = self.hotspot_rank.get(path, len(self.hotspot_rank))
+        return (-unit["score"], rank, -severity, path)
+
+
+def attention_tie_break(
+    complexity_stats: dict,
+    promissory_markers: dict | None,
+    behaviour: dict,
+) -> AttentionTieBreak:
+    """Build the attention tie-break from data the run already holds.
+
+    Hotspot rank is the ``top_hotspots`` list order. Severity for
+    ``unactioned_intent`` is the highest ``top_offenders[].severity`` among the
+    file's stale markers. Severity for ``hidden_coupling`` is ``1 -
+    containment_ratio``: a lower ratio means more of the directory's commits
+    bleed outside it, the worse seam (``coupling_analysis`` sorts ascending for
+    the same reason). A structure-drift directory with no hidden-coupling row
+    falls back to ``containment_by_dir``.
+
+    Both severities meet in one sort, so each is on a 0-1 scale: coupling is
+    already, and marker severity (unbounded, at least 5 for a stale marker) is
+    divided by the run's highest. Without that, every stale-marker file would
+    outrank every coupling directory at equal score, and at the attention cap
+    would evict them.
+    """
+    rank: dict[str, int] = {}
+    for h in complexity_stats.get("top_hotspots") or []:
+        path = h.get("path") if isinstance(h, dict) else None
+        if path and path not in rank:
+            rank[path] = len(rank)
+    markers: dict[str, float] = {}
+    for m in (promissory_markers or {}).get("top_offenders") or []:
+        path, sev = m.get("path"), m.get("severity")
+        if path and isinstance(sev, (int, float)):
+            markers[path] = max(markers.get(path, 0.0), float(sev))
+    top_marker = max(markers.values(), default=0.0)
+    if top_marker > 0:
+        markers = {p: v / top_marker for p, v in markers.items()}
+    containment: dict[str, float] = {
+        d: float(r) for d, r in (behaviour.get("containment_by_dir") or {}).items()
+        if isinstance(r, (int, float))
+    }
+    for h in behaviour.get("hidden_coupling_findings") or []:
+        if isinstance(h.get("containment_ratio"), (int, float)):
+            containment[h["path"]] = float(h["containment_ratio"])
+    return AttentionTieBreak(
+        hotspot_rank=rank,
+        severity={
+            "unactioned_intent": markers,
+            "hidden_coupling": {d: 1.0 - r for d, r in containment.items()},
+        },
+    )
 
 
 def build_attention_list(
     findings: list[dict], max_units: int = MAX_ATTENTION_UNITS,
+    tie_break: AttentionTieBreak | None = None,
 ) -> list[dict]:
     """Rank the few units worst across axes - the "where to look" list.
 
     A unit's score is how many *negative* findings name it (the one positive
     finding, ``refactor_boundary``, is a safe zone, never an attention row).
-    Higher score = worse across more axes = look here first.
+    Higher score = worse across more axes = look here first. Equal scores order
+    by ``tie_break`` (hotspot rank, then severity, then path); without one they
+    fall through to path.
     """
     reasons: dict[str, list[str]] = defaultdict(list)
     for f in findings:
@@ -532,9 +627,7 @@ def build_attention_list(
         {"path": path, "findings": sorted(set(names)), "score": len(set(names))}
         for path, names in reasons.items()
     ]
-    # dict values are heterogeneous (str | list | int), so mypy types the
-    # lookup as ``object``; the negation is valid at runtime (score is int).
-    units.sort(key=lambda u: (-u["score"], u["path"]))  # type: ignore[operator]
+    units.sort(key=(tie_break or AttentionTieBreak()).key)
     return units[:max_units]
 
 
@@ -900,6 +993,19 @@ def build_keyhole_summary(findings: list[dict]) -> dict:
 MAX_PRESCRIBED_ACTIONS = 3
 
 
+def is_attention_low_signal(attention: list[dict]) -> bool:
+    """True when no attention row lands in more than one negative finding.
+
+    A top score of 1 means the ranking separates nothing across axes, so its
+    rows 2-3 carry no more signal than any other score-1 path; prescribing them
+    would crowd out actions the report writer can justify. Only the fully flat
+    ranking is capped: once any row scores 2 or more the list keeps its usual
+    three prescribed actions, since its top already separates. Empty attention
+    is ``False``: there is nothing to prescribe, so nothing to cap.
+    """
+    return bool(attention) and max(unit["score"] for unit in attention) <= 1
+
+
 def build_prescribed_actions(
     attention: list[dict],
     findings: list[dict],
@@ -1227,6 +1333,7 @@ def integrate(
         "override_contradicts_signals": override_contradiction_paths,
         "refactor_boundary": [b["path"] for b in behaviour.get("refactor_boundaries", [])],
     })
+    _state_stale_threshold(findings, pm)
 
     # Dead-path pruning: a git-history finding path absent from the working tree
     # (deleted, no rename to follow) never reaches the report; the dropped paths
@@ -1249,7 +1356,13 @@ def integrate(
     # Archive exclusion: a path under archive/, archived/ or attic/ never ranks
     # in attention (so never becomes a prescribed action); the dropped paths are
     # carried out for the `excluded_as_archive` disclosure.
-    attention, archived_finding_paths = exclude_archive_from_attention(findings)
+    # Equal-score rows order by hotspot rank, then finding severity, then path.
+    attention, archived_finding_paths = exclude_archive_from_attention(
+        findings,
+        attention_tie_break(complexity_stats, promissory_markers, behaviour),
+    )
+    # A top score of 1 is a weak ranking: prescribe only its rank-1 row.
+    attention_low_signal = is_attention_low_signal(attention)
 
     return {
         "structure": structure,
@@ -1261,7 +1374,10 @@ def integrate(
         "attention": attention,
         "findings_markdown": render_findings_markdown(findings, attention),
         "keyhole_summary": build_keyhole_summary(findings),
-        "prescribed_actions": build_prescribed_actions(attention, findings),
+        "attention_low_signal": attention_low_signal,
+        "prescribed_actions": build_prescribed_actions(
+            attention, findings, 1 if attention_low_signal else MAX_PRESCRIBED_ACTIONS,
+        ),
         # Paths dropped from the findings because a config exclude covered them -
         # the raw material for the run-context `excluded_by_config` disclosure.
         "excluded_finding_paths": excluded_finding_paths,

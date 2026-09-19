@@ -25,10 +25,41 @@ A scorecard the orchestrator forwards to the `assess-findings` step:
 
 - the **score** (one point per layer that is Present; half for Partial - see the scoring rule in the methodology) **and its denominator** (8 for a software repo; the applicable-layer count for a knowledge base - see Step 0),
 - the **per-layer verdict** (Present / Partial / Missing, or **N/A** for a layer the archetype excludes) with a one-line evidence note each,
-- the **maturity label** the score maps to (for a non-software archetype it **names the archetype and the applicable-layer count** - see Step 0), and
-- any layer-specific observations the report should lead with (e.g. "Layer 3 linter exists but no complexity gate").
+- the **maturity label** the score maps to (for a non-software archetype it **names the archetype and the applicable-layer count** - see Step 0),
+- any layer-specific observations the report should lead with (e.g. "Layer 3 linter exists but no complexity gate"), and
+- the **`evidence`** list: every existence or wiring fact a verdict rests on, as structured entries in the schema below.
 
 Return this as a compact structured summary (not the full report prose). The `assess-findings` step renders it into the report template alongside the deterministic findings.
+
+### Evidence schema
+
+Prose evidence is a claim; an `evidence` entry is a claim a script can re-check. Before the report is written the orchestrator runs every entry through `lib/evidence_check.py` (`exists()` plus a literal substring search, no model): entries that hold stay in `evidence`, the rest move to `evidence_rejected` and never reach the report. So cite a fact only as it literally stands on disk, and give each scored layer's verdict at least one entry.
+
+The list is one flat JSON array. Each entry has `layer` (0-8, the layer whose verdict cites it), `kind`, and the kind's arguments. Every `path` is relative to the repository root. `needle` is a literal string, not a regex or glob.
+
+| `kind` | Arguments | Holds when |
+|---|---|---|
+| `path_exists` | `path` | the file or directory exists |
+| `path_absent` | `path` | nothing exists at `path` |
+| `referenced_in` | `needle`, `path` | `needle` occurs in the file `path`, or in any file under the directory `path` (searched recursively, skipping `.git/` and `.assess/`) |
+| `not_referenced_in` | `needle`, `path` | `path` exists and `needle` occurs nowhere in it |
+| `file_contains` | `path`, `needle` | the one file `path` contains `needle` |
+
+Every check fails closed: an entry whose search could not read everything under `path` (an unreadable file, a FIFO, a symlinked directory outside the walk) is rejected as incomplete, not decided on the part it read.
+
+One example per kind, each true of the toolkit's own repository:
+
+```json
+[
+  {"layer": 0, "kind": "path_exists", "path": "CLAUDE.md"},
+  {"layer": 3, "kind": "path_absent", "path": ".eslintrc.json"},
+  {"layer": 5, "kind": "referenced_in", "needle": "pytest", "path": ".github/workflows"},
+  {"layer": 6, "kind": "not_referenced_in", "needle": "mutmut", "path": ".github/workflows"},
+  {"layer": 3, "kind": "file_contains", "path": ".github/workflows/tests.yml", "needle": "ruff check"}
+]
+```
+
+Existence claims are `path_exists` / `path_absent`; wiring claims ("CI runs the linter", "no workflow calls the script") are `referenced_in` / `not_referenced_in` against the file or directory that would do the calling. A Missing verdict cites its gap with `path_absent` or `not_referenced_in`.
 
 ---
 
@@ -69,7 +100,7 @@ Layer 0 answers: *can the agent form a true picture before it acts?* It has two 
 Read the agent instruction file grades and surface integrity from `run-context.json`:
 
 ```bash
-jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .broken_instruction_refs, .sensitive_instruction_content, .ancestor_instruction_files, .skills_present, .skills_count, .skill_files, .instruction_file_size' "$REPO_ROOT/.assess/run-context.json"
+jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .broken_instruction_refs, .sensitive_instruction_content, .ancestor_instruction_files, .skills_present, .skills_count, .skill_files, .instruction_file_size, .instruction_claims' "$REPO_ROOT/.assess/run-context.json"
 ```
 
 `.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). Only **git-tracked** files are graded - a file present on disk but uncommitted is *not* credited (it isn't part of what the repo ships). The same heuristic grader scores each tracked file. For each:
@@ -103,6 +134,7 @@ jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .brok
 **Integrity overrides (these can pull the half *below* the grade - a single good file does not rescue a broken instruction surface):**
 - **`broken_instruction_refs` is non-empty → cap the instruction half at Partial, or Missing if it's the *primary* instruction surface that's broken.** These are advertised-but-broken instruction references: a committed `.cursorrules`/`AGENTS.md`/`CLAUDE.md` that is a **dangling symlink** (`reason: symlink target missing`), or an entry doc that **links to a missing instruction file** (`reason: link to missing instruction file`). The truth-pressure model says a broken map scores at or below absent - a repo that *advertises* `.cursorrules` but the symlink dangles is worse than one that never claimed to have it. Name each broken ref and make "fix or remove the broken instruction reference" a Top-3 action. Do **not** let an unrelated file that happens to grade B+ keep the half at Present. **But don't let the score mislead either:** if a committed instruction file still grades passing while the *advertised* surface dangles (e.g. a B+ `.github/copilot-instructions.md` while a referenced `CLAUDE.md` is missing), prefer **Partial** over Missing, and in the Evidence cell name that committed file and its grade. A human reviewer would call this Partial; reserve **Missing** for genuine absence. Either way the report must read as *the advertised surface is broken*, never *no instructions exist*.
 - **`untracked_instruction_files` is non-empty → note it, don't score it.** An instruction file exists on disk but isn't committed, so nobody who clones gets it. Report "`<file>` present locally but untracked - commit it or it won't reach contributors (human or agent)"; never let it raise the grade.
+- **`instruction_claims.failed` > 0 → cite each confirmed failure as Layer 0 evidence.** The core extracted the checkable claims in the graded instruction files with a regex and verified each against the repo: `kind: enforcement` is a backticked script the file says is enforced in CI that no CI configuration (GitHub Actions, GitLab, Jenkins, CircleCI and others) or task runner (`Makefile`, `package.json`, `.pre-commit-config.yaml` ...) references; `kind: pin` is a "pinned in `<file>`" version the file does not hold, or a pinned file that does not exist; `kind: count` is an integer the sentence claims for a backticked glob pattern that the matching files miss by more than the larger of 10% or 2. Each failure names `file`, `line`, `path` (the script, pinned file or pattern), `reason` and, for a pin, `version`; for a count, `claimed` and `actual`. **A failure is a lead, not a verdict.** Before citing it, read the sentence at `file:line` and confirm it really asserts enforcement, a pin or a count of the files the pattern matches (not, say, a count of tests inside them), and for an enforcement failure look for an indirect call the literal search cannot see (a composite or reusable action, a differently named wrapper). Cite only failures that survive that check ("`AGENTS.md:5` says `scripts/check-x.sh` is enforced in CI; no workflow calls it") with the action "wire it into CI or delete the sentence"; a confirmed false claim weighs like a broken instruction reference in the bucket judgement above, while a regex match you could not confirm is dropped, never cited. `total: 0` means no checkable claim was found (or the repo has no CI configuration to check an enforcement claim against) - no evidence either way, not a clean bill.
 - **Surface within-band regression.** The Present/Partial/Missing bucket is coarse - "lost the primary instruction file and gained 40 dangling links" may not move the bucket. When `broken_instruction_refs` or a large `doc_graph.dangling_links` count appears, call out the regression explicitly in the report even if the band label is unchanged.
 
 Important: a null grade and an F grade map to different remediation. Null means "create a CLAUDE.md / AGENTS.md (whichever the team uses)." F means "the file is there but needs rewriting." A broken/dangling reference means "the file you point at isn't reachable - fix the link or remove the claim." Don't conflate them.
@@ -133,7 +165,7 @@ Recognise the full range of navigability artefacts (not just README/ADR/API spec
 
 Score navigability from these signals:
 
-- **Connectivity / reachability (a wayfinding signal - read it as *curation*, not *access*).** A *good* doc set is one connected island, fully reachable from the entry points (README / `AGENTS.md` / top MOC). `doc_graph.island_count == 1` and `reachability_pct` near 1.0 is navigable (the headline counts reference edges - a backticked path to an existing doc - beside links; `link_only_reachability_pct` / `link_only_orphan_rate` are the link-only view); a high `orphan_rate` or many islands weakens wayfinding for both humans and agents. **Keep the claim honest:** reachability (and `link_only_reachability_pct` alike) measures whether the docs are *curated into a navigable map*, not whether content is *reachable at all* - an agent can always `ls docs/` and open any file by path. So low reachability means **uncurated** (poor signal-vs-noise / weak wayfinding), not **inaccessible**. Weight it accordingly - an index/MOC is worth adding, but a directory-organised docs tree with low reachability is not the emergency "an agent can only discover 9%" makes it sound. Name the orphan docs.
+- **Connectivity / reachability (a wayfinding signal - read it as *curation*, not *access*).** A *good* doc set is one connected island, fully reachable from the entry points (README / `AGENTS.md` / top MOC). `doc_graph.island_count == 1` and `reachability_pct` near 1.0 is navigable (the headline counts reference edges - a backticked path to an existing doc - beside links; `link_only_reachability_pct` / `link_only_orphan_rate` are the link-only view); a high `orphan_rate` or many islands weakens wayfinding for both humans and agents. **Keep the claim honest:** reachability (and `link_only_reachability_pct` alike) measures whether the docs are *curated into a navigable map*, not whether content is *reachable at all* - an agent can always `ls docs/` and open any file by path. So low reachability means **uncurated** (poor signal-vs-noise / weak wayfinding), not **inaccessible**. Weight it accordingly - an index/MOC is worth adding, but a directory-organised docs tree with low reachability is not the emergency "an agent can only discover 9%" makes it sound. Name the orphan docs. The headline figures cover the curated layer only: trees in `excluded_raw_trees` (raw exports) and `excluded_working_notes_trees` (pattern-named working notes under an index, counted in `working_notes_doc_count`) are left out, so score navigability on the curated figures and cite each excluded tree with its file count.
 - **Hubs / MOCs by centrality.** `doc_graph.hubs` are the load-bearing docs (highest PageRank). A stale hub is the most dangerous lying map - everything routes through it.
 - **MOC validation (declared vs structural).** `doc_graph.moc_named_but_not_wired` lists docs *named* like a map (`index.md`, "MOC") that aren't structural hubs - named but not wired. Flag each as a finding: the graph shows the map isn't actually built.
 - **Broken links / ghost files.** `doc_graph.broken_links` lists links whose target file doesn't exist - `{from, target, kind}`. The doc graph draws each as a labelled "ghost" node, and the missing name *is* the suggested fix (create the file or correct the link). Name a few and recommend the fix; `dangling_links` is the count. `ambiguous_wikilinks` (a bare `[[name]]` matching several files) is a milder smell worth noting.
@@ -169,11 +201,11 @@ Read both tiers from `run-context.json`:
 jq '.dead_code, .observability' "$REPO_ROOT/.assess/run-context.json"
 ```
 
-**Deterministic tier - intra-repo dead code (`dead_code`).** A best-effort scan (`vulture`/`ts-prune`/`knip`/`staticcheck`/`deadcode`) flags unused exports / unreferenced symbols. `dead_code.tools` reports per-language status; `candidate_count` and `candidates` list the findings (already filtered to *this* repo - vendored/build dirs are excluded). Surface them in the report **with the explicit caveat** from `dead_code.caveat`: static reachability proves "nothing in *this* repo calls it," never "no external consumer calls it." Cross-boundary liveness needs the next tier. When `available: false`, report "intra-repo dead-code scan not run (no language tool present)" - degrade, don't penalise.
+**Deterministic tier - intra-repo dead code (`dead_code`).** A best-effort scan (`vulture`/`ts-prune`/`knip`/`staticcheck`/`deadcode`) flags unused exports / unreferenced symbols. `dead_code.tools` reports per-language status; `candidate_count` and `candidates` list the findings (already filtered to *this* repo - vendored/build dirs are excluded). Surface them in the report **with the explicit caveat** from `dead_code.caveat`: static reachability proves "nothing in *this* repo calls it," never "no external consumer calls it." Cross-boundary liveness needs the next tier. When `available: false`, no tool ran: report "intra-repo dead-code scan not run" followed by each `tools[]` entry's `reason`, and add "no language tool present" only when every entry is `tool_absent` (a tool on PATH can be skipped as inapplicable) - degrade, don't penalise.
 
-Two `tools[].status` values need handling in the report: `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it - surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `timeout` / `tool_absent` likewise degrade, not penalise.
+`tools[].status` is one of `ran`, `available_not_run`, `not_applicable`, `honest_degrade`, `timeout`, `tool_absent`, `error`. `available_not_run` means the tool is present but would **build the project** (`deadcode`/`staticcheck`/`knip` resolve/compile and may write the module cache or hit the network), so a read-only assessment doesn't run it - surface the tool's `reason` (it includes the exact command) as a "run manually to cross-check" follow-up rather than a finding. `not_applicable` means the tool was skipped because it does not fit the repo: the losing language of a mixed JavaScript/TypeScript tree (the reason names its unanalysed file count), or ts-prune with no root `tsconfig.json`; surface the `reason` so the unanalysed code is named. `honest_degrade` means no tool serving the language is on PATH and the entry names the one that would (JavaScript names `knip`); surface the `reason` as that named follow-up, never as plain "absent". `timeout` / `tool_absent` / `error` likewise degrade, not penalise.
 
-**Capability-driven JVM offers (`capability_offers`).** When the repo is a Maven or Gradle project, `run-context.json` carries a `capability_offers` block and the `dead_code.tools` list includes a `java` entry. This is the capability-driven flow (SKILL.md Step 2b) surfaced to the scorer:
+**Capability-driven JVM offers (`capability_offers`).** When the repo is a Maven or Gradle project (a build file plus JVM source outside platform-wrapper `android/` directories, Cordova's `platforms/android/` included), `run-context.json` carries a `capability_offers` block and the `dead_code.tools` list includes a `java` entry. This is the capability-driven flow (SKILL.md Step 2b) surfaced to the scorer. A Flutter, React Native, Capacitor or Cordova app whose only Gradle files and Kotlin/Java sit under its generated `android/` wrapper gets neither, so never name a JVM candidate tool for it:
 
 ```bash
 jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"
@@ -183,6 +215,12 @@ jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"
 - `capabilities.liveness.state == "offer"` - Maven detected, analyze not run (a **run-consent** the user can accept in Step 2b). Treat like `available_not_run`: surface the candidate tool as a follow-up, don't penalise.
 - `state == "credited"` (linting/modernization) - a configured pom.xml plugin (`served_by`) already serves it. Credit it in the relevant layer; do **not** report it as missing.
 - `state == "honest_degrade"` - nothing serves the capability yet (module graph, unconfigured linting/modernization, all Gradle capabilities in v1). **Name the capability and its `candidate_tool` in the report** - this is a deliverable, distinct from a silent miss. Never report a honest-degraded capability as simply "absent".
+
+**Language capabilities (`language_capabilities`).** Non-JVM ecosystems get a sibling block keyed by language, present only when that language is detected (`capability_offers` stays JVM-only). Dart is the first key: a repo with a `pubspec.yaml` carries `language_capabilities.dart.linting` and `.liveness`, in the same fields and states as above, and one `dart` entry in `dead_code.tools`. Linting `credited` (`served_by` names `dart analyze` or `flutter analyze`) means the nearest `analysis_options.yaml` enables lint rules (a top-level `include:` or a `linter: rules:` list); credit it in Layer 3, skip only the Dart existence probe below, and still read the file in the "assess AI-relevant rules" step. Linting `honest_degrade` (no file, or one that enables no rules) names `dart analyze / flutter analyze` as the candidate. Liveness is always `honest_degrade`: the scan does not run the analyzer, and the candidate is its built-in `unused_*` diagnostics, which cover private declarations, imports and locals but not unused public members. Name that candidate and its limit; never recommend a third-party Dart dead-code package.
+
+```bash
+jq '.language_capabilities' "$REPO_ROOT/.assess/run-context.json"
+```
 
 **Observability tier (the decisive one) - three rungs (`observability.rung`, 0-3):**
 
@@ -347,7 +385,7 @@ In the matrix, "complexity in the High range" means **per-function** `fn_ccn` cl
 
 When scoring Partial or Missing on this combined check, name the top 3 worst offenders from `top_complex` / `top_large` in the report's Evidence/Gap columns. Those are the files the missing rule would have flagged. For each `top_complex` offender, cite its `max_fn_ccn` (the per-function value the threshold gates), not just the aggregate `ccn` - and if `max_fn_ccn` is under the threshold, it is not actually a per-function offender even though its aggregate is high.
 
-**Erosion cap (promissory markers).** Read `promissory_markers` from run-context. When `available` and `aging_reliable` are true and `families.suppression.stale` is greater than ~10 (or clearly growing vs the prior run), cap Layer 3 at **Partial** regardless of config quality: the linter exists but is being hollowed out - each stale suppression is a hole punched in the gate that survived 5+ edits without being fixed. Cite the count and the worst offender from `top_offenders` in the Evidence column. Suppressions with a trailing justification count as `linked`, not debt - only the bare remainder erodes.
+**Erosion cap (promissory markers).** Read `promissory_markers` from run-context. When `available` and `aging_reliable` are true and `families.suppression.stale` is greater than ~10 (or clearly growing vs the prior run), cap Layer 3 at **Partial** regardless of config quality: the linter exists but is being hollowed out - each stale suppression is a hole punched in the gate that survived `stale_touches_threshold` or more edits without being fixed. Cite the count and the worst offender from `top_offenders` in the Evidence column. Suppressions with an inline justification (`-- reason`, a trailing comment) are counted in `families.suppression.justified`, count as `linked`, and are never stale - only the bare remainder erodes. The exemption is suppression-only: ticketed or dated markers in other families still age.
 
 ### Layer 4: Architecture Tests (Conventions as Contracts)
 
@@ -479,11 +517,12 @@ fd -t f '(mutation|survivor|mutant)' "$REPO_ROOT" --extension json --extension x
 ls -la "$REPO_ROOT"/{.coderabbit.yaml,.coderabbit.yml,.github/copilot-review.yml} 2>/dev/null
 # Check for review bot in CI
 rg 'coderabbit|copilot|codeclimate|sonarqube|sonarcloud' "$REPO_ROOT"/.github/workflows/*.yml 2>/dev/null | head -5
-# Check if bots are active on recent PRs
-gh pr list --limit 5 --json number --jq '.[].number' 2>/dev/null | head -3 | while read PR; do
-  gh api repos/{owner}/{repo}/pulls/$PR/comments --jq '.[].user.login' 2>/dev/null | sort -u | head -5
-done
 ```
+
+**Read whether review happens from `run-context.json` `review_reality`** (the core samples the 30 most recently opened merged pull requests through `gh`; do not sample them by hand): `merged_count`, `oldest_merged_days_ago`, `reviewed_share` (any review from an account other than the author, a bot's included), `approved_share` (an `APPROVED` review from an account other than the author), `bot_review_share` (a comment from a bot other than `github-actions`), `self_merged_share`, `review_required` (a ruleset `pull_request` rule or classic protection requiring one or more approvals) `hollow_required_review` (review required and `reviewed_share` under 0.2: nobody looked) and `required_approval_bypassed` (review required and `approved_share` under 0.2: the required approval does not happen, even where a bot reviews every change). A null share or flag means that part could not be read; both flags are null under 5 merged pull requests. The rules are read as they stand now, so weigh `oldest_merged_days_ago` against a rule that may be recent. `available: false` means no sample (`reason` says why: no GitHub remote, `gh` absent or not logged in, `no_access` on a refused read) - score from the configuration evidence alone and say the review activity was not observed.
+
+- Evidence of review is `reviewed_share` and `approved_share`; a bot that submits reviews moves them. `bot_review_share` is weak corroboration that some bot comments on pull requests, never on its own evidence of review: deploy-preview, coverage and dependency bots comment without reviewing. A configured review bot with `reviewed_share` near 0 is the Partial case.
+- `hollow_required_review: true` or `required_approval_bypassed: true` caps the layer at Partial whatever is configured; cite the flag that fired: required review that merges bypass is a gate that reads Present and is hollow. The report writer adds it as a Layer 7 lying signal.
 
 **Scoring:**
 - Present: Automated review bot active on PRs, providing design-level feedback

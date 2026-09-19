@@ -54,19 +54,27 @@ from lib.badge import (
     fallback_badge,
     write_badge,
 )
-from lib.assess_config import load_excludes, load_structure_config
+from lib.assess_config import (
+    is_user_excluded, load_excludes, load_structure_config, load_working_notes_config,
+)
 from lib.change_coupling import build_rename_map
+from lib.config_drift import scan_config_drift
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
+from lib.gate_cost import estimate_gate_cost
+from lib.instruction_claims import scan_instruction_claims
 from lib.interactivity import build_offers_block
 from lib.doc_graph import build_doc_graph, is_repo_file
+from lib.gap_actions import build_gap_actions
 from lib.doc_staleness import analyze_doc_staleness
+from lib.generated_files import matches_generated_name
 from lib.git_churn import git_commit_info, tracked_files
 from lib.keyhole_signals import integrate as integrate_keyhole_signals
 from lib.liveness_scan import scan_liveness
 from lib.promissory_markers import scan_promissory_markers
+from lib.review_reality import scan_review_reality
 from lib.structure_graph import analyze_structure
-from lib.stats_diff import diff_stats, hotspot_commits, load_stats
+from lib.stats_diff import StatsDiff, diff_stats, hotspot_commits, load_stats
 from lib.structure_drift import (
     SEAM_ALLOWLIST,
     detect_path_existence_drift,
@@ -79,7 +87,9 @@ from lib.wiki_writer import (
     HotspotEntry,
     LogEntry,
     append_log_entry,
+    last_log_entry_is_unfinalized_run,
     prune_orphan_hotspots,
+    retire_excluded_hotspots,
     supersede_unfinalized_log_entry,
     verify_log_chain,
     write_hotspot_page,
@@ -532,16 +542,16 @@ def _rekey_first_flagged(
     return rekeyed
 
 
-def _supersede_same_commit_log_entry(
+def _same_measurement_prior_run(
     assess_dir: Path, *, run_date: str, measured_commit: dict
-) -> bool:
-    """Drop the prior run's unfinalized log entry when this run supersedes it.
+) -> dict | None:
+    """The previous run's context when this run supersedes it, else None.
 
     A run supersedes the previous one when both share ``run_date`` and the
     measured commit. The previous run-context.json is still on disk here (this
     run writes its own later), so it names the entry's run id and commit. The
-    wiki writer only removes that entry if it is the log's last and still
-    carries placeholders; a finalized entry is history and stays (#355).
+    wiki writer only removes that run's log entry if it is the log's last and
+    still carries placeholders; a finalized entry is history and stays (#355).
 
     A target with no git (``available`` false on both runs) has no commit to
     key on, so the date and the prior run id are the whole identity: two such
@@ -550,14 +560,14 @@ def _supersede_same_commit_log_entry(
     try:
         prior = json.loads((assess_dir / "run-context.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return False
+        return None
     if not isinstance(prior, dict) or not prior.get("run_id"):
-        return False
+        return None
     if prior.get("run_date") != run_date:
-        return False
+        return None
     prior_commit = prior.get("measured_commit")
     if not isinstance(prior_commit, dict):
-        return False
+        return None
     head_sha = measured_commit.get("head_sha")
     if head_sha:
         same = prior_commit.get("head_sha") == head_sha
@@ -566,9 +576,81 @@ def _supersede_same_commit_log_entry(
             measured_commit.get("available") is False
             and prior_commit.get("available") is False
         )
-    if not same:
-        return False
-    return supersede_unfinalized_log_entry(assess_dir, prior["run_id"])
+    return prior if same else None
+
+
+def _inherited_provisional_paths(
+    assess_dir: Path, superseded: dict | None, first_flagged_map: dict[str, str],
+) -> set[str]:
+    """Paths first flagged only by the superseded, never-finalized run (#356).
+
+    Empty unless the superseded run's log entry is still unfinalized. Each run
+    records ``provisional_first_flagged``: the paths it first flagged plus those
+    it inherited this way, so a chain of unfinalized same-day runs carries a
+    file forward after it stops being "new". A run-context written before the
+    key existed yields nothing: its ``diff_detail.new`` cannot tell a file first
+    flagged there from one first flagged by a finalized run earlier that day
+    that graduated and returned, and retiring the latter would delete a
+    finalized date. Only paths whose first-flagged date is still that run's
+    date qualify.
+    """
+    if superseded is None or not last_log_entry_is_unfinalized_run(
+        assess_dir, superseded["run_id"],
+    ):
+        return set()
+    paths = superseded.get("provisional_first_flagged")
+    if not isinstance(paths, list):
+        return set()
+    return {
+        p for p in paths
+        if isinstance(p, str) and first_flagged_map.get(p) == superseded.get("run_date")
+    }
+
+
+def _excluded_after_unfinalized_run(
+    assess_dir: Path, *, superseded: dict | None, first_flagged_map: dict[str, str],
+    current: dict, diff: StatsDiff, excludes: tuple[set[str], list[str]],
+) -> tuple[set[str], list[str]]:
+    """Split out the files excluded after a never-finalized run (#356).
+
+    Returns ``(provisional, excluded)``. ``provisional`` is what this run records
+    as ``provisional_first_flagged``: the inherited paths plus the ones this run
+    flags for the first time, minus ``excluded``. ``excluded`` is the sorted
+    inherited paths now matched by a config exclude and no longer a top hotspot;
+    they are removed from ``diff.graduated`` here so the rotated prior stats do
+    not carry them into index.md. Must run before the hotspot loop stamps new
+    first-flagged dates.
+    """
+    inherited = _inherited_provisional_paths(assess_dir, superseded, first_flagged_map)
+    current_hot = {h["path"] for h in current.get("top_hotspots", [])}
+    excluded = sorted(
+        p for p in inherited - current_hot if is_user_excluded(Path(p), *excludes)
+    )
+    diff.graduated = [h for h in diff.graduated if h.path not in excluded]
+    fresh = {h.path for h in diff.new if h.path not in first_flagged_map}
+    return (inherited | fresh) - set(excluded), excluded
+
+
+def _retire_excluded_unfinalized(
+    assess_dir: Path, excluded: list[str], first_flagged_map: dict[str, str],
+) -> tuple[list[str], list[str]]:
+    """Retire the pages of ``excluded`` and drop their first-flagged entries.
+
+    Returns ``(retired, dropped)``. A path whose page exists but has no status
+    token to stamp keeps its entry, so a page that still reads live never loses
+    its first-flagged date.
+    """
+    retired, unstamped = retire_excluded_hotspots(assess_dir, excluded)
+    dropped = [p for p in excluded if p not in unstamped and p in first_flagged_map]
+    for path in dropped:
+        del first_flagged_map[path]
+    return retired, dropped
+
+
+def _drop_superseded_log_entry(assess_dir: Path, superseded: dict | None) -> None:
+    """Remove the superseded run's log entry when it is still unfinalized."""
+    if superseded is not None:
+        supersede_unfinalized_log_entry(assess_dir, superseded["run_id"])
 
 
 def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None:
@@ -609,6 +691,25 @@ def _write_badge(
 # every file; the run-context list keeps only the worst few that also score in
 # the top complexity/size band, so a growing-but-simple file never earns a line.
 MAX_ACCRETION_FILES = 12
+
+
+def _excluded_generated(complexity_stats: dict) -> list[dict[str, str]]:
+    """The stats file's ``excluded_generated`` list, keeping well-formed rows.
+
+    Each row is ``{"path", "reason"}`` with non-empty strings; anything else
+    (an older stats file without the key, a malformed row) is dropped, so the
+    run-context key is always a list.
+    """
+    rows = complexity_stats.get("excluded_generated")
+    if not isinstance(rows, list):
+        return []
+    return [
+        {"path": r["path"], "reason": r["reason"]}
+        for r in rows
+        if isinstance(r, dict)
+        and isinstance(r.get("path"), str) and r["path"]
+        and isinstance(r.get("reason"), str) and r["reason"]
+    ]
 
 
 def _top_band_paths(complexity_stats: dict) -> set[str]:
@@ -973,6 +1074,16 @@ def build_run_context(
     )
 
     diff = diff_stats(prior=prior, current=current)
+    # A hotspot that left the ranking because this run excluded it as generated
+    # did not graduate: the filter changed, not the file. Drop it from the
+    # graduated list so the append-only log and index never record it as one.
+    # Content excludes are named in excluded_generated; the generated-name
+    # globs are silent, so they are matched here directly.
+    generated_paths = {r["path"] for r in _excluded_generated(current)}
+    diff.graduated = [
+        h for h in diff.graduated
+        if h.path not in generated_paths and not matches_generated_name(h.path)
+    ]
     instruction_files, instructions_grade, untracked_instr, dangling_instr, skills_info, \
         sensitive_instr = _grade_instruction_files(repo_root)
 
@@ -990,6 +1101,22 @@ def build_run_context(
     # into every read-side scan (heatmap parity, doc graph, staleness, liveness,
     # markers) so "this is reference data, not source" is a single statement.
     extra_exclude_dirs, extra_exclude_patterns = load_excludes(repo_root)
+
+    # Excluded after an unfinalized run (#356): a file first flagged only by the
+    # never-finalized run this one supersedes, and now excluded by config, was
+    # never part of a finished assessment. Its page is retired, its first-flagged
+    # entry dropped, and it is kept out of "graduated" so the rotated prior stats
+    # do not carry it into index.md. Files first flagged by a finalized run are
+    # outside the rule, as are files still in the current top hotspots.
+    measured_commit = git_commit_info(repo_root)
+    superseded = _same_measurement_prior_run(
+        assess_dir, run_date=run_date, measured_commit=measured_commit,
+    )
+    provisional, excluded_unfinalized = _excluded_after_unfinalized_run(
+        assess_dir, superseded=superseded, first_flagged_map=first_flagged_map,
+        current=current, diff=diff,
+        excludes=(extra_exclude_dirs, extra_exclude_patterns),
+    )
 
     # Promissory markers (stale TODO/FIXME, suppressions, disabled tests),
     # scanned before the wiki pages so each hotspot page can carry its own
@@ -1095,6 +1222,9 @@ def build_run_context(
     # are (re)written, so a file that is still a live hotspot has just had its
     # page refreshed and won't be touched.
     pruned_hotspots = prune_orphan_hotspots(assess_dir, repo_root)
+    retired_excluded, dropped_first_flagged = _retire_excluded_unfinalized(
+        assess_dir, excluded_unfinalized, first_flagged_map,
+    )
 
     # Also surface graduated hotspots in the index. Carry the file's actual
     # current metrics across the three top-N lists in `current` - graduating
@@ -1158,10 +1288,7 @@ def build_run_context(
         run_id=run_id,
         schema_version=ARTIFACT_SCHEMA_VERSION,
     )
-    measured_commit = git_commit_info(repo_root)
-    _supersede_same_commit_log_entry(
-        assess_dir, run_date=run_date, measured_commit=measured_commit,
-    )
+    _drop_superseded_log_entry(assess_dir, superseded)
     append_log_entry(assess_dir, log_entry)
 
     # log.md integrity: verify the chained checksums after the append. A break
@@ -1232,6 +1359,15 @@ def build_run_context(
         # Hotspot pages retired this run because their source file left the tree
         # (task 9). Empty on a run that deleted nothing - a stable baseline.
         "pruned_hotspots": pruned_hotspots,
+        # Pages retired this run because the file was first flagged only by a
+        # never-finalized run and is now excluded by config (#356); the
+        # first-flagged.json entries dropped for the same reason (a superset
+        # when such a file has no page); and the paths whose first-flagged date
+        # still rests on an unfinalized run (this one until it is finalized),
+        # read back by the next superseding run.
+        "retired_excluded_hotspots": retired_excluded,
+        "dropped_first_flagged": dropped_first_flagged,
+        "provisional_first_flagged": sorted(provisional),
         # log.md integrity chain state (task 11). `valid` is False when an earlier
         # log entry was edited after it was written; `broken_at_entry` is the
         # 1-based index of the first entry that fails verification (None when
@@ -1245,11 +1381,14 @@ def build_run_context(
 
     # Read-side foundation signals (Layer 0 navigability + Layer 1 liveness).
     # Each is best-effort and degrades rather than blocking the assessment.
+    working_notes = load_working_notes_config(repo_root)
     doc_graph = _safe("doc_graph", lambda: build_doc_graph(
         repo_root,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
         scope=scope_abs,
+        working_notes_dirs=working_notes.dirs,
+        working_notes_ignore=working_notes.ignore,
     ).as_dict())
     doc_to_code = (doc_graph.get("doc_to_code_edges", [])
                    if doc_graph.get("available") else [])
@@ -1347,6 +1486,11 @@ def build_run_context(
     # offer-layer turns into an AskUserQuestion.
     if liveness_ok and isinstance(liveness.get("jvm_capabilities"), dict):
         ctx["capability_offers"] = liveness["jvm_capabilities"]
+    # Non-JVM capability entries keyed by language (issue #352), present only
+    # when a language is detected; capability_offers stays JVM-only.
+    if liveness_ok and isinstance(liveness.get("dart_capabilities"), dict):
+        ctx["language_capabilities"] = {
+            "dart": liveness["dart_capabilities"]["capabilities"]}
 
     # Keyhole-readiness signals (PRD 2026-05-29): the static-structure,
     # behaviour (change-coupling / containment / static-vs-historical),
@@ -1432,6 +1576,14 @@ def build_run_context(
     # two layers never double-count the same artifact.
     ctx["agent_ops"] = _safe("agent_ops", lambda: scan_agent_ops(repo_root))
 
+    # Configuration drift (Layer 5 lying signal): tracked ruleset and
+    # branch-protection snapshots diffed against the live GitHub setting via
+    # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
+    # available: false with the reason, never a clean result.
+    ctx["config_drift"] = _safe("config_drift", lambda: scan_config_drift(repo_root))
+    ctx["review_reality"] = _safe("review_reality", lambda: scan_review_reality(repo_root))
+    ctx["gate_cost_estimate"] = _safe("gate_cost_estimate", lambda: estimate_gate_cost(repo_root))
+
     # Accretion ratchet (write-side tendency: files that only ever grow). The
     # scan measured every file above; here it is filtered to files already in the
     # top complexity/size band, sorted worst-first, and capped - so a file earns
@@ -1461,6 +1613,7 @@ def build_run_context(
     ctx["runtime"] = keyhole["runtime"]
     ctx["derived_findings"] = keyhole["derived_findings"]
     ctx["attention"] = keyhole["attention"]
+    ctx["attention_low_signal"] = keyhole["attention_low_signal"]
     # Deterministic report-skeleton products (assess-dogfooded Part 1): the
     # pre-rendered findings section the LLM copies verbatim, the keyhole
     # readiness summary reported alongside (never merged into) the 0-8 score, and
@@ -1468,6 +1621,12 @@ def build_run_context(
     ctx["findings_markdown"] = keyhole["findings_markdown"]
     ctx["keyhole_summary"] = keyhole["keyhole_summary"]
     ctx["prescribed_actions"] = keyhole["prescribed_actions"]
+    # Gap actions: Top 3 candidates read from the coverage and doc-graph
+    # signals, which the report writer uses for free slots before judgement.
+    ctx["gap_actions"] = build_gap_actions(
+        ctx["coverage_report"], doc_graph, current.get("top_hotspots"),
+        ctx["archetype"] if isinstance(ctx.get("archetype"), dict) else None,
+    )
     # Config-exclusion disclosure: config excludes silently drop paths from every
     # scan, so a finding suppressed by an exclude must be counted and named rather
     # than vanish. keyhole_signals filtered the excluded finding paths; this block
@@ -1499,6 +1658,11 @@ def build_run_context(
         "count": len(pruned_finding_paths),
         "rename_map_complete": keyhole.get("rename_map_complete", True),
     }
+    # Generated-file disclosure: the treemap drops files that declare
+    # themselves generated (header marker) or carry payload-length lines, and
+    # lists them in the stats file. Copied through so the report and gate name
+    # each one with its reason rather than letting it vanish from the ranking.
+    ctx["excluded_generated"] = _excluded_generated(current)
 
     # Structure drift (third write-side tendency surface: a declared ownership
     # map that no longer matches where the code lives). Tier 0 is the cheap
@@ -1541,6 +1705,11 @@ def build_run_context(
     # directory (which the harness substitutes for ${CLAUDE_SKILL_DIR}). A machine-stable
     # pointer so an agent can Read the removal steps without hunting for them.
     ctx["uninstall_instructions_path"] = "references/uninstall.md"
+
+    # Checkable claims in the graded instruction files ("`x.sh` is enforced in
+    # CI", "Node 20.11.0 is pinned in `.nvmrc`"), verified against the repo; a
+    # failed claim is a Layer 0 lying signal. Always present, zeros when none.
+    ctx["instruction_claims"] = scan_instruction_claims(repo_root, instruction_files)
 
     ctx["anomalies"] = [
         {"code": a.code, "description": a.description, "detail": a.detail}

@@ -92,6 +92,28 @@ SKILLS: dict[str, dict] = {
                 "that the deep mutation pass was not run."
             ),
             "uv-finalize": 'uv run scripts/assess_finalize.py "$REPO_ROOT"',
+            # The Step 4 evidence check: same paragraph as the plugin text, with
+            # the script path relative to the unpacked skill instead of SKILL_DIR.
+            "evidence-check": (
+                "**Verify the scorecard's evidence first** - the only point where a "
+                "false claim can still be kept out of the report. Write the scorecard's "
+                "`evidence` list to `$REPO_ROOT/.assess/.cache/evidence.json` (after "
+                '`mkdir -p "$REPO_ROOT/.assess/.cache"`), then run '
+                '`uv run scripts/lib/evidence_check.py "$REPO_ROOT" '
+                '"$REPO_ROOT/.assess/.cache/evidence.json" --json '
+                '"$REPO_ROOT/.assess/.cache/evidence-checked.json"`. '
+                "It prints `verified N, rejected M` and exits 0 (all hold) or 1 (some "
+                "rejected); without that line, or with no `evidence-checked.json`, the "
+                "check did not run - fix it before writing, never read it as a pass. "
+                "The output's `evidence` replaces the scorecard's list; entries under "
+                "`evidence_rejected` (each with a `reason`) are handed on beside it as "
+                "the record of refuted claims, never cited as fact. When every entry a layer cited was rejected, re-score that layer "
+                "from `run-context.json` and its remaining verified entries, not from "
+                "the earlier prose. Delete both files once read. Assembling "
+                "`.assess/assess-report.md` - the scorecard, the snapshots, the verbatim "
+                "cross-layer findings, the lying signals, and the mandatory Top 3 "
+                "Actions - is a reusable, mostly-deterministic procedure."
+            ),
             "uv-emit-workflow": 'uv run scripts/assess_emit_workflow.py "$REPO_ROOT"',
             "treemap-exclude-example": (
                 'uv run scripts/complexity-treemap.py "$REPO_ROOT" '
@@ -114,7 +136,8 @@ SKILLS: dict[str, dict] = {
             "layer-scorer-delegate": (
                 "Read the bundled methodology at `references/assess-layer-scorer.md` "
                 "and apply it yourself to produce the 0-8 score, the per-layer "
-                "verdicts with evidence, and the maturity label - this context has "
+                "verdicts with evidence, the maturity label, and the structured "
+                "`evidence` list the report step re-checks - this context has "
                 "no separate agent. Hold that scorecard for the report step."
             ),
             "findings-delegate": (
