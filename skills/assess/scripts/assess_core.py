@@ -79,6 +79,7 @@ from lib.wiki_writer import (
     LogEntry,
     append_log_entry,
     prune_orphan_hotspots,
+    supersede_unfinalized_log_entry,
     verify_log_chain,
     write_hotspot_page,
     write_index,
@@ -505,6 +506,45 @@ def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
     if not state_file.exists():
         return {}
     return json.loads(state_file.read_text(encoding="utf-8"))
+
+
+def _supersede_same_commit_log_entry(
+    assess_dir: Path, *, run_date: str, measured_commit: dict
+) -> bool:
+    """Drop the prior run's unfinalized log entry when this run supersedes it.
+
+    A run supersedes the previous one when both share ``run_date`` and the
+    measured commit. The previous run-context.json is still on disk here (this
+    run writes its own later), so it names the entry's run id and commit. The
+    wiki writer only removes that entry if it is the log's last and still
+    carries placeholders; a finalized entry is history and stays (#355).
+
+    A target with no git (``available`` false on both runs) has no commit to
+    key on, so the date and the prior run id are the whole identity: two such
+    runs on one day count as the same measurement.
+    """
+    try:
+        prior = json.loads((assess_dir / "run-context.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(prior, dict) or not prior.get("run_id"):
+        return False
+    if prior.get("run_date") != run_date:
+        return False
+    prior_commit = prior.get("measured_commit")
+    if not isinstance(prior_commit, dict):
+        return False
+    head_sha = measured_commit.get("head_sha")
+    if head_sha:
+        same = prior_commit.get("head_sha") == head_sha
+    else:
+        same = (
+            measured_commit.get("available") is False
+            and prior_commit.get("available") is False
+        )
+    if not same:
+        return False
+    return supersede_unfinalized_log_entry(assess_dir, prior["run_id"])
 
 
 def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None:
@@ -1084,6 +1124,10 @@ def build_run_context(
         run_id=run_id,
         schema_version=ARTIFACT_SCHEMA_VERSION,
     )
+    measured_commit = git_commit_info(repo_root)
+    _supersede_same_commit_log_entry(
+        assess_dir, run_date=run_date, measured_commit=measured_commit,
+    )
     append_log_entry(assess_dir, log_entry)
 
     # log.md integrity: verify the chained checksums after the append. A break
@@ -1114,7 +1158,7 @@ def build_run_context(
         # The commit the scan measured. Absolute LOC/CCN figures are a snapshot
         # of this commit; the report pins the SHA and warns when HEAD is dirty
         # or behind its upstream so the numbers aren't read as current (#59).
-        "measured_commit": git_commit_info(repo_root),
+        "measured_commit": measured_commit,
         "prior_stats_exists": prior_exists,
         "stats_summary": {
             "files_scored": current.get("files_scored", 0),
