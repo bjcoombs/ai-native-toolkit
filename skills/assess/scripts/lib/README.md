@@ -78,6 +78,17 @@ Three signals derived from `git log`:
 - B4 authorship: human/agent/mixed/unknown classification, e-mail-based and
   deliberately conservative (never labels a human's work "agent" on weak evidence).
 
+`parse_commit_file_sets` lists each commit's files under the names they had then.
+`build_rename_map` reads `git log --name-status -M --diff-filter=R` into a `RenameMap`:
+`paths`, a historical-path to current-path map (chains resolved first, then any source name
+that exists again in the working tree is left out), and `complete`, False when git could not be read so an empty map is
+never mistaken for "no renames". `fold_renames` rewrites the commit sets through `paths`,
+so history made before a rename counts under the current path. `repo_top` is the shared
+`git rev-parse --show-toplevel` helper; the git-log readers take an optional `top` so a
+caller that already resolved it skips the extra subprocess. Both readers pin `-M` and
+`core.quotepath=false`, so rename detection ignores the user's `diff.renames` and
+non-ASCII paths come back literal, matching the files on disk.
+
 All results are JSON-serialisable so `assess_core` can drop them straight into
 `run-context.json`.
 
@@ -110,7 +121,17 @@ directory anywhere under `repo_root`, not just at the root - a vault kept as a s
 (`repo/notes/.obsidian/`) sits below the `git rev-parse --show-toplevel` scan target and was
 previously reported as no vault, silently disabling downstream vault accommodations (#179).
 Pruning `EXCLUDE_DIRS` keeps a vendored or build-artifact `.obsidian/` from tripping a false
-positive.
+positive. Every doc-to-doc edge carries a `kind`: `link` for markdown links, wikilinks and
+vault query edges, `reference` for a backticked token outside a fence that resolves to an
+existing doc (path tokens via `ownership_parser._extract_path_refs`; exact paths before
+guesses: doc-relative, then a path via `ownership_parser._resolve_ref` or a bare basename
+that names exactly one walked doc). Fences are recognised behind blockquote and list-item
+markers too. References settle in a first pass, before the link
+pass: a `.claude/` doc a reference names joins the graph and is read in turn, so links
+reach it from any doc; an uncited one stays excluded. The headline `orphan_rate` and
+`reachability_pct` count both kinds; `link_only_orphan_rate` / `link_only_reachability_pct`
+report links alone over the same node set, so a doc only a reference brought in counts as
+an orphan there. A reference edge also clears the pair from `missing_xrefs` (#353).
 
 **`raw_source.py`**
 Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:
@@ -239,7 +260,14 @@ disclosure (a suppressed finding is counted and named, never silently vanished).
 `exclude_archive_from_attention` then builds the attention list with any path under an
 `archive/`, `archived/` or `attic/` directory left out (so it never becomes a prescribed
 action) and returns those paths as `archived_finding_paths` for the `excluded_as_archive`
-disclosure; the findings themselves still name them. Each
+disclosure; the findings themselves still name them. Before either filter, the commit
+sets are folded through the rename map (so a renamed directory's history lands on its
+current name), and `prune_missing_finding_paths` drops any `hidden_coupling` or
+`refactor_boundary` path absent from the working tree, returning them as
+`pruned_finding_paths` for the run-context block of that name (`paths`, `count`). The
+prune stands down when the rename map is incomplete, since an unfolded old path is not
+evidence of a deletion, and `rename_map_complete` carries that state into the block so
+the report can say renames were not read. Each
 block build is wrapped in a catch-all so one signal's failure degrades that block to
 `available: False` rather than crashing the run. It also runs `structure_drift.py`'s Tier 1
 grouping disagreement (fed the behaviour block's co-change pairs so no second git-log parse
