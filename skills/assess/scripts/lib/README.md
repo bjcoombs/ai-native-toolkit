@@ -462,12 +462,14 @@ pass). A marker that survived many edits to an actively-maintained file is
 unactioned intent; calendar age alone can't tell that from dormancy. Classifies
 markers as tracked (issue/ticket/URL/date reference, or a justified suppression)
 vs bare, and each introducing commit as agent/human (reusing `change_coupling`'s
-conservative B4 identity rules). A tracked marker is never stale, however many
-edits it survived; each family row carries a `justified` count (suppressions with
-an inline `-- reason` or trailing comment, 0 for other families), and the
-`unactioned_intent` action states the `stale_touches_threshold` it applied. Honours the shared excludes and the generated-file
-filter (codegen `ignore_for_file` boilerplate is not debt), and degrades aging to
-`aging_reliable: False` on degenerate history (same verdict as `git_churn`).
+conservative B4 identity rules). A justified suppression (inline `-- reason` or
+trailing comment) is never stale and is counted in each family row's `justified`
+(0 outside suppressions); other tracked markers still age, since an issue or a
+deadline can go stale too. The `unactioned_intent` action states the
+`stale_touches_threshold` it applied. Honours the shared excludes and the
+generated-file filter (codegen `ignore_for_file` boilerplate is not debt), and
+degrades aging to `aging_reliable: False` on degenerate history (same verdict as
+`git_churn`).
 Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
 sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.

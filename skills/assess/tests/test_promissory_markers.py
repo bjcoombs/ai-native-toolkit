@@ -184,17 +184,23 @@ def test_justified_not_stale_keeps_file_out_of_unactioned_intent(
     assert not {a["path"] for a in result["attention"]} & set(_JUSTIFIED_FORMS)
 
 
-def test_linked_todo_is_not_stale(tmp_path: Path) -> None:
-    """The linked-not-debt rule covers every family: a TODO citing an issue
-    is tracked intent, so surviving edits does not make it stale."""
+def test_linked_markers_of_other_families_still_go_stale(tmp_path: Path) -> None:
+    """Only a justified suppression is exempt. A ticketed TODO, an expired
+    dated deprecation and a ticketed skip still age: the promise can go stale
+    while the reference stays, and the Layer 5 cap reads disabled_test.stale."""
     repo = tmp_path / "repo"
-    _aged_marker_repo(
-        repo, {"a.py": "# TODO(#123) tracked", "b.py": "# TODO untracked"}, edits=6,
-    )
+    _aged_marker_repo(repo, {
+        "a.py": "# TODO(#123) tracked",
+        "d.py": "# DEPRECATED: use v2, deadline 2019-06-01",
+        "s.test.js": "it.skip('see JIRA-42', () => {});",
+    }, edits=6)
     summary = _scan(repo).summary()
-    assert set(summary["stale_by_file"]) == {"b.py"}
-    assert summary["families"]["todo"]["stale"] == 1
-    assert summary["families"]["todo"]["justified"] == 0
+    fams = summary["families"]
+    assert set(summary["stale_by_file"]) == {"a.py", "d.py", "s.test.js"}
+    assert fams["todo"]["linked"] == fams["todo"]["stale"] >= 1
+    assert fams["deprecation"]["linked"] == fams["deprecation"]["stale"] == 1
+    assert fams["disabled_test"]["linked"] == fams["disabled_test"]["stale"] == 1
+    assert all(row["justified"] == 0 for row in fams.values())
 
 
 def test_bare_suppression_rule_names_with_hyphens_are_not_justified() -> None:

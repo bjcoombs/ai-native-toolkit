@@ -16,9 +16,11 @@ Families and the layer each one wounds:
 
 A marker is *tracked* (pressure exists) when it cites an issue, ticket, URL, or
 deadline date - or, for suppressions, when it carries an inline justification
-(``//nolint:x // reason``, ``eslint-disable-line x -- reason``). A tracked
-marker is never stale, however many edits it survived. The bare remainder is
-the debt. Each marker's
+(``//nolint:x // reason``, ``eslint-disable-line x -- reason``). A justified
+suppression is never stale, however many edits it survived: the reason is the
+record, and there is no promise left to keep. Other tracked markers still age,
+because an issue or a deadline can go stale while the marker stays. The bare
+remainder is the debt. Each marker's
 introducing commit is also classified agent/human (reusing the conservative B4
 identity rules from ``change_coupling``), so "agent-introduced unactioned
 intent" is a measured quantity, not an article of faith.
@@ -97,11 +99,13 @@ LINKED_RE = re.compile(r"#\d+|\b[A-Z][A-Z0-9]+-\d+\b|https?://|\b\d{4}-\d{2}-\d{
 # directive, e.g. ``//nolint:nilerr // error conveyed via response status``, or
 # as ESLint's documented ``-- reason`` description, e.g.
 # ``// eslint-disable-line no-console -- CLI prints by design``. The ``--`` must
-# follow whitespace, so a hyphenated rule name is not read as a reason.
+# follow whitespace, so a hyphenated rule name is not read as a reason, and a
+# block directive's reason must sit inside its own ``/* ... */``.
 JUSTIFIED_SUPPRESSION_RE = re.compile(
     r"(nolint[^/]*//|noqa[^#]*#|eslint-disable[^*]*\*/|"
     r"//\s*ignore:[^/]*//|@SuppressWarnings\(.+\)\s*//)\s*\S"
-    r"|eslint-disable\S*\s.*?\s--\s*[^\s*]"
+    r"|/\*\s*eslint-disable[^*]*?\s--\s*[^\s*]"
+    r"|//\s*eslint-disable\S*\s.*?\s--\s*\S"
 )
 
 # Comment leaders; a todo/deprecation hit must sit after one of these on its
@@ -166,12 +170,16 @@ class MarkerScan:
     aging_reliable: bool = True  # False when history is too thin to age markers
 
     def is_stale(self, m: Marker) -> bool:
-        """Stale = untracked and survived at least the threshold of edits.
+        """Stale = survived at least the threshold of edits, unless justified.
 
-        A linked marker (issue, ticket, URL, date, or a justified suppression)
-        is tracked intent, not debt, so it never goes stale.
+        Only a justified suppression is exempt. A marker linked to an issue or a
+        date still ages: ``remove after 2019-06-01`` surviving 65 edits is the
+        broken promise, not tracked intent.
         """
-        return not m.linked and m.survived_touches >= self.stale_touches_threshold
+        return (
+            not m.justified
+            and m.survived_touches >= self.stale_touches_threshold
+        )
 
     @property
     def stale(self) -> list[Marker]:
