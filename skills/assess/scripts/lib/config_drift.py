@@ -35,7 +35,8 @@ repository-level rulesets (``includes_parents=false``). A missing live ruleset, 
 exists are drift entries, not outages.
 
 Block: ``{"available", "entries": [{"file", "key", "tracked", "live"}],
-"snapshots"}``. No snapshots, or none that differ, gives ``available: True``
+"snapshots"}``. Entries are ranked worst first: one-sided (``"absent"``) entries,
+then boolean flips, then other value changes. No snapshots, or none that differ, gives ``available: True``
 with ``entries: []``. Any GitHub read that fails degrades the whole block to
 ``{"available": False, "reason"}`` (``no_access`` on HTTP 403) - never a
 partial clean result. GitHub access goes through ``gh_cli``.
@@ -152,7 +153,8 @@ def diff_values(tracked: Any, live: Any, key: str = "") -> list[tuple[str, Any, 
             if k not in live:
                 # The live response omits the key entirely (e.g. a requirement
                 # switched off): removed, not "compared against null".
-                gone = "present" if isinstance(tracked[k], (dict, list)) else tracked[k]
+                was = _normalize(tracked[k])
+                gone = "present" if isinstance(was, (dict, list)) else was
                 out.append((sub, gone, "absent"))
                 continue
             out += diff_values(tracked[k], live[k], sub)
@@ -287,4 +289,23 @@ def scan_config_drift(repo_root: Path) -> dict[str, Any]:
             ]
     except GhUnavailable as e:
         return {**unavailable(e.reason), "snapshots": listed}
-    return {"available": True, "entries": entries, "snapshots": listed}
+    return {"available": True, "entries": rank_entries(entries), "snapshots": listed}
+
+
+def _severity(entry: dict[str, Any]) -> int:
+    """0 = something exists on one side only (a rule, requirement or branch gone
+    or added); 1 = a boolean flipped; 2 = any other value change."""
+    if "absent" in (entry["tracked"], entry["live"]):
+        return 0
+    if isinstance(entry["tracked"], bool) or isinstance(entry["live"], bool):
+        return 1
+    return 2
+
+
+def rank_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Worst first, stable within a tier (path, then snapshot key order).
+
+    The report renders only ``entries[0]``, so the order decides which drift a
+    reader sees - it must not be the export file's serialisation order.
+    """
+    return sorted(entries, key=_severity)

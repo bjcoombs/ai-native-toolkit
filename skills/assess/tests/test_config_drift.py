@@ -353,3 +353,21 @@ def test_json_without_a_snapshot_key_is_not_parsed(world, monkeypatch) -> None:
     monkeypatch.setattr(cd.json, "loads", lambda t: parsed.append(t) or real(t))
     assert find_snapshots(world.root) == []
     assert parsed == []
+
+
+def test_entries_rank_worst_first(world) -> None:
+    tracked = _protection(True)  # required_status_checks precedes enforce_admins
+    live = _protection(True)
+    live["required_status_checks"]["contexts"] = ["ci-renamed"]
+    live["enforce_admins"] = {"url": "u", "enabled": False}
+    del live["required_pull_request_reviews"]
+    world.track(".github/branch-protection/main.json", tracked)
+    world.serve("protection.json", live)
+    keys = [e["key"] for e in scan_config_drift(world.root)["entries"]]
+    assert keys == ["required_pull_request_reviews", "enforce_admins",
+                    "required_status_checks.contexts"]
+
+
+def test_absent_key_reports_the_normalised_tracked_value() -> None:
+    tracked = {"enforce_admins": {"url": "u", "enabled": False}}
+    assert diff_values(tracked, {}) == [("enforce_admins", False, "absent")]

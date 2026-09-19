@@ -399,7 +399,9 @@ are listed with `includes_parents=false`, so a repo snapshot never pairs with an
 inherited org ruleset. Tracked JSON holding none of the snapshot keys is skipped by
 a substring probe before any parse. A missing live ruleset, an
 unprotected branch and a deleted branch are drift entries, not outages. Emits
-`config_drift: {available, entries: [{file, key, tracked, live}], snapshots}`;
+`config_drift: {available, entries: [{file, key, tracked, live}], snapshots}`, entries
+ranked worst first (one-sided `"absent"`, then boolean flips, then other changes) because
+the report renders only `entries[0]`;
 with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` alongside any change to discovery or the diff.
