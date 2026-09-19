@@ -1342,6 +1342,7 @@ def build_run_context(
         coverage_data,
         ctx["test_pressure"].get("cheap_heuristics"),
         repo_root=repo_root,
+        index=hot_test_index,
     )
 
     # Promissory markers (stale TODO/FIXME, suppressions, disabled tests):

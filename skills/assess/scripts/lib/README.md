@@ -465,7 +465,11 @@ co-located and co-committed), and the `test_focus` signal. The parallel-tree
 (`git ls-files`, or a walk pruned of `doc_graph.EXCLUDE_DIRS` outside git): a
 test belongs to the same-named source sharing the deepest common directory with
 it, a tie between sources (two `index.js` equally close) credits none, and a
-root-only common ancestor credits nothing. Imports `git_churn` and `doc_graph`;
+root-only common ancestor credits nothing. A walk past 200,000 files yields an
+empty index (fail closed: the dropped files may hold a rival source). The module
+docstring names two limits: an untracked parallel test is invisible to this tier
+while the path probes see untracked files, and a helper named like a test
+(`test_utils.py`) can credit a lone `utils.py`. Imports `git_churn` and `doc_graph`;
 existence checks bounded to 16 ancestor levels; never raises.
 `tests/test_sibling_tests.py` pins the three-way agreement.
 
@@ -488,7 +492,8 @@ carry action `measure_coverage`. A report that records a 0 rate, or omits a file
 with no test file, gives `no_covering_test`. Without `repo_root` a no-report file
 is `unknown_no_coverage`. It never raises and records `coverage_present`. The
 only file I/O is the sibling-test probe (one repository index plus existence
-checks), and only under `repo_root`; imports no
+checks), and only under `repo_root`; the index is built on first use, or passed
+in as `index` (`assess_core` hands over the one its hotspot pages built); imports no
 orchestrator. This block is the SINGLE source both the report focus table and
 the mutation offer consume. The mutation scope is `mutation_scope(block)`: the
 entries with test evidence (`covered_but_hollow`, `sibling_test_only`) in ranked

@@ -197,3 +197,45 @@ def test_parallel_tree_basename_reads_git_index_when_present(tmp_path: Path) -> 
     index = tc.build_test_index(tmp_path)
     assert tc.has_sibling_test(tmp_path, "app/functions/foo.js", index=index) is True
     assert tc.has_sibling_test(tmp_path, "app/functions/baz.js", index=index) is False
+
+
+def test_parallel_tree_basename_truncated_index_credits_nothing(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """A walk cut off at the index cap can drop a rival source as readily as a
+    test, so a truncated index is empty: it fails closed rather than credit a
+    source on evidence the complete index calls a tie."""
+    for rel in ("svc/a/util.js", "svc/a-tests/util.test.js", "svc/b/util.js"):
+        _touch(tmp_path, rel)
+    # Complete index: svc/a and svc/b tie on svc/, so neither is credited.
+    assert tc.sibling_test_match(tmp_path, "svc/a/util.js") is None
+    # Cap at two files: the walk keeps svc/a and the test but drops svc/b.
+    monkeypatch.setattr(tc, "MAX_INDEX_FILES", 2)
+    index = tc.build_test_index(tmp_path)
+    assert index == tc.TestIndex()
+    assert tc.sibling_test_match(tmp_path, "svc/a/util.js", index) is None
+
+
+def test_parallel_tree_basename_index_is_built_only_when_a_probe_reads_it(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """A coverage report that records every hot file never reaches the test-file
+    probe, so the repository index is not built; a caller's index is reused."""
+    from lib import test_focus as tf
+
+    for rel in ("app/functions/foo.js", "app/unit-tests/functions/foo.test.js"):
+        _touch(tmp_path, rel)
+    built: list[Path] = []
+    real = tf.build_test_index
+    monkeypatch.setattr(tf, "build_test_index",
+                        lambda root: built.append(root) or real(root))
+    coverage = {"_overall": 0.9, "per_file": {"app/functions/foo.js": 0.9}}
+    compute_test_focus(["app/functions/foo.js"], coverage, None, repo_root=tmp_path)
+    assert built == []
+    shared = tc.build_test_index(tmp_path)
+    block = compute_test_focus(["app/functions/foo.js"], None, None,
+                               repo_root=tmp_path, index=shared)
+    assert built == []
+    assert block["entries"][0]["test_signal"] == "sibling_test_only"
+    compute_test_focus(["app/functions/foo.js"], None, None, repo_root=tmp_path)
+    assert built == [tmp_path]

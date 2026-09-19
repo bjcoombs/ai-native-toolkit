@@ -31,7 +31,24 @@ git repository, a pruned walk otherwise; built-in excluded trees such as
 ``node_modules`` and ``tests/fixtures`` skipped). A test found this way belongs
 to the same-named source whose directory shares the deepest common ancestor
 with it; a tie across sources (two ``index.js`` equally close) credits none, and
-a common ancestor of only the repository root credits nothing.
+a common ancestor of only the repository root credits nothing. A non-git walk
+past :data:`MAX_INDEX_FILES` yields an empty index, so the tier credits nothing.
+
+Two stated limits of the basename tier:
+
+- Existence differs by tier. The co-located, mirrored and flat tiers probe a
+  named path with ``is_file()``, so an untracked test beside the source counts.
+  The basename tier needs a repository-wide listing, and in a git repository
+  that listing is ``git ls-files``: it leaves out build output and untracked
+  scratch, which a disk walk would index as evidence. An untracked parallel
+  test is therefore invisible to it.
+- A helper module whose name matches a test convention (``test_utils.py`` in
+  ``pkg/b/helpers/``) is indexed as a test with no same-named source to compete
+  for it, so it credits a lone ``utils.py`` elsewhere under the same directory.
+  In a single-package layout (everything under one ``src/``) that directory is
+  the whole package, and the rivals count carries the precision alone. The
+  credit is ``sibling_test_only``, which sends the file to mutation testing,
+  where a helper that tests nothing shows up as all-surviving mutants.
 
 Inward-only: stdlib plus ``lib.git_churn`` / ``lib.doc_graph``, imports no
 orchestrator. Beyond the index, file I/O is existence checks (``is_file`` /
@@ -76,8 +93,10 @@ MAX_ANCESTOR_LEVELS = 16
 # relationship: a root ``tests/test_mod.py`` would credit every ``mod.py``.
 MAX_FLAT_BELOW = 2
 
-# Bound on the files a non-git walk indexes; past it the index stops growing
-# (a missed parallel test degrades to ``unsupported``, never a false credit).
+# Bound on the files a non-git walk indexes. A walk that reaches it yields an
+# empty index: the files it dropped may include a rival same-named source, so a
+# partial index could credit a test the complete one calls a tie. The basename
+# tier then credits nothing (``git ls-files`` is uncapped).
 MAX_INDEX_FILES = 200_000
 
 MATCH_DIRECT = "direct"  # co-located, mirrored, or the file is itself a test
@@ -133,10 +152,10 @@ def shared_name_keys(paths: Iterable[str]) -> frozenset[str]:
     return frozenset(k for k, n in counts.items() if n > 1)
 
 
-def _repo_files(repo_root: Path) -> list[Path]:
+def _repo_files(repo_root: Path) -> list[Path] | None:
     """Repo-relative file paths: the git-tracked files under ``repo_root`` when
-    it is in a git repository, else a walk pruned of :data:`EXCLUDE_DIRS` and
-    capped at :data:`MAX_INDEX_FILES`."""
+    it is in a git repository, else a walk pruned of :data:`EXCLUDE_DIRS`;
+    ``None`` when that walk finds more than :data:`MAX_INDEX_FILES` files."""
     root = repo_root.resolve()
     tracked = tracked_files(root)
     if tracked is not None:
@@ -152,21 +171,22 @@ def _repo_files(repo_root: Path) -> list[Path]:
         dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS)
         rel_dir = Path(dirpath).relative_to(root)
         for name in sorted(filenames):
-            walked.append(rel_dir / name)
             if len(walked) >= MAX_INDEX_FILES:
-                return walked
+                return None  # truncated: fail closed
+            walked.append(rel_dir / name)
     return walked
 
 
 def build_test_index(repo_root: Path) -> TestIndex:
     """Index the repository once for the basename tier. An empty index when the
-    root cannot be read. Never raises."""
+    root cannot be read or the walk passed :data:`MAX_INDEX_FILES`. Never
+    raises."""
     index = TestIndex()
     try:
         files = _repo_files(Path(repo_root))
     except (OSError, ValueError):
         return index
-    for rel in files:
+    for rel in files or ():
         if is_excluded_path(rel):
             continue
         dirs = rel.parts[:-1]
