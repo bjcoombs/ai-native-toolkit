@@ -448,7 +448,7 @@ keys pass through. The reference search is the public
 `is_referenced_in(repo_root, needle, path)`, so a check outside this module can
 reuse it. CLI, run from `skills/assess/scripts`:
 `uv run python -m lib.evidence_check <repo_root> <evidence.json> --json <out.json>`
-(exit 0 all verified, 1 any rejected, 2 malformed input or a `repo_root` that is not a
+(exit 0 all verified, 1 any rejected, 2 an evidence file that cannot be read or is not a JSON array, or a `repo_root` that is not a
 directory; a missing root would otherwise verify every `path_absent` claim). Stdlib only, imports no
 orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kind
 or change to a check rule.

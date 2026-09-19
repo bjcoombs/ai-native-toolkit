@@ -32,8 +32,9 @@ CLI (run from ``skills/assess/scripts``)::
 
     uv run python -m lib.evidence_check <repo_root> <evidence.json> --json <out.json>
 
-Exit 0 when every entry verifies, 1 when any is rejected, 2 when the input is
-not a JSON array or ``repo_root`` is not a directory (no output is written then).
+Exit 0 when every entry verifies, 1 when any is rejected, 2 when the evidence
+file cannot be read, is not JSON, or is not a JSON array, or ``repo_root`` is not
+a directory (no output is written then).
 """
 from __future__ import annotations
 
@@ -180,8 +181,12 @@ def _search(repo_root: Path | str, needle: str, path: str) -> bool | None:
         return False
     if target.is_file():
         return _file_has(target, raw)
-    if not target.is_dir():
+    if not target.exists():
         return False
+    if not target.is_dir():
+        # A FIFO, socket or device named directly: never opened (a FIFO would
+        # block the read), so the search is incomplete, not empty.
+        return None
     return _walk(Path(repo_root).resolve(), target, raw)
 
 

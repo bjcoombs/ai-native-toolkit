@@ -285,6 +285,15 @@ def test_fifo_under_the_path_makes_a_negative_claim_incomplete(repo: Path) -> No
     result = check_evidence(repo, [_not_referenced("scripts/other.sh")])
     assert result["evidence"] == []
     assert "could not be searched" in result["evidence_rejected"][0]["reason"]
+    # Named directly as the path, the FIFO is incomplete too, never an empty search.
+    named = check_evidence(repo, [
+        _not_referenced("scripts/other.sh", ".github/workflows/pipe"),
+        {"layer": 7, "kind": "referenced_in", "needle": "scripts/other.sh",
+         "path": ".github/workflows/pipe"},
+    ])
+    assert named["evidence"] == []
+    assert all("could not be searched" in e["reason"] for e in named["evidence_rejected"])
+    assert is_referenced_in(repo, "scripts/other.sh", ".github/workflows/pipe") is False
     # The FIFO is never opened, and a match elsewhere still verifies.
     ok = {"layer": 7, "kind": "referenced_in", "needle": "scripts/check-x.sh",
           "path": ".github/workflows"}
