@@ -522,13 +522,25 @@ hyphenated stem also matched as underscores), the adjacent test directories
 (`__tests__/` / `tests/` / `test/` / `spec/`), and the is-this-a-test rule, plus a
 layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
-ancestor mirroring the source path, then a flat tree within two components),
+ancestor mirroring the source path, then a conventionally named test anywhere in
+the repository - a parallel tree such as `app/unit-tests/` or Dart's
+`test/unit/` - then a flat tree within two components),
 and `has_sibling_test` (the yes/no/unknown verdict, dropping a flat-only match
 on a bare name more than one hot file shares). Three consumers read it and must
 agree in one run: the hotspot page's `Has test file` row
 (`assess_core._has_sibling_test`), the E2 test-to-code map
 (`keyhole_signals._find_sibling_test`, co-location layer only, since E2 means
-co-located and co-committed), and the `test_focus` signal. Stdlib only;
+co-located and co-committed), and the `test_focus` signal. The parallel-tree
+(basename) tier reads a `TestIndex` built once per run by `build_test_index`
+(`git ls-files`, or a walk pruned of `doc_graph.EXCLUDE_DIRS` outside git): a
+test belongs to the same-named source sharing the deepest common directory with
+it, a tie between sources (two `index.js` equally close) credits none, and a
+root-only common ancestor credits nothing. Tracked files deleted from disk are
+left out. A walk past 200,000 files, or one that cannot read a directory, yields
+an empty index (fail closed: the missed files may hold a rival source). The module
+docstring names two limits: an untracked parallel test is invisible to this tier
+while the path probes see untracked files, and a helper named like a test
+(`test_utils.py`) can credit a lone `utils.py`. Imports `git_churn` and `doc_graph`;
 existence checks bounded to 16 ancestor levels; never raises.
 `tests/test_sibling_tests.py` pins the three-way agreement.
 
@@ -545,11 +557,14 @@ higher: `no_covering_test` > `covered_but_hollow` > `unsupported` >
 so the focus table and the hotspot pages agree. With a `repo_root`, a file with a
 test file but no coverage record - no report at all, or a partial report that
 omits it - is `sibling_test_only` (test file present, coverage unmeasured; never
-a covered bucket); a file with no report and no test file is `unsupported`; both
+a covered bucket); a file with no report and no sibling or parallel-tree test
+file is `unsupported`; both
 carry action `measure_coverage`. A report that records a 0 rate, or omits a file
 with no test file, gives `no_covering_test`. Without `repo_root` a no-report file
 is `unknown_no_coverage`. It never raises and records `coverage_present`. The
-only file I/O is the sibling-test probe, and only under `repo_root`; imports no
+only file I/O is the sibling-test probe (one repository index plus existence
+checks), and only under `repo_root`; the index is built on first use, or passed
+in as `index` (`assess_core` hands over the one its hotspot pages built); imports no
 orchestrator. This block is the SINGLE source both the report focus table and
 the mutation offer consume. The mutation scope is `mutation_scope(block)`: the
 entries with test evidence (`covered_but_hollow`, `sibling_test_only`) in ranked
