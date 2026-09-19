@@ -1037,3 +1037,57 @@ def test_archive_paths_excluded_noop_without_archive() -> None:
     attention, archived = ks.exclude_archive_from_attention(findings)
     assert attention == ks.build_attention_list(findings)
     assert archived == []
+
+
+# --- prune_missing_finding_paths (renamed / deleted history) -----------------
+
+def test_pruned_finding_paths_only_git_history_findings(tmp_path: Path) -> None:
+    """A git-history finding path absent from disk is dropped and returned
+    sorted; paths that exist, and findings read from the working tree, are
+    untouched."""
+    (tmp_path / "live").mkdir()
+    findings = ks.assemble_findings({
+        "hidden_coupling": ["live", "gone", "also_gone"],
+        "refactor_boundary": ["gone_island"],
+        "unactioned_intent": ["not/on/disk.py"],
+    })
+    pruned, dropped = ks.prune_missing_finding_paths(findings, tmp_path)
+    by_name = {f["name"]: f["paths"] for f in pruned}
+    assert by_name["hidden_coupling"] == ["live"]
+    assert by_name["refactor_boundary"] == []
+    assert by_name["unactioned_intent"] == ["not/on/disk.py"]
+    assert dropped == ["also_gone", "gone", "gone_island"]
+    assert [f["name"] for f in pruned] == [f["name"] for f in findings]
+
+
+def test_pruned_finding_paths_stand_down_when_rename_map_incomplete(tmp_path: Path) -> None:
+    """With git history read, a hidden_coupling dir absent from disk is pruned.
+    When the rename map could not be built (git failed), a missing path may be
+    an unfolded old name rather than a deletion, so nothing is pruned."""
+    import subprocess
+
+    from lib.change_coupling import RenameMap
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+
+    def run(complete: bool) -> dict:
+        return ks.integrate(
+            repo_root=tmp_path,
+            complexity_stats=_COMPLEXITY_STATS,
+            doc_staleness=_stale_doc_staleness(churn_degenerate=False),
+            dead_code={"available": False, "candidate_count": 0,
+                       "candidates": [], "tools": []},
+            observability={"rung": None, "reachable": {"present": False}},
+            structure=_MODULAR_STRUCTURE,
+            commit_sets=_BLEEDING_COMMIT_SETS,
+            rename_map=RenameMap({}, complete=complete),
+        )
+
+    stood_down = run(complete=False)
+    assert _finding_paths(stood_down, "hidden_coupling")
+    assert stood_down["pruned_finding_paths"] == []
+    assert stood_down["rename_map_complete"] is False
+    pruned = run(complete=True)
+    assert _finding_paths(pruned, "hidden_coupling") == []
+    assert pruned["pruned_finding_paths"] == sorted(
+        _finding_paths(stood_down, "hidden_coupling"))

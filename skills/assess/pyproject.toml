@@ -46,7 +46,7 @@ select = ["E4", "E7", "E9", "F", "C901"]
 
 [tool.ruff.lint.mccabe]
 # Per-function cyclomatic complexity. 15 fences current reality: every function
-# already sits at or below it except four genuine offenders (ccn 17-19), which
+# already sits at or below it except four genuine offenders (ccn 17-21), which
 # carry an explicit ``# noqa: C901`` with a note - build_doc_graph and
 # authorship_analysis here, render in doc-graph-svg.py, and
 # build_standalone_skill_zip in scripts/. The gate fails the moment any other
