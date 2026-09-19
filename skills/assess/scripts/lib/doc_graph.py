@@ -197,6 +197,13 @@ class DocGraphResult:
     curated_doc_count: int = 0          # docs in the curated layer (== doc_count)
     raw_source_orphan_rate: float = 0.0  # orphan rate within the raw layer
     raw_source_broken_links: int = 0     # broken links originating in the raw layer
+    # Working-notes exclusion (issue #366): pattern-named notes hung off one or
+    # two index files (plans, session logs, tickets) leave the headline the
+    # same way, named with a file count, with the notes layer's own figures.
+    excluded_working_notes_trees: list[dict] = field(default_factory=list)  # [{path, file_count}]
+    working_notes_doc_count: int = 0
+    working_notes_orphan_rate: float = 0.0
+    working_notes_broken_links: int = 0
     # Link-only figures (issue #353). The headline orphan_rate and
     # reachability_pct count reference edges (a backticked doc path) as well as
     # links; these two are the same figures over link edges alone.
@@ -244,6 +251,10 @@ class DocGraphResult:
             "curated_doc_count": self.curated_doc_count,
             "raw_source_orphan_rate": round(self.raw_source_orphan_rate, 3),
             "raw_source_broken_links": self.raw_source_broken_links,
+            "excluded_working_notes_trees": self.excluded_working_notes_trees,
+            "working_notes_doc_count": self.working_notes_doc_count,
+            "working_notes_orphan_rate": round(self.working_notes_orphan_rate, 3),
+            "working_notes_broken_links": self.working_notes_broken_links,
             "link_only_orphan_rate": round(self.link_only_orphan_rate, 3),
             "link_only_reachability_pct": round(self.link_only_reachability_pct, 3),
         }
@@ -875,14 +886,19 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     # read-side metrics so the curated-wiki signal isn't drowned. Detection runs
     # on the *final* graph (after vault edges), so a doc made navigable by a
     # `.base` hub or dataview query is not misread as raw.
-    excluded_docs, raw_trees = _detect_raw_trees(
+    raw_docs, raw_trees = _detect_raw_trees(
         graph, docs, repo_root, rel, base_hubs, machine_links,
     )
+    # Working-notes trees (issue #366) are the second fingerprint, detected on
+    # what the raw pass leaves so no doc belongs to both layers.
+    notes_docs, notes_trees = _detect_working_notes_trees(
+        graph, {rel(d) for d in docs} - raw_docs,
+    )
+    excluded_docs = raw_docs | notes_docs
     curated_docs = [d for d in docs if rel(d) not in excluded_docs]
     curated_nodes = [n for n in graph.nodes() if n not in excluded_docs]
     curated_graph = graph.subgraph(curated_nodes).copy()
     curated_broken = [b for b in broken if b.get("from") not in excluded_docs]
-    raw_broken = [b for b in broken if b.get("from") in excluded_docs]
     curated_missing = [
         mx for mx in missing
         if mx.get("from") not in excluded_docs and mx.get("to") not in excluded_docs
@@ -908,18 +924,51 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     result.broken_links = curated_broken[:MAX_BROKEN_LINKS]
     result.missing_xrefs = curated_missing[:MAX_MISSING_XREFS]
 
-    # Raw-layer figures, reported separately so the exclusion stays legible.
-    in_deg_full = dict(graph.in_degree())
-    raw_doc_count = len(excluded_docs)
-    raw_orphans = sum(1 for r in excluded_docs if in_deg_full.get(r, 0) == 0)
-    result.excluded_raw_trees = [
-        {"path": t["path"], "file_count": t["file_count"]} for t in raw_trees
-    ]
-    result.raw_source_doc_count = raw_doc_count
+    # Excluded-layer figures, reported separately so the exclusion stays legible.
     result.curated_doc_count = result.doc_count
-    result.raw_source_orphan_rate = (raw_orphans / raw_doc_count) if raw_doc_count else 0.0
-    result.raw_source_broken_links = len(raw_broken)
+    (result.excluded_raw_trees, result.raw_source_doc_count,
+     result.raw_source_orphan_rate, result.raw_source_broken_links,
+     ) = _layer_figures(graph, broken, raw_docs, raw_trees)
+    (result.excluded_working_notes_trees, result.working_notes_doc_count,
+     result.working_notes_orphan_rate, result.working_notes_broken_links,
+     ) = _layer_figures(graph, broken, notes_docs, notes_trees)
     return result
+
+
+def _layer_figures(
+    graph, broken: list[dict], layer_docs: set[str], trees: list[dict],
+) -> tuple[list[dict], int, float, int]:
+    """An excluded layer's own figures: its trees as ``{path, file_count}``,
+    doc count, orphan rate over the full graph, and broken links it holds."""
+    in_deg = dict(graph.in_degree())
+    n = len(layer_docs)
+    orphans = sum(1 for r in layer_docs if in_deg.get(r, 0) == 0)
+    return (
+        [{"path": t["path"], "file_count": t["file_count"]} for t in trees],
+        n,
+        (orphans / n) if n else 0.0,
+        sum(1 for b in broken if b.get("from") in layer_docs),
+    )
+
+
+def _detect_working_notes_trees(graph, doc_rels: set[str]) -> tuple[set[str], list[dict]]:
+    """Detect working-notes subtrees and return (excluded_doc_rels, trees).
+
+    ``doc_rels`` is the doc set minus raw-source docs; like the raw pass it
+    never classifies a non-doc node (a ``.base`` hub). Signals come from the
+    headline graph (link and reference edges) restricted to those docs: each doc's in-degree and the docs its inbound
+    edges come from, so the classifier can tell one index holding the links
+    from a wiki whose links are spread out. The verdict is
+    ``lib.raw_source.classify_working_notes_trees``.
+    """
+    from lib.raw_source import classify_working_notes_trees
+
+    signals: dict[str, dict] = {}
+    for r in sorted(doc_rels):
+        sources = [u for u in graph.predecessors(r) if u in doc_rels]
+        signals[r] = {"in_degree": len(sources), "inbound_sources": sources}
+    trees = classify_working_notes_trees(signals)
+    return {r for t in trees for r in t["docs"]}, trees
 
 
 def _detect_raw_trees(
