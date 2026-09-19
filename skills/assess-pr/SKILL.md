@@ -323,6 +323,8 @@ This is the third item in the batched Phase 2 question - the one that converts `
 >
 > This turns `/assess` from a thing-you-run into a thing-that-runs. No AI in the loop - it is the frozen, contract version of the assessment you just ran by hand.
 
+**State the cost in the offer.** Read `gate_cost_estimate` from `.assess/run-context.json`. When its `available` is true, add one line to the offer: "Estimated cost: about N runs a month, roughly M minutes of GitHub Actions time", with N its `runs_per_month` and M its `minutes_per_month`, followed by its `assumption` sentence (a fixed 5 minutes a run, one run per pull request merged in the last 30 days), so the figure reads as an estimate. When `private` is true, add that a private repository spends these minutes from the account's Actions allowance; a public repository runs on standard runners at no charge. When `available` is false, leave the line out rather than guess a figure.
+
 This offer only makes sense when the repo can actually run the workflow. Apply the **same write-access check as Step 5** (`CAN_PUSH`): on a read-only target, the file can still be written locally for the user to commit via their fork, but don't promise to open the gating PR. If `gh` / the remote is unavailable, drop this option from the batched question (the workflow could never run).
 
 If the user **did not select** the CI-gate offer: skip. The deterministic report and findings already shipped in `.assess/`.
