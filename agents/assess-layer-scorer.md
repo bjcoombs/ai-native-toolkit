@@ -25,10 +25,41 @@ A scorecard the orchestrator forwards to the `assess-findings` step:
 
 - the **score** (one point per layer that is Present; half for Partial - see the scoring rule in the methodology) **and its denominator** (8 for a software repo; the applicable-layer count for a knowledge base - see Step 0),
 - the **per-layer verdict** (Present / Partial / Missing, or **N/A** for a layer the archetype excludes) with a one-line evidence note each,
-- the **maturity label** the score maps to (for a non-software archetype it **names the archetype and the applicable-layer count** - see Step 0), and
-- any layer-specific observations the report should lead with (e.g. "Layer 3 linter exists but no complexity gate").
+- the **maturity label** the score maps to (for a non-software archetype it **names the archetype and the applicable-layer count** - see Step 0),
+- any layer-specific observations the report should lead with (e.g. "Layer 3 linter exists but no complexity gate"), and
+- the **`evidence`** list: every existence or wiring fact a verdict rests on, as structured entries in the schema below.
 
 Return this as a compact structured summary (not the full report prose). The `assess-findings` step renders it into the report template alongside the deterministic findings.
+
+### Evidence schema
+
+Prose evidence is a claim; an `evidence` entry is a claim a script can re-check. Before the report is written the orchestrator runs every entry through `lib/evidence_check.py` (`exists()` plus a literal substring search, no model): entries that hold stay in `evidence`, the rest move to `evidence_rejected` and never reach the report. So cite a fact only as it literally stands on disk, and give each scored layer's verdict at least one entry.
+
+The list is one flat JSON array. Each entry has `layer` (0-8, the layer whose verdict cites it), `kind`, and the kind's arguments. Every `path` is relative to the repository root. `needle` is a literal string, not a regex or glob.
+
+| `kind` | Arguments | Holds when |
+|---|---|---|
+| `path_exists` | `path` | the file or directory exists |
+| `path_absent` | `path` | nothing exists at `path` |
+| `referenced_in` | `needle`, `path` | `needle` occurs in the file `path`, or in any file under the directory `path` (searched recursively, skipping `.git/` and `.assess/`) |
+| `not_referenced_in` | `needle`, `path` | `path` exists and `needle` occurs nowhere in it |
+| `file_contains` | `path`, `needle` | the one file `path` contains `needle` |
+
+Every check fails closed: an entry whose search could not read everything under `path` (an unreadable file, a FIFO, a symlinked directory outside the walk) is rejected as incomplete, not decided on the part it read.
+
+One example per kind, each true of the toolkit's own repository:
+
+```json
+[
+  {"layer": 0, "kind": "path_exists", "path": "CLAUDE.md"},
+  {"layer": 3, "kind": "path_absent", "path": ".eslintrc.json"},
+  {"layer": 5, "kind": "referenced_in", "needle": "pytest", "path": ".github/workflows"},
+  {"layer": 6, "kind": "not_referenced_in", "needle": "mutmut", "path": ".github/workflows"},
+  {"layer": 3, "kind": "file_contains", "path": ".github/workflows/tests.yml", "needle": "ruff check"}
+]
+```
+
+Existence claims are `path_exists` / `path_absent`; wiring claims ("CI runs the linter", "no workflow calls the script") are `referenced_in` / `not_referenced_in` against the file or directory that would do the calling. A Missing verdict cites its gap with `path_absent` or `not_referenced_in`.
 
 ---
 

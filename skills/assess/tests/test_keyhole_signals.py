@@ -1245,3 +1245,52 @@ def test_pruned_finding_paths_stand_down_when_rename_map_incomplete(tmp_path: Pa
     assert _finding_paths(pruned, "hidden_coupling") == []
     assert pruned["pruned_finding_paths"] == sorted(
         _finding_paths(stood_down, "hidden_coupling"))
+
+
+def test_rename_map_incomplete_when_ancestry_check_fails(tmp_path: Path, monkeypatch) -> None:
+    """A chain hop needs `git merge-base --is-ancestor`. Exit 128 (an object git
+    cannot resolve, as at a shallow boundary) is a failure, not "unrelated": the
+    map comes back empty and incomplete, and the prune stands down, so a live
+    finding is never reported as deleted."""
+    import subprocess
+
+    import lib.change_coupling as cc
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@example.com",
+                        "-c", "user.name=T", *args], check=True, capture_output=True)
+
+    git("init", "-q")
+    (tmp_path / "a.py").write_text("a = 1\n" * 5)
+    git("add", "-A")
+    git("commit", "-q", "-m", "a")
+    git("mv", "a.py", "b.py")
+    git("commit", "-q", "-m", "a -> b")
+    git("mv", "b.py", "c.py")
+    git("commit", "-q", "-m", "b -> c")
+
+    real_run = subprocess.run
+
+    def fake_run(cmd, *args, **kwargs):
+        if "--is-ancestor" in cmd:
+            return subprocess.CompletedProcess(cmd, 128, b"", b"fatal: bad object")
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(cc.subprocess, "run", fake_run)
+    rename_map = cc.build_rename_map(tmp_path)
+    assert rename_map == cc.RenameMap({}, complete=False)
+
+    result = ks.integrate(
+        repo_root=tmp_path,
+        complexity_stats=_COMPLEXITY_STATS,
+        doc_staleness=_stale_doc_staleness(churn_degenerate=False),
+        dead_code={"available": False, "candidate_count": 0,
+                   "candidates": [], "tools": []},
+        observability={"rung": None, "reachable": {"present": False}},
+        structure=_MODULAR_STRUCTURE,
+        commit_sets=_BLEEDING_COMMIT_SETS,
+        rename_map=rename_map,
+    )
+    assert _finding_paths(result, "hidden_coupling")
+    assert result["pruned_finding_paths"] == []
+    assert result["rename_map_complete"] is False

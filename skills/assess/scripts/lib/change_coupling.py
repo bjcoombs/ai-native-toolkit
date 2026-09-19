@@ -141,18 +141,25 @@ class RenameMap:
 def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
     """Map each historical path that git saw renamed to its current path.
 
-    Parsed from ``git log --name-status -M --diff-filter=R``. Chains resolve to
-    their final name (``a -> b`` then ``b -> c`` maps ``a`` to ``c``). A source
-    path that exists again in the working tree is left out, so a name reused
-    after a rename keeps its own history. Paths are repo-relative, as :func:`parse_commit_file_sets`
+    Parsed from ``git log --topo-order --name-status -M --diff-filter=R``. A
+    path starts from its first rename, and the chain moves on only through a
+    rename made in a commit that descends from the one before it (``a -> b``
+    then ``b -> c`` maps ``a`` to ``c``; ``b -> c`` then ``a -> b`` maps ``a``
+    to ``b``, and so do renames on sibling branches). A source path that exists
+    again in the working tree is left out, so a name reused after a rename keeps
+    its own history. Paths are repo-relative, as :func:`parse_commit_file_sets`
     prints them. Outside a git repo the result is empty and complete; on a git
-    failure it is empty and ``complete`` is False. ``top`` is as for :func:`parse_commit_file_sets`.
+    failure it is empty and ``complete`` is False. ``top`` is as for
+    :func:`parse_commit_file_sets`.
     """
     top = top or repo_top(repo_root)
     if top is None:
         return RenameMap({}, complete=True)
-    cmd = ["git", "-c", "core.quotepath=false", "-C", top, "log", "--name-status", "-M",
-           "--diff-filter=R", "--pretty=format:"]
+    # \x1e marks each commit and carries its hash. --topo-order lists every
+    # commit before its ancestors, so reversed, an ancestor always has the
+    # smaller index.
+    cmd = ["git", "-c", "core.quotepath=false", "-C", top, "log", "--topo-order",
+           "--name-status", "-M", "--diff-filter=R", "--pretty=format:\x1e%H"]
     try:
         raw = subprocess.run(
             cmd, capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
@@ -160,24 +167,56 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return RenameMap({}, complete=False)
 
-    # git log is newest first; replay oldest first so a later rename of the same
-    # path wins.
-    step: dict[str, str] = {}
-    for line in reversed(raw.splitlines()):
-        parts = line.split("\t")
-        if len(parts) == 3 and parts[0].startswith("R"):
-            step[parts[1]] = parts[2]
-    # Resolve chains over every rename first, then drop sources that exist again
-    # in the working tree. Filtering first would cut a chain at a reused
-    # intermediate name (a -> b, b -> c, then a fresh b) and point a at b.
+    # edges[src] lists (index, commit, dst) with the oldest rename first.
+    edges: dict[str, list[tuple[int, str, str]]] = {}
+    chunks = [c for c in raw.split("\x1e") if c.strip()]
+    for index, chunk in enumerate(reversed(chunks)):
+        lines = chunk.splitlines()
+        for line in lines[1:]:
+            parts = line.split("\t")
+            if len(parts) == 3 and parts[0].startswith("R"):
+                edges.setdefault(parts[1], []).append((index, lines[0].strip(), parts[2]))
+
+    ancestry: dict[tuple[str, str], bool] = {}
+
+    def descends(commit: str, ancestor: str) -> bool:
+        """True when ``commit`` has ``ancestor`` in its history (cached).
+
+        Exit 0 is yes and 1 is no. Anything else (128 for an object git cannot
+        resolve, as at a shallow or grafted boundary) is a failure, raised so the
+        map comes back incomplete rather than reading as unrelated commits.
+        """
+        key = (ancestor, commit)
+        if key not in ancestry:
+            cmd = ["git", "-C", top, "merge-base", "--is-ancestor", ancestor, commit]
+            result = subprocess.run(cmd, capture_output=True, timeout=GIT_TIMEOUT_SECONDS)
+            if result.returncode not in (0, 1):
+                raise subprocess.CalledProcessError(result.returncode, cmd)
+            ancestry[key] = result.returncode == 0
+        return ancestry[key]
+
+    def next_edge(path: str, index: int, commit: str) -> tuple[int, str, str] | None:
+        """The first rename of ``path`` in a later commit descending from ``commit``."""
+        return next((e for e in edges.get(path, [])
+                     if e[0] > index and descends(e[1], commit)), None)
+
+    # The walk follows an edge only when its commit descends from the one that
+    # moved the content to the current name, so a name freed by one rename and
+    # refilled by another (b -> c, then a -> b, in sequence or on sibling
+    # branches) is not chained through: a maps to b, not c. Chains resolve before
+    # sources that exist again in the working tree are dropped, so a reused
+    # intermediate name (a -> b, b -> c, then a fresh b) still leads a to c.
     resolved: dict[str, str] = {}
-    for old in step:
-        seen = {old}
-        cur = step[old]
-        while cur in step and cur not in seen:
-            seen.add(cur)
-            cur = step[cur]
-        resolved[old] = cur
+    try:
+        for old, outgoing in edges.items():
+            index, commit, cur = outgoing[0]
+            hop = next_edge(cur, index, commit)
+            while hop is not None:
+                index, commit, cur = hop
+                hop = next_edge(cur, index, commit)
+            resolved[old] = cur
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return RenameMap({}, complete=False)
     top_path = Path(top)
     return RenameMap(
         {old: new for old, new in resolved.items() if not (top_path / old).exists()},
