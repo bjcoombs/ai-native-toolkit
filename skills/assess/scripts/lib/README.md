@@ -76,6 +76,17 @@ Three signals derived from `git log`:
 - B4 authorship: human/agent/mixed/unknown classification, e-mail-based and
   deliberately conservative (never labels a human's work "agent" on weak evidence).
 
+`parse_commit_file_sets` lists each commit's files under the names they had then.
+`build_rename_map` reads `git log --name-status -M --diff-filter=R` into a `RenameMap`:
+`paths`, a historical-path to current-path map (chains resolved first, then any source name
+that exists again in the working tree is left out), and `complete`, False when git could not be read so an empty map is
+never mistaken for "no renames". `fold_renames` rewrites the commit sets through `paths`,
+so history made before a rename counts under the current path. `repo_top` is the shared
+`git rev-parse --show-toplevel` helper; the git-log readers take an optional `top` so a
+caller that already resolved it skips the extra subprocess. Both readers pin `-M` and
+`core.quotepath=false`, so rename detection ignores the user's `diff.renames` and
+non-ASCII paths come back literal, matching the files on disk.
+
 All results are JSON-serialisable so `assess_core` can drop them straight into
 `run-context.json`.
 
@@ -108,7 +119,17 @@ directory anywhere under `repo_root`, not just at the root - a vault kept as a s
 (`repo/notes/.obsidian/`) sits below the `git rev-parse --show-toplevel` scan target and was
 previously reported as no vault, silently disabling downstream vault accommodations (#179).
 Pruning `EXCLUDE_DIRS` keeps a vendored or build-artifact `.obsidian/` from tripping a false
-positive.
+positive. Every doc-to-doc edge carries a `kind`: `link` for markdown links, wikilinks and
+vault query edges, `reference` for a backticked token outside a fence that resolves to an
+existing doc (path tokens via `ownership_parser._extract_path_refs`; exact paths before
+guesses: doc-relative, then a path via `ownership_parser._resolve_ref` or a bare basename
+that names exactly one walked doc). Fences are recognised behind blockquote and list-item
+markers too. References settle in a first pass, before the link
+pass: a `.claude/` doc a reference names joins the graph and is read in turn, so links
+reach it from any doc; an uncited one stays excluded. The headline `orphan_rate` and
+`reachability_pct` count both kinds; `link_only_orphan_rate` / `link_only_reachability_pct`
+report links alone over the same node set, so a doc only a reference brought in counts as
+an orphan there. A reference edge also clears the pair from `missing_xrefs` (#353).
 
 **`raw_source.py`**
 Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:
@@ -237,7 +258,20 @@ disclosure (a suppressed finding is counted and named, never silently vanished).
 `exclude_archive_from_attention` then builds the attention list with any path under an
 `archive/`, `archived/` or `attic/` directory left out (so it never becomes a prescribed
 action) and returns those paths as `archived_finding_paths` for the `excluded_as_archive`
-disclosure; the findings themselves still name them. Each
+disclosure; the findings themselves still name them. Rows of equal score are ordered by
+`attention_tie_break` (an `AttentionTieBreak` built from data the run already holds):
+`top_hotspots` members first in hotspot rank order, then descending severity (the highest
+`promissory_markers.top_offenders[].severity` for an `unactioned_intent` file, divided by
+the run's highest so it shares the 0-1 scale of `1 - containment_ratio` for a
+`hidden_coupling` directory; neither finding type outranks the other by scale alone),
+then path. Before either filter, the commit
+sets are folded through the rename map (so a renamed directory's history lands on its
+current name), and `prune_missing_finding_paths` drops any `hidden_coupling` or
+`refactor_boundary` path absent from the working tree, returning them as
+`pruned_finding_paths` for the run-context block of that name (`paths`, `count`). The
+prune stands down when the rename map is incomplete, since an unfolded old path is not
+evidence of a deletion, and `rename_map_complete` carries that state into the block so
+the report can say renames were not read. Each
 block build is wrapped in a catch-all so one signal's failure degrades that block to
 `available: False` rather than crashing the run. It also runs `structure_drift.py`'s Tier 1
 grouping disagreement (fed the behaviour block's co-change pairs so no second git-log parse
@@ -345,7 +379,15 @@ ts-prune for TS, staticcheck for Go) to a *capability-driven detect-or-propose* 
 proven on one capability (liveness) in one build system (Maven). Reports each capability
 in one of four states - `served`, `offer` (with a run-or-install `consent` shape),
 `credited` (a configured pom.xml plugin already serves it), or `honest_degrade` (nothing
-serves it yet; the report names the capability and a candidate tool). Imported by
+serves it yet; the report names the capability and a candidate tool). A build file
+counts only when at least one `.java`, `.kt`, `.scala` or `.groovy` file exists outside
+platform-wrapper directories: an `android/` beside a `pubspec.yaml`, or beside a
+`package.json` whose `dependencies` or `devDependencies` name `react-native`,
+`@capacitor/android` or `cordova-android`, or a Cordova app's `platforms/android/`
+(beside a Cordova-namespace `config.xml` or a `cordova-android` `package.json`), at
+any depth. A Flutter plugin's own `android/` Kotlin is skipped the same way. Build files and source under
+a wrapper are both skipped, in one `os.walk` that also prunes the shared excludes, so a
+Flutter app never reads as Gradle while a real JVM service beside it still does. Imported by
 `liveness_scan.py`, never by the orchestrator - it is an inward dependency of the
 liveness tier.
 
@@ -435,6 +477,40 @@ fixture-tested. Also exposes `maturity_band`
 single source of truth `assess_finalize` reconciles the LLM's `maturity_label`
 against. Both producers accept an optional `run_id` provenance stamp.
 
+**`evidence_check.py`**
+Deterministic re-check of the evidence a layer verdict cites (issue #360). The
+scorer is a model and can cite a file that is not there or a wiring that does not
+exist; `evidence_check` re-checks each cited fact with `exists()` or a literal
+substring search, no model. Input is a flat array of entries, each with `layer`,
+`kind` and the kind's arguments: `path_exists` / `path_absent` take `path`;
+`referenced_in` / `not_referenced_in` take `needle` and `path` (one file, or a
+directory searched recursively); `file_contains` takes `path` (one file) and
+`needle`. Every `path` is relative to the repository root; one that resolves
+outside it, or cannot be resolved, is rejected. The reference search reads files in
+1 MiB chunks and does not enter `.git/` or `.assess/` (the tool's own previous
+output) when walking a directory; naming `.assess/` directly still searches it.
+The reference kinds reject a `path` inside `.git/` (literally or through a
+symlink), and a symlink met in the walk that leads into `.git/` or `.assess/` is
+skipped like one out of the root, while `file_contains`, a claim
+about one named file, may read one (e.g. `.git/config`).
+A symlink out of the root, or a dangling one, is not repository content and is
+skipped; a symlinked file inside the root is read at its target. Every check fails
+closed: a `referenced_in`, `not_referenced_in` or `file_contains` claim is rejected
+as incomplete when anything it needed could not be read (an unreadable file or
+directory, a FIFO, socket or device, a symlinked directory inside the root that
+the walk did not search), since the unread part could hold the reference; a needle
+that cannot be encoded (a lone surrogate) is rejected, not raised on. `layer` is
+carried through unchecked. `check_evidence` splits the list into `evidence` (verified,
+returned as given) and `evidence_rejected` (copies carrying a `reason`); unknown
+keys pass through. The reference search is the public
+`is_referenced_in(repo_root, needle, path)`, so a check outside this module can
+reuse it. CLI, run from `skills/assess/scripts`:
+`uv run python -m lib.evidence_check <repo_root> <evidence.json> --json <out.json>`
+(exit 0 all verified, 1 any rejected, 2 an evidence file that cannot be read or is not a UTF-8 JSON array, a `repo_root` that is not a
+directory, or a `--json` file that cannot be written; a missing root would otherwise verify every `path_absent` claim). Stdlib only, imports no
+orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kind
+or change to a check rule.
+
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
 CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts and
@@ -464,13 +540,25 @@ hyphenated stem also matched as underscores), the adjacent test directories
 (`__tests__/` / `tests/` / `test/` / `spec/`), and the is-this-a-test rule, plus a
 layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
-ancestor mirroring the source path, then a flat tree within two components),
+ancestor mirroring the source path, then a conventionally named test anywhere in
+the repository - a parallel tree such as `app/unit-tests/` or Dart's
+`test/unit/` - then a flat tree within two components),
 and `has_sibling_test` (the yes/no/unknown verdict, dropping a flat-only match
 on a bare name more than one hot file shares). Three consumers read it and must
 agree in one run: the hotspot page's `Has test file` row
 (`assess_core._has_sibling_test`), the E2 test-to-code map
 (`keyhole_signals._find_sibling_test`, co-location layer only, since E2 means
-co-located and co-committed), and the `test_focus` signal. Stdlib only;
+co-located and co-committed), and the `test_focus` signal. The parallel-tree
+(basename) tier reads a `TestIndex` built once per run by `build_test_index`
+(`git ls-files`, or a walk pruned of `doc_graph.EXCLUDE_DIRS` outside git): a
+test belongs to the same-named source sharing the deepest common directory with
+it, a tie between sources (two `index.js` equally close) credits none, and a
+root-only common ancestor credits nothing. Tracked files deleted from disk are
+left out. A walk past 200,000 files, or one that cannot read a directory, yields
+an empty index (fail closed: the missed files may hold a rival source). The module
+docstring names two limits: an untracked parallel test is invisible to this tier
+while the path probes see untracked files, and a helper named like a test
+(`test_utils.py`) can credit a lone `utils.py`. Imports `git_churn` and `doc_graph`;
 existence checks bounded to 16 ancestor levels; never raises.
 `tests/test_sibling_tests.py` pins the three-way agreement.
 
@@ -487,11 +575,14 @@ higher: `no_covering_test` > `covered_but_hollow` > `unsupported` >
 so the focus table and the hotspot pages agree. With a `repo_root`, a file with a
 test file but no coverage record - no report at all, or a partial report that
 omits it - is `sibling_test_only` (test file present, coverage unmeasured; never
-a covered bucket); a file with no report and no test file is `unsupported`; both
+a covered bucket); a file with no report and no sibling or parallel-tree test
+file is `unsupported`; both
 carry action `measure_coverage`. A report that records a 0 rate, or omits a file
 with no test file, gives `no_covering_test`. Without `repo_root` a no-report file
 is `unknown_no_coverage`. It never raises and records `coverage_present`. The
-only file I/O is the sibling-test probe, and only under `repo_root`; imports no
+only file I/O is the sibling-test probe (one repository index plus existence
+checks), and only under `repo_root`; the index is built on first use, or passed
+in as `index` (`assess_core` hands over the one its hotspot pages built); imports no
 orchestrator. This block is the SINGLE source both the report focus table and
 the mutation offer consume. The mutation scope is `mutation_scope(block)`: the
 entries with test evidence (`covered_but_hollow`, `sibling_test_only`) in ranked

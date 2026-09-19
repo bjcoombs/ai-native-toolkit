@@ -671,3 +671,246 @@ def test_isolated_curated_folder_not_excluded(tmp_path: Path) -> None:
     r = build_doc_graph(tmp_path)
     assert r.excluded_raw_trees == []
     assert any(o.startswith("notes/") for o in r.orphans)
+
+
+# --- Reference edges (backticked doc paths) --------------------------------
+
+
+def _edges(r) -> list[list]:
+    return sorted([u, v, d.get("kind")] for u, v, d in r.graph.edges(data=True))
+
+
+def test_reference_edge_from_backticked_existing_path(tmp_path: Path) -> None:
+    """A backticked token that resolves to an existing doc is a reference edge;
+    one that resolves to nothing adds no edge and no node. Markdown links keep
+    kind link."""
+    _write(
+        tmp_path, "CLAUDE.md",
+        "# Entry\nSee `docs/arch.md` and `docs/missing.md` and `not-a-path`, "
+        "then [guide](guide.md).\n",
+    )
+    _write(tmp_path, "docs/arch.md", "# Arch")
+    _write(tmp_path, "guide.md", "# Guide")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == [
+        ["CLAUDE.md", "docs/arch.md", "reference"],
+        ["CLAUDE.md", "guide.md", "link"],
+    ]
+    assert "docs/missing.md" not in r.graph
+
+
+def test_reference_edge_resolves_relative_to_the_citing_doc(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "[docs](docs/index.md)")
+    _write(tmp_path, "docs/index.md", "Read `setup.md` next.")
+    _write(tmp_path, "docs/setup.md", "# Setup")
+    r = build_doc_graph(tmp_path)
+    assert ["docs/index.md", "docs/setup.md", "reference"] in _edges(r)
+
+
+def test_reference_inside_fence_adds_no_edge(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "```\n`guide.md`\n```\n")
+    _write(tmp_path, "guide.md", "# Guide")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == []
+
+
+def test_link_kind_wins_when_a_doc_both_links_and_cites(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "Read `guide.md`, or [the guide](guide.md).")
+    _write(tmp_path, "guide.md", "# Guide")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == [["README.md", "guide.md", "link"]]
+
+
+def test_cited_claude_file_becomes_a_reachable_node(tmp_path: Path) -> None:
+    """A `.claude/` doc that a reference names is a node and reachable; an
+    uncited one stays excluded. The headline figures count reference edges;
+    the link-only figures sit beside them."""
+    _write(tmp_path, "CLAUDE.md", "# Entry\nOpen `.claude/skills/x/SKILL.md` first.\n")
+    _write(tmp_path, ".claude/skills/x/SKILL.md", "# x")
+    _write(tmp_path, ".claude/skills/y/SKILL.md", "# y")
+    _write(tmp_path, "docs/lonely.md", "# lonely")
+    r = build_doc_graph(tmp_path)
+    d = r.as_dict()
+    assert sorted(r.graph.nodes()) == [
+        ".claude/skills/x/SKILL.md", "CLAUDE.md", "docs/lonely.md",
+    ]
+    assert d["unreachable"] == ["docs/lonely.md"]
+    assert d["doc_count"] == 3
+    assert d["orphan_rate"] == 0.333
+    assert d["reachability_pct"] == 0.667
+    assert d["link_only_reachability_pct"] < d["reachability_pct"]
+    assert d["link_only_orphan_rate"] > d["orphan_rate"]
+
+
+def test_cited_claude_doc_is_parsed_for_its_own_edges(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "Open `.claude/skills/x/SKILL.md`.")
+    _write(tmp_path, ".claude/skills/x/SKILL.md", "See [ref](../../../docs/ref.md).")
+    _write(tmp_path, "docs/ref.md", "# Ref")
+    r = build_doc_graph(tmp_path)
+    assert [".claude/skills/x/SKILL.md", "docs/ref.md", "link"] in _edges(r)
+    assert r.unreachable == []
+
+
+def test_reference_edge_clears_missing_xref(tmp_path: Path) -> None:
+    _write(tmp_path, "CLAUDE.md", "# Entry\nRead `guide.md` before editing.\n")
+    _write(tmp_path, "guide.md", "# Guide")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == [["CLAUDE.md", "guide.md", "reference"]]
+    assert r.as_dict()["missing_xrefs"] == []
+
+
+def test_link_only_figures_equal_headline_without_references(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "[a](a.md)")
+    _write(tmp_path, "a.md", "# A")
+    _write(tmp_path, "b.md", "# B")
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["link_only_orphan_rate"] == d["orphan_rate"]
+    assert d["link_only_reachability_pct"] == d["reachability_pct"]
+
+
+def test_reference_inside_tilde_or_long_fence_adds_no_edge(tmp_path: Path) -> None:
+    """CommonMark fences: a tilde fence, and a four-backtick fence holding a
+    shorter backtick run, both hide their content from the reference pass."""
+    _write(
+        tmp_path, "README.md",
+        "~~~\n`a.md`\n~~~\n\n````\n```\n`b.md`\n```\n````\n",
+    )
+    _write(tmp_path, "a.md", "# A")
+    _write(tmp_path, "b.md", "# B")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == []
+
+
+def test_bare_basename_resolves_across_the_tree_when_unique(tmp_path: Path) -> None:
+    """A bare basename with no doc-relative match falls back to the one doc in
+    the tree with that name."""
+    _write(tmp_path, "CLAUDE.md", "# Entry\nSee `setup.md`.\n")
+    _write(tmp_path, "docs/guides/setup.md", "# Setup")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == [["CLAUDE.md", "docs/guides/setup.md", "reference"]]
+
+
+def test_ambiguous_bare_basename_adds_no_edge(tmp_path: Path) -> None:
+    """Two docs share the cited basename: the citation names neither, so the
+    basename fallback adds nothing rather than spraying edges."""
+    _write(tmp_path, "README.md", "Read `SKILL.md`.")
+    _write(tmp_path, "skills/a/SKILL.md", "# a")
+    _write(tmp_path, "skills/b/SKILL.md", "# b")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == []
+
+
+def test_cited_excluded_doc_guards(tmp_path: Path) -> None:
+    """A cited `.claude/` doc joins the graph only when every other exclusion
+    lets it: no parent-dir escape, no user exclude, tracked, inside scope."""
+    _write(tmp_path, ".claude/skills/x/SKILL.md", "# x")
+    _write(tmp_path, "docs/a.md", "# a")
+    target = (tmp_path / ".claude/skills/x/SKILL.md").resolve()
+
+    def cite(rel_path, tracked=None, scope=None, dirs=None, pats=None):
+        return doc_graph._cited_excluded_doc(
+            rel_path, tmp_path, tracked, scope, dirs or set(), pats or [],
+        )
+
+    assert cite(".claude/skills/x/SKILL.md") == target
+    assert cite(".claude/../.claude/skills/x/SKILL.md") is None
+    assert cite(".claude/skills/x/SKILL.md", dirs={"x"}) is None
+    assert cite(".claude/skills/x/SKILL.md", pats=["SKILL.md"]) is None
+    assert cite(".claude/skills/x/SKILL.md", tracked=frozenset()) is None
+    assert cite(".claude/skills/x/SKILL.md", scope=tmp_path / "docs") is None
+    assert cite("docs/a.md") is None  # not under .claude: the walk owns it
+
+
+def test_link_reaches_cited_claude_doc_from_a_doc_read_earlier(tmp_path: Path) -> None:
+    """References settle before the link pass, so a doc walked before the
+    citing doc still links to (and wikilinks to) the cited `.claude/` doc."""
+    _write(tmp_path, "AAA.md", "[x](.claude/skills/x/SKILL.md) and [[notes]]")
+    _write(tmp_path, "CLAUDE.md", "Open `.claude/skills/x/SKILL.md` and `.claude/notes.md`.")
+    _write(tmp_path, ".claude/skills/x/SKILL.md", "# x")
+    _write(tmp_path, ".claude/notes.md", "# notes")
+    r = build_doc_graph(tmp_path)
+    edges = _edges(r)
+    assert ["AAA.md", ".claude/skills/x/SKILL.md", "link"] in edges
+    assert ["AAA.md", ".claude/notes.md", "link"] in edges
+    assert r.as_dict()["dangling_links"] == 0
+
+
+def test_tilde_fenced_link_sample_is_not_a_broken_link(tmp_path: Path) -> None:
+    """The link harvest uses the same CommonMark fence parser as references: a
+    wikilink sample in a tilde fence is neither an edge nor a ghost."""
+    _write(tmp_path, "README.md", "~~~\n[[nowhere]] and [x](gone.md)\n~~~\n")
+    r = build_doc_graph(tmp_path)
+    assert r.as_dict()["dangling_links"] == 0
+    assert _edges(r) == []
+
+
+def test_reference_inside_indented_fence_adds_no_edge(tmp_path: Path) -> None:
+    """A fence nested under a list item sits four or more spaces in; its
+    content is still a sample, not a citation."""
+    _write(tmp_path, "README.md", "- step\n\n      ```\n      `docs/arch.md`\n      ```\n")
+    _write(tmp_path, "docs/arch.md", "# Arch")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == []
+
+
+def test_root_level_mdx_citation_is_a_reference_edge(tmp_path: Path) -> None:
+    """Every doc extension the graph walks is citable, with or without a slash."""
+    _write(tmp_path, "README.md", "See `guide.mdx` and `docs/intro.markdown`.")
+    _write(tmp_path, "guide.mdx", "# Guide")
+    _write(tmp_path, "docs/intro.markdown", "# Intro")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == [
+        ["README.md", "docs/intro.markdown", "reference"],
+        ["README.md", "guide.mdx", "reference"],
+    ]
+
+
+def test_reference_inside_container_prefixed_fence_adds_no_edge(tmp_path: Path) -> None:
+    """A fence behind a blockquote or list-item marker hides its body, and its
+    indented closer does not reopen a fence that swallows the rest of the doc."""
+    _write(
+        tmp_path, "README.md",
+        "> ```\n> `a.md` [[nowhere]]\n> ```\n\n"
+        "- ~~~\n  `b.md`\n  ~~~\n\n"
+        "Then [c](c.md).\n",
+    )
+    for name in ("a.md", "b.md", "c.md"):
+        _write(tmp_path, name, "# x")
+    r = build_doc_graph(tmp_path)
+    assert _edges(r) == [["README.md", "c.md", "link"]]
+    assert r.as_dict()["dangling_links"] == 0
+
+
+def test_root_level_exact_name_beats_a_same_named_doc_elsewhere(tmp_path: Path) -> None:
+    """A bare name that is a root-level doc resolves there, even when a doc of
+    the same name sits deeper in the tree."""
+    _write(tmp_path, "docs/x/index.md", "See `CHANGELOG.md`.")
+    _write(tmp_path, "CHANGELOG.md", "# root")
+    _write(tmp_path, "pkg/CHANGELOG.md", "# pkg")
+    r = build_doc_graph(tmp_path)
+    assert ["docs/x/index.md", "CHANGELOG.md", "reference"] in _edges(r)
+    assert not any(e[1] == "pkg/CHANGELOG.md" for e in _edges(r))
+
+
+def test_link_only_figures_share_the_headline_entry_points(tmp_path: Path, monkeypatch) -> None:
+    """The link-only pass is handed the headline's entry points instead of
+    re-picking them from link-only PageRank, so the two figures differ only in
+    their edge set. Without it, a repo with no conventional entry doc could
+    measure the two from different roots."""
+    calls: list = []
+    real = doc_graph._derive_signals
+
+    def spy(**kw):
+        out = real(**kw)
+        calls.append((kw.get("entries"), out.entry_points))
+        return out
+
+    monkeypatch.setattr(doc_graph, "_derive_signals", spy)
+    _write(tmp_path, "hub-a.md", "`n1.md` `n2.md`")
+    _write(tmp_path, "hub-b.md", "[1](m1.md)")
+    for name in ("n1.md", "n2.md", "m1.md"):
+        _write(tmp_path, name, "# x")
+    build_doc_graph(tmp_path)
+    (headline_in, headline_entries), (link_only_in, link_only_entries) = calls
+    assert headline_in is None
+    assert link_only_in == headline_entries == link_only_entries

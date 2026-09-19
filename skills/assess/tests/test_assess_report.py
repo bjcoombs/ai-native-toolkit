@@ -213,6 +213,21 @@ def test_archive_paths_excluded_disclosed_in_report() -> None:
     )
 
 
+def test_pruned_finding_paths_disclosed_in_report() -> None:
+    """Dead git-history paths dropped from the findings are named, capped at five."""
+    assert render_exclusion_disclosure(
+        {"pruned_finding_paths": {"paths": ["gone"], "count": 1}}
+    ) == (
+        "_1 git-history path no longer exists and was left out of the findings: gone._"
+    )
+    assert render_exclusion_disclosure(
+        {"pruned_finding_paths": {"paths": [], "count": 0}}
+    ) == ""
+    many = [f"gone/d{i}" for i in range(6)]
+    assert render_exclusion_disclosure(
+        {"pruned_finding_paths": {"paths": many, "count": 6}}
+    ).endswith("gone/d3, gone/d4 +1 more._")
+
 def test_report_includes_exclusion_disclosure() -> None:
     ctx = _full_ctx()
     ctx["excluded_by_config"] = {
@@ -608,3 +623,15 @@ def test_main_corrupt_context_skips_not_fails(tmp_path: Path,
     rc = main([str(tmp_path)])
     assert rc == 0
     assert "infrastructure failure" in capsys.readouterr().err
+
+
+def test_pruned_finding_paths_disclosure_names_incomplete_rename_map() -> None:
+    """A run whose rename map could not be built says so instead of reading
+    like a run with nothing dead."""
+    assert render_exclusion_disclosure({"pruned_finding_paths": {
+        "paths": [], "count": 0, "rename_map_complete": False}}) == (
+        "_Renames could not be read from git history: findings may name "
+        "pre-rename paths, and none were pruned._"
+    )
+    assert render_exclusion_disclosure({"pruned_finding_paths": {
+        "paths": [], "count": 0, "rename_map_complete": True}}) == ""
