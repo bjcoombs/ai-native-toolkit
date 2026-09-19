@@ -12,5 +12,7 @@
   "skills/assess/scripts/lib/keyhole_signals.py": "2026-06-01",
   "skills/assess/scripts/lib/change_coupling.py": "2026-06-01",
   "scripts/transform_skill.py": "2026-06-04",
-  "skills/assess/tests/test_keyhole_signals.py": "2026-06-19"
+  "skills/assess/tests/test_keyhole_signals.py": "2026-06-19",
+  "scripts/floor_anchor.py": "2026-09-19",
+  "skills/assess/tests/test_complexity_treemap.py": "2026-09-19"
 }

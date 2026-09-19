@@ -1,6 +1,8 @@
 {
   "schemaVersion": 1,
   "label": "AI-readiness",
-  "message": "8.0/8 · AI-Native (Optimized)",
-  "color": "brightgreen"
+  "message": "5 findings · 26 stale markers",
+  "color": "orange",
+  "run_id": "20260919114544-b4104782",
+  "link": "./assess-report.md"
 }

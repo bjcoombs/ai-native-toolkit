@@ -55,3 +55,16 @@
 [Full report](./assess-report.md)
 
 ---
+<!-- assess:run_id=20260919114544-b4104782 artifact_schema_version=1.1.0 -->
+## 2026-09-19 (v1.87.0, run b4104782)
+
+- **Files scored:** 168
+- **AI Readiness:** 5.5 / 8 (Solid)
+- **Instructions grade:** A
+- **Hotspot transitions:** 2 graduated, 8 regressed, 2 new, 0 persistent
+- **Top action:** Request human review of scripts/tests/test_floor_anchor.py against FLOOR.md: tests and code arrived in the same commit
+
+[Full report](./assess-report.md)
+
+---
+<!-- chain:a6e1017927b7a96a -->

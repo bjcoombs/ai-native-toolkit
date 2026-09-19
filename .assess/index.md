@@ -1,23 +1,24 @@
+<!-- assess:run_id=20260919114544-b4104782 artifact_schema_version=1.1.0 -->
 # Assess Wiki Index
 
-_Last updated: 2026-06-19_
+_Last updated: 2026-09-19_
 
 Catalog of every hotspot ever flagged by `/assess` in this repo. Status reflects the most recent run.
 
 | File | First Flagged | Last Seen | Status | Latest CCN | Latest LOC |
 |------|---------------|-----------|--------|------------|------------|
-| `skills/assess/scripts/assess_core.py` | 2026-05-31 | 2026-06-19 | regressed | 137.0 | 635 |
-| `skills/assess/scripts/complexity-treemap.py` | 2026-05-31 | 2026-06-19 | regressed | 133.0 | 558 |
-| `skills/assess/tests/test_assess_core.py` | 2026-05-31 | 2026-06-19 | regressed | 109.0 | 1015 |
-| `skills/assess/scripts/lib/doc_graph.py` | 2026-05-31 | 2026-06-19 | regressed | 194.0 | 592 |
-| `skills/assess/scripts/lib/keyhole_signals.py` | 2026-06-01 | 2026-06-19 | new | 166.0 | 609 |
-| `skills/assess/scripts/lib/doc_staleness.py` | 2026-05-31 | 2026-06-19 | regressed | 77.0 | 288 |
-| `skills/assess/scripts/doc-graph-svg.py` | 2026-05-31 | 2026-06-19 | persistent | 88.0 | 360 |
-| `skills/assess/tests/test_keyhole_signals.py` | 2026-06-19 | 2026-06-19 | new | 105.0 | 574 |
-| `skills/assess/scripts/lib/liveness_scan.py` | 2026-05-31 | 2026-06-19 | persistent | 107.0 | 412 |
-| `skills/assess/scripts/lib/change_coupling.py` | 2026-06-01 | 2026-06-19 | persistent | 84.0 | 237 |
-| `scripts/transform_skill.py` | 2026-06-04 | 2026-06-19 | graduated | - | - |
-| `skills/assess/scripts/lib/agent_instructions_grader.py` | 2026-05-31 | 2026-06-19 | graduated | - | - |
+| `skills/assess/scripts/assess_core.py` | 2026-05-31 | 2026-09-19 | regressed | 234.0 | 1020 |
+| `skills/assess/tests/test_assess_core.py` | 2026-05-31 | 2026-09-19 | regressed | 200.0 | 1644 |
+| `skills/assess/scripts/complexity-treemap.py` | 2026-05-31 | 2026-09-19 | regressed | 199.0 | 788 |
+| `skills/assess/scripts/lib/doc_graph.py` | 2026-05-31 | 2026-09-19 | regressed | 291.0 | 851 |
+| `skills/assess/scripts/lib/keyhole_signals.py` | 2026-06-01 | 2026-09-19 | regressed | 233.0 | 759 |
+| `skills/assess/tests/test_keyhole_signals.py` | 2026-06-19 | 2026-09-19 | regressed | 159.0 | 895 |
+| `skills/assess/scripts/doc-graph-svg.py` | 2026-05-31 | 2026-09-19 | regressed | 105.0 | 407 |
+| `scripts/floor_anchor.py` | 2026-09-19 | 2026-09-19 | new | 188.0 | 646 |
+| `skills/assess/scripts/lib/doc_staleness.py` | 2026-05-31 | 2026-09-19 | regressed | 90.0 | 335 |
+| `skills/assess/tests/test_complexity_treemap.py` | 2026-09-19 | 2026-09-19 | new | 130.0 | 934 |
+| `skills/assess/scripts/lib/liveness_scan.py` | 2026-05-31 | 2026-09-19 | graduated | - | - |
+| `skills/assess/scripts/lib/change_coupling.py` | 2026-06-01 | 2026-09-19 | graduated | - | - |
 
 ## Legend
 
