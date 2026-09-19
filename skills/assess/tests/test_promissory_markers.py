@@ -210,6 +210,13 @@ def test_bare_suppression_rule_names_with_hyphens_are_not_justified() -> None:
         "x; // eslint-disable-line @typescript-eslint/no-explicit-any"
     )
     assert not JUSTIFIED_SUPPRESSION_RE.search("/* eslint-disable no-console */")
+    # Code after the block comment closes is not the directive's reason.
+    assert not JUSTIFIED_SUPPRESSION_RE.search(
+        '/* eslint-disable no-console */ const s = "a -- b";'
+    )
+    assert JUSTIFIED_SUPPRESSION_RE.search(
+        "/* eslint-disable no-console */ // CLI prints by design"
+    )
     assert JUSTIFIED_SUPPRESSION_RE.search(
         "// eslint-disable-next-line no-alert -- confirm is the UX here"
     )

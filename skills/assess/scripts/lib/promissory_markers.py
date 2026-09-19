@@ -100,9 +100,10 @@ LINKED_RE = re.compile(r"#\d+|\b[A-Z][A-Z0-9]+-\d+\b|https?://|\b\d{4}-\d{2}-\d{
 # as ESLint's documented ``-- reason`` description, e.g.
 # ``// eslint-disable-line no-console -- CLI prints by design``. The ``--`` must
 # follow whitespace, so a hyphenated rule name is not read as a reason, and a
-# block directive's reason must sit inside its own ``/* ... */``.
+# block directive's reason must sit inside its own ``/* ... */`` or in a
+# trailing ``//`` comment - code after ``*/`` is not a reason.
 JUSTIFIED_SUPPRESSION_RE = re.compile(
-    r"(nolint[^/]*//|noqa[^#]*#|eslint-disable[^*]*\*/|"
+    r"(nolint[^/]*//|noqa[^#]*#|eslint-disable[^*]*\*/\s*//|"
     r"//\s*ignore:[^/]*//|@SuppressWarnings\(.+\)\s*//)\s*\S"
     r"|/\*\s*eslint-disable[^*]*?\s--\s*[^\s*]"
     r"|//\s*eslint-disable\S*\s.*?\s--\s*\S"
