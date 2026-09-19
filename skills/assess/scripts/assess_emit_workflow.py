@@ -203,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
     i = 0
     while i < len(args):
         if args[i] in flags:
-            if i + 1 >= len(args):
+            if i + 1 >= len(args) or args[i + 1] in flags:
                 print(f"{args[i]} needs a value.", file=sys.stderr)
                 print(_USAGE, file=sys.stderr)
                 return 2

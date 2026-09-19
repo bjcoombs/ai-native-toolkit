@@ -211,6 +211,14 @@ def test_main_flag_without_value_is_usage_error(tmp_path, capsys, flag):
     assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
 
 
+@pytest.mark.parametrize("flag", ["--paths", "--paths-ignore"])
+def test_main_flag_followed_by_another_flag_is_usage_error(tmp_path, capsys, flag):
+    # `--paths --branch main` must not emit a `paths: ['--branch']` filter.
+    assert main([str(tmp_path), "--version", "9.9.9", "--tools", "lizard", flag, "--branch", "main"]) == 2
+    assert f"{flag} needs a value" in capsys.readouterr().err
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
+
+
 def test_main_unquoted_glob_expansion_is_usage_error(tmp_path, capsys):
     # `--paths src/*` unquoted: the shell hands over src/a and src/b.
     assert main([str(tmp_path), *_FLAGS, "--paths", "src/a", "src/b"]) == 2
