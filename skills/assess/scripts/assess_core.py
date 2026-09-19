@@ -62,6 +62,7 @@ from lib.decline_markers import build_decline_block
 from lib.instruction_claims import scan_instruction_claims
 from lib.interactivity import build_offers_block
 from lib.doc_graph import build_doc_graph, is_repo_file
+from lib.gap_actions import build_gap_actions
 from lib.doc_staleness import analyze_doc_staleness
 from lib.generated_files import matches_generated_name
 from lib.git_churn import git_commit_info, tracked_files
@@ -1606,6 +1607,12 @@ def build_run_context(
     ctx["findings_markdown"] = keyhole["findings_markdown"]
     ctx["keyhole_summary"] = keyhole["keyhole_summary"]
     ctx["prescribed_actions"] = keyhole["prescribed_actions"]
+    # Gap actions: Top 3 candidates read from the coverage and doc-graph
+    # signals, which the report writer uses for free slots before judgement.
+    ctx["gap_actions"] = build_gap_actions(
+        ctx["coverage_report"], doc_graph, current.get("top_hotspots"),
+        ctx["archetype"] if isinstance(ctx.get("archetype"), dict) else None,
+    )
     # Config-exclusion disclosure: config excludes silently drop paths from every
     # scan, so a finding suppressed by an exclude must be counted and named rather
     # than vanish. keyhole_signals filtered the excluded finding paths; this block

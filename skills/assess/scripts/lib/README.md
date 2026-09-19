@@ -334,6 +334,20 @@ available), and refactor boundaries (high containment + low external coupling, a
 zone for keyhole edits). Looks-coupled-but-never-co-changes is suppressed - the static
 graph already surfaces it.
 
+**`gap_actions.py`**
+Builds the run-context `gap_actions` list: Top 3 candidates for the slots
+`prescribed_actions` leaves free, read from two blocks `assess_core` already holds. Each
+entry is `{signal, action, paths}`. A `coverage_report` entry fires when no coverage
+report was found in a repo whose archetype is `software` and names up to three
+`top_hotspots` to measure, skipping `archive/`, `archived/` and `attic/` paths (via
+`keyhole_signals.is_archive_path`); it is silent on a knowledge base (test layers N/A)
+and when no hotspot remains, and when it fires it comes first.
+A `doc_graph` entry fires when `reachability_pct` is below `REACHABILITY_FLOOR` (0.5, with
+its rationale beside it) and names up to ten unreachable docs. A repo with no markdown
+reports reachability 0.0, but nothing is unreachable there, so no `doc_graph` entry fires.
+`[]` when neither fires. There is no lint complexity-rule gap: the core has no detector
+for it, and the layer scorer owns that check.
+
 **`understanding_analysis.py`**
 Signals B4 + D2. Per module: human anchor (has a confirmed human authored it?), intent
 source (is there an externalised spec/doc?), authorship class, and the velocity clock
