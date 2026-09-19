@@ -180,13 +180,19 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
     ancestry: dict[tuple[str, str], bool] = {}
 
     def descends(commit: str, ancestor: str) -> bool:
-        """True when ``commit`` has ``ancestor`` in its history (cached)."""
+        """True when ``commit`` has ``ancestor`` in its history (cached).
+
+        Exit 0 is yes and 1 is no. Anything else (128 for an object git cannot
+        resolve, as at a shallow or grafted boundary) is a failure, raised so the
+        map comes back incomplete rather than reading as unrelated commits.
+        """
         key = (ancestor, commit)
         if key not in ancestry:
-            ancestry[key] = subprocess.run(
-                ["git", "-C", top, "merge-base", "--is-ancestor", ancestor, commit],
-                capture_output=True, timeout=GIT_TIMEOUT_SECONDS,
-            ).returncode == 0
+            cmd = ["git", "-C", top, "merge-base", "--is-ancestor", ancestor, commit]
+            result = subprocess.run(cmd, capture_output=True, timeout=GIT_TIMEOUT_SECONDS)
+            if result.returncode not in (0, 1):
+                raise subprocess.CalledProcessError(result.returncode, cmd)
+            ancestry[key] = result.returncode == 0
         return ancestry[key]
 
     def next_edge(path: str, index: int, commit: str) -> tuple[int, str, str] | None:
@@ -209,7 +215,7 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
                 index, commit, cur = hop
                 hop = next_edge(cur, index, commit)
             resolved[old] = cur
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return RenameMap({}, complete=False)
     top_path = Path(top)
     return RenameMap(
