@@ -109,11 +109,24 @@ def test_offline_emits_unverified(tmp_path, monkeypatch, running, capsys):
     assert any("unverified" in line.lower() and f"v{RUNNING}" in line for line in err.splitlines())
 
 
-def test_no_published_tag_with_action_keeps_running_and_warns(tmp_path, monkeypatch, running, capsys):
+def test_no_published_tag_with_action_refuses(tmp_path, monkeypatch, running, capsys):
+    # gh 404s the running tag and no published tag qualifies: v<running> is known
+    # missing, so nothing is written rather than a uses: line that cannot resolve.
     monkeypatch.setattr(emit, "_run", _fake_remote(["v1.23.0"], set()))
-    assert main([str(tmp_path), "--branch", "main", "--tools", "lizard"]) == 0
-    assert _pins(_workflow(tmp_path)) == {RUNNING}
-    assert "unverified" in capsys.readouterr().err.lower()
+    assert main([str(tmp_path), "--branch", "main", "--tools", "lizard"]) == 1
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
+    err = capsys.readouterr().err
+    assert f"v{RUNNING} is not published" in err and "--version" in err
+
+
+def test_running_tag_404_and_git_offline_refuses(tmp_path, monkeypatch, running, capsys):
+    # gh 404s the running tag, then git ls-remote fails: no fallback list, and
+    # the running tag is known missing, so the generator refuses.
+    fake = _fake_remote(None, set())
+    monkeypatch.setattr(emit, "_run", fake)
+    assert main([str(tmp_path), "--branch", "main", "--tools", "lizard"]) == 1
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
+    assert "--version" in capsys.readouterr().err
 
 
 def test_happy_path_skips_tag_listing(tmp_path, monkeypatch, running):

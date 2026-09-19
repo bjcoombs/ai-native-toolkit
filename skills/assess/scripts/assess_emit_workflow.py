@@ -10,12 +10,13 @@ Defaults are derived so the common case is a single argument:
   this script), never the target's ``.assess/run-context.json``, which can be
   months old. The pin is checked upstream: ``git ls-remote --tags`` lists the
   published tags and ``gh api .../contents/action.yml?ref=<tag>`` confirms the
-  tag ships the action. When the running tag is absent or ships no
-  ``action.yml``, the newest published tag that does is pinned instead and the
-  choice is printed. With neither ``gh`` nor ``git`` reaching GitHub, the running
+  tag ships the action. ``gh`` checks the running tag first; only when it is
+  absent or ships no ``action.yml`` are the tags listed and the newest published
+  tag that does is pinned instead, with the choice printed. With neither ``gh`` nor ``git`` reaching GitHub, the running
   version is emitted with an "unverified" warning. An explicit ``--version`` is
-  emitted as given, unchecked. With the running version unknown and no
-  published tag found, nothing is written and the exit code is 1.
+  emitted as given, unchecked. When the running version is unknown or known
+  unpublished and no published tag qualifies, nothing is written and the exit
+  code is 1.
 - ``--branch`` defaults to the repo's detected default branch (``main`` if it
   can't be detected).
 - ``--tools`` defaults to auto-detecting ``scc`` on PATH plus ``lizard`` (the
@@ -131,12 +132,12 @@ def _resolve_version(running: str | None) -> tuple[str | None, str]:
             return tag[1:], f"Pinned {tag}, the newest published tag that ships action.yml: {why}."
         if probe == "unknown":
             return tag[1:], f"Pinned {tag}, the newest published release after action.yml shipped (gh could not confirm it): {why}."
-    if running is None:
-        return None, (
-            "ERROR: no workflow written - the running plugin version is unknown and no published "
-            "tag shipping action.yml was found. Pass --version <X.Y.Z> naming a published release."
-        )
-    return _unverified(running, f"{why}, and no published tag shipping action.yml was found")
+    # Every path here has a definite negative (gh's 404, or a tag list without
+    # the running tag), so pinning the running version would write a dead ref.
+    return None, (
+        f"ERROR: no workflow written - {why}, and no published tag shipping action.yml was "
+        "found. Pass --version <X.Y.Z> naming a published release."
+    )
 
 
 def _default_branch(repo_root: Path) -> str:
