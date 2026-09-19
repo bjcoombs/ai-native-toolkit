@@ -66,11 +66,14 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
     The explanation shown to the maintainer when the floor-core sign-off is
     requested: why (clause iii), which floor-core paths changed and by how many
     lines, the head commit the approval covers, and what approving and
-    rejecting mean. The paths come from the same ``floor-core`` role the
-    trigger asks for, so the explanation and the trigger cannot disagree. When
-    every changed floor-core line is a ``uses:`` pin the section says so and
-    lists each action's old and new commit. Prints nothing when the floor core
-    is untouched.
+    rejecting mean. The paths come from the ``floor-core`` role the trigger
+    asks for; CI renders with the base ref's copy, so the two agree unless the
+    pull request edits the classification itself, and then the section still
+    appears (this script is floor core in every copy) and at worst counts a
+    newly floor-core path among the other changed paths, which it breaks down
+    by role. When the floor core changes only by like-for-like ``uses:`` pin
+    bumps the section says so and lists each action's old and new commit.
+    Prints nothing when the floor core is untouched.
 
 ``clauses``
     Unconditional integrity check of ``FLOOR.md``: the file must exist, it must
@@ -357,19 +360,13 @@ def clause_iii_purpose(floor_text: str | None) -> str:
     return " ".join(match.group(1).split())
 
 
-def pin_changes(diff_text: str) -> list[tuple[str, str, str]] | None:
-    """The ``uses:`` pin changes in a ``-U0`` diff, or ``None`` when the diff
-    is anything other than a like-for-like bump (or changes nothing).
-
-    Each entry is ``(action, old, new)`` where ``old`` and ``new`` read
-    ``<commit> <version comment>``. Every changed line must be a pin, and every
-    action must carry as many removed pins as added ones: an action added,
-    dropped or swapped for another changes what the workflow runs, so it is
-    not a pin-only change.  A diff whose pins all keep their commit (a
-    reorder or re-indent) bumps nothing and is not one either.
-    """
-    removed: dict[str, list[str]] = {}
-    added: dict[str, list[str]] = {}
+def _pin_lines(
+    diff_text: str,
+) -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str]]] | None:
+    """The removed and added ``(action, commit, version)`` pins of a ``-U0``
+    diff, in diff order, or ``None`` when a changed line is not a pin."""
+    removed: list[tuple[str, str, str]] = []
+    added: list[tuple[str, str, str]] = []
     in_hunk = False
     for line in diff_text.splitlines():
         # Track hunk state rather than prefix-match headers: inside a hunk a
@@ -387,34 +384,63 @@ def pin_changes(diff_text: str) -> list[tuple[str, str, str]] | None:
             return None
         action, commit, version = match.groups()
         side = added if line.startswith("+") else removed
-        side.setdefault(action, []).append(f"{commit} {version or ''}".strip())
-    if not removed and not added:
+        side.append((action, commit.lower(), version or ""))
+    return removed, added
+
+
+def pin_changes(diff_text: str) -> list[tuple[str, str, str]] | None:
+    """The ``uses:`` pin changes in a ``-U0`` diff, or ``None`` when the diff
+    is anything other than a like-for-like bump (or changes nothing).
+
+    Each entry is ``(action, old, new)`` where ``old`` and ``new`` read
+    ``<commit> <version comment>``. Like-for-like means: every changed line is
+    a pin; the removed and added pins name the same actions in the same order
+    (an action added, dropped, swapped for another or moved changes what the
+    workflow runs); and every pair either changes its commit or is the same
+    pin moved or re-indented. A version comment relabelled on an unchanged
+    commit is not a bump, and a diff that changes no commit is not one either.
+    """
+    lines = _pin_lines(diff_text)
+    if lines is None:
+        return None
+    removed, added = lines
+    if [pin[0] for pin in removed] != [pin[0] for pin in added]:
         return None
     changes: list[tuple[str, str, str]] = []
-    for action in dict.fromkeys([*removed, *added]):
-        olds, news = removed.get(action, []), added.get(action, [])
-        if len(olds) != len(news):
-            return None
-        for old, new in zip(olds, news):
-            # An unchanged pin is a moved or re-indented line, not a bump.
-            if old != new and (action, old, new) not in changes:
-                changes.append((action, old, new))
+    for (action, old_commit, old_version), (_, new_commit, new_version) in zip(
+        removed, added
+    ):
+        if old_commit == new_commit:
+            if old_version != new_version:
+                return None  # a relabelled comment, not a bump
+            continue  # the same pin moved or re-indented
+        change = (
+            action,
+            f"{old_commit} {old_version}".strip(),
+            f"{new_commit} {new_version}".strip(),
+        )
+        if change not in changes:
+            changes.append(change)
     return changes or None
 
 
 def render_signoff_summary(
-    paths: list[tuple[str, str, str]],
+    paths: list[tuple[str, str]],
     head_commit: str,
     clause_purpose: str,
     pins: list[tuple[str, str, str]] | None,
-    other_count: int = 0,
+    other_roles: dict[str, int] | None = None,
 ) -> str:
     """The markdown section the maintainer reads before approving.
 
-    ``paths`` is ``(path, added, removed)`` per changed floor-core path;
-    ``other_count`` is how many other paths the diff changes, shown as a count
-    so the verdict below is never read as covering them.
+    ``paths`` is ``(path, detail)`` per changed floor-core path, where the
+    detail is ``+<added> -<removed>``, ``mode change`` or ``binary change``.
+    ``other_roles`` counts the other changed paths by protected role
+    (``unprotected`` for the rest). They are counted, never listed, so the
+    verdict below is never read as covering them.
     """
+    others = {role: n for role, n in (other_roles or {}).items() if n}
+    breakdown = ", ".join(f"{n} {role}" for role, n in others.items())
     lines = [
         f"## {SIGNOFF_HEADING}",
         "",
@@ -428,11 +454,11 @@ def render_signoff_summary(
         "**Floor-core paths changed:**",
         "",
     ]
-    lines += [f"- `{path}` +{added} -{removed}" for path, added, removed in paths]
+    lines += [f"- `{path}` {detail}" for path, detail in paths]
     lines += [
         "",
         f"Other paths changed in this pull request (not floor core, not listed "
-        f"here): {other_count}",
+        f"here): {sum(others.values())}" + (f" ({breakdown})" if breakdown else ""),
     ]
     if pins:
         lines += [
@@ -737,11 +763,38 @@ def _git_out(*args: str) -> str:
     ).stdout
 
 
+# How the other changed paths are named in the sign-off count.
+_ROLE_LABELS = {
+    ROLE_CANARY: "canary",
+    ROLE_GATE_CODE: "gate code",
+    ROLE_MARKED_COMPONENT: "marked component",
+    None: "unprotected",
+}
+
+
+def _path_detail(base: str, path: str) -> tuple[str, bool]:
+    """``+<added> -<removed>`` for a text change, else ``mode change`` or
+    ``binary change``; the flag says whether the path has a content hunk."""
+    numstat = _git_out("diff", "--numstat", "--no-renames", base, "HEAD", "--", path)
+    added, removed = "0", "0"
+    for line in numstat.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 3:
+            added, removed = parts[0], parts[1]
+    if added == "-":
+        return "binary change", False
+    if added == "0" and removed == "0":
+        return "mode change", False
+    return f"+{added} -{removed}", True
+
+
 def cmd_signoff_summary(args: argparse.Namespace) -> int:
     """Print the sign-off explanation, or nothing when the floor core is untouched.
 
     The changed paths are ``git diff --name-only <base> HEAD`` classified with
-    the same roles ``protected --role floor-core`` uses, which is the trigger.
+    the roles of this copy of the script; CI runs the base ref's copy, so a
+    pull request that edits the classification is described by the rules it
+    is changing, and at worst counts a newly floor-core path among the others.
     ``--head-commit`` only changes the commit the text cites: in CI ``HEAD`` is
     the merge commit, and the approval covers the pull request's head.
     """
@@ -752,29 +805,30 @@ def cmd_signoff_summary(args: argparse.Namespace) -> int:
         for path in dict.fromkeys(_git_out("diff", "--name-only", base, "HEAD").splitlines())
         if path
     ]
-    floor_core = [
-        path for path in changed if classify_path(path, component_dirs) == ROLE_FLOOR_CORE
-    ]
+    roles = {path: classify_path(path, component_dirs) for path in changed}
+    floor_core = [path for path in changed if roles[path] == ROLE_FLOOR_CORE]
     if not floor_core:
         return 0
-    counts: list[tuple[str, str, str]] = []
-    for path in floor_core:
-        numstat = _git_out("diff", "--numstat", "--no-renames", base, "HEAD", "--", path)
-        added, removed = "0", "0"
-        for line in numstat.splitlines():
-            parts = line.split("\t")
-            if len(parts) == 3:
-                added, removed = parts[0], parts[1]  # "-" for a binary file
-        counts.append((path, added, removed))
-    pins = pin_changes(
-        _git_out("diff", "-U0", "--no-renames", base, "HEAD", "--", *floor_core)
-    )
+    details = [(path, *_path_detail(base, path)) for path in floor_core]
+    pins = None
+    if all(has_hunk for _, _, has_hunk in details):
+        pins = pin_changes(
+            _git_out("diff", "-U0", "--no-renames", base, "HEAD", "--", *floor_core)
+        )
     head = args.head_commit or _git_out("rev-parse", "HEAD").strip()
     # Quote the clause as the base declares it, so a pull request that
     # rewrites clause iii does not supply its own justification.
     purpose = clause_iii_purpose(_git_show(base, FLOOR_FILE))
-    other_count = len(changed) - len(floor_core)
-    sys.stdout.write(render_signoff_summary(counts, head, purpose, pins, other_count))
+    other_roles: dict[str, int] = {}
+    for path in changed:
+        if roles[path] != ROLE_FLOOR_CORE:
+            label = _ROLE_LABELS[roles[path]]
+            other_roles[label] = other_roles.get(label, 0) + 1
+    sys.stdout.write(
+        render_signoff_summary(
+            [(path, detail) for path, detail, _ in details], head, purpose, pins, other_roles
+        )
+    )
     return 0
 
 

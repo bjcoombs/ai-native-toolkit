@@ -1089,7 +1089,7 @@ def test_signoff_summary_counts_the_other_changed_paths(signoff_repo, capsys):
 
     out = _summary(capsys)
 
-    assert _line_with(out, "Other paths changed", "1") is not None
+    assert _line_with(out, "Other paths changed", "1", "1 unprotected") is not None
     assert "docs/notes.md" not in out
     assert "nothing else changed" not in out
     action = _line_with(out, "astral-sh/setup-uv")
@@ -1109,3 +1109,66 @@ def test_signoff_summary_reordered_pins_are_not_pin_only(signoff_repo, capsys):
     _commit_all(signoff_repo, "swap the two steps")
 
     assert "pin-only" not in _summary(capsys).lower()
+
+
+def test_signoff_summary_swapped_steps_with_new_commits_are_not_pin_only(
+    signoff_repo, capsys
+):
+    # Two actions that change order AND commit still balance per action; the
+    # execution order changed, so it is not a like-for-like bump.
+    cache_old = f"      - uses: actions/cache@{_OLD_PIN}  # v4.0.0\n"
+    (signoff_repo / _WORKFLOW).write_text(_workflow_text() + cache_old, encoding="utf-8")
+    _commit_all(signoff_repo, "two pins at base")
+    uv_new = f"      - uses: astral-sh/setup-uv@{_NEW_PIN}  # v10.1.0\n"
+    cache_new = f"      - uses: actions/cache@{_NEW_PIN}  # v5.0.0\n"
+    uv_old = f"      - uses: astral-sh/setup-uv@{_OLD_PIN}  # v10.0.1\n"
+    (signoff_repo / _WORKFLOW).write_text(
+        _workflow_text().replace(uv_old, cache_new + uv_new), encoding="utf-8"
+    )
+    _commit_all(signoff_repo, "swap and bump")
+
+    assert "pin-only" not in _summary(capsys).lower()
+
+
+def test_signoff_summary_version_comment_only_edit_is_not_pin_only(
+    signoff_repo, capsys
+):
+    (signoff_repo / _WORKFLOW).write_text(
+        _workflow_text(_OLD_PIN, "v10.0.1-relabelled"), encoding="utf-8"
+    )
+    _commit_all(signoff_repo, "relabel the comment only")
+
+    assert "pin-only" not in _summary(capsys).lower()
+
+
+def test_signoff_summary_mode_change_is_named_and_vetoes_pin_only(
+    signoff_repo, capsys
+):
+    (signoff_repo / _WORKFLOW).write_text(
+        _workflow_text(_NEW_PIN, "v10.1.0"), encoding="utf-8"
+    )
+    (signoff_repo / FLOOR_FILE).chmod(0o755)
+    _commit_all(signoff_repo, "pin bump plus a mode change")
+
+    out = _summary(capsys)
+
+    assert _line_with(out, "`FLOOR.md`", "mode change") is not None
+    assert "pin-only" not in out.lower()
+
+
+def test_signoff_summary_breaks_other_paths_down_by_role(signoff_repo, capsys):
+    # Clause iii also covers the canary and gate-code subtrees; the approver
+    # sees them counted by role, never listed (they are not floor core).
+    (signoff_repo / "scripts" / "canaries").mkdir(parents=True)
+    (signoff_repo / "scripts" / "canaries" / "run.py").write_text("x\n", encoding="utf-8")
+    with (signoff_repo / "docs" / "notes.md").open("a", encoding="utf-8") as fh:
+        fh.write("more\n")
+    with (signoff_repo / _WORKFLOW).open("a", encoding="utf-8") as fh:
+        fh.write("# trailing comment\n")
+    _commit_all(signoff_repo, "floor core, canary and docs")
+
+    out = _summary(capsys)
+
+    assert _line_with(out, "Other paths changed", "2", "1 canary", "1 unprotected")
+    assert "scripts/canaries/run.py" not in out
+    assert "docs/notes.md" not in out

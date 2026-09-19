@@ -37,9 +37,10 @@
 #     the maintainer what the approval covers: clause iii, each floor-core
 #     path with its line counts, the pull request's head commit, and, for a
 #     pin-only change, each action's old and new commit. The text comes from
-#     scripts/floor_check.py (the same classification as the trigger) and goes
-#     to the run's step summary and to one pull-request comment, updated in
-#     place. A read-only token (Dependabot, forks) skips the comment only.
+#     the base ref's copy of scripts/floor_check.py (the trigger's
+#     classification, as it stood before this pull request) and goes to the
+#     run's step summary and to one pull-request comment, updated in place. A
+#     read-only token (Dependabot, forks) skips the comment only.
 #
 #   floor self-anchor (E2, fail-closed on repo settings):
 #     Query the live GitHub API and FAIL (fail-closed) if either floor check
@@ -191,8 +192,11 @@ jobs:
   # What the maintainer is asked to approve. Runs on the same trigger as the
   # sign-off and sits in its `needs`, so the explanation is on the run summary
   # (and the pull request) before the deployment review is requested. The text
-  # is the script's, from the same classification the trigger uses, so the two
-  # cannot disagree and this file still names no path. It cites the pull
+  # is the script's, so this file still names no path. It is rendered by the
+  # base ref's copy while the trigger runs the head copy: the two agree unless
+  # the pull request edits the classification itself, and then the section
+  # still appears (floor_check.py is floor core in both) and at worst counts a
+  # newly floor-core path among the other paths, by role. It cites the pull
   # request's head commit: the checkout is the merge commit, which is not what
   # the maintainer approves.
   # This is the one floor job with a write scope. On the `pull_request` event
@@ -207,7 +211,10 @@ jobs:
     # One comment writer per pull request at a time, so two runs cannot both
     # find no comment and both post, or an older run overwrite a newer head.
     # Job-level, not workflow-level: a run held at the deployment review must
-    # not queue the next push's floor jobs behind it.
+    # not queue the next push's floor jobs behind it. GitHub keeps one pending
+    # job per group, so on quick successive pushes a middle run's job is
+    # cancelled; that run's `floor enforcement` then goes red on a superseded
+    # head, which branch protection does not read. Noise, not a floor cause.
     concurrency:
       group: floor-signoff-comment-${{ github.event.pull_request.number }}
       cancel-in-progress: false
@@ -222,14 +229,19 @@ jobs:
           persist-credentials: false
 
       # NO --depth=1 here, for the same reason as the path filter's fetch.
+      # The branch name reaches the shell through env, never through template
+      # expansion, since this job holds a write scope.
       - name: Fetch the PR base branch
-        run: git fetch --no-tags origin "${{ github.base_ref }}"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch --no-tags origin "${BASE_REF}"
 
       - name: Write the sign-off explanation to the step summary
         env:
+          BASE_REF: ${{ github.base_ref }}
           HEAD_COMMIT: ${{ github.event.pull_request.head.sha }}
         run: |
-          BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          BASE_SHA="$(git merge-base "origin/${BASE_REF}" HEAD)"
           echo "merge-base: ${BASE_SHA}"
           SUMMARY="${RUNNER_TEMP}/floor-signoff-summary.md"
           # Render with the BASE copy of the script: the head copy is floor
@@ -261,6 +273,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_COMMIT: ${{ github.event.pull_request.head.sha }}
         run: |
           # A step with no `shell:` runs as `bash -e` without pipefail, which
           # would hide a failed `gh api` behind jq's exit 0 and reach the POST.
@@ -278,6 +291,17 @@ jobs:
           if ! EXISTING="$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" \
               | jq -s -r --arg m "${MARKER}" 'add // [] | map(select(.user.login == "github-actions[bot]" and (.body | contains($m)))) | .[0].id // empty')"; then
             echo "::warning::Could not read the pull request's comments, so the sign-off comment was skipped; the step summary stands alone."
+            exit 0
+          fi
+          # A delayed run or a re-run of an older push must not overwrite the
+          # comment with an older head: write only while this run's head is
+          # still the pull request's head.
+          if ! LIVE_HEAD="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" | jq -r '.head.sha')"; then
+            echo "::warning::Could not read the pull request's live head, so the sign-off comment was skipped; the step summary stands alone."
+            exit 0
+          fi
+          if [ "${LIVE_HEAD}" != "${HEAD_COMMIT}" ]; then
+            echo "::warning::This run explains ${HEAD_COMMIT}, but the pull request's head is now ${LIVE_HEAD}; the comment is left to that newer run."
             exit 0
           fi
           ERR="${RUNNER_TEMP}/floor-signoff-comment.err"
