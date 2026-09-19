@@ -54,7 +54,7 @@ from lib.badge import (
     fallback_badge,
     write_badge,
 )
-from lib.assess_config import load_excludes, load_structure_config
+from lib.assess_config import is_user_excluded, load_excludes, load_structure_config
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
 from lib.interactivity import build_offers_block
@@ -65,7 +65,7 @@ from lib.keyhole_signals import integrate as integrate_keyhole_signals
 from lib.liveness_scan import scan_liveness
 from lib.promissory_markers import scan_promissory_markers
 from lib.structure_graph import analyze_structure
-from lib.stats_diff import diff_stats, hotspot_commits, load_stats
+from lib.stats_diff import StatsDiff, diff_stats, hotspot_commits, load_stats
 from lib.structure_drift import (
     SEAM_ALLOWLIST,
     detect_path_existence_drift,
@@ -78,7 +78,9 @@ from lib.wiki_writer import (
     HotspotEntry,
     LogEntry,
     append_log_entry,
+    last_log_entry_is_unfinalized_run,
     prune_orphan_hotspots,
+    retire_excluded_hotspots,
     supersede_unfinalized_log_entry,
     verify_log_chain,
     write_hotspot_page,
@@ -508,16 +510,16 @@ def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
     return json.loads(state_file.read_text(encoding="utf-8"))
 
 
-def _supersede_same_commit_log_entry(
+def _same_measurement_prior_run(
     assess_dir: Path, *, run_date: str, measured_commit: dict
-) -> bool:
-    """Drop the prior run's unfinalized log entry when this run supersedes it.
+) -> dict | None:
+    """The previous run's context when this run supersedes it, else None.
 
     A run supersedes the previous one when both share ``run_date`` and the
     measured commit. The previous run-context.json is still on disk here (this
     run writes its own later), so it names the entry's run id and commit. The
-    wiki writer only removes that entry if it is the log's last and still
-    carries placeholders; a finalized entry is history and stays (#355).
+    wiki writer only removes that run's log entry if it is the log's last and
+    still carries placeholders; a finalized entry is history and stays (#355).
 
     A target with no git (``available`` false on both runs) has no commit to
     key on, so the date and the prior run id are the whole identity: two such
@@ -526,14 +528,14 @@ def _supersede_same_commit_log_entry(
     try:
         prior = json.loads((assess_dir / "run-context.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return False
+        return None
     if not isinstance(prior, dict) or not prior.get("run_id"):
-        return False
+        return None
     if prior.get("run_date") != run_date:
-        return False
+        return None
     prior_commit = prior.get("measured_commit")
     if not isinstance(prior_commit, dict):
-        return False
+        return None
     head_sha = measured_commit.get("head_sha")
     if head_sha:
         same = prior_commit.get("head_sha") == head_sha
@@ -542,9 +544,63 @@ def _supersede_same_commit_log_entry(
             measured_commit.get("available") is False
             and prior_commit.get("available") is False
         )
-    if not same:
-        return False
-    return supersede_unfinalized_log_entry(assess_dir, prior["run_id"])
+    return prior if same else None
+
+
+def _inherited_provisional_paths(
+    assess_dir: Path, superseded: dict | None, first_flagged_map: dict[str, str],
+) -> set[str]:
+    """Paths first flagged only by the superseded, never-finalized run (#356).
+
+    Empty unless the superseded run's log entry is still unfinalized. Each run
+    records ``provisional_first_flagged``: the paths it first flagged plus those
+    it inherited this way, so a chain of unfinalized same-day runs carries a
+    file forward after it stops being "new". A run-context from before the key
+    existed falls back to its ``diff_detail.new`` paths. Only paths whose
+    first-flagged date is still that run's date qualify.
+    """
+    if superseded is None or not last_log_entry_is_unfinalized_run(
+        assess_dir, superseded["run_id"],
+    ):
+        return set()
+    paths = superseded.get("provisional_first_flagged")
+    if not isinstance(paths, list):
+        new = (superseded.get("diff_detail") or {}).get("new") or []
+        paths = [h.get("path") for h in new if isinstance(h, dict)]
+    return {
+        p for p in paths
+        if isinstance(p, str) and first_flagged_map.get(p) == superseded.get("run_date")
+    }
+
+
+def _excluded_after_unfinalized_run(
+    assess_dir: Path, *, superseded: dict | None, first_flagged_map: dict[str, str],
+    current: dict, diff: StatsDiff, excludes: tuple[set[str], list[str]],
+) -> tuple[set[str], list[str]]:
+    """Split out the files excluded after a never-finalized run (#356).
+
+    Returns ``(provisional, excluded)``. ``provisional`` is what this run records
+    as ``provisional_first_flagged``: the inherited paths plus the ones this run
+    flags for the first time, minus ``excluded``. ``excluded`` is the sorted
+    inherited paths now matched by a config exclude and no longer a top hotspot;
+    they are removed from ``diff.graduated`` here so the rotated prior stats do
+    not carry them into index.md. Must run before the hotspot loop stamps new
+    first-flagged dates.
+    """
+    inherited = _inherited_provisional_paths(assess_dir, superseded, first_flagged_map)
+    current_hot = {h["path"] for h in current.get("top_hotspots", [])}
+    excluded = sorted(
+        p for p in inherited - current_hot if is_user_excluded(Path(p), *excludes)
+    )
+    diff.graduated = [h for h in diff.graduated if h.path not in excluded]
+    fresh = {h.path for h in diff.new if h.path not in first_flagged_map}
+    return (inherited | fresh) - set(excluded), excluded
+
+
+def _drop_superseded_log_entry(assess_dir: Path, superseded: dict | None) -> None:
+    """Remove the superseded run's log entry when it is still unfinalized."""
+    if superseded is not None:
+        supersede_unfinalized_log_entry(assess_dir, superseded["run_id"])
 
 
 def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None:
@@ -960,6 +1016,22 @@ def build_run_context(
     # markers) so "this is reference data, not source" is a single statement.
     extra_exclude_dirs, extra_exclude_patterns = load_excludes(repo_root)
 
+    # Excluded after an unfinalized run (#356): a file first flagged only by the
+    # never-finalized run this one supersedes, and now excluded by config, was
+    # never part of a finished assessment. Its page is retired, its first-flagged
+    # entry dropped, and it is kept out of "graduated" so the rotated prior stats
+    # do not carry it into index.md. Files first flagged by a finalized run are
+    # outside the rule, as are files still in the current top hotspots.
+    measured_commit = git_commit_info(repo_root)
+    superseded = _same_measurement_prior_run(
+        assess_dir, run_date=run_date, measured_commit=measured_commit,
+    )
+    provisional, excluded_unfinalized = _excluded_after_unfinalized_run(
+        assess_dir, superseded=superseded, first_flagged_map=first_flagged_map,
+        current=current, diff=diff,
+        excludes=(extra_exclude_dirs, extra_exclude_patterns),
+    )
+
     # Promissory markers (stale TODO/FIXME, suppressions, disabled tests),
     # scanned before the wiki pages so each hotspot page can carry its own
     # marker debt. summary() shape on success; _safe's degrade dict on failure
@@ -1061,6 +1133,9 @@ def build_run_context(
     # are (re)written, so a file that is still a live hotspot has just had its
     # page refreshed and won't be touched.
     pruned_hotspots = prune_orphan_hotspots(assess_dir, repo_root)
+    retired_excluded = retire_excluded_hotspots(assess_dir, excluded_unfinalized)
+    for path in excluded_unfinalized:
+        first_flagged_map.pop(path, None)
 
     # Also surface graduated hotspots in the index. Carry the file's actual
     # current metrics across the three top-N lists in `current` - graduating
@@ -1124,10 +1199,7 @@ def build_run_context(
         run_id=run_id,
         schema_version=ARTIFACT_SCHEMA_VERSION,
     )
-    measured_commit = git_commit_info(repo_root)
-    _supersede_same_commit_log_entry(
-        assess_dir, run_date=run_date, measured_commit=measured_commit,
-    )
+    _drop_superseded_log_entry(assess_dir, superseded)
     append_log_entry(assess_dir, log_entry)
 
     # log.md integrity: verify the chained checksums after the append. A break
@@ -1198,6 +1270,12 @@ def build_run_context(
         # Hotspot pages retired this run because their source file left the tree
         # (task 9). Empty on a run that deleted nothing - a stable baseline.
         "pruned_hotspots": pruned_hotspots,
+        # Pages retired this run because the file was first flagged only by a
+        # never-finalized run and is now excluded by config (#356), and the
+        # paths whose first-flagged date still rests on an unfinalized run (this
+        # one until it is finalized), read back by the next superseding run.
+        "retired_excluded_hotspots": retired_excluded,
+        "provisional_first_flagged": sorted(provisional),
         # log.md integrity chain state (task 11). `valid` is False when an earlier
         # log entry was edited after it was written; `broken_at_entry` is the
         # 1-based index of the first entry that fails verification (None when
