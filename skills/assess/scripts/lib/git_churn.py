@@ -320,10 +320,16 @@ def content_commit_clock(
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return ContentClock({}, frozenset(), (), 0, len(docs), False)
-    shallow = subprocess.run(
-        ["git", "-C", top, "rev-parse", "--is-shallow-repository"],
-        capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
-    ).stdout.strip() == "true"
+    # Complete only when git confirms the history is not shallow; a failed or
+    # timed-out probe cannot vouch for it.
+    try:
+        probe = subprocess.run(
+            ["git", "-C", top, "rev-parse", "--is-shallow-repository"],
+            capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
+        )
+        full_history = probe.returncode == 0 and probe.stdout.strip() == "false"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        full_history = False
     rename_to = dict(renames)
 
     # Parse newest first: (sha, epoch, docs in `docs` the commit touched).
@@ -373,7 +379,7 @@ def content_commit_clock(
         skipped=tuple(records[:BULK_COMMITS_SKIPPED_CAP]),
         skipped_total=len(records),
         doc_count=len(docs),
-        complete=not shallow,
+        complete=full_history,
         creation_fallback=frozenset(pending),
     )
 

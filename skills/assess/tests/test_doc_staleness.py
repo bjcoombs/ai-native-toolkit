@@ -553,3 +553,27 @@ def test_non_doc_instruction_file_skips_bulk_commit(git_repo) -> None:
     commit("chore: headers everywhere", days_ago=5)
     files = _grade_instruction_files(repo)[0]
     assert files[".cursorrules"]["freshness_days"] in (399, 400)  # DST slack
+
+
+def test_shallow_probe_timeout_marks_scan_incomplete(git_repo, monkeypatch) -> None:
+    """A timed-out shallow probe must not escape the clock or vouch for it."""
+    import subprocess
+
+    import lib.git_churn as gc
+
+    repo, commit = git_repo
+    _bulk_fixture(repo, commit)
+    real_run = subprocess.run
+
+    def fake_run(cmd, *a, **k):
+        if "--is-shallow-repository" in cmd:
+            raise subprocess.TimeoutExpired(cmd, 1)
+        return real_run(cmd, *a, **k)
+
+    gc.content_commit_clock.cache_clear()
+    monkeypatch.setattr(gc.subprocess, "run", fake_run)
+    r = analyze_doc_staleness(repo)
+    gc.content_commit_clock.cache_clear()
+    assert r["bulk_commit_scan_complete"] is False
+    days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
+    assert days["docs/caching.md"] == 3
