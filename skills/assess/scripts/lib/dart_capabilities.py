@@ -44,8 +44,8 @@ _CAPABILITY_GLOSS = {
 # package:lints; ``linter:`` followed by an indented ``rules:`` lists rules
 # directly. ``analyzer: errors:`` only changes the severity of enabled rules.
 _INCLUDE_RE = re.compile(r"^include\s*:\s*\S", re.MULTILINE)
-_LINTER_RULES_RE = re.compile(r"^linter\s*:[^\n]*\n(?:(?:[ \t]+[^\n]*|[ \t]*)\n)*?[ \t]+rules\s*:",
-                              re.MULTILINE)
+_LINTER_KEY_RE = re.compile(r"linter\s*:")
+_RULES_KEY_RE = re.compile(r"rules\s*:")
 _COMMENT_RE = re.compile(r"(?m)^\s*#.*$|\s+#.*$")
 
 # What the liveness candidate would provide, and what it would not. Shared by the
@@ -101,7 +101,24 @@ def _scan_dart_tree(repo_root: Path,
 def _enables_lint_rules(text: str) -> bool:
     """True when an ``analysis_options.yaml`` text enables lint rules."""
     text = _COMMENT_RE.sub("", text)
-    return bool(_INCLUDE_RE.search(text) or _LINTER_RULES_RE.search(text))
+    return bool(_INCLUDE_RE.search(text)) or _linter_has_rules(text)
+
+
+def _linter_has_rules(text: str) -> bool:
+    """True when a top-level ``linter:`` block holds an indented ``rules:`` key.
+
+    A line scan, not a regex: one pass, no backtracking, so an arbitrary file
+    cannot stall the walk. Blank lines stay inside the block; the next
+    unindented line ends it."""
+    in_linter = False
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        if line[0] not in " \t":
+            in_linter = _LINTER_KEY_RE.match(line) is not None
+        elif in_linter and _RULES_KEY_RE.match(line.lstrip()):
+            return True
+    return False
 
 
 def _configured_packages(pubspecs: list[str], options: dict[Path, bool]) -> list[str]:

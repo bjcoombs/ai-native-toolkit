@@ -149,6 +149,14 @@ reach it from any doc; an uncited one stays excluded. The headline `orphan_rate`
 `reachability_pct` count both kinds; `link_only_orphan_rate` / `link_only_reachability_pct`
 report links alone over the same node set, so a doc only a reference brought in counts as
 an orphan there. A reference edge also clears the pair from `missing_xrefs` (#353).
+`directory_breakdown` lists `{path, doc_count, unreachable_count, broken_link_count}`
+per top-level directory (`path` is the first segment; root-level docs key as `.`), over
+the same curated layer as the headline: raw-source and working-notes trees are left out.
+A broken link counts toward the directory of the doc it is written in. Rows are ordered by
+unreachable count, then broken links, then doc count, and capped at
+`MAX_DIRECTORY_BREAKDOWN`; `directory_count` carries the uncapped total. Only an uncut
+list (`len(directory_breakdown) == directory_count`) sums to `doc_count`,
+`len(unreachable)` and `dangling_links`; a cut one sums to less (#365).
 
 **`raw_source.py`**
 Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:
@@ -333,6 +341,20 @@ hidden coupling (looks modular, bleeds historically), bleeding modules (no stati
 available), and refactor boundaries (high containment + low external coupling, a safe
 zone for keyhole edits). Looks-coupled-but-never-co-changes is suppressed - the static
 graph already surfaces it.
+
+**`gap_actions.py`**
+Builds the run-context `gap_actions` list: Top 3 candidates for the slots
+`prescribed_actions` leaves free, read from two blocks `assess_core` already holds. Each
+entry is `{signal, action, paths}`. A `coverage_report` entry fires when no coverage
+report was found in a repo whose archetype is `software` and names up to three
+`top_hotspots` to measure, skipping `archive/`, `archived/` and `attic/` paths (via
+`keyhole_signals.is_archive_path`); it is silent on a knowledge base (test layers N/A)
+and when no hotspot remains, and when it fires it comes first.
+A `doc_graph` entry fires when `reachability_pct` is below `REACHABILITY_FLOOR` (0.5, with
+its rationale beside it) and names up to ten unreachable docs. A repo with no markdown
+reports reachability 0.0, but nothing is unreachable there, so no `doc_graph` entry fires.
+`[]` when neither fires. There is no lint complexity-rule gap: the core has no detector
+for it, and the layer scorer owns that check.
 
 **`understanding_analysis.py`**
 Signals B4 + D2. Per module: human anchor (has a confirmed human authored it?), intent
@@ -544,6 +566,20 @@ object or a whole live list;
 with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` alongside any change to discovery or the diff.
+
+**`gate_cost.py`**
+Actions cost of the CI gate the assess-pr skill offers, so the offer can state it.
+Counts pull requests merged in the last `WINDOW_DAYS` (30) days with `gh pr list
+--state merged` via `gh_cli` (not `git log --merges`, which reads zero on a
+squash-merging repository), filtering `mergedAt` in Python because the search
+qualifier is day-granular, and multiplies by `MINUTES_PER_RUN` (5, an assumption
+from one measured run, not a measurement of the target). Emits `gate_cost_estimate:
+{available, runs_per_month, minutes_per_run, minutes_per_month, assumption, capped, private}`
+(`capped` true when the listing hit `PR_LIMIT`, so the counts are lower bounds);
+`private` comes from `gh repo view` and is `null` when that read fails. No remote,
+no `gh`, no auth, a failed read or zero merged pull requests degrade to `{available:
+false, reason}` (`no_merge_history` for the last). Only the counts are stored.
+Tests: `tests/test_gate_cost.py`.
 
 **`accretion_ratchet.py`**
 Write-side accretion instrument: detects files that only ever grow. Walks each

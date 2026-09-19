@@ -113,6 +113,35 @@ def test_analysis_options_with_linter_rules_credits(tmp_path: Path) -> None:
     assert linting["state"] == "credited"
 
 
+def test_linter_rules_after_a_comment_and_a_blank_line_credit(tmp_path: Path) -> None:
+    _write(tmp_path, "pubspec.yaml", "name: demo\n")
+    _write(tmp_path, "analysis_options.yaml",
+           "linter:\n  # house rules\n\n  rules:\n    - avoid_print\n")
+    linting = scan_dart_capabilities(tmp_path)["capabilities"]["linting"]
+    assert linting["state"] == "credited"
+
+
+def test_rules_under_another_top_level_key_does_not_credit(tmp_path: Path) -> None:
+    _write(tmp_path, "pubspec.yaml", "name: demo\n")
+    _write(tmp_path, "analysis_options.yaml",
+           "linter:\n  enabled: true\nformatter:\n  rules: []\n")
+    linting = scan_dart_capabilities(tmp_path)["capabilities"]["linting"]
+    assert linting["state"] == "honest_degrade"
+
+
+def test_long_linter_block_without_rules_is_linear(tmp_path: Path) -> None:
+    # A linter: block of many indented lines and no rules: child used to
+    # backtrack exponentially in a regex; the line scan must stay linear.
+    import time
+    _write(tmp_path, "pubspec.yaml", "name: demo\n")
+    body = "".join(f"    key{i}: value {i}\n" for i in range(30))
+    _write(tmp_path, "analysis_options.yaml", "linter:\n" + body + "  \n")
+    start = time.monotonic()
+    linting = scan_dart_capabilities(tmp_path)["capabilities"]["linting"]
+    assert time.monotonic() - start < 2.0
+    assert linting["state"] == "honest_degrade"
+
+
 def test_nearest_analysis_options_decides(tmp_path: Path) -> None:
     # The analyzer uses the nearest file only: a package-level file that enables
     # nothing shadows a root file that does.
