@@ -135,11 +135,14 @@ the curated-wiki signal isn't drowned. Pure - no `doc_graph` import - so
 
 Its second classifier, `classify_working_notes_trees` (issue #366), finds
 working-notes trees: at least `WORKING_NOTES_MIN_FILES` docs, most named in a
-small set of families (a shared first word, a date, or a ticket key), most with
+small set of sequence families (a word then an integer such as `plan_07`, a date,
+or a ticket key; a shared word alone like `how-to-*` is no family), most with
 in-degree <= 1, and one or two docs holding most of their inbound links - an
 agent's plans or session logs hung off a backlog index. The whole directory, the
-index included, is the tree; the innermost qualifying directory wins so curated
-siblings stay counted. It runs on the headline graph (link and reference edges)
+index included, is the tree. A qualifying parent absorbs qualifying
+subdirectories only when every other doc in it is their index (`notes/backlog.md`
+over `notes/2025/` and `notes/2026/`); otherwise the subdirectories win, so
+curated siblings stay counted. Only docs are classified, never a `.base` hub. It runs on the headline graph (link and reference edges)
 after the raw pass. `doc_graph.py` excludes these trees too and reports
 `excluded_working_notes_trees`, `working_notes_doc_count`,
 `working_notes_orphan_rate` and `working_notes_broken_links`.

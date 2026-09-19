@@ -704,6 +704,20 @@ def test_working_notes_tree_excluded_from_headline(tmp_path: Path) -> None:
     assert d["excluded_raw_trees"] == []
 
 
+def test_base_hub_beside_notes_is_not_a_notes_member(tmp_path: Path) -> None:
+    # A vault-wide .base stored in notes/ selects the wiki pages. It is not a
+    # doc, so it neither joins the tree's count nor leaves the headline graph,
+    # and the wiki pages it surfaces keep their inbound edge.
+    _notes_and_wiki(tmp_path)
+    _write(tmp_path, "notes/pages.base",
+           'filters:\n  and:\n    - file.inFolder("wiki")\n    - file.ext == "md"\n'
+           'views:\n  - type: table\n    name: All\n')
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["excluded_working_notes_trees"] == [{"path": "notes", "file_count": 51}]
+    assert d["working_notes_doc_count"] == 51
+    assert not any(o.startswith("wiki/") for o in d["orphans"])
+
+
 def test_no_working_notes_tree_keys_present_and_empty(tmp_path: Path) -> None:
     _curated_wiki(tmp_path)
     d = build_doc_graph(tmp_path).as_dict()

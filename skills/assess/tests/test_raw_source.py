@@ -242,6 +242,39 @@ def test_working_notes_nested_tree_keeps_curated_siblings() -> None:
     assert [t["path"] for t in trees] == ["docs/notes"]
 
 
+def test_prefix_named_indexed_section_is_not_working_notes() -> None:
+    # A curated how-to section: same-prefixed pages each linked once from the
+    # section README. Passes in-degree and index; the name leg must fail it,
+    # because a shared word is not a sequence.
+    topics = [f"how-to-{w}" for w in (
+        "deploy rotate-keys restore scale debug profile migrate upgrade rollback "
+        "tag release audit onboard offboard backup patch seed index cache trace"
+    ).split()]
+    signals = {f"docs/how-to/{t}.md": _wn_signal(["docs/how-to/README.md"]) for t in topics}
+    signals["docs/how-to/README.md"] = _wn_signal(["README.md"])
+    assert classify_working_notes_trees(signals) == []
+
+
+def test_versioned_release_pages_are_not_working_notes() -> None:
+    signals = {
+        f"releases/v1.{i}.0.md": _wn_signal(["releases/index.md"]) for i in range(30)
+    }
+    signals.update({
+        f"releases/release-2.{i}.1.md": _wn_signal(["releases/index.md"]) for i in range(30)
+    })
+    assert classify_working_notes_trees(signals) == []
+
+
+def test_notes_split_by_period_keep_their_index_in_the_tree() -> None:
+    signals = {
+        f"notes/{y}/plan_{i:02d}.md": _wn_signal(["notes/backlog.md"])
+        for y in (2025, 2026) for i in range(25)
+    }
+    signals["notes/backlog.md"] = _wn_signal(["README.md"])
+    trees = classify_working_notes_trees(signals)
+    assert [(t["path"], t["file_count"]) for t in trees] == [("notes", 51)]
+
+
 def test_working_notes_thresholds_are_precision_first() -> None:
     assert WORKING_NOTES_MIN_FILES >= 10
     assert 0.5 < WORKING_NOTES_NAME_DENSITY <= 1.0

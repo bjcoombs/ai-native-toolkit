@@ -891,7 +891,9 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     )
     # Working-notes trees (issue #366) are the second fingerprint, detected on
     # what the raw pass leaves so no doc belongs to both layers.
-    notes_docs, notes_trees = _detect_working_notes_trees(graph, raw_docs)
+    notes_docs, notes_trees = _detect_working_notes_trees(
+        graph, {rel(d) for d in docs} - raw_docs,
+    )
     excluded_docs = raw_docs | notes_docs
     curated_docs = [d for d in docs if rel(d) not in excluded_docs]
     curated_nodes = [n for n in graph.nodes() if n not in excluded_docs]
@@ -949,11 +951,12 @@ def _layer_figures(
     )
 
 
-def _detect_working_notes_trees(graph, raw_docs: set[str]) -> tuple[set[str], list[dict]]:
+def _detect_working_notes_trees(graph, doc_rels: set[str]) -> tuple[set[str], list[dict]]:
     """Detect working-notes subtrees and return (excluded_doc_rels, trees).
 
-    Signals come from the headline graph (link and reference edges) with the
-    raw-source docs removed: each doc's in-degree and the docs its inbound
+    ``doc_rels`` is the doc set minus raw-source docs; like the raw pass it
+    never classifies a non-doc node (a ``.base`` hub). Signals come from the
+    headline graph (link and reference edges) restricted to those docs: each doc's in-degree and the docs its inbound
     edges come from, so the classifier can tell one index holding the links
     from a wiki whose links are spread out. The verdict is
     ``lib.raw_source.classify_working_notes_trees``.
@@ -961,10 +964,8 @@ def _detect_working_notes_trees(graph, raw_docs: set[str]) -> tuple[set[str], li
     from lib.raw_source import classify_working_notes_trees
 
     signals: dict[str, dict] = {}
-    for r in graph.nodes():
-        if r in raw_docs:
-            continue
-        sources = [u for u in graph.predecessors(r) if u not in raw_docs]
+    for r in sorted(doc_rels):
+        sources = [u for u in graph.predecessors(r) if u in doc_rels]
         signals[r] = {"in_degree": len(sources), "inbound_sources": sources}
     trees = classify_working_notes_trees(signals)
     return {r for t in trees for r in t["docs"]}, trees

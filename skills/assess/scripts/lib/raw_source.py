@@ -153,12 +153,16 @@ def classify_raw_trees(
 # Working-notes thresholds (issue #366), precision-first for the same reason as
 # the raw-tree ones: excluding a curated folder hides real navigability gaps,
 # while missing a notes tree only keeps today's figures (and `.assess/config.toml`
-# can name the tree). All three legs must hold, so a curated wiki fails on names
-# (varied), on in-degree (cross-linked pages have several inbound links) or on
-# the index (its inbound links are spread across many pages).
-WORKING_NOTES_MIN_FILES = 20  # a pile, not a small wiki section; no fixture pins a lower bound
+# can name the tree). All three legs must hold. The name leg counts only names
+# that carry a sequence (a date, a ticket key, or a word then a separator and an
+# integer: plan_07), so a curated section of same-prefixed pages under its own
+# index (how-to-deploy.md, runbook-restart-db.md, v1.2.3.md) fails it even
+# though it passes the in-degree and index legs. A cross-linked wiki also fails
+# on in-degree (several inbound links per page) and on the index (inbound links
+# spread across many pages).
+WORKING_NOTES_MIN_FILES = 20  # a pile, not a small wiki section
 WORKING_NOTES_PREFIX_SET = 3  # "a small set of prefixes": plan_/spike_/retro_ at most
-WORKING_NOTES_NAME_DENSITY = 0.8  # >= this fraction share a prefix, date or ticket name
+WORKING_NOTES_NAME_DENSITY = 0.8  # >= this fraction carry a sequence name in a shared family
 WORKING_NOTES_LOW_INDEGREE_DENSITY = 0.8  # >= this fraction have in-degree <= 1
 WORKING_NOTES_INDEX_FILES = 2  # "one or two index files"
 WORKING_NOTES_INDEX_SHARE = 0.6  # the top index files hold >= this share of inbound links
@@ -167,28 +171,31 @@ WORKING_NOTES_INDEX_SHARE = 0.6  # the top index files hold >= this share of inb
 _DATE_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}[-_.]?(?:0[1-9]|1[0-2])[-_.]?(?:0[1-9]|[12]\d|3[01])(?!\d)")
 # PROJ-123, gh-42: a tracker key and a number.
 _TICKET_RE = re.compile(r"(?<![A-Za-z])[A-Za-z]{2,10}-\d+(?!\d)")
-_WORD_RE = re.compile(r"[a-z]+")
+# plan_07, spike-3-auth: a word prefix, a separator, then an integer that ends
+# the stem or is followed by another separator (not a dotted version: 1.2.3).
+_SEQUENCE_RE = re.compile(r"^([a-z]+(?:[-_ ][a-z]+)*)[-_ ]\d+(?:$|[-_ ])")
 
 
-def _name_key(rel: str) -> str:
-    """The naming family a doc belongs to: a date, a ticket, or its first word.
+def _name_key(rel: str) -> str | None:
+    """The sequence family a doc's name belongs to, or None when it has none.
 
     ``plan_07.md`` -> ``plan``; ``2026-01-31-standup.md`` -> ``<date>``;
-    ``PROJ-12.md`` -> ``<ticket>``; ``0001-use-postgres.md`` -> ``use``.
+    ``PROJ-12.md`` -> ``<ticket>``; ``how-to-deploy.md``, ``v1.2.3.md`` and
+    ``0001-use-postgres.md`` -> None (a shared word is not a sequence).
     """
     stem = rel.rsplit("/", 1)[-1].rsplit(".", 1)[0]
     if _DATE_RE.search(stem):
         return "<date>"
     if _TICKET_RE.search(stem):
         return "<ticket>"
-    word = _WORD_RE.search(stem.lower())
-    return word.group(0) if word else "<numeric>"
+    seq = _SEQUENCE_RE.match(stem.lower())
+    return seq.group(1) if seq else None
 
 
 def _is_working_notes(docs: list[str], doc_signals: dict[str, dict]) -> bool:
     """All three legs of the working-notes fingerprint over one directory."""
     n = len(docs)
-    families = Counter(_name_key(r) for r in docs)
+    families = Counter(k for k in map(_name_key, docs) if k is not None)
     shared = sorted((c for c in families.values() if c > 1), reverse=True)
     if sum(shared[:WORKING_NOTES_PREFIX_SET]) / n < WORKING_NOTES_NAME_DENSITY:
         return False
@@ -201,6 +208,17 @@ def _is_working_notes(docs: list[str], doc_signals: dict[str, dict]) -> bool:
     return total > 0 and held / total >= WORKING_NOTES_INDEX_SHARE
 
 
+def _absorbs(directory: str, qualifying: dict[str, list[str]], doc_signals: dict[str, dict]) -> bool:
+    """True when ``directory`` can stand as one tree over its qualifying
+    subdirectories: each doc outside them links into them (is their index)."""
+    inner = [o for o in qualifying if o != directory and _is_ancestor_path(directory, o)]
+    if not inner:
+        return True
+    nested = {r for o in inner for r in qualifying[o]}
+    indexes = {s for r in nested for s in doc_signals[r].get("inbound_sources", ())}
+    return all(r in indexes for r in qualifying[directory] if r not in nested)
+
+
 def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
     """Identify working-notes subtrees from per-doc graph signals.
 
@@ -211,10 +229,12 @@ def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
     most with in-degree <= 1, and one or two docs hold most of their inbound
     links. The whole directory is the tree, its index file included.
 
-    Returns ``{"path", "file_count", "docs"}`` per tree, sorted by path. Unlike
-    raw trees, the *innermost* qualifying directory wins: a parent that
-    qualifies only because a notes tree dominates it would otherwise take its
-    curated siblings out of the headline with it.
+    Returns ``{"path", "file_count", "docs"}`` per tree, sorted by path. A
+    qualifying parent absorbs its qualifying subdirectories only when every doc
+    it holds outside them is an index linking into them (``notes/backlog.md``
+    over ``notes/2025/`` and ``notes/2026/``); otherwise the subdirectories win,
+    so a parent that qualifies only because a notes tree dominates it does not
+    take its curated siblings out of the headline.
     """
     by_dir: dict[str, list[str]] = {}
     for rel in doc_signals:
@@ -225,9 +245,10 @@ def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
         d: docs for d, docs in by_dir.items()
         if len(docs) >= WORKING_NOTES_MIN_FILES and _is_working_notes(docs, doc_signals)
     }
+    candidates = [d for d in qualifying if _absorbs(d, qualifying, doc_signals)]
     kept = [
-        d for d in qualifying
-        if not any(o != d and _is_ancestor_path(d, o) for o in qualifying)
+        d for d in candidates
+        if not any(o != d and _is_ancestor_path(o, d) for o in candidates)
     ]
     return [
         {"path": d, "file_count": len(qualifying[d]), "docs": sorted(qualifying[d])}
