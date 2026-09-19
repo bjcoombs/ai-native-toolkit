@@ -630,6 +630,54 @@ def test_build_prescribed_actions_empty_attention() -> None:
     assert ks.build_prescribed_actions([], ks.assemble_findings({})) == []
 
 
+def test_attention_low_signal_when_top_score_is_one() -> None:
+    """Every row in one finding only: the ranking is weak, so it is flagged."""
+    findings = ks.assemble_findings({"lying_map": [f"u{i}" for i in range(5)]})
+    attention = ks.build_attention_list(findings)
+    assert ks.is_attention_low_signal(attention) is True
+
+
+def test_attention_low_signal_false_when_any_row_scores_two() -> None:
+    findings = ks.assemble_findings({
+        "hidden_coupling": ["worst"],
+        "lying_map": ["worst", "u1", "u2", "u3"],
+    })
+    assert ks.is_attention_low_signal(ks.build_attention_list(findings)) is False
+
+
+def test_attention_low_signal_false_on_empty_attention() -> None:
+    """No rows means nothing to cap: the flag stays false."""
+    assert ks.is_attention_low_signal([]) is False
+
+
+def test_integrate_attention_low_signal_caps_prescribed_at_one(tmp_path: Path) -> None:
+    """Five score-1 rows: flag true, one prescribed action (rank 1), attention intact."""
+    pm = {
+        "available": True, "aging_reliable": True,
+        "stale_by_file": {f"u{i}.py": {} for i in range(5)},
+        "top_offenders": [],
+    }
+    out = ks.integrate(
+        repo_root=tmp_path, complexity_stats={"top_hotspots": [{"path": "u3.py"}]},
+        doc_staleness={}, dead_code={}, observability={}, structure={},
+        promissory_markers=pm,
+    )
+    assert out["attention_low_signal"] is True
+    assert len(out["attention"]) == 5
+    assert [(p["path"], p["rank"]) for p in out["prescribed_actions"]] == [("u3.py", 1)]
+
+
+def test_build_prescribed_actions_attention_low_signal_false_keeps_three() -> None:
+    """One score-2 row: flag false, prescribed_actions built as before (three)."""
+    findings = ks.assemble_findings({
+        "hidden_coupling": ["u0.py"],
+        "unactioned_intent": [f"u{i}.py" for i in range(5)],
+    })
+    attention = ks.build_attention_list(findings)
+    assert ks.is_attention_low_signal(attention) is False
+    assert len(ks.build_prescribed_actions(attention, findings)) == 3
+
+
 def test_render_prescribed_actions_rows_and_empty() -> None:
     findings = ks.assemble_findings({
         "hidden_coupling": ["worst"],
