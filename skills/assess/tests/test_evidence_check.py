@@ -365,3 +365,17 @@ def test_cli_refuses_a_root_that_is_not_a_directory(tmp_path: Path) -> None:
     )
     assert proc.returncode == 2
     assert not (tmp_path / "out.json").exists()
+
+
+def test_cli_refuses_evidence_that_is_not_utf8(repo: Path, tmp_path_factory) -> None:
+    out_dir = tmp_path_factory.mktemp("out")
+    ev = out_dir / "ev.json"
+    ev.write_bytes(b'[{"layer": 0, "kind": "path_exists", "path": "docs/\xff.md"}]')
+    proc = subprocess.run(
+        [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
+         "--json", str(out_dir / "out.json")],
+        cwd=SCRIPTS_DIR, capture_output=True, text=True, timeout=30,
+    )
+    assert proc.returncode == 2, proc.stderr
+    assert "Traceback" not in proc.stderr
+    assert not (out_dir / "out.json").exists()

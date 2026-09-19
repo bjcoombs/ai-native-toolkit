@@ -443,6 +443,8 @@ directory searched recursively); `file_contains` takes `path` (one file) and
 outside it, or cannot be resolved, is rejected. The reference search reads files in
 1 MiB chunks and does not enter `.git/` or `.assess/` (the tool's own previous
 output) when walking a directory; naming `.assess/` directly still searches it.
+The reference kinds reject a `path` inside `.git/`, while `file_contains`, a claim
+about one named file, may read one (e.g. `.git/config`).
 A symlink out of the root, or a dangling one, is not repository content and is
 skipped; a symlinked file inside the root is read at its target. Every check fails
 closed: a `referenced_in`, `not_referenced_in` or `file_contains` claim is rejected
@@ -456,7 +458,7 @@ keys pass through. The reference search is the public
 `is_referenced_in(repo_root, needle, path)`, so a check outside this module can
 reuse it. CLI, run from `skills/assess/scripts`:
 `uv run python -m lib.evidence_check <repo_root> <evidence.json> --json <out.json>`
-(exit 0 all verified, 1 any rejected, 2 an evidence file that cannot be read or is not a JSON array, or a `repo_root` that is not a
+(exit 0 all verified, 1 any rejected, 2 an evidence file that cannot be read or is not a UTF-8 JSON array, or a `repo_root` that is not a
 directory; a missing root would otherwise verify every `path_absent` claim). Stdlib only, imports no
 orchestrator. Add a case in `tests/test_evidence_check.py` alongside any new kind
 or change to a check rule.

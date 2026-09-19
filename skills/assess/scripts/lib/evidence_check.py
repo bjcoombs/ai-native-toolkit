@@ -33,7 +33,7 @@ CLI (run from ``skills/assess/scripts``)::
     uv run python -m lib.evidence_check <repo_root> <evidence.json> --json <out.json>
 
 Exit 0 when every entry verifies, 1 when any is rejected, 2 when the evidence
-file cannot be read, is not JSON, or is not a JSON array, or ``repo_root`` is not
+file cannot be read, is not UTF-8 JSON, or is not a JSON array, or ``repo_root`` is not
 a directory (no output is written then).
 """
 from __future__ import annotations
@@ -48,6 +48,8 @@ _NEEDLE_KINDS = frozenset({"referenced_in", "not_referenced_in", "file_contains"
 
 # VCS metadata is not repository content: a needle found only in .git/ (a
 # commit message, a reflog) is not a reference an agent or CI would follow.
+# This applies to the two reference kinds only: file_contains is a claim about
+# one named file, so it may read a path inside .git/ (e.g. .git/config).
 _GIT_DIR = ".git"
 # Directories the recursive walk does not enter. .assess/ holds this tool's own
 # previous output, which quotes repository paths in prose; reading it as
@@ -308,8 +310,8 @@ def main() -> int:
     args = ap.parse_args()
 
     try:
-        entries = json.loads(args.evidence.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
+        entries = json.loads(args.evidence.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         print(f"evidence_check: cannot read {args.evidence}: {exc}", file=sys.stderr)
         return 2
     if not isinstance(entries, list):
@@ -322,7 +324,7 @@ def main() -> int:
 
     result = check_evidence(args.repo_root, entries)
     if args.json:
-        args.json.write_text(json.dumps(result, indent=2) + "\n")
+        args.json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
     print(f"verified {len(result['evidence'])}, rejected {len(result['evidence_rejected'])}")
     for entry in result["evidence_rejected"]:
