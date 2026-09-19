@@ -681,3 +681,24 @@ def test_attention_low_signal_disclosed_in_report() -> None:
         "finding): only rank 1 is prescribed._"
     )
     assert render_exclusion_disclosure({"attention_low_signal": False}) == ""
+
+
+def test_report_code_data_maxima_quoted_separately() -> None:
+    ctx = _full_ctx()
+    ctx["stats_summary"]["loc"].update({"max_code": 761.0, "max_data": 7137.0})
+    ctx["stats_summary"]["loc"]["max"] = 7137.0
+    lines = [ln for ln in render_report(ctx, "repo").splitlines()
+             if "**Complexity profile:**" in ln]
+    assert len(lines) == 1
+    line = lines[0]
+    assert "code 761" in line and "data 7137" in line
+    assert "(max 7137;" in line
+
+
+def test_report_code_data_maxima_absent_on_older_snapshot() -> None:
+    """A pre-split stats snapshot has no max_code / max_data; the line keeps
+    its old shape rather than printing '?' placeholders."""
+    line = next(ln for ln in render_report(_full_ctx(), "repo").splitlines()
+                if "**Complexity profile:**" in ln)
+    assert line == ("- **Complexity profile:** p95 LOC 483.6 (max 761), "
+                    "p95 CCN 107.3 (max 169)")
