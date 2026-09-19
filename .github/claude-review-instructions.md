@@ -64,9 +64,13 @@ balanced and applied to **all** `.md` in the skill dir, not just `SKILL.md`.
 Flag unmarked plugin-only content.
 
 ### 4. Deterministic-core boundary (`/assess`)
-The `lib/` core does all data/math with **no AI and no network**; the LLM only
-writes prose via the `assess_finalize.py` write-back. Flag:
-- AI calls, network calls, or nondeterminism creeping into `skills/assess/scripts/lib/`.
+The `lib/` core does all data/math with **no AI**, and reaches the network only
+through `lib/gh_cli.py` (optional live GitHub reads via the `gh` CLI that resolve the
+remote first and degrade to `available: false`); the LLM only writes prose via the
+`assess_finalize.py` write-back. Flag:
+- AI calls, nondeterminism, or network access outside `lib/gh_cli.py` creeping into
+  `skills/assess/scripts/lib/`, and any `gh_cli` caller that reports a clean result
+  when a read failed.
 - A change to a deterministic module **without a matching test** in
   `skills/assess/tests/` - that test is the contract that lets the output be
   trusted regardless of which LLM drives.

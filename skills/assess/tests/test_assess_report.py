@@ -21,6 +21,7 @@ from assess_report import (
     render_diff_section,
     render_exclusion_disclosure,
     render_findings_section,
+    render_generated_disclosure,
     render_hotspots_table,
     render_keyhole_summary,
     render_report,
@@ -623,6 +624,42 @@ def test_main_corrupt_context_skips_not_fails(tmp_path: Path,
     rc = main([str(tmp_path)])
     assert rc == 0
     assert "infrastructure failure" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------
+# Generated-file disclosure (excluded_generated)
+# --------------------------------------------------------------------------
+
+
+def test_generated_header_exclusion_named_with_reason_on_one_line() -> None:
+    ctx = _full_ctx()
+    ctx["excluded_generated"] = [
+        {"path": "db/schema.sql", "reason": "generated-header"},
+        {"path": "assets/font.ts", "reason": "long-lines"},
+    ]
+    report = render_report(ctx, "demo")
+    lines = report.splitlines()
+    assert any("db/schema.sql" in ln and "generated-header" in ln for ln in lines)
+    assert any("assets/font.ts" in ln and "long-lines" in ln for ln in lines)
+    assert "2 files excluded from scoring as generated" in report
+
+
+def test_generated_header_disclosure_silent_when_empty() -> None:
+    assert render_generated_disclosure({}) == ""
+    assert render_generated_disclosure({"excluded_generated": []}) == ""
+    assert "excluded from scoring as generated" not in render_report(_full_ctx(), "demo")
+
+
+def test_generated_header_disclosure_folds_rows_past_the_cap() -> None:
+    rows = [{"path": f"gen/f{i:02}.sql", "reason": "generated-header"} for i in range(13)]
+    out = render_generated_disclosure({"excluded_generated": rows})
+    head, fold = out.split("<details>")
+    assert "gen/f09.sql` (generated-header)" in head
+    assert "gen/f10.sql" not in head
+    assert "3 more</summary>" in fold
+    for i in (10, 11, 12):
+        assert f"- `gen/f{i}.sql` (generated-header)" in fold
+    assert fold.rstrip().endswith("</details>")
 
 
 def test_pruned_finding_paths_disclosure_names_incomplete_rename_map() -> None:

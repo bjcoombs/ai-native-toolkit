@@ -173,6 +173,8 @@ def evaluate(ctx: dict, gate: dict) -> dict:
         # excludes suppressed - the gate must never read clean when a real
         # finding was filtered out by an exclude.
         "excluded_by_config": ctx.get("excluded_by_config"),
+        # Files the treemap dropped as generated, so the log names the reasons.
+        "excluded_generated": ctx.get("excluded_generated"),
     }
 
 
@@ -204,6 +206,9 @@ def format_verdict(verdict: dict) -> str:
     disclosure = _format_exclusion_disclosure(verdict.get("excluded_by_config"))
     if disclosure:
         lines.append(disclosure)
+    generated = _format_generated_disclosure(verdict.get("excluded_generated"))
+    if generated:
+        lines.append(generated)
     lines.append("  RESULT: " + ("FAIL" if verdict["failed"] else "PASS"))
     return "\n".join(lines)
 
@@ -227,6 +232,34 @@ def _format_exclusion_disclosure(excluded_by_config: dict | None) -> str:
         f"  {count} {noun} suppressed by config excludes "
         f"(dirs: {dirs}; patterns: {patterns})"
     )
+
+
+# Per-file lines the gate log lists before summarising the rest as "+N more".
+GENERATED_DISCLOSURE_MAX_PATHS = 10
+
+
+def _format_generated_disclosure(excluded_generated: list | None) -> str:
+    """A summary line naming each distinct reason files were excluded as
+    generated, then one indented ``path (reason)`` line per file (capped at
+    ``GENERATED_DISCLOSURE_MAX_PATHS``), or ``""`` when none were, so a clean
+    run's log is unchanged."""
+    rows = [
+        r for r in (excluded_generated or [])
+        if isinstance(r, dict) and r.get("path") and r.get("reason")
+    ]
+    if not rows:
+        return ""
+    reasons = sorted({r["reason"] for r in rows})
+    noun = "file" if len(rows) == 1 else "files"
+    lines = [
+        f"  {len(rows)} {noun} excluded from scoring as generated "
+        f"(reasons: {', '.join(reasons)})"
+    ]
+    shown = rows[:GENERATED_DISCLOSURE_MAX_PATHS]
+    lines.extend(f"    {r['path']} ({r['reason']})" for r in shown)
+    if len(rows) > len(shown):
+        lines.append(f"    +{len(rows) - len(shown)} more")
+    return "\n".join(lines)
 
 
 def load_context(repo_root: Path) -> dict[str, Any]:
