@@ -597,6 +597,22 @@ def _excluded_after_unfinalized_run(
     return (inherited | fresh) - set(excluded), excluded
 
 
+def _retire_excluded_unfinalized(
+    assess_dir: Path, excluded: list[str], first_flagged_map: dict[str, str],
+) -> tuple[list[str], list[str]]:
+    """Retire the pages of ``excluded`` and drop their first-flagged entries.
+
+    Returns ``(retired, dropped)``. A path whose page exists but has no status
+    token to stamp keeps its entry, so a page that still reads live never loses
+    its first-flagged date.
+    """
+    retired, unstamped = retire_excluded_hotspots(assess_dir, excluded)
+    dropped = [p for p in excluded if p not in unstamped and p in first_flagged_map]
+    for path in dropped:
+        del first_flagged_map[path]
+    return retired, dropped
+
+
 def _drop_superseded_log_entry(assess_dir: Path, superseded: dict | None) -> None:
     """Remove the superseded run's log entry when it is still unfinalized."""
     if superseded is not None:
@@ -1133,9 +1149,9 @@ def build_run_context(
     # are (re)written, so a file that is still a live hotspot has just had its
     # page refreshed and won't be touched.
     pruned_hotspots = prune_orphan_hotspots(assess_dir, repo_root)
-    retired_excluded = retire_excluded_hotspots(assess_dir, excluded_unfinalized)
-    for path in excluded_unfinalized:
-        first_flagged_map.pop(path, None)
+    retired_excluded, dropped_first_flagged = _retire_excluded_unfinalized(
+        assess_dir, excluded_unfinalized, first_flagged_map,
+    )
 
     # Also surface graduated hotspots in the index. Carry the file's actual
     # current metrics across the three top-N lists in `current` - graduating
@@ -1271,10 +1287,13 @@ def build_run_context(
         # (task 9). Empty on a run that deleted nothing - a stable baseline.
         "pruned_hotspots": pruned_hotspots,
         # Pages retired this run because the file was first flagged only by a
-        # never-finalized run and is now excluded by config (#356), and the
-        # paths whose first-flagged date still rests on an unfinalized run (this
-        # one until it is finalized), read back by the next superseding run.
+        # never-finalized run and is now excluded by config (#356); the
+        # first-flagged.json entries dropped for the same reason (a superset
+        # when such a file has no page); and the paths whose first-flagged date
+        # still rests on an unfinalized run (this one until it is finalized),
+        # read back by the next superseding run.
         "retired_excluded_hotspots": retired_excluded,
+        "dropped_first_flagged": dropped_first_flagged,
         "provisional_first_flagged": sorted(provisional),
         # log.md integrity chain state (task 11). `valid` is False when an earlier
         # log entry was edited after it was written; `broken_at_entry` is the

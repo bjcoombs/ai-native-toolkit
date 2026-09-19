@@ -284,8 +284,10 @@ any hotspot page whose source file left the tree as `retired - file deleted`
 (history preserved, no active page lies about a live file), and
 `retire_excluded_hotspots(assess_dir, paths)` stamps `retired - excluded before
 finalize` on the pages of files the core found first flagged only by a superseded,
-never-finalized run and now excluded by `.assess/config.toml` (every retired status
-begins `retired`, and the pruner skips any of them); `append_log_entry`
+never-finalized run and now excluded by `.assess/config.toml`, returning the paths
+it retired and those whose page had no status token to stamp. Every retired status
+begins `retired`; `is_retired_status` is the one predicate for that, used by the
+pruner (which skips any retired page) and the orphan-invariant tests; `append_log_entry`
 chains each `log.md` entry with a `<!-- chain:<hash> -->` marker and
 `verify_log_chain(assess_dir)` returns `(valid, broken_at_entry)` so a later edit
 of a prior entry is detected and disclosed. The tool's own edits go through
@@ -295,7 +297,7 @@ every later one (stopping at an entry that was already broken); `find_log_entry`
 address entries by their `assess:run_id` stamp, and
 `supersede_unfinalized_log_entry` drops a same-date, same-commit run's unfilled
 last entry before the core appends its own (`last_log_entry_is_unfinalized_run` is
-its test, which the core also reads before writing the wiki); it and `--drop-entry` act only on an
+the condition it acts under, which the core also reads before writing the wiki); it and `--drop-entry` act only on an
 entry that starts with its own stamp (`log_entry_owns_span`), never on a span that
 also holds pre-chain history. Both are additive and back-compat -
 a legacy wiki (no markers, live files) is untouched and reads valid.

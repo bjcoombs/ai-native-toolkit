@@ -439,7 +439,10 @@ def last_log_entry_is_unfinalized_run(assess_dir: Path, run_id: str) -> bool:
     exposed so the core can learn before it writes the wiki that the previous
     run was never finalized (#356).
     """
-    entries = read_log_entries(assess_dir)
+    return _last_entry_is_unfinalized_run(read_log_entries(assess_dir), run_id)
+
+
+def _last_entry_is_unfinalized_run(entries: list[str], run_id: str) -> bool:
     if not entries:
         return False
     last = entries[-1]
@@ -455,9 +458,10 @@ def supersede_unfinalized_log_entry(assess_dir: Path, run_id: str) -> bool:
     removed, and neither is a span that also holds unchained legacy history.
     Returns True when an entry was removed.
     """
-    if not last_log_entry_is_unfinalized_run(assess_dir, run_id):
+    entries = read_log_entries(assess_dir)
+    if not _last_entry_is_unfinalized_run(entries, run_id):
         return False
-    rewrite_log_entry(assess_dir, len(read_log_entries(assess_dir)) - 1, None)
+    rewrite_log_entry(assess_dir, len(entries) - 1, None)
     return True
 
 
@@ -626,7 +630,7 @@ def prune_orphan_hotspots(assess_dir: Path, repo_root: Path) -> list[str]:
         path = hotspot_page_source_path(content)
         if path is None:
             continue  # not a recognisable hotspot page - leave it alone
-        if _is_retired(content):
+        if is_retired_status(hotspot_page_status(content)):
             continue  # already retired (for any reason) - idempotent
         if (repo_root / path).exists():
             continue  # source still on disk - a legitimate hotspot, untouched
@@ -639,20 +643,30 @@ def prune_orphan_hotspots(assess_dir: Path, repo_root: Path) -> list[str]:
     return sorted(retired)
 
 
-def retire_excluded_hotspots(assess_dir: Path, paths: list[str]) -> list[str]:
+def retire_excluded_hotspots(
+    assess_dir: Path, paths: list[str],
+) -> tuple[list[str], list[str]]:
     """Stamp the pages of ``paths`` retired as excluded before finalize (#356).
 
     The caller picks the paths: excluded by config and first flagged only by a
-    run that was never finalized. A path with no page, or whose page is already
-    retired, is skipped. Returns the sorted paths retired by this call.
+    run that was never finalized. Returns ``(retired, unstamped)``, both sorted:
+    the paths whose page this call retired, and the paths whose page exists but
+    carries no status token to stamp (left as-is, so the caller can keep their
+    first-flagged entries). A path with no page, or whose page is already
+    retired, is in neither list.
     """
     retired: list[str] = []
+    unstamped: list[str] = []
     for path in sorted(set(paths)):
         page = assess_dir / "hotspots" / f"{slug_for_path(path)}.md"
         if not page.exists():
             continue
         content = page.read_text(encoding="utf-8")
-        if _is_retired(content):
+        status = hotspot_page_status(content)
+        if status is None:
+            unstamped.append(path)
+            continue
+        if is_retired_status(status):
             continue
         _stamp_retired(page, content, RETIRED_EXCLUDED_STATUS, (
             "this file was first flagged by a run that was never finalized and "
@@ -660,11 +674,11 @@ def retire_excluded_hotspots(assess_dir: Path, paths: list[str]) -> list[str]:
             "history and no longer describes a live hotspot."
         ))
         retired.append(path)
-    return retired
+    return retired, unstamped
 
 
-def _is_retired(content: str) -> bool:
-    status = hotspot_page_status(content)
+def is_retired_status(status: str | None) -> bool:
+    """True for any retired status token: every one begins with ``retired``."""
     return status is not None and status.startswith(_RETIRED_PREFIX)
 
 

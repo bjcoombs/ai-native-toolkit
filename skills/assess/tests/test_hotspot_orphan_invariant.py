@@ -33,7 +33,9 @@ from lib.wiki_writer import (
     verify_log_chain,
     hotspot_page_source_path,
     hotspot_page_status,
+    is_retired_status,
     prune_orphan_hotspots,
+    retire_excluded_hotspots,
     write_hotspot_page,
 )
 
@@ -50,7 +52,7 @@ def _active_orphans(assess_dir: Path, repo_root: Path) -> list[str]:
         path = hotspot_page_source_path(content)
         if path is None:
             continue
-        if hotspot_page_status(content) == RETIRED_STATUS:
+        if is_retired_status(hotspot_page_status(content)):
             continue  # retired pages are allowed to reference a missing file
         if not (repo_root / path).exists():
             orphans.append(path)
@@ -241,6 +243,7 @@ def test_core_retires_page_excluded_after_unfinalized_run(excl_repo: Path) -> No
     assert "gen/big.py" not in index
     assert [p["path"] for p in ctx["diff_detail"]["graduated"]] == ["vendor/fin.py"]
     assert ctx["retired_excluded_hotspots"] == ["gen/big.py"]
+    assert ctx["dropped_first_flagged"] == ["gen/big.py"]
     assert verify_log_chain(assess) == (True, None)
 
 
@@ -290,3 +293,21 @@ def test_prune_leaves_excluded_retired_page_alone(tmp_path: Path) -> None:
     assert prune_orphan_hotspots(assess, repo) == []
     page = next((assess / "hotspots").iterdir())
     assert hotspot_page_status(page.read_text(encoding="utf-8")) == RETIRED_EXCLUDED_STATUS
+    # The file is absent from disk, yet the invariant holds: the page is retired.
+    assert _active_orphans(assess, repo) == []
+
+
+def test_retire_excluded_skips_page_without_status_token(tmp_path: Path) -> None:
+    """A page with no status token cannot be stamped, so it is reported as
+    unstamped rather than retired, and the core keeps its first-flagged entry."""
+    assess = tmp_path / ".assess"
+    _write_page(assess, "gen/big.py")
+    _write_page(assess, "gen/odd.py")
+    odd = assess / "hotspots" / f"{slug_for_path('gen/odd.py')}.md"
+    odd.write_text("# Hotspot: `gen/odd.py`\n\nno metadata line\n", encoding="utf-8")
+    before = odd.read_text(encoding="utf-8")
+
+    retired, unstamped = retire_excluded_hotspots(assess, ["gen/odd.py", "gen/big.py", "gen/none.py"])
+    assert retired == ["gen/big.py"]
+    assert unstamped == ["gen/odd.py"]
+    assert odd.read_text(encoding="utf-8") == before
