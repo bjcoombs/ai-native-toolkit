@@ -35,12 +35,23 @@ assessing agent has latitude to propose a different ecosystem-appropriate tool
 at runtime (SKILL.md Step 2); that choice is human-judged, not CI-tested. CI
 tests SIGNAL CONSUMPTION - given a tool's output, the scorecard feeds correctly.
 
+Detection (issue #351): a build file counts only when the repository holds at
+least one ``.java``, ``.kt``, ``.scala`` or ``.groovy`` file outside
+platform-wrapper ``android/`` directories (Flutter, React Native, Capacitor, and
+Cordova's ``platforms/android/``), so a mobile app's generated Gradle shell never
+reads as a JVM codebase. The prune also covers a Flutter *plugin* package: its
+``android/src/main/kotlin/`` holds real Kotlin beside the plugin's own
+``pubspec.yaml``, but that code is the plugin's Android platform implementation,
+not a JVM codebase, so it is skipped with the app wrapper.
+
 Out of scope for v1 (fast-follow): healing the module graph (``jdeps``), linting,
 and modernization; Gradle plugin reading and a served Gradle path; non-JVM
 languages benefiting from the same general flow.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -107,28 +118,105 @@ _COORD_RE = re.compile(
 )
 
 
-def _iter_build_files(repo_root: Path, names: set[str],
-                      extra_exclude_dirs: set[str] | None = None,
-                      extra_exclude_patterns: list[str] | None = None,
-                      ) -> list[Path]:
-    """Build files matching ``names``, skipping vendored / build / fixture dirs
-    and any user-supplied exclude (so a fixture ``pom.xml`` under
-    ``tests/fixtures/`` never makes a Python repo look like a Maven project)."""
+# A JVM codebase needs at least one of these source files outside a platform
+# wrapper; a build file alone (a stray pom.xml, a Flutter android/ shell) does not
+# make a repository a JVM project.
+_JVM_SOURCE_SUFFIXES = (".java", ".kt", ".scala", ".groovy")
+_MAVEN_FILES = frozenset({"pom.xml"})
+_GRADLE_FILES = frozenset({"build.gradle", "build.gradle.kts"})
+
+# package.json dependencies whose presence makes a sibling ``android/`` directory
+# a generated platform wrapper rather than a JVM codebase.
+_WRAPPER_NPM_PACKAGES = frozenset({"react-native", "@capacitor/android", "cordova-android"})
+# The package that marks a Cordova app root, whose wrapper is platforms/android/.
+_CORDOVA_NPM_PACKAGES = frozenset({"cordova-android"})
+
+
+def _package_json_names_wrapper(path: Path,
+                                packages: frozenset[str] = _WRAPPER_NPM_PACKAGES,
+                                ) -> bool:
+    try:
+        data = json.loads(_read(path))
+    except ValueError:
+        return False
+    if not isinstance(data, dict):
+        return False
+    for section in ("dependencies", "devDependencies"):
+        deps = data.get(section)
+        if isinstance(deps, dict) and packages.intersection(deps):
+            return True
+    return False
+
+
+def _is_platform_wrapper_parent(dirpath: Path, filenames: list[str]) -> bool:
+    """True when ``dirpath``'s ``android/`` child is a platform wrapper: the
+    directory holds a ``pubspec.yaml`` (Flutter) or a ``package.json`` naming
+    React Native, Capacitor or Cordova's Android platform."""
+    if "pubspec.yaml" in filenames:
+        return True
+    return ("package.json" in filenames
+            and _package_json_names_wrapper(dirpath / "package.json"))
+
+
+def _is_cordova_root(dirpath: Path, filenames: list[str]) -> bool:
+    """True when ``dirpath`` is a Cordova app root, whose generated Android
+    project sits at ``platforms/android/``: a ``config.xml`` in the Cordova
+    namespace, or a ``package.json`` naming ``cordova-android``."""
+    if "config.xml" in filenames and "cordova.apache.org" in _read(dirpath / "config.xml"):
+        return True
+    return ("package.json" in filenames
+            and _package_json_names_wrapper(dirpath / "package.json",
+                                            _CORDOVA_NPM_PACKAGES))
+
+
+def _scan_jvm_tree(repo_root: Path,
+                   extra_exclude_dirs: set[str] | None = None,
+                   extra_exclude_patterns: list[str] | None = None,
+                   ) -> tuple[list[str], list[str], bool]:
+    """One walk returning ``(pom_files, gradle_files, has_jvm_source)``.
+
+    Skips vendored / build / fixture dirs, any user-supplied exclude (so a
+    fixture ``pom.xml`` under ``tests/fixtures/`` never makes a Python repo look
+    like a Maven project), and every platform-wrapper ``android/`` directory,
+    whose build files and source both belong to a non-JVM app: an ``android/``
+    beside the app manifest, or Cordova's ``platforms/android/``.
+    """
     from lib.assess_config import is_user_excluded
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
-    out: list[Path] = []
-    for name in names:
-        for path in repo_root.rglob(name):
-            if not path.is_file():
+    poms: list[str] = []
+    gradles: list[str] = []
+    has_source = False
+    wrappers: set[Path] = set()
+    for dirpath, dirnames, filenames in os.walk(repo_root):
+        here = Path(dirpath)
+        rel_dir = here.relative_to(repo_root)
+        if "android" in dirnames and _is_platform_wrapper_parent(here, filenames):
+            wrappers.add(rel_dir / "android")
+        if "platforms" in dirnames and _is_cordova_root(here, filenames):
+            wrappers.add(rel_dir / "platforms" / "android")
+        dirnames[:] = [
+            d for d in dirnames
+            if rel_dir / d not in wrappers
+            and not is_excluded_path(rel_dir / d)
+            and not is_user_excluded(rel_dir / d, extra_dirs, [])
+        ]
+        for name in filenames:
+            is_pom = name in _MAVEN_FILES
+            is_gradle = name in _GRADLE_FILES
+            is_source = name.endswith(_JVM_SOURCE_SUFFIXES)
+            if not (is_pom or is_gradle or (is_source and not has_source)):
                 continue
-            rel = path.relative_to(repo_root)
-            if is_excluded_path(rel):
+            rel = rel_dir / name
+            if is_excluded_path(rel) or is_user_excluded(rel, extra_dirs, extra_pats):
                 continue
-            if is_user_excluded(rel, extra_dirs, extra_pats):
-                continue
-            out.append(path)
-    return out
+            if is_pom:
+                poms.append(rel.as_posix())
+            elif is_gradle:
+                gradles.append(rel.as_posix())
+            else:
+                has_source = True
+    return sorted(poms), sorted(gradles), has_source
 
 
 def detect_build_system(repo_root: Path,
@@ -137,26 +225,30 @@ def detect_build_system(repo_root: Path,
                         ) -> tuple[str | None, list[str]]:
     """Return ``(build_system, sorted_relative_build_files)``.
 
+    A ``pom.xml`` or Gradle build file counts only when the repository holds at
+    least one ``.java``, ``.kt``, ``.scala`` or ``.groovy`` file outside
+    platform-wrapper directories (an ``android/`` beside a ``pubspec.yaml``, or
+    beside a ``package.json`` naming ``react-native``, ``@capacitor/android`` or
+    ``cordova-android``; or Cordova's ``platforms/android/``). Build files under a
+    wrapper are never listed.
+
     Maven wins when both are present - it is the served path in v1, so a
     polyglot repo with a ``pom.xml`` still gets the liveness offer. Gradle is
     detected (so it honest-degrades with a named candidate) but has no served
     path in v1.
     """
     repo_root = repo_root.resolve()
-    poms = _iter_build_files(
-        repo_root, {"pom.xml"},
+    poms, gradles, has_source = _scan_jvm_tree(
+        repo_root,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
     )
+    if not has_source:
+        return None, []
     if poms:
-        return "maven", sorted(str(p.relative_to(repo_root)) for p in poms)
-    gradles = _iter_build_files(
-        repo_root, {"build.gradle", "build.gradle.kts"},
-        extra_exclude_dirs=extra_exclude_dirs,
-        extra_exclude_patterns=extra_exclude_patterns,
-    )
+        return "maven", poms
     if gradles:
-        return "gradle", sorted(str(p.relative_to(repo_root)) for p in gradles)
+        return "gradle", gradles
     return None, []
 
 
