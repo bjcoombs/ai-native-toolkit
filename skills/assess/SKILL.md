@@ -215,12 +215,11 @@ The script prints a one-line summary (file count, lizard vs scc coverage, churn 
 
 **Dependencies:** the script uses PEP 723 inline metadata (`lizard`, `squarify`, `matplotlib`, `numpy`). `uv` resolves them on first run.
 
-**Build artifacts and generated code are filtered by default.** The script excludes two classes of files:
+**Build artifacts, generated test reports and generated code are filtered by default** (full list in `complexity-treemap.py`'s `EXCLUDE_DIRS`, `EXCLUDE_FILE_PATTERNS` and `EXCLUDE_NESTED_PATH_PATTERNS`; pass `--include-artifacts` to score them, e.g. to visualise how much of the repo is generated). The script excludes three classes of files:
 
 - **Build artifacts**: `main.dart.js`, Flutter canvaskit/skwasm runtime bundles (`canvaskit.js`, `skwasm*.js`), `*.min.js`, `*.bundle.js`, `*.chunk.js`, `*.map`, sourcemaps, service workers, and files under `node_modules/`, `dist/`, `build/`, `.next/`, `.nuxt/`, `.output/`, `coverage/`, etc.
+- **Generated test reports**: `html-report/`, `playwright-report/`, `lighthouse-report.html`, `lighthouse-results.json`, `zap-report.*`, and `*.jsonl` under a `fixtures/` directory below the top level. When the 5 largest files are all JSON, YAML or JSONL scored by scc with complexity 0, stderr hints at `.assess/config.toml` excludes.
 - **Generated code**: protobuf bindings (`*.pb.go`, `*_grpc.pb.go`, `*.pb.gw.go`, `*.connect.go`, `*_pb.ts`, `*_pb.d.ts`, `*_pb2.py`, `*.pb.cc`, `*.pb.h`), Go generators (`*.gen.go`, `wire_gen.go`, `zz_generated_*.go`, `bindata.go`), .NET source generators (`*.designer.cs`, `*.g.cs`), Dart/Flutter codegen (`*.freezed.dart`, `*.g.dart`, `*.gr.dart`), `*.generated.*`, `*.gen.ts`, `database.types.ts`, and any file with a comment in its first 5 lines carrying a generator marker (`DO NOT EDIT`, `@generated`, etc.; reason `generated-header`) or whose average line exceeds 1,000 characters (reason `long-lines`). Content-matched files are listed in `excluded_generated` (stats file and `run-context.json`), which the report and gate disclose.
-
-Full list in `complexity-treemap.py`'s `EXCLUDE_DIRS` and `EXCLUDE_FILE_PATTERNS`. If you specifically want to score these (e.g., to visualise how much of the repo is generated), pass `--include-artifacts`.
 
 **Dominance warning.** If a single file still holds >30% of total scoreable LOC after filtering (the threshold compiled bundles typically cross), the script prints a warning to stderr identifying the file. When you see this, the right next step depends on *why* the file is large:
 

@@ -216,6 +216,12 @@ jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"
 - `state == "credited"` (linting/modernization) - a configured pom.xml plugin (`served_by`) already serves it. Credit it in the relevant layer; do **not** report it as missing.
 - `state == "honest_degrade"` - nothing serves the capability yet (module graph, unconfigured linting/modernization, all Gradle capabilities in v1). **Name the capability and its `candidate_tool` in the report** - this is a deliverable, distinct from a silent miss. Never report a honest-degraded capability as simply "absent".
 
+**Language capabilities (`language_capabilities`).** Non-JVM ecosystems get a sibling block keyed by language, present only when that language is detected (`capability_offers` stays JVM-only). Dart is the first key: a repo with a `pubspec.yaml` carries `language_capabilities.dart.linting` and `.liveness`, in the same fields and states as above, and one `dart` entry in `dead_code.tools`. Linting `credited` (`served_by` names `dart analyze` or `flutter analyze`) means the nearest `analysis_options.yaml` enables lint rules (a top-level `include:` or a `linter: rules:` list); credit it in Layer 3, skip only the Dart existence probe below, and still read the file in the "assess AI-relevant rules" step. Linting `honest_degrade` (no file, or one that enables no rules) names `dart analyze / flutter analyze` as the candidate. Liveness is always `honest_degrade`: the scan does not run the analyzer, and the candidate is its built-in `unused_*` diagnostics, which cover private declarations, imports and locals but not unused public members. Name that candidate and its limit; never recommend a third-party Dart dead-code package.
+
+```bash
+jq '.language_capabilities' "$REPO_ROOT/.assess/run-context.json"
+```
+
 **Observability tier (the decisive one) - three rungs (`observability.rung`, 0-3):**
 
 1. **Instrumented** - telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging). Necessary, not sufficient.

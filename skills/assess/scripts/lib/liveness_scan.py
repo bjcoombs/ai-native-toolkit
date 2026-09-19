@@ -659,6 +659,23 @@ def _merge_jvm_liveness(dead_code: dict, jvm: dict) -> None:
         })
 
 
+def _merge_dart_liveness(dead_code: dict, dart: dict) -> None:
+    """Record Dart liveness in ``dead_code.tools`` as one ``honest_degrade`` entry.
+
+    Built here rather than as a ``_DEAD_CODE_TOOLS`` spec because the scan never
+    runs the analyzer: a spec would try to run ``dart`` whenever it is on PATH,
+    and no parser reads analyzer output. The entry keeps the non-JVM shape
+    (``language``, ``tool``, ``status``, ``reason``) and adds no candidates.
+    """
+    liveness = dart.get("capabilities", {}).get("liveness", {})
+    if liveness.get("state") != "honest_degrade":
+        return
+    dead_code.setdefault("tools", []).append({
+        "language": "dart", "tool": liveness.get("candidate_tool"),
+        "status": "honest_degrade", "reason": liveness.get("note"),
+    })
+
+
 def scan_liveness(repo_root: Path, run_dead_code: bool = True,
                   run_build_tools: bool = False,
                   extra_exclude_dirs: set[str] | None = None,
@@ -666,19 +683,22 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
                   scope: Path | None = None,
                   ) -> dict:
     """Top-level Layer 1 scan: dead-code candidates + observability rungs, plus
-    the capability-driven JVM offer block when a Maven/Gradle project is found.
+    the capability-driven JVM offer block when a Maven/Gradle project is found
+    and the Dart capability block when a ``pubspec.yaml`` is found.
 
     `run_build_tools` defaults to False so the scan stays read-only - build-
     mutating dead-code tools (and `mvn dependency:analyze`, a run-consent goal)
     are reported as available-but-not-run / offer rather than executed.
     `extra_exclude_dirs` and `extra_exclude_patterns` come from
     `.assess/config.toml` / `--exclude` and apply to the dead-code scan, the
-    observability tree walk, and JVM build-file detection alike.
+    observability tree walk, JVM build-file detection and Dart `pubspec.yaml`
+    detection alike.
 
     `scope` (an absolute path under `repo_root`) confines the dead-code
     candidates to a subtree for `/assess <path>` monorepo scoping; the
     observability rungs stay repo-level (telemetry is a whole-repo property).
     """
+    from lib.dart_capabilities import scan_dart_capabilities
     from lib.jvm_capabilities import scan_jvm_capabilities
 
     dead_code = scan_dead_code(
@@ -694,6 +714,13 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
     )
     if jvm.get("available"):
         _merge_jvm_liveness(dead_code, jvm)
+    dart = scan_dart_capabilities(
+        repo_root,
+        extra_exclude_dirs=extra_exclude_dirs,
+        extra_exclude_patterns=extra_exclude_patterns,
+    )
+    if dart.get("available"):
+        _merge_dart_liveness(dead_code, dart)
     result = {
         "dead_code": dead_code,
         "observability": scan_observability(
@@ -704,4 +731,6 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
     }
     if jvm.get("available"):
         result["jvm_capabilities"] = jvm
+    if dart.get("available"):
+        result["dart_capabilities"] = dart
     return result

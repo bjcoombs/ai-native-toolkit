@@ -118,7 +118,7 @@ _Note: Mutation testing was not run. Layer 6 (Coverage) is capped at Partial and
 - **Measured at commit:** `<head_short>` (<committed_date>)<staleness-suffix>
 - **Files scored:** <N>
 - **Churn window chosen:** <last 12mo | last 24mo | last 5y | all-time>
-- **Complexity profile:** per-function ccn p95 <N> (max <M>); file-aggregate ccn p95 <N> (max <M>); p95 est. tokens <N> (max <M>); p95 LOC <N> (max <M>)
+- **Complexity profile:** per-function ccn p95 <N> (max <M>); file-aggregate ccn p95 <N> (max <M>); p95 est. tokens <N> (max <M>; code <C>, data <D>); p95 LOC <N> (max <M>; code <C>, data <D>). The code and data maxima come from `max_code` / `max_data` in the `est_tokens` and `loc` blocks (data is scc's JSON, YAML and JSONL); omit a split its snapshot lacks
 - **Top hotspots** (composite `sqrt(ccn) × sqrt(1 + commits) × sqrt(est_tokens)` - a sub-linear blend of complexity, recent churn, and context-window size, so a file high on *multiple* axes - big AND complex AND churning - is the worst keyhole and leads; a frozen-but-complex file ranks below an equally-sized active one; a churny-but-trivial file can't top on churn alone; and a big-but-simple-stable file can't top on size alone). `est_tokens` is the char-based estimate (~chars/4), `ccn` here is the **file aggregate**; the worst single function per file is in parentheses:
   1. `<path>` - <est_tokens> est. tokens (<loc> LOC), aggregate ccn <N> (worst function <max_fn_ccn>), <M> commits in window
   2. ...
