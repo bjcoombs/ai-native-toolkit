@@ -60,12 +60,17 @@ def _run_scan(repo_root: Path, var: str = "NO_CONTRIBUTIONS") -> str:
         ({"CONTRIBUTING.md": "Do not open a pull request if you have not signed the CLA.\n"}, "0"),
         ({"README.md": "# App\nDo not open a pull request; open an issue instead.\n"}, "1"),
         ({"README.md": "# App\nPlease don't send PRs\n"}, "1"),
+        ({"README.md": "# App\nWe are not currently accepting contributions.\n"}, "1"),
+        ({"README.md": "# App\nWe are not accepting new contributions.\n"}, "1"),
+        ({"README.md": "# App\nThis repo does not accept community contributions.\n"}, "1"),
+        ({"README.md": "# App\nThis repo does not accept a pull request from anyone.\n"}, "1"),
         ({}, "0"),
     ],
     ids=["readme", "contributing", "welcome", "not-accepting-prs", "prs-not-accepted",
          "prs-welcome", "cannot", "cant", "unable-to", "curly-apostrophe", "unsolicited",
          "cond-without", "cond-until", "cond-directly", "cond-accepted-without", "cond-for", "cond-with", "cond-from", "cond-to", "cond-if",
-         "imperative-semicolon", "imperative-eol", "no-docs"],
+         "imperative-semicolon", "imperative-eol", "not-currently-accepting", "not-accepting-new",
+         "community-contributions", "singular-pull-request", "no-docs"],
 )
 def test_scan_sets_no_contributions(tmp_path: Path, files: dict[str, str], expected: str) -> None:
     for name, body in files.items():
@@ -102,6 +107,19 @@ def test_no_contributions_flow_never_references_the_upstream_pr_step() -> None:
     assert "gh pr create --repo <owner>/<repo>" not in flow
     # The PR is created on the fork's own endpoint, never via a base-repo lookup.
     assert "repos/$FORK_SLUG/pulls" in flow
+
+
+def test_reusing_the_current_fork_needs_push_access() -> None:
+    # A READ clone of someone else's fork is also IS_FORK=true; it must fork
+    # again rather than push to a repo the user cannot write to.
+    flow = _step5().split("(no-contributions flow,", 1)[1].split("\n\n", 1)[0]
+    assert "`IS_FORK=true` and `CAN_PUSH=1`" in flow
+
+
+def test_fork_pr_body_file_is_written_before_it_is_used() -> None:
+    flow = _step5().split("(no-contributions flow,", 1)[1].split("\n\n", 1)[0]
+    assert flow.index("<body-file>") < flow.index("body=@<body-file>")
+    assert "temp file" in flow[: flow.index("body=@<body-file>")]
 
 
 def test_fork_slug_is_derived_not_guessed() -> None:
@@ -175,6 +193,7 @@ def test_scan_sits_in_step_5_before_the_offer_text() -> None:
     text = ASSESS_PR_SKILL.read_text(encoding="utf-8")
     step5 = text.split("## Step 5", 1)[1].split("## Step 6", 1)[0]
     assert START in step5 and END in step5
+    assert step5.index(END) < step5.index("Interpret the result")
 
 
 def test_step_5_replaces_upstream_offer_when_flag_is_set() -> None:
