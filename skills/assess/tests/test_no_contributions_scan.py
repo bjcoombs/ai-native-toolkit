@@ -7,6 +7,7 @@ text an agent would run rather than a paraphrase of it.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -64,13 +65,29 @@ def _run_scan(repo_root: Path, var: str = "NO_CONTRIBUTIONS") -> str:
         ({"README.md": "# App\nWe are not accepting new contributions.\n"}, "1"),
         ({"README.md": "# App\nThis repo does not accept community contributions.\n"}, "1"),
         ({"README.md": "# App\nThis repo does not accept a pull request from anyone.\n"}, "1"),
+        # Word boundary after the noun: "prs?" must not match the start of an
+        # ordinary word once the modifier slot lets any word precede it.
+        ({"README.md": "# App\nContributions welcome! The API does not accept a promise, only a value.\n"}, "0"),
+        ({"README.md": "# App\nThis endpoint does not accept preflight requests.\n"}, "0"),
+        ({"README.md": "# App\nWe do not accept private forks of the config.\n"}, "0"),
+        ({"README.md": "# App\nThe daemon does not accept process signals.\n"}, "0"),
+        ({"README.md": "# App\nThe loader does not accept project files.\n"}, "0"),
+        ({"README.md": "# App\nThe CLI does not accept provided defaults.\n"}, "0"),
+        ({"README.md": "# App\nWe do not accept prior versions of the schema.\n"}, "0"),
+        ({"README.md": "# App\nDo not open private issues.\n"}, "0"),
+        ({"README.md": "# App\nWe do not accept PRs.\n"}, "1"),
+        ({"README.md": "# App\nWe are not accepting PRs right now.\n"}, "1"),
+        ({"README.md": "# App\nWe do not accept PRs\n"}, "1"),
         ({}, "0"),
     ],
     ids=["readme", "contributing", "welcome", "not-accepting-prs", "prs-not-accepted",
          "prs-welcome", "cannot", "cant", "unable-to", "curly-apostrophe", "unsolicited",
          "cond-without", "cond-until", "cond-directly", "cond-accepted-without", "cond-for", "cond-with", "cond-from", "cond-to", "cond-if",
          "imperative-semicolon", "imperative-eol", "not-currently-accepting", "not-accepting-new",
-         "community-contributions", "singular-pull-request", "no-docs"],
+         "community-contributions", "singular-pull-request",
+         "fp-promise", "fp-preflight", "fp-private", "fp-process", "fp-project", "fp-provide",
+         "fp-prior", "fp-imperative-private", "accept-prs-dot", "accepting-prs-right-now",
+         "accept-prs-eol", "no-docs"],
 )
 def test_scan_sets_no_contributions(tmp_path: Path, files: dict[str, str], expected: str) -> None:
     for name, body in files.items():
@@ -113,7 +130,67 @@ def test_reusing_the_current_fork_needs_push_access() -> None:
     # A READ clone of someone else's fork is also IS_FORK=true; it must fork
     # again rather than push to a repo the user cannot write to.
     flow = _step5().split("(no-contributions flow,", 1)[1].split("\n\n", 1)[0]
-    assert "`IS_FORK=true` and `CAN_PUSH=1`" in flow
+    assert "`IS_OWN_FORK=true` and `CAN_PUSH=1`" in flow
+
+
+def _own_fork_block() -> str:
+    lines = _step5().splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("VIEWER_LC="))
+    end = next(i for i in range(start, len(lines)) if lines[i] == "fi")
+    return "\n".join(lines[start : end + 1]) + "\n"
+
+
+@pytest.mark.parametrize(
+    "viewer, owner, is_fork, expected",
+    [
+        ("alice", "alice", "true", "true"),
+        ("Alice", "alice", "true", "true"),
+        # Push-capable collaborator on another user's fork: not their fork.
+        ("bob", "alice", "true", "false"),
+        ("alice", "alice", "false", "false"),
+        # gh api user failed: never assume ownership.
+        ("", "alice", "true", "false"),
+    ],
+    ids=["own", "own-case", "collaborator", "not-a-fork", "no-viewer"],
+)
+def test_is_own_fork_compares_viewer_with_fork_owner(
+    tmp_path: Path, viewer: str, owner: str, is_fork: str, expected: str
+) -> None:
+    fake = tmp_path / "gh"
+    body = f"echo '{{\"login\": \"{viewer}\"}}'" if viewer else "exit 1"
+    fake.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
+    fake.chmod(0o755)
+    push_info = f'{{"isFork": {is_fork}, "owner": {{"login": "{owner}"}}}}'
+    script = f"IS_FORK={is_fork}\nPUSH_INFO='{push_info}'\n{_own_fork_block()}printf %s \"$IS_OWN_FORK\"\n"
+    result = subprocess.run(
+        ["sh", "-c", script], capture_output=True, text=True, check=True,
+        env={"PATH": f"{tmp_path}:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin"},
+    )
+    assert result.stdout == expected
+
+
+def test_reusing_the_current_fork_needs_the_viewer_to_own_it() -> None:
+    step5 = _step5()
+    assert "owner" in step5.split("PUSH_INFO=", 1)[1].split("\n", 1)[0]
+    flow = step5.split("(no-contributions flow,", 1)[1].split("\n\n", 1)[0]
+    assert "any clone of someone else's fork, whatever the permission" in flow
+    assert "skipping its fork step" not in step5
+
+
+def test_fork_pr_is_based_on_what_was_assessed() -> None:
+    # A pre-existing fork's default branch can differ from the assessed
+    # checkout; the PR must not carry the commits in between.
+    flow = _step5().split("(no-contributions flow,", 1)[1].split("\n\n", 1)[0]
+    pulls = flow.index("repos/$FORK_SLUG/pulls")
+    for needle in ("BASE_SHA=", "assess/base-<YYYY-MM-DD>", "tell the user"):
+        assert needle in flow[:pulls], needle
+    assert flow.index("BASE_SHA=") < flow.index("FORK_BRANCH=assess/base-")
+
+
+def test_fork_pr_url_check_is_host_agnostic() -> None:
+    flow = _step5().split("(no-contributions flow,", 1)[1].split("\n\n", 1)[0]
+    assert "https://github.com/$FORK_SLUG" not in flow
+    assert "/$FORK_SLUG/pull/<number>" in flow
 
 
 def test_fork_pr_body_file_is_written_before_it_is_used() -> None:
@@ -208,3 +285,15 @@ def test_step_5_replaces_upstream_offer_when_flag_is_set() -> None:
     assert "gh pr create --repo <owner>/<repo>" in step5
     phase2 = text.split("## Phase 2", 1)[1].split("## Step 5", 1)[0]
     assert "no-contributions" in phase2.lower()
+
+
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not installed")
+@pytest.mark.parametrize("body, expected", [(STATEMENT, "1"), ("PRs welcome!", "0")])
+def test_scan_runs_under_zsh(tmp_path: Path, body: str, expected: str) -> None:
+    # Agents often run the block in the user's zsh, where an unbraced
+    # "$var[" is a subscript, not a variable followed by a bracket class.
+    (tmp_path / "README.md").write_text(f"# App\n{body}\n", encoding="utf-8")
+    script = f'REPO_ROOT="{tmp_path}"\n{_scan_block()}printf %s "$NO_CONTRIBUTIONS"\n'
+    result = subprocess.run(["zsh", "-c", script], capture_output=True, text=True, check=True)
+    assert result.stderr == ""
+    assert result.stdout == expected
