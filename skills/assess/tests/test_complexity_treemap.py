@@ -1317,5 +1317,31 @@ def test_write_stats_version_keys_are_tool_versions_or_listed_non_tools(
     assert version_keys - tools == set(assess_core._NON_TOOL_VERSION_KEYS)
 
 
+def test_collect_dart_scanner_skips_files_with_no_function(
+        treemap, tmp_path, monkeypatch):
+    """A Dart file the scanner finds no function in stays scc-only, so it
+    records no backend and cannot make Dart read as covered."""
+    dart = tmp_path / "consts.dart"
+    dart.write_text("const a = 1;\n")
+    monkeypatch.setattr(treemap, "lizard_scores", lambda root, **kw: {})
+    monkeypatch.setattr(treemap, "scc_scores",
+                        lambda root, **kw: {dart.resolve(): (1, 1.0)})
+    backends: dict = {}
+    *_, fn_ccn = treemap.collect(tmp_path, by="complexity",
+                                 fn_backends=backends)
+    assert fn_ccn == {} and backends == {}
+
+
+def test_effective_ccn_clamps_dart_scanner_max_to_scc_aggregate(treemap):
+    """A Dart row takes ccn from scc and max_fn_ccn from the scanner; a
+    scanner figure above the aggregate must not lift the effective value
+    past it. Lizard rows, where max <= aggregate, are unchanged."""
+    assert treemap._effective_ccn(1.0, 5.0) == 1.0
+    assert treemap._effective_ccn(0.0, 3.0) == 0.0
+    w = treemap.PER_FUNCTION_WEIGHT
+    expected = 10.0 ** w * 100.0 ** (1 - w)
+    assert abs(treemap._effective_ccn(100.0, 10.0) - expected) < 1e-9
+
+
 def test_stats_schema_version_raised_for_dart_scanner(treemap):
     assert treemap.STATS_SCHEMA_VERSION >= 5

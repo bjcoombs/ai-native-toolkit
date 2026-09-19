@@ -370,7 +370,12 @@ def _add_dart_scores(files: list[tuple[Path, int, float, str]],
     for path, _loc, _metric, src in files:
         if src != "scc" or path.suffix != ".dart":
             continue
-        fn_ccn_by_path[path], worst = dart_function_scores(path)
+        fn_ccns, worst = dart_function_scores(path)
+        if not fn_ccns:
+            # No function found: the file stays scc-only, so a Dart file with
+            # decision points and no breakdown keeps backend_by_language null.
+            continue
+        fn_ccn_by_path[path] = fn_ccns
         if fn_names is not None and worst is not None:
             fn_names[path] = worst
         if fn_backends is not None:
@@ -892,14 +897,18 @@ def _effective_ccn(ccn: float, max_fn_ccn: float | None) -> float:
     function-14 coordinator out-ranked a ccn-28 DAO method). Blending toward
     ``max_fn_ccn`` corrects that.
 
-    ``max_fn_ccn <= ccn`` always (it is the largest term of the sum), so the
+    For a lizard file ``max_fn_ccn <= ccn`` by construction (it is the largest
+    term of the sum). A Dart file takes ``ccn`` from scc and ``max_fn_ccn`` from
+    the Dart scanner, whose counting rules differ (scc skips ``case``, ``catch``
+    and the per-function +1), so ``max_fn_ccn`` is clamped to ``ccn`` and the
     effective value never exceeds the aggregate. For single-function-dominant
     files (Python/Go, where ``max_fn_ccn`` is at or near the aggregate) the blend
-    collapses back to the aggregate, so their ranking is unchanged. scc-scored
-    files have no function breakdown (``max_fn_ccn is None``) and keep the raw
-    aggregate.
+    collapses back to the aggregate, so their ranking is unchanged. Files with no
+    function breakdown (``max_fn_ccn is None``) keep the raw aggregate.
     """
-    if not max_fn_ccn:  # None (scc) or 0 -> no usable per-function signal
+    if max_fn_ccn:
+        max_fn_ccn = min(max_fn_ccn, ccn)
+    if not max_fn_ccn:  # None (no breakdown) or 0 -> no usable signal
         return ccn
     w = PER_FUNCTION_WEIGHT
     return float(max_fn_ccn ** w * ccn ** (1.0 - w))
