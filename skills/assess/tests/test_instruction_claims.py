@@ -368,6 +368,28 @@ def test_count_threshold_integer_is_not_a_count_claim(sentence: str) -> None:
     assert [c for c in extract_claims(sentence + "\n") if c.kind == "count"] == []
 
 
+@pytest.mark.parametrize("sentence", [
+    "Indent `scripts/*.sh` with 4 spaces.",
+    "Cap `src/**/*.ts` at 15 cyclomatic complexity.",
+    "Run the suite 2 times before touching `tests/*.py`.",
+    # The pattern before the integer, even with a linking word.
+    "Files in `docs/*.md` number 30.",
+])
+def test_count_needs_the_integer_then_a_linking_word_before_the_pattern(sentence: str) -> None:
+    assert [c for c in extract_claims(sentence + "\n") if c.kind == "count"] == []
+
+
+@pytest.mark.parametrize("sentence, claimed", [
+    ("There are 43 pgTAP suites matching `supabase/tests/*.sql`.", 43),
+    ("There are 170 pgTAP files matching `supabase/tests/*.sql`.", 170),
+    ("The plugin ships 5 commands in `cmds/*.md`.", 5),
+    ("The 150 migrations live in `supabase/tests/*.sql`.", 150),
+])
+def test_count_contract_sentences_pass_the_order_gate(sentence: str, claimed: int) -> None:
+    claims = extract_claims(sentence + "\n")
+    assert [(c.kind, c.fields) for c in claims] == [("count", {"claimed": claimed})]
+
+
 def test_count_claim_without_a_unit_or_comparator_is_still_extracted() -> None:
     claims = extract_claims("There are 43 pgTAP suites matching `supabase/tests/*.sql`.\n")
     assert [(c.kind, c.fields) for c in claims] == [("count", {"claimed": 43})]

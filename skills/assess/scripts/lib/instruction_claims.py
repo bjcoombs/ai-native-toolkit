@@ -49,9 +49,12 @@ Claim kinds:
   matches only directories, or a subtree the walk cannot read, is also
   unverifiable rather than a wrong count, as is a non-recursive pattern whose
   matches mix files and directories; a Windows drive or UNC path is skipped.
-  An integer that reads as a threshold is not a count: one followed by a unit
-  of size or time ("500 lines", "3 days") or governed by a comparator ("at
-  most 10", "below 500"); the words live in ``COUNT_NOT_A_COUNT``.
+  The sentence must have the frame "<integer> <noun> ... <link> `<pattern>`":
+  the integer before the pattern and a word from ``COUNT_LINK_WORDS`` (in,
+  under, matching, across, beneath, within, inside) between them. A second,
+  closed-list filter then drops an integer followed by one of the unit words
+  or preceded by one of the comparators in ``COUNT_NOT_A_COUNT`` ("at most 10
+  files in", "500 lines"); a word outside those lists is not recognised.
 
 A sentence that fits no kind is skipped silently. Adding a kind means one
 extractor in ``_EXTRACTORS`` (sentence -> claims) and one verifier in
@@ -110,6 +113,13 @@ _VERSION = re.compile(r"(?<![\d.])(\d+(?:\.\d+)+)(?!\.?\d)")
 # A year (1900-2099) is skipped: far more often a date than a file count.
 _COUNT = re.compile(
     r"(?<![\w.,%$/-])(?!(?:19|20)\d\d(?!\d))(\d+)(?=\s+([A-Za-z][\w-]*))")
+
+
+# The frame of a count sentence: "<integer> <noun> ... <link> `<pattern>`".
+# The integer comes before the pattern and one of these words sits between
+# them ("43 suites matching `x/*.sql`", "150 migrations live in `x/*.sql`").
+COUNT_LINK_WORDS = re.compile(
+    r"\b(?:in|under|matching|across|beneath|within|inside)\b", re.IGNORECASE)
 
 
 class _ThresholdSigns(NamedTuple):
@@ -248,21 +258,26 @@ def _pin_claims(sentence: str, line: int) -> list[Claim]:
 
 
 def _count_claims(sentence: str, line: int) -> list[Claim]:
-    spans = _BACKTICK_SPAN.findall(sentence)
-    patterns = [s for s in spans if _GLOB_CHARS.search(s) and not re.search(r"\s", s)]
-    if len(patterns) != 1:
+    spans = [m for m in _BACKTICK_SPAN.finditer(sentence)
+             if _GLOB_CHARS.search(m.group(1)) and not re.search(r"\s", m.group(1))]
+    if len(spans) != 1:
         return []
-    pattern = patterns[0].removeprefix("./")
+    span = spans[0]
+    pattern = span.group(1).removeprefix("./")
     if (pattern.startswith(("/", "~")) or ".." in Path(pattern).parts
             or PureWindowsPath(pattern).drive):
         return []
     if "/" not in pattern and not _PLAIN_EXTENSION.search(pattern):
         return []  # `**kwargs`, `*args`, a `?` placeholder: not a path
-    prose = _BACKTICK_SPAN.sub(" ", sentence)
+    # Blank the backticked spans in place, so offsets still match ``span``.
+    prose = _BACKTICK_SPAN.sub(lambda m: " " * len(m.group(0)), sentence)
     numbers = list(_COUNT.finditer(prose))
     if len(numbers) != 1:
         return []
     number = numbers[0]
+    if (number.end() > span.start()
+            or not COUNT_LINK_WORDS.search(prose, number.end(), span.start())):
+        return []  # not "<integer> <noun> ... <link> `<pattern>`"
     if (number.group(2).lower() in COUNT_NOT_A_COUNT.units
             or COUNT_NOT_A_COUNT.comparator.search(prose[:number.start()])):
         return []  # a threshold ("below 500 lines"), not a count of files
