@@ -25,6 +25,7 @@ uses, so churn is computed one way across the whole skill.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from lib.doc_graph import (
@@ -181,7 +182,7 @@ def content_clock(repo_root: Path) -> ContentClock:
     The bulk-share denominator is every doc under the built-in exclusions for
     the whole repo, independent of `/assess <path>` scope and user excludes, so
     the doc-staleness metric and the instruction grader agree on which commits
-    are bulk. Both calls hit the same cached git pass.
+    are bulk. Both calls share one build per HEAD (see `_clock_at`).
     """
     import subprocess
 
@@ -193,14 +194,23 @@ def content_clock(repo_root: Path) -> ContentClock:
         ).stdout.strip() or None
     except (FileNotFoundError, subprocess.TimeoutExpired):
         head = None
+    return _clock_at(repo_root, head)
+
+
+@lru_cache(maxsize=4)
+def _clock_at(repo_root: Path, head: str | None) -> ContentClock:
+    """Build the clock once per (repo, HEAD): doc discovery, rename map, git pass."""
     from lib.change_coupling import build_rename_map
 
-    # A rename map that could not be read leaves renames unfollowed; a doc whose
-    # only visible commit is then a bulk rename is flagged as a creation date.
-    renames = tuple(sorted(build_rename_map(repo_root).paths.items()))
-    return content_commit_clock(
+    # A rename map that could not be read leaves renames unfollowed, so the scan
+    # is not complete: a renamed doc whose only visible commit is a bulk rename
+    # falls back to a creation date.
+    rename_map = build_rename_map(repo_root)
+    renames = tuple(sorted(rename_map.paths.items()))
+    clock = content_commit_clock(
         repo_root, frozenset(discover_doc_files(repo_root)), head, renames
     )
+    return clock if rename_map.complete else clock._replace(complete=False)
 
 
 def _safe_rel(path: Path, repo_root: Path) -> str:

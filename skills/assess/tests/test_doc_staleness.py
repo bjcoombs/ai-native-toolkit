@@ -577,3 +577,23 @@ def test_shallow_probe_timeout_marks_scan_incomplete(git_repo, monkeypatch) -> N
     assert r["bulk_commit_scan_complete"] is False
     days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
     assert days["docs/caching.md"] == 3
+
+
+def test_rename_scan_failure_marks_scan_incomplete(git_repo, monkeypatch) -> None:
+    """A rename map that could not be read leaves renames unfollowed, so the
+    completeness flag must not vouch for the scan."""
+    import lib.change_coupling as cc
+    import lib.doc_staleness as ds
+    import lib.git_churn as gc
+
+    repo, commit = git_repo
+    _bulk_fixture(repo, commit)
+    monkeypatch.setattr(cc, "build_rename_map",
+                        lambda *a, **k: cc.RenameMap({}, complete=False))
+    ds._clock_at.cache_clear()
+    gc.content_commit_clock.cache_clear()
+    r = analyze_doc_staleness(repo)
+    ds._clock_at.cache_clear()
+    assert r["bulk_commit_scan_complete"] is False
+    days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
+    assert days["docs/caching.md"] == 3
