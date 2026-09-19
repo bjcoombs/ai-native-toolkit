@@ -109,11 +109,72 @@ def test_offline_emits_unverified(tmp_path, monkeypatch, running, capsys):
     assert any("unverified" in line.lower() and f"v{RUNNING}" in line for line in err.splitlines())
 
 
-def test_no_published_tag_with_action_keeps_running_and_warns(tmp_path, monkeypatch, running, capsys):
+def test_no_published_tag_with_action_refuses(tmp_path, monkeypatch, running, capsys):
+    # gh 404s the running tag and no published tag qualifies: v<running> is known
+    # missing, so nothing is written rather than a uses: line that cannot resolve.
     monkeypatch.setattr(emit, "_run", _fake_remote(["v1.23.0"], set()))
+    assert main([str(tmp_path), "--branch", "main", "--tools", "lizard"]) == 1
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
+    err = capsys.readouterr().err
+    assert f"v{RUNNING} is not published" in err and "--version" in err
+
+
+def test_running_tag_404_and_git_offline_refuses(tmp_path, monkeypatch, running, capsys):
+    # gh 404s the running tag, then git ls-remote fails: no fallback list, and
+    # the running tag is known missing, so the generator refuses.
+    fake = _fake_remote(None, set())
+    monkeypatch.setattr(emit, "_run", fake)
+    assert main([str(tmp_path), "--branch", "main", "--tools", "lizard"]) == 1
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
+    assert "--version" in capsys.readouterr().err
+
+
+def test_happy_path_skips_tag_listing(tmp_path, monkeypatch, running):
+    # The running tag ships action.yml: one gh call, no git ls-remote round trip.
+    calls: list[str] = []
+    fake = _fake_remote([f"v{RUNNING}"], {f"v{RUNNING}"})
+
+    def run(cmd):
+        calls.append(cmd[0])
+        return fake(cmd)
+
+    monkeypatch.setattr(emit, "_run", run)
     assert main([str(tmp_path), "--branch", "main", "--tools", "lizard"]) == 0
     assert _pins(_workflow(tmp_path)) == {RUNNING}
-    assert "unverified" in capsys.readouterr().err.lower()
+    assert calls == ["gh"]
+
+
+def test_gh_failing_mid_walk_pins_published_tag(tmp_path, monkeypatch, running, capsys):
+    # gh answers the running tag with a definite 404, then degrades (a secondary
+    # rate limit): the newest published release after action.yml shipped is
+    # pinned, never the running tag gh just said does not exist.
+    gh_calls = 0
+    tags = ["v1.41.0", "v1.57.0", "v1.58.2"]
+    fake = _fake_remote(tags, set())
+
+    def run(cmd):
+        nonlocal gh_calls
+        if cmd[0] == "gh":
+            gh_calls += 1
+            if gh_calls > 1:
+                return 1, "", "gh: You have exceeded a secondary rate limit (HTTP 403)"
+        return fake(cmd)
+
+    monkeypatch.setattr(emit, "_run", run)
+    assert main([str(tmp_path), "--branch", "main", "--tools", "lizard"]) == 0
+    assert _pins(_workflow(tmp_path)) == {"1.58.2"}
+    assert "v1.58.2" in capsys.readouterr().err
+
+
+def test_unknown_running_version_without_fallback_refuses(tmp_path, monkeypatch, capsys):
+    # No readable plugin.json and no published tag: a guessed ref (vlatest) can
+    # never resolve, so nothing is written and the exit code is non-zero.
+    monkeypatch.setattr(emit, "_running_version", lambda: None)
+    monkeypatch.setattr(emit, "_run", _fake_remote(None, set(), gh_up=False))
+    assert main([str(tmp_path), "--branch", "main", "--tools", "lizard"]) == 1
+    assert not (tmp_path / ".github" / "workflows" / "assess-gate.yml").exists()
+    err = capsys.readouterr().err
+    assert "version is unknown" in err and "--version" in err
 
 
 def test_running_version_reads_plugin_json():
