@@ -76,3 +76,52 @@ def test_orchestrator_runs_the_check_by_script_path():
     assert '"$SKILL_DIR/scripts/lib/evidence_check.py"' in window
     assert "-m lib.evidence_check" not in window
     assert "<!-- chat-replace:evidence-check -->" in window
+
+
+def _step4_check_paragraph() -> str:
+    text = ASSESS_SKILL.read_text(encoding="utf-8")
+    step4 = text.split("## Step 4: Write the Report\n", 1)[1].split("## Step 7.5", 1)[0]
+    return next(p for p in step4.split("\n\n") if "evidence_check.py" in p)
+
+
+def test_step4_resolves_skill_dir_itself_before_the_check():
+    # Step 2's SKILL_DIR is a plain shell variable; Step 3's subagent sits in
+    # between, so a Step 4 that leans on it runs `uv run "/scripts/lib/..."` and
+    # never checks anything. Step 4 must re-resolve it, as Step 7.5 does.
+    para = _step4_check_paragraph()
+    resolve = 'SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/assess}"'
+    fallback = 'SKILL_DIR="${SKILL_DIR:-$(dirname "$(realpath ~/.claude/skills/assess/SKILL.md)")}"'
+    call = '"$SKILL_DIR/scripts/lib/evidence_check.py"'
+    assert resolve in para and fallback in para
+    assert para.index(resolve) < para.index(fallback) < para.index(call)
+    assert "as in Step 2" not in para
+
+
+def test_step4_hands_rejected_entries_on_to_the_findings_step():
+    # The findings step renders the refuted-claims gap from `evidence_rejected`,
+    # so the orchestrator must pass the list on rather than drop it.
+    para = _step4_check_paragraph()
+    assert "removed from the report input" not in para
+    assert "`evidence_rejected`" in para and "handed on" in para
+
+
+def _evidence_cell_rule() -> str:
+    text = FINDINGS_SKILL.read_text(encoding="utf-8")
+    return next(p for p in text.split("\n\n") if "cite only verified" in p.lower())
+
+
+def test_evidence_cell_marks_only_unoffered_evidence_unverified():
+    # No entries offered is an honest limit of the run: keep the note, flag it.
+    rule = _evidence_cell_rule()
+    unverified = next(s for s in rule.split(". ") if "`(unverified)`" in s)
+    assert "offered no" in unverified
+    assert "rejected" not in unverified and "held" not in unverified
+
+
+def test_evidence_cell_renders_refuted_claims_as_a_gap():
+    # Entries offered and all rejected were checked and found false: repeating
+    # the note, even flagged, restates the claim that just failed.
+    rule = _evidence_cell_rule()
+    assert "no verified evidence - N claim(s) rejected" in rule
+    assert "drop the scorer's note" in rule
+    assert "`reason`" in rule
