@@ -424,19 +424,24 @@ def _diff_is_reliable(
     return True, None
 
 
+_NON_TOOL_VERSION_KEYS = frozenset(
+    {"schema_version", "artifact_schema_version", "plugin_version"})
+
+
 def _stats_tool_versions(stats: dict | None) -> dict[str, str]:
     """Extract the ``{tool: version}`` map a stats sidecar stamped.
 
-    Reads the flat ``lizard_version`` / ``scc_version`` keys the treemap writes
-    (absent on pre-stamping snapshots, in which case the tool is simply omitted -
-    an omitted tool can't be compared, so it never forces a false reset)."""
+    Reads every flat ``<tool>_version`` key the treemap writes (``lizard_version``,
+    ``scc_version``, and any per-function backend added later), skipping the
+    layout and plugin stamps. A tool absent from a pre-stamping snapshot is
+    simply omitted - it can't be compared, so it never forces a false reset."""
     if not isinstance(stats, dict):
         return {}
     out: dict[str, str] = {}
-    for tool in ("lizard", "scc"):
-        v = stats.get(f"{tool}_version")
-        if isinstance(v, str) and v:
-            out[tool] = v
+    for key, v in stats.items():
+        if (key.endswith("_version") and key not in _NON_TOOL_VERSION_KEYS
+                and isinstance(v, str) and v):
+            out[key[: -len("_version")]] = v
     return out
 
 

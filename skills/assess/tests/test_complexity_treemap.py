@@ -1119,3 +1119,123 @@ def test_scc_only_hint_skipped_under_include_artifacts(
     assert treemap.main() == 0
     hinted = ".assess/config.toml" in capsys.readouterr().err
     assert hinted is not include_artifacts
+
+
+# --------------------------------------------------------------------------
+# Per-function backend per language and the worst function's name (issue #363)
+
+
+def test_write_stats_backend_by_language_maps_lizard_and_null(treemap, tmp_path):
+    """fn_ccn.source lists the backends that scored a file, as objects, and
+    backend_by_language maps each programming language to its backend or to
+    null when only scc scored it at file level. Data and markup languages,
+    where scc counts no decision points, carry no key."""
+    root = tmp_path
+    py = root / "src" / "app.py"
+    ex = root / "lib" / "router.ex"
+    js = root / "data.json"
+    md = root / "README.md"
+    out = root / "stats.json"
+    treemap.write_stats(
+        [(py, 20, 8.0, "lizard"), (ex, 9, 2.0, "scc"),
+         (js, 50, 0.0, "scc"), (md, 30, 0.0, "scc")],
+        None, None, root, out,
+        fn_ccn_by_path={py: [1.0, 7.0]},
+        fn_name_by_path={py: "gnarly"},
+        languages_by_path={py: "Python", ex: "Elixir",
+                           js: "JSON", md: "Markdown"},
+    )
+    fn = json.loads(out.read_text())["fn_ccn"]
+    assert fn["source"] == [{"name": "lizard", "approximate": False}]
+    assert fn["backend_by_language"] == {"Python": "lizard", "Elixir": None}
+
+
+def test_write_stats_backend_by_language_partial_coverage_is_null(
+        treemap, tmp_path):
+    """A language a backend covers only in part maps to null: one lizard file
+    must not make the language's scc-only files read as covered. A file with
+    no decision points loses no per-function figure and does not downgrade."""
+    root = tmp_path
+    cpp, ipp = root / "a.cpp", root / "a.ipp"
+    js, mjs = root / "a.js", root / "b.mjs"
+    out = root / "stats.json"
+    treemap.write_stats(
+        [(cpp, 20, 8.0, "lizard"), (ipp, 30, 4.0, "scc"),
+         (js, 20, 3.0, "lizard"), (mjs, 5, 0.0, "scc")],
+        None, None, root, out,
+        fn_ccn_by_path={cpp: [8.0], js: [3.0]},
+        languages_by_path={cpp: "C++", ipp: "C++",
+                           js: "JavaScript", mjs: "JavaScript"},
+    )
+    fn = json.loads(out.read_text())["fn_ccn"]
+    assert fn["backend_by_language"] == {"C++": None, "JavaScript": "lizard"}
+
+
+def test_write_stats_backend_by_language_empty_source_when_no_backend(
+        treemap, tmp_path):
+    """An scc-only run lists no backend rather than claiming lizard."""
+    root = tmp_path
+    ex = root / "router.ex"
+    out = root / "stats.json"
+    treemap.write_stats([(ex, 9, 2.0, "scc")], None, None, root, out,
+                        languages_by_path={ex: "Elixir"})
+    fn = json.loads(out.read_text())["fn_ccn"]
+    assert fn["source"] == []
+    assert fn["backend_by_language"] == {"Elixir": None}
+
+
+def test_write_stats_max_fn_name_names_worst_function(treemap, tmp_path):
+    """Every ranked row carries max_fn_name beside max_fn_ccn; it is null
+    wherever max_fn_ccn is null (an scc-scored file, or a lizard file with no
+    functions)."""
+    root = tmp_path
+    py = root / "app.py"
+    flat = root / "flat.py"
+    ex = root / "router.ex"
+    out = root / "stats.json"
+    treemap.write_stats(
+        [(py, 20, 8.0, "lizard"), (flat, 5, 1.0, "lizard"),
+         (ex, 9, 2.0, "scc")],
+        None, None, root, out,
+        fn_ccn_by_path={py: [1.0, 7.0], flat: []},
+        fn_name_by_path={py: "gnarly"},
+    )
+    stats = json.loads(out.read_text())
+    for key in ("top_hotspots", "top_complex", "top_large"):
+        rows = {r["path"]: r for r in stats[key]}
+        assert rows["app.py"]["max_fn_ccn"] == 7.0
+        assert rows["app.py"]["max_fn_name"] == "gnarly"
+        assert rows["flat.py"]["max_fn_ccn"] is None
+        assert rows["flat.py"]["max_fn_name"] is None
+        assert rows["router.ex"]["max_fn_name"] is None
+
+
+def test_lizard_scores_fills_max_fn_name_with_worst_function(
+        treemap, tmp_path, monkeypatch):
+    """lizard_scores records the name of each file's highest-ccn function in
+    the optional fn_names map, and collect threads it through."""
+    src = tmp_path / "app.py"
+    src.write_text("def simple(a):\n    return a\n")
+
+    def fn(name, ccn):
+        return types.SimpleNamespace(name=name, cyclomatic_complexity=ccn)
+
+    fake = types.SimpleNamespace(
+        filename=str(src), nloc=10,
+        function_list=[fn("simple", 1), fn("gnarly", 7), fn("tie", 7)],
+    )
+    monkeypatch.setattr(treemap.lizard, "analyze",
+                        lambda **kw: [fake], raising=False)
+    monkeypatch.setattr(treemap, "scc_scores", lambda root, **kw: {})
+    names: dict = {}
+    scores = treemap.lizard_scores(tmp_path, fn_names=names)
+    assert scores[src.resolve()][2] == [1.0, 7.0, 7.0]
+    assert names == {src.resolve(): "gnarly"}
+
+    via_collect: dict = {}
+    treemap.collect(tmp_path, by="complexity", fn_names=via_collect)
+    assert via_collect == {src.resolve(): "gnarly"}
+
+
+def test_stats_schema_version_raised_for_backend_by_language(treemap):
+    assert treemap.STATS_SCHEMA_VERSION >= 4
