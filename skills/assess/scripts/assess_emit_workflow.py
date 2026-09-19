@@ -10,11 +10,13 @@ Defaults are derived so the common case is a single argument:
   this script), never the target's ``.assess/run-context.json``, which can be
   months old. The pin is checked upstream: ``git ls-remote --tags`` lists the
   published tags and ``gh api .../contents/action.yml?ref=<tag>`` confirms the
-  tag ships the action. When the running tag is absent or ships no
-  ``action.yml``, the newest published tag that does is pinned instead and the
-  choice is printed. With neither ``gh`` nor ``git`` reaching GitHub, the running
+  tag ships the action. ``gh`` checks the running tag first; only when it is
+  absent or ships no ``action.yml`` are the tags listed and the newest published
+  tag that does is pinned instead, with the choice printed. With neither ``gh`` nor ``git`` reaching GitHub, the running
   version is emitted with an "unverified" warning. An explicit ``--version`` is
-  emitted as given, unchecked.
+  emitted as given, unchecked. When the running version is unknown or known
+  unpublished and no published tag qualifies, nothing is written and the exit
+  code is 1.
 - ``--branch`` defaults to the repo's detected default branch (``main`` if it
   can't be detected).
 - ``--tools`` defaults to auto-detecting ``scc`` on PATH plus ``lizard`` (the
@@ -108,12 +110,14 @@ def _unverified(version: str, why: str) -> tuple[str, str]:
     )
 
 
-def _resolve_version(running: str | None) -> tuple[str, str]:
-    """Pick the version to pin and a one-line note saying which and why."""
-    tags = _published_tags()
+def _resolve_version(running: str | None) -> tuple[str | None, str]:
+    """Pick the version to pin and a one-line note saying which and why.
+
+    ``None`` means nothing safe can be pinned; the note says why."""
     status = _action_status(f"v{running}") if running else "absent"
     if running and status == "ok":
         return running, f"Pinned v{running}: the running version's tag ships action.yml."
+    tags = _published_tags()
     if running and status == "unknown":
         if tags is None:
             return _unverified(running, "neither gh nor git ls-remote reached GitHub")
@@ -121,10 +125,19 @@ def _resolve_version(running: str | None) -> tuple[str, str]:
             return running, f"Pinned v{running}: the tag is published (gh could not confirm action.yml)."
     why = f"v{running} is not published or ships no action.yml" if running else "the running version is unknown"
     for tag in [t for t in tags or [] if _released_with_action(t)][:_MAX_TAG_PROBES]:
-        # With gh unavailable, a release at or after the first action.yml release stands in.
-        if status == "unknown" or _action_status(tag) == "ok":
+        # gh unavailable before or during the walk: a release at or after the
+        # first action.yml release stands in. Only a definite 404 rules a tag out.
+        probe = status if status == "unknown" else _action_status(tag)
+        if probe == "ok":
             return tag[1:], f"Pinned {tag}, the newest published tag that ships action.yml: {why}."
-    return _unverified(running or "latest", f"{why}, and no published tag shipping action.yml was found")
+        if probe == "unknown":
+            return tag[1:], f"Pinned {tag}, the newest published release after action.yml shipped (gh could not confirm it): {why}."
+    # Every path here has a definite negative (gh's 404, or a tag list without
+    # the running tag), so pinning the running version would write a dead ref.
+    return None, (
+        f"ERROR: no workflow written - {why}, and no published tag shipping action.yml was "
+        "found. Pass --version <X.Y.Z> naming a published release."
+    )
 
 
 def _default_branch(repo_root: Path) -> str:
@@ -184,6 +197,8 @@ def main(argv: list[str] | None = None) -> int:
     if version is None:
         version, note = _resolve_version(_running_version())
         print(note, file=sys.stderr)
+        if version is None:
+            return 1
     branch = _opt(args, "--branch") or _default_branch(repo_root)
     tools_arg = _opt(args, "--tools")
     tools = (
