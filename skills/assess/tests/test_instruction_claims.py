@@ -357,6 +357,41 @@ def test_count_with_an_unreadable_subtree_is_unverifiable(tmp_path: Path) -> Non
         locked.chmod(0o755)
 
 
+@pytest.mark.parametrize("sentence", [
+    "Keep every page under `docs/**/*.md` below 500 lines.",
+    "Keep at most 10 files in `x/*.md`.",
+    "Cap `src/**/*.ts` at 80 columns.",
+    "Review any change to `skills/*/SKILL.md` within 3 days.",
+    "Allow no more than 5 pages in `docs/*.md`.",
+])
+def test_count_threshold_integer_is_not_a_count_claim(sentence: str) -> None:
+    assert [c for c in extract_claims(sentence + "\n") if c.kind == "count"] == []
+
+
+def test_count_claim_without_a_unit_or_comparator_is_still_extracted() -> None:
+    claims = extract_claims("There are 43 pgTAP suites matching `supabase/tests/*.sql`.\n")
+    assert [(c.kind, c.fields) for c in claims] == [("count", {"claimed": 43})]
+
+
+def test_count_non_recursive_pattern_over_files_and_directories_is_unverifiable(
+        tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "README.md").write_text("")
+    for i in range(12):
+        (tmp_path / "docs" / f"guide{i}").mkdir()
+    (tmp_path / "AGENTS.md").write_text("The 12 guides live in `docs/*`.\n")
+    assert scan_instruction_claims(tmp_path, ["AGENTS.md"])["total"] == 0
+
+
+def test_count_non_recursive_pattern_over_files_only_still_counts(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    for i in range(30):
+        (tmp_path / "docs" / f"g{i}").write_text("")
+    (tmp_path / "AGENTS.md").write_text("The 12 guides live in `docs/*`.\n")
+    failure = scan_instruction_claims(tmp_path, ["AGENTS.md"])["failures"][0]
+    assert (failure["claimed"], failure["actual"]) == (12, 30)
+
+
 def test_count_glob_error_is_unverifiable_not_a_zero_count(
         counted: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     def broken(self: Path, pattern: str) -> list[Path]:

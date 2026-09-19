@@ -47,7 +47,11 @@ Claim kinds:
   nor, below the pattern's fixed prefix, the trees every scan excludes
   (``.git``, ``.assess``, ``node_modules``, ``.venv`` ...). A pattern that
   matches only directories, or a subtree the walk cannot read, is also
-  unverifiable rather than a wrong count; so is a Windows drive or UNC path.
+  unverifiable rather than a wrong count, as is a non-recursive pattern whose
+  matches mix files and directories; a Windows drive or UNC path is skipped.
+  An integer that reads as a threshold is not a count: one followed by a unit
+  of size or time ("500 lines", "3 days") or governed by a comparator ("at
+  most 10", "below 500"); the words live in ``COUNT_NOT_A_COUNT``.
 
 A sentence that fits no kind is skipped silently. Adding a kind means one
 extractor in ``_EXTRACTORS`` (sentence -> claims) and one verifier in
@@ -65,7 +69,7 @@ import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
-from typing import Any
+from typing import Any, NamedTuple
 
 from lib.doc_graph import is_excluded_path
 from lib.evidence_check import is_referenced_in
@@ -104,7 +108,31 @@ _VERSION = re.compile(r"(?<![\d.])(\d+(?:\.\d+)+)(?!\.?\d)")
 # A count: an integer, not part of a version, decimal, list or percentage,
 # followed by a word. Read with backticked spans removed.
 # A year (1900-2099) is skipped: far more often a date than a file count.
-_COUNT = re.compile(r"(?<![\w.,%$/-])(?!(?:19|20)\d\d(?!\d))(\d+)(?=\s+[A-Za-z])")
+_COUNT = re.compile(
+    r"(?<![\w.,%$/-])(?!(?:19|20)\d\d(?!\d))(\d+)(?=\s+([A-Za-z][\w-]*))")
+
+
+class _ThresholdSigns(NamedTuple):
+    units: frozenset[str]  # the word after the integer
+    comparator: re.Pattern[str]  # the text just before the integer
+
+
+# Signs that an integer beside a pattern is a threshold, not a file count
+# ("below 500 lines", "at most 10 files"). This list only ever removes
+# claims, never adds one: it is not a table of things that are counted.
+COUNT_NOT_A_COUNT = _ThresholdSigns(
+    units=frozenset({
+        "line", "lines", "loc", "character", "characters", "char", "chars",
+        "word", "words", "byte", "bytes", "kb", "mb", "gb", "token", "tokens",
+        "column", "columns", "percent", "ms", "second", "seconds", "sec", "secs",
+        "minute", "minutes", "min", "mins", "hour", "hours", "hr", "hrs",
+        "day", "days", "week", "weeks", "month", "months", "year", "years",
+    }),
+    comparator=re.compile(
+        r"\b(?:below|under|above|over|at most|at least|up to|no more than|"
+        r"fewer than|less than|more than|max|maximum|min|minimum|limit)"
+        r"(?:\s+of)?\s*$", re.IGNORECASE),
+)
 _GLOB_CHARS = re.compile(r"[*?]")
 # A path shape: a directory separator, or a last segment with a plain extension.
 _PLAIN_EXTENSION = re.compile(r"\.[A-Za-z0-9]+$")
@@ -230,10 +258,15 @@ def _count_claims(sentence: str, line: int) -> list[Claim]:
         return []
     if "/" not in pattern and not _PLAIN_EXTENSION.search(pattern):
         return []  # `**kwargs`, `*args`, a `?` placeholder: not a path
-    numbers = _COUNT.findall(_BACKTICK_SPAN.sub(" ", sentence))
+    prose = _BACKTICK_SPAN.sub(" ", sentence)
+    numbers = list(_COUNT.finditer(prose))
     if len(numbers) != 1:
         return []
-    return [Claim("count", line, pattern, {"claimed": int(numbers[0])})]
+    number = numbers[0]
+    if (number.group(2).lower() in COUNT_NOT_A_COUNT.units
+            or COUNT_NOT_A_COUNT.comparator.search(prose[:number.start()])):
+        return []  # a threshold ("below 500 lines"), not a count of files
+    return [Claim("count", line, pattern, {"claimed": int(number.group(1))})]
 
 
 def count_within_tolerance(claimed: int, actual: int) -> bool:
@@ -275,17 +308,21 @@ def _count_matches(repo_root: Path, pattern: str) -> int:
             raise Unverifiable
         if _unreadable_below(base, parts[split:]):
             raise Unverifiable
-        matched = count = 0
+        dirs = count = 0
         for match in root.glob(pattern):
             if is_excluded_path(match.relative_to(base).parent):
                 continue
-            matched += 1
-            if match.is_file() and match.resolve().is_relative_to(root):
-                count += 1
+            if match.is_file():
+                if match.resolve().is_relative_to(root):
+                    count += 1
+            elif match.is_dir():
+                dirs += 1
     except (OSError, ValueError, NotImplementedError, RuntimeError) as error:
         raise Unverifiable from error
-    if matched and not count:
-        raise Unverifiable  # the sentence counts directories: not this kind
+    if dirs and (not count or "**" not in parts):
+        # Only directories, or a flat pattern mixing files and directories:
+        # the sentence may count the directories, which this kind cannot check.
+        raise Unverifiable
     return count
 
 
