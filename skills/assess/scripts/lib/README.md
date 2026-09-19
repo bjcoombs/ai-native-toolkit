@@ -150,13 +150,16 @@ small set of sequence families (a date, or a word then an integer that ends the
 name: `plan_07`, `PROJ-123`; a counter followed by a title such as
 `adr-0001-use-postgres`, a dotted version, or a shared word alone like `how-to-*`
 is no family), most with
-in-degree <= 1, and one or two docs holding most of their inbound links - an
-agent's plans or session logs hung off a backlog index. The whole directory, the
+in-degree <= 1, and one or two index docs linking to most of the tree (coverage
+of the tree, not a share of whatever edges exist, so one stray link into an
+unlinked pile does not qualify it) - an agent's plans or session logs hung off a
+backlog index. The whole directory, the
 index included, is the tree. A qualifying parent absorbs qualifying
-subdirectories only when every other doc in it is their index, one of the top
-sources of their inbound links rather than a page citing one note (`notes/backlog.md`
-over `notes/2025/` and `notes/2026/`); otherwise the subdirectories win, so
-curated siblings stay counted. Only docs are classified, never a `.base` hub. It runs on the headline graph (link and reference edges)
+subdirectories that themselves absorb (decided deepest first) only when every
+other doc in it is their index, one of the top sources of their inbound links
+rather than a page citing one note (`notes/backlog.md` over `notes/2025/` and
+`notes/2026/`); otherwise the subdirectories win, so curated siblings stay
+counted, including a curated page inside a subdirectory that refused to absorb. Only docs are classified, never a `.base` hub. It runs on the headline graph (link and reference edges)
 after the raw pass. `doc_graph.py` excludes these trees too and reports
 `excluded_working_notes_trees`, `working_notes_doc_count`,
 `working_notes_orphan_rate` and `working_notes_broken_links`.

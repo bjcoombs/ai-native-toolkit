@@ -165,14 +165,14 @@ def classify_raw_trees(
 # separates shape, not intent: a numbered series under its own table of
 # contents (chapter-01 .. chapter-20) passes all three legs exactly as plan_NN
 # does, and only `.assess/config.toml` can keep it counted. A cross-linked wiki
-# fails on in-degree (several inbound links per page) and on the index (inbound
-# links spread across many pages).
+# fails on in-degree (several inbound links per page) and on the index (no one
+# or two pages link to most of it).
 WORKING_NOTES_MIN_FILES = 20  # a pile, not a small wiki section
 WORKING_NOTES_PREFIX_SET = 3  # "a small set of prefixes": plan_/spike_/retro_ at most
 WORKING_NOTES_NAME_DENSITY = 0.8  # >= this fraction carry a sequence name in a shared family
 WORKING_NOTES_LOW_INDEGREE_DENSITY = 0.8  # >= this fraction have in-degree <= 1
 WORKING_NOTES_INDEX_FILES = 2  # "one or two index files"
-WORKING_NOTES_INDEX_SHARE = 0.6  # the top index files hold >= this share of inbound links
+WORKING_NOTES_INDEX_SHARE = 0.6  # the top index files link to >= this fraction of the tree
 
 # 2026-01-31, 20260131, 2026_01_31 anywhere in the stem.
 _DATE_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}[-_.]?(?:0[1-9]|1[0-2])[-_.]?(?:0[1-9]|[12]\d|3[01])(?!\d)")
@@ -206,19 +206,24 @@ def _is_working_notes(docs: list[str], doc_signals: dict[str, dict]) -> bool:
     low = sum(1 for r in docs if int(doc_signals[r].get("in_degree", 0)) <= 1)
     if low / n < WORKING_NOTES_LOW_INDEGREE_DENSITY:
         return False
+    # Coverage, not concentration: the index files must link to most of the
+    # tree. A share of whatever edges exist goes vacuous on a sparse pile (one
+    # stray link would be 1/1 and hide every unlinked note).
     sources = Counter(s for r in docs for s in doc_signals[r].get("inbound_sources", ()))
-    total = sum(sources.values())
     held = sum(c for _, c in sources.most_common(WORKING_NOTES_INDEX_FILES))
-    return total > 0 and held / total >= WORKING_NOTES_INDEX_SHARE
+    return held >= WORKING_NOTES_INDEX_SHARE * n
 
 
-def _absorbs(directory: str, qualifying: dict[str, list[str]], doc_signals: dict[str, dict]) -> bool:
-    """True when ``directory`` can stand as one tree over its qualifying
-    subdirectories: each doc outside them is their index, one of the top
-    ``WORKING_NOTES_INDEX_FILES`` sources of their inbound links holding at
-    least an equal part of ``WORKING_NOTES_INDEX_SHARE``. A curated page that
-    cites one note is a source, not an index."""
-    inner = [o for o in qualifying if o != directory and _is_ancestor_path(directory, o)]
+def _absorbs(directory: str, qualifying: dict[str, list[str]], doc_signals: dict[str, dict],
+             absorbing: set[str]) -> bool:
+    """True when ``directory`` can stand as one tree over its absorbing
+    qualifying subdirectories: each doc outside them is their index, one of
+    the top ``WORKING_NOTES_INDEX_FILES`` sources of their inbound links
+    holding at least an equal part of ``WORKING_NOTES_INDEX_SHARE``. A curated
+    page that cites one note is a source, not an index. ``absorbing`` holds the
+    verdicts for every deeper directory: a subdirectory that refused to absorb
+    does not hand its curated docs to an ancestor as nested notes."""
+    inner = [o for o in absorbing if o != directory and _is_ancestor_path(directory, o)]
     if not inner:
         return True
     nested = {r for o in inner for r in qualifying[o]}
@@ -236,13 +241,14 @@ def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
     ``in_degree`` and ``inbound_sources`` (the paths of the docs linking or
     referring to it). A directory qualifies when it holds at least
     ``WORKING_NOTES_MIN_FILES`` docs, most named in a small set of families,
-    most with in-degree <= 1, and one or two docs hold most of their inbound
-    links. The whole directory is the tree, its index file included.
+    most with in-degree <= 1, and one or two docs link to most of the tree.
+    The whole directory is the tree, its index file included.
 
     Returns ``{"path", "file_count", "docs"}`` per tree, sorted by path. A
     qualifying parent absorbs its qualifying subdirectories only when every doc
-    it holds outside them is an index linking into them (``notes/backlog.md``
-    over ``notes/2025/`` and ``notes/2026/``); otherwise the subdirectories win,
+    it holds outside the ones that themselves absorb is an index linking into
+    them (``notes/backlog.md`` over ``notes/2025/`` and ``notes/2026/``);
+    otherwise the subdirectories win,
     so a parent that qualifies only because a notes tree dominates it does not
     take its curated siblings out of the headline.
     """
@@ -255,7 +261,10 @@ def classify_working_notes_trees(doc_signals: dict[str, dict]) -> list[dict]:
         d: docs for d, docs in by_dir.items()
         if len(docs) >= WORKING_NOTES_MIN_FILES and _is_working_notes(docs, doc_signals)
     }
-    candidates = [d for d in qualifying if _absorbs(d, qualifying, doc_signals)]
+    candidates: set[str] = set()
+    for d in sorted(qualifying, key=lambda x: -x.count("/")):  # deepest first
+        if _absorbs(d, qualifying, doc_signals, candidates):
+            candidates.add(d)
     kept = [
         d for d in candidates
         if not any(o != d and _is_ancestor_path(o, d) for o in candidates)

@@ -328,6 +328,28 @@ def test_notes_split_by_period_keep_their_index_in_the_tree() -> None:
     assert [(t["path"], t["file_count"]) for t in trees] == [("notes", 51)]
 
 
+def test_sparsely_linked_notes_pile_is_not_working_notes() -> None:
+    # One stray link into an otherwise unlinked pile: the few edges that exist
+    # are concentrated, but no index covers the tree, so it stays counted.
+    signals = {f"notes/topic-{i}.md": _wn_signal([]) for i in range(1, 26)}
+    signals["notes/topic-1.md"] = _wn_signal(["README.md"])
+    assert classify_working_notes_trees(signals) == []
+    signals["notes/topic-2.md"] = _wn_signal(["docs/guide.md"])
+    assert classify_working_notes_trees(signals) == []
+
+
+def test_non_absorbing_subdirectory_shields_its_curated_page() -> None:
+    # docs/team refuses to absorb docs/team/notes because of onboarding.md;
+    # docs must not then treat onboarding.md as nested and absorb it anyway.
+    signals = {
+        f"docs/team/notes/plan_{i:02d}.md": _wn_signal(["docs/index.md"]) for i in range(1, 51)
+    }
+    signals["docs/index.md"] = _wn_signal(["README.md"])
+    signals["docs/team/onboarding.md"] = _wn_signal(["README.md"])
+    trees = classify_working_notes_trees(signals)
+    assert [(t["path"], t["file_count"]) for t in trees] == [("docs/team/notes", 50)]
+
+
 def test_working_notes_thresholds_are_precision_first() -> None:
     assert WORKING_NOTES_MIN_FILES >= 10
     assert 0.5 < WORKING_NOTES_NAME_DENSITY <= 1.0
