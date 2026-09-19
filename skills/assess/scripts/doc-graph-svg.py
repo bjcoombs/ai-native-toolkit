@@ -211,9 +211,14 @@ def _render_ghosts(broken_links: list[dict], pos: dict, radius,
     return "\n".join(out)
 
 
+def _normalize_edge_kind(kind: str) -> str:
+    """An edge with no kind, or an unknown one, draws as a link."""
+    return kind if kind in _EDGE_STYLE else "link"
+
+
 def _edge_attrs(kind: str) -> str:
     """Presentation attributes for one edge kind; an unknown kind draws as a link."""
-    kind = kind if kind in _EDGE_STYLE else "link"
+    kind = _normalize_edge_kind(kind)
     style = " ".join(f'{k}="{v}"' for k, v in _EDGE_STYLE[kind].items() if v is not None)
     cap = ' stroke-linecap="round"' if _EDGE_STYLE[kind]["stroke-dasharray"] else ""
     return f'{style}{cap}'
@@ -351,7 +356,7 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  
         rt = radius(v) + 3
         ex, ey = x2 - dx / dist * rt, y2 - dy / dist * rt
         parts.append(
-            f'<line data-edge-kind="{kind if kind in _EDGE_STYLE else "link"}" '
+            f'<line data-edge-kind="{_normalize_edge_kind(kind)}" '
             f'x1="{x1:.1f}" y1="{y1:.1f}" x2="{ex:.1f}" y2="{ey:.1f}" '
             f'{_edge_attrs(kind)} marker-end="url(#arrow)"/>'
         )

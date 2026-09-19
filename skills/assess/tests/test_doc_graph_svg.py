@@ -136,9 +136,12 @@ def test_reference_edge_drawn_distinct_from_link_with_legend(svg, tmp_path, monk
     assert len(styles["reference"]) == 1
     assert styles["link"][0] != styles["reference"][0]
     assert styles["reference"][0][1] not in ("4,3", "3,2")
-    # The dots must survive the round caps: each cap adds half the stroke width
-    # to both ends of a dash, so the painted bead is dash + width and the painted
-    # gap is gap - width. A gap no wider than the bead washes out when scaled down.
+    # Round caps add half the stroke width to both ends of a dash, so the painted
+    # bead is dash + width and the painted gap is gap - width. That ratio is
+    # scale-invariant, so this assertion proves the caps can never swallow the
+    # gap at any scale - not that the dots stay visually distinct once rendered
+    # small (at README embed scale both fall under a pixel and only the weight
+    # and opacity difference actually survives).
     dash, gap = (float(v) for v in styles["reference"][0][1].split(","))
     width = float(styles["reference"][0][2])
     assert gap - width >= dash + width
@@ -151,3 +154,43 @@ def test_reference_edge_drawn_distinct_from_link_with_legend(svg, tmp_path, monk
     texts = [" ".join(e.itertext()).lower() for e in els if e.tag.endswith("text")]
     assert any("reference" in t for t in texts)
     assert any("link" in t for t in texts)
+
+
+@pytest.mark.parametrize("colour", ["staleness", "status"])
+def test_missing_or_unknown_edge_kind_draws_as_link(svg, tmp_path, monkeypatch, colour):
+    """An edge with no `kind`, or one that names a kind the SVG doesn't know,
+    normalizes to a link - both in styling and in the `data-edge-kind`
+    attribute. `_edge_attrs` and the `data-edge-kind` markup both delegate to
+    `_normalize_edge_kind`, so the two sites cannot diverge on this rule."""
+    import xml.etree.ElementTree as ET
+
+    import networkx as nx
+
+    graph = nx.DiGraph()
+    graph.add_edge("CLAUDE.md", "docs/nokind.md")
+    graph.add_edge("CLAUDE.md", "docs/weird.md", kind="footnote")
+    result = _FakeResult()
+    result.graph = graph
+    result.entry_points = ["CLAUDE.md"]
+    result.pagerank = {}
+    fixed = {"CLAUDE.md": (500.0, 500.0), "docs/nokind.md": (300.0, 300.0),
+             "docs/weird.md": (700.0, 300.0)}
+    monkeypatch.setattr(svg, "_radial_positions", lambda *a, **k: dict(fixed))
+    monkeypatch.setattr(svg.plt, "get_cmap", lambda _name: (lambda _v: (1.0, 1.0, 1.0, 1.0)),
+                        raising=False)
+    out = tmp_path / "out.svg"
+    svg.render(result, out, tmp_path, colour=colour)
+    els = list(ET.parse(out).iter())
+    edges = [e for e in els if e.get("data-edge-kind")]
+    assert len(edges) == 2
+    link_style = [svg._EDGE_STYLE["link"][k] for k in _STYLE_KEYS]
+    for edge in edges:
+        assert edge.get("data-edge-kind") == "link"
+        assert [edge.get(k) for k in _STYLE_KEYS] == link_style
+
+
+def test_normalize_edge_kind(svg):
+    assert svg._normalize_edge_kind("link") == "link"
+    assert svg._normalize_edge_kind("reference") == "reference"
+    assert svg._normalize_edge_kind("footnote") == "link"
+    assert svg._normalize_edge_kind("") == "link"
