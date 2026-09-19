@@ -27,11 +27,15 @@ from pathlib import Path
 
 from lib.assess_config import is_user_excluded
 from lib.change_coupling import (
+    RenameMap,
     authorship_analysis,
+    build_rename_map,
     change_coupling_pairs,
     containment_ratio,
     find_self_referential_tests,
+    fold_renames,
     parse_commit_file_sets,
+    repo_top,
 )
 from lib.coupling_analysis import detect_hidden_coupling, find_refactor_boundaries
 from lib.doc_complexity_join import (
@@ -443,6 +447,33 @@ def apply_config_excludes(
                 dropped.add(p)
             else:
                 kept.append(p)
+        filtered.append({**f, "paths": kept})
+    return filtered, sorted(dropped)
+
+
+# Findings built from git-log path strings. Only these can name a path that no
+# longer exists: every other finding reads the working tree or the stats file.
+GIT_HISTORY_FINDINGS = frozenset({"hidden_coupling", "refactor_boundary"})
+
+
+def prune_missing_finding_paths(
+    findings: list[dict], base: Path,
+) -> tuple[list[dict], list[str]]:
+    """Drop git-history finding paths absent under ``base``, returning ``(filtered, dropped)``.
+
+    Renamed paths were already folded onto their current names, so a path still
+    missing here was deleted with no current equivalent. ``dropped`` is the
+    sorted list for the run-context ``pruned_finding_paths`` disclosure, so the
+    pruning is counted rather than silent.
+    """
+    dropped: set[str] = set()
+    filtered: list[dict] = []
+    for f in findings:
+        if f["name"] not in GIT_HISTORY_FINDINGS:
+            filtered.append(f)
+            continue
+        kept = [p for p in f["paths"] if (base / p).exists()]
+        dropped.update(p for p in f["paths"] if p not in kept)
         filtered.append({**f, "paths": kept})
     return filtered, sorted(dropped)
 
@@ -996,6 +1027,7 @@ def integrate(
     exclude_dirs: set[str] | None = None,
     exclude_patterns: list[str] | None = None,
     scope: Path | None = None,
+    rename_map: RenameMap | None = None,
 ) -> dict:
     """Build the five run-context blocks + derived findings + attention list.
 
@@ -1013,16 +1045,26 @@ def integrate(
     finding fires against the marker's source file. ``exclude_dirs`` /
     ``exclude_patterns`` are the user-supplied config excludes; a finding path
     matching them is filtered out and reported in ``excluded_finding_paths`` so the
-    suppression is disclosed rather than silent.
+    suppression is disclosed rather than silent. ``rename_map`` (from
+    ``change_coupling.build_rename_map``, built here when None) folds history
+    recorded under a renamed path onto its current path; a git-history finding
+    path that still does not exist is pruned and reported in
+    ``pruned_finding_paths``. When the map is incomplete (git failed) nothing is
+    pruned: an unfolded old path is not evidence of a deletion.
     Every block is built defensively - a failure in one degrades that block to
     ``available: False`` and leaves the rest intact.
     """
     repo_root = Path(repo_root)
+    # Resolved once and shared by the git-log parse, the rename map and the prune.
+    top = repo_top(repo_root)
     if commit_sets is None:
         try:
-            commit_sets = parse_commit_file_sets(repo_root)
+            commit_sets = parse_commit_file_sets(repo_root, top=top)
         except Exception:  # noqa: BLE001 - degrade to no-history
             commit_sets = []
+    if rename_map is None:
+        rename_map = build_rename_map(repo_root, top=top)
+    commit_sets = fold_renames(commit_sets, rename_map.paths)
 
     # `/assess <path>` monorepo scoping: confine the change-history file-sets to
     # the subtree so the behaviour block (coupling, containment, hidden-seam)
@@ -1186,6 +1228,16 @@ def integrate(
         "refactor_boundary": [b["path"] for b in behaviour.get("refactor_boundaries", [])],
     })
 
+    # Dead-path pruning: a git-history finding path absent from the working tree
+    # (deleted, no rename to follow) never reaches the report; the dropped paths
+    # are carried out for the `pruned_finding_paths` disclosure.
+    # Outside a git repo there is no history to go stale, and with an incomplete
+    # rename map a missing path may just be unfolded, so nothing is pruned.
+    findings, pruned_finding_paths = (
+        prune_missing_finding_paths(findings, Path(top))
+        if top and rename_map.complete else (findings, [])
+    )
+
     # Config-based suppression: drop any finding path the user's config excludes
     # cover (the git-log-derived findings never saw the scan-level filter), and
     # carry the dropped paths out so the disclosure can count them. Applied before
@@ -1216,6 +1268,13 @@ def integrate(
         # Archive paths a negative finding names but attention leaves out - the
         # raw material for the run-context `excluded_as_archive` disclosure.
         "archived_finding_paths": archived_finding_paths,
+        # Git-history finding paths absent from the working tree (not HEAD: an
+        # uncommitted delete counts) - the raw material for the run-context
+        # `pruned_finding_paths` disclosure.
+        "pruned_finding_paths": pruned_finding_paths,
+        # False when the rename map could not be built: renames were not folded
+        # and the prune stood down, so the disclosure can say so.
+        "rename_map_complete": rename_map.complete,
         # The Tier 1 grouping disagreement, computed once here from the behaviour
         # block's co-change pairs, so the orchestrator can build the run-context
         # structure_drift tier_1 sub-block from it without a second computation.
