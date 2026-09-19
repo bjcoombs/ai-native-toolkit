@@ -1198,3 +1198,225 @@ def test_signoff_summary_mode_change_with_content_is_named_and_vetoes_pin_only(
 
     assert _line_with(out, _WORKFLOW, "+1", "-1", "mode change") is not None
     assert "pin-only" not in out.lower()
+
+
+# ── signoff-summary: crafted, moved and removed input ────────────────────────
+
+def _pins_workflow(*jobs: tuple[str, str]) -> str:
+    """A workflow with one job per ``(job id, steps block)``."""
+    text = "name: Floor\non:\n  pull_request:\njobs:\n"
+    for job_id, steps in jobs:
+        text += f"  {job_id}:\n    runs-on: ubuntu-latest\n    steps:\n{steps}"
+    return text
+
+
+def test_signoff_summary_crafted_version_comment_is_not_pin_only(
+    signoff_repo, capsys
+):
+    # A version comment that opens an HTML comment on one pin and closes it on
+    # a later one would hide the pin between them in the rendered markdown.
+    # Such a line is not a pin, so there is no pin-only verdict to hide.
+    def steps(pin: str, first: str, second: str, third: str) -> str:
+        return (
+            f"      - uses: actions/checkout@{pin}  # {first}\n"
+            "      - run: echo between\n"
+            f"      - uses: actions/cache@{pin}  # {second}\n"
+            "      - run: echo between\n"
+            f"      - uses: astral-sh/setup-uv@{pin}  # {third}\n"
+        )
+
+    (signoff_repo / _WORKFLOW).write_text(
+        _pins_workflow(("t", steps(_OLD_PIN, "v1", "v1", "v1"))), encoding="utf-8"
+    )
+    _commit_all(signoff_repo, "three pins at base")
+    (signoff_repo / _WORKFLOW).write_text(
+        _pins_workflow(("t", steps(_NEW_PIN, "v2 `<!--", "v2", "v2 -->"))),
+        encoding="utf-8",
+    )
+    _commit_all(signoff_repo, "crafted comments")
+
+    out = _summary(capsys)
+
+    assert "pin-only" not in out.lower()
+    assert "<!--" not in out
+    assert "-->" not in out
+    assert _line_with(out, _WORKFLOW, "+3", "-3") is not None
+
+
+def test_signoff_summary_renders_pull_request_text_inert():
+    # Every pull-request-controlled string lands in the approver's markdown as
+    # literal text: no code span can be closed, no HTML comment opened, no
+    # emphasis or link formed.
+    from floor_check import render_signoff_summary
+
+    out = render_signoff_summary(
+        [("a`<!--*b*[x](y).yml", "+1 -0")],
+        "0" * 40,
+        "Purpose.",
+        [("act`<!--", "old`x", "new -->")],
+    )
+
+    assert "<!--" not in out
+    assert "-->" not in out
+    assert "*b*" not in out
+    assert "](" not in out
+    assert "\\`" in out
+    # The safe strings stay in code spans, as the criteria read them.
+    assert "`" + "0" * 40 + "`" in out
+
+
+def test_signoff_summary_cross_job_move_with_a_new_commit_is_not_pin_only(
+    signoff_repo, capsys
+):
+    # Removed from one job and re-added with a new commit in another: the
+    # same action, but the step now runs under another job's conditions.
+    (signoff_repo / _WORKFLOW).write_text(
+        _pins_workflow(
+            ("t", f"      - uses: actions/checkout@{_OLD_PIN}  # v4.0.0\n"
+                  "      - run: echo t\n"),
+            ("u", "      - run: echo u\n"),
+        ),
+        encoding="utf-8",
+    )
+    _commit_all(signoff_repo, "pin in job t")
+    (signoff_repo / _WORKFLOW).write_text(
+        _pins_workflow(
+            ("t", "      - run: echo t\n"),
+            ("u", f"      - uses: actions/checkout@{_NEW_PIN}  # v5.0.0\n"
+                  "      - run: echo u\n"),
+        ),
+        encoding="utf-8",
+    )
+    _commit_all(signoff_repo, "move the pin to job u with a new commit")
+
+    assert "pin-only" not in _summary(capsys).lower()
+
+
+def test_signoff_summary_cross_file_move_is_not_pin_only(signoff_repo, capsys):
+    # A pin removed from one floor-core file and added to another is not a
+    # bump of either.
+    (signoff_repo / _WORKFLOW).write_text(
+        _workflow_text().replace(
+            f"      - uses: astral-sh/setup-uv@{_OLD_PIN}  # v10.0.1\n", ""
+        ),
+        encoding="utf-8",
+    )
+    with (signoff_repo / FLOOR_FILE).open("a", encoding="utf-8") as fh:
+        fh.write(f"      - uses: astral-sh/setup-uv@{_NEW_PIN}  # v10.1.0\n")
+    _commit_all(signoff_repo, "move the pin to another floor-core file")
+
+    assert "pin-only" not in _summary(capsys).lower()
+
+
+def test_signoff_summary_in_place_bumps_in_two_jobs_are_pin_only(
+    signoff_repo, capsys
+):
+    # Pairing within a hunk still recognises a bump in each of two jobs.
+    def jobs(pin: str, uv: str, cache: str) -> str:
+        return _pins_workflow(
+            ("t", f"      - uses: astral-sh/setup-uv@{pin}  # {uv}\n"
+                  "      - run: echo t\n"),
+            ("u", f"      - uses: actions/cache@{pin}  # {cache}\n"
+                  "      - run: echo u\n"),
+        )
+
+    (signoff_repo / _WORKFLOW).write_text(
+        jobs(_OLD_PIN, "v10.0.1", "v4.0.0"), encoding="utf-8"
+    )
+    _commit_all(signoff_repo, "two jobs at base")
+    (signoff_repo / _WORKFLOW).write_text(
+        jobs(_NEW_PIN, "v10.1.0", "v5.0.0"), encoding="utf-8"
+    )
+    _commit_all(signoff_repo, "bump both")
+
+    out = _summary(capsys)
+
+    assert "pin-only" in out.lower()
+    assert _line_with(out, "astral-sh/setup-uv", _OLD_PIN[:8], _NEW_PIN[:8])
+    assert _line_with(out, "actions/cache", "v4.0.0", "v5.0.0")
+
+
+def test_signoff_summary_deleted_floor_core_file_is_named_deleted(
+    signoff_repo, capsys
+):
+    (signoff_repo / FLOOR_FILE).unlink()
+    _commit_all(signoff_repo, "delete FLOOR.md")
+
+    out = _summary(capsys)
+
+    line = _line_with(out, "`FLOOR.md`")
+    assert line is not None and "deleted" in line
+    assert "mode change" not in line
+
+
+def test_signoff_summary_empty_added_file_is_not_a_mode_change(
+    signoff_repo, capsys
+):
+    (signoff_repo / "scripts").mkdir()
+    (signoff_repo / "scripts" / "floor_anchor.py").write_text("", encoding="utf-8")
+    _commit_all(signoff_repo, "add an empty floor-core file")
+
+    out = _summary(capsys)
+
+    line = _line_with(out, "`scripts/floor_anchor.py`")
+    assert line is not None and "added" in line
+    assert "mode change" not in line
+
+
+def test_signoff_summary_added_file_of_pins_is_named_added_and_not_pin_only(
+    signoff_repo, capsys
+):
+    (signoff_repo / "scripts").mkdir()
+    (signoff_repo / "scripts" / "floor_anchor.py").write_text(
+        f"      - uses: astral-sh/setup-uv@{_NEW_PIN}  # v10.1.0\n", encoding="utf-8"
+    )
+    _commit_all(signoff_repo, "add a floor-core file of one pin")
+
+    out = _summary(capsys)
+
+    assert _line_with(out, "`scripts/floor_anchor.py`", "added", "+1") is not None
+    assert "pin-only" not in out.lower()
+
+
+def test_signoff_summary_type_change_is_named(signoff_repo, capsys):
+    (signoff_repo / FLOOR_FILE).unlink()
+    (signoff_repo / FLOOR_FILE).symlink_to("docs/notes.md")
+    _commit_all(signoff_repo, "FLOOR.md becomes a symlink")
+
+    out = _summary(capsys)
+
+    line = _line_with(out, "`FLOOR.md`")
+    assert line is not None and "type change" in line
+
+
+def _workflow_job(job_id: str) -> str:
+    """The lines of one top-level job of the shipped floor.yml."""
+    lines = (REPO_ROOT / _WORKFLOW).read_text(encoding="utf-8").splitlines()
+    start = lines.index(f"  {job_id}:")
+    end = next(
+        (
+            i
+            for i in range(start + 1, len(lines))
+            if lines[i].startswith("  ") and not lines[i].startswith("   ")
+            and lines[i].rstrip().endswith(":") and not lines[i].lstrip().startswith("#")
+        ),
+        len(lines),
+    )
+    return "\n".join(lines[start:end])
+
+
+def test_signoff_summary_job_never_runs_the_checked_out_renderer():
+    # The job later holds a write token. Code from the pull request that ran
+    # in it could write GITHUB_ENV or GITHUB_PATH and so reach that step, so
+    # the only script it runs is the base ref's copy, extracted to RUNNER_TEMP.
+    import re
+
+    job = _workflow_job("signoff-summary")
+    code = "\n".join(
+        line for line in job.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "signoff-summary" in code and "GITHUB_STEP_SUMMARY" in code
+    assert re.search(r"python3?\s+\S*scripts/floor_check\.py", code) is None
+    assignments = re.findall(r"RENDERER=(\S+)", code)
+    assert assignments
+    assert all(value.startswith('"${RUNNER_TEMP}/') for value in assignments)

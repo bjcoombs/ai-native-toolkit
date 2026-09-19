@@ -89,6 +89,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import string
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
@@ -175,9 +176,19 @@ CLAUSE_III_HEADING_RE = re.compile(
 
 # One changed workflow line that is only an action pin:
 # ``- uses: owner/action@<sha>  # <version>`` (the list dash is optional).
+# The action and the version comment are pull-request text that the summary
+# renders, so both are held to a charset that carries no markdown or HTML
+# meaning. A `uses:` line outside it is not a pin: the pin-only verdict is
+# withheld and the line counts stand.
 USES_PIN_RE = re.compile(
-    r"^\s*(?:-\s+)?uses:\s*([^@\s]+)@([0-9a-fA-F]{7,40})\s*(?:#\s*(.*?))?\s*$"
+    r"^\s*(?:-\s+)?uses:\s*([\w.\-/]+)@([0-9a-fA-F]{7,40})"
+    r"\s*(?:#\s*([\w.+\-/ ]*?))?\s*$",
+    re.ASCII,
 )
+
+# Text the summary may put in a code span as it stands: no backtick, no
+# angle bracket, no emphasis or link syntax, no leading or trailing space.
+MD_CODE_SAFE_RE = re.compile(r"[\w.+\-/@]+(?: [\w.+\-/@]+)*", re.ASCII)
 
 
 class FloorTokenError(ValueError):
@@ -360,13 +371,34 @@ def clause_iii_purpose(floor_text: str | None) -> str:
     return " ".join(match.group(1).split())
 
 
-def _pin_lines(
-    diff_text: str,
-) -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str]]] | None:
+def md_literal(text: str) -> str:
+    """``text`` as inert markdown: a code span when it holds only safe
+    characters, otherwise plain text with every ASCII punctuation character
+    backslash-escaped and every unprintable character spelled as its code
+    point, so pull-request text can close no code span, open no HTML comment
+    and form no emphasis or link in the approver's view."""
+    if MD_CODE_SAFE_RE.fullmatch(text):
+        return f"`{text}`"
+    out = []
+    for ch in text:
+        if ch in string.punctuation:
+            out.append("\\" + ch)
+        elif ch.isprintable():
+            out.append(ch)
+        else:
+            out.append("\\\\" + f"u{ord(ch):04x}")
+    return "".join(out)
+
+
+_Pin = tuple[str, str, str]
+
+
+def _pin_lines(diff_text: str) -> list[tuple[list[_Pin], list[_Pin]]] | None:
     """The removed and added ``(action, commit, version)`` pins of a ``-U0``
-    diff, in diff order, or ``None`` when a changed line is not a pin."""
-    removed: list[tuple[str, str, str]] = []
-    added: list[tuple[str, str, str]] = []
+    diff, one ``(removed, added)`` pair per hunk in diff order, or ``None``
+    when a changed line is not a pin. A hunk belongs to one file, so keeping
+    the hunks apart keeps the files apart too."""
+    hunks: list[tuple[list[_Pin], list[_Pin]]] = []
     in_hunk = False
     for line in diff_text.splitlines():
         # Track hunk state rather than prefix-match headers: inside a hunk a
@@ -376,6 +408,7 @@ def _pin_lines(
             continue
         if line.startswith("@@"):
             in_hunk = True
+            hunks.append(([], []))
             continue
         if not in_hunk or not line.startswith(("+", "-")):
             continue
@@ -383,9 +416,10 @@ def _pin_lines(
         if match is None:
             return None
         action, commit, version = match.groups()
+        removed, added = hunks[-1]
         side = added if line.startswith("+") else removed
         side.append((action, commit.lower(), version or ""))
-    return removed, added
+    return hunks
 
 
 def pin_changes(diff_text: str) -> list[tuple[str, str, str]] | None:
@@ -394,26 +428,28 @@ def pin_changes(diff_text: str) -> list[tuple[str, str, str]] | None:
 
     Each entry is ``(action, old, new)`` where ``old`` and ``new`` read
     ``<commit> <version comment>``. Like-for-like means: every changed line is
-    a pin; the removed and added pins name the same actions in the same order
-    (an action added, dropped, swapped for another or moved changes what the
-    workflow runs); and every pair either changes its commit or is the same
-    pin moved or re-indented. A version comment relabelled on an unchanged
-    commit is not a bump, and a diff that changes no commit is not one either.
+    a pin; within each hunk the removed and added pins name the same actions
+    in the same order (an action added, dropped, swapped for another or moved
+    changes what the workflow runs, and a pin removed in one hunk and added in
+    another, whether another job or another file, has moved, not been bumped
+    in place); and every pair either changes its commit or is the same pin
+    re-indented. A version comment relabelled on an unchanged commit is not a
+    bump, and a diff that changes no commit is not one either.
     """
-    lines = _pin_lines(diff_text)
-    if lines is None:
+    hunks = _pin_lines(diff_text)
+    if hunks is None:
         return None
-    removed, added = lines
-    if [pin[0] for pin in removed] != [pin[0] for pin in added]:
-        return None
+    pairs: list[tuple[_Pin, _Pin]] = []
+    for removed, added in hunks:
+        if [pin[0] for pin in removed] != [pin[0] for pin in added]:
+            return None  # also a removal-only or addition-only hunk
+        pairs += zip(removed, added)
     changes: list[tuple[str, str, str]] = []
-    for (action, old_commit, old_version), (_, new_commit, new_version) in zip(
-        removed, added
-    ):
+    for (action, old_commit, old_version), (_, new_commit, new_version) in pairs:
         if old_commit == new_commit:
             if old_version != new_version:
                 return None  # a relabelled comment, not a bump
-            continue  # the same pin moved or re-indented
+            continue  # the same pin re-indented
         change = (
             action,
             f"{old_commit} {old_version}".strip(),
@@ -434,10 +470,12 @@ def render_signoff_summary(
     """The markdown section the maintainer reads before approving.
 
     ``paths`` is ``(path, detail)`` per changed floor-core path, where the
-    detail is ``+<added> -<removed>``, ``mode change`` or ``binary change``.
+    detail is ``+<added> -<removed>`` or ``binary change`` with the kind of
+    change (added, deleted, type change, mode change) named alongside.
     ``other_roles`` counts the other changed paths by protected role
     (``unprotected`` for the rest). They are counted, never listed, so the
-    verdict below is never read as covering them.
+    verdict below is never read as covering them. Every path, commit, action
+    and version is pull-request text and goes through ``md_literal``.
     """
     others = {role: n for role, n in (other_roles or {}).items() if n}
     breakdown = ", ".join(f"{n} {role}" for role, n in others.items())
@@ -449,12 +487,12 @@ def render_signoff_summary(
         "",
         f"**Why:** FLOOR.md clause iii. {clause_purpose}",
         "",
-        f"**Head commit the approval covers:** `{head_commit}`",
+        f"**Head commit the approval covers:** {md_literal(head_commit)}",
         "",
         "**Floor-core paths changed:**",
         "",
     ]
-    lines += [f"- `{path}` {detail}" for path, detail in paths]
+    lines += [f"- {md_literal(path)} {detail}" for path, detail in paths]
     lines += [
         "",
         f"Other paths changed in this pull request (not floor core, not listed "
@@ -469,7 +507,10 @@ def render_signoff_summary(
             "version:",
             "",
         ]
-        lines += [f"- `{action}`: `{old}` -> `{new}`" for action, old, new in pins]
+        lines += [
+            f"- {md_literal(action)}: {md_literal(old)} -> {md_literal(new)}"
+            for action, old, new in pins
+        ]
     lines += [
         "",
         "**Approving** asserts that these changes to the floor's own "
@@ -772,37 +813,52 @@ _ROLE_LABELS = {
 }
 
 
-def _mode_changed(base: str, path: str) -> bool:
-    """Did ``path``'s file mode change? ``--numstat`` counts lines only, and
-    the mode header sits before the first hunk, so it is read from ``--raw``
-    (``:<old mode> <new mode> <old sha> <new sha> <status>``)."""
+# How a `git diff --raw` status letter is named in the path list. A plain
+# modification (M) carries no label beyond its counts.
+_STATUS_LABELS = {"A": "added", "D": "deleted", "T": "type change"}
+
+
+def _raw_change(base: str, path: str) -> tuple[str, bool]:
+    """``path``'s status letter and whether its file mode changed.
+    ``--numstat`` counts lines only, so both are read from ``--raw``
+    (``:<old mode> <new mode> <old sha> <new sha> <status>``). A mode change
+    is a modification whose two modes differ; an added or deleted file has an
+    all-zero mode on one side, and a type change is named as one."""
     raw = _git_out("diff", "--raw", "--no-renames", base, "HEAD", "--", path)
     for line in raw.splitlines():
         fields = line.lstrip(":").split()
-        if len(fields) >= 2 and "000000" not in fields[:2] and fields[0] != fields[1]:
-            return True
-    return False
+        if len(fields) >= 5:
+            status = fields[4][:1]
+            return status, status == "M" and fields[0] != fields[1]
+    return "M", False
 
 
 def _path_detail(base: str, path: str) -> tuple[str, bool]:
     """``+<added> -<removed>`` for a text change, ``binary change`` for a
-    binary one, with ``mode change`` named alongside either or on its own.
-    The flag is True only for a pure text change: anything else vetoes the
-    pin-only verdict, since a pin diff cannot show it."""
+    binary one, with ``added``, ``deleted``, ``type change`` or ``mode
+    change`` named alongside, each only when git reports it. The flag is True
+    only for a text modification with no other change: anything else vetoes
+    the pin-only verdict, since a pin diff cannot show it."""
     numstat = _git_out("diff", "--numstat", "--no-renames", base, "HEAD", "--", path)
     added, removed = "0", "0"
     for line in numstat.splitlines():
         parts = line.split("\t")
         if len(parts) == 3:
             added, removed = parts[0], parts[1]
-    mode = _mode_changed(base, path)
+    status, mode = _raw_change(base, path)
+    parts = []
     if added == "-":
-        return "binary change" + (", mode change" if mode else ""), False
-    if added == "0" and removed == "0":
-        return "mode change", False
+        parts.append("binary change")
+    elif added != "0" or removed != "0":
+        parts.append(f"+{added} -{removed}")
+    if status in _STATUS_LABELS:
+        parts.append(_STATUS_LABELS[status])
     if mode:
-        return f"+{added} -{removed}, mode change", False
-    return f"+{added} -{removed}", True
+        parts.append("mode change")
+    if status == "A" and not (added != "0" or removed != "0"):
+        parts.append("empty")
+    pure_text = status == "M" and not mode and bool(parts) and added != "-"
+    return ", ".join(parts), pure_text
 
 
 def cmd_signoff_summary(args: argparse.Namespace) -> int:

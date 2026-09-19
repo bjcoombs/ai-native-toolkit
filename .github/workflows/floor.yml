@@ -193,7 +193,8 @@ jobs:
   # sign-off and sits in its `needs`, so the explanation is on the run summary
   # (and the pull request) before the deployment review is requested. The text
   # is the script's, so this file still names no path. It is rendered by the
-  # base ref's copy while the trigger runs the head copy: the two agree unless
+  # base ref's copy while the trigger runs the head copy (never the head copy
+  # here, where a later step holds a write token): the two agree unless
   # the pull request edits the classification itself, and then the section
   # still appears (floor_check.py is floor core in the base copy that renders
   # it) and at worst counts a newly floor-core path among the other paths,
@@ -247,18 +248,51 @@ jobs:
           SUMMARY="${RUNNER_TEMP}/floor-signoff-summary.md"
           # Render with the BASE copy of the script: the head copy is floor
           # core this pull request may itself change, and the approver should
-          # not read an account of a change written by that change. The head
-          # copy runs only when the base predates the subcommand.
+          # not read an account of a change written by that change. Nor does
+          # this job ever run the head copy: code run here could write
+          # GITHUB_ENV or GITHUB_PATH and so reach the next step, which holds
+          # the write token. When the base predates the subcommand, a fixed
+          # notice stands in for the explanation.
           RENDERER="${RUNNER_TEMP}/floor_check_base.py"
           if git show "${BASE_SHA}:scripts/floor_check.py" > "${RENDERER}" 2> /dev/null \
               && python "${RENDERER}" signoff-summary --help > /dev/null 2>&1; then
             echo "Rendering with scripts/floor_check.py at the base ${BASE_SHA}."
+            python "${RENDERER}" signoff-summary \
+              --base "${BASE_SHA}" --head-commit "${HEAD_COMMIT}" > "${SUMMARY}"
           else
-            RENDERER="scripts/floor_check.py"
-            echo "::warning::The base ${BASE_SHA} has no signoff-summary subcommand, so the pull request's own scripts/floor_check.py renders the explanation."
+            echo "::warning::The base ${BASE_SHA} has no signoff-summary subcommand, so a fixed notice replaces the explanation."
+            {
+              echo "## Floor sign-off requested"
+              echo ""
+              echo "This pull request changes the floor's own enforcement, so it waits on the maintainer's deployment review of the \`floor-signoff\` environment."
+              echo ""
+              echo "**Why:** FLOOR.md clause iii. Changes to the floor require the maintainer's out-of-band sign-off."
+              echo ""
+              echo "**Head commit the approval covers:** \`${HEAD_COMMIT}\`"
+              echo ""
+              echo "**No explanation was rendered.** The base \`${BASE_SHA}\` predates the sign-off renderer, and this job does not run the pull request's own copy of it. The paths below are every path the pull request changes, as git reports them, not classified: read the full diff before approving."
+              echo ""
+              # A path is pull-request text: a plain one goes in a code span,
+              # any other has every ASCII punctuation character escaped.
+              git diff --numstat --no-renames "${BASE_SHA}" HEAD \
+                | while IFS="$(printf '\t')" read -r ADDED REMOVED CHANGED_PATH; do
+                    if printf '%s' "${CHANGED_PATH}" | grep -Eq '^[A-Za-z0-9_.+/@-]+$'; then
+                      SHOWN="\`${CHANGED_PATH}\`"
+                    else
+                      SHOWN="$(printf '%s' "${CHANGED_PATH}" | sed 's/[][!"#$%&'"'"'()*+,./:;<=>?@\\^_`{|}~-]/\\&/g')"
+                    fi
+                    if [ "${ADDED}" = "-" ]; then
+                      echo "- ${SHOWN} binary change"
+                    else
+                      echo "- ${SHOWN} +${ADDED} -${REMOVED}"
+                    fi
+                  done
+              echo ""
+              echo "**Approving** asserts that these changes to the floor's own enforcement are intended."
+              echo ""
+              echo "**Rejecting** turns the required \`floor enforcement\` check red, so the pull request cannot merge."
+            } > "${SUMMARY}"
           fi
-          python "${RENDERER}" signoff-summary \
-            --base "${BASE_SHA}" --head-commit "${HEAD_COMMIT}" > "${SUMMARY}"
           cat "${SUMMARY}"
           cat "${SUMMARY}" >> "$GITHUB_STEP_SUMMARY"
 
