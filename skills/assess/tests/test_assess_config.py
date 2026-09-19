@@ -109,3 +109,21 @@ def test_working_notes_config_degrades_silently(tmp_path: Path) -> None:
     assert load_working_notes_config(tmp_path) == ([], ["a/b"])
     _config(tmp_path, "working_notes_dirs = [\n")  # malformed TOML
     assert load_working_notes_config(tmp_path) == ([], [])
+
+
+def test_working_notes_ignore_never_qualifies_a_parent(tmp_path: Path) -> None:
+    # 25 plans + backlog beside 10 varied curated pages in notes/misc: notes/
+    # fails the name-density leg. Ignoring notes/misc must not tip it over.
+    for i in range(1, 26):
+        _write(tmp_path, f"notes/plan_{i:02d}.md", f"# plan {i:02d}\n")
+    _write(tmp_path, "notes/backlog.md", "".join(
+        f"- [plan {i:02d}](plan_{i:02d}.md)\n" for i in range(1, 26)
+    ))
+    for w in "alpha bravo charlie delta echo foxtrot golf hotel india juliet".split():
+        _write(tmp_path, f"notes/misc/{w}.md", f"# {w}\n")
+    assert _graph(tmp_path)["excluded_working_notes_trees"] == []
+
+    _config(tmp_path, 'working_notes_ignore = ["notes/misc"]\n')
+    d = _graph(tmp_path)
+    assert d["excluded_working_notes_trees"] == []
+    assert d["doc_count"] == 36

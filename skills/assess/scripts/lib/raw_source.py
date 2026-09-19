@@ -273,6 +273,8 @@ def classify_working_notes_trees(
     repo-relative directories: every doc under a ``force`` directory joins a
     tree at that path whatever its size or fingerprint, and no doc under an
     ``ignore`` directory joins any tree, so ``ignore`` wins where they overlap.
+    Ignored docs are removed from the fingerprint's trees, not from its input,
+    so ignoring a directory never qualifies its parent.
     A forced directory holding no doc is not reported.
 
     Returns ``{"path", "file_count", "docs"}`` per outermost tree, sorted by
@@ -280,15 +282,17 @@ def classify_working_notes_trees(
     ``notes/backlog.md`` over ``notes/2025/`` and ``notes/2026/`` is one tree;
     ``docs/guide.md`` beside ``docs/notes/`` leaves ``docs/notes`` alone.
     """
-    signals = {
-        r: s for r, s in doc_signals.items()
-        if not any(_is_ancestor_path(d, r) for d in ignore)
+    # Ignore only ever subtracts: the fingerprint runs on every doc, so removing
+    # ignored docs can never tip a parent directory over a threshold.
+    kept_docs = {
+        r for r in doc_signals if not any(_is_ancestor_path(d, r) for d in ignore)
     }
-    trees = {d: set(docs) for d, docs in _fingerprint_trees(signals).items()}
+    trees = {
+        d: set(docs) & kept_docs for d, docs in _fingerprint_trees(doc_signals).items()
+    }
     for d in force:
-        forced = {r for r in signals if _is_ancestor_path(d, r)}
-        if forced:
-            trees[d] = trees.get(d, set()) | forced
+        trees[d] = trees.get(d, set()) | {r for r in kept_docs if _is_ancestor_path(d, r)}
+    trees = {d: docs for d, docs in trees.items() if docs}
     kept = [d for d in trees if not any(o != d and _is_ancestor_path(o, d) for o in trees)]
     out = []
     for d in sorted(kept):
