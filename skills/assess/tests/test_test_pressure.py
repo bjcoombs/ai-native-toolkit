@@ -788,6 +788,7 @@ def test_mutmut_major_unknown_degrades_to_none(tmp_path: Path, monkeypatch) -> N
 def test_mutmut3_config_scopes_to_top_level_dirs_and_files() -> None:
     cfg = mutation._mutmut3_config(["src/pkg/a.py", "src/pkg/b.py", "app.py"])
     assert cfg == ("[mutmut]\nsource_paths=\n    src\n    app.py\n"
+                   "paths_to_mutate=\n    src\n    app.py\n"
                    "only_mutate=\n    src/pkg/a.py\n    src/pkg/b.py\n    app.py\n")
 
 
@@ -824,7 +825,8 @@ def test_run_bounded_mutation_mutmut3_runs_in_scratch_copy(
     assert compute_survivor_density(r["per_file"])["overall"] == 2 / 3
     assert seen["cwd"] != tmp_path and seen["copied"]
     assert seen["setup_cfg"].startswith("[metadata]\nname = demo\n")
-    assert "source_paths=\n    pkg\nonly_mutate=\n    pkg/calc.py\n" in seen["setup_cfg"]
+    assert ("source_paths=\n    pkg\npaths_to_mutate=\n    pkg\n"
+            "only_mutate=\n    pkg/calc.py\n") in seen["setup_cfg"]
     assert not seen["cwd"].exists()
     after = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*"))
     assert after == before
@@ -892,3 +894,38 @@ def test_run_bounded_mutation_mutmut2_keeps_the_legacy_path(
     assert set(cwds) == {str(tmp_path)}
     assert r["reason"] == ("no mutant records recovered from mutmut output "
                            "(exit code 2): Error: boom")
+
+
+def test_run_bounded_mutation_mutmut3_drops_out_of_scope_files(
+        tmp_path: Path, monkeypatch) -> None:
+    """mutmut 3.0-3.5 ignores ``only_mutate`` and mutates every file under
+    ``paths_to_mutate``; results for files outside the scope are dropped."""
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _write(tmp_path, "pkg/other.py", "def twice(a):\n    return a * 2\n")
+    _as_mutmut3(monkeypatch)
+    inner = _fake_mutmut3({"exit_code_by_key": {"a": 1, "b": 0}}, {})
+
+    def fake_run(cmd, **kwargs):
+        if cmd == ["mutmut", "run"]:
+            _write(Path(kwargs["cwd"]), "mutants/pkg/other.py.meta",
+                   json.dumps({"exit_code_by_key": {"x": 33, "y": 33}}))
+        return inner(cmd, **kwargs)
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    assert r["per_file"] == [
+        {"file": "pkg/calc.py", "killed": 1, "survived": 1, "total": 2}]
+
+
+def test_launcher_interpreter_reads_the_long_path_trampoline(tmp_path: Path) -> None:
+    """pip and uv write an sh trampoline when the interpreter path exceeds the
+    shebang limit; a launcher naming no interpreter falls back to the python
+    beside it."""
+    trampoline = "#!/bin/sh\n'''exec' '/very/long/env/bin/python' \"$0\" \"$@\"\n' '''"
+    exe = _launcher(tmp_path / "a", trampoline)
+    assert mutation._launcher_interpreter(exe) == "/very/long/env/bin/python"
+    plain = _launcher(tmp_path / "b", "#!/bin/sh")
+    assert mutation._launcher_interpreter(plain) is None
+    sibling = Path(plain).parent / "python"
+    sibling.write_text("", encoding="utf-8")
+    assert mutation._launcher_interpreter(plain) == str(sibling.resolve())

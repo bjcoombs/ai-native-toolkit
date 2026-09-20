@@ -314,24 +314,42 @@ _COPY_IGNORE = shutil.ignore_patterns(
     "__pycache__", ".mutmut-cache", ".tox", ".pytest_cache")
 
 
+# The second line of the sh trampoline pip and uv write when the interpreter
+# path is too long for a shebang:  '''exec' '/path/to/python' "$0" "$@"
+_TRAMPOLINE_EXEC_RE = re.compile(r"^\s*'''exec' '([^']+)'")
+
+
+def _launcher_interpreter(exe: str) -> str | None:
+    """The Python interpreter a console-script launcher runs under: named by
+    the shebang, else by the sh trampoline's exec line, else the ``python``
+    beside the resolved launcher (a uv tool or pipx launcher is a symlink into
+    its environment's ``bin``)."""
+    try:
+        with open(exe, "rb") as fh:
+            head = fh.read(2048).decode("utf-8", "replace").splitlines()[:2]
+    except OSError:
+        return None
+    candidates: list[str] = []
+    if head and head[0].startswith("#!"):
+        candidates.append(head[0][2:].strip().split(" ")[0])
+    m = _TRAMPOLINE_EXEC_RE.match(head[1]) if len(head) > 1 else None
+    if m:
+        candidates.append(m.group(1))
+    for c in candidates:
+        if "python" in Path(c).name:
+            return c
+    sibling = Path(exe).resolve().parent / "python"
+    return str(sibling) if sibling.is_file() else None
+
+
 def _mutmut_major(exe: str | None) -> int | None:
     """Major version of the ``mutmut`` on PATH, or None when it cannot be told.
 
     ``mutmut --version`` is no use: mutmut 3 loads its configuration at import
     and aborts before parsing arguments in a directory it cannot guess source
-    paths for. The launcher script's shebang names the interpreter mutmut is
-    installed under, so ask that interpreter's package metadata instead."""
-    if not exe:
-        return None
-    try:
-        with open(exe, "rb") as fh:
-            first = fh.readline(512).decode("utf-8", "replace").strip()
-    except OSError:
-        return None
-    if not first.startswith("#!"):
-        return None
-    interpreter = first[2:].strip().split(" ")[0]
-    if "python" not in Path(interpreter).name:
+    paths for. Ask the package metadata of the interpreter it runs under."""
+    interpreter = _launcher_interpreter(exe) if exe else None
+    if not interpreter:
         return None
     try:
         proc = subprocess.run(
@@ -349,15 +367,20 @@ def _mutmut3_config(scope: list[str]) -> str:
 
     ``source_paths`` is the top-level directory of each file (mutmut copies it
     whole into ``mutants/`` so sibling imports still resolve); ``only_mutate``
-    narrows mutation to the files themselves."""
+    narrows mutation to the files themselves. mutmut 3.0-3.5 knows neither key:
+    it reads ``paths_to_mutate`` (deprecated in 3.6, where ``source_paths``
+    wins) and mutates every file under it, so the section carries both and
+    ``_run_mutmut3`` drops out-of-scope files from the results."""
     roots: list[str] = []
     for f in scope:
         parts = Path(f).parts
         root = parts[0] if len(parts) > 1 else f
         if root not in roots:
             roots.append(root)
-    lines = ["[mutmut]", "source_paths="]
-    lines += [f"    {r}" for r in roots]
+    lines = ["[mutmut]"]
+    for key in ("source_paths=", "paths_to_mutate="):
+        lines.append(key)
+        lines += [f"    {r}" for r in roots]
     lines.append("only_mutate=")
     lines += [f"    {Path(f).as_posix()}" for f in scope]
     return "\n".join(lines) + "\n"
@@ -450,6 +473,9 @@ def _run_mutmut3(repo_root: Path, scope: list[str], has_config: bool) -> dict:
             return {**base, "mutation_run": False, "per_file": [],
                     "reason": str(e)}
         per_file = _parse_mutmut3_meta(work / "mutants")
+    if scope and not has_config:
+        wanted = {Path(f).as_posix() for f in scope}
+        per_file = [p for p in per_file if p["file"] in wanted]
     if not per_file:
         return {**base, "mutation_run": False, "per_file": [],
                 "reason": _no_records_reason("mutmut", proc)}

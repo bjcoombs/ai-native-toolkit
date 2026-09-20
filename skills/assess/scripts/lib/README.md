@@ -885,7 +885,9 @@ Layer 1 write-side truth pressure. Two tiers:
   `pyproject.toml`, so `_run_mutmut3` copies the working tree to a scratch directory,
   appends a generated `[mutmut]` section (`source_paths` = the focus files' top-level
   directories, `only_mutate` = the focus files) unless the repo already configures
-  mutmut, runs there, and reads per-file totals from `mutants/**/*.meta`. The assessed
+  mutmut, runs there, and reads per-file totals from `mutants/**/*.meta`. mutmut 3.0-3.5
+  reads `paths_to_mutate` and has no `only_mutate`, so the section carries both path keys
+  and results for files outside the focus set are dropped. The assessed
   tree is never written to. An unknown version takes the mutmut 2 path. Whichever path
   runs, a tool that exits non-zero without yielding mutants puts the last line of its
   error output in the result's `reason` (surfaced as `mutation_note`). mutmut runs pytest
