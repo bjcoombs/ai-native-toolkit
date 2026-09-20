@@ -121,7 +121,7 @@ Text addressed to a user rather than a reader: "I hope this helps!", "Certainly!
 
 ### 12. Markup leaking from the chat window
 
-`**bold**`, `## headers`, or `* bullets` appearing in a context that doesn't use Markdown (wikitext, plain email, a CMS field); a `#` heading on every section; a `---` rule between every section. Worse, and unambiguous: the chatbot's internal citation markers pasted along with the text - ChatGPT `contentReference`, `oaicite`, `turn0search0`; Gemini `[cite: 1]`; Grok `grok_card`; DeepSeek `【85†L261-269】`; Perplexity `[attached_file:1]` and `[web:1]`.
+Markdown appearing in a target that doesn't render it (wikitext, plain email, a CMS field): `**bold**`, `## headers`, `* bullets`, a `#` heading on every section, a `---` rule between every section. None of these is a tell in a document that is meant to be Markdown - leave correct markup alone. Worse, and unambiguous: the chatbot's internal citation markers pasted along with the text - ChatGPT `contentReference`, `oaicite`, `turn0search0`; Gemini `[cite: 1]`; Grok `grok_card`; DeepSeek `【85†L261-269】`; Perplexity `[attached_file:1]` and `[web:1]`.
 
 **Fix:** Convert to the target format's actual markup, or remove. Delete vendor markers outright, then check the claim they were attached to - the marker stood where a source should be.
 

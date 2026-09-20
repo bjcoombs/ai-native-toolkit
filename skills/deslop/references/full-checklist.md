@@ -135,7 +135,7 @@ Read the list literally: overuse of a word does not extend to its synonyms, and 
 
 ## E. Markup tells
 
-**E1. Markdown bleeding into a non-Markdown target.** `**bold**`, `## headings`, `- bullets`, and bracket-then-parenthesis links pasted into wikitext, plain-text email, or a CMS that doesn't render it. Two structural forms of the same leak: a top-level `#` heading on every section, and a `---` thematic break between every section. **Fix:** convert to the target's real markup or remove.
+**E1. Markdown bleeding into a non-Markdown target.** `**bold**`, `## headings`, `- bullets`, and bracket-then-parenthesis links pasted into wikitext, plain-text email, or a CMS that doesn't render it. Two structural forms of the same leak: a top-level `#` heading on every section, and a `---` thematic break between every section. All of E1 applies only where the target does not render Markdown; in a Markdown document this is correct markup and stays. **Fix:** convert to the target's real markup or remove.
 
 **E2. Broken / placeholder markup.** Malformed links, leftover `[[ ]]` or `{{ }}` fragments, `[insert citation]`, `[Source]`, `[Year]` placeholders. **Fix:** complete or remove.
 
@@ -171,7 +171,7 @@ The source records constructions that are *more* common in human-written text th
 
 - Simple is/has phrases: "there is a," "it has a."
 - Plain verbs over stiff or euphemistic ones: *wrote* (not authored), *moved* (not relocated), *used* (not utilized), *tried* (not attempted), *died* (not passed away).
-- Superlative or definite statements: "one of the best," "is the only," "was the first." If the claim can't be verified, leave it as written and list it for the author to confirm; don't soften it.
+- Superlative or definite statements: "one of the best," "is the only," "was the first." A definite factual claim ("is the only," "was the first") that can't be verified stays as written and goes on the list for the author to confirm; don't soften it. An evaluative one with no source behind it ("one of the best restaurants in the region") is A1/A13 puffery and is handled there - the source's point is that humans make such statements more freely, not that they are exempt.
 - Qualifiers and intensifiers: *very, perhaps, tends to.*
 - Isolated wordy constructions: "as a result of," "in order to," "all of the," "the fact that."
 
