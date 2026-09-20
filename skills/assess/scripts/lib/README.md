@@ -325,8 +325,11 @@ core-provided input from `PROVIDED_INPUTS`, or the key of an earlier spec), the
 routes every degrading spec through `safe`, which turns any exception into
 `{"available": False, "reason": ...}` so one broken scan never stops the run; a spec
 opts out only with a `gate_reason`. `validate` runs at import and raises
-`ScanRegistryError` on a duplicate key, an unknown stage, or a read that nothing
-provides, so a mis-declared scan fails before any run. `stage` exists to keep
+`ScanRegistryError` on a duplicate key, an unknown stage, a read that nothing
+provides, or a read of a key produced at a later stage, so a mis-declared scan fails
+before any run. `run_scans` resolves reads outside the wrapper: an input the core did
+not pass raises `ScanRegistryError` and stops the run, where a failure inside the scan
+degrades. `stage` exists to keep
 `run-context.json` key order unchanged while scans migrate here; it goes when the
 hand-wired assignments between the stages are gone. Currently registered:
 `agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,

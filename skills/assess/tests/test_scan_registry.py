@@ -50,6 +50,23 @@ def test_a_scan_may_read_an_earlier_scans_key_but_not_a_later_one():
     assert ctx == {"a": 1, "b": 2}
 
 
+def test_read_of_a_key_produced_at_a_later_stage_is_rejected():
+    late = _spec("late", lambda root: 1, stage=reg.STAGE_POST_OFFERS)
+    early_reader = _spec("reader", lambda v: v, reads=("late",))
+    with pytest.raises(ScanRegistryError, match="later stage"):
+        reg.validate((late, early_reader))
+
+    same_stage_reader = _spec("reader", lambda v: v, reads=("late",), stage=reg.STAGE_POST_OFFERS)
+    reg.validate((late, same_stage_reader))
+
+
+def test_an_input_the_core_did_not_pass_stops_the_run_instead_of_degrading():
+    ctx: dict = {}
+    with pytest.raises(ScanRegistryError, match=r"'a'.*'repo_root'"):
+        reg.run_scans(ctx, {}, reg.STAGE_READ_SIDE, (_spec("a", lambda root: 1),))
+    assert ctx == {}
+
+
 def test_duplicate_key_and_shadowed_input_are_rejected():
     a = _spec("a", lambda root: 1)
     with pytest.raises(ScanRegistryError, match="declared twice"):

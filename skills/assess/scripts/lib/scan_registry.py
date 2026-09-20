@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from functools import partial
 from typing import Any
 
 from lib.agent_ops import scan_agent_ops
@@ -74,22 +75,44 @@ def safe(label: str, fn: Callable[[], Any]) -> Any:
 
 
 def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUTS) -> None:
-    """Raise ``ScanRegistryError`` unless every spec can run in table order."""
-    known = set(provided)
+    """Raise ``ScanRegistryError`` unless every spec can run in table order.
+
+    Stages run in ``STAGES`` order, so a read must name a provided input or a key
+    whose producer is declared earlier *and* runs at the same or an earlier stage.
+    """
+    produced_at: dict[str, int] = {name: -1 for name in provided}
     for spec in specs:
-        if spec.key in known:
+        if spec.key in produced_at:
             raise ScanRegistryError(f"scan key {spec.key!r} is declared twice or shadows a provided input")
         if spec.stage not in STAGES:
             raise ScanRegistryError(f"scan {spec.key!r} names unknown stage {spec.stage!r}")
-        missing = [name for name in spec.reads if name not in known]
+        stage_index = STAGES.index(spec.stage)
+        missing = [name for name in spec.reads if name not in produced_at]
         if missing:
             raise ScanRegistryError(
                 f"scan {spec.key!r} reads {missing}, which no earlier scan produces "
                 f"and the core does not provide"
             )
+        late = [name for name in spec.reads if produced_at[name] > stage_index]
+        if late:
+            raise ScanRegistryError(
+                f"scan {spec.key!r} runs at stage {spec.stage!r} but reads {late}, "
+                f"produced at a later stage"
+            )
         if not spec.degrade and not spec.gate_reason:
             raise ScanRegistryError(f"scan {spec.key!r} opts out of degrading without a gate_reason")
-        known.add(spec.key)
+        produced_at[spec.key] = stage_index
+
+
+def _resolve(spec: ScanSpec, name: str, inputs: Mapping[str, Any], ctx: Mapping[str, Any]) -> Any:
+    if name in inputs:
+        return inputs[name]
+    if name in ctx:
+        return ctx[name]
+    raise ScanRegistryError(
+        f"scan {spec.key!r} reads {name!r}, which is neither in the inputs the core "
+        f"passed nor in the run context yet"
+    )
 
 
 def run_scans(
@@ -100,16 +123,19 @@ def run_scans(
 ) -> None:
     """Run every spec of ``stage`` in table order, assigning ``ctx[spec.key]``.
 
-    A read resolves against ``inputs`` first, then against ``ctx``.
+    A read resolves against ``inputs`` first, then against ``ctx``. Reads are
+    resolved outside the degrade wrapper: an unresolvable read is a wiring error
+    in the table or the core, so it raises ``ScanRegistryError`` and stops the
+    run, where a failure inside the scan itself degrades.
     """
     for spec in SCANS if specs is None else specs:
         if spec.stage != stage:
             continue
-
-        def call(spec: ScanSpec = spec) -> Any:
-            return spec.fn(*[inputs[n] if n in inputs else ctx[n] for n in spec.reads])
-
-        ctx[spec.key] = safe(spec.key, call) if spec.degrade else call()
+        args = tuple(_resolve(spec, name, inputs, ctx) for name in spec.reads)
+        if spec.degrade:
+            ctx[spec.key] = safe(spec.key, partial(spec.fn, *args))
+        else:
+            ctx[spec.key] = spec.fn(*args)
 
 
 SCANS: tuple[ScanSpec, ...] = (
