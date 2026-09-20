@@ -306,16 +306,22 @@ def _action_text_key(entry: dict) -> str | None:
     return "\x00".join(["action", text]) if isinstance(text, str) and text else None
 
 
-def _read_prior_action_status(assess_dir: Path) -> dict[str, dict]:
+def _read_prior_action_status(assess_dir: Path) -> dict[str, list[dict]]:
     """Prior actions indexed for status carry-forward, by identity and by text.
 
     Each prior entry is registered under every key it can be found by: its
-    deterministic identity (finding plus paths) when it has one, and always its
-    ``action`` text. Registering both is what lets a contract written before
-    identity keys existed - it carries no finding at all - still match on text
-    on the first run after the upgrade, while a contract that does carry the
-    deterministic fields matches on those even when the text was reworded. The
-    two key spaces are prefixed, so a text can never collide with an identity.
+    identity (finding plus paths) when it has one, and always its ``action``
+    text. Registering both is what lets a contract written before identity keys
+    existed - it carries no finding at all - still match on text on the first
+    run after the upgrade, while a contract that does carry those fields matches
+    on them even when the text was reworded. The two key spaces are prefixed, so
+    a text can never collide with an identity.
+
+    A key maps to a **list**, in the order the entries appear (the contract is
+    written sorted by rank). Text keys genuinely collide: the core renders one
+    canned directive per finding type, so two prior actions on different files
+    routinely carry byte-identical text, and keeping only one of them would hide
+    the other from carry-forward and leave which one survives to file order.
 
     Reads v1 and v2 contracts alike - a v1 entry simply carries no lifecycle
     fields, so a re-run over a v1 actions.json initialises every action to
@@ -329,17 +335,17 @@ def _read_prior_action_status(assess_dir: Path) -> dict[str, dict]:
         prior = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return {}
-    out: dict[str, dict] = {}
+    out: dict[str, list[dict]] = {}
     for a in prior.get("actions", []) if isinstance(prior, dict) else []:
         if not isinstance(a, dict):
             continue
         for key in (_action_identity_key(a), _action_text_key(a)):
             if key is not None:
-                out[key] = a
+                out.setdefault(key, []).append(a)
     return out
 
 
-def _match_prior_action(prior: dict[str, dict], action: dict) -> dict:
+def _match_prior_action(prior: dict[str, list[dict]], action: dict) -> dict:
     """The prior entry for this action: identity first, then the text fallback.
 
     Identity wins because it survives a rewording. Text is tried second because
@@ -367,18 +373,28 @@ def _match_prior_action(prior: dict[str, dict], action: dict) -> dict:
     naming no file at all is not evidence of different work - it is the shape a
     pre-change contract and a judgement slot both have - so the text match
     stands whenever either side has nothing to compare.
+
+    Where several prior entries share a directive, the one sharing a file wins
+    outright; an entry with nothing to compare is taken only if no candidate
+    shares a file, and the earliest such entry is taken, so the result follows
+    the contract's rank order rather than its file order.
     """
     identity = _action_identity_key(action)
-    if identity is not None and identity in prior:
-        return prior[identity]
+    if identity is not None and prior.get(identity):
+        return prior[identity][0]
     text = _action_text_key(action)
-    if text is None or text not in prior:
+    if text is None:
         return {}
-    candidate = prior[text]
-    new_paths, prior_paths = _action_paths(action), _action_paths(candidate)
-    if new_paths and prior_paths and new_paths.isdisjoint(prior_paths):
-        return {}
-    return candidate
+    new_paths = _action_paths(action)
+    nothing_to_compare: dict = {}
+    for candidate in prior.get(text, []):
+        prior_paths = _action_paths(candidate)
+        if new_paths and prior_paths:
+            if not new_paths.isdisjoint(prior_paths):
+                return candidate
+        elif not nothing_to_compare:
+            nothing_to_compare = candidate
+    return nothing_to_compare
 
 
 def _carry_status_fields(prior_entry: dict) -> dict:

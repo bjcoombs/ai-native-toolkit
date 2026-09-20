@@ -1318,3 +1318,37 @@ def test_action_identity_keeps_status_when_the_path_set_grows(
 
     assert after["status"] == "done"
     assert after["completed_sha"] == "sha1"
+
+
+def test_action_identity_picks_the_overlapping_one_of_two_colliding_priors(
+    tmp_assess_dir: Path,
+) -> None:
+    """Two prior actions can carry byte-identical directives, since the core
+    renders one canned phrase per finding type. Both stay reachable, and the
+    text fallback takes the one sharing a file rather than whichever was
+    written last."""
+    canned = "investigate the seam"
+    _run_finalize(
+        tmp_assess_dir,
+        [
+            _identity_action(
+                1, text=canned, finding="hidden_coupling", files=["src/a.py"]
+            ),
+            _identity_action(
+                2, text=canned, finding="hidden_coupling", files=["src/b.py"]
+            ),
+        ],
+    )
+    _mark_done(tmp_assess_dir)
+
+    # The rank-1 entry is the earlier of the two under the shared text key, so
+    # a last-wins index would only ever reach rank 2's sha2.
+    after = _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text=canned, finding=None, files=["src/a.py", "src/z.py"]
+        )],
+    )[1]
+
+    assert after["status"] == "done"
+    assert after["completed_sha"] == "sha1"
