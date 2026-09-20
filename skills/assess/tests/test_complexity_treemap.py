@@ -1523,8 +1523,10 @@ def test_largest_first_tie_break_by_path_survives_input_order(
     """
     rows = [_scc_row(tmp_path, f"b{i}.json", 200) for i in range(1, 13)]
     tokens = {f[0]: 2000 for f in rows}
-    size_of = (lambda f: tokens.get(f[0], f[1]))
     expected = ["b1.json", "b10.json", "b11.json", "b12.json", "b2.json"]
+
+    def size_of(f):
+        return tokens.get(f[0], f[1])
 
     as_built = treemap._largest_first(rows, size_of, 5)
     reversed_in = treemap._largest_first(list(reversed(rows)), size_of, 5)
