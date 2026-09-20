@@ -78,6 +78,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -517,7 +518,12 @@ def _warn_if_dominated_by_one_file(
     total_loc = sum(f[1] for f in files)
     if total_loc == 0:
         return
-    biggest = max(files, key=lambda f: f[1])
+    # `max` returns the first maximal element, so two files of equal LOC made
+    # the named suspect depend on scanner emission order. The threshold is 30%,
+    # so a tie at the top is reachable - two generated files of the same size
+    # can each hold a third of the LOC. Ties break on the path, ascending, the
+    # same shape the top-10 lists use (issue #426).
+    biggest = min(files, key=lambda f: (-f[1], f[0].as_posix()))
     share = biggest[1] / total_loc
     if share < DOMINANCE_WARN_THRESHOLD:
         return
@@ -533,6 +539,26 @@ def _warn_if_dominated_by_one_file(
 
 
 SCC_ONLY_HINT_TOP_N = 5  # the largest blocks a reader sees first
+
+
+def _largest_first(
+    files: list[tuple[Path, int, float, str]],
+    size_of: Callable[[tuple[Path, int, float, str]], float],
+    n: int,
+) -> list[tuple[Path, int, float, str]]:
+    """The ``n`` largest files by ``size_of``, ties broken on the path.
+
+    Both callers pick "the biggest few" off the same file list and differ only
+    in what they do when a path carries no token estimate, so ``size_of`` is
+    passed in rather than branched on here. Ties break on the path, ascending,
+    under the plain byte ordering the top-10 lists use: without it the set
+    followed scanner emission order, so a tied boundary could show a different
+    few on two runs of the same commit - silencing the scc-only hint on one run
+    and not the next, and changing the biggest-files summary an agent reads
+    (issue #426). Every path shares the scan root, so ordering on the absolute
+    posix path is the same order as on the repository-relative one.
+    """
+    return sorted(files, key=lambda f: (-size_of(f), f[0].as_posix()))[:n]
 
 
 def _hint_if_largest_files_scc_only(
@@ -553,7 +579,8 @@ def _hint_if_largest_files_scc_only(
     """
     if len(files) < n:
         return
-    largest = sorted(files, key=lambda f: -tokens.get(f[0], f[1]))[:n]
+    # Falls back to the file's loc when a path carries no token estimate.
+    largest = _largest_first(files, lambda f: tokens.get(f[0], f[1]), n)
     if any(f[3] != "scc" or f[2] > 0
            or languages.get(f[0]) not in DATA_LANGUAGES for f in largest):
         return
@@ -679,7 +706,8 @@ def render(files: list[tuple[Path, int, float, str]],
         print(f"saturation: {aux_label}; range 0-{aux_max:.0f}; "
               f"cap {aux_cap:.0f} ({aux_cap_kind})")
 
-    biggest = sorted(files, key=lambda f: -tokens.get(f[0], 0))[:5]
+    # Counts a path with no token estimate as 0, unlike the scc-only hint.
+    biggest = _largest_first(files, lambda f: tokens.get(f[0], 0), 5)
     if biggest:
         print("biggest files (estimated tokens dominate layout):")
         for path, loc, metric, src in biggest:
@@ -973,6 +1001,17 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     backend scored one of its files or scc counted a decision point in one;
     data and markup (JSON, YAML, Markdown), where scc counts none, get no key,
     but CSS maps to null because scc counts decision points in it.
+
+    ``top_hotspots``, ``top_complex`` and ``top_large`` each rank on their own
+    key (composite score, aggregate ccn, loc) and break ties on the
+    repository-relative path, ascending. Files tie often - many share a
+    complexity or a line count - and without the tie-break the ten that make a
+    list depend on the order lizard and scc emitted them in, so a tied file can
+    swap in and out between runs on the same commit (issue #426). The
+    tie-break adds and removes no key, so it does not move
+    ``STATS_SCHEMA_VERSION``: a bump would make ``_diff_is_reliable`` reject
+    every stored snapshot and discard each repository's cross-run diff for a
+    run, which a pure ordering change has not earned.
     """
     fn_ccn_by_path = fn_ccn_by_path or {}
     fn_names = fn_name_by_path or {}
@@ -1070,9 +1109,17 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     def strip(rows: list[dict]) -> list[dict]:
         return [{k: v for k, v in r.items() if k != "_score"} for r in rows]
 
-    by_score = sorted(enriched, key=lambda f: -f["_score"])
-    by_ccn = sorted(enriched, key=lambda f: -f["ccn"])
-    by_loc = sorted(enriched, key=lambda f: -f["loc"])
+    # Ties break on the repository-relative path, ascending, under Python's
+    # default byte ordering for `str`. Without it a stable single-key sort
+    # hands ties back in scanner emission order, so which of a tied group
+    # makes the top ten depends on how lizard and scc happened to enumerate
+    # the tree - and membership of `top_hotspots` decides which files get a
+    # wiki page and a first-flagged date (issue #426). The primary keys are
+    # unchanged, so no file moves when the values differ; this is the same
+    # `(-primary, path)` shape the attention list took in #357.
+    by_score = sorted(enriched, key=lambda f: (-f["_score"], f["path"]))
+    by_ccn = sorted(enriched, key=lambda f: (-f["ccn"], f["path"]))
+    by_loc = sorted(enriched, key=lambda f: (-f["loc"], f["path"]))
 
     tool_versions = _tool_versions(files)
     stats: dict = {
