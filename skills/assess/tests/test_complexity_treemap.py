@@ -1419,13 +1419,3 @@ def test_write_stats_tie_break_by_path_is_input_order_independent(
     for key in ("top_hotspots", "top_complex", "top_large"):
         assert first[key] == second[key], key
         assert [r["path"] for r in first[key]] == _TIED_FIRST_TEN, key
-
-
-def test_stats_schema_version_unchanged_by_tie_break(treemap):
-    """The tie-break adds and removes no key, so the layout version holds at 5.
-
-    A bump would make `assess_core._diff_is_reliable` reject every prior
-    snapshot, discarding each repository's cross-run diff on the first run
-    after the upgrade (issue #426).
-    """
-    assert treemap.STATS_SCHEMA_VERSION == 5

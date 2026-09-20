@@ -979,7 +979,11 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     repository-relative path, ascending. Files tie often - many share a
     complexity or a line count - and without the tie-break the ten that make a
     list depend on the order lizard and scc emitted them in, so a tied file can
-    swap in and out between runs on the same commit (issue #426).
+    swap in and out between runs on the same commit (issue #426). The
+    tie-break adds and removes no key, so it does not move
+    ``STATS_SCHEMA_VERSION``: a bump would make ``_diff_is_reliable`` reject
+    every stored snapshot and discard each repository's cross-run diff for a
+    run, which a pure ordering change has not earned.
     """
     fn_ccn_by_path = fn_ccn_by_path or {}
     fn_names = fn_name_by_path or {}
