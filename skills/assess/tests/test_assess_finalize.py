@@ -1221,3 +1221,71 @@ def test_action_identity_ignores_a_duplicated_path(tmp_assess_dir: Path) -> None
 
     assert after["status"] == "done"
     assert after["completed_sha"] == "sha1"
+
+
+def test_action_identity_refuses_a_text_match_when_the_new_entry_has_no_finding(
+    tmp_assess_dir: Path,
+) -> None:
+    """`finding` is recommended, not required. An incoming entry that names
+    files but no finding has no identity key, so it reaches the text fallback -
+    and must still not inherit a prior entry about a different file."""
+    canned = "investigate the seam"
+    _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text=canned, finding="hidden_coupling", files=["src/b.py"]
+        )],
+    )
+    _mark_done(tmp_assess_dir)
+
+    after = _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(1, text=canned, finding=None, files=["src/c.py"])],
+    )[1]
+
+    assert after["status"] == "pending"
+    assert after["completed_sha"] is None
+
+
+def test_action_identity_refuses_a_text_match_when_the_prior_has_no_finding(
+    tmp_assess_dir: Path,
+) -> None:
+    """The upgrade path: a pre-change prior can name files while carrying no
+    finding, so it has no identity either. Its paths still decide - a different
+    file does not inherit it, the same file does."""
+    canned = "investigate the seam"
+    prior = {
+        "schema": 2,
+        "run_id": "run-old",
+        "actions": [{
+            "rank": 1,
+            "action": canned,
+            "done_when": "x",
+            "scope_fence": "y",
+            "files": ["src/b.py"],
+            "mode": "characterize_first",
+            "status": "done",
+            "claimed_by": "agent-b",
+            "completed_sha": "beef03",
+        }],
+    }
+    (tmp_assess_dir / "actions.json").write_text(json.dumps(prior), encoding="utf-8")
+
+    other = _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text=canned, finding="hidden_coupling", files=["src/c.py"]
+        )],
+    )[1]
+    assert other["status"] == "pending"
+    assert other["completed_sha"] is None
+
+    (tmp_assess_dir / "actions.json").write_text(json.dumps(prior), encoding="utf-8")
+    same = _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text=canned, finding="hidden_coupling", files=["src/b.py"]
+        )],
+    )[1]
+    assert same["status"] == "done"
+    assert same["completed_sha"] == "beef03"

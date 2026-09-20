@@ -253,6 +253,28 @@ ACTION_STATUS_VALUES = frozenset({"pending", "claimed", "done", "reopened"})
 _ACTION_CARRY_FIELDS = ("status", "claimed_by", "completed_sha")
 
 
+def _action_paths(entry: dict) -> frozenset[str]:
+    """The files an action names, as a set.
+
+    The ``files`` list is the source; a singular ``path`` is accepted as a
+    fallback. A set, so order and a repeated entry make no difference. Empty
+    when the entry names no file - which is what an action with no deterministic
+    fields at all looks like, and what the refusal in ``_match_prior_action``
+    reads to tell "different work" from "nothing to compare".
+    """
+    files = entry.get("files")
+    paths = (
+        {f for f in files if isinstance(f, str) and f}
+        if isinstance(files, list)
+        else set()
+    )
+    if not paths:
+        single = entry.get("path")
+        if isinstance(single, str) and single:
+            paths = {single}
+    return frozenset(paths)
+
+
 def _action_identity_key(entry: dict) -> str | None:
     """The deterministic identity of an action: its finding plus its paths.
 
@@ -267,19 +289,10 @@ def _action_identity_key(entry: dict) -> str | None:
     finding = entry.get("finding")
     if not isinstance(finding, str) or not finding:
         return None
-    files = entry.get("files")
-    paths = (
-        [f for f in files if isinstance(f, str) and f]
-        if isinstance(files, list)
-        else []
-    )
-    if not paths:
-        single = entry.get("path")
-        if isinstance(single, str) and single:
-            paths = [single]
+    paths = _action_paths(entry)
     if not paths:
         return None
-    return "\x00".join(["finding", finding, *sorted(set(paths))])
+    return "\x00".join(["finding", finding, *sorted(paths)])
 
 
 def _action_text_key(entry: dict) -> str | None:
@@ -333,14 +346,20 @@ def _match_prior_action(prior: dict[str, dict], action: dict) -> dict:
     a pre-change prior has no identity to match, and because an action with no
     finding has none either.
 
-    A text hit is refused when the prior entry carries an identity of its own
-    that names other work. The directive is not free text per file: the core
-    renders one canned phrase per finding type (``FINDING_ACTIONS`` in
-    ``lib/keyhole_signals.py``) with the path in its own column, so two hotspots
-    sharing a finding carry byte-identical directives. Without the refusal a
-    newly flagged file would inherit the completed status of a different file
-    that happened to share the phrase - the very false carry the identity key
-    exists to prevent.
+    A text hit is refused when the two entries name different files. The
+    directive is not free text per file: the core renders one canned phrase per
+    finding type (``FINDING_ACTIONS`` in ``lib/keyhole_signals.py``) with the
+    path in its own column, so two hotspots sharing a finding carry
+    byte-identical directives. Without the refusal a newly flagged file would
+    inherit the completed status of a different file that happened to share the
+    phrase - the very false carry the identity key exists to prevent.
+
+    The refusal reads the paths, not the identity keys, so it holds on both
+    sides even where no identity exists: ``finding`` is recommended and not
+    required, so either entry may name files while carrying no finding. An entry
+    naming no file at all is not evidence of different work - it is the shape a
+    pre-change contract and a judgement slot both have - so the text match
+    stands whenever either side has nothing to compare.
     """
     identity = _action_identity_key(action)
     if identity is not None and identity in prior:
@@ -349,7 +368,8 @@ def _match_prior_action(prior: dict[str, dict], action: dict) -> dict:
     if text is None or text not in prior:
         return {}
     candidate = prior[text]
-    if identity is not None and _action_identity_key(candidate) not in (None, identity):
+    new_paths, prior_paths = _action_paths(action), _action_paths(candidate)
+    if new_paths and prior_paths and new_paths != prior_paths:
         return {}
     return candidate
 
