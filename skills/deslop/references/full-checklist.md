@@ -55,7 +55,7 @@ Load-bearing (do NOT flag):
 
 **A13. Promotional and advertisement-like language.** Travel-guide or brochure tone where a neutral writer would describe. Appears even when nobody is trying to advertise, and when a rewrite claims to have "removed promotional tone." Older models are blatantly positive; current ones avoid "the best" and stay subtly positive throughout, so judge the tone across the passage rather than hunting superlatives. *Watch:* boasts a, vibrant, rich, profound, nestled, in the heart of, groundbreaking, renowned, diverse array, commitment to, natural beauty, exemplifies, enhancing, showcasing, featuring. **Fix:** describe what is there ("The town has a weekly market"); cut adjectives no source would support.
 
-**A14. Vague expression of connection or association.** Alludes to a link instead of stating it: "sources identified John Doe as being associated with leadership of ExampleCorp" for "John Doe was the CEO of ExampleCorp"; "has been associated with residential water management applications"; "referenced the inventor in connection with environmental award recognition." Often stacked with promotional words ("widely associated"). Indirection alone is weak evidence - the tell is a relationship the writer should know, left unstated. *Watch:* in connection with/to, connected with/to, in association with, associated with. **Fix:** name the relationship with its verb (was CEO of, taught at, won, sued). If it can't be established, cut the sentence.
+**A14. Vague expression of connection or association.** Alludes to a link instead of stating it: "sources identified John Doe as being associated with leadership of ExampleCorp" for "John Doe was the CEO of ExampleCorp"; "has been associated with residential water management applications"; "referenced the inventor in connection with environmental award recognition." Often stacked with promotional words ("widely associated"). Indirection alone is weak evidence - the tell is a relationship the writer should know, left unstated. *Watch:* in connection with/to, connected with/to, in association with, associated with. **Fix:** name the relationship with its verb (was CEO of, taught at, won, sued) when the text or its source supports one. If it can't be established, cut the sentence or return it as a question for the author; never supply a guessed verb.
 
 ---
 
@@ -76,11 +76,11 @@ Read the list literally: overuse of a word does not extend to its synonyms, and 
 
 **B4. Excessive hedging / both-sides padding.** "While some may argue… others contend…" balancing where no real controversy exists. This is structural padding, not word-level qualification: a natural "perhaps" or "tends to" is a human marker (see G) and stays. **Fix:** cut to the substantive point.
 
-**B5. Em dashes.** The signal is the formulaic em dash: spaced on both sides, punching up a clause or a parallelism in the manner of sales copy, in places a person would use a comma, parentheses or a colon. Raw frequency is vendor-dependent and falling - GPT-5.1 suppresses em dashes, and a July 2026 study found only Claude used them more than professional writers while ChatGPT used them less. The source is considering retiring the sign. Supporting evidence inside a cluster, never a tell alone. **Fix:** where the dash only adds drama, use a comma, period or parentheses; follow the house style for dashes.
+**B5. Em dashes.** The signal is the formulaic em dash: spaced on both sides, punching up a clause or a parallelism in the manner of sales copy, in places a person would use a comma, parentheses or a colon. Raw frequency is vendor-dependent and falling - GPT-5.1 suppresses em dashes, and a July 2026 study found only Claude used them more than professional writers while ChatGPT used them less. The source is considering retiring the sign. Supporting evidence inside a cluster, never a tell alone. A spaced hyphen or en dash in the same role is not this tell: the source notes that people use those where models use the em dash. **Fix:** where the dash only adds drama, use a comma, period or parentheses; follow the house style for dashes.
 
-**B6. Transitional adverbs - only in a cluster.** Additionally, Moreover, Furthermore, Consequently, Notably, Importantly opening many sentences. The source lists transition words in isolation as an *ineffective* indicator: only a few are overused, essay-writing humans do the same, and style guides accept it. Never flag on this alone. **Fix:** inside an otherwise sloppy passage, thin them out and let sentences connect by content.
+**B6. Transitional adverbs - only in a cluster.** Additionally, Moreover, Furthermore, Consequently, Notably, Importantly opening many sentences. The source lists transition words in isolation as an *ineffective* indicator: only a few are overused, essay-writing humans do the same, and style guides accept it. Never flag on this alone - and that includes *Additionally*, which B1 lists: it counts only alongside other B1 words. **Fix:** inside an otherwise sloppy passage, thin them out and let sentences connect by content.
 
-**B7. Avoidance of "is" and "has."** Replaces the copula with a grander verb: *serves as / stands as / marks / represents / functions as / operates as* for "is"; *boasts / features / offers / maintains* for "has" ("has been featured" is a different construction and fine); *refers to* in a lead sentence, as if the piece were about the term. Newer output uses longer forms: "ventured into politics as a candidate" for "was a candidate," "holds the distinction of being" for "is." Observed in GPT and Gemini models, and most visible in AI copyedits, which "improve" plain sentences this way. **Fix:** restore "is," "are," "has," "was."
+**B7. Avoidance of "is" and "has."** Replaces the copula with a grander verb: *serves as / stands as / marks / represents / functions as / operates as* for "is" (the first two are also A1 watch words: cite B7 when the sentence is otherwise plain, A1 when the clause exists to inflate); *boasts / features / offers / maintains* for "has" ("has been featured" is a different construction and fine); *refers to* in a lead sentence, as if the piece were about the term. Newer output uses longer forms: "ventured into politics as a candidate" for "was a candidate," "holds the distinction of being" for "is." Observed in GPT and Gemini models, and most visible in AI copyedits, which "improve" plain sentences this way. **Fix:** restore "is," "are," "has," "was."
 
 ---
 
@@ -171,7 +171,7 @@ The source records constructions that are *more* common in human-written text th
 
 - Simple is/has phrases: "there is a," "it has a."
 - Plain verbs over stiff or euphemistic ones: *wrote* (not authored), *moved* (not relocated), *used* (not utilized), *tried* (not attempted), *died* (not passed away).
-- Superlative or definite statements when true: "one of the best," "is the only," "was the first."
+- Superlative or definite statements: "one of the best," "is the only," "was the first." If the claim can't be verified, leave it as written and list it for the author to confirm; don't soften it.
 - Qualifiers and intensifiers: *very, perhaps, tends to.*
 - Isolated wordy constructions: "as a result of," "in order to," "all of the," "the fact that."
 
@@ -183,10 +183,15 @@ The source also lists indicators that do **not** work, so don't reason from them
 
 ## Verdict guidance
 
-Weigh clusters, not isolated hits. Discount *(historical)* entries on recent text. Categorize the result:
-- **Clean:** at most a couple of incidental tics; no puffery, real specificity throughout.
-- **Light slop:** scattered filler words or a trailing clause or two; fixable in place.
-- **Heavy slop:** puffery + indirection + vague attribution recurring; the prose is fluent but largely contentless. The honest fix is often to rebuild around real facts, not to reword.
+Weigh clusters, not isolated hits. Two questions are in play and they are separate:
+
+- **Quality - how much of the text survives the fixes?** This sets the bin below, and the age of the tells is irrelevant to it: empty prose is slop whatever produced it.
+- **Provenance - does it read as AI-written, and from when?** Here *(historical)* entries and dated vocabulary count as weak evidence on recent text and as dating evidence on older text.
+
+Bins, by what is left once the tells are fixed:
+- **Clean:** at most a couple of incidental tics; real specificity throughout.
+- **Light slop:** the facts are there and the tells sit on top of them; fixable in place.
+- **Heavy slop:** fixing the tells leaves little or nothing - the prose is fluent but largely contentless. The honest fix is to rebuild around real facts, not to reword. For a single sentence, say what survives rather than forcing a bin.
 
 Stay humble about the verdict. The source reports that untrained readers tell AI text from human text at about chance, and that even heavy LLM users mislabel roughly one text in ten. People's writing is also drifting toward LLM habits. Say "reads as" rather than "is."
 

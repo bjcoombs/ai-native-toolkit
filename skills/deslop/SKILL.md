@@ -21,7 +21,7 @@ For a full audit of an external file, read `references/full-checklist.md` for th
 - **The patterns are signals, not crimes.** Humans write some of these too (blogs, editorials, press releases). The presence of one phrase doesn't condemn a text; a *cluster* of them is the tell. Don't mechanically purge every "however."
 - **Fixing the surface tic is not the goal - fixing the underlying emptiness is.** Deleting the word "underscores" while leaving a sentence that says nothing just makes the slop harder to detect. If a sentence only puffs up significance and carries no fact, cut the whole sentence, don't reword it.
 - **Specificity is the antidote.** The core failure of slop is vagueness masquerading as importance. Replace "a revolutionary titan of industry" with "inventor of the first train-coupling device." When you can't add a real fact, delete the claim.
-- **Leave the human markers alone.** The source records what is *more* common in human text than in AI text: plain "there is" / "it has" phrasing, plain verbs (*wrote, moved, used, tried, died* over *authored, relocated, utilized, attempted, passed away*), definite claims when true ("was the first," "is the only"), natural qualifiers (*very, perhaps, tends to*), and the odd wordy phrase ("in order to," "the fact that"). An edit pass that "tightens" these pushes prose toward the AI register. Don't strip them, and don't sprinkle them in either - they are byproducts of a person writing, not ingredients.
+- **Leave the human markers alone.** The source records what is *more* common in human text than in AI text: plain "there is" / "it has" phrasing, plain verbs (*wrote, moved, used, tried, died* over *authored, relocated, utilized, attempted, passed away*), definite claims when true ("was the first," "is the only"), natural qualifiers (*very, perhaps, tends to*), and the odd wordy phrase ("in order to," "the fact that"). An edit pass that "tightens" these pushes prose toward the AI register. Don't strip them, and don't sprinkle them in either - they are byproducts of a person writing, not ingredients. A definite claim you can't verify stays as written and goes on the list of things for the author to confirm; softening it to "one of the first" is a guess in the other direction.
 
 ## The high-frequency tells
 
@@ -51,11 +51,13 @@ A trailing present-participle ("-ing") phrase that editorializes about significa
 
 Two habits with one cause - reaching past the simple verb. **Copula avoidance:** *serves as / stands as / marks / represents / functions as / operates as* where "is" would do; *boasts / features / offers / maintains* where "has" would do; in newer output, longer forms such as "ventured into politics as a candidate" for "was a candidate." **Vague connection:** *associated with, connected to, in connection with, in association with* where the writer should state what the relationship actually was.
 
-> "Professor Jane Doe **was connected with** science education at Example University, which **serves as** a regional hub." → "Jane Doe taught science at Example University."
+> "Professor Jane Doe **was connected with** science education at Example University, which **serves as** a regional hub." → if the source says she taught there: "Professor Jane Doe taught science at Example University." The hub clause goes as puffery (tell 1). If no source says what she did there, the honest output is a question for the author, not a guessed verb.
 
 This one bites hardest in copyedits: asked to "improve" plain text, a model swaps "is" for "serves as." In gate mode, don't.
 
-**Fix:** Write "is," "has," or the verb that names the relationship (*founded, taught, owned, sued*). If you don't know the relationship, find out or cut the sentence.
+"Serves as" and "stands as" are also puffery watch words. Cite tell 3 when the sentence is otherwise plain and tell 1 when the clause exists to inflate; when both apply, say so once.
+
+**Fix:** Write "is," "has," or the verb that names the relationship (*founded, taught, owned, sued*). If you don't know the relationship, find out or cut the sentence - never supply a verb the text doesn't support.
 
 ### 4. The rule of three
 
@@ -81,7 +83,7 @@ Hammering that a subject is notable by listing what kinds of outlets covered it,
 
 ### 7. Filler vocabulary (high-density AI diction)
 
-The overused words change with the model generation. The source dates them, newest first:
+The overused words change with the model generation. The source dates them; each word appears once here, under the latest era that still overuses it (the checklist's B1 has the full per-era lists):
 
 - **Mid-2025 on (GPT-5 era):** *emphasizing, enhance, highlighting, showcasing* - plus the notability phrases in tell 6.
 - **Mid-2024 to mid-2025 (GPT-4o era):** *align with, bolstered, crucial, enduring, fostering, pivotal, underscore, vibrant.*
@@ -89,7 +91,7 @@ The overused words change with the model generation. The source dates them, newe
 - **Undated in the source:** *robust, showcase, deep dive.* Grok has its own set: *causal, empirical, correlate,* and it still overuses *underscore.*
 - **Not in the source's list, kept from wider reports:** *realm, navigate (the landscape), nuanced, multifaceted, leverage, seamless, holistic, comprehensive, resonate, stark, ever-evolving.*
 
-Read the list literally: a word being overused does not condemn its synonyms, and context matters (an underscore can be a character). These words co-occur - where there is one, look for others.
+Read the list literally: a word being overused does not condemn its synonyms, and context matters (an underscore can be a character). These words co-occur - where there is one, look for others, and count one alone for nothing. That goes for a sentence-opening *Additionally* too: transitions are only ever evidence inside a cluster.
 
 **Fix:** Swap for plain words or cut. "Delve into" → "look at" / "examine" / cut. "A rich tapestry of" → just name the things. "Robust framework" → say what it actually does.
 
@@ -101,7 +103,7 @@ AI capitalizes Every Main Word in section headings, scatters **bold** mid-senten
 
 ### 9. Em dashes and curly quotes
 
-The signal is the formulaic em dash - spaced on both sides, punching up a clause or a parallelism the way sales copy does - not the raw count. The count is vendor-dependent and falling: GPT-5.1 suppresses em dashes, a July 2026 study found only Claude used them more than professional writers, and the source is considering retiring this sign. Treat it as supporting evidence inside a cluster, never alone. "Smart"/directional quotation marks where the surrounding document uses straight ones remain a copy-paste tell.
+The signal is the formulaic em dash - spaced on both sides, punching up a clause or a parallelism the way sales copy does - not the raw count. The count is vendor-dependent and falling: GPT-5.1 suppresses em dashes, a July 2026 study found only Claude used them more than professional writers, and the source is considering retiring this sign. Treat it as supporting evidence inside a cluster, never alone. A spaced hyphen or en dash in the same role is not this tell: the source notes that people reach for those where models reach for the em dash. "Smart"/directional quotation marks where the surrounding document uses straight ones remain a copy-paste tell.
 
 **Fix:** Where a dash is only adding drama, use a comma, a period, or parentheses. Follow the house style for dashes. Match the document's existing quote style.
 
@@ -143,7 +145,7 @@ Distinct from a load-bearing composition pointer the reader must actually follow
 
 **When editing:** Return the cleaned text. If the user wants to see what changed, follow with a short bullet list of the categories you hit and why - quote the worst offenders.
 
-**When auditing without editing:** Produce a findings list. For each issue: the quoted phrase, the category number above, and a one-line fix. Close with an overall verdict (e.g., "heavy slop - puffery and rule-of-three throughout" vs. "mostly clean, two trailing-participle clauses").
+**When auditing without editing:** Produce a findings list. For each issue: the quoted phrase, the category number above (or the checklist id, such as B6, when the tell appears only in `references/full-checklist.md`), and a one-line fix. Close with an overall verdict (e.g., "heavy slop - puffery and rule-of-three throughout" vs. "mostly clean, two trailing-participle clauses").
 
 **Always:** Prioritize the underlying emptiness over surface tics. If removing the slop would gut the text down to nothing, that's the real finding - say so. The fix for a paragraph that only asserts importance is to get a real fact or delete it, not to reword the puffery.
 
