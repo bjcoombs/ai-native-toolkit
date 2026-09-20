@@ -1289,3 +1289,32 @@ def test_action_identity_refuses_a_text_match_when_the_prior_has_no_finding(
     )[1]
     assert same["status"] == "done"
     assert same["completed_sha"] == "beef03"
+
+
+def test_action_identity_keeps_status_when_the_path_set_grows(
+    tmp_assess_dir: Path,
+) -> None:
+    """`files` is transcribed by the model, so the same action can gain a path
+    between runs. An overlapping set is the same work: refusing it would reset
+    completed work, which is the defect this identity exists to remove."""
+    canned = "investigate the seam"
+    _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text=canned, finding="hidden_coupling",
+            files=["src/a.py", "src/b.py"],
+        )],
+    )
+    _mark_done(tmp_assess_dir)
+
+    # The report now names a third coupled file. Same action, wider blast radius.
+    after = _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text=canned, finding="hidden_coupling",
+            files=["src/a.py", "src/b.py", "src/c.py"],
+        )],
+    )[1]
+
+    assert after["status"] == "done"
+    assert after["completed_sha"] == "sha1"

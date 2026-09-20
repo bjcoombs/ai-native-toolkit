@@ -346,13 +346,20 @@ def _match_prior_action(prior: dict[str, dict], action: dict) -> dict:
     a pre-change prior has no identity to match, and because an action with no
     finding has none either.
 
-    A text hit is refused when the two entries name different files. The
-    directive is not free text per file: the core renders one canned phrase per
-    finding type (``FINDING_ACTIONS`` in ``lib/keyhole_signals.py``) with the
-    path in its own column, so two hotspots sharing a finding carry
-    byte-identical directives. Without the refusal a newly flagged file would
-    inherit the completed status of a different file that happened to share the
-    phrase - the very false carry the identity key exists to prevent.
+    A text hit is refused when the two entries share no file. The directive is
+    not free text per file: the core renders one canned phrase per finding type
+    (``FINDING_ACTIONS`` in ``lib/keyhole_signals.py``) with the path in its own
+    column, so two hotspots sharing a finding carry byte-identical directives.
+    Without the refusal a newly flagged file would inherit the completed status
+    of a different file that happened to share the phrase - the very false carry
+    the identity key exists to prevent.
+
+    The test is disjointness, not inequality. ``files`` is transcribed by the
+    model, so the same piece of work can gain or lose a path between runs - a
+    coupling action that named two files and now names three is still that
+    action, and refusing it would reset completed work, which is the defect this
+    change exists to remove. One file in common is enough to call it the same
+    work; none at all is what says otherwise.
 
     The refusal reads the paths, not the identity keys, so it holds on both
     sides even where no identity exists: ``finding`` is recommended and not
@@ -369,7 +376,7 @@ def _match_prior_action(prior: dict[str, dict], action: dict) -> dict:
         return {}
     candidate = prior[text]
     new_paths, prior_paths = _action_paths(action), _action_paths(candidate)
-    if new_paths and prior_paths and new_paths != prior_paths:
+    if new_paths and prior_paths and new_paths.isdisjoint(prior_paths):
         return {}
     return candidate
 
