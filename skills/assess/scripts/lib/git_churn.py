@@ -20,28 +20,35 @@ from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
 
-from lib.assess_config import CONFIG_FILE as ASSESS_CONFIG_FILE
+# Both names come from `assess_config`, the module that reads the config file,
+# so the pathspecs below are built from the same path it resolves. Aliased:
+# `ASSESS_DIR` is, to this module, the tool's own output directory relative to
+# the scanned root. A scoped run writes to `.assess/<slug>/`, covered as a
+# prefix.
+from lib.assess_config import (
+    ASSESS_DIR as ASSESS_OUTPUT_DIR,
+    CONFIG_FILE as ASSESS_CONFIG_FILE,
+)
 
 # Cap every git call so a stuck invocation (huge repo, lock contention, a hung
 # credential prompt) degrades to "no churn data" rather than blocking the run.
 GIT_TIMEOUT_SECONDS = 20
 
-# The tool's own output directory, relative to the scanned root. A scoped run
-# writes to `.assess/<slug>/`, which this covers as a prefix.
-ASSESS_OUTPUT_DIR = ".assess"
-
 # Git pathspec dropping that directory from a status call. Exclude-only
 # pathspecs are legal: git includes everything else.
 ASSESS_EXCLUDE_PATHSPEC = f":(exclude){ASSESS_OUTPUT_DIR}"
 
-# The one file under that directory that is an input to the scan rather than
-# one of its outputs: `lib.assess_config.load_config` reads
-# `<root>/.assess/config.toml` and its excludes reach every scan, so an
-# uncommitted edit there moves the measured figures off HEAD. There is no
-# scoped variant - `load_config` takes the repo root, and a scoped run reads
-# the same file. Git applies `:(exclude)` after matching, so a positive
-# pathspec cannot re-admit a path under an excluded directory; this one is
-# checked by a second status call instead.
+# The one file under that directory whose uncommitted state moves what a scan
+# measures: `lib.assess_config.load_config` reads `<root>/.assess/config.toml`
+# before any scan and threads its excludes through every one of them, so an
+# edit there takes the measured figures off HEAD. The dividing line is "moves
+# what is measured on this run", not "is read at all" - a later run does read
+# the wiki back (`complexity-stats.prior.json` for the cross-run diff,
+# `first-flagged.json` for hotspot ages), but that shapes what the report says
+# about figures already computed. There is no scoped variant - `load_config`
+# takes the repo root, and a scoped run reads the same file. Git applies
+# `:(exclude)` after matching, so a positive pathspec cannot re-admit a path
+# under an excluded directory; this one is checked by a second status call.
 ASSESS_CONFIG_PATHSPEC = f"{ASSESS_OUTPUT_DIR}/{ASSESS_CONFIG_FILE}"
 
 
@@ -123,9 +130,9 @@ def git_commit_info(root: Path) -> dict:
       - ``subject``: HEAD's commit subject line.
       - ``dirty``: True when tracked files have uncommitted changes, so the
         measured numbers reflect the working tree, not any single commit. The
-        tool's own ``.assess/`` outputs are not such a change and are excluded;
-        ``.assess/config.toml`` is an input to the scan, so an edit there does
-        count.
+        tool's own ``.assess/`` outputs are excluded - rewriting them cannot
+        change what a scan measures. ``.assess/config.toml`` can, because its
+        excludes reach every scan, so an edit there does count.
       - ``upstream``: the upstream tracking ref (e.g. ``origin/main``) or None.
       - ``behind``: commits HEAD is behind ``upstream`` (0 = up to date,
         None = no upstream configured), i.e. how stale the snapshot is vs remote.
@@ -158,10 +165,11 @@ def git_commit_info(root: Path) -> dict:
     dirty_outside_assess = bool(
         _git("status", "--porcelain", "--untracked-files=no",
              "--", ASSESS_EXCLUDE_PATHSPEC))
-    # The exclusion is of the run's own OUTPUTS. `.assess/config.toml` is an
-    # INPUT that happens to live beside them, and its excludes move what every
-    # scan measures, so an uncommitted edit there is exactly the condition
-    # `dirty` exists to report. Checked separately and OR-ed back in.
+    # `.assess/config.toml` is the one path under that directory whose
+    # uncommitted state moves what every scan measures, so it is exactly the
+    # condition `dirty` exists to report. Checked separately and OR-ed back in.
+    # The rest of the directory is read back on a later run, but only to shape
+    # what the report says about figures already computed.
     dirty_assess_config = bool(
         _git("status", "--porcelain", "--untracked-files=no",
              "--", ASSESS_CONFIG_PATHSPEC))

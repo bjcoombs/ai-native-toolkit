@@ -205,3 +205,27 @@ def test_dirty_excludes_assess_outputs_beside_the_config(git_repo):
     (assess / "log.md").write_text("# Run log\n\n- a run\n", encoding="utf-8")
 
     assert git_churn.git_commit_info(repo)["dirty"] is False
+
+
+def test_assess_pathspecs_derive_from_assess_config(tmp_path):
+    """Both `dirty` pathspecs and `load_config`'s own path are built from the
+    same two constants in `assess_config`, so a rename of the directory or the
+    file moves them together. Were the directory a separate literal here, a
+    rename there would leave `ASSESS_CONFIG_PATHSPEC` naming a path that no
+    longer exists: `git status` exits 0 empty on it, and an uncommitted config
+    edit would silently stop flagging `dirty` - a false clean."""
+    from lib import assess_config
+
+    assert git_churn.ASSESS_OUTPUT_DIR == assess_config.ASSESS_DIR
+    assert git_churn.ASSESS_EXCLUDE_PATHSPEC == (
+        f":(exclude){assess_config.ASSESS_DIR}")
+    assert git_churn.ASSESS_CONFIG_PATHSPEC == (
+        f"{assess_config.ASSESS_DIR}/{assess_config.CONFIG_FILE}")
+
+    # The other end of the seam: the path the pathspec points at is the one
+    # `load_config` actually reads.
+    config_dir = tmp_path / assess_config.ASSESS_DIR
+    config_dir.mkdir()
+    (config_dir / assess_config.CONFIG_FILE).write_text(
+        'exclude_dirs = ["vendor"]\n', encoding="utf-8")
+    assert assess_config.load_config(tmp_path) == {"exclude_dirs": ["vendor"]}
