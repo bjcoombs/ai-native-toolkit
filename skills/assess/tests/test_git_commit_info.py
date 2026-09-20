@@ -169,3 +169,39 @@ def test_dirty_excludes_assess_but_still_flags_source_edits(git_repo):
     (repo / "a.py").write_text("x = 2\nprint(x)\n", encoding="utf-8")
 
     assert git_churn.git_commit_info(repo)["dirty"] is True
+
+
+def test_dirty_flags_assess_config_edits(git_repo):
+    """`.assess/config.toml` is an input to the scan, not one of its outputs:
+    `lib.assess_config.load_config` reads it and its excludes reach every
+    scan, so an uncommitted edit there really does move the measured figures
+    off HEAD and must still report dirty."""
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assess = repo / ".assess"
+    assess.mkdir()
+    (assess / "config.toml").write_text('exclude_dirs = ["vendor"]\n',
+                                        encoding="utf-8")
+    commit("initial commit")
+
+    (assess / "config.toml").write_text(
+        'exclude_dirs = ["vendor", "generated"]\n', encoding="utf-8")
+
+    assert git_churn.git_commit_info(repo)["dirty"] is True
+
+
+def test_dirty_excludes_assess_outputs_beside_the_config(git_repo):
+    """The config carve-out is that one path and no more: a rewritten wiki
+    page beside an untouched `config.toml` still reads clean."""
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assess = repo / ".assess"
+    assess.mkdir()
+    (assess / "config.toml").write_text('exclude_dirs = ["vendor"]\n',
+                                        encoding="utf-8")
+    (assess / "log.md").write_text("# Run log\n", encoding="utf-8")
+    commit("initial commit")
+
+    (assess / "log.md").write_text("# Run log\n\n- a run\n", encoding="utf-8")
+
+    assert git_churn.git_commit_info(repo)["dirty"] is False

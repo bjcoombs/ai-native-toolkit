@@ -71,7 +71,12 @@ one way, not three. Pure subprocess + stdlib, no heavy dependencies.
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
 pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
 scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
-file anywhere else still does.
+file anywhere else still does. The exclusion is of the run's own *outputs*:
+`.assess/config.toml` is an *input* (`assess_config.load_config` reads it and its excludes
+reach every scan), so it is checked by a second status call under
+`ASSESS_CONFIG_PATHSPEC` and OR-ed back in. That is the seam to keep in step if the
+config ever grows a second file or a scope-local path - `ASSESS_CONFIG_FILE` is imported
+from `assess_config` so the filename cannot drift.
 `content_commit_clock` is the last-content-change clock (issue #333): one `git log` pass
 over the docs' history that skips bulk mechanical commits (more than
 `BULK_COMMIT_DOC_SHARE` of the docs and at least `BULK_COMMIT_MIN_DOCS` of them, such as
