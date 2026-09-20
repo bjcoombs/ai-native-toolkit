@@ -1129,3 +1129,27 @@ def test_run_mutmut3_reason_carries_no_scratch_directory(
     r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
     assert r["reason"].endswith(": SyntaxError: bad input in pkg/calc.py")
     assert "assess-mutmut-" not in r["reason"]
+
+
+def test_no_records_reason_strips_the_longer_scratch_spelling_first(
+        tmp_path: Path) -> None:
+    """Behind a symlinked temp dir the unresolved scratch path is a substring of
+    the resolved one; whichever spelling the tool printed, the stored detail is
+    the repo-relative path, and the cut to length happens after the rewrite."""
+    real = tmp_path / "private" / "var" / "scratch" / "repo"
+    real.mkdir(parents=True)
+    (tmp_path / "var").symlink_to(tmp_path / "private" / "var")
+    scratch = tmp_path / "var" / "scratch" / "repo"
+    assert str(scratch) != str(scratch.resolve())
+
+    def reason(line: str) -> str:
+        proc = subprocess.CompletedProcess(["mutmut", "run"], 1, stdout="", stderr=line)
+        return mutation._no_records_reason("mutmut", proc, scratch=scratch)
+
+    for spelling in (scratch, scratch.resolve()):
+        assert reason(f"SyntaxError: bad input in {spelling}/pkg/calc.py\n").endswith(
+            ": SyntaxError: bad input in pkg/calc.py")
+    long_line = "E" * 290 + f" {scratch.resolve()}/pkg/calc.py\n"
+    got = reason(long_line)
+    assert "scratch" not in got
+    assert len(got.split(": ", 1)[1]) <= mutation._MAX_REASON_DETAIL

@@ -468,13 +468,16 @@ def _parse_mutmut3_meta(mutants_dir: Path) -> list[dict]:
     return out
 
 
+_MAX_REASON_DETAIL = 300        # chars of tool error kept in a stored reason
+
+
 def _tool_error_line(proc: subprocess.CompletedProcess) -> str:
     """The most telling line of a failed tool run: the last non-blank stderr
     line (a Python traceback ends with the exception), else of stdout."""
     for stream in (proc.stderr, proc.stdout):
         lines = [ln.strip() for ln in (stream or "").splitlines() if ln.strip()]
         if lines:
-            return lines[-1][:300]
+            return lines[-1]
     return ""
 
 
@@ -487,8 +490,14 @@ def _no_records_reason(tool: str, proc: subprocess.CompletedProcess,
               f"output (exit code {proc.returncode})")
     detail = _tool_error_line(proc) if proc.returncode != 0 else ""
     if scratch is not None:
-        for prefix in {str(scratch.resolve()), str(scratch)}:
+        # Longest first: where the temp dir sits behind a symlink (macOS /var
+        # -> /private/var) the unresolved form is a substring of the resolved
+        # one, and cutting it first would leave "/private" glued to the rest.
+        prefixes = sorted({str(scratch.resolve()), str(scratch)},
+                          key=len, reverse=True)
+        for prefix in prefixes:
             detail = detail.replace(prefix + os.sep, "").replace(prefix, ".")
+    detail = detail[:_MAX_REASON_DETAIL]
     return f"{reason}: {detail}" if detail else reason
 
 
