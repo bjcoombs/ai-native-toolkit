@@ -1678,6 +1678,8 @@ def build_run_context(
     # pointer so an agent can Read the removal steps without hunting for them.
     ctx["uninstall_instructions_path"] = "references/uninstall.md"
 
+    # Table scans whose blocks sit after the offers block in run-context.json;
+    # lib/scan_registry.py lists them.
     run_scans(ctx, scan_inputs, STAGE_POST_OFFERS)
 
     ctx["anomalies"] = [

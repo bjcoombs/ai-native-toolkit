@@ -118,6 +118,20 @@ def test_a_scan_is_added_without_touching_assess_core():
     assert not table_fns & imported
 
 
+def test_the_core_passes_exactly_the_provided_inputs():
+    """PROVIDED_INPUTS is what validate trusts; the core's literal must match it."""
+    core = ast.parse((SCRIPTS / "assess_core.py").read_text(encoding="utf-8"))
+    literals = [
+        node.value
+        for node in ast.walk(core)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "scan_inputs" for t in node.targets)
+    ]
+    assert len(literals) == 1 and isinstance(literals[0], ast.Dict)
+    keys = {k.value for k in literals[0].keys if isinstance(k, ast.Constant)}
+    assert keys == set(reg.PROVIDED_INPUTS)
+
+
 def test_every_table_scan_degrades():
     """instruction_claims ran outside the wrapper before it moved here."""
     assert all(spec.degrade for spec in reg.SCANS)

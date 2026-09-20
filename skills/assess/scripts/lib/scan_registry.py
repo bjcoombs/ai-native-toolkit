@@ -9,9 +9,11 @@ table, so the degrade wrapper applies by construction and adding a scan does
 not edit ``build_run_context``. The shape follows ``_DEAD_CODE_TOOLS`` in
 ``liveness_scan``: spec entries plus a single driving loop.
 
-The table is validated when this module is imported: a duplicate key, or a read
-of a name that neither the core provides nor an earlier scan produces, raises
-``ScanRegistryError`` before any run starts.
+The table is validated when this module is imported. A duplicate key, an unknown
+stage, a read of a name that neither the core provides nor an earlier scan
+produces, a read of a key produced at a later stage, or a scan that opts out of
+degrading without a ``gate_reason`` raises ``ScanRegistryError`` before any run
+starts.
 
 Migration is incremental. ``stage`` names the point in ``build_run_context``
 where an entry runs, which keeps the key order of ``run-context.json``
@@ -126,7 +128,7 @@ def run_scans(
     A read resolves against ``inputs`` first, then against ``ctx``. Reads are
     resolved outside the degrade wrapper: an unresolvable read is a wiring error
     in the table or the core, so it raises ``ScanRegistryError`` and stops the
-    run, where a failure inside the scan itself degrades.
+    run, while a failure inside the scan itself degrades.
     """
     for spec in SCANS if specs is None else specs:
         if spec.stage != stage:
