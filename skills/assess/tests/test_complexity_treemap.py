@@ -1417,16 +1417,25 @@ def test_write_stats_primary_key_outranks_tie_break_by_path(treemap, tmp_path):
         + "    return 0\n"
     )
     rows.append((dominant, 82, 41.0, "lizard"))
+    # The file aggregate is the sum of its per-function values, so a lizard
+    # file's worst function is the largest term of it and can equal it. Giving
+    # zbig a single function of 41 keeps the fixture a state the scanner can
+    # produce; leaving it at 1.0 would de-rate the effective ccn to about 3.05
+    # (see `_effective_ccn`) and the composite assertion would pass on the
+    # token axis rather than the complexity axis this test names.
+    fn_ccn = {p: [1.0] for p, *_ in rows}
+    fn_ccn[dominant] = [41.0]
     out = tmp_path / "stats.json"
-    treemap.write_stats(rows, None, None, tmp_path, out,
-                        fn_ccn_by_path={p: [1.0] for p, *_ in rows})
+    treemap.write_stats(rows, None, None, tmp_path, out, fn_ccn_by_path=fn_ccn)
 
     stats = json.loads(out.read_text())
+    assert {r["path"]: r["max_fn_ccn"] for r in stats["top_complex"]}[
+        "src/zbig.py"] == 41.0
     for key in ("top_hotspots", "top_complex", "top_large"):
         paths = [r["path"] for r in stats[key]]
         assert paths[0] == "src/zbig.py", key
-        # The nine places left go to the tied files in path order, so t7, t8
-        # and t9 - here f7 onward - fall out.
+        # The nine places left go to the tied files in path order, so f7, f8
+        # and f9 fall out.
         assert paths[1:] == _TIED_FIRST_TEN[:9], key
 
 
