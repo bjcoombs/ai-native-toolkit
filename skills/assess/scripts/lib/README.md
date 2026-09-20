@@ -874,10 +874,22 @@ or scope rule.
 **`test_pressure/`**
 Layer 1 write-side truth pressure. Two tiers:
 - Mutation tier: runs a mutation-testing tool (mutmut for Python) over a sample of the
-  codebase to measure whether the test suite actually catches changes. For mutmut the
-  run is two-step - `mutmut run` then `mutmut junitxml` - because the run's stdout lists
-  only survivors (no totals); the junitxml report carries every mutant, so per-file
-  killed/survived/total (and a real survivor density) can be derived. Falls back to the
-  survivor-only stdout parse when junitxml is absent (e.g. mutmut 3.x) or empty.
+  codebase to measure whether the test suite actually catches changes. mutmut's command
+  line differs by major version, so `_mutmut_major` reads the version from the launcher's
+  interpreter (`mutmut --version` aborts on 3.x before it parses arguments) and the run
+  dispatches on it. **mutmut 2** runs in place and is two-step - `mutmut run` then
+  `mutmut junitxml` - because the run's stdout lists only survivors (no totals); the
+  junitxml report carries every mutant, so per-file killed/survived/total (and a real
+  survivor density) can be derived, falling back to the survivor-only stdout parse when
+  junitxml is empty. **mutmut 3** takes no paths and reads its scope from `setup.cfg` /
+  `pyproject.toml`, so `_run_mutmut3` copies the working tree to a scratch directory,
+  appends a generated `[mutmut]` section (`source_paths` = the focus files' top-level
+  directories, `only_mutate` = the focus files) unless the repo already configures
+  mutmut, runs there, and reads per-file totals from `mutants/**/*.meta`. The assessed
+  tree is never written to. An unknown version takes the mutmut 2 path. Whichever path
+  runs, a tool that exits non-zero without yielding mutants puts the last line of its
+  error output in the result's `reason` (surfaced as `mutation_note`). mutmut runs pytest
+  under its own interpreter, so a repo whose tests need packages that interpreter lacks
+  fails at mutmut's clean-test step and reports that reason.
 - Cheap heuristics: test/source ratio, assertion density, and the coverage gap signal -
   fast proxies that run without a mutation tool.

@@ -292,6 +292,170 @@ def _select_mutation_tool(repo_root: Path, detected_tools: list[str]) -> dict | 
     return None
 
 
+# ── mutmut 3.x adapter ───────────────────────────────────────────────────────
+#
+# mutmut 3 changed its command line: ``mutmut run`` takes no paths, reads its
+# scope from ``setup.cfg``/``pyproject.toml`` in the working directory, aborts
+# when neither names ``source_paths`` and it cannot guess them, dropped the
+# ``junitxml`` subcommand, and records results as ``mutants/<path>.meta`` JSON.
+# The adapter runs it in a scratch copy of the repo carrying a generated
+# ``[mutmut]`` section, so the assessed tree is never written to.
+
+# mutmut 3 exit codes per mutant (its ``status_by_exit_code``). A timeout or a
+# type-check catch pins the behaviour as well as a failing test; "no tests"
+# (5, 33) means nothing exercises the mutant, which is a survivor for our
+# purposes (the stryker parser treats NoCoverage the same way). Unchecked,
+# skipped, suspicious and segfault mutants are left out of the totals.
+_MUTMUT3_KILLED = frozenset({1, 3, 24, -24, 36, 37, 152, 255})
+_MUTMUT3_SURVIVED = frozenset({0, 5, 33})
+
+_COPY_IGNORE = shutil.ignore_patterns(
+    ".git", ".assess", "mutants", "node_modules", ".venv", "venv",
+    "__pycache__", ".mutmut-cache", ".tox", ".pytest_cache")
+
+
+def _mutmut_major(exe: str | None) -> int | None:
+    """Major version of the ``mutmut`` on PATH, or None when it cannot be told.
+
+    ``mutmut --version`` is no use: mutmut 3 loads its configuration at import
+    and aborts before parsing arguments in a directory it cannot guess source
+    paths for. The launcher script's shebang names the interpreter mutmut is
+    installed under, so ask that interpreter's package metadata instead."""
+    if not exe:
+        return None
+    try:
+        with open(exe, "rb") as fh:
+            first = fh.readline(512).decode("utf-8", "replace").strip()
+    except OSError:
+        return None
+    if not first.startswith("#!"):
+        return None
+    interpreter = first[2:].strip().split(" ")[0]
+    if "python" not in Path(interpreter).name:
+        return None
+    try:
+        proc = subprocess.run(
+            [interpreter, "-c",
+             "from importlib.metadata import version; print(version('mutmut'))"],
+            capture_output=True, text=True, timeout=15, check=False)
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    m = re.match(r"\s*(\d+)\.", proc.stdout or "")
+    return int(m.group(1)) if m else None
+
+
+def _mutmut3_config(scope: list[str]) -> str:
+    """The ``[mutmut]`` setup.cfg section scoping a run to ``scope``.
+
+    ``source_paths`` is the top-level directory of each file (mutmut copies it
+    whole into ``mutants/`` so sibling imports still resolve); ``only_mutate``
+    narrows mutation to the files themselves."""
+    roots: list[str] = []
+    for f in scope:
+        parts = Path(f).parts
+        root = parts[0] if len(parts) > 1 else f
+        if root not in roots:
+            roots.append(root)
+    lines = ["[mutmut]", "source_paths="]
+    lines += [f"    {r}" for r in roots]
+    lines.append("only_mutate=")
+    lines += [f"    {Path(f).as_posix()}" for f in scope]
+    return "\n".join(lines) + "\n"
+
+
+def _copy_repo(repo_root: Path, dest: Path) -> None:
+    """Copy the working tree (tracked plus untracked-but-not-ignored files) to
+    ``dest``. Falls back to a filtered tree copy outside a git repository."""
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            cwd=str(repo_root), capture_output=True, text=True, timeout=60,
+            check=False)
+        listed = [f for f in (proc.stdout or "").split("\0") if f] \
+            if proc.returncode == 0 else []
+    except (subprocess.TimeoutExpired, OSError):
+        listed = []
+    if not listed:
+        shutil.copytree(repo_root, dest, ignore=_COPY_IGNORE, dirs_exist_ok=True)
+        return
+    for rel in listed:
+        if rel.split("/", 1)[0] in {".assess", "mutants"}:
+            continue
+        src = repo_root / rel
+        if not src.is_file():
+            continue
+        target = dest / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, target)
+
+
+def _parse_mutmut3_meta(mutants_dir: Path) -> list[dict]:
+    """Per-file killed/survived/total from mutmut 3's ``mutants/**/*.meta``."""
+    out: list[dict] = []
+    if not mutants_dir.is_dir():
+        return out
+    for meta in sorted(mutants_dir.rglob("*.meta")):
+        try:
+            codes = json.loads(meta.read_text(encoding="utf-8")).get(
+                "exit_code_by_key") or {}
+        except (OSError, ValueError, AttributeError):
+            continue
+        killed = sum(1 for c in codes.values() if c in _MUTMUT3_KILLED)
+        survived = sum(1 for c in codes.values() if c in _MUTMUT3_SURVIVED)
+        if killed + survived:
+            rel = meta.relative_to(mutants_dir).as_posix()[:-len(".meta")]
+            out.append({"file": rel, "killed": killed, "survived": survived,
+                        "total": killed + survived})
+    return out
+
+
+def _tool_error_line(proc: subprocess.CompletedProcess) -> str:
+    """The most telling line of a failed tool run: the last non-blank stderr
+    line (a Python traceback ends with the exception), else of stdout."""
+    for stream in (proc.stderr, proc.stdout):
+        lines = [ln.strip() for ln in (stream or "").splitlines() if ln.strip()]
+        if lines:
+            return lines[-1][:300]
+    return ""
+
+
+def _no_records_reason(tool: str, proc: subprocess.CompletedProcess) -> str:
+    reason = (f"no mutant records recovered from {tool} "
+              f"output (exit code {proc.returncode})")
+    detail = _tool_error_line(proc) if proc.returncode != 0 else ""
+    return f"{reason}: {detail}" if detail else reason
+
+
+def _run_mutmut3(repo_root: Path, scope: list[str], has_config: bool) -> dict:
+    """The mutmut 3 pass, in a scratch copy of the repo. A repo that already
+    configures mutmut keeps its own scope; otherwise a generated ``[mutmut]``
+    section limits the run to ``scope`` (an empty scope leaves mutmut to guess). Same result shape and the same
+    no-records-no-run rule as ``run_bounded_mutation``."""
+    base = {"available": True, "tool": "mutmut", "scope": scope}
+    with tempfile.TemporaryDirectory(prefix="assess-mutmut-") as tmp:
+        work = Path(tmp) / "repo"
+        work.mkdir()
+        try:
+            _copy_repo(repo_root, work)
+            if scope and not has_config:
+                with open(work / "setup.cfg", "a", encoding="utf-8") as fh:
+                    fh.write("\n" + _mutmut3_config(scope))
+            proc = subprocess.run(
+                ["mutmut", "run"], cwd=str(work), capture_output=True,
+                text=True, timeout=MUTATION_TIMEOUT, check=False)
+        except subprocess.TimeoutExpired:
+            return {**base, "mutation_run": False, "per_file": [],
+                    "reason": f"exceeded {MUTATION_TIMEOUT}s timeout"}
+        except OSError as e:
+            return {**base, "mutation_run": False, "per_file": [],
+                    "reason": str(e)}
+        per_file = _parse_mutmut3_meta(work / "mutants")
+    if not per_file:
+        return {**base, "mutation_run": False, "per_file": [],
+                "reason": _no_records_reason("mutmut", proc)}
+    return {**base, "mutation_run": True, "per_file": per_file}
+
+
 def run_bounded_mutation(repo_root: Path, hot_files: list | None = None,
                          opt_in: bool = False) -> dict:
     """Time-boxed, opt-in mutation pass over the hottest files. Never raises.
@@ -319,6 +483,8 @@ def run_bounded_mutation(repo_root: Path, hot_files: list | None = None,
                 "reason": "no supported mutation tool on PATH for languages present"}
 
     scope = [str(f) for f in (hot_files or [])][:MAX_FILES_TO_MUTATE]
+    if spec["tool"] == "mutmut" and (_mutmut_major(shutil.which("mutmut")) or 0) >= 3:
+        return _run_mutmut3(repo_root, scope, has_config="mutmut" in detected)
     started = time.monotonic()
     try:
         proc = subprocess.run(
@@ -358,8 +524,7 @@ def run_bounded_mutation(repo_root: Path, hot_files: list | None = None,
     if not per_file:
         return {"mutation_run": False, "available": True, "tool": spec["tool"],
                 "scope": scope, "per_file": [],
-                "reason": (f"no mutant records recovered from {spec['tool']} "
-                           f"output (exit code {proc.returncode})")}
+                "reason": _no_records_reason(spec["tool"], proc)}
 
     return {"mutation_run": True, "available": True, "tool": spec["tool"],
             "scope": scope, "per_file": per_file}

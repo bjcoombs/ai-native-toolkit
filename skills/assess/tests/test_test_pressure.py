@@ -1,10 +1,12 @@
 """Tests for Layer 1 write-side truth pressure: mutation tier + cheap heuristics."""
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
 import lib.test_pressure as tp
+from lib.test_pressure import mutation
 from lib.test_pressure import (
     compute_cheap_heuristics,
     compute_gap_signal,
@@ -715,3 +717,178 @@ def test_mutation_run_requires_parsed_mutants_true_with_records(
     r = run_bounded_mutation(tmp_path, hot_files=["app.py"], opt_in=True)
     assert r["mutation_run"] is True
     assert r["per_file"]
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# mutmut 3.x adapter (#413)
+# ════════════════════════════════════════════════════════════════════════════
+
+_MUTMUT3_TRACEBACK = (
+    "Traceback (most recent call last):\n"
+    '  File "mutmut/configuration.py", line 90, in _guess_source_paths\n'
+    "FileNotFoundError: Could not figure out where the code to mutate is.\n"
+)
+
+
+def _launcher(tmp_path: Path, shebang: str) -> str:
+    exe = tmp_path / "bin" / "mutmut"
+    exe.parent.mkdir(parents=True, exist_ok=True)
+    exe.write_text(f"{shebang}\nimport sys\n", encoding="utf-8")
+    return str(exe)
+
+
+def _as_mutmut3(monkeypatch) -> None:
+    monkeypatch.setattr(tp.shutil, "which", lambda t: "/usr/bin/" + t)
+    monkeypatch.setattr(mutation, "_mutmut_major", lambda _exe: 3)
+
+
+def _fake_mutmut3(meta: dict | None, seen: dict, *, returncode: int = 0,
+                  stderr: str = ""):
+    """A subprocess.run stand-in: git reports "not a repository" (so the copy
+    falls back to a tree copy) and ``mutmut run`` writes ``meta`` the way
+    mutmut 3 does, recording where it ran and the config it was given."""
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git":
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="")
+        assert cmd == ["mutmut", "run"]
+        cwd = Path(kwargs["cwd"])
+        seen["cwd"] = cwd
+        cfg = cwd / "setup.cfg"
+        seen["setup_cfg"] = cfg.read_text(encoding="utf-8") if cfg.exists() else None
+        seen["copied"] = (cwd / "pkg" / "calc.py").is_file()
+        if meta is not None:
+            _write(cwd, "mutants/pkg/calc.py.meta", json.dumps(meta))
+        return subprocess.CompletedProcess(cmd, returncode, stdout="", stderr=stderr)
+    return fake_run
+
+
+def test_mutmut_major_reads_launcher_interpreter(tmp_path: Path, monkeypatch) -> None:
+    exe = _launcher(tmp_path, "#!/opt/tools/mutmut/bin/python")
+    calls: list = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="3.6.0\n", stderr="")
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    assert mutation._mutmut_major(exe) == 3
+    assert calls[0][0] == "/opt/tools/mutmut/bin/python"
+
+
+def test_mutmut_major_unknown_degrades_to_none(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        tp.subprocess, "run",
+        lambda cmd, **k: subprocess.CompletedProcess(cmd, 1, stdout="", stderr="boom"))
+    assert mutation._mutmut_major(None) is None
+    assert mutation._mutmut_major(str(tmp_path / "absent")) is None
+    assert mutation._mutmut_major(_launcher(tmp_path, "#!/bin/sh")) is None
+    assert mutation._mutmut_major(_launcher(tmp_path, "#!/usr/bin/python3")) is None
+
+
+def test_mutmut3_config_scopes_to_top_level_dirs_and_files() -> None:
+    cfg = mutation._mutmut3_config(["src/pkg/a.py", "src/pkg/b.py", "app.py"])
+    assert cfg == ("[mutmut]\nsource_paths=\n    src\n    app.py\n"
+                   "only_mutate=\n    src/pkg/a.py\n    src/pkg/b.py\n    app.py\n")
+
+
+def test_parse_mutmut3_meta_counts_by_exit_code(tmp_path: Path) -> None:
+    codes = {"k1": 1, "k2": 36, "s1": 0, "s2": 33, "unchecked": None, "skipped": 34}
+    _write(tmp_path, "mutants/pkg/calc.py.meta",
+           json.dumps({"exit_code_by_key": codes}))
+    _write(tmp_path, "mutants/pkg/empty.py.meta", json.dumps({"exit_code_by_key": {}}))
+    _write(tmp_path, "mutants/pkg/bad.py.meta", "{not json")
+    assert mutation._parse_mutmut3_meta(tmp_path / "mutants") == [
+        {"file": "pkg/calc.py", "killed": 2, "survived": 2, "total": 4}]
+    assert mutation._parse_mutmut3_meta(tmp_path / "absent") == []
+
+
+def test_run_bounded_mutation_mutmut3_runs_in_scratch_copy(
+        tmp_path: Path, monkeypatch) -> None:
+    """mutmut 3 with no mutmut config: the pass runs in a copy carrying a
+    generated [mutmut] section, reads the .meta results, and leaves the
+    assessed tree exactly as it found it."""
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _write(tmp_path, "setup.cfg", "[metadata]\nname = demo\n")
+    _as_mutmut3(monkeypatch)
+    seen: dict = {}
+    monkeypatch.setattr(tp.subprocess, "run", _fake_mutmut3(
+        {"exit_code_by_key": {"a": 1, "b": 0, "c": 0}}, seen))
+    before = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*"))
+
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+
+    assert r == {"available": True, "tool": "mutmut", "scope": ["pkg/calc.py"],
+                 "mutation_run": True,
+                 "per_file": [{"file": "pkg/calc.py", "killed": 1,
+                               "survived": 2, "total": 3}]}
+    assert compute_survivor_density(r["per_file"])["overall"] == 2 / 3
+    assert seen["cwd"] != tmp_path and seen["copied"]
+    assert seen["setup_cfg"].startswith("[metadata]\nname = demo\n")
+    assert "source_paths=\n    pkg\nonly_mutate=\n    pkg/calc.py\n" in seen["setup_cfg"]
+    assert not seen["cwd"].exists()
+    after = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*"))
+    assert after == before
+    assert (tmp_path / "setup.cfg").read_text(encoding="utf-8") == "[metadata]\nname = demo\n"
+
+
+def test_run_bounded_mutation_mutmut3_keeps_existing_config(
+        tmp_path: Path, monkeypatch) -> None:
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _write(tmp_path, "pyproject.toml", "[tool.mutmut]\nsource_paths = ['pkg']\n")
+    _as_mutmut3(monkeypatch)
+    seen: dict = {}
+    monkeypatch.setattr(tp.subprocess, "run", _fake_mutmut3(
+        {"exit_code_by_key": {"a": 1}}, seen))
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    assert r["mutation_run"] is True
+    assert seen["setup_cfg"] is None
+
+
+def test_run_bounded_mutation_mutmut3_failure_names_the_cause(
+        tmp_path: Path, monkeypatch) -> None:
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _as_mutmut3(monkeypatch)
+    monkeypatch.setattr(tp.subprocess, "run", _fake_mutmut3(
+        None, {}, returncode=1, stderr=_MUTMUT3_TRACEBACK))
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    assert r["mutation_run"] is False
+    assert r["per_file"] == []
+    assert r["reason"] == (
+        "no mutant records recovered from mutmut output (exit code 1): "
+        "FileNotFoundError: Could not figure out where the code to mutate is.")
+
+
+def test_run_bounded_mutation_mutmut3_timeout_degrades(
+        tmp_path: Path, monkeypatch) -> None:
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _as_mutmut3(monkeypatch)
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git":
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="")
+        raise subprocess.TimeoutExpired(cmd, tp.MUTATION_TIMEOUT)
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    assert r["mutation_run"] is False
+    assert "timeout" in r["reason"]
+
+
+def test_run_bounded_mutation_mutmut2_keeps_the_legacy_path(
+        tmp_path: Path, monkeypatch) -> None:
+    """mutmut 2 still runs in place and is read from stdout/junitxml; a failed
+    legacy run now names its cause too."""
+    _write(tmp_path, "app.py", "def f(): pass")
+    monkeypatch.setattr(tp.shutil, "which", lambda t: "/usr/bin/" + t)
+    monkeypatch.setattr(mutation, "_mutmut_major", lambda _exe: 2)
+    cwds: list = []
+
+    def fake_run(cmd, **kwargs):
+        cwds.append(kwargs.get("cwd"))
+        return subprocess.CompletedProcess(cmd, 2, stdout="", stderr="Error: boom\n")
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    r = run_bounded_mutation(tmp_path, hot_files=["app.py"], opt_in=True)
+    assert set(cwds) == {str(tmp_path)}
+    assert r["reason"] == ("no mutant records recovered from mutmut output "
+                           "(exit code 2): Error: boom")
