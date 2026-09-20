@@ -29,6 +29,12 @@ Two modules are the identified co-change hotspots in the git history:
   the six named derived findings. Because it touches every upstream signal, it
   co-changes with the core on almost every schema or signal-set change.
 
+The seam is narrowing. A scan that reads only what the core hands it and feeds no
+later block is declared once in `scan_registry.py` (`SCANS`) and run by one loop, so
+adding such a scan edits its own module, its test, that table and this file - not
+`assess_core.py`. Scans still hand-wired in `build_run_context` move to the table in
+batches; until then both patterns exist, and the table is the one to extend.
+
 Seeing these two files in the same commit as `assess_core.py` is expected, not a
 defect. If the core is later decomposed, treat this seam as the natural boundary -
 `doc_graph` and `keyhole_signals` are where the cut-line already lives.
@@ -310,6 +316,21 @@ repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into
 `tests/test_structure_drift.py`.
 
 ### Signal integration
+
+**`scan_registry.py`**
+The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
+the run-context `key`, the callable, the names it `reads` (passed positionally: a
+core-provided input from `PROVIDED_INPUTS`, or the key of an earlier spec), the
+`stage` of `build_run_context` it runs at, and whether it degrades. `run_scans`
+routes every degrading spec through `safe`, which turns any exception into
+`{"available": False, "reason": ...}` so one broken scan never stops the run; a spec
+opts out only with a `gate_reason`. `validate` runs at import and raises
+`ScanRegistryError` on a duplicate key, an unknown stage, or a read that nothing
+provides, so a mis-declared scan fails before any run. `stage` exists to keep
+`run-context.json` key order unchanged while scans migrate here; it goes when the
+hand-wired assignments between the stages are gone. Currently registered:
+`agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
+`instruction_claims`.
 
 **`keyhole_signals.py`** *(co-change hotspot)*
 Integration barrier between the individual signal modules and `assess_core`. Derives

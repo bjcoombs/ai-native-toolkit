@@ -1,0 +1,138 @@
+"""Declared table of run-context scans, and the loop that runs them.
+
+``assess_core.build_run_context`` grew by one import and one assignment per
+scan until it was the most complex function in the repository, and the "a
+broken scan must never block the assessment" rule held only where the author
+remembered to wrap the call. Here a scan is declared once - its run-context
+key, its callable, what it reads, how it degrades - and one loop runs the
+table, so the degrade wrapper applies by construction and adding a scan does
+not edit ``build_run_context``. The shape follows ``_DEAD_CODE_TOOLS`` in
+``liveness_scan``: spec entries plus a single driving loop.
+
+The table is validated when this module is imported: a duplicate key, or a read
+of a name that neither the core provides nor an earlier scan produces, raises
+``ScanRegistryError`` before any run starts.
+
+Migration is incremental. ``stage`` names the point in ``build_run_context``
+where an entry runs, which keeps the key order of ``run-context.json``
+unchanged while scans move here in batches; the stages collapse once the
+hand-wired assignments between them are gone.
+"""
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
+from typing import Any
+
+from lib.agent_ops import scan_agent_ops
+from lib.config_drift import scan_config_drift
+from lib.gate_cost import estimate_gate_cost
+from lib.instruction_claims import scan_instruction_claims
+from lib.review_reality import scan_review_reality
+
+# Names the core passes to ``run_scans``. A spec may read these, or the key of
+# any spec declared before it.
+PROVIDED_INPUTS = frozenset({"repo_root", "instruction_files"})
+
+STAGE_READ_SIDE = "read_side"
+STAGE_POST_OFFERS = "post_offers"
+STAGES = (STAGE_READ_SIDE, STAGE_POST_OFFERS)
+
+
+class ScanRegistryError(ValueError):
+    """The scan table is malformed (duplicate key, unknown stage or read)."""
+
+
+@dataclass(frozen=True)
+class ScanSpec:
+    """One run-context block.
+
+    ``fn`` is called with the values of ``reads``, positionally and in order.
+    ``degrade`` routes the call through ``safe``; a scan opts out only by
+    setting ``gate_reason``, because a gate is the one kind of scan whose
+    failure should stop the run.
+    """
+
+    key: str
+    fn: Callable[..., Any]
+    reads: tuple[str, ...]
+    stage: str
+    degrade: bool = True
+    gate_reason: str = ""
+
+
+def safe(label: str, fn: Callable[[], Any]) -> Any:
+    """Run a read-side scan, degrading to an unavailable marker on any failure.
+
+    Read-side signals are additive context for the LLM, never gates - a broken
+    scan must never block the assessment (PRD: "never block").
+    """
+    try:
+        return fn()
+    except Exception as e:  # noqa: BLE001 - intentional catch-all; degrade, don't crash
+        return {"available": False, "reason": f"{label} scan failed: {e}"}
+
+
+def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUTS) -> None:
+    """Raise ``ScanRegistryError`` unless every spec can run in table order."""
+    known = set(provided)
+    for spec in specs:
+        if spec.key in known:
+            raise ScanRegistryError(f"scan key {spec.key!r} is declared twice or shadows a provided input")
+        if spec.stage not in STAGES:
+            raise ScanRegistryError(f"scan {spec.key!r} names unknown stage {spec.stage!r}")
+        missing = [name for name in spec.reads if name not in known]
+        if missing:
+            raise ScanRegistryError(
+                f"scan {spec.key!r} reads {missing}, which no earlier scan produces "
+                f"and the core does not provide"
+            )
+        if not spec.degrade and not spec.gate_reason:
+            raise ScanRegistryError(f"scan {spec.key!r} opts out of degrading without a gate_reason")
+        known.add(spec.key)
+
+
+def run_scans(
+    ctx: dict[str, Any],
+    inputs: Mapping[str, Any],
+    stage: str,
+    specs: Iterable[ScanSpec] | None = None,
+) -> None:
+    """Run every spec of ``stage`` in table order, assigning ``ctx[spec.key]``.
+
+    A read resolves against ``inputs`` first, then against ``ctx``.
+    """
+    for spec in SCANS if specs is None else specs:
+        if spec.stage != stage:
+            continue
+
+        def call(spec: ScanSpec = spec) -> Any:
+            return spec.fn(*[inputs[n] if n in inputs else ctx[n] for n in spec.reads])
+
+        ctx[spec.key] = safe(spec.key, call) if spec.degrade else call()
+
+
+SCANS: tuple[ScanSpec, ...] = (
+    # Agent-operations guardrails (permission allowlists, hooks, sandbox rules,
+    # routine definitions): Layer 8 workflow-maturity evidence. Tracked-only
+    # credit - an uncommitted settings file reaches no clone. Deliberately
+    # excludes .claude/agents/ and .claude/skills/ (Layer 0's evidence) so the
+    # two layers never double-count the same artifact.
+    ScanSpec("agent_ops", scan_agent_ops, ("repo_root",), STAGE_READ_SIDE),
+    # Configuration drift (Layer 5 lying signal): tracked ruleset and
+    # branch-protection snapshots diffed against the live GitHub setting via
+    # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
+    # available: false with the reason, never a clean result.
+    ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE),
+    ScanSpec("review_reality", scan_review_reality, ("repo_root",), STAGE_READ_SIDE),
+    ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE),
+    # Checkable claims in the graded instruction files ("`x.sh` is enforced in
+    # CI", "Node 20.11.0 is pinned in `.nvmrc`"), verified against the repo; a
+    # failed claim is a Layer 0 lying signal. Zeros when none.
+    ScanSpec(
+        "instruction_claims", scan_instruction_claims,
+        ("repo_root", "instruction_files"), STAGE_POST_OFFERS,
+    ),
+)
+
+validate(SCANS)
