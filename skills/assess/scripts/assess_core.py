@@ -45,7 +45,6 @@ from lib.agent_instructions_grader import (
     grade_instructions,
     scan_sensitive_content,
 )
-from lib.agent_ops import scan_agent_ops
 from lib.anomaly_detector import detect_anomalies
 from lib.archetype import analyze_archetype
 from lib.badge import (
@@ -57,11 +56,8 @@ from lib.assess_config import (
     is_user_excluded, load_excludes, load_structure_config, load_working_notes_config,
 )
 from lib.change_coupling import build_rename_map
-from lib.config_drift import scan_config_drift
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
-from lib.gate_cost import estimate_gate_cost
-from lib.instruction_claims import scan_instruction_claims
 from lib.interactivity import build_offers_block
 from lib.doc_graph import build_doc_graph, is_repo_file
 from lib.gap_actions import build_gap_actions
@@ -71,7 +67,8 @@ from lib.git_churn import ContentClock, git_commit_info, tracked_files
 from lib.keyhole_signals import integrate as integrate_keyhole_signals
 from lib.liveness_scan import scan_liveness
 from lib.promissory_markers import scan_promissory_markers
-from lib.review_reality import scan_review_reality
+from lib.scan_registry import STAGE_POST_OFFERS, STAGE_READ_SIDE, run_scans
+from lib.scan_registry import safe as _safe
 from lib.structure_graph import analyze_structure
 from lib.stats_diff import StatsDiff, diff_stats, hotspot_commits, load_stats
 from lib.structure_drift import (
@@ -868,18 +865,6 @@ def _marker_debt_sentence(debt: dict | None) -> str:
     )
 
 
-def _safe(label: str, fn):
-    """Run a read-side scan, degrading to an unavailable marker on any failure.
-
-    Read-side signals are additive context for the LLM, never gates - a broken
-    scan must never block the assessment (PRD: "never block").
-    """
-    try:
-        return fn()
-    except Exception as e:  # noqa: BLE001 - intentional catch-all; degrade, don't crash
-        return {"available": False, "reason": f"{label} scan failed: {e}"}
-
-
 def _normalize_test_pressure(test_pressure: Any) -> dict:
     """Normalize a ``scan_test_pressure`` result into the run-context block shape.
 
@@ -1566,20 +1551,10 @@ def build_run_context(
     # finding and the hotspot pages (already written above with marker debt).
     ctx["promissory_markers"] = promissory
 
-    # Agent-operations guardrails (permission allowlists, hooks, sandbox rules,
-    # routine definitions): Layer 8 workflow-maturity evidence. Tracked-only
-    # credit - an uncommitted settings file reaches no clone. Deliberately
-    # excludes .claude/agents/ and .claude/skills/ (Layer 0's evidence) so the
-    # two layers never double-count the same artifact.
-    ctx["agent_ops"] = _safe("agent_ops", lambda: scan_agent_ops(repo_root))
-
-    # Configuration drift (Layer 5 lying signal): tracked ruleset and
-    # branch-protection snapshots diffed against the live GitHub setting via
-    # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
-    # available: false with the reason, never a clean result.
-    ctx["config_drift"] = _safe("config_drift", lambda: scan_config_drift(repo_root))
-    ctx["review_reality"] = _safe("review_reality", lambda: scan_review_reality(repo_root))
-    ctx["gate_cost_estimate"] = _safe("gate_cost_estimate", lambda: estimate_gate_cost(repo_root))
+    # Scans that read only the repository and feed no later block run from the
+    # declared table in lib/scan_registry.py, each through the degrade wrapper.
+    scan_inputs = {"repo_root": repo_root, "instruction_files": instruction_files}
+    run_scans(ctx, scan_inputs, STAGE_READ_SIDE)
 
     # Accretion ratchet (write-side tendency: files that only ever grow). The
     # scan measured every file above; here it is filtered to files already in the
@@ -1703,10 +1678,9 @@ def build_run_context(
     # pointer so an agent can Read the removal steps without hunting for them.
     ctx["uninstall_instructions_path"] = "references/uninstall.md"
 
-    # Checkable claims in the graded instruction files ("`x.sh` is enforced in
-    # CI", "Node 20.11.0 is pinned in `.nvmrc`"), verified against the repo; a
-    # failed claim is a Layer 0 lying signal. Always present, zeros when none.
-    ctx["instruction_claims"] = scan_instruction_claims(repo_root, instruction_files)
+    # Table scans whose blocks sit after the offers block in run-context.json;
+    # lib/scan_registry.py lists them.
+    run_scans(ctx, scan_inputs, STAGE_POST_OFFERS)
 
     ctx["anomalies"] = [
         {"code": a.code, "description": a.description, "detail": a.detail}

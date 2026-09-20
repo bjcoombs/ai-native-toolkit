@@ -29,6 +29,12 @@ Two modules are the identified co-change hotspots in the git history:
   the six named derived findings. Because it touches every upstream signal, it
   co-changes with the core on almost every schema or signal-set change.
 
+The seam is narrowing. A scan that reads only what the core hands it and feeds no
+later block is declared once in `scan_registry.py` (`SCANS`) and run by one loop, so
+adding such a scan edits its own module, its test, that table and this file - not
+`assess_core.py`. Scans still hand-wired in `build_run_context` move to the table in
+batches; until then both patterns exist, and the table is the one to extend.
+
 Seeing these two files in the same commit as `assess_core.py` is expected, not a
 defect. If the core is later decomposed, treat this seam as the natural boundary -
 `doc_graph` and `keyhole_signals` are where the cut-line already lives.
@@ -68,6 +74,20 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+`git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
+pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
+scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
+file anywhere else still does. The line is whether a path moves what a scan *measures*,
+not whether anything reads it back: a later run does read the wiki (`complexity-stats.prior.json`
+for the cross-run diff, `first-flagged.json` for hotspot ages), but that shapes what the
+report says about figures already computed. `.assess/config.toml` is the exception -
+`assess_config.load_config` reads it before any scan and its excludes decide which files
+get measured - so it is checked by a second status call under `ASSESS_CONFIG_PATHSPEC`
+and OR-ed back in. That is the seam to keep in step if the config ever grows a second
+file or a scope-local path. Both pathspecs are built from `assess_config.ASSESS_DIR` and
+`CONFIG_FILE`, the same two constants `load_config` resolves its own path from, so
+renaming the directory or the file cannot leave the check pointing at a path that no
+longer exists (`test_assess_pathspecs_derive_from_assess_config` pins that).
 `content_commit_clock` is the last-content-change clock (issue #333): one `git log` pass
 over the docs' history that skips bulk mechanical commits (more than
 `BULK_COMMIT_DOC_SHARE` of the docs and at least `BULK_COMMIT_MIN_DOCS` of them, such as
@@ -310,6 +330,25 @@ repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into
 `tests/test_structure_drift.py`.
 
 ### Signal integration
+
+**`scan_registry.py`**
+The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
+the run-context `key`, the callable, the names it `reads` (passed positionally: a
+core-provided input from `PROVIDED_INPUTS`, or the key of an earlier spec), the
+`stage` of `build_run_context` it runs at, and whether it degrades. `run_scans`
+routes every degrading spec through `safe`, which turns any exception into
+`{"available": False, "reason": ...}` so one broken scan never stops the run; a spec
+opts out only with a `gate_reason`. `validate` runs at import and raises
+`ScanRegistryError` on a duplicate key, an unknown stage, a read that nothing
+provides, a read of a key produced at a later stage, or a callable that cannot take
+its declared reads, so a mis-declared scan fails
+before any run. `run_scans` resolves reads outside the wrapper: an input the core did
+not pass raises `ScanRegistryError` and stops the run, while a failure inside the scan
+degrades. `stage` exists to keep
+`run-context.json` key order unchanged while scans migrate here; it goes when the
+hand-wired assignments between the stages are gone. Currently registered:
+`agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
+`instruction_claims`.
 
 **`keyhole_signals.py`** *(co-change hotspot)*
 Integration barrier between the individual signal modules and `assess_core`. Derives
@@ -785,7 +824,8 @@ enforcement and pin checks use
 `evidence_check.is_referenced_in`, so the search is the same fail-closed one.
 The core writes the result as the run-context block `instruction_claims`
 (`{total, verified, failed, failures[{file, line, kind, path, reason, ...}]}`, zeros when
-nothing matched); failures feed Layer 0 evidence and a Lying Signals row. A new
+nothing matched; `{available: false, reason}` with no counts when the scan itself
+raised, since it runs from the `scan_registry` table); failures feed Layer 0 evidence and a Lying Signals row. A new
 claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
 (which returns the extra failure fields). Tests: `tests/test_instruction_claims.py`.
 
