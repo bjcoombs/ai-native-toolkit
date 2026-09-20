@@ -97,3 +97,135 @@ def test_reports_behind_count_vs_upstream(git_repo, tmp_path):
     info = git_churn.git_commit_info(repo)
     assert info["upstream"] == f"origin/{branch}"
     assert info["behind"] == 1
+
+
+def test_dirty_excludes_assess_outputs(git_repo):
+    """A repository that tracks `.assess/` gets that directory rewritten by the
+    run itself before the snapshot is taken, so a modified file there is the
+    tool's own output and must not raise the uncommitted-edits warning (#414)."""
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assess = repo / ".assess"
+    assess.mkdir()
+    (assess / "complexity-stats.json").write_text("{}\n", encoding="utf-8")
+    commit("initial commit")
+
+    # The run rewrites its own sidecar.
+    (assess / "complexity-stats.json").write_text(
+        '{"files_scored": 1}\n', encoding="utf-8")
+
+    assert git_churn.git_commit_info(repo)["dirty"] is False
+
+
+def test_dirty_excludes_assess_scoped_subdirectory(git_repo):
+    """A scoped run writes under `.assess/<slug>/`; that subdirectory is
+    excluded on the same terms as the top-level wiki."""
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    scoped = repo / ".assess" / "backend"
+    scoped.mkdir(parents=True)
+    (scoped / "assess-report.md").write_text("report\n", encoding="utf-8")
+    commit("initial commit")
+
+    (scoped / "assess-report.md").write_text("rewritten\n", encoding="utf-8")
+
+    assert git_churn.git_commit_info(repo)["dirty"] is False
+
+
+def test_dirty_excludes_assess_by_pathspec_not_status_code(git_repo):
+    """The exclusion is a git pathspec, so a staged edit and a `git rm` under
+    `.assess/` drop out on the same terms as an unstaged modification."""
+    import subprocess
+
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assess = repo / ".assess"
+    assess.mkdir()
+    (assess / "notes.md").write_text("notes\n", encoding="utf-8")
+    (assess / "log.md").write_text("log\n", encoding="utf-8")
+    commit("initial commit")
+
+    (assess / "notes.md").write_text("staged edit\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", ".assess/notes.md"],
+                   check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo), "rm", "-q", ".assess/log.md"],
+                   check=True, capture_output=True, text=True)
+
+    assert git_churn.git_commit_info(repo)["dirty"] is False
+
+
+def test_dirty_excludes_assess_but_still_flags_source_edits(git_repo):
+    """The pathspec narrows the check rather than disabling it: a modified
+    tracked file outside `.assess/` still reports dirty."""
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assess = repo / ".assess"
+    assess.mkdir()
+    (assess / "complexity-stats.json").write_text("{}\n", encoding="utf-8")
+    commit("initial commit")
+
+    (assess / "complexity-stats.json").write_text(
+        '{"files_scored": 1}\n', encoding="utf-8")
+    (repo / "a.py").write_text("x = 2\nprint(x)\n", encoding="utf-8")
+
+    assert git_churn.git_commit_info(repo)["dirty"] is True
+
+
+def test_dirty_flags_assess_config_edits(git_repo):
+    """`.assess/config.toml` is an input to the scan, not one of its outputs:
+    `lib.assess_config.load_config` reads it and its excludes reach every
+    scan, so an uncommitted edit there really does move the measured figures
+    off HEAD and must still report dirty."""
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assess = repo / ".assess"
+    assess.mkdir()
+    (assess / "config.toml").write_text('exclude_dirs = ["vendor"]\n',
+                                        encoding="utf-8")
+    commit("initial commit")
+
+    (assess / "config.toml").write_text(
+        'exclude_dirs = ["vendor", "generated"]\n', encoding="utf-8")
+
+    assert git_churn.git_commit_info(repo)["dirty"] is True
+
+
+def test_dirty_excludes_assess_outputs_beside_the_config(git_repo):
+    """The config carve-out is that one path and no more: a rewritten wiki
+    page beside an untouched `config.toml` still reads clean."""
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assess = repo / ".assess"
+    assess.mkdir()
+    (assess / "config.toml").write_text('exclude_dirs = ["vendor"]\n',
+                                        encoding="utf-8")
+    (assess / "log.md").write_text("# Run log\n", encoding="utf-8")
+    commit("initial commit")
+
+    (assess / "log.md").write_text("# Run log\n\n- a run\n", encoding="utf-8")
+
+    assert git_churn.git_commit_info(repo)["dirty"] is False
+
+
+def test_assess_pathspecs_derive_from_assess_config(tmp_path):
+    """Both `dirty` pathspecs and `load_config`'s own path are built from the
+    same two constants in `assess_config`, so a rename of the directory or the
+    file moves them together. Were the directory a separate literal here, a
+    rename there would leave `ASSESS_CONFIG_PATHSPEC` naming a path that no
+    longer exists: `git status` exits 0 empty on it, and an uncommitted config
+    edit would silently stop flagging `dirty` - a false clean."""
+    from lib import assess_config
+
+    assert git_churn.ASSESS_OUTPUT_DIR == assess_config.ASSESS_DIR
+    assert git_churn.ASSESS_EXCLUDE_PATHSPEC == (
+        f":(exclude){assess_config.ASSESS_DIR}")
+    assert git_churn.ASSESS_CONFIG_PATHSPEC == (
+        f"{assess_config.ASSESS_DIR}/{assess_config.CONFIG_FILE}")
+
+    # The other end of the seam: the path the pathspec points at is the one
+    # `load_config` actually reads.
+    config_dir = tmp_path / assess_config.ASSESS_DIR
+    config_dir.mkdir()
+    (config_dir / assess_config.CONFIG_FILE).write_text(
+        'exclude_dirs = ["vendor"]\n', encoding="utf-8")
+    assert assess_config.load_config(tmp_path) == {"exclude_dirs": ["vendor"]}

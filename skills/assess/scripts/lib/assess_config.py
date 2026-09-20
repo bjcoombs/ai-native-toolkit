@@ -53,6 +53,13 @@ from pathlib import Path
 from typing import NamedTuple
 
 
+# The tool's own directory under the scanned repo root: this config file lives
+# there beside the wiki a run writes. `git_churn` imports both constants so the
+# pathspecs its `dirty` check runs under are built from the same path this
+# module reads, and a rename here cannot leave that check pointing at a path
+# that no longer exists (issue #414).
+ASSESS_DIR = ".assess"
+
 CONFIG_FILE = "config.toml"
 
 
@@ -85,7 +92,7 @@ def load_config(repo_root: Path) -> dict:
     parse. Malformed files print a one-line warning to stderr; missing files
     are silent (the common case).
     """
-    config_path = (repo_root / ".assess" / CONFIG_FILE).resolve()
+    config_path = (repo_root / ASSESS_DIR / CONFIG_FILE).resolve()
     if not config_path.is_file():
         return {}
     try:

@@ -74,6 +74,20 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+`git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
+pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
+scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
+file anywhere else still does. The line is whether a path moves what a scan *measures*,
+not whether anything reads it back: a later run does read the wiki (`complexity-stats.prior.json`
+for the cross-run diff, `first-flagged.json` for hotspot ages), but that shapes what the
+report says about figures already computed. `.assess/config.toml` is the exception -
+`assess_config.load_config` reads it before any scan and its excludes decide which files
+get measured - so it is checked by a second status call under `ASSESS_CONFIG_PATHSPEC`
+and OR-ed back in. That is the seam to keep in step if the config ever grows a second
+file or a scope-local path. Both pathspecs are built from `assess_config.ASSESS_DIR` and
+`CONFIG_FILE`, the same two constants `load_config` resolves its own path from, so
+renaming the directory or the file cannot leave the check pointing at a path that no
+longer exists (`test_assess_pathspecs_derive_from_assess_config` pins that).
 `content_commit_clock` is the last-content-change clock (issue #333): one `git log` pass
 over the docs' history that skips bulk mechanical commits (more than
 `BULK_COMMIT_DOC_SHARE` of the docs and at least `BULK_COMMIT_MIN_DOCS` of them, such as
