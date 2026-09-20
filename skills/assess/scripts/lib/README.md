@@ -876,7 +876,7 @@ Layer 1 write-side truth pressure. Two tiers:
 - Mutation tier: runs a mutation-testing tool (mutmut for Python) over a sample of the
   codebase to measure whether the test suite actually catches changes. mutmut's command
   line differs by major version, so `_mutmut_major` asks the package metadata of the
-  interpreter the launcher runs under (shebang, the sh trampoline pip and uv write for
+  interpreter the launcher runs under (shebang, the sh trampoline uv and pip write for
   long paths, or the `python` beside a symlinked launcher) and, when the launcher names
   none, reads what `mutmut --version` reveals in an empty directory. **mutmut 2** runs in
   place and is two-step - `mutmut run` then `mutmut junitxml` - because the run's stdout

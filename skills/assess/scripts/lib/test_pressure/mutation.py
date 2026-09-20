@@ -317,9 +317,14 @@ _COPY_IGNORE = shutil.ignore_patterns(
     "__pycache__", ".mutmut-cache", ".tox", ".pytest_cache")
 
 
-# The second line of the sh trampoline pip and uv write when the interpreter
-# path is too long for a shebang:  '''exec' '/path/to/python' "$0" "$@"
-_TRAMPOLINE_EXEC_RE = re.compile(r"^\s*'''exec' '([^']+)'")
+# The second line of the sh trampoline written when the interpreter path is too
+# long for a shebang (or holds a space). uv single-quotes the interpreter, pip
+# (distlib) leaves it bare and double-quotes it only around a space:
+#   '''exec' '/path/to/python' "$0" "$@"
+#   '''exec' /path/to/python "$0" "$@"
+#   '''exec' "/path with space/python" "$0" "$@"
+_TRAMPOLINE_EXEC_RE = re.compile(
+    r"""^\s*'''exec' (?:'([^']+)'|"([^"]+)"|(\S+))""")
 
 
 def _launcher_interpreter(exe: str) -> str | None:
@@ -337,7 +342,7 @@ def _launcher_interpreter(exe: str) -> str | None:
         candidates.append(head[0][2:].strip().split(" ")[0])
     m = _TRAMPOLINE_EXEC_RE.match(head[1]) if len(head) > 1 else None
     if m:
-        candidates.append(m.group(1))
+        candidates.append(next(g for g in m.groups() if g))
     for c in candidates:
         if "python" in Path(c).name:
             return c
@@ -530,7 +535,11 @@ def _run_mutmut3(repo_root: Path, scope: list[str]) -> dict:
     timed_out = {**base, "mutation_run": False, "per_file": [],
                  "reason": f"exceeded {MUTATION_TIMEOUT}s timeout"}
     started = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix="assess-mutmut-") as tmp:
+    # ignore_cleanup_errors: a read-only directory carried over by the copy, or
+    # debris from the test run, must not raise on the way out of the block
+    # and turn a named result into a generic scan failure.
+    with tempfile.TemporaryDirectory(prefix="assess-mutmut-",
+                                     ignore_cleanup_errors=True) as tmp:
         work = Path(tmp) / "repo"
         work.mkdir()
         try:

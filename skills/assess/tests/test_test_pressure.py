@@ -923,9 +923,15 @@ def test_launcher_interpreter_reads_the_long_path_trampoline(tmp_path: Path) -> 
     """pip and uv write an sh trampoline when the interpreter path exceeds the
     shebang limit; a launcher naming no interpreter falls back to the python
     beside it."""
-    trampoline = "#!/bin/sh\n'''exec' '/very/long/env/bin/python' \"$0\" \"$@\"\n' '''"
-    exe = _launcher(tmp_path / "a", trampoline)
-    assert mutation._launcher_interpreter(exe) == "/very/long/env/bin/python"
+    forms = {
+        "uv": ("'/very/long/env/bin/python'", "/very/long/env/bin/python"),
+        "pip": ("/very/long/env/bin/python", "/very/long/env/bin/python"),
+        "pip-space": ('"/long env/bin/python"', "/long env/bin/python"),
+    }
+    for name, (written, expected) in forms.items():
+        trampoline = f"#!/bin/sh\n'''exec' {written} \"$0\" \"$@\"\n' '''"
+        exe = _launcher(tmp_path / name, trampoline)
+        assert mutation._launcher_interpreter(exe) == expected
     plain = _launcher(tmp_path / "b", "#!/bin/sh")
     assert mutation._launcher_interpreter(plain) is None
     sibling = Path(plain).parent / "python"
@@ -1153,3 +1159,32 @@ def test_no_records_reason_strips_the_longer_scratch_spelling_first(
     got = reason(long_line)
     assert "scratch" not in got
     assert len(got.split(": ", 1)[1]) <= mutation._MAX_REASON_DETAIL
+
+
+def test_run_mutmut3_survives_a_scratch_tree_it_cannot_remove(
+        tmp_path: Path, monkeypatch) -> None:
+    """A read-only directory left in the scratch copy must not raise out of the
+    pass: run_bounded_mutation promises never to."""
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _as_mutmut3(monkeypatch)
+    locked: list[Path] = []
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git":
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="")
+        cwd = Path(kwargs["cwd"])
+        _write(cwd, "mutants/pkg/calc.py.meta", json.dumps({"exit_code_by_key": {"a": 1}}))
+        _write(cwd, "locked/file.txt", "x")
+        (cwd / "locked").chmod(0o555)
+        locked.append(cwd / "locked")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    try:
+        r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    finally:
+        for d in locked:
+            if d.exists():
+                d.chmod(0o755)
+                tp.shutil.rmtree(d.parents[1], ignore_errors=True)
+    assert r["mutation_run"] is True
