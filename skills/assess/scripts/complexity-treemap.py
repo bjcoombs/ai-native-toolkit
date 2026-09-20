@@ -556,8 +556,7 @@ def _largest_first(
     few on two runs of the same commit - silencing the scc-only hint on one run
     and not the next, and changing the biggest-files summary an agent reads
     (issue #426). Every path shares the scan root, so ordering on the absolute
-    posix path is the same order as on the repository-relative one, and neither
-    caller is given the root.
+    posix path is the same order as on the repository-relative one.
     """
     return sorted(files, key=lambda f: (-size_of(f), f[0].as_posix()))[:n]
 
