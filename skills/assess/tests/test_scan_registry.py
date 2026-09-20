@@ -132,6 +132,21 @@ def test_the_core_passes_exactly_the_provided_inputs():
     assert keys == set(reg.PROVIDED_INPUTS)
 
 
+def test_the_core_drives_every_stage():
+    """A spec at a stage the core never runs would validate and then vanish."""
+    core = ast.parse((SCRIPTS / "assess_core.py").read_text(encoding="utf-8"))
+    driven = {
+        getattr(reg, node.args[2].id)
+        for node in ast.walk(core)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "run_scans"
+        and len(node.args) >= 3
+        and isinstance(node.args[2], ast.Name)
+    }
+    assert driven == set(reg.STAGES)
+
+
 def test_every_table_scan_degrades():
     """instruction_claims ran outside the wrapper before it moved here."""
     assert all(spec.degrade for spec in reg.SCANS)

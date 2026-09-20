@@ -809,7 +809,8 @@ enforcement and pin checks use
 `evidence_check.is_referenced_in`, so the search is the same fail-closed one.
 The core writes the result as the run-context block `instruction_claims`
 (`{total, verified, failed, failures[{file, line, kind, path, reason, ...}]}`, zeros when
-nothing matched); failures feed Layer 0 evidence and a Lying Signals row. A new
+nothing matched; `{available: false, reason}` with no counts when the scan itself
+raised, since it runs from the `scan_registry` table); failures feed Layer 0 evidence and a Lying Signals row. A new
 claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
 (which returns the extra failure fields). Tests: `tests/test_instruction_claims.py`.
 
