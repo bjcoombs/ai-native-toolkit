@@ -78,6 +78,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -540,6 +541,27 @@ def _warn_if_dominated_by_one_file(
 SCC_ONLY_HINT_TOP_N = 5  # the largest blocks a reader sees first
 
 
+def _largest_first(
+    files: list[tuple[Path, int, float, str]],
+    size_of: Callable[[tuple[Path, int, float, str]], float],
+    n: int,
+) -> list[tuple[Path, int, float, str]]:
+    """The ``n`` largest files by ``size_of``, ties broken on the path.
+
+    Both callers pick "the biggest few" off the same file list and differ only
+    in what they do when a path carries no token estimate, so ``size_of`` is
+    passed in rather than branched on here. Ties break on the path, ascending,
+    under the plain byte ordering the top-10 lists use: without it the set
+    followed scanner emission order, so a tied boundary could show a different
+    few on two runs of the same commit - silencing the scc-only hint on one run
+    and not the next, and changing the biggest-files summary an agent reads
+    (issue #426). Every path shares the scan root, so ordering on the absolute
+    posix path is the same order as on the repository-relative one, and neither
+    caller is given the root.
+    """
+    return sorted(files, key=lambda f: (-size_of(f), f[0].as_posix()))[:n]
+
+
 def _hint_if_largest_files_scc_only(
     files: list[tuple[Path, int, float, str]],
     tokens: dict[Path, int],
@@ -558,14 +580,8 @@ def _hint_if_largest_files_scc_only(
     """
     if len(files) < n:
         return
-    # Ties break on the path, ascending. Without it the n inspected files
-    # followed scanner emission order, so a tied boundary could pull a
-    # non-qualifying file into the set and silence the hint on one run and not
-    # the next. Every path shares the scan root, so ordering on the absolute
-    # posix path is the same order as on the repository-relative one, and this
-    # helper is not given the root (issue #426).
-    largest = sorted(files,
-                     key=lambda f: (-tokens.get(f[0], f[1]), f[0].as_posix()))[:n]
+    # Falls back to the file's loc when a path carries no token estimate.
+    largest = _largest_first(files, lambda f: tokens.get(f[0], f[1]), n)
     if any(f[3] != "scc" or f[2] > 0
            or languages.get(f[0]) not in DATA_LANGUAGES for f in largest):
         return
@@ -691,7 +707,8 @@ def render(files: list[tuple[Path, int, float, str]],
         print(f"saturation: {aux_label}; range 0-{aux_max:.0f}; "
               f"cap {aux_cap:.0f} ({aux_cap_kind})")
 
-    biggest = sorted(files, key=lambda f: -tokens.get(f[0], 0))[:5]
+    # Counts a path with no token estimate as 0, unlike the scc-only hint.
+    biggest = _largest_first(files, lambda f: tokens.get(f[0], 0), 5)
     if biggest:
         print("biggest files (estimated tokens dominate layout):")
         for path, loc, metric, src in biggest:

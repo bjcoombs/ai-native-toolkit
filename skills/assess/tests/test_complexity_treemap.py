@@ -1509,3 +1509,37 @@ def test_dominant_file_warning_tie_break_by_path_survives_input_order(
     assert outputs[0] == outputs[1]
     assert "aaa.json" in outputs[0]
     assert "zzz.json" not in outputs[0]
+
+
+def test_largest_first_tie_break_by_path_survives_input_order(
+        treemap, tmp_path):
+    """The selection both stderr summaries share picks the same few files
+    whatever order they arrive in.
+
+    Twelve files tie on tokens for five places. Unpadded names make byte order
+    `b1, b10, b11, b12, b2`, which neither creation order, numeric order nor
+    the reversed input can produce by accident, so the assertion can only hold
+    if the path tie-break ran (issue #426).
+    """
+    rows = [_scc_row(tmp_path, f"b{i}.json", 200) for i in range(1, 13)]
+    tokens = {f[0]: 2000 for f in rows}
+    size_of = (lambda f: tokens.get(f[0], f[1]))
+    expected = ["b1.json", "b10.json", "b11.json", "b12.json", "b2.json"]
+
+    as_built = treemap._largest_first(rows, size_of, 5)
+    reversed_in = treemap._largest_first(list(reversed(rows)), size_of, 5)
+
+    assert [f[0].name for f in as_built] == expected
+    assert as_built == reversed_in
+
+
+def test_largest_first_keeps_size_order_where_sizes_differ(treemap, tmp_path):
+    """The path tie-break orders only files that are already equal: a bigger
+    file leads even when its name sorts last."""
+    rows = [_scc_row(tmp_path, f"b{i}.json", 200) for i in range(1, 13)]
+    big = _scc_row(tmp_path, "zz.json", 900)
+    rows.append(big)
+    tokens = {f[0]: (9000 if f is big else 2000) for f in rows}
+
+    picked = treemap._largest_first(rows, lambda f: tokens.get(f[0], f[1]), 3)
+    assert [f[0].name for f in picked] == ["zz.json", "b1.json", "b10.json"]
