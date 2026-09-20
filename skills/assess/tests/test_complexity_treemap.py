@@ -1348,14 +1348,19 @@ def test_stats_schema_version_raised_for_dart_scanner(treemap):
 
 
 def _tied_rows(root: Path) -> list[tuple[Path, int, float, str]]:
-    """Twelve byte-distinct files of identical size, loc and ccn (issue #426).
+    """Twelve files tied on every ranking key (issue #426).
 
-    Each carries a distinct function name of identical length, because lizard
-    de-duplicates byte-identical sources: twelve literally identical files
-    never form the tie this fixture needs. Names are unpadded (`f1` to `f12`),
-    so byte order (`f1, f10, f11, f12, f2, ...`) differs from numeric order and
-    `f8`/`f9` fall outside the first ten - an outcome no input order,
-    enumeration order or numeric order can produce by accident.
+    `loc` and `ccn` are passed as literals, so the only file-derived value is
+    `est_token_count` (chars/4). What must hold is therefore identical byte
+    *length*, which the zero-padded function names (`a01` to `a12`) preserve
+    and a bare `a1`/`a10` would quietly break. The names are distinct so the
+    same fixture also ties when lizard scans it for real, since lizard
+    de-duplicates byte-identical sources and leaves the copies to scc.
+
+    File names are unpadded (`f1` to `f12`), so byte order is
+    `f1, f10, f11, f12, f2, ...` and `f8`/`f9` fall outside the first ten - an
+    outcome no input order, enumeration order or numeric order produces by
+    accident.
     """
     src = root / "src"
     src.mkdir()
@@ -1390,10 +1395,39 @@ def test_write_stats_tie_break_by_path_takes_first_ten_in_path_order(
     stats = json.loads(out.read_text())
     for key in ("top_hotspots", "top_complex", "top_large"):
         assert [r["path"] for r in stats[key]] == _TIED_FIRST_TEN, key
-    # Ranking is untouched where the primary values differ: the tie-break only
-    # orders rows that are already equal.
+    # Every row in this fixture ties, which is what makes the list above
+    # evidence about the tie-break alone. Precedence of the primary key is a
+    # separate claim, tested below against a file whose path sorts last.
     assert len({r["ccn"] for r in stats["top_complex"]}) == 1
     assert len({r["loc"] for r in stats["top_large"]}) == 1
+
+
+def test_write_stats_primary_key_outranks_tie_break_by_path(treemap, tmp_path):
+    """A higher-scoring file leads every list even when its path sorts last.
+
+    The tie-break must order only rows that are already equal. `zbig.py`
+    dominates on ccn, loc and the composite, and sorts after every tied file
+    by path, so a key that put path first would bury it (issue #426).
+    """
+    rows = _tied_rows(tmp_path)
+    dominant = tmp_path / "src" / "zbig.py"
+    dominant.write_text(
+        "def big(a):\n"
+        + "".join(f"    if a == {i}:\n        return {i}\n" for i in range(1, 41))
+        + "    return 0\n"
+    )
+    rows.append((dominant, 82, 41.0, "lizard"))
+    out = tmp_path / "stats.json"
+    treemap.write_stats(rows, None, None, tmp_path, out,
+                        fn_ccn_by_path={p: [1.0] for p, *_ in rows})
+
+    stats = json.loads(out.read_text())
+    for key in ("top_hotspots", "top_complex", "top_large"):
+        paths = [r["path"] for r in stats[key]]
+        assert paths[0] == "src/zbig.py", key
+        # The nine places left go to the tied files in path order, so t7, t8
+        # and t9 - here f7 onward - fall out.
+        assert paths[1:] == _TIED_FIRST_TEN[:9], key
 
 
 def test_write_stats_tie_break_by_path_is_input_order_independent(
