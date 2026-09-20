@@ -64,12 +64,12 @@
 
 **How an action is matched.** Two keys, tried in order:
 
-1. **Identity** - the action's `finding` plus the paths it names (its `files` list, or a singular `path`). Paths are compared as a set, so reordering the list changes nothing.
+1. **Identity** - the action's `finding` plus the paths it names (its `files` list, or a singular `path`). Paths are compared as a set, so reordering or repeating an entry changes nothing.
 2. **Directive text** - the `action` string, byte-for-byte.
 
 The directive is written afresh by the model on every run, so identity is tried first: a reworded action that still names the same finding and the same files keeps its lifecycle. Text is the fallback because an action with no `finding`, or none naming a path, has no deterministic identity - and because a contract written before identity matching existed carries no `finding` at all, and must still carry its statuses forward on the first run after the upgrade. Each prior entry is indexed under both keys, so both cases resolve.
 
-The same finding on a different file is a different piece of work: it does not inherit the other entry's status.
+The same finding on a different file is a different piece of work: it does not inherit the other entry's status. The text fallback is what would otherwise let it, because the directive is **not** free text per file - the core renders one canned phrase per finding type (`FINDING_ACTIONS` in `lib/keyhole_signals.py`) with the path in its own column, so two hotspots sharing a finding carry byte-identical directives. A text match is therefore refused when the matched prior entry carries an identity of its own that names other paths. What remains reachable by text is exactly what has no identity to contradict: a pre-change entry, and a judgement slot.
 
 ## `mode` derivation
 

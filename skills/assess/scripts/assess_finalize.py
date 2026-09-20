@@ -279,13 +279,18 @@ def _action_identity_key(entry: dict) -> str | None:
             paths = [single]
     if not paths:
         return None
-    return "\x00".join(["finding", finding, *sorted(paths)])
+    return "\x00".join(["finding", finding, *sorted(set(paths))])
 
 
 def _action_text_key(entry: dict) -> str | None:
-    """The fallback identity: the action directive text, as written."""
+    """The fallback identity: the action directive text, as written.
+
+    ``None`` for an empty directive: ``ACTION_REQUIRED_KEYS`` checks that the
+    key is present, not that it says anything, and every empty string would
+    otherwise index into one bucket.
+    """
     text = entry.get("action")
-    return "\x00".join(["action", text]) if isinstance(text, str) else None
+    return "\x00".join(["action", text]) if isinstance(text, str) and text else None
 
 
 def _read_prior_action_status(assess_dir: Path) -> dict[str, dict]:
@@ -327,11 +332,26 @@ def _match_prior_action(prior: dict[str, dict], action: dict) -> dict:
     Identity wins because it survives a rewording. Text is tried second because
     a pre-change prior has no identity to match, and because an action with no
     finding has none either.
+
+    A text hit is refused when the prior entry carries an identity of its own
+    that names other work. The directive is not free text per file: the core
+    renders one canned phrase per finding type (``FINDING_ACTIONS`` in
+    ``lib/keyhole_signals.py``) with the path in its own column, so two hotspots
+    sharing a finding carry byte-identical directives. Without the refusal a
+    newly flagged file would inherit the completed status of a different file
+    that happened to share the phrase - the very false carry the identity key
+    exists to prevent.
     """
-    for key in (_action_identity_key(action), _action_text_key(action)):
-        if key is not None and key in prior:
-            return prior[key]
-    return {}
+    identity = _action_identity_key(action)
+    if identity is not None and identity in prior:
+        return prior[identity]
+    text = _action_text_key(action)
+    if text is None or text not in prior:
+        return {}
+    candidate = prior[text]
+    if identity is not None and _action_identity_key(candidate) not in (None, identity):
+        return {}
+    return candidate
 
 
 def _carry_status_fields(prior_entry: dict) -> dict:

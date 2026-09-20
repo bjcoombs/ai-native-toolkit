@@ -1162,3 +1162,62 @@ def test_action_identity_adds_no_field_to_the_contract(
         "files", "finding", "first_step", "layer", "mode", "rank",
         "scope_fence", "status",
     }
+
+
+def test_action_identity_does_not_match_the_same_text_on_another_path(
+    tmp_assess_dir: Path,
+) -> None:
+    """The realistic collision: the core renders one canned directive per
+    finding type with the path in its own column, so two hotspots sharing a
+    finding carry byte-identical text. A newly flagged file must not inherit a
+    completed status through that shared phrase."""
+    canned = "investigate the seam"
+    _run_finalize(
+        tmp_assess_dir,
+        [
+            _identity_action(
+                1, text=canned, finding="hidden_coupling", files=["src/a.py"]
+            ),
+            _identity_action(
+                2, text=canned, finding="hidden_coupling", files=["src/b.py"]
+            ),
+        ],
+    )
+    _mark_done(tmp_assess_dir)
+
+    # Run 2: a.py and b.py are fixed and drop out; c.py is newly flagged with
+    # the same finding, so it carries the same canned directive.
+    after = _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text=canned, finding="hidden_coupling", files=["src/c.py"]
+        )],
+    )[1]
+
+    assert after["status"] == "pending"
+    assert after["claimed_by"] is None
+    assert after["completed_sha"] is None
+
+
+def test_action_identity_ignores_a_duplicated_path(tmp_assess_dir: Path) -> None:
+    """Paths are compared as a set, so a repeated entry in `files` is the same
+    identity and keeps the lifecycle."""
+    _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text="Investigate the seam",
+            finding="hidden_coupling", files=["src/a.py"],
+        )],
+    )
+    _mark_done(tmp_assess_dir)
+
+    after = _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text="REWORDED: pin the seam",
+            finding="hidden_coupling", files=["src/a.py", "src/a.py"],
+        )],
+    )[1]
+
+    assert after["status"] == "done"
+    assert after["completed_sha"] == "sha1"
