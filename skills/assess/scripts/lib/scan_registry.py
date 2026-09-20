@@ -11,7 +11,8 @@ not edit ``build_run_context``. The shape follows ``_DEAD_CODE_TOOLS`` in
 
 The table is validated when this module is imported. A duplicate key, an unknown
 stage, a read of a name that neither the core provides nor an earlier scan
-produces, a read of a key produced at a later stage, or a scan that opts out of
+produces, a read of a key produced at a later stage, a callable that cannot take
+as many positional arguments as it declares reads, or a scan that opts out of
 degrading without a ``gate_reason`` raises ``ScanRegistryError`` before any run
 starts.
 
@@ -22,6 +23,7 @@ hand-wired assignments between them are gone.
 """
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from functools import partial
@@ -76,6 +78,22 @@ def safe(label: str, fn: Callable[[], Any]) -> Any:
         return {"available": False, "reason": f"{label} scan failed: {e}"}
 
 
+def _accepts(fn: Callable[..., Any], count: int) -> bool:
+    """True when ``fn`` can be called with ``count`` positional arguments.
+
+    A callable whose signature cannot be inspected is given the benefit of the
+    doubt; the mismatch this guards against is a declared table entry, which is
+    always a plain function.
+    """
+    try:
+        inspect.signature(fn).bind(*[None] * count)
+    except TypeError:
+        return False
+    except ValueError:
+        return True
+    return True
+
+
 def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUTS) -> None:
     """Raise ``ScanRegistryError`` unless every spec can run in table order.
 
@@ -100,6 +118,11 @@ def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUT
             raise ScanRegistryError(
                 f"scan {spec.key!r} runs at stage {spec.stage!r} but reads {late}, "
                 f"produced at a later stage"
+            )
+        if not _accepts(spec.fn, len(spec.reads)):
+            raise ScanRegistryError(
+                f"scan {spec.key!r} declares {len(spec.reads)} read(s) but its callable "
+                f"cannot be called with that many positional arguments"
             )
         if not spec.degrade and not spec.gate_reason:
             raise ScanRegistryError(f"scan {spec.key!r} opts out of degrading without a gate_reason")

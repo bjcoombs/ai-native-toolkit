@@ -75,6 +75,21 @@ def test_duplicate_key_and_shadowed_input_are_rejected():
         reg.validate((_spec("repo_root", lambda root: 1),))
 
 
+def test_a_callable_that_cannot_take_its_declared_reads_is_rejected():
+    def two(_root, _files):
+        return 1
+
+    with pytest.raises(ScanRegistryError, match=r"'short'.*1 read"):
+        reg.validate((_spec("short", two),))
+    with pytest.raises(ScanRegistryError, match=r"'long'.*2 read"):
+        reg.validate((_spec("long", lambda root: 1, reads=("repo_root", "instruction_files")),))
+
+    def with_default(_root, _now=None):
+        return 1
+
+    reg.validate((_spec("ok", with_default),))
+
+
 def test_unknown_stage_is_rejected():
     with pytest.raises(ScanRegistryError, match="unknown stage"):
         reg.validate((_spec("a", lambda root: 1, stage="nowhere"),))
