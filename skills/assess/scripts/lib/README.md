@@ -29,6 +29,12 @@ Two modules are the identified co-change hotspots in the git history:
   the six named derived findings. Because it touches every upstream signal, it
   co-changes with the core on almost every schema or signal-set change.
 
+The seam is narrowing. A scan that reads only what the core hands it and feeds no
+later block is declared once in `scan_registry.py` (`SCANS`) and run by one loop, so
+adding such a scan edits its own module, its test, that table and this file - not
+`assess_core.py`. Scans still hand-wired in `build_run_context` move to the table in
+batches; until then both patterns exist, and the table is the one to extend.
+
 Seeing these two files in the same commit as `assess_core.py` is expected, not a
 defect. If the core is later decomposed, treat this seam as the natural boundary -
 `doc_graph` and `keyhole_signals` are where the cut-line already lives.
@@ -310,6 +316,25 @@ repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into
 `tests/test_structure_drift.py`.
 
 ### Signal integration
+
+**`scan_registry.py`**
+The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
+the run-context `key`, the callable, the names it `reads` (passed positionally: a
+core-provided input from `PROVIDED_INPUTS`, or the key of an earlier spec), the
+`stage` of `build_run_context` it runs at, and whether it degrades. `run_scans`
+routes every degrading spec through `safe`, which turns any exception into
+`{"available": False, "reason": ...}` so one broken scan never stops the run; a spec
+opts out only with a `gate_reason`. `validate` runs at import and raises
+`ScanRegistryError` on a duplicate key, an unknown stage, a read that nothing
+provides, a read of a key produced at a later stage, or a callable that cannot take
+its declared reads, so a mis-declared scan fails
+before any run. `run_scans` resolves reads outside the wrapper: an input the core did
+not pass raises `ScanRegistryError` and stops the run, while a failure inside the scan
+degrades. `stage` exists to keep
+`run-context.json` key order unchanged while scans migrate here; it goes when the
+hand-wired assignments between the stages are gone. Currently registered:
+`agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
+`instruction_claims`.
 
 **`keyhole_signals.py`** *(co-change hotspot)*
 Integration barrier between the individual signal modules and `assess_core`. Derives
@@ -785,7 +810,8 @@ enforcement and pin checks use
 `evidence_check.is_referenced_in`, so the search is the same fail-closed one.
 The core writes the result as the run-context block `instruction_claims`
 (`{total, verified, failed, failures[{file, line, kind, path, reason, ...}]}`, zeros when
-nothing matched); failures feed Layer 0 evidence and a Lying Signals row. A new
+nothing matched; `{available: false, reason}` with no counts when the scan itself
+raised, since it runs from the `scan_registry` table); failures feed Layer 0 evidence and a Lying Signals row. A new
 claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
 (which returns the extra failure fields). Tests: `tests/test_instruction_claims.py`.
 
@@ -874,10 +900,30 @@ or scope rule.
 **`test_pressure/`**
 Layer 1 write-side truth pressure. Two tiers:
 - Mutation tier: runs a mutation-testing tool (mutmut for Python) over a sample of the
-  codebase to measure whether the test suite actually catches changes. For mutmut the
-  run is two-step - `mutmut run` then `mutmut junitxml` - because the run's stdout lists
-  only survivors (no totals); the junitxml report carries every mutant, so per-file
-  killed/survived/total (and a real survivor density) can be derived. Falls back to the
-  survivor-only stdout parse when junitxml is absent (e.g. mutmut 3.x) or empty.
+  codebase to measure whether the test suite actually catches changes. mutmut's command
+  line differs by major version, so `_mutmut_major` asks the package metadata of the
+  interpreter the launcher runs under (shebang, the sh trampoline uv and pip write for
+  long paths, or the `python` beside a symlinked launcher) and, when the launcher names
+  none, reads what `mutmut --version` reveals in an empty directory. **mutmut 2** runs in
+  place and is two-step - `mutmut run` then `mutmut junitxml` - because the run's stdout
+  lists only survivors (no totals); the junitxml report carries every mutant, so per-file
+  killed/survived/total (and a real survivor density) can be derived, falling back to the
+  survivor-only stdout parse when junitxml is empty. **mutmut 3** takes no paths and reads
+  its scope from the root `pyproject.toml` (`[tool.mutmut]`) or `setup.cfg` (`[mutmut]`),
+  so `_run_mutmut3` copies the working tree to a scratch directory, appends a generated
+  `[mutmut]` section unless mutmut 3 would find one of those two (a nested config or a CI
+  workflow naming mutmut does not count), runs there, and reads per-file totals from
+  `mutants/**/*.meta` using the exit-code table of mutmut 3.6.0. The generated section
+  sets `source_paths` and `paths_to_mutate` (3.0-3.5 read only the latter) to the focus
+  files' top-level directories and `only_mutate` (3.6+) to the focus files. Only the focus
+  files are reported whichever config governed the run, so the result's `scope` names the
+  files its figures describe. The copy spends the same `MUTATION_TIMEOUT` budget as the
+  run. On this path the assessed tree is never written to. A version neither probe can
+  read takes the mutmut 2 path, which runs in the assessed repo and leaves mutmut's
+  `.mutmut-cache` there. Whichever path runs, a tool that exits non-zero without yielding mutants
+  puts the last line of its error output in the result's `reason` (surfaced as
+  `mutation_note`). mutmut runs pytest under its own interpreter, so a repo whose tests
+  need packages that interpreter lacks fails at mutmut's clean-test step and reports that
+  reason.
 - Cheap heuristics: test/source ratio, assertion density, and the coverage gap signal -
   fast proxies that run without a mutation tool.
