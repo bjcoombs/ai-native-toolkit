@@ -517,7 +517,12 @@ def _warn_if_dominated_by_one_file(
     total_loc = sum(f[1] for f in files)
     if total_loc == 0:
         return
-    biggest = max(files, key=lambda f: f[1])
+    # `max` returns the first maximal element, so two files of equal LOC made
+    # the named suspect depend on scanner emission order. The threshold is 30%,
+    # so a tie at the top is reachable - two generated files of the same size
+    # can each hold a third of the LOC. Ties break on the path, ascending, the
+    # same shape the top-10 lists use (issue #426).
+    biggest = min(files, key=lambda f: (-f[1], f[0].as_posix()))
     share = biggest[1] / total_loc
     if share < DOMINANCE_WARN_THRESHOLD:
         return
@@ -553,7 +558,14 @@ def _hint_if_largest_files_scc_only(
     """
     if len(files) < n:
         return
-    largest = sorted(files, key=lambda f: -tokens.get(f[0], f[1]))[:n]
+    # Ties break on the path, ascending. Without it the n inspected files
+    # followed scanner emission order, so a tied boundary could pull a
+    # non-qualifying file into the set and silence the hint on one run and not
+    # the next. Every path shares the scan root, so ordering on the absolute
+    # posix path is the same order as on the repository-relative one, and this
+    # helper is not given the root (issue #426).
+    largest = sorted(files,
+                     key=lambda f: (-tokens.get(f[0], f[1]), f[0].as_posix()))[:n]
     if any(f[3] != "scc" or f[2] > 0
            or languages.get(f[0]) not in DATA_LANGUAGES for f in largest):
         return

@@ -1462,3 +1462,50 @@ def test_write_stats_tie_break_by_path_is_input_order_independent(
     for key in ("top_hotspots", "top_complex", "top_large"):
         assert first[key] == second[key], key
         assert [r["path"] for r in first[key]] == _TIED_FIRST_TEN, key
+
+
+def test_scc_only_hint_tie_break_by_path_survives_input_order(
+        treemap, tmp_path, capsys):
+    """A tied boundary picks the same five files whatever order they arrive in.
+
+    Six files tie on estimated tokens for five places. `zz.py` is lizard-scored
+    code, so it disqualifies the set the moment it is inside it, and its path
+    sorts last. Byte order therefore leaves it out and the hint fires; scanner
+    emission order could pull it in and silence the hint on one run and not the
+    next. Same defect class as the top-10 lists, found while fixing them.
+    """
+    data = [_scc_row(tmp_path, f"d{i}.json", 200) for i in range(1, 6)]
+    code = _scc_row(tmp_path, "zz.py", 200, 5.0, "lizard")
+    tokens = {f[0]: 2000 for f in data + [code]}
+
+    outputs = []
+    for files in ([code] + data, data + [code]):
+        treemap._hint_if_largest_files_scc_only(files, tokens, _langs(files))
+        outputs.append(capsys.readouterr().err)
+
+    assert outputs[0] == outputs[1]
+    assert ".assess/config.toml" in outputs[0]
+    # The five data files by path, and never the disqualifying code file.
+    for i in range(1, 6):
+        assert f"d{i}.json" in outputs[0]
+    assert "zz.py" not in outputs[0]
+
+
+def test_dominant_file_warning_tie_break_by_path_survives_input_order(
+        treemap, tmp_path, capsys):
+    """Two equally-large files name the same suspect whatever order they
+    arrive in. Both hold 40% of the LOC, over the 30% threshold, so the tie is
+    reachable; `max` returned whichever the scanner emitted first (issue #426).
+    """
+    a = _scc_row(tmp_path, "aaa.json", 400)
+    z = _scc_row(tmp_path, "zzz.json", 400)
+    small = _scc_row(tmp_path, "small.py", 200, 1.0, "lizard")
+
+    outputs = []
+    for files in ([z, a, small], [a, z, small]):
+        treemap._warn_if_dominated_by_one_file(files)
+        outputs.append(capsys.readouterr().err)
+
+    assert outputs[0] == outputs[1]
+    assert "aaa.json" in outputs[0]
+    assert "zzz.json" not in outputs[0]
