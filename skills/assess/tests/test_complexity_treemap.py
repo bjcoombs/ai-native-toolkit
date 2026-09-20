@@ -1345,3 +1345,87 @@ def test_effective_ccn_clamps_dart_scanner_max_to_scc_aggregate(treemap):
 
 def test_stats_schema_version_raised_for_dart_scanner(treemap):
     assert treemap.STATS_SCHEMA_VERSION >= 5
+
+
+def _tied_rows(root: Path) -> list[tuple[Path, int, float, str]]:
+    """Twelve byte-distinct files of identical size, loc and ccn (issue #426).
+
+    Each carries a distinct function name of identical length, because lizard
+    de-duplicates byte-identical sources: twelve literally identical files
+    never form the tie this fixture needs. Names are unpadded (`f1` to `f12`),
+    so byte order (`f1, f10, f11, f12, f2, ...`) differs from numeric order and
+    `f8`/`f9` fall outside the first ten - an outcome no input order,
+    enumeration order or numeric order can produce by accident.
+    """
+    src = root / "src"
+    src.mkdir()
+    rows = []
+    for i in range(1, 13):
+        path = src / f"f{i}.py"
+        path.write_text(f"def a{i:02d}(a):\n    return a\n")
+        rows.append((path, 2, 1.0, "lizard"))
+    return rows
+
+
+_TIED_FIRST_TEN = [
+    "src/f1.py", "src/f10.py", "src/f11.py", "src/f12.py", "src/f2.py",
+    "src/f3.py", "src/f4.py", "src/f5.py", "src/f6.py", "src/f7.py",
+]
+
+
+def test_write_stats_tie_break_by_path_takes_first_ten_in_path_order(
+        treemap, tmp_path):
+    """Equal-scoring files fill a top-10 list in ascending path order.
+
+    Twelve files tie on every ranking key, so which ten make each list is
+    decided entirely by the tie-break. Byte order on the repository-relative
+    path puts f8 and f9 outside the first ten; scanner emission order (what a
+    single-key stable sort hands back) leaves them inside (issue #426).
+    """
+    rows = _tied_rows(tmp_path)
+    out = tmp_path / "stats.json"
+    treemap.write_stats(rows, None, None, tmp_path, out,
+                        fn_ccn_by_path={p: [1.0] for p, *_ in rows})
+
+    stats = json.loads(out.read_text())
+    for key in ("top_hotspots", "top_complex", "top_large"):
+        assert [r["path"] for r in stats[key]] == _TIED_FIRST_TEN, key
+    # Ranking is untouched where the primary values differ: the tie-break only
+    # orders rows that are already equal.
+    assert len({r["ccn"] for r in stats["top_complex"]}) == 1
+    assert len({r["loc"] for r in stats["top_large"]}) == 1
+
+
+def test_write_stats_tie_break_by_path_is_input_order_independent(
+        treemap, tmp_path):
+    """Reversing the order the file list reaches the sort changes nothing.
+
+    A directory scan cannot vary that order - the scanner enumerates its own
+    way - so the seam is driven directly: two `write_stats` calls over the same
+    twelve tied rows, one as built and one reversed, must write byte-identical
+    top-10 lists (issue #426).
+    """
+    rows = _tied_rows(tmp_path)
+    fn_ccn = {p: [1.0] for p, *_ in rows}
+    as_built = tmp_path / "as_built.json"
+    reversed_out = tmp_path / "reversed.json"
+    treemap.write_stats(rows, None, None, tmp_path, as_built,
+                        fn_ccn_by_path=fn_ccn)
+    treemap.write_stats(list(reversed(rows)), None, None, tmp_path,
+                        reversed_out, fn_ccn_by_path=fn_ccn)
+
+    first = json.loads(as_built.read_text())
+    second = json.loads(reversed_out.read_text())
+    for key in ("top_hotspots", "top_complex", "top_large"):
+        assert first[key] == second[key], key
+        assert [r["path"] for r in first[key]] == _TIED_FIRST_TEN, key
+
+
+def test_stats_schema_version_unchanged_by_tie_break(treemap):
+    """The tie-break adds and removes no key, so the layout version holds at 5.
+
+    A bump would make `assess_core._diff_is_reliable` reject every prior
+    snapshot, discarding each repository's cross-run diff on the first run
+    after the upgrade (issue #426).
+    """
+    assert treemap.STATS_SCHEMA_VERSION == 5

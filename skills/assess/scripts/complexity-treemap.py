@@ -973,6 +973,13 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     backend scored one of its files or scc counted a decision point in one;
     data and markup (JSON, YAML, Markdown), where scc counts none, get no key,
     but CSS maps to null because scc counts decision points in it.
+
+    ``top_hotspots``, ``top_complex`` and ``top_large`` each rank on their own
+    key (composite score, aggregate ccn, loc) and break ties on the
+    repository-relative path, ascending. Files tie often - many share a
+    complexity or a line count - and without the tie-break the ten that make a
+    list depend on the order lizard and scc emitted them in, so a tied file can
+    swap in and out between runs on the same commit (issue #426).
     """
     fn_ccn_by_path = fn_ccn_by_path or {}
     fn_names = fn_name_by_path or {}
@@ -1070,9 +1077,17 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     def strip(rows: list[dict]) -> list[dict]:
         return [{k: v for k, v in r.items() if k != "_score"} for r in rows]
 
-    by_score = sorted(enriched, key=lambda f: -f["_score"])
-    by_ccn = sorted(enriched, key=lambda f: -f["ccn"])
-    by_loc = sorted(enriched, key=lambda f: -f["loc"])
+    # Ties break on the repository-relative path, ascending, under Python's
+    # default byte ordering for `str`. Without it a stable single-key sort
+    # hands ties back in scanner emission order, so which of a tied group
+    # makes the top ten depends on how lizard and scc happened to enumerate
+    # the tree - and membership of `top_hotspots` decides which files get a
+    # wiki page and a first-flagged date (issue #426). The primary keys are
+    # unchanged, so no file moves when the values differ; this is the same
+    # `(-primary, path)` shape the attention list took in #357.
+    by_score = sorted(enriched, key=lambda f: (-f["_score"], f["path"]))
+    by_ccn = sorted(enriched, key=lambda f: (-f["ccn"], f["path"]))
+    by_loc = sorted(enriched, key=lambda f: (-f["loc"], f["path"]))
 
     tool_versions = _tool_versions(files)
     stats: dict = {
