@@ -985,3 +985,180 @@ def test_finalize_evidence_refusal_through_core_and_cli(tmp_path: Path) -> None:
     assert "path_absent docs/guide.md" in proc.stderr
     assert "((LLM fills in))" in (root / ".assess" / "log.md").read_text(encoding="utf-8")
     assert (cache / "finalize-input.json").exists()
+
+
+def _identity_action(
+    rank: int, *, text: str, finding: str | None, files: list[str] | None = None
+) -> dict:
+    """An action whose directive text and deterministic fields are set apart,
+    so a test can reword one without disturbing the other."""
+    a = {**_good_action(rank=rank), "action": text}
+    if finding is not None:
+        a["finding"] = finding
+    if files is not None:
+        a["files"] = files
+    else:
+        a.pop("files", None)
+    return a
+
+
+def _run_finalize(assess_dir: Path, actions: list[dict]) -> dict[int, dict]:
+    """Seed a run and finalize it; return the written contract keyed by rank."""
+    _seed_log_md(assess_dir)
+    _seed_run_context(assess_dir)
+    (assess_dir / "finalize-input.json").write_text(
+        json.dumps({**_base_input(), "actions": actions}), encoding="utf-8"
+    )
+    finalize_run(assess_dir=assess_dir)
+    contract = json.loads((assess_dir / "actions.json").read_text(encoding="utf-8"))
+    return {a["rank"]: a for a in contract["actions"]}
+
+
+def _mark_done(assess_dir: Path) -> None:
+    """Stand in for an executor completing every action in the contract."""
+    path = assess_dir / "actions.json"
+    contract = json.loads(path.read_text(encoding="utf-8"))
+    for entry in contract["actions"]:
+        entry.update(
+            status="done",
+            claimed_by="agent-%d" % entry["rank"],
+            completed_sha="sha%d" % entry["rank"],
+        )
+    path.write_text(json.dumps(contract), encoding="utf-8")
+
+
+def test_action_identity_survives_a_rewording(tmp_assess_dir: Path) -> None:
+    """Identity is the finding plus the files, so the model rewording the
+    directive between runs does not reset a completed action to pending."""
+    _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text="Investigate the src/a.py seam",
+            finding="hidden_coupling", files=["src/a.py", "src/b.py"],
+        )],
+    )
+    _mark_done(tmp_assess_dir)
+
+    after = _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text="REWORDED: pin the src/a.py contract",
+            # Same files, listed in the other order: identity is order-free.
+            finding="hidden_coupling", files=["src/b.py", "src/a.py"],
+        )],
+    )[1]
+
+    assert after["status"] == "done"
+    assert after["claimed_by"] == "agent-1"
+    assert after["completed_sha"] == "sha1"
+
+
+def test_action_identity_does_not_match_a_different_path(
+    tmp_assess_dir: Path,
+) -> None:
+    """The path is part of the identity: the same finding on another file is a
+    different piece of work and starts pending."""
+    _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text="Verify docs/old.md against the code",
+            finding="lying_map", files=["docs/old.md"],
+        )],
+    )
+    _mark_done(tmp_assess_dir)
+
+    after = _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text="REWORDED: check docs/new.md against the code",
+            finding="lying_map", files=["docs/new.md"],
+        )],
+    )[1]
+
+    assert after["status"] == "pending"
+    assert after["claimed_by"] is None
+    assert after["completed_sha"] is None
+
+
+def test_action_identity_falls_back_to_text_without_a_finding(
+    tmp_assess_dir: Path,
+) -> None:
+    """An action carrying no finding has no deterministic identity, so it keeps
+    the pre-existing key: its unchanged directive text."""
+    _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(1, text="Judgement slot text", finding=None)],
+    )
+    _mark_done(tmp_assess_dir)
+
+    after = _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(1, text="Judgement slot text", finding=None)],
+    )[1]
+
+    assert after["status"] == "done"
+    assert after["completed_sha"] == "sha1"
+
+
+def test_action_identity_matches_a_pre_change_prior_on_text(
+    tmp_assess_dir: Path,
+) -> None:
+    """A contract written before identity keys existed carries no finding. Its
+    entries must still carry forward on the first run after the upgrade, when
+    the new action does supply a finding - lookup falls back to the text."""
+    (tmp_assess_dir / "actions.json").write_text(
+        json.dumps({
+            "schema": 2,
+            "run_id": "run-old",
+            "actions": [{
+                "rank": 1,
+                "action": "Legacy text-only action on src/hot.py",
+                "done_when": "x",
+                "scope_fence": "y",
+                "mode": "characterize_first",
+                "status": "done",
+                "claimed_by": "agent-x",
+                "completed_sha": "beef01",
+            }],
+        }),
+        encoding="utf-8",
+    )
+
+    after = _run_finalize(
+        tmp_assess_dir,
+        [_identity_action(
+            1, text="Legacy text-only action on src/hot.py",
+            finding="unexplained_complexity", files=["src/hot.py"],
+        )],
+    )[1]
+
+    assert after["status"] == "done"
+    assert after["claimed_by"] == "agent-x"
+    assert after["completed_sha"] == "beef01"
+
+
+def test_action_identity_adds_no_field_to_the_contract(
+    tmp_assess_dir: Path,
+) -> None:
+    """The identity is computed from fields the entries already carry, so the
+    written keys - and the schema version - do not move."""
+    by_rank = _run_finalize(
+        tmp_assess_dir,
+        [
+            _identity_action(
+                1, text="Investigate the src/a.py seam",
+                finding="hidden_coupling", files=["src/a.py"],
+            ),
+            _identity_action(2, text="Judgement slot text", finding=None),
+        ],
+    )
+    contract = json.loads(
+        (tmp_assess_dir / "actions.json").read_text(encoding="utf-8")
+    )
+    assert contract["schema"] == 2
+    keys = set().union(*(set(e) for e in by_rank.values()))
+    assert keys == {
+        "action", "claimed_by", "completed_sha", "done_when", "effort",
+        "files", "finding", "first_step", "layer", "mode", "rank",
+        "scope_fence", "status",
+    }

@@ -253,15 +253,56 @@ ACTION_STATUS_VALUES = frozenset({"pending", "claimed", "done", "reopened"})
 _ACTION_CARRY_FIELDS = ("status", "claimed_by", "completed_sha")
 
 
-def _read_prior_action_status(assess_dir: Path) -> dict[str, dict]:
-    """Prior actions keyed by their ``action`` text, for status carry-forward.
+def _action_identity_key(entry: dict) -> str | None:
+    """The deterministic identity of an action: its finding plus its paths.
 
-    The action directive is the stable identity across runs: rank reshuffles as
-    findings re-prioritise, but "investigate the src/foo.go seam" is the same
-    piece of work whether it ranks 1 or 3 this time. Reads v1 and v2 contracts
-    alike - a v1 entry simply carries no lifecycle fields, so a re-run over a v1
-    actions.json initialises every action to pending (backward compatible). A
-    missing or unreadable prior contract yields no carry-forward, not an error.
+    Rank reshuffles between runs and the directive text is written afresh by the
+    model each run, but "the hidden_coupling between src/foo.go and src/bar.go"
+    is the same piece of work under either. The paths come from the entry's
+    ``files`` list, falling back to a singular ``path``; they are sorted, so a
+    reordered list is still the same identity. ``None`` when the entry carries
+    no finding or no path - a judgement-filled slot has no deterministic fields,
+    and its text remains the only identity available.
+    """
+    finding = entry.get("finding")
+    if not isinstance(finding, str) or not finding:
+        return None
+    files = entry.get("files")
+    paths = (
+        [f for f in files if isinstance(f, str) and f]
+        if isinstance(files, list)
+        else []
+    )
+    if not paths:
+        single = entry.get("path")
+        if isinstance(single, str) and single:
+            paths = [single]
+    if not paths:
+        return None
+    return "\x00".join(["finding", finding, *sorted(paths)])
+
+
+def _action_text_key(entry: dict) -> str | None:
+    """The fallback identity: the action directive text, as written."""
+    text = entry.get("action")
+    return "\x00".join(["action", text]) if isinstance(text, str) else None
+
+
+def _read_prior_action_status(assess_dir: Path) -> dict[str, dict]:
+    """Prior actions indexed for status carry-forward, by identity and by text.
+
+    Each prior entry is registered under every key it can be found by: its
+    deterministic identity (finding plus paths) when it has one, and always its
+    ``action`` text. Registering both is what lets a contract written before
+    identity keys existed - it carries no finding at all - still match on text
+    on the first run after the upgrade, while a contract that does carry the
+    deterministic fields matches on those even when the text was reworded. The
+    two key spaces are prefixed, so a text can never collide with an identity.
+
+    Reads v1 and v2 contracts alike - a v1 entry simply carries no lifecycle
+    fields, so a re-run over a v1 actions.json initialises every action to
+    pending (backward compatible). A missing or unreadable prior contract yields
+    no carry-forward, not an error.
     """
     path = assess_dir / "actions.json"
     if not path.exists():
@@ -272,9 +313,25 @@ def _read_prior_action_status(assess_dir: Path) -> dict[str, dict]:
         return {}
     out: dict[str, dict] = {}
     for a in prior.get("actions", []) if isinstance(prior, dict) else []:
-        if isinstance(a, dict) and isinstance(a.get("action"), str):
-            out[a["action"]] = a
+        if not isinstance(a, dict):
+            continue
+        for key in (_action_identity_key(a), _action_text_key(a)):
+            if key is not None:
+                out[key] = a
     return out
+
+
+def _match_prior_action(prior: dict[str, dict], action: dict) -> dict:
+    """The prior entry for this action: identity first, then the text fallback.
+
+    Identity wins because it survives a rewording. Text is tried second because
+    a pre-change prior has no identity to match, and because an action with no
+    finding has none either.
+    """
+    for key in (_action_identity_key(action), _action_text_key(action)):
+        if key is not None and key in prior:
+            return prior[key]
+    return {}
 
 
 def _carry_status_fields(prior_entry: dict) -> dict:
@@ -302,8 +359,9 @@ def _write_actions_contract(
     actions.json persists: it is the artifact an executing agent reads to know
     what to do, how to verify it, where to stop, and - v2 - whether the work is
     still open. Status/claimed_by/completed_sha are carried forward from any
-    existing contract so a done action stays done across re-runs; ``mode`` is
-    derived deterministically from each action's ``finding`` type.
+    existing contract so a done action stays done across re-runs, matched on the
+    action's deterministic identity (finding plus paths) and falling back to its
+    directive text; ``mode`` is derived deterministically from ``finding``.
     """
     prior = _read_prior_action_status(assess_dir)
     valid = []
@@ -325,7 +383,7 @@ def _write_actions_contract(
         # v2 lifecycle + derived mode over it so those fields are authoritative.
         entry = {
             **a,
-            **_carry_status_fields(prior.get(a["action"], {})),
+            **_carry_status_fields(_match_prior_action(prior, a)),
             "mode": mode_for_finding(a.get("finding")),
         }
         entries.append(entry)
