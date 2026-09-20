@@ -301,11 +301,14 @@ def _select_mutation_tool(repo_root: Path, detected_tools: list[str]) -> dict | 
 # The adapter runs it in a scratch copy of the repo carrying a generated
 # ``[mutmut]`` section, so the assessed tree is never written to.
 
-# mutmut 3 exit codes per mutant (its ``status_by_exit_code``). A timeout or a
-# type-check catch pins the behaviour as well as a failing test; "no tests"
-# (5, 33) means nothing exercises the mutant, which is a survivor for our
-# purposes (the stryker parser treats NoCoverage the same way). Unchecked,
-# skipped, suspicious and segfault mutants are left out of the totals.
+# mutmut 3 exit codes per mutant, read from ``status_by_exit_code`` in
+# ``mutmut/__main__.py`` of mutmut 3.6.0: 1 and 3 killed; 24, -24, 36, 152 and
+# 255 timeout; 37 caught by type check; 0 survived; 5 and 33 no tests. A
+# timeout or a type-check catch pins the behaviour as well as a failing test;
+# "no tests" means nothing exercises the mutant, which is a survivor for our
+# purposes (the stryker parser treats NoCoverage the same way). Everything
+# else (None not checked, 2 interrupted, 34 skipped, 35 suspicious, -9 and -11
+# segfault, unknown codes) is left out of the totals.
 _MUTMUT3_KILLED = frozenset({1, 3, 24, -24, 36, 37, 152, 255})
 _MUTMUT3_SURVIVED = frozenset({0, 5, 33})
 
@@ -342,13 +345,8 @@ def _launcher_interpreter(exe: str) -> str | None:
     return str(sibling) if sibling.is_file() else None
 
 
-def _mutmut_major(exe: str | None) -> int | None:
-    """Major version of the ``mutmut`` on PATH, or None when it cannot be told.
-
-    ``mutmut --version`` is no use: mutmut 3 loads its configuration at import
-    and aborts before parsing arguments in a directory it cannot guess source
-    paths for. Ask the package metadata of the interpreter it runs under."""
-    interpreter = _launcher_interpreter(exe) if exe else None
+def _mutmut_major_from_metadata(exe: str) -> int | None:
+    interpreter = _launcher_interpreter(exe)
     if not interpreter:
         return None
     try:
@@ -360,6 +358,44 @@ def _mutmut_major(exe: str | None) -> int | None:
         return None
     m = re.match(r"\s*(\d+)\.", proc.stdout or "")
     return int(m.group(1)) if m else None
+
+
+def _mutmut_major_from_cli() -> int | None:
+    """Read the major version off ``mutmut --version`` run in an empty
+    directory. Observed: 3.0-3.5 print ``mutmut, version 3.5.0``; 3.6 loads its
+    configuration at import and aborts with "Could not figure out where the
+    code to mutate is" before it parses arguments; 2.x has a ``version``
+    command but no such option, and says so."""
+    try:
+        with tempfile.TemporaryDirectory(prefix="assess-mutmut-probe-") as tmp:
+            proc = subprocess.run(
+                ["mutmut", "--version"], cwd=tmp, capture_output=True,
+                text=True, timeout=30, check=False)
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    out = f"{proc.stdout or ''}\n{proc.stderr or ''}"
+    m = re.search(r"version\s+(\d+)\.", out)
+    if m:
+        return int(m.group(1))
+    if "Could not figure out where the code to mutate" in out:
+        return 3
+    if "No such option" in out:
+        return 2
+    return None
+
+
+def _mutmut_major(exe: str | None) -> int | None:
+    """Major version of the ``mutmut`` on PATH, or None when it cannot be told.
+
+    The package metadata of the interpreter the launcher runs under is the
+    direct answer; a launcher that names no interpreter (a Windows ``.exe``, a
+    custom wrapper) falls back to what ``mutmut --version`` reveals. Getting
+    this wrong matters: mutmut 3 sent down the in-place path writes a
+    ``mutants/`` tree into the assessed repo."""
+    if not exe:
+        return None
+    major = _mutmut_major_from_metadata(exe)
+    return major if major is not None else _mutmut_major_from_cli()
 
 
 def _mutmut3_config(scope: list[str]) -> str:
@@ -449,33 +485,54 @@ def _no_records_reason(tool: str, proc: subprocess.CompletedProcess) -> str:
     return f"{reason}: {detail}" if detail else reason
 
 
-def _run_mutmut3(repo_root: Path, scope: list[str], has_config: bool) -> dict:
-    """The mutmut 3 pass, in a scratch copy of the repo. A repo that already
-    configures mutmut keeps its own scope; otherwise a generated ``[mutmut]``
-    section limits the run to ``scope`` (an empty scope leaves mutmut to guess). Same result shape and the same
-    no-records-no-run rule as ``run_bounded_mutation``."""
+def _mutmut3_reads_config(root: Path) -> bool:
+    """Whether mutmut 3 would find its own configuration in ``root``. It reads
+    exactly two places: ``[tool.mutmut]`` in the root ``pyproject.toml``, else
+    ``[mutmut]`` in the root ``setup.cfg``. A nested config file, a
+    ``.mutmut.toml`` or a CI workflow that names mutmut is not configuration it
+    can see, so ``detect_mutation_config`` (which counts all of those) is the
+    wrong question here."""
+    return ("[tool.mutmut]" in _read(root / "pyproject.toml").lower()
+            or "[mutmut]" in _read(root / "setup.cfg").lower())
+
+
+def _run_mutmut3(repo_root: Path, scope: list[str]) -> dict:
+    """The mutmut 3 pass, in a scratch copy of the repo. A repo whose root
+    config mutmut 3 can read keeps it; otherwise a generated ``[mutmut]``
+    section limits the run to ``scope``. Either way only ``scope``'s files are
+    reported, so the ``scope`` in the result is the set the figures describe
+    (with no scope given, it is rebuilt from the files that were). Copying
+    spends the same ``MUTATION_TIMEOUT`` budget as the run. Same result shape
+    and the same no-records-no-run rule as ``run_bounded_mutation``."""
     base = {"available": True, "tool": "mutmut", "scope": scope}
+    timed_out = {**base, "mutation_run": False, "per_file": [],
+                 "reason": f"exceeded {MUTATION_TIMEOUT}s timeout"}
+    started = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="assess-mutmut-") as tmp:
         work = Path(tmp) / "repo"
         work.mkdir()
         try:
             _copy_repo(repo_root, work)
-            if scope and not has_config:
+            if scope and not _mutmut3_reads_config(work):
                 with open(work / "setup.cfg", "a", encoding="utf-8") as fh:
                     fh.write("\n" + _mutmut3_config(scope))
+            remaining = MUTATION_TIMEOUT - (time.monotonic() - started)
+            if remaining <= 0:
+                return timed_out
             proc = subprocess.run(
                 ["mutmut", "run"], cwd=str(work), capture_output=True,
-                text=True, timeout=MUTATION_TIMEOUT, check=False)
+                text=True, timeout=remaining, check=False)
         except subprocess.TimeoutExpired:
-            return {**base, "mutation_run": False, "per_file": [],
-                    "reason": f"exceeded {MUTATION_TIMEOUT}s timeout"}
+            return timed_out
         except OSError as e:
             return {**base, "mutation_run": False, "per_file": [],
                     "reason": str(e)}
         per_file = _parse_mutmut3_meta(work / "mutants")
-    if scope and not has_config:
+    if scope:
         wanted = {Path(f).as_posix() for f in scope}
         per_file = [p for p in per_file if p["file"] in wanted]
+    else:
+        base["scope"] = [p["file"] for p in per_file]
     if not per_file:
         return {**base, "mutation_run": False, "per_file": [],
                 "reason": _no_records_reason("mutmut", proc)}
@@ -510,7 +567,7 @@ def run_bounded_mutation(repo_root: Path, hot_files: list | None = None,
 
     scope = [str(f) for f in (hot_files or [])][:MAX_FILES_TO_MUTATE]
     if spec["tool"] == "mutmut" and (_mutmut_major(shutil.which("mutmut")) or 0) >= 3:
-        return _run_mutmut3(repo_root, scope, has_config="mutmut" in detected)
+        return _run_mutmut3(repo_root, scope)
     started = time.monotonic()
     try:
         proc = subprocess.run(

@@ -875,23 +875,28 @@ or scope rule.
 Layer 1 write-side truth pressure. Two tiers:
 - Mutation tier: runs a mutation-testing tool (mutmut for Python) over a sample of the
   codebase to measure whether the test suite actually catches changes. mutmut's command
-  line differs by major version, so `_mutmut_major` reads the version from the launcher's
-  interpreter (`mutmut --version` aborts on 3.x before it parses arguments) and the run
-  dispatches on it. **mutmut 2** runs in place and is two-step - `mutmut run` then
-  `mutmut junitxml` - because the run's stdout lists only survivors (no totals); the
-  junitxml report carries every mutant, so per-file killed/survived/total (and a real
-  survivor density) can be derived, falling back to the survivor-only stdout parse when
-  junitxml is empty. **mutmut 3** takes no paths and reads its scope from `setup.cfg` /
-  `pyproject.toml`, so `_run_mutmut3` copies the working tree to a scratch directory,
-  appends a generated `[mutmut]` section (`source_paths` = the focus files' top-level
-  directories, `only_mutate` = the focus files) unless the repo already configures
-  mutmut, runs there, and reads per-file totals from `mutants/**/*.meta`. mutmut 3.0-3.5
-  reads `paths_to_mutate` and has no `only_mutate`, so the section carries both path keys
-  and results for files outside the focus set are dropped. The assessed
-  tree is never written to. An unknown version takes the mutmut 2 path. Whichever path
-  runs, a tool that exits non-zero without yielding mutants puts the last line of its
-  error output in the result's `reason` (surfaced as `mutation_note`). mutmut runs pytest
-  under its own interpreter, so a repo whose tests need packages that interpreter lacks
-  fails at mutmut's clean-test step and reports that reason.
+  line differs by major version, so `_mutmut_major` asks the package metadata of the
+  interpreter the launcher runs under (shebang, the sh trampoline pip and uv write for
+  long paths, or the `python` beside a symlinked launcher) and, when the launcher names
+  none, reads what `mutmut --version` reveals in an empty directory. **mutmut 2** runs in
+  place and is two-step - `mutmut run` then `mutmut junitxml` - because the run's stdout
+  lists only survivors (no totals); the junitxml report carries every mutant, so per-file
+  killed/survived/total (and a real survivor density) can be derived, falling back to the
+  survivor-only stdout parse when junitxml is empty. **mutmut 3** takes no paths and reads
+  its scope from the root `pyproject.toml` (`[tool.mutmut]`) or `setup.cfg` (`[mutmut]`),
+  so `_run_mutmut3` copies the working tree to a scratch directory, appends a generated
+  `[mutmut]` section unless mutmut 3 would find one of those two (a nested config or a CI
+  workflow naming mutmut does not count), runs there, and reads per-file totals from
+  `mutants/**/*.meta` using the exit-code table of mutmut 3.6.0. The generated section
+  sets `source_paths` and `paths_to_mutate` (3.0-3.5 read only the latter) to the focus
+  files' top-level directories and `only_mutate` (3.6+) to the focus files. Only the focus
+  files are reported whichever config governed the run, so the result's `scope` names the
+  files its figures describe. The copy spends the same `MUTATION_TIMEOUT` budget as the
+  run. The assessed tree is never written to. A version neither probe can read takes the
+  mutmut 2 path. Whichever path runs, a tool that exits non-zero without yielding mutants
+  puts the last line of its error output in the result's `reason` (surfaced as
+  `mutation_note`). mutmut runs pytest under its own interpreter, so a repo whose tests
+  need packages that interpreter lacks fails at mutmut's clean-test step and reports that
+  reason.
 - Cheap heuristics: test/source ratio, assertion density, and the coverage gap signal -
   fast proxies that run without a mutation tool.

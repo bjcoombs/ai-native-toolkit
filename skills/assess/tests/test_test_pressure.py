@@ -5,6 +5,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 import lib.test_pressure as tp
 from lib.test_pressure import mutation
 from lib.test_pressure import (
@@ -929,3 +931,149 @@ def test_launcher_interpreter_reads_the_long_path_trampoline(tmp_path: Path) -> 
     sibling = Path(plain).parent / "python"
     sibling.write_text("", encoding="utf-8")
     assert mutation._launcher_interpreter(plain) == str(sibling.resolve())
+
+
+def test_run_bounded_mutation_mutmut3_ci_mention_is_not_config(
+        tmp_path: Path, monkeypatch) -> None:
+    """A workflow that names mutmut, or a config file mutmut 3 cannot see (a
+    nested pyproject.toml), is not configuration: the generated section and the
+    scope filter still apply."""
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _write(tmp_path, ".github/workflows/ci.yml",
+           "jobs:\n  m:\n    steps:\n      - run: mutmut run --paths-to-mutate=pkg\n")
+    _write(tmp_path, "sub/pyproject.toml", "[tool.mutmut]\nsource_paths = ['x']\n")
+    assert "mutmut" in detect_mutation_config(tmp_path)["tools"]
+    _as_mutmut3(monkeypatch)
+    seen: dict = {}
+    monkeypatch.setattr(tp.subprocess, "run", _fake_mutmut3(
+        {"exit_code_by_key": {"a": 1}}, seen))
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    assert r["mutation_run"] is True
+    assert "only_mutate=\n    pkg/calc.py\n" in seen["setup_cfg"]
+
+
+def test_run_bounded_mutation_mutmut3_repo_config_still_reports_scope_only(
+        tmp_path: Path, monkeypatch) -> None:
+    """Under the repo's own mutmut config the run may cover more files; only
+    the focus files are reported, so ``scope`` describes the figures."""
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _write(tmp_path, "setup.cfg", "[mutmut]\nsource_paths=pkg\n")
+    _as_mutmut3(monkeypatch)
+    seen: dict = {}
+    inner = _fake_mutmut3({"exit_code_by_key": {"a": 1, "b": 0}}, seen)
+
+    def fake_run(cmd, **kwargs):
+        if cmd == ["mutmut", "run"]:
+            _write(Path(kwargs["cwd"]), "mutants/pkg/other.py.meta",
+                   json.dumps({"exit_code_by_key": {"x": 0, "y": 0, "z": 0}}))
+        return inner(cmd, **kwargs)
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    assert seen["setup_cfg"] == "[mutmut]\nsource_paths=pkg\n"
+    assert r["scope"] == ["pkg/calc.py"]
+    assert [p["file"] for p in r["per_file"]] == ["pkg/calc.py"]
+
+
+def test_run_mutmut3_without_scope_rebuilds_it_from_results(
+        tmp_path: Path, monkeypatch) -> None:
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _as_mutmut3(monkeypatch)
+    monkeypatch.setattr(tp.subprocess, "run", _fake_mutmut3(
+        {"exit_code_by_key": {"a": 1}}, {}))
+    r = mutation._run_mutmut3(tmp_path, [])
+    assert r["scope"] == ["pkg/calc.py"]
+
+
+@pytest.mark.parametrize("stdout,stderr,expected", [
+    ("mutmut, version 3.5.0\n", "", 3),
+    ("", _MUTMUT3_TRACEBACK, 3),
+    ("", "Usage: mutmut [OPTIONS] COMMAND [ARGS]...\nError: No such option '--version'.\n", 2),
+    ("", "something else entirely\n", None),
+])
+def test_mutmut_major_from_cli(monkeypatch, stdout, stderr, expected) -> None:
+    """The three observed answers to ``mutmut --version`` in an empty directory
+    (3.0-3.5, 3.6, 2.x) and an unrecognised one."""
+    monkeypatch.setattr(
+        tp.subprocess, "run",
+        lambda cmd, **k: subprocess.CompletedProcess(cmd, 1, stdout=stdout, stderr=stderr))
+    assert mutation._mutmut_major_from_cli() == expected
+
+
+def test_unreadable_launcher_running_mutmut3_never_touches_the_tree(
+        tmp_path: Path, monkeypatch) -> None:
+    """A launcher that names no interpreter (a Windows .exe, a wrapper) used to
+    mean "unknown version", which took the in-place mutmut 2 path; with mutmut 3
+    behind it that writes ``mutants/`` into the assessed repo. The --version
+    probe recognises 3.x, so the run goes to the scratch copy."""
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    monkeypatch.setattr(tp.shutil, "which", lambda t: "/nonexistent/bin/" + t)
+    seen: dict = {}
+    inner = _fake_mutmut3({"exit_code_by_key": {"a": 1}}, seen)
+
+    def fake_run(cmd, **kwargs):
+        if cmd == ["mutmut", "--version"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr=_MUTMUT3_TRACEBACK)
+        return inner(cmd, **kwargs)
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    before = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*"))
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    assert r["mutation_run"] is True
+    assert seen["cwd"] != tmp_path
+    assert sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*")) == before
+
+
+# One row per code in mutmut 3.6.0's status_by_exit_code (mutmut/__main__.py).
+@pytest.mark.parametrize("code,bucket", [
+    (1, "killed"), (3, "killed"),                                   # killed
+    (24, "killed"), (-24, "killed"), (36, "killed"),                # timeout
+    (152, "killed"), (255, "killed"),                               # timeout
+    (37, "killed"),                                                 # caught by type check
+    (0, "survived"),                                                # survived
+    (5, "survived"), (33, "survived"),                              # no tests
+    (None, None), (2, None), (34, None), (35, None),                # not checked, interrupted, skipped, suspicious
+    (-9, None), (-11, None), (99, None),                            # segfault, unknown
+])
+def test_parse_mutmut3_meta_exit_code_table(tmp_path: Path, code, bucket) -> None:
+    _write(tmp_path, "mutants/pkg/calc.py.meta",
+           json.dumps({"exit_code_by_key": {"m": code}}))
+    got = mutation._parse_mutmut3_meta(tmp_path / "mutants")
+    if bucket is None:
+        assert got == []
+    else:
+        assert got == [{"file": "pkg/calc.py", "total": 1,
+                        "killed": int(bucket == "killed"),
+                        "survived": int(bucket == "survived")}]
+
+
+def test_run_mutmut3_copy_time_spends_the_timeout_budget(
+        tmp_path: Path, monkeypatch) -> None:
+    """The copy and the run share MUTATION_TIMEOUT: a slow copy shortens the
+    run's timeout, and a copy that uses the whole budget means no run at all."""
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(mutation.time, "monotonic", lambda: clock["now"])
+    timeouts: list = []
+
+    def fake_run(cmd, **kwargs):
+        timeouts.append(kwargs.get("timeout"))
+        _write(Path(kwargs["cwd"]), "mutants/pkg/calc.py.meta",
+               json.dumps({"exit_code_by_key": {"a": 1}}))
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+
+    def slow_copy(seconds):
+        def copy(_src, _dest):
+            clock["now"] += seconds
+        return copy
+
+    monkeypatch.setattr(mutation, "_copy_repo", slow_copy(100))
+    assert mutation._run_mutmut3(tmp_path, ["pkg/calc.py"])["mutation_run"] is True
+    assert timeouts == [tp.MUTATION_TIMEOUT - 100]
+
+    monkeypatch.setattr(mutation, "_copy_repo", slow_copy(tp.MUTATION_TIMEOUT + 1))
+    r = mutation._run_mutmut3(tmp_path, ["pkg/calc.py"])
+    assert r["mutation_run"] is False and "timeout" in r["reason"]
+    assert len(timeouts) == 1
