@@ -892,8 +892,9 @@ Layer 1 write-side truth pressure. Two tiers:
   files' top-level directories and `only_mutate` (3.6+) to the focus files. Only the focus
   files are reported whichever config governed the run, so the result's `scope` names the
   files its figures describe. The copy spends the same `MUTATION_TIMEOUT` budget as the
-  run. The assessed tree is never written to. A version neither probe can read takes the
-  mutmut 2 path. Whichever path runs, a tool that exits non-zero without yielding mutants
+  run. On this path the assessed tree is never written to. A version neither probe can
+  read takes the mutmut 2 path, which runs in the assessed repo and leaves mutmut's
+  `.mutmut-cache` there. Whichever path runs, a tool that exits non-zero without yielding mutants
   puts the last line of its error output in the result's `reason` (surfaced as
   `mutation_note`). mutmut runs pytest under its own interpreter, so a repo whose tests
   need packages that interpreter lacks fails at mutmut's clean-test step and reports that

@@ -478,11 +478,24 @@ def _tool_error_line(proc: subprocess.CompletedProcess) -> str:
     return ""
 
 
-def _no_records_reason(tool: str, proc: subprocess.CompletedProcess) -> str:
+def _no_records_reason(tool: str, proc: subprocess.CompletedProcess,
+                       scratch: Path | None = None) -> str:
+    """``scratch`` is the directory the tool ran in when that was a temporary
+    copy: its prefix is cut from the detail, leaving repo-relative paths, since
+    the reason is stored in run-context.json and the directory is gone."""
     reason = (f"no mutant records recovered from {tool} "
               f"output (exit code {proc.returncode})")
     detail = _tool_error_line(proc) if proc.returncode != 0 else ""
+    if scratch is not None:
+        for prefix in {str(scratch.resolve()), str(scratch)}:
+            detail = detail.replace(prefix + os.sep, "").replace(prefix, ".")
     return f"{reason}: {detail}" if detail else reason
+
+
+# A section header on its own line, so a commented-out ``# [tool.mutmut]`` or a
+# mention inside a string does not count as configuration.
+_TOML_MUTMUT_SECTION_RE = re.compile(r"^[ \t]*\[tool\.mutmut\][ \t]*(#.*)?$", re.M)
+_INI_MUTMUT_SECTION_RE = re.compile(r"^\[mutmut\][ \t]*$", re.M)
 
 
 def _mutmut3_reads_config(root: Path) -> bool:
@@ -492,8 +505,8 @@ def _mutmut3_reads_config(root: Path) -> bool:
     ``.mutmut.toml`` or a CI workflow that names mutmut is not configuration it
     can see, so ``detect_mutation_config`` (which counts all of those) is the
     wrong question here."""
-    return ("[tool.mutmut]" in _read(root / "pyproject.toml").lower()
-            or "[mutmut]" in _read(root / "setup.cfg").lower())
+    return bool(_TOML_MUTMUT_SECTION_RE.search(_read(root / "pyproject.toml"))
+                or _INI_MUTMUT_SECTION_RE.search(_read(root / "setup.cfg")))
 
 
 def _run_mutmut3(repo_root: Path, scope: list[str]) -> dict:
@@ -528,14 +541,17 @@ def _run_mutmut3(repo_root: Path, scope: list[str]) -> dict:
             return {**base, "mutation_run": False, "per_file": [],
                     "reason": str(e)}
         per_file = _parse_mutmut3_meta(work / "mutants")
+        no_records = _no_records_reason("mutmut", proc, scratch=work)
+    produced = len(per_file)
     if scope:
         wanted = {Path(f).as_posix() for f in scope}
         per_file = [p for p in per_file if p["file"] in wanted]
     else:
         base["scope"] = [p["file"] for p in per_file]
     if not per_file:
-        return {**base, "mutation_run": False, "per_file": [],
-                "reason": _no_records_reason("mutmut", proc)}
+        reason = (f"mutmut produced mutants for {produced} file(s), none of "
+                  f"them in the focus set") if produced else no_records
+        return {**base, "mutation_run": False, "per_file": [], "reason": reason}
     return {**base, "mutation_run": True, "per_file": per_file}
 
 

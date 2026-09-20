@@ -1077,3 +1077,55 @@ def test_run_mutmut3_copy_time_spends_the_timeout_budget(
     r = mutation._run_mutmut3(tmp_path, ["pkg/calc.py"])
     assert r["mutation_run"] is False and "timeout" in r["reason"]
     assert len(timeouts) == 1
+
+
+def test_mutmut3_reads_config_needs_a_real_section_header(tmp_path: Path) -> None:
+    _write(tmp_path, "pyproject.toml", "# [tool.mutmut]\nnote = 'see [tool.mutmut]'\n")
+    _write(tmp_path, "setup.cfg", "# [mutmut]\n[metadata]\nname = demo\n")
+    assert mutation._mutmut3_reads_config(tmp_path) is False
+    _write(tmp_path, "setup.cfg", "[metadata]\nname = demo\n\n[mutmut]\nsource_paths=pkg\n")
+    assert mutation._mutmut3_reads_config(tmp_path) is True
+    _write(tmp_path, "setup.cfg", "")
+    _write(tmp_path, "pyproject.toml", "[project]\nname = 'x'\n\n[tool.mutmut]  # scope\n")
+    assert mutation._mutmut3_reads_config(tmp_path) is True
+
+
+def test_run_mutmut3_names_scope_as_the_cause_when_the_filter_empties_results(
+        tmp_path: Path, monkeypatch) -> None:
+    """mutmut produced records, none for the focus files: the note must not
+    blame the tool's output."""
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _write(tmp_path, "setup.cfg", "[mutmut]\nsource_paths=other\n")
+    _as_mutmut3(monkeypatch)
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git":
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="")
+        _write(Path(kwargs["cwd"]), "mutants/other/x.py.meta",
+               json.dumps({"exit_code_by_key": {"a": 0}}))
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    assert r["mutation_run"] is False
+    assert r["reason"] == ("mutmut produced mutants for 1 file(s), none of them "
+                           "in the focus set")
+
+
+def test_run_mutmut3_reason_carries_no_scratch_directory(
+        tmp_path: Path, monkeypatch) -> None:
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _as_mutmut3(monkeypatch)
+    seen: dict = {}
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git":
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="")
+        seen["cwd"] = kwargs["cwd"]
+        err = f"SyntaxError: bad input in {kwargs['cwd']}/pkg/calc.py\n"
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr=err)
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    assert r["reason"].endswith(": SyntaxError: bad input in pkg/calc.py")
+    assert "assess-mutmut-" not in r["reason"]
