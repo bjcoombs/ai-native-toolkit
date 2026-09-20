@@ -68,6 +68,10 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+`git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
+pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
+scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
+file anywhere else still does.
 `content_commit_clock` is the last-content-change clock (issue #333): one `git log` pass
 over the docs' history that skips bulk mechanical commits (more than
 `BULK_COMMIT_DOC_SHARE` of the docs and at least `BULK_COMMIT_MIN_DOCS` of them, such as

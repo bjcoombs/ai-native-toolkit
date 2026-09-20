@@ -24,6 +24,14 @@ from typing import NamedTuple
 # credential prompt) degrades to "no churn data" rather than blocking the run.
 GIT_TIMEOUT_SECONDS = 20
 
+# The tool's own output directory, relative to the scanned root. A scoped run
+# writes to `.assess/<slug>/`, which this covers as a prefix.
+ASSESS_OUTPUT_DIR = ".assess"
+
+# Git pathspec dropping that directory from a status call. Exclude-only
+# pathspecs are legal: git includes everything else.
+ASSESS_EXCLUDE_PATHSPEC = f":(exclude){ASSESS_OUTPUT_DIR}"
+
 
 def git_churn_scores(
     root: Path, since: str | None = None, scope: Path | None = None
@@ -101,8 +109,9 @@ def git_commit_info(root: Path) -> dict:
       - ``head_sha`` / ``head_short``: the commit HEAD pointed at during the scan.
       - ``committed_date``: ISO-8601 author date of HEAD.
       - ``subject``: HEAD's commit subject line.
-      - ``dirty``: True when tracked files have uncommitted changes, so the
-        measured numbers reflect the working tree, not any single commit.
+      - ``dirty``: True when tracked files outside the tool's own ``.assess/``
+        output directory have uncommitted changes, so the measured numbers
+        reflect the working tree, not any single commit.
       - ``upstream``: the upstream tracking ref (e.g. ``origin/main``) or None.
       - ``behind``: commits HEAD is behind ``upstream`` (0 = up to date,
         None = no upstream configured), i.e. how stale the snapshot is vs remote.
@@ -133,8 +142,15 @@ def git_commit_info(root: Path) -> dict:
         "subject": _git("show", "-s", "--format=%s", "HEAD"),
         # `--porcelain` with untracked excluded: a non-empty result means the
         # scan saw uncommitted edits to tracked files, so its numbers don't
-        # match the HEAD commit exactly.
-        "dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
+        # match the HEAD commit exactly. `.assess/` is excluded by pathspec
+        # because the run rewrites its own wiki before this snapshot is taken,
+        # so on a repository that tracks `.assess/` every run would otherwise
+        # report dirty and the warning would stop carrying information (#414).
+        # A pathspec narrows the check rather than filtering status codes, so a
+        # staged edit or a `git rm` under `.assess/` drops out on the same
+        # terms, and a modified tracked file elsewhere still reports True.
+        "dirty": bool(_git("status", "--porcelain", "--untracked-files=no",
+                           "--", ASSESS_EXCLUDE_PATHSPEC)),
         "upstream": None,
         "behind": None,
     }

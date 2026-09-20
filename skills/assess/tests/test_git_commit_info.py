@@ -97,3 +97,75 @@ def test_reports_behind_count_vs_upstream(git_repo, tmp_path):
     info = git_churn.git_commit_info(repo)
     assert info["upstream"] == f"origin/{branch}"
     assert info["behind"] == 1
+
+
+def test_dirty_excludes_assess_outputs(git_repo):
+    """A repository that tracks `.assess/` gets that directory rewritten by the
+    run itself before the snapshot is taken, so a modified file there is the
+    tool's own output and must not raise the uncommitted-edits warning (#414)."""
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assess = repo / ".assess"
+    assess.mkdir()
+    (assess / "complexity-stats.json").write_text("{}\n", encoding="utf-8")
+    commit("initial commit")
+
+    # The run rewrites its own sidecar.
+    (assess / "complexity-stats.json").write_text(
+        '{"files_scored": 1}\n', encoding="utf-8")
+
+    assert git_churn.git_commit_info(repo)["dirty"] is False
+
+
+def test_dirty_excludes_assess_scoped_subdirectory(git_repo):
+    """A scoped run writes under `.assess/<slug>/`; that subdirectory is
+    excluded on the same terms as the top-level wiki."""
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    scoped = repo / ".assess" / "backend"
+    scoped.mkdir(parents=True)
+    (scoped / "assess-report.md").write_text("report\n", encoding="utf-8")
+    commit("initial commit")
+
+    (scoped / "assess-report.md").write_text("rewritten\n", encoding="utf-8")
+
+    assert git_churn.git_commit_info(repo)["dirty"] is False
+
+
+def test_dirty_excludes_assess_by_pathspec_not_status_code(git_repo):
+    """The exclusion is a git pathspec, so a staged edit and a `git rm` under
+    `.assess/` drop out on the same terms as an unstaged modification."""
+    import subprocess
+
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assess = repo / ".assess"
+    assess.mkdir()
+    (assess / "notes.md").write_text("notes\n", encoding="utf-8")
+    (assess / "log.md").write_text("log\n", encoding="utf-8")
+    commit("initial commit")
+
+    (assess / "notes.md").write_text("staged edit\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", ".assess/notes.md"],
+                   check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo), "rm", "-q", ".assess/log.md"],
+                   check=True, capture_output=True, text=True)
+
+    assert git_churn.git_commit_info(repo)["dirty"] is False
+
+
+def test_dirty_excludes_assess_but_still_flags_source_edits(git_repo):
+    """The pathspec narrows the check rather than disabling it: a modified
+    tracked file outside `.assess/` still reports dirty."""
+    repo, commit = git_repo
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assess = repo / ".assess"
+    assess.mkdir()
+    (assess / "complexity-stats.json").write_text("{}\n", encoding="utf-8")
+    commit("initial commit")
+
+    (assess / "complexity-stats.json").write_text(
+        '{"files_scored": 1}\n', encoding="utf-8")
+    (repo / "a.py").write_text("x = 2\nprint(x)\n", encoding="utf-8")
+
+    assert git_churn.git_commit_info(repo)["dirty"] is True
