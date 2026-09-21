@@ -226,6 +226,9 @@ class DocGraphResult:
     # bound, so a consumer never asks a second question to learn that a doc has
     # no link path. Walking link_parent up from a doc reconstructs the whole
     # strip back to link_entry, the entry document its walk started from.
+    # Exported despite the pagerank precedent below: a path strip needs the
+    # exact doc a run flags. LLM readers of the block drop it with
+    # del(.link_parents), since nothing they score reads it.
     link_parents: list[dict] = field(default_factory=list)
     # Missing cross-references: a doc names another doc but never links to it
     # (Karpathy Lint). [{from, to}].

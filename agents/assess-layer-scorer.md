@@ -158,8 +158,10 @@ This replaces the prior subjective "is it generic?" check. The grader rewards po
 Navigability is a graph property, so the deterministic core measures it as one. Read the doc link-graph, staleness, and association signals from `run-context.json` - **do not re-scan for files by name**; the graph already identifies hubs by centrality without filename guessing:
 
 ```bash
-jq '.doc_graph, .doc_staleness.association, .doc_staleness.modularity, .stale_hubs[:5]' "$REPO_ROOT/.assess/run-context.json"
+jq '(.doc_graph | del(.link_parents)), .doc_staleness.association, .doc_staleness.modularity, .stale_hubs[:5]' "$REPO_ROOT/.assess/run-context.json"
 ```
+
+`link_parents` is left out on purpose: it holds one record per document, so on a well-linked doc-heavy repo it outweighs the rest of the block, and nothing in Layer 0 scores on it.
 
 Recognise the full range of navigability artefacts (not just README/ADR/API specs): a Map-of-Content (MOC) / index note, a linked-doc graph (cross-referenced markdown - the [Karpathy-pattern LLM wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)), `AGENTS.md`, and **repo skills** (`.claude/skills/`, `skills/`). The graph already accounts for all of these. The signals below are the deterministic subset of Karpathy's wiki "Lint" health-check - hubs, orphans, connectivity, dangling references - applied to a code repo's docs.
 
