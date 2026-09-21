@@ -21,7 +21,7 @@ uv run "$WT/skills/assess/scripts/docs-staleness-treemap.py" "$PWD" -o .assess/d
 uv run "$WT/skills/assess/scripts/assess_core.py"            "$PWD"
 # Then inspect the structured signals the LLM scores against:
 jq 'keys' .assess/run-context.json
-jq '.doc_graph, .doc_staleness.association, .stale_hubs[:5], .observability, .dead_code.tools' .assess/run-context.json
+jq '(.doc_graph | del(.link_parents)), .doc_staleness.association, .stale_hubs[:5], .observability, .dead_code.tools' .assess/run-context.json
 open .assess/complexity-heatmap.svg .assess/docs-staleness-heatmap.svg
 ```
 

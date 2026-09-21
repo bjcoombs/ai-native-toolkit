@@ -219,6 +219,17 @@ class DocGraphResult:
     # [{path, doc_count, unreachable_count, broken_link_count}]
     directory_breakdown: list[dict] = field(default_factory=list)
     directory_count: int = 0
+    # One link-path parent per doc (PRD item 1c), over link edges alone - the
+    # same edge set as link_only_reachability_pct, so a doc a reference edge
+    # brought in has no parent here. [{path, link_parent, link_entry}], one
+    # record per node, sorted by path: len(link_parents) == doc_count is the
+    # bound, so a consumer never asks a second question to learn that a doc has
+    # no link path. Walking link_parent up from a doc reconstructs the whole
+    # strip back to link_entry, the entry document its walk started from.
+    # Exported despite the pagerank precedent below: a path strip needs the
+    # exact doc a run flags. LLM readers of the block drop it with
+    # del(.link_parents), since nothing they score reads it.
+    link_parents: list[dict] = field(default_factory=list)
     # Missing cross-references: a doc names another doc but never links to it
     # (Karpathy Lint). [{from, to}].
     missing_xrefs: list[dict] = field(default_factory=list)
@@ -269,6 +280,7 @@ class DocGraphResult:
             "link_only_reachability_pct": round(self.link_only_reachability_pct, 3),
             "directory_breakdown": self.directory_breakdown,
             "directory_count": self.directory_count,
+            "link_parents": self.link_parents,
         }
 
 
@@ -939,6 +951,7 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     )
     result.link_only_orphan_rate = link_only.orphan_rate
     result.link_only_reachability_pct = link_only.reachability_pct
+    result.link_parents = _link_parents(link_graph, result.entry_points)
     result.broken_links = curated_broken[:MAX_BROKEN_LINKS]
     result.missing_xrefs = curated_missing[:MAX_MISSING_XREFS]
     rows = _directory_breakdown(curated_nodes, result.unreachable, curated_broken)
@@ -954,6 +967,56 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
      result.working_notes_orphan_rate, result.working_notes_broken_links,
      ) = _layer_figures(graph, broken, notes_docs, notes_trees)
     return result
+
+
+def _link_parents(graph, entry_points: list[str]) -> list[dict]:
+    """One ``{path, link_parent, link_entry}`` record per node in ``graph``.
+
+    ``graph`` is the link-only subgraph, so a doc reachable only over a
+    ``reference`` edge (a backticked doc path) has no link path and carries
+    ``null`` for both fields - which is also what a doc nothing reaches carries.
+    An entry carries ``link_parent`` ``None`` and ``link_entry`` equal to its own
+    path, so the three states stay distinguishable.
+
+    A consumer will draw a link-path strip from it, so a rebuild must be
+    byte-identical. That comes from the ordering: seeds are ``entry_points`` in
+    their exported ascending byte order, and within a walk the frontier and each
+    node's successors are taken in ascending byte order. First write wins, and
+    the recorded set is the visited set - a doc already recorded is never
+    enqueued again, so an entry met as a successor is not expanded by the
+    walking entry and never lends its name to another entry's children.
+
+    Each seed's walk runs to exhaustion before the next starts. That is an
+    attribution rule, not a determinism one: a doc belongs to the first entry,
+    in entry order, that reaches it at all, so a later entry gaining a shorter
+    link does not re-attribute it. The cost is that the recorded path is the
+    shortest from its own entry, not the shortest from any entry.
+    """
+    nodes = set(graph.nodes())
+    # (link_parent, link_entry), keyed by path. Entries land before any walk so
+    # one entry linking another cannot overwrite it.
+    recorded: dict[str, tuple[str | None, str | None]] = {
+        e: (None, e) for e in entry_points if e in nodes
+    }
+    for entry in entry_points:
+        if entry not in nodes:
+            continue
+        frontier = [entry]
+        while frontier:
+            reached: list[str] = []
+            for node in frontier:
+                for succ in sorted(graph.successors(node)):
+                    if succ in recorded:
+                        continue
+                    recorded[succ] = (node, entry)
+                    reached.append(succ)
+            frontier = sorted(reached)
+    return [
+        {"path": n,
+         "link_parent": recorded.get(n, (None, None))[0],
+         "link_entry": recorded.get(n, (None, None))[1]}
+        for n in sorted(nodes)
+    ]
 
 
 def _top_dir(rel_path: str) -> str:

@@ -186,6 +186,34 @@ unreachable count, then broken links, then doc count, and capped at
 `MAX_DIRECTORY_BREAKDOWN`; `directory_count` carries the uncapped total. Only an uncut
 list (`len(directory_breakdown) == directory_count`) sums to `doc_count`,
 `len(unreachable)` and `dangling_links`; a cut one sums to less (#365).
+`link_parents` carries one `{path, link_parent, link_entry}` record per node,
+sorted by path, over link edges alone - the same edge set as
+`link_only_reachability_pct`, so a doc only a reference edge brought in has no
+link path. An entry document carries a null `link_parent` and its own path as
+`link_entry`; a doc the walk reached carries the doc that first reached it and
+the entry that walk started from; a doc with no link path carries null for both,
+which is why `link_entry` is on the record at all. `link_parent` is the next hop
+toward an entry, not "who links to me": a doc linked only from an unreachable doc
+has an in-edge but no link path, so it records null for both. Walking
+`link_parent` up from a doc reconstructs the whole strip back to its entry. The
+walk seeds from `entry_points` in their exported byte order, runs each seed to
+exhaustion before the next, takes the frontier and each node's successors in
+byte order, writes once and never re-expands a recorded doc - so a rebuild is
+byte-identical and the earlier entry claims a doc a later one reaches in fewer
+hops. There is no cap and no total: `len(link_parents) == doc_count` is the
+bound, and capping would drop exactly the doc a doc-heavy run flags. That makes
+it the one per-document list on the block, unlike `pagerank`, which is kept off
+`as_dict()` to keep `run-context.json` lean: a record is three paths, about 140
+bytes as written (137 per record over this repository's 113 docs), so a
+5,000-doc vault adds roughly 700 KB. The trade was made because a path strip
+needs the exact doc a run flags, and a rounded float can be dropped where a path
+cannot. The cost lands on readers, not the file: the layer scorer and the report
+writer read `.doc_graph` into model context, so both drop the key with
+`del(.link_parents)`. A new LLM reader of the block does the same;
+`tests/test_plugin_contract.py` fails a shipped single-line `jq` read of the whole
+block that does not. One reader sits outside that guard: `skills/assess/SKILL.md`
+tells the orchestrator to read `run-context.json` before writing the report,
+which takes the whole file, `link_parents` included.
 
 **`raw_source.py`**
 Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:

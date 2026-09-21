@@ -1033,3 +1033,93 @@ def test_directory_breakdown_empty_repo(tmp_path: Path) -> None:
     d = build_doc_graph(tmp_path).as_dict()
     assert d["directory_breakdown"] == []
     assert d["directory_count"] == 0
+
+
+def _rows(d: dict) -> dict[str, tuple[str | None, str | None]]:
+    return {r["path"]: (r["link_parent"], r["link_entry"]) for r in d["link_parents"]}
+
+
+def test_link_parent_bfs_records_chain_and_entry(tmp_path: Path) -> None:
+    # README -> a -> b, so each reached doc names the doc that first reached it
+    # and the entry its walk started from.
+    _write(tmp_path, "README.md", "Root. See [a](a.md).\n")
+    _write(tmp_path, "a.md", "A doc. See [b](b.md).\n")
+    _write(tmp_path, "b.md", "B leaf.\n")
+
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["entry_points"] == ["README.md"]
+    # One record per node, sorted by path, so the consumer needs no second lookup.
+    assert [r["path"] for r in d["link_parents"]] == ["README.md", "a.md", "b.md"]
+    assert len(d["link_parents"]) == d["doc_count"]
+    assert {k for r in d["link_parents"] for k in r} == {"path", "link_parent", "link_entry"}
+    rows = _rows(d)
+    assert rows["README.md"] == (None, "README.md")  # an entry: null parent, itself
+    assert rows["a.md"] == ("README.md", "README.md")
+    assert rows["b.md"] == ("a.md", "README.md")
+
+
+def test_link_parent_bfs_no_link_path_is_both_null(tmp_path: Path) -> None:
+    # c.md is only *referenced* (a backticked doc path, a reference edge), and
+    # orphan.md is named by nothing: neither has a link path, so both fields are
+    # null and the page can say "no link path" rather than guess.
+    _write(tmp_path, "README.md", "Root. See [a](a.md). Also `c.md` is described here.\n")
+    _write(tmp_path, "a.md", "A doc.\n")
+    _write(tmp_path, "c.md", "C referenced only.\n")
+    _write(tmp_path, "orphan.md", "Nobody links me.\n")
+
+    d = build_doc_graph(tmp_path).as_dict()
+    rows = _rows(d)
+    # The headline counts the reference edge, so c.md is neither orphan nor
+    # unreachable - only the link-path question separates it.
+    assert "c.md" not in d["orphans"] and "c.md" not in d["unreachable"]
+    assert rows["c.md"] == (None, None)
+    assert rows["orphan.md"] == (None, None)
+    assert rows["a.md"] == ("README.md", "README.md")
+    # Same link_graph, same entries: the docs with a link path are exactly the
+    # link-only reachable set, so the two figures cannot drift apart.
+    with_path = sum(1 for r in d["link_parents"] if r["link_entry"] is not None)
+    assert with_path == round(d["link_only_reachability_pct"] * d["doc_count"]) == 2
+
+
+def test_link_parent_bfs_seed_exhaustion_beats_shorter_path(tmp_path: Path) -> None:
+    # Four ordering rules at once. Written out of byte order on purpose: p10
+    # before p1, and t.md before the doc that reaches it.
+    _write(tmp_path, "AGENTS.md", "Agents entry. See [x](x.md), [m](m.md) and [readme](README.md).\n")
+    _write(tmp_path, "p10.md", "P10. See [y](y.md).\n")
+    _write(tmp_path, "p1.md", "P1. See [y](y.md).\n")
+    _write(tmp_path, "README.md", "Readme entry. See [x](x.md), [p10](p10.md), [p1](p1.md) and [t](t.md).\n")
+    _write(tmp_path, "t.md", "T leaf.\n")
+    _write(tmp_path, "m.md", "M hop. See [t](t.md).\n")
+    _write(tmp_path, "x.md", "X leaf.\n")
+    _write(tmp_path, "y.md", "Y leaf.\n")
+
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["entry_points"] == ["AGENTS.md", "README.md"]
+    assert len(d["link_parents"]) == d["doc_count"] == 8
+    rows = _rows(d)
+    # Entries are recorded before any walk starts, so AGENTS.md linking README.md
+    # cannot overwrite README.md's own entry record.
+    assert rows["AGENTS.md"] == (None, "AGENTS.md")
+    assert rows["README.md"] == (None, "README.md")
+    # The earlier entry claims a doc both reach at the same distance.
+    assert rows["x.md"] == ("AGENTS.md", "AGENTS.md")
+    # Each seed's walk runs to exhaustion first, so t.md goes to AGENTS.md at two
+    # hops over README.md at one. A single multi-source walk would say README.md.
+    assert rows["m.md"] == ("AGENTS.md", "AGENTS.md")
+    assert rows["t.md"] == ("m.md", "AGENTS.md")
+    # A sorted frontier at equal depth: p1.md wins over p10.md by byte order,
+    # though p10.md was written first.
+    assert rows["p1.md"] == ("README.md", "README.md")
+    assert rows["p10.md"] == ("README.md", "README.md")
+    assert rows["y.md"] == ("p1.md", "README.md")
+
+
+def test_link_parent_bfs_is_empty_when_networkx_missing(tmp_path: Path, monkeypatch) -> None:
+    # A consumer must meet the key on every path, never absent on one of them.
+    _write(tmp_path, "README.md", "Root. See [a](a.md).\n")
+    _write(tmp_path, "a.md", "A doc.\n")
+    monkeypatch.setattr(doc_graph, "_NETWORKX_AVAILABLE", False)
+
+    d = build_doc_graph(tmp_path).as_dict()
+    assert d["available"] is False
+    assert d["link_parents"] == []
