@@ -176,6 +176,39 @@ def test_coupled_pairs_export_matches_on_path_components_not_prefix() -> None:
     assert by_path["src"]["coupled_pairs_total"] == 2
 
 
+def test_coupled_pairs_export_includes_pairs_wholly_inside_the_directory() -> None:
+    """The rule is "at least one file inside D", so a pair with both files
+    inside D belongs to D's finding as well as a pair crossing its boundary.
+
+    That is a decision, not a side effect: both kinds go out in the
+    repository-wide list's own order, and a consumer that wants only the
+    crossing pairs can tell them apart from the two paths and D alone.
+    """
+    commit_sets = _history(
+        [
+            (["alpha/a.py", "beta/p.py"], 6),
+            (["alpha/b.py", "beta/q.py"], 4),
+            (["beta/p.py", "beta/q.py"], 3),
+        ]
+    )
+    block = ks.build_behaviour_block(Path("/nonexistent"), commit_sets, _MODULAR)
+    by_path = _by_path(block)
+    # beta/p.py>beta/q.py sits wholly inside beta and is on beta's list, after
+    # the two crossing pairs because its count is lower.
+    assert _pair_ids(by_path["beta"]) == [
+        "alpha/a.py>beta/p.py",
+        "alpha/b.py>beta/q.py",
+        "beta/p.py>beta/q.py",
+    ]
+    assert by_path["beta"]["coupled_pairs_total"] == 3
+    # It names no file under alpha/, so alpha's list leaves it out.
+    assert _pair_ids(by_path["alpha"]) == [
+        "alpha/a.py>beta/p.py",
+        "alpha/b.py>beta/q.py",
+    ]
+    assert by_path["alpha"]["coupled_pairs_total"] == 2
+
+
 def test_coupled_pairs_export_cuts_to_five_and_reports_the_total() -> None:
     """At most 5 pairs per finding, in the repository-wide list's own order,
     with the pre-cut count beside them so a cut list never reads as complete."""

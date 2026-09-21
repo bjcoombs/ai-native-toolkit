@@ -402,7 +402,10 @@ absent. Each `hidden_coupling` finding then carries its own `coupled_pairs` (at 
 selecting from the already-capped list would drop exactly the pair the finding exists to explain.
 A pair belongs to a finding whose `path` is `D` when `file_a` or `file_b` begins with `D + "/"` -
 a path-component test, so `src/app` does not claim `src/app2/x.py` - and the order is the
-repository-wide list's own (count descending, then path). Both keys are always written, so a
+repository-wide list's own (count descending, then path). "At least one file inside" is the rule,
+so a pair with both files inside `D` is exported too, beside the pairs that cross its boundary;
+the two kinds are not reordered or labelled, and a consumer that wants only the crossing pairs
+tells them apart from the two paths and `D`. Both keys are always written, so a
 finding with no matching pair reads as "none recorded" rather than "field absent";
 `hidden_coupling_findings` and `static_history_disagreement` share their record objects, so the
 keys appear on the hidden-coupling entries of both lists and on no other disagreement entry.
