@@ -406,7 +406,11 @@ does not claim `src/app2/x.py`. The finding reports commits bleeding across `D`'
 only a crossing pair is evidence of that: a pair wholly inside `D` is cohesion, and a pair wholly
 outside is about somewhere else. The exclusion matters most on an ancestor directory, where the
 internal seams of its own subtree carry the highest counts and would otherwise fill all five
-slots. The order is the repository-wide list's own (count descending, then path). Selection is one
+slots. The order is the repository-wide list's own (count descending, then path). The candidates
+are only pairs `change_coupling_pairs` reports: at least 3 co-changes (`min_support`), counted only
+in commits of at most 50 files (`MAX_COMMIT_FILES_FOR_COUPLING`), while larger commits still count
+toward the containment figure that flagged the directory. So `coupled_pairs_total: 0` means no
+crossing pair reached that floor, not that nothing co-changes with the directory. Selection is one
 pass over the pairs, filing each under the directories that hold exactly one of its files, so the
 cost grows with the pair count rather than with pairs times findings. Both keys are always written, so a
 finding with no matching pair reads as "none recorded" rather than "field absent";
