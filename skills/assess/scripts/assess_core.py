@@ -103,7 +103,12 @@ from lib.wiki_writer import (
 # link_only_reachability_pct, and its orphan_rate / reachability_pct now count
 # reference edges (#353). complexity-stats.json is unchanged, so its layout
 # STATS_SCHEMA_VERSION stays put and the cross-run diff stays armed.
-ARTIFACT_SCHEMA_VERSION = "1.1.0"
+# 1.2.0: run-context.json doc_graph gains link_parents, one
+# {path, link_parent, link_entry} record per document naming the document one
+# step up its link path and the entry document that path starts from, so a
+# consumer can draw the strip without re-walking the graph. Additive: no
+# existing key moves, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.2.0"
 
 
 def _new_run_id() -> str:
