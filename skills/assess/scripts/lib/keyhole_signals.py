@@ -52,9 +52,9 @@ from lib.understanding_analysis import analyze_understanding
 # Caps so a pathological repo can't bloat run-context.json. The treemap and
 # liveness blocks already cap their own lists; these bound the new ones.
 MAX_COUPLING_PAIRS = 100
-# Pairs exported onto a single hidden-coupling finding. The report panel reads
-# a handful; `coupled_pairs_total` beside the list carries the rest, so a cut
-# list never reads as complete.
+# Pairs exported onto a single hidden-coupling finding: a handful is evidence
+# enough for one directory, and `coupled_pairs_total` beside the list carries
+# the rest, so a cut list never reads as complete.
 MAX_FINDING_COUPLED_PAIRS = 5
 MAX_CONTAINMENT_DIRS = 50
 MAX_AUTHORSHIP_PATHS = 40
@@ -284,19 +284,28 @@ def _attach_coupled_pairs(findings: list[dict], all_pairs: list[dict]) -> None:
     files, rather than one pass per finding: the uncapped list can run to tens
     of thousands of pairs.
     """
-    matched: dict[str, list[dict]] = {f["path"]: [] for f in findings}
+    if not findings:
+        # No static graph means no hidden_coupling findings at all; skip the
+        # walk over what can be a long uncapped list.
+        return
+    # Keep only the first MAX_FINDING_COUPLED_PAIRS per directory and count the
+    # rest, so memory stays bounded by the export rather than by the history.
+    kept: dict[str, list[dict]] = {f["path"]: [] for f in findings}
+    totals: dict[str, int] = dict.fromkeys(kept, 0)
     for pair in all_pairs:
         # Symmetric difference: the directories holding exactly one of the two
         # files, which are the boundaries this pair crosses.
         crossed = set(_ancestor_dirs(pair["file_a"])) ^ set(_ancestor_dirs(pair["file_b"]))
         for d in crossed:
-            bucket = matched.get(d)
-            if bucket is not None:
+            bucket = kept.get(d)
+            if bucket is None:
+                continue
+            totals[d] += 1
+            if len(bucket) < MAX_FINDING_COUPLED_PAIRS:
                 bucket.append(pair)
     for finding in findings:
-        pairs = matched[finding["path"]]
-        finding["coupled_pairs"] = pairs[:MAX_FINDING_COUPLED_PAIRS]
-        finding["coupled_pairs_total"] = len(pairs)
+        finding["coupled_pairs"] = kept[finding["path"]]
+        finding["coupled_pairs_total"] = totals[finding["path"]]
 
 
 # --------------------------------------------------------------------------
