@@ -192,14 +192,23 @@ sorted by path, over link edges alone - the same edge set as
 link path. An entry document carries a null `link_parent` and its own path as
 `link_entry`; a doc the walk reached carries the doc that first reached it and
 the entry that walk started from; a doc with no link path carries null for both,
-which is why `link_entry` is on the record at all. Walking `link_parent` up from
-a doc reconstructs the whole strip back to its entry. The walk seeds from
+which is why `link_entry` is on the record at all. `link_parent` is the next hop
+toward an entry, not "who links to me": a doc linked only from an unreachable doc
+has an in-edge but no link path, so it records null for both. Walking
+`link_parent` up from a doc reconstructs the whole strip back to its entry. The
+walk seeds from
 `entry_points` in their exported byte order, runs each seed to exhaustion before
 the next, takes the frontier and each node's successors in byte order, writes
 once and never re-expands a recorded doc - so a rebuild is byte-identical and
 the earlier entry claims a doc a later one reaches in fewer hops. There is no
 cap and no total: `len(link_parents) == doc_count` is the bound, and capping
-would drop exactly the doc a doc-heavy run flags.
+would drop exactly the doc a doc-heavy run flags. That makes it the one
+per-document list on the block, unlike `pagerank`, which is kept off `as_dict()`
+to keep `run-context.json` lean: a record is three paths, about 140 bytes as
+written (137 per record over this repository's 113 docs), so a 5,000-doc vault
+adds roughly 700 KB. The trade was made because a path
+strip needs the exact doc a run flags, and a rounded float can be dropped where
+a path cannot.
 
 **`raw_source.py`**
 Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:

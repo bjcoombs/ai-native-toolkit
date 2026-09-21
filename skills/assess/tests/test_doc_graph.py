@@ -1075,6 +1075,10 @@ def test_link_parent_bfs_no_link_path_is_both_null(tmp_path: Path) -> None:
     assert rows["c.md"] == (None, None)
     assert rows["orphan.md"] == (None, None)
     assert rows["a.md"] == ("README.md", "README.md")
+    # Same link_graph, same entries: the docs with a link path are exactly the
+    # link-only reachable set, so the two figures cannot drift apart.
+    with_path = sum(1 for r in d["link_parents"] if r["link_entry"] is not None)
+    assert with_path == round(d["link_only_reachability_pct"] * d["doc_count"]) == 2
 
 
 def test_link_parent_bfs_seed_exhaustion_beats_shorter_path(tmp_path: Path) -> None:

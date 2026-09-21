@@ -825,6 +825,17 @@ def test_write_svg_tooltip_shows_est_tokens_and_loc(render_lib, tmp_path):
     assert "514 loc" in svg
 
 
+def test_artifact_schema_version_mirrors_assess_core(treemap):
+    """One /assess run stamps one provenance schema version on every artifact it
+    writes. The treemap runs as its own process and duplicates the constant
+    rather than importing assess_core, so this is what keeps the copy honest:
+    bump one without the other and complexity-stats.json disagrees with
+    run-context.json about which run envelope it carries."""
+    import assess_core
+
+    assert treemap.ARTIFACT_SCHEMA_VERSION == assess_core.ARTIFACT_SCHEMA_VERSION
+
+
 def test_write_stats_stamps_run_id_and_schema_version(treemap, tmp_path):
     """The complexity-stats sidecar carries an artifact_schema_version and a
     unique run_id (assess-obey-thyself), so each stats emission is traceable.
@@ -835,7 +846,7 @@ def test_write_stats_stamps_run_id_and_schema_version(treemap, tmp_path):
     out = root / "stats.json"
     treemap.write_stats([(f, 100, 5.0, "lizard")], None, None, root, out)
     stats = json.loads(out.read_text())
-    assert stats["artifact_schema_version"] == treemap.ARTIFACT_SCHEMA_VERSION == "1.1.0"
+    assert stats["artifact_schema_version"] == treemap.ARTIFACT_SCHEMA_VERSION == "1.2.0"
     # The stats-layout schema_version (from #244) still coexists as an int.
     assert stats["schema_version"] == treemap.STATS_SCHEMA_VERSION
     run_id = stats["run_id"]

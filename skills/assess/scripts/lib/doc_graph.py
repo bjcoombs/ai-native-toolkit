@@ -975,8 +975,8 @@ def _link_parents(graph, entry_points: list[str]) -> list[dict]:
     An entry carries ``link_parent`` ``None`` and ``link_entry`` equal to its own
     path, so the three states stay distinguishable.
 
-    Deterministic by construction, because the page draws a link-path strip from
-    it and a rebuild must be byte-identical: the seeds are ``entry_points`` in
+    Deterministic by construction, because a consumer will draw a link-path
+    strip from it and a rebuild must be byte-identical: the seeds are ``entry_points`` in
     their exported ascending byte order, each seed's walk runs to exhaustion
     before the next starts, and within a walk the frontier and each node's
     successors are taken in ascending byte order. First write wins, and the
