@@ -53,6 +53,10 @@ ENVELOPE_TAG_RE = re.compile(
 # weeks with three unresolved conflict regions (535 stale lines). Reference a
 # marker illustratively as inline code (`` `<<<<<<<` ``) so it never starts a line.
 CONFLICT_MARKER_RE = re.compile(r"(?:<{7,}|>{7,}|\|{7,})(?: |$)")
+# A single-quoted jq program, and inside it a read of the *whole* doc_graph
+# block: `.doc_graph` not followed by a field (`.doc_graph.orphans` is fine).
+JQ_PROGRAM_RE = re.compile(r"\bjq\b[^'\n]*'([^'\n]*)'")
+WHOLE_DOC_GRAPH_RE = re.compile(r"\.doc_graph(?![\w.\[])")
 
 
 def _split_frontmatter(path: Path):
@@ -310,6 +314,36 @@ def test_subagent_types_has_cases():
     """
     found = shipped_md()
     assert len(found) >= 20, f"expected >= 20 shipped markdown components, found {len(found)}"
+
+
+def _unnarrowed_doc_graph_reads(text: str) -> list[str]:
+    """jq programs that select the whole doc_graph block but keep link_parents."""
+    return [
+        prog for prog in JQ_PROGRAM_RE.findall(text)
+        if WHOLE_DOC_GRAPH_RE.search(prog) and "del(.link_parents)" not in prog
+    ]
+
+
+def test_unnarrowed_doc_graph_matcher():
+    """The scan below is only as good as its matcher; pin both directions."""
+    assert _unnarrowed_doc_graph_reads("jq '.doc_graph, .stale_hubs' f") == [".doc_graph, .stale_hubs"]
+    assert _unnarrowed_doc_graph_reads("jq -r '.doc_graph' f") == [".doc_graph"]
+    assert _unnarrowed_doc_graph_reads("jq '(.doc_graph | del(.link_parents)), .x' f") == []
+    assert _unnarrowed_doc_graph_reads("jq '.doc_graph.orphans' f") == []
+    assert _unnarrowed_doc_graph_reads("jq '.doc_graph[\"hubs\"]' f") == []
+
+
+@pytest.mark.parametrize("p", all_authored_markdown(), ids=lambda p: str(p.relative_to(REPO)))
+def test_doc_graph_reads_drop_link_parents(p):
+    """`doc_graph.link_parents` holds one record per document, so a jq read of the
+    whole block into model context grows with the size of the doc set and can
+    push the signals after it past a tool call's output limit. Every such read in
+    shipped instructions drops it; a read of a named field is unaffected."""
+    found = _unnarrowed_doc_graph_reads(p.read_text(encoding="utf-8"))
+    assert not found, (
+        f"{p.relative_to(REPO)}: jq reads the whole .doc_graph block without "
+        f"del(.link_parents): {found} - use '(.doc_graph | del(.link_parents))'"
+    )
 
 
 @pytest.mark.parametrize("p", all_authored_markdown(), ids=lambda p: str(p.relative_to(REPO)))
