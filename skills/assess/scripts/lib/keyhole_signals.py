@@ -52,6 +52,10 @@ from lib.understanding_analysis import analyze_understanding
 # Caps so a pathological repo can't bloat run-context.json. The treemap and
 # liveness blocks already cap their own lists; these bound the new ones.
 MAX_COUPLING_PAIRS = 100
+# Pairs exported onto a single hidden-coupling finding. The report panel reads
+# a handful; `coupled_pairs_total` beside the list carries the rest, so a cut
+# list never reads as complete.
+MAX_FINDING_COUPLED_PAIRS = 5
 MAX_CONTAINMENT_DIRS = 50
 MAX_AUTHORSHIP_PATHS = 40
 MAX_ATTENTION_UNITS = 10
@@ -243,6 +247,35 @@ def _python_bearing_dirs(commit_sets: list[set[Path]]) -> set[str]:
     return out
 
 
+def _pair_is_inside(pair: dict, directory: str) -> bool:
+    """Is either file of ``pair`` under the repo-relative directory ``directory``?
+
+    A path-component test, not a string prefix: ``lib/doc`` must not claim
+    ``lib/docs/x.py``. A file is never equal to the directory, and ``.`` is
+    never a flagged path (`_candidate_dirs` excludes the repository root), so
+    the trailing slash needs no special case.
+    """
+    prefix = directory + "/"
+    return pair["file_a"].startswith(prefix) or pair["file_b"].startswith(prefix)
+
+
+def _attach_coupled_pairs(findings: list[dict], all_pairs: list[dict]) -> None:
+    """Export each finding's top coupled pairs, in place.
+
+    Candidates are the **full** pair list, before the repository-wide
+    ``MAX_COUPLING_PAIRS`` cut: a directory's own pair can rank below 100
+    repository-wide and still be the only coupling that directory has.
+    Selecting from the capped list is the defect this export exists to avoid.
+    Order is the candidate list's own (count descending, then path), and both
+    keys are always written, so a finding with no pair reads as "none
+    recorded" rather than "field absent".
+    """
+    for finding in findings:
+        matched = [p for p in all_pairs if _pair_is_inside(p, finding["path"])]
+        finding["coupled_pairs"] = matched[:MAX_FINDING_COUPLED_PAIRS]
+        finding["coupled_pairs_total"] = len(matched)
+
+
 # --------------------------------------------------------------------------
 # Block builders (pure transforms of upstream signal outputs)
 # --------------------------------------------------------------------------
@@ -257,12 +290,14 @@ def build_behaviour_block(
             "reason": "no git history (commit file-sets empty)",
             "containment_by_dir": {},
             "change_coupling_pairs": [],
+            "change_coupling_pairs_total": 0,
             "static_history_disagreement": [],
             "hidden_coupling_findings": [],
             "refactor_boundaries": [],
         }
     containment = containment_by_dir(repo_root, commit_sets)
-    pairs = change_coupling_pairs(commit_sets)[:MAX_COUPLING_PAIRS]
+    all_pairs = change_coupling_pairs(commit_sets)
+    pairs = all_pairs[:MAX_COUPLING_PAIRS]
     # Only project the (Python import-graph) static metrics onto Python-bearing
     # directories; a bleeding doc/config tree has no static evidence and
     # degrades to bleeding_module rather than a false hidden_coupling.
@@ -271,14 +306,17 @@ def build_behaviour_block(
     static_mod = project_static_modularity(structure, static_dirs)
     disagreement = detect_hidden_coupling(containment, static_modularity=static_mod)
     boundaries = find_refactor_boundaries(containment, static_modularity=static_mod)
+    hidden = [d for d in disagreement if d["finding"] == "hidden_coupling"]
+    # The two lists share their record objects, so writing here puts the keys
+    # on the hidden-coupling entries of both and on no other disagreement entry.
+    _attach_coupled_pairs(hidden, all_pairs)
     return {
         "available": True,
         "containment_by_dir": containment,
         "change_coupling_pairs": pairs,
+        "change_coupling_pairs_total": len(all_pairs),
         "static_history_disagreement": disagreement,
-        "hidden_coupling_findings": [
-            d for d in disagreement if d["finding"] == "hidden_coupling"
-        ],
+        "hidden_coupling_findings": hidden,
         "refactor_boundaries": boundaries,
         "static_modularity_projection": (
             "repo-level (coarse)" if static_mod is not None else "none"

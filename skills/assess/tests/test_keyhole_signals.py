@@ -130,6 +130,144 @@ def test_behaviour_block_refactor_boundary_is_positive() -> None:
     assert any(b["path"] == "island" for b in block["refactor_boundaries"])
 
 
+# --- coupled pairs on each hidden-coupling finding ---------------------------
+
+# The structure dict every fixture below passes: `project_static_modularity`
+# reads exactly these three keys, and one metric at or above its threshold is
+# what makes a bleeding directory read as hidden_coupling rather than a plain
+# bleeding_module. The free variable in each fixture is the history, not this.
+_MODULAR = {"available": True, "modularity_q": 0.9, "front_door_ratio": 0.9}
+
+
+def _history(spec: list[tuple[list[str], int]]) -> list[set[Path]]:
+    """Expand ``[(files, repeats), ...]`` into a commit file-set list."""
+    return [{Path(f) for f in files} for files, repeats in spec for _ in range(repeats)]
+
+
+def _pair_ids(finding: dict) -> list[str]:
+    return [f"{p['file_a']}>{p['file_b']}" for p in finding["coupled_pairs"]]
+
+
+def _by_path(block: dict) -> dict[str, dict]:
+    return {f["path"]: f for f in block["hidden_coupling_findings"]}
+
+
+def test_coupled_pairs_export_matches_on_path_components_not_prefix() -> None:
+    """A pair is inside D when a file begins with ``D + "/"``.
+
+    `src/app2` begins with the characters of `src/app`, so a `startswith(D)`
+    test without the separator puts `src/app2/x.py` on the `src/app` finding.
+    The parent `src` takes both, which is what a component test must do.
+    """
+    commit_sets = _history(
+        [(["src/app/a.py", "ext/e.py"], 6), (["src/app2/x.py", "ext/e.py"], 5)]
+    )
+    block = ks.build_behaviour_block(Path("/nonexistent"), commit_sets, _MODULAR)
+    by_path = _by_path(block)
+    assert sorted(by_path) == ["ext", "src", "src/app", "src/app2"]
+    assert _pair_ids(by_path["src/app"]) == ["ext/e.py>src/app/a.py"]
+    assert by_path["src/app"]["coupled_pairs_total"] == 1
+    assert _pair_ids(by_path["src/app2"]) == ["ext/e.py>src/app2/x.py"]
+    assert by_path["src/app2"]["coupled_pairs_total"] == 1
+    assert _pair_ids(by_path["src"]) == [
+        "ext/e.py>src/app/a.py",
+        "ext/e.py>src/app2/x.py",
+    ]
+    assert by_path["src"]["coupled_pairs_total"] == 2
+
+
+def test_coupled_pairs_export_cuts_to_five_and_reports_the_total() -> None:
+    """At most 5 pairs per finding, in the repository-wide list's own order,
+    with the pre-cut count beside them so a cut list never reads as complete."""
+    commit_sets = _history(
+        [(["hub/h.py", f"out/f{i}.py"], 9 if i == 3 else 3) for i in range(1, 13)]
+    )
+    block = ks.build_behaviour_block(Path("/nonexistent"), commit_sets, _MODULAR)
+    hub = _by_path(block)["hub"]
+    # f3 leads on co_change_count; the eleven that tie at 3 order by file_b
+    # under a byte comparison, so unpadded names run f1, f10, f11, f12, f2.
+    assert _pair_ids(hub) == [
+        "hub/h.py>out/f3.py",
+        "hub/h.py>out/f1.py",
+        "hub/h.py>out/f10.py",
+        "hub/h.py>out/f11.py",
+        "hub/h.py>out/f12.py",
+    ]
+    assert hub["coupled_pairs_total"] == 12
+    # The existing repository-wide list is untouched: same twelve, same order.
+    assert len(block["change_coupling_pairs"]) == 12
+    assert block["change_coupling_pairs_total"] == 12
+
+
+def test_coupled_pairs_export_selects_before_the_repository_wide_cap() -> None:
+    """A pair the 100-pair cap discards still reaches its own finding.
+
+    Sixteen `noise/` files co-changing ten times is 120 pairs at count 10;
+    the single `edge`-to-`far` pair at count 5 sorts last of 121 and is cut
+    from `change_coupling_pairs`. Selecting from that capped list is the
+    defect this export exists to avoid.
+    """
+    noise = [f"noise/n{i:02d}.py" for i in range(1, 17)]
+    commit_sets = _history([(noise, 10), (["edge/e.py", "far/g.py"], 5)])
+    block = ks.build_behaviour_block(Path("/nonexistent"), commit_sets, _MODULAR)
+    assert len(block["change_coupling_pairs"]) == ks.MAX_COUPLING_PAIRS == 100
+    assert block["change_coupling_pairs_total"] == 121
+    capped = {(p["file_a"], p["file_b"]) for p in block["change_coupling_pairs"]}
+    assert ("edge/e.py", "far/g.py") not in capped
+    edge = _by_path(block)["edge"]
+    assert _pair_ids(edge) == ["edge/e.py>far/g.py"]
+    assert edge["coupled_pairs_total"] == 1
+
+
+def test_coupled_pairs_export_keys_are_present_and_empty_when_nothing_matches() -> None:
+    """`coupled_pairs: []` with `coupled_pairs_total: 0`, never an absent key:
+    the report has to tell "no pairs recorded" from "field absent"."""
+    commit_sets = _history(
+        [(["lone/l.py", f"sink/s{i}.py"], 1) for i in range(1, 6)]
+        + [(["mod/m.py", "app/z.py"], 6)]
+    )
+    block = ks.build_behaviour_block(Path("/nonexistent"), commit_sets, _MODULAR)
+    lone = _by_path(block)["lone"]
+    assert lone["coupled_pairs"] == []
+    assert lone["coupled_pairs_total"] == 0
+
+
+def test_coupled_pairs_export_keys_stay_off_non_hidden_coupling_entries() -> None:
+    """`hidden_coupling_findings` and `static_history_disagreement` share their
+    record objects, so a write onto every disagreement entry would leak the two
+    keys onto `bleeding_module` records. It must not."""
+    commit_sets = _history(
+        [(["mod/m.py", "app/z.py"], 6), (["cfg/c.yaml", "app/z.py"], 5)]
+    )
+    block = ks.build_behaviour_block(Path("/nonexistent"), commit_sets, _MODULAR)
+    by_finding = {f["path"]: f for f in block["static_history_disagreement"]}
+    # cfg carries no Python file, so the static graph is silent on it and it
+    # degrades to bleeding_module.
+    assert by_finding["cfg"]["finding"] == "bleeding_module"
+    assert set(by_finding["cfg"]) == {
+        "path",
+        "containment_ratio",
+        "finding",
+        "recommendation",
+    }
+    assert set(by_finding["mod"]) == {
+        "path",
+        "containment_ratio",
+        "finding",
+        "recommendation",
+        "coupled_pairs",
+        "coupled_pairs_total",
+    }
+
+
+def test_coupled_pairs_export_total_is_present_on_the_unavailable_path() -> None:
+    """No commit file-sets: the block-level total is 0, not absent, so a
+    consumer never meets the key on one path and not the other."""
+    block = ks.build_behaviour_block(Path("/nonexistent"), [], _MODULAR)
+    assert block["available"] is False
+    assert block["change_coupling_pairs_total"] == 0
+
+
 # --- documentation block -----------------------------------------------------
 
 def test_documentation_block_maps_doc_join() -> None:
