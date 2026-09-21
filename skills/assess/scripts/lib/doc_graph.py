@@ -978,14 +978,19 @@ def _link_parents(graph, entry_points: list[str]) -> list[dict]:
     An entry carries ``link_parent`` ``None`` and ``link_entry`` equal to its own
     path, so the three states stay distinguishable.
 
-    Deterministic by construction, because a consumer will draw a link-path
-    strip from it and a rebuild must be byte-identical: the seeds are ``entry_points`` in
-    their exported ascending byte order, each seed's walk runs to exhaustion
-    before the next starts, and within a walk the frontier and each node's
-    successors are taken in ascending byte order. First write wins, and the
-    recorded set is the visited set - a doc already recorded is never enqueued
-    again, so an entry met as a successor is not expanded by the walking entry
-    and never lends its name to another entry's children.
+    A consumer will draw a link-path strip from it, so a rebuild must be
+    byte-identical. That comes from the ordering: seeds are ``entry_points`` in
+    their exported ascending byte order, and within a walk the frontier and each
+    node's successors are taken in ascending byte order. First write wins, and
+    the recorded set is the visited set - a doc already recorded is never
+    enqueued again, so an entry met as a successor is not expanded by the
+    walking entry and never lends its name to another entry's children.
+
+    Each seed's walk runs to exhaustion before the next starts. That is an
+    attribution rule, not a determinism one: a doc belongs to the first entry,
+    in entry order, that reaches it at all, so a later entry gaining a shorter
+    link does not re-attribute it. The cost is that the recorded path is the
+    shortest from its own entry, not the shortest from any entry.
     """
     nodes = set(graph.nodes())
     # (link_parent, link_entry), keyed by path. Entries land before any walk so

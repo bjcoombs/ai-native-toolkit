@@ -209,7 +209,11 @@ bytes as written (137 per record over this repository's 113 docs), so a
 needs the exact doc a run flags, and a rounded float can be dropped where a path
 cannot. The cost lands on readers, not the file: the layer scorer and the report
 writer read `.doc_graph` into model context, so both drop the key with
-`del(.link_parents)`. A new LLM reader of the block does the same.
+`del(.link_parents)`. A new LLM reader of the block does the same;
+`tests/test_plugin_contract.py` fails a shipped single-line `jq` read of the whole
+block that does not. One reader sits outside that guard: `skills/assess/SKILL.md`
+tells the orchestrator to read `run-context.json` before writing the report,
+which takes the whole file, `link_parents` included.
 
 **`raw_source.py`**
 Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:
