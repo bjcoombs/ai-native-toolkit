@@ -248,19 +248,21 @@ def _python_bearing_dirs(commit_sets: list[set[Path]]) -> set[str]:
 
 
 def _ancestor_dirs(path: str) -> list[str]:
-    """Every proper ancestor directory of a repo-relative posix ``path``.
+    """Every proper ancestor directory of a repo-relative ``path``, as posix.
 
-    ``src/app2/x.py`` gives ``src/app2`` and ``src``, never ``src/app``: the
-    split is on path components, so a file is inside ``D`` exactly when it
-    begins with ``D + "/"``. The repository root ``.`` is never produced,
-    matching `_candidate_dirs`, which never flags it.
+    Derived exactly as `_candidate_dirs` derives the directories it flags -
+    ``Path(path).parents``, each ``.as_posix()``, the root ``.`` dropped - so
+    the names compared here are always the names a finding carries. A pair's
+    paths come from ``str(Path)``, backslash-separated on Windows; splitting
+    them on a literal slash would match nothing there and ship every finding
+    an empty list. ``src/app2/x.py`` gives ``src/app2`` and ``src``, never
+    ``src/app``: a file is inside ``D`` exactly when it begins with ``D + "/"``.
     """
     out = []
-    i = path.rfind("/")
-    while i > 0:
-        path = path[:i]
-        out.append(path)
-        i = path.rfind("/")
+    for parent in Path(path).parents:
+        s = parent.as_posix()
+        if s != ".":
+            out.append(s)
     return out
 
 
@@ -316,9 +318,10 @@ def _empty_behaviour_fields() -> dict:
     """The behaviour block's data keys, empty, for both unavailable paths.
 
     No history and a builder that raised are two routes to the same shape, so
-    they share one source: a key added to the block is then present on every
-    path, and a consumer never meets it on one and not the other. Built fresh
-    on each call so no two blocks share a list.
+    they share one source: a data key added here is present on both unavailable
+    paths, and a consumer never meets it on one and not the other. Keys only the
+    available block carries (``static_modularity_projection``) are not listed.
+    Built fresh on each call so no two blocks share a list.
     """
     return {
         "containment_by_dir": {},

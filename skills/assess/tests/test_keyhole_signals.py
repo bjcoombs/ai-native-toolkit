@@ -238,6 +238,30 @@ def test_coupled_pairs_export_ancestor_keeps_only_its_own_crossings() -> None:
     assert by_path["src"]["coupled_pairs_total"] == 4
 
 
+def test_coupled_pairs_export_reads_windows_separated_pair_paths(monkeypatch) -> None:
+    """Pair paths come from ``str(Path)``, backslash-separated on Windows,
+    while finding paths are posix. Ancestors are derived the way
+    `_candidate_dirs` derives flagged directories, so the two still meet.
+    CI runs on POSIX, so the module's ``Path`` is pointed at the Windows
+    flavour to parse the pair paths as Windows would."""
+    from pathlib import PureWindowsPath
+
+    monkeypatch.setattr(ks, "Path", PureWindowsPath)
+    findings = [{"path": "src/app"}, {"path": "src"}]
+    pairs = [
+        {"file_a": "ext\\e.py", "file_b": "src\\app\\a.py",
+         "co_change_count": 6, "support_pct": 50.0},
+        {"file_a": "src\\app\\a.py", "file_b": "src\\b.py",
+         "co_change_count": 4, "support_pct": 33.33},
+    ]
+    ks._attach_coupled_pairs(findings, pairs)
+    by_path = {f["path"]: f for f in findings}
+    # Both pairs cross src/app; only the ext pair crosses src.
+    assert by_path["src/app"]["coupled_pairs_total"] == 2
+    assert by_path["src"]["coupled_pairs"] == [pairs[0]]
+    assert by_path["src"]["coupled_pairs_total"] == 1
+
+
 def test_coupled_pairs_export_cuts_to_five_and_reports_the_total() -> None:
     """At most 5 pairs per finding, in the repository-wide list's own order,
     with the pre-cut count beside them so a cut list never reads as complete."""
