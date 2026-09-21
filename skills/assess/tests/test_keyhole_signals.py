@@ -153,7 +153,7 @@ def _by_path(block: dict) -> dict[str, dict]:
 
 
 def test_coupled_pairs_export_matches_on_path_components_not_prefix() -> None:
-    """A pair is inside D when a file begins with ``D + "/"``.
+    """A file is inside D when it begins with ``D + "/"``.
 
     `src/app2` begins with the characters of `src/app`, so a `startswith(D)`
     test without the separator puts `src/app2/x.py` on the `src/app` finding.
@@ -176,13 +176,12 @@ def test_coupled_pairs_export_matches_on_path_components_not_prefix() -> None:
     assert by_path["src"]["coupled_pairs_total"] == 2
 
 
-def test_coupled_pairs_export_includes_pairs_wholly_inside_the_directory() -> None:
-    """The rule is "at least one file inside D", so a pair with both files
-    inside D belongs to D's finding as well as a pair crossing its boundary.
+def test_coupled_pairs_export_excludes_pairs_wholly_inside_the_directory() -> None:
+    """Only a pair that crosses D's boundary counts: exactly one file inside D.
 
-    That is a decision, not a side effect: both kinds go out in the
-    repository-wide list's own order, and a consumer that wants only the
-    crossing pairs can tell them apart from the two paths and D alone.
+    A hidden-coupling finding reports commits bleeding out of D, so a pair with
+    both files inside D is cohesion, not evidence, and a pair with neither file
+    inside D is about somewhere else. Both are left off D's list.
     """
     commit_sets = _history(
         [
@@ -193,20 +192,50 @@ def test_coupled_pairs_export_includes_pairs_wholly_inside_the_directory() -> No
     )
     block = ks.build_behaviour_block(Path("/nonexistent"), commit_sets, _MODULAR)
     by_path = _by_path(block)
-    # beta/p.py>beta/q.py sits wholly inside beta and is on beta's list, after
-    # the two crossing pairs because its count is lower.
+    # beta/p.py>beta/q.py sits wholly inside beta: excluded from beta's list.
     assert _pair_ids(by_path["beta"]) == [
         "alpha/a.py>beta/p.py",
         "alpha/b.py>beta/q.py",
-        "beta/p.py>beta/q.py",
     ]
-    assert by_path["beta"]["coupled_pairs_total"] == 3
-    # It names no file under alpha/, so alpha's list leaves it out.
+    assert by_path["beta"]["coupled_pairs_total"] == 2
+    # ...and wholly outside alpha: excluded from alpha's list too.
     assert _pair_ids(by_path["alpha"]) == [
         "alpha/a.py>beta/p.py",
         "alpha/b.py>beta/q.py",
     ]
     assert by_path["alpha"]["coupled_pairs_total"] == 2
+
+
+def test_coupled_pairs_export_ancestor_keeps_only_its_own_crossings() -> None:
+    """A pair can cross a child directory and still sit wholly inside its
+    parent. It counts for the child and not the parent, so an ancestor's five
+    slots are not filled by the internal seams of its own subtree, which carry
+    the highest counts in most repositories."""
+    # Four commits stay inside src; twelve reach out to ext, so src bleeds
+    # (containment 0.25) while its internal pair still has the top count.
+    commit_sets = _history(
+        [(["src/app/a.py", "src/b.py"], 4)]
+        + [(["src/app/a.py", f"ext/e{i}.py"], 3) for i in range(1, 5)]
+    )
+    block = ks.build_behaviour_block(Path("/nonexistent"), commit_sets, _MODULAR)
+    by_path = _by_path(block)
+    assert _pair_ids(by_path["src/app"]) == [
+        "src/app/a.py>src/b.py",
+        "ext/e1.py>src/app/a.py",
+        "ext/e2.py>src/app/a.py",
+        "ext/e3.py>src/app/a.py",
+        "ext/e4.py>src/app/a.py",
+    ]
+    assert by_path["src/app"]["coupled_pairs_total"] == 5
+    # src/app/a.py>src/b.py is wholly inside src, so despite leading on count
+    # it takes none of src's slots.
+    assert _pair_ids(by_path["src"]) == [
+        "ext/e1.py>src/app/a.py",
+        "ext/e2.py>src/app/a.py",
+        "ext/e3.py>src/app/a.py",
+        "ext/e4.py>src/app/a.py",
+    ]
+    assert by_path["src"]["coupled_pairs_total"] == 4
 
 
 def test_coupled_pairs_export_cuts_to_five_and_reports_the_total() -> None:
@@ -299,6 +328,30 @@ def test_coupled_pairs_export_total_is_present_on_the_unavailable_path() -> None
     block = ks.build_behaviour_block(Path("/nonexistent"), [], _MODULAR)
     assert block["available"] is False
     assert block["change_coupling_pairs_total"] == 0
+
+
+def test_coupled_pairs_export_total_is_present_when_the_builder_fails(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """The other unavailable path: `integrate` degrades a builder that raises
+    to a fallback block. That block carries the total too, with the same data
+    keys as the no-history block, so the two paths cannot drift apart."""
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("simulated signal failure")
+
+    monkeypatch.setattr(ks, "build_behaviour_block", boom)
+    out = ks.integrate(
+        repo_root=tmp_path, complexity_stats={}, doc_staleness={},
+        dead_code={}, observability={}, structure={},
+        commit_sets=[{Path("a/x.py")}],
+    )
+    degraded = out["behaviour"]
+    assert degraded["available"] is False
+    assert "simulated signal failure" in degraded["reason"]
+    assert degraded["change_coupling_pairs_total"] == 0
+    monkeypatch.undo()
+    no_history = ks.build_behaviour_block(Path("/nonexistent"), [], _MODULAR)
+    assert set(degraded) == set(no_history)
 
 
 # --- documentation block -----------------------------------------------------

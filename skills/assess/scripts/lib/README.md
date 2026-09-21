@@ -400,12 +400,15 @@ absent. Each `hidden_coupling` finding then carries its own `coupled_pairs` (at 
 `MAX_FINDING_COUPLED_PAIRS`, 5) and `coupled_pairs_total`. The per-finding candidates are the
 **full**, uncapped pair list: a directory's only coupling can rank below 100 repository-wide, and
 selecting from the already-capped list would drop exactly the pair the finding exists to explain.
-A pair belongs to a finding whose `path` is `D` when `file_a` or `file_b` begins with `D + "/"` -
-a path-component test, so `src/app` does not claim `src/app2/x.py` - and the order is the
-repository-wide list's own (count descending, then path). "At least one file inside" is the rule,
-so a pair with both files inside `D` is exported too, beside the pairs that cross its boundary;
-the two kinds are not reordered or labelled, and a consumer that wants only the crossing pairs
-tells them apart from the two paths and `D`. Both keys are always written, so a
+A pair belongs to a finding whose `path` is `D` when **exactly one** of `file_a` and `file_b` is
+inside `D`, a file being inside when it begins with `D + "/"` - a path-component test, so `src/app`
+does not claim `src/app2/x.py`. The finding reports commits bleeding across `D`'s boundary, and
+only a crossing pair is evidence of that: a pair wholly inside `D` is cohesion, and a pair wholly
+outside is about somewhere else. The exclusion matters most on an ancestor directory, where the
+internal seams of its own subtree carry the highest counts and would otherwise fill all five
+slots. The order is the repository-wide list's own (count descending, then path). Selection is one
+pass over the pairs, filing each under the directories that hold exactly one of its files, so the
+cost grows with the pair count rather than with pairs times findings. Both keys are always written, so a
 finding with no matching pair reads as "none recorded" rather than "field absent";
 `hidden_coupling_findings` and `static_history_disagreement` share their record objects, so the
 keys appear on the hidden-coupling entries of both lists and on no other disagreement entry.

@@ -247,16 +247,21 @@ def _python_bearing_dirs(commit_sets: list[set[Path]]) -> set[str]:
     return out
 
 
-def _pair_is_inside(pair: dict, directory: str) -> bool:
-    """Is either file of ``pair`` under the repo-relative directory ``directory``?
+def _ancestor_dirs(path: str) -> list[str]:
+    """Every proper ancestor directory of a repo-relative posix ``path``.
 
-    A path-component test, not a string prefix: ``lib/doc`` must not claim
-    ``lib/docs/x.py``. A file is never equal to the directory, and ``.`` is
-    never a flagged path (`_candidate_dirs` excludes the repository root), so
-    the trailing slash needs no special case.
+    ``src/app2/x.py`` gives ``src/app2`` and ``src``, never ``src/app``: the
+    split is on path components, so a file is inside ``D`` exactly when it
+    begins with ``D + "/"``. The repository root ``.`` is never produced,
+    matching `_candidate_dirs`, which never flags it.
     """
-    prefix = directory + "/"
-    return pair["file_a"].startswith(prefix) or pair["file_b"].startswith(prefix)
+    out = []
+    i = path.rfind("/")
+    while i > 0:
+        path = path[:i]
+        out.append(path)
+        i = path.rfind("/")
+    return out
 
 
 def _attach_coupled_pairs(findings: list[dict], all_pairs: list[dict]) -> None:
@@ -266,19 +271,55 @@ def _attach_coupled_pairs(findings: list[dict], all_pairs: list[dict]) -> None:
     ``MAX_COUPLING_PAIRS`` cut: a directory's own pair can rank below 100
     repository-wide and still be the only coupling that directory has.
     Selecting from the capped list is the defect this export exists to avoid.
-    Order is the candidate list's own (count descending, then path), and both
-    keys are always written, so a finding with no pair reads as "none
+    A pair belongs to a flagged directory when **exactly one** of its files is
+    inside it: a hidden-coupling finding reports commits that bleed across the
+    directory's boundary, and only a crossing pair is evidence of that. A pair
+    wholly inside is cohesion, and on an ancestor directory such pairs carry the
+    highest counts, so admitting them would crowd the crossing pairs out of the
+    five slots. Order is the candidate list's own (count descending, then path),
+    and both keys are always written, so a finding with no pair reads as "none
     recorded" rather than "field absent".
+
+    One pass over the pairs, filing each under the flagged ancestors of its two
+    files, rather than one pass per finding: the uncapped list can run to tens
+    of thousands of pairs.
     """
+    matched: dict[str, list[dict]] = {f["path"]: [] for f in findings}
+    for pair in all_pairs:
+        # Symmetric difference: the directories holding exactly one of the two
+        # files, which are the boundaries this pair crosses.
+        crossed = set(_ancestor_dirs(pair["file_a"])) ^ set(_ancestor_dirs(pair["file_b"]))
+        for d in crossed:
+            bucket = matched.get(d)
+            if bucket is not None:
+                bucket.append(pair)
     for finding in findings:
-        matched = [p for p in all_pairs if _pair_is_inside(p, finding["path"])]
-        finding["coupled_pairs"] = matched[:MAX_FINDING_COUPLED_PAIRS]
-        finding["coupled_pairs_total"] = len(matched)
+        pairs = matched[finding["path"]]
+        finding["coupled_pairs"] = pairs[:MAX_FINDING_COUPLED_PAIRS]
+        finding["coupled_pairs_total"] = len(pairs)
 
 
 # --------------------------------------------------------------------------
 # Block builders (pure transforms of upstream signal outputs)
 # --------------------------------------------------------------------------
+
+def _empty_behaviour_fields() -> dict:
+    """The behaviour block's data keys, empty, for both unavailable paths.
+
+    No history and a builder that raised are two routes to the same shape, so
+    they share one source: a key added to the block is then present on every
+    path, and a consumer never meets it on one and not the other. Built fresh
+    on each call so no two blocks share a list.
+    """
+    return {
+        "containment_by_dir": {},
+        "change_coupling_pairs": [],
+        "change_coupling_pairs_total": 0,
+        "static_history_disagreement": [],
+        "hidden_coupling_findings": [],
+        "refactor_boundaries": [],
+    }
+
 
 def build_behaviour_block(
     repo_root: Path, commit_sets: list[set[Path]], structure: dict | None,
@@ -288,12 +329,7 @@ def build_behaviour_block(
         return {
             "available": False,
             "reason": "no git history (commit file-sets empty)",
-            "containment_by_dir": {},
-            "change_coupling_pairs": [],
-            "change_coupling_pairs_total": 0,
-            "static_history_disagreement": [],
-            "hidden_coupling_findings": [],
-            "refactor_boundaries": [],
+            **_empty_behaviour_fields(),
         }
     containment = containment_by_dir(repo_root, commit_sets)
     all_pairs = change_coupling_pairs(commit_sets)
@@ -1232,9 +1268,7 @@ def integrate(
     behaviour = _safe_block(
         "behaviour",
         lambda: build_behaviour_block(repo_root, commit_sets, structure),
-        {"containment_by_dir": {}, "change_coupling_pairs": [],
-         "static_history_disagreement": [], "hidden_coupling_findings": [],
-         "refactor_boundaries": []},
+        _empty_behaviour_fields(),
     )
 
     documentation = _safe_block(
