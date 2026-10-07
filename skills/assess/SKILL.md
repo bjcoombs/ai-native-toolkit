@@ -387,7 +387,8 @@ If `prior` was None (first run), skip this section in the report.
 **Check `diff_reliable` first.** The reliability check is schema- and version-aware, not a blunt exact-version match: a MINOR/PATCH plugin bump keeps `diff_reliable: true` and the trend armed, but the diff is voided (`diff_reliable: false`, with `diff_version_note` naming the cause) when the stats `schema_version` changed, a complexity backend moved (`lizard`/`scc` version delta - the note names the tool), the prior snapshot never stamped a version, or the plugin MAJOR version changed. A MAJOR bump also sets `diff_trend_reset: true` - the report renders an explicit "Trend baseline reset" disclosure so a suppressed diff isn't misread as an unchanged run. **Suppress the "What Changed Since Last Run" section** whenever `diff_reliable` is false and surface the `diff_version_note` (as the deterministic renderer already does) rather than the transition lists. Otherwise, populate the section:
 
 - **Graduated** (good): list paths from `diff_detail.graduated` - hotspots that left the top list
-- **Regressed** (bad): list paths from `diff_detail.regressed` with their `ccn_delta` / `commits_delta`
+- **Regressed** (bad): list paths from `diff_detail.regressed` with their `max_fn_ccn_delta` / `ccn_delta` / `commits_delta`. A file regresses when its worst function's ccn rose; when that is flat or unmeasured (`max_fn_ccn_delta: null`, e.g. scc-scored files), when its summed ccn rose or it grew >50 LOC across >2 commits
+- **Restructured** (good): list paths from `diff_detail.restructured` - summed ccn rose but the worst function fell, the trace of splitting a function into named helpers. Never call these regressions: the sum rises because each extracted helper adds its own +1
 - **New** (watch): list paths from `diff_detail.new`
 - **Persistent** (structural debt if N runs in a row): list paths from `diff_detail.persistent`
 

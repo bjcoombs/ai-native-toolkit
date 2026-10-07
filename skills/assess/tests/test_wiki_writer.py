@@ -133,6 +133,14 @@ def test_append_log_entry_creates_file_if_missing(tmp_assess_dir: Path) -> None:
     assert "2026-05-22" in log.read_text()
 
 
+def test_append_log_entry_renders_restructured_count(tmp_assess_dir: Path) -> None:
+    """The log line names restructured hotspots beside regressed ones."""
+    append_log_entry(tmp_assess_dir, _log_entry(regressed_count=1,
+                                                restructured_count=4))
+    log = (tmp_assess_dir / "log.md").read_text()
+    assert "1 regressed, 4 restructured, 0 new" in log
+
+
 def test_append_log_entry_appends(tmp_assess_dir: Path) -> None:
     (tmp_assess_dir / "log.md").write_text("# Assess Log\n\n## 2026-05-01\n\nOld entry.\n\n---\n")
     entry = LogEntry(

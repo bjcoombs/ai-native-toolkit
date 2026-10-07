@@ -592,8 +592,25 @@ which is when the CLI applies `DEFAULT_PATHS_IGNORE` (`**/*.md`, `.assess/**`).
 
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
-transitions: graduated (was in top list, now absent), regressed (worsened), new, and
-persistent. Pure set operations + arithmetic, no LLM.
+transitions: graduated (was in top list, now absent), regressed, restructured, new,
+and persistent. Pure set operations + arithmetic, no LLM.
+
+Regression keys on the worst single function (`max_fn_ccn`), not the file's `ccn`,
+because `ccn` is a sum over functions: extracting helpers raises it while the worst
+function falls (`assess_core.py` went 238 -> 249 summed, 51 -> 12 worst). The rule:
+
+| Worst function (`max_fn_ccn_delta`) | Aggregate (`ccn` up, or >50 LOC across >2 commits) | Status |
+|---|---|---|
+| rose | any | regressed |
+| fell | worsened | restructured |
+| fell | not worsened | persistent |
+| flat, or null (scc / older sidecar) | worsened | regressed |
+| flat, or null | not worsened | persistent |
+
+Flat-worst with a rising sum stays regressed on purpose: a new function added beside
+an unchanged worst one is accretion, not restructuring. `restructured` never reaches
+`diff_detail.regressed`, so `assess_gate.py`'s `fail_on_regression` does not fire on
+a helper extraction.
 
 ### Scoring
 
