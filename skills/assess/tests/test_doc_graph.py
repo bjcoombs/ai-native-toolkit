@@ -1123,3 +1123,27 @@ def test_link_parent_bfs_is_empty_when_networkx_missing(tmp_path: Path, monkeypa
     d = build_doc_graph(tmp_path).as_dict()
     assert d["available"] is False
     assert d["link_parents"] == []
+
+
+def test_link_pass_records_broken_links_once_in_document_order(tmp_path: Path) -> None:
+    """Characterizes the link pass: wikilinks harvest before CommonMark links
+    within a doc, a repeated broken target from the same doc is recorded once,
+    a self-link and a pure #anchor add nothing, and a link to code is a
+    doc-to-code edge rather than a graph edge."""
+    _write(
+        tmp_path, "a.md",
+        "[x](gone.md) [[ghost]] [again](gone.md) [[ghost]] [me](a.md) [[a]] "
+        "[top](#intro) [src](app.py) [[b]] [b](b.md)",
+    )
+    _write(tmp_path, "b.md", "[x](gone.md)")
+    _write(tmp_path, "app.py", "print(1)")
+    r = build_doc_graph(tmp_path)
+    d = r.as_dict()
+    assert d["broken_links"] == [
+        {"from": "a.md", "target": "ghost", "kind": "wikilink"},
+        {"from": "a.md", "target": "gone.md", "kind": "mdlink"},
+        {"from": "b.md", "target": "gone.md", "kind": "mdlink"},
+    ]
+    assert d["dangling_links"] == 3
+    assert _edges(r) == [["a.md", "b.md", "link"]]
+    assert d["doc_to_code_edges"] == [{"doc": "a.md", "code": "app.py"}]
