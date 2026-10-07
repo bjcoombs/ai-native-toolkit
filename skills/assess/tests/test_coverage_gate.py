@@ -59,6 +59,12 @@ def test_pyproject_fail_under(tmp_path: Path) -> None:
     assert detect_coverage_gate(tmp_path)["enforced"] is True
 
 
+def test_section_header_with_trailing_comment(tmp_path: Path) -> None:
+    _write(tmp_path, "pyproject.toml",
+           "[tool.coverage.report]  # CI gate\nfail_under = 85\n")
+    assert _only_gate(tmp_path)["threshold"] == 85.0
+
+
 def test_fail_under_outside_report_section_is_ignored(tmp_path: Path) -> None:
     _write(tmp_path, "pyproject.toml", "[tool.other]\nfail_under = 85\n")
     assert detect_coverage_gate(tmp_path)["gates"] == []
@@ -198,6 +204,13 @@ def test_c8_cli_check_coverage(tmp_path: Path) -> None:
            '{\n  "scripts": {\n    "test": "c8 --check-coverage --lines 95 node --test"\n  }\n}\n')
     gate = _only_gate(tmp_path)
     assert (gate["tool"], gate["line"], gate["threshold"]) == ("c8", 3, 95.0)
+
+
+def test_nyc_check_coverage_subcommand(tmp_path: Path) -> None:
+    _write(tmp_path, "package.json",
+           '{\n  "scripts": {\n    "posttest": "nyc check-coverage --lines 90"\n  }\n}\n')
+    gate = _only_gate(tmp_path)
+    assert (gate["tool"], gate["line"], gate["threshold"]) == ("nyc", 3, 90.0)
 
 
 # --- JVM ------------------------------------------------------------------

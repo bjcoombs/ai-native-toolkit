@@ -48,7 +48,7 @@ _COVERAGE_PY_SECTIONS: dict[str, str] = {
     "setup.cfg": "coverage:report",
     "tox.ini": "coverage:report",
 }
-_SECTION_RE = re.compile(r"^\s*\[([^\]]+)\]\s*$")
+_SECTION_RE = re.compile(r"^\s*\[([^\]]+)\]\s*(?:[#;].*)?$")
 _FAIL_UNDER_RE = re.compile(r"^\s*fail_under\s*[=:]\s*[\"']?" + _NUM)
 
 # Command-line forms, read from CI and task-runner files.
@@ -61,7 +61,8 @@ _CLI_FILES = {
 _PYTEST_COV_RE = re.compile(r"--cov-fail-under[=\s]+[\"']?" + _NUM)
 _COVERAGE_CLI_RE = re.compile(
     r"\bcoverage\s+(report|xml|json|html|lcov)\b.*--fail-under[=\s]+" + _NUM)
-_CHECK_COVERAGE_CLI_RE = re.compile(r"\b(nyc|c8)\b.*--check-coverage")
+# Both the ``--check-coverage`` flag and the ``check-coverage`` subcommand.
+_CHECK_COVERAGE_CLI_RE = re.compile(r"\b(nyc|c8)\b.*(?<![\w-])(?:--)?check-coverage\b")
 _LINES_FLAG_RE = re.compile(r"--lines[=\s]+" + _NUM)
 
 # JS/TS config files and the anchor key that opens a threshold block in each.
@@ -98,6 +99,8 @@ NOT_DETECTED: tuple[str, ...] = (
     "workflows and composite actions, `.gitlab-ci.yml`, CircleCI, Jenkinsfile, "
     "Azure Pipelines, Travis, Bitbucket Pipelines, `Makefile`, `justfile`, "
     "`Taskfile.yml`, `noxfile.py`, `tox.ini` and `package.json` scripts",
+    "coverage.py `fail_under` in a TOML inline table (`report = { fail_under = "
+    "85 }` under `[tool.coverage]`)",
     "Vitest before 1.0: `lines` / `branches` directly under `coverage` with no "
     "`thresholds` key",
 )
