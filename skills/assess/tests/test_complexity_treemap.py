@@ -1752,10 +1752,18 @@ def test_main_threads_scope_into_output_name_title_and_stats(
 
 
 @pytest.mark.parametrize("n, expected", [
-    (0, "files"), (1, "file"), (2, "files"), (1.0, "file"),
+    (0, "files"), (1, "file"), (2, "files"),
 ])
 def test_plural_agrees_with_count(render_lib, n, expected):
     assert render_lib.plural(n, "file") == expected
+
+
+@pytest.mark.parametrize("n", [0.6, 1.0, True])
+def test_plural_rejects_a_non_int_count(render_lib, n):
+    """A float can print as "1" yet compare unequal to 1, so plural() takes the
+    rounded int the caller displays and refuses anything else."""
+    with pytest.raises(TypeError):
+        render_lib.plural(n, "line")
 
 
 def test_plural_takes_an_irregular_form(render_lib):

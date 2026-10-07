@@ -388,3 +388,12 @@ def test_rendered_svg_has_no_em_dash(svg, tmp_path, monkeypatch):
     """No generated text in the doc map carries an em dash."""
     _render_nodes(svg, tmp_path, monkeypatch)
     assert "—" not in (tmp_path / "out.svg").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("size, text", [(0.6, "1 line"), (1.4, "1 line"), (2.0, "2 lines")])
+def test_size_text_agrees_with_the_displayed_line_count(svg, size, text):
+    """A fractional size shown as "1" reads "1 line", not "1 lines"."""
+    from types import SimpleNamespace
+
+    painter = SimpleNamespace(sizes={"a.md": size}, size_mode="lines")
+    assert svg._NodePainter.size_text(painter, "a.md") == text

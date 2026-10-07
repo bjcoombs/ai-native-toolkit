@@ -210,13 +210,16 @@ def _survivor_legend_parts(W: float, H: float) -> list[str]:
     return parts
 
 
-def plural(n: float, singular: str, plural_form: str | None = None) -> str:
+def plural(n: int, singular: str, plural_form: str | None = None) -> str:
     """The noun for a count of ``n``: ``singular`` when ``n`` is 1, else the
-    plural (``singular + "s"`` unless ``plural_form`` is given). Returns the word
-    only, so each caller keeps its own number formatting
-    (``f"{n:,} {plural(n, 'token')}"``). Pass the number as it is displayed:
-    a raw ``0.6`` printed with ``:.0f`` reads "1" but takes the plural, so
-    round it first (as ``size_text`` in doc-graph-svg.py does)."""
+    plural (``singular + "s"`` unless ``plural_form`` is given).
+
+    Returns the word only, so each caller keeps its own number formatting
+    (``f"{n:,} {plural(n, 'token')}"``). ``n`` is an ``int`` so the noun agrees
+    with the number shown: a caller holding a float rounds it first and prints
+    the rounded value, and mypy rejects a raw float."""
+    if isinstance(n, bool) or not isinstance(n, int):
+        raise TypeError(f"plural() takes an int count, got {type(n).__name__}")
     if n == 1:
         return singular
     return plural_form if plural_form is not None else singular + "s"
