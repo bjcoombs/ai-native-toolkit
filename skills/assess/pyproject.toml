@@ -24,6 +24,10 @@ addopts = "-v --tb=short"
 # import from their own `src/` package which isn't on the path, so collecting
 # them errors. Exclude the whole fixtures tree from collection.
 norecursedirs = ["tests/fixtures"]
+# pytest-cov registers no_cover itself; declaring it here keeps a run without
+# pytest-cov (the plain local `uv run --with pytest pytest`) free of an
+# unknown-marker warning.
+markers = ["no_cover: run this test with coverage tracing paused (pytest-cov)"]
 
 [tool.ruff]
 target-version = "py311"
