@@ -237,83 +237,131 @@ def _edge_legend(mid: float, y: float) -> list[str]:
     return out
 
 
-def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  # noqa: C901  # SVG layout + colour-mode branching; ccn 18, ratchet target
-           size_mode: str = "lines", colour: str = "staleness",
-           staleness: dict | None = None, show_labels: bool = False) -> None:
-    graph = result.graph
-    nodes = list(graph.nodes())
-    n = len(nodes)
-    pr = result.pagerank or {x: 1.0 / max(n, 1) for x in nodes}
-    in_deg = dict(graph.in_degree())
-    out_deg = dict(graph.out_degree())
-
-    entries = set(result.entry_points)
-    unreachable = set(result.unreachable)
-    orphans = set(result.orphans)
-
-    # Node size metric: file length (lines) or link-graph centrality.
+def _node_sizes(nodes: list[str], size_mode: str, repo_root: Path,
+                pr: dict) -> tuple[dict, str]:
+    """Node size metric: file length (lines) or link-graph centrality."""
     if size_mode == "lines":
-        sizes = {x: _doc_lines(repo_root, x) for x in nodes}
-        size_label = "file length (lines)"
-    else:
-        sizes = {x: pr.get(x, 0.0) for x in nodes}
-        size_label = "link-graph centrality"
-    size_max = max(sizes.values(), default=1.0) or 1.0
+        return {x: _doc_lines(repo_root, x) for x in nodes}, "file length (lines)"
+    return {x: pr.get(x, 0.0) for x in nodes}, "link-graph centrality"
 
-    # Fill colour. Default "staleness" reuses the docs-staleness heatmap grammar
-    # (hue = days stale, blended toward grey by the churn of the code the doc
-    # describes) so the two doc views speak one colour language. "status" is the
-    # older navigability-by-colour mode, kept as an option.
-    staleness = staleness or {}
-    cmap = plt.get_cmap(STALENESS_CMAP)
+
+def _staleness_channels(nodes: list[str], staleness: dict) -> tuple[dict, dict, dict]:
+    """Per-node days stale, subject churn, and the hatch fill for unmeasured docs.
+
+    A node the staleness scan never measured (a `.claude/` doc a reference
+    brought in) is hatched, not painted as if a 0d / zero-churn value were known."""
     days = {x: float(staleness.get(x, {}).get("last_commit_days") or 0) for x in nodes}
     churn = {x: float(staleness.get(x, {}).get("code_churn_in_window") or 0) for x in nodes}
-    # A node the staleness scan never measured (a `.claude/` doc a reference
-    # brought in) is hatched, not painted as if a 0d / zero-churn value were known.
     unmeasured = {x: UNMEASURED_FILL for x in nodes if staleness and x not in staleness}
-    day_cap, _ = adaptive_cap([days[x] for x in nodes if x not in unmeasured])
-    churn_cap, _ = adaptive_cap([churn[x] for x in nodes if x not in unmeasured])
+    return days, churn, unmeasured
 
-    def fill(node: str) -> str:
-        if colour == "status":
-            return _STATUS_COLOR[classify_node(node, entries, unreachable, orphans)]
-        base = cmap(min(days[node] / day_cap, 1.0) if day_cap else 0.0)
-        sat = (churn[node] / churn_cap) if churn_cap else 0.0
-        return unmeasured.get(node) or rgba_to_hex(blend_to_grey(base, sat))
 
-    # Canvas: square-ish for the radial layout (it's circular, so a wide canvas
-    # wastes the sides); wide for the web two-panel. Header = centred title;
-    # footer = centred legend (radial only).
+class _NodePainter:
+    """Per-node size, fill, stroke and tooltip for one render.
+
+    The encoding choices (size metric, colour mode) are resolved once here and
+    applied to each node. Fill colour: default "staleness" reuses the
+    docs-staleness heatmap grammar (hue = days stale, blended toward grey by the
+    churn of the code the doc describes) so the two doc views speak one colour
+    language. "status" is the older navigability-by-colour mode, kept as an
+    option."""
+
+    def __init__(self, result, nodes: list[str], repo_root: Path, *, size_mode: str,
+                 colour: str, staleness: dict | None) -> None:
+        graph = result.graph
+        pr = result.pagerank or {x: 1.0 / max(len(nodes), 1) for x in nodes}
+        self.in_deg = dict(graph.in_degree())
+        self.out_deg = dict(graph.out_degree())
+        self.entries = set(result.entry_points)
+        self.unreachable = set(result.unreachable)
+        self.orphans = set(result.orphans)
+        self.size_mode = size_mode
+        self.colour = colour
+        self.sizes, self.size_label = _node_sizes(nodes, size_mode, repo_root, pr)
+        self.size_max = max(self.sizes.values(), default=1.0) or 1.0
+        self.cmap = plt.get_cmap(STALENESS_CMAP)
+        self.days, self.churn, self.unmeasured = _staleness_channels(nodes, staleness or {})
+        measured = [x for x in nodes if x not in self.unmeasured]
+        self.day_cap, _ = adaptive_cap([self.days[x] for x in measured])
+        self.churn_cap, _ = adaptive_cap([self.churn[x] for x in measured])
+
+    def degree(self, node: str) -> int:
+        return self.in_deg.get(node, 0) + self.out_deg.get(node, 0)
+
+    def status(self, node: str) -> str:
+        return classify_node(node, self.entries, self.unreachable, self.orphans)
+
+    def fill(self, node: str) -> str:
+        if self.colour == "status":
+            return _STATUS_COLOR[self.status(node)]
+        base = self.cmap(min(self.days[node] / self.day_cap, 1.0) if self.day_cap else 0.0)
+        sat = (self.churn[node] / self.churn_cap) if self.churn_cap else 0.0
+        return self.unmeasured.get(node) or rgba_to_hex(blend_to_grey(base, sat))
+
+    def radius(self, node: str) -> float:
+        return R_MIN + (R_MAX - R_MIN) * math.sqrt(self.sizes.get(node, 0.0) / self.size_max)
+
+    def size_text(self, node: str) -> str:
+        return (f"{self.sizes.get(node, 0):.0f} lines" if self.size_mode == "lines"
+                else f"centrality {self.sizes.get(node, 0):.3f}")
+
+    def stroke(self, status: str) -> tuple[str, float, str]:
+        """Stroke colour, width and dash attribute for a node of this status.
+
+        Staleness mode frees colour for staleness, so the entry root and orphans
+        are called out by stroke (a non-colour cue), not fill. A faint grey base
+        stroke keeps pale (fresh) nodes visible on the white canvas."""
+        if status == "entry":
+            return ENTRY_RING, 3.5, ""
+        if self.colour == "staleness" and status == "orphan":
+            return ORPHAN_RING, 1.8, ' stroke-dasharray="3,2"'
+        return "#b8b8b8", 1.0, ""
+
+    def tooltip(self, node: str, status: str) -> str:
+        days_txt = "" if self.colour != "staleness" else (
+            "staleness not measured" if node in self.unmeasured
+            else f"{self.days[node]:.0f}d stale, subject churn {self.churn[node]:.0f}")
+        return html.escape(
+            f"{node}\n{self.size_text(node)} · in {self.in_deg.get(node, 0)} · "
+            f"out {self.out_deg.get(node, 0)} · {status}"
+            + (f" · {days_txt}" if days_txt else ""),
+            quote=False)
+
+
+def _canvas(layout: str) -> tuple[float, float, float, float]:
+    """Canvas width, height, header and footer for a layout.
+
+    Square-ish for the radial layout (it's circular, so a wide canvas wastes the
+    sides); wide for the web two-panel. Header = centred title; footer = centred
+    legend (radial only)."""
     if layout == "radial":
-        cw, ch, header, footer = 1180.0, 1230.0, 92.0, 104.0
-    else:
-        cw, ch, header, footer = 1600.0, 1000.0, 110.0, 0.0
+        return 1180.0, 1230.0, 92.0, 104.0
+    return 1600.0, 1000.0, 110.0, 0.0
 
+
+def _web_positions(graph, nodes: list[str], painter: _NodePainter, cw: float,
+                   ch: float) -> tuple[dict, list[str], float]:
+    """Two-panel: linked web (force) + isolated-docs grid.
+
+    Returns the positions, the isolated docs, and the web panel's right edge."""
     pos: dict = {}
-    has_isolated = False
-    if layout == "radial":
-        cx, cy = cw / 2, header + (ch - header - footer) / 2
-        fit = min(cw, ch - header - footer) / 2 - R_MAX - 10
-        pos = _radial_positions(graph, entries, cx, cy, fit)
-    else:
-        # Two-panel: linked web (force) + isolated-docs grid.
-        linked = [x for x in nodes if in_deg.get(x, 0) + out_deg.get(x, 0) > 0]
-        isolated = [x for x in nodes if x not in set(linked)]
-        has_isolated = bool(isolated)
-        web_right = (0.60 * cw) if has_isolated else (cw - MARGIN)
-        web_rect = (MARGIN, 110, web_right - MARGIN, ch - 110 - MARGIN)
-        if linked:
-            sub = graph.subgraph(linked).to_undirected()
-            raw = nx.spring_layout(sub, k=1.2, iterations=250, seed=np.random.RandomState(42))
-            pos.update(_fit_rect(raw, linked, web_rect))
-        if has_isolated:
-            orphan_rect = (web_right + 40, 140, (cw - MARGIN) - (web_right + 40), ch - 140 - MARGIN)
-            pos.update(_grid_positions(sorted(isolated), orphan_rect))
+    linked = [x for x in nodes if painter.degree(x) > 0]
+    isolated = [x for x in nodes if x not in set(linked)]
+    web_right = (0.60 * cw) if isolated else (cw - MARGIN)
+    web_rect = (MARGIN, 110, web_right - MARGIN, ch - 110 - MARGIN)
+    if linked:
+        sub = graph.subgraph(linked).to_undirected()
+        raw = nx.spring_layout(sub, k=1.2, iterations=250, seed=np.random.RandomState(42))
+        pos.update(_fit_rect(raw, linked, web_rect))
+    if isolated:
+        orphan_rect = (web_right + 40, 140, (cw - MARGIN) - (web_right + 40), ch - 140 - MARGIN)
+        pos.update(_grid_positions(sorted(isolated), orphan_rect))
+    return pos, isolated, web_right
 
-    def radius(node: str) -> float:
-        return R_MIN + (R_MAX - R_MIN) * math.sqrt(sizes.get(node, 0.0) / size_max)
 
-    parts: list[str] = [
+def _svg_open(cw: float, ch: float) -> list[str]:
+    """The SVG root, its accessible name, styles, background and arrow marker."""
+    return [
         '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {cw:.0f} {ch:.0f}" '
         f'width="{cw:.0f}" height="{ch:.0f}" preserveAspectRatio="xMidYMid meet" '
@@ -333,19 +381,22 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  
         f'<path d="M0,0 L10,5 L0,10 z" fill="{EDGE_COLOR}"/></marker></defs>',
     ]
 
-    # Panels: a labelled bin for the isolated docs, separated from the web.
-    if has_isolated:
-        ox = web_right + 16
-        parts.append(
-            f'<rect x="{ox:.0f}" y="104" width="{(cw - MARGIN) - ox:.0f}" '
-            f'height="{ch - 104 - MARGIN + 16:.0f}" rx="10" fill="#fcf0f0" stroke="#f1c0c0"/>'
-        )
-        parts.append(
-            f'<text x="{ox + 16:.0f}" y="130" font-size="15" font-weight="600" fill="#86181d">'
-            f'{len(isolated)} isolated docs — no link in or out</text>'
-        )
 
-    # Edges (drawn first, under the nodes). Pull the arrow back to the target rim.
+def _isolated_panel(count: int, web_right: float, cw: float, ch: float) -> list[str]:
+    """A labelled bin for the isolated docs, separated from the web."""
+    ox = web_right + 16
+    return [
+        f'<rect x="{ox:.0f}" y="104" width="{(cw - MARGIN) - ox:.0f}" '
+        f'height="{ch - 104 - MARGIN + 16:.0f}" rx="10" fill="#fcf0f0" stroke="#f1c0c0"/>',
+        f'<text x="{ox + 16:.0f}" y="130" font-size="15" font-weight="600" fill="#86181d">'
+        f'{count} isolated docs — no link in or out</text>',
+    ]
+
+
+def _edge_lines(graph, pos: dict, radius) -> list[str]:
+    """Edges, drawn first so they sit under the nodes. Each arrow is pulled back
+    to the target's rim."""
+    out: list[str] = []
     for u, v, kind in graph.edges(data="kind", default="link"):
         if u not in pos or v not in pos:
             continue
@@ -355,65 +406,74 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",  
         dist = math.hypot(dx, dy) or 1.0
         rt = radius(v) + 3
         ex, ey = x2 - dx / dist * rt, y2 - dy / dist * rt
-        parts.append(
+        out.append(
             f'<line data-edge-kind="{_normalize_edge_kind(kind)}" '
             f'x1="{x1:.1f}" y1="{y1:.1f}" x2="{ex:.1f}" y2="{ey:.1f}" '
             f'{_edge_attrs(kind)} marker-end="url(#arrow)"/>'
         )
+    return out
 
-    def size_text(node: str) -> str:
-        return (f"{sizes.get(node, 0):.0f} lines" if size_mode == "lines"
-                else f"centrality {sizes.get(node, 0):.3f}")
 
-    # Nodes. The title (path + stats) lives in a hover tooltip; no inline text.
+def _node_circles(nodes: list[str], pos: dict, painter: _NodePainter,
+                  show_labels: bool) -> list[str]:
+    """One circle per doc, its path and stats in a hover tooltip, then the
+    opt-in (--labels) filename labels drawn above all circles."""
+    out: list[str] = []
     label_nodes: list[tuple[float, float, float, str]] = []
     for node in nodes:
         x, y = pos[node]
-        r = radius(node)
-        status = classify_node(node, entries, unreachable, orphans)
-        is_entry = status == "entry"
-        # Staleness mode frees colour for staleness, so the entry root and
-        # orphans are called out by stroke (a non-colour cue), not fill. A faint
-        # grey base stroke keeps pale (fresh) nodes visible on the white canvas.
-        dash = ""
-        if is_entry:
-            stroke, sw = ENTRY_RING, 3.5
-        elif colour == "staleness" and status == "orphan":
-            stroke, sw, dash = ORPHAN_RING, 1.8, ' stroke-dasharray="3,2"'
-        else:
-            stroke, sw = "#b8b8b8", 1.0
-        days_txt = "" if colour != "staleness" else (
-            "staleness not measured" if node in unmeasured
-            else f"{days[node]:.0f}d stale, subject churn {churn[node]:.0f}")
-        tip = html.escape(
-            f"{node}\n{size_text(node)} · in {in_deg.get(node, 0)} · "
-            f"out {out_deg.get(node, 0)} · {status}"
-            + (f" · {days_txt}" if days_txt else ""),
-            quote=False)
-        parts.append(
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{fill(node)}" '
-            f'stroke="{stroke}" stroke-width="{sw}"{dash}><title>{tip}</title></circle>'
+        r = painter.radius(node)
+        status = painter.status(node)
+        stroke, sw, dash = painter.stroke(status)
+        out.append(
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{painter.fill(node)}" '
+            f'stroke="{stroke}" stroke-width="{sw}"{dash}>'
+            f'<title>{painter.tooltip(node, status)}</title></circle>'
         )
-        # Inline labels are opt-in only (--labels); default is hover-only.
-        if show_labels and (is_entry or in_deg.get(node, 0) + out_deg.get(node, 0) > 0):
+        if show_labels and (status == "entry" or painter.degree(node) > 0):
             label_nodes.append((x, y, r, Path(node).name))
-
     for x, y, r, name in label_nodes:
-        parts.append(
+        out.append(
             f'<text x="{x:.1f}" y="{y - r - 3:.1f}" font-size="11" '
             f'text-anchor="middle">{html.escape(name)}</text>'
         )
+    return out
 
-    parts.append(_render_ghosts(result.broken_links, pos, radius, show_labels))
+
+def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
+           size_mode: str = "lines", colour: str = "staleness",
+           staleness: dict | None = None, show_labels: bool = False) -> None:
+    graph = result.graph
+    nodes = list(graph.nodes())
+    n = len(nodes)
+    painter = _NodePainter(result, nodes, repo_root, size_mode=size_mode,
+                           colour=colour, staleness=staleness)
+
+    cw, ch, header, footer = _canvas(layout)
+    isolated: list[str] = []
+    web_right = 0.0
+    if layout == "radial":
+        cx, cy = cw / 2, header + (ch - header - footer) / 2
+        fit = min(cw, ch - header - footer) / 2 - R_MAX - 10
+        pos = _radial_positions(graph, painter.entries, cx, cy, fit)
+    else:
+        pos, isolated, web_right = _web_positions(graph, nodes, painter, cw, ch)
+
+    parts = _svg_open(cw, ch)
+    if isolated:
+        parts.extend(_isolated_panel(len(isolated), web_right, cw, ch))
+    parts.extend(_edge_lines(graph, pos, painter.radius))
+    parts.extend(_node_circles(nodes, pos, painter, show_labels))
+    parts.append(_render_ghosts(result.broken_links, pos, painter.radius, show_labels))
     parts.append(_title(result, n, cw))
-    parts.append(_legend(size_label, layout, colour, cw, ch, footer))
+    parts.append(_legend(painter.size_label, layout, colour, cw, ch, footer))
     parts.append('</svg>')
     out_path.write_text("\n".join(parts), encoding="utf-8")
 
     print(f"wrote {out_path}  ({n} docs, {graph.number_of_edges()} edges, "
           f"{result.island_count} islands)")
     print(f"orphan-rate {result.orphan_rate:.0%}  reachable-from-entry "
-          f"{result.reachability_pct:.0%}  entries={sorted(entries)}")
+          f"{result.reachability_pct:.0%}  entries={sorted(painter.entries)}")
 
 
 def _title(result, n: int, cw: float) -> str:
