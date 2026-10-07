@@ -18,33 +18,22 @@ It exits zero only when the validator certifies PASS. A marathon that never
 spawned the cold-exit verifier therefore cannot pass completion in code.
 
 The contract directory holds both the completion record and the provenance
-side-channel the validator checks tokens against. It defaults to
-`.taskmaster/contract` (relative to the run cwd) and can be overridden with
-`--contract-dir` or the `ACCEPTANCE_CONTRACT_DIR` environment variable, so the
-gate is testable against a tmp dir.
+side-channel the validator checks tokens against. It is resolved by
+`contract_location.resolve_contract_dir`: `--contract-dir`, then the
+`ACCEPTANCE_CONTRACT_DIR` environment variable, then `.claude/contracts`
+relative to the run cwd, so the gate is testable against a tmp dir.
 """
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 from typing import List, Optional
 
-import validate_completion as vc
-
-DEFAULT_CONTRACT_DIR = Path(".taskmaster/contract")
-ENV_CONTRACT_DIR = "ACCEPTANCE_CONTRACT_DIR"
-
-
-def resolve_contract_dir(cli_value: Optional[str]) -> Path:
-    """Resolve the contract dir: CLI flag, then env var, then the default."""
-    if cli_value:
-        return Path(cli_value)
-    env = os.environ.get(ENV_CONTRACT_DIR)
-    if env:
-        return Path(env)
-    return DEFAULT_CONTRACT_DIR
+# Flat sibling modules (no package): put this directory on the path first.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import validate_completion as vc  # noqa: E402
+from contract_location import HELP_DEFAULT, resolve_contract_dir  # noqa: E402
 
 
 def complete_gate(run_id: str, contract_dir: Path) -> int:
@@ -78,7 +67,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--contract-dir",
         default=None,
         help="directory holding <run-id>.completion.json and <run-id>.provenance.json "
-        "(default: %s, or $%s)" % (DEFAULT_CONTRACT_DIR, ENV_CONTRACT_DIR),
+        "(%s)" % HELP_DEFAULT,
     )
     args = parser.parse_args(argv)
     return complete_gate(args.run_id, resolve_contract_dir(args.contract_dir))

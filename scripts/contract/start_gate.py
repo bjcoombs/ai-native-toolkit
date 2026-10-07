@@ -6,7 +6,7 @@ acceptance contract (PRD A1, success criterion 4). Each work-source command's
 marathon-start step invokes it, and the run may not proceed unless one of two
 doors is open:
 
-- **Freeze evidence** recorded in `.taskmaster/contract/<run-id>.completion.json`
+- **Freeze evidence** recorded in `<contract-dir>/<run-id>.completion.json`
   (the contract's sha256 frozen before decomposition, with a passing kill test)
   -> exit 0. The run has a real contract to verify against at exit.
 - **A signed operator skip** (`operator_signoff` recorded before the run starts)
@@ -21,38 +21,25 @@ Consistency with the exit side is deliberate: the freeze check delegates to
 failed (or that lacks the frozen contract hash) is no more valid as *start*
 evidence than it is as *exit* evidence. The two gates cannot drift apart.
 
-The contract directory defaults to `.taskmaster/contract` (relative to the run
-cwd) and can be overridden with `--contract-dir` or the
-`ACCEPTANCE_CONTRACT_DIR` environment variable, mirroring how
-`validate_completion` resolves its provenance dir - so the gate is testable
-against a tmp dir.
+The contract directory is resolved by `contract_location.resolve_contract_dir`,
+shared with every other contract script: `--contract-dir`, then the
+`ACCEPTANCE_CONTRACT_DIR` environment variable, then `.claude/contracts`
+relative to the run cwd - so the gate is testable against a tmp dir.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from typing import List, Optional
 
-import validate_completion as vc
-
-# Default location of the per-run contract artifacts, relative to the run cwd.
-DEFAULT_CONTRACT_DIR = Path(".taskmaster/contract")
-ENV_CONTRACT_DIR = "ACCEPTANCE_CONTRACT_DIR"
+# Flat sibling modules (no package): put this directory on the path first.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import validate_completion as vc  # noqa: E402
+from contract_location import HELP_DEFAULT, resolve_contract_dir  # noqa: E402
 
 _RULE = "=" * 70
-
-
-def resolve_contract_dir(cli_value: Optional[str]) -> Path:
-    """Resolve the contract dir: CLI flag, then env var, then the default."""
-    if cli_value:
-        return Path(cli_value)
-    env = os.environ.get(ENV_CONTRACT_DIR)
-    if env:
-        return Path(env)
-    return DEFAULT_CONTRACT_DIR
 
 
 def _load_record(contract_dir: Path, run_id: str) -> Optional[dict]:
@@ -138,8 +125,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--contract-dir",
         default=None,
-        help="directory holding <run-id>.completion.json (default: %s, or $%s)"
-        % (DEFAULT_CONTRACT_DIR, ENV_CONTRACT_DIR),
+        help="directory holding <run-id>.completion.json (%s)" % HELP_DEFAULT,
     )
     args = parser.parse_args(argv)
     return start_gate(args.run_id, resolve_contract_dir(args.contract_dir))

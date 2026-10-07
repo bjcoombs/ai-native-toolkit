@@ -21,7 +21,7 @@ success criteria 3, 13, 14). It refuses to freeze a contract unless all of:
    free.
 
 On success it records freeze evidence - contract sha256, `frozen_at`, and the
-kill-test outcome - into `.taskmaster/contract/<run-id>.completion.json` in the
+kill-test outcome - into `<contract-dir>/<run-id>.completion.json` in the
 exact shape `validate_completion.py` accepts (`freeze_evidence.contract_hash` +
 `freeze_evidence.kill_test.{null_artifact_all_fail, sabotage_rejected}`). Freeze
 evidence is this gate's ONLY write into the completion record; every other field
@@ -62,6 +62,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # for other import contexts (e.g. the canary harness importing freeze).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tiers  # noqa: E402
+from contract_location import HELP_DEFAULT, resolve_contract_dir  # noqa: E402
 
 # The four contract classes (PRD A4 / tests/canaries/README.md).
 CLASS_NAMES = ("cli", "interactive", "report", "refactor")
@@ -86,9 +87,6 @@ VALID_TIERS = (1, 2, 3)
 # tier-1 criteria.
 DOWNGRADE_ENFORCED_CLASSES = ("cli", "refactor")
 DOWNGRADE_DEFAULT_TIER = {c: tiers.CLASS_TIER_DEFAULTS[c] for c in DOWNGRADE_ENFORCED_CLASSES}
-
-# Default completion-record / provenance location, relative to the run cwd.
-DEFAULT_CONTRACT_DIR = Path(".taskmaster/contract")
 
 _YAML_BLOCK = re.compile(r"^```ya?ml[ \t]*\n(.*?)^```[ \t]*$", re.DOTALL | re.MULTILINE)
 
@@ -459,7 +457,7 @@ def freeze(
     run_id: str,
     kill_test_path: Optional[Any],
     record_path: Optional[Any] = None,
-    contract_dir: Any = DEFAULT_CONTRACT_DIR,
+    contract_dir: Optional[Any] = None,
 ) -> FreezeResult:
     """Attempt to freeze the contract. Refuses (frozen=False) with named reasons
     on any structural, downgrade, or kill-test failure, and fails closed when
@@ -499,7 +497,7 @@ def freeze(
         return FreezeResult(False, reasons, contract_hash=contract_hash)
 
     if record_path is None:
-        record_path = _default_record_path(run_id, contract_dir)
+        record_path = _default_record_path(run_id, resolve_contract_dir(contract_dir))
     write_freeze_evidence(record_path, run_id, contract_hash, sabotage_rejected)
     return FreezeResult(
         True, [], contract_hash=contract_hash, record_path=str(record_path)
@@ -523,8 +521,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument(
         "--contract-dir",
-        default=str(DEFAULT_CONTRACT_DIR),
-        help="directory for the completion record (default: .taskmaster/contract)",
+        default=None,
+        help="directory for the completion record (%s)" % HELP_DEFAULT,
     )
     args = parser.parse_args(argv)
 

@@ -6,7 +6,7 @@ document-only agent, one pass: it reads the spec + drafted contract and returns 
 ``ready | needs-work`` verdict together with the decorrelation *source* - who
 supplied the independent read (a non-Claude model, a human, or nobody). This
 script is the thin recorder that stamps that ``{verdict, source}`` into the run's
-completion record ``.taskmaster/contract/<run-id>.completion.json``.
+completion record ``<contract-dir>/<run-id>.completion.json``.
 
 Deliberately minimal, and it decides nothing:
 
@@ -32,9 +32,10 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Default location of the per-run completion record, relative to the run cwd.
-# Shared with the rest of the acceptance-contract machinery (F1).
-DEFAULT_CONTRACT_DIR = Path(".taskmaster/contract")
+# The record's folder is resolved by the resolver every contract script shares
+# (F1). Flat sibling module: put this directory on the path first.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from contract_location import HELP_DEFAULT, resolve_contract_dir  # noqa: E402
 
 # The readiness verdict values (PRD A2). `ready` only when every criterion is
 # cold-executable and nothing material is missing; otherwise `needs-work`.
@@ -70,7 +71,7 @@ def record_readiness(
     if source not in SOURCES:
         raise ValueError("invalid source %r: expected one of %s" % (source, SOURCES))
 
-    directory = Path(contract_dir) if contract_dir is not None else DEFAULT_CONTRACT_DIR
+    directory = resolve_contract_dir(contract_dir)
     path = directory / ("%s.completion.json" % run_id)
 
     record: Dict[str, Any] = {}
@@ -113,7 +114,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--contract-dir",
         default=None,
-        help="directory holding <run-id>.completion.json (default: .taskmaster/contract)",
+        help="directory holding <run-id>.completion.json (%s)" % HELP_DEFAULT,
     )
     args = parser.parse_args(argv)
 

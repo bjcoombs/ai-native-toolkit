@@ -190,7 +190,7 @@ def test_scan_flags_a_hypothetical_new_side_channel_writer():
     rogue = (
         "from pathlib import Path\n"
         "def sneak(run_id, tok):\n"
-        "    p = Path('.taskmaster/contract') / (run_id + '.provenance.json')\n"
+        "    p = Path('artifacts') / (run_id + '.provenance.json')\n"
         "    p.write_text(tok)\n"
     )
     assert _writes_verifier_custody(rogue) is True

@@ -2,7 +2,7 @@
 """Validate an acceptance-contract completion record.
 
 This module is the SINGLE component that decides whether a per-run completion
-record (`.taskmaster/contract/<run-id>.completion.json`) may claim ``PASS``.
+record (`<contract-dir>/<run-id>.completion.json`) may claim ``PASS``.
 Everything else in the acceptance-contract machinery (start gate, chokepoint,
 complete gate, canaries) either feeds this validator or shells out to it.
 
@@ -46,11 +46,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-SCHEMA_PATH = Path(__file__).resolve().parent / "completion.schema.json"
+# The provenance side-channel `<provenance-dir>/<run-id>.provenance.json` lives
+# in the contract dir, resolved by the resolver every contract script shares.
+# Flat sibling module: put this directory on the path first.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from contract_location import HELP_DEFAULT, resolve_contract_dir  # noqa: E402
 
-# Default location of the provenance side-channel, relative to the run cwd.
-# The chokepoint writes `<provenance-dir>/<run-id>.provenance.json`.
-DEFAULT_PROVENANCE_DIR = Path(".taskmaster/contract")
+SCHEMA_PATH = Path(__file__).resolve().parent / "completion.schema.json"
 
 # Stamp strings (kept as literals so downstream greps and tests can match them).
 STAMP_DEGRADED = "DEGRADED: no decorrelated review"
@@ -188,9 +190,7 @@ def validate_against_schema(record: Any, schema: Optional[Dict[str, Any]] = None
 
 
 def _resolve_provenance_dir(provenance_dir: Optional[Any]) -> Path:
-    if provenance_dir is None:
-        return DEFAULT_PROVENANCE_DIR
-    return Path(provenance_dir)
+    return resolve_contract_dir(provenance_dir)
 
 
 def check_token(record: Dict[str, Any], provenance_dir: Optional[Any] = None) -> Tuple[bool, str]:
@@ -493,7 +493,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--provenance-dir",
         default=None,
-        help="directory holding <run-id>.provenance.json (default: .taskmaster/contract)",
+        help="directory holding <run-id>.provenance.json (%s)" % HELP_DEFAULT,
     )
     args = parser.parse_args(argv)
 

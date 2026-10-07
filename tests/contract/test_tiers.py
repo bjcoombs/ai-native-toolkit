@@ -86,9 +86,11 @@ def test_tier3_artifact_path_shape(tmp_path):
     assert p == tmp_path / "my-run" / "tier3-C3.artifact"
 
 
-def test_tier3_artifact_path_default_contract_dir():
+def test_tier3_artifact_path_default_contract_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ACCEPTANCE_CONTRACT_DIR", raising=False)
     p = tiers.tier3_artifact_path("run", "c1")
-    assert p == Path(".taskmaster/contract") / "run" / "tier3-c1.artifact"
+    assert p == Path(".claude/contracts") / "run" / "tier3-c1.artifact"
 
 
 @pytest.mark.parametrize("bad", ["../evil", "a/b", "x\\y", "..", ""])

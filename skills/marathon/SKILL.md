@@ -85,7 +85,7 @@ Everything else — the DAG analysis, hot-file combining, tracking file, smart-m
 
 Before decomposing the run (Step 1), the acceptance contract must be frozen. Invoke the start gate first:
 
-The contract scripts live in the plugin package (`${CLAUDE_PLUGIN_ROOT}/scripts/contract/`), while the contract artifacts (contract, kill test, completion record) live in the target repository's `.taskmaster/contract/`, the scripts' default `--contract-dir`. When `CLAUDE_PLUGIN_ROOT` is unset (a hand-placed checkout rather than an installed plugin) the guard line before each invocation falls back to the current checkout.
+The contract scripts live in the plugin package (`${CLAUDE_PLUGIN_ROOT}/scripts/contract/`), while the contract artifacts (contract, kill test, completion record) live in the target repository's `.claude/contracts/` by default. Every contract script resolves the folder the same way: its `--contract-dir` flag, then the `ACCEPTANCE_CONTRACT_DIR` environment variable, then the default, so setting the variable once moves the folder for the whole run. A repo that already keeps its contracts in `.taskmaster/contract/` and has no `.claude/contracts/` keeps using `.taskmaster/contract/`. When the agent cannot write under `.claude/` without a permission prompt, set `ACCEPTANCE_CONTRACT_DIR` to a folder it can write to. When `CLAUDE_PLUGIN_ROOT` is unset (a hand-placed checkout rather than an installed plugin) the guard line before each invocation falls back to the current checkout.
 
 ```bash
 : "${CLAUDE_PLUGIN_ROOT:=.}"   # unset outside an installed plugin: fall back to the current checkout
