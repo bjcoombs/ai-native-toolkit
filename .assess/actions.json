@@ -1,21 +1,19 @@
 {
   "schema": 2,
-  "run_id": "20260919114544-b4104782",
+  "run_id": "20261007120131-f520a0c5",
   "actions": [
     {
       "rank": 1,
-      "action": "Request human review of scripts/tests/test_floor_anchor.py: map each FLOOR.md clause that scripts/floor_anchor.py enforces to the test that pins it, and list clauses with no test",
-      "layer": 6,
-      "effort": "medium",
-      "finding": "self_referential_tests",
+      "action": "Give each stale suppression in doc_graph.py a stated reason or remove it (lines 43, 46, 415)",
+      "layer": 3,
+      "effort": "small",
       "files": [
-        "scripts/floor_anchor.py",
-        "scripts/tests/test_floor_anchor.py",
-        "FLOOR.md"
+        "skills/assess/scripts/lib/doc_graph.py"
       ],
-      "first_step": "Read FLOOR.md beside scripts/tests/test_floor_anchor.py and write the clause-to-test map into the review record of the next floor-core pull request",
-      "done_when": "Every FLOOR.md clause floor_anchor.py enforces names at least one test or is listed as unpinned; cd scripts && uv run --with pytest pytest -q tests/test_floor_anchor.py passes",
-      "scope_fence": "Review and tests only; no behaviour change to scripts/floor_anchor.py. Floor-core edits need maintainer sign-off, so batch the line-280 noqa reason fix into an already-planned floor-core pull request",
+      "first_step": "Append ' - <reason>' after each suppression code, or restructure the import so the code is not needed",
+      "done_when": "A re-run lists no doc_graph.py line in promissory_markers.top_offenders; ruff check and mypy still pass",
+      "scope_fence": "Only the three suppression comments and the imports they guard; do not touch build_doc_graph or its noqa: C901 waiver",
+      "finding": "unactioned_intent",
       "status": "pending",
       "claimed_by": null,
       "completed_sha": null,
@@ -23,16 +21,16 @@
     },
     {
       "rank": 2,
-      "action": "Action the three stale suppressions in skills/assess/scripts/lib/doc_graph.py (lines 43, 46, 403): give each a reason in the '# noqa: X  # reason' form or remove the need for it",
-      "layer": 3,
+      "action": "Reword the comment at wiki_writer.py:20 so its wrapped line no longer opens with TODO:",
+      "layer": 0,
       "effort": "small",
-      "finding": "unactioned_intent",
       "files": [
-        "skills/assess/scripts/lib/doc_graph.py"
+        "skills/assess/scripts/lib/wiki_writer.py"
       ],
-      "first_step": "rg -n 'noqa|type: ignore' skills/assess/scripts/lib/doc_graph.py",
-      "done_when": "A re-run of /assess drops doc_graph.py from unactioned_intent; cd skills/assess && uvx ruff check . && uv run --with mypy mypy pass with no new suppressions",
-      "scope_fence": "The three comment lines only; leave build_doc_graph and its noqa C901 waiver for a separate decomposition",
+      "first_step": "Edit the UNFINALIZED_ACTIONS_POINTER comment at lines 18-24",
+      "done_when": "A re-run drops wiki_writer.py from unactioned_intent; the comment keeps its meaning and the issue #165 reference",
+      "scope_fence": "Comment text only; no change to UNFINALIZED_ACTIONS_POINTER or writer logic",
+      "finding": "unactioned_intent",
       "status": "pending",
       "claimed_by": null,
       "completed_sha": null,
@@ -40,16 +38,17 @@
     },
     {
       "rank": 3,
-      "action": "Fix skills/assess/scripts/lib/README.md: add entries for decline_markers.py and interactivity.py (2 of 44 modules missing) and reword the scanner-description prose at lines 280 and 532 so it is not read as a marker",
-      "layer": 0,
-      "effort": "small",
-      "finding": "lying_map",
+      "action": "Human review of floor_anchor.py and floor_check.py against FLOOR.md (same-commit tests)",
+      "layer": 4,
+      "effort": "medium",
       "files": [
-        "skills/assess/scripts/lib/README.md"
+        "scripts/floor_anchor.py",
+        "scripts/floor_check.py"
       ],
-      "first_step": "cd skills/assess/scripts/lib && for f in *.py; do rg -q -F \"$f\" README.md || echo \"$f\"; done",
-      "done_when": "That loop prints only __init__.py; a re-run of /assess drops the file from lying_map and unactioned_intent",
-      "scope_fence": "README.md only, plus promissory_markers.py with a test beside it if the scanner route is chosen; no module renames",
+      "first_step": "Read FLOOR.md clauses i-iv beside the scripts/tests/ suites for both files and list any clause with no test that would fail if violated",
+      "done_when": "Each FLOOR.md clause maps to at least one named test, or the gap is recorded for the maintainer",
+      "scope_fence": "Review only; floor files need the maintainer's out-of-band sign-off for any change (FLOOR.md clause iii)",
+      "finding": "self_referential_tests",
       "status": "pending",
       "claimed_by": null,
       "completed_sha": null,

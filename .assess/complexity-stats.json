@@ -1,35 +1,35 @@
 {
-  "artifact_schema_version": "1.1.0",
-  "run_id": "20260919114543-5d07f22b",
-  "plugin_version": "1.87.0",
+  "artifact_schema_version": "1.3.0",
+  "run_id": "20261007120123-42526dff",
+  "plugin_version": "1.92.0",
   "schema_version": 5,
   "lizard_version": "1.23.0",
   "scc_version": "3.7.0",
-  "files_scored": 168,
+  "files_scored": 172,
   "excluded_generated": [],
   "scoring_coverage": {
-    "lizard": 164,
+    "lizard": 168,
     "scc": 4
   },
   "churn_window": "commits (last 12mo)",
   "churn_degenerate": false,
   "loc": {
-    "p50": 170.0,
-    "p95": 735.9000000000003,
-    "max": 1644.0,
-    "max_code": 1644.0,
+    "p50": 167.0,
+    "p95": 815.4499999999998,
+    "max": 1819.0,
+    "max_code": 1819.0,
     "max_data": 78.0,
-    "total": 38817
+    "total": 41346
   },
   "est_tokens": {
-    "p50": 2873.0,
-    "p95": 12330.100000000004,
-    "max": 25117.0,
-    "max_code": 25117.0,
+    "p50": 2848.0,
+    "p95": 12989.549999999996,
+    "max": 27937.0,
+    "max_code": 27937.0,
     "max_data": 1572.0,
-    "total": 663341,
+    "total": 708476,
     "budget": {
-      "total": 663341,
+      "total": 708476,
       "budget": 200000,
       "budget_basis": "estimate (~4 chars/token, documented default)",
       "chars_per_token": 4,
@@ -38,7 +38,7 @@
       "over_budget_subtrees": [
         {
           "path": "skills",
-          "est_tokens": 510437
+          "est_tokens": 552325
         }
       ]
     }
@@ -46,8 +46,8 @@
   "ccn": {
     "basis": "file-aggregate",
     "p50": 36.0,
-    "p95": 155.15000000000006,
-    "max": 291.0
+    "p95": 174.0499999999999,
+    "max": 301.0
   },
   "fn_ccn": {
     "basis": "per-function",
@@ -58,81 +58,103 @@
       }
     ],
     "backend_by_language": {},
-    "function_count": 3345,
+    "function_count": 3560,
     "p50": 1.0,
     "p95": 8.0,
     "max": 51.0
   },
   "churn": {
     "p50": 2.0,
-    "p95": 13.650000000000006,
-    "max": 57.0
+    "p95": 15.0,
+    "max": 61.0
   },
   "top_hotspots": [
     {
       "path": "skills/assess/scripts/assess_core.py",
-      "loc": 1020,
-      "est_tokens": 21763,
-      "ccn": 234.0,
+      "loc": 1027,
+      "est_tokens": 21928,
+      "ccn": 238.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 51.0,
       "max_fn_name": "build_run_context",
-      "commits": 57,
+      "commits": 61,
       "source": "lizard"
     },
     {
       "path": "skills/assess/tests/test_assess_core.py",
-      "loc": 1644,
-      "est_tokens": 25117,
-      "ccn": 200.0,
+      "loc": 1819,
+      "est_tokens": 27937,
+      "ccn": 236.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 16.0,
       "max_fn_name": "test_pruned_finding_paths_block_after_rename_and_delete",
-      "commits": 36,
+      "commits": 39,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 788,
-      "est_tokens": 15730,
-      "ccn": 199.0,
+      "loc": 795,
+      "est_tokens": 16483,
+      "ccn": 200.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 40.0,
       "max_fn_name": "write_stats",
-      "commits": 22,
+      "commits": 25,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/doc_graph.py",
-      "loc": 851,
-      "est_tokens": 14245,
-      "ccn": 291.0,
+      "loc": 878,
+      "est_tokens": 15067,
+      "ccn": 301.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 44.0,
       "max_fn_name": "build_doc_graph",
-      "commits": 16,
+      "commits": 17,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/keyhole_signals.py",
-      "loc": 759,
-      "est_tokens": 15755,
-      "ccn": 233.0,
+      "loc": 806,
+      "est_tokens": 17122,
+      "ccn": 249.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 30.0,
       "max_fn_name": "integrate",
-      "commits": 18,
+      "commits": 20,
       "source": "lizard"
     },
     {
       "path": "skills/assess/tests/test_keyhole_signals.py",
-      "loc": 895,
-      "est_tokens": 13848,
-      "ccn": 159.0,
+      "loc": 1124,
+      "est_tokens": 17496,
+      "ccn": 208.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 8.0,
-      "max_fn_name": "test_format_accretion_items_roll_up_and_per_file_lines",
-      "commits": 13,
+      "max_fn_name": "test_render_findings_markdown_path_bullets_are_exactly_the_paths",
+      "commits": 15,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/tests/test_complexity_treemap.py",
+      "loc": 1040,
+      "est_tokens": 16729,
+      "ccn": 166.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 6.0,
+      "max_fn_name": "test_write_stats_tie_break_by_path_takes_first_ten_in_path_order",
+      "commits": 20,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/lib/wiki_writer.py",
+      "loc": 530,
+      "est_tokens": 10832,
+      "ccn": 170.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 13.0,
+      "max_fn_name": "rewrite_log_entry",
+      "commits": 14,
       "source": "lizard"
     },
     {
@@ -156,84 +178,73 @@
       "max_fn_name": "_workflow_job_names",
       "commits": 7,
       "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/lib/doc_staleness.py",
-      "loc": 335,
-      "est_tokens": 5732,
-      "ccn": 90.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 34.0,
-      "max_fn_name": "analyze_doc_staleness",
-      "commits": 11,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/tests/test_complexity_treemap.py",
-      "loc": 934,
-      "est_tokens": 14388,
-      "ccn": 130.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 4.0,
-      "max_fn_name": "test_write_stats_version_keys_are_tool_versions_or_listed_non_tools",
-      "commits": 17,
-      "source": "lizard"
     }
   ],
   "top_complex": [
     {
       "path": "skills/assess/scripts/lib/doc_graph.py",
-      "loc": 851,
-      "est_tokens": 14245,
-      "ccn": 291.0,
+      "loc": 878,
+      "est_tokens": 15067,
+      "ccn": 301.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 44.0,
       "max_fn_name": "build_doc_graph",
-      "commits": 16,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/assess_core.py",
-      "loc": 1020,
-      "est_tokens": 21763,
-      "ccn": 234.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 51.0,
-      "max_fn_name": "build_run_context",
-      "commits": 57,
+      "commits": 17,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/keyhole_signals.py",
-      "loc": 759,
-      "est_tokens": 15755,
-      "ccn": 233.0,
+      "loc": 806,
+      "est_tokens": 17122,
+      "ccn": 249.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 30.0,
       "max_fn_name": "integrate",
-      "commits": 18,
+      "commits": 20,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/assess_core.py",
+      "loc": 1027,
+      "est_tokens": 21928,
+      "ccn": 238.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 51.0,
+      "max_fn_name": "build_run_context",
+      "commits": 61,
       "source": "lizard"
     },
     {
       "path": "skills/assess/tests/test_assess_core.py",
-      "loc": 1644,
-      "est_tokens": 25117,
-      "ccn": 200.0,
+      "loc": 1819,
+      "est_tokens": 27937,
+      "ccn": 236.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 16.0,
       "max_fn_name": "test_pruned_finding_paths_block_after_rename_and_delete",
-      "commits": 36,
+      "commits": 39,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_signals.py",
+      "loc": 1124,
+      "est_tokens": 17496,
+      "ccn": 208.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 8.0,
+      "max_fn_name": "test_render_findings_markdown_path_bullets_are_exactly_the_paths",
+      "commits": 15,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 788,
-      "est_tokens": 15730,
-      "ccn": 199.0,
+      "loc": 795,
+      "est_tokens": 16483,
+      "ccn": 200.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 40.0,
       "max_fn_name": "write_stats",
-      "commits": 22,
+      "commits": 25,
       "source": "lizard"
     },
     {
@@ -248,6 +259,17 @@
       "source": "lizard"
     },
     {
+      "path": "skills/assess/scripts/lib/test_pressure/mutation.py",
+      "loc": 473,
+      "est_tokens": 8060,
+      "ccn": 184.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 15.0,
+      "max_fn_name": "detect_mutation_config",
+      "commits": 4,
+      "source": "lizard"
+    },
+    {
       "path": "scripts/floor_check.py",
       "loc": 579,
       "est_tokens": 10210,
@@ -259,35 +281,13 @@
       "source": "lizard"
     },
     {
-      "path": "scripts/tests/test_floor_check.py",
-      "loc": 998,
-      "est_tokens": 13790,
-      "ccn": 159.0,
+      "path": "skills/assess/scripts/lib/wiki_writer.py",
+      "loc": 530,
+      "est_tokens": 10832,
+      "ccn": 170.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 6.0,
-      "max_fn_name": "test_protected_role_filter_returns_only_the_floor_core",
-      "commits": 5,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/tests/test_keyhole_signals.py",
-      "loc": 895,
-      "est_tokens": 13848,
-      "ccn": 159.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 8.0,
-      "max_fn_name": "test_format_accretion_items_roll_up_and_per_file_lines",
-      "commits": 13,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/tests/test_doc_graph.py",
-      "loc": 682,
-      "est_tokens": 11360,
-      "ccn": 148.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 5.0,
-      "max_fn_name": "_notes_and_wiki",
+      "max_fn_ccn": 13.0,
+      "max_fn_name": "rewrite_log_entry",
       "commits": 14,
       "source": "lizard"
     }
@@ -295,24 +295,46 @@
   "top_large": [
     {
       "path": "skills/assess/tests/test_assess_core.py",
-      "loc": 1644,
-      "est_tokens": 25117,
-      "ccn": 200.0,
+      "loc": 1819,
+      "est_tokens": 27937,
+      "ccn": 236.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 16.0,
       "max_fn_name": "test_pruned_finding_paths_block_after_rename_and_delete",
-      "commits": 36,
+      "commits": 39,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_signals.py",
+      "loc": 1124,
+      "est_tokens": 17496,
+      "ccn": 208.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 8.0,
+      "max_fn_name": "test_render_findings_markdown_path_bullets_are_exactly_the_paths",
+      "commits": 15,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/tests/test_complexity_treemap.py",
+      "loc": 1040,
+      "est_tokens": 16729,
+      "ccn": 166.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 6.0,
+      "max_fn_name": "test_write_stats_tie_break_by_path_takes_first_ten_in_path_order",
+      "commits": 20,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/assess_core.py",
-      "loc": 1020,
-      "est_tokens": 21763,
-      "ccn": 234.0,
+      "loc": 1027,
+      "est_tokens": 21928,
+      "ccn": 238.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 51.0,
       "max_fn_name": "build_run_context",
-      "commits": 57,
+      "commits": 61,
       "source": "lizard"
     },
     {
@@ -327,36 +349,25 @@
       "source": "lizard"
     },
     {
-      "path": "skills/assess/tests/test_complexity_treemap.py",
-      "loc": 934,
-      "est_tokens": 14388,
-      "ccn": 130.0,
+      "path": "skills/assess/tests/test_assess_finalize.py",
+      "loc": 972,
+      "est_tokens": 12792,
+      "ccn": 80.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 4.0,
-      "max_fn_name": "test_write_stats_version_keys_are_tool_versions_or_listed_non_tools",
-      "commits": 17,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/tests/test_keyhole_signals.py",
-      "loc": 895,
-      "est_tokens": 13848,
-      "ccn": 159.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 8.0,
-      "max_fn_name": "test_format_accretion_items_roll_up_and_per_file_lines",
-      "commits": 13,
+      "max_fn_ccn": 5.0,
+      "max_fn_name": "_seed_run_context",
+      "commits": 11,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/doc_graph.py",
-      "loc": 851,
-      "est_tokens": 14245,
-      "ccn": 291.0,
+      "loc": 878,
+      "est_tokens": 15067,
+      "ccn": 301.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 44.0,
       "max_fn_name": "build_doc_graph",
-      "commits": 16,
+      "commits": 17,
       "source": "lizard"
     },
     {
@@ -371,36 +382,25 @@
       "source": "lizard"
     },
     {
-      "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 788,
-      "est_tokens": 15730,
-      "ccn": 199.0,
+      "path": "skills/assess/tests/test_test_pressure.py",
+      "loc": 827,
+      "est_tokens": 13231,
+      "ccn": 158.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 40.0,
-      "max_fn_name": "write_stats",
-      "commits": 22,
+      "max_fn_ccn": 4.0,
+      "max_fn_name": "test_duplicate_truth_python_direct_copy",
+      "commits": 6,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/keyhole_signals.py",
-      "loc": 759,
-      "est_tokens": 15755,
-      "ccn": 233.0,
+      "loc": 806,
+      "est_tokens": 17122,
+      "ccn": 249.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 30.0,
       "max_fn_name": "integrate",
-      "commits": 18,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/tests/test_assess_finalize.py",
-      "loc": 693,
-      "est_tokens": 9722,
-      "ccn": 61.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 5.0,
-      "max_fn_name": "_seed_run_context",
-      "commits": 10,
+      "commits": 20,
       "source": "lizard"
     }
   ]

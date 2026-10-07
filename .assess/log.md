@@ -68,3 +68,16 @@
 
 ---
 <!-- chain:a6e1017927b7a96a -->
+<!-- assess:run_id=20261007120131-f520a0c5 artifact_schema_version=1.3.0 -->
+## 2026-10-07 (v1.92.0, run f520a0c5)
+
+- **Files scored:** 172
+- **AI Readiness:** 5.5 / 8 (Solid)
+- **Instructions grade:** A
+- **Hotspot transitions:** 1 graduated, 7 regressed, 1 new, 2 persistent
+- **Top action:** Give each stale suppression in skills/assess/scripts/lib/doc_graph.py a stated reason or remove it
+
+[Full report](./assess-report.md)
+
+---
+<!-- chain:91c10d55d1a1e66c -->
