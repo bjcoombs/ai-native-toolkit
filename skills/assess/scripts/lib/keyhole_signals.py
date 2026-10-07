@@ -977,9 +977,10 @@ def _omitted_row(count: int, where: str, what: str = "full list") -> str:
 
     ``where`` is the exact key in ``.assess/run-context.json`` holding the
     list and ``what`` says how much of it that key holds, so the row never
-    claims more than the stored array contains.
+    claims more than the stored array contains. The row is italic, not a
+    ``- `` bullet, so it never reads (or parses) as one more listed path.
     """
-    return f"- ... {count} more omitted; {what} in {where}"
+    return f"_... {count} more omitted; {what} in {where}_"
 
 
 def render_findings_markdown(
@@ -1027,10 +1028,14 @@ def render_findings_markdown(
             lines.append(f"- {a['path']} (score {a['score']}): {names}")
         if len(attention) > MAX_ATTENTION_ROWS_RENDERED:
             omitted = len(attention) - MAX_ATTENTION_ROWS_RENDERED
+            # build_attention_list stops at MAX_ATTENTION_UNITS: below the cap
+            # the stored array is every flagged unit; at it, only the top N.
+            stored = (
+                f"top {MAX_ATTENTION_UNITS} ranked rows"
+                if len(attention) >= MAX_ATTENTION_UNITS else "full list"
+            )
             lines.append(_omitted_row(
-                omitted,
-                "`.assess/run-context.json` `attention`",
-                what=f"top {MAX_ATTENTION_UNITS} ranked rows",
+                omitted, "`.assess/run-context.json` `attention`", what=stored,
             ))
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"

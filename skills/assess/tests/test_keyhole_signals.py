@@ -713,9 +713,30 @@ def test_render_findings_markdown_discloses_omitted_paths() -> None:
     listed = [ln for ln in md.splitlines() if ln.startswith("- docs/")]
     assert len(listed) + 7 == n
     assert (
-        "- ... 7 more omitted; full list in `.assess/run-context.json` "
-        "`derived_findings` (`lying_map`) `paths`"
+        "_... 7 more omitted; full list in `.assess/run-context.json` "
+        "`derived_findings` (`lying_map`) `paths`_"
     ) in md
+
+
+def test_render_findings_markdown_path_bullets_are_exactly_the_paths() -> None:
+    """Omission markers never start with ``- ``, so a consumer parsing bullets
+    gets exactly the rendered paths and attention rows, nothing more."""
+    paths = [f"docs/{i}.md" for i in range(ks.MAX_FINDING_PATHS_RENDERED + 3)]
+    units = [f"u{i}" for i in range(ks.MAX_ATTENTION_UNITS + 4)]
+    findings = ks.assemble_findings({
+        "lying_map": paths,
+        "hidden_coupling": units,
+        "unexplained_complexity": units,
+    })
+    attention = ks.build_attention_list(findings)
+    md = ks.render_findings_markdown(findings, attention)
+    bullets = [ln[2:].split(" (")[0] for ln in md.splitlines()
+               if ln.startswith("- ")]
+    cap = ks.MAX_FINDING_PATHS_RENDERED
+    expected = [p for f in findings for p in f["paths"][:cap]]
+    expected += [a["path"] for a in attention[:ks.MAX_ATTENTION_ROWS_RENDERED]]
+    assert bullets == expected
+    assert md.count("more omitted") == 4  # three findings plus attention
 
 
 def test_render_findings_markdown_attention_no_marker_at_cap() -> None:
@@ -734,13 +755,31 @@ def test_render_findings_markdown_attention_discloses_omitted_rows() -> None:
         "lying_map": [f"u{i}" for i in range(8)],
     })
     attention = ks.build_attention_list(findings)
+    assert len(attention) < ks.MAX_ATTENTION_UNITS  # stored array is complete
     md = ks.render_findings_markdown(findings, attention)
     omitted = len(attention) - ks.MAX_ATTENTION_ROWS_RENDERED
     assert omitted > 0
     assert (
-        f"- ... {omitted} more omitted; top {ks.MAX_ATTENTION_UNITS} ranked rows in "
-        "`.assess/run-context.json` `attention`"
+        f"_... {omitted} more omitted; full list in "
+        "`.assess/run-context.json` `attention`_"
     ) in md
+    assert "ranked rows" not in md
+
+
+def test_render_findings_markdown_attention_at_unit_cap_says_top_n() -> None:
+    """At the build_attention_list cap, run-context holds only the top N."""
+    units = [f"u{i}" for i in range(ks.MAX_ATTENTION_UNITS + 4)]
+    findings = ks.assemble_findings(
+        {"hidden_coupling": units, "lying_map": units})
+    attention = ks.build_attention_list(findings)
+    assert len(attention) == ks.MAX_ATTENTION_UNITS
+    md = ks.render_findings_markdown(findings, attention)
+    omitted = ks.MAX_ATTENTION_UNITS - ks.MAX_ATTENTION_ROWS_RENDERED
+    assert (
+        f"_... {omitted} more omitted; top {ks.MAX_ATTENTION_UNITS} "
+        "ranked rows in `.assess/run-context.json` `attention`_"
+    ) in md
+    assert "full list in `.assess/run-context.json` `attention`" not in md
 
 
 # --- Issue #172: degenerate churn drops churn-derived findings ----------------
