@@ -131,7 +131,7 @@ def _signed_freshness(doc: dict) -> float:
     churn ratio below.
 
     Otherwise (the ordinary hand-written doc), ``ratio`` (the window churn ratio
-    capped by the subject file-commits since the doc's last content change; see
+    capped by the distinct subject commits since the doc's last content change; see
     ``lib.doc_staleness``) is the decaying-map signal: 0 when the doc is not
     behind its subject, large when the code churns while the doc sits frozen.
     Piecewise-linear::

@@ -14,8 +14,10 @@ stale map of a churning module. So for every doc we compute:
                                 ``code_churn_since_doc_change``; high = decaying map
   - ``window_ratio``         -- code churn per unit of doc maintenance over
                                 the whole window (``code_churn / max(doc_churn, 1)``)
-  - ``code_churn_since_doc_change`` -- subject file-commits authored after the
-                                doc's last content change (0 = the doc is current)
+  - ``code_churn_since_doc_change`` -- distinct commits to the subject authored
+                                after the doc's last content change (0 = the
+                                doc is current; one commit touching three
+                                subject files counts 1)
 
 The window ratio alone keys on how often the subject moved over months, so a
 doc corrected this morning beside a busy module still reads as a lie. Capping
@@ -314,12 +316,14 @@ def _window_since(churn_label: str | None) -> str | None:
 
 def commit_epochs_by_file(
     repo_root: Path, since: str | None,
-) -> dict[Path, list[int]] | None:
-    """{abs_path: [author epoch per commit]} over the churn window.
+) -> dict[Path, list[tuple[int, int]]] | None:
+    """{abs_path: [(author epoch, commit index)]} over the churn window.
 
     The per-commit counterpart of `git_churn.git_churn_scores`: the same walk,
     keeping each commit's author time (`%at`, the clock the doc side uses) so a
-    caller can count only the commits after a given moment. None when git fails.
+    caller can count only the commits after a given moment. The commit index
+    lets a caller count distinct commits rather than file-commits. None when
+    git fails.
     """
     import subprocess
 
@@ -335,29 +339,31 @@ def commit_epochs_by_file(
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
             FileNotFoundError):
         return None
-    epochs: dict[Path, list[int]] = {}
-    current = 0
+    epochs: dict[Path, list[tuple[int, int]]] = {}
+    current = (0, -1)
     for line in raw.splitlines():
         line = line.strip()
         if line.startswith("\x00"):
-            current = int(line[1:] or 0)
+            current = (int(line[1:] or 0), current[1] + 1)
         elif line:
             epochs.setdefault((repo_root / line).resolve(), []).append(current)
     return epochs
 
 
 def subject_epochs(
-    files: list[Path], epochs: dict[Path, list[int]] | None,
+    files: list[Path], epochs: dict[Path, list[tuple[int, int]]] | None,
 ) -> list[int] | None:
-    """Sorted author epochs of every file-commit to `files`; None when the
-    per-commit read failed. Built once per subject so each doc is one bisect."""
+    """Sorted author epochs of the distinct commits touching `files` (a commit
+    that touches several subject files appears once); None when the per-commit
+    read failed. Built once per subject so each doc is one bisect."""
     if epochs is None:
         return None
-    return sorted(ts for f in files for ts in epochs.get(f, ()))
+    commits = {c for f in files for c in epochs.get(f, ())}
+    return sorted(ts for ts, _ in commits)
 
 
 def churn_since(sorted_epochs: list[int] | None, after: int | None) -> int | None:
-    """Subject file-commits authored strictly after `after` (the doc's last
+    """Distinct subject commits authored strictly after `after` (the doc's last
     content change). A commit that changed the doc and its code together does
     not count. None when either side is unknown."""
     if sorted_epochs is None or after is None:

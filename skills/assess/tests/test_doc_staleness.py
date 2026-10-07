@@ -758,3 +758,19 @@ def test_repo_baseline_doc_is_capped_by_repo_wide_churn(git_repo) -> None:
     assert design["subject_code_count"] == 1
     assert design["code_churn_since_doc_change"] == 1
     assert design["ratio"] == 1.0
+
+
+def test_one_multi_file_commit_after_fix_counts_once(git_repo) -> None:
+    """The cap counts distinct commits: one follow-up commit touching three
+    subject files after a doc fix is one commit behind, not a lying map."""
+    repo, commit = git_repo
+    _churn_then_fix(repo, commit)
+    for name in ("app.py", "util.py", "cli.py"):
+        (repo / name).write_text(f"# follow-up {name}", encoding="utf-8")
+    commit("feat: one follow-up across three files", days_ago=2)
+
+    r = analyze_doc_staleness(repo)
+    readme = next(d for d in r["docs"] if d["path"] == "README.md")
+    assert readme["code_churn_since_doc_change"] == 1
+    assert readme["ratio"] == 1.0
+    assert _lying_map_paths(r, repo) == []

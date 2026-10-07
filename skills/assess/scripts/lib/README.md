@@ -270,7 +270,7 @@ Doc-staleness metric for Layer 0. Associates each doc with the code it describes
 nearest-ancestor base-doc rules, computes code churn relative to doc maintenance, and
 emits a signed ratio (high = decaying map). `ratio` is the whole-window ratio
 (`window_ratio`, subject churn over doc edits) capped by `code_churn_since_doc_change`,
-the subject file-commits authored after the doc's last content change, so a doc is a
+the distinct subject commits authored after the doc's last content change, so a doc is a
 decaying map only while it is behind its subject: one corrected after its subject's last
 change scores 0 however busy the window was, and new churn after the fix raises it again.
 Both `stale_hubs` and the `lying_map` join read this capped `ratio`. The association logic
