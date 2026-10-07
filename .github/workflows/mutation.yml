@@ -48,14 +48,22 @@ jobs:
 
       # The inner timeout stops mutmut with SIGINT before the job limit, so the
       # mutants already tested keep their results and still upload. A run cut
-      # short reports a partial score, never a missing one.
+      # short reports a partial score, never a missing one, and warns rather
+      # than fails: the scope has outgrown the budget. Survivors exit 0; any
+      # other non-zero exit is mutmut itself failing and stays red.
       - name: Run mutmut
         env:
           GIT_CONFIG_GLOBAL: /dev/null
-        run: >-
-          timeout --signal=INT --kill-after=60s 45m
-          uv run --with mutmut==3.8.0 --with pytest
-          mutmut run --max-children "$(nproc)"
+        run: |
+          rc=0
+          timeout --signal=INT --kill-after=60s 45m \
+            uv run --with mutmut==3.8.0 --with pytest \
+            mutmut run --max-children "$(nproc)" || rc=$?
+          if [ "$rc" -eq 124 ]; then
+            echo "::warning::mutmut hit the 45m budget; the score below is partial"
+          elif [ "$rc" -ne 0 ]; then
+            exit "$rc"
+          fi
         working-directory: skills/assess
 
       # Scores come from the same mutants/**/*.meta parser /assess uses for its
