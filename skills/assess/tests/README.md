@@ -37,7 +37,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_assess_report.py` | `scripts/assess_report.py` - deterministic report renderer; template substitution, section renderers, conditional fallbacks |
 | `test_emit_workflow.py` | `scripts/assess_emit_workflow.py` - CLI wrapper for the frozen-harness workflow emitter; default derivation, arg parsing, path filters and the path-filter default |
 | `test_decomposition_parity.py` | `scripts/assess_core.py` + `scripts/assess_report.py` - parity harness; guards that the deterministic pipeline produces byte-for-byte identical output after the Part 3 SKILL.md decomposition |
-| `test_complexity_treemap.py` | `scripts/complexity-treemap.py` - build-artifact filter, plugin version stamp, and stats-sidecar enrichment (heavy deps are stubbed) |
+| `test_complexity_treemap.py` | `scripts/complexity-treemap.py` - build-artifact filter, plugin version stamp, stats-sidecar enrichment, the render summary, CLI argument and scope checks, and the `plural()` count helper (heavy deps are stubbed) |
 
 ### lib/ suites
 
@@ -48,13 +48,13 @@ Every `test_*.py` file in this directory has a row below.
 | `test_change_coupling.py` | `lib/change_coupling.py` - B1 change-coupling pairs, B2 containment ratio, B4 authorship; synthetic git histories built in tmp dirs |
 | `test_coupling_analysis.py` | `lib/coupling_analysis.py` - B3 static-vs-historical disagreement; hidden-coupling, bleeding-module, and refactor-boundary classification with mocked inputs |
 | `test_doc_complexity_join.py` | `lib/doc_complexity_join.py` - Signal C: doc_value formula, slop-doc guard, threshold behaviour; mocked complexity-stats and staleness inputs |
-| `test_doc_staleness.py` | `lib/doc_staleness.py` - doc->code association (base-doc, parallel docs/, code links, repo-wide fallback) and churn-relative staleness ratios |
+| `test_doc_staleness.py` | `lib/doc_staleness.py` - doc->code association (base-doc, parallel docs/, code links, repo-wide fallback), churn-relative staleness ratios, and the lying-map rule that counts only the subject's commits after the doc's last edit |
 | `test_structure_graph.py` | `lib/structure_graph.py` - A1 footprint additivity, A2 SCCs and Q range, A3 front-door vs burrow, A4 cut-lines, graceful degradation |
 | `test_understanding_analysis.py` | `lib/understanding_analysis.py` - B4 human anchor + intent source, velocity clock (D2), orphaned-understanding classification; both pure-logic (mocked) and git-integration variants |
 | `test_liveness_scan.py` | `lib/liveness_scan.py` - dead-code tool output parsers, observability rungs, graceful degradation when tools are absent |
 | `test_test_pressure.py` | `lib/test_pressure/` - mutation tier output parsing, cheap heuristics (test/source ratio, assertion density, gap signal) |
-| `test_ci_workflow.py` | `lib/ci_workflow.py` - template substitution (version, branch, tool steps, path filters), path-filtered workflow detection, literal-dollar escaping, YAML well-formedness |
-| `test_stats_diff.py` | `lib/stats_diff.py` - hotspot transition classification (graduated, regressed, new, persistent) and sidecar loading |
+| `test_ci_workflow.py` | `lib/ci_workflow.py` - template substitution (version, branch, tool steps, path filters), path-filtered workflow detection, literal-dollar escaping, YAML well-formedness, and the `actions/checkout` pin matching this repo's gate workflow and `README.md` |
+| `test_stats_diff.py` | `lib/stats_diff.py` - hotspot transition classification (graduated, regressed, restructured, new, persistent; restructured when the worst function falls while summed complexity rises) and sidecar loading |
 | `test_wiki_writer.py` | `lib/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
 | `test_git_commit_info.py` | `lib/git_churn.py` (`git_commit_info`) - commit snapshot with SHA/timestamp for staleness warnings |
 | `test_instruction_bloat.py` | `lib/agent_instructions_grader.py` - bloat penalty, skills-delegation credit, conservative thresholds |
@@ -98,7 +98,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_smoke.py` | `lib/__init__.py` - confirms the lib package is importable and `__version__` is set |
 | `test_golden_baseline.py` | `tests/golden.py` + dogfood fixtures - guards the regression baseline scaffolding (fixture completeness, normalization idempotency, loader correctness) used by `test_decomposition_parity.py` |
 | `test_golden_svg_render.py` | `scripts/complexity-treemap.py` + `scripts/doc-graph-svg.py` - runs the real renderers and locks their colour encoding |
-| `test_doc_graph_svg.py` | `scripts/doc-graph-svg.py` - the SVG honours the same excludes as the scorer |
+| `test_doc_graph_svg.py` | `scripts/doc-graph-svg.py` - the SVG honours the same excludes as the scorer; node encoding, labels and layout; title and summary counts with singular/plural nouns and no em dash; CLI argument checks |
 | `test_action_contract.py` | `action.yml` (repo root) - the composite AI-readiness gate action |
 | `test_no_contributions_scan.py` | `skills/assess-pr/SKILL.md` (relative to the repo root) - extracts and runs the marked no-contributions bash block |
 | `test_uninstall.py` | `references/uninstall.md` + `scripts/assess_core.py` - run-context pointer, doc completeness, and the uninstall offer |
@@ -110,12 +110,48 @@ Every `test_*.py` file in this directory has a row below.
 
 ---
 
+## Fixtures
+
+`conftest.py` provides three fixtures: `fixtures_dir` (the path to `fixtures/`),
+`tmp_assess_dir` (an empty `.assess/` with a `hotspots/` subdirectory) and `git_repo`
+(a throwaway repo plus a `commit_fn` that can backdate author and committer time). At
+import time it points `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device, so
+ambient commit signing or hooks cannot break the git-backed tests.
+
+`fixtures/` holds data, not tests; `pyproject.toml` excludes it from collection:
+
+| Fixture | Used by |
+|---|---|
+| `golden/` | `golden.py`, `test_decomposition_parity.py`, `test_golden_baseline.py` - the run-context and report baselines |
+| `golden-doc-repo/`, `golden-svg-repo/` | `test_golden_svg_render.py` - small repos the real renderers draw |
+| `hollow_test_repo/`, `honest_test_repo/`, `mutmut-junitxml.xml` | `test_test_pressure.py` - weak versus real tests, and mutation output |
+| `good_instructions.md`, `bad_instructions.md`, `monolithic_instructions.md`, `lean_with_skills/` | the instruction grader and bloat suites |
+| `coverage.xml`, `lcov.info` | `test_coverage_report.py` and the coverage-driven test-focus paths |
+| `prior_stats.json`, `current_stats.json` | `test_stats_diff.py` |
+| `maven_project/` | `test_jvm_capabilities.py` |
+| `structure_drift/` | `test_structure_drift.py` |
+
+## Markers
+
+`no_cover` (declared in `pyproject.toml`) pauses pytest-cov tracing for one test. It
+guards wall-clock budgets: the Dart scanner's 1s pathological-input test in
+`test_dart_complexity.py` would otherwise miss its budget under `--cov`. Use it rather
+than widening a budget to fit the tracer.
+
+---
+
 ## Running the suite
 
 ```bash
-# From skills/assess/ - avoids ~7 phantom git-commit failures from global git config
-GIT_CONFIG_GLOBAL=/dev/null uv run --with pytest pytest tests/ -v
+# From skills/assess/
+uv run --with pytest --with pyyaml pytest tests/ -v
+
+# With line coverage, as CI runs it (reported, never gated)
+uv run --with pytest --with pytest-cov --with pyyaml pytest -v \
+  --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
 ```
 
-The phantom failures are a local-only artifact of global git commit-template or hook
-configuration. They do not appear in CI.
+`pyyaml` lets the structural guards in `test_action_contract.py` parse YAML; without it
+they skip. `conftest.py` neutralises global git config, so the suite needs no
+`GIT_CONFIG_GLOBAL=/dev/null` prefix. Scripts run outside pytest, such as
+`assess_core.py`, still read global config.

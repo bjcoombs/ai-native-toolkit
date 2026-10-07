@@ -160,18 +160,18 @@ JUSTIFIED_SUPPRESSION_RE = re.compile(
 # position: it opens its comment or line (after an optional list bullet or
 # checkbox), or it is followed by a colon or a parenthesised owner. A sentence
 # that lists marker names - ``(TODO/FIXME, deprecations, ...)`` - is prose
-# about markers, not a marker. The phrase alternatives (``remove after``,
-# ``temporary workaround``) keep the plain comment-context rule.
+# about markers, not a marker. The phrase alternatives in TODO_PHRASE_RE (a
+# removal deadline, a temporary stopgap) keep the plain comment-context rule.
 TODO_TOKEN_RE = re.compile(r"\b(TODO|FIXME|HACK|XXX|TBD)\b")
 _TODO_SUFFIX_RE = re.compile(r"\s*:|\([^)\s][^)]*\)")
 TODO_PHRASE_RE = re.compile(
     r"remove (after|before|once|when)|temporary (workaround|hack|fix)"
 )
 # In a prose file, a phrase inside an inline code span or quotation marks is an
-# example quoted in a sentence about markers (``"remove after migration"``),
-# not a promise. Double-backtick spans first so ````x```` is one span; an
-# unclosed quote matches nothing and the phrase stays bare. Code comments do not
-# get this exemption: ``# "remove after" v2 ships`` is still a promise.
+# example quoted in a sentence about markers, not a promise. Double-backtick
+# spans first so ````x```` is one span; an unclosed quote matches nothing and
+# the phrase stays bare. Code comments do not get this exemption: a removal
+# deadline wrapped in quotes inside a ``#`` comment is still a promise.
 _QUOTED_SPAN_RE = re.compile(r"``.+?``|`[^`]+`|\"[^\"]*\"|\u201c[^\u201d]*\u201d")
 # A list bullet, a checkbox, or both (``- [ ] TODO write X``).
 _BULLET_RE = re.compile(r"(?:(?:[-*+>]|\d+[.)])\s*)?(?:\[[ xX]?\]\s*)?")
