@@ -84,11 +84,11 @@ def ratchet_violations(
 
 def test_config_entries_are_well_formed() -> None:
     config = load_config()
-    assert isinstance(config.get("default_limit"), int) and config["default_limit"] > 0
+    assert type(config.get("default_limit")) is int and config["default_limit"] > 0
     assert config.get("roots"), f"{CONFIG_NAME} must list the roots it covers"
     bad = [
         path for path, entry in config.get("ceilings", {}).items()
-        if not isinstance(entry.get("lines"), int)
+        if type(entry.get("lines")) is not int
         or not str(entry.get("reason", "")).strip()
         or set(entry) - {"lines", "reason"}
     ]

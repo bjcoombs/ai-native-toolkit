@@ -310,7 +310,7 @@ ls "$REPO_ROOT"/.file-size-ratchet.toml 2>/dev/null
 - `TODO`/`FIXME` detection? (godox, no-warning-comments)
 - **Function length limits?** (`funlen`, `max-lines-per-function`, `MethodLength`, `function-max-lines`)
 - **Cyclomatic complexity limits?** (`cyclop`, `gocognit`, `complexity`, `CyclomaticComplexity`, `too-many-statements`, `cognitive-complexity`, `cognitive_complexity`)
-- **File size limits?** (`max-lines`, `FileLength`, `file-max-lines`, `lines-per-file`). A `.file-size-ratchet.toml` with a `default_limit` counts as one when a test or CI step reads it (`rg -l 'file-size-ratchet' "$REPO_ROOT"` finds the enforcer): every file in its `roots` is held to the limit, and its `[ceilings]` entries are files already over it that may shrink but not grow. Cite the limit and the number of ceilings; a config nothing reads is decoration, not a gate.
+- **File size limits?** (`max-lines`, `FileLength`, `file-max-lines`, `lines-per-file`). A `.file-size-ratchet.toml` with a `default_limit` counts as one when a test or CI step reads it (`rg -l --hidden -g '!.git' -g '!*.md' -g '!.file-size-ratchet.toml' 'file-size-ratchet' "$REPO_ROOT"` lists candidate enforcers; open each hit and confirm it loads the config, since a comment or string mention is not an enforcer): every file in its `roots` is held to the limit, and its `[ceilings]` entries are files already over it that may shrink but not grow. Cite the limit and the number of ceilings; a config nothing reads is decoration, not a gate.
 - Exhaustive matching? (exhaustive, strict unions)
 - Import boundary rules? (depguard, no-restricted-imports)
 
