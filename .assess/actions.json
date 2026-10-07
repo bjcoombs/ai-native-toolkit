@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "run_id": "20261007185833-e950cb1b",
+  "run_id": "20261007204013-4ace52ea",
   "actions": [
     {
       "rank": 1,
@@ -41,21 +41,20 @@
     },
     {
       "rank": 3,
-      "action": "Make the assess_core imports in test_assess_core.py resolve without type: ignore[import-not-found]",
-      "layer": 2,
+      "action": "Annotate test_keyhole_signals.py as a tracked large file and split it by finding family only when a change needs most of it",
+      "layer": 4,
       "effort": "small",
       "files": [
-        "skills/assess/tests/test_assess_core.py",
-        "skills/assess/pyproject.toml"
+        "skills/assess/tests/test_keyhole_signals.py"
       ],
-      "first_step": "Point mypy at skills/assess/scripts (mypy_path) or add a conftest import root; drop the ignores",
-      "done_when": "A re-run drops test_assess_core.py from unactioned_intent; both mypy gates pass",
-      "scope_fence": "Test import lines and mypy config only",
-      "finding": "unactioned_intent",
+      "first_step": "Add a large-file: tracked note naming the finding families as the split seams",
+      "done_when": "The file carries the tracked note; any later split keeps every test passing with no test logic changed",
+      "scope_fence": "Annotation only; no pre-emptive split of a working test file",
+      "finding": "accretion_ratchet",
       "status": "pending",
       "claimed_by": null,
       "completed_sha": null,
-      "mode": "verify_then_retire"
+      "mode": "refactor_safe"
     }
   ]
 }

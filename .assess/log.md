@@ -94,3 +94,16 @@
 
 ---
 <!-- chain:2e10d3785b44fd79 -->
+<!-- assess:run_id=20261007204013-4ace52ea artifact_schema_version=1.3.0 -->
+## 2026-10-07 (v1.92.7, run 4ace52ea)
+
+- **Files scored:** 176
+- **AI Readiness:** 6.0 / 8 (Solid)
+- **Instructions grade:** A
+- **Hotspot transitions:** 1 graduated, 3 regressed, 0 restructured, 1 new, 6 persistent
+- **Top action:** Decide how FLOOR.md clause iii and floor_core_changed agree, then add the clause-derived floor tests (#410)
+
+[Full report](./assess-report.md)
+
+---
+<!-- chain:3287cc08dc4b7312 -->
