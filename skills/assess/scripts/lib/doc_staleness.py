@@ -2,14 +2,36 @@
 
 Absolute doc age is not the signal -- a two-year-old doc beside two-year-old
 code is fine. The signal is a doc that has *frozen while its subject moves*: a
-stale map of a churning module. So for every doc we compute three things:
+stale map of a churning module. So for every doc we compute:
 
   - ``last_commit_days``     -- days since the doc's last content change: its
                                 newest commit that is not a bulk mechanical
                                 commit (see ``git_churn.content_commit_clock``)
-  - ``code_churn_in_window`` -- commits to the *code the doc describes*
-  - ``ratio``                -- code churn per unit of doc maintenance
-                                (``code_churn / max(doc_churn, 1)``); high = decaying map
+  - ``code_churn_in_window`` -- file-commits to the *code the doc describes*
+                                (one commit touching three subject files counts 3)
+  - ``ratio``                -- how far the doc is behind its subject: the
+                                smaller of ``window_ratio`` and
+                                ``code_churn_since_doc_change``; high = decaying map
+  - ``window_ratio``         -- code churn per unit of doc maintenance over
+                                the whole window (``code_churn / max(doc_churn, 1)``)
+  - ``code_churn_since_doc_change`` -- distinct commits to the subject authored
+                                after the doc's last content change (0 = the
+                                doc is current; one commit touching three
+                                subject files counts 1)
+
+The window ratio alone keys on how often the subject moved over months, so a
+doc corrected this morning beside a busy module still reads as a lie. Capping
+it by the churn since the doc's last content change makes the signal require
+the doc to be *behind* its subject now: a doc edited after its subject's last
+change has ratio 0, whatever the window ratio says. The cap applies only to a
+doc that changed inside the window; one behind by every subject commit in it
+keeps the uncapped ``window_ratio``. Both sides use author time
+(``%at``), so a code commit authored before the doc fix but merged after it
+(a long-lived branch, a rebase that keeps author dates) does not count as
+behind - the same trade the content clock makes. Bulk mechanical commits are
+skipped on the doc side only: a code-only sweep after a doc fix (a formatter
+run, a licence-header pass over source files) counts in full on the code side,
+which is the one route left by which a just-corrected doc can be re-flagged.
 
 Associating a doc with the code it describes uses the **nearest-ancestor
 base-doc rule** (same nearest-match logic as ``CODEOWNERS`` / ``.gitignore``):
@@ -24,6 +46,7 @@ uses, so churn is computed one way across the whole skill.
 """
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -36,6 +59,7 @@ from lib.doc_graph import (
 )
 from lib.doc_provenance import resolve_doc_sources, source_is_newer
 from lib.git_churn import (
+    CHURN_WINDOWS,
     GIT_TIMEOUT_SECONDS,
     ContentClock,
     churn_is_degenerate,
@@ -67,6 +91,12 @@ class DocStaleness:
     subject_code_count: int
     subject_method: str
     ratio: float
+    # Whole-window ratio and the subject churn after the doc's last content
+    # change; `ratio` is the smaller of the two (see the module docstring).
+    # `code_churn_since_doc_change` is None when the doc has no commit or the
+    # per-commit read failed, and `ratio` then falls back to `window_ratio`.
+    window_ratio: float = 0.0
+    code_churn_since_doc_change: int | None = None
     # Provenance (generated docs only; see lib.doc_provenance). When a doc
     # declares a source, staleness is measured against that source instead of
     # the doc's own age/churn: `provenance_method` names how it was declared
@@ -101,6 +131,8 @@ class DocStaleness:
             "subject_code_count": self.subject_code_count,
             "subject_method": self.subject_method,
             "ratio": round(self.ratio, 2),
+            "window_ratio": round(self.window_ratio, 2),
+            "code_churn_since_doc_change": self.code_churn_since_doc_change,
             "confidence": self.confidence,
         }
         if self.last_change_basis != "content":
@@ -276,6 +308,88 @@ def _nearest_base_doc(code_file: Path, base_doc_dirs: dict[Path, Path], repo_roo
         current = current.parent
 
 
+def _window_since(churn_label: str | None) -> str | None:
+    """The `--since` expression behind a `pick_churn_window` label."""
+    for label, since in CHURN_WINDOWS:
+        if churn_label == f"commits ({label})":
+            return since
+    return None
+
+
+def commit_epochs_by_file(
+    repo_root: Path, since: str | None,
+) -> dict[Path, list[tuple[int, int]]] | None:
+    """{abs_path: [(author epoch, commit index)]} over the churn window.
+
+    The per-commit counterpart of `git_churn.git_churn_scores`: the same walk,
+    keeping each commit's author time (`%at`, the clock the doc side uses) so a
+    caller can count only the commits after a given moment. The commit index
+    lets a caller count distinct commits rather than file-commits. None when
+    git fails.
+    """
+    import subprocess
+
+    cmd = ["git", "-C", str(repo_root), "log", "--relative",
+           "--pretty=format:%x00%at", "--name-only"]
+    if since:
+        cmd.append(f"--since={since}")
+    try:
+        raw = subprocess.run(
+            cmd, capture_output=True, text=True, check=True,
+            timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+            FileNotFoundError):
+        return None
+    epochs: dict[Path, list[tuple[int, int]]] = {}
+    current = (0, -1)
+    for line in raw.splitlines():
+        line = line.strip()
+        if line.startswith("\x00"):
+            current = (int(line[1:] or 0), current[1] + 1)
+        elif line:
+            epochs.setdefault((repo_root / line).resolve(), []).append(current)
+    return epochs
+
+
+def subject_epochs(
+    files: list[Path], epochs: dict[Path, list[tuple[int, int]]] | None,
+) -> list[int] | None:
+    """Sorted author epochs of the distinct commits touching `files` (a commit
+    that touches several subject files appears once); None when the per-commit
+    read failed. Built once per subject so each doc is one bisect."""
+    if epochs is None:
+        return None
+    commits = {c for f in files for c in epochs.get(f, ())}
+    return sorted(ts for ts, _ in commits)
+
+
+def churn_since(sorted_epochs: list[int] | None, after: int | None) -> int | None:
+    """Distinct subject commits authored strictly after `after` (the doc's last
+    content change). A commit that changed the doc and its code together does
+    not count. None when either side is unknown."""
+    if sorted_epochs is None or after is None:
+        return None
+    return len(sorted_epochs) - bisect_right(sorted_epochs, after)
+
+
+def behind_ratio(
+    window_ratio: float, sorted_epochs: list[int] | None, after: int | None,
+) -> tuple[float, int | None]:
+    """``(ratio, churn_since)``: the window ratio capped by the subject churn
+    after the doc's last content change.
+
+    The cap applies only when some subject commit in the window predates the
+    doc's last change - the doc caught up inside the window. A doc behind by
+    the whole window keeps the uncapped file-commit ratio, so two wide refactors
+    beside a doc frozen for a year still score by their full file-commit count.
+    Uncapped as well when the churn after the doc is unknown."""
+    since_doc = churn_since(sorted_epochs, after)
+    if since_doc is None or sorted_epochs is None or since_doc == len(sorted_epochs):
+        return window_ratio, since_doc
+    return min(window_ratio, float(since_doc)), since_doc
+
+
 def _parallel_docs_subject(
     doc: Path, repo_root: Path, code_dirs: set[Path],
 ) -> list[Path] | None:
@@ -357,6 +471,12 @@ def analyze_doc_staleness(
         churn_map.get(c, 0) for c in code_files
     )
 
+    # Per-commit author times over the same window, for the behind-the-subject
+    # cap. A repo-baseline doc measures against every code file, so that list is
+    # sorted once here rather than per doc.
+    commit_epochs = commit_epochs_by_file(repo_root, _window_since(churn_label))
+    baseline_epochs = subject_epochs(code_files, commit_epochs)
+
     # Last content change per doc, skipping bulk mechanical commits (#333).
     clock = content_clock(repo_root)
 
@@ -409,6 +529,7 @@ def analyze_doc_staleness(
             docs_mapping_to_code += 1
             code_churn = sum(churn_map.get(c, 0) for c in subject)
             subject_count = len(subject)
+            measured = subject_epochs(subject, commit_epochs)
         else:
             # repo-baseline has no derivable subject, so the ratio uses
             # repo-wide churn - a coarse proxy. In an active repo this can be
@@ -419,10 +540,14 @@ def analyze_doc_staleness(
             # with subject_method and last_commit_days, not on its own.
             code_churn = repo_wide_code_churn
             subject_count = len(code_files)
+            measured = baseline_epochs
 
         method_counts[method] = method_counts.get(method, 0) + 1
         doc_churn = churn_map.get(d, 0)
-        ratio = code_churn / max(doc_churn, 1)
+        window_ratio = code_churn / max(doc_churn, 1)
+        # Behind-the-subject cap: only churn after the doc's last content change
+        # (bulk commits already skipped by the clock) can make it a lying map.
+        ratio, since_doc = behind_ratio(window_ratio, measured, clock.epoch(d))
 
         # Provenance (issue #178): a *generated* doc that declares a source is
         # measured against that source, not its own age/churn. When the source
@@ -455,6 +580,8 @@ def analyze_doc_staleness(
             subject_code_count=subject_count,
             subject_method=method,
             ratio=ratio,
+            window_ratio=window_ratio,
+            code_churn_since_doc_change=since_doc,
             provenance_method=prov_method,
             provenance_sources=prov_source_rels,
             provenance_generated_by=generated_by,
