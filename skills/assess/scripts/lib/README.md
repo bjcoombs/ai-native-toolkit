@@ -685,7 +685,8 @@ or curly) is a quoted example and does not count; a bare phrase on the same line
 still does, and a code comment counts whatever the quoting. A justified
 suppression (a ` - reason` or ` -- reason` starting with a word character, or a
 non-empty `(reason)`, after the directive or its codes, or a trailing comment -
-for `type: ignore[...]` the trailing `  # reason` is the only form mypy accepts)
+for `type: ignore[...]` the trailing `  # reason` is the only form mypy accepts;
+a trailing comment that is itself a directive or a marker is not a reason)
 is never stale and is counted in each family row's `justified`
 (0 outside suppressions); other tracked markers still age, since an issue or a
 deadline can go stale too. The `unactioned_intent` action states the

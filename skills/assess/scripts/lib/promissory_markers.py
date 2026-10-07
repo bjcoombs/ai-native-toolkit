@@ -105,7 +105,9 @@ LINKED_RE = re.compile(r"#\d+|\b[A-Z][A-Z0-9]+-\d+\b|https?://|\b\d{4}-\d{2}-\d{
 # trailing ``//`` comment - code after ``*/`` is not a reason.
 JUSTIFIED_SUPPRESSION_RE = re.compile(
     r"(nolint[^/]*//|noqa[^#]*#|type:\s*ignore[^#]*#|eslint-disable[^*]*\*/\s*//|"
-    r"//\s*ignore:[^/]*//|@SuppressWarnings\(.+\)\s*//)\s*\S"
+    r"//\s*ignore:[^/]*//|@SuppressWarnings\(.+\)\s*//)\s*"
+    # The trailing comment must not be another directive or a marker.
+    r"(?!(?:noqa|type:\s*ignore|nolint|TODO|FIXME|HACK|XXX|TBD)\b)\S"
     r"|/\*\s*eslint-disable[^*]*?\s--\s*[^\s*]"
     r"|//\s*eslint-disable\S*\s.*?\s--\s*\S"
     # A dash, double-dash or parenthesised reason after the directive's codes,

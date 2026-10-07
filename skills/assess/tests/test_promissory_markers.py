@@ -444,6 +444,13 @@ def test_single_dash_and_parenthesised_suppression_reasons() -> None:
         "# type: ignore - ...",
         "# type: ignore[assignment]  #",
         "# type: ignore[assignment]  # ",
+        # A second directive or a marker in the trailing comment is not a
+        # reason: it stacks another waiver or promise on the first.
+        "# type: ignore[x]  # noqa: E501",
+        "# type: ignore  # TODO fix the stub",
+        "# noqa: E501  # type: ignore[x]",
+        "# noqa: E402  # FIXME",
+        "return nil //nolint:nilerr // TODO",
     ):
         assert not rx.search(bare), bare
 
