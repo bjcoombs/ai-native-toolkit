@@ -50,11 +50,13 @@ from __future__ import annotations
 
 from pathlib import Path, PurePosixPath
 
-# Code that churns more than this multiple of its doc's own churn is treated as
-# having outrun the map: freshness crosses zero here and reaches -1 at twice
-# this ratio. 2.0 = "the code changed twice as often as anyone touched the doc".
-# The doc-staleness metric already computes this ratio (code_churn / doc_churn)
-# as its core decaying-map signal; we only map it onto a signed scale.
+# A doc whose staleness ratio exceeds this is treated as having been outrun by
+# its code: freshness crosses zero here and reaches -1 at twice this value. The
+# doc-staleness metric computes the ratio (whole-window code_churn / doc_churn,
+# capped by the distinct subject commits since the doc's last content change
+# when the doc changed inside the window), so for a recently edited doc 2.0
+# means "more than two subject commits landed after the doc last changed". We
+# only map it onto a signed scale.
 STALENESS_RATIO_THRESHOLD = 2.0
 
 # McCabe's classic "moderate risk" line. We gate findings on the *higher* of

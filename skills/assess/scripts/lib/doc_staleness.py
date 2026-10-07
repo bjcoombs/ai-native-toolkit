@@ -23,7 +23,9 @@ The window ratio alone keys on how often the subject moved over months, so a
 doc corrected this morning beside a busy module still reads as a lie. Capping
 it by the churn since the doc's last content change makes the signal require
 the doc to be *behind* its subject now: a doc edited after its subject's last
-change has ratio 0, whatever the window ratio says. Both sides use author time
+change has ratio 0, whatever the window ratio says. The cap applies only to a
+doc that changed inside the window; one behind by every subject commit in it
+keeps the uncapped ``window_ratio``. Both sides use author time
 (``%at``), so a code commit authored before the doc fix but merged after it
 (a long-lived branch, a rebase that keeps author dates) does not count as
 behind - the same trade the content clock makes. Bulk mechanical commits are
@@ -375,10 +377,16 @@ def behind_ratio(
     window_ratio: float, sorted_epochs: list[int] | None, after: int | None,
 ) -> tuple[float, int | None]:
     """``(ratio, churn_since)``: the window ratio capped by the subject churn
-    after the doc's last content change; uncapped when that churn is unknown."""
+    after the doc's last content change.
+
+    The cap applies only when some subject commit in the window predates the
+    doc's last change - the doc caught up inside the window. A doc behind by
+    the whole window keeps the uncapped file-commit ratio, so two wide refactors
+    beside a doc frozen for a year still score by their full file-commit count.
+    Uncapped as well when the churn after the doc is unknown."""
     since_doc = churn_since(sorted_epochs, after)
-    if since_doc is None:
-        return window_ratio, None
+    if since_doc is None or sorted_epochs is None or since_doc == len(sorted_epochs):
+        return window_ratio, since_doc
     return min(window_ratio, float(since_doc)), since_doc
 
 

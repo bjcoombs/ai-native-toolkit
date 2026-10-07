@@ -774,3 +774,24 @@ def test_one_multi_file_commit_after_fix_counts_once(git_repo) -> None:
     assert readme["code_churn_since_doc_change"] == 1
     assert readme["ratio"] == 1.0
     assert _lying_map_paths(r, repo) == []
+
+
+def test_doc_frozen_before_window_keeps_file_commit_ratio(git_repo) -> None:
+    """A doc never touched inside the window is behind by all of it, so the
+    cap does not swap in the distinct-commit count: three wide refactors keep
+    their full file-commit weight and still flag the doc."""
+    repo, commit = git_repo
+    (repo / "README.md").write_text("module map", encoding="utf-8")
+    for i in range(10):
+        (repo / f"m{i}.py").write_text("v = 0", encoding="utf-8")
+    commit("initial", days_ago=500)
+    for j in range(3):
+        for i in range(10):
+            (repo / f"m{i}.py").write_text(f"v = {j + 1}", encoding="utf-8")
+        commit(f"refactor {j}", days_ago=40 - j * 10)
+
+    r = analyze_doc_staleness(repo)
+    assert r["churn_window"] == "commits (last 12mo)"
+    readme = next(d for d in r["docs"] if d["path"] == "README.md")
+    assert readme["code_churn_since_doc_change"] == 3
+    assert readme["ratio"] == readme["window_ratio"] == 30.0
