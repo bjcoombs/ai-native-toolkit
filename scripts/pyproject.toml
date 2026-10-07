@@ -26,3 +26,28 @@ select = ["E4", "E7", "E9", "F", "C901"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 15
+
+[tool.coverage.run]
+# The suite's own tests are measurement apparatus, not the package under
+# measurement (CI runs --cov=. from this directory).
+omit = ["*/tests/*"]
+
+[tool.mypy]
+# Mirrors the skills/assess type gate (same checks, same strictness): the build
+# pipeline modules plus the contract and canary tooling, which already pass.
+# floor_check.py is left out: it carries two type errors (one name bound to an
+# int and then a list) and is floor-protected (FLOOR.md clause iii), so its fix
+# needs the maintainer's floor sign-off. tests/ is out of scope, as it is for
+# skills/assess.
+files = [
+    "transform_skill.py",
+    "standalone_skill_config.py",
+    "floor_anchor.py",
+    "contract",
+    "canaries",
+]
+mypy_path = "."
+explicit_package_bases = true
+namespace_packages = true
+ignore_missing_imports = true
+warn_redundant_casts = true

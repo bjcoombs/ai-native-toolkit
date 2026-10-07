@@ -224,7 +224,15 @@ Each `/assess` run reads the prior state from this directory and adds to it. Hot
 ## What this repo doesn't have (and that's fine)
 
 - Test coverage focused on the deterministic core under `skills/assess/`. `complexity-treemap.py` is still smoke-tested rather than unit-tested - it's a thin CLI wrapper around lizard/squarify.
-- No coverage gates - same reason.
+- No coverage gates - same reason. CI measures line coverage without gating it: the `skills/assess pytest` and `scripts/ pytest` jobs print a term summary and upload a Cobertura `coverage.xml` artifact each (`coverage-skills-assess`, `coverage-scripts`), with no `--cov-fail-under`. Filenames in those artifacts are relative to the job's package directory, not the repo root.
+- `/assess` never runs the suites. It reads an existing `coverage.xml` or `lcov.info` from the repo root (or `coverage/`, `.coverage/`) to fill its "Where to focus testing" table. To give it one, run this from the repo root before `/assess`; it writes a gitignored `coverage.xml` with repo-relative filenames covering both packages. The `scripts/` suite must run from inside `scripts/` (some tests read `../skills/...`), hence the subshell and the combine step:
+
+  ```bash
+  GIT_CONFIG_GLOBAL=/dev/null uv run --project skills/assess --with pytest --with pytest-cov --with pyyaml pytest skills/assess -q --cov=skills/assess/scripts --cov-report= \
+    && (cd scripts && uv run --with pytest --with pytest-cov pytest -q --cov=. --cov-report=) \
+    && uv run --with coverage coverage combine --keep --data-file=.coverage.all .coverage scripts/.coverage \
+    && uv run --with coverage coverage xml --data-file=.coverage.all -o coverage.xml
+  ```
 
 ## Compatibility
 
