@@ -22,6 +22,7 @@ from lib.wiki_writer import (
     LOG_PLACEHOLDER,
     read_log_entries,
     rewrite_log_entry,
+    slug_for_path,
     verify_log_chain,
 )
 
@@ -94,6 +95,31 @@ def test_core_replaces_superseded_same_day_entry(repo: Path) -> None:
     assert "fixture action" in log
     assert "History integrity broken" not in log
     assert third["log_integrity"]["valid"] is True
+
+
+def test_core_sweeps_superseded_row_from_pages_it_does_not_rewrite(repo: Path) -> None:
+    """#421: the superseded run ranked src/cold.py, this run does not. The
+    superseded run's history row leaves cold.py's page with its log entry."""
+    assess_dir = repo / ".assess"
+    (repo / "src" / "cold.py").write_text("def cold():\n    return 1\n", encoding="utf-8")
+    stats_path = assess_dir / "complexity-stats.json"
+    stats = json.loads(stats_path.read_text(encoding="utf-8"))
+    both = {**stats, "top_hotspots": [
+        *stats["top_hotspots"], {"path": "src/cold.py", "loc": 2, "ccn": 1, "commits": 1}]}
+    stats_path.write_text(json.dumps(both), encoding="utf-8")
+    first = _run(repo)
+    stats_path.write_text(json.dumps(stats), encoding="utf-8")
+    second = _run(repo)
+
+    first_short = first["run_id"].rsplit("-", 1)[-1]
+    second_short = second["run_id"].rsplit("-", 1)[-1]
+    hot = assess_dir / "hotspots"
+    cold_page = (hot / f"{slug_for_path('src/cold.py')}.md").read_text(encoding="utf-8")
+    hot_page = (hot / f"{slug_for_path('src/hot.py')}.md").read_text(encoding="utf-8")
+    assert f"| {first_short} |" not in cold_page
+    assert f"| {first_short} |" not in hot_page
+    assert f"| {second_short} |" in hot_page
+    assert first["run_id"] not in (assess_dir / "log.md").read_text(encoding="utf-8")
 
 
 def test_core_keeps_superseded_same_day_entry_on_new_commit(repo: Path) -> None:
