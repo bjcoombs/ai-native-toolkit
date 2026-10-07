@@ -21,13 +21,13 @@
     },
     {
       "rank": 2,
-      "action": "Reword the comment at wiki_writer.py:20 so its wrapped line no longer opens with TODO:",
+      "action": "Reword the comment at wiki_writer.py:21 so its wrapped line no longer opens with TODO:",
       "layer": 0,
       "effort": "small",
       "files": [
         "skills/assess/scripts/lib/wiki_writer.py"
       ],
-      "first_step": "Edit the UNFINALIZED_ACTIONS_POINTER comment at lines 18-24",
+      "first_step": "Edit the UNFINALIZED_ACTIONS_POINTER comment at lines 19-25",
       "done_when": "A re-run drops wiki_writer.py from unactioned_intent; the comment keeps its meaning and the issue #165 reference",
       "scope_fence": "Comment text only; no change to UNFINALIZED_ACTIONS_POINTER or writer logic",
       "finding": "unactioned_intent",

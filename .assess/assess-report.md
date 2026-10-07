@@ -17,7 +17,7 @@ Actions 1-3 are the three prescribed attention rows: two stale-marker clusters i
 | # | Action | Layer | Effort | Command / First Step | Done when | Scope fence | Hotspot files this addresses | Issue |
 |---|--------|-------|--------|---------------------|-----------|-------------|------------------------------|-------|
 | 1 | Give each stale suppression in `doc_graph.py` a stated reason or remove it: `# type: ignore[assignment]` (line 43, 16 edits), `# noqa: E402` (line 46, 15 edits), `# noqa: F401` on the optional `obsidiantools` import (line 415, 15 edits) | 3 | small | Edit `skills/assess/scripts/lib/doc_graph.py`: append ` - <reason>` after each code, or restructure the import so the code is not needed | A re-run lists no `doc_graph.py` line in `promissory_markers.top_offenders`; `ruff check` and `mypy` still pass | Only the three suppression comments and the imports they guard; do not touch `build_doc_graph` (fn ccn 44) or its `noqa: C901` ratchet waiver | `skills/assess/scripts/lib/doc_graph.py` | #411 |
-| 2 | Reword the comment at `wiki_writer.py:20` so its wrapped line no longer opens with `TODO:`; it describes the neutral pointer that replaced a TODO, not an open promise | 0 | small | Edit `skills/assess/scripts/lib/wiki_writer.py` lines 18-24 (the `UNFINALIZED_ACTIONS_POINTER` comment) | A re-run drops `wiki_writer.py` from `unactioned_intent`; the comment keeps its meaning (issue #165 reference intact) | Comment text only; no change to `UNFINALIZED_ACTIONS_POINTER` or any writer logic | `skills/assess/scripts/lib/wiki_writer.py` | #444 |
+| 2 | Reword the comment at `wiki_writer.py:21` so its wrapped line no longer opens with `TODO:`; it describes the neutral pointer that replaced a TODO, not an open promise | 0 | small | Edit `skills/assess/scripts/lib/wiki_writer.py` lines 19-25 (the `UNFINALIZED_ACTIONS_POINTER` comment) | A re-run drops `wiki_writer.py` from `unactioned_intent`; the comment keeps its meaning (issue #165 reference intact) | Comment text only; no change to `UNFINALIZED_ACTIONS_POINTER` or any writer logic | `skills/assess/scripts/lib/wiki_writer.py` | #444 |
 | 3 | Have a human review `floor_anchor.py` and `floor_check.py` against `FLOOR.md`: each was written in the same commit as its tests, so the tests pin the author's reading of the floor, not an independent one | 4 | medium | Read `FLOOR.md` clauses i-iv beside `scripts/tests/` for `floor_anchor.py` and `floor_check.py`; list any clause with no test that would fail if it were violated | Each FLOOR.md clause maps to at least one named test, or the gap is recorded for the maintainer | Review only. These are floor files (FLOOR.md clause iii): any change needs the maintainer's out-of-band sign-off, so no agent edits | `scripts/floor_anchor.py`, `scripts/floor_check.py` | #410 |
 
 The ranking is not low-signal (the top attention rows score 2), so all three rows come from `prescribed_actions`. The coverage-report gap action is the next candidate and is listed under Additional Opportunities.
@@ -85,7 +85,7 @@ Of 113 docs, 84% are reachable from `CLAUDE.md`, `README.md` or `docs/index.md` 
 
 - **Graduated:** `skills/assess/scripts/lib/doc_staleness.py` left the top list.
 - **Regressed:** `skills/assess/scripts/assess_core.py` (ccn +4, +4 commits), `skills/assess/tests/test_assess_core.py` (ccn +36, +3), `skills/assess/scripts/complexity-treemap.py` (ccn +1, +3), `skills/assess/scripts/lib/doc_graph.py` (ccn +10, +1), `skills/assess/scripts/lib/keyhole_signals.py` (ccn +16, +2), `skills/assess/tests/test_keyhole_signals.py` (ccn +49, +2), `skills/assess/tests/test_complexity_treemap.py` (ccn +36, +3).
-- **New:** `skills/assess/scripts/lib/wiki_writer.py`, which grew from 692 to about 900 lines in #443.
+- **New:** `skills/assess/scripts/lib/wiki_writer.py` (530 LOC, 1,005 lines including comments and blanks), which #443 grew.
 - **Persistent:** `skills/assess/scripts/doc-graph-svg.py`, `scripts/floor_anchor.py`.
 
 </details>
@@ -131,7 +131,7 @@ The maturity band bounds how much agent **autonomy** this repo's contracts can s
 | Solid | Step 2 (Parallel) - ~10 agents, one orchestrator | Self-verification and review automation absorb parallel diffs |
 | AI-Native | Step 3 (Supervised autonomy) - background routines | Contracts plus L8 orchestration can absorb autonomous loops |
 
-**This is a bound, not a claim about how the team actually works.** Today's five-PR marathon ran at Step 2, inside the Solid bound.
+**This is a bound, not a claim about how the team actually works.**
 
 </details>
 
@@ -236,18 +236,18 @@ _... 5 more omitted; top 10 ranked rows in `.assess/run-context.json` `attention
 - **A complexity ratchet with explicit waivers.** ruff C901 at 15 in both Python packages, with each waiver named as a ratchet target in the code (`# noqa: C901` in `lib/doc_graph.py`).
 - **Contracts that grow from incidents.** `tests/test_plugin_contract.py` (`test_no_conflict_markers`) is paired with the incidents that prompted it, and `test_self_architecture.py` now also fails when a `lib/` module lacks a README entry (#442).
 - **Safe zones for isolated agent work:** `commands`, `docs/design` and `docs/design/2026-09-modernization` keep edits local (`refactor_boundary`).
-- **Design-level review on every PR.** `claude-review.yml` reviewed 97% of the last 30 merged PRs, and this week's runs each caught real regressions before merge.
+- **Design-level review on 97% of merged PRs.** `claude-review.yml` reviewed 29 of the last 30 merged PRs.
 
 ### Additional Opportunities
 
 - Generate a coverage report (`coverage.xml`) in CI and read it for `assess_core.py`, `test_assess_core.py` and `complexity-treemap.py` first (the `coverage_report` gap action).
 - Name `FLOOR.md` in `CLAUDE.md` and correct "four named required checks" to the six in branch protection.
 - Make the `ruff + mypy gates` job a required check.
-- Waive or extract `build_run_context` (lizard fn ccn 51, no waiver) so mccabe and lizard agree.
+- `build_run_context` reads ccn 51 under lizard but passes ruff's mccabe gate at 15, because the two count differently. It needs no waiver; extract it only if the lizard figure is the one the repo wants to gate on.
 - Add mypy config to `scripts/pyproject.toml`.
 - Teach the phrase rule in the marker scan to skip prose that quotes "remove after migration" (`CLAUDE.md`, `skills/assess/SKILL.md`, `skills/assess-findings/SKILL.md`).
 - Link the 9 doc islands and the orphan specs from `docs/index.md`.
-- Watch band, not violations: `test_assess_core.py` (1,819 LOC) and `wiki_writer.py` (~900 LOC) are growing; annotate them as tracked rather than split them pre-emptively.
+- Watch band, not violations: `test_assess_core.py` (1,819 LOC) and `wiki_writer.py` (530 LOC) are growing; annotate them as tracked rather than split them pre-emptively.
 
 </details>
 

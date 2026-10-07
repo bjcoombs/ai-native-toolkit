@@ -27,6 +27,6 @@ Hotspot (new). 530 LOC, aggregate cyclomatic complexity 170 (worst function `rew
 
 ## Suggested actions
 
-- Reword the comment at line 20 so the wrapped line no longer opens with 'TODO:'
-- Watch band (~900 LOC): annotate as tracked rather than split pre-emptively
+- Reword the comment at line 21 so the wrapped line no longer opens with 'TODO:'
+- Watch band (530 LOC): annotate as tracked rather than split pre-emptively
 
