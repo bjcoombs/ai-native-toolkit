@@ -18,7 +18,10 @@ PROMOTE` with the per-tier verdict for
 each. Certification valid only for the tested tier(s) - a skill forged only on a
 strong tier is not certified for a weaker one. Each runner's `Reported model ID`
 must match the requested tier's family; a runner that reported another model
-was discarded and respawned, never scored.>
+was discarded and respawned, never scored; a respawn that repeated the mismatch
+was reported to the user, not respawned again. Where the definition pins effort,
+record each runner's `Reported effort` beside its model ID, e.g.
+`haiku (<reported model ID>, effort <reported effort>)`.>
 
 **Judge Model:** <the tier the judge panel ran on, e.g. `opus`. The second half of
 the certification signature: a weaker judge passes weaker skills, so the gate is
