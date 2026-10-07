@@ -246,6 +246,10 @@ Sonnet is cost-effective but has a recurring false REVIEW_CLEAR problem — repo
 
 Haiku cannot reliably handle review loops — never use for teammates.
 
+**Verify the model, not the request.** The Agent tool reports no model or effort for a spawned teammate, and a spawn whose `subagent_type` names an agent definition the harness has not loaded yet is accepted under that name but runs on the lead's model at default effort (see [Gotchas](#gotchas)). So:
+- Before the first spawn of a definition written in this session, wait for the harness's "New agent types are now available" listing to include it. If it has not arrived, do not spawn: stop and say which definition is missing.
+- Every teammate reports `model_id` in its `REVIEW_CLEAR`. A `model_id` that does not match the requested model is a failed teammate: shut it down and respawn on the requested model before trusting its work.
+
 **Combined-group identity:** combining is the primary mechanic, so a teammate often covers several units. Give a combined group one identity derived from its member ids: name `task-<id>-<id>` (e.g. `task-1-2`) — the Agent `name` regex allows only letters, digits, `_`, and `-`, so a `+` in the name is rejected at spawn; branch `<tag>--<id>+<id>--<slug>` and worktree `worktree/<tag>/<id>+<id>--<slug>` may keep `+` (git accepts it in refs and paths). Its complexity is the sum of its members'. The Scope guard and the activity-check `find` path below operate on this combined branch/worktree — substitute the combined id wherever the singular `<task-id>` appears. Mark each member unit in-progress and close each on merge.
 
 **Teammate prompt template:**
@@ -288,7 +292,7 @@ Additive files (imports, barrel exports, routes): accept both sides. Same-line c
 ## Communication
 Only message the lead for **meaningful events**. Send the matching JSON payload from [Teammate Event Payloads](#teammate-event-payloads) as the message `content`, **prefixed with the event name on the same line** (`PR_CREATED {...}`) - the harness parses a bare JSON-object body against its shutdown/plan-approval protocol union and rejects any other shape, so a bare `JSON.stringify(...)` body never sends. The `event` field self-identifies it; the `summary` stays human-readable:
 - PR created: `SendMessage(type: "message", recipient: "lead", content: "PR_CREATED " + JSON.stringify({event: "PR_CREATED", task_id: "<tag>.<task-id>", pr_number: <number>, branch: "<branch>"}), summary: "PR created <task-id>")`
-- Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR " + JSON.stringify({event: "REVIEW_CLEAR", task_id: "<tag>.<task-id>", pr_number: <number>, required_checks_green: true, threads_resolved: true}), summary: "Review clear <task-id> — standing down (lead owns claude-review wait + merge)")`
+- Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR " + JSON.stringify({event: "REVIEW_CLEAR", task_id: "<tag>.<task-id>", pr_number: <number>, required_checks_green: true, threads_resolved: true, model_id: "<your exact model ID, read from your environment>"}), summary: "Review clear <task-id> — standing down (lead owns claude-review wait + merge)")`
 - Blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED " + JSON.stringify({event: "BLOCKED", task_id: "<tag>.<task-id>", pr_number: <number>, blocking_reason: "<reason>", blocking_category: "merge_conflict|ci_failure|dependency|external"}), summary: "Blocked <task-id>")`
 - Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX " + JSON.stringify({event: "TOO_COMPLEX", task_id: "<tag>.<task-id>", complexity_reason: "<reason>", suggested_decomposition: ["<subtask>", "<subtask>"]}), summary: "Too complex <task-id>")`
 - Clarification needed: `SendMessage(type: "message", recipient: "lead", content: "CLARIFICATION_NEEDED " + JSON.stringify({event: "CLARIFICATION_NEEDED", task_id: "<tag>.<task-id>", question: "<question>", context: "<context>"}), summary: "Clarification <task-id>")`
@@ -302,7 +306,7 @@ Each event is a JSON object whose `event` field names the type. Required fields 
 { "event": "PR_CREATED", "task_id": "<tag>.<task-id>", "pr_number": 123, "branch": "<branch-name>" }
 
 // REVIEW_CLEAR — required checks green and posted threads resolved; standing down
-{ "event": "REVIEW_CLEAR", "task_id": "<tag>.<task-id>", "pr_number": 123, "required_checks_green": true, "threads_resolved": true }
+{ "event": "REVIEW_CLEAR", "task_id": "<tag>.<task-id>", "pr_number": 123, "required_checks_green": true, "threads_resolved": true, "model_id": "<exact model ID from the environment>" }
 
 // BLOCKED — cannot progress without intervention
 { "event": "BLOCKED", "task_id": "<tag>.<task-id>", "pr_number": 123, "blocking_reason": "<what is blocking>", "blocking_category": "merge_conflict|ci_failure|dependency|external" }
@@ -580,6 +584,12 @@ For each that was exercised: did it help, hurt, or not apply? Mark validated.>
 - Wall clock: ~<N> min spawn to final merge
 - Estimated waste: ~<N> min (CI waits, conflict resolution, stalled teammates)
 ```
+
+## Gotchas
+
+- **A definition written mid-session falls back silently.** The harness loads new files in `~/.claude/agents/` lazily and announces them with a "New agent types are now available" system message. A spawn issued before that message keeps the requested name but runs on the parent's model at default effort, with no error. Wait for the listing; never spawn ahead of it.
+- **The spawn result proves nothing about the model.** The Agent tool returns no model ID, effort, or token count, and its `model` parameter takes only aliases, so a pinned model ID is reachable only through a definition, the path that can fall back. The teammate's own self-report is the only evidence: ask for its model ID (and effort, where it can see it) as the closing step of any prompt whose result depends on the model, and record both with its output.
+- **A mismatched self-report is a failed cell.** In a benchmark or any model-specific run (a Haiku-only triage pass, an Opus-only review), discard the output, do not score it, and respawn. In a marathon, the same mismatch means shutdown and respawn before trusting the teammate's `REVIEW_CLEAR`.
 
 ## Subagent Fallback (no teams)
 
