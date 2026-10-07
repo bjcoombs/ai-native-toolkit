@@ -139,6 +139,18 @@ def test_both_flat_is_persistent() -> None:
                    _one("a.py", ccn=100, max_fn=16)) == "persistent"
 
 
+def test_small_worst_trim_with_large_aggregate_growth_is_regressed() -> None:
+    """Trimming the worst 16 -> 15 while adding +100 summed ccn is accretion,
+    not an extraction; restructured must not hide it from the gate."""
+    assert _status(_one("a.py", ccn=100, max_fn=16),
+                   _one("a.py", ccn=200, max_fn=15)) == "regressed"
+
+
+def test_aggregate_rise_equal_to_worst_fall_is_restructured() -> None:
+    assert _status(_one("a.py", ccn=100, max_fn=30),
+                   _one("a.py", ccn=110, max_fn=20)) == "restructured"
+
+
 def test_worst_down_aggregate_down_is_persistent() -> None:
     assert _status(_one("a.py", ccn=100, max_fn=30),
                    _one("a.py", ccn=90, max_fn=12)) == "persistent"

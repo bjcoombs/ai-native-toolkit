@@ -602,13 +602,17 @@ function falls (`assess_core.py` went 238 -> 249 summed, 51 -> 12 worst). The ru
 | Worst function (`max_fn_ccn_delta`) | Aggregate (`ccn` up, or >50 LOC across >2 commits) | Status |
 |---|---|---|
 | rose | any | regressed |
-| fell | worsened | restructured |
+| fell, by at least the `ccn` rise | worsened | restructured |
+| fell, by less than the `ccn` rise | worsened | regressed |
 | fell | not worsened | persistent |
 | flat, or null (scc / older sidecar) | worsened | regressed |
 | flat, or null | not worsened | persistent |
 
 Flat-worst with a rising sum stays regressed on purpose: a new function added beside
-an unchanged worst one is accretion, not restructuring. `restructured` never reaches
+an unchanged worst one is accretion, not restructuring. The bound on `restructured`
+closes the same loophole from the other side: an extraction raises the sum by about
++1 per helper, far less than the worst function falls, so trimming the worst 16 -> 15
+while adding +100 of new functions still regresses. `restructured` never reaches
 `diff_detail.regressed`, so `assess_gate.py`'s `fail_on_regression` does not fire on
 a helper extraction.
 

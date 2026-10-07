@@ -5,8 +5,8 @@ Identifies hotspot transitions:
     regressed:    in both, and its worst function got worse - or, with the worst
                   function flat or unknown, the aggregate ccn or LOC-and-churn
                   got worse
-    restructured: in both, the aggregate grew but the worst function fell - the
-                  shape an extract-helper refactor leaves behind
+    restructured: in both, the aggregate grew but the worst function fell by at
+                  least as much - the shape an extract-helper refactor leaves
     new:          in current top_hotspots, absent from prior
     persistent:   in both, roughly unchanged
 
@@ -127,16 +127,21 @@ def _aggregate_worsened(t: HotspotTransition) -> bool:
 def classify(t: HotspotTransition, diff: StatsDiff) -> None:
     """File a still-ranked hotspot under regressed, restructured or persistent.
 
-    The worst function leads: up is regressed, down with a worsened aggregate is
-    restructured. Flat or unknown falls back to the aggregate rule, so adding a
-    new function beside an unchanged worst one (accretion) still regresses.
+    The worst function leads: up is regressed. Down with a worsened aggregate is
+    restructured only while the sum rose by no more than the worst fell - an
+    extraction adds about +1 per helper (assess_core.py: sum +11, worst -39).
+    A sum that outgrew the fall (trim the worst 16 -> 15, add +100 of new
+    functions) is accretion under cover and regresses. Flat or unknown falls
+    back to the aggregate rule, so a new function beside an unchanged worst
+    one still regresses.
     """
     worst = t.max_fn_ccn_delta
     if worst is not None and worst > 0:
         diff.regressed.append(t)
-    elif worst is not None and worst < 0:
-        target = diff.restructured if _aggregate_worsened(t) else diff.persistent
-        target.append(t)
+    elif worst is not None and worst < 0 and not _aggregate_worsened(t):
+        diff.persistent.append(t)
+    elif worst is not None and worst < 0 and t.ccn_delta <= -worst:
+        diff.restructured.append(t)
     elif _aggregate_worsened(t):
         diff.regressed.append(t)
     else:
