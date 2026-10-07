@@ -679,9 +679,13 @@ leaderless docstring interior line, or carries a colon or a `(owner)` - so a
 sentence that lists marker names is not a marker. In prose a comment leader opens
 a marker only at line start, so an inline example (`` `* TODO` ``) is not one, and
 a leaderless code-file line that opens with a bullet (a YAML enum's `- TODO`) is
-data, not a marker. A justified suppression (a ` - reason` or ` -- reason`
-starting with a word character, or a non-empty `(reason)`, after the directive or
-its codes, or a trailing comment)
+data, not a marker. In a prose file a phrase alternative (`remove after`,
+`temporary workaround`) inside an inline code span or quotation marks (straight
+or curly) is a quoted example and does not count; a bare phrase on the same line
+still does, and a code comment counts whatever the quoting. A justified
+suppression (a ` - reason` or ` -- reason` starting with a word character, or a
+non-empty `(reason)`, after the directive or its codes, or a trailing comment -
+for `type: ignore[...]` the trailing `  # reason` is the only form mypy accepts)
 is never stale and is counted in each family row's `justified`
 (0 outside suppressions); other tracked markers still age, since an issue or a
 deadline can go stale too. The `unactioned_intent` action states the
@@ -810,8 +814,12 @@ flagged, since an appended-to document carries no change risk. Compensates the *
 repo north star. Degrades to `available: False` on git failure and
 `reliable: False` on degenerate history (same verdict as `git_churn`). Reuses
 `git_churn`'s `GIT_TIMEOUT_SECONDS` and `churn_is_degenerate`; imports no
-orchestrator. Add a fixture-backed test in `tests/test_accretion_ratchet.py`
-alongside any change to the flagging rule.
+orchestrator. `net_additions` is net physical lines (numstat additions minus
+deletions over the file's non-merge commits), not scored LOC, so the hotspot
+page's growth-profile line (`wiki_writer`) and the keyhole's per-file items
+label it "lines net" and the deletion share "of churn deleted". Add a
+fixture-backed test in `tests/test_accretion_ratchet.py` alongside any change
+to the flagging rule.
 
 **`archetype.py`**
 Repository archetype detection (issue #224). Classifies a repo as `software` or

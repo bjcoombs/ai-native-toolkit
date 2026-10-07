@@ -96,14 +96,15 @@ LINKED_RE = re.compile(r"#\d+|\b[A-Z][A-Z0-9]+-\d+\b|https?://|\b\d{4}-\d{2}-\d{
 
 # A suppression with an inline justification is tracked: recorded reasoning is
 # pressure (nolintlint-style). Matched as a second comment segment after the
-# directive, e.g. ``//nolint:nilerr // error conveyed via response status``, or
+# directive, e.g. ``//nolint:nilerr // error conveyed via response status`` or
+# ``# type: ignore[assignment]  # reason`` (the only reason form mypy accepts), or
 # as ESLint's documented ``-- reason`` description, e.g.
 # ``// eslint-disable-line no-console -- CLI prints by design``. The ``--`` must
 # follow whitespace, so a hyphenated rule name is not read as a reason, and a
 # block directive's reason must sit inside its own ``/* ... */`` or in a
 # trailing ``//`` comment - code after ``*/`` is not a reason.
 JUSTIFIED_SUPPRESSION_RE = re.compile(
-    r"(nolint[^/]*//|noqa[^#]*#|eslint-disable[^*]*\*/\s*//|"
+    r"(nolint[^/]*//|noqa[^#]*#|type:\s*ignore[^#]*#|eslint-disable[^*]*\*/\s*//|"
     r"//\s*ignore:[^/]*//|@SuppressWarnings\(.+\)\s*//)\s*\S"
     r"|/\*\s*eslint-disable[^*]*?\s--\s*[^\s*]"
     r"|//\s*eslint-disable\S*\s.*?\s--\s*\S"
@@ -132,6 +133,12 @@ _TODO_SUFFIX_RE = re.compile(r"\s*:|\([^)\s][^)]*\)")
 TODO_PHRASE_RE = re.compile(
     r"remove (after|before|once|when)|temporary (workaround|hack|fix)"
 )
+# In a prose file, a phrase inside an inline code span or quotation marks is an
+# example quoted in a sentence about markers (``"remove after migration"``),
+# not a promise. Double-backtick spans first so ````x```` is one span; an
+# unclosed quote matches nothing and the phrase stays bare. Code comments do not
+# get this exemption: ``# "remove after" v2 ships`` is still a promise.
+_QUOTED_SPAN_RE = re.compile(r"``.+?``|`[^`]+`|\"[^\"]*\"|\u201c[^\u201d]*\u201d")
 # A list bullet, a checkbox, or both (``- [ ] TODO write X``).
 _BULLET_RE = re.compile(r"(?:(?:[-*+>]|\d+[.)])\s*)?(?:\[[ xX]?\]\s*)?")
 # A prose blockquote leader of any nesting depth (``>``, ``> >``, ``>>``).
@@ -385,7 +392,7 @@ def _todo_in_marker_position(text: str, is_prose: bool = False) -> bool:
     """
     tokens = list(TODO_TOKEN_RE.finditer(text))
     if not tokens:
-        return True
+        return _phrase_is_marker(text, is_prose)
     for m in tokens:
         if _TODO_SUFFIX_RE.match(text, m.end()):
             return True
@@ -394,6 +401,18 @@ def _todo_in_marker_position(text: str, is_prose: bool = False) -> bool:
             return True
     # No token in marker position: a phrase alternative on the same line
     # (``temporary workaround for the XXX parser``) still makes it a marker.
+    return _phrase_is_marker(text, is_prose)
+
+
+def _phrase_is_marker(text: str, is_prose: bool) -> bool:
+    """True when a phrase alternative (``remove after``) on the line is a promise.
+
+    In a prose file a phrase inside an inline code span or quotation marks is
+    a quoted example and does not count; a bare phrase on the same line still
+    does. In a code file every phrase hit counts, quoted or not.
+    """
+    if is_prose:
+        text = _QUOTED_SPAN_RE.sub(" ", text)
     return bool(TODO_PHRASE_RE.search(text))
 
 

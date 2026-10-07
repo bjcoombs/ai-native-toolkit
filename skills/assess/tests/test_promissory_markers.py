@@ -137,6 +137,9 @@ _JUSTIFIED_FORMS = {
     ),
     "src/cli.js": "/* eslint-disable no-console -- CLI entry point prints by design */",
     "src/url.py": "URL = 1  # noqa: E501  # long URL kept on one line",
+    # mypy rejects any text after ``type: ignore[...]`` except a second
+    # comment, so this is the only reason form a type gate lets through.
+    "src/ty.py": "nx = None  # type: ignore[assignment]  # guarded by a flag",
     "src/h.go": "x := run() //nolint:errcheck // error conveyed via response status",
     "src/G.java": '@SuppressWarnings("unchecked") // generic array creation is safe here',
 }
@@ -153,15 +156,15 @@ def _aged_marker_repo(repo: Path, lines: dict[str, str], *, edits: int) -> None:
 
 
 def test_justified_not_stale_counts_each_recognised_form(tmp_path: Path) -> None:
-    """Five justified suppressions survive 6 edits: all five are counted in
+    """Every justified suppression survives 6 edits: each is counted in
     ``families.suppression.justified`` and none is stale. The bare suppression
     and the bare TODO of the same age stay stale."""
     repo = tmp_path / "repo"
     _aged_marker_repo(repo, {**_JUSTIFIED_FORMS, **_BARE_FORMS}, edits=6)
     summary = _scan(repo).summary()
     suppression = summary["families"]["suppression"]
-    assert suppression["total"] == 6
-    assert suppression["justified"] == 5
+    assert suppression["total"] == len(_JUSTIFIED_FORMS) + 1
+    assert suppression["justified"] == len(_JUSTIFIED_FORMS)
     assert suppression["stale"] == 1
     assert set(summary["stale_by_file"]) == {"src/bare.js", "src/todo.py"}
     assert all(
@@ -439,6 +442,8 @@ def test_single_dash_and_parenthesised_suppression_reasons() -> None:
         "# noqa: E501 - !",
         "# noqa: E501 -- ?!",
         "# type: ignore - ...",
+        "# type: ignore[assignment]  #",
+        "# type: ignore[assignment]  # ",
     ):
         assert not rx.search(bare), bare
 
@@ -591,3 +596,82 @@ def test_unactioned_intent_silent_without_reliable_aging(tmp_path: Path) -> None
 
 def test_finding_order_contains_unactioned_intent() -> None:
     assert "unactioned_intent" in FINDING_ORDER
+
+
+# A promissory phrase quoted as an example in prose (``"remove after
+# migration"`` in a sentence about markers) describes markers; it is not one.
+# In a code comment the same quoting stays a marker. Every cell is pinned so a
+# shape cannot slip through one review round at a time.
+_PHRASE = "remove after migration"
+_PHRASE_QUOTES = {
+    "bare": "{}",
+    "backtick": "`{}`",
+    "double_backtick": "``{}``",
+    "double_quote": '"{}"',
+    "curly_quote": "“{}”",
+}
+_PHRASE_CONTEXTS = {
+    # phrase alone in a sentence
+    "alone": "Agents leave {} comments behind",
+    # beside a token that is not in marker position (a list of marker names)
+    "with_token": "Markers such as TODO / FIXME / {} age",
+}
+
+
+def test_quoted_phrase_matrix(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    files: dict[str, list[str]] = {"m.py": [], "m.md": []}
+    expected: set[tuple[str, int]] = set()
+    for path, leader in (("m.py", "# "), ("m.md", "")):
+        for quote, wrap in _PHRASE_QUOTES.items():
+            for ctx in _PHRASE_CONTEXTS.values():
+                files[path].append(leader + ctx.format(wrap.format(_PHRASE)))
+                # Code comments count whatever the quoting; prose only bare.
+                if path == "m.py" or quote == "bare":
+                    expected.add((path, len(files[path])))
+    _commit(repo, {p: "\n".join(ls) + "\n" for p, ls in files.items()}, day=1)
+    got = {(m.path, m.line) for m in _scan(repo).markers if m.family == "todo"}
+    labels = {
+        (path, i + 1): line for path, ls in files.items() for i, line in enumerate(ls)
+    }
+    assert {labels[k] for k in got - expected} == set(), "false positives"
+    assert {labels[k] for k in expected - got} == set(), "false negatives"
+
+
+def test_quoted_phrase_edge_cases(tmp_path: Path) -> None:
+    """A marker-position token still counts beside a quoted phrase, a bare
+    phrase beside a quoted one still counts, an unclosed quote is no quote,
+    and a real code comment keeps counting."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, {
+        "guide.md": (
+            "TODO: rename the `remove after` section\n"            # 1 token counts
+            'See "remove after" and remove after the cutover\n'     # 2 bare twin
+            'He said "remove after migration and left\n'            # 3 unclosed
+            "- **Unactioned intent** (`TODO` / \"remove after migration\")\n"  # 4
+            "Use a `temporary workaround` label sparingly\n"        # 5 quoted
+        ),
+        "m.py": (
+            "# remove after migration to v2\n"                      # 1 real
+            "x = 1  # temporary workaround for the parser\n"        # 2 real
+        ),
+    }, day=1)
+    got = {(m.path, m.line) for m in _scan(repo).markers if m.family == "todo"}
+    assert got == {
+        ("guide.md", 1), ("guide.md", 2), ("guide.md", 3),
+        ("m.py", 1), ("m.py", 2),
+    }
+
+
+def test_bare_todo_and_bare_noqa_still_detected(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, {
+        "m.py": "# TODO write this\nimport os  # noqa: E402\n",
+    }, day=1)
+    markers = _scan(repo).markers
+    assert {(m.family, m.line, m.justified) for m in markers} == {
+        ("todo", 1, False), ("suppression", 2, False),
+    }
