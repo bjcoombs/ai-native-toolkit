@@ -419,6 +419,12 @@ grouping disagreement (fed the behaviour block's co-change pairs so no second gi
 happens) and folds its hidden-seam direction into the `hidden_coupling` finding, returning the
 Tier 1 result for `assess_core` to serialise into the `structure_drift` run-context block - so
 structure-drift findings flow through this barrier rather than being assembled in the orchestrator.
+`integrate` itself only sequences named steps: `_prepare_commit_sets` (parse, rename-fold,
+scope), `_integrate_blocks` (the four `_safe_block` builds), one `_*_paths` helper per finding
+that needs more than a list comprehension, `_finding_path_inputs` (the `assemble_findings`
+input, with the degenerate-churn gate on `_CHURN_DERIVED_FINDINGS`) and `_filter_findings`
+(prune, then config excludes). A new finding adds a helper and a key there, not a branch in
+`integrate`; the C901 gate keeps each step under ccn 15.
 
 The behaviour block exports the co-change pairs twice, at two scales. `change_coupling_pairs`
 is the repository-wide list, cut to `MAX_COUPLING_PAIRS` (100), and `change_coupling_pairs_total`
