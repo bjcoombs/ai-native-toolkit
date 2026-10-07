@@ -134,7 +134,7 @@ LINKED_RE = re.compile(r"#\d+|\b[A-Z][A-Z0-9]+-\d+\b|https?://|\b\d{4}-\d{2}-\d{
 # block directive's reason must sit inside its own ``/* ... */`` or in a
 # trailing ``//`` comment - code after ``*/`` is not a reason.
 JUSTIFIED_SUPPRESSION_RE = re.compile(
-    r"(nolint[^/]*//|noqa[^#]*#|type:\s*ignore[^#]*#|eslint-disable[^*]*\*/\s*//|"
+    r"(nolint[^/]*//|noqa[^#]*#|type:\s*ignore[^#]*#|pyright:\s*ignore[^#]*#|eslint-disable[^*]*\*/\s*//|"
     r"//\s*ignore:[^/]*//|@SuppressWarnings\(.+\)\s*//)\s*"
     # The trailing comment must not be another directive or a marker.
     + _NOT_DIRECTIVE_OR_MARKER
@@ -149,6 +149,7 @@ JUSTIFIED_SUPPRESSION_RE = re.compile(
     # ``- !`` or an empty ``()`` is not a reason.
     r"|(?:noqa(?::\s*[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
     r"|type:\s*ignore(?:\[[^\]]*\])?"
+    r"|pyright:\s*ignore(?:\[[^\]]*\])?"
     r"|nosec(?:\s+[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
     r"|pylint:\s*disable=[\w,-]+"
     r"|nolint(?::[\w,-]+)?)"

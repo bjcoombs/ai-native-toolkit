@@ -743,3 +743,19 @@ def test_pyright_ignore_is_a_suppression(tmp_path: Path) -> None:
     _commit(repo, {"a.py": "x: int = f()  # pyright: ignore[reportAssignmentType]\n"}, day=1)
     fams = {m.family for m in _scan(repo).markers}
     assert fams == {"suppression"}
+
+
+def test_pyright_ignore_reason_forms_are_credited() -> None:
+    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    for justified in (
+        "x = f()  # pyright: ignore[reportAssignmentType]  # stub lags runtime",
+        "x = f()  # pyright: ignore[reportAssignmentType] - stub lags runtime",
+        "x = f()  # pyright: ignore (untyped dependency)",
+    ):
+        assert rx.search(justified), justified
+    for bare in (
+        "x = f()  # pyright: ignore[reportAssignmentType]",
+        "x = f()  # pyright: ignore[reportAssignmentType]  # TODO tidy",
+        "x = f()  # pyright: ignore  # noqa: E501",
+    ):
+        assert not rx.search(bare), bare
