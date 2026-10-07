@@ -972,13 +972,14 @@ MAX_FINDING_PATHS_RENDERED = 10
 MAX_ATTENTION_ROWS_RENDERED = 5
 
 
-def _omitted_row(count: int, where: str) -> str:
+def _omitted_row(count: int, where: str, what: str = "full list") -> str:
     """Disclosure row for a rendered list truncated at its cap.
 
-    ``where`` is the exact key in ``.assess/run-context.json`` holding the full
-    list, so a reader can go straight to it.
+    ``where`` is the exact key in ``.assess/run-context.json`` holding the
+    list and ``what`` says how much of it that key holds, so the row never
+    claims more than the stored array contains.
     """
-    return f"- ... {count} more omitted; full list in {where}"
+    return f"- ... {count} more omitted; {what} in {where}"
 
 
 def render_findings_markdown(
@@ -1026,7 +1027,11 @@ def render_findings_markdown(
             lines.append(f"- {a['path']} (score {a['score']}): {names}")
         if len(attention) > MAX_ATTENTION_ROWS_RENDERED:
             omitted = len(attention) - MAX_ATTENTION_ROWS_RENDERED
-            lines.append(_omitted_row(omitted, "`.assess/run-context.json` `attention`"))
+            lines.append(_omitted_row(
+                omitted,
+                "`.assess/run-context.json` `attention`",
+                what=f"top {MAX_ATTENTION_UNITS} ranked rows",
+            ))
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 

@@ -738,7 +738,7 @@ def test_render_findings_markdown_attention_discloses_omitted_rows() -> None:
     omitted = len(attention) - ks.MAX_ATTENTION_ROWS_RENDERED
     assert omitted > 0
     assert (
-        f"- ... {omitted} more omitted; full list in "
+        f"- ... {omitted} more omitted; top {ks.MAX_ATTENTION_UNITS} ranked rows in "
         "`.assess/run-context.json` `attention`"
     ) in md
 
