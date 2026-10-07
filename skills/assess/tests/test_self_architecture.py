@@ -88,3 +88,16 @@ def test_core_does_not_import_orchestrators() -> None:
         "(dependencies point inward - see CLAUDE.md /assess architecture):\n  "
         + "\n  ".join(violations)
     )
+
+
+def test_every_lib_module_has_a_readme_entry() -> None:
+    """`lib/README.md` is the per-module reference `CLAUDE.md` points agents at.
+    A module merged without an entry is invisible to an agent that trusts the
+    map (issue #412: `decline_markers.py` and `interactivity.py` were missing).
+    Every top-level ``lib/*.py`` except ``__init__.py`` must be named in it."""
+    readme = (LIB_DIR / "README.md").read_text(encoding="utf-8")
+    missing = [
+        p.name for p in sorted(LIB_DIR.glob("*.py"))
+        if p.name != "__init__.py" and p.name not in readme
+    ]
+    assert not missing, f"lib/README.md has no entry for: {missing}"

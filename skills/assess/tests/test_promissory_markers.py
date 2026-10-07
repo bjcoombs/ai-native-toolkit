@@ -222,6 +222,84 @@ def test_bare_suppression_rule_names_with_hyphens_are_not_justified() -> None:
     )
 
 
+# The four false positives from issue #415: two prose lines that list marker
+# names (read as todo markers), and two suppressions whose stated reason uses
+# a single dash or parentheses (read as unjustified). None may go stale; the
+# bare forms of the same age still must.
+_ISSUE_415_FORMS = {
+    "lib/README.md": (
+        "(TODO/FIXME, deprecations, lint suppressions, disabled tests) via one rg pass per"
+    ),
+    "core.py": "# Promissory markers (stale TODO/FIXME, suppressions, disabled tests),",
+    "catch.py": "x = 1  # noqa: BLE001 - intentional catch-all; degrade, don't crash",
+    "anchor.py": "x = 1  # noqa: S310 (fixed api host)",
+}
+_ISSUE_415_BARE = {
+    "bare_todo.py": "# TODO",
+    "bare_noqa.py": "import os  # noqa: E402",
+}
+
+
+def test_issue_415_prose_and_stated_reasons_not_stale(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _aged_marker_repo(repo, {**_ISSUE_415_FORMS, **_ISSUE_415_BARE}, edits=6)
+    summary = _scan(repo).summary()
+    assert set(summary["stale_by_file"]) == set(_ISSUE_415_BARE)
+    offenders = {m["path"] for m in summary["top_offenders"]}
+    assert not offenders & set(_ISSUE_415_FORMS)
+    assert summary["families"]["suppression"]["justified"] == 2
+
+
+def test_todo_requires_marker_position(tmp_path: Path) -> None:
+    """The token must open the comment, or carry a colon or an owner."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, {
+        "a.py": (
+            "# TODO\n"                          # 1 opens the comment
+            "x = 1  # FIXME later\n"            # 2 opens a trailing comment
+            "# see note; TODO: wire it up\n"    # 3 colon form
+            "# handled by HACK(ben) for now\n"  # 4 owner form
+            "# the TODO/FIXME list is long\n"   # 5 prose listing names
+            "# counts every TODO in the tree\n" # 6 prose mention
+            "/* XXX check bounds */\n"          # 7 block comment opener
+            "# remove after the 2.0 cut\n"      # 8 phrase form, unchanged
+        ),
+        "docs/plan.md": (
+            "TODO write the rollout section\n"   # 1
+            "- TODO: add diagrams\n"             # 2 list bullet
+            "Lists TODO, FIXME and HACK tokens\n"  # 3 prose
+            "or an aged TODO (intent) here\n"    # 4 aside, not an owner
+        ),
+    }, day=1)
+    scan = _scan(repo)
+    lines = {(m.path, m.line) for m in scan.markers if m.family == "todo"}
+    assert lines == {
+        ("a.py", 1), ("a.py", 2), ("a.py", 3), ("a.py", 4), ("a.py", 7),
+        ("a.py", 8), ("docs/plan.md", 1), ("docs/plan.md", 2),
+    }
+
+
+def test_single_dash_and_parenthesised_suppression_reasons() -> None:
+    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    assert rx.search("# noqa: BLE001 - intentional catch-all")
+    assert rx.search("# noqa: S310 (fixed api host)")
+    assert rx.search("# noqa: E501, E402 - generated table")
+    assert rx.search("x = f()  # type: ignore[attr-defined] - stub lags runtime")
+    assert rx.search("# nosec B603 (args are constant)")
+    assert rx.search("# pylint: disable=broad-except - top-level guard")
+    for bare in (
+        "# noqa: E402",
+        "# noqa",
+        "# noqa: E501,E402",
+        "# type: ignore[attr-defined]",
+        "# pylint: disable=too-many-args",
+        "# noqa: E501 -",
+        "# noqa: E501 ()",
+    ):
+        assert not rx.search(bare), bare
+
+
 def test_generated_and_prose_exclusions(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)

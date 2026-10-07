@@ -489,6 +489,29 @@ is the single shared path that combines config excludes with CLI `--exclude`; bo
 CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.
 Degrades silently on missing or malformed config rather than blocking the run.
 
+**`decline_markers.py`**
+Reads the `.assess/.no-<tool>` markers that record a permanent decline of an optional
+tool (`scc`, a dead-code linter, or the `mutmut` / `stryker` mutation pass). Markers
+are JSON carrying `declined_by` / `declined_at` / `plugin_version` / optional `reason`;
+a legacy empty `touch`-ed marker is still honoured as a decline, with no provenance.
+A marker written under an older plugin *major* carries `reoffer: True`, and
+`build_decline_block` returns the run-context `decline_markers` block: the per-marker
+provenance, `reoffer_mutation` (true only for a stale mutation-tool decline, the
+SKILL.md Step 2d re-offer flag), and one-line `disclosures` so an active decline is
+never invisible in the report. Legacy markers have no version and are never
+re-offered. Pure stdlib; never raises. Called by `assess_core.py`.
+
+**`interactivity.py`**
+Decides whether a run may prompt a human. Interactive is the default; the run is
+non-interactive only on an explicit signal - the orchestrator's `--non-interactive`
+flag, `ASSESS_NON_INTERACTIVE`, or `CI` set in the environment. `isatty()` is
+deliberately not consulted: the core always runs as a tool subprocess with no
+controlling terminal. `build_offers_block` returns the run-context `interactive` flag
+and `offers` list - empty when interactive (the orchestrator asks live), otherwise
+every type in `OFFER_TYPES` recorded as `skipped`, so a headless run completes with
+no prompts and an audit trail. Pure stdlib, no side effects. Called by
+`assess_core.py`; the consent contract is in `references/consent-lifecycle.md`.
+
 ### Output and formatting
 
 **`wiki_writer.py`**
@@ -628,8 +651,11 @@ pass). A marker that survived many edits to an actively-maintained file is
 unactioned intent; calendar age alone can't tell that from dormancy. Classifies
 markers as tracked (issue/ticket/URL/date reference, or a justified suppression)
 vs bare, and each introducing commit as agent/human (reusing `change_coupling`'s
-conservative B4 identity rules). A justified suppression (inline `-- reason` or
-trailing comment) is never stale and is counted in each family row's `justified`
+conservative B4 identity rules). A `todo` token counts only in marker position -
+it opens its comment or prose line, or carries a colon or a `(owner)` - so a
+sentence that lists marker names is not a marker. A justified suppression (inline
+`-- reason`, a ` - reason` or `(reason)` after the codes, or a trailing comment)
+is never stale and is counted in each family row's `justified`
 (0 outside suppressions); other tracked markers still age, since an issue or a
 deadline can go stale too. The `unactioned_intent` action states the
 `stale_touches_threshold` it applied. Honours the shared excludes and the

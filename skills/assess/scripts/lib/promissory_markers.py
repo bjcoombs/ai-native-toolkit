@@ -107,7 +107,27 @@ JUSTIFIED_SUPPRESSION_RE = re.compile(
     r"//\s*ignore:[^/]*//|@SuppressWarnings\(.+\)\s*//)\s*\S"
     r"|/\*\s*eslint-disable[^*]*?\s--\s*[^\s*]"
     r"|//\s*eslint-disable\S*\s.*?\s--\s*\S"
+    # A single-dash or parenthesised reason after the directive's codes, e.g.
+    # ``# noqa: BLE001 - catch-all by design`` or ``# noqa: S310 (fixed host)``.
+    # The dash needs whitespace on both sides and the parentheses a word, so a
+    # hyphenated code (``attr-defined``) or an empty ``()`` is not a reason.
+    r"|(?:noqa(?::\s*[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
+    r"|type:\s*ignore(?:\[[^\]]*\])?"
+    r"|nosec(?:\s+[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
+    r"|pylint:\s*disable=[\w,-]+"
+    r"|nolint(?::[\w,-]+)?)"
+    r"\s+(?:-\s+\S|\(\s*[^)\s])"
 )
+
+# The bare marker tokens of the todo family. A token hit counts only in marker
+# position: it opens its comment (or prose line, after an optional list
+# bullet), or it is followed by a colon or a parenthesised owner. A sentence
+# that lists marker names - ``(TODO/FIXME, deprecations, ...)`` - is prose
+# about markers, not a marker. The phrase alternatives (``remove after``,
+# ``temporary workaround``) keep the plain comment-context rule.
+TODO_TOKEN_RE = re.compile(r"\b(TODO|FIXME|HACK|XXX|TBD)\b")
+_TODO_SUFFIX_RE = re.compile(r"\s*:|\([^)\s][^)]*\)")
+_BULLET_RE = re.compile(r"(?:[-*+>]|\d+[.)]|\[[ xX]?\])\s*")
 
 # Comment leaders; a todo/deprecation hit must sit after one of these on its
 # line (suppressions and disabled tests are syntactic and skip the check).
@@ -281,6 +301,8 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
                 is_prose, text, pattern
             ):
                 continue
+            if family == "todo" and not _todo_in_marker_position(is_prose, text):
+                continue
             justified = family == "suppression" and bool(
                 JUSTIFIED_SUPPRESSION_RE.search(text)
             )
@@ -313,6 +335,32 @@ def _comment_context(is_prose: bool, text: str, pattern: str) -> bool:
         return False
     prefix = text[: m.start()]
     return any(lead in prefix for lead in COMMENT_LEADERS) or prefix.strip() == ""
+
+
+def _todo_in_marker_position(is_prose: bool, text: str) -> bool:
+    """Keep a todo hit only when one marker token sits in marker position.
+
+    A line matched only by a phrase alternative has no token and passes; the
+    comment-context filter already vetted it.
+    """
+    tokens = list(TODO_TOKEN_RE.finditer(text))
+    if not tokens:
+        return True
+    for m in tokens:
+        if _TODO_SUFFIX_RE.match(text, m.end()):
+            return True
+        prefix = text[: m.start()]
+        cut = max(
+            (prefix.rfind(lead) + len(lead) for lead in COMMENT_LEADERS
+             if lead in prefix),
+            default=0 if is_prose else -1,
+        )
+        if cut < 0:
+            continue
+        opener = prefix[cut:].strip()
+        if not opener or _BULLET_RE.fullmatch(opener):
+            return True
+    return False
 
 
 def _blame_ages(repo_root: Path, markers: list[Marker]) -> None:
