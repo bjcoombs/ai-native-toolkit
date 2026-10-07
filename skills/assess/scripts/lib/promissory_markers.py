@@ -392,9 +392,9 @@ def _opener(prefix: str, is_prose: bool) -> str:
     """The text between a token's opening position and the token.
 
     In a code file the opening position is just after the last comment leader
-    before the token, so a trailing comment (``x = 1  # FIXME``) opens there.
+    before the token, so a trailing comment (``x = 1  # <marker>``) opens there.
     In a prose file a leader counts only at line start (a heading or an HTML
-    comment): a ``*`` or ``#`` mid-sentence, as in ``shows `* TODO` as an
+    comment): a ``*`` or ``#`` mid-sentence, as in ``shows `* <marker>` as an
     example``, is an inline example, not a comment boundary.
     """
     if not is_prose:
