@@ -1157,6 +1157,14 @@ def build_run_context(
         h["path"] for h in current.get("top_hotspots", []))
     # One repository index for every hot file's parallel-tree (basename) probe.
     hot_test_index = build_test_index(repo_root) if current.get("top_hotspots") else None
+    # A never-finalized run this one supersedes loses its log entry below; its
+    # row in each page's history table goes with it (#421).
+    superseded_run_id = (
+        superseded["run_id"]
+        if superseded is not None
+        and last_log_entry_is_unfinalized_run(assess_dir, superseded["run_id"])
+        else None
+    )
     for h in current.get("top_hotspots", []):
         path = h["path"]
         # Preserve the original first_flagged date across runs. A path missing
@@ -1173,6 +1181,12 @@ def build_run_context(
         commits = hotspot_commits(h)
         loc = h.get("loc", 0)
         ccn = h.get("ccn", 0)
+        max_fn_ccn = h.get("max_fn_ccn")
+        max_fn_name = h.get("max_fn_name")
+        worst_fn = (
+            f" (worst function `{max_fn_name}` {max_fn_ccn})"
+            if max_fn_ccn is not None and max_fn_name else ""
+        )
         hotspot_entries.append(HotspotEntry(
             path=path,
             first_flagged=first_flagged,
@@ -1192,11 +1206,10 @@ def build_run_context(
             commits=commits,
             has_tests=_has_sibling_test(repo_root, path, hot_shared_names,
                                         hot_test_index),
-            history_rows=f"| {run_date} | {loc} | {ccn} | {commits} | {status} |",
             briefing=(
                 f"Hotspot ({status}). "
                 f"{loc} LOC, "
-                f"max cyclomatic complexity {ccn}, "
+                f"aggregate cyclomatic complexity {ccn}{worst_fn}, "
                 f"{commits} commits in churn window. "
                 + _marker_debt_sentence(marker_debt_by_file.get(path))
                 + "(Briefing refined by LLM via assess_finalize - see Suggested actions below.)"
@@ -1205,6 +1218,9 @@ def build_run_context(
             accretion_data=accretion_by_file.get(path),
             run_id=run_id,
             schema_version=ARTIFACT_SCHEMA_VERSION,
+            max_fn_ccn=max_fn_ccn,
+            max_fn_name=max_fn_name,
+            superseded_run_id=superseded_run_id,
         )
 
     # Prune orphan hotspot pages: any page from a prior run whose source file no

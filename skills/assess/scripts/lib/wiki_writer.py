@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -67,8 +67,9 @@ class HotspotEntry:
     # may still be sized, we just don't have current numbers. Zero is
     # reserved for "actually zero LOC" and must never stand in for
     # "unknown" - that misleads reviewers into thinking the file was
-    # emptied (issue #52 Bug 1).
-    ccn: int | None
+    # emptied (issue #52 Bug 1). ``ccn`` is the file aggregate, which the
+    # stats sidecar may carry as a float.
+    ccn: float | None
     loc: int | None
 
 
@@ -139,7 +140,20 @@ def write_index(
     run_id: str | None = None, schema_version: str | None = None,
     scope: str | None = None,
 ) -> None:
-    """(Re)write index.md from the current set of hotspot entries.
+    """(Re)write index.md: this run's entries merged into the prior catalog.
+
+    The index is the catalog of every hotspot ever flagged (#420), so it is
+    seeded from the rows already in ``index.md``; ``entries`` (this run's top
+    hotspots and graduations) replace the row for their path, and every other
+    path keeps its last known row. A hotspot page with no row in either (a page
+    orphaned by an older writer, or an index that was deleted) is backfilled
+    from the page itself. A carried row whose page is now retired takes the
+    page's retired status, so the index never calls a deleted file live. A
+    page retired as excluded before finalize (#356) was never part of a
+    finished assessment, so its path gets no carried or backfilled row.
+
+    Row order: this run's entries first, then carried rows in their prior
+    order, then backfilled rows by path.
 
     ``run_id`` / ``schema_version`` (when supplied) prepend a non-rendering
     HTML-comment provenance stamp; omitted, output is byte-identical to before.
@@ -148,8 +162,15 @@ def write_index(
     scope line under the title so the wiki page names what subtree it covers;
     None (a whole-repo run) leaves the body byte-identical to before.
     """
+    index_path = assess_dir / "index.md"
+    prior = (
+        parse_index_rows(index_path.read_text(encoding="utf-8"))
+        if index_path.exists() else []
+    )
+    pages = read_hotspot_page_entries(assess_dir)
+    merged = merge_index_entries(prior, entries, pages)
     rows = []
-    for e in entries:
+    for e in merged:
         # `None` -> "-" so an unknown metric never reads as "the file was
         # emptied." Real zeros (rare for tracked source code) still render
         # as `0`.
@@ -170,9 +191,110 @@ def write_index(
             f"# Assess Wiki Index\n\n_Scope: `{scope}`_\n",
             1,
         )
-    (assess_dir / "index.md").write_text(
+    index_path.write_text(
         _run_id_comment(run_id, schema_version) + content, encoding="utf-8"
     )
+
+
+def merge_index_entries(
+    prior: list[HotspotEntry], current: list[HotspotEntry],
+    pages: dict[str, HotspotEntry],
+) -> list[HotspotEntry]:
+    """Merge this run's index entries into the prior catalog (#420).
+
+    ``pages`` maps each hotspot page's source path to the entry read from the
+    page (see ``read_hotspot_page_entries``).
+    """
+    merged: dict[str, HotspotEntry] = {}
+    for e in current:
+        merged.setdefault(e.path, e)
+    never_assessed = {
+        p for p, page in pages.items() if page.status == RETIRED_EXCLUDED_STATUS
+    }
+    for e in prior:
+        if e.path in merged or e.path in never_assessed:
+            continue
+        page = pages.get(e.path)
+        if page is not None and is_retired_status(page.status):
+            e = replace(e, status=page.status)
+        merged[e.path] = e
+    for path in sorted(pages):
+        if path not in never_assessed:
+            merged.setdefault(path, pages[path])
+    return list(merged.values())
+
+
+_INDEX_ROW_RE = re.compile(
+    r"^\| `(?P<path>[^`]+)` \| (?P<first>[^|]*?) \| (?P<last>[^|]*?) \| "
+    r"(?P<status>[^|]*?) \| (?P<ccn>[^|]*?) \| (?P<loc>[^|]*?) \|$",
+    re.MULTILINE,
+)
+
+
+def _parse_metric(cell: str) -> float | None:
+    """A rendered metric cell back to a number; "-" (unknown) to None."""
+    cell = cell.strip()
+    try:
+        value = float(cell)
+    except ValueError:
+        return None
+    return int(value) if value.is_integer() and "." not in cell else value
+
+
+def parse_index_rows(content: str) -> list[HotspotEntry]:
+    """The hotspot rows of an ``index.md``, in file order."""
+    entries = []
+    for m in _INDEX_ROW_RE.finditer(content):
+        loc = _parse_metric(m.group("loc"))
+        entries.append(HotspotEntry(
+            path=m.group("path"),
+            first_flagged=m.group("first").strip(),
+            last_seen=m.group("last").strip(),
+            status=m.group("status").strip(),
+            ccn=_parse_metric(m.group("ccn")),
+            loc=None if loc is None else int(loc),
+        ))
+    return entries
+
+
+_HOTSPOT_META_RE = re.compile(
+    r"_First flagged: (?P<first>.+?)\. Last seen: (?P<last>.+?)\. Status: (?P<status>.+?)\._"
+)
+_PAGE_LOC_RE = re.compile(r"^\| LOC \| (?P<v>[^|]*?) \|$", re.MULTILINE)
+_PAGE_CCN_RE = re.compile(
+    r"^\| Cyclomatic complexity \(file (?:max|aggregate)\) \| (?P<v>[^|]*?) \|$",
+    re.MULTILINE,
+)
+
+
+def read_hotspot_page_entries(assess_dir: Path) -> dict[str, HotspotEntry]:
+    """An index entry for every recognisable hotspot page, keyed by source path.
+
+    Read from the page's heading, metadata line and current-metrics table.
+    Pages missing the heading or metadata line are skipped.
+    """
+    hotspots_dir = assess_dir / "hotspots"
+    if not hotspots_dir.is_dir():
+        return {}
+    out: dict[str, HotspotEntry] = {}
+    for page in sorted(hotspots_dir.glob("*.md")):
+        content = page.read_text(encoding="utf-8")
+        path = hotspot_page_source_path(content)
+        meta = _HOTSPOT_META_RE.search(content)
+        if path is None or meta is None:
+            continue
+        loc_m = _PAGE_LOC_RE.search(content)
+        ccn_m = _PAGE_CCN_RE.search(content)
+        loc = _parse_metric(loc_m.group("v")) if loc_m else None
+        out[path] = HotspotEntry(
+            path=path,
+            first_flagged=meta.group("first"),
+            last_seen=meta.group("last"),
+            status=meta.group("status"),
+            ccn=_parse_metric(ccn_m.group("v")) if ccn_m else None,
+            loc=None if loc is None else int(loc),
+        )
+    return out
 
 
 def _short_run_id(run_id: str) -> str:
@@ -532,14 +654,28 @@ def write_hotspot_page(
     ccn: int,
     commits: int,
     has_tests: bool | None,
-    history_rows: str,
     briefing: str,
     actions: str,
     accretion_data: dict | None = None,
     run_id: str | None = None,
     schema_version: str | None = None,
+    max_fn_ccn: float | None = None,
+    max_fn_name: str | None = None,
+    superseded_run_id: str | None = None,
 ) -> None:
-    """(Re)write hotspots/<slug>.md.
+    """(Re)write hotspots/<slug>.md, keeping the page's run history.
+
+    The history table compounds across runs (#421): the rows already on the
+    page are read back, this run's row (``last_seen``, the short run id and
+    the current metrics) is appended, and the rows are ordered by run date.
+    Only a row carrying this run's date *and* run id is replaced, so a re-run
+    of the same run never duplicates its row while two distinct runs on one
+    day both stay. ``superseded_run_id`` names a never-finalized run this one
+    replaces; its row is dropped, matching the log entry the core drops.
+
+    ``ccn`` is the file aggregate (the sum over the file's functions).
+    ``max_fn_ccn`` / ``max_fn_name`` are the worst single function from the
+    stats sidecar; the page shows that row only when both are present (#423).
 
     has_tests=None means "we don't know yet" - shown as "unknown" in the page.
     Test-to-code pairing is a deferred feature; honest reporting beats lying.
@@ -559,6 +695,12 @@ def write_hotspot_page(
     growth = _growth_profile_line(accretion_data)
     if growth:
         briefing = f"{briefing} {growth}"
+    page_path = hotspots_dir / f"{slug_for_path(path)}.md"
+    existing = page_path.read_text(encoding="utf-8") if page_path.exists() else ""
+    run_cell = _short_run_id(run_id) if run_id else "-"
+    new_row = [last_seen, run_cell, str(loc), str(ccn), str(commits), status]
+    drop = {_short_run_id(superseded_run_id)} if superseded_run_id else set()
+    history = merge_history_rows(parse_history_rows(existing), new_row, drop_runs=drop)
     content = _load_template("hotspot.md.template").format(
         path=path,
         first_flagged=first_flagged,
@@ -568,13 +710,84 @@ def write_hotspot_page(
         ccn=ccn,
         commits=commits,
         has_tests=has_tests_str,
-        history_rows=history_rows,
+        worst_fn_row=_worst_fn_row(max_fn_ccn, max_fn_name),
+        history_rows="\n".join(_render_row(r) for r in history),
         briefing=briefing,
         actions=actions,
     )
-    (hotspots_dir / f"{slug_for_path(path)}.md").write_text(
+    page_path.write_text(
         _run_id_comment(run_id, schema_version) + content, encoding="utf-8"
     )
+
+
+def _worst_fn_row(max_fn_ccn: float | None, max_fn_name: str | None) -> str:
+    """The "Worst function" metrics row, or "" when the sidecar has no
+    per-function data for the file (scc-scored files carry nulls)."""
+    if max_fn_ccn is None or not max_fn_name:
+        return ""
+    return f"| Worst function | `{max_fn_name}` ({max_fn_ccn}) |\n"
+
+
+# --- hotspot page history table (#421) ----------------------------------------
+#
+# Columns: Run date | Run | LOC | CCN | Commits | Status. ``Run`` is the short run
+# id (the same tail log.md headings use), or "-" when the writer had none. Pages
+# written before the Run column existed carry five cells; they are read with
+# "-" in the Run position so their rows survive the upgrade.
+_HISTORY_HEADING = "## History across runs"
+_HISTORY_COLUMNS = 6
+
+
+def _split_row(line: str) -> list[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _render_row(cells: list[str]) -> str:
+    return "| " + " | ".join(cells) + " |"
+
+
+def parse_history_rows(content: str) -> list[list[str]]:
+    """The data rows of a hotspot page's history table, as 6-cell lists.
+
+    Returns [] when the page has no history section. Header, separator and
+    malformed rows are skipped.
+    """
+    start = content.find(_HISTORY_HEADING)
+    if start == -1:
+        return []
+    rows: list[list[str]] = []
+    in_table = False
+    for line in content[start + len(_HISTORY_HEADING):].splitlines():
+        if not line.startswith("|"):
+            if in_table:
+                break  # the table ended
+            continue
+        in_table = True
+        cells = _split_row(line)
+        if cells and (cells[0] == "Run date" or set(cells[0]) <= set("-:")):
+            continue  # header or separator
+        if len(cells) == _HISTORY_COLUMNS - 1:
+            cells.insert(1, "-")  # legacy row from before the Run column
+        if len(cells) == _HISTORY_COLUMNS:
+            rows.append(cells)
+    return rows
+
+
+def merge_history_rows(
+    rows: list[list[str]], new_row: list[str], *, drop_runs: set[str] | None = None,
+) -> list[list[str]]:
+    """Append ``new_row`` to ``rows``, ordered by run date (stable).
+
+    A row with the same run date and run id as ``new_row`` is replaced; a row
+    whose run id is in ``drop_runs`` is removed. Every other row is kept.
+    """
+    drop = drop_runs or set()
+    kept = [
+        r for r in rows
+        if (r[0], r[1]) != (new_row[0], new_row[1])
+        and not (r[1] != "-" and r[1] in drop)
+    ]
+    return sorted([*kept, new_row], key=lambda r: r[0])
 
 
 # --- orphan hotspot pruning (issue: assess-obey-thyself, task 9) --------------

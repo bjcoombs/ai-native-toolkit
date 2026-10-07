@@ -496,6 +496,18 @@ Renders and writes the `.assess/` wiki files (`index.md`, `log.md`,
 `hotspots/*.md`) from string templates. No LLM calls. Pure string formatting + file IO.
 An optional `run_id`/`schema_version` prepends a non-rendering HTML-comment
 provenance stamp to each file (omitted -> byte-identical legacy output).
+Both persistent pages compound across runs rather than reflecting only the latest
+one. `write_hotspot_page` reads the page's existing history table
+(`parse_history_rows`, which reads pre-`Run`-column five-cell rows with `-` as the
+run) and `merge_history_rows` appends this run's row, ordered by date, replacing
+only a row with the same run date and short run id and dropping the row of a
+`superseded_run_id` (#421). The page labels its `ccn` the file aggregate and adds a
+`Worst function` row only when the sidecar's `max_fn_ccn` / `max_fn_name` are set
+(#423). `write_index` seeds from the prior `index.md` rows (`parse_index_rows`)
+and from every hotspot page on disk (`read_hotspot_page_entries`), then
+`merge_index_entries` lets this run's entries win per path: a path the run did not
+rank keeps its last known row, a carried row whose page is retired takes the
+retired status, and a page retired as excluded before finalize gets no row (#420).
 Also guards wiki integrity: `prune_orphan_hotspots(assess_dir, repo_root)` stamps
 any hotspot page whose source file left the tree as `retired - file deleted`
 (history preserved, no active page lies about a live file), and

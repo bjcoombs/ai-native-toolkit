@@ -12,6 +12,13 @@ import pytest
 
 import assess_core
 from assess_core import build_run_context
+from lib.wiki_writer import (
+    hotspot_page_source_path,
+    hotspot_page_status,
+    is_retired_status,
+    slug_for_path,
+    write_hotspot_page,
+)
 
 
 def _minimal_repo(tmp_path: Path) -> Path:
@@ -1062,7 +1069,7 @@ def test_briefing_includes_loc_ccn_commits_and_status(tmp_path: Path) -> None:
     page = next((assess_dir / "hotspots").iterdir())
     content = page.read_text(encoding="utf-8")
     assert "500 LOC" in content
-    assert "max cyclomatic complexity 20" in content
+    assert "aggregate cyclomatic complexity 20" in content
     assert "15 commits" in content
     # has_tests should be "unknown" now, not "no"
     assert "Has test file | unknown" in content
@@ -2313,3 +2320,100 @@ def test_stats_tool_versions_reads_every_backend_by_language_tool() -> None:
         "tool_versions": {"x": "y"}, "scc_version_extra": "no",
     })
     assert got == {"lizard": "1.23.0", "scc": "3.7.0", "dart-scanner": "1"}
+
+
+def _stats(top: list[dict]) -> dict:
+    return {
+        "files_scored": 10, "loc": {}, "ccn": {},
+        "top_hotspots": top,
+        "top_complex": [{"path": h["path"], "ccn": h["ccn"]} for h in top],
+        "top_large": [{"path": h["path"], "loc": h["loc"]} for h in top],
+    }
+
+
+def test_index_keeps_graduated_row_absent_from_later_diff(tmp_path: Path) -> None:
+    """#420: a hotspot that graduated in run one and is in neither run two's
+    top hotspots nor its graduations keeps its index row; #421: a page written
+    by both runs keeps both history rows, ordered by date."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    legacy = {"path": "src/legacy.go", "loc": 800, "ccn": 90, "commits": 3}
+    new = {"path": "src/new.go", "loc": 600, "ccn": 80, "commits": 4}
+    new_later = {"path": "src/new.go", "loc": 650, "ccn": 85, "commits": 6}
+
+    # Run one: legacy graduates, new enters.
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(_stats([legacy])))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats([new])))
+    build_run_context(repo_root=repo, run_date="2026-05-29")
+    index_one = (assess_dir / "index.md").read_text(encoding="utf-8")
+    assert "graduated" in next(r for r in index_one.splitlines() if "src/legacy.go" in r)
+
+    # Run two: new persists; legacy is in neither top_hotspots nor graduated.
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(_stats([new])))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats([new_later])))
+    build_run_context(repo_root=repo, run_date="2026-06-05")
+    index_two = (assess_dir / "index.md").read_text(encoding="utf-8")
+    legacy_row = next(r for r in index_two.splitlines() if "src/legacy.go" in r)
+    assert "| graduated |" in legacy_row
+    assert "2026-05-29" in legacy_row  # last seen stays at the run that saw it
+
+    page = (assess_dir / "hotspots" / f"{slug_for_path('src/new.go')}.md").read_text()
+    history = page.split("## History across runs", 1)[1].split("##", 1)[0]
+    rows = [r for r in history.splitlines() if r.startswith("| 2026-")]
+    assert [r.split(" | ")[0] for r in rows] == ["| 2026-05-29", "| 2026-06-05"]
+    assert "| 600 | 80 | 4 | new |" in rows[0]
+    assert "| 650 | 85 | 6 |" in rows[1]
+
+
+def test_every_live_hotspot_page_has_an_index_row(tmp_path: Path) -> None:
+    """#420 success criterion: after a run, every non-retired hotspot page,
+    including one orphaned from the index by an older writer, has a row."""
+    repo = tmp_path / "repo"
+    (repo / "src").mkdir(parents=True)
+    (repo / "src" / "orphan.go").write_text("package main\n")
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    write_hotspot_page(
+        assess_dir, path="src/orphan.go", first_flagged="2026-01-01",
+        last_seen="2026-02-01", status="graduated", loc=300, ccn=40, commits=2,
+        has_tests=None, briefing="x", actions="- y",
+    )
+    (assess_dir / "index.md").write_text("# Assess Wiki Index\n\n| File |\n")
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats(
+        [{"path": "src/foo.go", "loc": 500, "ccn": 20, "commits": 5}])))
+    build_run_context(repo_root=repo, run_date="2026-06-05")
+
+    index = (assess_dir / "index.md").read_text(encoding="utf-8")
+    for page in (assess_dir / "hotspots").glob("*.md"):
+        content = page.read_text(encoding="utf-8")
+        if is_retired_status(hotspot_page_status(content)):
+            continue
+        assert f"| `{hotspot_page_source_path(content)}` |" in index
+    assert "| `src/orphan.go` | 2026-01-01 | 2026-02-01 | graduated | 40 | 300 |" in index
+
+
+def test_hotspot_page_names_worst_function_and_aggregate(tmp_path: Path) -> None:
+    """#423: the file ccn is labelled an aggregate and the worst function from
+    the sidecar gets its own row and a mention in the briefing."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats([
+        {"path": "src/a.py", "loc": 900, "ccn": 159.0, "commits": 13,
+         "max_fn_ccn": 8.0, "max_fn_name": "test_scan"},
+        {"path": "src/b.go", "loc": 400, "ccn": 30, "commits": 2,
+         "max_fn_ccn": None, "max_fn_name": None},
+    ])))
+    build_run_context(repo_root=repo, run_date="2026-06-05")
+    hot = assess_dir / "hotspots"
+    a = (hot / f"{slug_for_path('src/a.py')}.md").read_text()
+    b = (hot / f"{slug_for_path('src/b.go')}.md").read_text()
+    assert "| Cyclomatic complexity (file aggregate) | 159.0 |" in a
+    assert "| Worst function | `test_scan` (8.0) |" in a
+    assert "aggregate cyclomatic complexity 159.0 (worst function `test_scan` 8.0)" in a
+    assert "file max" not in a and "max cyclomatic" not in a
+    assert "Worst function" not in b
+    assert "aggregate cyclomatic complexity 30, " in b
