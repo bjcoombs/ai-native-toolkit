@@ -1,0 +1,75 @@
+name: Security
+
+# Layer 5 security scanning, advisory (not in branch protection).
+#
+# - CodeQL static analysis over the Python deterministic core and build
+#   pipeline, the canary driver (scripts/canaries/*.mjs), and the workflows
+#   themselves (the `actions` language catches untrusted-input injection in
+#   `run:` steps). Findings land in the Security tab as code-scanning alerts.
+# - pip-audit over the Python packages CI installs: the runtime deps declared
+#   in skills/assess/pyproject.toml and scripts/pyproject.toml plus the test
+#   and lint tools tests.yml adds with `uv run --with`. Neither project
+#   commits a lockfile, so the audit resolves the same specifiers fresh,
+#   which is what a CI run installs that day.
+#
+# Runs on PRs and pushes to main, and weekly so new advisories against
+# unchanged code still surface.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2  # v4.38.2
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2  # v4.38.2
+        with:
+          category: /language:${{ matrix.language }}
+
+  dependency-audit:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+
+      # Keep the tool list in step with the `uv run --with` flags in tests.yml.
+      - name: Resolve CI dependencies
+        run: |
+          printf '%s\n' pytest pytest-cov pyyaml ruff mypy > "$RUNNER_TEMP/ci-tools.in"
+          uv pip compile --quiet --python-version 3.11 \
+            skills/assess/pyproject.toml scripts/pyproject.toml \
+            "$RUNNER_TEMP/ci-tools.in" -o "$RUNNER_TEMP/requirements.txt"
+          cat "$RUNNER_TEMP/requirements.txt"
+
+      - name: Audit for known vulnerabilities
+        run: >-
+          uvx pip-audit==2.10.1 --strict --progress-spinner off
+          -r "$RUNNER_TEMP/requirements.txt"
