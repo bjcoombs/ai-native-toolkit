@@ -79,7 +79,7 @@ For the interactive/visual class that motivated this - the class where the machi
 
 ### Artifact paths
 
-All paths relative to the repo root. `<contract-dir>` is `.claude/contracts/` unless overridden by a script's `--contract-dir` flag or the `ACCEPTANCE_CONTRACT_DIR` environment variable; a repo that has only the older Task Master contract folder keeps using it (`scripts/contract/contract_location.py` holds the rule).
+All paths relative to the repo root. `<contract-dir>` is `.claude/contracts/` unless overridden by a script's `--contract-dir` flag or the `ACCEPTANCE_CONTRACT_DIR` environment variable; a repo that has only `.taskmaster/contract/` keeps using it (`scripts/contract/contract_location.py` holds the rule). When the agent cannot write under `.claude/` without a permission prompt, set `ACCEPTANCE_CONTRACT_DIR` to a folder it can write to.
 
 | Artifact | Path |
 |---|---|

@@ -182,3 +182,10 @@ def test_end_to_end_fresh_repo_creates_claude_contracts(repo):
     assert fz.main([str(contract), "--run-id", run_id, "--kill-test-results", str(kill)]) == 0
     assert (repo / NEW / ("%s.completion.json" % run_id)).is_file()
     assert not (repo / ".taskmaster").exists()
+
+
+def test_help_text_names_env_var_default_and_legacy_fallback():
+    for part in (cl.ENV_CONTRACT_DIR, str(NEW), str(LEGACY)):
+        assert part in cl.HELP_DEFAULT
+    help_text = sv.build_parser().format_help()
+    assert cl.ENV_CONTRACT_DIR in help_text

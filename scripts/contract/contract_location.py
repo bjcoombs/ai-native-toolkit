@@ -34,9 +34,10 @@ LEGACY_CONTRACT_DIR = Path(".taskmaster/contract")
 ENV_CONTRACT_DIR = "ACCEPTANCE_CONTRACT_DIR"
 
 # One-line description of the resolution for argparse help text.
-HELP_DEFAULT = "default: $%s, else %s/ relative to the cwd" % (
+HELP_DEFAULT = "default: $%s, else %s/ (or %s/ when only that exists), relative to the cwd" % (
     ENV_CONTRACT_DIR,
     DEFAULT_CONTRACT_DIR,
+    LEGACY_CONTRACT_DIR,
 )
 
 
