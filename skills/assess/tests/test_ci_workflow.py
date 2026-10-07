@@ -9,6 +9,7 @@ that the result is well-formed YAML when a parser is available.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 
@@ -93,6 +94,32 @@ def test_render_pins_actions_to_commit_shas():
         ref = line.split("@", 1)[1].split("#", 1)[0].strip()
         assert re.fullmatch(r"[0-9a-f]{40}", ref), f"not SHA-pinned: {line.strip()}"
         assert re.search(r"#\s*v\d", line), f"missing version comment: {line.strip()}"
+
+
+def test_checkout_pin_matches_repo_workflow_and_readme():
+    """The emitted checkout pin must match this repo's own gate workflow and
+    the README snippet. Dependabot bumps only the workflow pin, so this test
+    goes red on each checkout bump until the template and README are updated
+    by hand."""
+    repo = Path(__file__).resolve().parents[3]
+    pin = re.compile(r"actions/checkout@[0-9a-f]{40}\s+# v\d+\.\d+\.\d+")
+
+    def checkout_pin(text: str) -> str:
+        found = pin.search(text)
+        assert found, "no SHA-pinned actions/checkout line"
+        return found.group(0)
+
+    emitted = checkout_pin(render_ci_workflow(plugin_version="1.23.0"))
+    workflow = (repo / ".github" / "workflows" / "assess-gate.yml").read_text()
+    readme = (repo / "README.md").read_text()
+    assert emitted == checkout_pin(workflow), (
+        "actions/checkout pin drifted: update skills/assess/templates/"
+        "assess-gate.yml.template to match .github/workflows/assess-gate.yml"
+    )
+    assert emitted == checkout_pin(readme), (
+        "actions/checkout pin drifted: update the README.md Action snippet "
+        "to match the generated workflow"
+    )
 
 
 def test_checkout_does_not_persist_credentials():

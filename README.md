@@ -134,7 +134,7 @@ The assess gate ships as a composite GitHub Action ([Marketplace listing](https:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v7
+  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     with:
       fetch-depth: 0   # full history so the churn window is accurate
   - uses: bjcoombs/ai-native-toolkit@v1.92.0
