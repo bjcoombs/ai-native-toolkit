@@ -73,7 +73,7 @@ mypy_path = "scripts"
 explicit_package_bases = true
 namespace_packages = true
 # networkx and grimp ship no type stubs; their absence is not a code defect.
-# The lib modules carry defensive ``# type: ignore[assignment]`` on their
+# The lib modules carry a defensive mypy assignment suppression on their
 # degrade-gracefully ``nx = None`` fallbacks so they also type-check when stubs
 # ARE installed; ``warn_unused_ignores`` is left off so those stay put.
 ignore_missing_imports = true
