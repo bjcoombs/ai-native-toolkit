@@ -222,6 +222,227 @@ def test_bare_suppression_rule_names_with_hyphens_are_not_justified() -> None:
     )
 
 
+# The four false positives from issue #415: two prose lines that list marker
+# names (read as todo markers), and two suppressions whose stated reason uses
+# a single dash or parentheses (read as unjustified). None may go stale; the
+# bare forms of the same age still must.
+_ISSUE_415_FORMS = {
+    "lib/README.md": (
+        "(TODO/FIXME, deprecations, lint suppressions, disabled tests) via one rg pass per"
+    ),
+    "core.py": "# Promissory markers (stale TODO/FIXME, suppressions, disabled tests),",
+    "catch.py": "x = 1  # noqa: BLE001 - intentional catch-all; degrade, don't crash",
+    "anchor.py": "x = 1  # noqa: S310 (fixed api host)",
+}
+_ISSUE_415_BARE = {
+    "bare_todo.py": "# TODO",
+    "bare_noqa.py": "import os  # noqa: E402",
+}
+
+
+def test_issue_415_prose_and_stated_reasons_not_stale(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _aged_marker_repo(repo, {**_ISSUE_415_FORMS, **_ISSUE_415_BARE}, edits=6)
+    summary = _scan(repo).summary()
+    assert set(summary["stale_by_file"]) == set(_ISSUE_415_BARE)
+    offenders = {m["path"] for m in summary["top_offenders"]}
+    assert not offenders & set(_ISSUE_415_FORMS)
+    assert summary["families"]["suppression"]["justified"] == 2
+
+
+def test_todo_requires_marker_position(tmp_path: Path) -> None:
+    """The token must open the comment, or carry a colon or an owner."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, {
+        "a.py": (
+            "# TODO\n"                          # 1 opens the comment
+            "x = 1  # FIXME later\n"            # 2 opens a trailing comment
+            "# see note; TODO: wire it up\n"    # 3 colon form
+            "# handled by HACK(ben) for now\n"  # 4 owner form
+            "# the TODO/FIXME list is long\n"   # 5 prose listing names
+            "# counts every TODO in the tree\n" # 6 prose mention
+            "/* XXX check bounds */\n"          # 7 block comment opener
+            "# remove after the 2.0 cut\n"      # 8 phrase form, unchanged
+            "# temporary workaround for the XXX parser; remove after 2.0\n"  # 9
+        ),
+        "docs/plan.md": (
+            "TODO write the rollout section\n"   # 1
+            "- TODO: add diagrams\n"             # 2 list bullet
+            "Lists TODO, FIXME and HACK tokens\n"  # 3 prose
+            "or an aged TODO (intent) here\n"    # 4 aside, not an owner
+            "- [ ] TODO write the runbook\n"     # 5 bullet plus checkbox
+            "[x] FIXME the link\n"               # 6 checkbox alone
+        ),
+    }, day=1)
+    scan = _scan(repo)
+    lines = {(m.path, m.line) for m in scan.markers if m.family == "todo"}
+    assert lines == {
+        ("a.py", 1), ("a.py", 2), ("a.py", 3), ("a.py", 4), ("a.py", 7),
+        ("a.py", 8), ("a.py", 9), ("docs/plan.md", 1), ("docs/plan.md", 2),
+        ("docs/plan.md", 5), ("docs/plan.md", 6),
+    }
+
+
+# Every leader/prefix shape crossed with every token position. Each shape is
+# a line prefix; each position is a line body with the token placed in it.
+# ``True`` = the token sits in marker position and must count. Two cells are
+# pinned limits, not goals: a leaderless code line (docstring interior) counts
+# only when the token opens it, because text before a mid-line token cannot be
+# told from a string literal without a parser; and a leaderless code line that
+# opens with a bullet or checkbox never counts, because in a code file it is as
+# likely a YAML or TOML list item as a docstring line.
+_TODO_SHAPES_CODE = {
+    "leader": "# ",
+    "interior": "    ",           # docstring / block-comment interior
+    "interior_bullet": "    - ",
+    "interior_checkbox": "    [ ] ",
+    "interior_bullet_checkbox": "    - [ ] ",
+    "leader_bullet": "# - ",
+    "leader_checkbox": "# [ ] ",
+    "leader_bullet_checkbox": "# - [x] ",
+}
+_TODO_SHAPES_PROSE = {
+    "prose": "",
+    "bullet": "- ",
+    "numbered": "1. ",
+    "checkbox": "[ ] ",
+    "bullet_checkbox": "- [ ] ",
+}
+_TODO_POSITIONS = {
+    "opens": ("TODO fix the retry loop", True),
+    "opens_colon": ("TODO: fix the retry loop", True),
+    "opens_owner": ("TODO(ben) fix the retry loop", True),
+    "mid_colon": ("see the note; FIXME: wire it up", True),
+    "mid_owner": ("handled by HACK(ben) for now", True),
+    "mid_bare": ("counts every TODO in the tree", False),
+    "mid_list": ("the TODO/FIXME list is long", False),
+    "mid_aside": ("an aged TODO (intent) here", False),
+}
+
+
+def test_todo_position_matrix(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    files: dict[str, list[str]] = {"m.py": [], "m.md": []}
+    expected: set[tuple[str, int]] = set()
+    for path, shapes in (("m.py", _TODO_SHAPES_CODE), ("m.md", _TODO_SHAPES_PROSE)):
+        for shape, prefix in shapes.items():
+            for pos, (body, counts) in _TODO_POSITIONS.items():
+                files[path].append(prefix + body)
+                leaderless_mid = shape.startswith("interior") and pos.startswith("mid")
+                leaderless_bullet = shape.startswith("interior_")
+                if counts and not leaderless_mid and not leaderless_bullet:
+                    expected.add((path, len(files[path])))
+    _commit(repo, {p: "\n".join(ls) + "\n" for p, ls in files.items()}, day=1)
+    got = {(m.path, m.line) for m in _scan(repo).markers if m.family == "todo"}
+    labels = {
+        (path, i + 1): line for path, ls in files.items() for i, line in enumerate(ls)
+    }
+    assert {labels[k] for k in got - expected} == set(), "false positives"
+    assert {labels[k] for k in expected - got} == set(), "false negatives"
+
+
+def test_leaderless_code_lines_need_blank_prefix(tmp_path: Path) -> None:
+    """A string literal, an expression or a bare bullet before the token is not
+    a comment. A YAML enum item (``- TODO`` / ``- DEPRECATED``) is data, so it
+    counts in neither the todo nor the deprecation family."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, {
+        "s.py": (
+            'msg = "TODO: is a word"\n'      # 1 string literal
+            "x = y - TODO_LIMIT\n"           # 2 identifier, no word boundary
+            'call("FIXME(ben)")\n'           # 3 literal with owner shape
+            "    TODO fix the retry loop\n"  # 4 docstring interior, counts
+            "    - TODO fix the retry\n"     # 5 bullet, no leader
+        ),
+        "api.yaml": (
+            "status:\n"
+            "  enum:\n"
+            "    - TODO\n"
+            "    - DONE\n"
+            "    - DEPRECATED\n"
+            "# TODO split this schema\n"     # 6 a YAML comment still counts
+        ),
+    }, day=1)
+    markers = _scan(repo).markers
+    todo = {(m.path, m.line) for m in markers if m.family == "todo"}
+    assert todo == {("s.py", 4), ("api.yaml", 6)}
+    assert not [m for m in markers if m.family == "deprecation"]
+
+
+def test_inline_example_in_prose_is_not_a_marker(tmp_path: Path) -> None:
+    """In prose a comment leader opens a marker only at line start: a ``*`` or
+    ``#`` quoted mid-sentence is an example, not a comment boundary."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, {
+        "guide.md": (
+            "The README shows `* TODO` as an example\n"  # 1 inline example
+            "Write `# FIXME` above the line\n"           # 2 inline example
+            "* TODO write the intro\n"                   # 3 star bullet
+            "# TODO heading\n"                           # 4 heading
+            "<!-- XXX check the table -->\n"             # 5 HTML comment
+            "## TODO write the intro\n"                  # 6 level-2 heading
+            "### FIXME stale numbers\n"                  # 7 level-3 heading
+            "> > TODO nested quote\n"                    # 8 nested blockquote
+            ">> HACK tight nested quote\n"               # 9 tight blockquote
+            "> - [ ] TODO quoted checkbox\n"             # 10 quoted bullet
+            "> see the `# TODO` example\n"               # 11 quoted inline example
+        ),
+    }, day=1)
+    lines = {m.line for m in _scan(repo).markers if m.family == "todo"}
+    assert lines == {3, 4, 5, 6, 7, 8, 9, 10}
+
+
+def test_double_dash_reason_per_suppression_family() -> None:
+    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    for justified in (
+        "x = 1  # noqa: E501 -- long URL kept on one line",
+        "x = 1  # noqa -- generated module",
+        "x = f()  # type: ignore[attr-defined] -- stub lags runtime",
+        "x = f()  # type: ignore -- untyped dependency",
+        "run(cmd)  # nosec B603 -- args are constant",
+        "except Exception:  # pylint: disable=broad-except -- top-level guard",
+        "return nil //nolint:nilerr -- error conveyed via status",
+    ):
+        assert rx.search(justified), justified
+    for bare in (
+        "x = 1  # noqa: E501 --",
+        "x = 1  # noqa: E501 -",
+        "x = f()  # type: ignore[attr-defined] --",
+        "run(cmd)  # nosec B603 -",
+        "except Exception:  # pylint: disable=broad-except --",
+        "return nil //nolint:nilerr --",
+        "x = 1  # noqa: E501 ---",
+    ):
+        assert not rx.search(bare), bare
+
+
+def test_single_dash_and_parenthesised_suppression_reasons() -> None:
+    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    assert rx.search("# noqa: BLE001 - intentional catch-all")
+    assert rx.search("# noqa: S310 (fixed api host)")
+    assert rx.search("# noqa: E501, E402 - generated table")
+    assert rx.search("x = f()  # type: ignore[attr-defined] - stub lags runtime")
+    assert rx.search("# nosec B603 (args are constant)")
+    assert rx.search("# pylint: disable=broad-except - top-level guard")
+    for bare in (
+        "# noqa: E402",
+        "# noqa",
+        "# noqa: E501,E402",
+        "# type: ignore[attr-defined]",
+        "# pylint: disable=too-many-args",
+        "# noqa: E501 -",
+        "# noqa: E501 ()",
+        "# noqa: E501 - !",
+        "# noqa: E501 -- ?!",
+        "# type: ignore - ...",
+    ):
+        assert not rx.search(bare), bare
+
+
 def test_generated_and_prose_exclusions(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)
