@@ -84,3 +84,95 @@ def test_diff_summary_counts(prior_stats: dict, current_stats: dict) -> None:
     assert summary["regressed"] == 1
     assert summary["new"] == 1
     assert summary["persistent"] == 1
+    assert summary["restructured"] == 0
+
+
+def _one(path: str, *, ccn: float, max_fn: float | None, loc: int = 500,
+         commits: int = 10) -> dict:
+    h: dict = {"path": path, "ccn": ccn, "loc": loc, "commits": commits}
+    if max_fn is not None:
+        h["max_fn_ccn"] = max_fn
+    return {"top_hotspots": [h]}
+
+
+def _status(prior: dict, current: dict) -> str:
+    diff = diff_stats(prior=prior, current=current)
+    for name in ("regressed", "restructured", "persistent"):
+        if getattr(diff, name):
+            return name
+    raise AssertionError("hotspot in both snapshots landed in no category")
+
+
+def test_aggregate_up_worst_down_is_restructured_not_regressed() -> None:
+    """Splitting a function into helpers raises the sum; the worst fell."""
+    status = _status(_one("a.py", ccn=100, max_fn=40),
+                     _one("a.py", ccn=110, max_fn=15))
+    assert status == "restructured"
+
+
+def test_worst_function_up_is_regressed_even_when_aggregate_fell() -> None:
+    assert _status(_one("a.py", ccn=100, max_fn=20),
+                   _one("a.py", ccn=95, max_fn=25)) == "regressed"
+
+
+def test_worst_unavailable_falls_back_to_aggregate_rule() -> None:
+    """scc rows carry no max_fn_ccn: an aggregate rise regresses as before."""
+    diff = diff_stats(prior=_one("a.go", ccn=100, max_fn=None),
+                      current=_one("a.go", ccn=104, max_fn=None))
+    assert [t.path for t in diff.regressed] == ["a.go"]
+    assert diff.regressed[0].max_fn_ccn_delta is None
+
+
+def test_worst_known_on_one_side_only_falls_back_to_aggregate_rule() -> None:
+    assert _status(_one("a.py", ccn=100, max_fn=None),
+                   _one("a.py", ccn=104, max_fn=12)) == "regressed"
+
+
+def test_worst_flat_aggregate_up_is_regressed_as_accretion() -> None:
+    """A new function beside an unchanged worst one is growth, not a refactor."""
+    assert _status(_one("a.py", ccn=100, max_fn=16),
+                   _one("a.py", ccn=104, max_fn=16)) == "regressed"
+
+
+def test_both_flat_is_persistent() -> None:
+    assert _status(_one("a.py", ccn=100, max_fn=16),
+                   _one("a.py", ccn=100, max_fn=16)) == "persistent"
+
+
+def test_small_worst_trim_with_large_aggregate_growth_is_regressed() -> None:
+    """Trimming the worst 16 -> 15 while adding +100 summed ccn is accretion,
+    not an extraction; restructured must not hide it from the gate."""
+    assert _status(_one("a.py", ccn=100, max_fn=16),
+                   _one("a.py", ccn=200, max_fn=15)) == "regressed"
+
+
+def test_aggregate_rise_equal_to_worst_fall_is_restructured() -> None:
+    assert _status(_one("a.py", ccn=100, max_fn=30),
+                   _one("a.py", ccn=110, max_fn=20)) == "restructured"
+
+
+def test_worst_down_aggregate_down_is_persistent() -> None:
+    assert _status(_one("a.py", ccn=100, max_fn=30),
+                   _one("a.py", ccn=90, max_fn=12)) == "persistent"
+
+
+def test_worst_down_with_loc_churn_growth_is_restructured() -> None:
+    """The LOC-and-churn branch no longer overrides a falling worst function."""
+    assert _status(_one("a.py", ccn=100, max_fn=30, loc=500, commits=10),
+                   _one("a.py", ccn=100, max_fn=12, loc=600, commits=14)
+                   ) == "restructured"
+
+
+def test_real_assess_core_split_is_restructured() -> None:
+    """The run after #451 split build_run_context: assess_core.py went from
+    238 summed / 51 worst to 249 summed / 12 worst, +62 LOC, +1 commit. The old
+    aggregate rule called that a regression; it is the recommended refactor."""
+    path = "skills/assess/scripts/assess_core.py"
+    diff = diff_stats(
+        prior=_one(path, ccn=238.0, max_fn=51.0, loc=1027, commits=61),
+        current=_one(path, ccn=249.0, max_fn=12.0, loc=1089, commits=62),
+    )
+    assert diff.regressed == []
+    (t,) = diff.restructured
+    assert (t.ccn_delta, t.max_fn_ccn_delta, t.loc_delta) == (11.0, -39.0, 62)
+    assert diff.summary()["restructured"] == 1

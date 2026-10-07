@@ -130,8 +130,10 @@ def check_diff_regression(ctx: dict, gate: dict) -> list[dict]:
 
     Only fires when ``fail_on_regression`` is set AND there is a reliable diff
     against a prior committed snapshot. ``assess_core`` already computed the diff
-    (graduated / new / regressed) into the run-context; "regressed" is its term
-    for hotspots whose complexity or churn increased since the prior run. On a
+    (graduated / new / regressed / restructured) into the run-context; "regressed"
+    is its term for hotspots whose worst function (or, without a per-function
+    breakdown, summed complexity or churn) increased since the prior run. A
+    ``restructured`` hotspot - worst function down, sum up - does not trip it. On a
     first run (no prior) or an unreliable diff (version-mismatched filter), it
     returns nothing - a freshly-adopted repo can't trip a regression gate.
     """
