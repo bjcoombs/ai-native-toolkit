@@ -408,6 +408,202 @@ def _parallel_docs_subject(
     return sorted(matches, key=lambda d: (len(d.parts), str(d)))[:1]
 
 
+@dataclass(frozen=True)
+class _ChurnContext:
+    """Repo-wide inputs every doc's staleness row is measured against."""
+    repo_root: Path
+    code_files: list[Path]
+    churn_map: dict[Path, int]
+    commit_epochs: dict[Path, list[tuple[int, int]]] | None
+    baseline_epochs: list[int] | None
+    clock: ContentClock
+    generated_sources: list[tuple[str, list[str]]]
+
+
+def _resolve_docs(
+    repo_root: Path,
+    doc_files: list[Path] | None,
+    extra_exclude_dirs: set[str] | None,
+    extra_exclude_patterns: list[str] | None,
+    scope: Path | None,
+) -> list[Path]:
+    """The caller's doc list, or every discovered doc, as resolved paths."""
+    if doc_files is None:
+        doc_files = discover_doc_files(
+            repo_root,
+            extra_exclude_dirs=extra_exclude_dirs,
+            extra_exclude_patterns=extra_exclude_patterns,
+            scope=scope,
+        )
+    return [d.resolve() for d in doc_files]
+
+
+def _explicit_links(
+    repo_root: Path, doc_to_code_edges: list[dict] | None,
+) -> dict[str, list[Path]]:
+    """Explicit doc->code links (fallback c): doc rel -> [code abs paths]."""
+    explicit: dict[str, list[Path]] = {}
+    for edge in (doc_to_code_edges or []):
+        code_abs = (repo_root / edge["code"]).resolve()
+        explicit.setdefault(edge["doc"], []).append(code_abs)
+    return explicit
+
+
+def _code_ownership(
+    code_files: list[Path], base_doc_dirs: dict[Path, Path], repo_root: Path,
+) -> tuple[dict[Path, Path], dict[Path, list[Path]]]:
+    """Nearest-ancestor ownership: (code file -> owning base doc, base doc ->
+    the code subtree it owns down to the next base doc)."""
+    code_owner: dict[Path, Path] = {}
+    for c in code_files:
+        owner = _nearest_base_doc(c, base_doc_dirs, repo_root)
+        if owner is not None:
+            code_owner[c] = owner
+    owned_by_doc: dict[Path, list[Path]] = {}
+    for code, owner in code_owner.items():
+        owned_by_doc.setdefault(owner, []).append(code)
+    return code_owner, owned_by_doc
+
+
+def _doc_subject(
+    d: Path,
+    doc_rel: str,
+    ctx: _ChurnContext,
+    owned_by_doc: dict[Path, list[Path]],
+    code_dirs: set[Path],
+    explicit: dict[str, list[Path]],
+) -> tuple[list[Path], str]:
+    """The code a doc describes and the method that found it.
+
+    Association precedence (per the PRD's ordered fallbacks): co-located base
+    doc (nearest-ancestor) -> a parallel docs/ tree -> the doc's explicit code
+    links -> repo-wide churn baseline (an empty subject).
+    """
+    if d in owned_by_doc:
+        return owned_by_doc[d], "nearest-ancestor"
+    par = _parallel_docs_subject(d, ctx.repo_root, code_dirs)
+    if par is not None:
+        subject = [c for c in ctx.code_files if any(sd in c.parents for sd in par)]
+        return subject, "parallel-docs-tree"
+    if explicit.get(doc_rel):
+        return explicit[doc_rel], "explicit-links"
+    return [], "repo-baseline"
+
+
+def _subject_churn(
+    subject: list[Path], method: str, ctx: _ChurnContext,
+) -> tuple[int, int, list[int] | None]:
+    """``(code churn, subject file count, sorted subject commit epochs)``."""
+    if method != "repo-baseline":
+        return (
+            sum(ctx.churn_map.get(c, 0) for c in subject),
+            len(subject),
+            subject_epochs(subject, ctx.commit_epochs),
+        )
+    # repo-baseline has no derivable subject, so the ratio uses repo-wide
+    # churn - a coarse proxy. In an active repo this can be high even for a
+    # freshly-written floating doc, so `ratio` alone over-flags here.
+    # `last_commit_days` is the corrective signal (the heatmap colours by
+    # staleness, and a floating doc won't be a graph hub, so its stale_hubs
+    # priority stays low). Read ratio together with subject_method and
+    # last_commit_days, not on its own.
+    return (
+        sum(ctx.churn_map.get(c, 0) for c in ctx.code_files),
+        len(ctx.code_files),
+        ctx.baseline_epochs,
+    )
+
+
+def _provenance(
+    d: Path, ctx: _ChurnContext,
+) -> tuple[str, tuple[str, ...], str | None, bool | None]:
+    """``(method, source rels, generated_by, source_newer)`` for a generated doc
+    (issue #178); empty/None for an ordinary hand-written doc."""
+    prov_sources, generated_by, prov_method = resolve_doc_sources(
+        d, ctx.repo_root, ctx.generated_sources
+    )
+    if not prov_method:
+        return prov_method, (), generated_by, None
+    src_newer = source_is_newer(d, prov_sources)
+    prov_source_rels = tuple(_safe_rel(s, ctx.repo_root) for s in prov_sources)
+    return prov_method, prov_source_rels, generated_by, src_newer
+
+
+def _doc_row(
+    d: Path, doc_rel: str, subject: list[Path], method: str, ctx: _ChurnContext,
+) -> DocStaleness:
+    """One doc's staleness row against its subject."""
+    code_churn, subject_count, measured = _subject_churn(subject, method, ctx)
+    doc_churn = ctx.churn_map.get(d, 0)
+    window_ratio = code_churn / max(doc_churn, 1)
+    # Behind-the-subject cap: only churn after the doc's last content change
+    # (bulk commits already skipped by the clock) can make it a lying map.
+    ratio, since_doc = behind_ratio(window_ratio, measured, ctx.clock.epoch(d))
+
+    # Provenance (issue #178): a *generated* doc that declares a source is
+    # measured against that source, not its own age/churn. When the source
+    # has NOT moved on, the doc provably matches its source, so its
+    # decaying-map ratio is zero by construction - this is what keeps a
+    # freshly-accurate generated doc out of the lying_map bucket regardless
+    # of how busy the surrounding code is. When the source HAS moved on,
+    # `source_newer` carries the staleness verdict for the join to sign
+    # freshness directly; the churn ratio is left untouched as a secondary
+    # signal.
+    prov_method, prov_source_rels, generated_by, src_newer = _provenance(d, ctx)
+    if src_newer is False:
+        ratio = 0.0
+
+    return DocStaleness(
+        path=doc_rel,
+        last_commit_days=ctx.clock.days(d),
+        last_change_basis="creation" if d in ctx.clock.creation_fallback else "content",
+        doc_churn_in_window=doc_churn,
+        code_churn_in_window=code_churn,
+        subject_code_count=subject_count,
+        subject_method=method,
+        ratio=ratio,
+        window_ratio=window_ratio,
+        code_churn_since_doc_change=since_doc,
+        provenance_method=prov_method,
+        provenance_sources=prov_source_rels,
+        provenance_generated_by=generated_by,
+        source_newer=src_newer,
+    )
+
+
+def _modularity(
+    code_files: list[Path], base_doc_dirs: dict[Path, Path],
+    code_dirs: set[Path], pct_code_under_base: float,
+) -> dict:
+    """The size-weighted modularity coverage block."""
+    # Modularity coverage is *size-weighted*: a 200-file service without a base
+    # doc is a real navigability gap, a 3-file utility dir without one isn't.
+    # Counting every code-containing directory equally (the un-weighted ratio
+    # below) penalises nested internal dirs (`services/<x>/internal/`,
+    # `adapters/persistence/`) the same as top-level service roots and pushes
+    # the headline to near-zero on any non-trivial repo. The weighted ratio is
+    # the fraction of *code* (by file count) sitting under a base doc - identical
+    # to `pct_code_under_base_doc`. Both are reported so the denominator stays
+    # auditable.
+    module_dirs_with_base = len(base_doc_dirs)
+    module_dir_count = len(code_dirs)
+    base_doc_dir_ratio = module_dirs_with_base / module_dir_count if module_dir_count else 0.0
+    # `pct_code_under_base` reaches 1.0 whenever a single root-level base doc
+    # (a top README) is an ancestor of every code file - it does NOT mean every
+    # module is documented. Reported as `base_doc_coverage_when_present` so it
+    # is never misread as headline coverage; `base_doc_dir_ratio` (fraction of
+    # code-containing dirs that actually hold a base doc) is the headline.
+    return {
+        "module_dir_count": module_dir_count,
+        "module_dirs_with_base_doc": module_dirs_with_base,
+        # Headline first: fraction of code-containing dirs with a base doc.
+        "base_doc_dir_ratio": round(base_doc_dir_ratio, 3),
+        "base_doc_coverage_when_present": round(pct_code_under_base, 3),
+        "code_file_count": len(code_files),
+        "large_repo": len(code_files) >= LARGE_REPO_CODE_FILES,
+    }
+
+
 def analyze_doc_staleness(
     repo_root: Path,
     doc_files: list[Path] | None = None,
@@ -431,17 +627,9 @@ def analyze_doc_staleness(
     if generated_sources is None:
         from lib.assess_config import load_generated_sources
         generated_sources = load_generated_sources(repo_root)
-    docs = [
-        d.resolve() for d in (
-            doc_files if doc_files is not None
-            else discover_doc_files(
-                repo_root,
-                extra_exclude_dirs=extra_exclude_dirs,
-                extra_exclude_patterns=extra_exclude_patterns,
-                scope=scope,
-            )
-        )
-    ]
+    docs = _resolve_docs(
+        repo_root, doc_files, extra_exclude_dirs, extra_exclude_patterns, scope,
+    )
     code_files = discover_code_files(
         repo_root,
         extra_exclude_dirs=extra_exclude_dirs,
@@ -449,13 +637,9 @@ def analyze_doc_staleness(
         scope=scope,
     )
 
-    def rel(p: Path) -> str:
-        return str(p.relative_to(repo_root))
-
     # Churn: pick a window over the code files (the subject we care about), then
     # score both docs and code in that window for the ratio.
-    all_paths = code_files + docs
-    churn_map, churn_label = pick_churn_window(repo_root, all_paths)
+    churn_map, churn_label = pick_churn_window(repo_root, code_files + docs)
     if churn_map is None:
         churn_map = {}
         churn_label = None
@@ -475,142 +659,38 @@ def analyze_doc_staleness(
     # cap. A repo-baseline doc measures against every code file, so that list is
     # sorted once here rather than per doc.
     commit_epochs = commit_epochs_by_file(repo_root, _window_since(churn_label))
-    baseline_epochs = subject_epochs(code_files, commit_epochs)
-
     # Last content change per doc, skipping bulk mechanical commits (#333).
     clock = content_clock(repo_root)
+    ctx = _ChurnContext(
+        repo_root=repo_root,
+        code_files=code_files,
+        churn_map=churn_map,
+        commit_epochs=commit_epochs,
+        baseline_epochs=subject_epochs(code_files, commit_epochs),
+        clock=clock,
+        generated_sources=generated_sources,
+    )
 
     base_doc_dirs = _build_base_doc_dirs(repo_root, docs)
     code_dirs = {c.parent for c in code_files}
-
-    # Explicit doc->code links (fallback c): doc rel -> [code abs paths].
-    explicit: dict[str, list[Path]] = {}
-    for edge in (doc_to_code_edges or []):
-        code_abs = (repo_root / edge["code"]).resolve()
-        explicit.setdefault(edge["doc"], []).append(code_abs)
-
-    # Nearest-ancestor ownership: code file -> owning base doc.
-    code_owner: dict[Path, Path] = {}
-    for c in code_files:
-        owner = _nearest_base_doc(c, base_doc_dirs, repo_root)
-        if owner is not None:
-            code_owner[c] = owner
-    # Invert: base doc -> the code subtree it owns (down to the next base doc).
-    owned_by_doc: dict[Path, list[Path]] = {}
-    for code, owner in code_owner.items():
-        owned_by_doc.setdefault(owner, []).append(code)
-
-    repo_wide_code_churn = sum(churn_map.get(c, 0) for c in code_files)
+    explicit = _explicit_links(repo_root, doc_to_code_edges)
+    code_owner, owned_by_doc = _code_ownership(code_files, base_doc_dirs, repo_root)
 
     results: list[DocStaleness] = []
     method_counts: dict[str, int] = {}
-    docs_mapping_to_code = 0
-
-    # Association precedence (per the PRD's ordered fallbacks): co-located base
-    # doc (nearest-ancestor) -> a parallel docs/ tree -> the doc's explicit code
-    # links -> repo-wide churn baseline.
     for d in docs:
-        subject: list[Path]
-        method: str
-        if d in owned_by_doc:
-            subject = owned_by_doc[d]
-            method = "nearest-ancestor"
-        elif (par := _parallel_docs_subject(d, repo_root, code_dirs)) is not None:
-            subject = [c for c in code_files if any(sd in c.parents for sd in par)]
-            method = "parallel-docs-tree"
-        elif explicit.get(rel(d)):
-            subject = explicit[rel(d)]
-            method = "explicit-links"
-        else:
-            subject = []
-            method = "repo-baseline"
-
-        if method != "repo-baseline":
-            docs_mapping_to_code += 1
-            code_churn = sum(churn_map.get(c, 0) for c in subject)
-            subject_count = len(subject)
-            measured = subject_epochs(subject, commit_epochs)
-        else:
-            # repo-baseline has no derivable subject, so the ratio uses
-            # repo-wide churn - a coarse proxy. In an active repo this can be
-            # high even for a freshly-written floating doc, so `ratio` alone
-            # over-flags here. `last_commit_days` is the corrective signal (the
-            # heatmap colours by staleness, and a floating doc won't be a graph
-            # hub, so its stale_hubs priority stays low). Read ratio together
-            # with subject_method and last_commit_days, not on its own.
-            code_churn = repo_wide_code_churn
-            subject_count = len(code_files)
-            measured = baseline_epochs
-
-        method_counts[method] = method_counts.get(method, 0) + 1
-        doc_churn = churn_map.get(d, 0)
-        window_ratio = code_churn / max(doc_churn, 1)
-        # Behind-the-subject cap: only churn after the doc's last content change
-        # (bulk commits already skipped by the clock) can make it a lying map.
-        ratio, since_doc = behind_ratio(window_ratio, measured, clock.epoch(d))
-
-        # Provenance (issue #178): a *generated* doc that declares a source is
-        # measured against that source, not its own age/churn. When the source
-        # has NOT moved on, the doc provably matches its source, so its
-        # decaying-map ratio is zero by construction - this is what keeps a
-        # freshly-accurate generated doc out of the lying_map bucket regardless
-        # of how busy the surrounding code is. When the source HAS moved on,
-        # `source_newer` carries the staleness verdict for the join to sign
-        # freshness directly; the churn ratio is left untouched as a secondary
-        # signal.
-        prov_sources, generated_by, prov_method = resolve_doc_sources(
-            d, repo_root, generated_sources
+        doc_rel = str(d.relative_to(repo_root))
+        subject, method = _doc_subject(
+            d, doc_rel, ctx, owned_by_doc, code_dirs, explicit,
         )
-        src_newer: bool | None = None
-        prov_source_rels: tuple[str, ...] = ()
-        if prov_method:
-            src_newer = source_is_newer(d, prov_sources)
-            prov_source_rels = tuple(
-                _safe_rel(s, repo_root) for s in prov_sources
-            )
-            if src_newer is False:
-                ratio = 0.0
-
-        results.append(DocStaleness(
-            path=rel(d),
-            last_commit_days=clock.days(d),
-            last_change_basis="creation" if d in clock.creation_fallback else "content",
-            doc_churn_in_window=doc_churn,
-            code_churn_in_window=code_churn,
-            subject_code_count=subject_count,
-            subject_method=method,
-            ratio=ratio,
-            window_ratio=window_ratio,
-            code_churn_since_doc_change=since_doc,
-            provenance_method=prov_method,
-            provenance_sources=prov_source_rels,
-            provenance_generated_by=generated_by,
-            source_newer=src_newer,
-        ))
+        method_counts[method] = method_counts.get(method, 0) + 1
+        results.append(_doc_row(d, doc_rel, subject, method, ctx))
+    docs_mapping_to_code = len(docs) - method_counts.get("repo-baseline", 0)
 
     # Association-derivability is itself a Layer 0 signal.
     code_under_base = sum(1 for c in code_files if c in code_owner)
     pct_code_under_base = code_under_base / len(code_files) if code_files else 0.0
     pct_docs_mapping = docs_mapping_to_code / len(docs) if docs else 0.0
-
-    # Modularity coverage is *size-weighted*: a 200-file service without a base
-    # doc is a real navigability gap, a 3-file utility dir without one isn't.
-    # Counting every code-containing directory equally (the un-weighted ratio
-    # below) penalises nested internal dirs (`services/<x>/internal/`,
-    # `adapters/persistence/`) the same as top-level service roots and pushes
-    # the headline to near-zero on any non-trivial repo. The weighted ratio is
-    # the fraction of *code* (by file count) sitting under a base doc - identical
-    # to `pct_code_under_base_doc`. Both are reported so the denominator stays
-    # auditable.
-    module_dirs_with_base = len(base_doc_dirs)
-    module_dir_count = len(code_dirs)
-    base_doc_dir_ratio = module_dirs_with_base / module_dir_count if module_dir_count else 0.0
-    # `pct_code_under_base` reaches 1.0 whenever a single root-level base doc
-    # (a top README) is an ancestor of every code file - it does NOT mean every
-    # module is documented. Reported as `base_doc_coverage_when_present` so it
-    # is never misread as headline coverage; `base_doc_dir_ratio` (fraction of
-    # code-containing dirs that actually hold a base doc) is the headline.
-    base_doc_coverage_when_present = pct_code_under_base
 
     return {
         "available": True,
@@ -643,13 +723,7 @@ def analyze_doc_staleness(
             "pct_docs_mapping_to_code": round(pct_docs_mapping, 3),
             "methods": method_counts,
         },
-        "modularity": {
-            "module_dir_count": module_dir_count,
-            "module_dirs_with_base_doc": module_dirs_with_base,
-            # Headline first: fraction of code-containing dirs with a base doc.
-            "base_doc_dir_ratio": round(base_doc_dir_ratio, 3),
-            "base_doc_coverage_when_present": round(base_doc_coverage_when_present, 3),
-            "code_file_count": len(code_files),
-            "large_repo": len(code_files) >= LARGE_REPO_CODE_FILES,
-        },
+        "modularity": _modularity(
+            code_files, base_doc_dirs, code_dirs, pct_code_under_base,
+        ),
     }

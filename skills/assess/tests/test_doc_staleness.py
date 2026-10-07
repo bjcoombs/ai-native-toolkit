@@ -55,6 +55,58 @@ def test_repo_baseline_when_no_association(tmp_path: Path) -> None:
     assert floating["subject_method"] == "repo-baseline"
 
 
+def test_association_precedence_and_summary_counts(tmp_path: Path) -> None:
+    """Pins the fallback order (nearest-ancestor, parallel docs/ tree, explicit
+    links, repo baseline), the summary counts derived from it, and the
+    descending-ratio order of the docs list."""
+    # nearest-ancestor wins over a parallel-tree match on the same name.
+    _write(tmp_path, "docs/auth/README.md", "auth")
+    _write(tmp_path, "docs/auth/x.py", "x")
+    _write(tmp_path, "src/auth/a.py", "x")
+    # parallel docs/ tree wins over the doc's explicit links.
+    _write(tmp_path, "docs/billing.md", "billing")
+    _write(tmp_path, "src/billing/b.py", "x")
+    _write(tmp_path, "src/other/o1.py", "x")
+    _write(tmp_path, "src/other/o2.py", "x")
+    # explicit links, then the baseline.
+    _write(tmp_path, "notes.md", "notes")
+    _write(tmp_path, "floating.md", "floating")
+    r = analyze_doc_staleness(
+        tmp_path,
+        doc_to_code_edges=[
+            {"doc": "docs/billing.md", "code": "src/other/o1.py"},
+            {"doc": "docs/billing.md", "code": "src/other/o2.py"},
+            {"doc": "notes.md", "code": "src/other/o1.py"},
+        ],
+    )
+    by_path = {d["path"]: d for d in r["docs"]}
+    assert by_path["docs/auth/README.md"]["subject_method"] == "nearest-ancestor"
+    assert by_path["docs/auth/README.md"]["subject_code_count"] == 1
+    assert by_path["docs/billing.md"]["subject_method"] == "parallel-docs-tree"
+    assert by_path["docs/billing.md"]["subject_code_count"] == 1
+    assert by_path["notes.md"]["subject_method"] == "explicit-links"
+    assert by_path["floating.md"]["subject_method"] == "repo-baseline"
+    assert by_path["floating.md"]["subject_code_count"] == 5
+    assert by_path["floating.md"]["confidence"] == "low"
+    assert by_path["notes.md"]["confidence"] == "high"
+    assert r["association"] == {
+        "code_file_count": 5,
+        "doc_count": 4,
+        "code_under_base_doc": 1,
+        "pct_code_under_base_doc": 0.2,
+        "docs_mapping_to_code": 3,
+        "pct_docs_mapping_to_code": 0.75,
+        "methods": {
+            "nearest-ancestor": 1,
+            "parallel-docs-tree": 1,
+            "explicit-links": 1,
+            "repo-baseline": 1,
+        },
+    }
+    ratios = [d["ratio"] for d in r["docs"]]
+    assert ratios == sorted(ratios, reverse=True)
+
+
 def test_boilerplate_is_not_a_base_doc(tmp_path: Path) -> None:
     _write(tmp_path, "src/LICENSE.md", "MIT")
     _write(tmp_path, "src/x.py", "x")
