@@ -1,0 +1,94 @@
+name: Mutation testing
+
+# Layer 6 truth-pressure for the /assess deterministic core. Line coverage
+# (tests.yml) shows the tests execute the code; mutmut shows whether they
+# would fail if the code were wrong. Scope and test selection live in
+# [tool.mutmut] in skills/assess/pyproject.toml.
+#
+# Non-blocking by design: a run is O(mutants) and takes minutes, so it never
+# runs on pull requests and is not a required check. Weekly plus on demand.
+# Surviving mutants are findings to read in the artifact, not a red build.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"  # Mondays 04:17 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutmut:
+    name: mutmut (assess core)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+
+      # promissory_markers shells out to ripgrep; without it its tests degrade
+      # and every mutant in that module would survive for the wrong reason.
+      - name: Install ripgrep
+        run: sudo apt-get update -q && sudo apt-get install -y -q ripgrep
+
+      # mutmut 3 keys mutants by file path, stripping only a leading "src.";
+      # the tests import lib.<mod> from scripts/, so mutate through a src link
+      # (the [tool.mutmut] comment in skills/assess/pyproject.toml explains).
+      - name: Link src to scripts
+        run: ln -sfn scripts src
+        working-directory: skills/assess
+
+      # The inner timeout stops mutmut with SIGINT before the job limit, so the
+      # mutants already tested keep their results and still upload. A run cut
+      # short reports a partial score, never a missing one.
+      - name: Run mutmut
+        env:
+          GIT_CONFIG_GLOBAL: /dev/null
+        run: >-
+          timeout --signal=INT --kill-after=60s 45m
+          uv run --with mutmut==3.8.0 --with pytest
+          mutmut run --max-children "$(nproc)"
+        working-directory: skills/assess
+
+      # Scores come from the same mutants/**/*.meta parser /assess uses for its
+      # opt-in mutation pass, so CI and the report count mutants identically.
+      - name: Report score per module
+        if: ${{ !cancelled() }}
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, "scripts")
+          from lib.test_pressure.mutation import _parse_mutmut3_meta
+          rows = _parse_mutmut3_meta(Path("mutants"))
+          print("| Module | Killed | Survived | Score |")
+          print("|---|---:|---:|---:|")
+          for r in rows:
+              print(f"| `{r['file']}` | {r['killed']} | {r['survived']} | "
+                    f"{r['killed'] / r['total']:.1%} |")
+          k = sum(r["killed"] for r in rows)
+          t = sum(r["total"] for r in rows)
+          print(f"| **all** | {k} | {t - k} | {k / t:.1%} |" if t
+                else "| **all** | 0 | 0 | no mutant records |")
+          PY
+          uv run --with mutmut==3.8.0 --with pytest mutmut results \
+            > mutmut-results.txt || true
+        working-directory: skills/assess
+
+      - name: Upload mutmut results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: mutmut-results
+          path: |
+            skills/assess/mutmut-results.txt
+            skills/assess/mutants/**/*.meta
+          if-no-files-found: warn
