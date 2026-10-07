@@ -129,14 +129,18 @@ jobs:
         run: uv run --with ruff ruff check .
         working-directory: scripts
 
-      # Layer 2 type gate (issue #79). Scoped to the deterministic core (lib/);
-      # config in skills/assess/pyproject.toml selects the files and checks.
-      - name: Mypy type gate (skills/assess deterministic core)
+      # Layer 2 type gate (issue #79). mypy strict (minus disallow_any_generics)
+      # over all of skills/assess/scripts/: the deterministic core (lib/), the
+      # orchestrators and the SVG renderers. Config in
+      # skills/assess/pyproject.toml selects the files and checks.
+      - name: Mypy type gate (skills/assess)
         run: uv run --with mypy mypy
         working-directory: skills/assess
 
-      # Same gate for the build pipeline and contract tooling; config in
-      # scripts/pyproject.toml selects the files (floor_check.py excluded).
+      # Same gate, full strict, for the build pipeline and contract tooling;
+      # config in scripts/pyproject.toml selects the files (floor_check.py
+      # excluded) and relaxes per module only the flags floor-protected code
+      # fails today.
       - name: Mypy type gate (scripts)
         run: uv run --with mypy mypy
         working-directory: scripts

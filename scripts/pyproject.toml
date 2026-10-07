@@ -41,12 +41,11 @@ omit = ["*/tests/*"]
 fail_under = 91
 
 [tool.mypy]
-# Mirrors the skills/assess type gate (same checks, same strictness): the build
-# pipeline modules plus the contract and canary tooling, which already pass.
-# floor_check.py is left out: it carries two type errors (one name bound to an
-# int and then a list) and is floor-protected (FLOOR.md clause iii), so its fix
-# needs the maintainer's floor sign-off. tests/ is out of scope, as it is for
-# skills/assess.
+# Mirrors the skills/assess type gate: strict, over the build pipeline modules
+# plus the contract and canary tooling. floor_check.py is left out: it carries
+# two type errors (one name bound to an int and then a list) and is
+# floor-protected (FLOOR.md clause iii), so its fix needs the maintainer's floor
+# sign-off. tests/ is out of scope, as it is for skills/assess.
 files = [
     "transform_skill.py",
     "standalone_skill_config.py",
@@ -63,4 +62,30 @@ mypy_path = ["contract", "canaries", "."]
 explicit_package_bases = true
 namespace_packages = true
 ignore_missing_imports = true
-warn_redundant_casts = true
+# Full strict here, disallow_any_generics included: unlike skills/assess, the
+# non-floor modules carry no bare generics.
+strict = true
+# strict does not reject a bare ``# type: ignore``; this makes the error code
+# mandatory. The trailing ``  # reason`` stays a house convention mypy cannot check.
+enable_error_code = ["ignore-without-code"]
+
+# Floor-protected modules (FLOOR.md clause iii) keep the strict flags they
+# already pass; only the flags their current code fails are relaxed, per module,
+# because fixing that code needs the maintainer's floor sign-off. Each relaxed
+# flag lists the modules that fail it today; tighten a module here in the PR
+# that fixes it under sign-off.
+[[tool.mypy.overrides]]
+# Return a value read from json.loads / a parsed blob without narrowing it.
+module = ["floor_anchor", "freeze", "validate_completion", "verifier"]
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+# Bare ``dict`` / ``subprocess.CompletedProcess`` annotations.
+module = ["floor_anchor", "start_gate", "run_canaries"]
+disallow_any_generics = false
+
+[[tool.mypy.overrides]]
+# One helper with an unannotated parameter.
+module = ["floor_anchor"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false

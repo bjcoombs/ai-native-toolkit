@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TypedDict
 
 
 POSITIVE_DIRECTIVE_PATTERNS = [
@@ -204,7 +205,14 @@ ALIAS_MAX_NONBLANK_LINES = 12
 ALIAS_MAX_WORDS = 80
 
 
-def detect_alias(text: str) -> dict:
+class AliasResult(TypedDict):
+    """``detect_alias``'s verdict: whether the file is a thin alias, and of what."""
+
+    is_alias: bool
+    alias_target: str | None
+
+
+def detect_alias(text: str) -> AliasResult:
     """Detect a thin alias/stub that points at a canonical instruction file.
 
     A thin alias is a short file whose only real content is a reference to a

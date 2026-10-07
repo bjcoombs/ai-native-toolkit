@@ -19,6 +19,13 @@ import re
 from collections.abc import Callable, Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotation only; the caller owns the networkx import
+    import networkx as nx
+
+# by-relpath, by-basename and by-stem indexes from ``_build_name_index``.
+NameIndex = tuple[dict[str, Path], dict[str, list[Path]], dict[str, list[Path]]]
 
 
 # Link parsers. Wikilinks: [[target]], [[target|alias]], [[target#anchor]].
@@ -64,7 +71,7 @@ def _strip_anchor_and_alias(target: str) -> str:
 
 def _build_name_index(
     docs: list[Path], repo_root: Path,
-) -> tuple[dict[str, Path], dict[str, list[Path]], dict[str, list[Path]]]:
+) -> NameIndex:
     """Indexes for resolving wikilinks: by relative-path, by basename, by stem.
 
     Name collisions (two `setup.md` files) are why `Path(link).stem` alone is
@@ -225,8 +232,8 @@ class LinkHarvest:
 
 
 def _harvest_wikilinks(
-    d: Path, link_text: str, repo_root: Path, name_index, doc_set: set[Path],
-    graph, harvest: LinkHarvest,
+    d: Path, link_text: str, repo_root: Path, name_index: NameIndex, doc_set: set[Path],
+    graph: nx.DiGraph, harvest: LinkHarvest,
 ) -> None:
     """Wikilinks resolve by note name across the vault."""
     rel = harvest.rel
@@ -252,7 +259,7 @@ def _harvest_wikilinks(
 
 def _harvest_mdlinks(
     d: Path, link_text: str, repo_root: Path, doc_set: set[Path],
-    graph, harvest: LinkHarvest, *, doc_exts: AbstractSet[str], code_exts: AbstractSet[str],
+    graph: nx.DiGraph, harvest: LinkHarvest, *, doc_exts: AbstractSet[str], code_exts: AbstractSet[str],
 ) -> None:
     """CommonMark links resolve relative to the doc's directory. A target with
     a ``doc_exts`` suffix in ``doc_set`` is a graph edge; one with a
@@ -287,7 +294,8 @@ def _record_unresolved_mdlink(
 
 
 def harvest_links(
-    docs: list[Path], texts: dict[Path, str], repo_root: Path, graph, rel,
+    docs: list[Path], texts: dict[Path, str], repo_root: Path, graph: nx.DiGraph,
+    rel: Callable[[Path], str],
     *, doc_exts: AbstractSet[str], code_exts: AbstractSet[str],
 ) -> LinkHarvest:
     """Add every wikilink and CommonMark link edge to ``graph`` and collect
