@@ -699,18 +699,23 @@ def test_render_findings_markdown_attention_section_caps_at_five() -> None:
 
 def test_render_findings_markdown_no_marker_when_paths_at_cap() -> None:
     n = ks.MAX_FINDING_PATHS_RENDERED
-    findings = ks.assemble_findings({"lying_map": [f"docs/{i}.md" for i in range(n)]})
+    paths = [f"docs/{i}.md" for i in range(n)]
+    findings = ks.assemble_findings({"lying_map": paths})
     md = ks.render_findings_markdown(findings, [])
     assert "omitted" not in md
 
 
 def test_render_findings_markdown_discloses_omitted_paths() -> None:
     n = ks.MAX_FINDING_PATHS_RENDERED + 7
-    findings = ks.assemble_findings({"lying_map": [f"docs/{i}.md" for i in range(n)]})
+    paths = [f"docs/{i}.md" for i in range(n)]
+    findings = ks.assemble_findings({"lying_map": paths})
     md = ks.render_findings_markdown(findings, [])
     listed = [ln for ln in md.splitlines() if ln.startswith("- docs/")]
     assert len(listed) + 7 == n
-    assert "- ... 7 more omitted; full list in run-context.json" in md
+    assert (
+        "- ... 7 more omitted; full list in `.assess/run-context.json` "
+        "`derived_findings` (`lying_map`) `paths`"
+    ) in md
 
 
 def test_render_findings_markdown_attention_no_marker_at_cap() -> None:
@@ -732,7 +737,10 @@ def test_render_findings_markdown_attention_discloses_omitted_rows() -> None:
     md = ks.render_findings_markdown(findings, attention)
     omitted = len(attention) - ks.MAX_ATTENTION_ROWS_RENDERED
     assert omitted > 0
-    assert f"- ... {omitted} more omitted; full list in run-context.json" in md
+    assert (
+        f"- ... {omitted} more omitted; full list in "
+        "`.assess/run-context.json` `attention`"
+    ) in md
 
 
 # --- Issue #172: degenerate churn drops churn-derived findings ----------------
