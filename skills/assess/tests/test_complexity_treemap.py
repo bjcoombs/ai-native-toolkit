@@ -955,7 +955,7 @@ def test_write_stats_paths_match_generated_header_list_separator(treemap, tmp_pa
     paths = [r["path"] for r in json.loads(out.read_text())["top_large"]]
     assert paths == ["db/a.py"]
     src = (Path(treemap.__file__)).read_text()
-    rel_body = src[src.index("    def rel(p: Path) -> str:"):][:400]
+    rel_body = src[src.index("def _rel_path(p: Path, root: Path) -> str:"):][:400]
     assert "as_posix()" in rel_body and "str(p" not in rel_body
 
 
@@ -1556,3 +1556,64 @@ def test_largest_first_keeps_size_order_where_sizes_differ(treemap, tmp_path):
 
     picked = treemap._largest_first(rows, lambda f: tokens.get(f[0], f[1]), 3)
     assert [f[0].name for f in picked] == ["zz.json", "b1.json", "b10.json"]
+
+
+def test_write_stats_distribution_blocks_pin_percentiles_and_totals(
+        treemap, tmp_path):
+    """Characterise every distribution block write_stats emits: p50/p95/max
+    (numpy's linear interpolation) and totals for loc, est_tokens, ccn,
+    fn_ccn and churn, plus scoring_coverage. Pins the arithmetic before
+    the function is split into helpers."""
+    a, b, c = tmp_path / "a.py", tmp_path / "b.py", tmp_path / "c.ex"
+    files = [(a, 10, 2.0, "lizard"), (b, 30, 8.0, "lizard"),
+             (c, 50, 20.0, "scc")]
+    tokens = {a: 100, b: 300, c: 500}
+    out = tmp_path / "stats.json"
+    treemap.write_stats(
+        files, {a: 1, b: 3}, "commits (last 12mo)", tmp_path, out,
+        fn_ccn_by_path={a: [1.0, 1.0], b: [2.0, 6.0]},
+        tokens_by_path=tokens)
+    # The numpy stub breaks pytest.approx, so round instead.
+    stats = json.loads(out.read_text(),
+                       parse_float=lambda v: round(float(v), 9))
+    assert stats["files_scored"] == 3
+    assert stats["scoring_coverage"] == {"lizard": 2, "scc": 1}
+    assert stats["loc"] == {"p50": 30.0, "p95": 48.0, "max": 50.0,
+                            "max_code": 50.0, "max_data": 0.0, "total": 90}
+    tok = dict(stats["est_tokens"])
+    budget = tok.pop("budget")
+    assert tok == {"p50": 300.0, "p95": 480.0, "max": 500.0,
+                   "max_code": 500.0, "max_data": 0.0, "total": 900}
+    assert budget["total"] == 900
+    assert budget["files_over_budget"] == 0
+    assert stats["ccn"] == {"basis": "file-aggregate", "p50": 8.0,
+                            "p95": 18.8, "max": 20.0}
+    fn = stats["fn_ccn"]
+    assert fn["source"] == [{"name": "lizard", "approximate": False}]
+    assert fn["function_count"] == 4
+    assert (fn["p50"], fn["p95"], fn["max"]) == (1.5, 5.4, 6.0)
+    # c.ex has no churn entry, so it counts as 0 commits.
+    assert stats["churn"] == {"p50": 1.0, "p95": 2.8,
+                              "max": 3.0}
+    assert [r["path"] for r in stats["top_large"]] == ["c.ex", "b.py", "a.py"]
+    rows = {r["path"]: r for r in stats["top_large"]}
+    assert rows["c.ex"]["commits"] == 0
+    assert rows["c.ex"]["max_fn_ccn"] is None
+    assert rows["b.py"]["max_fn_ccn"] == 6.0
+    assert "_score" not in rows["a.py"]
+
+
+def test_write_stats_empty_file_list_reports_zeroes(treemap, tmp_path):
+    """No scored files: every distribution reads 0 and every top list is empty,
+    rather than raising on max() of an empty sequence."""
+    out = tmp_path / "stats.json"
+    treemap.write_stats([], None, None, tmp_path, out)
+    stats = json.loads(out.read_text())
+    assert stats["files_scored"] == 0
+    assert stats["loc"]["max"] == stats["loc"]["p95"] == 0.0
+    assert stats["ccn"]["max"] == 0.0
+    assert stats["fn_ccn"]["function_count"] == 0
+    assert stats["fn_ccn"]["source"] == []
+    assert stats["fn_ccn"]["backend_by_language"] == {}
+    assert stats["churn"] is None
+    assert stats["top_hotspots"] == stats["top_complex"] == []

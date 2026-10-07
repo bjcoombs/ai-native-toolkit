@@ -636,6 +636,35 @@ def test_integrate_attention_tie_break_uses_top_hotspots(tmp_path: Path) -> None
     assert [u["path"] for u in out["attention"]] == ["c.py", "b.py", "a.py"]
 
 
+def test_integrate_unactioned_intent_silent_when_aging_unreliable(tmp_path: Path) -> None:
+    """Thin history reads "not assessed": stale markers never become a finding."""
+    pm = {"available": True, "aging_reliable": False,
+          "stale_by_file": {"a.py": {}}, "top_offenders": []}
+    out = ks.integrate(
+        repo_root=tmp_path, complexity_stats={}, doc_staleness={},
+        dead_code={}, observability={}, structure={}, promissory_markers=pm,
+    )
+    assert _finding_paths(out, "unactioned_intent") == []
+    pm["aging_reliable"] = True
+    out = ks.integrate(
+        repo_root=tmp_path, complexity_stats={}, doc_staleness={},
+        dead_code={}, observability={}, structure={}, promissory_markers=pm,
+    )
+    assert _finding_paths(out, "unactioned_intent") == ["a.py"]
+
+
+def test_integrate_untrusted_hotspot_wired_from_test_pressure(tmp_path: Path) -> None:
+    """test_pressure reaches the E1 finding; absent, the finding is silent."""
+    stats = {"top_hotspots": [{"path": "src/hot.py"}]}
+    pressure = {"per_file": [{"file": "src/hot.py", "survived": 4, "total": 10}]}
+    common = dict(repo_root=tmp_path, complexity_stats=stats, doc_staleness={},
+                  dead_code={}, observability={}, structure={})
+    assert _finding_paths(
+        ks.integrate(**common, test_pressure=pressure), "untrusted_hotspot"
+    ) == ["src/hot.py"]
+    assert _finding_paths(ks.integrate(**common), "untrusted_hotspot") == []
+
+
 # --- Task 2: render_findings_markdown ----------------------------------------
 
 def _sample_findings() -> list[dict]:
@@ -1152,8 +1181,15 @@ def test_format_accretion_items_roll_up_and_per_file_lines() -> None:
     assert items[0].startswith("2 files show monotonic growth")
     assert "2 hottest" in items[0]
     # Per-file lines include path, LOC, time span, commits, deletion fraction.
-    assert any("src/fat.py" in line and "+2,400 LOC" in line for line in items)
-    assert any("lib/bloat.py" in line for line in items)
+    # Net physical lines from git numstat (not scored LOC), and the share of
+    # churn that was deletions (not a count of net reductions).
+    assert any(
+        "src/fat.py" in line and "+2,400 lines net" in line for line in items
+    )
+    assert any(
+        "lib/bloat.py" in line and "5% of churn deleted" in line for line in items
+    )
+    assert not any("LOC" in line or "net reductions" in line for line in items)
     # Worst offender comes first.
     fat_idx = next(i for i, line in enumerate(items) if "src/fat.py" in line)
     bloat_idx = next(i for i, line in enumerate(items) if "lib/bloat.py" in line)

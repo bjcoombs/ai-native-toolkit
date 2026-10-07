@@ -943,6 +943,196 @@ def _effective_ccn(ccn: float, max_fn_ccn: float | None) -> float:
     return float(max_fn_ccn ** w * ccn ** (1.0 - w))
 
 
+def _pct(values: list[float], q: float) -> float:
+    return float(np.percentile(values, q)) if values else 0.0
+
+
+def _distribution(values: list) -> dict[str, float]:
+    """``{p50, p95, max}`` of ``values``; every field 0.0 when empty."""
+    return {
+        "p50": _pct(values, 50),
+        "p95": _pct(values, 95),
+        "max": float(max(values)) if values else 0.0,
+    }
+
+
+def _side_max(values: list, is_data: list[bool], data: bool) -> float:
+    """Largest of ``values`` on the code (``data=False``) or data side."""
+    side = [v for v, d in zip(values, is_data) if d is data]
+    return float(max(side)) if side else 0.0
+
+
+def _size_block(values: list, is_data: list[bool]) -> dict:
+    """The ``loc`` / ``est_tokens`` block: distribution, code/data maxima, total."""
+    return {
+        **_distribution(values),
+        "max_code": _side_max(values, is_data, False),
+        "max_data": _side_max(values, is_data, True),
+        "total": sum(values),
+    }
+
+
+def _rel_path(p: Path, root: Path) -> str:
+    # Forward slashes on every host, matching `excluded_generated` (built
+    # in `collect`), so assess_core can compare the two path sets on Windows.
+    try:
+        return p.relative_to(root).as_posix()
+    except ValueError:
+        return p.as_posix()
+
+
+def _max_fn(fn_ccn_by_path: dict[Path, list[float]], path: Path) -> float | None:
+    vals = fn_ccn_by_path.get(path)
+    return float(max(vals)) if vals else None
+
+
+def _scoring_coverage(files: list[tuple[Path, int, float, str]]) -> dict[str, int]:
+    return {
+        "lizard": sum(1 for f in files if f[3] == "lizard"),
+        "scc": sum(1 for f in files if f[3] == "scc"),
+    }
+
+
+def _backend_by_language(
+    files: list[tuple[Path, int, float, str]],
+    langs: dict[Path, str],
+    backend_of: dict[Path, str],
+) -> dict[str, str | None]:
+    """Map each scc language to its per-function backend, or None.
+
+    See ``write_stats`` for which languages get a key.
+    """
+    covered: dict[str, str] = {}
+    uncovered: set[str] = set()
+    for path, _loc, metric, _src in files:
+        lang = langs.get(path)
+        if not lang:
+            continue
+        if path in backend_of:
+            covered[lang] = backend_of[path]
+        elif metric > 0 and lang not in DATA_LANGUAGES:
+            uncovered.add(lang)
+    # A language counts as covered only when no file of it with decision points
+    # fell back to scc: partial coverage reads as null, not as the backend.
+    return {
+        lang: (None if lang in uncovered else covered[lang])
+        for lang in covered.keys() | uncovered
+    }
+
+
+def _enrich_row(path: Path, loc: int, ccn: float, src: str, *,
+                aux_data: dict[Path, int] | None,
+                tokens: dict[Path, int], root: Path,
+                fn_ccn_by_path: dict[Path, list[float]],
+                fn_names: dict[Path, str]) -> dict:
+    """One hotspot row, carrying the private ``_score`` ranking key."""
+    churn = float(aux_data.get(path, 0)) if aux_data else 0.0
+    est_tokens = tokens.get(path, est_token_count(path, loc))
+    max_fn_ccn = _max_fn(fn_ccn_by_path, path)
+    return {
+        "path": _rel_path(path, root),
+        "loc": int(loc),
+        # Estimated tokens (~chars/4), the size unit the treemap blocks and
+        # the hotspot composite use. `loc` is kept alongside (tooltip +
+        # back-compat). An estimate, not a model-exact count.
+        "est_tokens": int(est_tokens),
+        # File-level aggregate (sum of per-function ccn). See `max_fn_ccn`
+        # for the per-function worst case the linter threshold gates.
+        "ccn": float(ccn),
+        "ccn_basis": "file-aggregate",
+        "max_fn_ccn": max_fn_ccn,
+        # Name of the function whose ccn is max_fn_ccn; null with it.
+        "max_fn_name": (fn_names.get(path)
+                        if max_fn_ccn is not None else None),
+        # Named `commits` to match what every consumer reads (stats_diff,
+        # assess_core, the hotspot template). None when churn is unavailable
+        # (no git), so a missing value is distinct from a real 0.
+        "commits": int(churn) if aux_data else None,
+        "source": src,
+        # Ranked on the per-function-weighted effective complexity, recent
+        # churn, AND context-window size - each sqrt-damped so the worst
+        # keyhole (high on multiple axes) leads and no single axis can top
+        # the list alone (issue #115 for the ccn re-weight; PRD 2026-06 for
+        # the token axis). The `ccn`/`loc` fields above stay raw for the hue
+        # and the Layer 3 comparison.
+        "_score": math.sqrt(_effective_ccn(ccn, max_fn_ccn))
+        * math.sqrt(1.0 + churn)
+        * math.sqrt(est_tokens),
+    }
+
+
+def _fn_ccn_block(files: list[tuple[Path, int, float, str]],
+                  fn_ccn_by_path: dict[Path, list[float]],
+                  fn_backend_by_path: dict[Path, str] | None,
+                  langs: dict[Path, str]) -> dict:
+    """The per-function ``fn_ccn`` block of the stats sidecar."""
+    backend_of = {p: (fn_backend_by_path or {}).get(p, "lizard")
+                  for p in fn_ccn_by_path}
+    # Per-function population, per-function backends only. Other scc paths are
+    # absent from fn_ccn_by_path, so they don't contribute - the block
+    # self-labels its sources so a reader knows what it omits.
+    fn_population: list[float] = []
+    for vals in fn_ccn_by_path.values():
+        fn_population.extend(vals)
+
+    backends_used = sorted({backend_of[f[0]] for f in files
+                            if f[0] in backend_of})
+    backend_by_language = _backend_by_language(files, langs, backend_of)
+    return {
+        "basis": "per-function",
+        "source": [{"name": n, "approximate": FN_BACKENDS.get(n, False)}
+                   for n in backends_used],
+        "backend_by_language": dict(sorted(backend_by_language.items())),
+        "function_count": len(fn_population),
+        **_distribution(fn_population),
+    }
+
+
+def _provenance(files: list[tuple[Path, int, float, str]]) -> dict:
+    """Run-provenance keys that open the stats sidecar."""
+    tool_versions = _tool_versions(files)
+    return {
+        # Run provenance: the artifact schema and a unique id for this emission
+        # (distinct from schema_version below, which versions the stats layout).
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+        "run_id": _new_run_id(),
+        "plugin_version": _read_plugin_version(),
+        # Layout version of this sidecar. A cross-run diff is only comparable
+        # when both snapshots share it (assess_core._diff_is_reliable).
+        "schema_version": STATS_SCHEMA_VERSION,
+        # The complexity backends and their captured versions. A backend version
+        # change can shift scores, so a later run flags the diff as not
+        # comparable and names the tool. lizard is always present; scc only when
+        # it scored files.
+        "lizard_version": tool_versions["lizard"],
+        **({"scc_version": tool_versions["scc"]} if "scc" in tool_versions else {}),
+    }
+
+
+def _strip_score(rows: list[dict]) -> list[dict]:
+    return [{k: v for k, v in r.items() if k != "_score"} for r in rows]
+
+
+def _top_lists(enriched: list[dict]) -> dict[str, list[dict]]:
+    """``top_hotspots`` / ``top_complex`` / ``top_large``, ten rows each."""
+    # Ties break on the repository-relative path, ascending, under Python's
+    # default byte ordering for `str`. Without it a stable single-key sort
+    # hands ties back in scanner emission order, so which of a tied group
+    # makes the top ten depends on how lizard and scc happened to enumerate
+    # the tree - and membership of `top_hotspots` decides which files get a
+    # wiki page and a first-flagged date (issue #426). The primary keys are
+    # unchanged, so no file moves when the values differ; this is the same
+    # `(-primary, path)` shape the attention list took in #357.
+    by_score = sorted(enriched, key=lambda f: (-f["_score"], f["path"]))
+    by_ccn = sorted(enriched, key=lambda f: (-f["ccn"], f["path"]))
+    by_loc = sorted(enriched, key=lambda f: (-f["loc"], f["path"]))
+    return {
+        "top_hotspots": _strip_score(by_score[:10]),
+        "top_complex": _strip_score(by_ccn[:10]),
+        "top_large": _strip_score(by_loc[:10]),
+    }
+
+
 def write_stats(files: list[tuple[Path, int, float, str]],
                 aux_data: dict[Path, int] | None,
                 aux_label: str | None,
@@ -1016,8 +1206,6 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     """
     fn_ccn_by_path = fn_ccn_by_path or {}
     fn_names = fn_name_by_path or {}
-    backend_of = {p: (fn_backend_by_path or {}).get(p, "lizard")
-                  for p in fn_ccn_by_path}
     tokens = tokens_by_path if tokens_by_path is not None else est_tokens_by_path(files)
     locs = [f[1] for f in files]
     token_vals = [tokens.get(f[0], est_token_count(f[0], f[1])) for f in files]
@@ -1025,127 +1213,23 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     langs = languages_by_path or {}
     is_data = [langs.get(f[0]) in DATA_LANGUAGES for f in files]
 
-    def side_max(values: list, data: bool) -> float:
-        side = [v for v, d in zip(values, is_data) if d is data]
-        return float(max(side)) if side else 0.0
-
     churns = ([float(aux_data.get(f[0], 0)) for f in files]
               if aux_data is not None else [])
-    # Per-function population, per-function backends only. Other scc paths are
-    # absent from fn_ccn_by_path, so they don't contribute - the block
-    # self-labels its sources so a reader knows what it omits.
-    fn_population: list[float] = []
-    for vals in fn_ccn_by_path.values():
-        fn_population.extend(vals)
 
-    def pct(values: list[float], q: float) -> float:
-        return float(np.percentile(values, q)) if values else 0.0
+    enriched = [
+        _enrich_row(path, loc, ccn, src, aux_data=aux_data, tokens=tokens,
+                    root=root, fn_ccn_by_path=fn_ccn_by_path,
+                    fn_names=fn_names)
+        for path, loc, ccn, src in files
+    ]
 
-    def rel(p: Path) -> str:
-        # Forward slashes on every host, matching `excluded_generated` (built
-        # in `collect`), so assess_core can compare the two path sets on Windows.
-        try:
-            return p.relative_to(root).as_posix()
-        except ValueError:
-            return p.as_posix()
-
-    def max_fn(path: Path) -> float | None:
-        vals = fn_ccn_by_path.get(path)
-        return float(max(vals)) if vals else None
-
-    backends_used = sorted({backend_of[f[0]] for f in files
-                            if f[0] in backend_of})
-    covered: dict[str, str] = {}
-    uncovered: set[str] = set()
-    for path, _loc, metric, _src in files:
-        lang = langs.get(path)
-        if not lang:
-            continue
-        if path in backend_of:
-            covered[lang] = backend_of[path]
-        elif metric > 0 and lang not in DATA_LANGUAGES:
-            uncovered.add(lang)
-    # A language counts as covered only when no file of it with decision points
-    # fell back to scc: partial coverage reads as null, not as the backend.
-    backend_by_language: dict[str, str | None] = {
-        lang: (None if lang in uncovered else covered[lang])
-        for lang in covered.keys() | uncovered
-    }
-
-    enriched = []
-    for path, loc, ccn, src in files:
-        churn = float(aux_data.get(path, 0)) if aux_data else 0.0
-        est_tokens = tokens.get(path, est_token_count(path, loc))
-        enriched.append({
-            "path": rel(path),
-            "loc": int(loc),
-            # Estimated tokens (~chars/4), the size unit the treemap blocks and
-            # the hotspot composite use. `loc` is kept alongside (tooltip +
-            # back-compat). An estimate, not a model-exact count.
-            "est_tokens": int(est_tokens),
-            # File-level aggregate (sum of per-function ccn). See `max_fn_ccn`
-            # for the per-function worst case the linter threshold gates.
-            "ccn": float(ccn),
-            "ccn_basis": "file-aggregate",
-            "max_fn_ccn": max_fn(path),
-            # Name of the function whose ccn is max_fn_ccn; null with it.
-            "max_fn_name": (fn_names.get(path)
-                            if max_fn(path) is not None else None),
-            # Named `commits` to match what every consumer reads (stats_diff,
-            # assess_core, the hotspot template). None when churn is unavailable
-            # (no git), so a missing value is distinct from a real 0.
-            "commits": int(churn) if aux_data else None,
-            "source": src,
-            # Ranked on the per-function-weighted effective complexity, recent
-            # churn, AND context-window size - each sqrt-damped so the worst
-            # keyhole (high on multiple axes) leads and no single axis can top
-            # the list alone (issue #115 for the ccn re-weight; PRD 2026-06 for
-            # the token axis). The `ccn`/`loc` fields above stay raw for the hue
-            # and the Layer 3 comparison.
-            "_score": math.sqrt(_effective_ccn(ccn, max_fn(path)))
-            * math.sqrt(1.0 + churn)
-            * math.sqrt(est_tokens),
-        })
-
-    def strip(rows: list[dict]) -> list[dict]:
-        return [{k: v for k, v in r.items() if k != "_score"} for r in rows]
-
-    # Ties break on the repository-relative path, ascending, under Python's
-    # default byte ordering for `str`. Without it a stable single-key sort
-    # hands ties back in scanner emission order, so which of a tied group
-    # makes the top ten depends on how lizard and scc happened to enumerate
-    # the tree - and membership of `top_hotspots` decides which files get a
-    # wiki page and a first-flagged date (issue #426). The primary keys are
-    # unchanged, so no file moves when the values differ; this is the same
-    # `(-primary, path)` shape the attention list took in #357.
-    by_score = sorted(enriched, key=lambda f: (-f["_score"], f["path"]))
-    by_ccn = sorted(enriched, key=lambda f: (-f["ccn"], f["path"]))
-    by_loc = sorted(enriched, key=lambda f: (-f["loc"], f["path"]))
-
-    tool_versions = _tool_versions(files)
     stats: dict = {
-        # Run provenance: the artifact schema and a unique id for this emission
-        # (distinct from schema_version below, which versions the stats layout).
-        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
-        "run_id": _new_run_id(),
-        "plugin_version": _read_plugin_version(),
-        # Layout version of this sidecar. A cross-run diff is only comparable
-        # when both snapshots share it (assess_core._diff_is_reliable).
-        "schema_version": STATS_SCHEMA_VERSION,
-        # The complexity backends and their captured versions. A backend version
-        # change can shift scores, so a later run flags the diff as not
-        # comparable and names the tool. lizard is always present; scc only when
-        # it scored files.
-        "lizard_version": tool_versions["lizard"],
-        **({"scc_version": tool_versions["scc"]} if "scc" in tool_versions else {}),
+        **_provenance(files),
         "files_scored": len(files),
         # Files dropped by content (generator header, payload-length lines):
         # [{path, reason}]. assess_core copies it into run-context.json.
         "excluded_generated": list(excluded_generated or []),
-        "scoring_coverage": {
-            "lizard": sum(1 for f in files if f[3] == "lizard"),
-            "scc": sum(1 for f in files if f[3] == "scc"),
-        },
+        "scoring_coverage": _scoring_coverage(files),
         "churn_window": aux_label,
         # Churn-measurement reliability (lib.git_churn.churn_is_degenerate). True
         # when the history is degenerate - every file ~1 commit - so the
@@ -1153,59 +1237,28 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         # term (sqrt(1 + commits)) is near-constant. A reader (and the report)
         # treats the `commits` column and saturation axis as inactive here.
         "churn_degenerate": bool(churn_degenerate),
-        "loc": {
-            "p50": pct(locs, 50),
-            "p95": pct(locs, 95),
-            "max": float(max(locs)) if locs else 0.0,
-            # The maxima split by scc language (DATA_LANGUAGES), so a large
-            # JSON fixture cannot pass for the largest source file.
-            "max_code": side_max(locs, False),
-            "max_data": side_max(locs, True),
-            "total": sum(locs),
-        },
+        # The maxima split by scc language (DATA_LANGUAGES), so a large
+        # JSON fixture cannot pass for the largest source file.
+        "loc": _size_block(locs, is_data),
         # Estimated tokens (~chars/4) - the keyhole size unit. Sized the treemap
         # blocks and feeds the hotspot composite. `budget` rolls the per-file
         # totals into the "does the relevant slice fit one keyhole?" finding.
         "est_tokens": {
-            "p50": pct(token_vals, 50),
-            "p95": pct(token_vals, 95),
-            "max": float(max(token_vals)) if token_vals else 0.0,
-            "max_code": side_max(token_vals, False),
-            "max_data": side_max(token_vals, True),
-            "total": sum(token_vals),
+            **_size_block(token_vals, is_data),
             "budget": _keyhole_budget_rollup(tokens, root),
         },
         # File-level aggregate complexity (sum per file). Drives the treemap hue
         # and the hotspot composite - NOT comparable to a per-function linter
         # threshold. Use `fn_ccn` for that comparison.
-        "ccn": {
-            "basis": "file-aggregate",
-            "p50": pct(ccns, 50),
-            "p95": pct(ccns, 95),
-            "max": float(max(ccns)) if ccns else 0.0,
-        },
+        "ccn": {"basis": "file-aggregate", **_distribution(ccns)},
         # Per-function complexity distribution (the unit a linter threshold like
         # cyclop:15 actually gates). Per-function backends only; scc files
         # contribute no function breakdown. `function_count` is 0 when only scc
         # scored the repo. `backend_by_language` null = no per-function data.
-        "fn_ccn": {
-            "basis": "per-function",
-            "source": [{"name": n, "approximate": FN_BACKENDS.get(n, False)}
-                       for n in backends_used],
-            "backend_by_language": dict(sorted(backend_by_language.items())),
-            "function_count": len(fn_population),
-            "p50": pct(fn_population, 50),
-            "p95": pct(fn_population, 95),
-            "max": float(max(fn_population)) if fn_population else 0.0,
-        },
-        "churn": ({
-            "p50": pct(churns, 50),
-            "p95": pct(churns, 95),
-            "max": float(max(churns)) if churns else 0.0,
-        } if aux_data is not None else None),
-        "top_hotspots": strip(by_score[:10]),
-        "top_complex": strip(by_ccn[:10]),
-        "top_large": strip(by_loc[:10]),
+        "fn_ccn": _fn_ccn_block(files, fn_ccn_by_path, fn_backend_by_path,
+                                langs),
+        "churn": (_distribution(churns) if aux_data is not None else None),
+        **_top_lists(enriched),
     }
 
     out_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")

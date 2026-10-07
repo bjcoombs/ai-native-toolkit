@@ -31,19 +31,20 @@ from __future__ import annotations
 import os
 import posixpath
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
+
+from lib.git_churn import tracked_files
 
 try:  # networkx is the core dep; degrade rather than crash if it is missing.
     import networkx as nx
 
     _NETWORKX_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only on a broken env
-    nx = None  # type: ignore[assignment]
+    nx = None  # type: ignore[assignment]  # unused unless _NETWORKX_AVAILABLE
     _NETWORKX_AVAILABLE = False
-
-from lib.git_churn import tracked_files  # noqa: E402
 
 
 DOC_EXTENSIONS = {".md", ".mdx", ".markdown"}
@@ -412,7 +413,7 @@ def _vault_detected(repo_root: Path) -> bool:
 
 def _obsidiantools_available() -> bool:
     try:  # optional accelerator; never required.
-        import obsidiantools  # noqa: F401
+        import obsidiantools  # noqa: F401 - imported only to probe availability
 
         return True
     except ImportError:
@@ -753,7 +754,199 @@ def classify_node(node: str, entries: set, unreachable: set, orphans: set) -> st
     return "island"
 
 
-def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, ratchet target
+@dataclass
+class _LinkHarvest:
+    """What the link pass collects besides graph edges, one per build."""
+
+    rel: Callable[[Path], str]
+    doc_to_code: list[dict] = field(default_factory=list)
+    ambiguous: int = 0
+    broken: list[dict] = field(default_factory=list)
+    broken_seen: set[tuple[str, str]] = field(default_factory=set)
+    # Per-doc count of non-navigational URI-scheme links (mailto:/tel:/external
+    # http) - the machine-extraction fingerprint a converted document carries.
+    # Feeds raw-source-tree detection (issue #225).
+    machine_links: dict[str, int] = field(default_factory=dict)
+
+    def add_broken(self, src: Path, target: str, kind: str) -> None:
+        key = (self.rel(src), target)
+        if target and key not in self.broken_seen:
+            self.broken_seen.add(key)
+            self.broken.append({"from": self.rel(src), "target": target, "kind": kind})
+
+    def count_machine_link(self, src: Path) -> None:
+        self.machine_links[self.rel(src)] = self.machine_links.get(self.rel(src), 0) + 1
+
+
+def _harvest_wikilinks(
+    d: Path, link_text: str, repo_root: Path, name_index, doc_set: set[Path],
+    graph, harvest: _LinkHarvest,
+) -> None:
+    """Wikilinks resolve by note name across the vault."""
+    rel = harvest.rel
+    for m in _WIKILINK_RE.finditer(link_text):
+        # Strip alias/anchor first so the scheme check sees the bare target
+        # (e.g. `tel:+1-555-1234` from `[[tel:+1-555-1234|Call us]]`).
+        wikilink_target = _strip_anchor_and_alias(m.group(1))
+        if _EXTERNAL_RE.match(wikilink_target):
+            # Non-navigational URI (`tel:`, `mailto:`, etc.) -- not a note
+            # reference; skip without counting as a broken link (issue #227).
+            # Count it as a machine-extraction fingerprint (issue #225).
+            harvest.count_machine_link(d)
+            continue
+        tgt, amb = _resolve_wikilink(m.group(1), d, repo_root, *name_index)
+        if amb:
+            harvest.ambiguous += 1
+        if tgt is None:
+            harvest.add_broken(d, wikilink_target, "wikilink")
+            continue
+        if tgt in doc_set and tgt != d:
+            graph.add_edge(rel(d), rel(tgt), kind="link")
+
+
+def _harvest_mdlinks(
+    d: Path, link_text: str, repo_root: Path, doc_set: set[Path],
+    graph, harvest: _LinkHarvest,
+) -> None:
+    """CommonMark links resolve relative to the doc's directory."""
+    rel = harvest.rel
+    for m in _MDLINK_RE.finditer(link_text):
+        raw = m.group(1)
+        tgt = _resolve_mdlink(raw, d, repo_root)
+        if tgt is None:
+            _record_unresolved_mdlink(raw, d, repo_root, harvest)
+            continue
+        if tgt.suffix.lower() in DOC_EXTENSIONS and tgt in doc_set:
+            if tgt != d:
+                graph.add_edge(rel(d), rel(tgt), kind="link")
+        elif tgt.suffix.lower() in CODE_EXTENSIONS:
+            harvest.doc_to_code.append({"doc": rel(d), "code": rel(tgt)})
+
+
+def _record_unresolved_mdlink(
+    raw: str, d: Path, repo_root: Path, harvest: _LinkHarvest,
+) -> None:
+    """A relative-looking link that resolves to nothing is broken (a "ghost").
+    External URLs, pure #anchors, and links to an existing directory are not."""
+    cleaned = _strip_anchor_and_alias(raw)
+    if cleaned and _EXTERNAL_RE.match(cleaned):
+        # Non-navigational URI (mailto:/tel:/external http): the
+        # machine-extraction fingerprint, not a broken link (#225).
+        harvest.count_machine_link(d)
+    elif (cleaned and not raw.strip().startswith("#")
+            and not _target_exists(raw, d, repo_root)):
+        harvest.add_broken(d, cleaned, "mdlink")
+
+
+def _harvest_links(
+    docs: list[Path], texts: dict[Path, str], repo_root: Path, graph, rel,
+) -> _LinkHarvest:
+    """Add every wikilink and CommonMark link edge to ``graph`` and collect
+    broken links, doc-to-code links, ambiguity, and machine-link counts."""
+    name_index = _build_name_index(docs, repo_root)
+    doc_set = set(docs)
+    harvest = _LinkHarvest(rel=rel)
+    for d in docs:
+        text = texts.get(d)
+        if text is None:  # unreadable: skipped, Layer 0 stays best-effort
+            continue
+        # Strip code spans before harvesting links: a link target inside a
+        # fence or backtick span is a documentation sample (FORMAT specs,
+        # wikilink-syntax demos), not a navigation edge.
+        link_text = _strip_code_spans(text)
+        _harvest_wikilinks(d, link_text, repo_root, name_index, doc_set, graph, harvest)
+        _harvest_mdlinks(d, link_text, repo_root, doc_set, graph, harvest)
+    return harvest
+
+
+def _settle_reference_pairs(
+    docs: list[Path], texts: dict[Path, str], rel, repo_root: Path,
+    scope: Path | None, extra_exclude_dirs: set[str] | None,
+    extra_exclude_patterns: list[str] | None,
+) -> list:
+    """Reference edges (issue #353) settle first: a backticked token naming an
+    existing doc. A cited `.claude/` doc joins `docs` here, before the name
+    index and the link pass, so links and wikilinks reach it from any doc."""
+    doc_by_rel = {rel(x): x for x in docs}
+    cite = partial(
+        _cited_excluded_doc, repo_root=repo_root, tracked=tracked_files(repo_root),
+        scope=scope, extra_dirs=extra_exclude_dirs or set(),
+        extra_pats=extra_exclude_patterns or [],
+    )
+    return _settle_references(docs, texts, rel, partial(
+        _resolve_references, repo_root=repo_root, doc_by_rel=doc_by_rel,
+        doc_rels=set(doc_by_rel), by_basename=_basename_index(doc_by_rel), cite=cite,
+    ))
+
+
+def _excluded_layers(
+    graph, docs: list[Path], repo_root: Path, rel, base_hubs,
+    machine_links: dict[str, int], working_notes_dirs: list[str] | None,
+    working_notes_ignore: list[str] | None,
+) -> tuple[set[str], list, set[str], list]:
+    """Raw-source and working-notes trees, detected on the final graph.
+
+    Raw-source-tree exclusion (issue #225). Detect subtrees of raw,
+    machine-extracted source documents - link-isolated and carrying the
+    machine-extraction fingerprint - and exclude them from the headline
+    read-side metrics so the curated-wiki signal isn't drowned. Detection runs
+    on the *final* graph (after vault edges), so a doc made navigable by a
+    `.base` hub or dataview query is not misread as raw.
+    """
+    raw_docs, raw_trees = _detect_raw_trees(
+        graph, docs, repo_root, rel, base_hubs, machine_links,
+    )
+    # Working-notes trees (issue #366) are the second fingerprint, detected on
+    # what the raw pass leaves so no doc belongs to both layers.
+    notes_docs, notes_trees = _detect_working_notes_trees(
+        graph, {rel(d) for d in docs} - raw_docs,
+        force=working_notes_dirs or [], ignore=working_notes_ignore or [],
+    )
+    return raw_docs, raw_trees, notes_docs, notes_trees
+
+
+def _curated_result(
+    graph, docs: list[Path], repo_root: Path, rel, harvest: _LinkHarvest,
+    missing: list[dict], excluded_docs: set[str], vault: bool, obs: bool, base_hubs,
+) -> DocGraphResult:
+    """Derive the headline and link-only signals over the curated layer
+    (the graph minus excluded docs)."""
+    curated_docs = [d for d in docs if rel(d) not in excluded_docs]
+    curated_nodes = [n for n in graph.nodes() if n not in excluded_docs]
+    curated_graph = graph.subgraph(curated_nodes).copy()
+    curated_broken = [b for b in harvest.broken if b.get("from") not in excluded_docs]
+    curated_missing = [
+        mx for mx in missing
+        if mx.get("from") not in excluded_docs and mx.get("to") not in excluded_docs
+    ]
+
+    result = _derive_signals(
+        graph=curated_graph, docs=curated_docs, repo_root=repo_root, rel=rel,
+        doc_to_code=harvest.doc_to_code, dangling=len(curated_broken),
+        ambiguous=harvest.ambiguous, vault=vault, obs=obs, base_hubs=base_hubs,
+    )
+    link_graph = nx.DiGraph()
+    link_graph.add_nodes_from(curated_graph)
+    link_graph.add_edges_from(
+        (u, v) for u, v, k in curated_graph.edges(data="kind") if k != "reference"
+    )
+    link_only = _derive_signals(
+        graph=link_graph, docs=curated_docs, repo_root=repo_root, rel=rel,
+        doc_to_code=harvest.doc_to_code, dangling=0, ambiguous=0,
+        vault=vault, obs=obs, base_hubs=base_hubs, entries=result.entry_points,
+    )
+    result.link_only_orphan_rate = link_only.orphan_rate
+    result.link_only_reachability_pct = link_only.reachability_pct
+    result.link_parents = _link_parents(link_graph, result.entry_points)
+    result.broken_links = curated_broken[:MAX_BROKEN_LINKS]
+    result.missing_xrefs = curated_missing[:MAX_MISSING_XREFS]
+    rows = _directory_breakdown(curated_nodes, result.unreachable, curated_broken)
+    result.directory_breakdown = rows[:MAX_DIRECTORY_BREAKDOWN]
+    result.directory_count = len(rows)
+    return result
+
+
+def build_doc_graph(
     repo_root: Path, doc_files: list[Path] | None = None,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
@@ -770,6 +963,12 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     `working_notes_dirs` / `working_notes_ignore` are the `.assess/config.toml`
     overrides (`lib.assess_config.load_working_notes_config`) that force or
     suppress working-notes classification for repo-relative directories.
+
+    Phases, in order: reference edges settle (and may add cited `.claude/`
+    docs), the link pass adds link edges, reference edges fill the pairs no
+    link covers, vault-native edges join, the raw-source and working-notes
+    layers are detected on that final graph, and the signals are derived over
+    the curated remainder.
     """
     repo_root = repo_root.resolve()
     vault = _vault_detected(repo_root)
@@ -802,95 +1001,16 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
     def rel(p: Path) -> str:
         return str(p.relative_to(repo_root))
 
-    # Reference edges (issue #353) settle first: a backticked token naming an
-    # existing doc. A cited `.claude/` doc joins `docs` here, before the name
-    # index and the link pass, so links and wikilinks reach it from any doc.
     texts: dict[Path, str] = {}
     discovered = list(docs)  # the walked set; `docs` grows with cited .claude docs
-    doc_by_rel = {rel(x): x for x in discovered}
-    cite = partial(
-        _cited_excluded_doc, repo_root=repo_root, tracked=tracked_files(repo_root),
-        scope=scope, extra_dirs=extra_exclude_dirs or set(),
-        extra_pats=extra_exclude_patterns or [],
+    ref_pairs = _settle_reference_pairs(
+        docs, texts, rel, repo_root, scope, extra_exclude_dirs, extra_exclude_patterns,
     )
-    ref_pairs = _settle_references(docs, texts, rel, partial(
-        _resolve_references, repo_root=repo_root, doc_by_rel=doc_by_rel,
-        doc_rels=set(doc_by_rel), by_basename=_basename_index(doc_by_rel), cite=cite,
-    ))
-
-    by_relpath, by_name, by_stem = _build_name_index(docs, repo_root)
-    doc_set = set(docs)
 
     graph = nx.DiGraph()
     for d in docs:
         graph.add_node(rel(d))
-
-    doc_to_code: list[dict] = []
-    ambiguous = 0
-    broken: list[dict] = []
-    _broken_seen: set[tuple[str, str]] = set()
-    # Per-doc count of non-navigational URI-scheme links (mailto:/tel:/external
-    # http) - the machine-extraction fingerprint a converted document carries.
-    # Feeds raw-source-tree detection (issue #225).
-    machine_links: dict[str, int] = {}
-
-    def _add_broken(src: Path, target: str, kind: str) -> None:
-        key = (rel(src), target)
-        if target and key not in _broken_seen:
-            _broken_seen.add(key)
-            broken.append({"from": rel(src), "target": target, "kind": kind})
-
-    for d in docs:
-        text = texts.get(d)
-        if text is None:  # unreadable: skipped, Layer 0 stays best-effort
-            continue
-        # Strip code spans before harvesting links: a link target inside a
-        # fence or backtick span is a documentation sample (FORMAT specs,
-        # wikilink-syntax demos), not a navigation edge.
-        link_text = _strip_code_spans(text)
-        # Wikilinks resolve by note name across the vault.
-        for m in _WIKILINK_RE.finditer(link_text):
-            # Strip alias/anchor first so the scheme check sees the bare target
-            # (e.g. `tel:+1-555-1234` from `[[tel:+1-555-1234|Call us]]`).
-            wikilink_target = _strip_anchor_and_alias(m.group(1))
-            if _EXTERNAL_RE.match(wikilink_target):
-                # Non-navigational URI (`tel:`, `mailto:`, etc.) -- not a note
-                # reference; skip without counting as a broken link (issue #227).
-                # Count it as a machine-extraction fingerprint (issue #225).
-                machine_links[rel(d)] = machine_links.get(rel(d), 0) + 1
-                continue
-            tgt, amb = _resolve_wikilink(
-                m.group(1), d, repo_root, by_relpath, by_name, by_stem,
-            )
-            if amb:
-                ambiguous += 1
-            if tgt is None:
-                _add_broken(d, wikilink_target, "wikilink")
-                continue
-            if tgt in doc_set and tgt != d:
-                graph.add_edge(rel(d), rel(tgt), kind="link")
-        # CommonMark links resolve relative to the doc's directory.
-        for m in _MDLINK_RE.finditer(link_text):
-            raw = m.group(1)
-            tgt = _resolve_mdlink(raw, d, repo_root)
-            if tgt is None:
-                # A relative-looking link that resolves to nothing is broken
-                # (a "ghost"). External URLs, pure #anchors, and links to an
-                # existing directory are not broken.
-                cleaned = _strip_anchor_and_alias(raw)
-                if cleaned and _EXTERNAL_RE.match(cleaned):
-                    # Non-navigational URI (mailto:/tel:/external http): the
-                    # machine-extraction fingerprint, not a broken link (#225).
-                    machine_links[rel(d)] = machine_links.get(rel(d), 0) + 1
-                elif (cleaned and not raw.strip().startswith("#")
-                        and not _target_exists(raw, d, repo_root)):
-                    _add_broken(d, cleaned, "mdlink")
-                continue
-            if tgt.suffix.lower() in DOC_EXTENSIONS and tgt in doc_set:
-                if tgt != d:
-                    graph.add_edge(rel(d), rel(tgt), kind="link")
-            elif tgt.suffix.lower() in CODE_EXTENSIONS:
-                doc_to_code.append({"doc": rel(d), "code": rel(tgt)})
+    harvest = _harvest_links(docs, texts, repo_root, graph, rel)
     # A link between the same pair keeps kind link.
     graph.add_edges_from([
         (rel(src), rel(tgt)) for src, tgt in ref_pairs
@@ -909,63 +1029,23 @@ def build_doc_graph(  # noqa: C901  # graph assembly + link resolution; ccn 21, 
         scope=scope,
     )
 
-    # Raw-source-tree exclusion (issue #225). Detect subtrees of raw,
-    # machine-extracted source documents - link-isolated and carrying the
-    # machine-extraction fingerprint - and exclude them from the headline
-    # read-side metrics so the curated-wiki signal isn't drowned. Detection runs
-    # on the *final* graph (after vault edges), so a doc made navigable by a
-    # `.base` hub or dataview query is not misread as raw.
-    raw_docs, raw_trees = _detect_raw_trees(
-        graph, docs, repo_root, rel, base_hubs, machine_links,
+    raw_docs, raw_trees, notes_docs, notes_trees = _excluded_layers(
+        graph, docs, repo_root, rel, base_hubs, harvest.machine_links,
+        working_notes_dirs, working_notes_ignore,
     )
-    # Working-notes trees (issue #366) are the second fingerprint, detected on
-    # what the raw pass leaves so no doc belongs to both layers.
-    notes_docs, notes_trees = _detect_working_notes_trees(
-        graph, {rel(d) for d in docs} - raw_docs,
-        force=working_notes_dirs or [], ignore=working_notes_ignore or [],
+    result = _curated_result(
+        graph, docs, repo_root, rel, harvest, missing,
+        raw_docs | notes_docs, vault, obs, base_hubs,
     )
-    excluded_docs = raw_docs | notes_docs
-    curated_docs = [d for d in docs if rel(d) not in excluded_docs]
-    curated_nodes = [n for n in graph.nodes() if n not in excluded_docs]
-    curated_graph = graph.subgraph(curated_nodes).copy()
-    curated_broken = [b for b in broken if b.get("from") not in excluded_docs]
-    curated_missing = [
-        mx for mx in missing
-        if mx.get("from") not in excluded_docs and mx.get("to") not in excluded_docs
-    ]
-
-    result = _derive_signals(
-        graph=curated_graph, docs=curated_docs, repo_root=repo_root, rel=rel,
-        doc_to_code=doc_to_code, dangling=len(curated_broken), ambiguous=ambiguous,
-        vault=vault, obs=obs, base_hubs=base_hubs,
-    )
-    link_graph = nx.DiGraph()
-    link_graph.add_nodes_from(curated_graph)
-    link_graph.add_edges_from(
-        (u, v) for u, v, k in curated_graph.edges(data="kind") if k != "reference"
-    )
-    link_only = _derive_signals(
-        graph=link_graph, docs=curated_docs, repo_root=repo_root, rel=rel,
-        doc_to_code=doc_to_code, dangling=0, ambiguous=0,
-        vault=vault, obs=obs, base_hubs=base_hubs, entries=result.entry_points,
-    )
-    result.link_only_orphan_rate = link_only.orphan_rate
-    result.link_only_reachability_pct = link_only.reachability_pct
-    result.link_parents = _link_parents(link_graph, result.entry_points)
-    result.broken_links = curated_broken[:MAX_BROKEN_LINKS]
-    result.missing_xrefs = curated_missing[:MAX_MISSING_XREFS]
-    rows = _directory_breakdown(curated_nodes, result.unreachable, curated_broken)
-    result.directory_breakdown = rows[:MAX_DIRECTORY_BREAKDOWN]
-    result.directory_count = len(rows)
 
     # Excluded-layer figures, reported separately so the exclusion stays legible.
     result.curated_doc_count = result.doc_count
     (result.excluded_raw_trees, result.raw_source_doc_count,
      result.raw_source_orphan_rate, result.raw_source_broken_links,
-     ) = _layer_figures(graph, broken, raw_docs, raw_trees)
+     ) = _layer_figures(graph, harvest.broken, raw_docs, raw_trees)
     (result.excluded_working_notes_trees, result.working_notes_doc_count,
      result.working_notes_orphan_rate, result.working_notes_broken_links,
-     ) = _layer_figures(graph, broken, notes_docs, notes_trees)
+     ) = _layer_figures(graph, harvest.broken, notes_docs, notes_trees)
     return result
 
 

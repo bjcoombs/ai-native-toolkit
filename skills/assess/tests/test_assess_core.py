@@ -398,7 +398,7 @@ def test_hotspot_page_carries_growth_profile_when_file_accretes(git_repo) -> Non
         encoding="utf-8"
     )
     assert "Growth profile: monotonic" in page
-    assert "0 net reductions over" in page
+    assert "lines net over" in page
 
 
 def test_hotspot_page_omits_growth_profile_when_scan_unavailable(tmp_path: Path) -> None:
