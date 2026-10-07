@@ -414,7 +414,10 @@ prune stands down when the rename map is incomplete, since an unfolded old path 
 evidence of a deletion, and `rename_map_complete` carries that state into the block so
 the report can say renames were not read. Each
 block build is wrapped in a catch-all so one signal's failure degrades that block to
-`available: False` rather than crashing the run. It also runs `structure_drift.py`'s Tier 1
+`available: False` rather than crashing the run. `render_findings_markdown` renders at most
+`MAX_FINDING_PATHS_RENDERED` paths per finding and `MAX_ATTENTION_ROWS_RENDERED`
+attention rows, and discloses any cut with an italic omission row naming the
+`run-context.json` key that holds the rest (#440). It also runs `structure_drift.py`'s Tier 1
 grouping disagreement (fed the behaviour block's co-change pairs so no second git-log parse
 happens) and folds its hidden-seam direction into the `hidden_coupling` finding, returning the
 Tier 1 result for `assess_core` to serialise into the `structure_drift` run-context block - so

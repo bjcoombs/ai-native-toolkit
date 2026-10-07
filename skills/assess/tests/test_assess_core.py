@@ -961,6 +961,40 @@ def test_failed_liveness_scan_is_not_scored_rung_0(tmp_path: Path, monkeypatch) 
     assert ctx["dead_code"]["available"] is False
 
 
+def test_failed_liveness_fallback_blocks_exact_shape(tmp_path: Path, monkeypatch) -> None:
+    """Pins the full degrade shape of dead_code / observability when the liveness
+    scan fails, the reason carried through from _safe, and that no capability
+    keys appear - so moving the fallback into a helper cannot drift a field."""
+    repo = _minimal_repo(tmp_path)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("liveness blew up")
+
+    monkeypatch.setattr(assess_core, "scan_liveness", boom)
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    reason = ctx["observability"]["reason"]
+    assert reason and reason == ctx["dead_code"]["reason"]
+    assert ctx["dead_code"] == {
+        "available": False, "candidate_count": 0, "candidates": [],
+        "tools": [], "reason": reason,
+    }
+    assert ctx["observability"] == {
+        "rung": None, "available": False, "reason": reason,
+        "instrumented": {"present": False, "signals": []},
+        "discoverable": {"present": False, "signals": []},
+        "reachable": {"present": False, "signals": []},
+    }
+    assert "capability_offers" not in ctx
+    assert "language_capabilities" not in ctx
+
+
+def test_coverage_report_block_absent_shape(tmp_path: Path) -> None:
+    """With no coverage report on disk the block is the bare not-found shape."""
+    repo = _minimal_repo(tmp_path)
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    assert ctx["coverage_report"] == {"available": False, "source": "none found"}
+
+
 def test_plugin_version_in_ctx(tmp_path: Path) -> None:
     """ctx should include plugin_version so the LLM can surface it in the report.
 

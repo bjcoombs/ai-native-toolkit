@@ -10,11 +10,13 @@ The suites below are expected to move with the engine. A reviewer seeing
 `test_doc_graph.py` and `lib/doc_graph.py` in the same diff is looking at the normal
 edit cycle, not a layering violation. Keep tests co-located.
 
-The two highest-frequency co-change pairs in the git history are:
+The three highest-frequency co-change pairs in the git history are:
 
 - **`test_assess_core.py` / `assess_core.py`** - the orchestrator and its end-to-end
   harness. Every time the core adds a signal or changes the `run-context.json` schema,
   both files move.
+- **`test_complexity_treemap.py` / `complexity-treemap.py`** - the heatmap CLI and its
+  filter, version-stamp and sidecar tests.
 - **`test_doc_graph.py` / `lib/doc_graph.py`** - the navigability graph is the
   foundation for Layer 0 and feeds both the staleness and the understanding analysis,
   so its contract tests are touched on most doc-analysis changes.
@@ -22,6 +24,8 @@ The two highest-frequency co-change pairs in the git history are:
 ---
 
 ## Suite / source mapping
+
+Every `test_*.py` file in this directory has a row below.
 
 ### Orchestrator suites
 
@@ -40,7 +44,7 @@ The two highest-frequency co-change pairs in the git history are:
 | Suite | Pins |
 |---|---|
 | `test_doc_graph.py` | `lib/doc_graph.py` - doc link-graph, link parsing, orphan detection, connectivity, MOC validation, doc->code edges |
-| `test_keyhole_signals.py` | `lib/keyhole_signals.py` - integration barrier; derivation of the five run-context blocks and the six named derived findings from mocked upstream signal outputs |
+| `test_keyhole_signals.py` | `lib/keyhole_signals.py` - integration barrier; derivation of the run-context blocks and the derived findings named in `FINDING_ORDER` from mocked upstream signal outputs |
 | `test_change_coupling.py` | `lib/change_coupling.py` - B1 change-coupling pairs, B2 containment ratio, B4 authorship; synthetic git histories built in tmp dirs |
 | `test_coupling_analysis.py` | `lib/coupling_analysis.py` - B3 static-vs-historical disagreement; hidden-coupling, bleeding-module, and refactor-boundary classification with mocked inputs |
 | `test_doc_complexity_join.py` | `lib/doc_complexity_join.py` - Signal C: doc_value formula, slop-doc guard, threshold behaviour; mocked complexity-stats and staleness inputs |
@@ -54,6 +58,38 @@ The two highest-frequency co-change pairs in the git history are:
 | `test_wiki_writer.py` | `lib/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
 | `test_git_commit_info.py` | `lib/git_churn.py` (`git_commit_info`) - commit snapshot with SHA/timestamp for staleness warnings |
 | `test_instruction_bloat.py` | `lib/agent_instructions_grader.py` - bloat penalty, skills-delegation credit, conservative thresholds |
+| `test_accretion_ratchet.py` | `lib/accretion_ratchet.py` - the accretion-ratchet scanner (files that only ever grow) |
+| `test_accretion_ratchet_threshold.py` | `lib/accretion_ratchet.py` - regression: the caller's `--deletion-threshold` is the cut applied |
+| `test_agent_instructions_grader.py` | `lib/agent_instructions_grader.py` - heuristic grading of agent instruction files |
+| `test_agent_ops.py` | `lib/agent_ops.py` - agent-operations guardrail scan (Layer 8 evidence) |
+| `test_anomaly_detector.py` | `lib/anomaly_detector.py` - anomaly detection on run output |
+| `test_archetype.py` | `lib/archetype.py` - repository archetype detection |
+| `test_assess_config.py` | `lib/assess_config.py` - the working-notes keys in `.assess/config.toml` |
+| `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge and its producers |
+| `test_config_drift.py` | `lib/config_drift.py` + `lib/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
+| `test_coverage_report.py` | `lib/coverage_report.py` - coverage-report parser |
+| `test_dart_capabilities.py` | `lib/dart_capabilities.py` - Dart linting and liveness capability entries |
+| `test_dart_complexity.py` | `lib/dart_complexity.py` - the approximate Dart per-function scanner |
+| `test_decline_markers.py` | `lib/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
+| `test_doc_provenance.py` | `lib/doc_provenance.py` - provenance-aware staleness of generated docs |
+| `test_evidence_check.py` | `lib/evidence_check.py` - deterministic re-check of scorer evidence |
+| `test_scorer_evidence.py` | `lib/evidence_check.py` - the layer scorer's structured evidence contract |
+| `test_gap_actions.py` | `lib/gap_actions.py` - the deterministic Top 3 gap candidates |
+| `test_gate_cost.py` | `lib/gate_cost.py` - the CI gate's Actions cost estimate |
+| `test_generated_files.py` | `lib/generated_files.py` - generated-file header sniff and long-line detector |
+| `test_git_churn.py` | `lib/git_churn.py` - churn-degeneracy detector |
+| `test_instruction_claims.py` | `lib/instruction_claims.py` - verifying claims in agent instruction files |
+| `test_interactivity.py` | `lib/interactivity.py` - the non-interactive consent contract |
+| `test_jvm_capabilities.py` | `lib/jvm_capabilities.py` - the capability-driven JVM offer flow |
+| `test_ownership_parser.py` | `lib/ownership_parser.py` - ownership-map parser |
+| `test_promissory_markers.py` | `lib/promissory_markers.py` - stale TODOs, suppressions and skips |
+| `test_raw_source.py` | `lib/raw_source.py` - raw-source subtree detection |
+| `test_review_reality.py` | `lib/review_reality.py` - review-automation evidence from merged PRs |
+| `test_scan_registry.py` | `lib/scan_registry.py` - the declared scan table and the loop that runs it |
+| `test_sibling_tests.py` | `lib/sibling_tests.py` - the one sibling-test resolver |
+| `test_structure_drift.py` | `lib/structure_drift.py` - Tier 0 path-existence structure-drift signal |
+| `test_test_focus.py` | `lib/test_focus.py` - `compute_test_focus` and mutation scope |
+| `test_vault_queries.py` | `lib/vault_queries.py` - vault-native navigation query parser |
 
 ### Infrastructure suites
 
@@ -61,6 +97,16 @@ The two highest-frequency co-change pairs in the git history are:
 |---|---|
 | `test_smoke.py` | `lib/__init__.py` - confirms the lib package is importable and `__version__` is set |
 | `test_golden_baseline.py` | `tests/golden.py` + dogfood fixtures - guards the regression baseline scaffolding (fixture completeness, normalization idempotency, loader correctness) used by `test_decomposition_parity.py` |
+| `test_golden_svg_render.py` | `scripts/complexity-treemap.py` + `scripts/doc-graph-svg.py` - runs the real renderers and locks their colour encoding |
+| `test_doc_graph_svg.py` | `scripts/doc-graph-svg.py` - the SVG honours the same excludes as the scorer |
+| `test_action_contract.py` | `action.yml` (repo root) - the composite AI-readiness gate action |
+| `test_no_contributions_scan.py` | `skills/assess-pr/SKILL.md` (relative to the repo root) - extracts and runs the marked no-contributions bash block |
+| `test_uninstall.py` | `references/uninstall.md` + `scripts/assess_core.py` - run-context pointer, doc completeness, and the uninstall offer |
+| `test_scope.py` | `/assess <path>` monorepo scoping across `lib/doc_graph.py`, `lib/git_churn.py`, `lib/badge.py` and `lib/wiki_writer.py` |
+| `test_log_supersede.py` | `lib/wiki_writer.py` - `log.md` entry replacement and re-chain across core runs and finalize |
+| `test_hotspot_orphan_invariant.py` | `lib/wiki_writer.py` - executable invariant for the hotspot wiki |
+| `test_self_architecture.py` | `scripts/lib/` - the inward-only layering contract and the lib `README.md` entry check |
+| `test_self_dogfood.py` | the whole deterministic core - it must obey the signals it computes |
 
 ---
 
