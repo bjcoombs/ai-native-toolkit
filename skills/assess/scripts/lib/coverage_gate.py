@@ -26,7 +26,7 @@ import os
 import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, TypedDict
 
 from lib.doc_graph import is_excluded_path
 
@@ -55,9 +55,12 @@ _FAIL_UNDER_RE = re.compile(r"^\s*fail_under\s*[=:]\s*[\"']?" + _NUM)
 _CLI_FILES = {
     "pyproject.toml", "setup.cfg", "tox.ini", "pytest.ini", "noxfile.py",
     "Makefile", "package.json", ".gitlab-ci.yml", ".pre-commit-config.yaml",
+    "Jenkinsfile", "azure-pipelines.yml", ".travis.yml", "bitbucket-pipelines.yml",
+    "justfile", "Justfile", "Taskfile.yml", "Taskfile.yaml",
 }
 _PYTEST_COV_RE = re.compile(r"--cov-fail-under[=\s]+[\"']?" + _NUM)
-_COVERAGE_CLI_RE = re.compile(r"\bcoverage\s+report\b.*--fail-under[=\s]+" + _NUM)
+_COVERAGE_CLI_RE = re.compile(
+    r"\bcoverage\s+(report|xml|json|html|lcov)\b.*--fail-under[=\s]+" + _NUM)
 _CHECK_COVERAGE_CLI_RE = re.compile(r"\b(nyc|c8)\b.*--check-coverage")
 _LINES_FLAG_RE = re.compile(r"--lines[=\s]+" + _NUM)
 
@@ -91,13 +94,39 @@ NOT_DETECTED: tuple[str, ...] = (
     "Kover `minBound`, sbt-scoverage `coverageMinimumStmtTotal`, "
     "cargo-tarpaulin `--fail-under`, SimpleCov `minimum_coverage`",
     "JaCoCo rules built programmatically or in a shared Gradle convention plugin",
+    "CLI thresholds in shell scripts or in CI and task files other than GitHub "
+    "workflows and composite actions, `.gitlab-ci.yml`, CircleCI, Jenkinsfile, "
+    "Azure Pipelines, Travis, Bitbucket Pipelines, `Makefile`, `justfile`, "
+    "`Taskfile.yml`, `noxfile.py`, `tox.ini` and `package.json` scripts",
     "Vitest before 1.0: `lines` / `branches` directly under `coverage` with no "
     "`thresholds` key",
 )
 
 
+Unit = Literal["percent", "ratio", "uncovered_count"]
+
+
+class CoverageGate(TypedDict):
+    """One enforced threshold, as the ``coverage_gate.gates`` entries carry it."""
+
+    file: str
+    line: int
+    tool: str
+    form: str
+    threshold: float | None
+    unit: Unit
+    metric: str | None
+
+
+# Tools whose check runs at a built-in default when no number is given, so a
+# ``threshold: null`` still gates. For any other tool a null threshold means the
+# value was not read (an empty ``coverageThreshold``, a ``thresholds`` block with
+# only ``autoUpdate``), which is reported but not counted as enforced.
+_DEFAULT_THRESHOLD_TOOLS = {"nyc", "c8", "nyc/c8"}
+
+
 def _gate(file: str, line: int, tool: str, form: str,
-          threshold: float | None, unit: str, metric: str | None) -> dict[str, Any]:
+          threshold: float | None, unit: Unit, metric: str | None) -> CoverageGate:
     return {"file": file, "line": line, "tool": tool, "form": form,
             "threshold": threshold, "unit": unit, "metric": metric}
 
@@ -111,9 +140,9 @@ def _is_comment(line: str) -> bool:
     return stripped.startswith(("#", ";", "//"))
 
 
-def _scan_fail_under(rel: str, lines: list[str], section: str) -> list[dict]:
+def _scan_fail_under(rel: str, lines: list[str], section: str) -> list[CoverageGate]:
     """coverage.py ``fail_under`` inside the named INI/TOML section."""
-    gates: list[dict] = []
+    gates: list[CoverageGate] = []
     current = None
     for idx, line in enumerate(lines, 1):
         header = _SECTION_RE.match(line)
@@ -127,9 +156,9 @@ def _scan_fail_under(rel: str, lines: list[str], section: str) -> list[dict]:
     return gates
 
 
-def _scan_cli(rel: str, lines: list[str]) -> list[dict]:
+def _scan_cli(rel: str, lines: list[str]) -> list[CoverageGate]:
     """``--cov-fail-under``, ``coverage report --fail-under`` and nyc/c8 flags."""
-    gates: list[dict] = []
+    gates: list[CoverageGate] = []
     for idx, line in enumerate(lines, 1):
         if _is_comment(line):
             continue
@@ -137,7 +166,7 @@ def _scan_cli(rel: str, lines: list[str]) -> list[dict]:
     return gates
 
 
-def _cli_line_gates(rel: str, idx: int, line: str) -> list[dict]:
+def _cli_line_gates(rel: str, idx: int, line: str) -> list[CoverageGate]:
     gates = []
     match = _PYTEST_COV_RE.search(line)
     if match:
@@ -145,8 +174,9 @@ def _cli_line_gates(rel: str, idx: int, line: str) -> list[dict]:
                            _num(match.group(1)), "percent", "lines"))
     match = _COVERAGE_CLI_RE.search(line)
     if match:
-        gates.append(_gate(rel, idx, "coverage.py", "coverage report --fail-under",
-                           _num(match.group(1)), "percent", "lines"))
+        gates.append(_gate(rel, idx, "coverage.py",
+                           f"coverage {match.group(1)} --fail-under",
+                           _num(match.group(2)), "percent", "lines"))
     match = _CHECK_COVERAGE_CLI_RE.search(line)
     if match:
         lines_flag = _LINES_FLAG_RE.search(line)
@@ -169,19 +199,20 @@ def _window_metric(lines: list[str], start: int, end: int
 
 
 def _scan_anchor(rel: str, lines: list[str], anchor: re.Pattern[str],
-                 tool: str, form: str, before: int = 0) -> list[dict]:
+                 tool: str, form: str, before: int = 0) -> list[CoverageGate]:
     """A threshold block opened by ``anchor``; the metric is read from a window."""
-    gates: list[dict] = []
+    gates: list[CoverageGate] = []
     for idx, line in enumerate(lines, 1):
         if _is_comment(line) or not anchor.search(line):
             continue
         threshold, metric = _window_metric(lines, idx - 1 - before, idx + _WINDOW)
-        unit = "uncovered_count" if threshold is not None and threshold < 0 else "percent"
+        unit: Unit = ("uncovered_count" if threshold is not None and threshold < 0
+                      else "percent")
         gates.append(_gate(rel, idx, tool, form, threshold, unit, metric))
     return gates
 
 
-def _scan_package_json(rel: str, lines: list[str]) -> list[dict]:
+def _scan_package_json(rel: str, lines: list[str]) -> list[CoverageGate]:
     """Jest ``coverageThreshold``, nyc/c8 ``check-coverage`` and script flags."""
     return (_scan_anchor(rel, lines, _JEST_ANCHOR, "jest", "coverageThreshold")
             + _scan_anchor(rel, lines, _CHECK_COVERAGE_KEY, "nyc/c8",
@@ -199,11 +230,11 @@ def _nearest_counter(lines: list[str], idx: int, pattern: re.Pattern[str]) -> st
 
 
 def _scan_jacoco(rel: str, lines: list[str], minimum: re.Pattern[str],
-                 counter: re.Pattern[str], form: str) -> list[dict]:
+                 counter: re.Pattern[str], form: str) -> list[CoverageGate]:
     """JaCoCo ``minimum`` values in a build file that applies JaCoCo."""
     if not any("jacoco" in line.lower() for line in lines):
         return []
-    gates: list[dict] = []
+    gates: list[CoverageGate] = []
     for idx, line in enumerate(lines, 1):
         match = None if _is_comment(line) else minimum.search(line)
         if match:
@@ -211,16 +242,16 @@ def _scan_jacoco(rel: str, lines: list[str], minimum: re.Pattern[str],
             # unit follows the ``%`` as written (Gradle's DSL takes ratios only).
             value = _num(match.group(1))
             has_percent = match.lastindex == 2 and match.group(2) == "%"
-            unit = "percent" if has_percent else "ratio"
+            unit: Unit = "percent" if has_percent else "ratio"
             gates.append(_gate(rel, idx, "jacoco", form, value, unit,
                                _nearest_counter(lines, idx, counter)))
     return gates
 
 
 def _scanners_for(name: str, rel_parts: tuple[str, ...]
-                  ) -> list[Callable[[str, list[str]], list[dict]]]:
+                  ) -> list[Callable[[str, list[str]], list[CoverageGate]]]:
     """The scanners that apply to a file, by its name and location."""
-    scanners: list[Callable[[str, list[str]], list[dict]]] = []
+    scanners: list[Callable[[str, list[str]], list[CoverageGate]]] = []
     if name in _COVERAGE_PY_SECTIONS:
         section = _COVERAGE_PY_SECTIONS[name]
         scanners.append(lambda r, ls: _scan_fail_under(r, ls, section))
@@ -232,7 +263,7 @@ def _scanners_for(name: str, rel_parts: tuple[str, ...]
     return scanners
 
 
-def _js_jvm_scanners(name: str) -> list[Callable[[str, list[str]], list[dict]]]:
+def _js_jvm_scanners(name: str) -> list[Callable[[str, list[str]], list[CoverageGate]]]:
     if _JEST_FILES.match(name):
         return [lambda r, ls: _scan_anchor(r, ls, _JEST_ANCHOR, "jest",
                                            "coverageThreshold")]
@@ -254,8 +285,15 @@ def _js_jvm_scanners(name: str) -> list[Callable[[str, list[str]], list[dict]]]:
 
 
 def _is_workflow(name: str, rel_parts: tuple[str, ...]) -> bool:
-    return (rel_parts[:2] == (".github", "workflows")
-            and name.endswith((".yml", ".yaml")))
+    """A CI definition read by location: GitHub workflows and composite actions,
+    and CircleCI's ``.circleci/config.yml``."""
+    if not name.endswith((".yml", ".yaml")):
+        return False
+    if rel_parts[:2] == (".github", "workflows"):
+        return True
+    if rel_parts[:2] == (".github", "actions") and name in {"action.yml", "action.yaml"}:
+        return True
+    return rel_parts[:1] == (".circleci",)
 
 
 def _candidate_files(root: Path) -> Iterator[tuple[Path, str]]:
@@ -281,17 +319,24 @@ def _read_lines(path: Path) -> list[str] | None:
         return None
 
 
+def _gates_something(gate: CoverageGate) -> bool:
+    if gate["threshold"] is None:
+        return gate["tool"] in _DEFAULT_THRESHOLD_TOOLS
+    return gate["threshold"] != 0
+
+
 def detect_coverage_gate(repo_root: Path | str) -> dict[str, Any]:
     """Return the ``coverage_gate`` run-context block for ``repo_root``.
 
     ``{"available": True, "enforced": bool, "gates": [...], "not_detected": [...]}``
     where each gate is ``{file, line, tool, form, threshold, unit, metric}``.
-    ``enforced`` is true when at least one gate has a non-zero threshold (or a
-    tool-default one, ``threshold: null``); a ``fail_under = 0`` is reported but
-    gates nothing.
+    ``enforced`` is true when at least one gate has a non-zero threshold, or a
+    null one from a tool that checks at a built-in default (nyc/c8). A
+    ``fail_under = 0``, and a Jest/Vitest anchor whose threshold was not read, are
+    reported but count as gating nothing.
     """
     root = Path(repo_root)
-    gates: list[dict] = []
+    gates: list[CoverageGate] = []
     for path, rel in _candidate_files(root):
         lines = _read_lines(path)
         if lines is None:
@@ -300,7 +345,7 @@ def detect_coverage_gate(repo_root: Path | str) -> dict[str, Any]:
             gates.extend(scan(rel, lines))
     return {
         "available": True,
-        "enforced": any(g["threshold"] != 0 for g in gates),
+        "enforced": any(_gates_something(g) for g in gates),
         "gates": gates,
         "not_detected": list(NOT_DETECTED),
     }

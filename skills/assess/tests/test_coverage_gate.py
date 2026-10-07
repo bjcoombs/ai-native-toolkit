@@ -124,6 +124,22 @@ def test_coverage_report_cli_fail_under(tmp_path: Path) -> None:
     assert (gate["tool"], gate["line"], gate["threshold"]) == ("coverage.py", 2, 75.0)
 
 
+def test_coverage_xml_cli_fail_under(tmp_path: Path) -> None:
+    _write(tmp_path, ".github/workflows/ci.yml",
+           "jobs:\n  t:\n    steps:\n      - run: coverage xml --fail-under=82\n")
+    gate = _only_gate(tmp_path)
+    assert (gate["form"], gate["threshold"]) == ("coverage xml --fail-under", 82.0)
+
+
+def test_composite_action_and_circleci_are_read(tmp_path: Path) -> None:
+    _write(tmp_path, ".github/actions/test/action.yml",
+           "runs:\n  steps:\n    - run: pytest --cov-fail-under=70\n")
+    _write(tmp_path, ".circleci/config.yml",
+           "jobs:\n  t:\n    steps:\n      - run: pytest --cov-fail-under=71\n")
+    files = {g["file"] for g in detect_coverage_gate(tmp_path)["gates"]}
+    assert files == {".github/actions/test/action.yml", ".circleci/config.yml"}
+
+
 # --- JS / TS --------------------------------------------------------------
 
 def test_jest_config_coverage_threshold(tmp_path: Path) -> None:
@@ -148,6 +164,17 @@ def test_package_json_jest_coverage_threshold(tmp_path: Path) -> None:
            '      "global": { "lines": 90 }\n    }\n  }\n}\n')
     gate = _only_gate(tmp_path)
     assert (gate["file"], gate["line"], gate["threshold"]) == ("package.json", 4, 90.0)
+
+
+def test_unread_jest_threshold_is_reported_but_not_enforced(tmp_path: Path) -> None:
+    """An empty ``coverageThreshold`` gates nothing; nyc's null default does."""
+    _write(tmp_path, "jest.config.js", "module.exports = { coverageThreshold: {} };\n")
+    block = detect_coverage_gate(tmp_path)
+    assert block["gates"][0]["threshold"] is None
+    assert block["enforced"] is False
+
+    _write(tmp_path, ".nycrc", '{ "check-coverage": true }\n')
+    assert detect_coverage_gate(tmp_path)["enforced"] is True
 
 
 def test_vitest_thresholds(tmp_path: Path) -> None:
