@@ -889,7 +889,7 @@ def test_stale_hubs_sort_deweights_low_confidence(tmp_path: Path) -> None:
     """A precise-subject hub at half the raw priority of a baseline hub still
     outranks it. The sort multiplies low-confidence priority by 0.5.
     """
-    from assess_core import _build_stale_hubs  # type: ignore[import-not-found]
+    from assess_core import _build_stale_hubs
 
     doc_graph = {
         "available": True,
@@ -1176,7 +1176,7 @@ def test_commits_read_from_legacy_churn_field(tmp_path: Path) -> None:
 def test_diff_is_reliable_pure_matrix() -> None:
     """Direct unit coverage of the pure reliability decision, independent of the
     full pipeline."""
-    from assess_core import _diff_is_reliable  # type: ignore[import-not-found]
+    from assess_core import _diff_is_reliable
 
     # Missing prior version stamp.
     assert _diff_is_reliable(None, "1.0.0", 1, 1) == (

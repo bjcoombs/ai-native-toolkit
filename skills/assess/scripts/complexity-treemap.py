@@ -90,21 +90,21 @@ import numpy as np
 # heatmap, the docs heatmap, and the Layer 0 staleness metric reuse one
 # implementation. Only the colour mapping differs per heatmap and stays local.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib.assess_config import resolve_excludes  # noqa: E402
-from lib.dart_complexity import (  # noqa: E402
+from lib.assess_config import resolve_excludes
+from lib.dart_complexity import (
     BACKEND_NAME as DART_BACKEND,
     dart_function_scores,
 )
-from lib.git_churn import (  # noqa: E402
+from lib.git_churn import (
     churn_is_degenerate,
     git_churn_scores,
     pick_churn_window,
 )
-from lib.generated_files import (  # noqa: E402
+from lib.generated_files import (
     GENERATED_NAME_PATTERNS,
     generated_reason,
 )
-from lib.treemap_render import (  # noqa: E402
+from lib.treemap_render import (
     adaptive_cap,
     blend_to_grey,
     build_tree,

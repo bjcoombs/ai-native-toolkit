@@ -694,9 +694,12 @@ or curly) is a quoted example and does not count; a bare phrase on the same line
 still does, and a code comment counts whatever the quoting. A justified
 suppression (a ` - reason` or ` -- reason` starting with a word character, or a
 non-empty `(reason)`, after the directive or its codes, or a trailing comment -
-for `type: ignore[...]` the trailing `  # reason` is the only form mypy accepts;
-a trailing comment that is itself a directive or a marker is not a reason)
-is never stale and is counted in each family row's `justified`
+for `type: ignore[...]` the trailing `  # reason` is the only form mypy accepts,
+and `pyright: ignore[...]` takes the same forms;
+a trailing comment that opens with a directive or a todo token is not a
+reason, so `# noqa: S603  # nosec B603` stays bare; the excluded directives are
+the same `SUPPRESSION_DIRECTIVES` list the suppression family detects, so the
+two cannot drift) is never stale and is counted in each family row's `justified`
 (0 outside suppressions); other tracked markers still age, since an issue or a
 deadline can go stale too. The `unactioned_intent` action states the
 `stale_touches_threshold` it applied. Honours the shared excludes and the

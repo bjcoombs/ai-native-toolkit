@@ -46,15 +46,15 @@ import networkx as nx
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib.doc_graph import (  # noqa: E402
+from lib.doc_graph import (
     build_doc_graph,
     classify_node,
     group_broken_links,
     radial_shells,
 )
-from lib.assess_config import load_working_notes_config, resolve_excludes  # noqa: E402
-from lib.doc_staleness import analyze_doc_staleness  # noqa: E402
-from lib.treemap_render import adaptive_cap, blend_to_grey, rgba_to_hex  # noqa: E402
+from lib.assess_config import load_working_notes_config, resolve_excludes
+from lib.doc_staleness import analyze_doc_staleness
+from lib.treemap_render import adaptive_cap, blend_to_grey, rgba_to_hex
 
 # Colour-blind-safe by default. The status palette uses the Okabe-Ito set
 # (distinguishable under all common colour-vision deficiencies); the staleness
