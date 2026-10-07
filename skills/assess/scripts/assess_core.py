@@ -1068,7 +1068,7 @@ def _doc_to_code_edges(doc_graph: dict) -> list:
             if doc_graph.get("available") else [])
 
 
-def _hotspot_status_map(diff: Any) -> dict[str, str]:
+def _hotspot_status_map(diff: StatsDiff) -> dict[str, str]:
     """Which paths are graduated, new, regressed, persistent (later lists win)."""
     status_map: dict[str, str] = {}
     for h in diff.graduated:
@@ -1085,7 +1085,7 @@ def _hotspot_status_map(diff: Any) -> dict[str, str]:
 def _write_current_hotspot_page(
     h: dict, *, assess_dir: Path, repo_root: Path, run_date: str, run_id: str,
     status_map: dict[str, str], first_flagged_map: dict[str, str],
-    hot_shared_names: Any, hot_test_index: Any,
+    hot_shared_names: frozenset[str], hot_test_index: TestIndex | None,
     marker_debt_by_file: dict, accretion_by_file: dict,
 ) -> HotspotEntry:
     """Write one current top hotspot's wiki page and return its index entry.
@@ -1153,11 +1153,11 @@ def _write_current_hotspot_page(
 def _write_current_hotspot_pages(
     current: dict, *, assess_dir: Path, repo_root: Path, run_date: str,
     run_id: str, status_map: dict[str, str], first_flagged_map: dict[str, str],
-    superseded: Any, marker_debt_by_file: dict, accretion_by_file: dict,
-) -> tuple[list[HotspotEntry], Any]:
+    superseded: dict | None, marker_debt_by_file: dict, accretion_by_file: dict,
+) -> tuple[list[HotspotEntry], TestIndex | None]:
     """Write a page per current top hotspot; return the entries and test index.
 
-    Sweeps the superseded run's history first, as the inline loop did.
+    Sweeps the superseded run's history before the first page is written.
     """
     hotspot_entries: list[HotspotEntry] = []
     # Same flat-tree disambiguation the test_focus block applies to these files.
@@ -1179,7 +1179,7 @@ def _write_current_hotspot_pages(
 
 
 def _graduated_hotspot_entries(
-    diff: Any, current: dict, first_flagged_map: dict[str, str], run_date: str,
+    diff: StatsDiff, current: dict, first_flagged_map: dict[str, str], run_date: str,
 ) -> list[HotspotEntry]:
     """Index entries for this run's graduated hotspots, with current metrics."""
     current_locs, current_ccns = _current_metrics_by_path(current)
