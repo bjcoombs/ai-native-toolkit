@@ -29,6 +29,14 @@ norecursedirs = ["tests/fixtures"]
 # unknown-marker warning.
 markers = ["no_cover: run this test with coverage tracing paused (pytest-cov)"]
 
+[tool.coverage.report]
+# Layer 6 floor: CI's --cov=scripts run fails below this line rate. Measured
+# 93.44% (9945 statements, 652 missed) on 2026-10-07, identical over three
+# runs; rounded down to 93, a margin of about 44 uncovered lines. A ratchet:
+# raise it when coverage rises, never lower it without a stated reason in the
+# PR that does. Applies to any local run with pytest-cov too.
+fail_under = 93
+
 [tool.ruff]
 target-version = "py311"
 # Test fixtures are deliberately messy sample repos consumed as *data*, not

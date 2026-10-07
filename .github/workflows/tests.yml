@@ -33,8 +33,9 @@ jobs:
       # parse action.yml / assess-gate.yml and pytest.skip without PyYAML - a
       # skipped guard is a decorative guard. skills/assess/pyproject.toml does
       # not declare it, so the CI invocation supplies it.
-      # Line coverage is measured and reported, never gated: no
-      # --cov-fail-under (CLAUDE.md, "What this repo doesn't have").
+      # Line coverage is gated by a floor: [tool.coverage.report] fail_under
+      # in skills/assess/pyproject.toml fails this step below it. A ratchet -
+      # raise it when coverage rises (CLAUDE.md, "What this repo doesn't have").
       - name: Run pytest
         run: >-
           uv run --with pytest --with pytest-cov --with pyyaml pytest -v
@@ -58,6 +59,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
 
+      # Line coverage is gated by a floor: [tool.coverage.report] fail_under
+      # in scripts/pyproject.toml fails this step below it. A ratchet - raise
+      # it when coverage rises (CLAUDE.md, "What this repo doesn't have").
       - name: Run pytest
         run: >-
           uv run --with pytest --with pytest-cov pytest -v

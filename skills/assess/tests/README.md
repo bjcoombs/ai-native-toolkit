@@ -149,7 +149,7 @@ than widening a budget to fit the tracer.
 # From skills/assess/
 uv run --with pytest --with pyyaml pytest tests/ -v
 
-# With line coverage, as CI runs it (reported, never gated)
+# With line coverage, as CI runs it (fails below fail_under in pyproject.toml)
 uv run --with pytest --with pytest-cov --with pyyaml pytest -v \
   --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
 ```

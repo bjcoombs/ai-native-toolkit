@@ -32,6 +32,14 @@ max-complexity = 15
 # measurement (CI runs --cov=. from this directory).
 omit = ["*/tests/*"]
 
+[tool.coverage.report]
+# Layer 6 floor: CI's --cov=. run fails below this line rate. Measured 92.14%
+# (903 statements, 71 missed) on 2026-10-07, identical over three runs. Set one
+# point under the rounded-down 92: at 92 the margin would be about one line, so
+# any small uncovered addition would trip it. A ratchet: raise it when coverage
+# rises, never lower it without a stated reason in the PR that does.
+fail_under = 91
+
 [tool.mypy]
 # Mirrors the skills/assess type gate (same checks, same strictness): the build
 # pipeline modules plus the contract and canary tooling, which already pass.
