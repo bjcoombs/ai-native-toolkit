@@ -416,6 +416,7 @@ class _ChurnContext:
     churn_map: dict[Path, int]
     commit_epochs: dict[Path, list[tuple[int, int]]] | None
     baseline_epochs: list[int] | None
+    repo_wide_code_churn: int
     clock: ContentClock
     generated_sources: list[tuple[str, list[str]]]
 
@@ -508,7 +509,7 @@ def _subject_churn(
     # priority stays low). Read ratio together with subject_method and
     # last_commit_days, not on its own.
     return (
-        sum(ctx.churn_map.get(c, 0) for c in ctx.code_files),
+        ctx.repo_wide_code_churn,
         len(ctx.code_files),
         ctx.baseline_epochs,
     )
@@ -667,6 +668,7 @@ def analyze_doc_staleness(
         churn_map=churn_map,
         commit_epochs=commit_epochs,
         baseline_epochs=subject_epochs(code_files, commit_epochs),
+        repo_wide_code_churn=sum(churn_map.get(c, 0) for c in code_files),
         clock=clock,
         generated_sources=generated_sources,
     )

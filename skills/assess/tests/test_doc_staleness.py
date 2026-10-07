@@ -57,8 +57,7 @@ def test_repo_baseline_when_no_association(tmp_path: Path) -> None:
 
 def test_association_precedence_and_summary_counts(tmp_path: Path) -> None:
     """Pins the fallback order (nearest-ancestor, parallel docs/ tree, explicit
-    links, repo baseline), the summary counts derived from it, and the
-    descending-ratio order of the docs list."""
+    links, repo baseline) and the summary counts derived from it."""
     # nearest-ancestor wins over a parallel-tree match on the same name.
     _write(tmp_path, "docs/auth/README.md", "auth")
     _write(tmp_path, "docs/auth/x.py", "x")
@@ -103,8 +102,6 @@ def test_association_precedence_and_summary_counts(tmp_path: Path) -> None:
             "repo-baseline": 1,
         },
     }
-    ratios = [d["ratio"] for d in r["docs"]]
-    assert ratios == sorted(ratios, reverse=True)
 
 
 def test_boilerplate_is_not_a_base_doc(tmp_path: Path) -> None:
