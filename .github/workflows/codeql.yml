@@ -76,9 +76,14 @@ jobs:
             "$out/ci-tools.in" -o "$out/requirements-projects.txt"
           grep -rl --include='*.py' --exclude-dir=.git --exclude-dir=fixtures \
             '^# /// script' . | sort | while read -r script; do
+            # Name each set by its full path so same-named scripts never collide.
+            name="${script#./}"
+            name="${name%.py}"
             uv export --quiet --script "$script" --no-header \
-              -o "$out/requirements-script-$(basename "$script" .py).txt"
+              -o "$out/requirements-script-${name//\//_}.txt"
           done
+          # Pin count per set, for the log only: grep exits 1 when a set is
+          # empty (a script with no inline deps), which is expected here.
           grep -c '==' "$out"/requirements-*.txt || true
 
       - name: Audit for known vulnerabilities
