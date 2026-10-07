@@ -116,7 +116,7 @@ def test_write_index_legend_defines_every_status_token(tmp_assess_dir: Path) -> 
     write_index(tmp_assess_dir, entries, last_updated="2026-06-07")
     content = (tmp_assess_dir / "index.md").read_text()
     legend = content.split("## Legend", 1)[1]
-    for status in ("active", "new", "graduated", "regressed", "persistent"):
+    for status in ("active", "new", "graduated", "regressed", "restructured", "persistent"):
         assert f"- **{status}**" in legend, f"legend missing status {status!r}"
 
 
@@ -717,3 +717,16 @@ def test_write_index_drops_never_assessed_and_generated_paths(tmp_assess_dir: Pa
     rows = {e.path: e.status for e in parse_index_rows(
         (tmp_assess_dir / "index.md").read_text())}
     assert rows == {"a.go": "active", "b.go": "graduated"}
+
+
+def test_write_index_legend_names_aggregate_rise_larger_than_worst_fall(
+    tmp_assess_dir: Path,
+) -> None:
+    """A file whose worst function fell but whose sum rose by more is
+    `regressed`; the legend must say so, and bound `restructured` the same way."""
+    write_index(tmp_assess_dir, [], last_updated="2026-07-07")
+    legend = (tmp_assess_dir / "index.md").read_text().split("## Legend", 1)[1]
+    regressed = next(ln for ln in legend.splitlines() if ln.startswith("- **regressed**"))
+    restructured = next(ln for ln in legend.splitlines() if ln.startswith("- **restructured**"))
+    assert "aggregate rise larger than the worst-function fall" in regressed
+    assert "at least as much as the sum rose" in restructured

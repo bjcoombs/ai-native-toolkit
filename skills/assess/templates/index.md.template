@@ -13,8 +13,8 @@ Catalog of every hotspot ever flagged by `/assess` in this repo. Status reflects
 - **active** - in the latest top hotspots list
 - **new** - newly entered the hotspot list this run
 - **graduated** - was a hotspot, no longer is (good)
-- **regressed** - still a hotspot, and getting worse: its worst function rose, or (worst function flat or unmeasured) its summed complexity or churn rose
-- **restructured** - still a hotspot; summed complexity rose but the worst function fell by at least as much, the shape a split into named helpers leaves (good)
+- **regressed** - still a hotspot, and getting worse. Any of: its worst function rose; its summed complexity rose by more than the worst function fell (an aggregate rise larger than the worst-function fall); or the worst function is flat or unmeasured and the sum or churn rose
+- **restructured** - still a hotspot; the sum or churn rose but the worst function fell by at least as much as the sum rose, the shape a split into named helpers leaves (good)
 - **persistent** - still a hotspot, roughly unchanged
 - **retired** - the source file was deleted or excluded; the page is kept for history
 
