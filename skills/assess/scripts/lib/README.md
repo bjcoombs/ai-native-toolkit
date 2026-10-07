@@ -577,6 +577,8 @@ a legacy wiki (no markers, live files) is untouched and reads valid.
 Shared treemap layout and SVG primitives for the code heatmap and the doc-staleness
 heatmap. Pulls `matplotlib`, `squarify`, and `numpy`. Must not be imported by the
 deterministic core (which runs with `networkx` alone) - only by the treemap scripts.
+Also holds `plural(n, singular)`, the count-agreement helper both SVG renderers use
+for generated text ("1 island", "9 islands").
 
 **`ci_workflow.py`**
 Renders the frozen-harness GitHub Action from `templates/assess-gate.yml.template`

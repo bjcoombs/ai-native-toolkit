@@ -1749,3 +1749,50 @@ def test_main_threads_scope_into_output_name_title_and_stats(
     assert seen["stats_path"] == Path("s.json")
     assert seen["stats_kwargs"]["fn_ccn_by_path"] == {"fn": 1}
     assert seen["stats_kwargs"]["tokens_by_path"] is seen["tokens_by_path"]
+
+
+@pytest.mark.parametrize("n, expected", [
+    (0, "files"), (1, "file"), (2, "files"),
+])
+def test_plural_agrees_with_count(render_lib, n, expected):
+    assert render_lib.plural(n, "file") == expected
+
+
+@pytest.mark.parametrize("n", [0.6, 1.0, True])
+def test_plural_rejects_a_non_int_count(render_lib, n):
+    """A float can print as "1" yet compare unequal to 1, so plural() takes the
+    rounded int the caller displays and refuses anything else."""
+    with pytest.raises(TypeError):
+        render_lib.plural(n, "line")
+
+
+def test_plural_takes_an_irregular_form(render_lib):
+    assert render_lib.plural(2, "child", "children") == "children"
+    assert render_lib.plural(1, "child", "children") == "child"
+
+
+@pytest.mark.parametrize("tokens, text", [
+    (1, "1 est. token · 100 loc"),
+    (1200, "1,200 est. tokens · 100 loc"),
+])
+def test_write_svg_token_tooltip_and_label_pluralise(render_lib, tmp_path, tokens, text):
+    """The est-token count in the tooltip and the on-block label agrees with
+    its number."""
+    node = render_lib.Node(name="a.py", rel_path="a.py", loc=100,
+                           metric=5.0, color=(0.8, 0.2, 0.1, 1.0),
+                           is_file=True, est_tokens=tokens)
+    rects = [(0.0, 0.0, 1600.0, 1000.0, node)]
+    out = tmp_path / "tok.svg"
+    render_lib.write_svg(rects, Path("/repo"), 1600.0, 1000.0, out, True, "ccn")
+    svg = out.read_text()
+    assert text in svg
+    label = text.split(" · ")[0]
+    assert f">{label}</text>" in svg
+    assert "—" not in svg
+
+
+def test_render_summary_singular_file(treemap, tmp_path, monkeypatch, capsys):
+    _stub_render_io(treemap, monkeypatch)
+    files = _two_files(tmp_path)[:1]
+    treemap.render(files, tmp_path, tmp_path / "o.svg", "t")
+    assert "(1 file, 1 lizard, 0 scc)" in capsys.readouterr().out

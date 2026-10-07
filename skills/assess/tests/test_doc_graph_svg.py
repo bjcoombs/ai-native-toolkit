@@ -255,7 +255,7 @@ def test_staleness_mode_marks_entry_and_orphan_by_stroke(svg, tmp_path, monkeypa
     assert "staleness not measured" in orphan_tip
     plain, plain_tip = circles["docs/a.md"]
     assert (plain.get("stroke"), plain.get("stroke-width")) == ("#b8b8b8", "1.0")
-    assert "lines · in 1 · out 0 · reachable" in plain_tip
+    assert "1 line · in 1 · out 0 · reachable" in plain_tip
 
 
 def test_status_mode_fills_by_status_without_orphan_ring(svg, tmp_path, monkeypatch):
@@ -309,7 +309,7 @@ def test_web_layout_bins_isolated_docs(svg, tmp_path, monkeypatch):
 def test_render_prints_summary(svg, tmp_path, monkeypatch, capsys):
     _render_nodes(svg, tmp_path, monkeypatch)
     out = capsys.readouterr().out
-    assert "(3 docs, 1 edges, 0 islands)" in out
+    assert "(3 docs, 1 edge, 0 islands)" in out
     assert "entries=['CLAUDE.md']" in out
 
 
@@ -333,3 +333,67 @@ def test_main_reports_unusable_graph(svg, tmp_path, monkeypatch, capsys,
     monkeypatch.setattr(sys, "argv", ["doc-graph-svg.py", str(tmp_path)])
     assert svg.main() == 1
     assert message in capsys.readouterr().err
+
+
+def _counts_result(n_edges: int, islands: int, broken: list | None = None):
+    import networkx as nx
+
+    graph = nx.DiGraph()
+    for i in range(n_edges):
+        graph.add_edge(f"a{i}.md", f"b{i}.md")
+    result = _FakeResult()
+    result.graph = graph
+    result.island_count = islands
+    result.broken_links = broken or []
+    return result
+
+
+@pytest.mark.parametrize("n, edges, islands, expected", [
+    (1, 1, 1, "1 doc, 1 edge, 1 island"),
+    (9, 0, 9, "9 docs, 0 edges, 9 islands"),
+    (3, 2, 0, "3 docs, 2 edges, 0 islands"),
+])
+def test_graph_counts_pluralise_each_noun(svg, n, edges, islands, expected):
+    """The title and stdout summary share one count phrase; each noun agrees
+    with its own count ('1 island', not '1 islands')."""
+    assert svg._graph_counts(_counts_result(edges, islands), n) == expected
+
+
+def test_title_uses_hyphen_and_singular_counts(svg):
+    title = svg._title(_counts_result(1, 1), 1, 1000.0)
+    assert "Doc map - 1 doc, 1 edge, 1 island</text>" in title
+    assert "—" not in title
+
+
+@pytest.mark.parametrize("broken, clause", [
+    ([{"from": "a.md", "target": "x.md"}], " · 1 broken link</text>"),
+    ([{"from": "a.md", "target": "x.md"}, {"from": "b.md", "target": "x.md"}],
+     " · 2 broken links to 1 missing file</text>"),
+])
+def test_title_pluralises_broken_link_clause(svg, broken, clause):
+    assert clause in svg._title(_counts_result(0, 0, broken), 2, 1000.0)
+
+
+@pytest.mark.parametrize("count, text", [
+    (1, "1 isolated doc - no link in or out"),
+    (2, "2 isolated docs - no link in or out"),
+])
+def test_isolated_panel_label(svg, count, text):
+    panel = "".join(svg._isolated_panel(count, 100.0, 1600.0, 1000.0))
+    assert text in panel
+    assert "—" not in panel
+
+
+def test_rendered_svg_has_no_em_dash(svg, tmp_path, monkeypatch):
+    """No generated text in the doc map carries an em dash."""
+    _render_nodes(svg, tmp_path, monkeypatch)
+    assert "—" not in (tmp_path / "out.svg").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("size, text", [(0.6, "1 line"), (1.4, "1 line"), (2.0, "2 lines")])
+def test_size_text_agrees_with_the_displayed_line_count(svg, size, text):
+    """A fractional size shown as "1" reads "1 line", not "1 lines"."""
+    from types import SimpleNamespace
+
+    painter = SimpleNamespace(sizes={"a.md": size}, size_mode="lines")
+    assert svg._NodePainter.size_text(painter, "a.md") == text

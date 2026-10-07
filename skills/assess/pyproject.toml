@@ -62,10 +62,16 @@ max-complexity = 15
 # Issue #79: type hints existed but were unenforced. This gate makes them a
 # contract. Scoped to the deterministic core (lib/) where the annotations are
 # densest and most load-bearing, plus the orchestrator assess_core.py (the
-# most-churned file, ratcheted in here). The remaining orchestrator scripts
-# (assess_finalize.py, complexity-treemap.py) and the build pipeline are the
-# next ratchet step.
-files = ["scripts/lib", "scripts/assess_core.py"]
+# most-churned file, ratcheted in here), and the two SVG renderers. The
+# renderers have hyphenated filenames, so they are listed as paths, not module
+# names. The remaining orchestrator scripts (assess_finalize.py and the rest)
+# and the build pipeline are the next ratchet step.
+files = [
+    "scripts/lib",
+    "scripts/assess_core.py",
+    "scripts/doc-graph-svg.py",
+    "scripts/complexity-treemap.py",
+]
 # lib/ is a package; treat scripts/ as the import base so lib.<mod> resolves and
 # the back-compat shims (scripts/stats_diff.py, lib/assess_core.py) don't collide
 # as duplicate top-level modules.

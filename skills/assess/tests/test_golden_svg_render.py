@@ -322,4 +322,4 @@ def test_doc_graph_unmeasured_node_is_hatched_not_a_measured_colour(tmp_path):
     assert "0d stale" not in circles["notes.md"]["title"]
     assert "stale" in circles["README.md"]["title"]  # measured docs keep the scale
     assert circles["README.md"]["fill"].startswith("#")
-    assert "2 docs, 1 edges" in svg
+    assert "2 docs, 1 edge," in svg

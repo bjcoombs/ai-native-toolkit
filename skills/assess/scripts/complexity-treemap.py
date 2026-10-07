@@ -109,6 +109,7 @@ from lib.treemap_render import (
     blend_to_grey,
     build_tree,
     layout,
+    plural,
     write_svg,
 )
 
@@ -740,7 +741,7 @@ def render(files: list[tuple[Path, int, float, str]],
     write_svg(rects, root, W, H, out_path, show_labels, metric_label,
               show_survivor_legend=bool(overrides))
 
-    print(f"wrote {out_path}  ({len(files)} files, "
+    print(f"wrote {out_path}  ({len(files)} {plural(len(files), 'file')}, "
           f"{sum(1 for f in files if f[3] == 'lizard')} lizard, "
           f"{sum(1 for f in files if f[3] == 'scc')} scc)")
     _print_axes(files, metric_label, cap, cap_kind,
@@ -926,11 +927,13 @@ def _keyhole_budget_rollup(
         # a directory maps to that directory.
         top = rel.parts[0] if rel.parts else rel.name
         subtree_totals[top] = subtree_totals.get(top, 0) + t
-    over_subtrees = sorted(
-        ({"path": name, "est_tokens": tot}
-         for name, tot in subtree_totals.items() if tot > budget),
-        key=lambda s: -s["est_tokens"],
-    )
+    # Sort the (name, tokens) pairs before building the dicts, so the key reads
+    # an int rather than a value of the mixed-type row.
+    over_subtrees = [
+        {"path": name, "est_tokens": tot}
+        for name, tot in sorted(subtree_totals.items(), key=lambda kv: -kv[1])
+        if tot > budget
+    ]
     return {
         "total": total,
         "budget": budget,
