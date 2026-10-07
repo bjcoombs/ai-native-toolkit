@@ -7,14 +7,14 @@ _First flagged: {first_flagged}. Last seen: {last_seen}. Status: {status}._
 | Metric | Value |
 |--------|-------|
 | LOC | {loc} |
-| Cyclomatic complexity (file max) | {ccn} |
-| Commits in churn window | {commits} |
+| Cyclomatic complexity (file aggregate) | {ccn} |
+{worst_fn_row}| Commits in churn window | {commits} |
 | Has test file | {has_tests} |
 
 ## History across runs
 
-| Run date | LOC | CCN | Commits | Status |
-|----------|-----|-----|---------|--------|
+| Run date | Run | LOC | CCN | Commits | Status |
+|----------|-----|-----|-----|---------|--------|
 {history_rows}
 
 ## Briefing for editing this file

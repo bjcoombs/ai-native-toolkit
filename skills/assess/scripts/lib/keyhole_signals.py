@@ -972,6 +972,17 @@ MAX_FINDING_PATHS_RENDERED = 10
 MAX_ATTENTION_ROWS_RENDERED = 5
 
 
+def _omitted_row(count: int, where: str, what: str = "full list") -> str:
+    """Disclosure row for a rendered list truncated at its cap.
+
+    ``where`` is the exact key in ``.assess/run-context.json`` holding the
+    list and ``what`` says how much of it that key holds, so the row never
+    claims more than the stored array contains. The row is italic, not a
+    ``- `` bullet, so it never reads (or parses) as one more listed path.
+    """
+    return f"_... {count} more omitted; {what} in {where}_"
+
+
 def render_findings_markdown(
     findings: list[dict], attention: list[dict],
 ) -> str:
@@ -997,6 +1008,12 @@ def render_findings_markdown(
         lines.append("Paths:")
         for p in paths[:MAX_FINDING_PATHS_RENDERED]:
             lines.append(f"- {p}")
+        if len(paths) > MAX_FINDING_PATHS_RENDERED:
+            omitted = len(paths) - MAX_FINDING_PATHS_RENDERED
+            lines.append(_omitted_row(
+                omitted,
+                f"`.assess/run-context.json` `derived_findings` (`{f['name']}`) `paths`",
+            ))
         lines.append("")
     if not rendered_any:
         lines.append(
@@ -1009,6 +1026,17 @@ def render_findings_markdown(
         for a in attention[:MAX_ATTENTION_ROWS_RENDERED]:
             names = ", ".join(a.get("findings", []))
             lines.append(f"- {a['path']} (score {a['score']}): {names}")
+        if len(attention) > MAX_ATTENTION_ROWS_RENDERED:
+            omitted = len(attention) - MAX_ATTENTION_ROWS_RENDERED
+            # build_attention_list stops at MAX_ATTENTION_UNITS: below the cap
+            # the stored array is every flagged unit; at it, only the top N.
+            stored = (
+                f"top {MAX_ATTENTION_UNITS} ranked rows"
+                if len(attention) >= MAX_ATTENTION_UNITS else "full list"
+            )
+            lines.append(_omitted_row(
+                omitted, "`.assess/run-context.json` `attention`", what=stored,
+            ))
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 

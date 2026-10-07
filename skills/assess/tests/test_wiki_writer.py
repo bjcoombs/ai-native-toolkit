@@ -1,6 +1,7 @@
 """Tests for wiki writer module."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -8,7 +9,12 @@ from lib.wiki_writer import (
     HotspotEntry,
     LogEntry,
     append_log_entry,
+    format_ccn,
+    parse_history_rows,
+    parse_index_rows,
+    prune_orphan_hotspots,
     slug_for_path,
+    sweep_superseded_history_rows,
     verify_log_chain,
     write_hotspot_page,
     write_index,
@@ -224,7 +230,6 @@ def test_write_hotspot_page_creates_file(tmp_assess_dir: Path) -> None:
         ccn=30,
         commits=15,
         has_tests=False,
-        history_rows="| 2026-01-01 | 500 | 25 | 8 | active |\n| 2026-05-22 | 600 | 30 | 15 | regressed |",
         briefing="Go API handler. Pairs with handler_test.go (which is missing).",
         actions="- Add `handler_test.go`\n- Split into smaller functions",
     )
@@ -255,7 +260,6 @@ def test_write_hotspot_page_unknown_has_tests(tmp_assess_dir: Path) -> None:
         ccn=30,
         commits=15,
         has_tests=None,
-        history_rows="| 2026-05-22 | 600 | 30 | 15 | active |",
         briefing="Go API handler.",
         actions="- Investigate complexity",
     )
@@ -275,7 +279,6 @@ def _hotspot_kwargs(**overrides: object) -> dict:
         ccn=30,
         commits=15,
         has_tests=None,
-        history_rows="| 2026-06-17 | 600 | 30 | 15 | active |",
         briefing="Go API handler.",
         actions="- Investigate complexity",
     )
@@ -375,7 +378,7 @@ def test_write_hotspot_page_stamps_run_id(tmp_assess_dir: Path) -> None:
     write_hotspot_page(
         tmp_assess_dir, path="src/foo.go", first_flagged="2026-01-01",
         last_seen="2026-07-07", status="active", loc=600, ccn=30, commits=5,
-        has_tests=True, history_rows="| 2026-07-07 | 600 | 30 | 5 | active |",
+        has_tests=True,
         briefing="x", actions="- y",
         run_id="20260707120000-abcdef01", schema_version="1.0.0",
     )
@@ -536,3 +539,170 @@ def test_log_heading_unique_within_minute_short_id_collision(tmp_assess_dir: Pat
         "## 2026-09-14 (v9.9.9, run 20260914101011-abcd1234 #2)",
         "## 2026-09-14 (v9.9.9, run 20260914101012-abcd1234)",
     ]
+
+
+# --- history and index carry-forward (#420, #421) ----------------------------
+
+
+def _history(tmp_assess_dir: Path, path: str = "src/foo.go") -> list[str]:
+    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path(path)}.md").read_text()
+    section = page.split("## History across runs", 1)[1].split("##", 1)[0]
+    return [r for r in section.splitlines() if r.startswith("| 20")]
+
+
+def test_hotspot_history_appends_across_runs_in_date_order(tmp_assess_dir: Path) -> None:
+    """#421: a second write with a different date keeps the first row."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(
+        last_seen="2026-07-01", loc=700, status="regressed", run_id="20260701000000-bbbbbbbb"))
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(
+        last_seen="2026-06-19", loc=574, status="new", run_id="20260619000000-aaaaaaaa"))
+    assert _history(tmp_assess_dir) == [
+        "| 2026-06-19 | aaaaaaaa | 574 | 30 | 15 | new |",
+        "| 2026-07-01 | bbbbbbbb | 700 | 30 | 15 | regressed |",
+    ]
+
+
+def test_hotspot_history_replaces_only_same_date_and_run(tmp_assess_dir: Path) -> None:
+    """Re-writing the same run replaces its row; another run on the same
+    day is kept; a superseded run's row is dropped."""
+    kw = _hotspot_kwargs(last_seen="2026-07-01")
+    write_hotspot_page(tmp_assess_dir, **{**kw, "run_id": "r-11111111", "loc": 1})
+    write_hotspot_page(tmp_assess_dir, **{**kw, "run_id": "r-11111111", "loc": 2})
+    write_hotspot_page(tmp_assess_dir, **{**kw, "run_id": "r-22222222", "loc": 3})
+    assert [r.split(" | ")[1:3] for r in _history(tmp_assess_dir)] == [
+        ["11111111", "2"], ["22222222", "3"],
+    ]
+    assert sweep_superseded_history_rows(tmp_assess_dir, "r-22222222") == [
+        f"{slug_for_path('src/foo.go')}.md"]
+    write_hotspot_page(tmp_assess_dir, **{**kw, "run_id": "r-33333333", "loc": 4})
+    assert [r.split(" | ")[1] for r in _history(tmp_assess_dir)] == ["11111111", "33333333"]
+
+
+def test_sweep_superseded_rows_reaches_pages_not_rewritten(tmp_assess_dir: Path) -> None:
+    """#421: a page this run does not rewrite still loses the superseded run's
+    row; other rows, other pages and text outside the table are untouched."""
+    kw = _hotspot_kwargs(last_seen="2026-07-01")
+    write_hotspot_page(tmp_assess_dir, **{**kw, "run_id": "r-11111111"})
+    write_hotspot_page(tmp_assess_dir, **{**kw, "run_id": "r-22222222",
+                                          "briefing": "| 2026 | 22222222 | kept |"})
+    write_hotspot_page(tmp_assess_dir, **{**kw, "path": "b.go", "run_id": "r-11111111"})
+    assert sweep_superseded_history_rows(tmp_assess_dir, "r-22222222") == [
+        f"{slug_for_path('src/foo.go')}.md"]
+    assert [r.split(" | ")[1] for r in _history(tmp_assess_dir)] == ["11111111"]
+    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('src/foo.go')}.md").read_text()
+    assert "| 2026 | 22222222 | kept |" in page
+    assert sweep_superseded_history_rows(tmp_assess_dir, "r-22222222") == []
+    assert [r.split(" | ")[1] for r in _history(tmp_assess_dir, "b.go")] == ["11111111"]
+
+
+def test_hotspot_history_reads_legacy_five_column_rows() -> None:
+    """Pages written before the Run column keep their rows, with "-" as run."""
+    legacy = (
+        "## History across runs\n\n"
+        "| Run date | LOC | CCN | Commits | Status |\n"
+        "|----------|-----|-----|---------|--------|\n"
+        "| 2026-06-19 | 574 | 105 | 6 | new |\n\n## Briefing\n"
+    )
+    assert parse_history_rows(legacy) == [["2026-06-19", "-", "574", "105", "6", "new"]]
+
+
+def test_hotspot_page_worst_function_row_omitted_when_null(tmp_assess_dir: Path) -> None:
+    """#423: the aggregate is labelled as such; the worst-function row
+    appears only with sidecar data."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(path="a.py"))
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(
+        path="b.py", max_fn_ccn=8.0, max_fn_name="parse_line"))
+    hot = tmp_assess_dir / "hotspots"
+    a = (hot / f"{slug_for_path('a.py')}.md").read_text()
+    b = (hot / f"{slug_for_path('b.py')}.md").read_text()
+    assert "| Cyclomatic complexity (file aggregate) | 30 |\n| Commits" in a
+    assert "Worst function" not in a and "file max" not in a
+    assert "| Worst function | `parse_line` (8) |\n| Commits" in b
+
+
+def test_hotspot_page_renders_integral_ccn_as_integer(tmp_assess_dir: Path) -> None:
+    """Sidecar floats render as whole numbers when integral, fractional ones
+    unchanged, in the metrics table and the history row."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(ccn=159.0, run_id="r-11111111"))
+    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('src/foo.go')}.md").read_text()
+    assert "| Cyclomatic complexity (file aggregate) | 159 |" in page
+    assert _history(tmp_assess_dir)[0].split(" | ")[3] == "159"
+    assert format_ccn(12.5) == "12.5" and format_ccn(7) == "7" and format_ccn(8.0) == "8"
+
+
+def test_hotspot_page_worst_function_escapes_pipe_and_flags_excess(
+    tmp_assess_dir: Path,
+) -> None:
+    """A ``|`` in the name cannot split the cell; a worst function above the
+    aggregate (Dart: scc aggregate, Dart-scanner function) shows unclamped."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(
+        path="a.dart", ccn=6.0, max_fn_ccn=9.0, max_fn_name="operator |"))
+    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('a.dart')}.md").read_text()
+    row = next(line for line in page.splitlines() if line.startswith("| Worst function"))
+    assert row == ("| Worst function | `operator \\|` (9) - above the file aggregate: "
+                   "the two are counted by different tools |")
+    assert len(_split_cells(row)) == 2
+
+
+def _split_cells(row: str) -> list[str]:
+    """Table cells as a markdown renderer splits them (``\\|`` is literal)."""
+    return [c for c in re.split(r"(?<!\\)\|", row.strip().strip("|"))]
+
+
+def _entry(path: str, status: str = "active", **kw: object) -> HotspotEntry:
+    base: dict = dict(path=path, first_flagged="2026-01-01", last_seen="2026-07-01",
+                      status=status, ccn=10, loc=100)
+    base.update(kw)
+    return HotspotEntry(**base)
+
+
+def test_write_index_carries_prior_rows_forward(tmp_assess_dir: Path) -> None:
+    """#420: a path absent from this run's entries keeps its last known row;
+    a path present takes this run's row."""
+    write_index(tmp_assess_dir, [_entry("a.go"), _entry("b.go", "graduated", ccn=12.5)],
+                last_updated="2026-07-01")
+    write_index(tmp_assess_dir, [_entry("a.go", "persistent", last_seen="2026-07-08")],
+                last_updated="2026-07-08")
+    index = (tmp_assess_dir / "index.md").read_text()
+    assert "| `a.go` | 2026-01-01 | 2026-07-08 | persistent | 10 | 100 |" in index
+    assert "| `b.go` | 2026-01-01 | 2026-07-01 | graduated | 12.5 | 100 |" in index
+    assert index.index("`a.go`") < index.index("`b.go`")
+    assert parse_index_rows(index)[1] == _entry("b.go", "graduated", ccn=12.5)
+
+
+def test_write_index_marks_carried_row_retired(tmp_assess_dir: Path) -> None:
+    """A carried row whose page is retired takes the retired status."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(path="gone.go"))
+    write_index(tmp_assess_dir, [_entry("gone.go", "graduated")], last_updated="2026-07-01")
+    prune_orphan_hotspots(tmp_assess_dir, tmp_assess_dir)  # gone.go is not on disk
+    write_index(tmp_assess_dir, [], last_updated="2026-07-08")
+    row = next(r for r in (tmp_assess_dir / "index.md").read_text().splitlines()
+               if "`gone.go`" in r)
+    assert "| retired - file deleted |" in row
+
+
+def test_write_index_backfills_orphaned_live_page_as_graduated(tmp_assess_dir: Path) -> None:
+    """An orphaned page still reading `persistent` (its last ranked run) is
+    not a hotspot this run, so its backfilled row renders `graduated`; a
+    carried row with a live status does too."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(path="orphan.go", status="persistent"))
+    write_index(tmp_assess_dir, [_entry("was_new.go", "new")], last_updated="2026-07-01")
+    write_index(tmp_assess_dir, [_entry("a.go")], last_updated="2026-07-08")
+    rows = {e.path: e.status for e in parse_index_rows(
+        (tmp_assess_dir / "index.md").read_text())}
+    assert rows == {"a.go": "active", "was_new.go": "graduated", "orphan.go": "graduated"}
+
+
+def test_write_index_drops_never_assessed_and_generated_paths(tmp_assess_dir: Path) -> None:
+    """``never_assessed`` drops a carried row even when the page has no status
+    token to read it from; ``excluded_as_generated`` drops carried and
+    backfilled rows alike."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(path="gen/page.go"))
+    write_index(tmp_assess_dir, [_entry("unstamped.go"), _entry("gen/row.go"), _entry("b.go")],
+                last_updated="2026-07-01")
+    write_index(tmp_assess_dir, [_entry("a.go")], last_updated="2026-07-08",
+                never_assessed=["unstamped.go"],
+                excluded_as_generated=lambda p: p.startswith("gen/"))
+    rows = {e.path: e.status for e in parse_index_rows(
+        (tmp_assess_dir / "index.md").read_text())}
+    assert rows == {"a.go": "active", "b.go": "graduated"}
