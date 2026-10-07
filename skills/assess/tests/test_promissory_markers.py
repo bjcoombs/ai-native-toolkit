@@ -384,10 +384,16 @@ def test_inline_example_in_prose_is_not_a_marker(tmp_path: Path) -> None:
             "* TODO write the intro\n"                   # 3 star bullet
             "# TODO heading\n"                           # 4 heading
             "<!-- XXX check the table -->\n"             # 5 HTML comment
+            "## TODO write the intro\n"                  # 6 level-2 heading
+            "### FIXME stale numbers\n"                  # 7 level-3 heading
+            "> > TODO nested quote\n"                    # 8 nested blockquote
+            ">> HACK tight nested quote\n"               # 9 tight blockquote
+            "> - [ ] TODO quoted checkbox\n"             # 10 quoted bullet
+            "> see the `# TODO` example\n"               # 11 quoted inline example
         ),
     }, day=1)
     lines = {m.line for m in _scan(repo).markers if m.family == "todo"}
-    assert lines == {3, 4, 5}
+    assert lines == {3, 4, 5, 6, 7, 8, 9, 10}
 
 
 def test_double_dash_reason_per_suppression_family() -> None:

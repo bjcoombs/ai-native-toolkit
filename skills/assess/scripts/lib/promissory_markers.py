@@ -134,6 +134,8 @@ TODO_PHRASE_RE = re.compile(
 )
 # A list bullet, a checkbox, or both (``- [ ] TODO write X``).
 _BULLET_RE = re.compile(r"(?:(?:[-*+>]|\d+[.)])\s*)?(?:\[[ xX]?\]\s*)?")
+# A prose blockquote leader of any nesting depth (``>``, ``> >``, ``>>``).
+_BLOCKQUOTE_RE = re.compile(r"^(?:>\s*)+")
 
 # Comment leaders; a todo/deprecation hit must sit after one of these on its
 # line (suppressions and disabled tests are syntactic and skip the check).
@@ -361,7 +363,11 @@ def _opener(prefix: str, is_prose: bool) -> str:
             default=0,
         )
         return prefix[cut:].strip()
-    rest = prefix.lstrip()
+    # A blockquote of any depth (``> > TODO``) and a heading of any level
+    # (``### TODO``) open as a whole run, not one character.
+    rest = _BLOCKQUOTE_RE.sub("", prefix.lstrip())
+    if rest.startswith("#"):
+        return rest.lstrip("#").strip()
     for lead in sorted(COMMENT_LEADERS, key=len, reverse=True):
         if rest.startswith(lead):
             return rest[len(lead):].strip()
