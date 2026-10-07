@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://ai-native-toolkit/acceptance-contract/completion.schema.json",
   "title": "Acceptance Contract Completion Record",
-  "description": "Per-run completion record written to .taskmaster/contract/<run-id>.completion.json. Validated by scripts/contract/validate_completion.py, the single component that decides whether a record may claim PASS. run_id is the only unconditionally-required field: a signed-skip record legitimately carries no verifier results, so requiring criteria_results/readiness_verdict here would misclassify a valid skip as a schema violation. Deeper certification requirements (freeze evidence, chokepoint token, tier-3 sign-off) are enforced by the validator's logic, not by required-ness in this schema.",
+  "description": "Per-run completion record written to <contract-dir>/<run-id>.completion.json, where <contract-dir> is --contract-dir, else $ACCEPTANCE_CONTRACT_DIR, else .claude/contracts (see scripts/contract/contract_location.py). Validated by scripts/contract/validate_completion.py, the single component that decides whether a record may claim PASS. run_id is the only unconditionally-required field: a signed-skip record legitimately carries no verifier results, so requiring criteria_results/readiness_verdict here would misclassify a valid skip as a schema violation. Deeper certification requirements (freeze evidence, chokepoint token, tier-3 sign-off) are enforced by the validator's logic, not by required-ness in this schema.",
   "type": "object",
   "required": ["run_id"],
   "additionalProperties": true,

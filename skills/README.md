@@ -79,16 +79,16 @@ For the interactive/visual class that motivated this - the class where the machi
 
 ### Artifact paths
 
-All paths relative to the repo root unless prefixed `.taskmaster/` (which lives at the Task Master container level).
+All paths relative to the repo root. `<contract-dir>` is `.claude/contracts/` unless overridden by a script's `--contract-dir` flag or the `ACCEPTANCE_CONTRACT_DIR` environment variable; a repo that has only the older Task Master contract folder keeps using it (`scripts/contract/contract_location.py` holds the rule).
 
 | Artifact | Path |
 |---|---|
-| Acceptance contract (per run) | `.taskmaster/contract/<run-id>.contract.md` |
-| Completion record (per run) | `.taskmaster/contract/<run-id>.completion.json` |
-| Provenance side-channel (per run) | `.taskmaster/contract/<run-id>.provenance.json` (chokepoint-only) |
+| Acceptance contract (per run) | `<contract-dir>/<run-id>.contract.md` |
+| Completion record (per run) | `<contract-dir>/<run-id>.completion.json` |
+| Provenance side-channel (per run) | `<contract-dir>/<run-id>.provenance.json` (chokepoint-only) |
 | Constitutional floor | `FLOOR.md` |
 | Floor CI workflow | `.github/workflows/floor.yml` |
-| Gates + schema + verifier | `scripts/contract/` (`start_gate.py`, `freeze.py`, `spawn_verifier.py`, `validate_completion.py`, `complete_gate.py`, `completion.schema.json`) |
+| Gates + schema + verifier | `scripts/contract/` (`contract_location.py`, `start_gate.py`, `freeze.py`, `spawn_verifier.py`, `validate_completion.py`, `complete_gate.py`, `completion.schema.json`) |
 | Canary harness + fixtures | `scripts/canaries/run_canaries.py`, `tests/canaries/` |
 | Contract test modules | `tests/contract/` |
 | External-anchor proof | `docs/floor-anchor-proof.md` |

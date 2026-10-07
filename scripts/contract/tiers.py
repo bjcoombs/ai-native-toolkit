@@ -29,8 +29,13 @@ materializes the tier-3 artifact FILE and writes the escalation into the record.
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
+# Flat sibling module (no package): put this directory on the path first.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from contract_location import resolve_contract_dir  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # Class tier defaults (PRD A4).
@@ -88,11 +93,10 @@ def default_tier_for_class(cls: str) -> int:
 
 ARTIFACT_SUFFIX = ".artifact"
 
-# Default artifact-root, relative to the run cwd. Mirrors the contract-dir the
-# chokepoint and validator share; the per-run artifacts live in a `<run-id>/`
-# subdirectory beside the `<run-id>.completion.json` / `<run-id>.provenance.json`
-# files.
-DEFAULT_CONTRACT_DIR = Path(".taskmaster/contract")
+# The artifact root is the contract dir the chokepoint and validator share,
+# resolved at call time by `contract_location.resolve_contract_dir`; the per-run
+# artifacts live in a `<run-id>/` subdirectory beside the
+# `<run-id>.completion.json` / `<run-id>.provenance.json` files.
 
 
 def _reject_bad_component(name: str, kind: str) -> None:
@@ -108,7 +112,7 @@ def _reject_bad_component(name: str, kind: str) -> None:
 
 
 def tier3_artifact_path(
-    run_id: str, criterion_id: str, contract_dir: Any = DEFAULT_CONTRACT_DIR
+    run_id: str, criterion_id: str, contract_dir: Optional[Any] = None
 ) -> Path:
     """Return the canonical, path-safe location of a tier-3 escalation artifact.
 
@@ -117,7 +121,9 @@ def tier3_artifact_path(
     """
     _reject_bad_component(run_id, "run_id")
     _reject_bad_component(criterion_id, "criterion_id")
-    return Path(contract_dir) / run_id / ("tier3-%s%s" % (criterion_id, ARTIFACT_SUFFIX))
+    return resolve_contract_dir(contract_dir) / run_id / (
+        "tier3-%s%s" % (criterion_id, ARTIFACT_SUFFIX)
+    )
 
 
 def tier3_artifact_contents(run_id: str, criterion_id: str, observation: str) -> str:
@@ -148,7 +154,7 @@ def build_tier3_escalation(
     criterion_id: str,
     observation: str,
     run_id: str,
-    contract_dir: Any = DEFAULT_CONTRACT_DIR,
+    contract_dir: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Assemble one tier-3 escalation entry - RETURNS data, writes nothing.
 

@@ -2,7 +2,7 @@
 """Verifier spawn chokepoint - the single code path for cold verification.
 
 This module is the ONLY code path in the toolkit that may (a) write the
-provenance side-channel `.taskmaster/contract/<run-id>.provenance.json` and
+provenance side-channel `<contract-dir>/<run-id>.provenance.json` and
 (b) write verifier results / `verifier_provenance` into a completion record.
 That exclusivity is not a convention - `tests/contract/test_custody.py` derives
 it from disk with an AST scan (PRD C4, criterion 11): any other `.py` under
@@ -71,9 +71,7 @@ from typing import Any, Dict, List, Optional
 # writer of the record and the materialized artifact files.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tiers  # noqa: E402
-
-# Shared artifact location (mirrors validate_completion.DEFAULT_PROVENANCE_DIR).
-DEFAULT_CONTRACT_DIR = Path(".taskmaster/contract")
+from contract_location import HELP_DEFAULT, resolve_contract_dir  # noqa: E402
 
 CONTRACT_SUFFIX = ".contract.md"
 PROVENANCE_SUFFIX = ".provenance.json"
@@ -236,13 +234,14 @@ def spawn_verifier(
     Reads and hashes the frozen contract, mints a fresh custody token, writes
     the provenance side-channel, and composes the fixed verifier prompt. The
     only positional inputs are the contract path and the product path (the CLI
-    exposes exactly these); ``contract_dir`` is a keyword-only artifact-location
-    override for testing and defaults to the shared `.taskmaster/contract`.
+    exposes exactly these as positionals); ``contract_dir`` is a keyword-only
+    artifact-location override, resolved by the shared
+    `contract_location.resolve_contract_dir` when omitted.
     """
     contract_path = Path(contract_path)
     product_path = Path(product_path)
     run_id = run_id_from_contract(contract_path)
-    cdir = Path(contract_dir) if contract_dir is not None else DEFAULT_CONTRACT_DIR
+    cdir = resolve_contract_dir(contract_dir)
 
     contract_content = contract_path.read_text(encoding="utf-8")
     contract_hash = hash_contract(contract_path)
@@ -419,11 +418,13 @@ def ingest_verifier_results(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """The chokepoint CLI: exactly {contract path, product path}, no extras.
+    """The chokepoint CLI: exactly {contract path, product path} as inputs.
 
     No option shapes the prompt or the run_id; the run identifier is derived
-    from the contract filename. Argparse rejects a third positional and any
-    unknown option, so the C4 prevention property holds at the interface.
+    from the contract filename. The one option, ``--contract-dir``, says only
+    where the artifacts live (the same override every contract script takes).
+    Argparse rejects a third positional and any unknown option, so the C4
+    prevention property holds at the interface.
     """
     parser = argparse.ArgumentParser(
         description="Spawn a cold acceptance verifier for one run (the single "
@@ -432,13 +433,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("contract_path", help="path to <run-id>.contract.md (the frozen contract)")
     parser.add_argument("product_path", help="path to the assembled product to verify")
+    parser.add_argument(
+        "--contract-dir",
+        default=None,
+        help="directory for <run-id>.provenance.json and <run-id>.completion.json "
+        "(%s)" % HELP_DEFAULT,
+    )
     return parser
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    spawn = spawn_verifier(args.contract_path, args.product_path)
+    spawn = spawn_verifier(args.contract_path, args.product_path, contract_dir=args.contract_dir)
     # The prompt is the artifact a caller drives the cold verifier with; the
     # side-channel is already written. Emit the prompt on stdout.
     print(spawn.prompt)
