@@ -14,7 +14,7 @@
 <line data-edge-kind="reference" x1="743.8" y1="656.6" x2="317.8" y2="755.1" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="743.8" y1="656.6" x2="289.1" y2="535.8" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="743.8" y1="656.6" x2="561.9" y2="460.2" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
-<line data-edge-kind="reference" x1="743.8" y1="656.6" x2="372.7" y2="400.4" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
+<line data-edge-kind="reference" x1="743.8" y1="656.6" x2="373.0" y2="400.6" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="835.7" y1="817.2" x2="318.1" y2="759.6" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="link" x1="471.9" y1="718.4" x2="551.0" y2="462.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
 <line data-edge-kind="link" x1="471.9" y1="718.4" x2="730.5" y2="659.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
@@ -176,7 +176,7 @@
 <line data-edge-kind="reference" x1="365.6" y1="1036.7" x2="734.2" y2="666.3" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="365.6" y1="1036.7" x2="275.6" y2="675.5" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="365.6" y1="1036.7" x2="307.5" y2="771.3" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
-<line data-edge-kind="reference" x1="365.6" y1="1036.7" x2="355.7" y2="409.5" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
+<line data-edge-kind="reference" x1="365.6" y1="1036.7" x2="355.7" y2="409.9" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="365.6" y1="1036.7" x2="293.2" y2="737.9" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="365.6" y1="1036.7" x2="825.7" y2="821.8" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="365.6" y1="1036.7" x2="1048.9" y2="494.4" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
@@ -229,8 +229,8 @@
 <line data-edge-kind="link" x1="554.3" y1="452.0" x2="302.1" y2="498.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
 <line data-edge-kind="link" x1="554.3" y1="452.0" x2="315.0" y2="469.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
 <line data-edge-kind="link" x1="554.3" y1="452.0" x2="344.7" y2="415.6" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
-<line data-edge-kind="link" x1="554.3" y1="452.0" x2="375.4" y2="394.8" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
-<line data-edge-kind="link" x1="554.3" y1="452.0" x2="389.8" y2="370.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line data-edge-kind="link" x1="554.3" y1="452.0" x2="375.8" y2="395.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
+<line data-edge-kind="link" x1="554.3" y1="452.0" x2="390.5" y2="371.0" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
 <line data-edge-kind="link" x1="554.3" y1="452.0" x2="538.3" y2="917.9" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
 <line data-edge-kind="link" x1="554.3" y1="452.0" x2="346.0" y2="805.1" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
 <line data-edge-kind="link" x1="554.3" y1="452.0" x2="370.5" y2="823.7" stroke="#9aa0a6" stroke-width="1.2" opacity="0.6" marker-end="url(#arrow)"/>
@@ -297,7 +297,7 @@
 <line data-edge-kind="reference" x1="131.2" y1="760.1" x2="842.1" y2="790.2" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="131.2" y1="760.1" x2="307.1" y2="455.3" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="131.2" y1="760.1" x2="730.3" y2="658.9" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
-<line data-edge-kind="reference" x1="115.7" y1="700.2" x2="305.3" y2="454.1" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
+<line data-edge-kind="reference" x1="115.7" y1="700.2" x2="305.2" y2="454.1" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="115.7" y1="700.2" x2="514.7" y2="305.1" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="115.7" y1="700.2" x2="456.1" y2="717.6" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="115.7" y1="700.2" x2="730.2" y2="657.5" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
@@ -322,7 +322,7 @@
 <line data-edge-kind="reference" x1="223.0" y1="295.0" x2="385.2" y2="849.5" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="223.0" y1="295.0" x2="463.9" y2="704.8" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="266.1" y1="250.7" x2="305.3" y2="219.6" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
-<line data-edge-kind="reference" x1="266.1" y1="250.7" x2="311.2" y2="425.3" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
+<line data-edge-kind="reference" x1="266.1" y1="250.7" x2="311.1" y2="425.3" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="266.1" y1="250.7" x2="545.2" y2="445.6" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="314.6" y1="212.2" x2="315.2" y2="424.7" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="367.6" y1="180.2" x2="469.8" y2="142.9" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
@@ -365,7 +365,7 @@
 <line data-edge-kind="reference" x1="728.5" y1="146.3" x2="664.1" y2="282.1" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="728.5" y1="146.3" x2="743.4" y2="642.9" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="786.6" y1="167.8" x2="745.0" y2="643.0" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
-<line data-edge-kind="reference" x1="786.6" y1="167.8" x2="374.1" y2="378.9" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
+<line data-edge-kind="reference" x1="786.6" y1="167.8" x2="374.5" y2="378.7" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="841.4" y1="196.6" x2="473.9" y2="309.7" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="841.4" y1="196.6" x2="505.6" y2="298.1" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="272.8" y1="664.3" x2="297.3" y2="485.7" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
@@ -483,231 +483,231 @@
 <line data-edge-kind="reference" x1="887.3" y1="732.6" x2="895.4" y2="710.0" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <line data-edge-kind="reference" x1="873.0" y1="762.5" x2="895.0" y2="709.8" stroke="#9aa0a6" stroke-dasharray="0.1,4" stroke-width="1.6" opacity="0.8" stroke-linecap="round" marker-end="url(#arrow)"/>
 <circle cx="855.8" cy="790.8" r="10.7" fill="#fef1df" stroke="#b8b8b8" stroke-width="1.0"><title>.github/claude-review-instructions.md
-242 lines · in 6 · out 1 · reachable · 18d stale, subject churn 719</title></circle>
+242 lines · in 6 · out 1 · reachable · 18d stale, subject churn 757</title></circle>
 <circle cx="743.8" cy="656.6" r="10.7" fill="#fff7ec" stroke="#0072B2" stroke-width="3.5"><title>CLAUDE.md
-241 lines · in 30 · out 6 · entry · 0d stale, subject churn 719</title></circle>
+241 lines · in 30 · out 6 · entry · 0d stale, subject churn 757</title></circle>
 <circle cx="835.7" cy="817.2" r="8.0" fill="#feeed6" stroke="#b8b8b8" stroke-width="1.0"><title>FLOOR.md
-85 lines · in 17 · out 1 · reachable · 29d stale, subject churn 719</title></circle>
-<circle cx="471.9" cy="718.4" r="12.8" fill="#d9d7da" stroke="#0072B2" stroke-width="3.5"><title>README.md
+85 lines · in 17 · out 1 · reachable · 29d stale, subject churn 757</title></circle>
+<circle cx="471.9" cy="718.4" r="12.8" fill="#d8d7d9" stroke="#0072B2" stroke-width="3.5"><title>README.md
 423 lines · in 13 · out 12 · entry · 0d stale, subject churn 127</title></circle>
 <circle cx="812.9" cy="841.3" r="6.1" fill="#fdc48d" stroke="#b8b8b8" stroke-width="1.0"><title>agents/README.md
-24 lines · in 7 · out 13 · reachable · 127d stale, subject churn 719</title></circle>
+24 lines · in 7 · out 13 · reachable · 127d stale, subject churn 757</title></circle>
 <circle cx="787.9" cy="863.0" r="14.3" fill="#fef2e0" stroke="#b8b8b8" stroke-width="1.0"><title>agents/assess-layer-scorer.md
-582 lines · in 3 · out 2 · reachable · 16d stale, subject churn 719</title></circle>
+582 lines · in 3 · out 2 · reachable · 16d stale, subject churn 757</title></circle>
 <circle cx="760.7" cy="882.0" r="8.2" fill="#fc925d" stroke="#b8b8b8" stroke-width="1.0"><title>agents/black-hat.md
-97 lines · in 2 · out 0 · reachable · 187d stale, subject churn 719</title></circle>
+97 lines · in 2 · out 0 · reachable · 187d stale, subject churn 757</title></circle>
 <circle cx="731.7" cy="898.1" r="7.3" fill="#fc925d" stroke="#b8b8b8" stroke-width="1.0"><title>agents/blue-hat.md
-58 lines · in 2 · out 0 · reachable · 187d stale, subject churn 719</title></circle>
+58 lines · in 2 · out 0 · reachable · 187d stale, subject churn 757</title></circle>
 <circle cx="701.3" cy="911.2" r="7.6" fill="#fc925d" stroke="#b8b8b8" stroke-width="1.0"><title>agents/green-hat.md
-70 lines · in 2 · out 0 · reachable · 187d stale, subject churn 719</title></circle>
+70 lines · in 2 · out 0 · reachable · 187d stale, subject churn 757</title></circle>
 <circle cx="669.6" cy="921.0" r="7.9" fill="#fc925d" stroke="#b8b8b8" stroke-width="1.0"><title>agents/red-hat.md
-84 lines · in 2 · out 0 · reachable · 187d stale, subject churn 719</title></circle>
+84 lines · in 2 · out 0 · reachable · 187d stale, subject churn 757</title></circle>
 <circle cx="637.1" cy="927.5" r="8.0" fill="#7f0000" stroke="#b8b8b8" stroke-width="1.0"><title>agents/scribe.md
-86 lines · in 2 · out 0 · reachable · 385d stale, subject churn 719</title></circle>
+86 lines · in 2 · out 0 · reachable · 385d stale, subject churn 757</title></circle>
 <circle cx="604.1" cy="930.7" r="7.6" fill="#fc925d" stroke="#b8b8b8" stroke-width="1.0"><title>agents/white-hat.md
-70 lines · in 2 · out 0 · reachable · 187d stale, subject churn 719</title></circle>
+70 lines · in 2 · out 0 · reachable · 187d stale, subject churn 757</title></circle>
 <circle cx="570.9" cy="930.4" r="7.3" fill="#fc925d" stroke="#b8b8b8" stroke-width="1.0"><title>agents/yellow-hat.md
-58 lines · in 2 · out 0 · reachable · 187d stale, subject churn 719</title></circle>
+58 lines · in 2 · out 0 · reachable · 187d stale, subject churn 757</title></circle>
 <circle cx="538.0" cy="926.8" r="5.9" fill="#fdd39c" stroke="#b8b8b8" stroke-width="1.0"><title>commands/6hats.md
-20 lines · in 5 · out 0 · reachable · 98d stale, subject churn 719</title></circle>
+20 lines · in 5 · out 0 · reachable · 98d stale, subject churn 757</title></circle>
 <circle cx="505.6" cy="919.7" r="6.1" fill="#fdc48d" stroke="#b8b8b8" stroke-width="1.0"><title>commands/README.md
-23 lines · in 6 · out 13 · reachable · 127d stale, subject churn 719</title></circle>
+23 lines · in 6 · out 13 · reachable · 127d stale, subject churn 757</title></circle>
 <circle cx="474.1" cy="909.4" r="9.5" fill="#fdd39c" stroke="#b8b8b8" stroke-width="1.0"><title>commands/fix-develop.md
-165 lines · in 6 · out 0 · reachable · 98d stale, subject churn 719</title></circle>
+165 lines · in 6 · out 0 · reachable · 98d stale, subject churn 757</title></circle>
 <circle cx="443.8" cy="895.9" r="8.4" fill="#feefdb" stroke="#b8b8b8" stroke-width="1.0"><title>commands/fix-pr.md
-104 lines · in 6 · out 0 · reachable · 23d stale, subject churn 719</title></circle>
+104 lines · in 6 · out 0 · reachable · 23d stale, subject churn 757</title></circle>
 <circle cx="415.1" cy="879.4" r="13.3" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>commands/issues.md
-466 lines · in 10 · out 1 · reachable · 0d stale, subject churn 719</title></circle>
+466 lines · in 10 · out 1 · reachable · 0d stale, subject churn 757</title></circle>
 <circle cx="388.2" cy="859.9" r="7.8" fill="#feefdb" stroke="#b8b8b8" stroke-width="1.0"><title>commands/tm-marathon-config-example.md
-80 lines · in 5 · out 0 · reachable · 23d stale, subject churn 719</title></circle>
+80 lines · in 5 · out 0 · reachable · 23d stale, subject churn 757</title></circle>
 <circle cx="363.5" cy="837.9" r="12.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>commands/tm.md
-416 lines · in 11 · out 0 · reachable · 0d stale, subject churn 719</title></circle>
+416 lines · in 11 · out 0 · reachable · 0d stale, subject churn 757</title></circle>
 <circle cx="341.2" cy="813.4" r="6.6" fill="#fdd39c" stroke="#b8b8b8" stroke-width="1.0"><title>commands/understand.md
-36 lines · in 3 · out 0 · reachable · 98d stale, subject churn 719</title></circle>
+36 lines · in 3 · out 0 · reachable · 98d stale, subject churn 757</title></circle>
 <circle cx="321.5" cy="786.7" r="5.9" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/README.md
-20 lines · in 10 · out 13 · reachable · 33d stale, subject churn 719</title></circle>
+20 lines · in 10 · out 13 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="890.2" cy="987.3" r="10.7" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/behaviour/spec.md
-242 lines · in 2 · out 10 · reachable · 33d stale, subject churn 719</title></circle>
+242 lines · in 2 · out 10 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="839.4" cy="1022.6" r="11.7" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/disclosure/spec.md
-319 lines · in 3 · out 9 · reachable · 33d stale, subject churn 719</title></circle>
+319 lines · in 3 · out 9 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="784.4" cy="1051.1" r="11.8" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/distribution/spec.md
-328 lines · in 3 · out 6 · reachable · 33d stale, subject churn 719</title></circle>
+328 lines · in 3 · out 6 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="726.3" cy="1072.4" r="12.6" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/evals/spec.md
-404 lines · in 1 · out 16 · reachable · 33d stale, subject churn 719</title></circle>
+404 lines · in 1 · out 16 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="665.9" cy="1086.0" r="12.0" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/floor/spec.md
-348 lines · in 3 · out 8 · reachable · 33d stale, subject churn 719</title></circle>
+348 lines · in 3 · out 8 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="604.3" cy="1091.8" r="11.8" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/frontmatter/spec.md
-330 lines · in 2 · out 7 · reachable · 33d stale, subject churn 719</title></circle>
+330 lines · in 2 · out 7 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="542.5" cy="1089.7" r="11.4" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/guardrails/spec.md
-300 lines · in 2 · out 6 · reachable · 33d stale, subject churn 719</title></circle>
+300 lines · in 2 · out 6 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="481.4" cy="1079.6" r="7.7" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/intent.md
-76 lines · in 12 · out 6 · reachable · 33d stale, subject churn 719</title></circle>
+76 lines · in 12 · out 6 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="422.1" cy="1061.9" r="12.8" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/knowledge/spec.md
-418 lines · in 4 · out 14 · reachable · 33d stale, subject churn 719</title></circle>
+418 lines · in 4 · out 14 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="365.6" cy="1036.7" r="15.5" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/layout/spec.md
-724 lines · in 1 · out 28 · reachable · 33d stale, subject churn 719</title></circle>
+724 lines · in 1 · out 28 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="312.7" cy="1004.5" r="9.0" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/naming/spec.md
-134 lines · in 3 · out 6 · reachable · 33d stale, subject churn 719</title></circle>
+134 lines · in 3 · out 6 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="264.4" cy="965.8" r="13.0" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/probes.md
-441 lines · in 5 · out 3 · reachable · 33d stale, subject churn 719</title></circle>
+441 lines · in 5 · out 3 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="221.5" cy="921.2" r="9.3" fill="#feedd4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/design/2026-09-modernization/sunset/spec.md
-152 lines · in 2 · out 11 · reachable · 33d stale, subject churn 719</title></circle>
+152 lines · in 2 · out 11 · reachable · 33d stale, subject churn 757</title></circle>
 <circle cx="304.6" cy="758.1" r="10.5" fill="#feefdb" stroke="#b8b8b8" stroke-width="1.0"><title>docs/floor-anchor-proof.md
-232 lines · in 6 · out 2 · reachable · 23d stale, subject churn 719</title></circle>
+232 lines · in 6 · out 2 · reachable · 23d stale, subject churn 757</title></circle>
 <circle cx="290.8" cy="728.0" r="7.2" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/huddle-explainer/README.md
-57 lines · in 3 · out 3 · reachable · 90d stale, subject churn 719</title></circle>
+57 lines · in 3 · out 3 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="184.6" cy="871.5" r="6.5" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>docs/huddle-explainer/narration-script.md
-33 lines · in 1 · out 0 · reachable · 90d stale, subject churn 719</title></circle>
+33 lines · in 1 · out 0 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="554.3" cy="452.0" r="8.1" fill="#fff7ec" stroke="#0072B2" stroke-width="3.5"><title>docs/index.md
-92 lines · in 19 · out 62 · entry · 0d stale, subject churn 719</title></circle>
+92 lines · in 19 · out 62 · entry · 0d stale, subject churn 757</title></circle>
 <circle cx="280.1" cy="696.6" r="6.5" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/README.md
-35 lines · in 3 · out 24 · reachable · 0d stale, subject churn 719</title></circle>
+35 lines · in 3 · out 24 · reachable · 0d stale, subject churn 757</title></circle>
 <circle cx="154.3" cy="817.5" r="24.0" fill="#fdbe87" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-22-assess-deterministic-wiki.md
-2177 lines · in 1 · out 3 · reachable · 138d stale, subject churn 719</title></circle>
+2177 lines · in 1 · out 3 · reachable · 138d stale, subject churn 757</title></circle>
 <circle cx="131.2" cy="760.1" r="19.3" fill="#fdbe87" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-22-assess-v1.5-real-use-fixes.md
-1277 lines · in 1 · out 3 · reachable · 138d stale, subject churn 719</title></circle>
+1277 lines · in 1 · out 3 · reachable · 138d stale, subject churn 757</title></circle>
 <circle cx="115.7" cy="700.2" r="19.6" fill="#fdbf88" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-23-standalone-skill-pipeline.md
-1328 lines · in 2 · out 4 · reachable · 136d stale, subject churn 719</title></circle>
+1328 lines · in 2 · out 4 · reachable · 136d stale, subject churn 757</title></circle>
 <circle cx="107.9" cy="638.8" r="9.8" fill="#fdc18b" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-27-assess-truth-pressure-signals.md
-186 lines · in 2 · out 3 · reachable · 132d stale, subject churn 719</title></circle>
+186 lines · in 2 · out 3 · reachable · 132d stale, subject churn 757</title></circle>
 <circle cx="108.1" cy="576.9" r="8.6" fill="#fdc08a" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-27-huddle-broadcast-per-recipient.md
-115 lines · in 1 · out 1 · reachable · 133d stale, subject churn 719</title></circle>
+115 lines · in 1 · out 1 · reachable · 133d stale, subject churn 757</title></circle>
 <circle cx="116.1" cy="515.5" r="8.3" fill="#fdc08a" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-27-huddle-cli-team-mode-regression.md
-99 lines · in 1 · out 2 · reachable · 133d stale, subject churn 719</title></circle>
+99 lines · in 1 · out 2 · reachable · 133d stale, subject churn 757</title></circle>
 <circle cx="132.0" cy="455.7" r="10.4" fill="#fdc18b" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-28-assess-dismiss-false-positives.md
-220 lines · in 1 · out 1 · reachable · 131d stale, subject churn 719</title></circle>
+220 lines · in 1 · out 1 · reachable · 132d stale, subject churn 757</title></circle>
 <circle cx="155.3" cy="398.4" r="9.9" fill="#fdc18b" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-29-assess-keyhole-readiness.md
-189 lines · in 2 · out 1 · reachable · 131d stale, subject churn 719</title></circle>
+189 lines · in 2 · out 1 · reachable · 131d stale, subject churn 757</title></circle>
 <circle cx="185.8" cy="344.5" r="9.2" fill="#fdc18b" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-29-assess-write-side-truth-pressure.md
-145 lines · in 1 · out 3 · reachable · 131d stale, subject churn 719</title></circle>
-<circle cx="223.0" cy="295.0" r="18.1" fill="#fdc28b" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md
-1080 lines · in 1 · out 9 · reachable · 130d stale, subject churn 719</title></circle>
+145 lines · in 1 · out 3 · reachable · 131d stale, subject churn 757</title></circle>
+<circle cx="223.0" cy="295.0" r="18.1" fill="#fdc18b" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-29-issues-marathon-shared-skills.md
+1080 lines · in 1 · out 9 · reachable · 131d stale, subject churn 757</title></circle>
 <circle cx="266.1" cy="250.7" r="8.0" fill="#fdc38c" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-31-assess-dogfooded-analysis.md
-89 lines · in 1 · out 3 · reachable · 128d stale, subject churn 719</title></circle>
+89 lines · in 1 · out 3 · reachable · 128d stale, subject churn 757</title></circle>
 <circle cx="314.6" cy="212.2" r="8.9" fill="#fdc38c" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-05-31-assess-dogfooded.md
-133 lines · in 2 · out 1 · reachable · 128d stale, subject churn 719</title></circle>
+133 lines · in 2 · out 1 · reachable · 128d stale, subject churn 757</title></circle>
 <circle cx="367.6" cy="180.2" r="13.8" fill="#fdc48d" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/plans/2026-06-02-skill-forge.md
-526 lines · in 1 · out 9 · reachable · 127d stale, subject churn 719</title></circle>
-<circle cx="424.3" cy="155.3" r="10.5" fill="#fdc28b" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md
-228 lines · in 2 · out 4 · reachable · 130d stale, subject churn 719</title></circle>
+526 lines · in 1 · out 9 · reachable · 127d stale, subject churn 757</title></circle>
+<circle cx="424.3" cy="155.3" r="10.5" fill="#fdc18b" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-05-29-issues-marathon-shared-skills-design.md
+228 lines · in 2 · out 4 · reachable · 131d stale, subject churn 757</title></circle>
 <circle cx="483.7" cy="137.9" r="11.7" fill="#fdc48d" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-02-skill-forge-design.md
-323 lines · in 4 · out 0 · reachable · 127d stale, subject churn 719</title></circle>
+323 lines · in 4 · out 0 · reachable · 127d stale, subject churn 757</title></circle>
 <circle cx="544.8" cy="128.1" r="7.4" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-03-instruction-optimizer-directive-clarity-design.md
-64 lines · in 3 · out 2 · reachable · 126d stale, subject churn 719</title></circle>
+64 lines · in 3 · out 2 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="606.6" cy="126.3" r="8.4" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-03-semantic-compress-distillation-design.md
-103 lines · in 3 · out 5 · reachable · 126d stale, subject churn 719</title></circle>
+103 lines · in 3 · out 5 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="668.2" cy="132.4" r="8.5" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-03-skill-forge-extraction-verification.md
-108 lines · in 1 · out 6 · reachable · 126d stale, subject churn 719</title></circle>
+108 lines · in 1 · out 6 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="728.5" cy="146.3" r="8.5" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-03-skill-forge-hardening-and-ab-extraction-design.md
-108 lines · in 2 · out 13 · reachable · 126d stale, subject churn 719</title></circle>
+108 lines · in 2 · out 13 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="786.6" cy="167.8" r="8.5" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-04-assess-feedback-seams-and-archtest-design.md
-110 lines · in 1 · out 2 · reachable · 125d stale, subject churn 719</title></circle>
+110 lines · in 1 · out 2 · reachable · 125d stale, subject churn 757</title></circle>
 <circle cx="841.4" cy="196.6" r="9.2" fill="#fdcf99" stroke="#b8b8b8" stroke-width="1.0"><title>docs/superpowers/specs/2026-06-24-ghreport-org-state-design.md
-149 lines · in 1 · out 2 · reachable · 104d stale, subject churn 719</title></circle>
+149 lines · in 1 · out 2 · reachable · 104d stale, subject churn 757</title></circle>
 <circle cx="272.8" cy="664.3" r="8.6" fill="#fef2e0" stroke="#b8b8b8" stroke-width="1.0"><title>docs/testing-a-branch-locally.md
-115 lines · in 3 · out 1 · reachable · 16d stale, subject churn 719</title></circle>
+115 lines · in 3 · out 1 · reachable · 16d stale, subject churn 757</title></circle>
 <circle cx="268.8" cy="631.4" r="8.1" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>scripts/contract/readiness_check_prompt.md
-90 lines · in 2 · out 1 · reachable · 90d stale, subject churn 719</title></circle>
+90 lines · in 2 · out 1 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="268.2" cy="598.2" r="8.4" fill="#d9d8da" stroke="#b8b8b8" stroke-width="1.0"><title>skills/README.md
-104 lines · in 8 · out 23 · reachable · 0d stale, subject churn 131</title></circle>
-<circle cx="271.0" cy="565.2" r="8.9" fill="#fdd09a" stroke="#b8b8b8" stroke-width="1.0"><title>skills/ab-equivalence/SKILL.md
-129 lines · in 5 · out 4 · reachable · 103d stale, subject churn 719</title></circle>
+104 lines · in 8 · out 23 · reachable · 0d stale, subject churn 141</title></circle>
+<circle cx="271.0" cy="565.2" r="8.9" fill="#fdcf99" stroke="#b8b8b8" stroke-width="1.0"><title>skills/ab-equivalence/SKILL.md
+129 lines · in 5 · out 4 · reachable · 104d stale, subject churn 757</title></circle>
 <circle cx="892.1" cy="232.1" r="8.4" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/ab-equivalence/references/ab-equivalence.md
-104 lines · in 10 · out 3 · reachable · 126d stale, subject churn 719</title></circle>
+104 lines · in 10 · out 3 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="937.8" cy="273.8" r="8.6" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/ab-equivalence/references/equivalence-judge-prompt.md
-114 lines · in 3 · out 2 · reachable · 126d stale, subject churn 719</title></circle>
+114 lines · in 3 · out 2 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="277.2" cy="532.6" r="9.3" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/ab-equivalence/references/runner-prompt.md
-155 lines · in 14 · out 3 · reachable · 0d stale, subject churn 719</title></circle>
-<circle cx="315.2" cy="441.1" r="13.4" fill="#fef1df" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess/SKILL.md
-477 lines · in 13 · out 4 · reachable · 17d stale, subject churn 719</title></circle>
+155 lines · in 14 · out 3 · reachable · 0d stale, subject churn 757</title></circle>
+<circle cx="315.2" cy="441.1" r="13.4" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess/SKILL.md
+478 lines · in 13 · out 4 · reachable · 0d stale, subject churn 757</title></circle>
 <circle cx="977.8" cy="321.0" r="8.4" fill="#fef1df" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess/references/actions-schema.md
-103 lines · in 1 · out 0 · reachable · 17d stale, subject churn 719</title></circle>
+103 lines · in 1 · out 0 · reachable · 17d stale, subject churn 757</title></circle>
 <circle cx="1011.4" cy="373.0" r="7.5" fill="#fef1df" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess/references/consent-lifecycle.md
-68 lines · in 2 · out 0 · reachable · 18d stale, subject churn 719</title></circle>
+68 lines · in 2 · out 0 · reachable · 18d stale, subject churn 757</title></circle>
 <circle cx="1038.1" cy="428.8" r="8.0" fill="#fef1df" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess/references/monorepo-scoping.md
-88 lines · in 1 · out 1 · reachable · 18d stale, subject churn 719</title></circle>
+88 lines · in 1 · out 1 · reachable · 18d stale, subject churn 757</title></circle>
 <circle cx="334.0" cy="413.7" r="7.9" fill="#fdd5a1" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess/references/uninstall.md
-83 lines · in 1 · out 2 · reachable · 92d stale, subject churn 719</title></circle>
-<circle cx="355.4" cy="388.5" r="18.0" fill="#dcdadb" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess/scripts/lib/README.md
-1068 lines · in 4 · out 3 · reachable · 0d stale, subject churn 182</title></circle>
-<circle cx="379.3" cy="365.5" r="8.7" fill="#e2dfde" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess/tests/README.md
-122 lines · in 1 · out 1 · reachable · 0d stale, subject churn 278</title></circle>
-<circle cx="286.7" cy="500.9" r="12.6" fill="#fef2e0" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess-findings/SKILL.md
-406 lines · in 2 · out 1 · reachable · 16d stale, subject churn 719</title></circle>
+83 lines · in 1 · out 2 · reachable · 92d stale, subject churn 757</title></circle>
+<circle cx="355.4" cy="388.5" r="18.4" fill="#dcdadb" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess/scripts/lib/README.md
+1134 lines · in 4 · out 3 · reachable · 0d stale, subject churn 193</title></circle>
+<circle cx="379.3" cy="365.5" r="9.4" fill="#e2dfde" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess/tests/README.md
+161 lines · in 1 · out 1 · reachable · 0d stale, subject churn 295</title></circle>
+<circle cx="286.7" cy="500.9" r="12.6" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess-findings/SKILL.md
+406 lines · in 2 · out 1 · reachable · 0d stale, subject churn 757</title></circle>
 <circle cx="299.4" cy="470.2" r="12.6" fill="#fef1df" stroke="#b8b8b8" stroke-width="1.0"><title>skills/assess-pr/SKILL.md
-405 lines · in 6 · out 1 · reachable · 18d stale, subject churn 719</title></circle>
+405 lines · in 6 · out 1 · reachable · 18d stale, subject churn 757</title></circle>
 <circle cx="405.5" cy="345.1" r="9.5" fill="#fef1df" stroke="#b8b8b8" stroke-width="1.0"><title>skills/deslop/SKILL.md
-163 lines · in 3 · out 1 · reachable · 17d stale, subject churn 719</title></circle>
+163 lines · in 3 · out 1 · reachable · 17d stale, subject churn 757</title></circle>
 <circle cx="433.6" cy="327.6" r="10.0" fill="#fef1df" stroke="#b8b8b8" stroke-width="1.0"><title>skills/deslop/references/full-checklist.md
-199 lines · in 4 · out 0 · reachable · 17d stale, subject churn 719</title></circle>
+199 lines · in 4 · out 0 · reachable · 17d stale, subject churn 757</title></circle>
 <circle cx="463.3" cy="313.0" r="8.0" fill="#fef1df" stroke="#b8b8b8" stroke-width="1.0"><title>skills/ghreport/SKILL.md
-89 lines · in 3 · out 0 · reachable · 18d stale, subject churn 719</title></circle>
+89 lines · in 3 · out 0 · reachable · 18d stale, subject churn 757</title></circle>
 <circle cx="494.4" cy="301.5" r="8.7" fill="#fef1df" stroke="#b8b8b8" stroke-width="1.0"><title>skills/ghsync/SKILL.md
-119 lines · in 3 · out 0 · reachable · 18d stale, subject churn 719</title></circle>
+119 lines · in 3 · out 0 · reachable · 18d stale, subject churn 757</title></circle>
 <circle cx="526.6" cy="293.3" r="13.8" fill="#fdd39c" stroke="#b8b8b8" stroke-width="1.0"><title>skills/huddle/SKILL.md
-520 lines · in 9 · out 0 · reachable · 99d stale, subject churn 719</title></circle>
+520 lines · in 9 · out 0 · reachable · 99d stale, subject churn 757</title></circle>
 <circle cx="559.4" cy="288.5" r="14.5" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/marathon/SKILL.md
-600 lines · in 12 · out 4 · reachable · 0d stale, subject churn 719</title></circle>
+600 lines · in 12 · out 4 · reachable · 0d stale, subject churn 757</title></circle>
 <circle cx="1057.5" cy="487.6" r="7.9" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/marathon/forge/corpus.md
-84 lines · in 4 · out 0 · reachable · 125d stale, subject churn 719</title></circle>
+84 lines · in 4 · out 0 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="592.5" cy="287.0" r="8.4" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/marathon/forge/forge-report.md
-107 lines · in 1 · out 2 · reachable · 125d stale, subject churn 719</title></circle>
+107 lines · in 1 · out 2 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="625.6" cy="289.0" r="10.8" fill="#feefdb" stroke="#b8b8b8" stroke-width="1.0"><title>skills/pr-review-merge/SKILL.md
-248 lines · in 9 · out 1 · reachable · 23d stale, subject churn 719</title></circle>
+248 lines · in 9 · out 1 · reachable · 23d stale, subject churn 757</title></circle>
 <circle cx="658.3" cy="294.3" r="10.5" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/SKILL.md
-230 lines · in 5 · out 8 · reachable · 125d stale, subject churn 719</title></circle>
+230 lines · in 5 · out 8 · reachable · 125d stale, subject churn 757</title></circle>
 <circle cx="690.3" cy="303.0" r="7.6" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/references/battle-scar-classifier.md
-71 lines · in 4 · out 1 · reachable · 126d stale, subject churn 719</title></circle>
+71 lines · in 4 · out 1 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="721.2" cy="315.0" r="6.7" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/references/cognitive-ergonomics.md
-41 lines · in 3 · out 1 · reachable · 126d stale, subject churn 719</title></circle>
+41 lines · in 3 · out 1 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="750.8" cy="330.0" r="8.2" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/references/directive-clarity-patterns.md
-97 lines · in 4 · out 3 · reachable · 126d stale, subject churn 719</title></circle>
+97 lines · in 4 · out 3 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="778.6" cy="348.0" r="7.7" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/references/directive-clarity-rewrites.md
-74 lines · in 4 · out 3 · reachable · 126d stale, subject churn 719</title></circle>
+74 lines · in 4 · out 3 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="1069.2" cy="548.4" r="10.4" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/references/distill-loop.md
-224 lines · in 5 · out 5 · reachable · 126d stale, subject churn 719</title></circle>
+224 lines · in 5 · out 5 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="1073.0" cy="610.2" r="8.6" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/references/distillation-report-template.md
-117 lines · in 2 · out 2 · reachable · 125d stale, subject churn 719</title></circle>
+117 lines · in 2 · out 2 · reachable · 125d stale, subject churn 757</title></circle>
 <circle cx="1068.9" cy="671.9" r="8.4" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/semantic-compress/references/transfer-set-design.md
-106 lines · in 2 · out 4 · reachable · 126d stale, subject churn 719</title></circle>
+106 lines · in 2 · out 4 · reachable · 126d stale, subject churn 757</title></circle>
 <circle cx="804.4" cy="368.8" r="9.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/SKILL.md
-176 lines · in 5 · out 10 · reachable · 0d stale, subject churn 719</title></circle>
+176 lines · in 5 · out 10 · reachable · 0d stale, subject churn 757</title></circle>
 <circle cx="1056.9" cy="732.6" r="8.7" fill="#fff7ec" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/references/forge-report-template.md
-118 lines · in 7 · out 2 · reachable · 0d stale, subject churn 719</title></circle>
+118 lines · in 7 · out 2 · reachable · 0d stale, subject churn 757</title></circle>
 <circle cx="1037.3" cy="791.3" r="7.3" fill="#fdcf99" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/references/gate-hierarchy.md
-58 lines · in 6 · out 3 · reachable · 105d stale, subject churn 719</title></circle>
+58 lines · in 6 · out 3 · reachable · 105d stale, subject churn 757</title></circle>
 <circle cx="1010.3" cy="847.0" r="7.9" fill="#fdcf99" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/references/judge-lenses.md
-82 lines · in 9 · out 5 · reachable · 105d stale, subject churn 719</title></circle>
+82 lines · in 9 · out 5 · reachable · 105d stale, subject churn 757</title></circle>
 <circle cx="976.4" cy="898.8" r="8.0" fill="#fdc48e" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/references/panel-ledger.md
-89 lines · in 5 · out 1 · reachable · 125d stale, subject churn 719</title></circle>
+89 lines · in 5 · out 1 · reachable · 125d stale, subject churn 757</title></circle>
 <circle cx="936.2" cy="945.8" r="7.0" fill="#fdcf99" stroke="#b8b8b8" stroke-width="1.0"><title>skills/skill-forge/references/test-taxonomy.md
-49 lines · in 8 · out 3 · reachable · 105d stale, subject churn 719</title></circle>
+49 lines · in 8 · out 3 · reachable · 105d stale, subject churn 757</title></circle>
 <circle cx="828.0" cy="392.1" r="8.5" fill="#d1d1d6" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/README.md
 111 lines · in 3 · out 1 · reachable · 90d stale, subject churn 1</title></circle>
 <circle cx="849.0" cy="417.7" r="7.0" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/jet-fighters/contract.md
-49 lines · in 2 · out 1 · reachable · 90d stale, subject churn 719</title></circle>
+49 lines · in 2 · out 1 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="867.3" cy="445.4" r="7.2" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/jet-fighters/expected_result.md
-55 lines · in 1 · out 1 · reachable · 90d stale, subject churn 719</title></circle>
+55 lines · in 1 · out 1 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="882.7" cy="474.8" r="9.3" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/jet-fighters/prd.md
-151 lines · in 3 · out 0 · reachable · 90d stale, subject churn 719</title></circle>
+151 lines · in 3 · out 0 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="911.9" cy="603.2" r="6.3" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/known-good/contract.md
-30 lines · in 1 · out 0 · reachable · 90d stale, subject churn 719</title></circle>
+30 lines · in 1 · out 0 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="910.8" cy="636.3" r="6.8" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/known-good/expected_result.md
-42 lines · in 1 · out 0 · reachable · 90d stale, subject churn 719</title></circle>
+42 lines · in 1 · out 0 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="906.3" cy="669.2" r="6.7" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/known-good/spec.md
-40 lines · in 1 · out 0 · reachable · 90d stale, subject churn 719</title></circle>
+40 lines · in 1 · out 0 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="894.9" cy="505.6" r="6.7" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/known-good-interactive/contract.md
-40 lines · in 1 · out 0 · reachable · 90d stale, subject churn 719</title></circle>
+40 lines · in 1 · out 0 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="904.0" cy="537.5" r="7.0" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/known-good-interactive/expected_result.md
-48 lines · in 1 · out 0 · reachable · 90d stale, subject churn 719</title></circle>
+48 lines · in 1 · out 0 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="909.6" cy="570.1" r="7.0" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/known-good-interactive/spec.md
-50 lines · in 1 · out 0 · reachable · 90d stale, subject churn 719</title></circle>
+50 lines · in 1 · out 0 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="898.5" cy="701.4" r="6.1" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/vacuous-contract/contract.md
-24 lines · in 3 · out 0 · reachable · 90d stale, subject churn 719</title></circle>
+24 lines · in 3 · out 0 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="887.3" cy="732.6" r="6.7" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/vacuous-contract/expected_result.md
-39 lines · in 1 · out 1 · reachable · 90d stale, subject churn 719</title></circle>
+39 lines · in 1 · out 1 · reachable · 90d stale, subject churn 757</title></circle>
 <circle cx="873.0" cy="762.5" r="6.5" fill="#fdd6a4" stroke="#b8b8b8" stroke-width="1.0"><title>tests/canaries/vacuous-contract/spec.md
-35 lines · in 1 · out 1 · reachable · 90d stale, subject churn 719</title></circle>
+35 lines · in 1 · out 1 · reachable · 90d stale, subject churn 757</title></circle>
 
 <text x="590" y="40" font-size="24" font-weight="600" text-anchor="middle">Doc map - 113 docs, 474 edges, 1 island</text>
 <text x="590" y="66" font-size="14" fill="#555" text-anchor="middle">0% orphaned · 100% reachable from the entry point</text>

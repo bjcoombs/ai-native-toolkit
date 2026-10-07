@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261007185833-e950cb1b artifact_schema_version=1.3.0 -->
+<!-- assess:run_id=20261007204013-4ace52ea artifact_schema_version=1.3.0 -->
 # Assess Wiki Index
 
 _Last updated: 2026-10-07_
@@ -7,17 +7,17 @@ Catalog of every hotspot ever flagged by `/assess` in this repo. Status reflects
 
 | File | First Flagged | Last Seen | Status | Latest CCN | Latest LOC |
 |------|---------------|-----------|--------|------------|------------|
-| `skills/assess/scripts/assess_core.py` | 2026-05-31 | 2026-10-07 | regressed | 249.0 | 1089 |
-| `skills/assess/tests/test_assess_core.py` | 2026-05-31 | 2026-10-07 | regressed | 240.0 | 1843 |
-| `skills/assess/scripts/complexity-treemap.py` | 2026-05-31 | 2026-10-07 | regressed | 204.0 | 817 |
-| `skills/assess/scripts/lib/keyhole_signals.py` | 2026-06-01 | 2026-10-07 | regressed | 260.0 | 885 |
-| `skills/assess/scripts/lib/doc_graph.py` | 2026-05-31 | 2026-10-07 | regressed | 309.0 | 930 |
-| `skills/assess/tests/test_keyhole_signals.py` | 2026-06-19 | 2026-10-07 | regressed | 213.0 | 1152 |
-| `skills/assess/tests/test_complexity_treemap.py` | 2026-09-19 | 2026-10-07 | regressed | 170.0 | 1089 |
-| `skills/assess/scripts/lib/wiki_writer.py` | 2026-10-07 | 2026-10-07 | persistent | 170.0 | 531 |
-| `skills/assess/scripts/doc-graph-svg.py` | 2026-05-31 | 2026-10-07 | persistent | 105.0 | 407 |
+| `skills/assess/scripts/assess_core.py` | 2026-05-31 | 2026-10-07 | regressed | 251.0 | 1093 |
+| `skills/assess/tests/test_assess_core.py` | 2026-05-31 | 2026-10-07 | persistent | 240.0 | 1843 |
+| `skills/assess/scripts/complexity-treemap.py` | 2026-05-31 | 2026-10-07 | regressed | 214.0 | 846 |
+| `skills/assess/scripts/lib/keyhole_signals.py` | 2026-06-01 | 2026-10-07 | persistent | 260.0 | 885 |
+| `skills/assess/tests/test_keyhole_signals.py` | 2026-06-19 | 2026-10-07 | persistent | 213.0 | 1152 |
+| `skills/assess/scripts/lib/doc_graph.py` | 2026-05-31 | 2026-10-07 | persistent | 209.0 | 695 |
+| `skills/assess/tests/test_complexity_treemap.py` | 2026-09-19 | 2026-10-07 | regressed | 189.0 | 1227 |
+| `skills/assess/scripts/lib/wiki_writer.py` | 2026-10-07 | 2026-10-07 | persistent | 170.0 | 533 |
 | `scripts/floor_anchor.py` | 2026-09-19 | 2026-10-07 | persistent | 188.0 | 646 |
-| `skills/assess/scripts/lib/doc_staleness.py` | 2026-05-31 | 2026-10-07 | graduated | - | - |
+| `skills/assess/scripts/lib/doc_staleness.py` | 2026-05-31 | 2026-10-07 | new | 119.0 | 453 |
+| `skills/assess/scripts/doc-graph-svg.py` | 2026-05-31 | 2026-10-07 | graduated | - | - |
 | `skills/assess/scripts/lib/liveness_scan.py` | 2026-05-31 | 2026-09-19 | graduated | - | - |
 | `skills/assess/scripts/lib/change_coupling.py` | 2026-06-01 | 2026-09-19 | graduated | - | - |
 | `scripts/transform_skill.py` | 2026-06-04 | 2026-06-04 | graduated | 44.0 | 165 |
@@ -30,7 +30,8 @@ Catalog of every hotspot ever flagged by `/assess` in this repo. Status reflects
 - **active** - in the latest top hotspots list
 - **new** - newly entered the hotspot list this run
 - **graduated** - was a hotspot, no longer is (good)
-- **regressed** - still a hotspot, and getting worse
+- **regressed** - still a hotspot, and getting worse. Any of: its worst function rose; its summed complexity rose by more than the worst function fell (an aggregate rise larger than the worst-function fall); or the worst function is flat or unmeasured and the sum or churn rose
+- **restructured** - still a hotspot; the sum or churn rose but the worst function fell by at least as much as the sum rose, the shape a split into named helpers leaves (good)
 - **persistent** - still a hotspot, roughly unchanged
 - **retired** - the source file was deleted or excluded; the page is kept for history
 
