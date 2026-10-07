@@ -995,6 +995,21 @@ def test_coverage_report_block_absent_shape(tmp_path: Path) -> None:
     assert ctx["coverage_report"] == {"available": False, "source": "none found"}
 
 
+def test_coverage_gate_block_reports_configured_threshold(tmp_path: Path) -> None:
+    """The run context carries the coverage_gate block: absent by default, and
+    the file, line and threshold once a fail_under is configured."""
+    repo = _minimal_repo(tmp_path)
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    assert ctx["coverage_gate"]["enforced"] is False
+    assert ctx["coverage_gate"]["gates"] == []
+
+    (repo / ".coveragerc").write_text("[report]\nfail_under = 80\n")
+    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    gate = ctx["coverage_gate"]["gates"][0]
+    assert ctx["coverage_gate"]["enforced"] is True
+    assert (gate["file"], gate["line"], gate["threshold"]) == (".coveragerc", 2, 80.0)
+
+
 def test_plugin_version_in_ctx(tmp_path: Path) -> None:
     """ctx should include plugin_version so the LLM can surface it in the report.
 

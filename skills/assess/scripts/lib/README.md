@@ -1041,6 +1041,29 @@ assessment; `assess_core.py` records provenance ("none found" vs. the file/forma
 separately. Stdlib only, imports no orchestrator. Add fixtures + cases in
 `tests/test_coverage_report.py` alongside any change to a parse rule.
 
+**`coverage_gate.py`**
+Answers the Layer 6 question measurement cannot: is a line-coverage threshold
+*enforced*? `detect_coverage_gate` walks config files (built-in excludes, depth 4,
+so a monorepo package's own config counts) and emits the run-context
+`coverage_gate` block: `{available, enforced, gates, not_detected}`, each gate
+`{file, line, tool, form, threshold, unit, metric}`. Forms read: coverage.py
+`fail_under` in `[tool.coverage.report]` (`pyproject.toml`), `[report]`
+(`.coveragerc`) and `[coverage:report]` (`setup.cfg`, `tox.ini`); `--cov-fail-under`
+and `coverage report --fail-under` in CI workflows, `Makefile`, `pytest.ini` /
+`addopts` and the other task-runner files; Jest `coverageThreshold` (config or
+`package.json`); Vitest `coverage.thresholds`; nyc/c8 `check-coverage` (rc file,
+`package.json`, or `--check-coverage --lines N`); JaCoCo `<minimum>` in a `pom.xml`
+and `minimum =` in a `build.gradle(.kts)` that applies JaCoCo. The threshold is
+reported as written (`unit` `percent`, `ratio` for a JaCoCo `0.80`, or
+`uncovered_count` for a negative Jest value), never rescaled. `enforced` is true when
+any gate has a non-zero threshold; `fail_under = 0` is listed but gates nothing.
+Nothing found is `enforced: false`, never inferred from a coverage report, and
+`not_detected` names the forms not read (Go `-coverprofile` scripts, Codecov /
+Coveralls status targets, Kover, scoverage, tarpaulin, SimpleCov) so an empty
+result reads as "none of these forms". A configured threshold proves the tool
+fails below it when coverage runs; whether CI runs coverage is the Layer 5 read.
+Stdlib plus `lib.doc_graph.is_excluded_path`. Tests: `tests/test_coverage_gate.py`.
+
 **`sibling_tests.py`**
 The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
 `.test`, `.spec`, `_spec`, `test_<stem>`, `<stem>Test`, `<stem>Tests`, with a
