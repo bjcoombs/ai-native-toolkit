@@ -54,7 +54,7 @@ One example per kind, each true of the toolkit's own repository:
   {"layer": 0, "kind": "path_exists", "path": "CLAUDE.md"},
   {"layer": 3, "kind": "path_absent", "path": ".eslintrc.json"},
   {"layer": 5, "kind": "referenced_in", "needle": "pytest", "path": ".github/workflows"},
-  {"layer": 6, "kind": "not_referenced_in", "needle": "mutmut", "path": ".github/workflows"},
+  {"layer": 6, "kind": "not_referenced_in", "needle": "stryker", "path": ".github/workflows"},
   {"layer": 3, "kind": "file_contains", "path": ".github/workflows/tests.yml", "needle": "ruff check"}
 ]
 ```

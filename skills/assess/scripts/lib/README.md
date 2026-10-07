@@ -1129,5 +1129,9 @@ Layer 1 write-side truth pressure. Two tiers:
   `mutation_note`). mutmut runs pytest under its own interpreter, so a repo whose tests
   need packages that interpreter lacks fails at mutmut's clean-test step and reports that
   reason.
+  This repo dogfoods the tier: `[tool.mutmut]` in `skills/assess/pyproject.toml` scopes
+  mutmut 3 to three core modules and `.github/workflows/mutation.yml` runs it weekly,
+  scoring per module with `_parse_mutmut3_meta`, so CI and `/assess` count mutants alike.
+  That config and workflow are also what `detect_mutation_config` credits on this repo.
 - Cheap heuristics: test/source ratio, assertion density, and the coverage gap signal -
   fast proxies that run without a mutation tool.

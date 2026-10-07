@@ -86,3 +86,36 @@ disallow_any_generics = false
 # strict does not reject a bare ``# type: ignore``; this makes the error code
 # mandatory. The trailing ``  # reason`` stays a house convention mypy cannot check.
 enable_error_code = ["ignore-without-code"]
+
+[tool.mutmut]
+# Layer 6 truth-pressure: line coverage shows the tests execute this code,
+# mutation testing shows they would fail if it were wrong. Scoped to three
+# deterministic, well-tested lib/ modules from /assess's own test-focus list;
+# widening the scope is a deliberate ratchet, since a run is O(mutants).
+# Run weekly and on demand by .github/workflows/mutation.yml, never per PR.
+#
+# "src" is a link to scripts/ made at run time (`ln -sfn scripts src`, ignored
+# by git). mutmut 3 names a mutant after its file path with only a leading
+# "src." stripped, so scripts/lib/x.py would be keyed scripts.lib.x while the
+# tests import it as lib.x (pythonpath = scripts) and no mutant would match.
+# Run locally from skills/assess, then clean up: /assess's file walks do not
+# prune mutants/ (copies of the sources and tests) or the src link, so a later
+# /assess of this checkout would count those files twice.
+#   ln -sfn scripts src
+#   uv run --with mutmut==3.8.0 --with pytest mutmut run
+#   uv run --with mutmut==3.8.0 --with pytest mutmut results   # survivors
+#   rm -rf mutants src
+source_paths = ["src"]
+only_mutate = [
+    "src/lib/stats_diff.py",
+    "src/lib/promissory_markers.py",
+    "src/lib/doc_staleness.py",
+]
+# Each mutant runs only the tests mutmut's coverage pass maps to it; this list
+# bounds that pass to the suites that own the modules in scope. (tests_dir is
+# deprecated in mutmut 3.8 and appends the whole tests/ tree to this list.)
+pytest_add_cli_args_test_selection = [
+    "tests/test_stats_diff.py",
+    "tests/test_promissory_markers.py",
+    "tests/test_doc_staleness.py",
+]
