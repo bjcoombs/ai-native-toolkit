@@ -213,7 +213,35 @@ writer read `.doc_graph` into model context, so both drop the key with
 `tests/test_plugin_contract.py` fails a shipped single-line `jq` read of the whole
 block that does not. One reader sits outside that guard: `skills/assess/SKILL.md`
 tells the orchestrator to read `run-context.json` before writing the report,
-which takes the whole file, `link_parents` included.
+which takes the whole file, `link_parents` included. Link syntax and the link pass
+live in `doc_links.py`; the SVG's render-side helpers live in `doc_graph_layout.py`.
+
+**`doc_links.py`**
+The link half of `doc_graph.py`, split out to stop that file's growth. Parses
+`[[wikilinks]]` and `[text](relative/path)` links, strips the code spans and fenced
+blocks (backtick or tilde, behind blockquote and list-item markers) that only show link
+syntax, and resolves each target: a wikilink by note name across the vault (a name shared
+by two notes prefers the source's directory and counts as ambiguous), a CommonMark link
+relative to the doc or from the repo root. `harvest_links` adds the `link` edges to the
+graph and returns a `LinkHarvest` of broken links ("ghosts"; a link to an existing
+directory is not one), doc->code links, the ambiguous-wikilink count, and the per-doc
+count of URI-scheme links (`mailto:`, `tel:`, `http:`) that `raw_source.py` reads as the
+machine-extraction fingerprint. Stdlib only and imports no `lib` module, so
+`doc_graph.py` passes its doc and code extension sets in. `doc_graph.py` also reuses
+`strip_fenced_lines` and `INLINE_CODE_RE` for its reference-edge and missing-xref scans.
+Co-changes with `doc_graph.py` (its only caller) and its test `tests/test_doc_links.py`;
+`skills/assess/tests/test_doc_graph.py` covers the same rules end to end.
+
+**`doc_graph_layout.py`**
+Render-side helpers over a built doc graph, used by `doc-graph-svg.py`:
+`radial_shells` orders nodes into concentric shells by link distance from the entry
+points, with unreachable docs chunked into widening outer rings; `classify_node` names a
+node's status (entry, reachable, orphan, island); `group_broken_links` collapses broken
+links into one ghost per missing file, keying markdown targets by their resolved path
+(root-absolute and `../` spellings merge) and wikilinks by bare name. Graph traversal and
+bookkeeping only, no plotting, so it is unit-tested without numpy or matplotlib.
+Stdlib only. Co-changes with `doc-graph-svg.py` and its test
+`tests/test_doc_graph_layout.py`.
 
 **`raw_source.py`**
 Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:

@@ -25,7 +25,8 @@ neither is overloaded:
   - The entry point carries a blue ring so the navigation root is obvious even
     though colour now means staleness.
 
-Reuses ``lib.doc_graph`` (structure) and ``lib.doc_staleness`` (the staleness
+Reuses ``lib.doc_graph`` (structure), ``lib.doc_graph_layout`` (radial shells,
+node classes, ghost grouping) and ``lib.doc_staleness`` (the staleness
 metric) so the picture matches the Layer 0 score exactly, and folds the separate
 docs-staleness treemap into this one artifact.
 
@@ -46,12 +47,8 @@ import networkx as nx
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib.doc_graph import (
-    build_doc_graph,
-    classify_node,
-    group_broken_links,
-    radial_shells,
-)
+from lib.doc_graph import build_doc_graph
+from lib.doc_graph_layout import classify_node, group_broken_links, radial_shells
 from lib.assess_config import load_working_notes_config, resolve_excludes
 from lib.doc_staleness import analyze_doc_staleness
 from lib.treemap_render import adaptive_cap, blend_to_grey, plural, rgba_to_hex
@@ -148,7 +145,7 @@ def _radial_positions(graph, entries: set[str], cx: float, cy: float, fit: float
     rim. The plot is centred at (cx, cy) and scaled to radius `fit`.
     """
     # Shell assignment (the BFS/distance logic) lives in
-    # lib.doc_graph.radial_shells, which is unit-tested; here we only turn the
+    # lib.doc_graph_layout.radial_shells, which is unit-tested; here we only turn the
     # shells into x/y coordinates.
     shells = radial_shells(graph, entries)
     if not shells:

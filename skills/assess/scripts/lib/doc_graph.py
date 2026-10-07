@@ -25,17 +25,21 @@ module needs no Obsidian-specific package; ``obsidiantools`` is detected and
 noted as an optional accelerator when an Obsidian vault is present, but is never
 required. If ``networkx`` is unavailable the module degrades to an
 ``available=False`` result rather than crashing -- the assessment never blocks.
+
+Link syntax, resolution and the link pass live in ``lib.doc_links``; the
+render-side helpers (radial shells, node classes, ghost grouping) live in
+``lib.doc_graph_layout``.
 """
 from __future__ import annotations
 
 import os
 import posixpath
 import re
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 
+from lib.doc_links import INLINE_CODE_RE, LinkHarvest, harvest_links, strip_fenced_lines
 from lib.git_churn import tracked_files
 
 try:  # networkx is the core dep; degrade rather than crash if it is missing.
@@ -121,38 +125,6 @@ _MOC_STEM_RE = re.compile(r"(^|[ _-])moc([ _-]|$)|map[ _-]?of[ _-]?content",
 # A declared MOC counts as "wired" (a real structural hub) once it links out to
 # at least this many other docs. Below it, the map is named but not built.
 HUB_MIN_OUTDEGREE = 3
-
-# Link parsers. Wikilinks: [[target]], [[target|alias]], [[target#anchor]].
-_WIKILINK_RE = re.compile(r"\[\[([^\[\]]+?)\]\]")
-# Markdown inline links: [text](target). Excludes images handled below.
-_MDLINK_RE = re.compile(r"(?<!\!)\[(?:[^\]]*)\]\(([^)]+)\)")
-# Schemes / forms that are not intra-repo file links.  Any token matching
-# the RFC 3986 URI-scheme pattern (`[a-z][a-z0-9+.-]*:`) is non-navigational:
-# `http://`, `https://`, `ftp://` (the scheme-plus-`://` form), but also bare
-# schemes such as `tel:`, `mailto:`, `sms:`, `callto:`, `javascript:`, etc.
-# Using the generic scheme pattern rather than an allowlist keeps the regex
-# stable as new schemes appear and avoids the specific-scheme gap that caused
-# `sms:` and `skype:` to be misclassified as broken file references (issue #227).
-_EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
-# Inline-code spans: backtick-delimited segments on a single logical line. A
-# link target inside `[[foo]]` or `[text](./foo.md)` is documentation syntax
-# (an Obsidian skill teaching wikilinks, a FORMAT-spec showing a sample), not
-# a real navigation edge - the writer formatted it as code on purpose. Caps
-# match-length to avoid spanning paragraphs when stray backticks appear.
-_INLINE_CODE_RE = re.compile(r"`[^`\n]{1,200}`")
-
-
-def _strip_code_spans(text: str) -> str:
-    """Remove fenced code blocks and inline-code spans before link extraction.
-
-    Without this, a markdown doc that *teaches* link syntax (a FORMAT spec, an
-    Obsidian-skill how-to) contributes phantom edges to the navigation graph
-    and inflates `dangling_links`. The writer formatted those targets as code
-    precisely because they are samples, not navigation.
-    """
-    # Strip fenced blocks first so an inline-code regex can't snag content
-    # inside a fence that legitimately contains backticks of its own.
-    return _INLINE_CODE_RE.sub("", _strip_fenced_lines(text))
 
 # Caps so a pathological repo can't bloat run-context.json.
 MAX_BROKEN_LINKS = 60
@@ -374,14 +346,6 @@ def discover_base_files(
     )
 
 
-def _strip_anchor_and_alias(target: str) -> str:
-    """Drop a `|alias` (wikilink) and `#anchor` / `?query` from a link target."""
-    target = target.split("|", 1)[0]
-    target = target.split("#", 1)[0]
-    target = target.split("?", 1)[0]
-    return target.strip()
-
-
 def _vault_detected(repo_root: Path) -> bool:
     """True if the repo is, or contains, an Obsidian vault.
 
@@ -420,117 +384,6 @@ def _obsidiantools_available() -> bool:
         return False
 
 
-def _build_name_index(
-    docs: list[Path], repo_root: Path,
-) -> tuple[dict[str, Path], dict[str, list[Path]], dict[str, list[Path]]]:
-    """Indexes for resolving wikilinks: by relative-path, by basename, by stem.
-
-    Name collisions (two `setup.md` files) are why `Path(link).stem` alone is
-    too naive -- by_stem maps a stem to *every* candidate so the resolver can
-    disambiguate (prefer same-directory) instead of silently picking one.
-    """
-    by_relpath: dict[str, Path] = {}
-    by_name: dict[str, list[Path]] = {}
-    by_stem: dict[str, list[Path]] = {}
-    for d in docs:
-        rel = d.relative_to(repo_root)
-        by_relpath[str(rel).lower()] = d
-        by_relpath[str(rel.with_suffix("")).lower()] = d
-        by_name.setdefault(d.name.lower(), []).append(d)
-        by_stem.setdefault(d.stem.lower(), []).append(d)
-    return by_relpath, by_name, by_stem
-
-
-def _resolve_wikilink(
-    raw: str,
-    source: Path,
-    repo_root: Path,
-    by_relpath: dict[str, Path],
-    by_name: dict[str, list[Path]],
-    by_stem: dict[str, list[Path]],
-) -> tuple[Path | None, bool]:
-    """Resolve a wikilink target to a doc path. Returns (path, ambiguous)."""
-    target = _strip_anchor_and_alias(raw)
-    if not target:
-        return None, False
-    key = target.lower()
-    # Path-qualified wikilink (`[[folder/note]]`): try the relative-path index,
-    # which is keyed by both the suffixed and suffix-stripped relpath, so
-    # `[[folder/note]]` and `[[folder/note.md]]` both resolve here.
-    if "/" in target or "\\" in target:
-        norm = key.replace("\\", "/")
-        if norm in by_relpath:
-            return by_relpath[norm], False
-    # Bare note name: try basename (with and without .md), then stem.
-    candidates: list[Path] = []
-    if key in by_name:
-        candidates = by_name[key]
-    elif f"{key}.md" in by_name:
-        candidates = by_name[f"{key}.md"]
-    elif key in by_stem:
-        candidates = by_stem[key]
-    if not candidates:
-        return None, False
-    if len(candidates) == 1:
-        return candidates[0], False
-    # Collision: prefer a candidate in the same directory as the source.
-    same_dir = [c for c in candidates if c.parent == source.parent]
-    if len(same_dir) == 1:
-        return same_dir[0], True
-    return sorted(candidates)[0], True  # deterministic fallback
-
-
-def _resolve_mdlink(
-    raw: str, source: Path, repo_root: Path,
-) -> Path | None:
-    """Resolve a CommonMark relative link target to a real file path."""
-    target = raw.strip()
-    if not target or target.startswith("#"):
-        return None
-    if _EXTERNAL_RE.match(target):
-        return None
-    target = _strip_anchor_and_alias(target)
-    if not target:
-        return None
-    # Absolute-from-repo-root ("/docs/x.md") vs relative-to-this-doc.
-    if target.startswith("/"):
-        candidate = (repo_root / target.lstrip("/"))
-    else:
-        candidate = (source.parent / target)
-    try:
-        resolved = candidate.resolve()
-    except (OSError, RuntimeError):
-        return None
-    if not resolved.is_file():
-        return None
-    try:
-        resolved.relative_to(repo_root.resolve())
-    except ValueError:
-        return None
-    return resolved
-
-
-def _target_exists(raw: str, source: Path, repo_root: Path) -> bool:
-    """True if a relative link resolves to an existing path (file OR directory)
-    within the repo. Used so a link to a folder (`docs/guides/`) isn't mistaken
-    for a broken link just because it isn't a file."""
-    target = _strip_anchor_and_alias(raw)
-    if not target or target.startswith("#") or _EXTERNAL_RE.match(target):
-        return False
-    candidate = (repo_root / target.lstrip("/")) if target.startswith("/") else (source.parent / target)
-    try:
-        resolved = candidate.resolve()
-    except (OSError, RuntimeError):
-        return False
-    if not resolved.exists():
-        return False
-    try:
-        resolved.relative_to(repo_root.resolve())
-    except ValueError:
-        return False
-    return True
-
-
 def _cited_excluded_doc(
     rel_path: str, repo_root: Path, tracked, scope: Path | None,
     extra_dirs: set[str], extra_pats: list[str],
@@ -560,33 +413,6 @@ def _cited_excluded_doc(
     return path.resolve()
 
 
-# Any indentation (a fence nested under a list item sits four or more spaces
-# in), behind any CommonMark container prefix: blockquote `>` markers and a
-# list-item marker (`- ~~~`, `1. ~~~`).
-_FENCE_OPEN_RE = re.compile(
-    r"^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|\d+[.)])[ \t]+)?(`{3,}|~{3,})"
-)
-
-
-def _strip_fenced_lines(text: str) -> str:
-    """Drop CommonMark fenced blocks line by line: backtick or tilde fences,
-    closed only by the same marker at least as long as the opener. An
-    unclosed fence runs to the end of the document."""
-    out: list[str] = []
-    fence = ""
-    for line in text.splitlines():
-        m = _FENCE_OPEN_RE.match(line)
-        if not fence:
-            if m and not (m.group(1)[0] == "`" and "`" in line[m.end():]):
-                fence = m.group(1)
-            else:
-                out.append(line)
-        elif m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) \
-                and not line[m.end():].strip():
-            fence = ""
-    return "\n".join(out)
-
-
 def _reference_paths(text: str, source_rel: str) -> list[tuple[str, str]]:
     """Doc paths named by backticked tokens outside fences, as
     `(raw_ref, doc_relative_candidate)` pairs, in document order.
@@ -597,7 +423,7 @@ def _reference_paths(text: str, source_rel: str) -> list[tuple[str, str]]:
     """
     from lib.ownership_parser import _extract_path_refs
     out: list[tuple[str, str]] = []
-    for m in _INLINE_CODE_RE.finditer(_strip_fenced_lines(text)):
+    for m in INLINE_CODE_RE.finditer(strip_fenced_lines(text)):
         span = m.group(0)
         if "[[" in span or "](" in span:
             continue
@@ -702,7 +528,7 @@ def _missing_xrefs(docs, texts: dict, graph, repo_root: Path, rel) -> list[dict]
         text = texts.get(d)
         if not text:
             continue
-        body = _strip_fenced_lines(text)
+        body = strip_fenced_lines(text)
         seen: set[Path] = set()
         for m in pattern.finditer(body):
             t = name_to_doc.get(m.group(1).lower())
@@ -712,151 +538,6 @@ def _missing_xrefs(docs, texts: dict, graph, repo_root: Path, rel) -> list[dict]
             if (rel(d), rel(t)) not in edges:  # already linked -> not missing
                 out.append({"from": rel(d), "to": rel(t)})
     return out
-
-
-def radial_shells(graph, entries, ring: int = 24) -> list[list[str]]:
-    """Order nodes into concentric shells by link-distance from the entry points.
-
-    Shell 0 = the entry points; shell k = docs k hops away (following links);
-    then the unreachable docs, chunked into progressively larger outer rings.
-    Pure graph traversal - no layout - so it's unit-testable without numpy.
-    """
-    dist: dict[str, int] = {e: 0 for e in entries if e in graph}
-    frontier = list(dist)
-    while frontier:
-        nxt = []
-        for u in frontier:
-            for v in graph.successors(u):
-                if v not in dist:
-                    dist[v] = dist[u] + 1
-                    nxt.append(v)
-        frontier = nxt
-    all_nodes = list(graph.nodes())
-    max_d = max(dist.values(), default=0)
-    shells = [sorted(n for n in all_nodes if dist.get(n) == d) for d in range(max_d + 1)]
-    unreachable = sorted(n for n in all_nodes if n not in dist)
-    i, cap = 0, ring
-    while i < len(unreachable):
-        shells.append(unreachable[i:i + cap])
-        i += cap
-        cap += 12
-    return [s for s in shells if s]
-
-
-def classify_node(node: str, entries: set, unreachable: set, orphans: set) -> str:
-    """Navigability status of a node: entry / reachable / orphan / island."""
-    if node in entries:
-        return "entry"
-    if node not in unreachable:
-        return "reachable"
-    if node in orphans:
-        return "orphan"
-    return "island"
-
-
-@dataclass
-class _LinkHarvest:
-    """What the link pass collects besides graph edges, one per build."""
-
-    rel: Callable[[Path], str]
-    doc_to_code: list[dict] = field(default_factory=list)
-    ambiguous: int = 0
-    broken: list[dict] = field(default_factory=list)
-    broken_seen: set[tuple[str, str]] = field(default_factory=set)
-    # Per-doc count of non-navigational URI-scheme links (mailto:/tel:/external
-    # http) - the machine-extraction fingerprint a converted document carries.
-    # Feeds raw-source-tree detection (issue #225).
-    machine_links: dict[str, int] = field(default_factory=dict)
-
-    def add_broken(self, src: Path, target: str, kind: str) -> None:
-        key = (self.rel(src), target)
-        if target and key not in self.broken_seen:
-            self.broken_seen.add(key)
-            self.broken.append({"from": self.rel(src), "target": target, "kind": kind})
-
-    def count_machine_link(self, src: Path) -> None:
-        self.machine_links[self.rel(src)] = self.machine_links.get(self.rel(src), 0) + 1
-
-
-def _harvest_wikilinks(
-    d: Path, link_text: str, repo_root: Path, name_index, doc_set: set[Path],
-    graph, harvest: _LinkHarvest,
-) -> None:
-    """Wikilinks resolve by note name across the vault."""
-    rel = harvest.rel
-    for m in _WIKILINK_RE.finditer(link_text):
-        # Strip alias/anchor first so the scheme check sees the bare target
-        # (e.g. `tel:+1-555-1234` from `[[tel:+1-555-1234|Call us]]`).
-        wikilink_target = _strip_anchor_and_alias(m.group(1))
-        if _EXTERNAL_RE.match(wikilink_target):
-            # Non-navigational URI (`tel:`, `mailto:`, etc.) -- not a note
-            # reference; skip without counting as a broken link (issue #227).
-            # Count it as a machine-extraction fingerprint (issue #225).
-            harvest.count_machine_link(d)
-            continue
-        tgt, amb = _resolve_wikilink(m.group(1), d, repo_root, *name_index)
-        if amb:
-            harvest.ambiguous += 1
-        if tgt is None:
-            harvest.add_broken(d, wikilink_target, "wikilink")
-            continue
-        if tgt in doc_set and tgt != d:
-            graph.add_edge(rel(d), rel(tgt), kind="link")
-
-
-def _harvest_mdlinks(
-    d: Path, link_text: str, repo_root: Path, doc_set: set[Path],
-    graph, harvest: _LinkHarvest,
-) -> None:
-    """CommonMark links resolve relative to the doc's directory."""
-    rel = harvest.rel
-    for m in _MDLINK_RE.finditer(link_text):
-        raw = m.group(1)
-        tgt = _resolve_mdlink(raw, d, repo_root)
-        if tgt is None:
-            _record_unresolved_mdlink(raw, d, repo_root, harvest)
-            continue
-        if tgt.suffix.lower() in DOC_EXTENSIONS and tgt in doc_set:
-            if tgt != d:
-                graph.add_edge(rel(d), rel(tgt), kind="link")
-        elif tgt.suffix.lower() in CODE_EXTENSIONS:
-            harvest.doc_to_code.append({"doc": rel(d), "code": rel(tgt)})
-
-
-def _record_unresolved_mdlink(
-    raw: str, d: Path, repo_root: Path, harvest: _LinkHarvest,
-) -> None:
-    """A relative-looking link that resolves to nothing is broken (a "ghost").
-    External URLs, pure #anchors, and links to an existing directory are not."""
-    cleaned = _strip_anchor_and_alias(raw)
-    if cleaned and _EXTERNAL_RE.match(cleaned):
-        # Non-navigational URI (mailto:/tel:/external http): the
-        # machine-extraction fingerprint, not a broken link (#225).
-        harvest.count_machine_link(d)
-    elif (cleaned and not raw.strip().startswith("#")
-            and not _target_exists(raw, d, repo_root)):
-        harvest.add_broken(d, cleaned, "mdlink")
-
-
-def _harvest_links(
-    docs: list[Path], texts: dict[Path, str], repo_root: Path, graph, rel,
-) -> _LinkHarvest:
-    """Add every wikilink and CommonMark link edge to ``graph`` and collect
-    broken links, doc-to-code links, ambiguity, and machine-link counts."""
-    name_index = _build_name_index(docs, repo_root)
-    doc_set = set(docs)
-    harvest = _LinkHarvest(rel=rel)
-    for d in docs:
-        text = texts.get(d)
-        if text is None:  # unreadable: skipped, Layer 0 stays best-effort
-            continue
-        # Strip code spans before harvesting links: a link target inside a
-        # fence or backtick span is a documentation sample (FORMAT specs,
-        # wikilink-syntax demos), not a navigation edge.
-        link_text = _strip_code_spans(text)
-        _harvest_wikilinks(d, link_text, repo_root, name_index, doc_set, graph, harvest)
-        _harvest_mdlinks(d, link_text, repo_root, doc_set, graph, harvest)
-    return harvest
 
 
 def _settle_reference_pairs(
@@ -906,7 +587,7 @@ def _excluded_layers(
 
 
 def _curated_result(
-    graph, docs: list[Path], repo_root: Path, rel, harvest: _LinkHarvest,
+    graph, docs: list[Path], repo_root: Path, rel, harvest: LinkHarvest,
     missing: list[dict], excluded_docs: set[str], vault: bool, obs: bool, base_hubs,
 ) -> DocGraphResult:
     """Derive the headline and link-only signals over the curated layer
@@ -1010,7 +691,10 @@ def build_doc_graph(
     graph = nx.DiGraph()
     for d in docs:
         graph.add_node(rel(d))
-    harvest = _harvest_links(docs, texts, repo_root, graph, rel)
+    harvest = harvest_links(
+        docs, texts, repo_root, graph, rel,
+        doc_exts=DOC_EXTENSIONS, code_exts=CODE_EXTENSIONS,
+    )
     # A link between the same pair keeps kind link.
     graph.add_edges_from([
         (rel(src), rel(tgt)) for src, tgt in ref_pairs
@@ -1409,58 +1093,3 @@ def _derive_signals(
         graph=graph,
     )
 
-
-def _broken_link_key(src: str, target: str, kind: str | None) -> str:
-    """Canonical grouping key for a broken link's missing target.
-
-    Mirrors ``_resolve_mdlink``'s path arithmetic so links that point at the same
-    absent file share a key whatever way they're spelt:
-
-    - A markdown link starting ``/`` is root-absolute — resolved from the repo
-      root (``/CLAUDE.md`` -> ``CLAUDE.md``), matching ``_resolve_mdlink``'s
-      ``repo_root / target.lstrip("/")`` branch. Without this, ``/CLAUDE.md`` and
-      ``CLAUDE.md`` would key apart and the duplicate ghost this function exists
-      to kill would survive for the root-absolute spelling.
-    - Any other markdown link resolves relative to the source file's directory
-      (``../CLAUDE.md`` from a subdir collapses onto the root ``CLAUDE.md``).
-    - A wikilink resolves by note name globally, so it keys on the bare name.
-
-    Known limit (intentional, not fixed): wikilinks and markdown links live in
-    different resolution domains, so ``[[CLAUDE]]`` (key ``CLAUDE``) and
-    ``[x](CLAUDE.md)`` (key ``CLAUDE.md``) at the same missing file do not merge.
-    """
-    if kind == "wikilink":
-        return target  # wikilinks resolve by note name, not by directory
-    if not target:
-        return target
-    if target.startswith("/"):
-        return posixpath.normpath(target.lstrip("/"))
-    return posixpath.normpath(posixpath.join(posixpath.dirname(src), target))
-
-
-def group_broken_links(broken_links: list[dict]) -> list[dict]:
-    """Collapse broken links by the missing file they point at.
-
-    Several links can name the same non-existent target — `README.md` and
-    `CONTRIBUTING.md` both linking a missing `CLAUDE.md`, say. They describe one
-    absent file, so the renderer should draw one ghost they both tether to, not a
-    separate ghost per link.
-
-    Targets are normalised to a canonical key (see ``_broken_link_key``) before
-    grouping. Returns ``[{"target", "sources"}]`` ordered by descending source
-    count then key, so the most-referenced ghost is rendered first.
-    """
-    groups: dict[str, list[str]] = {}
-    for bl in broken_links:
-        src = bl.get("from") or ""
-        target = bl.get("target") or "?"
-        key = _broken_link_key(src, target, bl.get("kind"))
-        sources = groups.setdefault(key, [])
-        if src not in sources:
-            sources.append(src)
-    return [
-        {"target": key, "sources": sources}
-        for key, sources in sorted(
-            groups.items(), key=lambda kv: (-len(kv[1]), kv[0])
-        )
-    ]
