@@ -43,7 +43,9 @@ Every `test_*.py` file in this directory has a row below.
 
 | Suite | Pins |
 |---|---|
-| `test_doc_graph.py` | `lib/doc_graph.py` - doc link-graph, link parsing, orphan detection, connectivity, MOC validation, doc->code edges |
+| `test_doc_graph.py` | `lib/doc_graph.py` - doc link-graph, link parsing (unit level: `test_doc_links.py`), orphan detection, connectivity, MOC validation, doc->code edges |
+| `test_doc_links.py` | `lib/doc_links.py` - link pass called directly: wikilink and markdown-link edges, ghosts, directory links, machine-link counts, code-span skipping, ambiguity, fence stripping |
+| `test_doc_graph_layout.py` | `lib/doc_graph_layout.py` - radial shells, node classification, broken-link ghost grouping |
 | `test_keyhole_signals.py` | `lib/keyhole_signals.py` - integration barrier; derivation of the run-context blocks and the derived findings named in `FINDING_ORDER` from mocked upstream signal outputs |
 | `test_change_coupling.py` | `lib/change_coupling.py` - B1 change-coupling pairs, B2 containment ratio, B4 authorship; synthetic git histories built in tmp dirs |
 | `test_coupling_analysis.py` | `lib/coupling_analysis.py` - B3 static-vs-historical disagreement; hidden-coupling, bleeding-module, and refactor-boundary classification with mocked inputs |

@@ -16,7 +16,7 @@ extension sets are passed in rather than imported from ``lib.doc_graph``.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -252,7 +252,7 @@ def _harvest_wikilinks(
 
 def _harvest_mdlinks(
     d: Path, link_text: str, repo_root: Path, doc_set: set[Path],
-    graph, harvest: LinkHarvest, *, doc_exts: set[str], code_exts: set[str],
+    graph, harvest: LinkHarvest, *, doc_exts: AbstractSet[str], code_exts: AbstractSet[str],
 ) -> None:
     """CommonMark links resolve relative to the doc's directory. A target with
     a ``doc_exts`` suffix in ``doc_set`` is a graph edge; one with a
@@ -288,7 +288,7 @@ def _record_unresolved_mdlink(
 
 def harvest_links(
     docs: list[Path], texts: dict[Path, str], repo_root: Path, graph, rel,
-    *, doc_exts: set[str], code_exts: set[str],
+    *, doc_exts: AbstractSet[str], code_exts: AbstractSet[str],
 ) -> LinkHarvest:
     """Add every wikilink and CommonMark link edge to ``graph`` and collect
     broken links, doc-to-code links, ambiguity, and machine-link counts.

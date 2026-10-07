@@ -57,10 +57,10 @@ def classify_node(node: str, entries: set, unreachable: set, orphans: set) -> st
 def _broken_link_key(src: str, target: str, kind: str | None) -> str:
     """Canonical grouping key for a broken link's missing target.
 
-    Mirrors ``lib.doc_links._resolve_mdlink``'s path arithmetic so links that point at the same
-    absent file share a key whatever way they're spelt:
+    Mirrors ``lib.doc_links._resolve_mdlink``'s path arithmetic so links that
+    point at the same absent file share a key whatever way they're spelt:
 
-    - A markdown link starting ``/`` is root-absolute — resolved from the repo
+    - A markdown link starting ``/`` is root-absolute - resolved from the repo
       root (``/CLAUDE.md`` -> ``CLAUDE.md``), matching ``lib.doc_links._resolve_mdlink``'s
       ``repo_root / target.lstrip("/")`` branch. Without this, ``/CLAUDE.md`` and
       ``CLAUDE.md`` would key apart and the duplicate ghost this function exists
@@ -85,7 +85,7 @@ def _broken_link_key(src: str, target: str, kind: str | None) -> str:
 def group_broken_links(broken_links: list[dict]) -> list[dict]:
     """Collapse broken links by the missing file they point at.
 
-    Several links can name the same non-existent target — `README.md` and
+    Several links can name the same non-existent target - `README.md` and
     `CONTRIBUTING.md` both linking a missing `CLAUDE.md`, say. They describe one
     absent file, so the renderer should draw one ghost they both tether to, not a
     separate ghost per link.

@@ -15,8 +15,8 @@ def _write(root: Path, rel: str, text: str) -> None:
 
 
 def test_radial_shells_and_classify(tmp_path: Path) -> None:
-    """The headline claim — reachable = central, unreachable = banished to the
-    rim — is the BFS/shell logic; lock it in deterministically (no rendering)."""
+    """The headline claim - reachable = central, unreachable = banished to the
+    rim - is the BFS/shell logic; lock it in deterministically (no rendering)."""
     _write(tmp_path, "index.md", "# Index\n[[a]]")
     _write(tmp_path, "a.md", "[[b]]")
     _write(tmp_path, "b.md", "leaf")
@@ -67,7 +67,7 @@ def test_group_broken_links_resolves_relative_targets() -> None:
 
 def test_group_broken_links_merges_root_absolute_spelling() -> None:
     """A root-absolute link (/CLAUDE.md) and a plain one (CLAUDE.md) at the same
-    missing root file must merge — they only differ in spelling. Regression for
+    missing root file must merge - they only differ in spelling. Regression for
     the leading-slash key mismatch."""
     broken = [
         {"from": "README.md", "target": "CLAUDE.md", "kind": "mdlink"},
