@@ -634,6 +634,71 @@ def _survivor_overrides(
     return overrides
 
 
+def _aux_cap(files: list[tuple[Path, int, float, str]],
+             aux_data: dict[Path, int] | None) -> tuple[float, str]:
+    """The saturation cap and its kind; (1.0, "") when there is no aux axis."""
+    if aux_data is None:
+        return 1.0, ""
+    return adaptive_cap([float(aux_data.get(f[0], 0)) for f in files])
+
+
+def _colour_files(files: list[tuple[Path, int, float, str]], cmap, cap: float,
+                  aux_data: dict[Path, int] | None, aux_cap: float) -> list:
+    """Append each file's fill: hue from its metric, greyed by its aux value."""
+    files_colored = []
+    for f in files:
+        # Floor the ramp at 0.12 so the calm (low-complexity) end is a visible
+        # pale orange, not near-white that washes out against the white canvas.
+        base = cmap(0.12 + 0.88 * min(f[2] / cap, 1.0))
+        if aux_data is not None:
+            aux_val = float(aux_data.get(f[0], 0))
+            color = blend_to_grey(base, aux_val / aux_cap)
+        else:
+            color = base
+        files_colored.append((f[0], f[1], f[2], f[3], color))
+    return files_colored
+
+
+def _print_axes(files: list[tuple[Path, int, float, str]], metric_label: str,
+                cap: float, cap_kind: str, *, churn_degenerate: bool,
+                aux_data: dict[Path, int] | None, aux_label: str | None,
+                aux_cap: float, aux_cap_kind: str) -> None:
+    """One console line per colour axis: the hue range and cap, then the
+    saturation range and cap (or why the saturation axis is inactive)."""
+    mx = float(max(f[2] for f in files)) if files else 0.0
+    print(f"hue: {metric_label}; range 0-{mx:.0f}; "
+          f"cap {cap:.0f} ({cap_kind})")
+    if churn_degenerate:
+        print("saturation: churn signal flat (degenerate history - every file "
+              "~1 commit); axis inactive, rendering pure complexity.")
+    elif aux_data is not None:
+        aux_max = max((float(aux_data.get(f[0], 0)) for f in files),
+                       default=0.0)
+        print(f"saturation: {aux_label}; range 0-{aux_max:.0f}; "
+              f"cap {aux_cap:.0f} ({aux_cap_kind})")
+
+
+def _print_biggest(files: list[tuple[Path, int, float, str]], root: Path,
+                   tokens: dict[Path, int], metric_label: str,
+                   aux_data: dict[Path, int] | None, aux_label: str | None) -> None:
+    """The five files with the most estimated tokens, which dominate the layout."""
+    # Counts a path with no token estimate as 0, unlike the scc-only hint.
+    biggest = _largest_first(files, lambda f: tokens.get(f[0], 0), 5)
+    if not biggest:
+        return
+    print("biggest files (estimated tokens dominate layout):")
+    for path, loc, metric, src in biggest:
+        try:
+            rel = path.relative_to(root)
+        except ValueError:
+            rel = path
+        aux_str = ""
+        if aux_data is not None:
+            aux_str = f"  {aux_label} {aux_data.get(path, 0):>4d}"
+        print(f"  {tokens.get(path, 0):>9,} est.tok  {loc:>7} loc  "
+              f"{metric_label} {metric:>5.0f}{aux_str}  [{src:6}]  {rel}")
+
+
 def render(files: list[tuple[Path, int, float, str]],
            root: Path, out_path: Path, title: str,
            show_labels: bool = False,
@@ -644,8 +709,7 @@ def render(files: list[tuple[Path, int, float, str]],
            tokens_by_path: dict[Path, int] | None = None,
            churn_degenerate: bool = False) -> None:
     metric_label = "commits" if by == "churn" else "ccn"
-    metrics = [f[2] for f in files]
-    cap, cap_kind = adaptive_cap(metrics)
+    cap, cap_kind = adaptive_cap([f[2] for f in files])
     # OrRd (ColorBrewer): colour-blind-safe sequential ramp, pale = simple ->
     # dark red = complex. Avoids the red-green of RdYlGn (the most common CVD).
     cmap = plt.get_cmap("OrRd")
@@ -658,23 +722,8 @@ def render(files: list[tuple[Path, int, float, str]],
     if churn_degenerate:
         aux_data = None
 
-    aux_cap = 1.0
-    aux_cap_kind = ""
-    if aux_data is not None:
-        aux_values = [float(aux_data.get(f[0], 0)) for f in files]
-        aux_cap, aux_cap_kind = adaptive_cap(aux_values)
-
-    files_colored = []
-    for f in files:
-        # Floor the ramp at 0.12 so the calm (low-complexity) end is a visible
-        # pale orange, not near-white that washes out against the white canvas.
-        base = cmap(0.12 + 0.88 * min(f[2] / cap, 1.0))
-        if aux_data is not None:
-            aux_val = float(aux_data.get(f[0], 0))
-            color = blend_to_grey(base, aux_val / aux_cap)
-        else:
-            color = base
-        files_colored.append((f[0], f[1], f[2], f[3], color))
+    aux_cap, aux_cap_kind = _aux_cap(files, aux_data)
+    files_colored = _colour_files(files, cmap, cap, aux_data, aux_cap)
 
     # Block area is estimated tokens (the keyhole size unit), not LOC: size_by
     # overrides the layout area per file while each leaf keeps its real LOC for
@@ -694,32 +743,10 @@ def render(files: list[tuple[Path, int, float, str]],
     print(f"wrote {out_path}  ({len(files)} files, "
           f"{sum(1 for f in files if f[3] == 'lizard')} lizard, "
           f"{sum(1 for f in files if f[3] == 'scc')} scc)")
-    mx = float(max(metrics)) if metrics else 0.0
-    print(f"hue: {metric_label}; range 0-{mx:.0f}; "
-          f"cap {cap:.0f} ({cap_kind})")
-    if churn_degenerate:
-        print("saturation: churn signal flat (degenerate history - every file "
-              "~1 commit); axis inactive, rendering pure complexity.")
-    elif aux_data is not None:
-        aux_max = max((float(aux_data.get(f[0], 0)) for f in files),
-                       default=0.0)
-        print(f"saturation: {aux_label}; range 0-{aux_max:.0f}; "
-              f"cap {aux_cap:.0f} ({aux_cap_kind})")
-
-    # Counts a path with no token estimate as 0, unlike the scc-only hint.
-    biggest = _largest_first(files, lambda f: tokens.get(f[0], 0), 5)
-    if biggest:
-        print("biggest files (estimated tokens dominate layout):")
-        for path, loc, metric, src in biggest:
-            try:
-                rel = path.relative_to(root)
-            except ValueError:
-                rel = path
-            aux_str = ""
-            if aux_data is not None:
-                aux_str = f"  {aux_label} {aux_data.get(path, 0):>4d}"
-            print(f"  {tokens.get(path, 0):>9,} est.tok  {loc:>7} loc  "
-                  f"{metric_label} {metric:>5.0f}{aux_str}  [{src:6}]  {rel}")
+    _print_axes(files, metric_label, cap, cap_kind,
+                churn_degenerate=churn_degenerate, aux_data=aux_data,
+                aux_label=aux_label, aux_cap=aux_cap, aux_cap_kind=aux_cap_kind)
+    _print_biggest(files, root, tokens, metric_label, aux_data, aux_label)
 
 
 # Artifact schema version for complexity-stats.json - the run_id provenance
@@ -1307,7 +1334,7 @@ def load_survivor_density(run_context_path: Path,
     return density
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=(
             "Render a Codecov-style hotspot treemap of any folder. "
@@ -1367,6 +1394,58 @@ def main() -> int:
               "carries no signal from a sibling directory. Omit for a whole-repo "
               "run."),
     )
+    return ap
+
+
+def _resolve_scope(root: Path, scope_arg: Path | None) -> tuple[Path | None, str | None]:
+    """The resolved ``--scope`` subtree, or an error message when it does not
+    exist or sits outside ``root``. (None, None) for a whole-repo run."""
+    if scope_arg is None:
+        return None, None
+    scope = scope_arg if scope_arg.is_absolute() else (root / scope_arg)
+    scope = scope.resolve()
+    if not scope.exists():
+        return None, f"error: scope path {scope} does not exist"
+    if not scope.is_relative_to(root):
+        return None, f"error: scope path {scope} is not under {root}"
+    return scope, None
+
+
+def _no_files_message(scope: Path | None, excluded_generated: list[dict]) -> str:
+    """The dead-end error when nothing is left to score."""
+    where = f" under {scope}" if scope is not None else ""
+    # Content excludes can drop every file (an all-generated SDK subtree
+    # under --scope); name them so the dead end explains itself.
+    why = (
+        f" ({len(excluded_generated)} excluded as generated - pass "
+        f"--include-artifacts to score them)"
+        if excluded_generated else ""
+    )
+    return f"error: no scoreable files found{where}{why}"
+
+
+def _out_path_and_title(root: Path, scope: Path | None,
+                        out_arg: Path | None) -> tuple[Path, str]:
+    """The SVG path (``-o`` or a name derived from the root and scope) and the
+    treemap title."""
+    scope_label = (
+        str(scope.relative_to(root)) if scope is not None and scope != root
+        else None
+    )
+    default_name = (
+        f"hotspot-{root.name}-{scope_label.replace('/', '-')}.svg"
+        if scope_label else f"hotspot-{root.name}.svg"
+    )
+    out = out_arg or Path(default_name)
+    title = (
+        f"Hotspot: {root.name}/{scope_label}" if scope_label
+        else f"Hotspot: {root.name}"
+    )
+    return out, title
+
+
+def main() -> int:
+    ap = _build_parser()
     args = ap.parse_args()
 
     root = args.path.resolve()
@@ -1374,17 +1453,10 @@ def main() -> int:
         print(f"error: {root} is not a directory", file=sys.stderr)
         return 1
 
-    scope: Path | None = None
-    if args.scope is not None:
-        scope = args.scope if args.scope.is_absolute() else (root / args.scope)
-        scope = scope.resolve()
-        if not scope.exists():
-            print(f"error: scope path {scope} does not exist", file=sys.stderr)
-            return 1
-        if not scope.is_relative_to(root):
-            print(f"error: scope path {scope} is not under {root}",
-                  file=sys.stderr)
-            return 1
+    scope, scope_error = _resolve_scope(root, args.scope)
+    if scope_error:
+        print(scope_error, file=sys.stderr)
+        return 1
 
     # Resolve user excludes from `.assess/config.toml` first, then layer the
     # CLI `--exclude` on top. Both extend the built-in defaults; the CLI is
@@ -1413,15 +1485,7 @@ def main() -> int:
         fn_backends=fn_backends,
     )
     if not files:
-        where = f" under {scope}" if scope is not None else ""
-        # Content excludes can drop every file (an all-generated SDK subtree
-        # under --scope); name them so the dead end explains itself.
-        why = (
-            f" ({len(excluded_generated)} excluded as generated - pass "
-            f"--include-artifacts to score them)"
-            if excluded_generated else ""
-        )
-        print(f"error: no scoreable files found{where}{why}", file=sys.stderr)
+        print(_no_files_message(scope, excluded_generated), file=sys.stderr)
         return 1
 
     _warn_if_dominated_by_one_file(files)
@@ -1444,19 +1508,7 @@ def main() -> int:
         load_survivor_density(args.test_pressure, root)
         if args.test_pressure else {}
     )
-    scope_label = (
-        str(scope.relative_to(root)) if scope is not None and scope != root
-        else None
-    )
-    default_name = (
-        f"hotspot-{root.name}-{scope_label.replace('/', '-')}.svg"
-        if scope_label else f"hotspot-{root.name}.svg"
-    )
-    out = args.out or Path(default_name)
-    title = (
-        f"Hotspot: {root.name}/{scope_label}" if scope_label
-        else f"Hotspot: {root.name}"
-    )
+    out, title = _out_path_and_title(root, scope, args.out)
     render(files, root, out, title,
            show_labels=args.labels, by=effective_by,
            aux_data=aux_data, aux_label=aux_label,
