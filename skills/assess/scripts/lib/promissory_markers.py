@@ -160,18 +160,18 @@ JUSTIFIED_SUPPRESSION_RE = re.compile(
 # position: it opens its comment or line (after an optional list bullet or
 # checkbox), or it is followed by a colon or a parenthesised owner. A sentence
 # that lists marker names - ``(TODO/FIXME, deprecations, ...)`` - is prose
-# about markers, not a marker. The phrase alternatives (``remove after``,
-# ``temporary workaround``) keep the plain comment-context rule.
+# about markers, not a marker. The phrase alternatives in TODO_PHRASE_RE (a
+# removal deadline, a temporary stopgap) keep the plain comment-context rule.
 TODO_TOKEN_RE = re.compile(r"\b(TODO|FIXME|HACK|XXX|TBD)\b")
 _TODO_SUFFIX_RE = re.compile(r"\s*:|\([^)\s][^)]*\)")
 TODO_PHRASE_RE = re.compile(
     r"remove (after|before|once|when)|temporary (workaround|hack|fix)"
 )
 # In a prose file, a phrase inside an inline code span or quotation marks is an
-# example quoted in a sentence about markers (``"remove after migration"``),
-# not a promise. Double-backtick spans first so ````x```` is one span; an
-# unclosed quote matches nothing and the phrase stays bare. Code comments do not
-# get this exemption: ``# "remove after" v2 ships`` is still a promise.
+# example quoted in a sentence about markers, not a promise. Double-backtick
+# spans first so ````x```` is one span; an unclosed quote matches nothing and
+# the phrase stays bare. Code comments do not get this exemption: a removal
+# deadline wrapped in quotes inside a ``#`` comment is still a promise.
 _QUOTED_SPAN_RE = re.compile(r"``.+?``|`[^`]+`|\"[^\"]*\"|\u201c[^\u201d]*\u201d")
 # A list bullet, a checkbox, or both (``- [ ] TODO write X``).
 _BULLET_RE = re.compile(r"(?:(?:[-*+>]|\d+[.)])\s*)?(?:\[[ xX]?\]\s*)?")
@@ -392,9 +392,9 @@ def _opener(prefix: str, is_prose: bool) -> str:
     """The text between a token's opening position and the token.
 
     In a code file the opening position is just after the last comment leader
-    before the token, so a trailing comment (``x = 1  # FIXME``) opens there.
+    before the token, so a trailing comment (``x = 1  # <marker>``) opens there.
     In a prose file a leader counts only at line start (a heading or an HTML
-    comment): a ``*`` or ``#`` mid-sentence, as in ``shows `* TODO` as an
+    comment): a ``*`` or ``#`` mid-sentence, as in ``shows `* <marker>` as an
     example``, is an inline example, not a comment boundary.
     """
     if not is_prose:
@@ -404,8 +404,8 @@ def _opener(prefix: str, is_prose: bool) -> str:
             default=0,
         )
         return prefix[cut:].strip()
-    # A blockquote of any depth (``> > TODO``) and a heading of any level
-    # (``### TODO``) open as a whole run, not one character.
+    # A blockquote of any depth (``> > <marker>``) and a heading of any level
+    # (``### <marker>``) open as a whole run, not one character.
     rest = _BLOCKQUOTE_RE.sub("", prefix.lstrip())
     if rest.startswith("#"):
         return rest.lstrip("#").strip()
@@ -433,13 +433,13 @@ def _todo_in_marker_position(text: str, is_prose: bool = False) -> bool:
         opener = _opener(text[: m.start()], is_prose)
         if not opener or _BULLET_RE.fullmatch(opener):
             return True
-    # No token in marker position: a phrase alternative on the same line
-    # (``temporary workaround for the XXX parser``) still makes it a marker.
+    # No token in marker position: a phrase alternative on the same line (a
+    # stopgap phrase beside a mid-sentence token) still makes it a marker.
     return _phrase_is_marker(text, is_prose)
 
 
 def _phrase_is_marker(text: str, is_prose: bool) -> bool:
-    """True when a phrase alternative (``remove after``) on the line is a promise.
+    """True when a phrase alternative from TODO_PHRASE_RE on the line is a promise.
 
     In a prose file a phrase inside an inline code span or quotation marks is
     a quoted example and does not count; a bare phrase on the same line still

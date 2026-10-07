@@ -59,6 +59,13 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   shape and the build that ships it co-change by construction. That seam is documented in
   `CLAUDE.md`'s "Standalone skill pipeline" section; it is cohesion between a packager and
   the thing it packages, not a leak.
+- **The `actions/checkout` pin across `.github/workflows/*`,
+  `skills/assess/templates/assess-gate.yml.template` and `README.md`.** The gate the
+  skill generates, the repo's own workflows and the README's copy-paste snippet pin the
+  same release by commit SHA. Dependabot bumps only the workflow pins, so the template
+  and README follow by hand in the same PR. `skills/assess/tests/test_ci_workflow.py`
+  fails the build when the template's pin drifts from `.github/workflows/assess-gate.yml`
+  or the README.
 
 None of these is a refactor task. They are recorded here so the seam is owned: if any is
 ever cut, this note is where the intended boundary is written down.
