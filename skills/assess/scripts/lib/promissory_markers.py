@@ -67,6 +67,41 @@ FAMILY_WEIGHTS = {
     "todo": 1,
 }
 
+# The suppression directives as (comment leader, directive token) regex pairs.
+# The suppression family pattern joins each pair; the justified-suppression
+# check below refuses any token here as a "reason", so a second directive
+# (``# noqa: S603  # nosec B603``) is never credited as recorded reasoning.
+# One list feeds both, so a directive added to detection is excluded from
+# reason credit with no second edit.
+SUPPRESSION_DIRECTIVES: tuple[tuple[str, str], ...] = (
+    (r"#\s*", r"noqa"),
+    (r"#\s*", r"type:\s*ignore"),
+    (r"#\s*", r"pyright:\s*ignore"),
+    (r"", r"eslint-disable"),
+    (r"//\s*", r"nolint"),
+    (r"", r"@SuppressWarnings"),
+    (r"#\s*", r"nosec"),
+    (r"", r"rubocop:disable"),
+    (r"", r"pylint:\s*disable"),
+    (r"", r"@ts-ignore"),
+    (r"", r"@ts-nocheck"),
+    (r"//\s*", r"NOSONAR"),
+    (r"//\s*", r"ignore(_for_file)?:"),  # Dart analyzer
+)
+
+# The bare todo-family tokens a trailing comment may not open with to count as
+# a reason: a marker is a promise, not reasoning.
+_TODO_TOKENS = ("TODO", "FIXME", "HACK", "XXX", "TBD")
+
+# Negative lookahead: the trailing comment does not open with a directive or a
+# todo token. ``(?!\w)`` rather than ``\b`` so a token ending in ``:`` (Dart's
+# ``ignore:``) still matches before a space.
+_NOT_DIRECTIVE_OR_MARKER = (
+    r"(?!(?:"
+    + "|".join([token for _, token in SUPPRESSION_DIRECTIVES] + list(_TODO_TOKENS))
+    + r")(?!\w))"
+)
+
 # One rg pattern per family. Kept deliberately coarse: precision comes from the
 # comment-context filter and the survived-touches join, not from the regex.
 # Case-sensitive with word boundaries on purpose - a case-insensitive TODO
@@ -76,12 +111,7 @@ FAMILY_WEIGHTS = {
 FAMILY_PATTERNS = {
     "todo": r"\b(TODO|FIXME|HACK|XXX|TBD)\b|remove (after|before|once|when)|temporary (workaround|hack|fix)",
     "deprecation": r"@[Dd]eprecated\b|\bDEPRECATED\b",
-    "suppression": (
-        r"#\s*noqa|#\s*type:\s*ignore|eslint-disable|//\s*nolint|"
-        r"@SuppressWarnings|#\s*nosec|rubocop:disable|pylint:\s*disable|"
-        r"@ts-ignore|@ts-nocheck|//\s*NOSONAR|"
-        r"//\s*ignore(_for_file)?:"  # Dart analyzer
-    ),
+    "suppression": "|".join(leader + token for leader, token in SUPPRESSION_DIRECTIVES),
     "disabled_test": (
         r"pytest\.mark\.skip|@unittest\.skip|\bxfail\b|"
         r"\b(it|test|describe|xit|xdescribe)\.skip\(|"
@@ -107,7 +137,8 @@ JUSTIFIED_SUPPRESSION_RE = re.compile(
     r"(nolint[^/]*//|noqa[^#]*#|type:\s*ignore[^#]*#|eslint-disable[^*]*\*/\s*//|"
     r"//\s*ignore:[^/]*//|@SuppressWarnings\(.+\)\s*//)\s*"
     # The trailing comment must not be another directive or a marker.
-    r"(?!(?:noqa|type:\s*ignore|nolint|TODO|FIXME|HACK|XXX|TBD)\b)\S"
+    + _NOT_DIRECTIVE_OR_MARKER
+    + r"\S"
     r"|/\*\s*eslint-disable[^*]*?\s--\s*[^\s*]"
     r"|//\s*eslint-disable\S*\s.*?\s--\s*\S"
     # A dash, double-dash or parenthesised reason after the directive's codes,

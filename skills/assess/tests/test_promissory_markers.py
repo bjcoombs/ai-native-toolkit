@@ -682,3 +682,64 @@ def test_bare_todo_and_bare_noqa_still_detected(tmp_path: Path) -> None:
     assert {(m.family, m.line, m.justified) for m in markers} == {
         ("todo", 1, False), ("suppression", 2, False),
     }
+
+
+# A second directive after the first is not a reason. One sample per entry in
+# SUPPRESSION_DIRECTIVES plus each todo token, each written after both trailing
+# comment styles the justified check reads (``#`` and ``//``).
+_SECOND_DIRECTIVES = (
+    "noqa: S603",
+    "type: ignore[arg-type]",
+    "pyright: ignore[reportGeneralTypeIssues]",
+    "eslint-disable-line no-console",
+    "nolint:errcheck",
+    "@SuppressWarnings",
+    "nosec B603",
+    "rubocop:disable Style/Foo",
+    "pylint: disable=broad-except",
+    "@ts-ignore",
+    "@ts-nocheck",
+    "NOSONAR",
+    "ignore: unused_import",
+    "ignore_for_file: unused_import",
+    "TODO tidy",
+    "FIXME later",
+    "HACK around it",
+    "XXX check",
+    "TBD",
+)
+
+
+def test_second_directive_is_never_a_reason() -> None:
+    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    for second in _SECOND_DIRECTIVES:
+        for line in (
+            f"run(cmd)  # noqa: S603  # {second}",
+            f"x = f()  # type: ignore[arg-type]  # {second}",
+            f"return nil //nolint:nilerr // {second}",
+            f"import 'x.dart'; // ignore: unused_import // {second}",
+        ):
+            assert not rx.search(line), line
+
+
+def test_every_suppression_directive_has_a_second_directive_sample() -> None:
+    """Drift guard: a directive added to SUPPRESSION_DIRECTIVES needs a sample
+    above, so its exclusion from reason credit is pinned by a test."""
+    import re
+
+    from lib.promissory_markers import SUPPRESSION_DIRECTIVES
+    for _, token in SUPPRESSION_DIRECTIVES:
+        assert any(re.match(token, s) for s in _SECOND_DIRECTIVES), token
+
+
+def test_directive_word_inside_a_real_reason_is_still_credited() -> None:
+    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    assert rx.search("run(cmd)  # noqa: S603  # args are constant, so nosec is moot")
+
+
+def test_pyright_ignore_is_a_suppression(tmp_path: Path) -> None:
+    repo = tmp_path / "r"
+    _init_repo(repo)
+    _commit(repo, {"a.py": "x: int = f()  # pyright: ignore[reportAssignmentType]\n"}, day=1)
+    fams = {m.family for m in _scan(repo).markers}
+    assert fams == {"suppression"}
