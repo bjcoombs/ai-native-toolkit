@@ -2,7 +2,7 @@
 
 It must be a **pure wrapper**: it never explains why the skill works, adds context beyond the draft, or coaches the runner (SKILL.md carries the rationale for why this is load-bearing).
 
-The lead fills this template per runner - one runner per test case per round. Every self-report field is required; fields 1-5 are the standard report, and field 6 (gates hit) records interactive gates and reads "none encountered" on a run that hit none. The optional `Runner model` header records which model tier is executing, so a caller running a multi-tier sweep (e.g. skill-forge's runner-model knob) can attribute each transcript's verdict to a tier; omit it when no model is pinned. Copy the template, drop in the draft and the case input, send it to a fresh-context runner.
+The lead fills this template per runner - one runner per test case per round. Every self-report field is required; fields 1-5 are the standard report, and field 6 (gates hit) records interactive gates and reads "none encountered" on a run that hit none. The optional `Runner model` header records which model tier is executing, so a caller running a multi-tier sweep (e.g. skill-forge's runner-model knob) can attribute each transcript's verdict to a tier; omit it when no model is pinned. When the header is set, the runner also ends its self-report with a `Reported model ID` line, the only evidence of the model that actually ran, and, when the runner's definition pins effort, a `Reported effort` line (the lead keeps that template line only then). Copy the template, drop in the draft and the case input, send it to a fresh-context runner.
 
 ## Two runner variants
 
@@ -21,6 +21,10 @@ The instruction-file variant exists because an always-loaded context file is nev
 Runner model: <optional - the model tier executing this runner, e.g. haiku |
 sonnet | opus; record it so the transcript's verdict can be attributed to a tier.
 Omit if the caller is not pinning a model.>
+If a Runner model is set above, end your self-report with one extra line,
+`Reported model ID: <your exact model ID, read from your environment>`.
+<optional - keep the next line only when the runner's definition pins effort:>
+Also add `Reported effort: <your effort level>`; omit it if you cannot see it.
 
 You are a test runner. Apply the following skill to the following input, exactly
 as the skill instructs.
@@ -80,6 +84,10 @@ Use this variant when the document under test is an always-loaded instruction fi
 Runner model: <optional - the model tier executing this runner, e.g. haiku |
 sonnet | opus; record it so the transcript's verdict can be attributed to a tier.
 Omit if the caller is not pinning a model.>
+If a Runner model is set above, end your self-report with one extra line,
+`Reported model ID: <your exact model ID, read from your environment>`.
+<optional - keep the next line only when the runner's definition pins effort:>
+Also add `Reported effort: <your effort level>`; omit it if you cannot see it.
 
 You are a test runner. The instruction file below is your ONLY operating context
 for this run. Carry out the repo task below the way the instruction file directs.
