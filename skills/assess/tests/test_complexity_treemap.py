@@ -1617,3 +1617,135 @@ def test_write_stats_empty_file_list_reports_zeroes(treemap, tmp_path):
     assert stats["fn_ccn"]["backend_by_language"] == {}
     assert stats["churn"] is None
     assert stats["top_hotspots"] == stats["top_complex"] == []
+
+
+# --- Characterization: render's console summary and main's CLI paths -------
+# Pin the branches of `render` and `main` so splitting them into named steps
+# cannot change what they print, pass on, or reject.
+
+
+def _stub_render_io(treemap, monkeypatch):
+    """Stub the colour map, squarify layout and SVG writer; capture writer args."""
+    captured: dict = {}
+    monkeypatch.setattr(treemap.plt, "get_cmap",
+                        lambda _name: (lambda v: (1.0, 1.0 - v, 0.0, 1.0)), raising=False)
+    monkeypatch.setattr(treemap, "layout", lambda *a, **k: None)
+
+    def fake_write_svg(rects, root, W, H, out_path, show_labels, metric_label,
+                       show_survivor_legend=False):
+        captured.update(show_labels=show_labels, metric_label=metric_label,
+                        show_survivor_legend=show_survivor_legend)
+
+    monkeypatch.setattr(treemap, "write_svg", fake_write_svg)
+    return captured
+
+
+def _two_files(tmp_path):
+    a = tmp_path / "a.py"
+    a.write_text("x = 1\n" * 40, encoding="utf-8")
+    b = tmp_path / "b.py"
+    b.write_text("y = 2\n" * 4, encoding="utf-8")
+    return [(a, 40, 12.0, "lizard"), (b, 4, 3.0, "scc")]
+
+
+def test_render_prints_hue_saturation_and_biggest_files(treemap, tmp_path, monkeypatch, capsys):
+    captured = _stub_render_io(treemap, monkeypatch)
+    files = _two_files(tmp_path)
+    aux = {files[0][0]: 7, files[1][0]: 1}
+    treemap.render(files, tmp_path, tmp_path / "o.svg", "t", show_labels=True,
+                   aux_data=aux, aux_label="commits (last 12mo)",
+                   survivor_density={files[0][0]: 0.6})
+    out = capsys.readouterr().out
+    assert "(2 files, 1 lizard, 1 scc)" in out
+    assert "hue: ccn; range 0-12; cap 12 (max)" in out
+    assert "saturation: commits (last 12mo); range 0-7; cap 7 (max)" in out
+    assert "biggest files (estimated tokens dominate layout):" in out
+    assert "commits (last 12mo)    7  [lizard]  a.py" in out
+    assert captured == {"show_labels": True, "metric_label": "ccn",
+                        "show_survivor_legend": True}
+
+
+def test_render_degenerate_churn_drops_saturation(treemap, tmp_path, monkeypatch, capsys):
+    captured = _stub_render_io(treemap, monkeypatch)
+    files = _two_files(tmp_path)
+    aux = {files[0][0]: 1, files[1][0]: 1}
+    treemap.render(files, tmp_path, tmp_path / "o.svg", "t", by="churn",
+                   aux_data=aux, aux_label="commits", churn_degenerate=True)
+    out = capsys.readouterr().out
+    assert "hue: commits;" in out
+    assert "saturation: churn signal flat" in out
+    assert "saturation: commits;" not in out
+    # The aux column is dropped from the biggest-files list with the axis.
+    rows = [ln for ln in out.splitlines() if "est.tok" in ln]
+    assert len(rows) == 2
+    assert all(row.count("commits") == 1 for row in rows)
+    assert captured["show_survivor_legend"] is False
+
+
+def test_main_rejects_non_directory(treemap, monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(sys, "argv", ["complexity-treemap.py", str(tmp_path / "nope")])
+    assert treemap.main() == 1
+    assert "is not a directory" in capsys.readouterr().err
+
+
+def test_main_rejects_missing_scope(treemap, monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(sys, "argv",
+                        ["complexity-treemap.py", str(tmp_path), "--scope", "absent"])
+    assert treemap.main() == 1
+    assert "error: scope path" in capsys.readouterr().err
+
+
+def test_main_rejects_scope_outside_root(treemap, monkeypatch, tmp_path, capsys):
+    root = tmp_path / "repo"
+    root.mkdir()
+    monkeypatch.setattr(sys, "argv",
+                        ["complexity-treemap.py", str(root), "--scope", str(tmp_path)])
+    assert treemap.main() == 1
+    assert "is not under" in capsys.readouterr().err
+
+
+def test_main_no_files_under_scope_names_it(treemap, monkeypatch, tmp_path, capsys):
+    (tmp_path / "sub").mkdir()
+    monkeypatch.setattr(treemap, "collect",
+                        lambda *a, **k: ([], "complexity", None, None, {}))
+    monkeypatch.setattr(sys, "argv",
+                        ["complexity-treemap.py", str(tmp_path), "--scope", "sub"])
+    assert treemap.main() == 1
+    err = capsys.readouterr().err
+    assert "no scoreable files found under" in err
+    assert "excluded as generated" not in err
+
+
+@pytest.mark.parametrize("scope, out_name, title_suffix", [
+    (None, "hotspot-{root}.svg", ""),
+    ("sub/deep", "hotspot-{root}-sub-deep.svg", "/sub/deep"),
+])
+def test_main_threads_scope_into_output_name_title_and_stats(
+        treemap, monkeypatch, tmp_path, scope, out_name, title_suffix):
+    root = tmp_path / "repo"
+    (root / "sub" / "deep").mkdir(parents=True)
+    files = _two_files(root)
+    aux = {files[0][0]: 3, files[1][0]: 1}
+    seen: dict = {}
+    monkeypatch.setattr(treemap, "collect",
+                        lambda *a, **k: (files, "hotspot", aux, "commits", {"fn": 1}))
+    monkeypatch.setattr(treemap, "render",
+                        lambda f, r, out, title, **k: seen.update(out=out, title=title, **k))
+    monkeypatch.setattr(treemap, "write_stats",
+                        lambda *a, **k: seen.update(stats_path=a[4], stats_kwargs=k))
+    monkeypatch.chdir(tmp_path)
+    argv = ["complexity-treemap.py", str(root), "--labels", "--stats", "s.json"]
+    if scope:
+        argv += ["--scope", scope]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert treemap.main() == 0
+    assert seen["out"] == Path(out_name.format(root=root.name))
+    assert seen["title"] == f"Hotspot: {root.name}{title_suffix}"
+    assert seen["show_labels"] is True
+    assert seen["by"] == "hotspot"
+    assert seen["aux_data"] is aux
+    assert seen["survivor_density"] == {}
+    assert seen["churn_degenerate"] is False
+    assert seen["stats_path"] == Path("s.json")
+    assert seen["stats_kwargs"]["fn_ccn_by_path"] == {"fn": 1}
+    assert seen["stats_kwargs"]["tokens_by_path"] is seen["tokens_by_path"]

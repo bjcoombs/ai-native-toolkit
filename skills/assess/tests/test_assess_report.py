@@ -387,11 +387,27 @@ def test_diff_reliable_renders_all_categories() -> None:
     out = render_diff_section(_full_ctx())
     assert "- **Graduated** (left the hotspot list): 1" in out
     assert "- **New** (entered the hotspot list): 1" in out
-    assert "- **Regressed** (complexity or churn increased): 1" in out
+    assert ("- **Regressed** (worst function, complexity or churn increased): 1"
+            in out)
+    assert ("- **Restructured** (worst function fell while summed complexity "
+            "rose): 0") in out
     assert "- **Persistent** (still in the hotspot list): 1" in out
     assert "- `old/file.py`" in out
     assert "- `new/file.py`" in out
     assert "- `stable/file.py`" in out
+
+
+def test_diff_restructured_shows_float_deltas() -> None:
+    """Real sidecars carry ccn as floats; ``:+d`` raised on them. A restructured
+    entry leads with the worst-function fall that earns the status."""
+    ctx = _full_ctx()
+    ctx["diff_detail"]["restructured"] = [{
+        "path": "skills/assess/scripts/assess_core.py", "ccn_delta": 11.0,
+        "commits_delta": 1, "loc_delta": 62, "max_fn_ccn_delta": -39.0,
+    }]
+    out = render_diff_section(ctx)
+    assert ("- `skills/assess/scripts/assess_core.py` (worst function CCN -39, "
+            "CCN +11, LOC +62)") in out
 
 
 def test_diff_regressed_shows_deltas() -> None:

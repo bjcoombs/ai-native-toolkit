@@ -182,7 +182,7 @@ Colour = staleness (vivid red = a frozen doc beside churning code = a lying map)
 
 #### What changed since last run
 
-<the diff summary (graduated / new / regressed / persistent), OR "_Diff suppressed: <note>._" when the prior snapshot was a different plugin version, OR "_No prior run to compare against - this is the first recorded snapshot._" on a first run.>
+<the diff summary (graduated / new / regressed / restructured / persistent), OR "_Diff suppressed: <note>._" when the prior snapshot was a different plugin version, OR "_No prior run to compare against - this is the first recorded snapshot._" on a first run.>
 
 </details>
 
