@@ -246,7 +246,7 @@ def render_findings_section(ctx: dict) -> str:
     into ``findings_markdown``; this renderer copies it so the section appears
     whether or not an LLM is in the loop.
     """
-    markdown = ctx.get("findings_markdown")
+    markdown: str | None = ctx.get("findings_markdown")
     if not markdown or not markdown.strip():
         return "_No cross-layer findings recorded._"
     return markdown.strip()
@@ -537,7 +537,8 @@ def _structure_drift_section(ctx: dict, repo_name: str) -> str:
 def load_context(repo_root: Path) -> dict:
     """Load ``.assess/run-context.json`` from a repo root."""
     ctx_path = repo_root / ".assess" / "run-context.json"
-    return json.loads(ctx_path.read_text(encoding="utf-8"))
+    ctx: dict = json.loads(ctx_path.read_text(encoding="utf-8"))
+    return ctx
 
 
 def main(argv: list[str] | None = None) -> int:

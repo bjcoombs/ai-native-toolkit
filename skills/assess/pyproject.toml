@@ -60,30 +60,32 @@ max-complexity = 15
 
 [tool.mypy]
 # Issue #79: type hints existed but were unenforced. This gate makes them a
-# contract. Scoped to the deterministic core (lib/) where the annotations are
-# densest and most load-bearing, plus the orchestrator assess_core.py (the
-# most-churned file, ratcheted in here), and the two SVG renderers. The
-# renderers have hyphenated filenames, so they are listed as paths, not module
-# names. The remaining orchestrator scripts (assess_finalize.py and the rest)
-# and the build pipeline are the next ratchet step.
-files = [
-    "scripts/lib",
-    "scripts/assess_core.py",
-    "scripts/doc-graph-svg.py",
-    "scripts/complexity-treemap.py",
-]
-# lib/ is a package; treat scripts/ as the import base so lib.<mod> resolves and
-# the back-compat shims (scripts/stats_diff.py, lib/assess_core.py) don't collide
-# as duplicate top-level modules.
+# contract. It covers every module under scripts/: the deterministic core
+# (lib/), every orchestrator (assess_core, assess_finalize, assess_report,
+# assess_gate, assess_emit_workflow), and the two SVG renderers. Listing the
+# directory rather than each file means a new orchestrator joins the gate by
+# construction instead of waiting for a ratchet step. tests/ is out of scope.
+files = ["scripts"]
+# lib/ is a package; treat scripts/ as the import base so lib.<mod> resolves
+# the same way the orchestrators import it at runtime.
 mypy_path = "scripts"
 explicit_package_bases = true
 namespace_packages = true
-# networkx and grimp ship no type stubs; their absence is not a code defect.
-# The lib modules carry a defensive mypy assignment suppression on their
-# degrade-gracefully ``nx = None`` fallbacks so they also type-check when stubs
-# ARE installed; ``warn_unused_ignores`` is left off so those stay put.
+# networkx ships no type stubs; their absence is not a code defect (grimp ships
+# py.typed, so it is checked). The lib modules' degrade-gracefully ``nx = None`` fallbacks carry
+# ``# type: ignore[assignment, unused-ignore]``: without stubs nx is Any and the
+# ignore is unused; with stubs installed the None assignment is a real mismatch.
 ignore_missing_imports = true
-warn_redundant_casts = true
+# Strict, minus one flag. disallow_any_generics stays off: it flags ~430 bare
+# ``dict`` / ``list`` annotations, almost all on JSON blobs (run-context,
+# stats sidecars, finding rows). Rewriting each as ``dict[str, Any]`` adds
+# noise and no information; the honest fix is a TypedDict per known shape,
+# which is the next ratchet step.
+strict = true
+disallow_any_generics = false
+# strict does not reject a bare ``# type: ignore``; this makes the error code
+# mandatory. The trailing ``  # reason`` stays a house convention mypy cannot check.
+enable_error_code = ["ignore-without-code"]
 
 [tool.mutmut]
 # Layer 6 truth-pressure: line coverage shows the tests execute this code,

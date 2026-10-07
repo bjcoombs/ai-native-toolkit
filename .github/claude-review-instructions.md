@@ -78,8 +78,10 @@ remote first and degrade to `available: false`); the LLM only writes prose via t
   means "no instruction file found anywhere" - different remediation from `F`).
 
 ### 5. Python quality gates
-Ruff enforces mccabe `max-complexity = 15`; mypy gates `lib/`. Flag new
-functions likely over the complexity threshold, new untyped public functions,
+Ruff enforces mccabe `max-complexity = 15`; mypy runs `strict` over all of
+`skills/assess/scripts/` and the non-floor `scripts/` modules, so an untyped
+function already fails the gate. Flag new functions likely over the complexity
+threshold, new `Any` where the shape is known (prefer a `TypedDict`),
 and any `# noqa` / `# type: ignore` added **without a one-line justification**.
 Prefer the "types over tests" fix (schema/type) over a runtime guard.
 

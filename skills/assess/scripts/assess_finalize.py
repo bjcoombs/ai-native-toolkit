@@ -490,11 +490,12 @@ def _load_run_context(assess_dir: Path) -> dict:
             "LLM input against the deterministic core's output; refusing to write"
         )
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        ctx: dict = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         raise FinalizeValidationError(
             f"run-context.json at {path} is not valid JSON: {e}"
         ) from e
+    return ctx
 
 
 def _claimed_maturity_tier(label: str) -> str | None:
@@ -606,7 +607,7 @@ def _validate_hotspot_actions(data: dict, ctx: dict) -> None:
         return
     stats_summary = ctx.get("stats_summary")
     top = stats_summary.get("top_hotspots", []) if isinstance(stats_summary, dict) else []
-    known = {h.get("path") for h in top if isinstance(h, dict) and h.get("path")}
+    known = {p for h in top if isinstance(h, dict) and (p := h.get("path"))}
     for path in hotspot_actions:
         if path not in known:
             raise FinalizeValidationError(
