@@ -652,10 +652,14 @@ unactioned intent; calendar age alone can't tell that from dormancy. Classifies
 markers as tracked (issue/ticket/URL/date reference, or a justified suppression)
 vs bare, and each introducing commit as agent/human (reusing `change_coupling`'s
 conservative B4 identity rules). A `todo` token counts only in marker position -
-it opens its comment, prose line or docstring interior line (after an optional
-bullet or checkbox), or carries a colon or a `(owner)` - so a sentence that lists
-marker names is not a marker. A justified suppression (a ` - reason`,
-` -- reason` or `(reason)` after the directive or its codes, or a trailing comment)
+it opens its comment or prose line (after an optional bullet or checkbox) or a
+leaderless docstring interior line, or carries a colon or a `(owner)` - so a
+sentence that lists marker names is not a marker. In prose a comment leader opens
+a marker only at line start, so an inline example (`` `* TODO` ``) is not one, and
+a leaderless code-file line that opens with a bullet (a YAML enum's `- TODO`) is
+data, not a marker. A justified suppression (a ` - reason` or ` -- reason`
+starting with a word character, or a non-empty `(reason)`, after the directive or
+its codes, or a trailing comment)
 is never stale and is counted in each family row's `justified`
 (0 outside suppressions); other tracked markers still age, since an issue or a
 deadline can go stale too. The `unactioned_intent` action states the

@@ -19,6 +19,7 @@ Pure stdlib (`ast`, `pathlib`); no import side effects, so it is safe and fast.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 # tests/ -> assess/ ; the deterministic core and its orchestrators live under scripts/.
@@ -95,12 +96,20 @@ def test_every_lib_module_has_a_readme_entry() -> None:
     A module merged without an entry is invisible to an agent that trusts the
     map (issue #412: `decline_markers.py` and `interactivity.py` were missing).
     Every top-level ``lib/*.py`` except ``__init__.py`` must have an entry
-    heading in the README's form, **`name.py`** - a bare mention, or a name
-    inside a longer filename (``stats.py`` in ``complexity_stats.py``), does
-    not count as an entry."""
+    heading in the README's form: a line of its own reading **`name.py`**,
+    optionally followed by an italic note such as *(co-change hotspot)*. A
+    mention in prose, a bullet or a code example, or a name inside a longer
+    filename (``stats.py`` in ``complexity_stats.py``), does not count."""
     readme = (LIB_DIR / "README.md").read_text(encoding="utf-8")
+    # A fenced code example is not the map, even when a line in it looks like
+    # an entry heading.
+    readme = re.sub(r"^```.*?^```", "", readme, flags=re.MULTILINE | re.DOTALL)
+    entries = set(
+        re.findall(r"^\*\*`([\w.]+\.py)`\*\*(?:[ \t]+\*\([^)\n]*\)\*)?[ \t]*$",
+                   readme, flags=re.MULTILINE)
+    )
     missing = [
         p.name for p in sorted(LIB_DIR.glob("*.py"))
-        if p.name != "__init__.py" and f"**`{p.name}`**" not in readme
+        if p.name != "__init__.py" and p.name not in entries
     ]
     assert not missing, f"lib/README.md has no entry for: {missing}"

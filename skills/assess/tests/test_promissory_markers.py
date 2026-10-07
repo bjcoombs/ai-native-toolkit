@@ -286,10 +286,12 @@ def test_todo_requires_marker_position(tmp_path: Path) -> None:
 
 # Every leader/prefix shape crossed with every token position. Each shape is
 # a line prefix; each position is a line body with the token placed in it.
-# ``True`` = the token sits in marker position and must count. One cell is a
-# pinned limit, not a goal: a leaderless code line (docstring interior) counts
+# ``True`` = the token sits in marker position and must count. Two cells are
+# pinned limits, not goals: a leaderless code line (docstring interior) counts
 # only when the token opens it, because text before a mid-line token cannot be
-# told from a string literal without a parser.
+# told from a string literal without a parser; and a leaderless code line that
+# opens with a bullet or checkbox never counts, because in a code file it is as
+# likely a YAML or TOML list item as a docstring line.
 _TODO_SHAPES_CODE = {
     "leader": "# ",
     "interior": "    ",           # docstring / block-comment interior
@@ -329,7 +331,8 @@ def test_todo_position_matrix(tmp_path: Path) -> None:
             for pos, (body, counts) in _TODO_POSITIONS.items():
                 files[path].append(prefix + body)
                 leaderless_mid = shape.startswith("interior") and pos.startswith("mid")
-                if counts and not leaderless_mid:
+                leaderless_bullet = shape.startswith("interior_")
+                if counts and not leaderless_mid and not leaderless_bullet:
                     expected.add((path, len(files[path])))
     _commit(repo, {p: "\n".join(ls) + "\n" for p, ls in files.items()}, day=1)
     got = {(m.path, m.line) for m in _scan(repo).markers if m.family == "todo"}
@@ -340,8 +343,10 @@ def test_todo_position_matrix(tmp_path: Path) -> None:
     assert {labels[k] for k in expected - got} == set(), "false negatives"
 
 
-def test_leaderless_code_lines_need_blank_or_bullet_prefix(tmp_path: Path) -> None:
-    """A string literal or expression before the token is not a comment."""
+def test_leaderless_code_lines_need_blank_prefix(tmp_path: Path) -> None:
+    """A string literal, an expression or a bare bullet before the token is not
+    a comment. A YAML enum item (``- TODO`` / ``- DEPRECATED``) is data, so it
+    counts in neither the todo nor the deprecation family."""
     repo = tmp_path / "repo"
     _init_repo(repo)
     _commit(repo, {
@@ -350,10 +355,39 @@ def test_leaderless_code_lines_need_blank_or_bullet_prefix(tmp_path: Path) -> No
             "x = y - TODO_LIMIT\n"           # 2 identifier, no word boundary
             'call("FIXME(ben)")\n'           # 3 literal with owner shape
             "    TODO fix the retry loop\n"  # 4 docstring interior, counts
+            "    - TODO fix the retry\n"     # 5 bullet, no leader
+        ),
+        "api.yaml": (
+            "status:\n"
+            "  enum:\n"
+            "    - TODO\n"
+            "    - DONE\n"
+            "    - DEPRECATED\n"
+            "# TODO split this schema\n"     # 6 a YAML comment still counts
+        ),
+    }, day=1)
+    markers = _scan(repo).markers
+    todo = {(m.path, m.line) for m in markers if m.family == "todo"}
+    assert todo == {("s.py", 4), ("api.yaml", 6)}
+    assert not [m for m in markers if m.family == "deprecation"]
+
+
+def test_inline_example_in_prose_is_not_a_marker(tmp_path: Path) -> None:
+    """In prose a comment leader opens a marker only at line start: a ``*`` or
+    ``#`` quoted mid-sentence is an example, not a comment boundary."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, {
+        "guide.md": (
+            "The README shows `* TODO` as an example\n"  # 1 inline example
+            "Write `# FIXME` above the line\n"           # 2 inline example
+            "* TODO write the intro\n"                   # 3 star bullet
+            "# TODO heading\n"                           # 4 heading
+            "<!-- XXX check the table -->\n"             # 5 HTML comment
         ),
     }, day=1)
     lines = {m.line for m in _scan(repo).markers if m.family == "todo"}
-    assert lines == {4}
+    assert lines == {3, 4, 5}
 
 
 def test_double_dash_reason_per_suppression_family() -> None:
@@ -396,6 +430,9 @@ def test_single_dash_and_parenthesised_suppression_reasons() -> None:
         "# pylint: disable=too-many-args",
         "# noqa: E501 -",
         "# noqa: E501 ()",
+        "# noqa: E501 - !",
+        "# noqa: E501 -- ?!",
+        "# type: ignore - ...",
     ):
         assert not rx.search(bare), bare
 

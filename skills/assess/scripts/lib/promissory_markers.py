@@ -110,19 +110,20 @@ JUSTIFIED_SUPPRESSION_RE = re.compile(
     # A dash, double-dash or parenthesised reason after the directive's codes,
     # e.g. ``# noqa: BLE001 - catch-all by design``, ``# noqa: E501 -- long
     # URL`` or ``# noqa: S310 (fixed host)``. The dash needs whitespace on both
-    # sides and a word after it and the parentheses a word, so a
-    # hyphenated code (``attr-defined``) or an empty ``()`` is not a reason.
+    # sides and a word character after it, and the parentheses a non-blank
+    # character, so a hyphenated code (``attr-defined``), a punctuation-only
+    # ``- !`` or an empty ``()`` is not a reason.
     r"|(?:noqa(?::\s*[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
     r"|type:\s*ignore(?:\[[^\]]*\])?"
     r"|nosec(?:\s+[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
     r"|pylint:\s*disable=[\w,-]+"
     r"|nolint(?::[\w,-]+)?)"
-    r"\s+(?:--?\s+\S|\(\s*[^)\s])"
+    r"\s+(?:--?\s+\w|\(\s*[^)\s])"
 )
 
 # The bare marker tokens of the todo family. A token hit counts only in marker
-# position: it opens its comment (or prose line, after an optional list
-# bullet), or it is followed by a colon or a parenthesised owner. A sentence
+# position: it opens its comment or line (after an optional list bullet or
+# checkbox), or it is followed by a colon or a parenthesised owner. A sentence
 # that lists marker names - ``(TODO/FIXME, deprecations, ...)`` - is prose
 # about markers, not a marker. The phrase alternatives (``remove after``,
 # ``temporary workaround``) keep the plain comment-context rule.
@@ -306,7 +307,7 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
                 is_prose, text, pattern
             ):
                 continue
-            if family == "todo" and not _todo_in_marker_position(text):
+            if family == "todo" and not _todo_in_marker_position(text, is_prose):
                 continue
             justified = family == "suppression" and bool(
                 JUSTIFIED_SUPPRESSION_RE.search(text)
@@ -328,10 +329,11 @@ def _comment_context(is_prose: bool, text: str, pattern: str) -> bool:
     """Keep a todo/deprecation hit only when it sits in a comment-ish context.
 
     Prose files count whole-line; code files require a comment leader at or
-    before the match position on the same line, or nothing before the match but
-    whitespace and an optional list bullet or checkbox - the shape of a
-    docstring or block-comment interior (``    - TODO fix the retry``). This
-    is a line-local heuristic, not a parser: string-literal mentions are the
+    before the match position on the same line, or nothing but whitespace
+    before the match (a docstring or block-comment interior). A bullet with no
+    leader does not count: in a code file it is as likely a YAML or TOML list
+    item (``  - TODO`` in a status enum) as a docstring line. This is a
+    line-local heuristic, not a parser - string-literal mentions are the
     false-positive it exists to drop.
     """
     if is_prose:
@@ -340,20 +342,40 @@ def _comment_context(is_prose: bool, text: str, pattern: str) -> bool:
     if not m:
         return False
     prefix = text[: m.start()]
-    return any(lead in prefix for lead in COMMENT_LEADERS) or bool(
-        _BULLET_RE.fullmatch(prefix.strip())
-    )
+    return any(lead in prefix for lead in COMMENT_LEADERS) or prefix.strip() == ""
 
 
-def _todo_in_marker_position(text: str) -> bool:
+def _opener(prefix: str, is_prose: bool) -> str:
+    """The text between a token's opening position and the token.
+
+    In a code file the opening position is just after the last comment leader
+    before the token, so a trailing comment (``x = 1  # FIXME``) opens there.
+    In a prose file a leader counts only at line start (a heading or an HTML
+    comment): a ``*`` or ``#`` mid-sentence, as in ``shows `* TODO` as an
+    example``, is an inline example, not a comment boundary.
+    """
+    if not is_prose:
+        cut = max(
+            (prefix.rfind(lead) + len(lead) for lead in COMMENT_LEADERS
+             if lead in prefix),
+            default=0,
+        )
+        return prefix[cut:].strip()
+    rest = prefix.lstrip()
+    for lead in sorted(COMMENT_LEADERS, key=len, reverse=True):
+        if rest.startswith(lead):
+            return rest[len(lead):].strip()
+    return rest.strip()
+
+
+def _todo_in_marker_position(text: str, is_prose: bool = False) -> bool:
     """Keep a todo hit when a marker token sits in marker position, or when
     the line carries a phrase alternative (``remove after ...``).
 
     A line matched only by a phrase alternative has no token and passes; the
-    comment-context filter already vetted it. With no comment leader before
-    the token the opener is the whole prefix: a prose line, or a code line the
-    comment-context filter admitted only because nothing but a bullet precedes
-    the match (a docstring or block-comment interior).
+    comment-context filter already vetted it. The token is in marker position
+    when nothing but an optional list bullet or checkbox sits between its
+    opening position (see ``_opener``) and the token.
     """
     tokens = list(TODO_TOKEN_RE.finditer(text))
     if not tokens:
@@ -361,13 +383,7 @@ def _todo_in_marker_position(text: str) -> bool:
     for m in tokens:
         if _TODO_SUFFIX_RE.match(text, m.end()):
             return True
-        prefix = text[: m.start()]
-        cut = max(
-            (prefix.rfind(lead) + len(lead) for lead in COMMENT_LEADERS
-             if lead in prefix),
-            default=0,
-        )
-        opener = prefix[cut:].strip()
+        opener = _opener(text[: m.start()], is_prose)
         if not opener or _BULLET_RE.fullmatch(opener):
             return True
     # No token in marker position: a phrase alternative on the same line
