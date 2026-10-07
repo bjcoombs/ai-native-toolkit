@@ -292,7 +292,7 @@ Additive files (imports, barrel exports, routes): accept both sides. Same-line c
 ## Communication
 Only message the lead for **meaningful events**. Send the matching JSON payload from [Teammate Event Payloads](#teammate-event-payloads) as the message `content`, **prefixed with the event name on the same line** (`PR_CREATED {...}`) - the harness parses a bare JSON-object body against its shutdown/plan-approval protocol union and rejects any other shape, so a bare `JSON.stringify(...)` body never sends. The `event` field self-identifies it; the `summary` stays human-readable:
 - PR created: `SendMessage(type: "message", recipient: "lead", content: "PR_CREATED " + JSON.stringify({event: "PR_CREATED", task_id: "<tag>.<task-id>", pr_number: <number>, branch: "<branch>"}), summary: "PR created <task-id>")`
-- Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR " + JSON.stringify({event: "REVIEW_CLEAR", task_id: "<tag>.<task-id>", pr_number: <number>, required_checks_green: true, threads_resolved: true, model_id: "<your exact model ID, read from your environment>"}), summary: "Review clear <task-id> — standing down (lead owns claude-review wait + merge)")`
+- Review clear: `SendMessage(type: "message", recipient: "lead", content: "REVIEW_CLEAR " + JSON.stringify({event: "REVIEW_CLEAR", task_id: "<tag>.<task-id>", pr_number: <number>, required_checks_green: true, threads_resolved: true, model_id: "<your exact model ID, read from your environment>", effort: "<your effort level, if visible to you; omit otherwise>"}), summary: "Review clear <task-id> — standing down (lead owns claude-review wait + merge)")`
 - Blocked: `SendMessage(type: "message", recipient: "lead", content: "BLOCKED " + JSON.stringify({event: "BLOCKED", task_id: "<tag>.<task-id>", pr_number: <number>, blocking_reason: "<reason>", blocking_category: "merge_conflict|ci_failure|dependency|external"}), summary: "Blocked <task-id>")`
 - Too complex: `SendMessage(type: "message", recipient: "lead", content: "TOO_COMPLEX " + JSON.stringify({event: "TOO_COMPLEX", task_id: "<tag>.<task-id>", complexity_reason: "<reason>", suggested_decomposition: ["<subtask>", "<subtask>"]}), summary: "Too complex <task-id>")`
 - Clarification needed: `SendMessage(type: "message", recipient: "lead", content: "CLARIFICATION_NEEDED " + JSON.stringify({event: "CLARIFICATION_NEEDED", task_id: "<tag>.<task-id>", question: "<question>", context: "<context>"}), summary: "Clarification <task-id>")`
@@ -306,7 +306,7 @@ Each event is a JSON object whose `event` field names the type. Required fields 
 { "event": "PR_CREATED", "task_id": "<tag>.<task-id>", "pr_number": 123, "branch": "<branch-name>" }
 
 // REVIEW_CLEAR — required checks green and posted threads resolved; standing down
-{ "event": "REVIEW_CLEAR", "task_id": "<tag>.<task-id>", "pr_number": 123, "required_checks_green": true, "threads_resolved": true, "model_id": "<exact model ID from the environment>" }
+{ "event": "REVIEW_CLEAR", "task_id": "<tag>.<task-id>", "pr_number": 123, "required_checks_green": true, "threads_resolved": true, "model_id": "<exact model ID from the environment>", "effort": "<effort level, omitted when not visible>" }
 
 // BLOCKED — cannot progress without intervention
 { "event": "BLOCKED", "task_id": "<tag>.<task-id>", "pr_number": 123, "blocking_reason": "<what is blocking>", "blocking_category": "merge_conflict|ci_failure|dependency|external" }
@@ -317,7 +317,7 @@ Each event is a JSON object whose `event` field names the type. Required fields 
 // CLARIFICATION_NEEDED — requirements ambiguous, need a decision
 { "event": "CLARIFICATION_NEEDED", "task_id": "<tag>.<task-id>", "question": "<the question>", "context": "<relevant context>" }
 ```
-`pr_number` is omitted on `TOO_COMPLEX`/`CLARIFICATION_NEEDED` (no PR yet) and on `BLOCKED` if the block predates the PR.
+`effort` is optional because some workers cannot see their own effort level; record it with the teammate's output when it is present. `pr_number` is omitted on `TOO_COMPLEX`/`CLARIFICATION_NEEDED` (no PR yet) and on `BLOCKED` if the block predates the PR.
 
 ## Scope
 - Only create PRs on YOUR branch (`<tag>--<task-id>--<slug>`, or the combined-group branch `<tag>--<id>+<id>--<slug>` if you cover several units). Never create PRs on other branches or for work outside your assigned task(s).
