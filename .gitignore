@@ -37,6 +37,13 @@ dist/standalone-skills/
 **/uv.lock
 **/.coverage
 **/.coverage.*
+# Line-coverage reports (pytest-cov / coverage.py output). The parser fixtures
+# under skills/assess/tests/fixtures/ are committed test inputs.
+**/coverage.xml
+**/lcov.info
+**/htmlcov/
+!/skills/assess/tests/fixtures/coverage.xml
+!/skills/assess/tests/fixtures/lcov.info
 
 # Ignore nested CLAUDE.md files (e.g. user's personal config when they
 # clone this into ~/.claude/). The root /CLAUDE.md is re-allowlisted

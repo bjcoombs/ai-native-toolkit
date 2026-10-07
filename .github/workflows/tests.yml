@@ -33,9 +33,21 @@ jobs:
       # parse action.yml / assess-gate.yml and pytest.skip without PyYAML - a
       # skipped guard is a decorative guard. skills/assess/pyproject.toml does
       # not declare it, so the CI invocation supplies it.
+      # Line coverage is measured and reported, never gated: no
+      # --cov-fail-under (CLAUDE.md, "What this repo doesn't have").
       - name: Run pytest
-        run: uv run --with pytest --with pyyaml pytest -v
+        run: >-
+          uv run --with pytest --with pytest-cov --with pyyaml pytest -v
+          --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
         working-directory: skills/assess
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: coverage-skills-assess
+          path: skills/assess/coverage.xml
+          if-no-files-found: warn
 
   pipeline-tests:
     name: scripts/ pytest
@@ -47,8 +59,18 @@ jobs:
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
 
       - name: Run pytest
-        run: uv run --with pytest pytest -v
+        run: >-
+          uv run --with pytest --with pytest-cov pytest -v
+          --cov=. --cov-report=term --cov-report=xml:coverage.xml
         working-directory: scripts
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: coverage-scripts
+          path: scripts/coverage.xml
+          if-no-files-found: warn
 
   contract-tests:
     name: plugin contract pytest
@@ -108,3 +130,9 @@ jobs:
       - name: Mypy type gate (skills/assess deterministic core)
         run: uv run --with mypy mypy
         working-directory: skills/assess
+
+      # Same gate for the build pipeline and contract tooling; config in
+      # scripts/pyproject.toml selects the files (floor_check.py excluded).
+      - name: Mypy type gate (scripts)
+        run: uv run --with mypy mypy
+        working-directory: scripts

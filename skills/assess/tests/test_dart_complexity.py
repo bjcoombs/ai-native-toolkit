@@ -118,6 +118,10 @@ class A<T> extends B<T> {
         ("size", 2.0), ("size", 2.0), ("load", 2.0), ("label", 2.0)]
 
 
+# pytest-cov's line tracing (CI runs this suite under --cov) slows the scanner
+# past the 1s budget; no_cover pauses tracing for this test so the budget stays
+# exact instead of being widened to fit the tracer.
+@pytest.mark.no_cover
 @pytest.mark.parametrize("text", [
     "void f() {" + "{" * 200_000,
     "void f() {" * 100_000,
