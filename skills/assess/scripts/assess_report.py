@@ -8,7 +8,7 @@ It renders:
 - a metrics dashboard (complexity profile, churn window, total LOC),
 - the top-hotspots table,
 - the keyhole-readiness summary + the six cross-layer findings, and
-- the regression deltas (graduated / new / regressed / persistent).
+- the regression deltas (graduated / new / regressed / restructured / persistent).
 
 It deliberately does NOT reproduce (these require LLM judgement and are written
 elsewhere by the orchestrator, see SKILL.md):
@@ -45,7 +45,8 @@ MAX_DIFF_ROWS = 10
 DIFF_CATEGORIES = [
     ("graduated", "Graduated", "left the hotspot list"),
     ("new", "New", "entered the hotspot list"),
-    ("regressed", "Regressed", "complexity or churn increased"),
+    ("regressed", "Regressed", "worst function, complexity or churn increased"),
+    ("restructured", "Restructured", "worst function fell while summed complexity rose"),
     ("persistent", "Persistent", "still in the hotspot list"),
 ]
 
@@ -366,18 +367,30 @@ def format_structure_drift_findings(
     return "## Structure Drift\n\n" + "\n".join(body).rstrip() + "\n"
 
 
+def _signed(value: float) -> str:
+    """A delta with its sign; ``11.0`` prints as ``+11``, ``2.5`` as ``+2.5``."""
+    return f"{value:+g}"
+
+
 def _format_transition(category: str, entry: dict) -> str:
-    """Render one hotspot transition as a bullet, with deltas for regressions."""
+    """Render one hotspot transition as a bullet, with deltas where they explain it.
+
+    Regressed and restructured entries carry the deltas that put them there:
+    the worst-function change (when known) leads, then summed CCN and LOC.
+    """
     path = entry.get("path", "?")
-    if category != "regressed":
+    if category not in ("regressed", "restructured"):
         return f"  - `{path}`"
     bits = []
+    max_fn_delta = entry.get("max_fn_ccn_delta")
     ccn_delta = entry.get("ccn_delta", 0)
     loc_delta = entry.get("loc_delta", 0)
+    if max_fn_delta:
+        bits.append(f"worst function CCN {_signed(max_fn_delta)}")
     if ccn_delta:
-        bits.append(f"CCN {ccn_delta:+d}")
+        bits.append(f"CCN {_signed(ccn_delta)}")
     if loc_delta:
-        bits.append(f"LOC {loc_delta:+d}")
+        bits.append(f"LOC {_signed(loc_delta)}")
     suffix = f" ({', '.join(bits)})" if bits else ""
     return f"  - `{path}`{suffix}"
 

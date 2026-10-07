@@ -3,7 +3,7 @@
 - **Files scored:** {files_scored}
 - **AI Readiness:** {readiness_score} / 8 ({maturity_label})
 - **Instructions grade:** {instructions_grade}
-- **Hotspot transitions:** {graduated_count} graduated, {regressed_count} regressed, {new_count} new, {persistent_count} persistent
+- **Hotspot transitions:** {graduated_count} graduated, {regressed_count} regressed, {restructured_count} restructured, {new_count} new, {persistent_count} persistent
 - **Top action:** {top_action}
 
 [Full report]({report_link})

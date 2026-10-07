@@ -67,7 +67,7 @@ class HotspotEntry:
     path: str
     first_flagged: str
     last_seen: str
-    status: str   # active | new | graduated | regressed | persistent
+    status: str   # active | new | graduated | regressed | restructured | persistent
     # `ccn` and `loc` are `None` when the file's current metrics are not
     # carried in the latest stats sidecar (e.g. a graduated file that fell
     # off every top-N list). The wiki renders `None` as "-" - the file
@@ -109,6 +109,9 @@ class LogEntry:
     # backwards-compat with callers that don't pass it yet.
     run_id: str | None = None
     schema_version: str | None = None
+    # Hotspots whose worst function fell while the summed ccn rose (see
+    # stats_diff). Defaulted so a caller predating the status still builds.
+    restructured_count: int = 0
 
 
 def _run_id_comment(run_id: str | None, schema_version: str | None) -> str:
@@ -238,7 +241,7 @@ def merge_index_entries(
       filter changed rather than the file, so it never graduated.
 
     Otherwise a carried or backfilled row never keeps a live status (new,
-    active, persistent, regressed): it renders ``graduated``, the legend's "was
+    active, persistent, regressed, restructured): it renders ``graduated``, the legend's "was
     a hotspot, no longer is". A page is rewritten only while its file is ranked,
     so an orphaned page still carries the live status of its last ranked run.
     """
@@ -660,6 +663,7 @@ def append_log_entry(assess_dir: Path, entry: LogEntry) -> None:
         instructions_grade=entry.instructions_grade,
         graduated_count=entry.graduated_count,
         regressed_count=entry.regressed_count,
+        restructured_count=entry.restructured_count,
         new_count=entry.new_count,
         persistent_count=entry.persistent_count,
         top_action=entry.top_action,

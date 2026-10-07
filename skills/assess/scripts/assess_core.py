@@ -1069,7 +1069,7 @@ def _doc_to_code_edges(doc_graph: dict) -> list:
 
 
 def _hotspot_status_map(diff: StatsDiff) -> dict[str, str]:
-    """Which paths are graduated, new, regressed, persistent (later lists win)."""
+    """Which paths are graduated, new, regressed, restructured, persistent."""
     status_map: dict[str, str] = {}
     for h in diff.graduated:
         status_map[h.path] = "graduated"
@@ -1077,6 +1077,8 @@ def _hotspot_status_map(diff: StatsDiff) -> dict[str, str]:
         status_map[h.path] = "new"
     for h in diff.regressed:
         status_map[h.path] = "regressed"
+    for h in diff.restructured:
+        status_map[h.path] = "restructured"
     for h in diff.persistent:
         status_map[h.path] = "persistent"
     return status_map
@@ -1510,6 +1512,7 @@ def build_run_context(
         instructions_grade=instructions_grade,
         graduated_count=len(diff.graduated),
         regressed_count=len(diff.regressed),
+        restructured_count=len(diff.restructured),
         new_count=len(diff.new),
         persistent_count=len(diff.persistent),
         top_action=top_action,
@@ -1582,6 +1585,7 @@ def build_run_context(
         "diff_detail": {
             "graduated": [h.__dict__ for h in diff.graduated],
             "regressed": [h.__dict__ for h in diff.regressed],
+            "restructured": [h.__dict__ for h in diff.restructured],
             "new": [h.__dict__ for h in diff.new],
             "persistent": [h.__dict__ for h in diff.persistent],
         },
