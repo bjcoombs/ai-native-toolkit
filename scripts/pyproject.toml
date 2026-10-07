@@ -57,6 +57,9 @@ ignore_missing_imports = true
 # Full strict here, disallow_any_generics included: unlike skills/assess, the
 # non-floor modules carry no bare generics.
 strict = true
+# strict does not reject a bare ``# type: ignore``; this makes the error code
+# mandatory. The trailing ``  # reason`` stays a house convention mypy cannot check.
+enable_error_code = ["ignore-without-code"]
 
 # Floor-protected modules (FLOOR.md clause iii) keep the strict flags they
 # already pass; only the flags their current code fails are relaxed, per module,

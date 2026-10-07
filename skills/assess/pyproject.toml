@@ -83,3 +83,6 @@ ignore_missing_imports = true
 # which is the next ratchet step.
 strict = true
 disallow_any_generics = false
+# strict does not reject a bare ``# type: ignore``; this makes the error code
+# mandatory. The trailing ``  # reason`` stays a house convention mypy cannot check.
+enable_error_code = ["ignore-without-code"]
