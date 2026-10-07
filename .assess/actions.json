@@ -48,7 +48,7 @@
         "skills/assess/tests/test_keyhole_signals.py"
       ],
       "first_step": "Add a large-file: tracked note naming the finding families as the split seams",
-      "done_when": "The file carries the tracked note; any later split keeps every test passing with no test logic changed",
+      "done_when": "The file carries the tracked note. The accretion_ratchet finding persists until the engine honours such a note, so expect this row next run; any later split keeps every test passing with no test logic changed",
       "scope_fence": "Annotation only; no pre-emptive split of a working test file",
       "finding": "accretion_ratchet",
       "status": "pending",

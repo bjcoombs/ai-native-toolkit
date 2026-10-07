@@ -24,7 +24,7 @@ All three are the prescribed attention rows: the two floor scripts with same-com
 |---|--------|-------|--------|---------------------|-----------|-------------|------------------------------|-------|
 | 1 | Decide how FLOOR.md clause iii and `floor_core_changed` should agree, then add the clause-derived tests the #410 review lists for `floor_anchor.py` | 4 | medium | Read the review comment on #410; choose to widen the floor-core classifier to all seven clause-iii paths, or narrow the clause to four | Each FLOOR.md clause maps to a test written from the clause text, and a change under `scripts/contract/` requests `floor-signoff` (or clause iii no longer lists it) | Floor files: any change needs the maintainer's out-of-band `floor-signoff` approval; no agent edits | `scripts/floor_anchor.py` | #410 |
 | 2 | Add the clause-integrity and token-floor tests for `floor_check.py` from the #410 review (tests 2-4), independent of `REQUIRED_CLAUSES` and `MINIMUM_TOKEN_COUNT` | 4 | medium | Write each test from FLOOR.md's sentence, not from the constants | Deleting a `REQUIRED_CLAUSES` entry or lowering `MINIMUM_TOKEN_COUNT` turns a test red | Same floor sign-off rule as Action 1; tests only, no change to the checker's behaviour | `scripts/floor_check.py` | #410 |
-| 3 | Annotate `test_keyhole_signals.py` (1,152 LOC, `accretion_ratchet`) as a tracked large file, and split it by finding family only when a change needs to touch most of it | 4 | small | Add a `large-file: tracked` note at the top of the module, naming the finding families as the future split seams | The file carries the tracked note; any later split keeps every test passing with no test logic changed | Annotation only; no pre-emptive split of a working test file | `skills/assess/tests/test_keyhole_signals.py` | - |
+| 3 | Annotate `test_keyhole_signals.py` (1,152 LOC, `accretion_ratchet`) as a tracked large file, and split it by finding family only when a change needs to touch most of it | 4 | small | Add a `large-file: tracked` note at the top of the module, naming the finding families as the future split seams | The file carries the tracked note. The `accretion_ratchet` finding persists until the engine honours such a note, so expect this row next run; any later split keeps every test passing with no test logic changed | Annotation only; no pre-emptive split of a working test file | `skills/assess/tests/test_keyhole_signals.py` | - |
 
 The top rows score 2, so the ranking separates them. No gap action is pending.
 
@@ -40,7 +40,7 @@ Action 3 is accretion in a test file: `test_keyhole_signals.py` grows with every
 
 [![Complexity hotspot](./complexity-heatmap.svg)](./complexity-heatmap.svg)
 
-The risk is still concentrated in `skills/assess/`. Per-function ccn p95 is 8. No source function in the top hotspots exceeds 15. `analyze_doc_staleness` went from 34 to 13 in #463, and the highest left anywhere is 33, in a non-hotspot `lib/` module.
+The risk is still concentrated in `skills/assess/`. Per-function ccn p95 is 8. No source function in the top hotspots exceeds 15. `analyze_doc_staleness` went from 34 to 14 in #463, and the highest left anywhere is 33, in a non-hotspot `lib/` module.
 
 ### Doc navigability - can an agent find its way?
 
@@ -95,7 +95,7 @@ Of 113 docs, all are reachable from `CLAUDE.md`, `README.md` or `docs/index.md` 
   - `assess_core.py`: aggregate +2, worst function 12 -> 13.
   - `complexity-treemap.py`: aggregate +10, worst function 19 -> 14. The sum rose more than the worst function fell, so under #455's rule this is not `restructured`.
   - `test_complexity_treemap.py`: aggregate +19, worst function flat. These are new tests, which count as accretion.
-- **New:** `skills/assess/scripts/lib/doc_staleness.py`, which #458 grew; #463 has since brought its worst function from 34 to 13.
+- **New:** `skills/assess/scripts/lib/doc_staleness.py`, which #458 grew; #463 has since brought its worst function from 34 to 14.
 - **Persistent:** `test_assess_core.py`, `keyhole_signals.py`, `doc_graph.py`, `test_keyhole_signals.py`, `wiki_writer.py`, `scripts/floor_anchor.py`.
 
 </details>
