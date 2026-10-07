@@ -64,7 +64,6 @@ def _write_page(assess_dir: Path, path: str, status: str = "active") -> None:
     write_hotspot_page(
         assess_dir, path=path, first_flagged="2026-01-01", last_seen="2026-07-07",
         status=status, loc=600, ccn=30, commits=5, has_tests=None,
-        history_rows="| 2026-07-07 | 600 | 30 | 5 | active |",
         briefing="x", actions="- y",
     )
 
