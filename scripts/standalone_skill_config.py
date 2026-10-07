@@ -17,6 +17,7 @@ Each entry in SKILLS maps a skill name to:
 """
 
 import json
+from typing import Any
 from pathlib import Path
 
 
@@ -28,7 +29,8 @@ def _plugin_version() -> str:
     source of truth — drift impossible.
     """
     plugin_json = Path(__file__).parent.parent / ".claude-plugin" / "plugin.json"
-    return json.loads(plugin_json.read_text("utf-8"))["version"]
+    version: str = json.loads(plugin_json.read_text("utf-8"))["version"]
+    return version
 
 
 VERSION = _plugin_version()
@@ -39,7 +41,9 @@ VERSION_SUFFIX = (
 )
 
 
-SKILLS: dict[str, dict] = {
+# Per-skill build config. Each skill sets a different subset of keys (names,
+# descriptions, dirs, replacement maps, bundled files), so the values stay Any.
+SKILLS: dict[str, dict[str, Any]] = {
     "assess": {
         "standalone_name": "assess",
         "standalone_description": (

@@ -22,6 +22,9 @@ import numpy as np
 # helpers (rgba_to_hex / blend_to_grey / adaptive_cap) - e.g. the doc-graph
 # renderer - don't have to depend on it.
 
+# One coloured treemap input row: (path, size, metric, source, rgba fill).
+ColoredFile = tuple[Path, int, float, str, tuple]
+
 
 @dataclass
 class Node:
@@ -52,7 +55,7 @@ class Node:
     hatch: str = ""
 
 
-def build_tree(files_with_color, root: Path,
+def build_tree(files_with_color: list[ColoredFile], root: Path,
                aux_data: dict[Path, int] | None = None,
                aux_label: str = "",
                node_overrides: dict[Path, dict] | None = None,

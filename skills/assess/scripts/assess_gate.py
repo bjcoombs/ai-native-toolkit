@@ -267,7 +267,8 @@ def _format_generated_disclosure(excluded_generated: list | None) -> str:
 def load_context(repo_root: Path) -> dict[str, Any]:
     """Load ``.assess/run-context.json`` from a repo root."""
     ctx_path = repo_root / ".assess" / "run-context.json"
-    return json.loads(ctx_path.read_text(encoding="utf-8"))
+    ctx: dict[str, Any] = json.loads(ctx_path.read_text(encoding="utf-8"))
+    return ctx
 
 
 def main(argv: list[str] | None = None) -> int:

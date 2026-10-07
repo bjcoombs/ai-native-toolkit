@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .heuristics import compute_cheap_heuristics
+from .heuristics import CoverageData, compute_cheap_heuristics
 from .mutation import (
     compute_gap_signal,
     compute_survivor_density,
@@ -46,7 +46,7 @@ class TestPressureResult:
         }
 
 
-def _overall_coverage(coverage_data) -> float | None:
+def _overall_coverage(coverage_data: CoverageData | None) -> float | None:
     """Reduce coverage_data to a single line-coverage ratio, if supplied.
     We only have covered lines, not total lines, so we cannot compute a true
     ratio here - return None unless an explicit ``{"_overall": ratio}`` is
@@ -59,7 +59,8 @@ def _overall_coverage(coverage_data) -> float | None:
 
 
 def scan_test_pressure(repo_root: Path, hot_files: list | None = None,
-                       opt_in: bool = False, coverage_data=None) -> dict:
+                       opt_in: bool = False,
+                       coverage_data: CoverageData | None = None) -> dict:
     """Top-level Layer-1 write-side scan. Merges the mutation tier and the cheap
     always-on heuristics into one ``test_pressure`` block ready to drop into
     run-context.json. Never raises.

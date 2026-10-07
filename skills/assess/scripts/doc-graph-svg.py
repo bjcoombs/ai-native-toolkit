@@ -40,6 +40,7 @@ import argparse
 import html
 import math
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -47,7 +48,7 @@ import networkx as nx
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib.doc_graph import build_doc_graph
+from lib.doc_graph import DocGraphResult, build_doc_graph
 from lib.doc_graph_layout import classify_node, group_broken_links, radial_shells
 from lib.assess_config import load_working_notes_config, resolve_excludes
 from lib.doc_staleness import analyze_doc_staleness
@@ -136,7 +137,7 @@ def _doc_lines(repo_root: Path, rel: str) -> int:
         return 1
 
 
-def _radial_positions(graph, entries: set[str], cx: float, cy: float, fit: float) -> dict:
+def _radial_positions(graph: nx.DiGraph, entries: set[str], cx: float, cy: float, fit: float) -> dict:
     """Concentric rings by link-distance from the entry points.
 
     Centre = entry; ring k = docs k hops away (following links); everything
@@ -156,7 +157,7 @@ def _radial_positions(graph, entries: set[str], cx: float, cy: float, fit: float
     return {n: (cx + x / max_r * fit, cy + y / max_r * fit) for n, (x, y) in raw.items()}
 
 
-def _render_ghosts(broken_links: list[dict], pos: dict, radius,
+def _render_ghosts(broken_links: list[dict], pos: dict, radius: Callable[[str], float],
                    show_labels: bool = False) -> str:
     """Draw one 'ghost' node per missing file — not per broken link. Several links
     to the same absent target (e.g. README.md and CONTRIBUTING.md both pointing at
@@ -263,12 +264,13 @@ class _NodePainter:
     language. "status" is the older navigability-by-colour mode, kept as an
     option."""
 
-    def __init__(self, result, nodes: list[str], repo_root: Path, *, size_mode: str,
-                 colour: str, staleness: dict | None) -> None:
+    def __init__(self, result: DocGraphResult, nodes: list[str], repo_root: Path, *,
+                 size_mode: str, colour: str, staleness: dict | None) -> None:
         graph = result.graph
+        assert graph is not None, "main() rejects a doc graph result with no graph"
         pr = result.pagerank or {x: 1.0 / max(len(nodes), 1) for x in nodes}
-        self.in_deg = dict(graph.in_degree())
-        self.out_deg = dict(graph.out_degree())
+        self.in_deg: dict[str, int] = dict(graph.in_degree())
+        self.out_deg: dict[str, int] = dict(graph.out_degree())
         self.entries = set(result.entry_points)
         self.unreachable = set(result.unreachable)
         self.orphans = set(result.orphans)
@@ -337,7 +339,7 @@ def _canvas(layout: str) -> tuple[float, float, float, float]:
     return 1600.0, 1000.0, 110.0, 0.0
 
 
-def _web_positions(graph, nodes: list[str], painter: _NodePainter, cw: float,
+def _web_positions(graph: nx.DiGraph, nodes: list[str], painter: _NodePainter, cw: float,
                    ch: float) -> tuple[dict, list[str], float]:
     """Two-panel: linked web (force) + isolated-docs grid.
 
@@ -391,7 +393,7 @@ def _isolated_panel(count: int, web_right: float, cw: float, ch: float) -> list[
     ]
 
 
-def _edge_lines(graph, pos: dict, radius) -> list[str]:
+def _edge_lines(graph: nx.DiGraph, pos: dict, radius: Callable[[str], float]) -> list[str]:
     """Edges, drawn first so they sit under the nodes. Each arrow is pulled back
     to the target's rim."""
     out: list[str] = []
@@ -438,10 +440,11 @@ def _node_circles(nodes: list[str], pos: dict, painter: _NodePainter,
     return out
 
 
-def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
+def render(result: DocGraphResult, out_path: Path, repo_root: Path, *, layout: str = "radial",
            size_mode: str = "lines", colour: str = "staleness",
            staleness: dict | None = None, show_labels: bool = False) -> None:
     graph = result.graph
+    assert graph is not None, "main() rejects a doc graph result with no graph"
     nodes = list(graph.nodes())
     n = len(nodes)
     painter = _NodePainter(result, nodes, repo_root, size_mode=size_mode,
@@ -473,15 +476,16 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
           f"{result.reachability_pct:.0%}  entries={sorted(painter.entries)}")
 
 
-def _graph_counts(result, n: int) -> str:
+def _graph_counts(result: DocGraphResult, n: int) -> str:
     """'3 docs, 1 edge, 1 island': the counts the title and stdout summary share."""
+    assert result.graph is not None, "main() rejects a doc graph result with no graph"
     edges = result.graph.number_of_edges()
     islands = result.island_count
     return (f"{n} {plural(n, 'doc')}, {edges} {plural(edges, 'edge')}, "
             f"{islands} {plural(islands, 'island')}")
 
 
-def _title(result, n: int, cw: float) -> str:
+def _title(result: DocGraphResult, n: int, cw: float) -> str:
     """Two centred lines at the top: headline + one-line stats."""
     mid = cw / 2
     links = len(result.broken_links)
