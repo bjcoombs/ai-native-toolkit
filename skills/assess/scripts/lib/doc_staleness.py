@@ -24,7 +24,10 @@ the doc to be *behind* its subject now: a doc edited after its subject's last
 change has ratio 0, whatever the window ratio says. Both sides use author time
 (``%at``), so a code commit authored before the doc fix but merged after it
 (a long-lived branch, a rebase that keeps author dates) does not count as
-behind - the same trade the content clock makes.
+behind - the same trade the content clock makes. Bulk mechanical commits are
+skipped on the doc side only: a code-only sweep after a doc fix (a formatter
+run, a licence-header pass over source files) counts in full on the code side,
+which is the one route left by which a just-corrected doc can be re-flagged.
 
 Associating a doc with the code it describes uses the **nearest-ancestor
 base-doc rule** (same nearest-match logic as ``CODEOWNERS`` / ``.gitignore``):
