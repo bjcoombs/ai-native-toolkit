@@ -9,6 +9,7 @@ that the result is well-formed YAML when a parser is available.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 
@@ -93,6 +94,24 @@ def test_render_pins_actions_to_commit_shas():
         ref = line.split("@", 1)[1].split("#", 1)[0].strip()
         assert re.fullmatch(r"[0-9a-f]{40}", ref), f"not SHA-pinned: {line.strip()}"
         assert re.search(r"#\s*v\d", line), f"missing version comment: {line.strip()}"
+
+
+def test_checkout_pin_matches_repo_workflow_and_readme():
+    """The emitted checkout pin must not drift from this repo's own gate
+    workflow or the README snippet when Dependabot bumps one of them."""
+    repo = Path(__file__).resolve().parents[3]
+    pin = re.compile(r"actions/checkout@[0-9a-f]{40}\s+# v\d+\.\d+\.\d+")
+
+    def checkout_pin(text: str) -> str:
+        found = pin.search(text)
+        assert found, "no SHA-pinned actions/checkout line"
+        return found.group(0)
+
+    emitted = checkout_pin(render_ci_workflow(plugin_version="1.23.0"))
+    workflow = (repo / ".github" / "workflows" / "assess-gate.yml").read_text()
+    readme = (repo / "README.md").read_text()
+    assert emitted == checkout_pin(workflow)
+    assert emitted == checkout_pin(readme)
 
 
 def test_checkout_does_not_persist_credentials():
