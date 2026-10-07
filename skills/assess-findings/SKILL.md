@@ -155,7 +155,11 @@ Open with the **coverage provenance line** from `.coverage_report`, so a reader 
 - `available: true` → _"Coverage data: `<source>` (Cobertura)"_ (name the report file from `.coverage_report.source`; the format is `cobertura` or `lcov`).
 - `available: false` → _"Coverage data: none found - test signals are heuristic-only."_
 
-Follow it with the **coverage gate line** from `.coverage_gate`: when `enforced` is true, _"Coverage gate: `<file>:<line>` (`<form>` `<threshold>`)"_ for each gate (the threshold as written, with `ratio` appended for a JaCoCo ratio); when false, _"Coverage gate: none detected"_.
+Follow it with the **coverage gate line** from `.coverage_gate`:
+
+- `available: false` (the scan failed) → _"Coverage gate: scan failed (`<reason>`)"_. Never render a failed scan as "none detected".
+- `enforced: true` → _"Coverage gate: `<file>:<line>` (`<form>` `<threshold>`)"_ for each gate: the threshold as written, with `ratio` appended for a JaCoCo ratio. A `threshold: null` reads "tool default" for an nyc/c8 `check-coverage` and "threshold not read" for any other tool.
+- `enforced: false` → _"Coverage gate: none detected"_.
 
 Then the table, one row per entry, mapping the raw `.test_focus.entries` values to human-readable labels:
 

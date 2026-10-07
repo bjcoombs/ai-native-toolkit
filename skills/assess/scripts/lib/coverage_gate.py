@@ -76,7 +76,7 @@ _METRIC_RE = {
 
 # JaCoCo: Maven ``<minimum>`` and Gradle ``minimum = 0.8`` / ``BigDecimal("0.8")``.
 _JACOCO_GRADLE = {"build.gradle", "build.gradle.kts"}
-_POM_MINIMUM_RE = re.compile(r"<minimum>\s*" + _NUM + r"%?\s*</minimum>")
+_POM_MINIMUM_RE = re.compile(r"<minimum>\s*" + _NUM + r"\s*(%?)\s*</minimum>")
 _POM_COUNTER_RE = re.compile(r"<counter>\s*(\w+)\s*</counter>")
 _GRADLE_MINIMUM_RE = re.compile(r"\bminimum\s*=\s*[^0-9\n]{0,20}?" + _NUM)
 _GRADLE_COUNTER_RE = re.compile(r"\bcounter\s*=\s*[\"'](\w+)[\"']")
@@ -91,6 +91,8 @@ NOT_DETECTED: tuple[str, ...] = (
     "Kover `minBound`, sbt-scoverage `coverageMinimumStmtTotal`, "
     "cargo-tarpaulin `--fail-under`, SimpleCov `minimum_coverage`",
     "JaCoCo rules built programmatically or in a shared Gradle convention plugin",
+    "Vitest before 1.0: `lines` / `branches` directly under `coverage` with no "
+    "`thresholds` key",
 )
 
 
@@ -205,8 +207,11 @@ def _scan_jacoco(rel: str, lines: list[str], minimum: re.Pattern[str],
     for idx, line in enumerate(lines, 1):
         match = None if _is_comment(line) else minimum.search(line)
         if match:
+            # JaCoCo reads ``0.80`` as a ratio and ``80%`` as a percentage; the
+            # unit follows the ``%`` as written (Gradle's DSL takes ratios only).
             value = _num(match.group(1))
-            unit = "ratio" if value <= 1 else "percent"
+            has_percent = match.lastindex == 2 and match.group(2) == "%"
+            unit = "percent" if has_percent else "ratio"
             gates.append(_gate(rel, idx, "jacoco", form, value, unit,
                                _nearest_counter(lines, idx, counter)))
     return gates

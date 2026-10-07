@@ -188,6 +188,15 @@ def test_pom_jacoco_minimum_keeps_ratio(tmp_path: Path) -> None:
                     "unit": "ratio", "metric": "line"}
 
 
+def test_pom_jacoco_percent_minimum_is_percent(tmp_path: Path) -> None:
+    """``<minimum>1%</minimum>`` is one percent, not a ratio of 1."""
+    _write(tmp_path, "pom.xml",
+           "<project>\n  <artifactId>jacoco-maven-plugin</artifactId>\n"
+           "  <minimum>1%</minimum>\n</project>\n")
+    gate = _only_gate(tmp_path)
+    assert (gate["threshold"], gate["unit"]) == (1.0, "percent")
+
+
 def test_pom_minimum_without_jacoco_is_ignored(tmp_path: Path) -> None:
     _write(tmp_path, "pom.xml", "<project>\n  <minimum>0.80</minimum>\n</project>\n")
     assert detect_coverage_gate(tmp_path)["gates"] == []
