@@ -59,8 +59,10 @@ jobs:
           timeout --signal=INT --kill-after=60s 45m \
             uv run --with mutmut==3.8.0 --with pytest \
             mutmut run --max-children "$(nproc)" || rc=$?
-          if [ "$rc" -eq 124 ]; then
-            echo "::warning::mutmut hit the 45m budget; the score below is partial"
+          # 124: stopped by SIGINT at the budget. 137: ignored SIGINT for the
+          # 60s grace and was killed. Both are an overrun, not a mutmut fault.
+          if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+            echo "::warning::mutmut hit the 45m budget (exit $rc); the score below is partial"
           elif [ "$rc" -ne 0 ]; then
             exit "$rc"
           fi
