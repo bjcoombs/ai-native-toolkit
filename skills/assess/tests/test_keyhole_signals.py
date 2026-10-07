@@ -636,7 +636,6 @@ def test_integrate_attention_tie_break_uses_top_hotspots(tmp_path: Path) -> None
     assert [u["path"] for u in out["attention"]] == ["c.py", "b.py", "a.py"]
 
 
-
 def test_integrate_unactioned_intent_silent_when_aging_unreliable(tmp_path: Path) -> None:
     """Thin history reads "not assessed": stale markers never become a finding."""
     pm = {"available": True, "aging_reliable": False,
@@ -664,6 +663,7 @@ def test_integrate_untrusted_hotspot_wired_from_test_pressure(tmp_path: Path) ->
         ks.integrate(**common, test_pressure=pressure), "untrusted_hotspot"
     ) == ["src/hot.py"]
     assert _finding_paths(ks.integrate(**common), "untrusted_hotspot") == []
+
 
 # --- Task 2: render_findings_markdown ----------------------------------------
 
