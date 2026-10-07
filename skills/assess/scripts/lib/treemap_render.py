@@ -210,10 +210,6 @@ def _survivor_legend_parts(W: float, H: float) -> list[str]:
     return parts
 
 
-# Default accessible name/description for the code heatmap. Passed as the root
-# <svg>'s <title>/<desc> (a11y metadata) so a screen reader announces what the
-# image is and how its channels encode; kept as defaults on write_svg so a
-# future consumer (e.g. a docs heatmap) can override without touching callers.
 def plural(n: float, singular: str, plural_form: str | None = None) -> str:
     """The noun for a count of ``n``: ``singular`` when ``n`` is 1, else the
     plural (``singular + "s"`` unless ``plural_form`` is given). Returns the word
@@ -224,6 +220,10 @@ def plural(n: float, singular: str, plural_form: str | None = None) -> str:
     return plural_form if plural_form is not None else singular + "s"
 
 
+# Default accessible name/description for the code heatmap. Passed as the root
+# <svg>'s <title>/<desc> (a11y metadata) so a screen reader announces what the
+# image is and how its channels encode; kept as defaults on write_svg so a
+# future consumer (e.g. a docs heatmap) can override without touching callers.
 DEFAULT_SVG_TITLE = "Complexity Hotspot Heatmap"
 DEFAULT_SVG_DESC = (
     "Treemap showing code complexity by file size, hue indicates cyclomatic "
