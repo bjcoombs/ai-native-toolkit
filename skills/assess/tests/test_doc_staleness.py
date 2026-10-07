@@ -707,3 +707,54 @@ def test_generated_doc_provenance_unaffected_by_cap(git_repo) -> None:
     assert readme["provenance"]["source_newer"] is True
     assert readme["code_churn_since_doc_change"] == 0
     assert _lying_map_paths(r, repo) == ["README.md"]
+
+
+def test_failed_commit_read_falls_back_to_window_ratio(git_repo, monkeypatch) -> None:
+    """Honest degrade: when the per-commit read fails, the cap is not applied
+    and the doc reports the uncapped window ratio with no since-doc count."""
+    import lib.doc_staleness as ds
+
+    repo, commit = git_repo
+    _churn_then_fix(repo, commit)
+    monkeypatch.setattr(ds, "commit_epochs_by_file", lambda *_a, **_k: None)
+
+    r = analyze_doc_staleness(repo)
+    readme = next(d for d in r["docs"] if d["path"] == "README.md")
+    assert readme["code_churn_since_doc_change"] is None
+    assert readme["ratio"] == readme["window_ratio"] >= 5
+
+
+def test_window_since_maps_every_churn_window_label() -> None:
+    """The cap reads the same window `pick_churn_window` chose; an unmatched
+    label would silently widen it to full history."""
+    from lib.doc_staleness import _window_since
+    from lib.git_churn import CHURN_WINDOWS
+
+    for label, since in CHURN_WINDOWS:
+        assert _window_since(f"commits ({label})") == since
+    assert _window_since(None) is None
+
+
+def test_repo_baseline_doc_is_capped_by_repo_wide_churn(git_repo) -> None:
+    """A floating doc (no derivable subject) measures churn after it against
+    every code file."""
+    repo, commit = git_repo
+    (repo / "pkg").mkdir()
+    (repo / "pkg" / "app.py").write_text("v = 0", encoding="utf-8")
+    (repo / "notes").mkdir()
+    (repo / "notes" / "design.md").write_text("design", encoding="utf-8")
+    commit("initial", days_ago=200)
+    for i in range(4):
+        (repo / "pkg" / "app.py").write_text(f"v = {i + 1}", encoding="utf-8")
+        commit(f"change {i}", days_ago=100 - i * 5)
+    (repo / "notes" / "design.md").write_text("design v2", encoding="utf-8")
+    commit("docs: refresh design", days_ago=50)
+    (repo / "pkg" / "app.py").write_text("v = 9", encoding="utf-8")
+    commit("after doc", days_ago=10)
+
+    r = analyze_doc_staleness(repo)
+    design = next(d for d in r["docs"] if d["path"] == "notes/design.md")
+    assert design["subject_method"] == "repo-baseline"
+    assert design["subject_code_count"] == 1
+    assert design["code_churn_since_doc_change"] == 1
+    assert design["ratio"] == 1.0
