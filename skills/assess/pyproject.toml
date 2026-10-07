@@ -98,9 +98,13 @@ enable_error_code = ["ignore-without-code"]
 # by git). mutmut 3 names a mutant after its file path with only a leading
 # "src." stripped, so scripts/lib/x.py would be keyed scripts.lib.x while the
 # tests import it as lib.x (pythonpath = scripts) and no mutant would match.
-# Run locally from skills/assess:
+# Run locally from skills/assess, then clean up: /assess's file walks do not
+# prune mutants/ (copies of the sources and tests) or the src link, so a later
+# /assess of this checkout would count those files twice.
 #   ln -sfn scripts src
 #   uv run --with mutmut==3.8.0 --with pytest mutmut run
+#   uv run --with mutmut==3.8.0 --with pytest mutmut results   # survivors
+#   rm -rf mutants src
 source_paths = ["src"]
 only_mutate = [
     "src/lib/stats_diff.py",
