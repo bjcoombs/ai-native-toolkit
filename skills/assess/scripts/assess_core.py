@@ -1037,6 +1037,304 @@ def resolve_scope(
     return scope_abs, str(rel), slug
 
 
+def _assess_dir_for(repo_root: Path, scope_slug: str) -> Path:
+    """The artifact directory: .assess/, or .assess/<slug>/ for a scoped run."""
+    return repo_root / ".assess" / scope_slug if scope_slug else repo_root / ".assess"
+
+
+def _load_current_stats(assess_dir: Path) -> dict:
+    """This run's complexity stats, or an empty snapshot when none was written."""
+    return load_stats(assess_dir / "complexity-stats.json") or {
+        "files_scored": 0, "top_hotspots": [], "top_complex": [], "top_large": [],
+        "loc": {}, "ccn": {},
+    }
+
+
+def _prior_stamps(prior: dict | None) -> tuple[Any, Any]:
+    """The prior snapshot's (plugin_version, schema_version), None when absent."""
+    prior_version = prior.get("plugin_version") if prior else None
+    prior_schema = prior.get("schema_version") if prior else None
+    return prior_version, prior_schema
+
+
+def _dict_or(value: Any, default: Any) -> Any:
+    """``value`` when it is a dict (a scan block), else ``default``."""
+    return value if isinstance(value, dict) else default
+
+
+def _doc_to_code_edges(doc_graph: dict) -> list:
+    """The doc graph's doc->code edges, empty when the graph is unavailable."""
+    return (doc_graph.get("doc_to_code_edges", [])
+            if doc_graph.get("available") else [])
+
+
+def _hotspot_status_map(diff: StatsDiff) -> dict[str, str]:
+    """Which paths are graduated, new, regressed, persistent (later lists win)."""
+    status_map: dict[str, str] = {}
+    for h in diff.graduated:
+        status_map[h.path] = "graduated"
+    for h in diff.new:
+        status_map[h.path] = "new"
+    for h in diff.regressed:
+        status_map[h.path] = "regressed"
+    for h in diff.persistent:
+        status_map[h.path] = "persistent"
+    return status_map
+
+
+def _write_current_hotspot_page(
+    h: dict, *, assess_dir: Path, repo_root: Path, run_date: str, run_id: str,
+    status_map: dict[str, str], first_flagged_map: dict[str, str],
+    hot_shared_names: frozenset[str], hot_test_index: TestIndex | None,
+    marker_debt_by_file: dict, accretion_by_file: dict,
+) -> HotspotEntry:
+    """Write one current top hotspot's wiki page and return its index entry.
+
+    Mutates ``first_flagged_map`` when the path has no recorded date yet.
+    """
+    path = h["path"]
+    # Preserve the original first_flagged date across runs. A path missing
+    # from the map is either genuinely new this run (stamp today) or it was
+    # present in the prior snapshot but we have no recorded date - e.g. the
+    # prior stats were seeded without first-flagged.json. In the latter case
+    # it predates this run, so an honest "unknown" beats a wrong today.
+    if path not in first_flagged_map:
+        first_flagged_map[path] = (
+            run_date if status_map.get(path) == "new" else "unknown"
+        )
+    first_flagged = first_flagged_map[path]
+    status = status_map.get(path, "active")
+    commits = hotspot_commits(h)
+    loc = h.get("loc", 0)
+    ccn = h.get("ccn", 0)
+    max_fn_ccn = h.get("max_fn_ccn")
+    max_fn_name = h.get("max_fn_name")
+    worst_fn = (
+        f" (worst function `{max_fn_name}` {format_ccn(max_fn_ccn)})"
+        if max_fn_ccn is not None and max_fn_name else ""
+    )
+    entry = HotspotEntry(
+        path=path,
+        first_flagged=first_flagged,
+        last_seen=run_date,
+        status=status,
+        ccn=ccn,
+        loc=loc,
+    )
+    write_hotspot_page(
+        assess_dir,
+        path=path,
+        first_flagged=first_flagged,
+        last_seen=run_date,
+        status=status,
+        loc=loc,
+        ccn=ccn,
+        commits=commits,
+        has_tests=_has_sibling_test(repo_root, path, hot_shared_names,
+                                    hot_test_index),
+        briefing=(
+            f"Hotspot ({status}). "
+            f"{loc} LOC, "
+            f"aggregate cyclomatic complexity {format_ccn(ccn)}{worst_fn}, "
+            f"{commits} commits in churn window. "
+            + _marker_debt_sentence(marker_debt_by_file.get(path))
+            + "(Briefing refined by LLM via assess_finalize - see Suggested actions below.)"
+        ),
+        actions=UNFINALIZED_ACTIONS_POINTER,
+        accretion_data=accretion_by_file.get(path),
+        run_id=run_id,
+        schema_version=ARTIFACT_SCHEMA_VERSION,
+        max_fn_ccn=max_fn_ccn,
+        max_fn_name=max_fn_name,
+    )
+    return entry
+
+
+def _write_current_hotspot_pages(
+    current: dict, *, assess_dir: Path, repo_root: Path, run_date: str,
+    run_id: str, status_map: dict[str, str], first_flagged_map: dict[str, str],
+    superseded: dict | None, marker_debt_by_file: dict, accretion_by_file: dict,
+) -> tuple[list[HotspotEntry], TestIndex | None]:
+    """Write a page per current top hotspot; return the entries and test index.
+
+    Sweeps the superseded run's history before the first page is written.
+    """
+    hotspot_entries: list[HotspotEntry] = []
+    # Same flat-tree disambiguation the test_focus block applies to these files.
+    hot_shared_names = shared_name_keys(
+        h["path"] for h in current.get("top_hotspots", []))
+    # One repository index for every hot file's parallel-tree (basename) probe.
+    hot_test_index = build_test_index(repo_root) if current.get("top_hotspots") else None
+    _sweep_superseded_history(assess_dir, superseded)
+    for h in current.get("top_hotspots", []):
+        hotspot_entries.append(_write_current_hotspot_page(
+            h, assess_dir=assess_dir, repo_root=repo_root, run_date=run_date,
+            run_id=run_id, status_map=status_map,
+            first_flagged_map=first_flagged_map,
+            hot_shared_names=hot_shared_names, hot_test_index=hot_test_index,
+            marker_debt_by_file=marker_debt_by_file,
+            accretion_by_file=accretion_by_file,
+        ))
+    return hotspot_entries, hot_test_index
+
+
+def _graduated_hotspot_entries(
+    diff: StatsDiff, current: dict, first_flagged_map: dict[str, str], run_date: str,
+) -> list[HotspotEntry]:
+    """Index entries for this run's graduated hotspots, with current metrics."""
+    current_locs, current_ccns = _current_metrics_by_path(current)
+    return [
+        HotspotEntry(
+            path=h.path,
+            # Graduated means it was a prior hotspot; if we have no recorded
+            # first-flagged date, it predates this run - "unknown", not today.
+            first_flagged=first_flagged_map.get(h.path, "unknown"),
+            last_seen=run_date,
+            status="graduated",
+            ccn=current_ccns.get(h.path),
+            loc=current_locs.get(h.path),
+        )
+        for h in diff.graduated
+    ]
+
+
+def _current_metrics_by_path(current: dict) -> tuple[dict[str, int], dict[str, int]]:
+    """Per-path LOC and CCN merged across the three top-N lists in ``current``.
+
+    The first list that carries a metric for a path wins; a metric absent from
+    every list stays absent (the wiki renders it as "-", never a zero).
+    """
+    current_locs: dict[str, int] = {}
+    current_ccns: dict[str, int] = {}
+    for src_key in ("top_hotspots", "top_complex", "top_large"):
+        for entry in current.get(src_key, []):
+            path = entry.get("path")
+            if not path:
+                continue
+            loc = entry.get("loc")
+            ccn = entry.get("ccn")
+            if loc is not None and path not in current_locs:
+                current_locs[path] = int(loc)
+            if ccn is not None and path not in current_ccns:
+                current_ccns[path] = int(ccn)
+    return current_locs, current_ccns
+
+
+def _instruction_file_size(instruction_files: dict) -> dict:
+    """Line/word counts and bloat penalty per graded instruction file."""
+    return {
+        path: {
+            "line_count": meta["subscores"].get("line_count", 0),
+            "word_count": meta["subscores"].get("word_count", 0),
+            "bloat_penalty": meta["subscores"].get("bloat_penalty", 0),
+        }
+        for path, meta in instruction_files.items()
+    }
+
+
+def _attach_liveness_blocks(ctx: dict[str, Any], liveness: Any) -> None:
+    """Set dead_code / observability, plus the capability keys when detected."""
+    # When the scan failed, preserve failure semantics: a failed scan must not be
+    # read as "no observability" (rung 0) - that would mis-score Layer 1 Missing
+    # when the truth is "not assessed". Carry the reason instead.
+    liveness_ok = isinstance(liveness, dict) and "dead_code" in liveness
+    reason = (liveness.get("reason", "liveness scan unavailable")
+              if isinstance(liveness, dict) else "liveness scan unavailable")
+    ctx["dead_code"] = (
+        liveness["dead_code"] if liveness_ok
+        else {"available": False, "candidate_count": 0, "candidates": [],
+              "tools": [], "reason": reason}
+    )
+    ctx["observability"] = (
+        liveness["observability"] if liveness_ok
+        else {"rung": None, "available": False, "reason": reason,
+              "instrumented": {"present": False, "signals": []},
+              "discoverable": {"present": False, "signals": []},
+              "reachable": {"present": False, "signals": []}}
+    )
+    # Capability-driven JVM offers (issue #113): present only when a Maven/Gradle
+    # project is detected, so non-JVM repos carry no extra key (the run-context
+    # baseline stays stable). Names each unserved capability + a candidate tool
+    # (honest-degrade) and the liveness run/install-consent offer the Step 2
+    # offer-layer turns into an AskUserQuestion.
+    if liveness_ok and isinstance(liveness.get("jvm_capabilities"), dict):
+        ctx["capability_offers"] = liveness["jvm_capabilities"]
+    # Non-JVM capability entries keyed by language (issue #352), present only
+    # when a language is detected; capability_offers stays JVM-only.
+    if liveness_ok and isinstance(liveness.get("dart_capabilities"), dict):
+        ctx["language_capabilities"] = {
+            "dart": liveness["dart_capabilities"]["capabilities"]}
+
+
+def _coverage_report_block(cov_detect: Any, coverage_data: Any) -> dict:
+    """Provenance of the coverage report read (or "none found")."""
+    if cov_detect:
+        return {
+            "available": True,
+            "source": cov_detect["source"],
+            "format": cov_detect["format"],
+            "parsed": coverage_data is not None,
+        }
+    return {"available": False, "source": "none found"}
+
+
+def _attach_keyhole_blocks(ctx: dict[str, Any], keyhole: dict) -> None:
+    """Copy the keyhole signal blocks and report-skeleton products into ctx."""
+    ctx["structure"] = keyhole["structure"]
+    ctx["behaviour"] = keyhole["behaviour"]
+    ctx["documentation"] = keyhole["documentation"]
+    ctx["understanding"] = keyhole["understanding"]
+    ctx["runtime"] = keyhole["runtime"]
+    ctx["derived_findings"] = keyhole["derived_findings"]
+    ctx["attention"] = keyhole["attention"]
+    ctx["attention_low_signal"] = keyhole["attention_low_signal"]
+    # Deterministic report-skeleton products (assess-dogfooded Part 1): the
+    # pre-rendered findings section the LLM copies verbatim, the keyhole
+    # readiness summary reported alongside (never merged into) the 0-8 score, and
+    # the mandatory attention-derived Top-3 actions.
+    ctx["findings_markdown"] = keyhole["findings_markdown"]
+    ctx["keyhole_summary"] = keyhole["keyhole_summary"]
+    ctx["prescribed_actions"] = keyhole["prescribed_actions"]
+
+
+def _attach_exclusion_disclosures(
+    ctx: dict[str, Any], keyhole: dict,
+    extra_exclude_dirs: Any, extra_exclude_patterns: Any,
+) -> None:
+    """Set the config / archive / dead-path finding-exclusion disclosure blocks."""
+    # Config-exclusion disclosure: config excludes silently drop paths from every
+    # scan, so a finding suppressed by an exclude must be counted and named rather
+    # than vanish. keyhole_signals filtered the excluded finding paths; this block
+    # records the active excludes alongside the paths that would otherwise have
+    # been findings, so the gate and report can surface the suppression.
+    excluded_finding_paths = keyhole.get("excluded_finding_paths", [])
+    ctx["excluded_by_config"] = {
+        "dirs": sorted(extra_exclude_dirs),
+        "patterns": list(extra_exclude_patterns),
+        "affected_finding_paths": excluded_finding_paths,
+        "count": len(excluded_finding_paths),
+    }
+    # Archive disclosure: paths under archive/, archived/ or attic/ are kept out
+    # of attention and prescribed_actions; this block names and counts them so
+    # the exclusion is visible. Mirrors excluded_by_config's path/count shape.
+    archived_finding_paths = keyhole.get("archived_finding_paths", [])
+    ctx["excluded_as_archive"] = {
+        "affected_finding_paths": archived_finding_paths,
+        "count": len(archived_finding_paths),
+    }
+    # Dead-path disclosure: a git-history finding path that no longer exists
+    # (deleted, with no rename to follow) is dropped from the findings,
+    # attention, prescribed actions and markdown; this block names and counts it.
+    # rename_map_complete False means git history could not be read for renames:
+    # nothing was folded or pruned, and a finding may still name an old path.
+    pruned_finding_paths = keyhole.get("pruned_finding_paths", [])
+    ctx["pruned_finding_paths"] = {
+        "paths": pruned_finding_paths,
+        "count": len(pruned_finding_paths),
+        "rename_map_complete": keyhole.get("rename_map_complete", True),
+    }
+
+
 def build_run_context(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
     scope: Path | None = None,
@@ -1058,16 +1356,13 @@ def build_run_context(
     Side effects: writes index.md, log.md, hotspots/*.md, run-context.json.
     """
     scope_abs, scope_rel, scope_slug = resolve_scope(repo_root, scope)
-    assess_dir = repo_root / ".assess" / scope_slug if scope_slug else repo_root / ".assess"
+    assess_dir = _assess_dir_for(repo_root, scope_slug)
     assess_dir.mkdir(parents=True, exist_ok=True)
     # Unique id minted once at the top of the run and stamped on every artifact
     # this build produces, so finalize can prove the finalize-input it later
     # consumes was authored against *this* run-context and not a stale one.
     run_id = _new_run_id()
-    current = load_stats(assess_dir / "complexity-stats.json") or {
-        "files_scored": 0, "top_hotspots": [], "top_complex": [], "top_large": [],
-        "loc": {}, "ccn": {},
-    }
+    current = _load_current_stats(assess_dir)
     prior = load_stats(assess_dir / "complexity-stats.prior.json")
     prior_exists = prior is not None
 
@@ -1081,9 +1376,8 @@ def build_run_context(
     #   3. the prior snapshot never stamped a version - comparability can't be
     #      established, so "graduated" entries may be phantom filter transitions.
     # A mere MINOR/PATCH plugin bump keeps the diff reliable and the gate armed.
-    prior_version = prior.get("plugin_version") if prior else None
+    prior_version, prior_schema = _prior_stamps(prior)
     current_schema = current.get("schema_version")
-    prior_schema = prior.get("schema_version") if prior else None
     current_tools = _stats_tool_versions(current)
     prior_tools = _stats_tool_versions(prior)
     diff_reliable, diff_version_note, diff_trend_reset = _compute_diff_reliability(
@@ -1162,81 +1456,16 @@ def build_run_context(
     # unavailable - graceful degradation: those files just get no growth line.
     accretion_by_file = _accretion_lookup(accretion_scan)
 
-    # Build status map: which paths are graduated, new, regressed, persistent
-    status_map: dict[str, str] = {}
-    for h in diff.graduated:
-        status_map[h.path] = "graduated"
-    for h in diff.new:
-        status_map[h.path] = "new"
-    for h in diff.regressed:
-        status_map[h.path] = "regressed"
-    for h in diff.persistent:
-        status_map[h.path] = "persistent"
+    status_map = _hotspot_status_map(diff)
 
     # Wiki: hotspot pages for current top hotspots
-    hotspot_entries: list[HotspotEntry] = []
-    # Same flat-tree disambiguation the test_focus block applies to these files.
-    hot_shared_names = shared_name_keys(
-        h["path"] for h in current.get("top_hotspots", []))
-    # One repository index for every hot file's parallel-tree (basename) probe.
-    hot_test_index = build_test_index(repo_root) if current.get("top_hotspots") else None
-    _sweep_superseded_history(assess_dir, superseded)
-    for h in current.get("top_hotspots", []):
-        path = h["path"]
-        # Preserve the original first_flagged date across runs. A path missing
-        # from the map is either genuinely new this run (stamp today) or it was
-        # present in the prior snapshot but we have no recorded date - e.g. the
-        # prior stats were seeded without first-flagged.json. In the latter case
-        # it predates this run, so an honest "unknown" beats a wrong today.
-        if path not in first_flagged_map:
-            first_flagged_map[path] = (
-                run_date if status_map.get(path) == "new" else "unknown"
-            )
-        first_flagged = first_flagged_map[path]
-        status = status_map.get(path, "active")
-        commits = hotspot_commits(h)
-        loc = h.get("loc", 0)
-        ccn = h.get("ccn", 0)
-        max_fn_ccn = h.get("max_fn_ccn")
-        max_fn_name = h.get("max_fn_name")
-        worst_fn = (
-            f" (worst function `{max_fn_name}` {format_ccn(max_fn_ccn)})"
-            if max_fn_ccn is not None and max_fn_name else ""
-        )
-        hotspot_entries.append(HotspotEntry(
-            path=path,
-            first_flagged=first_flagged,
-            last_seen=run_date,
-            status=status,
-            ccn=ccn,
-            loc=loc,
-        ))
-        write_hotspot_page(
-            assess_dir,
-            path=path,
-            first_flagged=first_flagged,
-            last_seen=run_date,
-            status=status,
-            loc=loc,
-            ccn=ccn,
-            commits=commits,
-            has_tests=_has_sibling_test(repo_root, path, hot_shared_names,
-                                        hot_test_index),
-            briefing=(
-                f"Hotspot ({status}). "
-                f"{loc} LOC, "
-                f"aggregate cyclomatic complexity {format_ccn(ccn)}{worst_fn}, "
-                f"{commits} commits in churn window. "
-                + _marker_debt_sentence(marker_debt_by_file.get(path))
-                + "(Briefing refined by LLM via assess_finalize - see Suggested actions below.)"
-            ),
-            actions=UNFINALIZED_ACTIONS_POINTER,
-            accretion_data=accretion_by_file.get(path),
-            run_id=run_id,
-            schema_version=ARTIFACT_SCHEMA_VERSION,
-            max_fn_ccn=max_fn_ccn,
-            max_fn_name=max_fn_name,
-        )
+    hotspot_entries, hot_test_index = _write_current_hotspot_pages(
+        current, assess_dir=assess_dir, repo_root=repo_root, run_date=run_date,
+        run_id=run_id, status_map=status_map,
+        first_flagged_map=first_flagged_map, superseded=superseded,
+        marker_debt_by_file=marker_debt_by_file,
+        accretion_by_file=accretion_by_file,
+    )
 
     # Prune orphan hotspot pages: any page from a prior run whose source file no
     # longer exists on disk is stamped retired (history preserved) so no active
@@ -1259,31 +1488,8 @@ def build_run_context(
     # carry only `loc` - only top_hotspots carries both. When a metric
     # genuinely isn't present in any list, leave it as None - the wiki
     # renders None as "-" rather than misleading zeros (issue #52 Bug 1).
-    current_locs: dict[str, int] = {}
-    current_ccns: dict[str, int] = {}
-    for src_key in ("top_hotspots", "top_complex", "top_large"):
-        for entry in current.get(src_key, []):
-            path = entry.get("path")
-            if not path:
-                continue
-            loc = entry.get("loc")
-            ccn = entry.get("ccn")
-            if loc is not None and path not in current_locs:
-                current_locs[path] = int(loc)
-            if ccn is not None and path not in current_ccns:
-                current_ccns[path] = int(ccn)
-
-    for h in diff.graduated:
-        hotspot_entries.append(HotspotEntry(
-            path=h.path,
-            # Graduated means it was a prior hotspot; if we have no recorded
-            # first-flagged date, it predates this run - "unknown", not today.
-            first_flagged=first_flagged_map.get(h.path, "unknown"),
-            last_seen=run_date,
-            status="graduated",
-            ccn=current_ccns.get(h.path),
-            loc=current_locs.get(h.path),
-        ))
+    hotspot_entries.extend(
+        _graduated_hotspot_entries(diff, current, first_flagged_map, run_date))
 
     # Persist the updated first-flagged map for future runs
     _save_first_flagged(assess_dir, first_flagged_map)
@@ -1413,8 +1619,7 @@ def build_run_context(
         working_notes_dirs=working_notes.dirs,
         working_notes_ignore=working_notes.ignore,
     ).as_dict())
-    doc_to_code = (doc_graph.get("doc_to_code_edges", [])
-                   if doc_graph.get("available") else [])
+    doc_to_code = _doc_to_code_edges(doc_graph)
     doc_staleness = _safe(
         "doc_staleness",
         lambda: analyze_doc_staleness(
@@ -1441,9 +1646,7 @@ def build_run_context(
     # the treemap saturation axis is inactive. Single source of truth: the
     # doc-staleness block (lib.git_churn.churn_is_degenerate).
     ctx["churn_degenerate"] = bool(
-        doc_staleness.get("churn_degenerate", False)
-        if isinstance(doc_staleness, dict) else False
-    )
+        _dict_or(doc_staleness, {}).get("churn_degenerate", False))
     # Instruction-surface integrity (Layer 0): files present on disk but not
     # committed, and advertised-but-broken instruction references (dangling
     # symlinks + entry docs linking a missing instruction file). A broken
@@ -1476,44 +1679,8 @@ def build_run_context(
     ctx["skills_present"] = skills_info["skills_dirs_present"]
     ctx["skills_count"] = skills_info["skills_count"]
     ctx["skill_files"] = skills_info["skill_files"]
-    ctx["instruction_file_size"] = {
-        path: {
-            "line_count": meta["subscores"].get("line_count", 0),
-            "word_count": meta["subscores"].get("word_count", 0),
-            "bloat_penalty": meta["subscores"].get("bloat_penalty", 0),
-        }
-        for path, meta in instruction_files.items()
-    }
-    # When the scan failed, preserve failure semantics: a failed scan must not be
-    # read as "no observability" (rung 0) - that would mis-score Layer 1 Missing
-    # when the truth is "not assessed". Carry the reason instead.
-    liveness_ok = isinstance(liveness, dict) and "dead_code" in liveness
-    reason = (liveness.get("reason", "liveness scan unavailable")
-              if isinstance(liveness, dict) else "liveness scan unavailable")
-    ctx["dead_code"] = (
-        liveness["dead_code"] if liveness_ok
-        else {"available": False, "candidate_count": 0, "candidates": [],
-              "tools": [], "reason": reason}
-    )
-    ctx["observability"] = (
-        liveness["observability"] if liveness_ok
-        else {"rung": None, "available": False, "reason": reason,
-              "instrumented": {"present": False, "signals": []},
-              "discoverable": {"present": False, "signals": []},
-              "reachable": {"present": False, "signals": []}}
-    )
-    # Capability-driven JVM offers (issue #113): present only when a Maven/Gradle
-    # project is detected, so non-JVM repos carry no extra key (the run-context
-    # baseline stays stable). Names each unserved capability + a candidate tool
-    # (honest-degrade) and the liveness run/install-consent offer the Step 2
-    # offer-layer turns into an AskUserQuestion.
-    if liveness_ok and isinstance(liveness.get("jvm_capabilities"), dict):
-        ctx["capability_offers"] = liveness["jvm_capabilities"]
-    # Non-JVM capability entries keyed by language (issue #352), present only
-    # when a language is detected; capability_offers stays JVM-only.
-    if liveness_ok and isinstance(liveness.get("dart_capabilities"), dict):
-        ctx["language_capabilities"] = {
-            "dart": liveness["dart_capabilities"]["capabilities"]}
+    ctx["instruction_file_size"] = _instruction_file_size(instruction_files)
+    _attach_liveness_blocks(ctx, liveness)
 
     # Keyhole-readiness signals (PRD 2026-05-29): the static-structure,
     # behaviour (change-coupling / containment / static-vs-historical),
@@ -1551,16 +1718,7 @@ def build_run_context(
     # report can distinguish a real read from "none found".
     cov_detect = detect_coverage_report(repo_root)
     coverage_data = load_coverage_data(repo_root)
-    ctx["coverage_report"] = (
-        {
-            "available": True,
-            "source": cov_detect["source"],
-            "format": cov_detect["format"],
-            "parsed": coverage_data is not None,
-        }
-        if cov_detect
-        else {"available": False, "source": "none found"}
-    )
+    ctx["coverage_report"] = _coverage_report_block(cov_detect, coverage_data)
     test_pressure = _safe(
         "test_pressure",
         lambda: scan_test_pressure(repo_root, hot_files=hot_files, opt_in=False,
@@ -1606,71 +1764,28 @@ def build_run_context(
     keyhole = integrate_keyhole_signals(
         repo_root=repo_root,
         complexity_stats=current,
-        doc_staleness=doc_staleness if isinstance(doc_staleness, dict) else {},
+        doc_staleness=_dict_or(doc_staleness, {}),
         dead_code=ctx["dead_code"],
         observability=ctx["observability"],
         structure=structure,
         test_pressure=ctx["test_pressure"],
-        promissory_markers=promissory if isinstance(promissory, dict) else None,
+        promissory_markers=_dict_or(promissory, None),
         accretion_ratchet=ctx["accretion_ratchet"],
-        archetype=ctx["archetype"] if isinstance(ctx.get("archetype"), dict) else None,
+        archetype=_dict_or(ctx.get("archetype"), None),
         exclude_dirs=extra_exclude_dirs,
         exclude_patterns=extra_exclude_patterns,
         scope=scope_abs,
         rename_map=rename_map,
     )
-    ctx["structure"] = keyhole["structure"]
-    ctx["behaviour"] = keyhole["behaviour"]
-    ctx["documentation"] = keyhole["documentation"]
-    ctx["understanding"] = keyhole["understanding"]
-    ctx["runtime"] = keyhole["runtime"]
-    ctx["derived_findings"] = keyhole["derived_findings"]
-    ctx["attention"] = keyhole["attention"]
-    ctx["attention_low_signal"] = keyhole["attention_low_signal"]
-    # Deterministic report-skeleton products (assess-dogfooded Part 1): the
-    # pre-rendered findings section the LLM copies verbatim, the keyhole
-    # readiness summary reported alongside (never merged into) the 0-8 score, and
-    # the mandatory attention-derived Top-3 actions.
-    ctx["findings_markdown"] = keyhole["findings_markdown"]
-    ctx["keyhole_summary"] = keyhole["keyhole_summary"]
-    ctx["prescribed_actions"] = keyhole["prescribed_actions"]
+    _attach_keyhole_blocks(ctx, keyhole)
     # Gap actions: Top 3 candidates read from the coverage and doc-graph
     # signals, which the report writer uses for free slots before judgement.
     ctx["gap_actions"] = build_gap_actions(
         ctx["coverage_report"], doc_graph, current.get("top_hotspots"),
-        ctx["archetype"] if isinstance(ctx.get("archetype"), dict) else None,
+        _dict_or(ctx.get("archetype"), None),
     )
-    # Config-exclusion disclosure: config excludes silently drop paths from every
-    # scan, so a finding suppressed by an exclude must be counted and named rather
-    # than vanish. keyhole_signals filtered the excluded finding paths; this block
-    # records the active excludes alongside the paths that would otherwise have
-    # been findings, so the gate and report can surface the suppression.
-    excluded_finding_paths = keyhole.get("excluded_finding_paths", [])
-    ctx["excluded_by_config"] = {
-        "dirs": sorted(extra_exclude_dirs),
-        "patterns": list(extra_exclude_patterns),
-        "affected_finding_paths": excluded_finding_paths,
-        "count": len(excluded_finding_paths),
-    }
-    # Archive disclosure: paths under archive/, archived/ or attic/ are kept out
-    # of attention and prescribed_actions; this block names and counts them so
-    # the exclusion is visible. Mirrors excluded_by_config's path/count shape.
-    archived_finding_paths = keyhole.get("archived_finding_paths", [])
-    ctx["excluded_as_archive"] = {
-        "affected_finding_paths": archived_finding_paths,
-        "count": len(archived_finding_paths),
-    }
-    # Dead-path disclosure: a git-history finding path that no longer exists
-    # (deleted, with no rename to follow) is dropped from the findings,
-    # attention, prescribed actions and markdown; this block names and counts it.
-    # rename_map_complete False means git history could not be read for renames:
-    # nothing was folded or pruned, and a finding may still name an old path.
-    pruned_finding_paths = keyhole.get("pruned_finding_paths", [])
-    ctx["pruned_finding_paths"] = {
-        "paths": pruned_finding_paths,
-        "count": len(pruned_finding_paths),
-        "rename_map_complete": keyhole.get("rename_map_complete", True),
-    }
+    _attach_exclusion_disclosures(
+        ctx, keyhole, extra_exclude_dirs, extra_exclude_patterns)
     # Generated-file disclosure: the treemap drops files that declare
     # themselves generated (header marker) or carry payload-length lines, and
     # lists them in the stats file. Copied through so the report and gate name
