@@ -404,8 +404,8 @@ def _opener(prefix: str, is_prose: bool) -> str:
             default=0,
         )
         return prefix[cut:].strip()
-    # A blockquote of any depth (``> > TODO``) and a heading of any level
-    # (``### TODO``) open as a whole run, not one character.
+    # A blockquote of any depth (``> > <marker>``) and a heading of any level
+    # (``### <marker>``) open as a whole run, not one character.
     rest = _BLOCKQUOTE_RE.sub("", prefix.lstrip())
     if rest.startswith("#"):
         return rest.lstrip("#").strip()
@@ -433,13 +433,13 @@ def _todo_in_marker_position(text: str, is_prose: bool = False) -> bool:
         opener = _opener(text[: m.start()], is_prose)
         if not opener or _BULLET_RE.fullmatch(opener):
             return True
-    # No token in marker position: a phrase alternative on the same line
-    # (``temporary workaround for the XXX parser``) still makes it a marker.
+    # No token in marker position: a phrase alternative on the same line (a
+    # stopgap phrase beside a mid-sentence token) still makes it a marker.
     return _phrase_is_marker(text, is_prose)
 
 
 def _phrase_is_marker(text: str, is_prose: bool) -> bool:
-    """True when a phrase alternative (``remove after``) on the line is a promise.
+    """True when a phrase alternative from TODO_PHRASE_RE on the line is a promise.
 
     In a prose file a phrase inside an inline code span or quotation marks is
     a quoted example and does not count; a bare phrase on the same line still
