@@ -12,9 +12,14 @@ Inward-only: stdlib only, no ``lib`` import.
 from __future__ import annotations
 
 import posixpath
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotation only; this module stays stdlib-only at runtime
+    import networkx as nx
 
 
-def radial_shells(graph, entries, ring: int = 24) -> list[list[str]]:
+def radial_shells(graph: nx.DiGraph, entries: Iterable[str], ring: int = 24) -> list[list[str]]:
     """Order nodes into concentric shells by link-distance from the entry points.
 
     Shell 0 = the entry points; shell k = docs k hops away (following links);

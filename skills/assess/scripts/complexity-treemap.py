@@ -105,6 +105,7 @@ from lib.generated_files import (
     generated_reason,
 )
 from lib.treemap_render import (
+    ColoredFile,
     adaptive_cap,
     blend_to_grey,
     build_tree,
@@ -643,10 +644,11 @@ def _aux_cap(files: list[tuple[Path, int, float, str]],
     return adaptive_cap([float(aux_data.get(f[0], 0)) for f in files])
 
 
-def _colour_files(files: list[tuple[Path, int, float, str]], cmap, cap: float,
-                  aux_data: dict[Path, int] | None, aux_cap: float) -> list:
+def _colour_files(files: list[tuple[Path, int, float, str]],
+                  cmap: Callable[[float], tuple], cap: float,
+                  aux_data: dict[Path, int] | None, aux_cap: float) -> list[ColoredFile]:
     """Append each file's fill: hue from its metric, greyed by its aux value."""
-    files_colored = []
+    files_colored: list[ColoredFile] = []
     for f in files:
         # Floor the ramp at 0.12 so the calm (low-complexity) end is a visible
         # pale orange, not near-white that washes out against the white canvas.

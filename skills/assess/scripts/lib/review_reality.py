@@ -83,8 +83,10 @@ PR_FIELDS = "author,mergedBy,mergedAt,reviews,reviewDecision,comments"
 
 
 def _login(actor: Any) -> str | None:
-    if isinstance(actor, dict) and isinstance(actor.get("login"), str) and actor["login"]:
-        return actor["login"].lower()
+    if isinstance(actor, dict):
+        login = actor.get("login")
+        if isinstance(login, str) and login:
+            return login.lower()
     return None
 
 
@@ -104,10 +106,12 @@ class _BotClassifier:
         if login is None:
             # No author login (a deleted account, a malformed entry): unknown.
             return None
-        if isinstance(actor.get("is_bot"), bool):
-            return actor["is_bot"]
-        if isinstance(actor.get("type"), str):
-            return actor["type"] == "Bot"
+        flag = actor.get("is_bot")
+        if isinstance(flag, bool):
+            return flag
+        kind = actor.get("type")
+        if isinstance(kind, str):
+            return kind == "Bot"
         if login.endswith("[bot]"):
             return True
         if login not in self._known:
