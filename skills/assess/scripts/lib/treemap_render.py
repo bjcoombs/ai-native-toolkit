@@ -214,11 +214,48 @@ def _survivor_legend_parts(W: float, H: float) -> list[str]:
 # <svg>'s <title>/<desc> (a11y metadata) so a screen reader announces what the
 # image is and how its channels encode; kept as defaults on write_svg so a
 # future consumer (e.g. a docs heatmap) can override without touching callers.
+def plural(n: float, singular: str, plural_form: str | None = None) -> str:
+    """The noun for a count of ``n``: ``singular`` when ``n`` is 1, else the
+    plural (``singular + "s"`` unless ``plural_form`` is given). Returns the word
+    only, so each caller keeps its own number formatting
+    (``f"{n:,} {plural(n, 'token')}"``)."""
+    if n == 1:
+        return singular
+    return plural_form if plural_form is not None else singular + "s"
+
+
 DEFAULT_SVG_TITLE = "Complexity Hotspot Heatmap"
 DEFAULT_SVG_DESC = (
     "Treemap showing code complexity by file size, hue indicates cyclomatic "
     "complexity, saturation indicates git churn"
 )
+
+
+def _token_text(est_tokens: int) -> str:
+    return f"{est_tokens:,} est. {plural(est_tokens, 'token')}"
+
+
+def _tooltip_line2(node: Node, metric_label: str) -> str:
+    """The stats line under a block's path in its hover tooltip."""
+    if node.tooltip2:
+        return node.tooltip2
+    line2 = f"{node.loc} loc · {metric_label} {node.metric:.0f}"
+    if node.est_tokens:
+        # Code heatmap: block area is estimated tokens, so lead with that and
+        # keep the familiar LOC one hover away (PRD: nothing lost).
+        line2 = f"{_token_text(node.est_tokens)} · {line2}"
+    if node.aux_label:
+        line2 += f" · {node.aux_label} {node.aux_metric:.0f}"
+    return line2
+
+
+def _label_size_text(node: Node) -> str:
+    """The size line of a block's on-canvas label."""
+    if node.label_size_text:
+        return node.label_size_text
+    if node.est_tokens:
+        return _token_text(node.est_tokens)
+    return f"{node.loc} loc"
 
 
 def write_svg(rects: list, root: Path, W: float, H: float,
@@ -253,19 +290,7 @@ def write_svg(rects: list, root: Path, W: float, H: float,
 
     for x, y, w, h, node in rects:
         rel = node.rel_path or node.name
-        if node.tooltip2:
-            line2 = node.tooltip2
-        elif node.est_tokens:
-            # Code heatmap: block area is estimated tokens, so lead with that
-            # and keep the familiar LOC one hover away (PRD: nothing lost).
-            line2 = (f"{node.est_tokens:,} est. tokens · {node.loc} loc "
-                     f"· {metric_label} {node.metric:.0f}")
-            if node.aux_label:
-                line2 += f" · {node.aux_label} {node.aux_metric:.0f}"
-        else:
-            line2 = f"{node.loc} loc · {metric_label} {node.metric:.0f}"
-            if node.aux_label:
-                line2 += f" · {node.aux_label} {node.aux_metric:.0f}"
+        line2 = _tooltip_line2(node, metric_label)
         tooltip = html.escape(f"{rel}\n{line2}", quote=False)
         parts.append(
             f'<rect x="{x:.2f}" y="{y:.2f}" '
@@ -294,12 +319,7 @@ def write_svg(rects: list, root: Path, W: float, H: float,
             fs = max(7, min(int(min(w, h) / 6), 18))
             cx, cy = x + w / 2, y + h / 2
             name = html.escape(node.name)
-            if node.label_size_text:
-                size_text = node.label_size_text
-            elif node.est_tokens:
-                size_text = f"{node.est_tokens:,} est. tokens"
-            else:
-                size_text = f"{node.loc} loc"
+            size_text = _label_size_text(node)
             metric_text = node.label_metric_text or f"{metric_label} {node.metric:.0f}"
             parts.append(
                 f'<text x="{cx:.1f}" y="{cy - fs:.1f}" '

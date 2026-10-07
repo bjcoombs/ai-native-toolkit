@@ -917,7 +917,7 @@
 <circle cx="807.7" cy="634.6" r="7" fill="#ffffff" stroke="#CC79A7" stroke-width="1.6" stroke-dasharray="3,2"><title>broken link to ghost target</title></circle>
 <line x1="847.2" y1="1017.9" x2="887.4" y2="1047.4" stroke="#CC79A7" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.85"/>
 <circle cx="887.4" cy="1047.4" r="7" fill="#ffffff" stroke="#CC79A7" stroke-width="1.6" stroke-dasharray="3,2"><title>broken link to ghost target</title></circle>
-<text x="590" y="40" font-size="24" font-weight="600" text-anchor="middle">Doc map — 254 docs, 622 links, 43 islands</text>
+<text x="590" y="40" font-size="24" font-weight="600" text-anchor="middle">Doc map - 254 docs, 622 links, 43 islands</text>
 <text x="590" y="66" font-size="14" fill="#555" text-anchor="middle">24% orphaned · 30% reachable from the entry point · 15 broken links</text>
 <defs><linearGradient id="stalegrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff7ec"/><stop offset="0.5" stop-color="#fc8d59"/><stop offset="1" stop-color="#7f0000"/></linearGradient></defs>
 <text x="334" y="1162" font-size="12" fill="#555" text-anchor="end">stable</text>

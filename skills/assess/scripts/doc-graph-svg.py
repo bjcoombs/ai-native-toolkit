@@ -54,7 +54,7 @@ from lib.doc_graph import (
 )
 from lib.assess_config import load_working_notes_config, resolve_excludes
 from lib.doc_staleness import analyze_doc_staleness
-from lib.treemap_render import adaptive_cap, blend_to_grey, rgba_to_hex
+from lib.treemap_render import adaptive_cap, blend_to_grey, plural, rgba_to_hex
 
 # Colour-blind-safe by default. The status palette uses the Okabe-Ito set
 # (distinguishable under all common colour-vision deficiencies); the staleness
@@ -73,7 +73,7 @@ EDGE_COLOR = "#9aa0a6"
 # the one line style left that collides with neither. Round caps add half the
 # stroke width to each end of a dash, so a near-zero dash paints a round dot and
 # the 4-unit gap keeps a visible break after the caps take their 1.6 units.
-_EDGE_STYLE = {
+_EDGE_STYLE: dict[str, dict[str, str | None]] = {
     "link": {"stroke": EDGE_COLOR, "stroke-dasharray": None,
              "stroke-width": "1.2", "opacity": "0.6"},
     "reference": {"stroke": EDGE_COLOR, "stroke-dasharray": "0.1,4",
@@ -302,7 +302,8 @@ class _NodePainter:
         return R_MIN + (R_MAX - R_MIN) * math.sqrt(self.sizes.get(node, 0.0) / self.size_max)
 
     def size_text(self, node: str) -> str:
-        return (f"{self.sizes.get(node, 0):.0f} lines" if self.size_mode == "lines"
+        lines = round(self.sizes.get(node, 0))
+        return (f"{lines} {plural(lines, 'line')}" if self.size_mode == "lines"
                 else f"centrality {self.sizes.get(node, 0):.3f}")
 
     def stroke(self, status: str) -> tuple[str, float, str]:
@@ -389,7 +390,7 @@ def _isolated_panel(count: int, web_right: float, cw: float, ch: float) -> list[
         f'<rect x="{ox:.0f}" y="104" width="{(cw - MARGIN) - ox:.0f}" '
         f'height="{ch - 104 - MARGIN + 16:.0f}" rx="10" fill="#fcf0f0" stroke="#f1c0c0"/>',
         f'<text x="{ox + 16:.0f}" y="130" font-size="15" font-weight="600" fill="#86181d">'
-        f'{count} isolated docs — no link in or out</text>',
+        f'{count} isolated {plural(count, "doc")} - no link in or out</text>',
     ]
 
 
@@ -470,10 +471,17 @@ def render(result, out_path: Path, repo_root: Path, *, layout: str = "radial",
     parts.append('</svg>')
     out_path.write_text("\n".join(parts), encoding="utf-8")
 
-    print(f"wrote {out_path}  ({n} docs, {graph.number_of_edges()} edges, "
-          f"{result.island_count} islands)")
+    print(f"wrote {out_path}  ({_graph_counts(result, n)})")
     print(f"orphan-rate {result.orphan_rate:.0%}  reachable-from-entry "
           f"{result.reachability_pct:.0%}  entries={sorted(painter.entries)}")
+
+
+def _graph_counts(result, n: int) -> str:
+    """'3 docs, 1 edge, 1 island': the counts the title and stdout summary share."""
+    edges = result.graph.number_of_edges()
+    islands = result.island_count
+    return (f"{n} {plural(n, 'doc')}, {edges} {plural(edges, 'edge')}, "
+            f"{islands} {plural(islands, 'island')}")
 
 
 def _title(result, n: int, cw: float) -> str:
@@ -486,13 +494,13 @@ def _title(result, n: int, cw: float) -> str:
     elif ghosts < links:
         # Several links point at the same absent file; show the link total and
         # the smaller count of distinct missing files they collapse to.
-        broken_clause = f' · {links} broken links to {ghosts} missing files'
+        broken_clause = (f' · {links} broken {plural(links, "link")} to '
+                         f'{ghosts} missing {plural(ghosts, "file")}')
     else:
-        broken_clause = f' · {links} broken links'
+        broken_clause = f' · {links} broken {plural(links, "link")}'
     return "\n".join([
         f'<text x="{mid:.0f}" y="40" font-size="24" font-weight="600" '
-        f'text-anchor="middle">Doc map — {n} docs, {result.graph.number_of_edges()} '
-        f'edges, {result.island_count} islands</text>',
+        f'text-anchor="middle">Doc map - {_graph_counts(result, n)}</text>',
         f'<text x="{mid:.0f}" y="66" font-size="14" fill="#555" text-anchor="middle">'
         f'{result.orphan_rate:.0%} orphaned · {result.reachability_pct:.0%} '
         f'reachable from the entry point'

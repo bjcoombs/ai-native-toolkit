@@ -1160,7 +1160,7 @@
 <circle cx="1006.9" cy="852.8" r="9.1" fill="#d1d1d6" stroke="#1a1a1a" stroke-width="1.8" stroke-dasharray="3,2"><title>tests/audit-e2e/README.md
 255 lines · in 0 · out 3 · orphan · 92d stale, subject churn 4</title></circle>
 
-<text x="590" y="40" font-size="24" font-weight="600" text-anchor="middle">Doc map — 247 docs, 659 links, 20 islands</text>
+<text x="590" y="40" font-size="24" font-weight="600" text-anchor="middle">Doc map - 247 docs, 659 links, 20 islands</text>
 <text x="590" y="66" font-size="14" fill="#555" text-anchor="middle">11% orphaned · 89% reachable from the entry point</text>
 <defs><linearGradient id="stalegrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff7ec"/><stop offset="0.5" stop-color="#fc8d59"/><stop offset="1" stop-color="#7f0000"/></linearGradient></defs>
 <text x="334" y="1162" font-size="12" fill="#555" text-anchor="end">stable</text>
