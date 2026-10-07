@@ -6,11 +6,14 @@ name: Security
 #   pipeline, the canary driver (scripts/canaries/*.mjs), and the workflows
 #   themselves (the `actions` language catches untrusted-input injection in
 #   `run:` steps). Findings land in the Security tab as code-scanning alerts.
-# - pip-audit over the Python packages CI installs: the runtime deps declared
-#   in skills/assess/pyproject.toml and scripts/pyproject.toml plus the test
-#   and lint tools tests.yml adds with `uv run --with`. Neither project
-#   commits a lockfile, so the audit resolves the same specifiers fresh,
-#   which is what a CI run installs that day.
+# - pip-audit over the Python packages CI and the Assess Gate install: the
+#   deps declared in skills/assess/pyproject.toml and scripts/pyproject.toml,
+#   the test and lint tools tests.yml adds with `uv run --with`, and the PEP 723
+#   inline deps of every `uv run` script (complexity-treemap.py runs in every
+#   consumer's Assess Gate, so it has the widest reach). Nothing commits a
+#   lockfile, so the audit resolves the same specifiers fresh, which is what a
+#   run installs that day. Each set is audited on its own because the scripts
+#   pin different Python floors and can resolve a shared package differently.
 #
 # Runs on PRs and pushes to main, and weekly so new advisories against
 # unchanged code still surface.
@@ -61,15 +64,32 @@ jobs:
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
 
       # Keep the tool list in step with the `uv run --with` flags in tests.yml.
-      - name: Resolve CI dependencies
+      # Every set is resolved with hashes so pip-audit can read the pins
+      # directly (--disable-pip) instead of installing them into a venv.
+      - name: Resolve dependency sets
         run: |
-          printf '%s\n' pytest pytest-cov pyyaml ruff mypy > "$RUNNER_TEMP/ci-tools.in"
-          uv pip compile --quiet --python-version 3.11 \
+          out="$RUNNER_TEMP/audit"
+          mkdir -p "$out"
+          printf '%s\n' pytest pytest-cov pyyaml ruff mypy > "$out/ci-tools.in"
+          uv pip compile --quiet --generate-hashes --python-version 3.11 \
             skills/assess/pyproject.toml scripts/pyproject.toml \
-            "$RUNNER_TEMP/ci-tools.in" -o "$RUNNER_TEMP/requirements.txt"
-          cat "$RUNNER_TEMP/requirements.txt"
+            "$out/ci-tools.in" -o "$out/requirements-projects.txt"
+          grep -rl --include='*.py' --exclude-dir=.git --exclude-dir=fixtures \
+            '^# /// script' . | sort | while read -r script; do
+            uv export --quiet --script "$script" --no-header \
+              -o "$out/requirements-script-$(basename "$script" .py).txt"
+          done
+          grep -c '==' "$out"/requirements-*.txt || true
 
       - name: Audit for known vulnerabilities
-        run: >-
-          uvx pip-audit==2.10.1 --strict --progress-spinner off
-          -r "$RUNNER_TEMP/requirements.txt"
+        run: |
+          status=0
+          for req in "$RUNNER_TEMP"/audit/requirements-*.txt; do
+            # A script with no inline dependencies exports an empty set.
+            grep -q '==' "$req" || continue
+            echo "::group::$(basename "$req")"
+            uvx pip-audit==2.10.1 --strict --disable-pip --require-hashes \
+              --progress-spinner off -r "$req" || status=1
+            echo "::endgroup::"
+          done
+          exit "$status"
