@@ -124,9 +124,10 @@ ambient commit signing or hooks cannot break the git-backed tests.
 |---|---|
 | `golden/` | `golden.py`, `test_decomposition_parity.py`, `test_golden_baseline.py` - the run-context and report baselines |
 | `golden-doc-repo/`, `golden-svg-repo/` | `test_golden_svg_render.py` - small repos the real renderers draw |
-| `hollow_test_repo/`, `honest_test_repo/`, `mutmut-junitxml.xml` | `test_test_pressure.py` - weak versus real tests, and mutation output |
+| `hollow_test_repo/`, `honest_test_repo/` | `test_test_pressure.py` - weak versus real tests |
+| `mutmut-junitxml.xml` | `test_test_pressure.py`, `test_complexity_treemap.py` - mutation output |
 | `good_instructions.md`, `bad_instructions.md`, `monolithic_instructions.md`, `lean_with_skills/` | the instruction grader and bloat suites |
-| `coverage.xml`, `lcov.info` | `test_coverage_report.py` and the coverage-driven test-focus paths |
+| `coverage.xml`, `lcov.info` | `test_coverage_report.py` |
 | `prior_stats.json`, `current_stats.json` | `test_stats_diff.py` |
 | `maven_project/` | `test_jvm_capabilities.py` |
 | `structure_drift/` | `test_structure_drift.py` |
