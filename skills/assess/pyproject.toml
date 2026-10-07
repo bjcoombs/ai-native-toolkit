@@ -50,12 +50,12 @@ select = ["E4", "E7", "E9", "F", "C901"]
 
 [tool.ruff.lint.mccabe]
 # Per-function cyclomatic complexity. 15 fences current reality: every function
-# already sits at or below it except three genuine offenders (ccn 17-19), which
-# carry an explicit ``# noqa: C901`` with a note - authorship_analysis here,
-# render in doc-graph-svg.py, and build_standalone_skill_zip in scripts/. The
-# gate fails the moment any other function regresses past 15; ratchet down as
-# the three are decomposed (build_doc_graph was split into phases and retired
-# its waiver).
+# already sits at or below it except two genuine offenders (ccn 17-19), which
+# carry an explicit ``# noqa: C901`` with a note - authorship_analysis here and
+# build_standalone_skill_zip in scripts/. The gate fails the moment any other
+# function regresses past 15; ratchet down as the two are decomposed
+# (build_doc_graph was split into phases and render in doc-graph-svg.py into
+# named steps, each retiring its waiver).
 max-complexity = 15
 
 [tool.mypy]
