@@ -107,16 +107,17 @@ JUSTIFIED_SUPPRESSION_RE = re.compile(
     r"//\s*ignore:[^/]*//|@SuppressWarnings\(.+\)\s*//)\s*\S"
     r"|/\*\s*eslint-disable[^*]*?\s--\s*[^\s*]"
     r"|//\s*eslint-disable\S*\s.*?\s--\s*\S"
-    # A single-dash or parenthesised reason after the directive's codes, e.g.
-    # ``# noqa: BLE001 - catch-all by design`` or ``# noqa: S310 (fixed host)``.
-    # The dash needs whitespace on both sides and the parentheses a word, so a
+    # A dash, double-dash or parenthesised reason after the directive's codes,
+    # e.g. ``# noqa: BLE001 - catch-all by design``, ``# noqa: E501 -- long
+    # URL`` or ``# noqa: S310 (fixed host)``. The dash needs whitespace on both
+    # sides and a word after it and the parentheses a word, so a
     # hyphenated code (``attr-defined``) or an empty ``()`` is not a reason.
     r"|(?:noqa(?::\s*[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
     r"|type:\s*ignore(?:\[[^\]]*\])?"
     r"|nosec(?:\s+[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
     r"|pylint:\s*disable=[\w,-]+"
     r"|nolint(?::[\w,-]+)?)"
-    r"\s+(?:-\s+\S|\(\s*[^)\s])"
+    r"\s+(?:--?\s+\S|\(\s*[^)\s])"
 )
 
 # The bare marker tokens of the todo family. A token hit counts only in marker
@@ -305,7 +306,7 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
                 is_prose, text, pattern
             ):
                 continue
-            if family == "todo" and not _todo_in_marker_position(is_prose, text):
+            if family == "todo" and not _todo_in_marker_position(text):
                 continue
             justified = family == "suppression" and bool(
                 JUSTIFIED_SUPPRESSION_RE.search(text)
@@ -327,10 +328,11 @@ def _comment_context(is_prose: bool, text: str, pattern: str) -> bool:
     """Keep a todo/deprecation hit only when it sits in a comment-ish context.
 
     Prose files count whole-line; code files require a comment leader at or
-    before the match position on the same line. This is a line-local heuristic,
-    not a parser - block-comment interiors that start with a bare word are the
-    known false-negative, and string-literal mentions are the false-positive it
-    exists to drop.
+    before the match position on the same line, or nothing before the match but
+    whitespace and an optional list bullet or checkbox - the shape of a
+    docstring or block-comment interior (``    - TODO fix the retry``). This
+    is a line-local heuristic, not a parser: string-literal mentions are the
+    false-positive it exists to drop.
     """
     if is_prose:
         return True
@@ -338,15 +340,20 @@ def _comment_context(is_prose: bool, text: str, pattern: str) -> bool:
     if not m:
         return False
     prefix = text[: m.start()]
-    return any(lead in prefix for lead in COMMENT_LEADERS) or prefix.strip() == ""
+    return any(lead in prefix for lead in COMMENT_LEADERS) or bool(
+        _BULLET_RE.fullmatch(prefix.strip())
+    )
 
 
-def _todo_in_marker_position(is_prose: bool, text: str) -> bool:
+def _todo_in_marker_position(text: str) -> bool:
     """Keep a todo hit when a marker token sits in marker position, or when
     the line carries a phrase alternative (``remove after ...``).
 
     A line matched only by a phrase alternative has no token and passes; the
-    comment-context filter already vetted it.
+    comment-context filter already vetted it. With no comment leader before
+    the token the opener is the whole prefix: a prose line, or a code line the
+    comment-context filter admitted only because nothing but a bullet precedes
+    the match (a docstring or block-comment interior).
     """
     tokens = list(TODO_TOKEN_RE.finditer(text))
     if not tokens:
@@ -358,10 +365,8 @@ def _todo_in_marker_position(is_prose: bool, text: str) -> bool:
         cut = max(
             (prefix.rfind(lead) + len(lead) for lead in COMMENT_LEADERS
              if lead in prefix),
-            default=0 if is_prose else -1,
+            default=0,
         )
-        if cut < 0:
-            continue
         opener = prefix[cut:].strip()
         if not opener or _BULLET_RE.fullmatch(opener):
             return True

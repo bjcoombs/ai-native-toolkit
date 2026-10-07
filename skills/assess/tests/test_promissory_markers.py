@@ -284,6 +284,102 @@ def test_todo_requires_marker_position(tmp_path: Path) -> None:
     }
 
 
+# Every leader/prefix shape crossed with every token position. Each shape is
+# a line prefix; each position is a line body with the token placed in it.
+# ``True`` = the token sits in marker position and must count. One cell is a
+# pinned limit, not a goal: a leaderless code line (docstring interior) counts
+# only when the token opens it, because text before a mid-line token cannot be
+# told from a string literal without a parser.
+_TODO_SHAPES_CODE = {
+    "leader": "# ",
+    "interior": "    ",           # docstring / block-comment interior
+    "interior_bullet": "    - ",
+    "interior_checkbox": "    [ ] ",
+    "interior_bullet_checkbox": "    - [ ] ",
+    "leader_bullet": "# - ",
+    "leader_checkbox": "# [ ] ",
+    "leader_bullet_checkbox": "# - [x] ",
+}
+_TODO_SHAPES_PROSE = {
+    "prose": "",
+    "bullet": "- ",
+    "numbered": "1. ",
+    "checkbox": "[ ] ",
+    "bullet_checkbox": "- [ ] ",
+}
+_TODO_POSITIONS = {
+    "opens": ("TODO fix the retry loop", True),
+    "opens_colon": ("TODO: fix the retry loop", True),
+    "opens_owner": ("TODO(ben) fix the retry loop", True),
+    "mid_colon": ("see the note; FIXME: wire it up", True),
+    "mid_owner": ("handled by HACK(ben) for now", True),
+    "mid_bare": ("counts every TODO in the tree", False),
+    "mid_list": ("the TODO/FIXME list is long", False),
+    "mid_aside": ("an aged TODO (intent) here", False),
+}
+
+
+def test_todo_position_matrix(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    files: dict[str, list[str]] = {"m.py": [], "m.md": []}
+    expected: set[tuple[str, int]] = set()
+    for path, shapes in (("m.py", _TODO_SHAPES_CODE), ("m.md", _TODO_SHAPES_PROSE)):
+        for shape, prefix in shapes.items():
+            for pos, (body, counts) in _TODO_POSITIONS.items():
+                files[path].append(prefix + body)
+                leaderless_mid = shape.startswith("interior") and pos.startswith("mid")
+                if counts and not leaderless_mid:
+                    expected.add((path, len(files[path])))
+    _commit(repo, {p: "\n".join(ls) + "\n" for p, ls in files.items()}, day=1)
+    got = {(m.path, m.line) for m in _scan(repo).markers if m.family == "todo"}
+    labels = {
+        (path, i + 1): line for path, ls in files.items() for i, line in enumerate(ls)
+    }
+    assert {labels[k] for k in got - expected} == set(), "false positives"
+    assert {labels[k] for k in expected - got} == set(), "false negatives"
+
+
+def test_leaderless_code_lines_need_blank_or_bullet_prefix(tmp_path: Path) -> None:
+    """A string literal or expression before the token is not a comment."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, {
+        "s.py": (
+            'msg = "TODO: is a word"\n'      # 1 string literal
+            "x = y - TODO_LIMIT\n"           # 2 identifier, no word boundary
+            'call("FIXME(ben)")\n'           # 3 literal with owner shape
+            "    TODO fix the retry loop\n"  # 4 docstring interior, counts
+        ),
+    }, day=1)
+    lines = {m.line for m in _scan(repo).markers if m.family == "todo"}
+    assert lines == {4}
+
+
+def test_double_dash_reason_per_suppression_family() -> None:
+    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    for justified in (
+        "x = 1  # noqa: E501 -- long URL kept on one line",
+        "x = 1  # noqa -- generated module",
+        "x = f()  # type: ignore[attr-defined] -- stub lags runtime",
+        "x = f()  # type: ignore -- untyped dependency",
+        "run(cmd)  # nosec B603 -- args are constant",
+        "except Exception:  # pylint: disable=broad-except -- top-level guard",
+        "return nil //nolint:nilerr -- error conveyed via status",
+    ):
+        assert rx.search(justified), justified
+    for bare in (
+        "x = 1  # noqa: E501 --",
+        "x = 1  # noqa: E501 -",
+        "x = f()  # type: ignore[attr-defined] --",
+        "run(cmd)  # nosec B603 -",
+        "except Exception:  # pylint: disable=broad-except --",
+        "return nil //nolint:nilerr --",
+        "x = 1  # noqa: E501 ---",
+    ):
+        assert not rx.search(bare), bare
+
+
 def test_single_dash_and_parenthesised_suppression_reasons() -> None:
     from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
     assert rx.search("# noqa: BLE001 - intentional catch-all")
