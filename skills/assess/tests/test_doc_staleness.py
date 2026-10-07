@@ -597,3 +597,113 @@ def test_rename_scan_failure_marks_scan_incomplete(git_repo, monkeypatch) -> Non
     assert r["bulk_commit_scan_complete"] is False
     days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
     assert days["docs/caching.md"] == 3
+
+
+# --- Behind-the-subject cap: a lying map must be behind its subject now -----
+
+def _lying_map_paths(staleness: dict, repo: Path) -> list[str]:
+    """Run the doc->complexity join with `app.py` over the high-CCN bar."""
+    from lib.doc_complexity_join import analyze_doc_complexity_join
+
+    stats = {"ccn": {"p95": 10.0}, "top_complex": [{"path": "app.py", "ccn": 30.0}]}
+    joined = analyze_doc_complexity_join(stats, staleness, repo)
+    return [u["path"] for u in joined["findings"]["lying_maps"]]
+
+
+def _churn_then_fix(repo: Path, commit) -> None:
+    """Doc frozen for months beside heavy churn, then corrected."""
+    (repo / "README.md").write_text("module map", encoding="utf-8")
+    (repo / "app.py").write_text("v = 0", encoding="utf-8")
+    commit("initial docs+code", days_ago=200)
+    for i in range(12):
+        (repo / "app.py").write_text(f"v = {i + 1}", encoding="utf-8")
+        commit(f"change {i}", days_ago=100 - i * 5)
+    (repo / "README.md").write_text("module map, corrected", encoding="utf-8")
+    commit("docs: correct the module map", days_ago=6)
+
+
+def test_doc_edited_after_subject_churn_is_not_flagged(git_repo) -> None:
+    """A doc corrected after its subject's last change is current, however
+    busy the subject was across the window: ratio 0, no lying_map."""
+    repo, commit = git_repo
+    _churn_then_fix(repo, commit)
+
+    r = analyze_doc_staleness(repo)
+    readme = next(d for d in r["docs"] if d["path"] == "README.md")
+    assert readme["window_ratio"] >= 5  # the old whole-window signal still fires
+    assert readme["code_churn_since_doc_change"] == 0
+    assert readme["ratio"] == 0.0
+    assert _lying_map_paths(r, repo) == []
+
+
+def test_doc_older_than_heavy_churn_is_flagged(git_repo) -> None:
+    repo, commit = git_repo
+    (repo / "README.md").write_text("module map", encoding="utf-8")
+    (repo / "app.py").write_text("v = 0", encoding="utf-8")
+    commit("initial docs+code", days_ago=200)
+    for i in range(6):
+        (repo / "app.py").write_text(f"v = {i + 1}", encoding="utf-8")
+        commit(f"change {i}", days_ago=50 - i * 5)
+
+    r = analyze_doc_staleness(repo)
+    readme = next(d for d in r["docs"] if d["path"] == "README.md")
+    assert readme["code_churn_since_doc_change"] == 6
+    assert readme["ratio"] >= 4
+    assert _lying_map_paths(r, repo) == ["README.md"]
+
+
+def test_doc_fixed_then_outrun_again_is_flagged(git_repo) -> None:
+    """The fix resets the clock, not the verdict: heavy churn after the
+    correction makes the doc a lying map again."""
+    repo, commit = git_repo
+    _churn_then_fix(repo, commit)
+    for i in range(5):
+        (repo / "app.py").write_text(f"w = {i}", encoding="utf-8")
+        commit(f"post-fix change {i}", days_ago=5 - i)
+
+    r = analyze_doc_staleness(repo)
+    readme = next(d for d in r["docs"] if d["path"] == "README.md")
+    assert readme["code_churn_since_doc_change"] == 5
+    assert readme["ratio"] >= 4
+    assert _lying_map_paths(r, repo) == ["README.md"]
+
+
+def test_doc_and_code_changed_together_is_current(git_repo) -> None:
+    """The commit that changes the doc and its code together does not count
+    as churn after the doc."""
+    repo, commit = git_repo
+    (repo / "README.md").write_text("module map", encoding="utf-8")
+    (repo / "app.py").write_text("v = 0", encoding="utf-8")
+    commit("initial docs+code", days_ago=200)
+    for i in range(6):
+        (repo / "app.py").write_text(f"v = {i + 1}", encoding="utf-8")
+        commit(f"change {i}", days_ago=50 - i * 5)
+    (repo / "README.md").write_text("module map v2", encoding="utf-8")
+    (repo / "app.py").write_text("v = 99", encoding="utf-8")
+    commit("feat: change app and its doc", days_ago=1)
+
+    r = analyze_doc_staleness(repo)
+    readme = next(d for d in r["docs"] if d["path"] == "README.md")
+    assert readme["code_churn_since_doc_change"] == 0
+    assert readme["ratio"] == 0.0
+
+
+def test_generated_doc_provenance_unaffected_by_cap(git_repo) -> None:
+    """Provenance still decides a generated doc: source newer -> lying_map,
+    even though the doc's own subject churn since it changed is zero."""
+    repo, commit = git_repo
+    (repo / "data").mkdir()
+    (repo / "data" / "jira.tsv").write_text("rows v1", encoding="utf-8")
+    (repo / "README.md").write_text(
+        "---\nsource: data/jira.tsv\n---\nnotes", encoding="utf-8",
+    )
+    (repo / "app.py").write_text("v = 0", encoding="utf-8")
+    commit("generate", days_ago=10)
+    (repo / "data" / "jira.tsv").write_text("rows v2", encoding="utf-8")
+    commit("source moved on", days_ago=1)
+
+    r = analyze_doc_staleness(repo)
+    readme = next(d for d in r["docs"] if d["path"] == "README.md")
+    assert readme["provenance"]["source_newer"] is True
+    assert readme["code_churn_since_doc_change"] == 0
+    assert _lying_map_paths(r, repo) == ["README.md"]
