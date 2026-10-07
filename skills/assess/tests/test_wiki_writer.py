@@ -629,3 +629,15 @@ def test_write_index_marks_carried_row_retired(tmp_assess_dir: Path) -> None:
     row = next(r for r in (tmp_assess_dir / "index.md").read_text().splitlines()
                if "`gone.go`" in r)
     assert "| retired - file deleted |" in row
+
+
+def test_write_index_backfills_orphaned_live_page_as_graduated(tmp_assess_dir: Path) -> None:
+    """An orphaned page still reading `persistent` (its last ranked run) is
+    not a hotspot this run, so its backfilled row renders `graduated`; a
+    carried row with a live status does too."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(path="orphan.go", status="persistent"))
+    write_index(tmp_assess_dir, [_entry("was_new.go", "new")], last_updated="2026-07-01")
+    write_index(tmp_assess_dir, [_entry("a.go")], last_updated="2026-07-08")
+    rows = {e.path: e.status for e in parse_index_rows(
+        (tmp_assess_dir / "index.md").read_text())}
+    assert rows == {"a.go": "active", "was_new.go": "graduated", "orphan.go": "graduated"}

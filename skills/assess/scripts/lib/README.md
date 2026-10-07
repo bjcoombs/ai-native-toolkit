@@ -506,8 +506,10 @@ only a row with the same run date and short run id and dropping the row of a
 (#423). `write_index` seeds from the prior `index.md` rows (`parse_index_rows`)
 and from every hotspot page on disk (`read_hotspot_page_entries`), then
 `merge_index_entries` lets this run's entries win per path: a path the run did not
-rank keeps its last known row, a carried row whose page is retired takes the
-retired status, and a page retired as excluded before finalize gets no row (#420).
+rank keeps its last known row but renders `graduated` (it is not a hotspot this
+run, whatever live status its page last carried), a carried row whose page is
+retired takes the retired status, and a page retired as excluded before finalize
+gets no row (#420).
 Also guards wiki integrity: `prune_orphan_hotspots(assess_dir, repo_root)` stamps
 any hotspot page whose source file left the tree as `retired - file deleted`
 (history preserved, no active page lies about a live file), and

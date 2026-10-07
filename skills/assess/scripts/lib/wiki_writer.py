@@ -204,6 +204,13 @@ def merge_index_entries(
 
     ``pages`` maps each hotspot page's source path to the entry read from the
     page (see ``read_hotspot_page_entries``).
+
+    A path absent from ``current`` is not a hotspot this run, so a carried or
+    backfilled row never keeps a live status (new, active, persistent,
+    regressed): it renders ``graduated``, the legend's "was a hotspot, no
+    longer is". A page is rewritten only while its file is ranked, so an
+    orphaned page still carries the live status of its last ranked run. A
+    retired page's status wins over the row's.
     """
     merged: dict[str, HotspotEntry] = {}
     for e in current:
@@ -211,17 +218,24 @@ def merge_index_entries(
     never_assessed = {
         p for p, page in pages.items() if page.status == RETIRED_EXCLUDED_STATUS
     }
-    for e in prior:
-        if e.path in merged or e.path in never_assessed:
+    carried = [e for e in prior if e.path not in merged]
+    carried_paths = {e.path for e in carried}
+    backfilled = [pages[p] for p in sorted(pages) if p not in merged and p not in carried_paths]
+    for e in [*carried, *backfilled]:
+        if e.path in never_assessed or e.path in merged:
             continue
-        page = pages.get(e.path)
-        if page is not None and is_retired_status(page.status):
-            e = replace(e, status=page.status)
-        merged[e.path] = e
-    for path in sorted(pages):
-        if path not in never_assessed:
-            merged.setdefault(path, pages[path])
+        merged[e.path] = _not_current(e, pages.get(e.path))
     return list(merged.values())
+
+
+def _not_current(entry: HotspotEntry, page: HotspotEntry | None) -> HotspotEntry:
+    """The index row for a path this run did not rank: retired if its page is
+    retired, else graduated."""
+    if page is not None and is_retired_status(page.status):
+        return replace(entry, status=page.status)
+    if is_retired_status(entry.status):
+        return entry
+    return replace(entry, status="graduated")
 
 
 _INDEX_ROW_RE = re.compile(
