@@ -14,7 +14,9 @@ Fill the template below. Replace every `<...>` with the run's actual values.
 **Runner Model(s) Tested:** <single model, e.g. `haiku`; or a sweep, e.g.
 `haiku: PROMOTE / sonnet: PROMOTE / opus: PROMOTE` with the per-tier verdict for
 each. Certification valid only for the tested tier(s) - a skill forged only on a
-strong tier is not certified for a weaker one.>
+strong tier is not certified for a weaker one. Each runner's `Reported model ID`
+must match the requested tier's family; a runner that reported another model
+was discarded and respawned, never scored.>
 
 **Judge Model:** <the tier the judge panel ran on, e.g. `opus`. The second half of
 the certification signature: a weaker judge passes weaker skills, so the gate is
