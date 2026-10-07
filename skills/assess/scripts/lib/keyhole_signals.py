@@ -972,6 +972,11 @@ MAX_FINDING_PATHS_RENDERED = 10
 MAX_ATTENTION_ROWS_RENDERED = 5
 
 
+def _omitted_row(count: int) -> str:
+    """Disclosure row for a rendered list truncated at its cap."""
+    return f"- ... {count} more omitted; full list in run-context.json"
+
+
 def render_findings_markdown(
     findings: list[dict], attention: list[dict],
 ) -> str:
@@ -997,6 +1002,8 @@ def render_findings_markdown(
         lines.append("Paths:")
         for p in paths[:MAX_FINDING_PATHS_RENDERED]:
             lines.append(f"- {p}")
+        if len(paths) > MAX_FINDING_PATHS_RENDERED:
+            lines.append(_omitted_row(len(paths) - MAX_FINDING_PATHS_RENDERED))
         lines.append("")
     if not rendered_any:
         lines.append(
@@ -1009,6 +1016,8 @@ def render_findings_markdown(
         for a in attention[:MAX_ATTENTION_ROWS_RENDERED]:
             names = ", ".join(a.get("findings", []))
             lines.append(f"- {a['path']} (score {a['score']}): {names}")
+        if len(attention) > MAX_ATTENTION_ROWS_RENDERED:
+            lines.append(_omitted_row(len(attention) - MAX_ATTENTION_ROWS_RENDERED))
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 

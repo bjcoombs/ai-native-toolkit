@@ -697,6 +697,44 @@ def test_render_findings_markdown_attention_section_caps_at_five() -> None:
     assert len(rows) == ks.MAX_ATTENTION_ROWS_RENDERED
 
 
+def test_render_findings_markdown_no_marker_when_paths_at_cap() -> None:
+    n = ks.MAX_FINDING_PATHS_RENDERED
+    findings = ks.assemble_findings({"lying_map": [f"docs/{i}.md" for i in range(n)]})
+    md = ks.render_findings_markdown(findings, [])
+    assert "omitted" not in md
+
+
+def test_render_findings_markdown_discloses_omitted_paths() -> None:
+    n = ks.MAX_FINDING_PATHS_RENDERED + 7
+    findings = ks.assemble_findings({"lying_map": [f"docs/{i}.md" for i in range(n)]})
+    md = ks.render_findings_markdown(findings, [])
+    listed = [ln for ln in md.splitlines() if ln.startswith("- docs/")]
+    assert len(listed) + 7 == n
+    assert "- ... 7 more omitted; full list in run-context.json" in md
+
+
+def test_render_findings_markdown_attention_no_marker_at_cap() -> None:
+    n = ks.MAX_ATTENTION_ROWS_RENDERED
+    findings = ks.assemble_findings({
+        "hidden_coupling": [f"u{i}" for i in range(n)],
+        "lying_map": [f"u{i}" for i in range(n)],
+    })
+    md = ks.render_findings_markdown(findings, ks.build_attention_list(findings))
+    assert "omitted" not in md
+
+
+def test_render_findings_markdown_attention_discloses_omitted_rows() -> None:
+    findings = ks.assemble_findings({
+        "hidden_coupling": [f"u{i}" for i in range(8)],
+        "lying_map": [f"u{i}" for i in range(8)],
+    })
+    attention = ks.build_attention_list(findings)
+    md = ks.render_findings_markdown(findings, attention)
+    omitted = len(attention) - ks.MAX_ATTENTION_ROWS_RENDERED
+    assert omitted > 0
+    assert f"- ... {omitted} more omitted; full list in run-context.json" in md
+
+
 # --- Issue #172: degenerate churn drops churn-derived findings ----------------
 
 # A bleeding-but-statically-modular dir -> hidden_coupling; reused below.
