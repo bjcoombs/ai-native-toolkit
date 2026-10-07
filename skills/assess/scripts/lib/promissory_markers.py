@@ -127,7 +127,11 @@ JUSTIFIED_SUPPRESSION_RE = re.compile(
 # ``temporary workaround``) keep the plain comment-context rule.
 TODO_TOKEN_RE = re.compile(r"\b(TODO|FIXME|HACK|XXX|TBD)\b")
 _TODO_SUFFIX_RE = re.compile(r"\s*:|\([^)\s][^)]*\)")
-_BULLET_RE = re.compile(r"(?:[-*+>]|\d+[.)]|\[[ xX]?\])\s*")
+TODO_PHRASE_RE = re.compile(
+    r"remove (after|before|once|when)|temporary (workaround|hack|fix)"
+)
+# A list bullet, a checkbox, or both (``- [ ] TODO write X``).
+_BULLET_RE = re.compile(r"(?:(?:[-*+>]|\d+[.)])\s*)?(?:\[[ xX]?\]\s*)?")
 
 # Comment leaders; a todo/deprecation hit must sit after one of these on its
 # line (suppressions and disabled tests are syntactic and skip the check).
@@ -338,7 +342,8 @@ def _comment_context(is_prose: bool, text: str, pattern: str) -> bool:
 
 
 def _todo_in_marker_position(is_prose: bool, text: str) -> bool:
-    """Keep a todo hit only when one marker token sits in marker position.
+    """Keep a todo hit when a marker token sits in marker position, or when
+    the line carries a phrase alternative (``remove after ...``).
 
     A line matched only by a phrase alternative has no token and passes; the
     comment-context filter already vetted it.
@@ -360,7 +365,9 @@ def _todo_in_marker_position(is_prose: bool, text: str) -> bool:
         opener = prefix[cut:].strip()
         if not opener or _BULLET_RE.fullmatch(opener):
             return True
-    return False
+    # No token in marker position: a phrase alternative on the same line
+    # (``temporary workaround for the XXX parser``) still makes it a marker.
+    return bool(TODO_PHRASE_RE.search(text))
 
 
 def _blame_ages(repo_root: Path, markers: list[Marker]) -> None:

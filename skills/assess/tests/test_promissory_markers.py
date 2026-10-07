@@ -264,19 +264,23 @@ def test_todo_requires_marker_position(tmp_path: Path) -> None:
             "# counts every TODO in the tree\n" # 6 prose mention
             "/* XXX check bounds */\n"          # 7 block comment opener
             "# remove after the 2.0 cut\n"      # 8 phrase form, unchanged
+            "# temporary workaround for the XXX parser; remove after 2.0\n"  # 9
         ),
         "docs/plan.md": (
             "TODO write the rollout section\n"   # 1
             "- TODO: add diagrams\n"             # 2 list bullet
             "Lists TODO, FIXME and HACK tokens\n"  # 3 prose
             "or an aged TODO (intent) here\n"    # 4 aside, not an owner
+            "- [ ] TODO write the runbook\n"     # 5 bullet plus checkbox
+            "[x] FIXME the link\n"               # 6 checkbox alone
         ),
     }, day=1)
     scan = _scan(repo)
     lines = {(m.path, m.line) for m in scan.markers if m.family == "todo"}
     assert lines == {
         ("a.py", 1), ("a.py", 2), ("a.py", 3), ("a.py", 4), ("a.py", 7),
-        ("a.py", 8), ("docs/plan.md", 1), ("docs/plan.md", 2),
+        ("a.py", 8), ("a.py", 9), ("docs/plan.md", 1), ("docs/plan.md", 2),
+        ("docs/plan.md", 5), ("docs/plan.md", 6),
     }
 
 
