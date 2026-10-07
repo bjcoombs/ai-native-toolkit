@@ -110,8 +110,14 @@ def test_checkout_pin_matches_repo_workflow_and_readme():
     emitted = checkout_pin(render_ci_workflow(plugin_version="1.23.0"))
     workflow = (repo / ".github" / "workflows" / "assess-gate.yml").read_text()
     readme = (repo / "README.md").read_text()
-    assert emitted == checkout_pin(workflow)
-    assert emitted == checkout_pin(readme)
+    assert emitted == checkout_pin(workflow), (
+        "actions/checkout pin drifted: update skills/assess/templates/"
+        "assess-gate.yml.template to match .github/workflows/assess-gate.yml"
+    )
+    assert emitted == checkout_pin(readme), (
+        "actions/checkout pin drifted: update the README.md Action snippet "
+        "to match the generated workflow"
+    )
 
 
 def test_checkout_does_not_persist_credentials():
