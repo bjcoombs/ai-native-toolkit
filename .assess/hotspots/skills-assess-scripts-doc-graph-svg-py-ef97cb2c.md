@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261007120131-f520a0c5 artifact_schema_version=1.3.0 -->
+<!-- assess:run_id=20261007185833-e950cb1b artifact_schema_version=1.3.0 -->
 # Hotspot: `skills/assess/scripts/doc-graph-svg.py`
 
 _First flagged: 2026-05-31. Last seen: 2026-10-07. Status: persistent._
@@ -19,6 +19,7 @@ _First flagged: 2026-05-31. Last seen: 2026-10-07. Status: persistent._
 |----------|-----|-----|-----|---------|--------|
 | 2026-09-19 | - | 407 | 105.0 | 8 | regressed |
 | 2026-10-07 | f520a0c5 | 407 | 105 | 8 | persistent |
+| 2026-10-07 | e950cb1b | 407 | 105 | 8 | persistent |
 
 ## Briefing for editing this file
 
@@ -28,4 +29,6 @@ Hotspot (persistent). 407 LOC, aggregate cyclomatic complexity 105 (worst functi
 
 ## Suggested actions
 
-This file is flagged but outside this run's Top 3. See the report's Top 3 Actions, or run a focused /assess pass for file-specific guidance.
+- Extract render (lizard ccn 44) into named steps behind byte-identical SVG checks
+- Give the noqa: E402 bootstrap import a reason or a shared bootstrap helper
+
