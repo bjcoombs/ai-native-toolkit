@@ -296,8 +296,11 @@ def test_hotspot_page_includes_growth_profile_when_accreting(tmp_assess_dir: Pat
     page = next((tmp_assess_dir / "hotspots").iterdir())
     content = page.read_text(encoding="utf-8")
     assert "Growth profile: monotonic" in content
-    assert "+420 LOC" in content
-    assert "0 net reductions over 18 commits in 7 months" in content
+    # The figure is net physical lines from git numstat, not scored LOC, and
+    # the window is the commits that touched this file.
+    assert "+420 lines net over 18 commits to this file in 7 months" in content
+    assert "none a net reduction" in content
+    assert "LOC" not in content.split("Growth profile:", 1)[1].splitlines()[0]
     # No new section header - the line rides inside the existing briefing.
     assert "## Growth" not in content
 

@@ -17,12 +17,13 @@ _TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates"
 
 
 # Default "## Suggested actions" body for a hotspot page that has not (yet) been
-# finalized with file-specific LLM actions. Worded as a deliberate pointer, not a
-# TODO: a page that is never finalized - a hotspot flagged outside the run's Top 3,
-# which assess_finalize is only required to fill for the Top 3 - still reads as
-# intentional rather than as unfinished work. assess_finalize overwrites this
-# section for the pages it's handed concrete actions; the heading is unchanged so
-# that rewrite contract still holds (issue #165).
+# finalized with file-specific LLM actions. Worded as a deliberate pointer rather
+# than as a to-do placeholder, so a page that is never finalized - a hotspot
+# flagged outside the run's Top 3, which assess_finalize is only required to fill
+# for the Top 3 - still reads as intentional rather than as unfinished work.
+# assess_finalize overwrites this section for the pages it's handed concrete
+# actions; the heading is unchanged so that rewrite contract still holds
+# (issue #165).
 UNFINALIZED_ACTIONS_POINTER = (
     "This file is flagged but outside this run's Top 3. "
     "See the report's Top 3 Actions, or run a focused /assess pass "
@@ -36,6 +37,10 @@ def _growth_profile_line(accretion: dict | None) -> str:
     ``accretion`` is the per-file accretion-ratchet entry for *this* hotspot
     (the serialized AccretionFile dict: ``net_additions`` / ``commit_count`` /
     ``time_span_months``), plus a ``reliable`` flag threaded down from the scan.
+    ``net_additions`` is net physical lines (git numstat additions minus
+    deletions) summed over the non-merge commits that touched the file, and the
+    months span its first to last such commit - so the line says "lines net",
+    not "LOC": the page's table shows scored LOC, a different count.
     A file absent from the accretion data (no entry, or None) earns no line -
     growth that wasn't flagged as pure accretion is normal development, not a
     ratchet. When the underlying git history is degenerate (shallow/squashed
@@ -49,7 +54,8 @@ def _growth_profile_line(accretion: dict | None) -> str:
     months = round(accretion.get("time_span_months", 0))
     line = (
         f"Growth profile: monotonic "
-        f"(+{net} LOC, 0 net reductions over {commits} commits in {months} months)."
+        f"(+{net} lines net over {commits} commits to this file in {months} "
+        f"months, none a net reduction)."
     )
     if accretion.get("reliable") is False:
         line += " (history may be incomplete - shallow/squashed repo)"

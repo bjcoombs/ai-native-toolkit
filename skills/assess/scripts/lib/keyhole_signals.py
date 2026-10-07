@@ -899,8 +899,8 @@ def _format_accretion_items(run_context: dict) -> list[str]:
         commits = f["commit_count"]
         del_frac = f["deletion_fraction"]
         items.append(
-            f"{f['path']} — +{net:,} LOC over {months} across {commits} commit"
-            f"{'s' if commits != 1 else ''}, {del_frac:.0%} net reductions"
+            f"{f['path']} — +{net:,} lines net over {months} across {commits} commit"
+            f"{'s' if commits != 1 else ''}, {del_frac:.0%} of churn deleted"
             " — only ever grows"
         )
 

@@ -36,15 +36,15 @@ from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 
+from lib.git_churn import tracked_files
+
 try:  # networkx is the core dep; degrade rather than crash if it is missing.
     import networkx as nx
 
     _NETWORKX_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only on a broken env
-    nx = None  # type: ignore[assignment]
+    nx = None  # type: ignore[assignment]  # unused unless _NETWORKX_AVAILABLE
     _NETWORKX_AVAILABLE = False
-
-from lib.git_churn import tracked_files  # noqa: E402
 
 
 DOC_EXTENSIONS = {".md", ".mdx", ".markdown"}
@@ -413,7 +413,7 @@ def _vault_detected(repo_root: Path) -> bool:
 
 def _obsidiantools_available() -> bool:
     try:  # optional accelerator; never required.
-        import obsidiantools  # noqa: F401
+        import obsidiantools  # noqa: F401 - imported only to probe availability
 
         return True
     except ImportError:

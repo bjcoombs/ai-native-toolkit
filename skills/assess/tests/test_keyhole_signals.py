@@ -1181,8 +1181,15 @@ def test_format_accretion_items_roll_up_and_per_file_lines() -> None:
     assert items[0].startswith("2 files show monotonic growth")
     assert "2 hottest" in items[0]
     # Per-file lines include path, LOC, time span, commits, deletion fraction.
-    assert any("src/fat.py" in line and "+2,400 LOC" in line for line in items)
-    assert any("lib/bloat.py" in line for line in items)
+    # Net physical lines from git numstat (not scored LOC), and the share of
+    # churn that was deletions (not a count of net reductions).
+    assert any(
+        "src/fat.py" in line and "+2,400 lines net" in line for line in items
+    )
+    assert any(
+        "lib/bloat.py" in line and "5% of churn deleted" in line for line in items
+    )
+    assert not any("LOC" in line or "net reductions" in line for line in items)
     # Worst offender comes first.
     fat_idx = next(i for i, line in enumerate(items) if "src/fat.py" in line)
     bloat_idx = next(i for i, line in enumerate(items) if "lib/bloat.py" in line)
