@@ -30,3 +30,5 @@ The plans and specs behind the skills, captured as they were built. These are hi
 | [instruction optimizer directive-clarity design](./specs/2026-06-03-instruction-optimizer-directive-clarity-design.md) | Directive-clarity transform - first A/B-validated member of the instruction cognitive-ergonomics family |
 | [skill-forge hardening + A/B-extraction design](./specs/2026-06-03-skill-forge-hardening-and-ab-extraction-design.md) | Extract A/B-equivalence into a standalone library skill and apply five B1-B5 hardening changes to skill-forge |
 | [skill-forge extraction verification](./specs/2026-06-03-skill-forge-extraction-verification.md) | Acceptance test for the ab-equivalence extraction - re-forge to PROMOTE, both A/B comparisons equivalent, suites green |
+| [Assess feedback seams + architecture test design](./specs/2026-06-04-assess-feedback-seams-and-archtest-design.md) | Address the v1.36.0 `/assess` self-assessment - co-change seam map, lying-map fix, executable architecture contract |
+| [ghreport org state design](./specs/2026-06-24-ghreport-org-state-design.md) | Read-only org repo state report reusing `ghsync`'s repo discovery |
