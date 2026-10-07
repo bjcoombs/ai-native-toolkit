@@ -76,8 +76,9 @@ def ratchet_violations(
             )
     for path in sorted(set(ceilings) - set(counts)):
         problems.append(
-            f"{path} has a [ceilings] entry in {CONFIG_NAME} but no longer "
-            "exists. Delete the entry."
+            f"{path} has a [ceilings] entry in {CONFIG_NAME} but is not a "
+            "Python file under its `roots` (it was deleted, renamed or the path "
+            "is mistyped). Fix the path or delete the entry."
         )
     return problems
 
@@ -88,7 +89,9 @@ def test_config_entries_are_well_formed() -> None:
     assert config.get("roots"), f"{CONFIG_NAME} must list the roots it covers"
     bad = [
         path for path, entry in config.get("ceilings", {}).items()
-        if type(entry.get("lines")) is not int
+        # `type(...) is int`, not isinstance: bool is an int subclass.
+        if not isinstance(entry, dict)
+        or type(entry.get("lines")) is not int
         or not str(entry.get("reason", "")).strip()
         or set(entry) - {"lines", "reason"}
     ]
@@ -121,7 +124,7 @@ SYNTHETIC: dict[str, Any] = {
         ({"new.py": 101}, "over the default limit of 100. Split it"),
         ({"big.py": 151}, "past its ceiling of 150. Split it, or"),
         ({"big.py": 100}, "Delete its [ceilings] entry"),
-        ({}, "no longer exists"),
+        ({}, "is not a Python file under its `roots`"),
     ],
     ids=["over-default", "allowlisted-grew", "allowlisted-shrank-under-default",
          "allowlisted-file-gone"],
