@@ -97,8 +97,10 @@ def test_render_pins_actions_to_commit_shas():
 
 
 def test_checkout_pin_matches_repo_workflow_and_readme():
-    """The emitted checkout pin must not drift from this repo's own gate
-    workflow or the README snippet when Dependabot bumps one of them."""
+    """The emitted checkout pin must match this repo's own gate workflow and
+    the README snippet. Dependabot bumps only the workflow pin, so this test
+    goes red on each checkout bump until the template and README are updated
+    by hand."""
     repo = Path(__file__).resolve().parents[3]
     pin = re.compile(r"actions/checkout@[0-9a-f]{40}\s+# v\d+\.\d+\.\d+")
 
