@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import ast
 import sys
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,7 +46,7 @@ try:  # grimp + networkx are the core deps; degrade rather than crash if absent.
 
     _GRIMP_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only on a broken env
-    grimp = None  # type: ignore[assignment]
+    grimp = None  # type: ignore[assignment]  # grimp is typed; None stands in for the missing module
     _GRIMP_AVAILABLE = False
 
 try:
@@ -53,7 +54,7 @@ try:
 
     _NETWORKX_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only on a broken env
-    nx = None  # type: ignore[assignment]
+    nx = None  # type: ignore[assignment, unused-ignore]  # stubs absent: nx is Any; installed: None mismatches the module
     _NETWORKX_AVAILABLE = False
 
 from lib.assess_config import DEFAULT_KEYHOLE_BUDGET
@@ -166,7 +167,7 @@ def discover_packages(
 
 
 @contextmanager
-def _syspath_prepended(paths: list[Path]):
+def _syspath_prepended(paths: list[Path]) -> Iterator[None]:
     """Temporarily prepend `paths` to sys.path, restoring it afterwards.
 
     grimp locates a package by importable name via sys.path; we add each
@@ -278,7 +279,7 @@ def compute_footprint(
 # A2 -- blob vs modular
 # --------------------------------------------------------------------------
 
-def _detect_communities(undirected) -> list[set]:
+def _detect_communities(undirected: nx.Graph) -> list[set]:
     """Community partition of an undirected graph (greedy / louvain by size)."""
     if undirected.number_of_nodes() == 0:
         return []
@@ -295,7 +296,7 @@ def _detect_communities(undirected) -> list[set]:
     return [set(c) for c in louvain_communities(undirected, seed=1)]
 
 
-def _modularity_q(undirected, communities: list[set]) -> float:
+def _modularity_q(undirected: nx.Graph, communities: list[set]) -> float:
     """Newman Q for a partition, clamped to the theoretical [-0.5, 1] range."""
     if not communities or undirected.number_of_edges() == 0:
         return 0.0
@@ -304,10 +305,10 @@ def _modularity_q(undirected, communities: list[set]) -> float:
         q = modularity(undirected, communities)
     except (ZeroDivisionError, KeyError):  # pragma: no cover - defensive
         return 0.0
-    return max(-0.5, min(1.0, q))
+    return max(-0.5, min(1.0, float(q)))
 
 
-def compute_modularity(graph) -> tuple[list[list[str]], float]:
+def compute_modularity(graph: nx.DiGraph) -> tuple[list[list[str]], float]:
     """A2: import cycles (SCCs len > 1) and the Newman modularity Q.
 
     Returns ``(sccs, q)`` where ``sccs`` is the list of strongly-connected
@@ -334,7 +335,7 @@ def _top_package(module: str) -> str:
 
 
 def compute_front_door_ratio(
-    graph, packages: set[str],
+    graph: nx.DiGraph, packages: set[str],
 ) -> tuple[float, list[dict]]:
     """A3: fraction of cross-package edges landing on a front door.
 
@@ -367,7 +368,7 @@ def compute_front_door_ratio(
 # --------------------------------------------------------------------------
 
 def find_breakup_candidates(
-    package: str, internal_graph,
+    package: str, internal_graph: nx.DiGraph,
 ) -> dict | None:
     """A4: propose cut-lines for a package that is several packages in one.
 
@@ -403,7 +404,9 @@ def find_breakup_candidates(
 # Entry point
 # --------------------------------------------------------------------------
 
-def _build_grimp_graph(package_dirs: list[Path]):
+def _build_grimp_graph(
+    package_dirs: list[Path],
+) -> tuple[grimp.ImportGraph, list[str], dict[str, Path]]:
     """Build the grimp import graph for the discovered packages.
 
     Returns ``(import_graph, package_names, roots)`` or raises on failure.

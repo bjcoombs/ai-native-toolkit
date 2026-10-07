@@ -278,9 +278,10 @@ def _alias_target(candidate: Path, text: str, repo_root: Path) -> str | None:
             return candidate.resolve().name
     # Thin-stub alias - short file that just points at a canonical doc.
     alias = detect_alias(text)
-    if alias["is_alias"] and alias["alias_target"]:
-        if alias["alias_target"].lower() != self_name:
-            return alias["alias_target"]
+    target = alias["alias_target"]
+    if alias["is_alias"] and target:
+        if target.lower() != self_name:
+            return target
     return None
 
 
@@ -527,7 +528,8 @@ def _load_first_flagged(assess_dir: Path) -> dict[str, str]:
     state_file = assess_dir / "first-flagged.json"
     if not state_file.exists():
         return {}
-    return json.loads(state_file.read_text(encoding="utf-8"))
+    first_flagged: dict[str, str] = json.loads(state_file.read_text(encoding="utf-8"))
+    return first_flagged
 
 
 def _rekey_first_flagged(
@@ -914,10 +916,9 @@ def _normalize_test_pressure(test_pressure: Any) -> dict:
     Shared by the default read-only scan (``build_run_context``) and the opt-in
     mutation re-run (``run_opt_in_mutation``) so both write an identical shape.
     """
-    tp_ok = (isinstance(test_pressure, dict)
-             and "mutation_config_present" in test_pressure
-             and "cheap_heuristics" in test_pressure)
-    if tp_ok:
+    if (isinstance(test_pressure, dict)
+            and "mutation_config_present" in test_pressure
+            and "cheap_heuristics" in test_pressure):
         return test_pressure
     return {
         "available": False,
