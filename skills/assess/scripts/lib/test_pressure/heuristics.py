@@ -18,8 +18,14 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
+from typing import Any
 
 from .common import MAX_FINDINGS, _is_test_file, _iter_files, _read, _rel
+
+# Coverage as loaded from coverage.xml / lcov: {relpath: [lines]} or
+# {relpath: {line: hits}}, plus an optional reserved ``_overall`` ratio. The
+# value shape varies per key, so the values stay dynamic.
+CoverageData = dict[str, Any]
 
 CHEAP_HEURISTIC_NOTE = (
     "candidate signals for human judgement, never verdicts"
@@ -187,7 +193,7 @@ _CMP_SYMBOL = {ast.Lt: "<", ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">="}
 _BOUNDARY_RE = re.compile(r"(<=|>=|<|>|\+\s*1\b|-\s*1\b)")
 
 
-def _normalise_coverage(coverage_data) -> set[tuple[str, int]] | None:
+def _normalise_coverage(coverage_data: CoverageData | None) -> set[tuple[str, int]] | None:
     """Accept {relpath: [lines]} or {relpath: {line: hits}} -> {(relpath, line)}.
     None stays None (we cannot assess boundaries without it). A reserved
     ``_overall`` key (the line-coverage ratio) is ignored here."""
@@ -250,7 +256,8 @@ def _regex_boundaries(path: Path, rel: str,
     return out
 
 
-def detect_untested_boundaries(repo_root: Path, coverage_data=None) -> list[dict]:
+def detect_untested_boundaries(repo_root: Path,
+                               coverage_data: CoverageData | None = None) -> list[dict]:
     """Boundary comparisons that are covered but, as far as we can tell, exercised
     on only one side. Off-by-one territory.
 
@@ -425,7 +432,8 @@ def detect_duplicate_truth(repo_root: Path) -> list[dict]:
     return findings[:MAX_FINDINGS]
 
 
-def compute_cheap_heuristics(repo_root: Path, coverage_data=None) -> dict:
+def compute_cheap_heuristics(repo_root: Path,
+                             coverage_data: CoverageData | None = None) -> dict:
     """Aggregate the three always-on hollow-test heuristics. Never raises - each
     detector degrades independently, so a failure in one still returns the
     others. Every finding is a *candidate*, flagged by ``confidence_note``.

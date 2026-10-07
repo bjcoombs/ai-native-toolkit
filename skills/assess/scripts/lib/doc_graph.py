@@ -35,6 +35,7 @@ from __future__ import annotations
 import os
 import posixpath
 import re
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
@@ -42,12 +43,15 @@ from pathlib import Path
 from lib.doc_links import INLINE_CODE_RE, LinkHarvest, harvest_links, strip_fenced_lines
 from lib.git_churn import tracked_files
 
+# Maps an absolute doc path to its repo-relative string form (the graph's node key).
+RelFn = Callable[[Path], str]
+
 try:  # networkx is the core dep; degrade rather than crash if it is missing.
     import networkx as nx
 
     _NETWORKX_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only on a broken env
-    nx = None  # type: ignore[assignment]  # unused unless _NETWORKX_AVAILABLE
+    nx = None  # type: ignore[assignment, unused-ignore]  # stubs absent: nx is Any; installed: None mismatches the module
     _NETWORKX_AVAILABLE = False
 
 
@@ -216,7 +220,8 @@ class DocGraphResult:
     # The underlying networkx DiGraph (nodes = doc rel-paths, edges = doc->doc).
     # Kept off as_dict(); the connectivity-graph SVG renderer needs the full
     # edge list that the serialised signals don't carry.
-    graph: object = None
+    # None until build_doc_graph fills it (and on the degrade paths).
+    graph: nx.DiGraph | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -385,7 +390,7 @@ def _obsidiantools_available() -> bool:
 
 
 def _cited_excluded_doc(
-    rel_path: str, repo_root: Path, tracked, scope: Path | None,
+    rel_path: str, repo_root: Path, tracked: frozenset[Path] | None, scope: Path | None,
     extra_dirs: set[str], extra_pats: list[str],
 ) -> Path | None:
     """The `.claude/` doc at `rel_path`, if a reference may bring it in.
@@ -444,7 +449,7 @@ def _read_doc(path: Path) -> str | None:
         return None
 
 
-def _basename_index(rels) -> dict[str, list[str]]:
+def _basename_index(rels: Iterable[str]) -> dict[str, list[str]]:
     """Repo-relative doc paths grouped by basename, built once per graph."""
     out: dict[str, list[str]] = {}
     for r in rels:
@@ -455,7 +460,7 @@ def _basename_index(rels) -> dict[str, list[str]]:
 def _resolve_references(
     text: str, source_rel: str, repo_root: Path,
     doc_by_rel: dict[str, Path], doc_rels: set[str], by_basename: dict[str, list[str]],
-    cite,
+    cite: Callable[[str], Path | None],
 ) -> list[Path]:
     """Docs named by backticked paths in `text`, exact paths before guesses:
     the doc-relative path (walked doc or cited `.claude/` doc), then the
@@ -483,7 +488,8 @@ def _resolve_references(
 
 
 def _settle_references(
-    docs: list[Path], texts: dict[Path, str], rel, resolve,
+    docs: list[Path], texts: dict[Path, str], rel: RelFn,
+    resolve: Callable[[str, str], list[Path]],
 ) -> list[tuple[Path, Path]]:
     """First pass: read every doc into `texts` and resolve its reference edges.
 
@@ -507,7 +513,9 @@ def _settle_references(
     return pairs
 
 
-def _missing_xrefs(docs, texts: dict, graph, repo_root: Path, rel) -> list[dict]:
+def _missing_xrefs(
+    docs: list[Path], texts: dict[Path, str], graph: nx.DiGraph, repo_root: Path, rel: RelFn,
+) -> list[dict]:
     """Docs that name another doc's filename in prose but never link to it
     (Karpathy Lint: "missing cross-references").
 
@@ -541,7 +549,7 @@ def _missing_xrefs(docs, texts: dict, graph, repo_root: Path, rel) -> list[dict]
 
 
 def _settle_reference_pairs(
-    docs: list[Path], texts: dict[Path, str], rel, repo_root: Path,
+    docs: list[Path], texts: dict[Path, str], rel: RelFn, repo_root: Path,
     scope: Path | None, extra_exclude_dirs: set[str] | None,
     extra_exclude_patterns: list[str] | None,
 ) -> list:
@@ -561,7 +569,7 @@ def _settle_reference_pairs(
 
 
 def _excluded_layers(
-    graph, docs: list[Path], repo_root: Path, rel, base_hubs,
+    graph: nx.DiGraph, docs: list[Path], repo_root: Path, rel: RelFn, base_hubs: list[str],
     machine_links: dict[str, int], working_notes_dirs: list[str] | None,
     working_notes_ignore: list[str] | None,
 ) -> tuple[set[str], list, set[str], list]:
@@ -587,8 +595,9 @@ def _excluded_layers(
 
 
 def _curated_result(
-    graph, docs: list[Path], repo_root: Path, rel, harvest: LinkHarvest,
-    missing: list[dict], excluded_docs: set[str], vault: bool, obs: bool, base_hubs,
+    graph: nx.DiGraph, docs: list[Path], repo_root: Path, rel: RelFn, harvest: LinkHarvest,
+    missing: list[dict], excluded_docs: set[str], vault: bool, obs: bool,
+    base_hubs: list[str],
 ) -> DocGraphResult:
     """Derive the headline and link-only signals over the curated layer
     (the graph minus excluded docs)."""
@@ -733,7 +742,7 @@ def build_doc_graph(
     return result
 
 
-def _link_parents(graph, entry_points: list[str]) -> list[dict]:
+def _link_parents(graph: nx.DiGraph, entry_points: list[str]) -> list[dict]:
     """One ``{path, link_parent, link_entry}`` record per node in ``graph``.
 
     ``graph`` is the link-only subgraph, so a doc reachable only over a
@@ -790,7 +799,7 @@ def _top_dir(rel_path: str) -> str:
 
 
 def _directory_breakdown(
-    nodes, unreachable: list[str], broken: list[dict],
+    nodes: Iterable[str], unreachable: list[str], broken: list[dict],
 ) -> list[dict]:
     """Doc, unreachable and broken-link counts per top-level directory, largest
     gap first. A broken link counts toward the directory of the doc it is
@@ -810,7 +819,7 @@ def _directory_breakdown(
 
 
 def _layer_figures(
-    graph, broken: list[dict], layer_docs: set[str], trees: list[dict],
+    graph: nx.DiGraph, broken: list[dict], layer_docs: set[str], trees: list[dict],
 ) -> tuple[list[dict], int, float, int]:
     """An excluded layer's own figures: its trees as ``{path, file_count}``,
     doc count, orphan rate over the full graph, and broken links it holds."""
@@ -826,7 +835,7 @@ def _layer_figures(
 
 
 def _detect_working_notes_trees(
-    graph, doc_rels: set[str], *, force: list[str], ignore: list[str],
+    graph: nx.DiGraph, doc_rels: set[str], *, force: list[str], ignore: list[str],
 ) -> tuple[set[str], list[dict]]:
     """Detect working-notes subtrees and return (excluded_doc_rels, trees).
 
@@ -849,7 +858,7 @@ def _detect_working_notes_trees(
 
 
 def _detect_raw_trees(
-    graph, docs: list[Path], repo_root: Path, rel, base_hubs: list[str],
+    graph: nx.DiGraph, docs: list[Path], repo_root: Path, rel: RelFn, base_hubs: list[str],
     machine_links: dict[str, int],
 ) -> tuple[set[str], list[dict]]:
     """Detect raw-source subtrees and return (excluded_doc_rels, raw_trees).
@@ -883,7 +892,7 @@ def _detect_raw_trees(
 
 
 def _apply_vault_edges(
-    graph, repo_root: Path, docs: list[Path], texts: dict[Path, str], rel,
+    graph: nx.DiGraph, repo_root: Path, docs: list[Path], texts: dict[Path, str], rel: RelFn,
     *, extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
     scope: Path | None = None,
@@ -944,7 +953,7 @@ def _apply_vault_edges(
     return base_hubs
 
 
-def _pagerank(graph, alpha: float = 0.85, max_iter: int = 100,
+def _pagerank(graph: nx.DiGraph, alpha: float = 0.85, max_iter: int = 100,
               tol: float = 1e-9) -> dict[str, float]:
     """PageRank by pure-Python power iteration (with dangling-node handling).
 
@@ -989,7 +998,7 @@ def _is_declared_moc(path: Path) -> bool:
 
 
 def _pick_entry_points(
-    docs: list[Path], repo_root: Path, pagerank: dict[str, float], rel,
+    docs: list[Path], repo_root: Path, pagerank: dict[str, float], rel: RelFn,
     base_hubs: list[str] | None = None,
 ) -> list[str]:
     """Entry roots for reachability: root-level README/AGENTS/CLAUDE/index, the
@@ -1017,7 +1026,7 @@ def _pick_entry_points(
 
 
 def _derive_signals(
-    *, graph, docs: list[Path], repo_root: Path, rel,
+    *, graph: nx.DiGraph, docs: list[Path], repo_root: Path, rel: RelFn,
     doc_to_code: list[dict], dangling: int, ambiguous: int,
     vault: bool, obs: bool, base_hubs: list[str] | None = None,
     entries: list[str] | None = None,
