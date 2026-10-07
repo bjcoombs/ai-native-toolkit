@@ -500,10 +500,15 @@ Both persistent pages compound across runs rather than reflecting only the lates
 one. `write_hotspot_page` reads the page's existing history table
 (`parse_history_rows`, which reads pre-`Run`-column five-cell rows with `-` as the
 run) and `merge_history_rows` appends this run's row, ordered by date, replacing
-only a row with the same run date and short run id and dropping the row of a
-`superseded_run_id` (#421). The page labels its `ccn` the file aggregate and adds a
-`Worst function` row only when the sidecar's `max_fn_ccn` / `max_fn_name` are set
-(#423). `write_index` seeds from the prior `index.md` rows (`parse_index_rows`)
+only a row with the same run date and short run id. Before the pages are
+rewritten, `sweep_superseded_history_rows` removes a superseded, never-finalized
+run's row from every page on disk, including files this run does not rank, matching
+the log entry the core drops (#421). The page labels its `ccn` the file aggregate and
+adds a `Worst function` row only when the sidecar's `max_fn_ccn` / `max_fn_name` are
+set (#423). `format_ccn` renders integral sidecar floats as integers; the worst
+function is shown unclamped, with a note when it exceeds the aggregate (a Dart file's
+aggregate is scc's, its worst function the Dart scanner's), and a `|` in its name is
+escaped. `write_index` seeds from the prior `index.md` rows (`parse_index_rows`)
 and from every hotspot page on disk (`read_hotspot_page_entries`), then
 `merge_index_entries` lets this run's entries win per path: a path the run did not
 rank keeps its last known row but renders `graduated` (it is not a hotspot this

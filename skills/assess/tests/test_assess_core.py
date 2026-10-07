@@ -2544,9 +2544,9 @@ def test_hotspot_page_names_worst_function_and_aggregate(tmp_path: Path) -> None
     hot = assess_dir / "hotspots"
     a = (hot / f"{slug_for_path('src/a.py')}.md").read_text()
     b = (hot / f"{slug_for_path('src/b.go')}.md").read_text()
-    assert "| Cyclomatic complexity (file aggregate) | 159.0 |" in a
-    assert "| Worst function | `test_scan` (8.0) |" in a
-    assert "aggregate cyclomatic complexity 159.0 (worst function `test_scan` 8.0)" in a
+    assert "| Cyclomatic complexity (file aggregate) | 159 |" in a
+    assert "| Worst function | `test_scan` (8) |" in a
+    assert "aggregate cyclomatic complexity 159 (worst function `test_scan` 8)" in a
     assert "file max" not in a and "max cyclomatic" not in a
     assert "Worst function" not in b
     assert "aggregate cyclomatic complexity 30, " in b

@@ -84,10 +84,12 @@ from lib.wiki_writer import (
     HotspotEntry,
     LogEntry,
     append_log_entry,
+    format_ccn,
     last_log_entry_is_unfinalized_run,
     prune_orphan_hotspots,
     retire_excluded_hotspots,
     supersede_unfinalized_log_entry,
+    sweep_superseded_history_rows,
     verify_log_chain,
     write_hotspot_page,
     write_index,
@@ -651,6 +653,19 @@ def _retire_excluded_unfinalized(
     return retired, dropped
 
 
+def _sweep_superseded_history(assess_dir: Path, superseded: dict | None) -> None:
+    """Remove a never-finalized superseded run's row from every hotspot page.
+
+    Its log entry is dropped later in the run; the history rows go with it,
+    including pages of files this run does not rank (#421). Runs before the
+    pages are rewritten, so a rewritten page merges onto a swept table.
+    """
+    if superseded is not None and last_log_entry_is_unfinalized_run(
+        assess_dir, superseded["run_id"],
+    ):
+        sweep_superseded_history_rows(assess_dir, superseded["run_id"])
+
+
 def _drop_superseded_log_entry(assess_dir: Path, superseded: dict | None) -> None:
     """Remove the superseded run's log entry when it is still unfinalized."""
     if superseded is not None:
@@ -1165,14 +1180,7 @@ def build_run_context(
         h["path"] for h in current.get("top_hotspots", []))
     # One repository index for every hot file's parallel-tree (basename) probe.
     hot_test_index = build_test_index(repo_root) if current.get("top_hotspots") else None
-    # A never-finalized run this one supersedes loses its log entry below; its
-    # row in each page's history table goes with it (#421).
-    superseded_run_id = (
-        superseded["run_id"]
-        if superseded is not None
-        and last_log_entry_is_unfinalized_run(assess_dir, superseded["run_id"])
-        else None
-    )
+    _sweep_superseded_history(assess_dir, superseded)
     for h in current.get("top_hotspots", []):
         path = h["path"]
         # Preserve the original first_flagged date across runs. A path missing
@@ -1192,7 +1200,7 @@ def build_run_context(
         max_fn_ccn = h.get("max_fn_ccn")
         max_fn_name = h.get("max_fn_name")
         worst_fn = (
-            f" (worst function `{max_fn_name}` {max_fn_ccn})"
+            f" (worst function `{max_fn_name}` {format_ccn(max_fn_ccn)})"
             if max_fn_ccn is not None and max_fn_name else ""
         )
         hotspot_entries.append(HotspotEntry(
@@ -1217,7 +1225,7 @@ def build_run_context(
             briefing=(
                 f"Hotspot ({status}). "
                 f"{loc} LOC, "
-                f"aggregate cyclomatic complexity {ccn}{worst_fn}, "
+                f"aggregate cyclomatic complexity {format_ccn(ccn)}{worst_fn}, "
                 f"{commits} commits in churn window. "
                 + _marker_debt_sentence(marker_debt_by_file.get(path))
                 + "(Briefing refined by LLM via assess_finalize - see Suggested actions below.)"
@@ -1228,7 +1236,6 @@ def build_run_context(
             schema_version=ARTIFACT_SCHEMA_VERSION,
             max_fn_ccn=max_fn_ccn,
             max_fn_name=max_fn_name,
-            superseded_run_id=superseded_run_id,
         )
 
     # Prune orphan hotspot pages: any page from a prior run whose source file no

@@ -1,6 +1,7 @@
 """Tests for wiki writer module."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -8,10 +9,12 @@ from lib.wiki_writer import (
     HotspotEntry,
     LogEntry,
     append_log_entry,
+    format_ccn,
     parse_history_rows,
     parse_index_rows,
     prune_orphan_hotspots,
     slug_for_path,
+    sweep_superseded_history_rows,
     verify_log_chain,
     write_hotspot_page,
     write_index,
@@ -569,9 +572,27 @@ def test_hotspot_history_replaces_only_same_date_and_run(tmp_assess_dir: Path) -
     assert [r.split(" | ")[1:3] for r in _history(tmp_assess_dir)] == [
         ["11111111", "2"], ["22222222", "3"],
     ]
-    write_hotspot_page(tmp_assess_dir, **{
-        **kw, "run_id": "r-33333333", "loc": 4, "superseded_run_id": "r-22222222"})
+    assert sweep_superseded_history_rows(tmp_assess_dir, "r-22222222") == [
+        f"{slug_for_path('src/foo.go')}.md"]
+    write_hotspot_page(tmp_assess_dir, **{**kw, "run_id": "r-33333333", "loc": 4})
     assert [r.split(" | ")[1] for r in _history(tmp_assess_dir)] == ["11111111", "33333333"]
+
+
+def test_sweep_superseded_rows_reaches_pages_not_rewritten(tmp_assess_dir: Path) -> None:
+    """#421: a page this run does not rewrite still loses the superseded run's
+    row; other rows, other pages and text outside the table are untouched."""
+    kw = _hotspot_kwargs(last_seen="2026-07-01")
+    write_hotspot_page(tmp_assess_dir, **{**kw, "run_id": "r-11111111"})
+    write_hotspot_page(tmp_assess_dir, **{**kw, "run_id": "r-22222222",
+                                          "briefing": "| 2026 | 22222222 | kept |"})
+    write_hotspot_page(tmp_assess_dir, **{**kw, "path": "b.go", "run_id": "r-11111111"})
+    assert sweep_superseded_history_rows(tmp_assess_dir, "r-22222222") == [
+        f"{slug_for_path('src/foo.go')}.md"]
+    assert [r.split(" | ")[1] for r in _history(tmp_assess_dir)] == ["11111111"]
+    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('src/foo.go')}.md").read_text()
+    assert "| 2026 | 22222222 | kept |" in page
+    assert sweep_superseded_history_rows(tmp_assess_dir, "r-22222222") == []
+    assert [r.split(" | ")[1] for r in _history(tmp_assess_dir, "b.go")] == ["11111111"]
 
 
 def test_hotspot_history_reads_legacy_five_column_rows() -> None:
@@ -596,7 +617,36 @@ def test_hotspot_page_worst_function_row_omitted_when_null(tmp_assess_dir: Path)
     b = (hot / f"{slug_for_path('b.py')}.md").read_text()
     assert "| Cyclomatic complexity (file aggregate) | 30 |\n| Commits" in a
     assert "Worst function" not in a and "file max" not in a
-    assert "| Worst function | `parse_line` (8.0) |\n| Commits" in b
+    assert "| Worst function | `parse_line` (8) |\n| Commits" in b
+
+
+def test_hotspot_page_renders_integral_ccn_as_integer(tmp_assess_dir: Path) -> None:
+    """Sidecar floats render as whole numbers when integral, fractional ones
+    unchanged, in the metrics table and the history row."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(ccn=159.0, run_id="r-11111111"))
+    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('src/foo.go')}.md").read_text()
+    assert "| Cyclomatic complexity (file aggregate) | 159 |" in page
+    assert _history(tmp_assess_dir)[0].split(" | ")[3] == "159"
+    assert format_ccn(12.5) == "12.5" and format_ccn(7) == "7" and format_ccn(8.0) == "8"
+
+
+def test_hotspot_page_worst_function_escapes_pipe_and_flags_excess(
+    tmp_assess_dir: Path,
+) -> None:
+    """A ``|`` in the name cannot split the cell; a worst function above the
+    aggregate (Dart: scc aggregate, Dart-scanner function) shows unclamped."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(
+        path="a.dart", ccn=6.0, max_fn_ccn=9.0, max_fn_name="operator |"))
+    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('a.dart')}.md").read_text()
+    row = next(line for line in page.splitlines() if line.startswith("| Worst function"))
+    assert row == ("| Worst function | `operator \\|` (9) - above the file aggregate: "
+                   "the two are counted by different tools |")
+    assert len(_split_cells(row)) == 2
+
+
+def _split_cells(row: str) -> list[str]:
+    """Table cells as a markdown renderer splits them (``\\|`` is literal)."""
+    return [c for c in re.split(r"(?<!\\)\|", row.strip().strip("|"))]
 
 
 def _entry(path: str, status: str = "active", **kw: object) -> HotspotEntry:

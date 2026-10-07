@@ -694,7 +694,7 @@ def write_hotspot_page(
     last_seen: str,
     status: str,
     loc: int,
-    ccn: int,
+    ccn: float,
     commits: int,
     has_tests: bool | None,
     briefing: str,
@@ -704,7 +704,6 @@ def write_hotspot_page(
     schema_version: str | None = None,
     max_fn_ccn: float | None = None,
     max_fn_name: str | None = None,
-    superseded_run_id: str | None = None,
 ) -> None:
     """(Re)write hotspots/<slug>.md, keeping the page's run history.
 
@@ -713,12 +712,16 @@ def write_hotspot_page(
     the current metrics) is appended, and the rows are ordered by run date.
     Only a row carrying this run's date *and* run id is replaced, so a re-run
     of the same run never duplicates its row while two distinct runs on one
-    day both stay. ``superseded_run_id`` names a never-finalized run this one
-    replaces; its row is dropped, matching the log entry the core drops.
+    day both stay. A superseded run's rows are removed from every page by
+    ``sweep_superseded_history_rows``, not here.
 
     ``ccn`` is the file aggregate (the sum over the file's functions).
     ``max_fn_ccn`` / ``max_fn_name`` are the worst single function from the
     stats sidecar; the page shows that row only when both are present (#423).
+    Both render as integers when integral (``format_ccn``) and unclamped: a
+    Dart file's aggregate comes from scc and its worst function from the Dart
+    scanner, which counts more branches, so the worst function can exceed
+    the aggregate, and the row says so rather than hiding it.
 
     has_tests=None means "we don't know yet" - shown as "unknown" in the page.
     Test-to-code pairing is a deferred feature; honest reporting beats lying.
@@ -741,19 +744,18 @@ def write_hotspot_page(
     page_path = hotspots_dir / f"{slug_for_path(path)}.md"
     existing = page_path.read_text(encoding="utf-8") if page_path.exists() else ""
     run_cell = _short_run_id(run_id) if run_id else "-"
-    new_row = [last_seen, run_cell, str(loc), str(ccn), str(commits), status]
-    drop = {_short_run_id(superseded_run_id)} if superseded_run_id else set()
-    history = merge_history_rows(parse_history_rows(existing), new_row, drop_runs=drop)
+    new_row = [last_seen, run_cell, str(loc), format_ccn(ccn), str(commits), status]
+    history = merge_history_rows(parse_history_rows(existing), new_row)
     content = _load_template("hotspot.md.template").format(
         path=path,
         first_flagged=first_flagged,
         last_seen=last_seen,
         status=status,
         loc=loc,
-        ccn=ccn,
+        ccn=format_ccn(ccn),
         commits=commits,
         has_tests=has_tests_str,
-        worst_fn_row=_worst_fn_row(max_fn_ccn, max_fn_name),
+        worst_fn_row=_worst_fn_row(ccn, max_fn_ccn, max_fn_name),
         history_rows="\n".join(_render_row(r) for r in history),
         briefing=briefing,
         actions=actions,
@@ -763,12 +765,33 @@ def write_hotspot_page(
     )
 
 
-def _worst_fn_row(max_fn_ccn: float | None, max_fn_name: str | None) -> str:
+def format_ccn(value: float) -> str:
+    """A complexity value as text: ``8`` for an integral ``8.0`` (a function's
+    cyclomatic complexity, and a sum of them, is a whole number; the sidecar
+    stores floats), the plain float otherwise."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _worst_fn_row(
+    ccn: float, max_fn_ccn: float | None, max_fn_name: str | None,
+) -> str:
     """The "Worst function" metrics row, or "" when the sidecar has no
-    per-function data for the file (scc-scored files carry nulls)."""
+    per-function data for the file (scc-scored files carry nulls).
+
+    The name is escaped so a ``|`` cannot split the table cell. A worst
+    function above the aggregate (a Dart file: scc aggregate, Dart-scanner
+    function) is shown as measured, with a note that two counters disagree.
+    """
     if max_fn_ccn is None or not max_fn_name:
         return ""
-    return f"| Worst function | `{max_fn_name}` ({max_fn_ccn}) |\n"
+    name = max_fn_name.replace("|", "\\|")
+    note = (
+        " - above the file aggregate: the two are counted by different tools"
+        if max_fn_ccn > ccn else ""
+    )
+    return f"| Worst function | `{name}` ({format_ccn(max_fn_ccn)}){note} |\n"
 
 
 # --- hotspot page history table (#421) ----------------------------------------
@@ -816,21 +839,55 @@ def parse_history_rows(content: str) -> list[list[str]]:
     return rows
 
 
-def merge_history_rows(
-    rows: list[list[str]], new_row: list[str], *, drop_runs: set[str] | None = None,
-) -> list[list[str]]:
+def merge_history_rows(rows: list[list[str]], new_row: list[str]) -> list[list[str]]:
     """Append ``new_row`` to ``rows``, ordered by run date (stable).
 
-    A row with the same run date and run id as ``new_row`` is replaced; a row
-    whose run id is in ``drop_runs`` is removed. Every other row is kept.
+    A row with the same run date and run id as ``new_row`` is replaced. Every
+    other row is kept.
     """
-    drop = drop_runs or set()
-    kept = [
-        r for r in rows
-        if (r[0], r[1]) != (new_row[0], new_row[1])
-        and not (r[1] != "-" and r[1] in drop)
-    ]
+    kept = [r for r in rows if (r[0], r[1]) != (new_row[0], new_row[1])]
     return sorted([*kept, new_row], key=lambda r: r[0])
+
+
+def _drop_history_run(content: str, short_id: str) -> str:
+    """``content`` with the history-table rows of run ``short_id`` removed.
+
+    Only the history section (from its heading to the next ``## `` heading) is
+    touched, so a matching cell elsewhere on the page is left alone.
+    """
+    start = content.find(_HISTORY_HEADING)
+    if start == -1:
+        return content
+    end = content.find("\n## ", start + len(_HISTORY_HEADING))
+    end = len(content) if end == -1 else end
+    section = content[start:end].splitlines(keepends=True)
+    kept = [
+        line for line in section
+        if not (line.startswith("|") and (cells := _split_row(line))
+                and len(cells) == _HISTORY_COLUMNS and cells[1] == short_id)
+    ]
+    return content[:start] + "".join(kept) + content[end:]
+
+
+def sweep_superseded_history_rows(assess_dir: Path, superseded_run_id: str) -> list[str]:
+    """Remove a superseded, never-finalized run's row from every hotspot page.
+
+    The core drops that run's ``log.md`` entry; its history rows go with it on
+    every page, including files it ranked that this run does not (#421).
+    Returns the sorted page filenames that changed.
+    """
+    short_id = _short_run_id(superseded_run_id)
+    changed: list[str] = []
+    hotspots_dir = assess_dir / "hotspots"
+    if not hotspots_dir.is_dir():
+        return changed
+    for page in sorted(hotspots_dir.glob("*.md")):
+        content = page.read_text(encoding="utf-8")
+        swept = _drop_history_run(content, short_id)
+        if swept != content:
+            page.write_text(swept, encoding="utf-8")
+            changed.append(page.name)
+    return changed
 
 
 # --- orphan hotspot pruning (issue: assess-obey-thyself, task 9) --------------
