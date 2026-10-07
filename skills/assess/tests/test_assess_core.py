@@ -2367,6 +2367,139 @@ def test_index_keeps_graduated_row_absent_from_later_diff(tmp_path: Path) -> Non
     assert "| 650 | 85 | 6 |" in rows[1]
 
 
+# --- index rows for paths absent from this run (#420) -------------------------
+#
+# Each test is a run sequence on the real core: run one ranks the path, which
+# writes its hotspot page and its index row, so later runs start from both. One
+# test per reason a previously indexed path can be absent from this run's set.
+
+_KEEP = {"path": "src/keep.go", "loc": 300, "ccn": 30, "commits": 3}
+
+
+def _absent_repo(tmp_path: Path, path: str) -> tuple[Path, Path]:
+    repo = tmp_path / "repo"
+    (repo / path).parent.mkdir(parents=True, exist_ok=True)
+    (repo / path).write_text("package main\n", encoding="utf-8")
+    (repo / "src").mkdir(exist_ok=True)
+    (repo / "src" / "keep.go").write_text("package main\n", encoding="utf-8")
+    assess_dir = repo / ".assess"
+    assess_dir.mkdir()
+    return repo, assess_dir
+
+
+def _run(repo: Path, top: list[dict], day: str, **extra: object) -> dict:
+    """Rotate the stats sidecar like the treemap does, then run the core."""
+    assess_dir = repo / ".assess"
+    current = assess_dir / "complexity-stats.json"
+    if current.exists():
+        (assess_dir / "complexity-stats.prior.json").write_text(current.read_text())
+    current.write_text(json.dumps({**_stats(top), **extra}))
+    return build_run_context(repo_root=repo, run_date=day)
+
+
+def _index_row(assess_dir: Path, path: str) -> str | None:
+    index = (assess_dir / "index.md").read_text(encoding="utf-8")
+    return next((r for r in index.splitlines() if f"| `{path}` |" in r), None)
+
+
+def _seeded(assess_dir: Path, path: str) -> None:
+    """Run one left both a page and an index row for ``path``."""
+    assert (assess_dir / "hotspots" / f"{slug_for_path(path)}.md").exists()
+    assert _index_row(assess_dir, path) is not None
+
+
+def test_index_row_for_path_graduating_this_run(tmp_path: Path) -> None:
+    hot = {"path": "src/hot.go", "loc": 900, "ccn": 90, "commits": 9}
+    repo, assess_dir = _absent_repo(tmp_path, hot["path"])
+    _run(repo, [hot, _KEEP], "2026-06-01")
+    _seeded(assess_dir, hot["path"])
+    _run(repo, [_KEEP], "2026-06-08")
+    row = _index_row(assess_dir, hot["path"])
+    assert row is not None and "| 2026-06-08 | graduated |" in row
+
+
+def test_index_row_for_path_graduated_in_an_earlier_run(tmp_path: Path) -> None:
+    hot = {"path": "src/hot.go", "loc": 900, "ccn": 90, "commits": 9}
+    repo, assess_dir = _absent_repo(tmp_path, hot["path"])
+    _run(repo, [hot, _KEEP], "2026-06-01")
+    _seeded(assess_dir, hot["path"])
+    _run(repo, [_KEEP], "2026-06-08")
+    _run(repo, [_KEEP], "2026-06-15")
+    row = _index_row(assess_dir, hot["path"])
+    assert row is not None and "| 2026-06-08 | graduated |" in row
+
+
+def test_index_row_for_deleted_file(tmp_path: Path) -> None:
+    """The run that drops a deleted file counts it graduated, as diff.graduated
+    does, while its page is retired; every later run carries the page's
+    retired status."""
+    hot = {"path": "src/hot.go", "loc": 900, "ccn": 90, "commits": 9}
+    repo, assess_dir = _absent_repo(tmp_path, hot["path"])
+    _run(repo, [hot, _KEEP], "2026-06-01")
+    _seeded(assess_dir, hot["path"])
+    (repo / hot["path"]).unlink()
+    ctx = _run(repo, [_KEEP], "2026-06-08")
+    assert [g["path"] for g in ctx["diff_detail"]["graduated"]] == [hot["path"]]
+    row = _index_row(assess_dir, hot["path"])
+    assert row is not None and "| graduated |" in row
+    _run(repo, [_KEEP], "2026-06-15")
+    row = _index_row(assess_dir, hot["path"])
+    assert row is not None and "| retired - file deleted |" in row
+
+
+def test_index_row_for_file_excluded_by_config_after_finalized_run(tmp_path: Path) -> None:
+    """A config exclude after a run on another day is outside #356: the core
+    counts the file graduated, and later runs carry it as graduated."""
+    hot = {"path": "vendor/fin.go", "loc": 900, "ccn": 90, "commits": 9}
+    repo, assess_dir = _absent_repo(tmp_path, hot["path"])
+    _run(repo, [hot, _KEEP], "2026-06-01")
+    _seeded(assess_dir, hot["path"])
+    (assess_dir / "config.toml").write_text('exclude_dirs = ["vendor"]\n')
+    ctx = _run(repo, [_KEEP], "2026-06-08")
+    assert [g["path"] for g in ctx["diff_detail"]["graduated"]] == [hot["path"]]
+    _run(repo, [_KEEP], "2026-06-15")
+    row = _index_row(assess_dir, hot["path"])
+    assert row is not None and "| 2026-06-08 | graduated |" in row
+
+
+def test_index_drops_file_excluded_before_finalize(tmp_path: Path) -> None:
+    """#356: a file first flagged only by a never-finalized run and then
+    excluded is retired as excluded before finalize and loses the index row
+    that unfinalized run wrote."""
+    hot = {"path": "gen/big.go", "loc": 900, "ccn": 90, "commits": 9}
+    repo, assess_dir = _absent_repo(tmp_path, hot["path"])
+    _run(repo, [_KEEP], "2026-06-01")
+    _run(repo, [hot, _KEEP], "2026-06-08")  # flags gen/big.go, never finalized
+    _seeded(assess_dir, hot["path"])
+    (assess_dir / "config.toml").write_text('exclude_dirs = ["gen"]\n')
+    ctx = _run(repo, [_KEEP], "2026-06-08")
+    assert ctx["retired_excluded_hotspots"] == [hot["path"]]
+    assert _index_row(assess_dir, hot["path"]) is None
+    _run(repo, [_KEEP], "2026-06-15")
+    assert _index_row(assess_dir, hot["path"]) is None
+
+
+@pytest.mark.parametrize("path, excluded_generated", [
+    ("db/schema.sql", [{"path": "db/schema.sql", "reason": "generated-header"}]),
+    ("web/src/database.types.ts", []),  # generated-name glob, silent
+])
+def test_index_drops_file_now_excluded_as_generated(
+    tmp_path: Path, path: str, excluded_generated: list[dict],
+) -> None:
+    """A ranked file the generated filter now drops did not graduate: its
+    carried index row and the row its page would backfill are both dropped,
+    this run and the next."""
+    hot = {"path": path, "loc": 900, "ccn": 90, "commits": 9}
+    repo, assess_dir = _absent_repo(tmp_path, path)
+    _run(repo, [hot, _KEEP], "2026-06-01")
+    _seeded(assess_dir, path)
+    ctx = _run(repo, [_KEEP], "2026-06-08", excluded_generated=excluded_generated)
+    assert ctx["diff"]["graduated"] == 0
+    assert _index_row(assess_dir, path) is None
+    _run(repo, [_KEEP], "2026-06-15", excluded_generated=excluded_generated)
+    assert _index_row(assess_dir, path) is None
+
+
 def test_every_live_hotspot_page_has_an_index_row(tmp_path: Path) -> None:
     """#420 success criterion: after a run, every non-retired hotspot page,
     including one orphaned from the index by an older writer, has a row."""

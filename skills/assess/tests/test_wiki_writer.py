@@ -641,3 +641,18 @@ def test_write_index_backfills_orphaned_live_page_as_graduated(tmp_assess_dir: P
     rows = {e.path: e.status for e in parse_index_rows(
         (tmp_assess_dir / "index.md").read_text())}
     assert rows == {"a.go": "active", "was_new.go": "graduated", "orphan.go": "graduated"}
+
+
+def test_write_index_drops_never_assessed_and_generated_paths(tmp_assess_dir: Path) -> None:
+    """``never_assessed`` drops a carried row even when the page has no status
+    token to read it from; ``excluded_as_generated`` drops carried and
+    backfilled rows alike."""
+    write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(path="gen/page.go"))
+    write_index(tmp_assess_dir, [_entry("unstamped.go"), _entry("gen/row.go"), _entry("b.go")],
+                last_updated="2026-07-01")
+    write_index(tmp_assess_dir, [_entry("a.go")], last_updated="2026-07-08",
+                never_assessed=["unstamped.go"],
+                excluded_as_generated=lambda p: p.startswith("gen/"))
+    rows = {e.path: e.status for e in parse_index_rows(
+        (tmp_assess_dir / "index.md").read_text())}
+    assert rows == {"a.go": "active", "b.go": "graduated"}

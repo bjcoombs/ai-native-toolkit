@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -139,6 +140,8 @@ def write_index(
     assess_dir: Path, entries: list[HotspotEntry], *, last_updated: str,
     run_id: str | None = None, schema_version: str | None = None,
     scope: str | None = None,
+    never_assessed: Iterable[str] = (),
+    excluded_as_generated: Callable[[str], bool] | None = None,
 ) -> None:
     """(Re)write index.md: this run's entries merged into the prior catalog.
 
@@ -150,7 +153,12 @@ def write_index(
     from the page itself. A carried row whose page is now retired takes the
     page's retired status, so the index never calls a deleted file live. A
     page retired as excluded before finalize (#356) was never part of a
-    finished assessment, so its path gets no carried or backfilled row.
+    finished assessment, so its path gets no carried or backfilled row; nor does
+    a path in ``never_assessed`` (the core's excluded-before-finalize list,
+    which also covers a page with no status token to stamp) or one for which
+    ``excluded_as_generated`` is true (left the ranking because the generated
+    filter now drops it, so it did not graduate). See ``merge_index_entries``
+    for the full case list.
 
     Row order: this run's entries first, then carried rows in their prior
     order, then backfilled rows by path.
@@ -168,7 +176,10 @@ def write_index(
         if index_path.exists() else []
     )
     pages = read_hotspot_page_entries(assess_dir)
-    merged = merge_index_entries(prior, entries, pages)
+    merged = merge_index_entries(
+        prior, entries, pages, never_assessed=never_assessed,
+        excluded_as_generated=excluded_as_generated,
+    )
     rows = []
     for e in merged:
         # `None` -> "-" so an unknown metric never reads as "the file was
@@ -198,33 +209,51 @@ def write_index(
 
 def merge_index_entries(
     prior: list[HotspotEntry], current: list[HotspotEntry],
-    pages: dict[str, HotspotEntry],
+    pages: dict[str, HotspotEntry], *, never_assessed: Iterable[str] = (),
+    excluded_as_generated: Callable[[str], bool] | None = None,
 ) -> list[HotspotEntry]:
     """Merge this run's index entries into the prior catalog (#420).
 
     ``pages`` maps each hotspot page's source path to the entry read from the
     page (see ``read_hotspot_page_entries``).
 
-    A path absent from ``current`` is not a hotspot this run, so a carried or
-    backfilled row never keeps a live status (new, active, persistent,
-    regressed): it renders ``graduated``, the legend's "was a hotspot, no
-    longer is". A page is rewritten only while its file is ranked, so an
-    orphaned page still carries the live status of its last ranked run. A
-    retired page's status wins over the row's.
+    ``current`` wins for every path it names, including this run's graduations.
+    A previously indexed path absent from ``current`` gets, by the reason it is
+    absent:
+
+    - graduated in an earlier run, or excluded by config after a finalized run
+      (the core counts that a graduation): carried as ``graduated``;
+    - file deleted: its page is retired by ``prune_orphan_hotspots``, so the row
+      takes the page's retired status;
+    - excluded before finalize (#356), named in ``never_assessed`` or shown by a
+      page retired with that status: no row, it was never part of a finished
+      assessment;
+    - excluded as generated (``excluded_as_generated`` is true): no row, the
+      filter changed rather than the file, so it never graduated.
+
+    Otherwise a carried or backfilled row never keeps a live status (new,
+    active, persistent, regressed): it renders ``graduated``, the legend's "was
+    a hotspot, no longer is". A page is rewritten only while its file is ranked,
+    so an orphaned page still carries the live status of its last ranked run.
     """
     merged: dict[str, HotspotEntry] = {}
     for e in current:
         merged.setdefault(e.path, e)
-    never_assessed = {
+    dropped = set(never_assessed) | {
         p for p, page in pages.items() if page.status == RETIRED_EXCLUDED_STATUS
     }
+
+    def keep(path: str) -> bool:
+        if path in merged or path in dropped:
+            return False
+        return excluded_as_generated is None or not excluded_as_generated(path)
+
     carried = [e for e in prior if e.path not in merged]
     carried_paths = {e.path for e in carried}
-    backfilled = [pages[p] for p in sorted(pages) if p not in merged and p not in carried_paths]
+    backfilled = [pages[p] for p in sorted(pages) if p not in carried_paths]
     for e in [*carried, *backfilled]:
-        if e.path in never_assessed or e.path in merged:
-            continue
-        merged[e.path] = _not_current(e, pages.get(e.path))
+        if keep(e.path):
+            merged[e.path] = _not_current(e, pages.get(e.path))
     return list(merged.values())
 
 
