@@ -1,0 +1,96 @@
+# File-size ratchet for the Python under skills/assess/ and scripts/.
+#
+# Every Python file there may be at most `default_limit` lines. A file already
+# over the limit when the ratchet started is listed under [ceilings] with its
+# line count as its ceiling: it may shrink, but not grow past that ceiling.
+# Enforced by tests/test_file_size_ratchet.py (the `plugin contract pytest`
+# job).
+#
+# A file over its limit: split it. Raise a ceiling only when the growth is
+# justified, and say why in that entry's `reason`. Once an allowlisted file
+# drops to `default_limit` or below, delete its entry; the test fails until
+# you do.
+#
+# 800 lines: the current distribution has a median of 276, p75 of 473 and
+# p90 of 876 across 159 files, so 800 sits above the shape of a well-split
+# module and test file (88% of files already fit) while biting on the
+# monoliths that only ever grow.
+
+default_limit = 800
+roots = ["skills/assess", "scripts"]
+
+[ceilings."scripts/canaries/run_canaries.py"]
+lines = 876
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."scripts/floor_anchor.py"]
+lines = 1067
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."scripts/floor_check.py"]
+lines = 997
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."scripts/tests/test_floor_anchor.py"]
+lines = 1208
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."scripts/tests/test_floor_check.py"]
+lines = 1422
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/scripts/assess_core.py"]
+lines = 1975
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/scripts/assess_finalize.py"]
+lines = 840
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/scripts/complexity-treemap.py"]
+lines = 1532
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/scripts/lib/doc_graph.py"]
+lines = 1095
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/scripts/lib/keyhole_signals.py"]
+lines = 1639
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/scripts/lib/wiki_writer.py"]
+lines = 1015
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/tests/test_assess_core.py"]
+lines = 2586
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/tests/test_assess_finalize.py"]
+lines = 1354
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/tests/test_complexity_treemap.py"]
+lines = 1798
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/tests/test_doc_graph.py"]
+lines = 1047
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/tests/test_doc_staleness.py"]
+lines = 846
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/tests/test_keyhole_signals.py"]
+lines = 1665
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/tests/test_structure_drift.py"]
+lines = 885
+reason = "pre-existing; ratchet from 2026-10-07"
+
+[ceilings."skills/assess/tests/test_test_pressure.py"]
+lines = 1190
+reason = "pre-existing; ratchet from 2026-10-07"

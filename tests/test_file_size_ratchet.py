@@ -7,9 +7,11 @@ gets `default_limit` lines; a file already over it is allowlisted with its
 line count as its ceiling. The failure messages point at splitting first and
 at the allowlist only for justified growth.
 """
+
 import subprocess
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -18,7 +20,8 @@ CONFIG_NAME = ".file-size-ratchet.toml"
 CONFIG = REPO / CONFIG_NAME
 
 
-def load_config(path: Path = CONFIG) -> dict:
+def load_config(path: Path = CONFIG) -> dict[str, Any]:
+    """Parse the ratchet config: `default_limit`, `roots` and `[ceilings]`."""
     with path.open("rb") as fh:
         return tomllib.load(fh)
 
@@ -38,10 +41,13 @@ def python_files(repo: Path, roots: list[str]) -> list[str]:
 
 
 def count_lines(path: Path) -> int:
+    """Line count as `wc -l` reports it for a file ending in a newline."""
     return len(path.read_text(encoding="utf-8").splitlines())
 
 
-def ratchet_violations(counts: dict[str, int], config: dict) -> list[str]:
+def ratchet_violations(
+    counts: dict[str, int], config: dict[str, Any]
+) -> list[str]:
     """Every breach of the ratchet, each as an instruction a contributor can act on."""
     limit = config["default_limit"]
     ceilings = config.get("ceilings", {})
@@ -103,7 +109,7 @@ def test_python_files_stay_within_their_size_limit() -> None:
 
 # --- The rules themselves, on synthetic input --------------------------------
 
-SYNTHETIC = {
+SYNTHETIC: dict[str, Any] = {
     "default_limit": 100,
     "ceilings": {"big.py": {"lines": 150, "reason": "pre-existing"}},
 }
