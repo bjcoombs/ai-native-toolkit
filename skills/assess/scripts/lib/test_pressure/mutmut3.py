@@ -362,6 +362,26 @@ def _to_repo(pkg_rel: str, rel: str) -> str:
 
 # ── the scratch copy ─────────────────────────────────────────────────────────
 
+# Variables that point git at a repository regardless of its working
+# directory (``git rev-parse --local-env-vars``). Inherited from a hook or a
+# wrapper, they would make the copy list, stage and commit into the user's own
+# repository instead of the scratch one.
+_GIT_LOCATION_VARS = frozenset({
+    "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_NAMESPACE",
+    "GIT_PREFIX", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
+    "GIT_GRAFT_FILE", "GIT_IMPLICIT_WORK_TREE", "GIT_INTERNAL_SUPER_PREFIX",
+    "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_SHALLOW_FILE",
+})
+
+
+def _git_env(**extra: str) -> dict[str, str]:
+    """The environment for a git call that must act on its ``cwd`` only."""
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_LOCATION_VARS}
+    env.update(extra)
+    return env
+
+
 def _copy_repo(repo_root: Path, dest: Path) -> bool:
     """Copy the working tree (tracked plus untracked-but-not-ignored files) to
     ``dest``. Falls back to a filtered tree copy outside a git repository.
@@ -370,8 +390,8 @@ def _copy_repo(repo_root: Path, dest: Path) -> bool:
     try:
         proc = subprocess.run(
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-            cwd=str(repo_root), capture_output=True, text=True, timeout=60,
-            check=False)
+            cwd=str(repo_root), env=_git_env(), capture_output=True, text=True,
+            timeout=60, check=False)
         listed = [f for f in (proc.stdout or "").split("\0") if f] \
             if proc.returncode == 0 else []
     except (subprocess.TimeoutExpired, OSError):
@@ -417,8 +437,9 @@ def _snapshot_git(work: Path, deadline: float) -> None:
     """Commit the copy to a fresh repository, so a test that asks git about
     the repository (``git show HEAD:...``, ``git ls-files``) finds the copied
     tree. Best effort: the user's git config, hooks and signing are kept out,
-    and any failure leaves a plain copy."""
-    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    as is any inherited variable that would aim git at another repository
+    (``_git_env``), and any failure leaves a plain copy."""
+    env = _git_env(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
     ident = ["-c", "user.name=assess", "-c", "user.email=assess@localhost",
              "-c", "commit.gpgsign=false", "-c", f"core.hooksPath={os.devnull}"]
     for cmd in (["git", "init", "-q"], ["git", "add", "-A"],

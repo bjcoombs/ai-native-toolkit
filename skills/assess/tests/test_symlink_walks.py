@@ -54,10 +54,53 @@ def test_shared_walks_do_not_descend_a_directory_link(tmp_path: Path) -> None:
 
 
 def test_repo_src_link_points_at_scripts() -> None:
+    """The [tool.mutmut] config mutates through this link; a checkout that
+    lost it (core.symlinks=false, a tool that resolved it) fails here."""
+    if not (REPO / ".git").exists():
+        pytest.skip("not a git checkout of the repository")
     link = REPO / "skills" / "assess" / "src"
-    if not link.is_symlink():
-        pytest.skip("not a checkout with the committed src link")
-    assert link.readlink() == Path("scripts")
+    assert link.is_symlink() and link.readlink() == Path("scripts")
+
+
+def test_scratch_git_never_touches_an_inherited_repository(
+        tmp_path: Path, monkeypatch) -> None:
+    """Run from a hook, git can inherit GIT_DIR / GIT_INDEX_FILE pointing at
+    the user's repository; the copy and its snapshot must ignore them."""
+    import subprocess
+    import time
+
+    from lib.test_pressure import mutmut3
+
+    user = tmp_path / "user"
+    user.mkdir()
+    (user / "keep.txt").write_text("k", encoding="utf-8")
+    clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    for cmd in (["init", "-q"], ["add", "-A"]):
+        subprocess.run(["git", *cmd], cwd=user, env=clean, check=True, capture_output=True)
+    index_before = (user / ".git" / "index").read_bytes()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _linked_repo(repo)
+    subprocess.run(["git", "init", "-q"], cwd=repo, env=clean, check=True,
+                   capture_output=True)
+    subprocess.run(["git", "add", "-A"], cwd=repo, env=clean, check=True,
+                   capture_output=True)
+    monkeypatch.setenv("GIT_DIR", str(user / ".git"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(user / ".git" / "index"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(user))
+    dest = tmp_path / "copy"
+    dest.mkdir()
+    assert mutmut3._copy_repo(repo, dest) is True
+    assert (dest / "pkg" / "scripts" / "lib" / "a.py").is_file()
+    assert not (dest / "keep.txt").exists()
+    mutmut3._snapshot_git(dest, time.monotonic() + 60)
+    assert (user / ".git" / "index").read_bytes() == index_before
+    head = subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], cwd=user,
+                          env=clean, capture_output=True, text=True, check=False)
+    assert head.returncode != 0  # no snapshot commit landed in the user's repo
+    log = subprocess.run(["git", "log", "--format=%s"], cwd=dest, env=clean,
+                         capture_output=True, text=True, check=False)
+    assert log.stdout.strip() == "snapshot"
 
 
 def test_scratch_copy_keeps_a_tracked_directory_link(tmp_path: Path) -> None:
