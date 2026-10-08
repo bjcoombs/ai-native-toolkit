@@ -22,7 +22,7 @@ import pytest
 
 import assess_core
 from lib.keyhole_signals import FINDING_ORDER
-from lib.mutation_refresh import refresh_mutation_findings
+from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
 
 _PRODUCTS = (
     "derived_findings", "attention", "attention_low_signal", "findings_markdown",
@@ -386,3 +386,15 @@ def test_recompute_failure_keeps_ctx_untouched(monkeypatch: pytest.MonkeyPatch) 
     before = json.loads(json.dumps(ctx))
     assert refresh_mutation_findings(ctx, _stats("src/hot.py"), set(), []) is False
     assert ctx == before
+
+
+def test_recorded_excludes_prefer_the_disclosed_filter(tmp_path: Path) -> None:
+    """The pass filters with the excludes the default run disclosed, so a config
+    edited between the two runs cannot split the filter from its disclosure."""
+    (tmp_path / ".assess").mkdir()
+    (tmp_path / ".assess" / "config.toml").write_text(
+        'exclude_dirs = ["fresh"]\n', encoding="utf-8")
+    ctx = {"excluded_by_config": {"dirs": ["vendor"], "patterns": ["*.gen.py"]}}
+    assert recorded_excludes(ctx, tmp_path) == ({"vendor"}, ["*.gen.py"])
+    fresh_dirs, _ = recorded_excludes({}, tmp_path)
+    assert "fresh" in fresh_dirs

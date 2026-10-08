@@ -16,8 +16,10 @@ run ranks and renders exactly as a default run with the same inputs would.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+from lib.assess_config import load_excludes
 from lib.keyhole_signals import apply_config_excludes, assemble_findings, finding_products
 from lib.untrusted_hotspot import untrusted_hotspot_paths
 
@@ -72,6 +74,21 @@ def _merge_config_exclusions(ctx: dict[str, Any], excluded: list[str]) -> None:
     added = sorted(set(excluded) - base)
     if added:
         block[_PASS_ADDED_KEY] = added
+
+
+def recorded_excludes(ctx: dict[str, Any], repo_root: Path) -> tuple[set[str], list[str]]:
+    """The config excludes the default run applied, as its disclosure records them.
+
+    Filtering E1 with these, not a fresh read of ``.assess/config.toml``, keeps
+    the pass applying exactly the filter ``excluded_by_config`` names. Falls back
+    to ``load_excludes`` when the run-context carries no well-formed block.
+    """
+    block = ctx.get("excluded_by_config")
+    if isinstance(block, dict):
+        dirs, patterns = block.get("dirs"), block.get("patterns")
+        if isinstance(dirs, list) and isinstance(patterns, list):
+            return set(dirs), list(patterns)
+    return load_excludes(repo_root)
 
 
 def refresh_mutation_findings(

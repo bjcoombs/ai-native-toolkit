@@ -491,10 +491,12 @@ reassembles in `FINDING_ORDER` through `assemble_findings`, then rewrites
 `derived_findings`, the `finding_products` keys and `excluded_as_archive`, and rebuilds
 `excluded_by_config` with the config-excluded E1 paths, recording the ones a pass added
 under `added_by_mutation_pass` so a later pass that no longer suppresses them takes them
-back out. Only `untrusted_hotspot` is inserted when an older run-context lacks it. A run-context with no
-`derived_findings` list is left untouched (returns `False`). `assess_core` hands it
-this run's `complexity-stats.json` (the scoped one under `--scope`) and the config
-excludes, then rewrites `badge.json` through `badge.write_findings_badge`. Tests:
+back out. Only `untrusted_hotspot` is inserted when an older run-context lacks it.
+A run-context with no `derived_findings` list is left untouched (returns `False`).
+`assess_core` hands it this run's `complexity-stats.json` (the scoped one under
+`--scope`) and the excludes from `recorded_excludes` (the `excluded_by_config` dirs
+and patterns the default run applied and disclosed, or `load_excludes` when the
+block is absent), then rewrites `badge.json` through `badge.write_findings_badge`. Tests:
 `tests/test_mutation_refresh.py`.
 
 The behaviour block exports the co-change pairs twice, at two scales. `change_coupling_pairs`
@@ -956,7 +958,8 @@ is deterministic by default: `assess_core` always writes the findings-count form
 through `write_findings_badge` (`fallback_badge`, "2 findings · 0 stale markers",
 colour banded from the counts), which stamps a `link` to `assess-report.md`, so a
 badge-clicker lands on the full report; the opt-in mutation pass rewrites it the
-same way once the refreshed findings are in. The LLM-derived headline (`score_badge`, "7.0/8 · AI-Native",
+same way once the refreshed findings are in. The LLM-derived headline
+(`score_badge`, "7.0/8 · AI-Native",
 renormalised over its `denominator` - 8 for software, the applicable-layer count
 for a knowledge-base archetype, e.g. "2.5/3 · Knowledge Base · Solid") is *not*
 written to the badge; it appears inside `assess-report.md`, so the badge never

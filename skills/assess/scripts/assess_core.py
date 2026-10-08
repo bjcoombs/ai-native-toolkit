@@ -64,7 +64,7 @@ from lib.generated_files import matches_generated_name
 from lib.git_churn import ContentClock, git_commit_info, tracked_files
 from lib.keyhole_signals import integrate as integrate_keyhole_signals
 from lib.liveness_scan import scan_liveness
-from lib.mutation_refresh import refresh_mutation_findings
+from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.promissory_markers import scan_promissory_markers
 from lib.scan_registry import STAGE_POST_OFFERS, STAGE_READ_SIDE, run_scans
 from lib.scan_registry import safe as _safe
@@ -1889,7 +1889,7 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     # E1 crosses the refreshed survivor density with this run's hotspots; the
     # findings, attention, report products and badge are rebuilt from it.
     if refresh_mutation_findings(
-        ctx, _load_current_stats(assess_dir), *load_excludes(repo_root),
+        ctx, _load_current_stats(assess_dir), *recorded_excludes(ctx, repo_root),
     ):
         write_findings_badge(
             assess_dir, ctx.get("promissory_markers"), ctx["derived_findings"],
