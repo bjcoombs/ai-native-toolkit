@@ -138,6 +138,7 @@ pytest_add_cli_args_test_selection = [
     "tests/test_promissory_markers.py",
     "tests/test_promissory_markers_literals.py",
     "tests/test_doc_staleness.py",
+    "tests/test_doc_modularity.py",
     "tests/test_doc_graph.py",
     "tests/test_keyhole_accretion.py",
     "tests/test_keyhole_attention.py",

@@ -646,7 +646,10 @@ def _modularity(
     # the fraction of *code* (by file count) sitting under a base doc - identical
     # to `pct_code_under_base_doc`. Both are reported so the denominator stays
     # auditable.
-    module_dirs_with_base = len(base_doc_dirs)
+    # Numerator and denominator both count code directories only: a base doc in
+    # a directory with no code (`docs/`, `agents/`) documents no module, and
+    # counting it let the ratio exceed 1.0 and move when a README did.
+    module_dirs_with_base = len(code_dirs & base_doc_dirs.keys())
     module_dir_count = len(code_dirs)
     base_doc_dir_ratio = module_dirs_with_base / module_dir_count if module_dir_count else 0.0
     # `pct_code_under_base` reaches 1.0 whenever a single root-level base doc
