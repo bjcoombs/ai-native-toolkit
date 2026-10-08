@@ -40,8 +40,8 @@ lines = 1422
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."skills/assess/scripts/assess_core.py"]
-lines = 1976
-reason = "raised by #468: mypy strict type annotations"
+lines = 1982
+reason = "raised by #468 and #469: mypy strict annotations, coverage-gate detector wiring"
 
 [ceilings."skills/assess/scripts/assess_finalize.py"]
 lines = 841
@@ -64,8 +64,8 @@ lines = 1015
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."skills/assess/tests/test_assess_core.py"]
-lines = 2586
-reason = "pre-existing; ratchet from 2026-10-07"
+lines = 2601
+reason = "raised by #469: coverage-gate tests"
 
 [ceilings."skills/assess/tests/test_assess_finalize.py"]
 lines = 1354

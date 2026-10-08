@@ -125,7 +125,8 @@ This runs in parallel with CI. Check it and note it in your summary; don't block
 gh pr checks {PR_NUMBER}
 ```
 Required (merge-gating) checks are `skills/assess pytest`, `scripts/ pytest`,
-`plugin contract pytest`, `Validate PR title`. `CodeRabbit`, `Auto-label`, and
+`plugin contract pytest`, `ruff + mypy gates`, `Validate PR title`,
+`floor enforcement` and `floor self-anchor`. `CodeRabbit`, `Auto-label`, and
 `build` are non-blocking.
 
 ## Bot comment gate (CodeRabbit)
