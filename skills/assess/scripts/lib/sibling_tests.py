@@ -20,7 +20,10 @@ Layers, narrowest first:
   then a conventionally named test anywhere in the repository that shares a
   directory with the source (``MATCH_BASENAME``: parallel trees such as
   ``app/unit-tests/`` or Dart's ``test/unit/`` that do not mirror the path),
-  then a bounded flat tree holding the bare name (``MATCH_FLAT``, weaker).
+  then a test file that imports the source (``MATCH_IMPORT``: a large test
+  split by concern into ``test_foo_<family>.py`` files, none named after
+  ``foo.py``; the scan lives in :mod:`lib.import_credit`), then a bounded flat
+  tree holding the bare name (``MATCH_FLAT``, weaker).
 - :func:`has_sibling_test` - the yes/no/unknown verdict the hotspot page and the
   focus signal both read, with a flat-only match dropped for a bare name that
   more than one hot file shares (:func:`shared_name_keys`).
@@ -51,9 +54,14 @@ Two stated limits of the basename tier:
   credit is ``sibling_test_only``, which sends the file to mutation testing,
   where a helper that tests nothing shows up as all-surviving mutants.
 
-Inward-only: stdlib plus ``lib.git_churn`` / ``lib.doc_graph``, imports no
-orchestrator. Beyond the index, file I/O is existence checks (``is_file`` /
-``is_dir``) bounded by :data:`MAX_ANCESTOR_LEVELS`. Never raises.
+The import tier reads the same index: its test and source lists are the ones
+the basename tier keys, so the built-in excludes and the tracked-files rule
+apply to it unchanged, and the files are read only when a probe reaches it.
+
+Inward-only: stdlib plus ``lib.git_churn`` / ``lib.doc_graph`` /
+``lib.import_credit``, imports no orchestrator. Beyond the index, file I/O is
+existence checks (``is_file`` / ``is_dir``) bounded by
+:data:`MAX_ANCESTOR_LEVELS`. Never raises.
 """
 from __future__ import annotations
 
@@ -65,6 +73,7 @@ from pathlib import Path
 
 from lib.doc_graph import EXCLUDE_DIRS, is_excluded_path
 from lib.git_churn import tracked_files
+from lib.import_credit import FileReader, ImportCredits
 
 # Test-file name builders keyed off a source file's stem + suffix (``.ext``
 # including the dot, or empty). A cheap precision heuristic, not a build graph.
@@ -102,6 +111,7 @@ MAX_INDEX_FILES = 200_000
 
 MATCH_DIRECT = "direct"  # co-located, mirrored, or the file is itself a test
 MATCH_BASENAME = "basename"  # a same-named test elsewhere, closest source wins
+MATCH_IMPORT = "import"  # a test file imports the source
 MATCH_FLAT = "flat"  # only a bounded flat tree held the bare name
 
 
@@ -115,6 +125,7 @@ class TestIndex:
 
     tests_by_name: dict[str, list[tuple[str, ...]]] = field(default_factory=dict)
     sources_by_key: dict[str, list[tuple[str, ...]]] = field(default_factory=dict)
+    imports: ImportCredits | None = field(default=None, compare=False, repr=False)
 
 
 def sibling_test_names(name: str) -> list[str]:
@@ -188,20 +199,29 @@ def build_test_index(repo_root: Path) -> TestIndex:
     """Index the repository once for the basename tier. An empty index when the
     root or any directory under it cannot be read, or the walk passed
     :data:`MAX_INDEX_FILES`. Never raises."""
-    index = TestIndex()
     try:
         files = _repo_files(Path(repo_root))
     except (OSError, ValueError):
-        return index
-    for rel in files or ():
+        return TestIndex()
+    if files is None:
+        return TestIndex()
+    tests_by_name: dict[str, list[tuple[str, ...]]] = {}
+    sources_by_key: dict[str, list[tuple[str, ...]]] = {}
+    tests: list[str] = []
+    sources: list[str] = []
+    for rel in files:
         if is_excluded_path(rel):
             continue
-        dirs = rel.parts[:-1]
-        if is_test_path(rel.as_posix()):
-            index.tests_by_name.setdefault(rel.name, []).append(dirs)
+        posix = rel.as_posix()
+        if is_test_path(posix):
+            tests_by_name.setdefault(rel.name, []).append(rel.parts[:-1])
+            tests.append(posix)
         else:
-            index.sources_by_key.setdefault(name_key(rel.as_posix()), []).append(dirs)
-    return index
+            sources_by_key.setdefault(name_key(posix), []).append(rel.parts[:-1])
+            sources.append(posix)
+    reader = FileReader(Path(repo_root).resolve().as_posix())
+    return TestIndex(tests_by_name, sources_by_key,
+                     ImportCredits(reader, tests, sources))
 
 
 def _common_depth(a: tuple[str, ...], b: tuple[str, ...]) -> int:
@@ -279,6 +299,23 @@ def _tree_dirs_for(rel_dir: Path) -> list[tuple[Path, bool]]:
     return [(d, flat) for d, flat in dirs.items() if d not in adjacent]
 
 
+def _tree_match(repo_root: Path, rel_dir: Path, names: list[str]) -> str | None:
+    """``MATCH_DIRECT`` when a mirrored test tree holds a builder name,
+    ``MATCH_FLAT`` when only a bounded flat tree does, else ``None``."""
+    flat_hit = False
+    for rel, is_flat in _tree_dirs_for(rel_dir):
+        if is_flat and flat_hit:
+            continue  # already have the weak match; only a direct one helps
+        directory = repo_root / rel
+        if not directory.is_dir():
+            continue
+        if any((directory / n).is_file() for n in names):
+            if not is_flat:
+                return MATCH_DIRECT
+            flat_hit = True
+    return MATCH_FLAT if flat_hit else None
+
+
 def sibling_test_match(
     repo_root: Path, rel_path: str, index: TestIndex | None = None,
 ) -> str | None:
@@ -288,7 +325,9 @@ def sibling_test_match(
     tree at an ancestor mirrors the source path. ``MATCH_BASENAME``: a test in
     the repository index (``index``, built here when not passed) shares a
     directory with the source and no same-named source sits closer to it.
-    ``MATCH_FLAT``: only a bounded flat tree holds a builder name - weaker
+    ``MATCH_IMPORT``: a test file in the index imports the source
+    (:mod:`lib.import_credit`). ``MATCH_FLAT``: only a bounded flat tree holds
+    a builder name - weaker
     evidence the caller disambiguates with :func:`shared_name_keys`. A source
     not on disk (a stale stats entry for a deleted file) is never credited.
     Never raises."""
@@ -303,23 +342,17 @@ def sibling_test_match(
         rel_dir = Path(rel_path).parent
         if ".." in rel_dir.parts or rel_dir.is_absolute():
             return None
-        names = sibling_test_names(source.name)
-        flat_hit = False
-        for rel, is_flat in _tree_dirs_for(rel_dir):
-            if is_flat and flat_hit:
-                continue  # already have the weak match; only a direct one helps
-            directory = repo_root / rel
-            if not directory.is_dir():
-                continue
-            if any((directory / n).is_file() for n in names):
-                if not is_flat:
-                    return MATCH_DIRECT
-                flat_hit = True
+        tree = _tree_match(repo_root, rel_dir, sibling_test_names(source.name))
+        if tree == MATCH_DIRECT:
+            return MATCH_DIRECT
         if index is None:
             index = build_test_index(repo_root)
-        if _basename_match(index, Path(rel_path).as_posix()):
+        posix = Path(rel_path).as_posix()
+        if _basename_match(index, posix):
             return MATCH_BASENAME
-        return MATCH_FLAT if flat_hit else None
+        if index.imports is not None and index.imports.credits(posix):
+            return MATCH_IMPORT
+        return tree
     except (OSError, ValueError):
         return None
 
@@ -329,8 +362,8 @@ def has_sibling_test(
     index: TestIndex | None = None,
 ) -> bool | None:
     """Does this file have a test file? ``None`` when the file is not on disk
-    (honestly unknown), ``True`` for a direct or basename match or a flat match
-    on a name no other considered file shares, otherwise ``False``. Callers
+    (honestly unknown), ``True`` for a direct, basename or import match or a
+    flat match on a name no other considered file shares, otherwise ``False``. Callers
     probing several files pass one ``index`` from :func:`build_test_index`."""
     try:
         if not (repo_root / rel_path).is_file():
@@ -338,6 +371,6 @@ def has_sibling_test(
     except (OSError, ValueError):
         return None
     match = sibling_test_match(repo_root, rel_path, index)
-    if match in (MATCH_DIRECT, MATCH_BASENAME):
+    if match in (MATCH_DIRECT, MATCH_BASENAME, MATCH_IMPORT):
         return True
     return match == MATCH_FLAT and name_key(rel_path) not in shared_names
