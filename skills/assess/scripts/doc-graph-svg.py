@@ -372,7 +372,10 @@ def _svg_open(cw: float, ch: float) -> list[str]:
         '<desc>Graph showing documentation structure, reachability from entry '
         'point, and staleness indicators</desc>',
         '<style>',
-        '  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #1a1a1a; }',
+        # :not([fill]) keeps the default from overriding a text's own fill
+        # attribute (a stylesheet rule beats an SVG presentation attribute).
+        '  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }',
+        '  text:not([fill]) { fill: #1a1a1a; }',
         '  circle:hover { stroke: #000; stroke-width: 2; }',
         '</style>',
         f'<rect x="0" y="0" width="{cw:.0f}" height="{ch:.0f}" fill="#ffffff"/>',

@@ -285,12 +285,18 @@ def write_svg(rects: list, root: Path, W: float, H: float,
         # image an accessible name and description (SVG accessibility contract).
         f'<title>{html.escape(svg_title)}</title>',
         f'<desc>{html.escape(svg_desc)}</desc>',
+        # A stylesheet rule beats an SVG presentation attribute, so a bare
+        # `text { text-anchor: middle }` would centre the left-anchored legend
+        # and turn every grey label black. Each default that some <text> also
+        # sets as an attribute is guarded with :not([attr]) so it applies
+        # only where the attribute is absent.
         '<style>',
         '  rect:hover { stroke: #000; stroke-width: 1.5; }',
         '  text { font-family: -apple-system, BlinkMacSystemFont, '
-        '"Segoe UI", sans-serif; fill: #1a1a1a; '
-        'pointer-events: none; text-anchor: middle; '
-        'dominant-baseline: middle; }',
+        '"Segoe UI", sans-serif; '
+        'pointer-events: none; dominant-baseline: middle; }',
+        '  text:not([fill]) { fill: #1a1a1a; }',
+        '  text:not([text-anchor]) { text-anchor: middle; }',
         '</style>',
     ]
     if has_hatch or show_survivor_legend:
