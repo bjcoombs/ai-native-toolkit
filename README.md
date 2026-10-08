@@ -375,11 +375,12 @@ ai-native-toolkit/
 ├── README.md
 ├── CLAUDE.md                          # Contract for agents editing this repo
 ├── FLOOR.md                           # Constitutional floor of the acceptance-contract workflow
+├── .file-size-ratchet.toml            # Line limits for Python files: 800 by default, recorded ceilings for larger files
 ├── action.yml                         # AI-Readiness Assess Gate composite action
 ├── .claude-plugin/
 │   ├── plugin.json                    # Plugin manifest (enables /plugin install)
 │   └── marketplace.json               # Marketplace entry (enables /plugin marketplace add)
-├── .github/workflows/                 # assess-gate, build-standalone-skills, claude-review, floor, pr-lint, tests
+├── .github/workflows/                 # assess-gate, build-standalone-skills, claude-review, codeql, floor, mutation, pr-lint, tests
 ├── .assess/                           # This repo's own /assess wiki (report, heatmap, hotspots, log)
 ├── skills/                            # One directory per skill - catalog in skills/README.md
 │   ├── assess/                        # SKILL.md, scripts/ (assess_core.py, lib/, renderers), references/, templates/, tests/
