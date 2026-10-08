@@ -5,7 +5,6 @@
 !/.gitignore
 !/.claude-plugin/
 !/agents/
-!/commands/
 !/skills/
 !/LICENSE
 !/FLOOR.md

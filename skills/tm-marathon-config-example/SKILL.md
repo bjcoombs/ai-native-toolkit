@@ -7,7 +7,7 @@ description: "Example Marathon Configuration for CLAUDE.md - copy the section be
 # Marathon Configuration Example
 
 Copy the `## Marathon Configuration` section below into your project's CLAUDE.md file.
-The `/tm` and `/issues` commands read this section to configure marathon mode for your specific codebase.
+The `/tm` and `/issues` skills read this section to configure marathon mode for your specific codebase.
 
 **If this section is missing**, `/tm` uses these defaults:
 - Base branch: `main`

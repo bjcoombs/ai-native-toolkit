@@ -533,7 +533,7 @@ The lead operates as a **tech lead running a sprint** — not a task router.
 The retrospective's self-rewrite scope **excludes** the floor artifacts. The retro may **propose** changes to any of them but must never self-apply one (`FLOOR.md` clause iii): a self-rewriting process with no outcome signal can optimize away its own verification, and that capability is already proven. Excluded (all paths relative to the repo root):
 
 - `FLOOR.md`
-- the `<!-- floor:cold-verify-completion -->` markers in all four marked files (`skills/marathon/SKILL.md`, `skills/pr-review-merge/SKILL.md`, `commands/tm.md`, `commands/issues.md`) and the gate invocations alongside them
+- the `<!-- floor:cold-verify-completion -->` markers in all four marked files (`skills/marathon/SKILL.md`, `skills/pr-review-merge/SKILL.md`, `skills/tm/SKILL.md`, `skills/issues/SKILL.md`) and the gate invocations alongside them
 - `.github/workflows/floor.yml`
 - `scripts/contract/`
 - `scripts/canaries/`

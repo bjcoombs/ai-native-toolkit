@@ -4,7 +4,7 @@ Subagent definitions invoked by the skills, or directly via `Task(subagent_type=
 
 ## Six Thinking Hats team
 
-Orchestrated by [`/huddle`](../skills/huddle/SKILL.md) and [`/6hats`](../commands/6hats.md):
+Orchestrated by [`/huddle`](../skills/huddle/SKILL.md) and [`/6hats`](../skills/6hats/SKILL.md):
 
 | Agent | Role |
 |-------|------|

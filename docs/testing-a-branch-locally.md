@@ -57,7 +57,7 @@ git marketplace. So give the local copy a throwaway distinct name first.
 /plugin install ai-native-toolkit@ai-native-toolkit-dev
 ```
 
-Then **restart Claude Code** - skills, commands and agents are discovered at session
+Then **restart Claude Code** - skills and agents are discovered at session
 start, so the new `SKILL.md` + scripts only load after a relaunch. Run `/assess` against
 a target repo and confirm it completes end-to-end (this is where a broken script path
 would surface).

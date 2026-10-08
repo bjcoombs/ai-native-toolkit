@@ -7,9 +7,9 @@ workflow substitutes `{REPO}`, `{PR_NUMBER}`, `{HEAD_SHA}`, `{REPO_OWNER}`,
 ## Project
 
 `ai-native-toolkit` is a **Claude Code plugin**. The deliverable is markdown:
-skills (`skills/<name>/SKILL.md`), commands (`commands/*.md`), and agents
-(`agents/*.md`). The only runtime code is the Python **`/assess` deterministic
-core** under `skills/assess/scripts/` (with `lib/`) plus the standalone-skill
+skills (`skills/<name>/SKILL.md`, including the user-invoked slash-command
+workflows) and agents (`agents/*.md`). The only runtime code is the Python
+**`/assess` deterministic core** under `skills/assess/scripts/` (with `lib/`) plus the standalone-skill
 build pipeline under `scripts/`. It is a **public** repo.
 
 The product's own thesis is **truth-pressure**: honest, navigable docs and
