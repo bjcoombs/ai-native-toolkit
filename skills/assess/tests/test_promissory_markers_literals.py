@@ -11,9 +11,13 @@ detects and still ages. Fixture strings below carry marker text on purpose.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+import pytest
+
 from lib.keyhole_signals import integrate
+import lib.promissory_markers as pm
 from lib.promissory_markers import MarkerScan
 from lib.python_regions import (
     CODE,
@@ -283,3 +287,39 @@ def test_load_regions_memoises_and_tolerates_missing_files(tmp_path: Path) -> No
     assert load_regions(tmp_path, "m.py", cache) is first
     assert load_regions(tmp_path, "gone.py", cache) is None
     assert "gone.py" in cache
+
+
+# ---------------------------------------------------------------------------
+# Reproducibility: rg's output order must not reach run-context.json
+# ---------------------------------------------------------------------------
+
+def test_summary_is_byte_stable_whatever_order_rg_returns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """rg searches files on parallel threads, so two runs on one tree can list
+    hits in different orders. Reversing its output must not change a byte of
+    the summary: not the stale_by_file key order, not top_offenders ties."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    files = {f"f{i}.py": "# FIXME a\nx = 1  # noqa: E501\n" for i in range(6)}
+    files.update({"a.py": "a", "b.py": "b", "c.py": "c"})
+    _commit(repo, files, day=1)
+    for i in range(3):
+        _commit(repo, {f"f{j}.py": f"# FIXME a\nx = 1  # noqa: E501\nn = {i}\n"
+                       for j in range(6)}, day=2 + i)
+
+    def dump() -> str:
+        return json.dumps(_scan(repo, stale_touches=1).summary())
+
+    forward = dump()
+    real_run = pm._run
+
+    def reversed_rg(cmd: list[str], cwd: Path) -> str:
+        out = real_run(cmd, cwd)
+        return "\n".join(reversed(out.splitlines())) if cmd[0] == "rg" else out
+
+    monkeypatch.setattr(pm, "_run", reversed_rg)
+    assert dump() == forward
+    assert list(json.loads(forward)["stale_by_file"]) == sorted(
+        json.loads(forward)["stale_by_file"]
+    )

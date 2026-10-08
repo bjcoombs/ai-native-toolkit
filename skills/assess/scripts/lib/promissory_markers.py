@@ -298,7 +298,8 @@ class MarkerScan:
             entry["families"].add(m.family)
             entry["max_survived"] = max(entry["max_survived"], m.survived_touches)
         return {
-            p: {**e, "families": sorted(e["families"])} for p, e in rollup.items()
+            p: {**e, "families": sorted(e["families"])}
+            for p, e in sorted(rollup.items())
         }
 
     def summary(self) -> dict[str, Any]:
@@ -317,7 +318,9 @@ class MarkerScan:
         bare = sum(1 for m in self.markers if m.family == "todo" and not m.linked)
         linked = sum(1 for m in self.markers if m.family == "todo" and m.linked)
         stale = self.stale
-        top = sorted(stale, key=lambda m: -m.severity)[:MAX_TOP_OFFENDERS]
+        top = sorted(
+            stale, key=lambda m: (-m.severity, m.path, m.line, m.family)
+        )[:MAX_TOP_OFFENDERS]
         return {
             "available": self.available,
             "reason": self.reason,
@@ -402,6 +405,11 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
                     justified=justified,
                 )
             )
+    # rg searches files on parallel threads, so its output order varies run to
+    # run; every rollup built from this list inherits whatever order it has.
+    # Sorting here keeps run-context.json byte-stable on an unchanged tree.
+    family_rank = {f: i for i, f in enumerate(FAMILY_PATTERNS)}
+    markers.sort(key=lambda m: (family_rank[m.family], m.path, m.line))
     return markers
 
 
