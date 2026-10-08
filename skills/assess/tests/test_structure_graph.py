@@ -10,6 +10,7 @@ this package itself.
 from __future__ import annotations
 
 import networkx as nx
+import pytest
 
 from lib import structure_graph as sg
 from lib.assess_config import DEFAULT_KEYHOLE_BUDGET
@@ -357,10 +358,8 @@ def test_package_finder_restored_when_grimp_raises(tmp_path, monkeypatch):
 
     monkeypatch.setattr(sg.grimp, "build_graph", boom)
     pkg = _pkg(tmp_path, "pkg", {"a": ""})
-    try:
+    with pytest.raises(RuntimeError, match="parse failure"):
         sg.build_import_map([pkg], tmp_path)
-    except RuntimeError:
-        pass
     assert settings.PACKAGE_FINDER is finder_before
 
 
@@ -404,7 +403,6 @@ def test_path_finder_serves_both_grimp_port_shapes(tmp_path):
     assert finder.determine_package_directories("lib", None) == {
         str(tmp_path / "lib"),
     }
-    import pytest
     with pytest.raises(ValueError):
         finder.determine_package_directory("json", None)
 
