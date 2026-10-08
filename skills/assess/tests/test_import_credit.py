@@ -167,6 +167,12 @@ def test_unparseable_or_undecodable_test_credits_nothing(tmp_path: Path) -> None
     assert _credited(tmp_path, "pkg/mod.py") is False
 
 
+def test_pathologically_nested_test_credits_nothing() -> None:
+    """``ast.parse`` raises RecursionError on deep nesting; the scan skips it."""
+    source = "import pkg.mod\nx = " + "(" * 100_000 + ")" * 100_000 + A_TEST
+    assert ic.python_imports(source, ("tests",)) == []
+
+
 def test_js_relative_specifiers_credit_and_aliases_do_not(tmp_path: Path) -> None:
     test = ("import { a } from '../src/alpha';\n"
             "import '../src/side.js';\n"

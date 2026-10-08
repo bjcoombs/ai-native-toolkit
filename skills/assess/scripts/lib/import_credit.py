@@ -141,8 +141,8 @@ def python_imports(source: str, test_dirs: Module) -> list[Target]:
     parse or defines no test."""
     try:
         tree = ast.parse(source)
-    except (SyntaxError, ValueError):
-        return []
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return []  # deeply nested input can exhaust the parser
     if not _defines_python_test(tree):
         return []
     targets: list[Target] = []
