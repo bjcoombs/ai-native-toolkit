@@ -54,7 +54,7 @@ Required frontmatter:
 - `description` - shown in `/help` and the slash-command menu. No `TRIGGER` clause: the router never reads it, so one would describe behaviour that cannot happen. `tests/test_plugin_contract.py::test_skill_has_trigger_clause` enforces both directions.
 - `argument-hint` - shown after the command name when typing. Quote the value when it opens with `[`, which YAML otherwise reads as a list; `test_skill_frontmatter_is_valid_yaml` fails on frontmatter no YAML parser accepts.
 
-`$ARGUMENTS` works in a skill as it did in a command. Bare `$1`..`$9` do not get a pass: they are substituted in every `SKILL.md`, so write `${1}` (see CI below).
+`$ARGUMENTS` works in a skill as it did in a command. Bare `$0`..`$9` get no exemption: they are substituted in every `SKILL.md`, so write `${0}`, `${1}` (see CI below).
 
 Bundled executables go under `skills/<name>/scripts/`. Reference docs go under `skills/<name>/references/`.
 
