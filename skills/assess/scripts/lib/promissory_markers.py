@@ -25,6 +25,15 @@ introducing commit is also classified agent/human (reusing the conservative B4
 identity rules from ``change_coupling``), so "agent-introduced unactioned
 intent" is a measured quantity, not an article of faith.
 
+Marker text that is data is not a marker. In a Python file ``tokenize`` places
+each hit: one inside a string literal (f-strings included) is a fixture or a
+pattern and is dropped, but a todo or deprecation in a docstring is prose about
+the code and counts. A suppression counts only in a comment, where linters read
+it; a disabled test in code or a comment. A file that does not tokenize, and
+every other language, keeps the line-based filters. A suppression quoted in a
+backtick code span on a comment-only line is a quotation, and config files (TOML, YAML, INI, JSON)
+carry no suppressions: no listed linter reads them.
+
 Pure subprocess (rg + git) and stdlib. No LLM calls. Degrades to
 ``available: False`` when ``rg`` is missing or the directory is not a git
 repo; never raises out of ``scan_promissory_markers``.
@@ -50,10 +59,12 @@ from typing import Any
 try:
     from lib.change_coupling import _coauthors_have_agent, _identity_is_agent
     from lib.git_churn import churn_is_degenerate
+    from lib.python_regions import PyRegions, load_regions
 except ImportError:  # standalone CLI: script dir is lib/, put scripts/ on path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from lib.change_coupling import _coauthors_have_agent, _identity_is_agent
     from lib.git_churn import churn_is_degenerate
+    from lib.python_regions import PyRegions, load_regions
 
 # Default: a marker is stale once this many commits to its file landed after it.
 STALE_TOUCHES_DEFAULT = 5
@@ -184,6 +195,24 @@ _BLOCKQUOTE_RE = re.compile(r"^(?:>\s*)+")
 # for the syntactic families (a t.Skip in a guide is an example, not debt).
 COMMENT_LEADERS = ("#", "//", "/*", "*", "<!--", "--", ";;", "%", '"""', "'''")
 PROSE_SUFFIXES = {".md", ".markdown", ".rst", ".txt", ".adoc"}
+# Files ``tokenize`` can classify: a hit's position is decided, not guessed.
+PYTHON_SUFFIXES = {".py", ".pyi"}
+# Config formats no directive in SUPPRESSION_DIRECTIVES is read from: a noqa
+# in a pyproject.toml comment documents a directive, it suppresses nothing.
+CONFIG_SUFFIXES = {".toml", ".ini", ".cfg", ".yaml", ".yml", ".json"}
+# An inline code span on a comment-only line: a directive inside one is quoted.
+# Only there: ruff reads a noqa anywhere in a trailing comment, so a quoted one
+# after code still suppresses that code.
+_CODE_SPAN_RE = re.compile(r"``.+?``|`[^`]+`")
+# The token regions of a Python line each family may count in. A docstring is
+# prose about the code, so a promise there is a promise; any other string is
+# data. Only a comment can carry a suppression a linter reads.
+_PY_REGIONS_ALLOWED = {
+    "todo": {"comment", "docstring", "code"},
+    "deprecation": {"comment", "docstring", "code"},
+    "suppression": {"comment"},
+    "disabled_test": {"comment", "code"},
+}
 
 # Generated / vendored / lockfile noise that rg's gitignore pass won't catch
 # when the files are committed. Mirrors the treemap's exclude spirit; the
@@ -333,6 +362,7 @@ def _extra_globs(
 def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
     """Stage 1: one rg pass per family, comment-context filtered."""
     markers: list[Marker] = []
+    regions: dict[str, PyRegions | None] = {}
     for family, pattern in FAMILY_PATTERNS.items():
         cmd = ["rg", "-n", "--no-heading", "--no-messages", "-e", pattern]
         for g in [*EXCLUDE_GLOBS, *extra_globs]:
@@ -347,6 +377,10 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
             is_prose = Path(path).suffix.lower() in PROSE_SUFFIXES
             # Syntactic families in prose files are code examples, not debt.
             if family in ("suppression", "disabled_test") and is_prose:
+                continue
+            if not _hit_is_comment_text(
+                repo_root, path, int(line_s), text, family, regions
+            ):
                 continue
             if family in ("todo", "deprecation") and not _comment_context(
                 is_prose, text, pattern
@@ -368,6 +402,44 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
                 )
             )
     return markers
+
+
+def _hit_is_comment_text(
+    repo_root: Path,
+    path: str,
+    row: int,
+    text: str,
+    family: str,
+    cache: dict[str, PyRegions | None],
+) -> bool:
+    """False when every match of the family on the line is data, not a marker.
+
+    A match is data when it sits in a region its family may not count in
+    (``_PY_REGIONS_ALLOWED``, Python files that tokenize), or, for a
+    suppression, inside a backtick code span on a comment-only line or
+    anywhere in a config file.
+    Prose files are not this function's concern and always pass.
+    """
+    suffix = Path(path).suffix.lower()
+    if suffix in PROSE_SUFFIXES:
+        return True
+    if family == "suppression" and suffix in CONFIG_SUFFIXES:
+        return False
+    regions = (
+        load_regions(repo_root, path, cache) if suffix in PYTHON_SUFFIXES else None
+    )
+    comment_only = text.lstrip().startswith(COMMENT_LEADERS)
+    quoted = (
+        [m.span() for m in _CODE_SPAN_RE.finditer(text)]
+        if family == "suppression" and comment_only else []
+    )
+    allowed = _PY_REGIONS_ALLOWED[family]
+    for m in re.finditer(FAMILY_PATTERNS[family], text):
+        if any(a <= m.start() < b for a, b in quoted):
+            continue
+        if regions is None or regions.region(row, m.start()) in allowed:
+            return True
+    return False
 
 
 def _comment_context(is_prose: bool, text: str, pattern: str) -> bool:

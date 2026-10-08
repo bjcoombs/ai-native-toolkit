@@ -463,7 +463,7 @@ def test_generated_and_prose_exclusions(tmp_path: Path) -> None:
         "model.g.dart": "// ignore_for_file: type=lint\n",
         # syntactic marker in prose: a code example, not debt
         "docs/guide.md": "Use t.Skip(\"reason\") to skip.\n",
-        # prose TODO: real (docs carry intent too)
+        # a prose todo counts: docs carry intent too
         "docs/plan.md": "TODO write the rollout section\n",
     }, day=1)
     scan = _scan(repo)
@@ -617,8 +617,8 @@ def test_finding_order_contains_unactioned_intent() -> None:
     assert "unactioned_intent" in FINDING_ORDER
 
 
-# A promissory phrase quoted as an example in prose (``"remove after
-# migration"`` in a sentence about markers) describes markers; it is not one.
+# A promissory phrase quoted as an example in prose (the removal-deadline
+# phrase in a sentence about markers) describes markers; it is not one.
 # In a code comment the same quoting stays a marker. Every cell is pinned so a
 # shape cannot slip through one review round at a time.
 _PHRASE = "remove after migration"
