@@ -48,6 +48,9 @@ def _launcher(tmp_path: Path, shebang: str) -> str:
 def _as_mutmut3(monkeypatch) -> None:
     monkeypatch.setattr(tp.shutil, "which", lambda t: "/usr/bin/" + t)
     monkeypatch.setattr(mutation, "_mutmut_major", lambda _exe: 3)
+    # the PATH runner: these tests fake ``mutmut run`` itself, so a uv or
+    # package-venv invocation (``_resolve_runner``) is tested on its own
+    monkeypatch.setattr(mutmut3, "_resolve_runner", lambda *_a: ("path", ("mutmut",)))
 
 
 def _fake_mutmut3(meta: dict | None, seen: dict, *, returncode: int = 0,
@@ -129,7 +132,8 @@ def test_run_bounded_mutation_mutmut3_runs_in_scratch_copy(
     assert r == {"available": True, "tool": "mutmut", "scope": ["pkg/calc.py"],
                  "mutation_run": True,
                  "groups": [{"root": ".", "config": "generated",
-                             "scope": ["pkg/calc.py"], "mutation_run": True}],
+                             "scope": ["pkg/calc.py"], "runner": "path",
+                             "mutation_run": True}],
                  "per_file": [{"file": "pkg/calc.py", "killed": 1,
                                "survived": 2, "total": 3}]}
     assert compute_survivor_density(r["per_file"])["overall"] == 2 / 3

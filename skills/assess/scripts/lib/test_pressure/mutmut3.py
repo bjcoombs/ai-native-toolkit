@@ -18,6 +18,12 @@ package root:
   mirrors the rest of the repository around ``mutants/``, so a test that climbs
   from its own file to a repository file still finds it.
 
+Each run uses the assessed package's own environment where one can be had
+(``_resolve_runner``): a package virtualenv that already holds mutmut 3, else
+a scratch environment uv builds from the package's ``pyproject.toml``, else
+the ``mutmut`` on PATH. A suite that imports third-party packages fails
+mutmut's baseline run under a mutmut tool environment that lacks them.
+
 The assessed tree is never written to. Every group draws on one
 ``MUTATION_TIMEOUT`` budget: the git snapshot and the mutmut run are bounded by
 what remains, a copy is not interruptible but is checked against the deadline
@@ -74,6 +80,19 @@ _WARNING_LINE_RE = re.compile(r"^\S+:\d+: \w*Warning: |^warnings\.warn\(")
 
 _MAX_REASON_DETAIL = 300        # chars of tool error kept in a stored reason
 
+# The first line naming why a suite failed: an import that did not resolve (a
+# test dependency missing from the environment mutmut ran in), else pytest's
+# short-summary line for the first failing or erroring test.
+_IMPORT_ERROR_RE = re.compile(r"^(?:E\s+)?((?:ModuleNotFoundError|ImportError): .+)$")
+_PYTEST_FAILURE_RE = re.compile(r"^((?:FAILED|ERROR) \S.*)$")
+
+# The mutmut a uv-built scratch environment gets: the version the weekly
+# mutation workflow pins, whose exit codes match the table above.
+_MUTMUT_PIN = "mutmut==3.8.0"
+_VENV_DIRS = (".venv", "venv")
+_VENV_PYTHONS = ("bin/python", "Scripts/python.exe")
+_RUNNER_PROBE_TIMEOUT = 15.0
+
 
 # ── results ──────────────────────────────────────────────────────────────────
 
@@ -111,6 +130,20 @@ def _tool_error_line(proc: subprocess.CompletedProcess) -> str:
     return ""
 
 
+def _likely_cause(proc: subprocess.CompletedProcess) -> str:
+    """The first unresolved import in the tool's output, else the first
+    failing test pytest summarised. mutmut's own stop message ("failed to
+    collect stats") says the baseline run failed, not why."""
+    lines = [ln.strip() for stream in (proc.stdout, proc.stderr)
+             for ln in (stream or "").splitlines()]
+    for pattern in (_IMPORT_ERROR_RE, _PYTEST_FAILURE_RE):
+        for ln in lines:
+            m = pattern.match(ln)
+            if m:
+                return m.group(1)
+    return ""
+
+
 def _no_records_reason(tool: str, proc: subprocess.CompletedProcess,
                        scratch: Path | None = None) -> str:
     """``scratch`` is the directory the tool ran in when that was a temporary
@@ -119,6 +152,9 @@ def _no_records_reason(tool: str, proc: subprocess.CompletedProcess,
     reason = (f"no mutant records recovered from {tool} "
               f"output (exit code {proc.returncode})")
     detail = _tool_error_line(proc) if proc.returncode != 0 else ""
+    cause = _likely_cause(proc) if proc.returncode != 0 else ""
+    if cause and cause not in detail:
+        detail = f"{detail}; first failure: {cause}" if detail else cause
     if scratch is not None:
         # Longest first: where the temp dir sits behind a symlink (macOS /var
         # -> /private/var) the unresolved form is a substring of the resolved
@@ -225,16 +261,90 @@ def _mutant_glob(cfg_rel: str) -> str:
     return f"{module}.*"
 
 
-def _mutmut_command(pkg: Path, config: str, cfg_scope: list[str]) -> list[str]:
+def _mutmut_command(pkg: Path, config: str, cfg_scope: list[str],
+                    mutmut: tuple[str, ...] = ("mutmut",)) -> list[str]:
     """``mutmut run``, narrowed under a package's own config to the focus
     files' mutants. The config, its test selection and so every verdict are
     unchanged; only the mutants outside the focus set go unchecked, so the
-    time box is spent on the files the pass reports."""
+    time box is spent on the files the pass reports. ``mutmut`` is the
+    resolved invocation (``_resolve_runner``)."""
     if config != "repo" or not cfg_scope:
-        return ["mutmut", "run"]
+        return [*mutmut, "run"]
     cfg = _read_mutmut3_config(pkg)
-    return ["mutmut", "run", *(_mutant_glob(f) for f in cfg_scope
-                               if _covered_by_config(cfg, f))]
+    return [*mutmut, "run", *(_mutant_glob(f) for f in cfg_scope
+                              if _covered_by_config(cfg, f))]
+
+
+# ── the environment mutmut runs in ───────────────────────────────────────────
+
+def _venv_mutmut3(pkg_on_disk: Path, deadline: float) -> str | None:
+    """The interpreter of a virtualenv in the assessed package that already
+    has mutmut 3 installed, or None. Only read: nothing is installed into it.
+    The version probe is bounded by the deadline."""
+    for d in _VENV_DIRS:
+        for rel in _VENV_PYTHONS:
+            python = pkg_on_disk / d / rel
+            if not python.is_file():
+                continue
+            remaining = min(_RUNNER_PROBE_TIMEOUT, deadline - time.monotonic())
+            if remaining <= 0:
+                return None
+            try:
+                proc = subprocess.run(
+                    [str(python), "-c", "from importlib.metadata import version; "
+                     "print(version('mutmut'))"],
+                    capture_output=True, text=True, timeout=remaining, check=False)
+            except (subprocess.TimeoutExpired, OSError):
+                continue
+            m = re.match(r"\s*(\d+)\.", proc.stdout or "")
+            if m and int(m.group(1)) >= 3:
+                return str(python)
+    return None
+
+
+def _is_uv_project(pkg_on_disk: Path) -> bool:
+    """Whether the package's ``pyproject.toml`` declares a ``[project]`` uv
+    can build an environment from (one holding only tool config cannot)."""
+    try:
+        return isinstance(tomllib.loads(_read(pkg_on_disk / "pyproject.toml"))
+                          .get("project"), dict)
+    except tomllib.TOMLDecodeError:
+        return False
+
+
+def _resolve_runner(pkg_on_disk: Path, deadline: float) -> tuple[str, tuple[str, ...]]:
+    """How to invoke mutmut so the suite runs with the package's own
+    dependencies: ``(runner, invocation)``.
+
+    1. ``venv``: a package virtualenv that already holds mutmut 3. It is the
+       environment the maintainer runs the suite in, and costs nothing to set up.
+    2. ``uv``: ``uv run --project`` builds the package's environment (its
+       dependencies and default groups, from its lock file when it has one)
+       plus the pinned mutmut and pytest. The environment lands in the scratch
+       directory (``_runner_env``), never the assessed tree or the user's own.
+    3. ``path``: the ``mutmut`` on PATH, as before; enough for a suite with no
+       third-party test dependencies.
+    """
+    python = _venv_mutmut3(pkg_on_disk, deadline)
+    if python:
+        return "venv", (python, "-m", "mutmut")
+    uv = shutil.which("uv")
+    if uv and _is_uv_project(pkg_on_disk):
+        return "uv", (uv, "run", "--quiet", "--project", ".",
+                      "--with", _MUTMUT_PIN, "--with", "pytest", "mutmut")
+    return "path", ("mutmut",)
+
+
+def _runner_env(runner: str, tmp: Path) -> dict[str, str] | None:
+    """The uv runner's environment: its project environment goes in ``tmp``
+    (an inherited ``UV_PROJECT_ENVIRONMENT`` could name the user's own), and
+    an active ``VIRTUAL_ENV`` is dropped so uv does not target it. The other
+    runners inherit the caller's environment."""
+    if runner != "uv":
+        return None
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    env["UV_PROJECT_ENVIRONMENT"] = str(tmp / "venv")
+    return env
 
 
 def _repo_config_gap(pkg: Path, pkg_rel: str, rel_scope: list[str]) -> str | None:
@@ -486,6 +596,23 @@ def _group_record(pkg_rel: str, config: str, scope: list[str]) -> dict:
     return {"root": pkg_rel or ".", "config": config, "scope": scope}
 
 
+def _run_mutmut(pkg: Path, pkg_on_disk: Path, config: str, cfg_scope: list[str],
+                tmp: Path, deadline: float,
+                record: dict) -> subprocess.CompletedProcess | None:
+    """Resolve the runner (recorded on ``record``) and run mutmut in ``pkg``
+    with what remains of the budget; None when nothing remains. Raises
+    ``subprocess.TimeoutExpired`` / ``OSError`` like ``subprocess.run``."""
+    runner, mutmut = _resolve_runner(pkg_on_disk, deadline)
+    record["runner"] = runner
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return None
+    return subprocess.run(
+        _mutmut_command(pkg, config, cfg_scope, mutmut), cwd=str(pkg),
+        env=_runner_env(runner, tmp), capture_output=True, text=True,
+        timeout=remaining, check=False)
+
+
 def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
                deadline: float) -> tuple[dict, list[dict]]:
     """One package's run in its own scratch copy. Returns the group record
@@ -497,8 +624,8 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
                else {f: f for f in rel_scope})
     cfg_scope = list(spelled.values())
     back = {v: k for k, v in spelled.items()}
-    timed_out = {**record, "mutation_run": False,
-                 "reason": f"exceeded {MUTATION_TIMEOUT}s timeout"}
+    timeout_reason = {"mutation_run": False,
+                      "reason": f"exceeded {MUTATION_TIMEOUT}s timeout"}
     # ignore_cleanup_errors: a read-only directory carried over by the copy, or
     # debris from the test run, must not raise on the way out of the block
     # and turn a named result into a generic scan failure.
@@ -508,21 +635,19 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
         work.mkdir()
         pkg = work / pkg_rel if pkg_rel else work
         if deadline - time.monotonic() <= 0:
-            return timed_out, []
+            return {**record, **timeout_reason}, []
         try:
             from_git = _copy_repo(repo_root, work)
             gap = _prepare_group(work, pkg_rel, cfg_scope,
                                  deadline if from_git else None)
             if gap:
                 return {**record, "mutation_run": False, "reason": gap}, []
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                return timed_out, []
-            proc = subprocess.run(
-                _mutmut_command(pkg, config, cfg_scope), cwd=str(pkg),
-                capture_output=True, text=True, timeout=remaining, check=False)
+            proc = _run_mutmut(pkg, pkg_on_disk, config, cfg_scope, Path(tmp),
+                               deadline, record)
+            if proc is None:
+                return {**record, **timeout_reason}, []
         except subprocess.TimeoutExpired:
-            return _stopped_result(timed_out, pkg_rel, cfg_scope,
+            return _stopped_result({**record, **timeout_reason}, pkg_rel, cfg_scope,
                                    _parse_mutmut3_meta(pkg / "mutants"), back)
         except OSError as e:
             return {**record, "mutation_run": False, "reason": str(e)}, []
