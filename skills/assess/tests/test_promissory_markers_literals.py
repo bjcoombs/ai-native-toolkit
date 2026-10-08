@@ -66,7 +66,12 @@ def test_marker_after_a_string_literal_marker_is_judged_on_its_own(
     """The later filters judge the first match that is not data, so a string
     literal holding marker text cannot hide a real comment marker after it."""
     got = _scan_files(tmp_path, {
-        "m.py": 'x = "TODO: data"  # FIXME: real\ny = "TODO: data only"\n',
+        "m.py": (
+            'x = "TODO: data"  # FIXME: real\n'           # 1 real after data
+            'y = "TODO: data only"\n'                     # 2 data only
+            '("TODO: x", True),  # a bare TODO counts\n'  # 3 the comment's
+            # token is mid-sentence; only the string's has the colon form
+        ),
     })
     assert {line for _, line, fam in got if fam == "todo"} == {1}
 

@@ -27,8 +27,8 @@ intent" is a measured quantity, not an article of faith.
 
 Marker text that is data is not a marker. In a Python file ``tokenize`` places
 each hit: one inside a string literal (f-strings included) is a fixture or a
-pattern and is dropped, but a todo or deprecation in a docstring is prose about
-the code and counts. A suppression counts only in a comment, where linters read
+pattern and is dropped, but a todo or deprecation in a triple-quoted docstring
+is prose about the code and counts. A suppression counts only in a comment, where linters read
 it; a disabled test in code or a comment. A file that does not tokenize, and
 every other language, keeps the line-based filters. A suppression quoted in a
 backtick code span on a comment-only line is a quotation, and config files (TOML, YAML, INI, JSON)
@@ -398,7 +398,9 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
                 is_prose, text, pattern, offset
             ):
                 continue
-            if family == "todo" and not _todo_in_marker_position(text, is_prose):
+            if family == "todo" and not _todo_in_marker_position(
+                text, is_prose, offset
+            ):
                 continue
             justified = family == "suppression" and bool(
                 JUSTIFIED_SUPPRESSION_RE.search(text)
@@ -522,18 +524,23 @@ def _opener(prefix: str, is_prose: bool) -> str:
     return rest.strip()
 
 
-def _todo_in_marker_position(text: str, is_prose: bool = False) -> bool:
+def _todo_in_marker_position(
+    text: str, is_prose: bool = False, start: int = 0
+) -> bool:
     """Keep a todo hit when a marker token sits in marker position, or when
     the line carries a phrase alternative (``remove after ...``).
 
     A line matched only by a phrase alternative has no token and passes; the
     comment-context filter already vetted it. The token is in marker position
     when nothing but an optional list bullet or checkbox sits between its
-    opening position (see ``_opener``) and the token.
+    opening position (see ``_opener``) and the token. Only tokens and phrases
+    at or after ``start`` (the accepted match, see ``_marker_offset``) count:
+    anything before it on the line was ruled data, and a comment runs to the
+    end of the line, so nothing after an accepted comment match is a string.
     """
-    tokens = list(TODO_TOKEN_RE.finditer(text))
+    tokens = [m for m in TODO_TOKEN_RE.finditer(text) if m.start() >= start]
     if not tokens:
-        return _phrase_is_marker(text, is_prose)
+        return _phrase_is_marker(text[start:], is_prose)
     for m in tokens:
         if _TODO_SUFFIX_RE.match(text, m.end()):
             return True
@@ -542,7 +549,7 @@ def _todo_in_marker_position(text: str, is_prose: bool = False) -> bool:
             return True
     # No token in marker position: a phrase alternative on the same line (a
     # stopgap phrase beside a mid-sentence token) still makes it a marker.
-    return _phrase_is_marker(text, is_prose)
+    return _phrase_is_marker(text[start:], is_prose)
 
 
 def _phrase_is_marker(text: str, is_prose: bool) -> bool:

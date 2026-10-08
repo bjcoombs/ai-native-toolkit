@@ -914,7 +914,9 @@ vs bare, and each introducing commit as agent/human (reusing `change_coupling`'s
 conservative B4 identity rules). Marker text that is data is not a marker: in a
 Python file `python_regions` places each hit, so one inside a string literal (a
 test fixture, a pattern table) is dropped while a todo or deprecation in a
-docstring still counts as prose about the code; a suppression counts only in a
+triple-quoted docstring still counts as prose about the code (a single-quoted
+docstring opens with a quote, which the comment-context filter does not read as
+a leader); a suppression counts only in a
 comment and a disabled test only in code or a comment. A file that does not
 tokenize, and every other language, keeps the line-based filters below. In any
 code file a line-scoped suppression quoted in a backtick code span on a
