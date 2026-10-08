@@ -33,27 +33,45 @@ def _rebuilt_findings(findings: list[Any], untrusted: list[str]) -> list[dict]:
     """``findings`` in ``FINDING_ORDER`` with ``untrusted_hotspot`` replaced.
 
     Stored actions are kept (the ``unactioned_intent`` action carries the stale
-    threshold the default run appended); a finding missing from an older
-    run-context comes back with its default action.
+    threshold the default run appended). Only ``untrusted_hotspot`` is inserted
+    when an older run-context lacks it; any other finding missing from the
+    stored list stays missing, since this pass never computed it.
     """
     stored = [f for f in findings if isinstance(f, dict) and "name" in f]
     paths_by_name = {f["name"]: list(f.get("paths") or []) for f in stored}
     paths_by_name["untrusted_hotspot"] = untrusted
     actions = {f["name"]: f["action"] for f in stored if f.get("action")}
-    rebuilt = assemble_findings(paths_by_name)
+    rebuilt = [f for f in assemble_findings(paths_by_name) if f["name"] in paths_by_name]
     for f in rebuilt:
         f["action"] = actions.get(f["name"], f["action"])
     return rebuilt
 
 
+# Key in ``excluded_by_config`` naming the paths a mutation pass added, so a
+# later pass can take them back out when E1 no longer names them.
+_PASS_ADDED_KEY = "added_by_mutation_pass"
+
+
 def _merge_config_exclusions(ctx: dict[str, Any], excluded: list[str]) -> None:
-    """Add newly excluded E1 paths to the ``excluded_by_config`` disclosure."""
+    """Rebuild the ``excluded_by_config`` paths with this pass's E1 exclusions.
+
+    Paths an earlier pass added are removed first, so the disclosure never
+    names a suppressed E1 path this pass did not suppress. A path the default
+    run already disclosed is never recorded as added, so it is never removed.
+    """
     block = ctx.get("excluded_by_config")
-    if not excluded or not isinstance(block, dict):
+    if not isinstance(block, dict):
         return
-    paths = sorted(set(block.get("affected_finding_paths") or []) | set(excluded))
+    prior_added = set(block.pop(_PASS_ADDED_KEY, None) or [])
+    if not excluded and not prior_added:
+        return
+    base = set(block.get("affected_finding_paths") or []) - prior_added
+    paths = sorted(base | set(excluded))
     block["affected_finding_paths"] = paths
     block["count"] = len(paths)
+    added = sorted(set(excluded) - base)
+    if added:
+        block[_PASS_ADDED_KEY] = added
 
 
 def refresh_mutation_findings(
@@ -67,8 +85,9 @@ def refresh_mutation_findings(
     ``complexity_stats`` is this run's ``complexity-stats.json`` (scoped when the
     run was); ``exclude_dirs`` / ``exclude_patterns`` are the config excludes the
     default run applied. Rewrites ``derived_findings``, the products in
-    ``_PRODUCT_KEYS`` and the ``excluded_as_archive`` disclosure, and adds any
-    config-excluded E1 path to ``excluded_by_config``.
+    ``_PRODUCT_KEYS`` and the ``excluded_as_archive`` disclosure, and rebuilds
+    ``excluded_by_config`` with this pass's config-excluded E1 paths (recorded
+    under ``added_by_mutation_pass`` so a later pass can retract them).
 
     Returns False and leaves ``ctx`` untouched when it carries no
     ``derived_findings`` list (a run-context older than the keyhole findings):

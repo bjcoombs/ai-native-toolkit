@@ -9,8 +9,8 @@ Edge cases covered: survivors over the threshold on a hotspot (end to end, and
 equal to a default run fed the same block), all killed, a second pass clearing
 a prior E1, a timed-out partial pass, the tool absent, no focus targets, a
 scoped run, survivors on a non-hotspot, a run-context older than the keyhole
-blocks, findings missing the E1 entry, a config-excluded hotspot, an archive
-hotspot, and a recompute failure.
+blocks, findings missing the E1 entry, a config-excluded hotspot (and a later
+pass retracting it), an archive hotspot, and a recompute failure.
 """
 from __future__ import annotations
 
@@ -315,10 +315,13 @@ def _empty_findings() -> list[dict]:
 
 
 def test_missing_untrusted_entry_is_inserted_in_order() -> None:
-    findings = [f for f in _empty_findings() if f["name"] != "untrusted_hotspot"]
+    findings = [f for f in _empty_findings()
+                if f["name"] not in ("untrusted_hotspot", "override_contradicts_signals")]
     ctx = _ctx(findings, [{"file": "src/hot.py", "survived": 5, "total": 10}])
     assert refresh_mutation_findings(ctx, _stats("src/hot.py"), set(), []) is True
-    assert [f["name"] for f in ctx["derived_findings"]] == FINDING_ORDER
+    # Only E1 is inserted; a finding this pass never computed stays absent.
+    assert [f["name"] for f in ctx["derived_findings"]] == [
+        n for n in FINDING_ORDER if n != "override_contradicts_signals"]
     assert _untrusted(ctx) == ["src/hot.py"]
     # Stored actions survive; the inserted finding takes its default action.
     lying = next(f for f in ctx["derived_findings"] if f["name"] == "lying_map")
@@ -333,6 +336,34 @@ def test_config_excluded_hotspot_is_disclosed() -> None:
     assert _untrusted(ctx) == []
     assert ctx["excluded_by_config"]["affected_finding_paths"] == ["vendor/hot.py"]
     assert ctx["excluded_by_config"]["count"] == 1
+
+
+def test_later_pass_retracts_config_exclusion_it_no_longer_makes() -> None:
+    """Pass 1 suppresses an excluded hotspot; pass 2 kills every mutant. The
+    disclosure drops the path pass 1 added, and keeps the default run's."""
+    ctx = _ctx(_empty_findings(), [{"file": "vendor/hot.py", "survived": 6, "total": 10}])
+    ctx["excluded_by_config"]["affected_finding_paths"] = ["vendor/old.py"]
+    ctx["excluded_by_config"]["count"] = 1
+    before = json.loads(json.dumps(ctx["excluded_by_config"]))
+    stats = _stats("vendor/hot.py")
+    refresh_mutation_findings(ctx, stats, {"vendor"}, [])
+    assert ctx["excluded_by_config"]["affected_finding_paths"] == [
+        "vendor/hot.py", "vendor/old.py"]
+    ctx["test_pressure"] = {"per_file": [{"file": "vendor/hot.py", "survived": 0, "total": 10}]}
+    refresh_mutation_findings(ctx, stats, {"vendor"}, [])
+    assert ctx["excluded_by_config"] == before
+
+
+def test_pass_never_retracts_a_path_the_default_run_disclosed() -> None:
+    ctx = _ctx(_empty_findings(), [{"file": "vendor/hot.py", "survived": 6, "total": 10}])
+    ctx["excluded_by_config"]["affected_finding_paths"] = ["vendor/hot.py"]
+    ctx["excluded_by_config"]["count"] = 1
+    stats = _stats("vendor/hot.py")
+    refresh_mutation_findings(ctx, stats, {"vendor"}, [])
+    assert "added_by_mutation_pass" not in ctx["excluded_by_config"]
+    ctx["test_pressure"] = {"per_file": []}
+    refresh_mutation_findings(ctx, stats, {"vendor"}, [])
+    assert ctx["excluded_by_config"]["affected_finding_paths"] == ["vendor/hot.py"]
 
 
 def test_archive_hotspot_kept_out_of_attention() -> None:

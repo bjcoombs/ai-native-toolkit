@@ -488,8 +488,10 @@ E1 unable to fire in a real run. `refresh_mutation_findings` recomputes
 `untrusted_hotspot` through `untrusted_hotspot_paths` and `apply_config_excludes`, keeps
 every other finding and its action as stored (none of them reads `test_pressure`),
 reassembles in `FINDING_ORDER` through `assemble_findings`, then rewrites
-`derived_findings`, the `finding_products` keys and `excluded_as_archive`, and adds any
-config-excluded E1 path to `excluded_by_config`. A run-context with no
+`derived_findings`, the `finding_products` keys and `excluded_as_archive`, and rebuilds
+`excluded_by_config` with the config-excluded E1 paths, recording the ones a pass added
+under `added_by_mutation_pass` so a later pass that no longer suppresses them takes them
+back out. Only `untrusted_hotspot` is inserted when an older run-context lacks it. A run-context with no
 `derived_findings` list is left untouched (returns `False`). `assess_core` hands it
 this run's `complexity-stats.json` (the scoped one under `--scope`) and the config
 excludes, then rewrites `badge.json` through `badge.write_findings_badge`. Tests:
