@@ -14,6 +14,9 @@ from lib.doc_graph import EXCLUDE_DIRS
 # Per-heuristic cap so a pathological repo can't bloat the run-context block.
 MAX_FINDINGS = 50
 
+# Seconds; a mutation pass (every copy and run in it) is bounded or it degrades.
+MUTATION_TIMEOUT = 300
+
 _PY_TEST_RE = re.compile(r"(^test_.*\.py$|.*_test\.py$)")
 _TS_TEST_RE = re.compile(r".*\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$")
 _GO_TEST_RE = re.compile(r".*_test\.go$")

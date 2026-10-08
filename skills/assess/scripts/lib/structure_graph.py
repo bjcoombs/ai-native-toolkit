@@ -68,7 +68,7 @@ EXCLUDE_DIRS = {
     "worktree", ".understand-anything", ".obsidian", ".taskmaster",
     ".claude", ".next", ".nuxt", ".output", ".svelte-kit", ".astro",
     "out", "coverage", "htmlcov", "Pods", "DerivedData", "flutter_assets",
-    ".assess", "tests", "test",
+    ".assess", "mutants", "tests", "test",
 }
 
 # Below this many internal modules a package is too small to be worth proposing

@@ -100,4 +100,8 @@ def scan_test_pressure(repo_root: Path, hot_files: list | None = None,
     # Surface why a mutation run didn't happen, for the report prose.
     if "reason" in mutation:
         block["mutation_note"] = mutation["reason"]
+    # Per-package runs of the mutmut 3 pass, each with its own reason when it
+    # could not run, so a partial pass says which package fell short and why.
+    if "groups" in mutation:
+        block["mutation_groups"] = mutation["groups"]
     return block

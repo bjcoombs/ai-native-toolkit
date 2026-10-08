@@ -119,10 +119,10 @@ EXCLUDE_DIRS = {".git", "node_modules", "dist", "build", "target", "vendor",
                 ".venv", "venv", "__pycache__", ".gradle", ".idea", ".mvn",
                 "worktree", ".understand-anything", ".obsidian",
                 ".taskmaster", ".claude",
-                # /assess's own output directory. Without this the prior
-                # run's run-context.json (often 2,000+ LOC) gets picked up
-                # as a top-large file on every re-run - circular pollution.
-                ".assess",
+                # /assess's own output, else a prior run-context.json (often
+                # 2,000+ LOC) is scored on every re-run; and mutmut 3's local
+                # mutants/ tree, copies of sources and tests counted twice.
+                ".assess", "mutants",
                 # modern web framework build outputs
                 ".next", ".nuxt", ".output", ".svelte-kit", ".astro",
                 "out", "coverage", "htmlcov",

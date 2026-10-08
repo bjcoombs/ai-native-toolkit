@@ -359,6 +359,8 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT" --opt-in-mutati
 uv run "${CLAUDE_SKILL_DIR}/scripts/complexity-treemap.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/complexity-heatmap.svg" --stats "$REPO_ROOT/.assess/complexity-stats.json" --test-pressure "$REPO_ROOT/.assess/run-context.json"
 ```
 
+The pass runs once per package root among the focus files (the nearest directory with a `pyproject.toml`, `setup.cfg` or `setup.py`), from that directory, under the package's own mutmut config when it has one and a generated one otherwise. `test_pressure.mutation_groups` lists each run with its `root`, `config` (`repo` or `generated`) and, when it could not run, its `reason`. The pass counts as run when any group produced mutant records; in the report, name each group that did not run and quote its `reason`, so a partial pass reads as partial.
+
 <!-- chat-skip:start -->
 With no mutation data the `--test-pressure` flag is a silent no-op, so the overlay regeneration is harmless even if the pass produced nothing.
 

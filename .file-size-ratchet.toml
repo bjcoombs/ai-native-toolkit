@@ -91,6 +91,3 @@ reason = "pre-existing; ratchet from 2026-10-07"
 lines = 885
 reason = "pre-existing; ratchet from 2026-10-07"
 
-[ceilings."skills/assess/tests/test_test_pressure.py"]
-lines = 1190
-reason = "pre-existing; ratchet from 2026-10-07"

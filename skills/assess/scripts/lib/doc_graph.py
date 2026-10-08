@@ -79,7 +79,7 @@ EXCLUDE_DIRS = {
     "worktree", ".understand-anything", ".obsidian", ".taskmaster",
     ".claude", ".next", ".nuxt", ".output", ".svelte-kit", ".astro",
     "out", "coverage", "htmlcov", "Pods", "DerivedData", "flutter_assets",
-    ".assess",
+    ".assess", "mutants",
 }
 
 # Path-segment *sequences* (not single dir names) that mark non-navigational
