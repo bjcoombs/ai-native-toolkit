@@ -238,10 +238,14 @@ def test_no_frontmatter_is_not_malformed() -> None:
 
 
 def test_quoted_values_and_comments_are_cleaned() -> None:
-    fm = parse_frontmatter(_fm('color: "red"', "effort: low  # cheap", "model: 'inherit'"))
+    fm = parse_frontmatter(_fm(
+        'color: "red"', "effort: low  # cheap", "model: 'inherit'",
+        'shell: "bash"  # house shell', "description: 'it''s # not a comment'"))
     assert fm is not None
     assert [(e.key, e.value) for e in fm.entries] == [
-        ("color", "red"), ("effort", "low"), ("model", "inherit")]
+        ("color", "red"), ("effort", "low"), ("model", "inherit"), ("shell", "bash"),
+        ("description", "it's # not a comment")]
+    assert check_file("a.md", "agent", "project", _fm('color: "red"  # house colour')) == []
 
 
 def test_malformed_manifest_falls_back_to_defaults(tmp_path: Path) -> None:
@@ -298,6 +302,18 @@ def test_default_plugin_layout_without_overrides(tmp_path: Path) -> None:
     assert block["files_by_kind"] == {"skill": 1, "command": 1, "agent": 1}
     assert _rows(block) == [("legacy_command", "commands/c.md", 1, None, None)]
     assert "`skills/c/SKILL.md`" in block["findings"][0]["fix"]
+
+
+def test_command_name_fix_keeps_it_for_other_loaders() -> None:
+    [_, f] = check_file("commands/c.md", "command", "plugin", _fm("name: c"))
+    assert f["kind"] == "command_unsupported_key"
+    assert "keep it only if another loader" in f["fix"]
+
+
+def test_manifest_agents_directory_entry_is_not_loaded(tmp_path: Path) -> None:
+    _write(tmp_path, ".claude-plugin/plugin.json", '{"name": "p", "agents": ["./bots/"]}')
+    _write(tmp_path, "bots/a.md", _fm("color: teal"))
+    assert scan_claude_config(tmp_path)["files_by_kind"]["agent"] == 0
 
 
 def test_manifest_commands_object_map_and_single_skill_dir(tmp_path: Path) -> None:

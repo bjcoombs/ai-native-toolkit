@@ -101,6 +101,8 @@ class ClaudeConfigBlock(TypedDict, total=False):
 # colon followed by whitespace or the end of the line.
 _KEY_RE = re.compile(r"^(?P<key>[^\s:#'\"\-][^:]*?)\s*:(?:\s+(?P<val>.*?))?\s*$")
 _FENCE = "---"
+_DQ_RE = re.compile(r'^"((?:[^"\\]|\\.)*)"\s*(?:#.*)?$')
+_SQ_RE = re.compile(r"^'((?:[^']|'')*)'\s*(?:#.*)?$")
 
 
 @dataclass
@@ -129,8 +131,13 @@ def _clean_scalar(raw: str | None) -> str | None:
     """Unquote a scalar, drop a trailing comment; None for an empty value."""
     if raw is None or raw == "":
         return None
-    if len(raw) >= 2 and raw[0] in "\"'" and raw[-1] == raw[0]:
-        return raw[1:-1]
+    # A quoted scalar ends at its closing quote; a comment may follow it.
+    m = _DQ_RE.match(raw)
+    if m:
+        return m.group(1)
+    m = _SQ_RE.match(raw)
+    if m:
+        return m.group(1).replace("''", "'")
     return re.sub(r"\s+#.*$", "", raw)
 
 
@@ -272,7 +279,9 @@ def _value_finding(path: str, value: str | None, kind: str) -> str | None:
 def _check_entry(entry: FmEntry, rel: str, kind: str, origin: str) -> list[ClaudeConfigFinding]:
     key = entry.key
     if kind == "command" and key in COMMAND_UNSUPPORTED_FIELDS:
-        fix = ("Remove `name`; a command's name comes from its file path."
+        fix = ("Claude Code ignores `name` in a command file (the name comes from its "
+               "path); keep it only if another loader, such as a claude.ai skill upload, "
+               "needs it."
                if key == "name" else
                "Move the command to a skill to use `paths`; command files ignore it.")
         return [_finding("command_unsupported_key", rel, entry.line, key, entry.value, fix)]
@@ -425,11 +434,19 @@ def _plugin_files(root: Path, manifest: dict[str, object]) -> Discovered:
                  else ["commands"])
     for c in cmd_paths:
         found.extend((p, "command", "plugin") for p in _md_files(_inside(root, c)))
-    agent_paths = (_paths_value(manifest["agents"]) if "agents" in manifest
-                   else ["agents"])
-    for a in agent_paths:
-        found.extend((p, "agent", "plugin") for p in _md_files(_inside(root, a)))
+    found.extend((p, "agent", "plugin") for p in _plugin_agent_files(root, manifest))
     return found
+
+
+def _plugin_agent_files(root: Path, manifest: dict[str, object]) -> list[Path]:
+    """``agents/`` (recursive), or the manifest's ``agents`` entries instead.
+
+    Manifest entries must be ``.md`` files; a directory entry is not loaded.
+    """
+    if "agents" not in manifest:
+        return _md_files(root / "agents")
+    paths = (_inside(root, a) for a in _paths_value(manifest["agents"]))
+    return [p for p in paths if p is not None and p.is_file() and p.suffix == ".md"]
 
 
 def _project_files(root: Path) -> Discovered:
