@@ -13,7 +13,7 @@
         "FLOOR.md"
       ],
       "first_step": "Read the #410 review comment and choose widen-the-classifier or narrow-the-clause",
-      "done_when": "Each FLOOR.md clause maps to a test written from its text, and floor_anchor.py mutation survivor density falls below 0.3",
+      "done_when": "Each FLOOR.md clause maps to a test written from its text; a scripts/contract/ change requests floor-signoff (or clause iii no longer lists it); and floor_anchor.py mutation survivor density falls below 0.3",
       "scope_fence": "Floor files: changes need the maintainer's out-of-band floor-signoff approval; no agent edits",
       "finding": "self_referential_tests",
       "status": "pending",
