@@ -97,6 +97,11 @@ Every `test_*.py` file in this directory has a row below.
 | `test_interactivity.py` | `lib/interactivity.py` - the non-interactive consent contract |
 | `test_jvm_capabilities.py` | `lib/jvm_capabilities.py` - the capability-driven JVM offer flow |
 | `test_mutation_cap.py` | `lib/mutation_cap.py` - the `test_pressure` block shape and the Layer 6 mutation-not-run cap |
+| `test_mutation_cap_partial.py` | `lib/mutation_cap.py` - the Layer 6 cap holds at Partial, and finalize refuses Present, when every mutmut 3 group with records stopped at the time budget (`partial`) |
+| `test_mutation_refresh.py` | `scripts/assess_core.py --opt-in-mutation` - the opt-in pass rebuilds every block derived from `test_pressure` (E1 `untrusted_hotspot`, attention, findings markdown, summary, prescribed actions, badge), not only the block and the cap |
+| `test_mutmut3.py` | `lib/test_pressure/mutmut3.py` - the mutmut 3 adapter and the mutmut version probe |
+| `test_mutmut3_layout.py` | `lib/test_pressure/mutmut3.py` - the pass across package layouts: grouping by package root, the package's own config against a generated one, files read outside the package, several packages in one focus set (mutmut faked) |
+| `test_mutmut3_runner.py` | `lib/test_pressure/mutmut3.py` (`_resolve_runner`) - the environment the pass runs in (package venv, uv scratch environment, PATH) and the reason naming the first import error or failing test when the baseline run fails |
 | `test_ownership_parser.py` | `lib/ownership_parser.py` - ownership-map parser |
 | `test_promissory_markers.py` | `lib/promissory_markers.py` - stale TODOs, suppressions and skips |
 | `test_raw_source.py` | `lib/raw_source.py` - raw-source subtree detection |
@@ -117,6 +122,9 @@ Every `test_*.py` file in this directory has a row below.
 | `test_smoke.py` | `lib/__init__.py` - confirms the lib package is importable and `__version__` is set |
 | `test_golden_baseline.py` | `tests/golden.py` + dogfood fixtures - guards the regression baseline scaffolding (fixture completeness, normalization idempotency, loader correctness) used by `test_decomposition_parity.py` |
 | `test_golden_svg_render.py` | `scripts/complexity-treemap.py` + `scripts/doc-graph-svg.py` - runs the real renderers and locks their colour encoding |
+| `test_svg_cascade.py` | `lib/treemap_render.py` - the heatmap stylesheet never overrides a `<text>` presentation attribute (the check itself is in `svg_cascade.py`) |
+| `svg_cascade.py` | the CSS-cascade check shared by `test_svg_cascade.py` and `test_golden_svg_render.py` (not a test module) |
+| `test_symlink_walks.py` | the committed `skills/assess/src -> scripts` symlink (relative to the repo root) - the link exists and points at `scripts`; the treemap and the shared walks count linked files once; the mutation pass's scratch copy keeps the link, never links back into the assessed tree, ignores an inherited `GIT_DIR`, and maps focus paths through it both ways |
 | `test_doc_graph_svg.py` | `scripts/doc-graph-svg.py` - the SVG honours the same excludes as the scorer; node encoding, labels and layout; title and summary counts with singular/plural nouns and no em dash; CLI argument checks |
 | `test_action_contract.py` | `action.yml` (repo root) - the composite AI-readiness gate action |
 | `test_no_contributions_scan.py` | `skills/assess-pr/SKILL.md` (relative to the repo root) - extracts and runs the marked no-contributions bash block |

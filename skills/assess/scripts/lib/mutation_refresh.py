@@ -18,15 +18,19 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from lib.assess_config import load_excludes
 from lib.keyhole_signals import apply_config_excludes, assemble_findings, finding_products
+from lib.run_context_types import DerivedFinding, FindingPaths, FindingProducts
 from lib.untrusted_hotspot import untrusted_hotspot_paths
 
 # Run-context keys rewritten from ``finding_products``, in the order the default
 # run writes them.
-_PRODUCT_KEYS = (
+_PRODUCT_KEYS: tuple[Literal[
+    "attention", "attention_low_signal", "findings_markdown",
+    "keyhole_summary", "prescribed_actions",
+], ...] = (
     "attention", "attention_low_signal", "findings_markdown",
     "keyhole_summary", "prescribed_actions",
 )
@@ -36,7 +40,7 @@ _PRODUCT_KEYS = (
 _PASS_ADDED_KEY = "added_by_mutation_pass"
 
 
-def _rebuilt_findings(findings: list[Any], untrusted: list[str]) -> list[dict[str, Any]]:
+def _rebuilt_findings(findings: list[Any], untrusted: list[str]) -> list[DerivedFinding]:
     """``findings`` in ``FINDING_ORDER`` with ``untrusted_hotspot`` replaced.
 
     Stored actions are kept (the ``unactioned_intent`` action carries the stale
@@ -148,12 +152,11 @@ def refresh_mutation_findings(
 def _recompute(
     ctx: dict[str, Any], findings: list[Any], complexity_stats: dict[str, Any],
     exclude_dirs: set[str], exclude_patterns: list[str],
-) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
+) -> tuple[list[DerivedFinding], list[str], FindingProducts]:
     """The rebuilt findings, newly excluded E1 paths and finding products."""
     paths = untrusted_hotspot_paths(complexity_stats, ctx.get("test_pressure"))
-    filtered, excluded = apply_config_excludes(
-        [{"name": "untrusted_hotspot", "paths": paths}], exclude_dirs, exclude_patterns,
-    )
+    e1: list[FindingPaths] = [{"name": "untrusted_hotspot", "paths": paths}]
+    filtered, excluded = apply_config_excludes(e1, exclude_dirs, exclude_patterns)
     rebuilt = _rebuilt_findings(findings, filtered[0]["paths"])
     promissory = ctx.get("promissory_markers")
     behaviour = ctx.get("behaviour")
