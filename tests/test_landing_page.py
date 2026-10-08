@@ -10,6 +10,7 @@ Entries are classified by frontmatter, not by directory: a file with
 a `data-kind="skill"` list. `commands/` is read when present, so the check
 holds before and after commands move to `skills/<name>/SKILL.md`.
 """
+
 import re
 from pathlib import Path
 
@@ -27,9 +28,11 @@ NOT_USER_INVOCABLE = {
     "tm-marathon-config-example",
 }
 
-FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
-MANUAL_RE = re.compile(r"^disable-model-invocation:\s*true\s*$", re.M)
-LIST_RE = re.compile(r'<dl class="legend" data-kind="(skill|manual)">(.*?)</dl>', re.S)
+FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
+MANUAL_RE = re.compile(r"^disable-model-invocation:\s*true\s*$", re.MULTILINE)
+LIST_RE = re.compile(
+    r'<dl class="legend" data-kind="(skill|manual)">(.*?)</dl>', re.DOTALL
+)
 DT_RE = re.compile(r"<dt>/([a-z0-9][a-z0-9-]*)</dt>")
 
 
@@ -42,7 +45,9 @@ def _on_disk() -> dict[str, set[str]]:
     files = {p.parent.name: p for p in (REPO / "skills").glob("*/SKILL.md")}
     commands = REPO / "commands"
     if commands.is_dir():
-        files.update({p.stem: p for p in commands.glob("*.md") if p.name != "README.md"})
+        files.update(
+            {p.stem: p for p in commands.glob("*.md") if p.name != "README.md"}
+        )
     kinds: dict[str, set[str]] = {"skill": set(), "manual": set()}
     for name, path in files.items():
         if name not in NOT_USER_INVOCABLE:
