@@ -148,5 +148,12 @@ pytest_add_cli_args_test_selection = [
     "tests/test_promissory_markers.py",
     "tests/test_doc_staleness.py",
     "tests/test_doc_graph.py",
-    "tests/test_keyhole_signals.py",
+    "tests/test_keyhole_accretion.py",
+    "tests/test_keyhole_attention.py",
+    "tests/test_keyhole_blocks.py",
+    "tests/test_keyhole_hidden_coupling.py",
+    "tests/test_keyhole_override_contradicts.py",
+    "tests/test_keyhole_render.py",
+    "tests/test_keyhole_suppression.py",
+    "tests/test_keyhole_untrusted_hotspot.py",
 ]
