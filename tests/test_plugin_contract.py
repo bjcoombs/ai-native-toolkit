@@ -163,9 +163,10 @@ def test_skill_frontmatter(d):
 
 def agent_files():
     # Every .md under agents/ is an agent definition: Claude Code registers each
-    # one as an agent, so none is exempt. The walk is recursive as a precaution:
-    # holding a nested doc to the agent contract is strict but harmless (a README there loaded as a bogus
-    # `ai-native-toolkit:README` agent until it moved to docs/index.md).
+    # one as an agent, so none is exempt (a README there loaded as a bogus
+    # `ai-native-toolkit:README` agent until it moved to docs/index.md). The walk
+    # is recursive as a precaution: holding a nested doc to the agent contract is
+    # strict but harmless.
     if not AGENTS.is_dir():
         return []
     return sorted(AGENTS.rglob("*.md"))
