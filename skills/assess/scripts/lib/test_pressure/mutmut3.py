@@ -570,7 +570,8 @@ def _group_result(record: dict, pkg_rel: str, rel_scope: list[str],
     measured = {p["file"] for p in per_file}
     unmeasured = [f for f in record["scope"] if f not in measured]
     if unmeasured:
-        # e.g. a focus file outside the package config's only_mutate
+        # a focus file outside the package config's only_mutate, or one a
+        # run stopped at the budget never reached (_stopped_result)
         record["unmeasured"] = unmeasured
     return {**record, "mutation_run": True}, per_file
 
