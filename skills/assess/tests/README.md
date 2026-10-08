@@ -104,6 +104,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_mutmut3_runner.py` | `lib/test_pressure/mutmut3.py` (`_resolve_runner`) - the environment the pass runs in (package venv, uv scratch environment, PATH) and the reason naming the first import error or failing test when the baseline run fails |
 | `test_ownership_parser.py` | `lib/ownership_parser.py` - ownership-map parser |
 | `test_promissory_markers.py` | `lib/promissory_markers.py` - stale TODOs, suppressions and skips |
+| `test_promissory_markers_literals.py` | `lib/promissory_markers.py` and `lib/python_regions.py` - marker text in Python string literals, quoted directives and config files is data, not a marker; docstrings and real comments still count and age |
 | `test_raw_source.py` | `lib/raw_source.py` - raw-source subtree detection |
 | `test_review_reality.py` | `lib/review_reality.py` - review-automation evidence from merged PRs |
 | `test_run_wiki.py` | `lib/run_wiki.py` - hotspot pages, `index.md` rows and graduation records for one run |
