@@ -26,7 +26,11 @@ question off the import graph:
     sub-clusters *are* the proposed cut-lines.
 
 Core dependencies are ``grimp`` (Python import-graph) and ``networkx``
-(community detection / SCCs).
+(community detection / SCCs). Mirroring ``doc_graph``, the module degrades to
+an ``available=False`` result rather than crashing when either is missing --
+the assessment never blocks. The analysis is purely static (AST-level import
+parsing via grimp; no code execution) and deterministic, so it is reproducible
+run to run.
 
 Packages are resolved **by path, never by name**. grimp's default package
 finder asks ``importlib.util.find_spec``, which answers from ``sys.modules``
@@ -34,16 +38,18 @@ first: when the assessed tree has a package called ``lib`` (or ``json``, or
 ``networkx``), the running ``/assess`` has already imported a module of that
 name and grimp would graph *that* copy instead of the target's. So each build
 swaps in a finder that maps a name to the directory discovery found, and
-``sys.path`` / ``sys.modules`` are never touched. A name held by two
-discovered packages (``a/lib`` and ``b/lib``) cannot share one grimp graph:
-each copy is graphed in its own build under its repo-relative path (``a/lib``,
-``b/lib``) and listed in ``name_collisions``; imports between builds are not
-resolved, since which copy wins depends on a runtime ``sys.path`` no static
-read can know. Mirroring ``doc_graph``, the module degrades to
-an ``available=False`` result rather than crashing when either is missing --
-the assessment never blocks. The analysis is purely static (AST-level import
-parsing via grimp; no code execution) and deterministic, so it is reproducible
-run to run.
+``sys.path`` / ``sys.modules`` are never touched.
+
+A name held by two discovered packages (``a/lib`` and ``b/lib``) cannot share
+one grimp graph, so packages are split across builds: each copy is graphed
+under its repo-relative path (``a/lib``, ``b/lib``) and listed in
+``name_collisions``. Every import between builds is dropped, not only an
+import of the colliding name: grimp treats a package outside the current build
+as external. For the colliding name the drop is also the honest answer, since
+which copy wins depends on a runtime ``sys.path`` no static read can know; for
+a unique name it is a loss, so with collisions present the A1 footprints and
+A3 front-door ratio can be understated. ``_partition_builds`` places packages
+first-fit, which is greedy rather than edge-maximising.
 """
 from __future__ import annotations
 
@@ -534,6 +540,10 @@ def _partition_builds(package_dirs: list[Path]) -> list[list[Path]]:
     build, so their imports of each other resolve. Each root goes into the first
     build it adds no duplicate name to; a repo with no colliding names is one
     build, exactly as before.
+
+    First-fit is greedy, not edge-maximising: with three or more roots it can
+    place a root apart from a non-colliding package it imports, and that edge
+    is dropped with the other cross-build imports.
     """
     by_parent: dict[Path, list[Path]] = {}
     for d in sorted(package_dirs):

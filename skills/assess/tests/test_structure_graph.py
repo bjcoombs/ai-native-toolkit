@@ -425,3 +425,19 @@ def test_non_colliding_tree_has_no_collisions_and_plain_names(tmp_path):
     assert result.name_collisions == []
     assert _module_names(result) == {"alpha", "alpha.one", "beta", "beta.two"}
     assert result.edge_count == 1
+
+
+def test_cross_build_import_of_a_unique_name_is_dropped(tmp_path):
+    # src/ and tools/ both hold ``lib``, forcing two builds. tools/runner
+    # imports the unique ``core`` from src/: grimp sees it as external to the
+    # tools build, so the edge is dropped (documented in the module docstring).
+    _pkg(tmp_path / "src", "lib", {"a": ""})
+    _pkg(tmp_path / "src", "core", {"c": ""})
+    _pkg(tmp_path / "tools", "lib", {"b": ""})
+    _pkg(tmp_path / "tools", "runner", {"r": "from core import c\n"})
+    result = sg.analyze_structure(tmp_path)
+    assert {"core.c", "runner.r"} <= _module_names(result)
+    assert result.edge_count == 0
+    assert result.name_collisions == [
+        {"name": "lib", "paths": ["src/lib", "tools/lib"]},
+    ]
