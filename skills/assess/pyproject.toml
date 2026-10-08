@@ -115,8 +115,8 @@ disallow_any_generics = false
 # Layer 6 truth-pressure: line coverage shows the tests execute this code,
 # mutation testing shows they would fail if it were wrong. Scoped to six
 # deterministic lib/ modules: three small ones from /assess's own test-focus
-# list (promissory_markers with its python_regions helper) plus the two
-# largest complexity hotspots (doc_graph, keyhole_signals),
+# list, promissory_markers' python_regions helper, and the two largest
+# complexity hotspots (doc_graph, keyhole_signals),
 # about 4.5k mutants as of 2026-10 (the weekly job summary has the live count).
 # Widening the scope is a deliberate ratchet, since a run is O(mutants): keep
 # the weekly run well inside the workflow's 45m budget.

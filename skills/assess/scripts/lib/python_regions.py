@@ -74,6 +74,35 @@ def _string_kind(sig: list[tokenize.TokenInfo], first: int, last: int) -> str:
     return STRING
 
 
+def _literal_runs(sig: list[tokenize.TokenInfo]) -> list[list[int]]:
+    """Each string literal as a [first, last] index run into ``sig``.
+
+    An f-string or t-string spans its START..END tokens. Adjacent literals
+    (implicit concatenation) merge into one run, so two triple-quoted literals
+    alone on a line are one docstring, as Python reads them.
+    """
+    runs: list[list[int]] = []
+    depth, first = 0, 0
+    for i, t in enumerate(sig):
+        if t.type in _FSTRING_START:
+            first = i if depth == 0 else first
+            depth += 1
+            continue
+        if t.type in _FSTRING_END:
+            depth -= 1
+            if depth:
+                continue
+        elif depth or t.type != tokenize.STRING:
+            continue
+        else:
+            first = i
+        if runs and runs[-1][1] == first - 1:
+            runs[-1][1] = i
+        else:
+            runs.append([first, i])
+    return runs
+
+
 def python_regions(source: str) -> PyRegions | None:
     """Tokenize a Python source; None when it does not tokenize."""
     try:
@@ -84,18 +113,10 @@ def python_regions(source: str) -> PyRegions | None:
     # Comments and blank-line NL tokens sit outside the statement structure, so
     # skipping them lets a docstring with a trailing comment still read as one.
     sig = [t for t in toks if t.type not in (tokenize.NL, tokenize.COMMENT)]
-    spans: list[Span] = []
-    depth, first = 0, 0
-    for i, t in enumerate(sig):
-        if t.type in _FSTRING_START:
-            first = i if depth == 0 else first
-            depth += 1
-        elif t.type in _FSTRING_END:
-            depth -= 1
-            if depth == 0:
-                spans.append((sig[first].start, t.end, _string_kind(sig, first, i)))
-        elif depth == 0 and t.type == tokenize.STRING:
-            spans.append((t.start, t.end, _string_kind(sig, i, i)))
+    runs = _literal_runs(sig)
+    spans: list[Span] = [
+        (sig[a].start, sig[b].end, _string_kind(sig, a, b)) for a, b in runs
+    ]
     return PyRegions(spans, comments)
 
 

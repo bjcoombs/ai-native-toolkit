@@ -241,6 +241,26 @@ def test_regions_classify_each_token_kind() -> None:
     assert r.region(8, 8) == CODE
 
 
+def test_regions_merge_implicitly_concatenated_literals() -> None:
+    """Python reads adjacent literals as one string, so a statement made of
+    them is one docstring, and a marker in its second part still counts."""
+    r = python_regions('"""a""" """TODO: b"""\nx = ("c"\n     f"d{x}")\n')
+    assert r is not None
+    assert r.region(1, 0) == DOCSTRING
+    assert r.region(1, 7) == DOCSTRING  # the gap between the two parts
+    assert r.region(1, 12) == DOCSTRING
+    assert r.region(2, 5) == STRING
+    assert r.region(3, 5) == STRING
+    assert len(r.spans) == 2
+
+
+def test_concatenated_docstring_todo_counts(tmp_path: Path) -> None:
+    got = _scan_files(tmp_path, {
+        "m.py": 'def f():\n    """Doc.""" """TODO: say what f returns."""\n',
+    })
+    assert ("m.py", 2, "todo") in got
+
+
 def test_regions_multiline_string_interior_and_end() -> None:
     r = python_regions('s = """\nTODO in here\n"""  # after\n')
     assert r is not None

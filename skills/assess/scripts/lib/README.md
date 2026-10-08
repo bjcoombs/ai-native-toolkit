@@ -947,7 +947,8 @@ fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
 **`python_regions.py`**
 Token regions of a Python source for `promissory_markers`: `tokenize` records
 each string literal's span (classed `docstring` when it is a statement of its
-own, `string` otherwise, f-strings and t-strings as one span) and each comment's
+own, `string` otherwise; an f-string, a t-string and a run of implicitly
+concatenated literals each form one span) and each comment's
 opening column, and `PyRegions.region(row, col)` answers `comment` / `docstring`
 / `string` / `code`. Returns `None` for a source that does not tokenize, so the
 caller falls back to its line filters; `load_regions` memoises per file and

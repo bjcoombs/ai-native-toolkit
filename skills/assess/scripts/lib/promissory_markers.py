@@ -201,8 +201,9 @@ PYTHON_SUFFIXES = {".py", ".pyi"}
 # in a pyproject.toml comment documents a directive, it suppresses nothing.
 CONFIG_SUFFIXES = {".toml", ".ini", ".cfg", ".yaml", ".yml", ".json"}
 # An inline code span on a comment-only line: a directive inside one is quoted.
-# Only there: ruff reads a noqa anywhere in a trailing comment, so a quoted one
-# after code still suppresses that code.
+# There it has no code to suppress (ruff would apply it to the comment line
+# alone). After code it stays: ruff reads a noqa anywhere in a trailing
+# comment, so a quoted one still suppresses that code.
 _CODE_SPAN_RE = re.compile(r"``.+?``|`[^`]+`")
 # The token regions of a Python line each family may count in. A docstring is
 # prose about the code, so a promise there is a promise; any other string is
