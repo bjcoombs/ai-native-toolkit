@@ -168,6 +168,7 @@ def test_agent_frontmatter(p):
     assert fm is not None, f"{p.name}: missing YAML frontmatter"
     assert _fm_scalar(fm, "name") == p.stem, f"{p.name}: name: must match filename"
     assert _fm_scalar(fm, "description"), f"{p.name}: non-empty description required"
+    assert _fm_scalar(fm, "model"), f"{p.name}: non-empty model required"
     color = _fm_scalar(fm, "color")
     assert color in AGENT_COLORS, (
         f"{p.name}: color {color!r} is not a documented Claude Code agent colour "
