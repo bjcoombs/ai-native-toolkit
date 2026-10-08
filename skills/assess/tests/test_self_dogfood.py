@@ -27,9 +27,9 @@ from pathlib import Path
 
 import pytest
 
-import assess_core
 from assess_core import build_run_context
 from assess_finalize import _write_actions_contract
+from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION
 from lib.keyhole_signals import FINDING_MODE_VALUES, mode_for_finding
 from lib.wiki_writer import (
     hotspot_page_source_path,
@@ -136,12 +136,12 @@ def dogfood_run(tmp_path_factory, request) -> dict:
 def test_run_id_and_schema_version_stamped(dogfood_run: dict) -> None:
     ctx = dogfood_run["ctx"]
     assert RUN_ID_RE.match(ctx["run_id"]), ctx["run_id"]
-    assert ctx["artifact_schema_version"] == assess_core.ARTIFACT_SCHEMA_VERSION
+    assert ctx["artifact_schema_version"] == ARTIFACT_SCHEMA_VERSION
     # The stamp is persisted, not just returned in-process.
     assert dogfood_run["on_disk"]["run_id"] == ctx["run_id"]
     assert (
         dogfood_run["on_disk"]["artifact_schema_version"]
-        == assess_core.ARTIFACT_SCHEMA_VERSION
+        == ARTIFACT_SCHEMA_VERSION
     )
 
 

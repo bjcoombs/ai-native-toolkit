@@ -36,8 +36,18 @@ adding such a scan edits its own module, its test, that table and this file - no
 batches; until then both patterns exist, and the table is the one to extend.
 
 Seeing these two files in the same commit as `assess_core.py` is expected, not a
-defect. If the core is later decomposed, treat this seam as the natural boundary -
-`doc_graph` and `keyhole_signals` are where the cut-line already lives.
+defect.
+
+The core keeps only the orchestration: `build_run_context`, `run_opt_in_mutation` and
+`main`, plus `_new_run_id` and `_read_plugin_version`. Its helpers live in seven modules, one per seam: `instruction_files.py`
+(instruction-file grading), `diff_reliability.py` (cross-run diff trust),
+`wiki_state.py` (first-flagged dates and run supersession), `run_wiki.py` (the wiki
+pages, index and log for one run), `context_blocks.py` (scan results serialised into
+run-context blocks), `mutation_cap.py` (the `test_pressure` shape and the Layer 6 cap)
+and `run_scope.py` (`--scope` and the artifact directory), plus the
+`artifact_schema.py` constant. A change to one of these concerns edits its module and
+its test; `assess_core.py` moves only when the order of the pipeline or the
+run-context key order changes.
 
 ## The wider co-change seams (cohesion, not entanglement)
 
@@ -416,6 +426,21 @@ repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into
 
 ### Signal integration
 
+**`context_blocks.py`**
+Serialises scan results into run-context blocks for `build_run_context`, each
+degrading to an explicit unavailable block rather than a false negative.
+`accretion_block` keeps the accretion files already in the top complexity/size band,
+worst first, capped at `MAX_ACCRETION_FILES` (12); `accretion_lookup` gives the hotspot
+pages a per-path view of the same scan. `excluded_generated` and `generated_exclusion`
+read the stats file's generated-file exclusions. `attach_structure_drift` runs the Tier
+0 ownership check (`structure_drift.detect_path_existence_drift`) and joins it with the
+Tier 1 counts `keyhole_signals` computed, omitting the block when no ownership map
+exists. `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
+baseline entries rank at half weight). `attach_liveness_blocks`,
+`coverage_report_block`, `attach_keyhole_blocks` and `attach_exclusion_disclosures`
+copy the liveness, coverage, keyhole and exclusion-disclosure blocks into the context.
+Runs no scan of its own besides Tier 0. Tests: `tests/test_assess_core.py`.
+
 **`scan_registry.py`**
 The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
 the run-context `key`, the callable, the names it `reads` (passed positionally: a
@@ -510,6 +535,18 @@ per-file mutation data, so the default read-only run never fires it. `keyhole_si
 re-exports `find_untrusted_hotspots` and `DEFAULT_SURVIVOR_DENSITY_THRESHOLD`. Tests: `tests/test_keyhole_untrusted_hotspot.py` (E1 cases) and
 `tests/test_mutation_refresh.py`.
 
+**`mutation_cap.py`**
+The run-context `test_pressure` block shape and the Layer 6 cap derived from it.
+`normalize_test_pressure` passes a well-formed `scan_test_pressure` result through and
+turns a failed or malformed one into an explicit `available: False` block with a null
+`mutation_config_present` and empty `cheap_heuristics` buckets, so a failed scan never
+reads as "no mutation setup". `mutation_not_run_cap` sets `applies` unless the block
+claims `mutation_run` *and* carries at least one parsed record in `per_file` (#317);
+while it applies, Layer 6 is capped at Partial and must carry
+`MUTATION_NOT_RUN_ANNOTATION`, which `assess_finalize` enforces. Both the default run
+and `assess_core --opt-in-mutation` call it, so the two write one shape. Tests:
+`tests/test_assess_core.py`.
+
 **`mutation_refresh.py`**
 Rebuilds the keyhole products that read `test_pressure` after the opt-in mutation pass
 (`assess_core --opt-in-mutation`), which otherwise rewrote only `test_pressure` and left
@@ -585,6 +622,14 @@ conservative agent/human classification is defined one way.
 
 ### Configuration
 
+**`run_scope.py`**
+`resolve_scope` turns a `--scope` argument into the absolute path, the repo-relative
+path and the artifact-directory slug, raising `ValueError` for a missing or
+outside-repo path; a whole-repo run returns `(None, None, "")`. `assess_dir_for` names
+`.assess/` or `.assess/<slug>/`, and `load_current_stats` reads that directory's
+`complexity-stats.json`, or an empty snapshot when none was written. Tests:
+`tests/test_scope.py`.
+
 **`assess_config.py`**
 Reads the optional per-repo `.assess/config.toml`: `exclude_dirs` / `exclude_patterns`
 (the same two lists feed every scan - heatmap, doc graph, staleness, liveness - so
@@ -621,6 +666,34 @@ no prompts and an audit trail. Pure stdlib, no side effects. Called by
 `assess_core.py`; the consent contract is in `references/consent-lifecycle.md`.
 
 ### Output and formatting
+
+**`artifact_schema.py`**
+`ARTIFACT_SCHEMA_VERSION`, the run_id provenance schema stamped on every artifact a run
+writes (run-context.json, the badge, the wiki pages); the version history is in the
+module comment. `complexity-treemap.py` carries a copy that
+`tests/test_complexity_treemap.py` holds equal to it.
+
+**`run_wiki.py`**
+Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
+top hotspot (status from the stats diff, first-flagged date, the `Has test file` row
+from `_has_sibling_test`, marker debt and accretion in the briefing), retires orphan and
+excluded-before-finalize pages, adds graduated hotspots to `index.md` with their current
+metrics, saves `first-flagged.json`, replaces a superseded unfinalized log entry and
+appends this run's, then verifies the log chain. It returns a `RunWiki` (the test index
+it built, the retired and dropped paths, the chain verdict) for `build_run_context` to
+copy into run-context.json. Tests: `tests/test_assess_core.py`,
+`tests/test_sibling_tests.py`, `tests/test_log_supersede.py`.
+
+**`wiki_state.py`**
+The wiki state carried between runs. `load_first_flagged` / `save_first_flagged` read and
+write `first-flagged.json`, and `rekey_first_flagged` moves a renamed file's date to its
+current path, keeping the earlier date on a collision. `same_measurement_prior_run`
+finds the previous run-context when this run measures the same commit on the same day;
+`excluded_after_unfinalized_run` and `retire_excluded_unfinalized` handle the files only
+a never-finalized superseded run flagged and config now excludes (#356);
+`sweep_superseded_history` and `drop_superseded_log_entry` remove that run's history
+rows and log entry (#355, #421). Tests: `tests/test_assess_core.py`,
+`tests/test_log_supersede.py`.
 
 **`wiki_writer.py`**
 Renders and writes the `.assess/` wiki files (`index.md`, `log.md`,
@@ -691,6 +764,16 @@ repo's other workflows for a `paths:` / `paths-ignore:` key under a `pull_reques
 trigger or a `dorny/paths-filter` step,
 which is when the CLI applies `DEFAULT_PATHS_IGNORE` (`**/*.md`, `.assess/**`).
 
+**`diff_reliability.py`**
+Decides whether the cross-run diff can be trusted. `compute_diff_reliability` returns
+`(diff_reliable, diff_version_note, diff_trend_reset)`: a first run is reliable; a
+missing or unparseable plugin version, a changed stats schema or a MAJOR plugin bump
+voids the diff (MAJOR also resets the trend); a MINOR/PATCH bump keeps it armed unless a
+complexity backend's version moved (`stats_tool_versions` reads the `<tool>_version`
+stamps, skipping `_NON_TOOL_VERSION_KEYS`). `prior_stamps` reads the prior snapshot's
+plugin and schema versions. Stdlib only. Tests: `tests/test_assess_core.py`,
+`tests/test_complexity_treemap.py`.
+
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
 transitions: graduated (was in top list, now absent), regressed, restructured, new,
@@ -718,6 +801,18 @@ while adding +100 of new functions still regresses. `restructured` never reaches
 a helper extraction.
 
 ### Scoring
+
+**`instruction_files.py`**
+Finds and grades the instruction files at `INSTRUCTION_FILE_PATHS` through
+`agent_instructions_grader`. `grade_instruction_files` grades each committed file with
+its content-clock freshness, lets an alias (a symlink or thin stub pointing at a
+canonical file) inherit the target's grade, and returns the untracked and dangling
+files, the skills-directory info and the redacted sensitive-content findings alongside
+the best grade (`None` when no committed file exists, distinct from `F`).
+`broken_instruction_refs` adds doc links to a missing instruction file;
+`detect_ancestor_instructions` names the ancestor and global files a clone never sees
+(#57); `instruction_file_size` feeds the bloat signal. Tests:
+`tests/test_assess_core.py`, `tests/test_doc_staleness.py`.
 
 **`agent_instructions_grader.py`**
 Heuristic scoring of agent instruction files (CLAUDE.md, AGENTS.md, GEMINI.md,
@@ -1142,7 +1237,7 @@ the repository - a parallel tree such as `app/unit-tests/` or Dart's
 and `has_sibling_test` (the yes/no/unknown verdict, dropping a flat-only match
 on a bare name more than one hot file shares). Three consumers read it and must
 agree in one run: the hotspot page's `Has test file` row
-(`assess_core._has_sibling_test`), the E2 test-to-code map
+(`run_wiki._has_sibling_test`), the E2 test-to-code map
 (`keyhole_signals._find_sibling_test`, co-location layer only, since E2 means
 co-located and co-committed), and the `test_focus` signal. The parallel-tree
 (basename) tier reads a `TestIndex` built once per run by `build_test_index`

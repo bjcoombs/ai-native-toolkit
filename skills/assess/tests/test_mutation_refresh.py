@@ -23,6 +23,7 @@ import pytest
 import assess_core
 from lib.keyhole_signals import FINDING_ORDER
 from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
+from lib.run_scope import resolve_scope
 
 _PRODUCTS = (
     "derived_findings", "attention", "attention_low_signal", "findings_markdown",
@@ -95,7 +96,7 @@ def _default_run(
 ) -> Path:
     """Run the default pass and return run-context.json, optionally seeding test_focus."""
     ctx = assess_core.build_run_context(repo_root=repo, run_date="2026-10-08", scope=scope)
-    slug = assess_core.resolve_scope(repo, scope)[2]
+    slug = resolve_scope(repo, scope)[2]
     ctx_path = (repo / ".assess" / slug if slug else repo / ".assess") / "run-context.json"
     if focus is not None:
         ctx["test_focus"] = focus
@@ -250,7 +251,7 @@ def test_scoped_run_reads_scoped_stats(
     git_repo: Any, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo = _make_repo(git_repo, prefix="pkg")
-    slug = assess_core.resolve_scope(repo, Path("pkg"))[2]
+    slug = resolve_scope(repo, Path("pkg"))[2]
     assert slug
     assess_dir = _seed_stats(repo, _stats("pkg/src/hot.py"), slug=slug)
     # A whole-repo sidecar naming a different hotspot must not be read.

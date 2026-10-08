@@ -1,6 +1,6 @@
 """Contract tests for ``lib/sibling_tests``: the one sibling-test resolver.
 
-The hotspot page (``assess_core._has_sibling_test``), the E2 test-to-code map
+The hotspot page (``run_wiki._has_sibling_test``), the E2 test-to-code map
 (``keyhole_signals._find_sibling_test``), and the focus signal
 (``test_focus.compute_test_focus``) must answer "does this file have a test
 file?" the same way in one run. These tests pin that agreement on a fixture set
@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import assess_core
 from lib import keyhole_signals as ks
+from lib import run_wiki
 from lib import sibling_tests as tc
 from lib.test_focus import compute_test_focus, mutation_scope
 
@@ -61,7 +61,7 @@ def test_three_resolvers_agree_on_colocated_fixtures(tmp_path: Path) -> None:
 
     for src in sources:
         expected = src in COLOCATED
-        assert assess_core._has_sibling_test(tmp_path, src) is expected, src
+        assert run_wiki._has_sibling_test(tmp_path, src) is expected, src
         found = ks._find_sibling_test(tmp_path, src)
         assert (found is not None) is expected, src
         if expected:
@@ -75,7 +75,7 @@ def test_resolvers_agree_that_a_test_file_is_test_evidence(tmp_path: Path) -> No
     _fixture(tmp_path)
     for test in COLOCATED.values():
         assert tc.is_test_path(test), test
-        assert assess_core._has_sibling_test(tmp_path, test) is True
+        assert run_wiki._has_sibling_test(tmp_path, test) is True
         assert ks._find_sibling_test(tmp_path, test) is None
         block = compute_test_focus([test], None, None, repo_root=tmp_path)
         assert block["entries"][0]["test_signal"] == "sibling_test_only"
@@ -94,7 +94,7 @@ def test_hotspot_page_and_focus_agree_on_mirrored_and_flat_trees(tmp_path: Path)
     block = compute_test_focus(hot, None, None, repo_root=tmp_path)
     focus = {e["path"]: e["test_signal"] == "sibling_test_only" for e in block["entries"]}
     for src in hot:
-        assert assess_core._has_sibling_test(tmp_path, src, shared) is focus[src], src
+        assert run_wiki._has_sibling_test(tmp_path, src, shared) is focus[src], src
     assert focus == {"src/pkg/view.py": True, "a/mod.py": False, "b/mod.py": False}
 
 
@@ -102,7 +102,7 @@ def test_missing_source_is_unknown_not_credited(tmp_path: Path) -> None:
     """A stale path whose test outlived it: unknown on the hotspot page, no
     sibling for E2, unsupported in the focus block."""
     _touch(tmp_path, "src/gone.test.ts")
-    assert assess_core._has_sibling_test(tmp_path, "src/gone.ts") is None
+    assert run_wiki._has_sibling_test(tmp_path, "src/gone.ts") is None
     assert ks._find_sibling_test(tmp_path, "src/gone.ts") is None
     block = compute_test_focus(["src/gone.ts"], None, None, repo_root=tmp_path)
     assert block["entries"][0]["test_signal"] == "unsupported"
@@ -146,9 +146,9 @@ def test_parallel_tree_basename_credits_the_three_layouts(tmp_path: Path) -> Non
     assert mutation_scope(block) == list(PARALLEL)
     for src in PARALLEL:
         assert tc.sibling_test_match(tmp_path, src) == tc.MATCH_BASENAME, src
-        assert assess_core._has_sibling_test(tmp_path, src) is True, src
+        assert run_wiki._has_sibling_test(tmp_path, src) is True, src
         assert ks._find_sibling_test(tmp_path, src) is None, src  # E2: co-located only
-    assert assess_core._has_sibling_test(tmp_path, "app/functions/bar.js") is False
+    assert run_wiki._has_sibling_test(tmp_path, "app/functions/bar.js") is False
 
 
 def test_parallel_tree_basename_common_name_goes_to_the_closest_source(
@@ -161,11 +161,11 @@ def test_parallel_tree_basename_common_name_goes_to_the_closest_source(
                 "web/unit-tests/pages/index.test.js",
                 "svc/a/util.js", "svc/b/util.js", "svc/unit-tests/util.test.js"):
         _touch(tmp_path, rel)
-    assert assess_core._has_sibling_test(tmp_path, "web/pages/index.js") is True
-    assert assess_core._has_sibling_test(tmp_path, "api/index.js") is False
+    assert run_wiki._has_sibling_test(tmp_path, "web/pages/index.js") is True
+    assert run_wiki._has_sibling_test(tmp_path, "api/index.js") is False
     # svc/a and svc/b tie on svc/: the test cannot say which util.js it tests.
-    assert assess_core._has_sibling_test(tmp_path, "svc/a/util.js") is False
-    assert assess_core._has_sibling_test(tmp_path, "svc/b/util.js") is False
+    assert run_wiki._has_sibling_test(tmp_path, "svc/a/util.js") is False
+    assert run_wiki._has_sibling_test(tmp_path, "svc/b/util.js") is False
 
 
 def test_parallel_tree_basename_needs_a_shared_directory(tmp_path: Path) -> None:

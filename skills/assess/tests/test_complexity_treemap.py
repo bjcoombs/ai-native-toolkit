@@ -828,12 +828,12 @@ def test_write_svg_tooltip_shows_est_tokens_and_loc(render_lib, tmp_path):
 def test_artifact_schema_version_mirrors_assess_core(treemap):
     """One /assess run stamps one provenance schema version on every artifact it
     writes. The treemap runs as its own process and duplicates the constant
-    rather than importing assess_core, so this is what keeps the copy honest:
+    rather than importing lib.artifact_schema, so this is what keeps the copy honest:
     bump one without the other and complexity-stats.json disagrees with
     run-context.json about which run envelope it carries."""
-    import assess_core
+    from lib import artifact_schema
 
-    assert treemap.ARTIFACT_SCHEMA_VERSION == assess_core.ARTIFACT_SCHEMA_VERSION
+    assert treemap.ARTIFACT_SCHEMA_VERSION == artifact_schema.ARTIFACT_SCHEMA_VERSION
 
 
 def test_write_stats_stamps_run_id_and_schema_version(treemap, tmp_path):
@@ -1307,9 +1307,9 @@ def test_write_stats_dart_scanner_marked_approximate(treemap, tmp_path):
 def test_write_stats_version_keys_are_tool_versions_or_listed_non_tools(
         treemap, tmp_path, monkeypatch):
     """Every `*_version` key write_stats emits is either a tool version that
-    assess_core._stats_tool_versions reads or a stamp listed in
+    diff_reliability.stats_tool_versions reads or a stamp listed in
     _NON_TOOL_VERSION_KEYS, so the writer and the reader cannot drift."""
-    import assess_core
+    from lib import diff_reliability
 
     monkeypatch.setattr(treemap, "_scc_version", lambda: "3.7.0")
     root = tmp_path
@@ -1323,9 +1323,9 @@ def test_write_stats_version_keys_are_tool_versions_or_listed_non_tools(
     )
     stats = json.loads(out.read_text())
     version_keys = {k for k in stats if k.endswith("_version")}
-    tools = {f"{t}_version" for t in assess_core._stats_tool_versions(stats)}
+    tools = {f"{t}_version" for t in diff_reliability.stats_tool_versions(stats)}
     assert tools == {"lizard_version", "scc_version"}
-    assert version_keys - tools == set(assess_core._NON_TOOL_VERSION_KEYS)
+    assert version_keys - tools == set(diff_reliability._NON_TOOL_VERSION_KEYS)
 
 
 def test_collect_dart_scanner_skips_files_with_no_function(
