@@ -1358,7 +1358,8 @@ Layer 1 write-side truth pressure. Two tiers:
   a `pyproject.toml` with a `[project]` table; no optional extras), else the `mutmut` on
   PATH.
   This repo dogfoods the tier: `[tool.mutmut]` in `skills/assess/pyproject.toml` scopes
-  mutmut 3 to three core modules and `.github/workflows/mutation.yml` runs it weekly,
+  mutmut 3 to five core modules (`stats_diff`, `promissory_markers`, `doc_staleness`,
+  `doc_graph` and `keyhole_signals`, per `only_mutate`) and `.github/workflows/mutation.yml` runs it weekly,
   scoring per module with `_parse_mutmut3_meta`, so CI and `/assess` count mutants alike.
   That config and workflow are also what `detect_mutation_config` credits on this repo.
   That config mutates through `skills/assess/src`, a committed symlink to `scripts`, so the
