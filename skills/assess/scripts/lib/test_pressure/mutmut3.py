@@ -213,6 +213,30 @@ def _config_spellings(pkg: Path, rel_scope: list[str]) -> dict[str, str]:
     return out
 
 
+def _mutant_glob(cfg_rel: str) -> str:
+    """The ``mutmut run`` name pattern for one file's mutants. mutmut 3 names a
+    mutant ``<module>.<function>__mutmut_<n>``, the module being the file path
+    dotted with a leading ``src.`` stripped (``__init__`` collapses into its
+    package, so that pattern also takes the package's submodules; the results
+    are filtered to the focus files anyway)."""
+    module = cfg_rel[:-len(".py")].replace("/", ".")
+    module = module[len("src."):] if module.startswith("src.") else module
+    module = module[:-len(".__init__")] if module.endswith(".__init__") else module
+    return f"{module}.*"
+
+
+def _mutmut_command(pkg: Path, config: str, cfg_scope: list[str]) -> list[str]:
+    """``mutmut run``, narrowed under a package's own config to the focus
+    files' mutants. The config, its test selection and so every verdict are
+    unchanged; only the mutants outside the focus set go unchecked, so the
+    time box is spent on the files the pass reports."""
+    if config != "repo" or not cfg_scope:
+        return ["mutmut", "run"]
+    cfg = _read_mutmut3_config(pkg)
+    return ["mutmut", "run", *(_mutant_glob(f) for f in cfg_scope
+                               if _covered_by_config(cfg, f))]
+
+
 def _repo_config_gap(pkg: Path, pkg_rel: str, rel_scope: list[str]) -> str | None:
     """Why the package's own mutmut config cannot measure ``rel_scope``, or
     None when it can. Checked against the scratch copy, so a ``source_paths``
@@ -459,8 +483,8 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
                 return timed_out, []
             pkg = work / pkg_rel if pkg_rel else work
             proc = subprocess.run(
-                ["mutmut", "run"], cwd=str(pkg), capture_output=True,
-                text=True, timeout=remaining, check=False)
+                _mutmut_command(pkg, config, cfg_scope), cwd=str(pkg),
+                capture_output=True, text=True, timeout=remaining, check=False)
         except subprocess.TimeoutExpired:
             return timed_out, []
         except OSError as e:
@@ -487,6 +511,11 @@ def _group_result(record: dict, pkg_rel: str, rel_scope: list[str],
         reason = (f"mutmut produced mutants for {produced} file(s), none of "
                   f"them in the focus set") if produced else no_records
         return {**record, "mutation_run": False, "reason": reason}, []
+    measured = {p["file"] for p in per_file}
+    unmeasured = [f for f in record["scope"] if f not in measured]
+    if unmeasured:
+        # e.g. a focus file outside the package config's only_mutate
+        record["unmeasured"] = unmeasured
     return {**record, "mutation_run": True}, per_file
 
 

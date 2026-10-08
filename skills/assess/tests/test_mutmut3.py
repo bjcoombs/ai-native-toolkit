@@ -58,7 +58,7 @@ def _fake_mutmut3(meta: dict | None, seen: dict, *, returncode: int = 0,
     def fake_run(cmd, **kwargs):
         if cmd[0] == "git":
             return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="")
-        assert cmd == ["mutmut", "run"]
+        assert cmd[:2] == ["mutmut", "run"]
         cwd = Path(kwargs["cwd"])
         seen["cwd"] = cwd
         cfg = cwd / "setup.cfg"
@@ -216,7 +216,7 @@ def test_run_bounded_mutation_mutmut3_drops_out_of_scope_files(
     inner = _fake_mutmut3({"exit_code_by_key": {"a": 1, "b": 0}}, {})
 
     def fake_run(cmd, **kwargs):
-        if cmd == ["mutmut", "run"]:
+        if cmd[:2] == ["mutmut", "run"]:
             _write(Path(kwargs["cwd"]), "mutants/pkg/other.py.meta",
                    json.dumps({"exit_code_by_key": {"x": 33, "y": 33}}))
         return inner(cmd, **kwargs)
@@ -277,7 +277,7 @@ def test_run_bounded_mutation_mutmut3_repo_config_still_reports_scope_only(
     inner = _fake_mutmut3({"exit_code_by_key": {"a": 1, "b": 0}}, seen)
 
     def fake_run(cmd, **kwargs):
-        if cmd == ["mutmut", "run"]:
+        if cmd[:2] == ["mutmut", "run"]:
             _write(Path(kwargs["cwd"]), "mutants/pkg/other.py.meta",
                    json.dumps({"exit_code_by_key": {"x": 0, "y": 0, "z": 0}}))
         return inner(cmd, **kwargs)

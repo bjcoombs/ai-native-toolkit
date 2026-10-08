@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import tomllib
 from collections.abc import Callable
+from fnmatch import fnmatch
 from pathlib import Path
 
 import lib.test_pressure as tp
@@ -69,19 +70,21 @@ def _copy_into_mutants(cwd: Path, rel: str) -> None:
 Suite = Callable[[Path], bool]
 
 
-def _fake_mutmut(suite: Suite, runs: list[Path]):
+def _fake_mutmut(suite: Suite, runs: list[Path], commands: list | None = None):
     """A subprocess.run stand-in: git runs for real; ``mutmut run`` builds
     ``mutants/`` from the config in its cwd, runs ``suite(cwd)`` as the
     baseline, and on a pass records one killed and one surviving mutant per
     source file."""
     real_run = subprocess.run
+    commands = [] if commands is None else commands
 
     def run(cmd, **kwargs):
         if cmd[0] == "git":
             return real_run(cmd, **kwargs)
-        assert cmd == ["mutmut", "run"]
+        assert cmd[:2] == ["mutmut", "run"]
         cwd = Path(kwargs["cwd"])
         runs.append(cwd)
+        commands.append(cmd)
         sources, also_copy = _mutmut_config(cwd)
         for rel in [*sources, *also_copy, "tests", "setup.cfg", "pyproject.toml"]:
             _copy_into_mutants(cwd, rel)
@@ -92,6 +95,9 @@ def _fake_mutmut(suite: Suite, runs: list[Path]):
             files = [cwd / source] if source.endswith(".py") else (cwd / source).rglob("*.py")
             for f in files:
                 rel = f.relative_to(cwd).as_posix()
+                key = mutmut3._mutant_glob(rel)[:-1] + "x_f__mutmut_1"
+                if cmd[2:] and not any(fnmatch(key, pat) for pat in cmd[2:]):
+                    continue  # mutmut checks only the named mutants
                 _write(cwd, f"mutants/{rel}.meta",
                        json.dumps({"exit_code_by_key": {"k": 1, "s": 0}}))
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr=_DEPRECATION)
@@ -221,11 +227,14 @@ def test_subdirectory_config_runs_unchanged_from_its_package(
     _write(tmp_path, "sub/tests/test_x.py", "")
     _as_mutmut3(monkeypatch)
     runs: list[Path] = []
+    commands: list = []
     monkeypatch.setattr(tp.subprocess, "run", _fake_mutmut(
-        _reads_from_test_dir("data/table.csv", levels=2), runs))
+        _reads_from_test_dir("data/table.csv", levels=2), runs, commands))
 
     r = run_bounded_mutation(tmp_path, hot_files=["sub/src/calc.py"], opt_in=True)
 
+    # narrowed to the focus file's mutants: mutmut strips a leading "src."
+    assert commands == [["mutmut", "run", "calc.*"]]
     assert r["per_file"] == [
         {"file": "sub/src/calc.py", "killed": 1, "survived": 1, "total": 2}]
     assert r["groups"][0]["config"] == "repo"
@@ -251,6 +260,22 @@ def test_own_config_naming_a_missing_source_path_is_reported_not_run(
     assert r["reason"] == ("the mutmut config in sub/pyproject.toml names "
                            "source_paths missing from a clean copy (src); a path "
                            "made at run time is not recreated")
+
+
+def test_focus_file_outside_own_config_scope_is_listed_as_unmeasured(
+        tmp_path: Path, monkeypatch) -> None:
+    _write(tmp_path, "sub/pyproject.toml", _OWN_CONFIG)
+    _write(tmp_path, "sub/src/calc.py", "def add(a, b):\n    return a + b\n")
+    _write(tmp_path, "sub/src/other.py", "def f():\n    return 1\n")
+    _write(tmp_path, "sub/data/table.csv", "a,b")
+    _as_mutmut3(monkeypatch)
+    commands: list = []
+    monkeypatch.setattr(tp.subprocess, "run", _fake_mutmut(lambda _c: True, [], commands))
+    r = run_bounded_mutation(tmp_path, hot_files=["sub/src/calc.py", "sub/src/other.py"],
+                             opt_in=True)
+    assert commands == [["mutmut", "run", "calc.*"]]
+    assert [p["file"] for p in r["per_file"]] == ["sub/src/calc.py"]
+    assert r["groups"][0]["unmeasured"] == ["sub/src/other.py"]
 
 
 def test_focus_file_outside_own_config_scope_is_reported_not_run(
@@ -487,3 +512,10 @@ def test_tool_error_line_keeps_a_raised_warning() -> None:
     proc = subprocess.CompletedProcess(
         ["mutmut"], 1, stdout="", stderr=_DEPRECATION + "DeprecationWarning: old api\n")
     assert mutmut3._tool_error_line(proc) == "DeprecationWarning: old api"
+
+
+def test_mutant_glob_follows_mutmut_naming() -> None:
+    assert mutmut3._mutant_glob("src/lib/doc_staleness.py") == "lib.doc_staleness.*"
+    assert mutmut3._mutant_glob("pkg/calc.py") == "pkg.calc.*"
+    assert mutmut3._mutant_glob("pkg/__init__.py") == "pkg.*"
+    assert mutmut3._mutant_glob("src.py") == "src.*"

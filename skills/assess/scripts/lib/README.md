@@ -1149,7 +1149,12 @@ Layer 1 write-side truth pressure. Two tiers:
   mutmut 3 can read runs under it unchanged (its `source_paths`, `also_copy`,
   `pytest_add_cli_args`), after a check that its `source_paths` exist in the copy and
   cover a focus file: a path made at run time (a link CI creates, a generated tree) is
-  named in the group's `reason` and not recreated. Any other
+  named in the group's `reason` and not recreated. Focus paths are matched through a
+  `source_paths` link (`scripts/lib/x.py` is `src/lib/x.py` under this repo's config), and
+  `mutmut run` is given the in-scope files' mutant-name patterns (`lib.x.*`), so the time
+  box is spent on the focus files rather than everything the config covers; the config
+  and its test selection, and so every verdict, are unchanged. A focus file the config
+  does not cover is listed in the group's `unmeasured`. Any other
   package gets a generated `[mutmut]` section: `source_paths` and `paths_to_mutate`
   (3.0-3.5 read only the latter) set to the focus files' top-level entries, `only_mutate`
   (3.6+) to the files, and `also_copy` to the package's other entries, so `mutants/`
@@ -1162,8 +1167,8 @@ Layer 1 write-side truth pressure. Two tiers:
   `mutants/**/*.meta` using the exit-code table of mutmut 3.6.0, mapped back to
   repo-relative paths. Only the focus files are reported whichever config governed a run,
   so the result's `scope` names the files its figures describe. `groups` records each
-  package's run (`root`, `config` of `repo` or `generated`, `scope`, `mutation_run`, and a
-  `reason` when it could not run), surfaced as `test_pressure.mutation_groups`; the pass
+  package's run (`root`, `config` of `repo` or `generated`, `scope`, `mutation_run`, a
+  `reason` when it could not run, and `unmeasured` focus files when it ran without them), surfaced as `test_pressure.mutation_groups`; the pass
   counts as run when any group recovered records. Every group draws on one `MUTATION_TIMEOUT` budget: the
   snapshot and the run are bounded by what remains, and a copy (not interruptible) is
   checked against the deadline before and after, so a later group can record a timeout
