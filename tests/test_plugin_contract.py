@@ -1,4 +1,4 @@
-"""Deterministic contract + reference checks for the plugin's skills and commands.
+"""Deterministic contract + reference checks for the plugin's skills and agents.
 
 No AI, no network. Encodes the invariants documented in CLAUDE.md as executable
 assertions so a broken reference or dropped frontmatter fails the PR.
@@ -11,7 +11,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 SKILLS = REPO / "skills"
-COMMANDS = REPO / "commands"
+LEGACY_COMMANDS = REPO / "commands"
 AGENTS = REPO / "agents"
 PLUGIN = REPO / ".claude-plugin"
 
@@ -49,7 +49,7 @@ ENVELOPE_TAG_RE = re.compile(
 # markers are 7+ identical chars at line start; the angle/pipe forms are
 # unambiguous (a `=======` separator collides with markdown setext headings, and
 # is always bracketed by the angle markers anyway, so we don't need it).
-# Regression guard for #211/#216, where commands/tm.md shipped on main for ~3
+# Regression guard for #211/#216, where commands/tm.md (now skills/tm/SKILL.md) shipped on main for ~3
 # weeks with three unresolved conflict regions (535 stale lines). Reference a
 # marker illustratively as inline code (`` `<<<<<<<` ``) so it never starts a line.
 CONFLICT_MARKER_RE = re.compile(r"(?:<{7,}|>{7,}|\|{7,})(?: |$)")
@@ -108,20 +108,16 @@ def skill_dirs():
     return [p.parent for p in skill_md_files()]
 
 
-def command_files():
-    return sorted(COMMANDS.glob("*.md")) if COMMANDS.is_dir() else []
-
-
 def shipped_md():
     # references/*.md is left out on purpose: a skill opens those by path, so
     # Claude Code never argument-substitutes them and a bare $1 there is safe.
-    return skill_md_files() + command_files()
+    return skill_md_files()
 
 
 def all_authored_markdown():
     """Every authored markdown file that ships with the plugin.
 
-    Broader than ``shipped_md()`` (SKILL.md + commands) because leaked envelope
+    Broader than ``shipped_md()`` (every SKILL.md) because leaked envelope
     tags can land in docs/ and module README.md files too - that's exactly where
     the v1.24.0 escape happened. Excludes test fixtures (intentional inputs) and
     build/VCS dirs.
@@ -148,10 +144,50 @@ def test_skill_frontmatter(d):
     assert _fm_scalar(fm, "description"), f"{d.name}: non-empty description required"
 
 
+def _manual_only(fm: str) -> bool:
+    return (_fm_scalar(fm, "disable-model-invocation") or "").lower() == "true"
+
+
 @pytest.mark.parametrize("d", skill_dirs(), ids=lambda d: d.name)
 def test_skill_has_trigger_clause(d):
+    # The router matches a description's TRIGGER clause to auto-load a skill.
+    # A skill with disable-model-invocation: true is never auto-loaded, so a
+    # TRIGGER clause there would describe behaviour that cannot happen; it must
+    # not carry one. Every other skill must.
     fm, _ = _split_frontmatter(d / "SKILL.md")
-    assert fm and "TRIGGER" in fm, f"{d.name}: description must include a TRIGGER clause"
+    assert fm is not None, f"{d.name}/SKILL.md missing YAML frontmatter"
+    if _manual_only(fm):
+        assert "TRIGGER" not in fm, (
+            f"{d.name}: disable-model-invocation: true skills are slash-command "
+            f"only, so a TRIGGER clause misdescribes them"
+        )
+    else:
+        assert "TRIGGER" in fm, f"{d.name}: description must include a TRIGGER clause"
+
+
+@pytest.mark.parametrize("d", skill_dirs(), ids=lambda d: d.name)
+def test_skill_frontmatter_is_valid_yaml(d):
+    # The regex checks above read one key at a time and pass on frontmatter
+    # that no YAML parser accepts, such as an unquoted argument-hint opening
+    # with "[" (a flow sequence) followed by more text.
+    yaml = pytest.importorskip("yaml")
+    fm, _ = _split_frontmatter(d / "SKILL.md")
+    assert fm is not None, f"{d.name}/SKILL.md missing YAML frontmatter"
+    try:
+        data = yaml.safe_load(fm)
+    except yaml.YAMLError as exc:
+        pytest.fail(f"{d.name}/SKILL.md frontmatter is not valid YAML: {exc}")
+    assert isinstance(data, dict), f"{d.name}/SKILL.md frontmatter is not a mapping"
+
+
+def test_no_legacy_command_files():
+    # commands/ is the older plugin layout; slash-command workflows live at
+    # skills/<name>/SKILL.md with disable-model-invocation: true (#500).
+    found = sorted(LEGACY_COMMANDS.glob("*.md")) if LEGACY_COMMANDS.is_dir() else []
+    assert not found, (
+        "commands/ is the legacy layout; move each file to skills/<name>/SKILL.md "
+        f"with disable-model-invocation: true: {[p.name for p in found]}"
+    )
 
 
 def _fence_spans(lines):
@@ -214,10 +250,6 @@ def test_no_bare_positional_in_skill_md(p):
     # anywhere in a SKILL.md before the model reads it, fenced or not, so a
     # shell function or awk field reference runs with argument words in place
     # of its parameters. Brace form (${1}) and awk's $(1) are left alone.
-    # Commands are exempt: there $1..$9 is the documented per-argument
-    # placeholder, used on purpose.
-    if p.name != "SKILL.md":
-        pytest.skip("commands use $1..$9 as intended argument placeholders")
     for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
         m = BARE_POSITIONAL_RE.search(line)
         assert not m, (
@@ -315,12 +347,12 @@ def test_subagent_types_resolve(p):
 def test_subagent_types_has_cases():
     """Parametrizing over an empty list is a silently green test.
 
-    The subagent check ran over ``commands/*.md`` alone before; a discovery
+    The subagent check once ran over the legacy ``commands/*.md`` alone; a discovery
     change that returns nothing would make it pass by collecting no cases at
     all. Pin the floor so the regression is red instead of invisible.
     """
     found = shipped_md()
-    assert len(found) >= 20, f"expected >= 20 shipped markdown components, found {len(found)}"
+    assert len(found) >= 19, f"expected >= 19 shipped markdown components, found {len(found)}"
 
 
 def _unnarrowed_doc_graph_reads(text: str) -> list[str]:
