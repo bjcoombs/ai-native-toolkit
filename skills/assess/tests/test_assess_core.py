@@ -2360,7 +2360,7 @@ def test_generated_header_free_name_glob_is_not_recorded_as_graduation(tmp_path:
 
 
 def test_stats_tool_versions_reads_every_backend_by_language_tool() -> None:
-    """_stats_tool_versions reads any `<tool>_version` stamp, not a fixed
+    """stats_tool_versions reads any `<tool>_version` stamp, not a fixed
     lizard/scc tuple, so a per-function backend added later is compared too;
     the layout and plugin stamps are not tools."""
     got = diff_reliability.stats_tool_versions({

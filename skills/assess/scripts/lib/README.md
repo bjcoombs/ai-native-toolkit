@@ -39,7 +39,7 @@ Seeing these two files in the same commit as `assess_core.py` is expected, not a
 defect.
 
 The core keeps only the orchestration: `build_run_context`, `run_opt_in_mutation` and
-`main`. Its helpers live in seven modules, one per seam: `instruction_files.py`
+`main`, plus `_new_run_id` and `_read_plugin_version`. Its helpers live in seven modules, one per seam: `instruction_files.py`
 (instruction-file grading), `diff_reliability.py` (cross-run diff trust),
 `wiki_state.py` (first-flagged dates and run supersession), `run_wiki.py` (the wiki
 pages, index and log for one run), `context_blocks.py` (scan results serialised into

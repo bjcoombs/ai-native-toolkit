@@ -331,7 +331,7 @@ Rejected: trimming line 81 in place instead of moving it (a bullet that still ca
 
 PR-B also brings in `CLAUDE.md`'s `## CI` section, including the two authoring rules inside its line 81, under the house-conventions heading the file already carries. PR-B therefore merges before PR-A: the rules are stated in `REVIEW.md` before `CLAUDE.md` stops stating them, and between the two merges they are stated in both files, which is the safe direction.
 
-The layer-0 problem the pointer creates is settled by adding `"REVIEW.md"` to `INSTRUCTION_FILE_PATHS` in `plugins/assess/skills/assess/scripts/assess_core.py`, in the same PR that creates the file. That is an additive change to the deterministic core, so it is an `assess` MINOR under D2 and leaves `assess_gate.py`'s regression compare armed. Rejected: leaving `REVIEW.md` unscanned (the layer's evidence would then rest on `CLAUDE.md` alone while an A-graded file degrades to a stub, which is the lying-map failure the layer exists to catch). Rejected: keeping the policy in `.github/` and skipping R8 (the playbook's repo-root `REVIEW.md` is what the brief asks for, and the root position is what makes the policy discoverable to a human reviewer).
+The layer-0 problem the pointer creates is settled by adding `"REVIEW.md"` to `INSTRUCTION_FILE_PATHS` in `plugins/assess/skills/assess/scripts/lib/instruction_files.py`, in the same PR that creates the file. That is an additive change to the deterministic core, so it is an `assess` MINOR under D2 and leaves `assess_gate.py`'s regression compare armed. Rejected: leaving `REVIEW.md` unscanned (the layer's evidence would then rest on `CLAUDE.md` alone while an A-graded file degrades to a stub, which is the lying-map failure the layer exists to catch). Rejected: keeping the policy in `.github/` and skipping R8 (the playbook's repo-root `REVIEW.md` is what the brief asks for, and the root position is what makes the policy discoverable to a human reviewer).
 
 Because `claude-review.yml` checks out the default branch, the PR that introduces `REVIEW.md` is reviewed by the old file. The PR body says so.
 
@@ -358,7 +358,7 @@ Rejected: a single root `CHANGELOG.md` for all seven plugins (Dependabot would r
 5. `REVIEW.md` exists at the repo root and carries all six depended-on elements listed in Current state. Verified by a grep of the six literals in the PR body.
 6. `.github/workflows/claude-review.yml` reads `REVIEW.md` and no longer reads `.github/claude-review-instructions.md`; the workflow's `ref:` line is unchanged.
 7. `.github/claude-review-instructions.md` is a three-line pointer to `REVIEW.md` carrying `remove-in: 3.0.0`.
-8. `"REVIEW.md"` is in `INSTRUCTION_FILE_PATHS` in `plugins/assess/skills/assess/scripts/assess_core.py`, and `plugins/assess/.claude-plugin/plugin.json` takes a MINOR bump in the same PR.
+8. `"REVIEW.md"` is in `INSTRUCTION_FILE_PATHS` in `plugins/assess/skills/assess/scripts/lib/instruction_files.py`, and `plugins/assess/.claude-plugin/plugin.json` takes a MINOR bump in the same PR.
 9. An `/assess` self-run on the post-WS5 tree reports layer 0 at Present, with `REVIEW.md` named in the evidence column. Recorded verdict pasted into the PR body.
 10. `docs/design/plans/` and `docs/design/specs/` hold the 13 plans and 8 specs byte-identically; `git diff -M50% --name-status` reports R100 for all 21.
 11. `docs/superpowers/README.md` is a redirect stub whose table maps all 21 moved files to their new paths, with `remove-in: 3.0.0`.
@@ -408,7 +408,7 @@ Four PRs, all after PR1 has merged. They touch disjoint file sets, so no merge c
 | PR | Brief | Touches | May not touch |
 |---|---|---|---|
 | PR-A | R7 | `CLAUDE.md`, `README.md`, `scripts/README.md`, `plugins/assess/README.md`, `plugins/delivery/skills/marathon/references/release-after-marathon.md`, `tests/test_plugin_contract.py` | `REVIEW.md`, `.github/`, `plugins/assess/skills/assess/scripts/`, `docs/superpowers/`, any `CHANGELOG.md`, any file under `plugins/*/skills/*/SKILL.md` other than the new `references/` file |
-| PR-B | R8 | `REVIEW.md`, `.github/claude-review-instructions.md`, `.github/workflows/claude-review.yml`, `plugins/assess/skills/assess/scripts/assess_core.py`, `plugins/assess/skills/assess/tests/test_assess_core.py`, `plugins/assess/.claude-plugin/plugin.json` | `CLAUDE.md`, the workflow's `ref:` line, any CI job `name:`, `docs/superpowers/` |
+| PR-B | R8 | `REVIEW.md`, `.github/claude-review-instructions.md`, `.github/workflows/claude-review.yml`, `plugins/assess/skills/assess/scripts/lib/instruction_files.py`, `plugins/assess/skills/assess/tests/test_assess_core.py`, `plugins/assess/.claude-plugin/plugin.json` | `CLAUDE.md`, the workflow's `ref:` line, any CI job `name:`, `docs/superpowers/` |
 | PR-C | R13 | `docs/superpowers/` to `docs/design/`, `docs/design/TEMPLATE/`, `docs/index.md`, `plugins/skill-craft/skills/skill-forge/SKILL.md` | `CLAUDE.md`, `.github/`, `docs/design/2026-09-modernization/`, the two golden fixtures |
 | PR-D | R15 | `CHANGELOG.md`, `plugins/*/CHANGELOG.md` | `plugins/*/.claude-plugin/plugin.json`, `CLAUDE.md`, `.github/`, `tests/` |
 
