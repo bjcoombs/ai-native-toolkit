@@ -10,6 +10,7 @@ this package itself.
 from __future__ import annotations
 
 import networkx as nx
+import pytest
 
 from lib import structure_graph as sg
 from lib.assess_config import DEFAULT_KEYHOLE_BUDGET
@@ -280,3 +281,190 @@ def test_analyze_structure_on_lib_itself():
     assert sample["total"] == (
         sample["size"] + sample["dep_surface"] + sample["exposed_surface"]
     )
+
+
+# --------------------------------------------------------------------------
+# Resolution by path: the graph describes the assessed tree, never whatever
+# copy of a package name the running interpreter already imported.
+# --------------------------------------------------------------------------
+
+def _pkg(root, name, modules):
+    """Write package ``root/name`` with ``modules`` ({stem: source})."""
+    pkg = root / name
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    for stem, src in modules.items():
+        (pkg / f"{stem}.py").write_text(src)
+    return pkg
+
+
+def _module_names(result):
+    return {fp["module"] for fp in result.footprints}
+
+
+def test_target_lib_package_is_graphed_not_the_running_assess_lib(tmp_path):
+    # The test process has imported /assess's own top-level ``lib`` (see the
+    # import at the top of this file), exactly as assess_core.py does.
+    import sys
+    assert "lib" in sys.modules
+    _pkg(tmp_path, "lib", {
+        "alpha": "X = 1\n",
+        "beta": "from lib import alpha\n",
+    })
+    result = sg.analyze_structure(tmp_path)
+    assert result.available is True, result.reason
+    assert _module_names(result) == {"lib", "lib.alpha", "lib.beta"}
+    assert result.module_count == 3
+    assert result.edge_count == 1
+    assert "lib.structure_graph" not in _module_names(result)
+
+
+def test_package_named_like_an_imported_module_is_graphed(tmp_path):
+    # ``json`` (stdlib) and ``networkx`` (this module's own dependency) are
+    # both in sys.modules; a target package of the same name must still be
+    # read from the target tree.
+    _pkg(tmp_path, "json", {"target_only": "Y = 2\n"})
+    _pkg(tmp_path, "networkx", {"also_target": "from json import target_only\n"})
+    result = sg.analyze_structure(tmp_path)
+    assert result.available is True, result.reason
+    assert _module_names(result) == {
+        "json", "json.target_only", "networkx", "networkx.also_target",
+    }
+    assert result.edge_count == 1
+
+
+def test_scan_leaves_interpreter_import_state_untouched(tmp_path):
+    import sys
+
+    from grimp.application.config import settings
+
+    _pkg(tmp_path, "lib", {"alpha": "X = 1\n"})
+    path_before = list(sys.path)
+    lib_before = sys.modules["lib"]
+    finder_before = settings.PACKAGE_FINDER
+    sg.analyze_structure(tmp_path)
+    assert sys.path == path_before
+    assert sys.modules["lib"] is lib_before
+    assert settings.PACKAGE_FINDER is finder_before
+
+
+def test_package_finder_restored_when_grimp_raises(tmp_path, monkeypatch):
+    from grimp.application.config import settings
+
+    finder_before = settings.PACKAGE_FINDER
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("parse failure")
+
+    monkeypatch.setattr(sg.grimp, "build_graph", boom)
+    pkg = _pkg(tmp_path, "pkg", {"a": ""})
+    with pytest.raises(RuntimeError, match="parse failure"):
+        sg.build_import_map([pkg], tmp_path)
+    assert settings.PACKAGE_FINDER is finder_before
+
+
+def test_same_named_packages_are_graphed_separately_and_disclosed(tmp_path):
+    # Two roots each holding a ``lib``: one grimp graph cannot hold both, so
+    # each copy is graphed under its repo-relative path, and the collision is
+    # disclosed rather than one copy silently winning.
+    _pkg(tmp_path / "a", "lib", {"x": "from lib import y\n", "y": ""})
+    _pkg(tmp_path / "a", "app", {"main": "from lib import x\n"})
+    _pkg(tmp_path / "b", "lib", {"z": ""})
+    result = sg.analyze_structure(tmp_path)
+    assert result.available is True, result.reason
+    assert _module_names(result) == {
+        "a/lib", "a/lib.x", "a/lib.y", "app", "app.main", "b/lib", "b/lib.z",
+    }
+    # Same-root imports still resolve: app.main -> a's lib, lib.x -> lib.y.
+    assert result.edge_count == 2
+    assert result.name_collisions == [{"name": "lib", "paths": ["a/lib", "b/lib"]}]
+    sizes = {fp["module"]: fp["size"] for fp in result.footprints}
+    assert sizes["a/lib.x"] == 1  # resolved back to a/lib/x.py, not b's tree
+    d = result.as_dict()
+    assert d["name_collisions"] == result.name_collisions
+
+
+def test_qualified_name_escapes_dots_in_the_path(tmp_path):
+    _pkg(tmp_path / "v1.2", "lib", {"m": "X = 1\n"})
+    _pkg(tmp_path / "v2", "lib", {"n": ""})
+    result = sg.analyze_structure(tmp_path)
+    names = _module_names(result)
+    assert "v1%2E2/lib.m" in names
+    assert "v2/lib.n" in names
+    sizes = {fp["module"]: fp["size"] for fp in result.footprints}
+    assert sizes["v1%2E2/lib.m"] == 1  # mapped back to v1.2/lib/m.py
+
+
+def test_path_finder_serves_both_grimp_port_shapes(tmp_path):
+    # grimp 3.0-3.13 call determine_package_directory (one path); 3.14+ call
+    # determine_package_directories (a set). Both must answer from the path.
+    finder = sg._PathPackageFinder({"lib": tmp_path / "lib"})
+    assert finder.determine_package_directory("lib", None) == str(tmp_path / "lib")
+    assert finder.determine_package_directories("lib", None) == {
+        str(tmp_path / "lib"),
+    }
+    with pytest.raises(ValueError):
+        finder.determine_package_directory("json", None)
+
+
+def test_non_identifier_package_dir_does_not_sink_the_scan(tmp_path):
+    # ``my-pkg`` carries an __init__.py but is not importable by any name;
+    # it must not knock out the whole structure block.
+    _pkg(tmp_path, "my-pkg", {"a": ""})
+    _pkg(tmp_path, "class", {"b": ""})  # keyword: not importable either
+    _pkg(tmp_path, "real", {"c": ""})
+    result = sg.analyze_structure(tmp_path)
+    assert result.available is True, result.reason
+    assert _module_names(result) == {"real", "real.c"}
+
+
+def test_non_colliding_tree_has_no_collisions_and_plain_names(tmp_path):
+    _pkg(tmp_path / "src", "alpha", {"one": "from beta import two\n"})
+    _pkg(tmp_path / "src", "beta", {"two": ""})
+    result = sg.analyze_structure(tmp_path)
+    assert result.name_collisions == []
+    assert _module_names(result) == {"alpha", "alpha.one", "beta", "beta.two"}
+    assert result.edge_count == 1
+
+
+def test_cross_build_import_of_a_unique_name_is_dropped(tmp_path):
+    # src/ and tools/ both hold ``lib``, forcing two builds. tools/runner
+    # imports the unique ``core`` from src/: grimp sees it as external to the
+    # tools build, so the edge is dropped (documented in the module docstring).
+    _pkg(tmp_path / "src", "lib", {"a": ""})
+    _pkg(tmp_path / "src", "core", {"c": ""})
+    _pkg(tmp_path / "tools", "lib", {"b": ""})
+    _pkg(tmp_path / "tools", "runner", {"r": "from core import c\n"})
+    result = sg.analyze_structure(tmp_path)
+    assert {"core.c", "runner.r"} <= _module_names(result)
+    assert result.edge_count == 0
+    assert result.name_collisions == [
+        {"name": "lib", "paths": ["src/lib", "tools/lib"]},
+    ]
+
+
+def test_third_root_import_of_a_colliding_name_is_not_pinned_to_one_copy(
+    tmp_path,
+):
+    # a/lib and b/lib collide; c/app imports ``lib``. Which copy that reaches
+    # depends on runtime sys.path, so the edge must be dropped, not resolved to
+    # a/lib because "a" sorts first.
+    _pkg(tmp_path / "a", "lib", {"x": ""})
+    _pkg(tmp_path / "b", "lib", {"y": ""})
+    _pkg(tmp_path / "c", "app", {"main": "from lib import x\nimport lib.y\n"})
+    result = sg.analyze_structure(tmp_path)
+    assert "app.main" in _module_names(result)
+    assert result.edge_count == 0
+
+
+def test_partition_isolates_colliding_roots_and_shares_the_rest(tmp_path):
+    dirs = [
+        tmp_path / "a" / "lib", tmp_path / "b" / "lib",
+        tmp_path / "c" / "app", tmp_path / "d" / "core",
+    ]
+    builds = sg._partition_builds(dirs)
+    assert builds == [
+        [tmp_path / "c" / "app", tmp_path / "d" / "core"],
+        [tmp_path / "a" / "lib"],
+        [tmp_path / "b" / "lib"],
+    ]
