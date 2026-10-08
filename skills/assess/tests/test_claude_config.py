@@ -181,6 +181,34 @@ def test_metadata_children_and_yaml_lists_are_free_form() -> None:
     assert check_file("s/SKILL.md", "skill", "project", text) == []
 
 
+@pytest.mark.parametrize("rel,kind,loaded_as", [
+    ("agents/README.md", "agent", "an agent named `README`"),
+    ("commands/README.md", "command", "the `/README` command"),
+    (".claude/commands/CHANGELOG.md", "command", "the `/CHANGELOG` command"),
+])
+def test_document_under_a_commands_or_agents_path_is_stray(
+        rel: str, kind: FileKind, loaded_as: str) -> None:
+    [f] = check_file(rel, kind, "plugin", "# Notes\n\nNot configuration.\n")
+    assert (f["kind"], f["file"], f["line"]) == ("stray_markdown", rel, 1)
+    assert loaded_as in f["fix"]
+
+
+def test_readme_in_a_skill_folder_is_not_stray() -> None:
+    assert check_file("skills/readme/SKILL.md", "skill", "plugin", "# Body\n") == []
+
+
+def test_agent_without_frontmatter_is_flagged() -> None:
+    [f] = check_file("agents/helper.md", "agent", "plugin", "You help.\n")
+    assert (f["kind"], f["line"]) == ("missing_frontmatter", 1)
+    assert "`name` and `description`" in f["fix"]
+
+
+def test_skill_and_command_without_frontmatter_are_valid() -> None:
+    assert check_file("skills/s/SKILL.md", "skill", "plugin", "Body\n") == []
+    assert [f["kind"] for f in check_file("commands/c.md", "command", "plugin", "Body\n")] == [
+        "legacy_command"]
+
+
 # --- malformed frontmatter ----------------------------------------------------
 
 def test_unclosed_frontmatter_is_reported_not_raised() -> None:

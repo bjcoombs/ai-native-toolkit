@@ -34,6 +34,10 @@ one-line ``fix``:
 - ``malformed_frontmatter``: frontmatter the minimal parser cannot read; the
   scan reports it and moves on, it never raises.
 - ``unreadable_file``: a configuration file the scan could not read.
+- ``stray_markdown``: a repository document (``README.md`` ...) under a
+  commands or agents path, which Claude Code loads as a command or agent.
+- ``missing_frontmatter``: an agent file with no frontmatter, which loads with
+  no description and every field ignored.
 
 No ``.claude/`` directory and no plugin manifest gives ``available: false``
 with a reason: there is nothing to check, which is not a clean pass.
@@ -315,8 +319,26 @@ def _skill_target(rel: str, origin: str) -> str:
     return f"{base}/{name}/SKILL.md"
 
 
+# Basenames of repository documents, not configuration. Under a commands or
+# agents path Claude Code still loads one: `commands/README.md` becomes the
+# `/README` command and `agents/README.md` an agent named README.
+_DOC_STEMS = frozenset({
+    "readme", "changelog", "contributing", "license", "licence", "notes", "todo",
+})
+
+
+def _stray_fix(rel: str, kind: str) -> str:
+    stem = Path(rel).stem
+    loaded_as = f"the `/{stem}` command" if kind == "command" else f"an agent named `{stem}`"
+    where = "commands" if kind == "command" else "agents"
+    return (f"Claude Code loads this document as {loaded_as}; move it out of the "
+            f"{where} path (or into a skill's supporting files).")
+
+
 def check_file(rel: str, kind: FileKind, origin: Origin, text: str) -> list[ClaudeConfigFinding]:
     """Every finding for one configuration file, in line order."""
+    if kind != "skill" and Path(rel).stem.lower() in _DOC_STEMS:
+        return [_finding("stray_markdown", rel, 1, None, None, _stray_fix(rel, kind))]
     out: list[ClaudeConfigFinding] = []
     if kind == "command":
         out.append(_finding(
@@ -324,6 +346,11 @@ def check_file(rel: str, kind: FileKind, origin: Origin, text: str) -> list[Clau
             f"Move to `{_skill_target(rel, origin)}`; `commands/` is the older form of skills."))
     fm = parse_frontmatter(text)
     if fm is None:
+        if kind == "agent":
+            out.append(_finding(
+                "missing_frontmatter", rel, 1, None, None,
+                "Add `name` and `description` frontmatter; without it the agent loads "
+                "with no description and every field ignored."))
         return out
     for line, msg in fm.errors:
         out.append(_finding("malformed_frontmatter", rel, line, None, None,
