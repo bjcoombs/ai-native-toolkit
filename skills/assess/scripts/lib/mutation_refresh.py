@@ -73,11 +73,34 @@ def refresh_mutation_findings(
     Returns False and leaves ``ctx`` untouched when it carries no
     ``derived_findings`` list (a run-context older than the keyhole findings):
     there is nothing to rank against, and inventing the other findings would
-    misreport them.
+    misreport them. A failure while recomputing also returns False with ``ctx``
+    untouched, so the caller still writes the refreshed ``test_pressure``.
     """
     findings = ctx.get("derived_findings")
     if not isinstance(findings, list):
         return False
+    try:
+        rebuilt, excluded, products = _recompute(
+            ctx, findings, complexity_stats, exclude_dirs, exclude_patterns,
+        )
+    except Exception:  # noqa: BLE001 - keep the mutation result, never crash
+        return False
+    ctx["derived_findings"] = rebuilt
+    for key in _PRODUCT_KEYS:
+        ctx[key] = products[key]
+    archived = products["archived_finding_paths"]
+    ctx["excluded_as_archive"] = {
+        "affected_finding_paths": archived, "count": len(archived),
+    }
+    _merge_config_exclusions(ctx, excluded)
+    return True
+
+
+def _recompute(
+    ctx: dict[str, Any], findings: list[Any], complexity_stats: dict,
+    exclude_dirs: set[str], exclude_patterns: list[str],
+) -> tuple[list[dict], list[str], dict]:
+    """The rebuilt findings, newly excluded E1 paths and finding products."""
     paths = untrusted_hotspot_paths(complexity_stats, ctx.get("test_pressure"))
     filtered, excluded = apply_config_excludes(
         [{"name": "untrusted_hotspot", "paths": paths}], exclude_dirs, exclude_patterns,
@@ -90,10 +113,4 @@ def refresh_mutation_findings(
         promissory if isinstance(promissory, dict) else None,
         behaviour if isinstance(behaviour, dict) else {},
     )
-    ctx["derived_findings"] = rebuilt
-    for key in _PRODUCT_KEYS:
-        ctx[key] = products[key]
-    archived = products["archived_finding_paths"]
-    ctx["excluded_as_archive"] = {"affected_finding_paths": archived, "count": len(archived)}
-    _merge_config_exclusions(ctx, excluded)
-    return True
+    return rebuilt, excluded, products

@@ -5,23 +5,12 @@ Layer 6 cap, so the E1 ``untrusted_hotspot`` finding (and the attention list,
 report markdown, summary, prescribed actions and badge built from the findings)
 kept the mutation-off values and E1 could never fire in a real run.
 
-Edge cases covered, one test each unless noted:
-
-| Case | Test |
-|------|------|
-| survivors over the threshold on a hotspot (end to end) | test_e2e_* |
-| refreshed products equal a default run fed the same test_pressure | test_e2e_refresh_matches_default_run_with_same_inputs |
-| every mutant killed | test_all_killed_leaves_findings_empty |
-| a second pass clears an E1 the first pass raised | test_second_pass_clears_prior_untrusted |
-| timed out / partial (zero-total and missing-total rows) | test_partial_pass_counts_only_measured_files |
-| mutation tool absent (no per_file) | test_tool_absent_keeps_blocks_unchanged |
-| no focus targets (scan never runs) | test_no_focus_targets_leaves_run_context_byte_identical |
-| scoped run | test_scoped_run_reads_scoped_stats |
-| survivors on a file that is not a hotspot | test_non_hotspot_survivors_do_not_fire |
-| run-context older than the keyhole blocks | test_older_run_context_without_findings_is_left_alone |
-| older run-context missing the untrusted_hotspot entry | test_missing_untrusted_entry_is_inserted_in_order |
-| config-excluded hotspot | test_config_excluded_hotspot_is_disclosed |
-| archive hotspot | test_archive_hotspot_kept_out_of_attention |
+Edge cases covered: survivors over the threshold on a hotspot (end to end, and
+equal to a default run fed the same block), all killed, a second pass clearing
+a prior E1, a timed-out partial pass, the tool absent, no focus targets, a
+scoped run, survivors on a non-hotspot, a run-context older than the keyhole
+blocks, findings missing the E1 entry, a config-excluded hotspot, an archive
+hotspot, and a recompute failure.
 """
 from __future__ import annotations
 
@@ -101,7 +90,9 @@ def _patch_scan(monkeypatch: pytest.MonkeyPatch, block: dict) -> None:
     monkeypatch.setattr(assess_core, "scan_test_pressure", scan)
 
 
-def _default_run(repo: Path, focus: dict | None = None, scope: Path | None = None) -> Path:
+def _default_run(
+    repo: Path, focus: dict | None = None, scope: Path | None = None,
+) -> Path:
     """Run the default pass and return run-context.json, optionally seeding test_focus."""
     ctx = assess_core.build_run_context(repo_root=repo, run_date="2026-10-08", scope=scope)
     slug = assess_core.resolve_scope(repo, scope)[2]
@@ -351,3 +342,16 @@ def test_archive_hotspot_kept_out_of_attention() -> None:
     assert ctx["attention"] == []
     assert ctx["excluded_as_archive"] == {"affected_finding_paths": ["archive/old.py"],
                                           "count": 1}
+
+
+def test_recompute_failure_keeps_ctx_untouched(monkeypatch: pytest.MonkeyPatch) -> None:
+    import lib.mutation_refresh as mr
+
+    def boom(*a: Any, **k: Any) -> dict:
+        raise RuntimeError("ranking exploded")
+
+    monkeypatch.setattr(mr, "finding_products", boom)
+    ctx = _ctx(_empty_findings(), [{"file": "src/hot.py", "survived": 5, "total": 10}])
+    before = json.loads(json.dumps(ctx))
+    assert refresh_mutation_findings(ctx, _stats("src/hot.py"), set(), []) is False
+    assert ctx == before
