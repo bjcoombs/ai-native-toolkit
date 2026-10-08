@@ -186,6 +186,32 @@ def test_run_bounded_mutation_mutmut3_timeout_degrades(
     assert "timeout" in r["reason"]
 
 
+def test_run_bounded_mutation_mutmut3_timeout_keeps_saved_verdicts(
+        tmp_path: Path, monkeypatch) -> None:
+    """mutmut 3 saves each verdict to its .meta as it lands, so a run stopped
+    at the budget reports the mutants it tested (null ones are untested) and
+    says the figures are partial, instead of discarding them."""
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _as_mutmut3(monkeypatch)
+    meta = {"exit_code_by_key": {"k1": 1, "k2": 1, "s1": 0, "u1": None, "u2": None}}
+    inner = _fake_mutmut3(meta, {})
+
+    def fake_run(cmd, **kwargs):
+        out = inner(cmd, **kwargs)
+        if cmd[0] == "mutmut":
+            raise subprocess.TimeoutExpired(cmd, tp.MUTATION_TIMEOUT)
+        return out
+
+    monkeypatch.setattr(tp.subprocess, "run", fake_run)
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    assert r["mutation_run"] is True
+    assert r["per_file"] == [
+        {"file": "pkg/calc.py", "killed": 2, "survived": 1, "total": 3}]
+    group = r["groups"][0]
+    assert group["mutation_run"] is True and group["partial"] is True
+    assert group["reason"].startswith(f"stopped at the {tp.MUTATION_TIMEOUT}s budget")
+
+
 def test_run_bounded_mutation_mutmut2_keeps_the_legacy_path(
         tmp_path: Path, monkeypatch) -> None:
     """mutmut 2 still runs in place and is read from stdout/junitxml; a failed

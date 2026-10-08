@@ -506,6 +506,7 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
                                      ignore_cleanup_errors=True) as tmp:
         work = Path(tmp) / "repo"
         work.mkdir()
+        pkg = work / pkg_rel if pkg_rel else work
         if deadline - time.monotonic() <= 0:
             return timed_out, []
         try:
@@ -517,17 +518,36 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 return timed_out, []
-            pkg = work / pkg_rel if pkg_rel else work
             proc = subprocess.run(
                 _mutmut_command(pkg, config, cfg_scope), cwd=str(pkg),
                 capture_output=True, text=True, timeout=remaining, check=False)
         except subprocess.TimeoutExpired:
-            return timed_out, []
+            return _stopped_result(timed_out, pkg_rel, cfg_scope,
+                                   _parse_mutmut3_meta(pkg / "mutants"), back)
         except OSError as e:
             return {**record, "mutation_run": False, "reason": str(e)}, []
         per_file = _parse_mutmut3_meta(pkg / "mutants")
         no_records = _no_records_reason("mutmut", proc, scratch=work)
     return _group_result(record, pkg_rel, cfg_scope, per_file, no_records, back)
+
+
+def _stopped_result(timed_out: dict, pkg_rel: str, rel_scope: list[str],
+                    per_file: list[dict],
+                    back: dict[str, str]) -> tuple[dict, list[dict]]:
+    """A run stopped at the budget keeps the verdicts mutmut already saved.
+    mutmut 3 writes each mutant's exit code to its ``.meta`` as the result
+    lands, and an untested mutant stays ``null`` (left out of the totals), so
+    the files hold exactly the mutants tested before the stop. The group is
+    marked ``partial``: mutmut tests the fastest mutants first, so the figures
+    are a real sample but not the whole file. With no focus-file verdict saved
+    yet, the timeout record stands."""
+    record = {k: v for k, v in timed_out.items() if k not in ("mutation_run", "reason")}
+    result, rows = _group_result(record, pkg_rel, rel_scope, per_file, "", back)
+    if not rows:
+        return timed_out, []
+    return {**result, "partial": True,
+            "reason": (f"stopped at the {MUTATION_TIMEOUT}s budget; the figures "
+                       f"cover only the mutants tested before it")}, rows
 
 
 def _group_result(record: dict, pkg_rel: str, rel_scope: list[str],
