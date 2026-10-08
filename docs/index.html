@@ -330,6 +330,12 @@
         </div>
       </dl>
 
+      <h3 class="group-label">Portable commands</h3>
+      <dl class="legend">
+        <div><dt>/6hats</dt><dd>Solo Six Thinking Hats analysis: <code>/huddle</code> at team size 1.</dd></div>
+        <div><dt>/understand</dt><dd>Deep understanding mode (nemawashi): exhaustive context-gathering before action.</dd></div>
+      </dl>
+
       <h3 class="group-label">Workflow commands</h3>
       <dl class="legend">
         <div><dt>/tm</dt><dd>Task Master orchestration: starts, reviews, or cleans up tasks based on current state.</dd></div>
@@ -433,7 +439,10 @@
         navigator.clipboard.writeText(btn.dataset.copy).then(function () {
           btn.textContent = 'Copied';
           setTimeout(function () { btn.textContent = 'Copy'; }, 1600);
-        }, function () { btn.textContent = 'Select and copy'; });
+        }, function () {
+          btn.textContent = 'Select and copy';
+          setTimeout(function () { btn.textContent = 'Copy'; }, 2400);
+        });
       });
     });
   })();
