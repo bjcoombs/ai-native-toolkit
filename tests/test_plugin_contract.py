@@ -216,7 +216,12 @@ def test_skill_frontmatter_is_valid_yaml(d):
     assert isinstance(data, dict), f"{d.name}/SKILL.md frontmatter is not a mapping"
 
 
-def _top_level_imports(path: Path) -> set[str]:
+def _imported_roots(path: Path) -> set[str]:
+    """Root package of every import in ``path``, nested ones included.
+
+    ``ast.walk`` on purpose, not ``tree.body``: a lazy import inside a function
+    is still a dependency the gate cannot run without.
+    """
     tree = ast.parse(path.read_text(encoding="utf-8"))
     names: set[str] = set()
     for node in ast.walk(tree):
@@ -239,7 +244,7 @@ def test_gate_code_is_stdlib_only(p: Path) -> None:
         | {q.stem for q in GATE_CODE_FILES}
         | {"__future__"}
     )
-    foreign = sorted(_top_level_imports(p) - allowed)
+    foreign = sorted(_imported_roots(p) - allowed)
     assert not foreign, (
         f"{p.relative_to(REPO)} imports {foreign}; gate code is stdlib-only"
     )
