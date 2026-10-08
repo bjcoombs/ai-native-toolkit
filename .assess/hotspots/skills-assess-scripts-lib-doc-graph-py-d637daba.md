@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261008155039-de900b5c artifact_schema_version=1.3.0 -->
+<!-- assess:run_id=20261008175925-32cb78d4 artifact_schema_version=1.3.0 -->
 # Hotspot: `skills/assess/scripts/lib/doc_graph.py`
 
 _First flagged: 2026-05-31. Last seen: 2026-10-08. Status: persistent._
@@ -24,6 +24,7 @@ _First flagged: 2026-05-31. Last seen: 2026-10-08. Status: persistent._
 | 2026-10-08 | 417634ee | 701 | 209 | 22 | persistent |
 | 2026-10-08 | d0c68d2e | 705 | 209 | 23 | persistent |
 | 2026-10-08 | de900b5c | 705 | 209 | 23 | persistent |
+| 2026-10-08 | 32cb78d4 | 705 | 209 | 23 | persistent |
 
 ## Briefing for editing this file
 
@@ -33,5 +34,5 @@ Hotspot (persistent). 705 LOC, aggregate cyclomatic complexity 209 (worst functi
 
 ## Suggested actions
 
-- Pin the survivor clusters in _derive_signals and build_doc_graph (304 of 1,315 mutants survive)
+- Pin the survivor clusters in _derive_signals and build_doc_graph (305 of 1,315 mutants survive)
 
