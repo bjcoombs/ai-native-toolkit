@@ -84,28 +84,20 @@ namespace_packages = true
 # ``# type: ignore[assignment, unused-ignore]``: without stubs nx is Any and the
 # ignore is unused; with stubs installed the None assignment is a real mismatch.
 ignore_missing_imports = true
-# Strict, minus one flag globally. disallow_any_generics flagged 444 bare
-# ``dict`` / ``list`` annotations, almost all on JSON blobs (run-context,
-# stats sidecars, finding rows). The fix is a TypedDict per known shape
-# (shared row shapes in ``lib/run_context_types.py``) and ``dict[str, Any]``
-# only where the keys are genuinely dynamic, applied module by module through
-# the override below. 56 remain (measured with the global flag set to true),
-# all in the orchestrators the override does not cover.
+# Full strict, disallow_any_generics included, with no per-module exception.
+# The flag started off: it flagged 444 bare ``dict`` / ``list`` annotations,
+# almost all on JSON blobs (run-context, stats sidecar, finding rows), and was
+# ratcheted on module by module until every script passed. A known shape is a
+# TypedDict (shared and orchestrator file shapes in ``lib/run_context_types.py``);
+# ``dict[str, Any]`` (``JsonDict``) is for blocks whose keys genuinely vary,
+# such as a run-context read back from disk by a renderer that tolerates older
+# snapshots. strict implies the flag; it is spelled out so the finished state
+# reads at a glance.
 strict = true
-disallow_any_generics = false
+disallow_any_generics = true
 # strict does not reject a bare ``# type: ignore``; this makes the error code
 # mandatory. The trailing ``  # reason`` stays a house convention mypy cannot check.
 enable_error_code = ["ignore-without-code"]
-
-# disallow_any_generics ratchet. Every lib/ module is covered by the wildcard,
-# so a new lib module joins the stricter gate by construction. Ratchet rule:
-# the covered list only grows. When no uncovered script is left, flip the
-# global flag above to true and delete the override. Uncovered today: the
-# orchestrators assess_core, assess_finalize, assess_report and
-# complexity-treemap.
-[[tool.mypy.overrides]]
-module = ["lib.*", "assess_emit_workflow", "assess_gate", "doc-graph-svg"]
-disallow_any_generics = true
 
 [tool.mutmut]
 # Layer 6 truth-pressure: line coverage shows the tests execute this code,

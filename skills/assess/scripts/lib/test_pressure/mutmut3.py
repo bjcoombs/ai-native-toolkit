@@ -664,7 +664,7 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
     cfg_scope = list(spelled.values())
     back = {v: k for k, v in spelled.items()}
     timeout_reason: _Outcome = {"mutation_run": False,
-                      "reason": f"exceeded {MUTATION_TIMEOUT}s timeout"}
+                                "reason": f"exceeded {MUTATION_TIMEOUT}s timeout"}
     # ignore_cleanup_errors: a read-only directory carried over by the copy, or
     # debris from the test run, must not raise on the way out of the block
     # and turn a named result into a generic scan failure.
@@ -765,7 +765,7 @@ def _run_mutmut3(repo_root: Path, scope: list[str]) -> MutationRunResult:
         per_file += results
     out_scope = scope or [f for g in groups for f in g["scope"]]
     result: MutationRunResult = {"available": True, "tool": "mutmut", "scope": out_scope,
-              "groups": groups, "mutation_run": bool(per_file), "per_file": per_file}
+                                 "groups": groups, "mutation_run": bool(per_file), "per_file": per_file}
     if not per_file:
         reasons = [g["reason"] for g in groups]
         result["reason"] = reasons[0] if len(groups) == 1 else "; ".join(
