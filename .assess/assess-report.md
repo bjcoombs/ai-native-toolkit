@@ -240,6 +240,8 @@ _... 5 more omitted; top 10 ranked rows in `.assess/run-context.json` `attention
 
 - **Layer 2 to Present:** extend `disallow_any_generics` to `lib/keyhole_signals.py` and `lib/test_pressure/`, then the orchestrators, and flip the global flag.
 - **Layer 6 to Present:** after #410, Action 1; then pin `doc_graph.py`'s survivor clusters (`_derive_signals` 39, `build_doc_graph` 33) and `keyhole_signals.py`'s (`_integrate_blocks` 71) from the weekly run.
+- **Sibling-test detector after a split:** `.assess/hotspots/` reports "Has test file: no" for `lib/keyhole_signals.py` because the check looks for `test_keyhole_signals.py`, which #478 split into eight `test_keyhole_*.py` files. The tests exist; credit a test file that imports the module, not only one named after it.
+- **`lib/README.md`** still says `[tool.mutmut]` covers three core modules; it covers five since #476.
 - **Marker scanner false positives:** skip `promissory_markers.py`'s own pattern table and the fixtures in `tests/test_promissory_markers.py`, which inflate the badge's stale-marker count.
 - **Report:** say the structure signals are partial when `structure.name_collisions` is non-empty.
 - **CodeQL alert #3** (`py/clear-text-storage-sensitive-data`, sink in `lib/wiki_writer.py`): triage, then fix or dismiss with a reason.
