@@ -48,11 +48,7 @@ from lib.agent_instructions_grader import (
 )
 from lib.anomaly_detector import detect_anomalies
 from lib.archetype import analyze_archetype
-from lib.badge import (
-    concern_count_from_findings,
-    fallback_badge,
-    write_badge,
-)
+from lib.badge import write_findings_badge
 from lib.assess_config import (
     is_user_excluded, load_excludes, load_structure_config, load_working_notes_config,
 )
@@ -68,6 +64,7 @@ from lib.generated_files import matches_generated_name
 from lib.git_churn import ContentClock, git_commit_info, tracked_files
 from lib.keyhole_signals import integrate as integrate_keyhole_signals
 from lib.liveness_scan import scan_liveness
+from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.promissory_markers import scan_promissory_markers
 from lib.scan_registry import STAGE_POST_OFFERS, STAGE_READ_SIDE, run_scans
 from lib.scan_registry import safe as _safe
@@ -680,33 +677,6 @@ def _save_first_flagged(assess_dir: Path, first_flagged: dict[str, str]) -> None
     (assess_dir / "first-flagged.json").write_text(
         json.dumps(first_flagged, indent=2), encoding="utf-8"
     )
-
-
-def _write_badge(
-    assess_dir: Path, promissory: Any, derived_findings: list[dict],
-    run_id: str | None = None, scope: str | None = None,
-) -> None:
-    """Write the deterministic default badge, always.
-
-    The shipped ``badge.json`` is the deterministic findings-count form: a pure
-    function of measured run data, never an LLM-authored score. It is written on
-    every run and is no longer overwritten by ``assess_finalize`` - the
-    LLM-derived grade lives in ``assess-report.md``, and the badge's ``link``
-    funnels a badge-clicker there. ``run_id`` stamps the badge with the run that
-    produced it. ``scope`` (the repo-relative subtree) labels the badge for a
-    ``/assess <path>`` monorepo run.
-    """
-    stale = (
-        promissory.get("total_stale", 0)
-        if isinstance(promissory, dict) and promissory.get("available")
-        else 0
-    )
-    badge = fallback_badge(
-        concern_count_from_findings(derived_findings), stale, run_id=run_id,
-        scope=scope,
-    )
-    badge["link"] = "./assess-report.md"
-    write_badge(assess_dir, badge)
 
 
 # Cap on accretion files carried into run-context.json. The scanner measures
@@ -1813,7 +1783,7 @@ def build_run_context(
     # report's B3 attention list via keyhole_signals; this block is the record.
     _attach_structure_drift(ctx, repo_root, keyhole["structure_drift_tier1"])
 
-    _write_badge(
+    write_findings_badge(
         assess_dir, promissory, ctx["derived_findings"], run_id=run_id,
         scope=scope_rel,
     )
@@ -1866,10 +1836,16 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     is never part of the default pass. It does not recompute the whole context:
     it reads the existing ``run-context.json``, takes the focus targets that carry
     test evidence from the ``test_focus`` block (``lib.test_focus.mutation_scope``),
-    runs
-    ``scan_test_pressure(..., opt_in=True)`` scoped to them, and rewrites only the
-    ``test_pressure`` block in place. ``run_bounded_mutation`` itself caps the
-    scope at ``MAX_FILES_TO_MUTATE``, so passing every focus path is safe.
+    runs ``scan_test_pressure(..., opt_in=True)`` scoped to them, and rewrites the
+    ``test_pressure`` block in place along with every block derived from it: the
+    Layer 6 ``mutation_not_run_cap``, the E1 ``untrusted_hotspot`` finding in
+    ``derived_findings``, and the products ranked or rendered from the findings
+    (``attention``, ``attention_low_signal``, ``findings_markdown``,
+    ``keyhole_summary``, ``prescribed_actions``, the archive and config-exclude
+    disclosures) and ``badge.json``, through ``lib.mutation_refresh``. Blocks that
+    do not read ``test_pressure`` (``test_focus``, ``gap_actions``) are kept.
+    ``run_bounded_mutation`` itself caps the scope at ``MAX_FILES_TO_MUTATE``, so
+    passing every focus path is safe.
 
     The treemap overlay (regenerated separately by the orchestrator) then reads
     the refreshed ``test_pressure.per_file`` so covered-but-unpinned files get
@@ -1910,6 +1886,15 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     # Refresh the Layer 6 cap: the mutation tier may have run this pass, lifting
     # the ceiling to Present. Written back so a subsequent finalize sees it.
     ctx["mutation_not_run_cap"] = _mutation_not_run_cap(ctx["test_pressure"])
+    # E1 crosses the refreshed survivor density with this run's hotspots; the
+    # findings, attention, report products and badge are rebuilt from it.
+    if refresh_mutation_findings(
+        ctx, _load_current_stats(assess_dir), *recorded_excludes(ctx, repo_root),
+    ):
+        write_findings_badge(
+            assess_dir, ctx.get("promissory_markers"), ctx["derived_findings"],
+            run_id=ctx.get("run_id"), scope=ctx.get("scope"),
+        )
     ctx_path.write_text(json.dumps(ctx, indent=2), encoding="utf-8")
 
     tp = ctx["test_pressure"]
@@ -1932,7 +1917,8 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Re-run only the Layer-1 test-pressure scan with the bounded "
             "mutation pass enabled, scoped to the existing run-context.json "
-            "test_focus targets, and rewrite the test_pressure block in place. "
+            "test_focus targets, and rewrite the test_pressure block and the "
+            "findings, attention and report products derived from it in place. "
             "Requires a prior default run. Mutates and runs code - consent-gated."
         ),
     )

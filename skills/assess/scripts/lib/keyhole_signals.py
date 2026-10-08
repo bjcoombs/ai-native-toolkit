@@ -49,6 +49,11 @@ from lib.liveness_scan import STATIC_REACHABILITY_CAVEAT
 from lib.structure_drift import detect_grouping_disagreement
 from lib.sibling_tests import find_colocated_test, is_test_path
 from lib.understanding_analysis import analyze_understanding
+from lib.untrusted_hotspot import (
+    DEFAULT_SURVIVOR_DENSITY_THRESHOLD as DEFAULT_SURVIVOR_DENSITY_THRESHOLD,
+)
+from lib.untrusted_hotspot import find_untrusted_hotspots as find_untrusted_hotspots
+from lib.untrusted_hotspot import untrusted_hotspot_paths
 
 # Caps so a pathological repo can't bloat run-context.json. The treemap and
 # liveness blocks already cap their own lists; these bound the new ones.
@@ -734,56 +739,6 @@ def build_attention_list(
 
 
 # --------------------------------------------------------------------------
-# E1 - untrusted hotspots (complexity x hollow tests)
-# --------------------------------------------------------------------------
-
-# A hotspot is "untrusted" when at least this fraction of its mutants survive -
-# the suite runs the code but doesn't pin it. Asymmetric like dead-weight: this
-# fires only on positive mutation evidence, so a read-only /assess (no opt-in
-# mutation pass) reports no untrusted hotspots rather than guessing.
-DEFAULT_SURVIVOR_DENSITY_THRESHOLD = 0.3
-
-
-def find_untrusted_hotspots(
-    complexity_stats: dict,
-    test_pressure: dict,
-    threshold_survivor_density: float = DEFAULT_SURVIVOR_DENSITY_THRESHOLD,
-) -> list[str]:
-    """E1: complexity hotspots whose tests are hollow (mutants survive).
-
-    Crosses the complexity hotspot list with the per-file mutation survivor
-    density. A hotspot whose tests let a high fraction of mutants survive is a
-    trust failure: the suite *visits* the code but doesn't *pin* it. Returns the
-    sorted hotspot paths over the density threshold.
-
-    Degrades to ``[]`` whenever there is no per-file mutation data - the default
-    read-only /assess run never mutates, so E1 stays silent rather than
-    manufacturing a finding from the always-on cheap heuristics. It speaks only
-    when an opt-in mutation pass populated ``test_pressure.per_file``.
-    """
-    if not isinstance(test_pressure, dict):
-        return []
-    per_file = test_pressure.get("per_file") or []
-    if not per_file:
-        return []
-    hotspot_paths = {
-        h.get("path")
-        for h in complexity_stats.get("top_hotspots", [])
-        if h.get("path")
-    }
-    density_by_file: dict[str, float] = {}
-    for entry in per_file:
-        total = entry.get("total")
-        survived = entry.get("survived") or 0
-        if total:
-            density_by_file[entry.get("file")] = survived / total
-    return sorted(
-        p for p in hotspot_paths
-        if density_by_file.get(p, 0.0) >= threshold_survivor_density
-    )
-
-
-# --------------------------------------------------------------------------
 # E2 - self-referential test authorship (test+code co-located AND co-committed)
 # --------------------------------------------------------------------------
 
@@ -1348,20 +1303,6 @@ def _integrate_blocks(
     return behaviour, documentation, understanding, runtime
 
 
-def _untrusted_hotspot_paths(
-    complexity_stats: dict, test_pressure: dict | None,
-) -> list[str]:
-    """E1 trust axis: complexity hotspots whose tests are hollow.
-
-    Silent without opt-in mutation data, so it degrades cleanly on the default
-    read-only run.
-    """
-    try:
-        return find_untrusted_hotspots(complexity_stats, test_pressure or {})
-    except Exception:  # noqa: BLE001 - degrade, never crash
-        return []
-
-
 def _self_referential_test_paths(
     repo_root: Path, complexity_stats: dict, commit_sets: list[set[Path]],
 ) -> list[str]:
@@ -1492,6 +1433,37 @@ def _filter_findings(
     return findings, pruned_finding_paths, excluded_finding_paths
 
 
+def finding_products(
+    findings: list[dict], complexity_stats: dict,
+    promissory_markers: dict | None, behaviour: dict,
+) -> dict:
+    """The attention list and report products derived from ``findings``.
+
+    Shared by ``integrate`` and the opt-in mutation refresh
+    (``lib.mutation_refresh``), so a refreshed finding set ranks and renders
+    exactly as the default run's does. A path under archive/, archived/ or
+    attic/ never ranks in attention (so never becomes a prescribed action);
+    ``archived_finding_paths`` carries those out for the `excluded_as_archive`
+    disclosure. Equal-score rows order by hotspot rank, then finding severity,
+    then path. A top score of 1 is a weak ranking: only its rank-1 row is
+    prescribed.
+    """
+    attention, archived = exclude_archive_from_attention(
+        findings, attention_tie_break(complexity_stats, promissory_markers, behaviour),
+    )
+    low_signal = is_attention_low_signal(attention)
+    return {
+        "attention": attention,
+        "findings_markdown": render_findings_markdown(findings, attention),
+        "keyhole_summary": build_keyhole_summary(findings),
+        "attention_low_signal": low_signal,
+        "prescribed_actions": build_prescribed_actions(
+            attention, findings, 1 if low_signal else MAX_PRESCRIBED_ACTIONS,
+        ),
+        "archived_finding_paths": archived,
+    }
+
+
 def integrate(
     *,
     repo_root: Path,
@@ -1554,7 +1526,7 @@ def integrate(
     dead_weight = candidate_dead_weight_paths(
         complexity_stats, dead_code, understanding.get("intent_source_by_path", {})
     )
-    untrusted = _untrusted_hotspot_paths(complexity_stats, test_pressure)
+    untrusted = untrusted_hotspot_paths(complexity_stats, test_pressure)
     self_ref_paths = _self_referential_test_paths(repo_root, complexity_stats, commit_sets)
     pm = promissory_markers or {}
     unactioned = _unactioned_intent_paths(pm)
@@ -1595,17 +1567,6 @@ def integrate(
     findings, pruned_finding_paths, excluded_finding_paths = _filter_findings(
         findings, top, rename_map, exclude_dirs, exclude_patterns,
     )
-    # Archive exclusion: a path under archive/, archived/ or attic/ never ranks
-    # in attention (so never becomes a prescribed action); the dropped paths are
-    # carried out for the `excluded_as_archive` disclosure.
-    # Equal-score rows order by hotspot rank, then finding severity, then path.
-    attention, archived_finding_paths = exclude_archive_from_attention(
-        findings,
-        attention_tie_break(complexity_stats, promissory_markers, behaviour),
-    )
-    # A top score of 1 is a weak ranking: prescribe only its rank-1 row.
-    attention_low_signal = is_attention_low_signal(attention)
-
     return {
         "structure": structure,
         "behaviour": behaviour,
@@ -1613,19 +1574,10 @@ def integrate(
         "understanding": understanding,
         "runtime": runtime,
         "derived_findings": findings,
-        "attention": attention,
-        "findings_markdown": render_findings_markdown(findings, attention),
-        "keyhole_summary": build_keyhole_summary(findings),
-        "attention_low_signal": attention_low_signal,
-        "prescribed_actions": build_prescribed_actions(
-            attention, findings, 1 if attention_low_signal else MAX_PRESCRIBED_ACTIONS,
-        ),
+        **finding_products(findings, complexity_stats, promissory_markers, behaviour),
         # Paths dropped from the findings because a config exclude covered them -
         # the raw material for the run-context `excluded_by_config` disclosure.
         "excluded_finding_paths": excluded_finding_paths,
-        # Archive paths a negative finding names but attention leaves out - the
-        # raw material for the run-context `excluded_as_archive` disclosure.
-        "archived_finding_paths": archived_finding_paths,
         # Git-history finding paths absent from the working tree (not HEAD: an
         # uncommitted delete counts) - the raw material for the run-context
         # `pruned_finding_paths` disclosure.

@@ -40,8 +40,8 @@ lines = 1422
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."skills/assess/scripts/assess_core.py"]
-lines = 1982
-reason = "raised by #468 and #469: mypy strict annotations, coverage-gate detector wiring"
+lines = 1968
+reason = "raised by #468 and #469, then lowered by #473 (badge writer moved to lib/badge.py)"
 
 [ceilings."skills/assess/scripts/assess_finalize.py"]
 lines = 841
@@ -56,8 +56,8 @@ lines = 1107
 reason = "raised by #468: mypy strict type annotations; +3 for the run_context_types import (disallow_any_generics ratchet)"
 
 [ceilings."skills/assess/scripts/lib/keyhole_signals.py"]
-lines = 1640
-reason = "raised by #468: mypy strict type annotations"
+lines = 1592
+reason = "raised by #468, then lowered by #473 (E1 detector moved to lib/untrusted_hotspot.py)"
 
 [ceilings."skills/assess/scripts/lib/wiki_writer.py"]
 lines = 1016
