@@ -165,9 +165,10 @@ imported. `build_import_map` swaps in a finder that maps each name to the
 directory `discover_packages` found, for the length of each build, and leaves
 `sys.path` and `sys.modules` alone. Two discovered packages sharing a name
 (`a/lib`, `b/lib`) go in separate builds, are graphed under their repo-relative
-paths, and are listed in the block's `name_collisions`. Any import between
-builds is unresolved, not only an import of the colliding name, since which copy
-wins depends on a runtime `sys.path`. The finder implements both shapes of
+paths, and are listed in the block's `name_collisions`. Each root holding a
+colliding name is a build of its own; all other roots share one. Any import
+between builds is unresolved, not only an import of the colliding name, since
+which copy wins depends on a runtime `sys.path`. The finder implements both shapes of
 grimp's package-finder port (`determine_package_directory` before 3.14,
 `determine_package_directories` from 3.14), so the `grimp>=3.0` floor holds.
 `structure_drift.py` builds its module map and communities through the same

@@ -48,8 +48,9 @@ import of the colliding name: grimp treats a package outside the current build
 as external. For the colliding name the drop is also the honest answer, since
 which copy wins depends on a runtime ``sys.path`` no static read can know; for
 a unique name it is a loss, so with collisions present the A1 footprints and
-A3 front-door ratio can be understated. ``_partition_builds`` places packages
-first-fit, which is greedy rather than edge-maximising.
+A3 front-door ratio can be understated. A root holding a colliding name is
+always a build of its own (``_partition_builds``), so an import of that name
+from another root is never pinned to whichever copy sorts first.
 """
 from __future__ import annotations
 
@@ -537,27 +538,25 @@ def _partition_builds(package_dirs: list[Path]) -> list[list[Path]]:
     """Split packages into builds whose top-level names are unique.
 
     Packages sharing a parent directory (one ``sys.path`` root) always share a
-    build, so their imports of each other resolve. Each root goes into the first
-    build it adds no duplicate name to; a repo with no colliding names is one
-    build, exactly as before.
-
-    First-fit is greedy, not edge-maximising: with three or more roots it can
-    place a root apart from a non-colliding package it imports, and that edge
-    is dropped with the other cross-build imports.
+    build, so their imports of each other resolve. Roots holding no colliding
+    name all share one build, where every name is unique by definition; a repo
+    with no collisions is that single build, exactly as before. A root holding a
+    colliding name gets a build of its own, so no other root's import of that
+    name can land on one copy just because its path sorts first: the import is
+    external to every build that does not own the name, and is dropped.
     """
+    counts = Counter(d.name for d in package_dirs)
     by_parent: dict[Path, list[Path]] = {}
     for d in sorted(package_dirs):
         by_parent.setdefault(d.parent, []).append(d)
-    builds: list[list[Path]] = []
+    shared: list[Path] = []
+    isolated: list[list[Path]] = []
     for group in by_parent.values():
-        names = {d.name for d in group}
-        for build in builds:
-            if names.isdisjoint(d.name for d in build):
-                build.extend(group)
-                break
+        if any(counts[d.name] > 1 for d in group):
+            isolated.append(group)
         else:
-            builds.append(list(group))
-    return builds
+            shared.extend(group)
+    return ([shared] if shared else []) + isolated
 
 
 def _qualified_name(package_dir: Path, repo_root: Path) -> str:

@@ -441,3 +441,30 @@ def test_cross_build_import_of_a_unique_name_is_dropped(tmp_path):
     assert result.name_collisions == [
         {"name": "lib", "paths": ["src/lib", "tools/lib"]},
     ]
+
+
+def test_third_root_import_of_a_colliding_name_is_not_pinned_to_one_copy(
+    tmp_path,
+):
+    # a/lib and b/lib collide; c/app imports ``lib``. Which copy that reaches
+    # depends on runtime sys.path, so the edge must be dropped, not resolved to
+    # a/lib because "a" sorts first.
+    _pkg(tmp_path / "a", "lib", {"x": ""})
+    _pkg(tmp_path / "b", "lib", {"y": ""})
+    _pkg(tmp_path / "c", "app", {"main": "from lib import x\nimport lib.y\n"})
+    result = sg.analyze_structure(tmp_path)
+    assert "app.main" in _module_names(result)
+    assert result.edge_count == 0
+
+
+def test_partition_isolates_colliding_roots_and_shares_the_rest(tmp_path):
+    dirs = [
+        tmp_path / "a" / "lib", tmp_path / "b" / "lib",
+        tmp_path / "c" / "app", tmp_path / "d" / "core",
+    ]
+    builds = sg._partition_builds(dirs)
+    assert builds == [
+        [tmp_path / "c" / "app", tmp_path / "d" / "core"],
+        [tmp_path / "a" / "lib"],
+        [tmp_path / "b" / "lib"],
+    ]
