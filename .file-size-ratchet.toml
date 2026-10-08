@@ -40,7 +40,7 @@ lines = 1422
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."skills/assess/scripts/assess_finalize.py"]
-lines = 841
+lines = 820
 reason = "raised by #468: mypy strict type annotations"
 
 [ceilings."skills/assess/scripts/complexity-treemap.py"]
