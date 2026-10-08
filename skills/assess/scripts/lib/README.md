@@ -470,12 +470,14 @@ and working-notes classifier signals, bulk commits, co-change pairs, B3 coupling
 the keyhole blocks, derived findings and attention rows that `context_blocks` and
 `mutation_refresh` read back from `keyhole_signals`, and the `test_pressure` block),
 plus the other row shapes of the blocks those belong to: the `doc_graph`, `dead_code`,
-keyhole and `test_pressure` blocks keep all their rows here. `JsonDict`
-(`dict[str, Any]`) names a block whose keys are genuinely dynamic. Any other shape,
-including a block only the orchestrator reads back, stays in the module that builds it.
-Annotations only: no runtime behaviour, so the serialised run-context is unchanged.
-Part of the `disallow_any_generics` ratchet in `pyproject.toml` `[tool.mypy]`; modules
-outside it still read some of these blocks as bare `dict`.
+keyhole and `test_pressure` blocks keep all their rows here. The orchestrators' file
+shapes live here too, so those scripts stay under their file-size ceilings: the stats
+sidecar rows and blocks `complexity-treemap.py` writes, and the `finalize-input.json`
+and action-lifecycle shapes `assess_finalize.py` reads. `JsonDict` (`dict[str, Any]`)
+names a block whose keys are genuinely dynamic. Any other shape stays in the module
+that builds it. Annotations only: no runtime behaviour, so the serialised run-context
+is unchanged. mypy runs with `disallow_any_generics` on for every script
+(`pyproject.toml` `[tool.mypy]`), so a bare `dict` fails the gate.
 
 **`keyhole_signals.py`** *(co-change hotspot)*
 Integration barrier between the individual signal modules and `assess_core`. Derives

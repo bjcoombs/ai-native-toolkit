@@ -123,7 +123,7 @@ def _read_plugin_version() -> str:
 def build_run_context(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
     scope: Path | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Run the deterministic pipeline and return the structured context dict.
 
     ``non_interactive`` is the orchestrator's explicit headless/CI signal; it

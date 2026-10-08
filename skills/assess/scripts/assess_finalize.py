@@ -48,6 +48,7 @@ from lib.badge import maturity_band
 from lib.evidence_check import check_evidence, describe
 from lib.keyhole_signals import mode_for_finding
 from lib.mutation_cap import layer6_cap_violation
+from lib.run_context_types import ActionLifecycle, FinalizeInput, JsonDict
 from lib.wiki_writer import (
     find_log_entry,
     log_entry_date,
@@ -249,7 +250,7 @@ ACTION_STATUS_VALUES = frozenset({"pending", "claimed", "done", "reopened"})
 _ACTION_CARRY_FIELDS = ("status", "claimed_by", "completed_sha")
 
 
-def _action_paths(entry: dict) -> frozenset[str]:
+def _action_paths(entry: JsonDict) -> frozenset[str]:
     """The files an action names, as a set.
 
     The ``files`` list is the source; a singular ``path`` is accepted as a
@@ -271,7 +272,7 @@ def _action_paths(entry: dict) -> frozenset[str]:
     return frozenset(paths)
 
 
-def _action_identity_key(entry: dict) -> str | None:
+def _action_identity_key(entry: JsonDict) -> str | None:
     """The deterministic identity of an action: its finding plus its paths.
 
     Rank reshuffles between runs and the directive text is written afresh by the
@@ -291,7 +292,7 @@ def _action_identity_key(entry: dict) -> str | None:
     return "\x00".join(["finding", finding, *sorted(paths)])
 
 
-def _action_text_key(entry: dict) -> str | None:
+def _action_text_key(entry: JsonDict) -> str | None:
     """The fallback identity: the action directive text, as written.
 
     ``None`` for an empty directive: ``ACTION_REQUIRED_KEYS`` checks that the
@@ -302,7 +303,7 @@ def _action_text_key(entry: dict) -> str | None:
     return "\x00".join(["action", text]) if isinstance(text, str) and text else None
 
 
-def _read_prior_action_status(assess_dir: Path) -> dict[str, list[dict]]:
+def _read_prior_action_status(assess_dir: Path) -> dict[str, list[JsonDict]]:
     """Prior actions indexed for status carry-forward, by identity and by text.
 
     Each prior entry is registered under every key it can be found by: its
@@ -331,7 +332,7 @@ def _read_prior_action_status(assess_dir: Path) -> dict[str, list[dict]]:
         prior = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return {}
-    out: dict[str, list[dict]] = {}
+    out: dict[str, list[JsonDict]] = {}
     for a in prior.get("actions", []) if isinstance(prior, dict) else []:
         if not isinstance(a, dict):
             continue
@@ -341,7 +342,7 @@ def _read_prior_action_status(assess_dir: Path) -> dict[str, list[dict]]:
     return out
 
 
-def _match_prior_action(prior: dict[str, list[dict]], action: dict) -> dict:
+def _match_prior_action(prior: dict[str, list[JsonDict]], action: JsonDict) -> JsonDict:
     """The prior entry for this action: identity first, then the text fallback.
 
     Identity wins because it survives a rewording. Text is tried second because
@@ -382,7 +383,7 @@ def _match_prior_action(prior: dict[str, list[dict]], action: dict) -> dict:
     if text is None:
         return {}
     new_paths = _action_paths(action)
-    nothing_to_compare: dict = {}
+    nothing_to_compare: JsonDict = {}
     for candidate in prior.get(text, []):
         prior_paths = _action_paths(candidate)
         if new_paths and prior_paths:
@@ -393,7 +394,7 @@ def _match_prior_action(prior: dict[str, list[dict]], action: dict) -> dict:
     return nothing_to_compare
 
 
-def _carry_status_fields(prior_entry: dict) -> dict:
+def _carry_status_fields(prior_entry: JsonDict) -> ActionLifecycle:
     """The lifecycle fields to inherit from a matching prior action.
 
     An unrecognised prior status resets to ``pending`` (a corrupted or
@@ -410,7 +411,7 @@ def _carry_status_fields(prior_entry: dict) -> dict:
 
 
 def _write_actions_contract(
-    assess_dir: Path, actions: list[dict], *, run_id: str | None = None
+    assess_dir: Path, actions: list[JsonDict], *, run_id: str | None = None
 ) -> None:
     """Write the durable machine-readable Top 3 contract to actions.json (v2).
 
@@ -451,9 +452,7 @@ def _write_actions_contract(
         "run_id": run_id,
         "actions": entries,
     }
-    (assess_dir / "actions.json").write_text(
-        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
-    )
+    (assess_dir / "actions.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def _locate_input(assess_dir: Path) -> Path:
@@ -471,7 +470,7 @@ def _locate_input(assess_dir: Path) -> Path:
     )
 
 
-def _load_run_context(assess_dir: Path) -> dict:
+def _load_run_context(assess_dir: Path) -> JsonDict:
     """Load run-context.json, the ground truth finalize reconciles against.
 
     Its absence is a hard failure, not a skip: finalize *reconciles* the
@@ -486,7 +485,7 @@ def _load_run_context(assess_dir: Path) -> dict:
             "LLM input against the deterministic core's output; refusing to write"
         )
     try:
-        ctx: dict = json.loads(path.read_text(encoding="utf-8"))
+        ctx: JsonDict = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         raise FinalizeValidationError(
             f"run-context.json at {path} is not valid JSON: {e}"
@@ -506,7 +505,7 @@ def _claimed_maturity_tier(label: str) -> str | None:
     return hits[0] if len(hits) == 1 else None
 
 
-def _layer_score(data: dict, layer: int) -> float | None:
+def _layer_score(data: FinalizeInput, layer: int) -> float | None:
     """The LLM-supplied numeric score for one layer, or None if not carried.
 
     ``layer_scores`` maps a layer id to its 0.0/0.5/1.0 band (Missing/Partial/
@@ -526,7 +525,7 @@ def _layer_score(data: dict, layer: int) -> float | None:
     return None
 
 
-def _validate_run_id_match(data: dict, ctx: dict) -> None:
+def _validate_run_id_match(data: FinalizeInput, ctx: JsonDict) -> None:
     """Both artifacts must be from the same run (torn-write detection).
 
     Only enforced when *both* carry a run_id: a legacy artifact missing the
@@ -544,7 +543,7 @@ def _validate_run_id_match(data: dict, ctx: dict) -> None:
         )
 
 
-def _validate_denominator(denominator: int, ctx: dict) -> None:
+def _validate_denominator(denominator: int, ctx: JsonDict) -> None:
     """The finalize-input denominator must match the archetype's.
 
     Skipped when the archetype scan degraded (no available block / no
@@ -592,7 +591,7 @@ def _validate_maturity(score: float, denominator: int, label: str) -> None:
         )
 
 
-def _validate_hotspot_actions(data: dict, ctx: dict) -> None:
+def _validate_hotspot_actions(data: FinalizeInput, ctx: JsonDict) -> None:
     """Every hotspot_actions key must be a real top hotspot from run-context.
 
     A path the LLM invented (not in ``stats_summary.top_hotspots``) is a
@@ -613,7 +612,7 @@ def _validate_hotspot_actions(data: dict, ctx: dict) -> None:
             )
 
 
-def _validate_layer6_cap(data: dict, ctx: dict) -> None:
+def _validate_layer6_cap(data: FinalizeInput, ctx: JsonDict) -> None:
     """Layer 6 cannot exceed Partial without complete mutation evidence.
 
     The rule lives in ``lib.mutation_cap.layer6_cap_violation``: Present is
@@ -635,7 +634,7 @@ def _evidence_layer(entry: object) -> int | None:
     return layer
 
 
-def _validate_evidence(data: dict, repo_root: Path) -> list[dict]:
+def _validate_evidence(data: FinalizeInput, repo_root: Path) -> list[JsonDict]:
     """Re-check the input's ``evidence`` list against the repository (#362).
 
     The scorer is a model, and the facts it cites ("docs/guide.md is absent",
@@ -687,8 +686,8 @@ def _validate_evidence(data: dict, repo_root: Path) -> list[dict]:
 
 
 def _validate_finalize_input(
-    data: dict, ctx: dict, *, denominator: int, repo_root: Path
-) -> list[dict]:
+    data: FinalizeInput, ctx: JsonDict, *, denominator: int, repo_root: Path
+) -> list[JsonDict]:
     """Run every finalize invariant. Raises FinalizeValidationError on the first
     violation, before any write - so a bad input reaches nothing.
 
@@ -714,7 +713,7 @@ def finalize_run(*, assess_dir: Path) -> None:
     ``FinalizeValidationError`` and nothing is written.
     """
     input_path = _locate_input(assess_dir)
-    data = json.loads(input_path.read_text(encoding="utf-8"))
+    data: FinalizeInput = json.loads(input_path.read_text(encoding="utf-8"))
     ctx = _load_run_context(assess_dir)
     # Denominator: 8 for a software repo (the display ceiling), or the count of
     # applicable layers for a knowledge base (issue #224). Defaults to 8 so a

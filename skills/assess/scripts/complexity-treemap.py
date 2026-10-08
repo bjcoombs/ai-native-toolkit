@@ -78,9 +78,10 @@ import shutil
 import subprocess
 import sys
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 import lizard
 import matplotlib.pyplot as plt
@@ -104,14 +105,12 @@ from lib.generated_files import (
     GENERATED_NAME_PATTERNS,
     generated_reason,
 )
+from lib.run_context_types import (
+    Distribution, FnCcnBlock, GeneratedExclusion, HotspotRow, KeyholeBudget,
+    ScoredHotspotRow, SizeBlock, SubtreeTokens,
+)
 from lib.treemap_render import (
-    ColoredFile,
-    adaptive_cap,
-    blend_to_grey,
-    build_tree,
-    layout,
-    plural,
-    write_svg,
+    ColoredFile, Rect, Rgba, adaptive_cap, blend_to_grey, build_tree, layout, plural, write_svg,
 )
 
 
@@ -390,7 +389,7 @@ def collect(root: Path, by: str = "complexity",
             extra_exclude_dirs: set[str] | None = None,
             extra_exclude_patterns: list[str] | None = None,
             scope: Path | None = None,
-            excluded_generated: list[dict] | None = None,
+            excluded_generated: list[GeneratedExclusion] | None = None,
             scc_languages: dict[Path, str] | None = None,
             fn_names: dict[Path, str] | None = None,
             fn_backends: dict[Path, str] | None = None,
@@ -620,7 +619,7 @@ def _hatch_for_density(density: float | None) -> str:
 def _survivor_overrides(
     files: list[tuple[Path, int, float, str]],
     survivor_density: dict[Path, float] | None,
-) -> dict[Path, dict]:
+) -> dict[Path, dict[str, str]]:
     """Build the per-file Node overrides (``{path: {"hatch": ...}}``) for the
     survivor-density overlay. Keys in ``survivor_density`` are matched against
     each file's resolved path (``files[i][0]``). Returns an empty dict when no
@@ -628,7 +627,7 @@ def _survivor_overrides(
     as "no overlay"."""
     if not survivor_density:
         return {}
-    overrides: dict[Path, dict] = {}
+    overrides: dict[Path, dict[str, str]] = {}
     for f in files:
         hatch = _hatch_for_density(survivor_density.get(f[0]))
         if hatch:
@@ -645,7 +644,7 @@ def _aux_cap(files: list[tuple[Path, int, float, str]],
 
 
 def _colour_files(files: list[tuple[Path, int, float, str]],
-                  cmap: Callable[[float], tuple], cap: float,
+                  cmap: Callable[[float], Rgba], cap: float,
                   aux_data: dict[Path, int] | None, aux_cap: float) -> list[ColoredFile]:
     """Append each file's fill: hue from its metric, greyed by its aux value."""
     files_colored: list[ColoredFile] = []
@@ -737,7 +736,7 @@ def render(files: list[tuple[Path, int, float, str]],
     tree = build_tree(files_colored, root, aux_data, aux_label or "",
                       node_overrides=overrides or None, size_by=tokens)
     W, H = 1600.0, 1000.0
-    rects: list = []
+    rects: list[Rect] = []
     layout(tree, 0, 0, W, H, rects)
 
     write_svg(rects, root, W, H, out_path, show_labels, metric_label,
@@ -909,7 +908,7 @@ def est_tokens_by_path(
 def _keyhole_budget_rollup(
     tokens: dict[Path, int], root: Path,
     budget: int = CONTEXT_WINDOW_BUDGET_TOKENS,
-) -> dict:
+) -> KeyholeBudget:
     """Roll per-file estimated tokens into the keyhole-budget finding.
 
     Reports the repo total and how many individual files / top-level subtrees
@@ -931,7 +930,7 @@ def _keyhole_budget_rollup(
         subtree_totals[top] = subtree_totals.get(top, 0) + t
     # Sort the (name, tokens) pairs before building the dicts, so the key reads
     # an int rather than a value of the mixed-type row.
-    over_subtrees = [
+    over_subtrees: list[SubtreeTokens] = [
         {"path": name, "est_tokens": tot}
         for name, tot in sorted(subtree_totals.items(), key=lambda kv: -kv[1])
         if tot > budget
@@ -975,11 +974,11 @@ def _effective_ccn(ccn: float, max_fn_ccn: float | None) -> float:
     return float(max_fn_ccn ** w * ccn ** (1.0 - w))
 
 
-def _pct(values: list[float], q: float) -> float:
+def _pct(values: Sequence[float], q: float) -> float:
     return float(np.percentile(values, q)) if values else 0.0
 
 
-def _distribution(values: list) -> dict[str, float]:
+def _distribution(values: Sequence[float]) -> Distribution:
     """``{p50, p95, max}`` of ``values``; every field 0.0 when empty."""
     return {
         "p50": _pct(values, 50),
@@ -988,13 +987,13 @@ def _distribution(values: list) -> dict[str, float]:
     }
 
 
-def _side_max(values: list, is_data: list[bool], data: bool) -> float:
+def _side_max(values: Sequence[float], is_data: list[bool], data: bool) -> float:
     """Largest of ``values`` on the code (``data=False``) or data side."""
     side = [v for v, d in zip(values, is_data) if d is data]
     return float(max(side)) if side else 0.0
 
 
-def _size_block(values: list, is_data: list[bool]) -> dict:
+def _size_block(values: Sequence[int], is_data: list[bool]) -> SizeBlock:
     """The ``loc`` / ``est_tokens`` block: distribution, code/data maxima, total."""
     return {
         **_distribution(values),
@@ -1056,7 +1055,7 @@ def _enrich_row(path: Path, loc: int, ccn: float, src: str, *,
                 aux_data: dict[Path, int] | None,
                 tokens: dict[Path, int], root: Path,
                 fn_ccn_by_path: dict[Path, list[float]],
-                fn_names: dict[Path, str]) -> dict:
+                fn_names: dict[Path, str]) -> ScoredHotspotRow:
     """One hotspot row, carrying the private ``_score`` ranking key."""
     churn = float(aux_data.get(path, 0)) if aux_data else 0.0
     est_tokens = tokens.get(path, est_token_count(path, loc))
@@ -1096,7 +1095,7 @@ def _enrich_row(path: Path, loc: int, ccn: float, src: str, *,
 def _fn_ccn_block(files: list[tuple[Path, int, float, str]],
                   fn_ccn_by_path: dict[Path, list[float]],
                   fn_backend_by_path: dict[Path, str] | None,
-                  langs: dict[Path, str]) -> dict:
+                  langs: dict[Path, str]) -> FnCcnBlock:
     """The per-function ``fn_ccn`` block of the stats sidecar."""
     backend_of = {p: (fn_backend_by_path or {}).get(p, "lizard")
                   for p in fn_ccn_by_path}
@@ -1120,7 +1119,7 @@ def _fn_ccn_block(files: list[tuple[Path, int, float, str]],
     }
 
 
-def _provenance(files: list[tuple[Path, int, float, str]]) -> dict:
+def _provenance(files: list[tuple[Path, int, float, str]]) -> dict[str, object]:
     """Run-provenance keys that open the stats sidecar."""
     tool_versions = _tool_versions(files)
     return {
@@ -1141,11 +1140,11 @@ def _provenance(files: list[tuple[Path, int, float, str]]) -> dict:
     }
 
 
-def _strip_score(rows: list[dict]) -> list[dict]:
-    return [{k: v for k, v in r.items() if k != "_score"} for r in rows]
+def _strip_score(rows: list[ScoredHotspotRow]) -> list[HotspotRow]:
+    return [cast(HotspotRow, {k: v for k, v in r.items() if k != "_score"}) for r in rows]
 
 
-def _top_lists(enriched: list[dict]) -> dict[str, list[dict]]:
+def _top_lists(enriched: list[ScoredHotspotRow]) -> dict[str, list[HotspotRow]]:
     """``top_hotspots`` / ``top_complex`` / ``top_large``, ten rows each."""
     # Ties break on the repository-relative path, ascending, under Python's
     # default byte ordering for `str`. Without it a stable single-key sort
@@ -1172,7 +1171,7 @@ def write_stats(files: list[tuple[Path, int, float, str]],
                 fn_ccn_by_path: dict[Path, list[float]] | None = None,
                 tokens_by_path: dict[Path, int] | None = None,
                 churn_degenerate: bool = False,
-                excluded_generated: list[dict] | None = None,
+                excluded_generated: list[GeneratedExclusion] | None = None,
                 languages_by_path: dict[Path, str] | None = None,
                 fn_name_by_path: dict[Path, str] | None = None,
                 fn_backend_by_path: dict[Path, str] | None = None) -> None:
@@ -1255,7 +1254,7 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         for path, loc, ccn, src in files
     ]
 
-    stats: dict = {
+    stats: dict[str, object] = {
         **_provenance(files),
         "files_scored": len(files),
         # Files dropped by content (generator header, payload-length lines):
@@ -1416,7 +1415,7 @@ def _resolve_scope(root: Path, scope_arg: Path | None) -> tuple[Path | None, str
     return scope, None
 
 
-def _no_files_message(scope: Path | None, excluded_generated: list[dict]) -> str:
+def _no_files_message(scope: Path | None, excluded_generated: list[GeneratedExclusion]) -> str:
     """The dead-end error when nothing is left to score."""
     where = f" under {scope}" if scope is not None else ""
     # Content excludes can drop every file (an all-generated SDK subtree
@@ -1475,7 +1474,7 @@ def main() -> int:
     # read-side scans via the same config - see `assess_core.build_run_context`.
     extra_dirs, extra_patterns = resolve_excludes(root, args.exclude)
 
-    excluded_generated: list[dict] = []
+    excluded_generated: list[GeneratedExclusion] = []
     scc_languages: dict[Path, str] = {}
     fn_names: dict[Path, str] = {}
     fn_backends: dict[Path, str] = {}
