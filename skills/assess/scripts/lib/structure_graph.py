@@ -31,11 +31,32 @@ an ``available=False`` result rather than crashing when either is missing --
 the assessment never blocks. The analysis is purely static (AST-level import
 parsing via grimp; no code execution) and deterministic, so it is reproducible
 run to run.
+
+Packages are resolved **by path, never by name**. grimp's default package
+finder asks ``importlib.util.find_spec``, which answers from ``sys.modules``
+first: when the assessed tree has a package called ``lib`` (or ``json``, or
+``networkx``), the running ``/assess`` has already imported a module of that
+name and grimp would graph *that* copy instead of the target's. So each build
+swaps in a finder that maps a name to the directory discovery found, and
+``sys.path`` / ``sys.modules`` are never touched.
+
+A name held by two discovered packages (``a/lib`` and ``b/lib``) cannot share
+one grimp graph, so packages are split across builds: each copy is graphed
+under its repo-relative path (``a/lib``, ``b/lib``) and listed in
+``name_collisions``. Every import between builds is dropped, not only an
+import of the colliding name: grimp treats a package outside the current build
+as external. For the colliding name the drop is also the honest answer, since
+which copy wins depends on a runtime ``sys.path`` no static read can know; for
+a unique name it is a loss, so with collisions present the A1 footprints and
+A3 front-door ratio can be understated. A root holding a colliding name is
+always a build of its own (``_partition_builds``), so an import of that name
+from another root is never pinned to whichever copy sorts first.
 """
 from __future__ import annotations
 
 import ast
-import sys
+import keyword
+from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -44,10 +65,12 @@ from typing import TypedDict
 
 try:  # grimp + networkx are the core deps; degrade rather than crash if absent.
     import grimp
+    from grimp.application.config import settings as _grimp_settings
 
     _GRIMP_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only on a broken env
     grimp = None  # type: ignore[assignment]  # grimp is typed; None stands in for the missing module
+    _grimp_settings = None  # type: ignore[assignment]  # as above: absent module
     _GRIMP_AVAILABLE = False
 
 try:
@@ -118,6 +141,13 @@ class BreakupCandidate(TypedDict):
     modularity_q: float
 
 
+class NameCollision(TypedDict):
+    """Two or more discovered packages sharing one top-level import name."""
+
+    name: str
+    paths: list[str]
+
+
 class StructureBlock(TypedDict):
     """``run-context.json`` ``structure``: :meth:`StructureGraphResult.as_dict`."""
 
@@ -132,6 +162,7 @@ class StructureBlock(TypedDict):
     breakup_candidates: list[BreakupCandidate]
     module_count: int
     edge_count: int
+    name_collisions: list[NameCollision]
 
 
 @dataclass
@@ -154,6 +185,9 @@ class StructureGraphResult:
     breakup_candidates: list[BreakupCandidate] = field(default_factory=list)
     module_count: int = 0
     edge_count: int = 0
+    # Package names held by more than one discovered package; each copy is
+    # graphed under its repo-relative path instead of one silently winning.
+    name_collisions: list[NameCollision] = field(default_factory=list)
 
     def as_dict(self) -> StructureBlock:
         return {
@@ -168,6 +202,7 @@ class StructureGraphResult:
             "breakup_candidates": self.breakup_candidates,
             "module_count": self.module_count,
             "edge_count": self.edge_count,
+            "name_collisions": self.name_collisions,
         }
 
 
@@ -207,45 +242,80 @@ def discover_packages(
             continue
         init_dirs.add(init.parent.resolve())
     # Keep only roots: a package whose parent is also a package is a subpackage.
-    return sorted(d for d in init_dirs if d.parent not in init_dirs)
+    # A directory no import statement can name (``my-pkg``, ``class``) is not a
+    # package whatever files it holds.
+    return sorted(
+        d for d in init_dirs
+        if d.parent not in init_dirs and _is_importable_name(d.name)
+    )
+
+
+def _is_importable_name(name: str) -> bool:
+    """True when an ``import`` statement could name a package called ``name``."""
+    return name.isidentifier() and not keyword.iskeyword(name)
+
+
+class _PathPackageFinder:
+    """grimp package finder that answers from discovered paths, not imports.
+
+    Stands in for grimp's ``ImportLibPackageFinder``, whose ``find_spec``
+    lookup returns whatever module of that name is already imported. The port
+    changed shape in grimp 3.14: 3.0-3.13 call ``determine_package_directory``
+    (one path), 3.14+ call ``determine_package_directories`` (a set). Both are
+    implemented so every grimp the ``>=3.0`` floor admits works.
+    """
+
+    def __init__(self, dirs: dict[str, Path]) -> None:
+        self._dirs = dirs
+
+    def determine_package_directory(
+        self, package_name: str, file_system: object,
+    ) -> str:
+        del file_system  # part of grimp's port signature; unused here
+        directory = self._dirs.get(package_name)
+        if directory is None:
+            raise ValueError(f"package {package_name!r} was not discovered")
+        return str(directory)
+
+    def determine_package_directories(
+        self, package_name: str, file_system: object,
+    ) -> set[str]:
+        return {self.determine_package_directory(package_name, file_system)}
 
 
 @contextmanager
-def _syspath_prepended(paths: list[Path]) -> Iterator[None]:
-    """Temporarily prepend `paths` to sys.path, restoring it afterwards.
+def _path_package_finder(dirs: dict[str, Path]) -> Iterator[None]:
+    """Point grimp's package finder at ``dirs`` for one build, then restore it.
 
-    grimp locates a package by importable name via sys.path; we add each
-    package's parent so ``grimp.build_graph("lib")`` resolves. Restored in a
-    finally so a scan never leaves the interpreter's import state mutated.
+    Callers reach this only after ``analyze_structure``'s grimp-available check.
     """
-    added = [str(p) for p in paths]
-    original = list(sys.path)
-    for p in added:
-        if p not in sys.path:
-            sys.path.insert(0, p)
+    original = _grimp_settings.PACKAGE_FINDER
+    _grimp_settings.configure(PACKAGE_FINDER=_PathPackageFinder(dirs))
     try:
         yield
     finally:
-        sys.path[:] = original
+        _grimp_settings.configure(PACKAGE_FINDER=original)
 
 
 def _module_file(module: str, roots: dict[str, Path]) -> Path | None:
-    """Resolve a dotted module name to its source file via its package root.
+    """Resolve a graph module name to its source file via its package root.
 
-    ``roots`` maps a top-level package name to its directory; the module's
-    file lives under that directory's *parent* (the sys.path root), since the
-    dotted name already includes the package as its first component.
+    ``roots`` maps a graph-level top name (``lib``, or a path-qualified
+    ``a/lib`` for a colliding name) to its package directory; the rest of the
+    dotted name walks down from there.
     """
-    top = module.split(".", 1)[0]
+    top, _, rest = module.partition(".")
     root = roots.get(top)
     if root is None:
         return None
-    base = root.parent
-    rel = module.replace(".", "/")
-    candidate = base / f"{rel}.py"
+    if not rest:
+        init = root / "__init__.py"
+        return init if init.is_file() else None
+    base = root.joinpath(*rest.split("."))
+    candidate = base.parent / f"{base.name}.py"
     if candidate.is_file():
         return candidate
-    pkg_init = base / rel / "__init__.py"
+    pkg_init = base / "__init__.py"
     if pkg_init.is_file():
         return pkg_init
     return None
@@ -448,22 +518,143 @@ def find_breakup_candidates(
 # Entry point
 # --------------------------------------------------------------------------
 
-def _build_grimp_graph(
-    package_dirs: list[Path],
-) -> tuple[grimp.ImportGraph, list[str], dict[str, Path]]:
-    """Build the grimp import graph for the discovered packages.
+@dataclass
+class ImportMap:
+    """The direct-import graph of the discovered packages, merged across builds.
 
-    Returns ``(import_graph, package_names, roots)`` or raises on failure.
-    ``roots`` maps each top-level package name to its source directory, used to
-    resolve module names back to files for surface measurement.
+    ``modules`` and ``imports`` use graph-level names: plain dotted names, with
+    the top component path-qualified (``a/lib.x``) only for a colliding name.
+    ``roots`` maps each graph-level top name to its package directory.
     """
-    names = [d.name for d in package_dirs]
-    roots = {d.name: d for d in package_dirs}
-    parents = list({d.parent for d in package_dirs})
-    with _syspath_prepended(parents):
+
+    modules: list[str] = field(default_factory=list)
+    imports: dict[str, set[str]] = field(default_factory=dict)
+    roots: dict[str, Path] = field(default_factory=dict)
+    package_names: list[str] = field(default_factory=list)
+    name_collisions: list[NameCollision] = field(default_factory=list)
+
+
+def _partition_builds(package_dirs: list[Path]) -> list[list[Path]]:
+    """Split packages into builds whose top-level names are unique.
+
+    Packages sharing a parent directory (one ``sys.path`` root) always share a
+    build, so their imports of each other resolve. Roots holding no colliding
+    name all share one build, where every name is unique by definition; a repo
+    with no collisions is that single build, exactly as before. A root holding a
+    colliding name gets a build of its own, so no other root's import of that
+    name can land on one copy just because its path sorts first: the import is
+    external to every build that does not own the name, and is dropped.
+    """
+    counts = Counter(d.name for d in package_dirs)
+    by_parent: dict[Path, list[Path]] = {}
+    for d in sorted(package_dirs):
+        by_parent.setdefault(d.parent, []).append(d)
+    shared: list[Path] = []
+    isolated: list[list[Path]] = []
+    for group in by_parent.values():
+        if any(counts[d.name] > 1 for d in group):
+            isolated.append(group)
+        else:
+            shared.extend(group)
+    return ([shared] if shared else []) + isolated
+
+
+def _qualified_name(package_dir: Path, repo_root: Path) -> str:
+    """Repo-relative path of a package, dot-free so it stays one name component."""
+    try:
+        rel = package_dir.relative_to(repo_root).as_posix()
+    except ValueError:  # pragma: no cover - discovery only yields paths under root
+        return package_dir.name
+    if rel == ".":
+        return package_dir.name
+    return rel.replace("%", "%25").replace(".", "%2E")
+
+
+def _rename(module: str, renames: dict[str, str]) -> str:
+    """Swap a module name's top component for its graph-level (qualified) name."""
+    top, sep, rest = module.partition(".")
+    return renames.get(top, top) + sep + rest
+
+
+def _add_build(
+    imap: ImportMap, build: list[Path], renames: dict[str, str],
+) -> None:
+    """Graph one build's packages and merge them into ``imap`` under ``renames``."""
+    dirs = {d.name: d for d in build}
+    with _path_package_finder(dirs):
         # cache_dir=None: never write grimp's cache into the target repo.
-        import_graph = grimp.build_graph(*names, cache_dir=None)
-    return import_graph, names, roots
+        graph = grimp.build_graph(*sorted(dirs), cache_dir=None)
+    for name, directory in dirs.items():
+        imap.roots[renames[name]] = directory
+    for module in graph.modules:
+        imap.imports[_rename(module, renames)] = {
+            _rename(dep, renames)
+            for dep in graph.find_modules_directly_imported_by(module)
+        }
+
+
+def build_import_map(package_dirs: list[Path], repo_root: Path) -> ImportMap:
+    """Build the import graph of ``package_dirs``, resolving every name by path.
+
+    Raises whatever grimp raises on an unparseable tree; callers degrade.
+    """
+    repo_root = repo_root.resolve()
+    counts = Counter(d.name for d in package_dirs)
+    imap = ImportMap()
+    for build in _partition_builds(package_dirs):
+        renames = {
+            d.name: _qualified_name(d, repo_root) if counts[d.name] > 1 else d.name
+            for d in build
+        }
+        _add_build(imap, build, renames)
+    imap.modules = sorted(imap.imports)
+    imap.package_names = sorted(imap.roots)
+    imap.name_collisions = [
+        {
+            "name": name,
+            "paths": sorted(
+                _qualified_name(d, repo_root)
+                for d in package_dirs if d.name == name
+            ),
+        }
+        for name in sorted(n for n, c in counts.items() if c > 1)
+    ]
+    return imap
+
+
+def import_digraph(imap: ImportMap) -> nx.DiGraph:
+    """The networkx digraph of ``imap``: nodes = modules, edges = direct imports."""
+    graph = nx.DiGraph()
+    graph.add_nodes_from(imap.modules)
+    for m in imap.modules:
+        for dep in sorted(imap.imports[m]):
+            if dep in graph:  # ignore imports of external / unknown modules
+                graph.add_edge(m, dep)
+    return graph
+
+
+def _package_modules(imap: ImportMap) -> set[str]:
+    """Modules that are packages (an ``__init__``): the front doors for A3."""
+    return set(imap.package_names) | {
+        m for m in imap.modules
+        if (mf := _module_file(m, imap.roots)) is not None
+        and mf.name == "__init__.py"
+    }
+
+
+def _all_breakup_candidates(
+    graph: nx.DiGraph, imap: ImportMap,
+) -> list[BreakupCandidate]:
+    """A4 over every top-level package, each judged on its own subgraph."""
+    breakup: list[BreakupCandidate] = []
+    for pkg in imap.package_names:
+        members = [
+            m for m in imap.modules if m == pkg or m.startswith(pkg + ".")
+        ]
+        candidate = find_breakup_candidates(pkg, graph.subgraph(members))
+        if candidate is not None:
+            breakup.append(candidate)
+    return breakup
 
 
 def analyze_structure(
@@ -508,7 +699,7 @@ def analyze_structure(
         )
 
     try:
-        import_graph, package_names, roots = _build_grimp_graph(package_dirs)
+        imap = build_import_map(package_dirs, repo_root)
     except Exception as e:  # pragma: no cover - grimp parse failure on odd trees
         return StructureGraphResult(
             available=False,
@@ -516,11 +707,8 @@ def analyze_structure(
             keyhole_budget=budget,
         )
 
-    modules = sorted(import_graph.modules)
-    package_set = set(package_names) | {
-        m for m in modules
-        if (mf := _module_file(m, roots)) is not None and mf.name == "__init__.py"
-    }
+    modules, roots = imap.modules, imap.roots
+    package_set = _package_modules(imap)
 
     # Measure each module's size and public surface once.
     sizes: dict[str, int] = {}
@@ -530,13 +718,7 @@ def analyze_structure(
         sizes[m] = _count_loc(f)
         surfaces[m] = _public_surface(f)
 
-    # Build the networkx digraph (nodes = modules, edges = direct imports).
-    graph = nx.DiGraph()
-    graph.add_nodes_from(modules)
-    for m in modules:
-        for dep in import_graph.find_modules_directly_imported_by(m):
-            if dep in graph:  # ignore imports of external / unknown modules
-                graph.add_edge(m, dep)
+    graph = import_digraph(imap)
 
     # A1 footprints (direct deps only).
     footprints = [
@@ -553,16 +735,7 @@ def analyze_structure(
     # A3 front-door ratio.
     front_door_ratio, burrow_edges = compute_front_door_ratio(graph, package_set)
 
-    # A4 breakup candidates -- one analysis per top-level package.
-    breakup: list[BreakupCandidate] = []
-    for pkg in sorted(package_names):
-        members = [
-            m for m in modules if m == pkg or m.startswith(pkg + ".")
-        ]
-        internal = graph.subgraph(members)
-        candidate = find_breakup_candidates(pkg, internal)
-        if candidate is not None:
-            breakup.append(candidate)
+    breakup = _all_breakup_candidates(graph, imap)
 
     return StructureGraphResult(
         available=True,
@@ -575,4 +748,5 @@ def analyze_structure(
         breakup_candidates=breakup,
         module_count=graph.number_of_nodes(),
         edge_count=graph.number_of_edges(),
+        name_collisions=imap.name_collisions,
     )

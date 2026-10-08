@@ -167,6 +167,23 @@ Python import-graph analysis (Signals A1-A4) via `grimp` + `networkx`:
 Degrades to `available: False` when `grimp`/`networkx` are absent rather than
 blocking the run.
 
+Packages resolve by path, never by import name. grimp's default finder asks
+`importlib.util.find_spec`, which answers from `sys.modules` first, so a target
+package named `lib` (this repo's own `skills/assess/scripts/lib`) or `json` was
+graphed from whichever module of that name the running `/assess` had already
+imported. `build_import_map` swaps in a finder that maps each name to the
+directory `discover_packages` found, for the length of each build, and leaves
+`sys.path` and `sys.modules` alone. Two discovered packages sharing a name
+(`a/lib`, `b/lib`) go in separate builds, are graphed under their repo-relative
+paths, and are listed in the block's `name_collisions`. Each root holding a
+colliding name is a build of its own; all other roots share one. Any import
+between builds is unresolved, not only an import of the colliding name, since
+which copy wins depends on a runtime `sys.path`. The finder implements both shapes of
+grimp's package-finder port (`determine_package_directory` before 3.14,
+`determine_package_directories` from 3.14), so the `grimp>=3.0` floor holds.
+`structure_drift.py` builds its module map and communities through the same
+`build_import_map` / `import_digraph`.
+
 ### Document analysis
 
 **`doc_graph.py`** *(co-change hotspot)*
@@ -515,7 +532,7 @@ The E1 trust axis, a leaf module. `find_untrusted_hotspots` crosses the complexi
 and returns the hotspots at or over `DEFAULT_SURVIVOR_DENSITY_THRESHOLD` (0.3);
 `untrusted_hotspot_paths` wraps it so a malformed block degrades to `[]`. Silent without
 per-file mutation data, so the default read-only run never fires it. `keyhole_signals`
-re-exports `find_untrusted_hotspots` and `DEFAULT_SURVIVOR_DENSITY_THRESHOLD`. Tests: `tests/test_keyhole_signals.py` (E1 cases) and
+re-exports `find_untrusted_hotspots` and `DEFAULT_SURVIVOR_DENSITY_THRESHOLD`. Tests: `tests/test_keyhole_untrusted_hotspot.py` (E1 cases) and
 `tests/test_mutation_refresh.py`.
 
 **`mutation_cap.py`**

@@ -441,8 +441,8 @@ def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
     """
     try:
         from lib.structure_graph import (
-            _build_grimp_graph,
             _module_file,
+            build_import_map,
             discover_packages,
         )
     except ImportError:  # pragma: no cover - exercised only on a broken env
@@ -453,13 +453,13 @@ def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
     if not package_dirs:
         return {}
     try:
-        import_graph, _names, roots = _build_grimp_graph(package_dirs)
+        imap = build_import_map(package_dirs, repo_root)
     except Exception:  # pragma: no cover - grimp parse failure on odd trees
         return {}
 
     mapping: dict[str, Path] = {}
-    for module in import_graph.modules:
-        src = _module_file(module, roots)
+    for module in imap.modules:
+        src = _module_file(module, imap.roots)
         if src is None:
             continue
         try:
@@ -715,12 +715,12 @@ def _compute_communities(repo_root: Path) -> list[set[str]]:
     """
     try:
         from lib.structure_graph import (
-            _build_grimp_graph,
-            _detect_communities,
             _NETWORKX_AVAILABLE,
+            _detect_communities,
+            build_import_map,
             discover_packages,
+            import_digraph,
         )
-        import networkx as nx
     except ImportError:  # pragma: no cover - exercised only on a broken env
         return []
     if not _NETWORKX_AVAILABLE:
@@ -730,18 +730,11 @@ def _compute_communities(repo_root: Path) -> list[set[str]]:
     if not package_dirs:
         return []
     try:
-        import_graph, _names, _roots = _build_grimp_graph(package_dirs)
+        imap = build_import_map(package_dirs, repo_root)
     except Exception:  # pragma: no cover - grimp parse failure on odd trees
         return []
 
-    modules = sorted(import_graph.modules)
-    graph = nx.DiGraph()
-    graph.add_nodes_from(modules)
-    for m in modules:
-        for dep in import_graph.find_modules_directly_imported_by(m):
-            if dep in graph:
-                graph.add_edge(m, dep)
-    return _detect_communities(graph.to_undirected())
+    return _detect_communities(import_digraph(imap).to_undirected())
 
 
 def _compute_coupling_pairs(repo_root: Path) -> list[JsonDict]:

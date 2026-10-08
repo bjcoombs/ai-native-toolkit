@@ -79,10 +79,6 @@ reason = "pre-existing; ratchet from 2026-10-07"
 lines = 846
 reason = "pre-existing; ratchet from 2026-10-07"
 
-[ceilings."skills/assess/tests/test_keyhole_signals.py"]
-lines = 1665
-reason = "pre-existing; ratchet from 2026-10-07"
-
 [ceilings."skills/assess/tests/test_structure_drift.py"]
 lines = 885
 reason = "pre-existing; ratchet from 2026-10-07"
