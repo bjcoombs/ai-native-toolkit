@@ -10,8 +10,10 @@ per-doc machine-link fingerprint the raw-source detector reads.
 ``lib.doc_graph`` owns discovery, the reference-edge pass, and the signals; it
 calls :func:`harvest_links` once per build and reuses :func:`strip_fenced_lines`
 and :data:`INLINE_CODE_RE` for its backticked-reference and missing-xref scans.
-Inward-only and leaf-level: stdlib only, no ``lib`` import, so the doc and code
-extension sets are passed in rather than imported from ``lib.doc_graph``.
+Inward-only and leaf-level: stdlib only, no runtime ``lib`` import, so the doc
+and code extension sets are passed in rather than imported from
+``lib.doc_graph``. The row shapes come from ``lib.run_context_types`` under
+``TYPE_CHECKING`` only.
 """
 from __future__ import annotations
 
@@ -23,6 +25,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # annotation only; the caller owns the networkx import
     import networkx as nx
+
+    from lib.run_context_types import BrokenLink, DocToCodeEdge
 
 # by-relpath, by-basename and by-stem indexes from ``_build_name_index``.
 NameIndex = tuple[dict[str, Path], dict[str, list[Path]], dict[str, list[Path]]]
@@ -212,9 +216,9 @@ class LinkHarvest:
     """What the link pass collects besides graph edges, one per build."""
 
     rel: Callable[[Path], str]
-    doc_to_code: list[dict] = field(default_factory=list)
+    doc_to_code: list[DocToCodeEdge] = field(default_factory=list)
     ambiguous: int = 0
-    broken: list[dict] = field(default_factory=list)
+    broken: list[BrokenLink] = field(default_factory=list)
     broken_seen: set[tuple[str, str]] = field(default_factory=set)
     # Per-doc count of non-navigational URI-scheme links (mailto:/tel:/external
     # http) - the machine-extraction fingerprint a converted document carries.

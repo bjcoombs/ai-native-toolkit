@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 # Backend name recorded in the stats file (`fn_ccn.source`,
 # `fn_ccn.backend_by_language`). The treemap registers it as approximate.
@@ -114,7 +115,9 @@ class _Scanner:
         # Open named `=>` bodies: (function, brace depth, paren depth).
         self.arrows: list[tuple[_Fn, int, int]] = []
         # Open `${` interpolations: [string quote, raw flag, braces inside].
-        self.interps: list[list] = []
+        # A mutable list (the brace count is bumped in place), so its slots
+        # are heterogeneous: str, bool, int.
+        self.interps: list[list[Any]] = []
         self.string: tuple[str, bool] | None = None  # (quote, raw) inside one
         self.prev = ""          # last significant code token
         self.prev_ws = False    # whitespace directly before the current token

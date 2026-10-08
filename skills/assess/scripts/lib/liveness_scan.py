@@ -31,11 +31,18 @@ import json
 import re
 import shutil
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NotRequired, TypedDict
 
 from lib.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_excluded_path
+from lib.run_context_types import (
+    DeadCodeBlock,
+    DeadCodeCandidate,
+    DeadCodeTool,
+    JsonDict,
+)
 
 DEAD_CODE_TIMEOUT = 60  # seconds; a slow tool degrades rather than hangs the run
 MAX_CANDIDATES = 50     # cap so a pathological repo can't bloat run-context.json
@@ -86,9 +93,9 @@ def _iter_ext(repo_root: Path, exts: set[str],
         yield path
 
 
-def _parse_vulture(stdout: str) -> list[dict]:
+def _parse_vulture(stdout: str) -> list[DeadCodeCandidate]:
     """vulture: `path:line: unused function 'name' (60% confidence)`."""
-    out: list[dict] = []
+    out: list[DeadCodeCandidate] = []
     rx = re.compile(r"^(.*?):(\d+): (unused \w[\w ]*?) '?([\w.]+)'?")
     for line in stdout.splitlines():
         m = rx.match(line.strip())
@@ -98,9 +105,9 @@ def _parse_vulture(stdout: str) -> list[dict]:
     return out
 
 
-def _parse_ts_prune(stdout: str) -> list[dict]:
+def _parse_ts_prune(stdout: str) -> list[DeadCodeCandidate]:
     """ts-prune: `path:line - name` (suffix `(used in module)` is not dead)."""
-    out: list[dict] = []
+    out: list[DeadCodeCandidate] = []
     rx = re.compile(r"^(.*?):(\d+) - (\S+)(.*)$")
     for line in stdout.splitlines():
         m = rx.match(line.strip())
@@ -110,9 +117,9 @@ def _parse_ts_prune(stdout: str) -> list[dict]:
     return out
 
 
-def _parse_staticcheck(stdout: str) -> list[dict]:
+def _parse_staticcheck(stdout: str) -> list[DeadCodeCandidate]:
     """staticcheck U1000: `path:line:col: ... is unused (U1000)`."""
-    out: list[dict] = []
+    out: list[DeadCodeCandidate] = []
     rx = re.compile(r"^(.*?):(\d+):\d+:\s*(.*?is unused.*)$")
     for line in stdout.splitlines():
         m = rx.match(line.strip())
@@ -122,9 +129,9 @@ def _parse_staticcheck(stdout: str) -> list[dict]:
     return out
 
 
-def _parse_deadcode(stdout: str) -> list[dict]:
+def _parse_deadcode(stdout: str) -> list[DeadCodeCandidate]:
     """x/tools deadcode: `path:line:col: unreachable func: name`."""
-    out: list[dict] = []
+    out: list[DeadCodeCandidate] = []
     rx = re.compile(r"^(.*?):(\d+):\d+:\s*(unreachable func.*)$")
     for line in stdout.splitlines():
         m = rx.match(line.strip())
@@ -134,13 +141,13 @@ def _parse_deadcode(stdout: str) -> list[dict]:
     return out
 
 
-def _parse_knip(stdout: str) -> list[dict]:
+def _parse_knip(stdout: str) -> list[DeadCodeCandidate]:
     """knip --reporter json: {files:[...], issues:[{file, exports:[...]}]}."""
     try:
         data = json.loads(stdout)
     except (json.JSONDecodeError, ValueError):
         return []
-    out: list[dict] = []
+    out: list[DeadCodeCandidate] = []
     for f in data.get("files", []):
         out.append({"path": f, "line": 0, "kind": "unused file", "symbol": "(file)"})
     for issue in data.get("issues", []):
@@ -183,7 +190,23 @@ def _vulture_excludes(extra_exclude_dirs: set[str] | None = None) -> str:
 # `absent_reason` replace `tool_absent` when no other tool serves the language.
 _TS_EXTS = {".ts", ".tsx", ".mts", ".cts"}
 _JS_EXTS = {".js", ".jsx", ".mjs", ".cjs"}
-_DEAD_CODE_TOOLS: list[dict] = [
+
+
+class _ToolSpec(TypedDict):
+    """One ``_DEAD_CODE_TOOLS`` entry (fields described above)."""
+
+    language: str
+    tool: str
+    exts: set[str]
+    builds: bool
+    requires: NotRequired[str]
+    absent_status: NotRequired[str]
+    absent_reason: NotRequired[str]
+    cmd: Callable[[Path, set[str]], list[str]]
+    parser: Callable[[str], list[DeadCodeCandidate]]
+
+
+_DEAD_CODE_TOOLS: list[_ToolSpec] = [
     {"language": "python", "tool": "vulture", "exts": {".py"}, "builds": False,
      "cmd": lambda root, extra_dirs: [
          "vulture", ".", "--exclude", _vulture_excludes(extra_dirs),
@@ -233,11 +256,11 @@ def _under_excluded(path_str: str,
 @dataclass
 class DeadCodeResult:
     available: bool = False
-    candidates: list[dict] = field(default_factory=list)
-    tools: list[dict] = field(default_factory=list)  # {language, tool, status, reason}
+    candidates: list[DeadCodeCandidate] = field(default_factory=list)
+    tools: list[DeadCodeTool] = field(default_factory=list)
     caveat: str = STATIC_REACHABILITY_CAVEAT
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> DeadCodeBlock:
         return {
             "available": self.available,
             "candidate_count": len(self.candidates),
@@ -562,6 +585,31 @@ def _detect_reachable(repo_root: Path, files: list[Path],
     return sorted(signals)
 
 
+class ObservabilityRung(TypedDict):
+    present: bool
+    signals: list[str]
+
+
+class ObservabilityBlock(TypedDict):
+    """``run-context.json`` ``liveness.observability``."""
+
+    rung: int
+    instrumented: ObservabilityRung
+    discoverable: ObservabilityRung
+    reachable: ObservabilityRung
+    boundary: str
+
+
+class LivenessBlock(TypedDict):
+    """``run-context.json`` ``liveness``: the two Layer 1 scans plus the
+    JVM and Dart capability blocks when those projects are present."""
+
+    dead_code: DeadCodeBlock
+    observability: ObservabilityBlock
+    jvm_capabilities: NotRequired[JsonDict]
+    dart_capabilities: NotRequired[JsonDict]
+
+
 @dataclass
 class ObservabilityResult:
     instrumented: list[str] = field(default_factory=list)
@@ -569,7 +617,7 @@ class ObservabilityResult:
     reachable: list[str] = field(default_factory=list)
     rung: int = 0
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> ObservabilityBlock:
         return {
             "rung": self.rung,
             "instrumented": {"present": bool(self.instrumented), "signals": self.instrumented},
@@ -619,7 +667,7 @@ def scan_observability(repo_root: Path,
     )
 
 
-def _merge_jvm_liveness(dead_code: dict, jvm: dict) -> None:
+def _merge_jvm_liveness(dead_code: DeadCodeBlock, jvm: JsonDict) -> None:
     """Fold the JVM liveness capability into the existing ``dead_code`` block so
     the per-symbol dead-code consumers (the ``runtime`` block, the report) see
     Maven candidates without a schema change. The full capability-offer detail
@@ -659,7 +707,7 @@ def _merge_jvm_liveness(dead_code: dict, jvm: dict) -> None:
         })
 
 
-def _merge_dart_liveness(dead_code: dict, dart: dict) -> None:
+def _merge_dart_liveness(dead_code: DeadCodeBlock, dart: JsonDict) -> None:
     """Record Dart liveness in ``dead_code.tools`` as one ``honest_degrade`` entry.
 
     Built here rather than as a ``_DEAD_CODE_TOOLS`` spec because the scan never
@@ -681,7 +729,7 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
                   extra_exclude_dirs: set[str] | None = None,
                   extra_exclude_patterns: list[str] | None = None,
                   scope: Path | None = None,
-                  ) -> dict:
+                  ) -> LivenessBlock:
     """Top-level Layer 1 scan: dead-code candidates + observability rungs, plus
     the capability-driven JVM offer block when a Maven/Gradle project is found
     and the Dart capability block when a ``pubspec.yaml`` is found.
@@ -721,7 +769,7 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
     )
     if dart.get("available"):
         _merge_dart_liveness(dead_code, dart)
-    result = {
+    result: LivenessBlock = {
         "dead_code": dead_code,
         "observability": scan_observability(
             repo_root,

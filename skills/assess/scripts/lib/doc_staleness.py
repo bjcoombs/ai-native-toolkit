@@ -50,6 +50,7 @@ from bisect import bisect_right
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import NotRequired, TypedDict
 
 from lib.doc_graph import (
     CODE_EXTENSIONS,
@@ -67,6 +68,65 @@ from lib.git_churn import (
     pick_churn_window,
     tracked_files,
 )
+from lib.run_context_types import BulkCommit, DocToCodeEdge
+
+
+class DocProvenance(TypedDict):
+    method: str
+    sources: list[str]
+    generated_by: str | None
+    source_newer: bool | None
+
+
+class DocStalenessRow(TypedDict):
+    """One ``doc_staleness.docs`` row: :meth:`DocStaleness.as_dict`."""
+
+    path: str
+    last_commit_days: int | None
+    doc_churn_in_window: int
+    code_churn_in_window: int
+    subject_code_count: int
+    subject_method: str
+    ratio: float
+    window_ratio: float
+    code_churn_since_doc_change: int | None
+    confidence: str
+    last_change_basis: NotRequired[str]
+    provenance: NotRequired[DocProvenance]
+
+
+class DocAssociation(TypedDict):
+    code_file_count: int
+    doc_count: int
+    code_under_base_doc: int
+    pct_code_under_base_doc: float
+    docs_mapping_to_code: int
+    pct_docs_mapping_to_code: float
+    methods: dict[str, int]
+
+
+class DocModularity(TypedDict):
+    module_dir_count: int
+    module_dirs_with_base_doc: int
+    base_doc_dir_ratio: float
+    base_doc_coverage_when_present: float
+    code_file_count: int
+    large_repo: bool
+
+
+class DocStalenessBlock(TypedDict):
+    """``run-context.json`` ``doc_staleness``: :func:`analyze_doc_staleness`."""
+
+    available: bool
+    churn_window: str | None
+    churn_degenerate: bool
+    docs: list[DocStalenessRow]
+    bulk_commits_skipped: list[BulkCommit]
+    bulk_commits_skipped_total: int
+    bulk_commit_scan_complete: bool
+    creation_date_fallback_count: int
+    association: DocAssociation
+    modularity: DocModularity
 
 
 # Docs that describe the directory they live in. Precedence (best first) when a
@@ -122,8 +182,8 @@ class DocStaleness:
             return "low"
         return "high"
 
-    def as_dict(self) -> dict:
-        d: dict = {
+    def as_dict(self) -> DocStalenessRow:
+        d: DocStalenessRow = {
             "path": self.path,
             "last_commit_days": self.last_commit_days,
             "doc_churn_in_window": self.doc_churn_in_window,
@@ -440,7 +500,7 @@ def _resolve_docs(
 
 
 def _explicit_links(
-    repo_root: Path, doc_to_code_edges: list[dict] | None,
+    repo_root: Path, doc_to_code_edges: list[DocToCodeEdge] | None,
 ) -> dict[str, list[Path]]:
     """Explicit doc->code links (fallback c): doc rel -> [code abs paths]."""
     explicit: dict[str, list[Path]] = {}
@@ -575,7 +635,7 @@ def _doc_row(
 def _modularity(
     code_files: list[Path], base_doc_dirs: dict[Path, Path],
     code_dirs: set[Path], pct_code_under_base: float,
-) -> dict:
+) -> DocModularity:
     """The size-weighted modularity coverage block."""
     # Modularity coverage is *size-weighted*: a 200-file service without a base
     # doc is a real navigability gap, a 3-file utility dir without one isn't.
@@ -608,12 +668,12 @@ def _modularity(
 def analyze_doc_staleness(
     repo_root: Path,
     doc_files: list[Path] | None = None,
-    doc_to_code_edges: list[dict] | None = None,
+    doc_to_code_edges: list[DocToCodeEdge] | None = None,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
     generated_sources: list[tuple[str, list[str]]] | None = None,
     scope: Path | None = None,
-) -> dict:
+) -> DocStalenessBlock:
     """Compute the doc-staleness metric and doc->code association summary.
 
     ``generated_sources`` is the ``[[generated]]`` folder->source map (issue

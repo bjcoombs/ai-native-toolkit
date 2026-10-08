@@ -49,6 +49,22 @@ the core.
 from __future__ import annotations
 
 from pathlib import Path, PurePosixPath
+from typing import TypedDict
+
+from lib.run_context_types import JsonDict
+
+
+class DocUnit(TypedDict):
+    """One ``documentation.docs`` row: a doc, or undocumented complex code."""
+
+    path: str
+    complexity_summarised: float
+    freshness: float
+    doc_value: float
+    finding: str | None
+    confidence: str | None
+    subject_code_count: int
+    recommendation: str | None
 
 # A doc whose staleness ratio exceeds this is treated as having been outrun by
 # its code: freshness crosses zero here and reaches -1 at twice this value. The
@@ -89,7 +105,7 @@ def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
-def _extract_file_ccn(complexity_stats: dict) -> dict[str, float]:
+def _extract_file_ccn(complexity_stats: JsonDict) -> dict[str, float]:
     """Build path -> max-CCN from whatever per-file lists the stats expose.
 
     ``complexity-stats.json`` carries per-file CCN only in its ranked lists
@@ -110,13 +126,13 @@ def _extract_file_ccn(complexity_stats: dict) -> dict[str, float]:
     return ccn
 
 
-def _high_ccn_threshold(complexity_stats: dict) -> float:
+def _high_ccn_threshold(complexity_stats: JsonDict) -> float:
     """The CCN at or above which a unit counts as 'high complexity'."""
     p95 = float((complexity_stats.get("ccn") or {}).get("p95", 0.0) or 0.0)
     return max(p95, MIN_HIGH_CCN)
 
 
-def _signed_freshness(doc: dict) -> float:
+def _signed_freshness(doc: JsonDict) -> float:
     """Map the doc's staleness state onto a signed freshness in [-1, +1].
 
     **Generated docs with declared provenance** (issue #178) bypass the churn
@@ -192,8 +208,8 @@ def _assign_code_to_docs(
 
 
 def analyze_doc_complexity_join(
-    complexity_stats: dict, doc_staleness: dict, repo_root: Path,
-) -> dict:
+    complexity_stats: JsonDict, doc_staleness: JsonDict, repo_root: Path,
+) -> JsonDict:
     """Join complexity hotspots with doc freshness into Signal C findings.
 
     Args:
@@ -247,10 +263,10 @@ def analyze_doc_complexity_join(
     assignment = _assign_code_to_docs(list(file_ccn), doc_paths)
     covered_code = {c for codes in assignment.values() for c in codes}
 
-    units: list[dict] = []
-    lying_maps: list[dict] = []
-    unexplained: list[dict] = []
-    good_contracts: list[dict] = []
+    units: list[DocUnit] = []
+    lying_maps: list[DocUnit] = []
+    unexplained: list[DocUnit] = []
+    good_contracts: list[DocUnit] = []
 
     # --- Real docs: classify by (complexity it covers) x (its freshness) ---
     for doc in docs_in:
@@ -299,7 +315,7 @@ def analyze_doc_complexity_join(
             elif freshness > 0:
                 finding = "good_contract"
 
-        unit = {
+        unit: DocUnit = {
             "path": path,
             "complexity_summarised": complexity_summarised,
             "freshness": freshness,

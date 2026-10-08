@@ -58,6 +58,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.doc_graph import is_excluded_path
+from lib.run_context_types import DeadCodeCandidate, JsonDict
 
 # Capabilities a JVM project exposes, in report order. Only ``liveness`` is
 # healed in v1; the rest honest-degrade (or are credited when a plugin serves
@@ -282,7 +283,9 @@ def detect_configured_plugins(repo_root: Path, build_files: list[str]) -> dict[s
     return served
 
 
-def parse_dependency_analyze(stdout: str, pom_path: str = "pom.xml") -> list[dict]:
+def parse_dependency_analyze(
+    stdout: str, pom_path: str = "pom.xml",
+) -> list[DeadCodeCandidate]:
     """Parse ``mvn dependency:analyze`` output into coarse liveness candidates.
 
     Surfaces *unused declared dependencies* - a dependency a module declares but
@@ -291,7 +294,7 @@ def parse_dependency_analyze(stdout: str, pom_path: str = "pom.xml") -> list[dic
     tier so the existing ``dead_code`` consumers need no change. ``path`` is the
     pom that declared it; ``symbol`` is the ``group:artifact`` coordinate.
     """
-    out: list[dict] = []
+    out: list[DeadCodeCandidate] = []
     in_unused = False
     for raw in stdout.splitlines():
         lowered = raw.lower()
@@ -344,7 +347,7 @@ def count_used_undeclared(stdout: str) -> int:
 
 def _liveness_capability(build_system: str, mvn_on_path: bool,
                          analyze_output: str | None,
-                         pom_path: str) -> dict:
+                         pom_path: str) -> JsonDict:
     """Build the ``liveness`` capability entry, the only one healed in v1."""
     cap: dict[str, Any] = {
         "candidate_tool": _CANDIDATE_TOOLS["liveness"],
@@ -400,7 +403,7 @@ def _liveness_capability(build_system: str, mvn_on_path: bool,
     return cap
 
 
-def _credited_or_degraded(capability: str, served: dict[str, list[str]]) -> dict:
+def _credited_or_degraded(capability: str, served: dict[str, list[str]]) -> JsonDict:
     """Build a non-liveness capability entry: credited when a configured plugin
     serves it, otherwise honest-degrade with a named candidate."""
     cap: dict[str, Any] = {
@@ -431,7 +434,7 @@ def scan_jvm_capabilities(repo_root: Path, *,
                           mvn_on_path: bool | None = None,
                           extra_exclude_dirs: set[str] | None = None,
                           extra_exclude_patterns: list[str] | None = None,
-                          ) -> dict:
+                          ) -> JsonDict:
     """Capability-driven JVM scan. Never raises - degrades to ``available: False``.
 
     ``analyze_output`` lets a caller (and CI's consumption test) feed canned

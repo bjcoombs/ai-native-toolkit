@@ -52,16 +52,16 @@ lines = 1534
 reason = "raised by #468: mypy strict type annotations"
 
 [ceilings."skills/assess/scripts/lib/doc_graph.py"]
-lines = 1104
-reason = "raised by #468: mypy strict type annotations"
+lines = 1107
+reason = "raised by #468: mypy strict type annotations; +3 for the run_context_types import (disallow_any_generics ratchet)"
 
 [ceilings."skills/assess/scripts/lib/keyhole_signals.py"]
 lines = 1640
 reason = "raised by #468: mypy strict type annotations"
 
 [ceilings."skills/assess/scripts/lib/wiki_writer.py"]
-lines = 1015
-reason = "pre-existing; ratchet from 2026-10-07"
+lines = 1016
+reason = "pre-existing; ratchet from 2026-10-07; +1 for the run_context_types import (disallow_any_generics ratchet)"
 
 [ceilings."skills/assess/tests/test_assess_core.py"]
 lines = 2601

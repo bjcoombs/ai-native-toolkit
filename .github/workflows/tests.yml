@@ -129,9 +129,10 @@ jobs:
         run: uv run --with ruff ruff check .
         working-directory: scripts
 
-      # Layer 2 type gate (issue #79). mypy strict (minus disallow_any_generics)
-      # over all of skills/assess/scripts/: the deterministic core (lib/), the
-      # orchestrators and the SVG renderers. Config in
+      # Layer 2 type gate (issue #79). mypy strict (disallow_any_generics
+      # ratcheted per module) over all of skills/assess/scripts/: the
+      # deterministic core (lib/), the orchestrators and the SVG renderers.
+      # Config in
       # skills/assess/pyproject.toml selects the files and checks.
       - name: Mypy type gate (skills/assess)
         run: uv run --with mypy mypy

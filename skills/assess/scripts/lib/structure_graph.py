@@ -40,6 +40,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TypedDict
 
 try:  # grimp + networkx are the core deps; degrade rather than crash if absent.
     import grimp
@@ -90,13 +91,56 @@ MAX_BURROW_EDGES = 100
 MAX_SCCS = 50
 
 
+class Footprint(TypedDict):
+    """A1: a module's comprehension footprint against the keyhole budget."""
+
+    module: str
+    size: int
+    dep_surface: int
+    exposed_surface: int
+    total: int
+    over_budget: bool
+
+
+class BurrowEdge(TypedDict):
+    """A3: an import that reaches into another package's internals."""
+
+    importer: str
+    imported: str
+
+
+class BreakupCandidate(TypedDict):
+    """A4: a package whose modules split into well-separated clusters."""
+
+    package: str
+    clusters: list[list[str]]
+    num_clusters: int
+    modularity_q: float
+
+
+class StructureBlock(TypedDict):
+    """``run-context.json`` ``structure``: :meth:`StructureGraphResult.as_dict`."""
+
+    available: bool
+    reason: str
+    keyhole_budget: int
+    footprints: list[Footprint]
+    sccs: list[list[str]]
+    modularity_q: float
+    front_door_ratio: float
+    internal_burrow_edges: list[BurrowEdge]
+    breakup_candidates: list[BreakupCandidate]
+    module_count: int
+    edge_count: int
+
+
 @dataclass
 class StructureGraphResult:
     available: bool = True
     reason: str = ""
     keyhole_budget: int = DEFAULT_KEYHOLE_BUDGET
-    # A1: [{module, size, dep_surface, exposed_surface, total, over_budget}]
-    footprints: list[dict] = field(default_factory=list)
+    # A1: one footprint per module, largest total first.
+    footprints: list[Footprint] = field(default_factory=list)
     # A2: strongly-connected components of length > 1 (import cycles = blobs).
     sccs: list[list[str]] = field(default_factory=list)
     # A2: Newman modularity Q in [-0.5, 1] over the module graph.
@@ -104,14 +148,14 @@ class StructureGraphResult:
     # A3: fraction of cross-package inbound edges landing on a front door.
     front_door_ratio: float = 1.0
     # A3: the burrowing edges (imports that reach into another package's
-    # internals instead of its public API). [{importer, imported}].
-    internal_burrow_edges: list[dict] = field(default_factory=list)
-    # A4: [{package, clusters: [[mod, ...], ...], num_clusters, modularity_q}].
-    breakup_candidates: list[dict] = field(default_factory=list)
+    # internals instead of its public API).
+    internal_burrow_edges: list[BurrowEdge] = field(default_factory=list)
+    # A4: packages proposed for splitting, with their clusters as cut-lines.
+    breakup_candidates: list[BreakupCandidate] = field(default_factory=list)
     module_count: int = 0
     edge_count: int = 0
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> StructureBlock:
         return {
             "available": self.available,
             "reason": self.reason,
@@ -253,7 +297,7 @@ def compute_footprint(
     surfaces: dict[str, int],
     sizes: dict[str, int],
     keyhole_budget: int,
-) -> dict:
+) -> Footprint:
     """A1 footprint for one module: size + direct-dep surface + own surface.
 
     ``direct_deps`` is the module's DIRECT imports only -- no transitive
@@ -279,7 +323,7 @@ def compute_footprint(
 # A2 -- blob vs modular
 # --------------------------------------------------------------------------
 
-def _detect_communities(undirected: nx.Graph) -> list[set]:
+def _detect_communities(undirected: nx.Graph) -> list[set[str]]:
     """Community partition of an undirected graph (greedy / louvain by size)."""
     if undirected.number_of_nodes() == 0:
         return []
@@ -296,7 +340,7 @@ def _detect_communities(undirected: nx.Graph) -> list[set]:
     return [set(c) for c in louvain_communities(undirected, seed=1)]
 
 
-def _modularity_q(undirected: nx.Graph, communities: list[set]) -> float:
+def _modularity_q(undirected: nx.Graph, communities: list[set[str]]) -> float:
     """Newman Q for a partition, clamped to the theoretical [-0.5, 1] range."""
     if not communities or undirected.number_of_edges() == 0:
         return 0.0
@@ -336,7 +380,7 @@ def _top_package(module: str) -> str:
 
 def compute_front_door_ratio(
     graph: nx.DiGraph, packages: set[str],
-) -> tuple[float, list[dict]]:
+) -> tuple[float, list[BurrowEdge]]:
     """A3: fraction of cross-package edges landing on a front door.
 
     Only *cross-package* edges carry a contract -- intra-package edges are
@@ -348,7 +392,7 @@ def compute_front_door_ratio(
     (ratio 1.0) -- there are no boundaries being violated.
     """
     front, burrow = 0, 0
-    burrow_edges: list[dict] = []
+    burrow_edges: list[BurrowEdge] = []
     for importer, imported in graph.edges():
         if _top_package(importer) == _top_package(imported):
             continue  # intra-package: not a contract edge
@@ -369,7 +413,7 @@ def compute_front_door_ratio(
 
 def find_breakup_candidates(
     package: str, internal_graph: nx.DiGraph,
-) -> dict | None:
+) -> BreakupCandidate | None:
     """A4: propose cut-lines for a package that is several packages in one.
 
     ``internal_graph`` holds only the package's own modules and the edges
@@ -510,7 +554,7 @@ def analyze_structure(
     front_door_ratio, burrow_edges = compute_front_door_ratio(graph, package_set)
 
     # A4 breakup candidates -- one analysis per top-level package.
-    breakup: list[dict] = []
+    breakup: list[BreakupCandidate] = []
     for pkg in sorted(package_names):
         members = [
             m for m in modules if m == pkg or m.startswith(pkg + ".")

@@ -44,6 +44,11 @@ is treated the same way per-directory (no static evidence for *that* dir).
 """
 from __future__ import annotations
 
+from lib.run_context_types import JsonDict
+
+# Per-directory static metrics (``modularity_q`` / ``front_door_ratio``), keyed
+# by directory, as keyhole_signals projects them from the structure block.
+StaticModularity = dict[str, JsonDict]
 # Containment below this fraction means a module bleeds: most of its commits
 # drag in files outside it. The PRD leaves the exact island threshold open for
 # calibration (Open Question: "what containment ratio counts as an island?");
@@ -63,7 +68,7 @@ DEFAULT_HIGH_FRONT_DOOR_RATIO = 0.7
 
 
 def _looks_modular(
-    metrics: dict | None,
+    metrics: JsonDict | None,
     high_modularity_q: float,
     high_front_door_ratio: float,
 ) -> bool:
@@ -87,11 +92,11 @@ def _looks_modular(
 
 def detect_hidden_coupling(
     containment_by_dir: dict[str, float],
-    static_modularity: dict | None = None,
+    static_modularity: StaticModularity | None = None,
     threshold_low_containment: float = DEFAULT_LOW_CONTAINMENT,
     high_modularity_q: float = DEFAULT_HIGH_MODULARITY_Q,
     high_front_door_ratio: float = DEFAULT_HIGH_FRONT_DOOR_RATIO,
-) -> list[dict]:
+) -> list[JsonDict]:
     """B3: cross static modularity with historical containment to find lying boundaries.
 
     For each directory in ``containment_by_dir`` whose containment is **below**
@@ -118,7 +123,9 @@ def detect_hidden_coupling(
     reported, so a caller can see the directory was evaluated and consciously
     left alone).
     """
-    results: list[dict] = []
+    # Plain dicts, not a TypedDict: keyhole_signals adds keys to the
+    # hidden-coupling rows after they are returned.
+    results: list[JsonDict] = []
     for path in sorted(containment_by_dir):
         containment = containment_by_dir[path]
         if containment >= threshold_low_containment:
@@ -165,10 +172,10 @@ def detect_hidden_coupling(
 def find_refactor_boundaries(
     containment_by_dir: dict[str, float],
     threshold_high_containment: float = DEFAULT_HIGH_CONTAINMENT,
-    static_modularity: dict | None = None,
+    static_modularity: StaticModularity | None = None,
     high_modularity_q: float = DEFAULT_HIGH_MODULARITY_Q,
     high_front_door_ratio: float = DEFAULT_HIGH_FRONT_DOOR_RATIO,
-) -> list[dict]:
+) -> list[JsonDict]:
     """B3 positive finding: directories an agent can safely refactor in isolation.
 
     A directory whose containment is **above** ``threshold_high_containment`` is
@@ -189,7 +196,9 @@ def find_refactor_boundaries(
     'recommendation'}`` entries, sorted by containment descending (safest first),
     then path.
     """
-    results: list[dict] = []
+    # Plain dicts, not a TypedDict: keyhole_signals adds keys to the
+    # hidden-coupling rows after they are returned.
+    results: list[JsonDict] = []
     for path in sorted(containment_by_dir):
         containment = containment_by_dir[path]
         if containment <= threshold_high_containment:
