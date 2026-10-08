@@ -23,35 +23,29 @@ structured data + the named findings; the LLM write-back fills judgement later.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, TypeVar, cast
 
 from lib.assess_config import is_user_excluded
 from lib.change_coupling import (
-    RenameMap,
-    authorship_analysis,
-    build_rename_map,
-    change_coupling_pairs,
-    containment_ratio,
-    find_self_referential_tests,
-    fold_renames,
-    parse_commit_file_sets,
-    repo_top,
+    RenameMap, authorship_analysis, build_rename_map, change_coupling_pairs, containment_ratio,
+    find_self_referential_tests, fold_renames, parse_commit_file_sets, repo_top,
 )
-from lib.coupling_analysis import detect_hidden_coupling, find_refactor_boundaries
-from lib.doc_complexity_join import (
-    _extract_file_ccn,
-    _high_ccn_threshold,
-    analyze_doc_complexity_join,
-)
+from lib.coupling_analysis import (
+    StaticModularity, detect_hidden_coupling, find_refactor_boundaries)
+from lib.doc_complexity_join import _extract_file_ccn, _high_ccn_threshold, analyze_doc_complexity_join
 from lib.liveness_scan import STATIC_REACHABILITY_CAVEAT
+from lib.run_context_types import (
+    AttentionRow, BehaviourBlock, BehaviourFields, CoChangePair, CouplingRow, DerivedFinding,
+    DocumentationBlock, FindingPaths, FindingProducts, JsonDict, KeyholeConcern, KeyholeIntegration,
+    KeyholeSummary, PrescribedAction, RuntimeBlock, UnderstandingBlock,
+)
 from lib.structure_drift import detect_grouping_disagreement
 from lib.sibling_tests import find_colocated_test, is_test_path
 from lib.understanding_analysis import analyze_understanding
-from lib.untrusted_hotspot import (
-    DEFAULT_SURVIVOR_DENSITY_THRESHOLD as DEFAULT_SURVIVOR_DENSITY_THRESHOLD,
-)
+from lib.untrusted_hotspot import DEFAULT_SURVIVOR_DENSITY_THRESHOLD as DEFAULT_SURVIVOR_DENSITY_THRESHOLD
 from lib.untrusted_hotspot import find_untrusted_hotspots as find_untrusted_hotspots
 from lib.untrusted_hotspot import untrusted_hotspot_paths
 
@@ -140,6 +134,8 @@ FINDING_MODES = {
 DEFAULT_FINDING_MODE = "characterize_first"
 # The closed set of modes, exposed for validators/tests that assert coverage.
 FINDING_MODE_VALUES = frozenset(FINDING_MODES.values())
+_F = TypeVar("_F", bound=FindingPaths)  # a finding row the path filters rewrite
+_B = TypeVar("_B")  # a block builder's result
 
 
 def mode_for_finding(name: str | None) -> str:
@@ -202,8 +198,8 @@ def containment_by_dir(
 
 
 def project_static_modularity(
-    structure: dict | None, dirs: list[str],
-) -> dict | None:
+    structure: JsonDict | None, dirs: list[str],
+) -> StaticModularity | None:
     """Project the repo-level static-modularity view onto per-directory keys.
 
     ``structure_graph`` currently emits a single repo-level ``modularity_q`` /
@@ -272,7 +268,7 @@ def _ancestor_dirs(path: str) -> list[str]:
     return out
 
 
-def _attach_coupled_pairs(findings: list[dict], all_pairs: list[dict]) -> None:
+def _attach_coupled_pairs(findings: list[CouplingRow], all_pairs: list[CoChangePair]) -> None:
     """Export each finding's top coupled pairs, in place.
 
     Candidates are the **full** pair list, before the repository-wide
@@ -298,7 +294,7 @@ def _attach_coupled_pairs(findings: list[dict], all_pairs: list[dict]) -> None:
         return
     # Keep only the first MAX_FINDING_COUPLED_PAIRS per directory and count the
     # rest, so memory stays bounded by the export rather than by the history.
-    kept: dict[str, list[dict]] = {f["path"]: [] for f in findings}
+    kept: dict[str, list[CoChangePair]] = {f["path"]: [] for f in findings}
     totals: dict[str, int] = dict.fromkeys(kept, 0)
     for pair in all_pairs:
         # Symmetric difference: the directories holding exactly one of the two
@@ -320,7 +316,7 @@ def _attach_coupled_pairs(findings: list[dict], all_pairs: list[dict]) -> None:
 # Block builders (pure transforms of upstream signal outputs)
 # --------------------------------------------------------------------------
 
-def _empty_behaviour_fields() -> dict:
+def _empty_behaviour_fields() -> BehaviourFields:
     """The behaviour block's data keys, empty, for both unavailable paths.
 
     No history and a builder that raised are two routes to the same shape, so
@@ -340,15 +336,17 @@ def _empty_behaviour_fields() -> dict:
 
 
 def build_behaviour_block(
-    repo_root: Path, commit_sets: list[set[Path]], structure: dict | None,
-) -> dict:
+    repo_root: Path, commit_sets: list[set[Path]], structure: JsonDict | None,
+) -> BehaviourBlock:
     """The ``behaviour`` block: B1 coupling, B2 containment, B3 disagreement."""
     if not commit_sets:
-        return {
+        # cast: strict's extra checks reject a ** item in a TypedDict literal
+        # whose target has NotRequired keys (static_modularity_projection).
+        return cast("BehaviourBlock", {
             "available": False,
             "reason": "no git history (commit file-sets empty)",
             **_empty_behaviour_fields(),
-        }
+        })
     containment = containment_by_dir(repo_root, commit_sets)
     all_pairs = change_coupling_pairs(commit_sets)
     pairs = all_pairs[:MAX_COUPLING_PAIRS]
@@ -378,7 +376,7 @@ def build_behaviour_block(
     }
 
 
-def build_documentation_block(doc_join: dict) -> dict:
+def build_documentation_block(doc_join: JsonDict) -> DocumentationBlock:
     """The ``documentation`` block: freshness, complexity coverage, Signal C."""
     if not doc_join.get("available"):
         return {
@@ -412,7 +410,7 @@ def build_documentation_block(doc_join: dict) -> dict:
     }
 
 
-def build_understanding_block(understanding: dict) -> dict:
+def build_understanding_block(understanding: JsonDict) -> UnderstandingBlock:
     """The ``understanding`` block: human anchor, intent source, authorship class."""
     if not understanding.get("available"):
         return {
@@ -435,7 +433,7 @@ def build_understanding_block(understanding: dict) -> dict:
     }
 
 
-def build_runtime_block(dead_code: dict, observability: dict) -> dict:
+def build_runtime_block(dead_code: JsonDict, observability: JsonDict) -> RuntimeBlock:
     """The ``runtime`` block: D1 static reachability + the observability rung.
 
     Reuses the existing ``liveness_scan`` outputs rather than re-deriving:
@@ -464,7 +462,7 @@ def build_runtime_block(dead_code: dict, observability: dict) -> dict:
 # Derived findings (the primary output)
 # --------------------------------------------------------------------------
 
-def _high_complexity_paths(complexity_stats: dict) -> list[str]:
+def _high_complexity_paths(complexity_stats: JsonDict) -> list[str]:
     """Paths at or above the high-CCN threshold (same gate the joins use)."""
     ccn = _extract_file_ccn(complexity_stats)
     threshold = _high_ccn_threshold(complexity_stats)
@@ -472,8 +470,8 @@ def _high_complexity_paths(complexity_stats: dict) -> list[str]:
 
 
 def candidate_dead_weight_paths(
-    complexity_stats: dict,
-    dead_code: dict,
+    complexity_stats: JsonDict,
+    dead_code: JsonDict,
     intent_source_by_path: dict[str, bool],
 ) -> list[str]:
     """Derive *candidate dead weight* with asymmetric delete caution (PRD 5).
@@ -494,7 +492,7 @@ def candidate_dead_weight_paths(
     )
 
 
-def assemble_findings(paths_by_name: dict[str, list[str]]) -> list[dict]:
+def assemble_findings(paths_by_name: dict[str, list[str]]) -> list[DerivedFinding]:
     """Assemble the six named findings in fixed order.
 
     Each finding is ``{name, paths, action}``; ``paths`` is deduped and sorted
@@ -511,7 +509,7 @@ def assemble_findings(paths_by_name: dict[str, list[str]]) -> list[dict]:
     ]
 
 
-def _state_stale_threshold(findings: list[dict], promissory_markers: dict) -> None:
+def _state_stale_threshold(findings: list[DerivedFinding], promissory_markers: JsonDict) -> None:
     """Append the scan's stale threshold to the ``unactioned_intent`` action.
 
     A reader weighing a marker that survived 6 edits against one that survived
@@ -529,10 +527,10 @@ def _state_stale_threshold(findings: list[dict], promissory_markers: dict) -> No
 
 
 def apply_config_excludes(
-    findings: list[dict],
+    findings: list[_F],
     exclude_dirs: set[str],
     exclude_patterns: list[str],
-) -> tuple[list[dict], list[str]]:
+) -> tuple[list[_F], list[str]]:
     """Drop config-excluded paths from findings, returning ``(filtered, dropped)``.
 
     User-supplied excludes (``.assess/config.toml``) filter most scans at their
@@ -549,7 +547,7 @@ def apply_config_excludes(
     if not exclude_dirs and not exclude_patterns:
         return findings, []
     dropped: set[str] = set()
-    filtered: list[dict] = []
+    filtered: list[_F] = []
     for f in findings:
         kept: list[str] = []
         for p in f["paths"]:
@@ -557,7 +555,8 @@ def apply_config_excludes(
                 dropped.add(p)
             else:
                 kept.append(p)
-        filtered.append({**f, "paths": kept})
+        # A copy of the row's own TypedDict with ``paths`` replaced.
+        filtered.append(cast("_F", {**f, "paths": kept}))
     return filtered, sorted(dropped)
 
 
@@ -567,8 +566,8 @@ GIT_HISTORY_FINDINGS = frozenset({"hidden_coupling", "refactor_boundary"})
 
 
 def prune_missing_finding_paths(
-    findings: list[dict], base: Path,
-) -> tuple[list[dict], list[str]]:
+    findings: list[DerivedFinding], base: Path,
+) -> tuple[list[DerivedFinding], list[str]]:
     """Drop git-history finding paths absent under ``base``, returning ``(filtered, dropped)``.
 
     Renamed paths were already folded onto their current names, so a path still
@@ -577,7 +576,7 @@ def prune_missing_finding_paths(
     pruning is counted rather than silent.
     """
     dropped: set[str] = set()
-    filtered: list[dict] = []
+    filtered: list[DerivedFinding] = []
     for f in findings:
         if f["name"] not in GIT_HISTORY_FINDINGS:
             filtered.append(f)
@@ -601,8 +600,8 @@ def is_archive_path(path: str) -> bool:
 
 
 def exclude_archive_from_attention(
-    findings: list[dict], tie_break: AttentionTieBreak | None = None,
-) -> tuple[list[dict], list[str]]:
+    findings: list[DerivedFinding], tie_break: AttentionTieBreak | None = None,
+) -> tuple[list[AttentionRow], list[str]]:
     """Build the attention list with archive paths left out, returning ``(attention, dropped)``.
 
     ``dropped`` is the sorted list of archive paths that a negative finding
@@ -616,7 +615,7 @@ def exclude_archive_from_attention(
     })
     if not dropped:
         return build_attention_list(findings, tie_break=tie_break), []
-    ranked = [
+    ranked: list[DerivedFinding] = [
         {**f, "paths": [p for p in f["paths"] if not is_archive_path(p)]}
         for f in findings
     ]
@@ -636,7 +635,7 @@ class AttentionTieBreak:
     hotspot_rank: dict[str, int] = field(default_factory=dict)
     severity: dict[str, dict[str, float]] = field(default_factory=dict)
 
-    def key(self, unit: dict) -> tuple:
+    def key(self, unit: AttentionRow) -> tuple[int, int, float, str]:
         """Sort key: score desc, hotspot rank (members first), severity desc, path."""
         path = unit["path"]
         severity = max(
@@ -648,9 +647,9 @@ class AttentionTieBreak:
 
 
 def attention_tie_break(
-    complexity_stats: dict,
-    promissory_markers: dict | None,
-    behaviour: dict,
+    complexity_stats: JsonDict,
+    promissory_markers: JsonDict | None,
+    behaviour: Mapping[str, Any],
 ) -> AttentionTieBreak:
     """Build the attention tie-break from data the run already holds.
 
@@ -677,7 +676,7 @@ def attention_tie_break(
     )
 
 
-def _hotspot_rank(complexity_stats: dict) -> dict[str, int]:
+def _hotspot_rank(complexity_stats: JsonDict) -> dict[str, int]:
     """Each path's first position in ``top_hotspots``."""
     rank: dict[str, int] = {}
     for h in complexity_stats.get("top_hotspots") or []:
@@ -687,7 +686,7 @@ def _hotspot_rank(complexity_stats: dict) -> dict[str, int]:
     return rank
 
 
-def _marker_severity(promissory_markers: dict | None) -> dict[str, float]:
+def _marker_severity(promissory_markers: JsonDict | None) -> dict[str, float]:
     """Highest stale-marker severity per file, divided by the run's highest."""
     markers: dict[str, float] = {}
     for m in (promissory_markers or {}).get("top_offenders") or []:
@@ -700,7 +699,7 @@ def _marker_severity(promissory_markers: dict | None) -> dict[str, float]:
     return markers
 
 
-def _coupling_severity(behaviour: dict) -> dict[str, float]:
+def _coupling_severity(behaviour: Mapping[str, Any]) -> dict[str, float]:
     """``1 - containment_ratio`` per directory; hidden-coupling rows win."""
     containment: dict[str, float] = {
         d: float(r) for d, r in (behaviour.get("containment_by_dir") or {}).items()
@@ -713,9 +712,9 @@ def _coupling_severity(behaviour: dict) -> dict[str, float]:
 
 
 def build_attention_list(
-    findings: list[dict], max_units: int = MAX_ATTENTION_UNITS,
+    findings: list[DerivedFinding], max_units: int = MAX_ATTENTION_UNITS,
     tie_break: AttentionTieBreak | None = None,
-) -> list[dict]:
+) -> list[AttentionRow]:
     """Rank the few units worst across axes - the "where to look" list.
 
     A unit's score is how many *negative* findings name it (the one positive
@@ -730,7 +729,7 @@ def build_attention_list(
             continue
         for path in f["paths"]:
             reasons[path].append(f["name"])
-    units = [
+    units: list[AttentionRow] = [
         {"path": path, "findings": sorted(set(names)), "score": len(set(names))}
         for path, names in reasons.items()
     ]
@@ -799,7 +798,7 @@ _ACCRETION_UNRELIABLE_DISCLAIMER = (
 )
 
 
-def _accretion_ratchet_finding(run_context: dict) -> list[str]:
+def _accretion_ratchet_finding(run_context: JsonDict) -> list[str]:
     """Derive the accretion_ratchet finding paths from the run-context block.
 
     Reads ``run_context["accretion_ratchet"]``; returns an empty list when the
@@ -821,7 +820,7 @@ def _accretion_ratchet_finding(run_context: dict) -> list[str]:
     return [f["path"] for f in ordered]
 
 
-def _format_accretion_items(run_context: dict) -> list[str]:
+def _format_accretion_items(run_context: JsonDict) -> list[str]:
     """Build the human-readable detail items for the accretion_ratchet finding.
 
     Returns a roll-up sentence followed by one line per file (capped at
@@ -898,7 +897,7 @@ def _parent_dir(path_str: str) -> str:
 
 
 def structure_drift_hidden_coupling_dirs(
-    tier1: dict, min_pairs: int = MIN_DRIFT_PAIRS_FOR_HIDDEN_COUPLING,
+    tier1: JsonDict, min_pairs: int = MIN_DRIFT_PAIRS_FOR_HIDDEN_COUPLING,
 ) -> list[str]:
     """Directories entangled by a recurring Tier 1 hidden seam.
 
@@ -955,7 +954,7 @@ def _omitted_row(count: int, where: str, what: str = "full list") -> str:
 
 
 def render_findings_markdown(
-    findings: list[dict], attention: list[dict],
+    findings: list[DerivedFinding], attention: list[AttentionRow],
 ) -> str:
     """Render the derived findings + attention list as a markdown section.
 
@@ -1025,7 +1024,7 @@ def finding_display_name(name: str) -> str:
     return FINDING_DISPLAY_NAMES.get(name, name.replace("_", " "))
 
 
-def _format_summary(concerns: list[dict], safe_zones: int) -> str:
+def _format_summary(concerns: list[KeyholeConcern], safe_zones: int) -> str:
     """One-line human-readable keyhole-readiness summary.
 
     Pure count with a positive/negative split (PRD: never imply commensurability
@@ -1048,7 +1047,7 @@ def _format_summary(concerns: list[dict], safe_zones: int) -> str:
     return f"{headline} ({detail}), {zones}."
 
 
-def build_keyhole_summary(findings: list[dict]) -> dict:
+def build_keyhole_summary(findings: list[DerivedFinding]) -> KeyholeSummary:
     """Roll the derived findings into a count/severity readiness summary.
 
     Reported *alongside* the 0-8 layered score, never merged into it: the score
@@ -1058,7 +1057,7 @@ def build_keyhole_summary(findings: list[dict]) -> dict:
     every negative finding with paths and ``safe_zones`` is the
     ``refactor_boundary`` path count (the one positive finding).
     """
-    concerns: list[dict] = []
+    concerns: list[KeyholeConcern] = []
     safe_zones = 0
     for f in findings:
         if f["name"] == "refactor_boundary":
@@ -1078,7 +1077,7 @@ def build_keyhole_summary(findings: list[dict]) -> dict:
 MAX_PRESCRIBED_ACTIONS = 3
 
 
-def is_attention_low_signal(attention: list[dict]) -> bool:
+def is_attention_low_signal(attention: list[AttentionRow]) -> bool:
     """True when no attention row lands in more than one negative finding.
 
     A top score of 1 means the ranking separates nothing across axes, so its
@@ -1092,10 +1091,10 @@ def is_attention_low_signal(attention: list[dict]) -> bool:
 
 
 def build_prescribed_actions(
-    attention: list[dict],
-    findings: list[dict],
+    attention: list[AttentionRow],
+    findings: list[DerivedFinding],
     max_actions: int = MAX_PRESCRIBED_ACTIONS,
-) -> list[dict]:
+) -> list[PrescribedAction]:
     """Map the top attention units to their finding-derived prescribed actions.
 
     The attention list already ranks units by negative-finding count; this picks
@@ -1106,7 +1105,7 @@ def build_prescribed_actions(
     """
     finding_actions = {f["name"]: f["action"] for f in findings}
     severity = [n for n in FINDING_ORDER if n != "refactor_boundary"]
-    prescribed: list[dict] = []
+    prescribed: list[PrescribedAction] = []
     for i, unit in enumerate(attention[:max_actions]):
         for name in severity:
             if name in unit["findings"]:
@@ -1120,7 +1119,7 @@ def build_prescribed_actions(
     return prescribed
 
 
-def render_prescribed_actions(prescribed: list[dict]) -> str:
+def render_prescribed_actions(prescribed: list[PrescribedAction]) -> str:
     """Render the mandatory attention-derived actions as Top-3 table rows.
 
     Pre-fills the rank, action, hotspot path, and issue columns of the report's
@@ -1144,7 +1143,7 @@ def render_prescribed_actions(prescribed: list[dict]) -> str:
 # Orchestration entry point
 # --------------------------------------------------------------------------
 
-def _safe_block(label: str, fn: Callable[[], dict], fallback: dict) -> dict:
+def _safe_block(label: str, fn: Callable[[], _B], fallback: Mapping[str, Any]) -> _B:
     """Run a block builder, degrading to ``fallback`` on any failure.
 
     Each new signal does git-log / static-graph work; a hang or parse failure in
@@ -1155,12 +1154,13 @@ def _safe_block(label: str, fn: Callable[[], dict], fallback: dict) -> dict:
     try:
         return fn()
     except Exception as e:  # noqa: BLE001 - intentional: degrade, never crash
-        return {**fallback, "available": False, "reason": f"{label} failed: {e}"}
+        # The fallback carries the block's data keys; available/reason complete it.
+        return cast("_B", {**fallback, "available": False, "reason": f"{label} failed: {e}"})
 
 
 def _structure_drift_tier1(
-    repo_root: Path, structure: dict | None, behaviour: dict,
-) -> dict:
+    repo_root: Path, structure: JsonDict | None, behaviour: BehaviourBlock,
+) -> JsonDict:
     """Tier 1 grouping disagreement, fed the behaviour block's co-change pairs.
 
     Returns ``{"available": False}`` (no disagreement to surface) whenever the
@@ -1184,7 +1184,7 @@ def _structure_drift_tier1(
         return {"available": False}
 
 
-def _paths_from_stats(complexity_stats: dict, cap: int = MAX_AUTHORSHIP_PATHS) -> list[str]:
+def _paths_from_stats(complexity_stats: JsonDict, cap: int = MAX_AUTHORSHIP_PATHS) -> list[str]:
     """The ranked-list paths to run authorship analysis over (capped).
 
     Union of the three top-N lists; these are the high-complexity / high-churn
@@ -1251,12 +1251,12 @@ def _prepare_commit_sets(
 def _integrate_blocks(
     repo_root: Path,
     commit_sets: list[set[Path]],
-    structure: dict,
-    complexity_stats: dict,
-    doc_staleness: dict,
-    dead_code: dict,
-    observability: dict,
-) -> tuple[dict, dict, dict, dict]:
+    structure: JsonDict,
+    complexity_stats: JsonDict,
+    doc_staleness: JsonDict,
+    dead_code: JsonDict,
+    observability: JsonDict,
+) -> tuple[BehaviourBlock, DocumentationBlock, UnderstandingBlock, RuntimeBlock]:
     """The behaviour, documentation, understanding and runtime blocks.
 
     Each is built through ``_safe_block``, so a failure in one degrades that
@@ -1277,7 +1277,7 @@ def _integrate_blocks(
          "stale_doc_on_complexity": [], "unexplained_complexity": []},
     )
 
-    def _understanding() -> dict:
+    def _understanding() -> UnderstandingBlock:
         paths = _paths_from_stats(complexity_stats)
         authorship_by_path = {p: authorship_analysis(repo_root, p) for p in paths}
         return build_understanding_block(
@@ -1304,7 +1304,7 @@ def _integrate_blocks(
 
 
 def _self_referential_test_paths(
-    repo_root: Path, complexity_stats: dict, commit_sets: list[set[Path]],
+    repo_root: Path, complexity_stats: JsonDict, commit_sets: list[set[Path]],
 ) -> list[str]:
     """E2 trust axis: tests co-located AND co-committed with the code they cover.
 
@@ -1320,7 +1320,7 @@ def _self_referential_test_paths(
         return []
 
 
-def _unactioned_intent_paths(pm: dict) -> list[str]:
+def _unactioned_intent_paths(pm: JsonDict) -> list[str]:
     """Files carrying stale promissory markers.
 
     Markers that survived >= threshold edits to their own file. Silent when the
@@ -1333,7 +1333,7 @@ def _unactioned_intent_paths(pm: dict) -> list[str]:
     return []
 
 
-def _override_contradiction_paths(archetype: dict | None) -> list[str]:
+def _override_contradiction_paths(archetype: JsonDict | None) -> list[str]:
     """Archetype-override contradiction: the marker's source file, or nothing.
 
     An `assess-archetype` marker forces a classification the deterministic
@@ -1362,9 +1362,9 @@ _CHURN_DERIVED_FINDINGS = frozenset({"lying_map", "hidden_coupling"})
 
 def _finding_path_inputs(
     *,
-    behaviour: dict,
-    documentation: dict,
-    understanding: dict,
+    behaviour: BehaviourBlock,
+    documentation: DocumentationBlock,
+    understanding: UnderstandingBlock,
     drift_hidden_dirs: list[str],
     churn_degenerate: bool,
     untrusted: list[str],
@@ -1402,12 +1402,12 @@ def _finding_path_inputs(
 
 
 def _filter_findings(
-    findings: list[dict],
+    findings: list[DerivedFinding],
     top: str | None,
     rename_map: RenameMap,
     exclude_dirs: set[str] | None,
     exclude_patterns: list[str] | None,
-) -> tuple[list[dict], list[str], list[str]]:
+) -> tuple[list[DerivedFinding], list[str], list[str]]:
     """Prune dead git-history paths, then drop config-excluded paths.
 
     Dead-path pruning: a git-history finding path absent from the working tree
@@ -1434,9 +1434,9 @@ def _filter_findings(
 
 
 def finding_products(
-    findings: list[dict], complexity_stats: dict,
-    promissory_markers: dict | None, behaviour: dict,
-) -> dict:
+    findings: list[DerivedFinding], complexity_stats: JsonDict,
+    promissory_markers: JsonDict | None, behaviour: Mapping[str, Any],
+) -> FindingProducts:
     """The attention list and report products derived from ``findings``.
 
     Shared by ``integrate`` and the opt-in mutation refresh
@@ -1467,21 +1467,21 @@ def finding_products(
 def integrate(
     *,
     repo_root: Path,
-    complexity_stats: dict,
-    doc_staleness: dict,
-    dead_code: dict,
-    observability: dict,
-    structure: dict,
+    complexity_stats: JsonDict,
+    doc_staleness: JsonDict,
+    dead_code: JsonDict,
+    observability: JsonDict,
+    structure: JsonDict,
     commit_sets: list[set[Path]] | None = None,
-    test_pressure: dict | None = None,
-    promissory_markers: dict | None = None,
-    accretion_ratchet: dict | None = None,
-    archetype: dict | None = None,
+    test_pressure: JsonDict | None = None,
+    promissory_markers: JsonDict | None = None,
+    accretion_ratchet: JsonDict | None = None,
+    archetype: JsonDict | None = None,
     exclude_dirs: set[str] | None = None,
     exclude_patterns: list[str] | None = None,
     scope: Path | None = None,
     rename_map: RenameMap | None = None,
-) -> dict:
+) -> KeyholeIntegration:
     """Build the five run-context blocks + derived findings + attention list.
 
     Pure orchestration over the lib signals. ``commit_sets`` may be passed in

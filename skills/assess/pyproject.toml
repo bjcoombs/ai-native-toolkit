@@ -89,7 +89,8 @@ ignore_missing_imports = true
 # stats sidecars, finding rows). The fix is a TypedDict per known shape
 # (shared row shapes in ``lib/run_context_types.py``) and ``dict[str, Any]``
 # only where the keys are genuinely dynamic, applied module by module through
-# the overrides below. 235 remain, all in the not-yet-covered modules.
+# the overrides below. 119 remain (78 cleared from keyhole_signals; measured
+# with the global flag set to true), all in the not-yet-covered modules.
 strict = true
 disallow_any_generics = false
 # strict does not reject a bare ``# type: ignore``; this makes the error code
@@ -108,7 +109,7 @@ module = ["lib.*", "assess_emit_workflow", "assess_gate", "doc-graph-svg"]
 disallow_any_generics = true
 
 [[tool.mypy.overrides]]
-module = ["lib.keyhole_signals", "lib.test_pressure.*"]
+module = ["lib.test_pressure.*"]
 disallow_any_generics = false
 
 [tool.mutmut]
