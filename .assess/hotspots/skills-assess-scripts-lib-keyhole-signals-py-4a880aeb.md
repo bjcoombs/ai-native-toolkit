@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261008085555-417634ee artifact_schema_version=1.3.0 -->
+<!-- assess:run_id=20261008133519-d0c68d2e artifact_schema_version=1.3.0 -->
 # Hotspot: `skills/assess/scripts/lib/keyhole_signals.py`
 
 _First flagged: 2026-06-01. Last seen: 2026-10-08. Status: persistent._
@@ -7,11 +7,11 @@ _First flagged: 2026-06-01. Last seen: 2026-10-08. Status: persistent._
 
 | Metric | Value |
 |--------|-------|
-| LOC | 886 |
-| Cyclomatic complexity (file aggregate) | 260 |
-| Worst function | `find_untrusted_hotspots` (11) |
-| Commits in churn window | 23 |
-| Has test file | yes |
+| LOC | 864 |
+| Cyclomatic complexity (file aggregate) | 247 |
+| Worst function | `render_findings_markdown` (11) |
+| Commits in churn window | 25 |
+| Has test file | no |
 
 ## History across runs
 
@@ -22,13 +22,15 @@ _First flagged: 2026-06-01. Last seen: 2026-10-08. Status: persistent._
 | 2026-10-07 | e950cb1b | 885 | 260 | 22 | regressed |
 | 2026-10-07 | 4ace52ea | 885 | 260 | 22 | persistent |
 | 2026-10-08 | 417634ee | 886 | 260 | 23 | persistent |
+| 2026-10-08 | d0c68d2e | 864 | 247 | 25 | persistent |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/scripts/lib/keyhole_signals.py`:
 
-Hotspot (persistent). 886 LOC, aggregate cyclomatic complexity 260 (worst function `find_untrusted_hotspots` 11), 23 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
+Hotspot (persistent). 864 LOC, aggregate cyclomatic complexity 247 (worst function `render_findings_markdown` 11), 25 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
 
 ## Suggested actions
 
-This file is flagged but outside this run's Top 3. See the report's Top 3 Actions, or run a focused /assess pass for file-specific guidance.
+- Bring it under disallow_any_generics with TypedDicts for its block shapes (Layer 2)
+

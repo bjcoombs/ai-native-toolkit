@@ -120,3 +120,16 @@
 
 ---
 <!-- chain:981698290f9d2107 -->
+<!-- assess:run_id=20261008133519-d0c68d2e artifact_schema_version=1.3.0 -->
+## 2026-10-08 (v1.93.0, run d0c68d2e)
+
+- **Files scored:** 215
+- **AI Readiness:** 7.0 / 8 (AI-Native)
+- **Instructions grade:** A
+- **Hotspot transitions:** 1 graduated, 0 regressed, 0 restructured, 1 new, 9 persistent
+- **Top action:** Strengthen scripts/floor_anchor.py tests from FLOOR.md clause text once #410 decides clause iii
+
+[Full report](./assess-report.md)
+
+---
+<!-- chain:93a4b7b505a3c8e0 -->
