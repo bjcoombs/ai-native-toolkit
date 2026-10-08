@@ -1139,20 +1139,48 @@ Layer 1 write-side truth pressure. Two tiers:
   place and is two-step - `mutmut run` then `mutmut junitxml` - because the run's stdout
   lists only survivors (no totals); the junitxml report carries every mutant, so per-file
   killed/survived/total (and a real survivor density) can be derived, falling back to the
-  survivor-only stdout parse when junitxml is empty. **mutmut 3** takes no paths and reads
-  its scope from the root `pyproject.toml` (`[tool.mutmut]`) or `setup.cfg` (`[mutmut]`),
-  so `_run_mutmut3` copies the working tree to a scratch directory, appends a generated
-  `[mutmut]` section unless mutmut 3 would find one of those two (a nested config or a CI
-  workflow naming mutmut does not count), runs there, and reads per-file totals from
-  `mutants/**/*.meta` using the exit-code table of mutmut 3.6.0. The generated section
-  sets `source_paths` and `paths_to_mutate` (3.0-3.5 read only the latter) to the focus
-  files' top-level directories and `only_mutate` (3.6+) to the focus files. Only the focus
-  files are reported whichever config governed the run, so the result's `scope` names the
-  files its figures describe. The copy spends the same `MUTATION_TIMEOUT` budget as the
-  run. On this path the assessed tree is never written to. A version neither probe can
+  survivor-only stdout parse when junitxml is empty. **mutmut 3** takes no paths, reads its
+  config from `[tool.mutmut]` in `pyproject.toml` or `[mutmut]` in `setup.cfg` of the
+  directory it runs in, copies only `source_paths` (plus `also_copy` and a few defaults)
+  into `mutants/`, and runs the suite from there. Its adapter, `test_pressure/mutmut3.py`,
+  groups the focus files by package root (the nearest directory holding `pyproject.toml`,
+  `setup.cfg` or `setup.py`, else the repository root) and runs mutmut once per group,
+  from that root, in a fresh scratch copy of the working tree. The copy keeps a tracked
+  link only when it points inside the repository (recreated relative); a link out of it
+  has a file target copied as content and a directory target left out, so no suite can
+  write through the copy into the assessed tree. A package whose config
+  mutmut 3 can read runs under it unchanged (its `source_paths`, `also_copy`,
+  `pytest_add_cli_args`), after a check that its `source_paths` exist in the copy and
+  cover a focus file: a path made at run time (a link CI creates, a generated tree) is
+  named in the group's `reason` and not recreated. Focus paths are matched through a
+  `source_paths` link (`scripts/lib/x.py` is `src/lib/x.py` under this repo's config), and
+  `mutmut run` is given the in-scope files' mutant-name patterns (`lib.x.*`), so the time
+  box is spent on the focus files rather than everything the config covers; the config
+  and its test selection, and so every verdict, are unchanged. A focus file the config
+  does not cover is listed in the group's `unmeasured`. Any other
+  package gets a generated `[mutmut]` section: `source_paths` and `paths_to_mutate`
+  (3.0-3.5 read only the latter) set to the focus files' top-level entries, `only_mutate`
+  (3.6+) to the files, and `also_copy` to the package's other entries, so `mutants/`
+  stands in for the package. Because the suite then runs one level deeper than in the
+  repository, `_mirror_ancestors` copies each ancestor's entries one level down in the
+  scratch copy (the parent's into the package, and so on), so a test that climbs
+  `Path(__file__).parents[n]` to a repository file still finds it. The copy is then
+  committed to a fresh git repository (user config, hooks and signing kept out), so a test
+  that asks git about `HEAD` sees the copied tree. Per-file totals come from
+  `mutants/**/*.meta` using the exit-code table of mutmut 3.6.0, mapped back to
+  repo-relative paths. Only the focus files are reported whichever config governed a run,
+  so the result's `scope` names the files its figures describe. `groups` records each
+  package's run (`root`, `config` of `repo` or `generated`, `scope`, `mutation_run`, a
+  `reason` when it could not run, and `unmeasured` focus files when it ran without them), surfaced as `test_pressure.mutation_groups`; the pass
+  counts as run when any group recovered records. Every group draws on one `MUTATION_TIMEOUT` budget: the
+  snapshot and the run are bounded by what remains, and a copy (not interruptible) is
+  checked against the deadline before and after, so a later group can record a timeout
+  without copying. On this path the
+  assessed tree is never written to. A version neither probe can
   read takes the mutmut 2 path, which runs in the assessed repo and leaves mutmut's
   `.mutmut-cache` there. Whichever path runs, a tool that exits non-zero without yielding mutants
-  puts the last line of its error output in the result's `reason` (surfaced as
+  puts the last line of its error output (skipping Python warning lines, such as
+  mutmut's `paths_to_mutate` deprecation) in the result's `reason` (surfaced as
   `mutation_note`). mutmut runs pytest under its own interpreter, so a repo whose tests
   need packages that interpreter lacks fails at mutmut's clean-test step and reports that
   reason.
@@ -1160,5 +1188,11 @@ Layer 1 write-side truth pressure. Two tiers:
   mutmut 3 to three core modules and `.github/workflows/mutation.yml` runs it weekly,
   scoring per module with `_parse_mutmut3_meta`, so CI and `/assess` count mutants alike.
   That config and workflow are also what `detect_mutation_config` credits on this repo.
+  That config mutates through `skills/assess/src`, a committed symlink to `scripts`, so the
+  opt-in pass runs it as checked out for the `skills/assess` group, while `scripts/` (no
+  mutmut config) runs under a generated section. The walks do not descend the link, and
+  the treemap keys files by resolved path, so the linked files are never counted twice. The shared walks
+  (`doc_graph`, `structure_graph`, the treemap) skip `mutants/`, so a tree a local run
+  leaves behind is never scored.
 - Cheap heuristics: test/source ratio, assertion density, and the coverage gap signal -
   fast proxies that run without a mutation tool.

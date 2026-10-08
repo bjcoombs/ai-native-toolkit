@@ -326,8 +326,8 @@ def test_effective_ccn_collapses_to_aggregate_without_per_function_data(treemap)
 def test_assess_dir_is_self_excluded_by_default(treemap):
     """A prior run's run-context.json must not be scored on the next run -
     the script's own output directory is in EXCLUDE_DIRS. Otherwise re-runs
-    pollute the heatmap with their own past output (issue #50 bonus)."""
-    assert ".assess" in treemap.EXCLUDE_DIRS
+    pollute the heatmap with their own past output (#50); so does mutants/."""
+    assert {".assess", "mutants"} <= treemap.EXCLUDE_DIRS
 
 
 def test_is_user_excluded_matches_dir_name(treemap):

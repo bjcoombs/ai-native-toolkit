@@ -36,7 +36,7 @@ from .aggregate import (
     _overall_coverage,
     scan_test_pressure,
 )
-from .common import MAX_FINDINGS
+from .common import MAX_FINDINGS, MUTATION_TIMEOUT
 from .heuristics import (
     CHEAP_HEURISTIC_NOTE,
     compute_cheap_heuristics,
@@ -49,7 +49,6 @@ from .mutation import (
     HIGH_COVERAGE,
     LOW_MUTATION_SCORE,
     MAX_FILES_TO_MUTATE,
-    MUTATION_TIMEOUT,
     _parse_cargo_mutants,
     _parse_gremlins,
     _parse_mutmut,
