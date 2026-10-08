@@ -375,7 +375,9 @@ def test_archive_hotspot_kept_out_of_attention() -> None:
                                           "count": 1}
 
 
-def test_recompute_failure_keeps_ctx_untouched(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_recompute_failure_keeps_ctx_untouched(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
     import lib.mutation_refresh as mr
 
     def boom(*a: Any, **k: Any) -> dict:
@@ -386,6 +388,8 @@ def test_recompute_failure_keeps_ctx_untouched(monkeypatch: pytest.MonkeyPatch) 
     before = json.loads(json.dumps(ctx))
     assert refresh_mutation_findings(ctx, _stats("src/hot.py"), set(), []) is False
     assert ctx == before
+    err = capsys.readouterr().err
+    assert "not refreshed" in err and "ranking exploded" in err
 
 
 def test_recorded_excludes_prefer_the_disclosed_filter(tmp_path: Path) -> None:

@@ -16,6 +16,7 @@ run ranks and renders exactly as a default run with the same inputs would.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,10 @@ _PRODUCT_KEYS = (
     "attention", "attention_low_signal", "findings_markdown",
     "keyhole_summary", "prescribed_actions",
 )
+
+# Key in ``excluded_by_config`` naming the paths a mutation pass added, so a
+# later pass can take them back out when E1 no longer names them.
+_PASS_ADDED_KEY = "added_by_mutation_pass"
 
 
 def _rebuilt_findings(findings: list[Any], untrusted: list[str]) -> list[dict]:
@@ -47,11 +52,6 @@ def _rebuilt_findings(findings: list[Any], untrusted: list[str]) -> list[dict]:
     for f in rebuilt:
         f["action"] = actions.get(f["name"], f["action"])
     return rebuilt
-
-
-# Key in ``excluded_by_config`` naming the paths a mutation pass added, so a
-# later pass can take them back out when E1 no longer names them.
-_PASS_ADDED_KEY = "added_by_mutation_pass"
 
 
 def _merge_config_exclusions(ctx: dict[str, Any], excluded: list[str]) -> None:
@@ -110,7 +110,8 @@ def refresh_mutation_findings(
     ``derived_findings`` list (a run-context older than the keyhole findings):
     there is nothing to rank against, and inventing the other findings would
     misreport them. A failure while recomputing also returns False with ``ctx``
-    untouched, so the caller still writes the refreshed ``test_pressure``.
+    untouched, after a warning on stderr naming the error, so the caller still
+    writes the refreshed ``test_pressure`` and the stale findings are not silent.
     """
     findings = ctx.get("derived_findings")
     if not isinstance(findings, list):
@@ -119,7 +120,10 @@ def refresh_mutation_findings(
         rebuilt, excluded, products = _recompute(
             ctx, findings, complexity_stats, exclude_dirs, exclude_patterns,
         )
-    except Exception:  # noqa: BLE001 - keep the mutation result, never crash
+    except Exception as exc:  # noqa: BLE001 - keep the mutation result, never crash
+        print(f"warning: keyhole findings not refreshed after the mutation pass "
+              f"({type(exc).__name__}: {exc}); derived_findings keep the default "
+              f"run's values", file=sys.stderr)
         return False
     ctx["derived_findings"] = rebuilt
     for key in _PRODUCT_KEYS:
