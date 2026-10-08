@@ -78,11 +78,13 @@ Every `test_*.py` file in this directory has a row below.
 | `test_assess_config.py` | `lib/assess_config.py` - the working-notes keys in `.assess/config.toml` |
 | `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge and its producers |
 | `test_config_drift.py` | `lib/config_drift.py` + `lib/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
+| `test_context_blocks.py` | `lib/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
 | `test_coverage_gate.py` | `lib/coverage_gate.py` - enforced coverage-threshold detector |
 | `test_coverage_report.py` | `lib/coverage_report.py` - coverage-report parser |
 | `test_dart_capabilities.py` | `lib/dart_capabilities.py` - Dart linting and liveness capability entries |
 | `test_dart_complexity.py` | `lib/dart_complexity.py` - the approximate Dart per-function scanner |
 | `test_decline_markers.py` | `lib/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
+| `test_diff_reliability.py` | `lib/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
 | `test_doc_provenance.py` | `lib/doc_provenance.py` - provenance-aware staleness of generated docs |
 | `test_evidence_check.py` | `lib/evidence_check.py` - deterministic re-check of scorer evidence |
 | `test_scorer_evidence.py` | `lib/evidence_check.py` - the layer scorer's structured evidence contract |
@@ -91,23 +93,21 @@ Every `test_*.py` file in this directory has a row below.
 | `test_generated_files.py` | `lib/generated_files.py` - generated-file header sniff and long-line detector |
 | `test_git_churn.py` | `lib/git_churn.py` - churn-degeneracy detector |
 | `test_instruction_claims.py` | `lib/instruction_claims.py` - verifying claims in agent instruction files |
+| `test_instruction_files.py` | `lib/instruction_files.py` - instruction-file discovery and grading, alias grade inheritance, broken references, sensitive content, ancestor cascade (through `build_run_context`) |
 | `test_interactivity.py` | `lib/interactivity.py` - the non-interactive consent contract |
 | `test_jvm_capabilities.py` | `lib/jvm_capabilities.py` - the capability-driven JVM offer flow |
+| `test_mutation_cap.py` | `lib/mutation_cap.py` - the `test_pressure` block shape and the Layer 6 mutation-not-run cap |
 | `test_ownership_parser.py` | `lib/ownership_parser.py` - ownership-map parser |
 | `test_promissory_markers.py` | `lib/promissory_markers.py` - stale TODOs, suppressions and skips |
 | `test_raw_source.py` | `lib/raw_source.py` - raw-source subtree detection |
 | `test_review_reality.py` | `lib/review_reality.py` - review-automation evidence from merged PRs |
+| `test_run_wiki.py` | `lib/run_wiki.py` - hotspot pages, `index.md` rows and graduation records for one run |
 | `test_scan_registry.py` | `lib/scan_registry.py` - the declared scan table and the loop that runs it |
 | `test_sibling_tests.py` | `lib/sibling_tests.py` - the one sibling-test resolver |
-| `test_instruction_files.py` | `lib/instruction_files.py` - instruction-file discovery and grading, alias grade inheritance, broken references, sensitive content, ancestor cascade (through `build_run_context`) |
-| `test_diff_reliability.py` | `lib/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
-| `test_wiki_state.py` | `lib/wiki_state.py` - first-flagged dates and their rekeying through the rename map |
-| `test_run_wiki.py` | `lib/run_wiki.py` - hotspot pages, `index.md` rows and graduation records for one run |
-| `test_context_blocks.py` | `lib/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
-| `test_mutation_cap.py` | `lib/mutation_cap.py` - the `test_pressure` block shape and the Layer 6 mutation-not-run cap |
 | `test_structure_drift.py` | `lib/structure_drift.py` - Tier 0 path-existence structure-drift signal |
 | `test_test_focus.py` | `lib/test_focus.py` - `compute_test_focus` and mutation scope |
 | `test_vault_queries.py` | `lib/vault_queries.py` - vault-native navigation query parser |
+| `test_wiki_state.py` | `lib/wiki_state.py` - first-flagged dates and their rekeying through the rename map |
 
 ### Infrastructure suites
 

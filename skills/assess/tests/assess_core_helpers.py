@@ -49,10 +49,7 @@ def _renamed_and_deleted_history(repo: Path, commit) -> None:
     commit("remove")
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# Config-exclusion disclosure (excluded_by_config block)
-# ════════════════════════════════════════════════════════════════════════════
-
+# Seeds an empty complexity-stats.json into an existing .assess/ directory.
 def _write_min_stats(assess_dir: Path) -> None:
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 0, "loc": {}, "ccn": {},
