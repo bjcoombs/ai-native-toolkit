@@ -1,6 +1,6 @@
 # Codebase Assessment: ai-native-toolkit
 
-_Generated 2026-10-08 by `/assess` (plugin 1.94.1 plus #503-#509), measuring `0bd9b71`: `main` 08735da plus the dangling-link fix in this assessment's branch._
+_Generated 2026-10-08 by `/assess` 1.95.0 (`main` 08735da with #503-#509, plus this branch's version bump), measuring `0bd9b71`: `main` plus the dangling-link fix in this assessment's branch._
 
 **Score: 7.5 / 8 - AI-Native** - a readiness snapshot, not a verdict · Keyhole: 24 structural concerns (12 hidden coupling, 1 untrusted hotspot, 2 self-referential tests, 9 accretion ratchet), 3 safe zones.
 
