@@ -365,8 +365,8 @@ def _to_repo(pkg_rel: str, rel: str) -> str:
 def _copy_repo(repo_root: Path, dest: Path) -> bool:
     """Copy the working tree (tracked plus untracked-but-not-ignored files) to
     ``dest``. Falls back to a filtered tree copy outside a git repository.
-    Symlinks are copied as links. Returns True when the copy came from a git
-    listing."""
+    A link stays a link only while it points inside the repository
+    (``_copy_link``). Returns True when the copy came from a git listing."""
     try:
         proc = subprocess.run(
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
@@ -377,8 +377,9 @@ def _copy_repo(repo_root: Path, dest: Path) -> bool:
     except (subprocess.TimeoutExpired, OSError):
         listed = []
     if not listed:
-        shutil.copytree(repo_root, dest, ignore=_COPY_IGNORE, dirs_exist_ok=True,
-                        symlinks=True)
+        # Links are followed (their targets copied as content), so none in the
+        # copy can reach back into the assessed tree.
+        shutil.copytree(repo_root, dest, ignore=_COPY_IGNORE, dirs_exist_ok=True)
         return False
     for rel in listed:
         if rel.split("/", 1)[0] in {".assess", "mutants"}:
@@ -386,16 +387,30 @@ def _copy_repo(repo_root: Path, dest: Path) -> bool:
         src = repo_root / rel
         target = dest / rel
         if src.is_symlink():
-            # git tracks a link as one entry; recreate it, never its target's
-            # contents (a directory link would otherwise be skipped as no file).
-            target.parent.mkdir(parents=True, exist_ok=True)
-            os.symlink(os.readlink(src), target)
+            _copy_link(repo_root, src, target)
             continue
         if not src.is_file():
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, target)
     return True
+
+
+def _copy_link(repo_root: Path, src: Path, target: Path) -> None:
+    """Copy a tracked link (git lists it as one entry) without opening a way
+    back into the assessed tree: a link whose target lies inside the
+    repository is recreated relative, so it points into the copy; a link out
+    of it (absolute, or climbing past the root) has its file target copied as
+    content and a directory target left out."""
+    try:
+        resolved = src.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return  # dangling or looping: nothing to copy
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if resolved.is_relative_to(repo_root.resolve()):
+        os.symlink(os.path.relpath(resolved, src.parent.resolve()), target)
+    elif resolved.is_file():
+        shutil.copy2(resolved, target)
 
 
 def _snapshot_git(work: Path, deadline: float) -> None:

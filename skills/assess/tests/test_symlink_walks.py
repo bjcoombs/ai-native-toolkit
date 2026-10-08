@@ -4,6 +4,7 @@ linked files twice: the treemap keys files by resolved path, and the shared
 walks do not descend the link."""
 from __future__ import annotations
 
+import os
 import types
 from pathlib import Path
 
@@ -81,7 +82,40 @@ def test_scratch_copy_keeps_a_tracked_directory_link(tmp_path: Path) -> None:
     fallback.mkdir()
     (repo / ".git").rename(tmp_path / "git-aside")
     assert mutmut3._copy_repo(repo, fallback) is False
-    assert (fallback / "pkg" / "src").is_symlink()
+    # outside git, links are followed: the target's files, never a link
+    assert not (fallback / "pkg" / "src").is_symlink()
+    assert (fallback / "pkg" / "src" / "lib" / "a.py").is_file()
+
+
+def test_scratch_copy_never_links_back_into_the_assessed_tree(tmp_path: Path) -> None:
+    """A link out of the repository (absolute, or climbing past its root)
+    would let a suite write through the copy into real files: a file target is
+    copied as content, a directory target left out."""
+    import subprocess
+
+    from lib.test_pressure import mutmut3
+
+    outside = tmp_path / "outside"
+    (outside / "data").mkdir(parents=True)
+    (outside / "note.txt").write_text("n", encoding="utf-8")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    real = _linked_repo(repo)
+    (repo / "abs_dir").symlink_to(outside / "data")
+    (repo / "abs_file").symlink_to(outside / "note.txt")
+    (repo / "pkg" / "up_file").symlink_to("../../outside/note.txt")
+    (repo / "pkg" / "in_file").symlink_to(real)  # absolute but inside the repo
+    for cmd in (["init", "-q"], ["add", "-A"]):
+        subprocess.run(["git", *cmd], cwd=repo, check=True, capture_output=True)
+    dest = tmp_path / "copy"
+    dest.mkdir()
+    assert mutmut3._copy_repo(repo, dest) is True
+    assert not (dest / "abs_dir").exists() and not (dest / "abs_dir").is_symlink()
+    for rel in ("abs_file", "pkg/up_file"):
+        assert not (dest / rel).is_symlink() and (dest / rel).read_text() == "n"
+    in_file = dest / "pkg" / "in_file"
+    assert in_file.is_symlink() and not Path(os.readlink(in_file)).is_absolute()
+    assert in_file.resolve() == (dest / "pkg" / "scripts" / "lib" / "a.py").resolve()
 
 
 def test_own_config_through_a_link_maps_focus_paths_both_ways(
@@ -107,7 +141,7 @@ def test_own_config_through_a_link_maps_focus_paths_both_ways(
         if cmd[0] == "git":
             return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="")
         cwd = Path(kwargs["cwd"])
-        seen.append((cwd / "src").is_symlink())
+        seen.append((cwd / "src" / "lib" / "a.py").is_file())
         meta = cwd / "mutants" / "src" / "lib" / "a.py.meta"
         meta.parent.mkdir(parents=True)
         meta.write_text(json.dumps({"exit_code_by_key": {"k": 1, "s": 0}}), encoding="utf-8")

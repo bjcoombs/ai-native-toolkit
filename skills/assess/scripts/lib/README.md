@@ -1145,7 +1145,10 @@ Layer 1 write-side truth pressure. Two tiers:
   into `mutants/`, and runs the suite from there. Its adapter, `test_pressure/mutmut3.py`,
   groups the focus files by package root (the nearest directory holding `pyproject.toml`,
   `setup.cfg` or `setup.py`, else the repository root) and runs mutmut once per group,
-  from that root, in a fresh scratch copy of the working tree. A package whose config
+  from that root, in a fresh scratch copy of the working tree. The copy keeps a tracked
+  link only when it points inside the repository (recreated relative); a link out of it
+  has a file target copied as content and a directory target left out, so no suite can
+  write through the copy into the assessed tree. A package whose config
   mutmut 3 can read runs under it unchanged (its `source_paths`, `also_copy`,
   `pytest_add_cli_args`), after a check that its `source_paths` exist in the copy and
   cover a focus file: a path made at run time (a link CI creates, a generated tree) is
