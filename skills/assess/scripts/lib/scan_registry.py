@@ -30,6 +30,7 @@ from functools import partial
 from typing import Any
 
 from lib.agent_ops import scan_agent_ops
+from lib.claude_config import scan_claude_config
 from lib.config_drift import scan_config_drift
 from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
@@ -37,7 +38,7 @@ from lib.review_reality import scan_review_reality
 
 # Names the core passes to ``run_scans``. A spec may read these, or the key of
 # any spec declared before it.
-PROVIDED_INPUTS = frozenset({"repo_root", "instruction_files"})
+PROVIDED_INPUTS = frozenset({"repo_root", "instruction_files", "scope", "excludes"})
 
 STAGE_READ_SIDE = "read_side"
 STAGE_POST_OFFERS = "post_offers"
@@ -183,6 +184,15 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec(
         "instruction_claims", scan_instruction_claims,
         ("repo_root", "instruction_files"), STAGE_POST_OFFERS,
+    ),
+    # Claude Code configuration (Layer 0): legacy command files and skill,
+    # command and agent frontmatter the runtime silently ignores, checked
+    # against the documented field sets pinned in lib/claude_config_fields.py.
+    # available: false when the run root has no .claude/ and no plugin
+    # manifest. Last in the table so every earlier key keeps its position.
+    ScanSpec(
+        "claude_config", scan_claude_config,
+        ("repo_root", "scope", "excludes"), STAGE_POST_OFFERS,
     ),
 )
 

@@ -488,7 +488,10 @@ def build_run_context(
 
     # Scans that read only the repository and feed no later block run from the
     # declared table in lib/scan_registry.py, each through the degrade wrapper.
-    scan_inputs = {"repo_root": repo_root, "instruction_files": instruction_files}
+    scan_inputs = {
+        "repo_root": repo_root, "instruction_files": instruction_files,
+        "scope": scope_abs, "excludes": (extra_exclude_dirs, extra_exclude_patterns),
+    }
     run_scans(ctx, scan_inputs, STAGE_READ_SIDE)
 
     # Accretion ratchet (write-side tendency: files that only ever grow). The

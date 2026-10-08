@@ -92,6 +92,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_gate_cost.py` | `lib/gate_cost.py` - the CI gate's Actions cost estimate |
 | `test_generated_files.py` | `lib/generated_files.py` - generated-file header sniff and long-line detector |
 | `test_git_churn.py` | `lib/git_churn.py` - churn-degeneracy detector |
+| `test_claude_config.py` | `lib/claude_config.py` - legacy command files and Claude Code frontmatter the runtime ignores, plugin path overrides, scope, and the unchanged run-context of an unconfigured repo |
 | `test_instruction_claims.py` | `lib/instruction_claims.py` - verifying claims in agent instruction files |
 | `test_instruction_files.py` | `lib/instruction_files.py` - instruction-file discovery and grading, alias grade inheritance, broken references, sensitive content, ancestor cascade (through `build_run_context`) |
 | `test_interactivity.py` | `lib/interactivity.py` - the non-interactive consent contract |
@@ -158,6 +159,7 @@ ambient commit signing or hooks cannot break the git-backed tests.
 | `coverage.xml`, `lcov.info` | `test_coverage_report.py` |
 | `prior_stats.json`, `current_stats.json` | `test_stats_diff.py` |
 | `maven_project/` | `test_jvm_capabilities.py` |
+| `claude_config_plugin/` | `test_claude_config.py` - a plugin repo whose manifest overrides the skills, commands and agents paths |
 | `structure_drift/` | `test_structure_drift.py` |
 
 ## Markers
