@@ -16,7 +16,8 @@ root):
   ``.claude/agents/**/*.md`` (project configuration);
 - for a plugin repository (``.claude-plugin/plugin.json`` present):
   ``skills/*/SKILL.md`` plus the manifest's ``skills`` directories (which add to
-  the default), and ``commands/`` and ``agents/`` or, when the manifest sets
+  the default; a root ``SKILL.md`` when neither exists), and flat
+  ``commands/*.md`` and recursive ``agents/`` or, when the manifest sets
   ``commands`` / ``agents``, the paths it names instead (those keys replace the
   default scan, as Claude Code does).
 
