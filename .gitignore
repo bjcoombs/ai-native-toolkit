@@ -16,6 +16,7 @@
 dist/standalone-skills/
 !/.github/
 !/action.yml
+!/.file-size-ratchet.toml
 
 # /assess output: we dogfood /assess on this repo, so its compounding wiki and
 # latest report ARE tracked (the report, both SVGs, the stats baseline for the

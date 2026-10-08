@@ -301,6 +301,8 @@ ls "$REPO_ROOT"/clippy.toml "$REPO_ROOT"/.clippy.toml 2>/dev/null
 ls "$REPO_ROOT"/analysis_options.yaml 2>/dev/null
 # Swift
 ls "$REPO_ROOT"/.swiftlint.yml 2>/dev/null
+# Any language: a file-size ratchet enforced by the repo's own test suite
+ls "$REPO_ROOT"/.file-size-ratchet.toml 2>/dev/null
 ```
 
 **If found, assess AI-relevant rules** by reading the config:
@@ -308,7 +310,7 @@ ls "$REPO_ROOT"/.swiftlint.yml 2>/dev/null
 - `TODO`/`FIXME` detection? (godox, no-warning-comments)
 - **Function length limits?** (`funlen`, `max-lines-per-function`, `MethodLength`, `function-max-lines`)
 - **Cyclomatic complexity limits?** (`cyclop`, `gocognit`, `complexity`, `CyclomaticComplexity`, `too-many-statements`, `cognitive-complexity`, `cognitive_complexity`)
-- **File size limits?** (`max-lines`, `FileLength`, `file-max-lines`, `lines-per-file`)
+- **File size limits?** (`max-lines`, `FileLength`, `file-max-lines`, `lines-per-file`). A `.file-size-ratchet.toml` with a `default_limit` counts as one when a test or CI step reads it (`rg -l --hidden -g '!.git' -g '!*.md' -g '!.file-size-ratchet.toml' 'file-size-ratchet' "$REPO_ROOT"` lists candidate enforcers; open each hit and confirm it loads the config, since a comment or string mention is not an enforcer): every file in its `roots` is held to the limit, and its `[ceilings]` entries are files already over it that may shrink but not grow. Cite the limit and the number of ceilings; a config nothing reads is decoration, not a gate.
 - Exhaustive matching? (exhaustive, strict unions)
 - Import boundary rules? (depguard, no-restricted-imports)
 
