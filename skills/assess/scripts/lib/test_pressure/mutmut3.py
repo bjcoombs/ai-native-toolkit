@@ -150,11 +150,14 @@ def _cut_prefix(detail: str, path: Path, label: str | None) -> str:
     label. Longest spelling first: where the directory sits behind a symlink
     (macOS /var -> /private/var) the unresolved form is a substring of the
     resolved one, and cutting it first would leave "/private" glued on."""
+    if label is not None and path == Path(path.anchor):
+        return detail  # a root home (HOME=/) would relabel every path separator
     for prefix in sorted({str(path.resolve()), str(path)}, key=len, reverse=True):
         if label is None:
             detail = detail.replace(prefix + os.sep, "").replace(prefix, ".")
         else:
-            detail = detail.replace(prefix, label)
+            # only at a separator, so /home/u does not rewrite /home/u2
+            detail = detail.replace(prefix + os.sep, label + os.sep)
     return detail
 
 

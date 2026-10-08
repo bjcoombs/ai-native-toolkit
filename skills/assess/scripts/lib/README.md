@@ -2,9 +2,12 @@
 
 Deterministic library modules for the `/assess` engine. No LLM calls anywhere in this
 package - every function is a pure transform of filesystem, git, or pre-computed signal
-data, with one bounded exception: live GitHub reads, confined to `gh_cli.py`, which are
-optional (they need a github.com remote and an authenticated `gh`) and degrade to
-`available: False` with a reason, never to a clean result. The LLM reads
+data, with two bounded exceptions. Live GitHub reads are confined to `gh_cli.py`; they
+are optional (they need a github.com remote and an authenticated `gh`) and degrade to
+`available: False` with a reason, never to a clean result. The opt-in mutation pass's uv
+runner (`test_pressure/mutmut3.py`) may fetch mutmut, pytest and the assessed package's
+dependencies from the package index on first use, into a scratch environment; it runs
+only on explicit consent and degrades to a named `reason`. The LLM reads
 `run-context.json` after the core finishes; it does not call into these modules.
 
 ## The assess_core.py -> lib seam
@@ -1331,7 +1334,7 @@ Layer 1 write-side truth pressure. Two tiers:
   `mutants/**/*.meta` using the exit-code table of mutmut 3.6.0, mapped back to
   repo-relative paths. Only the focus files are reported whichever config governed a run,
   so the result's `scope` names the files its figures describe. `groups` records each
-  package's run (`root`, `config` of `repo` or `generated`, `scope`, `mutation_run`, a
+  package's run (`root`, `config` of `repo` or `generated`, `scope`, `runner`, `mutation_run`, a
   `reason` when it could not run, and `unmeasured` focus files when it ran without them), surfaced as `test_pressure.mutation_groups`; the pass
   counts as run when any group recovered records. Every group draws on one `MUTATION_TIMEOUT` budget: the
   snapshot and the run are bounded by what remains, and a copy (not interruptible) is
@@ -1346,9 +1349,14 @@ Layer 1 write-side truth pressure. Two tiers:
   `.mutmut-cache` there. Whichever path runs, a tool that exits non-zero without yielding mutants
   puts the last line of its error output (skipping Python warning lines, such as
   mutmut's `paths_to_mutate` deprecation) in the result's `reason` (surfaced as
-  `mutation_note`). mutmut runs pytest under its own interpreter, so a repo whose tests
-  need packages that interpreter lacks fails at mutmut's clean-test step and reports that
-  reason.
+  `mutation_note`), and the mutmut 3 path appends `; first failure:` with the first
+  import error, else pytest's first failing test, scratch and home paths labelled. mutmut
+  runs pytest under the interpreter that launches it, so `_resolve_runner` picks one that
+  can import the suite's dependencies (`runner`): a package `.venv` / `venv` that already
+  holds mutmut 3 (read only, no bytecode written), else `uv run --project` with
+  `UV_PROJECT_ENVIRONMENT` in the temp dir plus the pinned `mutmut==3.8.0` and pytest (for
+  a `pyproject.toml` with a `[project]` table; no optional extras), else the `mutmut` on
+  PATH.
   This repo dogfoods the tier: `[tool.mutmut]` in `skills/assess/pyproject.toml` scopes
   mutmut 3 to three core modules and `.github/workflows/mutation.yml` runs it weekly,
   scoring per module with `_parse_mutmut3_meta`, so CI and `/assess` count mutants alike.

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -270,6 +271,25 @@ def test_reason_cuts_scratch_env_and_package_paths(tmp_path: Path,
     assert mutmut3._no_records_reason(
         "mutmut", proc, labels={pkg_on_disk: "pkg"}).endswith(
         "ImportError: from pkg/.venv/lib/y.py")
+
+
+def test_labels_stop_at_a_separator_and_skip_a_root_home(tmp_path: Path) -> None:
+    proc = subprocess.CompletedProcess(
+        ["m"], 1, stdout="", stderr="ImportError: x (/home/u/a.py) (/home/u2/b.py)\n")
+    assert mutmut3._no_records_reason(
+        "mutmut", proc, labels={Path("/home/u"): "~"}).endswith(
+        "ImportError: x (~/a.py) (/home/u2/b.py)")
+    assert mutmut3._no_records_reason(
+        "mutmut", proc, labels={Path("/"): "~"}).endswith(
+        "ImportError: x (/home/u/a.py) (/home/u2/b.py)")
+
+
+def test_mutmut_pin_matches_the_weekly_workflow() -> None:
+    """The uv runner's mutmut is the one the weekly mutation run uses, so the
+    adapter's exit-code and key handling is the version CI exercises."""
+    workflow = Path(__file__).resolve().parents[3] / ".github/workflows/mutation.yml"
+    pins = set(re.findall(r"mutmut==[\d.]+", workflow.read_text(encoding="utf-8")))
+    assert pins == {mutmut3._MUTMUT_PIN}
 
 
 def test_clean_exit_adds_no_cause() -> None:
