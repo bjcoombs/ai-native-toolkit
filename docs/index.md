@@ -1,13 +1,12 @@
 # Map of Content
 
-The navigation index for `ai-native-toolkit`. Every shipped doc in this repo is reachable from here by following links - no directory-walking required. The public landing page is the [GitHub Pages site](https://bjcoombs.github.io/ai-native-toolkit/), served as-is from `docs/index.html`. Start at the [README](../README.md) for the project overview, the [CLAUDE.md](../CLAUDE.md) contract for the rules that govern edits, then use the trails below to reach any agent, command, or skill.
+The navigation index for `ai-native-toolkit`. Every shipped doc in this repo is reachable from here by following links - no directory-walking required. The public landing page is the [GitHub Pages site](https://bjcoombs.github.io/ai-native-toolkit/), served as-is from `docs/index.html`. Start at the [README](../README.md) for the project overview, the [CLAUDE.md](../CLAUDE.md) contract for the rules that govern edits, then use the trails below to reach any agent or skill.
 
 ## Subtrees at a glance
 
 | Subtree | Entry doc | What lives there |
 |---------|-----------|------------------|
-| Skills | [`skills/`](../skills/README.md) | The plugin's skills - the headline `/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, plus `/ghsync` and the team-orchestration library skills |
-| Commands | [`commands/`](../commands/README.md) | Slash commands - portable framework commands and opt-in personal workflow commands |
+| Skills | [`skills/`](../skills/README.md) | The plugin's skills - the headline `/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, plus `/ghsync`, the user-invoked workflows (`/tm`, `/issues`, `/fix-pr`, ...) and the team-orchestration library skills |
 | Agents | [`agents/`](../agents/README.md) | The Six Thinking Hats team that `/huddle` and `/6hats` orchestrate |
 | Docs | this file | Design history, runbooks, and the rendered example SVGs |
 
@@ -28,7 +27,7 @@ Plugin-only (Claude Code, no standalone ZIP):
 - [`/ghsync`](../skills/ghsync/SKILL.md) - bulk-clone and fast-forward sync every GitHub repo you can access across an org.
 - [`/ghreport`](../skills/ghreport/SKILL.md) - read-only org repo state report: open PRs, default-branch CI, security alerts and branch protection per repo, reusing `/ghsync`'s repo discovery.
 
-Team-orchestration library skills (invoked by the workflow commands, not standalone):
+Team-orchestration library skills (invoked by the workflow skills, not standalone):
 
 - [`marathon`](../skills/marathon/SKILL.md) - parallel agent marathon orchestration: DAG analysis, waves, crash recovery, retrospective. Its [forge report](../skills/marathon/forge/forge-report.md) is a real `/skill-forge` run output, kept as a worked example.
 - [`pr-review-merge`](../skills/pr-review-merge/SKILL.md) - the PR review-to-green loop plus smart merge.
@@ -42,22 +41,22 @@ Team-orchestration library skills (invoked by the workflow commands, not standal
 
 The deterministic core's per-module reference is [`skills/assess/scripts/lib/README.md`](../skills/assess/scripts/lib/README.md); its test suites are mapped to the modules they pin in [`skills/assess/tests/README.md`](../skills/assess/tests/README.md).
 
-## Commands
+## User-invoked skills
 
-The slash commands, indexed in [`commands/README.md`](../commands/README.md).
+Slash-command-only skills (`disable-model-invocation: true`): Claude never loads them on its own, only when you type the command. Indexed in [`skills/README.md`](../skills/README.md#user-invoked).
 
 Portable:
 
-- [`/6hats`](../commands/6hats.md) - solo Six Hats analysis, an alias for `/huddle` at team size 1.
-- [`/understand`](../commands/understand.md) - deep understanding mode (nemawashi): exhaustive context-gathering before action.
+- [`/6hats`](../skills/6hats/SKILL.md) - solo Six Hats analysis, an alias for `/huddle` at team size 1.
+- [`/understand`](../skills/understand/SKILL.md) - deep understanding mode (nemawashi): exhaustive context-gathering before action.
 
-Personal workflow commands (opt-in - see [Adapting for your workflow](../README.md#adapting-for-your-workflow)):
+Personal workflows (opt-in - see [Adapting for your workflow](../README.md#adapting-for-your-workflow)):
 
-- [`/tm`](../commands/tm.md) - Task Master orchestration: starts, reviews, or cleans up tasks by current state.
-- [`/issues`](../commands/issues.md) - GitHub-issue marathon: triage open issues, then run agent-ready ones to merge with Agent Teams.
-- [`/fix-pr`](../commands/fix-pr.md) - autonomous PR fixing loop: iterates on CI failures and review comments until green.
-- [`/fix-develop`](../commands/fix-develop.md) - autonomous fix loop for failing CI on the default branch.
-- [`/tm-marathon-config-example`](../commands/tm-marathon-config-example.md) - reference configuration block for marathon-mode `/tm` and `/issues`.
+- [`/tm`](../skills/tm/SKILL.md) - Task Master orchestration: starts, reviews, or cleans up tasks by current state.
+- [`/issues`](../skills/issues/SKILL.md) - GitHub-issue marathon: triage open issues, then run agent-ready ones to merge with Agent Teams.
+- [`/fix-pr`](../skills/fix-pr/SKILL.md) - autonomous PR fixing loop: iterates on CI failures and review comments until green.
+- [`/fix-develop`](../skills/fix-develop/SKILL.md) - autonomous fix loop for failing CI on the default branch.
+- [`/tm-marathon-config-example`](../skills/tm-marathon-config-example/SKILL.md) - reference configuration block for marathon-mode `/tm` and `/issues`.
 
 ## Agents
 

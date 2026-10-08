@@ -2,13 +2,13 @@
 
 [![AI-readiness](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fbjcoombs%2Fai-native-toolkit%2Fmain%2F.assess%2Fbadge.json)](.assess/assess-report.md) [![Assess Gate](https://github.com/bjcoombs/ai-native-toolkit/actions/workflows/assess-gate.yml/badge.svg)](https://github.com/bjcoombs/ai-native-toolkit/actions/workflows/assess-gate.yml)
 
-A Claude Code plugin - and a set of standalone skills for **any AI assistant**: skills, agents, and commands for AI-native development. In Claude Code it runs locally against your own codebase using whichever model you already pay for. Several of the skills also ship as standalone [Agent Skills](https://www.anthropic.com/news/skills) ZIPs you can upload to claude.ai, Claude Desktop, Cowork, or any assistant that supports the skills format - no Claude Code required.
+A Claude Code plugin - and a set of standalone skills for **any AI assistant**: skills and agents for AI-native development. In Claude Code it runs locally against your own codebase using whichever model you already pay for. Several of the skills also ship as standalone [Agent Skills](https://www.anthropic.com/news/skills) ZIPs you can upload to claude.ai, Claude Desktop, Cowork, or any assistant that supports the skills format - no Claude Code required.
 
 > **Want the skills without Claude Code?** Download the ZIPs from the **[latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/latest)** - the release notes link straight to that version's standalone skill bundle - and upload them in your assistant's Skills UI. Full walkthrough: [Standalone skill ZIPs](#standalone-skill-zips-any-ai-assistant). Currently standalone: `/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`.
 
 > **Project site:** a one-page tour of the toolkit lives at https://bjcoombs.github.io/ai-native-toolkit/.
 
-> **New here?** The [Map of Content](docs/index.md) is the navigation index - one trail to every skill, command, agent, and design doc in this repo. The [`CLAUDE.md`](CLAUDE.md) contract holds the rules for editing it.
+> **New here?** The [Map of Content](docs/index.md) is the navigation index - one trail to every skill, agent, and design doc in this repo. The [`CLAUDE.md`](CLAUDE.md) contract holds the rules for editing it.
 
 > **Here from the GitHub Marketplace?** You found the **AI-Readiness Assess Gate** - the CI-gate half of this toolkit. It runs the same deterministic engine the `/assess` skill uses (complexity treemap, promissory-marker scan, doc-graph signals - zero AI tokens) on every pull request and gates on what your `.assess/config.toml` opts into. Jump straight to [Use as a GitHub Action](#use-as-a-github-action); the rest of this README covers the full plugin the action is carved from.
 
@@ -277,20 +277,20 @@ Full catalog and per-skill base docs: [`skills/README.md`](skills/README.md).
 
 Also auto-discovered, but not invoked directly: the library skills `marathon`, `pr-review-merge` and `ab-equivalence`, and the `/assess` render-time helpers `assess-findings` and `assess-pr`.
 
-### Commands (slash-only, no bundled assets)
+### User-invoked skills (slash-command only)
 
-Full catalog: [`commands/README.md`](commands/README.md).
+These set `disable-model-invocation: true`: Claude runs one only when you type it, never on its own. Full catalog: [`skills/README.md`](skills/README.md#user-invoked).
 
 Portable:
 
-| Command | Description |
+| Skill | Description |
 |---------|-------------|
 | `/6hats <question>` | Solo Six Hats analysis - alias for `/huddle` at team size 1 |
 | `/understand <thing>` | Deep understanding mode (nemawashi) - exhaustive context-gathering before action |
 
 Workflow (personal setup, opt-in - see [Adapting](#adapting-for-your-workflow)):
 
-| Command | Description |
+| Skill | Description |
 |---------|-------------|
 | `/tm` | Task Master orchestration - context-aware: starts, reviews, or cleans up tasks based on current state |
 | `/issues` | GitHub-issue marathon - triage open issues (tag `agent-ready` or post clarifying questions), then run agent-ready ones to merge with Agent Teams; mirrors `/tm`'s plan-then-marathon flow |
@@ -298,7 +298,7 @@ Workflow (personal setup, opt-in - see [Adapting](#adapting-for-your-workflow)):
 | `/fix-pr` | Autonomous PR fixing loop - iterates on CI failures and review comments until green |
 | `/fix-develop` | Autonomous fix loop for failing CI on the repo's default branch |
 
-`/tm` and `/issues` share the `marathon` skill (team orchestration engine: DAG analysis, waves, crash recovery, retrospective); all four workflow commands share the `pr-review-merge` skill (review-to-green loop + smart merge) as a single source of truth. Each command supplies a thin work-source adapter; the skills own the execution.
+`/tm` and `/issues` share the `marathon` skill (team orchestration engine: DAG analysis, waves, crash recovery, retrospective); all four workflow skills share the `pr-review-merge` skill (review-to-green loop + smart merge) as a single source of truth. Each workflow supplies a thin work-source adapter; the skills own the execution.
 
 ### Agents (invoked by skills, or directly via `Agent(subagent_type=...)`)
 
@@ -339,10 +339,10 @@ What am I not considering? What's the lazy solution that might work?
 
 ## Adapting for your workflow
 
-The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, `/6hats`, `/understand` and their agents) are reusable as-is. The workflow commands embed assumptions you will likely need to override:
+The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, `/6hats`, `/understand` and their agents) are reusable as-is. The workflow skills embed assumptions you will likely need to override:
 
-- **Directory layout** - `commands/tm.md`, `commands/issues.md`, `commands/fix-pr.md`, `commands/fix-develop.md` all assume `~/dev/github.com/<org>/<repo>/<repo>-main/` + sibling `worktree/`. Edit the path patterns to match your structure.
-- **Default branch** - `/fix-develop` derives the branch via `gh repo view --json defaultBranchRef`. `/tm` uses a `$BASE_BRANCH` variable. Other commands may still reference `develop` in prose; check before relying on them on a `main`-default repo.
+- **Directory layout** - `skills/tm/SKILL.md`, `skills/issues/SKILL.md`, `skills/fix-pr/SKILL.md`, `skills/fix-develop/SKILL.md` all assume `~/dev/github.com/<org>/<repo>/<repo>-main/` + sibling `worktree/`. Edit the path patterns to match your structure.
+- **Default branch** - `/fix-develop` derives the branch via `gh repo view --json defaultBranchRef`. `/tm` uses a `$BASE_BRANCH` variable. Other workflow skills may still reference `develop` in prose; check before relying on them on a `main`-default repo.
 - **Required external tools** - `gh` CLI for GitHub, [Task Master](https://github.com/eyaltoledano/claude-task-master) for `/tm`, optional Agent Teams capability flag (`$CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`) for `/tm` marathon mode.
 - **Review-bot conventions** - PR-loop logic in `/tm`, `/fix-pr`, `/fix-develop` distinguishes CodeRabbit, claude[bot], and human threads. Adjust if your repo uses different bots.
 - **CLAUDE.md** - your global / project `CLAUDE.md` references to the directory structure need to match.
@@ -389,8 +389,9 @@ ai-native-toolkit/
 │   ├── assess-findings/ assess-pr/    # /assess render-time helpers
 │   ├── huddle/ deslop/ skill-forge/ semantic-compress/
 │   ├── ghsync/ ghreport/              # SKILL.md + scripts/*.sh
+│   ├── 6hats/ understand/             # User-invoked framework skills
+│   ├── tm/ issues/ fix-pr/ fix-develop/ tm-marathon-config-example/   # User-invoked workflows
 │   └── marathon/ pr-review-merge/ ab-equivalence/   # Library skills
-├── commands/                          # Slash commands - catalog in commands/README.md
 ├── agents/                            # Six Hats team + assess-layer-scorer - catalog in agents/README.md
 ├── scripts/                           # Standalone ZIP build, floor checks, acceptance-contract gates
 │   ├── transform_skill.py             # Marker-based SKILL.md transformer
@@ -411,7 +412,7 @@ ai-native-toolkit/
     └── example-*.svg                  # Real /assess heatmaps and doc graphs (README hero and gallery)
 ```
 
-Each subtree has a base doc that the [Map of Content](docs/index.md) links to: [`agents/README.md`](agents/README.md), [`commands/README.md`](commands/README.md), and [`skills/README.md`](skills/README.md).
+Each subtree has a base doc that the [Map of Content](docs/index.md) links to: [`agents/README.md`](agents/README.md) and [`skills/README.md`](skills/README.md).
 
 ## Contributors
 

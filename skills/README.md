@@ -1,6 +1,6 @@
 # Skills
 
-The plugin's skills, auto-discovered by Claude Code from each `<name>/SKILL.md`. Each `SKILL.md` is its subtree's base doc and carries the frontmatter contract (`name`, `description` with a `TRIGGER` clause) documented in [`CLAUDE.md`](../CLAUDE.md). Bundled executables live under `<name>/scripts/`, reference docs under `<name>/references/`. Back to the [Map of Content](../docs/index.md).
+The plugin's skills, auto-discovered by Claude Code from each `<name>/SKILL.md`. Each `SKILL.md` is its subtree's base doc and carries the frontmatter contract (`name`, plus a `description` with a `TRIGGER` clause, or `disable-model-invocation: true` for a user-invoked skill) documented in [`CLAUDE.md`](../CLAUDE.md). Bundled executables live under `<name>/scripts/`, reference docs under `<name>/references/`. Back to the [Map of Content](../docs/index.md).
 
 ## Portable
 
@@ -23,6 +23,29 @@ Claude Code only; not in the standalone-ZIP build.
 | `/ghsync` | [`ghsync/SKILL.md`](./ghsync/SKILL.md) | Bulk-clone and fast-forward sync every GitHub repo you can access across an org |
 | `/ghreport` | [`ghreport/SKILL.md`](./ghreport/SKILL.md) | Read-only org repo state report - open PRs, default-branch CI, security alerts and branch protection per repo, reusing `/ghsync`'s repo discovery |
 
+## User-invoked
+
+Slash-command-only skills: each sets `disable-model-invocation: true`, so Claude never loads one on its own and its `description` carries no `TRIGGER` clause. Invoke them as `/ai-native-toolkit:<name>` (or `/<name>` when nothing else claims the name). They moved here from the legacy `commands/` directory ([#500](https://github.com/bjcoombs/ai-native-toolkit/issues/500)) with their invocation names unchanged. None ships as a standalone ZIP.
+
+Portable (work in any Claude Code session):
+
+| Skill | Base doc | Description |
+|-------|----------|-------------|
+| `/6hats` | [`6hats/SKILL.md`](./6hats/SKILL.md) | Solo Six Hats analysis - alias for [`/huddle`](./huddle/SKILL.md) at team size 1 |
+| `/understand` | [`understand/SKILL.md`](./understand/SKILL.md) | Deep understanding mode (nemawashi) - exhaustive context-gathering before action |
+
+Workflow (personal setup, opt-in - see [Adapting for your workflow](../README.md#adapting-for-your-workflow) before relying on them):
+
+| Skill | Base doc | Description |
+|-------|----------|-------------|
+| `/tm` | [`tm/SKILL.md`](./tm/SKILL.md) | Task Master orchestration - starts, reviews, or cleans up tasks based on current state |
+| `/issues` | [`issues/SKILL.md`](./issues/SKILL.md) | GitHub-issue marathon - triage open issues, then run agent-ready ones to merge with Agent Teams |
+| `/fix-pr` | [`fix-pr/SKILL.md`](./fix-pr/SKILL.md) | Autonomous PR fixing loop - iterates on CI failures and review comments until green |
+| `/fix-develop` | [`fix-develop/SKILL.md`](./fix-develop/SKILL.md) | Autonomous fix loop for failing CI on the repo's default branch |
+| `/tm-marathon-config-example` | [`tm-marathon-config-example/SKILL.md`](./tm-marathon-config-example/SKILL.md) | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` and `/issues` |
+
+`/tm`, `/issues`, `/fix-pr`, and `/fix-develop` share the [`marathon`](./marathon/SKILL.md) and [`pr-review-merge`](./pr-review-merge/SKILL.md) library skills as their single source of truth. Each workflow supplies a thin work-source adapter; the library skills own the execution.
+
 ## Assessment helpers
 
 `/assess` is split into an orchestrator plus two render-time helper skills:
@@ -34,7 +57,7 @@ Claude Code only; not in the standalone-ZIP build.
 
 ## Team-orchestration library skills
 
-Invoked by the workflow commands ([`/tm`](../commands/tm.md), [`/issues`](../commands/issues.md), [`/fix-pr`](../commands/fix-pr.md), [`/fix-develop`](../commands/fix-develop.md)), never standalone. Excluded from the standalone-ZIP build.
+Invoked by the workflow skills ([`/tm`](./tm/SKILL.md), [`/issues`](./issues/SKILL.md), [`/fix-pr`](./fix-pr/SKILL.md), [`/fix-develop`](./fix-develop/SKILL.md)), never standalone. Excluded from the standalone-ZIP build.
 
 | Skill | Base doc | Description |
 |-------|----------|-------------|
@@ -48,12 +71,12 @@ Marathon certifies *process* (tasks closed, CI green, PRs merged); none of that 
 
 ### When a contract is required
 
-Every marathon run started by [`/tm`](../commands/tm.md) or [`/issues`](../commands/issues.md), source-agnostic. There are exactly **two doors** and no third:
+Every marathon run started by [`/tm`](./tm/SKILL.md) or [`/issues`](./issues/SKILL.md), source-agnostic. There are exactly **two doors** and no third:
 
 - **Frozen contract** - a contract authored, kill-tested, and frozen before decomposition. The only path that can certify `PASS`.
 - **Operator-signed skip** - `operator_signoff` recorded before the run starts. Loud, human-authorized, and permanently capped at `UNVERIFIED`; it can never green. Skip is an amendment door too, so it is capped, not free.
 
-`scripts/contract/start_gate.py <run-id>` fails closed (non-zero) unless one of the two exists; each command invokes it before decomposing. The run identifier is a Task Master tag for `/tm`, an issue-queue slug for `/issues`.
+`scripts/contract/start_gate.py <run-id>` fails closed (non-zero) unless one of the two exists; each workflow skill invokes it before decomposing. The run identifier is a Task Master tag for `/tm`, an issue-queue slug for `/issues`.
 
 ### Authoring a contract
 
@@ -79,7 +102,7 @@ Run-complete is redefined and gated in code. A fresh non-implementing agent exec
 
 ### Relationship to marathon and pr-review-merge
 
-The executable spine is `start_gate.py` -> chokepoint -> `validate_completion.py` -> `complete_gate.py`, each fail-closed. `marathon` invokes the start gate before decomposition and the chokepoint + complete gate at run-complete; `pr-review-merge` carries only a note that a green, merged PR is a process signal that never substitutes for these gates. All four marked files - [`marathon/SKILL.md`](./marathon/SKILL.md), [`pr-review-merge/SKILL.md`](./pr-review-merge/SKILL.md), [`../commands/tm.md`](../commands/tm.md), [`../commands/issues.md`](../commands/issues.md) - carry the literal `floor:cold-verify-completion` marker plus the gate invocation strings; `.github/workflows/floor.yml` (a required check) fails any PR that removes a marker or invocation from a file that previously carried it. The **retro boundary** excludes `FLOOR.md`, the markers, `floor.yml`, `scripts/contract/`, `scripts/canaries/`, and `tests/canaries/` from self-rewrite - the retro may propose changes to them, never self-apply.
+The executable spine is `start_gate.py` -> chokepoint -> `validate_completion.py` -> `complete_gate.py`, each fail-closed. `marathon` invokes the start gate before decomposition and the chokepoint + complete gate at run-complete; `pr-review-merge` carries only a note that a green, merged PR is a process signal that never substitutes for these gates. All four marked files - [`marathon/SKILL.md`](./marathon/SKILL.md), [`pr-review-merge/SKILL.md`](./pr-review-merge/SKILL.md), [`tm/SKILL.md`](./tm/SKILL.md), [`issues/SKILL.md`](./issues/SKILL.md) - carry the literal `floor:cold-verify-completion` marker plus the gate invocation strings; `.github/workflows/floor.yml` (a required check) fails any PR that removes a marker or invocation from a file that previously carried it. The **retro boundary** excludes `FLOOR.md`, the markers, `floor.yml`, `scripts/contract/`, `scripts/canaries/`, and `tests/canaries/` from self-rewrite - the retro may propose changes to them, never self-apply.
 
 ### Honest narrowness
 
