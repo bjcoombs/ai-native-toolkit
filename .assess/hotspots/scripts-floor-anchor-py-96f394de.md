@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261008133519-d0c68d2e artifact_schema_version=1.3.0 -->
+<!-- assess:run_id=20261008155039-de900b5c artifact_schema_version=1.3.0 -->
 # Hotspot: `scripts/floor_anchor.py`
 
 _First flagged: 2026-09-19. Last seen: 2026-10-08. Status: persistent._
@@ -23,6 +23,7 @@ _First flagged: 2026-09-19. Last seen: 2026-10-08. Status: persistent._
 | 2026-10-07 | 4ace52ea | 646 | 188 | 7 | persistent |
 | 2026-10-08 | 417634ee | 646 | 188 | 7 | persistent |
 | 2026-10-08 | d0c68d2e | 646 | 188 | 7 | persistent |
+| 2026-10-08 | de900b5c | 646 | 188 | 7 | persistent |
 
 ## Briefing for editing this file
 
@@ -33,5 +34,5 @@ Hotspot (persistent). 646 LOC, aggregate cyclomatic complexity 188 (worst functi
 ## Suggested actions
 
 - Pin observable behaviour with one test per FLOOR.md clause, after the #410 clause iii decision (floor sign-off required)
-- Target: opt-in mutation survivor density below 0.3 (437 of 1,017 survive today)
+- Target: opt-in mutation survivor density below 0.3 (435 of 1,017 survive today)
 
