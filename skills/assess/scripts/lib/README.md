@@ -1200,7 +1200,11 @@ Layer 1 write-side truth pressure. Two tiers:
   counts as run when any group recovered records. Every group draws on one `MUTATION_TIMEOUT` budget: the
   snapshot and the run are bounded by what remains, and a copy (not interruptible) is
   checked against the deadline before and after, so a later group can record a timeout
-  without copying. On this path the
+  without copying. mutmut 3 saves each verdict to its `.meta` as it lands, so a run stopped
+  at the budget keeps the mutants it tested: the group reports them with `partial: true`
+  and a `reason` saying the figures cover only the mutants tested before the stop (mutmut
+  tests the fastest first), and records a timeout only when no focus-file verdict was
+  saved. On this path the
   assessed tree is never written to. A version neither probe can
   read takes the mutmut 2 path, which runs in the assessed repo and leaves mutmut's
   `.mutmut-cache` there. Whichever path runs, a tool that exits non-zero without yielding mutants
