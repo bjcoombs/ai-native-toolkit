@@ -439,7 +439,7 @@ exists. `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-conf
 baseline entries rank at half weight). `attach_liveness_blocks`,
 `coverage_report_block`, `attach_keyhole_blocks` and `attach_exclusion_disclosures`
 copy the liveness, coverage, keyhole and exclusion-disclosure blocks into the context.
-Runs no scan of its own besides Tier 0. Tests: `tests/test_assess_core.py`.
+Runs no scan of its own besides Tier 0. Tests: `tests/test_context_blocks.py`.
 
 **`scan_registry.py`**
 The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
@@ -549,7 +549,8 @@ stays False, and Layer 6 is still held at Partial with `MUTATION_PARTIAL_ANNOTAT
 One complete group lifts the hold. `layer6_cap_violation` turns the cap into the
 refusal `assess_finalize` raises. Both the default run and
 `assess_core --opt-in-mutation` call it, so the two write one shape. Tests:
-`tests/test_assess_core.py`, `tests/test_mutation_cap_partial.py`.
+`tests/test_mutation_cap.py`, `tests/test_mutation_cap_partial.py`, `tests/test_assess_core.py`
+(opt-in pass).
 
 **`mutation_refresh.py`**
 Rebuilds the keyhole products that read `test_pressure` after the opt-in mutation pass
@@ -685,7 +686,7 @@ excluded-before-finalize pages, adds graduated hotspots to `index.md` with their
 metrics, saves `first-flagged.json`, replaces a superseded unfinalized log entry and
 appends this run's, then verifies the log chain. It returns a `RunWiki` (the test index
 it built, the retired and dropped paths, the chain verdict) for `build_run_context` to
-copy into run-context.json. Tests: `tests/test_assess_core.py`,
+copy into run-context.json. Tests: `tests/test_run_wiki.py`,
 `tests/test_sibling_tests.py`, `tests/test_log_supersede.py`.
 
 **`wiki_state.py`**
@@ -696,8 +697,8 @@ finds the previous run-context when this run measures the same commit on the sam
 `excluded_after_unfinalized_run` and `retire_excluded_unfinalized` handle the files only
 a never-finalized superseded run flagged and config now excludes (#356);
 `sweep_superseded_history` and `drop_superseded_log_entry` remove that run's history
-rows and log entry (#355, #421). Tests: `tests/test_assess_core.py`,
-`tests/test_log_supersede.py`.
+rows and log entry (#355, #421). Tests: `tests/test_wiki_state.py`,
+`tests/test_run_wiki.py` (index rows), `tests/test_log_supersede.py`.
 
 **`wiki_writer.py`**
 Renders and writes the `.assess/` wiki files (`index.md`, `log.md`,
@@ -775,7 +776,7 @@ missing or unparseable plugin version, a changed stats schema or a MAJOR plugin 
 voids the diff (MAJOR also resets the trend); a MINOR/PATCH bump keeps it armed unless a
 complexity backend's version moved (`stats_tool_versions` reads the `<tool>_version`
 stamps, skipping `_NON_TOOL_VERSION_KEYS`). `prior_stamps` reads the prior snapshot's
-plugin and schema versions. Stdlib only. Tests: `tests/test_assess_core.py`,
+plugin and schema versions. Stdlib only. Tests: `tests/test_diff_reliability.py`,
 `tests/test_complexity_treemap.py`.
 
 **`stats_diff.py`**
@@ -816,7 +817,7 @@ the best grade (`None` when no committed file exists, distinct from `F`).
 `broken_instruction_refs` adds doc links to a missing instruction file;
 `detect_ancestor_instructions` names the ancestor and global files a clone never sees
 (#57); `instruction_file_size` feeds the bloat signal. Tests:
-`tests/test_assess_core.py`, `tests/test_doc_staleness.py`.
+`tests/test_instruction_files.py`, `tests/test_doc_staleness.py`.
 
 **`agent_instructions_grader.py`**
 Heuristic scoring of agent instruction files (CLAUDE.md, AGENTS.md, GEMINI.md,
