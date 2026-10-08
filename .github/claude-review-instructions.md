@@ -68,8 +68,8 @@ The `lib/` core does all data/math with **no AI**, and reaches the network only
 through `lib/gh_cli.py` (optional live GitHub reads via the `gh` CLI that resolve the
 remote first and degrade to `available: false`) and the opt-in mutation pass's uv
 runner in `lib/test_pressure/mutmut3.py` (`uv run --project` in a scratch copy, which
-may download the assessed package's dependencies on first use); the LLM only writes
-prose via the `assess_finalize.py` write-back. Flag:
+may download the assessed package's dependencies plus the pinned mutmut and pytest
+on first use); the LLM only writes prose via the `assess_finalize.py` write-back. Flag:
 - AI calls, nondeterminism, or network access outside those two paths creeping into
   `skills/assess/scripts/lib/`, and any `gh_cli` caller that reports a clean result
   when a read failed.
