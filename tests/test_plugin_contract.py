@@ -24,8 +24,15 @@ EXTERNAL_SKILLS = {
 BUILTIN_AGENTS = {"general-purpose", "Explore", "Plan", "statusline-setup"}
 
 PLACEHOLDER_RE = re.compile(r"\b(TODO|TBD|FIXME)\b")
-# No trailing \b: bash reads $1x and $10 as $1 followed by text.
-BARE_POSITIONAL_RE = re.compile(r"\$[1-9]")
+# Claude Code's positional placeholders are 0-based ($0 is the first argument),
+# so $0 is guarded too; that also catches shell's $0 (the script name), which
+# substitution corrupts the same way. No trailing \b: bash reads $1x and $10 as
+# $1 followed by text.
+BARE_POSITIONAL_RE = re.compile(r"\$[0-9]")
+# The agent `color` values Claude Code documents; any other value is ignored
+# without an error, so the agent silently gets no colour.
+# https://code.claude.com/docs/en/sub-agents.md
+AGENT_COLORS = {"red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"}
 # Any indent: substitution ignores markdown structure, so a fence nested in a
 # list item is corrupted the same way.
 FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
@@ -148,6 +155,26 @@ def test_skill_frontmatter(d):
     assert _fm_scalar(fm, "description"), f"{d.name}: non-empty description required"
 
 
+def agent_files():
+    # README.md is the directory's index, not an agent definition.
+    if not AGENTS.is_dir():
+        return []
+    return sorted(p for p in AGENTS.glob("*.md") if p.name != "README.md")
+
+
+@pytest.mark.parametrize("p", agent_files(), ids=lambda p: p.stem)
+def test_agent_frontmatter(p):
+    fm, _ = _split_frontmatter(p)
+    assert fm is not None, f"{p.name}: missing YAML frontmatter"
+    assert _fm_scalar(fm, "name") == p.stem, f"{p.name}: name: must match filename"
+    assert _fm_scalar(fm, "description"), f"{p.name}: non-empty description required"
+    color = _fm_scalar(fm, "color")
+    assert color in AGENT_COLORS, (
+        f"{p.name}: color {color!r} is not a documented Claude Code agent colour "
+        f"({', '.join(sorted(AGENT_COLORS))}); an unknown value is ignored silently"
+    )
+
+
 @pytest.mark.parametrize("d", skill_dirs(), ids=lambda d: d.name)
 def test_skill_has_trigger_clause(d):
     fm, _ = _split_frontmatter(d / "SKILL.md")
@@ -210,14 +237,18 @@ def test_unclosed_fence_leaves_the_tail_in_scope():
 
 @pytest.mark.parametrize("p", shipped_md(), ids=lambda p: str(p.relative_to(REPO)))
 def test_no_bare_positional_in_skill_md(p):
-    # Claude Code substitutes the invocation's arguments into bare $1..$9
-    # anywhere in a SKILL.md before the model reads it, fenced or not, so a
-    # shell function or awk field reference runs with argument words in place
-    # of its parameters. Brace form (${1}) and awk's $(1) are left alone.
-    # Commands are exempt: there $1..$9 is the documented per-argument
-    # placeholder, used on purpose.
+    # Claude Code substitutes the invocation's arguments into bare $0..$9
+    # anywhere in a SKILL.md before the model reads it, fenced or not; the
+    # placeholders are 0-based, so $0 is the first argument and $1 the second
+    # (https://code.claude.com/docs/en/skills.md, "String substitutions"). A
+    # shell function, a shell $0, or an awk field reference therefore runs with
+    # argument words in place of its parameters. Brace form (${0}) and awk's
+    # $(0) are left alone. Named placeholders ($name) need no guard: they exist
+    # only for skills that declare an `arguments` frontmatter list, and none
+    # here does. Commands are exempt: there $0..$9 is the documented
+    # per-argument placeholder, used on purpose.
     if p.name != "SKILL.md":
-        pytest.skip("commands use $1..$9 as intended argument placeholders")
+        pytest.skip("commands use $0..$9 as intended argument placeholders")
     for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
         m = BARE_POSITIONAL_RE.search(line)
         assert not m, (
