@@ -75,6 +75,9 @@ def test_diff_no_prior_means_all_new(current_stats: dict) -> None:
     assert len(diff.regressed) == 0
     assert len(diff.persistent) == 0
     assert len(diff.new) == len(current_stats["top_hotspots"])
+    # A count alone let a mutant that drops every path survive mutation testing.
+    assert [h.path for h in diff.new] == [
+        h["path"] for h in current_stats["top_hotspots"]]
 
 
 def test_diff_summary_counts(prior_stats: dict, current_stats: dict) -> None:

@@ -59,7 +59,8 @@ def load_stats(path: Path) -> dict | None:
     """Load stats JSON from path, or None if file doesn't exist."""
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    stats: dict = json.loads(path.read_text(encoding="utf-8"))
+    return stats
 
 
 def hotspot_commits(h: dict) -> int:
@@ -113,7 +114,8 @@ def _max_fn_delta(prior_h: dict, current_h: dict) -> float | None:
     before, after = prior_h.get("max_fn_ccn"), current_h.get("max_fn_ccn")
     if before is None or after is None:
         return None
-    return after - before
+    delta: float = after - before
+    return delta
 
 
 def _aggregate_worsened(t: HotspotTransition) -> bool:

@@ -23,6 +23,7 @@ structured data + the named findings; the LLM write-back fills judgement later.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -1188,7 +1189,7 @@ def render_prescribed_actions(prescribed: list[dict]) -> str:
 # Orchestration entry point
 # --------------------------------------------------------------------------
 
-def _safe_block(label: str, fn, fallback: dict) -> dict:
+def _safe_block(label: str, fn: Callable[[], dict], fallback: dict) -> dict:
     """Run a block builder, degrading to ``fallback`` on any failure.
 
     Each new signal does git-log / static-graph work; a hang or parse failure in

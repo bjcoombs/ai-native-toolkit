@@ -675,8 +675,8 @@ def _compute_communities(repo_root: Path) -> list[set[str]]:
             _detect_communities,
             _NETWORKX_AVAILABLE,
             discover_packages,
-            nx,
         )
+        import networkx as nx
     except ImportError:  # pragma: no cover - exercised only on a broken env
         return []
     if not _NETWORKX_AVAILABLE:

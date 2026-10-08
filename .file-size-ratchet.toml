@@ -40,24 +40,24 @@ lines = 1422
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."skills/assess/scripts/assess_core.py"]
-lines = 1975
-reason = "pre-existing; ratchet from 2026-10-07"
+lines = 1976
+reason = "raised by #468: mypy strict type annotations"
 
 [ceilings."skills/assess/scripts/assess_finalize.py"]
-lines = 840
-reason = "pre-existing; ratchet from 2026-10-07"
+lines = 841
+reason = "raised by #468: mypy strict type annotations"
 
 [ceilings."skills/assess/scripts/complexity-treemap.py"]
-lines = 1532
-reason = "pre-existing; ratchet from 2026-10-07"
+lines = 1534
+reason = "raised by #468: mypy strict type annotations"
 
 [ceilings."skills/assess/scripts/lib/doc_graph.py"]
-lines = 1095
-reason = "pre-existing; ratchet from 2026-10-07"
+lines = 1104
+reason = "raised by #468: mypy strict type annotations"
 
 [ceilings."skills/assess/scripts/lib/keyhole_signals.py"]
-lines = 1639
-reason = "pre-existing; ratchet from 2026-10-07"
+lines = 1640
+reason = "raised by #468: mypy strict type annotations"
 
 [ceilings."skills/assess/scripts/lib/wiki_writer.py"]
 lines = 1015

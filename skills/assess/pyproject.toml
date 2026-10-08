@@ -60,27 +60,62 @@ max-complexity = 15
 
 [tool.mypy]
 # Issue #79: type hints existed but were unenforced. This gate makes them a
-# contract. Scoped to the deterministic core (lib/) where the annotations are
-# densest and most load-bearing, plus the orchestrator assess_core.py (the
-# most-churned file, ratcheted in here), and the two SVG renderers. The
-# renderers have hyphenated filenames, so they are listed as paths, not module
-# names. The remaining orchestrator scripts (assess_finalize.py and the rest)
-# and the build pipeline are the next ratchet step.
-files = [
-    "scripts/lib",
-    "scripts/assess_core.py",
-    "scripts/doc-graph-svg.py",
-    "scripts/complexity-treemap.py",
-]
-# lib/ is a package; treat scripts/ as the import base so lib.<mod> resolves and
-# the back-compat shims (scripts/stats_diff.py, lib/assess_core.py) don't collide
-# as duplicate top-level modules.
+# contract. It covers every module under scripts/: the deterministic core
+# (lib/), every orchestrator (assess_core, assess_finalize, assess_report,
+# assess_gate, assess_emit_workflow), and the two SVG renderers. Listing the
+# directory rather than each file means a new orchestrator joins the gate by
+# construction instead of waiting for a ratchet step. tests/ is out of scope.
+files = ["scripts"]
+# lib/ is a package; treat scripts/ as the import base so lib.<mod> resolves
+# the same way the orchestrators import it at runtime.
 mypy_path = "scripts"
 explicit_package_bases = true
 namespace_packages = true
-# networkx and grimp ship no type stubs; their absence is not a code defect.
-# The lib modules carry a defensive mypy assignment suppression on their
-# degrade-gracefully ``nx = None`` fallbacks so they also type-check when stubs
-# ARE installed; ``warn_unused_ignores`` is left off so those stay put.
+# networkx ships no type stubs; their absence is not a code defect (grimp ships
+# py.typed, so it is checked). The lib modules' degrade-gracefully ``nx = None`` fallbacks carry
+# ``# type: ignore[assignment, unused-ignore]``: without stubs nx is Any and the
+# ignore is unused; with stubs installed the None assignment is a real mismatch.
 ignore_missing_imports = true
-warn_redundant_casts = true
+# Strict, minus one flag. disallow_any_generics stays off: it flags ~430 bare
+# ``dict`` / ``list`` annotations, almost all on JSON blobs (run-context,
+# stats sidecars, finding rows). Rewriting each as ``dict[str, Any]`` adds
+# noise and no information; the honest fix is a TypedDict per known shape,
+# which is the next ratchet step.
+strict = true
+disallow_any_generics = false
+# strict does not reject a bare ``# type: ignore``; this makes the error code
+# mandatory. The trailing ``  # reason`` stays a house convention mypy cannot check.
+enable_error_code = ["ignore-without-code"]
+
+[tool.mutmut]
+# Layer 6 truth-pressure: line coverage shows the tests execute this code,
+# mutation testing shows they would fail if it were wrong. Scoped to three
+# deterministic, well-tested lib/ modules from /assess's own test-focus list;
+# widening the scope is a deliberate ratchet, since a run is O(mutants).
+# Run weekly and on demand by .github/workflows/mutation.yml, never per PR.
+#
+# "src" is a link to scripts/ made at run time (`ln -sfn scripts src`, ignored
+# by git). mutmut 3 names a mutant after its file path with only a leading
+# "src." stripped, so scripts/lib/x.py would be keyed scripts.lib.x while the
+# tests import it as lib.x (pythonpath = scripts) and no mutant would match.
+# Run locally from skills/assess, then clean up: /assess's file walks do not
+# prune mutants/ (copies of the sources and tests) or the src link, so a later
+# /assess of this checkout would count those files twice.
+#   ln -sfn scripts src
+#   uv run --with mutmut==3.8.0 --with pytest mutmut run
+#   uv run --with mutmut==3.8.0 --with pytest mutmut results   # survivors
+#   rm -rf mutants src
+source_paths = ["src"]
+only_mutate = [
+    "src/lib/stats_diff.py",
+    "src/lib/promissory_markers.py",
+    "src/lib/doc_staleness.py",
+]
+# Each mutant runs only the tests mutmut's coverage pass maps to it; this list
+# bounds that pass to the suites that own the modules in scope. (tests_dir is
+# deprecated in mutmut 3.8 and appends the whole tests/ tree to this list.)
+pytest_add_cli_args_test_selection = [
+    "tests/test_stats_diff.py",
+    "tests/test_promissory_markers.py",
+    "tests/test_doc_staleness.py",
+]
