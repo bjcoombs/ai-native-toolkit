@@ -10,8 +10,9 @@ The scan is static and bounded:
 
 - Only files that are tests by name (``sibling_tests.is_test_path``) are read,
   and only those that define a test: a top-level ``test*`` function or
-  ``Test*`` class in Python, an ``it(`` / ``test(`` / ``describe(`` call in
-  JS/TS. A ``conftest.py`` or a helper such as ``keyhole_helpers.py`` is not a
+  ``Test*`` class (or a ``*TestCase`` subclass, or a class with ``test*``
+  methods) in Python, an ``it(`` / ``test(`` / ``describe(`` call outside a
+  comment in JS/TS. A ``conftest.py`` or a helper such as ``keyhole_helpers.py`` is not a
   test by name, and a helper named ``test_utils.py`` defines no test, so a
   support module that imports everything credits nothing.
 - Python is parsed with ``ast`` (no execution). ``import a.b`` and
@@ -39,6 +40,8 @@ also needs that ancestor to be below the repository root, because a bare name
 with no path relationship is as likely to be the standard library's ``json``
 as the repository's ``tools/x/json.py``; a module at the root itself
 (``pkg/__init__.py`` for ``import pkg``) is exactly that name and counts. A
+one-part name that is a standard-library module (``import json`` from
+``tools/tests/``) never credits, however close a same-named source sits. A
 module that lives inside a test directory (``tests/``, ``test/``, ``spec/``,
 ``__tests__/``) is test support, never credited by this tier. Resolution
 indexes test modules too, so ``from lib import test_focus`` names the source
@@ -79,9 +82,46 @@ MAX_FILE_BYTES = 1_000_000
 _JS_SPEC_RE = re.compile(
     r"""\b(?:import|export)\s+(type\s+)?[\w*{}\s,$]*?\bfrom\s*['"](\.{1,2}/[^'"\n]+)['"]"""
     r"""|\b(?:import\s*\(?|require\s*\()\s*['"](\.{1,2}/[^'"\n]+)['"]""")
+# ``//`` comments and ``/* */`` blocks that start a line, stripped before the
+# JS scan (a ``/*`` mid-line may sit in a string such as a glob pattern)
+# so a commented-out import or ``it(`` is not evidence. Strings are not parsed:
+# an import spelled inside a string literal still matches.
+_JS_COMMENT_RE = re.compile(r"^[ \t]*(?:/\*.*?\*/|//[^\n]*)", re.DOTALL | re.MULTILINE)
 _JS_TEST_RE = re.compile(r"\b(?:it|test|describe)(?:\.\w+)?\s*\(")
 
 Module = tuple[str, ...]
+
+# Top-level standard-library module names: the union of
+# ``sys.stdlib_module_names`` over CPython 3.10-3.14, private names dropped,
+# pinned so the output does not depend on the interpreter running the scan. A
+# one-part import of one of these (``import json``) names the standard library
+# at runtime, whatever ``json.py`` the repository holds, so it credits nothing.
+_STDLIB_TOP_LEVEL = frozenset("""
+abc aifc annotationlib antigravity argparse array ast asynchat asyncio
+asyncore atexit audioop base64 bdb binascii binhex bisect builtins bz2
+calendar cgi cgitb chunk cmath cmd code codecs codeop collections colorsys
+compileall compression concurrent configparser contextlib contextvars copy
+copyreg cProfile crypt csv ctypes curses dataclasses datetime dbm decimal
+difflib dis distutils doctest email encodings ensurepip enum errno
+faulthandler fcntl filecmp fileinput fnmatch fractions ftplib functools gc
+genericpath getopt getpass gettext glob graphlib grp gzip hashlib heapq hmac
+html http idlelib imaplib imghdr imp importlib inspect io ipaddress
+itertools json keyword lib2to3 linecache locale logging lzma mailbox mailcap
+marshal math mimetypes mmap modulefinder msilib msvcrt multiprocessing netrc
+nis nntplib nt ntpath nturl2path numbers opcode operator optparse os
+ossaudiodev pathlib pdb pickle pickletools pipes pkgutil platform plistlib
+poplib posix posixpath pprint profile pstats pty pwd py_compile pyclbr pydoc
+pydoc_data pyexpat queue quopri random re readline reprlib resource
+rlcompleter runpy sched secrets select selectors shelve shlex shutil signal
+site smtpd smtplib sndhdr socket socketserver spwd sqlite3 sre_compile
+sre_constants sre_parse ssl stat statistics string stringprep struct
+subprocess sunau symtable sys sysconfig syslog tabnanny tarfile telnetlib
+tempfile termios textwrap this threading time timeit tkinter token tokenize
+tomllib trace traceback tracemalloc tty turtle turtledemo types typing
+unicodedata unittest urllib uu uuid venv warnings wave weakref webbrowser
+winreg winsound wsgiref xdrlib xml xmlrpc zipapp zipfile zipimport zlib
+zoneinfo
+""".split())
 
 
 def module_parts(rel_path: str) -> Module:
@@ -92,12 +132,25 @@ def module_parts(rel_path: str) -> Module:
     return dirs if p.stem == "__init__" else (*dirs, p.stem)
 
 
+def _is_test_class(node: ast.ClassDef) -> bool:
+    """A pytest ``Test*`` class, a ``unittest`` / Django ``*TestCase``
+    subclass, or any class defining a ``test*`` method."""
+    if node.name.startswith("Test"):
+        return True
+    for base in node.bases:
+        name = base.attr if isinstance(base, ast.Attribute) else getattr(base, "id", "")
+        if name.endswith("TestCase"):
+            return True
+    return any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+               and n.name.startswith("test") for n in node.body)
+
+
 def _defines_python_test(tree: ast.Module) -> bool:
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if node.name.startswith("test"):
                 return True
-        elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+        elif isinstance(node, ast.ClassDef) and _is_test_class(node):
             return True
     return False
 
@@ -158,6 +211,7 @@ def js_imports(source: str, test_dir: str, files: frozenset[str]) -> list[str]:
     """Repo-relative files a JS/TS test imports through relative specifiers, or
     an empty list when it defines no test. A specifier resolves to the file as
     written, then with each JS/TS suffix, then to an ``index`` file."""
+    source = _JS_COMMENT_RE.sub("", source)
     if not _JS_TEST_RE.search(source):
         return []
     out: list[str] = []
@@ -245,7 +299,7 @@ def _resolve(target: Target, test_dirs: Module,
     support module included), or ``None``."""
     exact, names = target
     for name in names:
-        if not name:
+        if not name or (not exact and len(name) == 1 and name[0] in _STDLIB_TOP_LEVEL):
             continue
         hit = (by_module.get(name) if exact
                else _closest(by_stem.get(name[-1], []), name, test_dirs))

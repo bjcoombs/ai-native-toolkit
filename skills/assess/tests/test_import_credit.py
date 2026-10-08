@@ -160,6 +160,52 @@ def test_bare_import_needs_a_unique_closest_source_below_the_root(
     assert tc.has_sibling_test(tmp_path, "svc/d/helpers.py", index=index) is False
 
 
+def test_stdlib_name_never_credits_a_close_same_named_source(tmp_path: Path) -> None:
+    """``import json`` from ``tools/tests/`` loads the standard library at
+    runtime even though ``tools/x/json.py`` shares ``tools/`` with the test."""
+    _write(tmp_path, {"tools/x/json.py": "", "tools/x/codec.py": "",
+                      "tools/tests/test_j.py": "import json\nimport codec" + A_TEST})
+    index = tc.build_test_index(tmp_path)
+    assert tc.has_sibling_test(tmp_path, "tools/x/json.py", index=index) is False
+    assert tc.has_sibling_test(tmp_path, "tools/x/codec.py", index=index) is True
+
+
+@pytest.mark.parametrize("body", [
+    "class QuestionModelTests(TestCase):\n    pass\n",
+    "class FooChecks(unittest.TestCase):\n    pass\n",
+    "class Checks:\n    def test_a(self):\n        pass\n",
+])
+def test_unittest_style_classes_qualify(tmp_path: Path, body: str) -> None:
+    _write(tmp_path, {"pkg/mod.py": "",
+                      "tests/test_a.py": "import unittest\nimport pkg.mod\n" + body})
+    assert _credited(tmp_path, "pkg/mod.py") is True
+
+
+def test_plain_class_without_tests_does_not_qualify(tmp_path: Path) -> None:
+    _write(tmp_path, {"pkg/mod.py": "", "tests/test_a.py":
+                      "import pkg.mod\nclass Helper(Base):\n    def run(self):\n"
+                      "        pass\n"})
+    assert _credited(tmp_path, "pkg/mod.py") is False
+
+
+def test_js_comments_are_not_evidence(tmp_path: Path) -> None:
+    """A commented-out import credits nothing, and a test whose only ``it(``
+    is commented out defines no test."""
+    _write(tmp_path, {
+        "web/src/a.ts": "", "web/src/b.ts": "", "web/src/c.ts": "",
+        "web/spec/one.test.ts": ("// import { x } from '../src/a';\n"
+                                 "/* import { y } from '../src/b'; */\n"
+                                 "import { z } from '../src/c';\n"
+                                 "test('z', () => {});\n"),
+        "web/spec/two.test.ts": ("import { y } from '../src/b';\n"
+                                 "// it('was disabled', () => {});\n"),
+    })
+    index = tc.build_test_index(tmp_path)
+    assert tc.has_sibling_test(tmp_path, "web/src/c.ts", index=index) is True
+    for src in ("web/src/a.ts", "web/src/b.ts"):
+        assert tc.has_sibling_test(tmp_path, src, index=index) is False, src
+
+
 def test_unparseable_or_undecodable_test_credits_nothing(tmp_path: Path) -> None:
     _write(tmp_path, {"pkg/mod.py": "",
                       "tests/test_broken.py": "import pkg.mod\ndef test_(:\n"})

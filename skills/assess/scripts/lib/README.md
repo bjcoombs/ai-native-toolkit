@@ -1267,15 +1267,18 @@ The import tier of the sibling-test probe (issue #485): a source counts as havin
 a test file when a test file imports it, so a large test split by concern
 (`test_keyhole_<family>.py`, none named after `keyhole_signals.py`) still credits
 its subject. Reads only files that are tests by name and define a test (a
-top-level `test*` function or `Test*` class; an `it(` / `test(` / `describe(`
-call), so a `conftest.py`, a helper module, or a `test_utils.py` that defines no
+top-level `test*` function, or a `Test*` class, `*TestCase` subclass or class
+with `test*` methods; an `it(` / `test(` / `describe(` call outside a
+line-leading comment), so a `conftest.py`, a helper module, or a `test_utils.py` that defines no
 test credits nothing. Python is parsed with `ast`: absolute names credit the
 source whose module path ends with the name (closest unique source to the test;
 a one-part name needs a common directory below the root unless the module sits
-at the root), relative imports resolve exactly, and `from pkg import mod` names
+at the root, and a one-part standard-library name such as `json` - from a pinned
+union over CPython 3.10-3.14 - never credits), relative imports resolve exactly, and `from pkg import mod` names
 `pkg/mod.py` when it exists, else `pkg/__init__.py`. JS/TS is a regex over
 relative specifiers only (`import ... from`, `export ... from`, side-effect and
-dynamic `import`, `require`; `import type` skipped); alias and package
+dynamic `import`, `require`; `import type` and line-leading comments skipped;
+string literals are not parsed); alias and package
 specifiers keep the name match, as do all other languages. Modules inside a test
 directory are support, never credited. Every module a qualifying test imports
 directly is credited. Runs lazily, once per `TestIndex`, over the index's test
