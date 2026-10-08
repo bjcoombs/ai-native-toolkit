@@ -100,9 +100,9 @@ enable_error_code = ["ignore-without-code"]
 # mutation testing shows they would fail if it were wrong. Scoped to five
 # deterministic lib/ modules: three small ones from /assess's own test-focus
 # list plus the two largest complexity hotspots (doc_graph, keyhole_signals),
-# 4,528 mutants in all (22 min locally at 4 workers). Widening the scope is a
-# deliberate ratchet, since a run is O(mutants): keep the weekly run well
-# inside the workflow's 45m budget.
+# about 4.5k mutants as of 2026-10 (the weekly job summary has the live count).
+# Widening the scope is a deliberate ratchet, since a run is O(mutants): keep
+# the weekly run well inside the workflow's 45m budget.
 # Run weekly and on demand by .github/workflows/mutation.yml, never per PR.
 #
 # "src" is a committed relative symlink to scripts/. mutmut 3 names a mutant
