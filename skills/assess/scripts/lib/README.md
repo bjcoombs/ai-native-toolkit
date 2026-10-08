@@ -157,6 +157,19 @@ Python import-graph analysis (Signals A1-A4) via `grimp` + `networkx`:
 Degrades to `available: False` when `grimp`/`networkx` are absent rather than
 blocking the run.
 
+Packages resolve by path, never by import name. grimp's default finder asks
+`importlib.util.find_spec`, which answers from `sys.modules` first, so a target
+package named `lib` (this repo's own `skills/assess/scripts/lib`) or `json` was
+graphed from whichever module of that name the running `/assess` had already
+imported. `build_import_map` swaps in a finder that maps each name to the
+directory `discover_packages` found, for the length of each build, and leaves
+`sys.path` and `sys.modules` alone. Two discovered packages sharing a name
+(`a/lib`, `b/lib`) go in separate builds, are graphed under their repo-relative
+paths, and are listed in the block's `name_collisions`; imports between builds
+are not resolved, since which copy wins depends on a runtime `sys.path`.
+`structure_drift.py` builds its module map and communities through the same
+`build_import_map` / `import_digraph`.
+
 ### Document analysis
 
 **`doc_graph.py`** *(co-change hotspot)*
