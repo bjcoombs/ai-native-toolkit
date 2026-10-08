@@ -251,22 +251,29 @@ def _is_importable_name(name: str) -> bool:
 class _PathPackageFinder:
     """grimp package finder that answers from discovered paths, not imports.
 
-    Stands in for grimp's ``ImportLibPackageFinder`` (same
-    ``determine_package_directories`` signature), whose ``find_spec`` lookup
-    returns whatever module of that name is already imported.
+    Stands in for grimp's ``ImportLibPackageFinder``, whose ``find_spec``
+    lookup returns whatever module of that name is already imported. The port
+    changed shape in grimp 3.14: 3.0-3.13 call ``determine_package_directory``
+    (one path), 3.14+ call ``determine_package_directories`` (a set). Both are
+    implemented so every grimp the ``>=3.0`` floor admits works.
     """
 
     def __init__(self, dirs: dict[str, Path]) -> None:
         self._dirs = dirs
 
-    def determine_package_directories(
+    def determine_package_directory(
         self, package_name: str, file_system: object,
-    ) -> set[str]:
+    ) -> str:
         del file_system  # part of grimp's port signature; unused here
         directory = self._dirs.get(package_name)
         if directory is None:
             raise ValueError(f"package {package_name!r} was not discovered")
-        return {str(directory)}
+        return str(directory)
+
+    def determine_package_directories(
+        self, package_name: str, file_system: object,
+    ) -> set[str]:
+        return {self.determine_package_directory(package_name, file_system)}
 
 
 @contextmanager

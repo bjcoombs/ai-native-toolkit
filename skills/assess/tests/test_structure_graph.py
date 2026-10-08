@@ -386,14 +386,27 @@ def test_same_named_packages_are_graphed_separately_and_disclosed(tmp_path):
 
 
 def test_qualified_name_escapes_dots_in_the_path(tmp_path):
-    _pkg(tmp_path / "v1.2", "lib", {"m": ""})
+    _pkg(tmp_path / "v1.2", "lib", {"m": "X = 1\n"})
     _pkg(tmp_path / "v2", "lib", {"n": ""})
     result = sg.analyze_structure(tmp_path)
     names = _module_names(result)
     assert "v1%2E2/lib.m" in names
     assert "v2/lib.n" in names
     sizes = {fp["module"]: fp["size"] for fp in result.footprints}
-    assert sizes["v1%2E2/lib.m"] == 0  # empty file, but resolved (no crash)
+    assert sizes["v1%2E2/lib.m"] == 1  # mapped back to v1.2/lib/m.py
+
+
+def test_path_finder_serves_both_grimp_port_shapes(tmp_path):
+    # grimp 3.0-3.13 call determine_package_directory (one path); 3.14+ call
+    # determine_package_directories (a set). Both must answer from the path.
+    finder = sg._PathPackageFinder({"lib": tmp_path / "lib"})
+    assert finder.determine_package_directory("lib", None) == str(tmp_path / "lib")
+    assert finder.determine_package_directories("lib", None) == {
+        str(tmp_path / "lib"),
+    }
+    import pytest
+    with pytest.raises(ValueError):
+        finder.determine_package_directory("json", None)
 
 
 def test_non_identifier_package_dir_does_not_sink_the_scan(tmp_path):
