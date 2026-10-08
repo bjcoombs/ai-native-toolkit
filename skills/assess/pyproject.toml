@@ -104,7 +104,7 @@ enable_error_code = ["ignore-without-code"]
 # overrides. Uncovered today: the exceptions below plus the orchestrators
 # assess_core, assess_finalize, assess_report and complexity-treemap.
 [[tool.mypy.overrides]]
-module = ["lib.*", "assess_gate", "doc-graph-svg"]
+module = ["lib.*", "assess_emit_workflow", "assess_gate", "doc-graph-svg"]
 disallow_any_generics = true
 
 [[tool.mypy.overrides]]
