@@ -467,7 +467,33 @@ scope), `_integrate_blocks` (the four `_safe_block` builds), one `_*_paths` help
 that needs more than a list comprehension, `_finding_path_inputs` (the `assemble_findings`
 input, with the degenerate-churn gate on `_CHURN_DERIVED_FINDINGS`) and `_filter_findings`
 (prune, then config excludes). A new finding adds a helper and a key there, not a branch in
-`integrate`; the C901 gate keeps each step under ccn 15.
+`integrate`; the C901 gate keeps each step under ccn 15. The attention list and every
+product rendered from the findings (`findings_markdown`, `keyhole_summary`,
+`attention_low_signal`, `prescribed_actions`, `archived_finding_paths`) come from one
+function, `finding_products`, which `mutation_refresh.py` calls too.
+
+**`untrusted_hotspot.py`**
+The E1 trust axis, a leaf module. `find_untrusted_hotspots` crosses the complexity
+`top_hotspots` with the per-file mutation survivor density in `test_pressure.per_file`
+and returns the hotspots at or over `DEFAULT_SURVIVOR_DENSITY_THRESHOLD` (0.3);
+`untrusted_hotspot_paths` wraps it so a malformed block degrades to `[]`. Silent without
+per-file mutation data, so the default read-only run never fires it. `keyhole_signals`
+re-exports both names. Tests: `tests/test_keyhole_signals.py` (E1 cases) and
+`tests/test_mutation_refresh.py`.
+
+**`mutation_refresh.py`**
+Rebuilds the keyhole products that read `test_pressure` after the opt-in mutation pass
+(`assess_core --opt-in-mutation`), which otherwise rewrote only `test_pressure` and left
+E1 unable to fire in a real run. `refresh_mutation_findings` recomputes
+`untrusted_hotspot` through `untrusted_hotspot_paths` and `apply_config_excludes`, keeps
+every other finding and its action as stored (none of them reads `test_pressure`),
+reassembles in `FINDING_ORDER` through `assemble_findings`, then rewrites
+`derived_findings`, the `finding_products` keys and `excluded_as_archive`, and adds any
+config-excluded E1 path to `excluded_by_config`. A run-context with no
+`derived_findings` list is left untouched (returns `False`). `assess_core` hands it
+this run's `complexity-stats.json` (the scoped one under `--scope`) and the config
+excludes, then rewrites `badge.json` through `badge.write_findings_badge`. Tests:
+`tests/test_mutation_refresh.py`.
 
 The behaviour block exports the co-change pairs twice, at two scales. `change_coupling_pairs`
 is the repository-wide list, cut to `MAX_COUPLING_PAIRS` (100), and `change_coupling_pairs_total`
@@ -925,9 +951,10 @@ denominator) and its test `tests/test_archetype.py`.
 **`badge.py`**
 Shields.io endpoint badge for the wiki (`.assess/badge.json`). The shipped badge
 is deterministic by default: `assess_core` always writes the findings-count form
-(`fallback_badge`, "2 findings · 0 stale markers", colour banded from the counts)
-and stamps a `link` to `assess-report.md`, so a badge-clicker lands on the full
-report. The LLM-derived headline (`score_badge`, "7.0/8 · AI-Native",
+through `write_findings_badge` (`fallback_badge`, "2 findings · 0 stale markers",
+colour banded from the counts), which stamps a `link` to `assess-report.md`, so a
+badge-clicker lands on the full report; the opt-in mutation pass rewrites it the
+same way once the refreshed findings are in. The LLM-derived headline (`score_badge`, "7.0/8 · AI-Native",
 renormalised over its `denominator` - 8 for software, the applicable-layer count
 for a knowledge-base archetype, e.g. "2.5/3 · Knowledge Base · Solid") is *not*
 written to the badge; it appears inside `assess-report.md`, so the badge never

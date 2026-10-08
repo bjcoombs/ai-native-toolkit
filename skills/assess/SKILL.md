@@ -345,7 +345,7 @@ REOFFER_MUT=$(jq -r '.reoffer_mutation // false' "$REPO_ROOT/.assess/run-context
 - **Skip for now** - continue with the cheap read intact. Don't write a marker; ask again next run.
 - **Skip permanently for this repo** - `write_decline_marker "$MUT_TOOL"` so future runs don't ask. Re-declining restamps the marker at the current version, so the re-offer won't repeat within this major.
 
-**On accept (tool available):** run the opt-in mutation pass, then regenerate the heatmap with the survivor overlay. The core re-run reads the `test_focus` targets with test evidence itself, runs `scan_test_pressure(..., opt_in=True)` scoped to them, and rewrites the `test_pressure` block in `run-context.json` in place:
+**On accept (tool available):** run the opt-in mutation pass, then regenerate the heatmap with the survivor overlay. The core re-run reads the `test_focus` targets with test evidence itself, runs `scan_test_pressure(..., opt_in=True)` scoped to them, and rewrites the `test_pressure` block in `run-context.json` in place, together with what derives from it: `mutation_not_run_cap`, the `untrusted_hotspot` finding in `derived_findings`, `attention`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` and `badge.json`. Read those blocks after this step, not before:
 
 <!-- chat-skip:end -->
 ```bash

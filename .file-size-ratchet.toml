@@ -40,7 +40,7 @@ lines = 1422
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."skills/assess/scripts/assess_core.py"]
-lines = 1982
+lines = 1968
 reason = "raised by #468 and #469: mypy strict annotations, coverage-gate detector wiring"
 
 [ceilings."skills/assess/scripts/assess_finalize.py"]
@@ -56,7 +56,7 @@ lines = 1104
 reason = "raised by #468: mypy strict type annotations"
 
 [ceilings."skills/assess/scripts/lib/keyhole_signals.py"]
-lines = 1640
+lines = 1592
 reason = "raised by #468: mypy strict type annotations"
 
 [ceilings."skills/assess/scripts/lib/wiki_writer.py"]

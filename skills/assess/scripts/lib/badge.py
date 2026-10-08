@@ -185,5 +185,32 @@ def write_badge(assess_dir: Path, badge: dict[str, Any]) -> None:
     )
 
 
+def write_findings_badge(
+    assess_dir: Path, promissory: Any, derived_findings: list[dict],
+    run_id: str | None = None, scope: str | None = None,
+) -> None:
+    """Write the deterministic default badge, always.
+
+    The shipped ``badge.json`` is the deterministic findings-count form: a pure
+    function of measured run data, never an LLM-authored score. It is written on
+    every run and is no longer overwritten by ``assess_finalize`` - the
+    LLM-derived grade lives in ``assess-report.md``, and the badge's ``link``
+    funnels a badge-clicker there. ``run_id`` stamps the badge with the run that
+    produced it. ``scope`` (the repo-relative subtree) labels the badge for a
+    ``/assess <path>`` monorepo run.
+    """
+    stale = (
+        promissory.get("total_stale", 0)
+        if isinstance(promissory, dict) and promissory.get("available")
+        else 0
+    )
+    badge = fallback_badge(
+        concern_count_from_findings(derived_findings), stale, run_id=run_id,
+        scope=scope,
+    )
+    badge["link"] = "./assess-report.md"
+    write_badge(assess_dir, badge)
+
+
 def badge_exists(assess_dir: Path) -> bool:
     return (assess_dir / BADGE_FILENAME).exists()
