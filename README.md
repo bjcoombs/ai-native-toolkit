@@ -302,7 +302,7 @@ Workflow (personal setup, opt-in - see [Adapting](#adapting-for-your-workflow)):
 
 ### Agents (invoked by skills, or directly via `Agent(subagent_type=...)`)
 
-Full catalog: [`agents/README.md`](agents/README.md).
+Full catalog: [Map of Content, Agents](docs/index.md#agents).
 
 The Six Hats team that `/huddle` and `/6hats` orchestrate:
 
@@ -392,7 +392,7 @@ ai-native-toolkit/
 │   ├── 6hats/ understand/             # User-invoked framework skills
 │   ├── tm/ issues/ fix-pr/ fix-develop/ tm-marathon-config-example/   # User-invoked workflows
 │   └── marathon/ pr-review-merge/ ab-equivalence/   # Library skills
-├── agents/                            # Six Hats team + assess-layer-scorer - catalog in agents/README.md
+├── agents/                            # Six Hats team + assess-layer-scorer (agent files only; catalog in docs/index.md)
 ├── scripts/                           # Standalone ZIP build, floor checks, acceptance-contract gates
 │   ├── transform_skill.py             # Marker-based SKILL.md transformer
 │   ├── standalone_skill_config.py     # Per-skill config (names, descriptions, replacements)
@@ -412,7 +412,7 @@ ai-native-toolkit/
     └── example-*.svg                  # Real /assess heatmaps and doc graphs (README hero and gallery)
 ```
 
-Each subtree has a base doc that the [Map of Content](docs/index.md) links to: [`agents/README.md`](agents/README.md) and [`skills/README.md`](skills/README.md).
+The [Map of Content](docs/index.md) links each subtree's entry doc: [`skills/README.md`](skills/README.md) for skills, and its own [Agents](docs/index.md#agents) section for `agents/`, which holds no README because Claude Code would load one as an agent.
 
 ## Contributors
 
