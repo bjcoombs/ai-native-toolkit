@@ -148,8 +148,9 @@ def known_skill_names():
 
 
 def known_agent_names():
-    names = {p.stem for p in AGENTS.glob("*.md")} if AGENTS.is_dir() else set()
-    return names | BUILTIN_AGENTS
+    # Same walk as agent_files(), so the frontmatter contract and the
+    # subagent_type reference check agree on what counts as an agent.
+    return {p.stem for p in agent_files()} | BUILTIN_AGENTS
 
 
 @pytest.mark.parametrize("d", skill_dirs(), ids=lambda d: d.name)
@@ -161,10 +162,28 @@ def test_skill_frontmatter(d):
 
 
 def agent_files():
-    # README.md is the directory's index, not an agent definition.
+    # Every .md under agents/ is an agent definition: Claude Code registers each
+    # one as an agent, so none is exempt (a README there loaded as a bogus
+    # `ai-native-toolkit:README` agent until it moved to docs/index.md). The walk
+    # is recursive as a precaution: holding a nested doc to the agent contract is
+    # strict but harmless.
     if not AGENTS.is_dir():
         return []
-    return sorted(p for p in AGENTS.glob("*.md") if p.name != "README.md")
+    return sorted(AGENTS.rglob("*.md"))
+
+
+def test_every_agents_md_is_an_agent():
+    # A stray doc under agents/ (a README, notes) has no frontmatter `name` and
+    # would load as a bogus agent; catalog agents in docs/index.md instead.
+    strays = []
+    for p in agent_files():
+        fm, _ = _split_frontmatter(p)
+        if fm is None or not _fm_scalar(fm, "name"):
+            strays.append(str(p.relative_to(REPO)))
+    assert not strays, (
+        "every .md under agents/ loads as an agent and needs frontmatter with "
+        f"`name`; move docs out of agents/ (catalog lives in docs/index.md): {strays}"
+    )
 
 
 @pytest.mark.parametrize("p", agent_files(), ids=lambda p: p.stem)

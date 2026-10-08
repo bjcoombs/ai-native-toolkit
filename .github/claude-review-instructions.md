@@ -34,16 +34,19 @@ clean.
 ### 1. Plugin contract invariants
 The `plugin contract pytest` job encodes these, but catch them in review too:
 - **SKILL.md frontmatter**: `name` must match the directory; `description`
-  **must contain a `TRIGGER` clause** (the skill router matches on it).
+  **must contain a `TRIGGER` clause** (the skill router matches on it), except
+  in a user-invoked skill (`disable-model-invocation: true`), which must not
+  carry one.
 - **No placeholder tokens** (`TODO`, `TKTK`, `FIXME`, `{PLACEHOLDER}`) outside
-  code fences in any shipped `SKILL.md` / command file.
+  code fences in any shipped `SKILL.md`.
 - **Internal links resolve**: a relative markdown link `[x](./path)` must point
   to a real file. For illustrative file mentions use inline code (`` `CLAUDE.md` ``),
   never a clickable relative link - a dead link fails CI.
 - **marketplace / agents**: every plugin in `.claude-plugin/marketplace.json`
-  exists on disk; any agent a command names has an `agents/<name>.md`; agent
-  frontmatter has `name` (matches filename), `description`, `model`, and a
-  `color` from the allowed set.
+  exists on disk; any agent a skill names has an `agents/<name>.md`; every `.md`
+  under `agents/` is an agent (no README or other doc there: Claude Code loads
+  each one as an agent); agent frontmatter has `name` (matches filename),
+  `description`, `model`, and a `color` from the allowed set.
 
 ### 2. Versioning discipline
 Did the PR bump `.claude-plugin/plugin.json` `.version`? Substantive PRs must,

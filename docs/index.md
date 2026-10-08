@@ -7,7 +7,7 @@ The navigation index for `ai-native-toolkit`. Every shipped doc in this repo is 
 | Subtree | Entry doc | What lives there |
 |---------|-----------|------------------|
 | Skills | [`skills/`](../skills/README.md) | The plugin's skills - the headline `/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, plus `/ghsync`, the user-invoked workflows (`/tm`, `/issues`, `/fix-pr`, ...) and the team-orchestration library skills |
-| Agents | [`agents/`](../agents/README.md) | The Six Thinking Hats team that `/huddle` and `/6hats` orchestrate |
+| Agents | [Agents](#agents) below | The Six Thinking Hats team that `/huddle` and `/6hats` orchestrate, plus `/assess`'s layer scorer |
 | Docs | this file | Design history, runbooks, and the rendered example SVGs |
 
 ## Skills
@@ -60,7 +60,9 @@ Personal workflows (opt-in - see [Adapting for your workflow](../README.md#adapt
 
 ## Agents
 
-The Six Thinking Hats team, indexed in [`agents/README.md`](../agents/README.md):
+Subagent definitions under `agents/`, invoked by the skills or directly via `Agent(subagent_type=...)`. Claude Code loads every `.md` in `agents/` as an agent, so this list is the catalog and `agents/` holds agent files only. Each carries the frontmatter contract (`name`, `description`, `model`, `color`) documented in [`CLAUDE.md`](../CLAUDE.md).
+
+The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.md) and [`/6hats`](../skills/6hats/SKILL.md), and `/assess`'s scorer:
 
 - [`white-hat`](../agents/white-hat.md) - facts and evidence.
 - [`red-hat`](../agents/red-hat.md) - gut feelings and emotional drivers.

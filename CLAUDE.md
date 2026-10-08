@@ -67,6 +67,8 @@ Required frontmatter:
 - `model` - typically `inherit`
 - `color` - one of: `red`, `blue`, `green`, `yellow`, `purple`, `orange`, `pink`, `cyan`, the set [the sub-agents docs](https://code.claude.com/docs/en/sub-agents.md) list. Any other value is ignored without an error, so the agent gets no colour; `test_agent_frontmatter` in `tests/test_plugin_contract.py` enforces the set
 
+Every `.md` under `agents/` loads as an agent, so the directory holds agent files only: no README or other doc. The agent catalog is the Agents section of `docs/index.md`; `test_every_agents_md_is_an_agent` fails the build on a stray doc.
+
 ### `commands/` (legacy; do not add)
 
 Claude Code's docs call flat `commands/<name>.md` files the older form of skills. The seven former commands moved to `skills/<name>/SKILL.md` with their invocation names unchanged (https://github.com/bjcoombs/ai-native-toolkit/issues/500). A new slash-command workflow is a user-invoked skill; `test_no_legacy_command_files` fails the build if a `commands/*.md` file reappears.
