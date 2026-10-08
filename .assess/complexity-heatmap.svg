@@ -1,361 +1,387 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" preserveAspectRatio="xMidYMid meet" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1084" width="1600" height="1084" preserveAspectRatio="xMidYMid meet" role="img">
 <title>Complexity Hotspot Heatmap</title>
 <desc>Treemap showing code complexity by file size, hue indicates cyclomatic complexity, saturation indicates git churn</desc>
 <style>
   rect:hover { stroke: #000; stroke-width: 1.5; }
   text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #1a1a1a; pointer-events: none; text-anchor: middle; dominant-baseline: middle; }
 </style>
-<rect x="0.00" y="0.00" width="279.88" height="221.16" fill="#ac4547" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_assess_core.py
-28,298 est. tokens · 1843 loc · ccn 240 · commits (last 12mo) 42</title></rect>
-<rect x="279.88" y="0.00" width="191.88" height="221.16" fill="#d29492" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_complexity_treemap.py
-19,400 est. tokens · 1227 loc · ccn 189 · commits (last 12mo) 23</title></rect>
-<rect x="471.76" y="0.00" width="177.34" height="221.16" fill="#cb9b9e" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_keyhole_signals.py
+<defs><pattern id="survivor-diag" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#1a1a1a" stroke-width="1" stroke-opacity="0.55"/></pattern><pattern id="survivor-cross" patternUnits="userSpaceOnUse" width="6" height="6"><path d="M0,0 l6,6 M6,0 l-6,6" stroke="#1a1a1a" stroke-width="1" stroke-opacity="0.6"/></pattern></defs>
+<rect x="0.00" y="0.00" width="282.38" height="213.49" fill="#ac4648" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_assess_core.py
+28,487 est. tokens · 1853 loc · ccn 241 · commits (last 12mo) 43</title></rect>
+<rect x="282.38" y="0.00" width="192.34" height="213.49" fill="#d29491" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_complexity_treemap.py
+19,404 est. tokens · 1227 loc · ccn 189 · commits (last 12mo) 24</title></rect>
+<rect x="474.72" y="0.00" width="177.73" height="213.49" fill="#cb9da0" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_keyhole_signals.py
 17,930 est. tokens · 1152 loc · ccn 213 · commits (last 12mo) 17</title></rect>
-<rect x="0.00" y="221.16" width="184.12" height="157.19" fill="#d3c5c7" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_test_pressure.py
-13,231 est. tokens · 827 loc · ccn 158 · commits (last 12mo) 6</title></rect>
-<rect x="184.12" y="221.16" width="178.01" height="157.19" fill="#d8ccc6" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_assess_finalize.py
+<rect x="0.00" y="213.49" width="196.70" height="137.62" fill="#d8ccc7" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_assess_finalize.py
 12,792 est. tokens · 972 loc · ccn 80 · commits (last 12mo) 11</title></rect>
-<rect x="362.12" y="221.16" width="161.03" height="157.19" fill="#d9b4af" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_graph.py
+<rect x="196.70" y="213.49" width="177.94" height="137.62" fill="#d8b4b1" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_graph.py
 11,572 est. tokens · 686 loc · ccn 149 · commits (last 12mo) 17</title></rect>
-<rect x="523.16" y="221.16" width="125.94" height="157.19" fill="#d6bcbb" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_staleness.py
+<rect x="374.64" y="213.49" width="139.16" height="137.62" fill="#d6bdbc" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_staleness.py
 9,050 est. tokens · 593 loc · ccn 147 · commits (last 12mo) 12</title></rect>
-<rect x="0.00" y="378.35" width="140.80" height="140.08" fill="#d3d0d2" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_structure_drift.py
+<rect x="513.80" y="213.49" width="138.65" height="137.62" fill="#d3d0d2" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_structure_drift.py
 9,017 est. tokens · 467 loc · ccn 71 · commits (last 12mo) 3</title></rect>
-<rect x="0.00" y="518.42" width="140.80" height="130.86" fill="#dac9c2" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_wiki_writer.py
+<rect x="0.00" y="351.11" width="126.19" height="141.27" fill="#d9c9c2" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_wiki_writer.py
 8,424 est. tokens · 523 loc · ccn 89 · commits (last 12mo) 13</title></rect>
-<rect x="0.00" y="649.29" width="140.80" height="122.29" fill="#d4cbcc" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_promissory_markers.py
+<rect x="0.00" y="492.38" width="126.19" height="132.01" fill="#d4cbcc" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_promissory_markers.py
 7,872 est. tokens · 580 loc · ccn 114 · commits (last 12mo) 5</title></rect>
-<rect x="0.00" y="771.58" width="140.80" height="120.46" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_accretion_ratchet.py
+<rect x="0.00" y="624.39" width="126.19" height="130.03" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_accretion_ratchet.py
 7,754 est. tokens · 352 loc · ccn 70 · commits (last 12mo) 2</title></rect>
-<rect x="0.00" y="892.03" width="140.80" height="107.97" fill="#d8ccc7" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_assess_report.py
+<rect x="0.00" y="754.42" width="126.19" height="129.03" fill="#d5ccca" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_test_pressure.py
+7,694 est. tokens · 474 loc · ccn 95 · commits (last 12mo) 7</title></rect>
+<rect x="0.00" y="883.45" width="126.19" height="116.55" fill="#d8ccc7" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_assess_report.py
 6,950 est. tokens · 501 loc · ccn 79 · commits (last 12mo) 11</title></rect>
-<rect x="140.80" y="378.35" width="104.20" height="114.15" fill="#d1d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_config_drift.py
+<rect x="126.19" y="351.11" width="112.58" height="112.04" fill="#d1d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_mutmut3_layout.py
+5,960 est. tokens · 378 loc · ccn 77 · commits (last 12mo) 1</title></rect>
+<rect x="238.77" y="351.11" width="108.27" height="112.04" fill="#d1d0d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_mutmut3.py
+5,732 est. tokens · 368 loc · ccn 64 · commits (last 12mo) 1</title></rect>
+<rect x="347.04" y="351.11" width="102.72" height="112.04" fill="#d1d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_config_drift.py
 5,438 est. tokens · 392 loc · ccn 74 · commits (last 12mo) 1</title></rect>
-<rect x="245.01" y="378.35" width="103.26" height="114.15" fill="#d4cfcf" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_liveness_scan.py
+<rect x="449.76" y="351.11" width="101.79" height="112.04" fill="#d4cfcf" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_liveness_scan.py
 5,389 est. tokens · 356 loc · ccn 77 · commits (last 12mo) 5</title></rect>
-<rect x="348.27" y="378.35" width="102.36" height="114.15" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_test_focus.py
+<rect x="551.55" y="351.11" width="100.90" height="112.04" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_test_focus.py
 5,342 est. tokens · 308 loc · ccn 80 · commits (last 12mo) 2</title></rect>
-<rect x="450.63" y="378.35" width="100.79" height="114.15" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_instruction_claims.py
+<rect x="126.19" y="463.15" width="118.57" height="93.88" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_instruction_claims.py
 5,260 est. tokens · 331 loc · ccn 78 · commits (last 12mo) 2</title></rect>
-<rect x="551.42" y="378.35" width="97.67" height="114.15" fill="#d3d0d1" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_change_coupling.py
+<rect x="244.76" y="463.15" width="114.90" height="93.88" fill="#d3d0d1" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_change_coupling.py
 5,097 est. tokens · 348 loc · ccn 60 · commits (last 12mo) 4</title></rect>
-<rect x="140.80" y="492.50" width="90.94" height="111.08" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_evidence_check.py
+<rect x="359.66" y="463.15" width="104.10" height="93.88" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_evidence_check.py
 4,618 est. tokens · 340 loc · ccn 41 · commits (last 12mo) 1</title></rect>
-<rect x="140.80" y="603.58" width="90.94" height="101.36" fill="#d4cfd0" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_graph_svg.py
+<rect x="463.75" y="463.15" width="94.99" height="93.88" fill="#d4cfd0" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_graph_svg.py
 4,214 est. tokens · 281 loc · ccn 64 · commits (last 12mo) 5</title></rect>
-<rect x="140.80" y="704.94" width="90.94" height="99.99" fill="#d8d1cd" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_golden_baseline.py
+<rect x="558.75" y="463.15" width="93.71" height="93.88" fill="#d7d1ce" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_golden_baseline.py
 4,157 est. tokens · 204 loc · ccn 36 · commits (last 12mo) 10</title></rect>
-<rect x="140.80" y="804.93" width="90.94" height="99.75" fill="#d2d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_jvm_capabilities.py
+<rect x="126.19" y="557.03" width="93.91" height="93.45" fill="#d2d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_jvm_capabilities.py
 4,147 est. tokens · 260 loc · ccn 56 · commits (last 12mo) 2</title></rect>
-<rect x="140.80" y="904.68" width="90.94" height="95.32" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_no_contributions_scan.py
+<rect x="126.19" y="650.47" width="93.91" height="89.30" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_no_contributions_scan.py
 3,963 est. tokens · 230 loc · ccn 52 · commits (last 12mo) 1</title></rect>
-<rect x="231.74" y="492.50" width="89.03" height="97.34" fill="#d3d0d1" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_assess_gate.py
+<rect x="126.19" y="739.78" width="93.91" height="89.28" fill="#d3d0d1" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_assess_gate.py
 3,962 est. tokens · 285 loc · ccn 60 · commits (last 12mo) 4</title></rect>
-<rect x="320.77" y="492.50" width="86.78" height="97.34" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_raw_source.py
+<rect x="126.19" y="829.06" width="93.91" height="87.03" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_raw_source.py
 3,862 est. tokens · 250 loc · ccn 81 · commits (last 12mo) 2</title></rect>
-<rect x="407.55" y="492.50" width="83.68" height="97.34" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_ownership_parser.py
+<rect x="126.19" y="916.08" width="93.91" height="83.92" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_ownership_parser.py
 3,724 est. tokens · 225 loc · ccn 34 · commits (last 12mo) 2</title></rect>
-<rect x="491.23" y="492.50" width="79.46" height="97.34" fill="#d3d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_golden_svg_render.py
+<rect x="220.10" y="557.03" width="89.40" height="83.70" fill="#d3d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_golden_svg_render.py
 3,536 est. tokens · 195 loc · ccn 29 · commits (last 12mo) 3</title></rect>
-<rect x="570.69" y="492.50" width="78.40" height="97.34" fill="#d3d0d1" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_emit_workflow.py
+<rect x="309.51" y="557.03" width="88.21" height="83.70" fill="#d3d0d2" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_emit_workflow.py
 3,489 est. tokens · 196 loc · ccn 53 · commits (last 12mo) 4</title></rect>
-<rect x="231.74" y="589.84" width="86.61" height="87.18" fill="#d3d1d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_hotspot_orphan_invariant.py
+<rect x="397.72" y="557.03" width="87.28" height="83.70" fill="#d3d1d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_hotspot_orphan_invariant.py
 3,452 est. tokens · 229 loc · ccn 36 · commits (last 12mo) 3</title></rect>
-<rect x="231.74" y="677.02" width="86.61" height="84.98" fill="#d3d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_self_dogfood.py
+<rect x="485.00" y="557.03" width="85.08" height="83.70" fill="#d3d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_self_dogfood.py
 3,365 est. tokens · 203 loc · ccn 23 · commits (last 12mo) 3</title></rect>
-<rect x="231.74" y="762.00" width="86.61" height="82.28" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_sibling_tests.py
+<rect x="570.08" y="557.03" width="82.37" height="83.70" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_sibling_tests.py
 3,258 est. tokens · 194 loc · ccn 42 · commits (last 12mo) 2</title></rect>
-<rect x="231.74" y="844.28" width="86.61" height="80.76" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_log_supersede.py
+<rect x="220.10" y="640.73" width="87.39" height="77.44" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_log_supersede.py
 3,198 est. tokens · 229 loc · ccn 19 · commits (last 12mo) 2</title></rect>
-<rect x="231.74" y="925.04" width="86.61" height="74.96" fill="#d3d1d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_complexity_join.py
+<rect x="220.10" y="718.16" width="87.39" height="71.87" fill="#d3d1d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_complexity_join.py
 2,968 est. tokens · 166 loc · ccn 23 · commits (last 12mo) 4</title></rect>
-<rect x="318.35" y="589.84" width="83.61" height="75.50" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_scope.py
+<rect x="220.10" y="790.03" width="87.39" height="71.05" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_coverage_gate.py
+2,934 est. tokens · 176 loc · ccn 33 · commits (last 12mo) 1</title></rect>
+<rect x="220.10" y="861.08" width="87.39" height="69.88" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_scope.py
 2,886 est. tokens · 176 loc · ccn 35 · commits (last 12mo) 1</title></rect>
-<rect x="401.97" y="589.84" width="82.60" height="75.50" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_understanding_analysis.py
+<rect x="220.10" y="930.96" width="87.39" height="69.04" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_understanding_analysis.py
 2,851 est. tokens · 174 loc · ccn 25 · commits (last 12mo) 1</title></rect>
-<rect x="484.56" y="589.84" width="82.42" height="75.50" fill="#d5d1d0" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_ci_workflow.py
+<rect x="307.50" y="640.73" width="73.35" height="82.08" fill="#d5d1d0" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_ci_workflow.py
 2,845 est. tokens · 154 loc · ccn 37 · commits (last 12mo) 7</title></rect>
-<rect x="566.99" y="589.84" width="82.11" height="75.50" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_archetype.py
+<rect x="380.84" y="640.73" width="73.06" height="82.08" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_archetype.py
 2,834 est. tokens · 236 loc · ccn 27 · commits (last 12mo) 2</title></rect>
-<rect x="318.35" y="665.34" width="84.49" height="67.31" fill="#d3d1d2" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_agent_instructions_grader.py
+<rect x="453.91" y="640.73" width="67.03" height="82.08" fill="#d3d1d2" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_agent_instructions_grader.py
 2,600 est. tokens · 165 loc · ccn 37 · commits (last 12mo) 4</title></rect>
-<rect x="402.84" y="665.34" width="83.77" height="67.31" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_structure_graph.py
+<rect x="520.94" y="640.73" width="66.46" height="82.08" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_structure_graph.py
 2,578 est. tokens · 181 loc · ccn 30 · commits (last 12mo) 1</title></rect>
-<rect x="486.62" y="665.34" width="81.99" height="67.31" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_review_reality.py
+<rect x="587.41" y="640.73" width="65.05" height="82.08" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_review_reality.py
 2,523 est. tokens · 196 loc · ccn 33 · commits (last 12mo) 1</title></rect>
-<rect x="568.60" y="665.34" width="80.49" height="67.31" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_dart_capabilities.py
+<rect x="307.50" y="722.81" width="72.89" height="71.91" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_dart_capabilities.py
 2,477 est. tokens · 142 loc · ccn 29 · commits (last 12mo) 1</title></rect>
-<rect x="318.35" y="732.65" width="70.31" height="75.34" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_coupling_analysis.py
+<rect x="307.50" y="794.72" width="72.89" height="70.31" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_coupling_analysis.py
 2,422 est. tokens · 127 loc · ccn 31 · commits (last 12mo) 1</title></rect>
-<rect x="318.35" y="808.00" width="70.31" height="75.00" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_git_commit_info.py
+<rect x="307.50" y="865.03" width="72.89" height="69.99" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_git_commit_info.py
 2,411 est. tokens · 142 loc · ccn 13 · commits (last 12mo) 2</title></rect>
-<rect x="318.35" y="883.00" width="70.31" height="58.64" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_coverage_report.py
+<rect x="307.50" y="935.03" width="72.89" height="64.97" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_symlink_walks.py
+2,238 est. tokens · 146 loc · ccn 25 · commits (last 12mo) 1</title></rect>
+<rect x="380.39" y="722.81" width="69.56" height="57.35" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_coverage_report.py
 1,885 est. tokens · 115 loc · ccn 19 · commits (last 12mo) 2</title></rect>
-<rect x="318.35" y="941.64" width="70.31" height="58.36" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_scorer_evidence.py
+<rect x="449.95" y="722.81" width="69.22" height="57.35" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_scorer_evidence.py
 1,876 est. tokens · 93 loc · ccn 42 · commits (last 12mo) 2</title></rect>
-<rect x="388.67" y="732.65" width="66.90" height="59.34" fill="#d3d1d2" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_action_contract.py
+<rect x="519.17" y="722.81" width="66.97" height="57.35" fill="#d3d1d2" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_action_contract.py
 1,815 est. tokens · 98 loc · ccn 42 · commits (last 12mo) 4</title></rect>
-<rect x="455.57" y="732.65" width="64.88" height="59.34" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_instruction_bloat.py
+<rect x="586.14" y="722.81" width="66.31" height="57.35" fill="#d4d1d2" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_stats_diff.py
+1,797 est. tokens · 116 loc · ccn 36 · commits (last 12mo) 5</title></rect>
+<rect x="380.39" y="780.16" width="63.64" height="58.53" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_instruction_bloat.py
 1,760 est. tokens · 117 loc · ccn 14 · commits (last 12mo) 2</title></rect>
-<rect x="520.45" y="732.65" width="64.58" height="59.34" fill="#d3d1d2" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_stats_diff.py
-1,752 est. tokens · 114 loc · ccn 34 · commits (last 12mo) 4</title></rect>
-<rect x="585.03" y="732.65" width="64.06" height="59.34" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_generated_files.py
+<rect x="380.39" y="838.69" width="63.64" height="57.80" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_generated_files.py
 1,738 est. tokens · 139 loc · ccn 22 · commits (last 12mo) 1</title></rect>
-<rect x="388.67" y="791.99" width="64.72" height="52.62" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_decline_markers.py
+<rect x="380.39" y="896.48" width="63.64" height="51.78" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_decline_markers.py
 1,557 est. tokens · 136 loc · ccn 17 · commits (last 12mo) 1</title></rect>
-<rect x="388.67" y="844.61" width="64.72" height="52.58" fill="#d3d1d3" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_anomaly_detector.py
+<rect x="380.39" y="948.26" width="63.64" height="51.74" fill="#d3d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_anomaly_detector.py
 1,556 est. tokens · 111 loc · ccn 31 · commits (last 12mo) 3</title></rect>
-<rect x="388.67" y="897.20" width="64.72" height="51.71" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_assess_config.py
+<rect x="444.03" y="780.16" width="53.83" height="60.15" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_assess_config.py
 1,530 est. tokens · 101 loc · ccn 23 · commits (last 12mo) 1</title></rect>
-<rect x="388.67" y="948.90" width="64.72" height="51.10" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_scan_registry.py
+<rect x="497.86" y="780.16" width="53.20" height="60.15" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_scan_registry.py
 1,512 est. tokens · 117 loc · ccn 40 · commits (last 12mo) 1</title></rect>
-<rect x="453.39" y="791.99" width="53.75" height="61.28" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_gate_cost.py
+<rect x="551.05" y="780.16" width="52.99" height="60.15" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_gate_cost.py
 1,506 est. tokens · 125 loc · ccn 24 · commits (last 12mo) 1</title></rect>
-<rect x="507.14" y="791.99" width="49.11" height="61.28" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_self_architecture.py
+<rect x="604.04" y="780.16" width="48.41" height="60.15" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_self_architecture.py
 1,376 est. tokens · 53 loc · ccn 21 · commits (last 12mo) 2</title></rect>
-<rect x="556.26" y="791.99" width="47.11" height="61.28" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_graph_layout.py
+<rect x="444.03" y="840.31" width="50.73" height="55.07" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_graph_layout.py
 1,320 est. tokens · 77 loc · ccn 13 · commits (last 12mo) 1</title></rect>
-<rect x="603.37" y="791.99" width="45.72" height="61.28" fill="#d3d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_decomposition_parity.py
+<rect x="444.03" y="895.37" width="50.73" height="53.44" fill="#d3d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_decomposition_parity.py
 1,281 est. tokens · 61 loc · ccn 17 · commits (last 12mo) 3</title></rect>
-<rect x="453.39" y="853.28" width="53.79" height="49.90" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_provenance.py
+<rect x="444.03" y="948.81" width="50.73" height="51.19" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_provenance.py
 1,227 est. tokens · 92 loc · ccn 19 · commits (last 12mo) 1</title></rect>
-<rect x="453.39" y="903.17" width="53.79" height="49.16" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_dart_complexity.py
+<rect x="494.76" y="840.31" width="53.96" height="47.41" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_dart_complexity.py
 1,209 est. tokens · 114 loc · ccn 8 · commits (last 12mo) 2</title></rect>
-<rect x="453.39" y="952.34" width="53.79" height="47.66" fill="#d3d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_badge.py
+<rect x="548.72" y="840.31" width="52.31" height="47.41" fill="#d3d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_badge.py
 1,172 est. tokens · 84 loc · ccn 13 · commits (last 12mo) 3</title></rect>
-<rect x="507.18" y="853.28" width="50.35" height="50.05" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/golden.py
+<rect x="601.03" y="840.31" width="51.42" height="47.41" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/golden.py
 1,152 est. tokens · 56 loc · ccn 9 · commits (last 12mo) 2</title></rect>
-<rect x="557.53" y="853.28" width="47.51" height="50.05" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_agent_ops.py
+<rect x="494.76" y="887.72" width="39.49" height="58.26" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_agent_ops.py
 1,087 est. tokens · 94 loc · ccn 12 · commits (last 12mo) 1</title></rect>
-<rect x="605.04" y="853.28" width="44.05" height="50.05" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_vault_queries.py
+<rect x="494.76" y="945.98" width="39.49" height="54.02" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_vault_queries.py
 1,008 est. tokens · 72 loc · ccn 17 · commits (last 12mo) 1</title></rect>
-<rect x="507.18" y="903.33" width="41.09" height="49.83" fill="#d3d2d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/conftest.py
+<rect x="534.24" y="887.72" width="49.87" height="39.72" fill="#d3d2d4" stroke="white" stroke-width="0.5"><title>skills/assess/tests/conftest.py
 936 est. tokens · 48 loc · ccn 9 · commits (last 12mo) 4</title></rect>
-<rect x="507.18" y="953.15" width="41.09" height="46.85" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_gap_actions.py
+<rect x="534.24" y="927.44" width="49.87" height="37.34" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_gap_actions.py
 880 est. tokens · 49 loc · ccn 16 · commits (last 12mo) 1</title></rect>
-<rect x="548.27" y="903.33" width="21.50" height="19.23" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/hollow_test_repo/src/processor.py
+<rect x="534.24" y="964.78" width="19.77" height="20.23" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/hollow_test_repo/src/processor.py
 189 est. tokens · 10 loc · ccn 3 · commits (last 12mo) 1</title></rect>
-<rect x="569.77" y="903.33" width="15.92" height="19.23" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/hollow_test_repo/tests/test_processor.py
+<rect x="534.24" y="985.01" width="19.77" height="14.99" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/hollow_test_repo/tests/test_processor.py
 140 est. tokens · 5 loc · ccn 1 · commits (last 12mo) 1</title></rect>
-<rect x="548.27" y="922.56" width="22.11" height="23.05" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/golden-svg-repo/hot.py
+<rect x="554.01" y="964.78" width="23.70" height="20.81" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/golden-svg-repo/hot.py
 233 est. tokens · 43 loc · ccn 21 · commits (last 12mo) 1</title></rect>
-<rect x="548.27" y="945.61" width="22.11" height="6.23" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/golden-svg-repo/simple_stable.py
+<rect x="577.70" y="964.78" width="6.41" height="20.81" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/golden-svg-repo/simple_stable.py
 63 est. tokens · 4 loc · ccn 2 · commits (last 12mo) 1</title></rect>
-<rect x="570.38" y="922.56" width="15.31" height="19.57" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/honest_test_repo/tests/test_processor.py
+<rect x="554.01" y="985.59" width="20.12" height="14.41" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/honest_test_repo/tests/test_processor.py
 137 est. tokens · 5 loc · ccn 1 · commits (last 12mo) 1</title></rect>
-<rect x="570.38" y="942.12" width="13.51" height="9.71" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/maven_project/Sample.java
+<rect x="574.13" y="985.59" width="9.99" height="12.72" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/maven_project/Sample.java
 60 est. tokens · 8 loc · ccn 2 · commits (last 12mo) 1</title></rect>
-<rect x="583.89" y="942.12" width="1.80" height="9.71" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/golden-doc-repo/src/app.py
+<rect x="574.13" y="998.30" width="9.99" height="1.70" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/fixtures/golden-doc-repo/src/app.py
 8 est. tokens · 2 loc · ccn 1 · commits (last 12mo) 1</title></rect>
-<rect x="548.27" y="951.84" width="37.42" height="48.16" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_interactivity.py
+<rect x="584.11" y="887.72" width="35.13" height="49.64" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_interactivity.py
 824 est. tokens · 46 loc · ccn 17 · commits (last 12mo) 1</title></rect>
-<rect x="585.69" y="903.33" width="33.24" height="51.27" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_links.py
+<rect x="619.24" y="887.72" width="33.21" height="49.64" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_doc_links.py
 779 est. tokens · 66 loc · ccn 16 · commits (last 12mo) 1</title></rect>
-<rect x="618.93" y="903.33" width="30.16" height="51.27" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_uninstall.py
+<rect x="584.11" y="937.36" width="47.43" height="31.54" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_uninstall.py
 707 est. tokens · 41 loc · ccn 9 · commits (last 12mo) 1</title></rect>
-<rect x="585.69" y="954.60" width="33.58" height="45.40" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_git_churn.py
+<rect x="584.11" y="968.90" width="47.43" height="31.10" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_git_churn.py
 697 est. tokens · 25 loc · ccn 9 · commits (last 12mo) 1</title></rect>
-<rect x="619.27" y="954.60" width="29.82" height="38.51" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_accretion_ratchet_threshold.py
+<rect x="631.54" y="937.36" width="20.91" height="53.13" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_accretion_ratchet_threshold.py
 525 est. tokens · 25 loc · ccn 3 · commits (last 12mo) 1</title></rect>
-<rect x="619.27" y="993.10" width="29.82" height="6.90" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_smoke.py
+<rect x="631.54" y="990.49" width="20.91" height="9.51" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/tests/test_smoke.py
 94 est. tokens · 6 loc · ccn 2 · commits (last 12mo) 1</title></rect>
-<rect x="649.09" y="0.00" width="244.86" height="161.27" fill="#b4888b" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/keyhole_signals.py
-18,053 est. tokens · 885 loc · ccn 260 · commits (last 12mo) 22</title></rect>
-<rect x="893.95" y="0.00" width="109.32" height="161.27" fill="#d1c7ca" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_pressure/mutation.py
-8,060 est. tokens · 473 loc · ccn 184 · commits (last 12mo) 4</title></rect>
-<rect x="1003.28" y="0.00" width="90.79" height="109.21" fill="#d1cfd4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_pressure/heuristics.py
-4,533 est. tokens · 298 loc · ccn 124 · commits (last 12mo) 1</title></rect>
-<rect x="1003.28" y="109.21" width="42.14" height="52.06" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_pressure/aggregate.py
-1,003 est. tokens · 70 loc · ccn 7 · commits (last 12mo) 1</title></rect>
-<rect x="1045.42" y="109.21" width="48.65" height="31.29" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_pressure/__init__.py
-696 est. tokens · 53 loc · ccn 1 · commits (last 12mo) 2</title></rect>
-<rect x="1045.42" y="140.50" width="48.65" height="20.77" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_pressure/common.py
-462 est. tokens · 42 loc · ccn 16 · commits (last 12mo) 1</title></rect>
-<rect x="1094.07" y="0.00" width="161.42" height="161.27" fill="#cb9495" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_graph.py
-11,901 est. tokens · 695 loc · ccn 209 · commits (last 12mo) 20</title></rect>
-<rect x="649.09" y="161.27" width="129.71" height="185.30" fill="#d5adac" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/wiki_writer.py
+<rect x="652.45" y="0.00" width="155.97" height="95.12" fill="#d1ced3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_pressure/mutmut3.py
+7,011 est. tokens · 348 loc · ccn 179 · commits (last 12mo) 1</title></rect>
+<rect x="652.45" y="95.12" width="155.97" height="78.61" fill="#d3cacb" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_pressure/mutation.py
+5,794 est. tokens · 354 loc · ccn 131 · commits (last 12mo) 5</title></rect>
+<rect x="808.42" y="0.00" width="83.98" height="116.64" fill="#d2ced2" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_pressure/heuristics.py
+4,629 est. tokens · 302 loc · ccn 124 · commits (last 12mo) 2</title></rect>
+<rect x="808.42" y="116.64" width="40.14" height="57.10" fill="#d3d2d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_pressure/aggregate.py
+1,083 est. tokens · 73 loc · ccn 8 · commits (last 12mo) 3</title></rect>
+<rect x="848.56" y="116.64" width="43.85" height="33.54" fill="#d3d2d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_pressure/__init__.py
+695 est. tokens · 52 loc · ccn 1 · commits (last 12mo) 3</title></rect>
+<rect x="848.56" y="150.18" width="43.85" height="23.55" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_pressure/common.py
+488 est. tokens · 43 loc · ccn 16 · commits (last 12mo) 2</title></rect>
+<rect x="892.41" y="0.00" width="220.06" height="173.74" fill="#b4878a" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/keyhole_signals.py
+18,067 est. tokens · 886 loc · ccn 260 · commits (last 12mo) 23</title></rect>
+<rect x="1112.47" y="0.00" width="146.97" height="173.74" fill="#cb9091" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_graph.py
+12,066 est. tokens · 701 loc · ccn 209 · commits (last 12mo) 22</title></rect>
+<rect x="652.45" y="173.74" width="126.57" height="183.71" fill="#d5aead" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/wiki_writer.py
 10,988 est. tokens · 533 loc · ccn 170 · commits (last 12mo) 16</title></rect>
-<rect x="649.09" y="346.57" width="129.71" height="141.83" fill="#d5c6c5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/liveness_scan.py
+<rect x="652.45" y="357.45" width="126.57" height="140.61" fill="#d5c6c5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/liveness_scan.py
 8,410 est. tokens · 495 loc · ccn 127 · commits (last 12mo) 8</title></rect>
-<rect x="649.09" y="488.40" width="129.71" height="133.71" fill="#d9c1bb" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_staleness.py
+<rect x="652.45" y="498.05" width="126.57" height="132.57" fill="#d9c2bc" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_staleness.py
 7,929 est. tokens · 453 loc · ccn 119 · commits (last 12mo) 13</title></rect>
-<rect x="649.09" y="622.11" width="129.71" height="127.59" fill="#d2cfd3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/structure_drift.py
-7,566 est. tokens · 342 loc · ccn 90 · commits (last 12mo) 2</title></rect>
-<rect x="778.80" y="161.27" width="131.89" height="114.23" fill="#d5cbc9" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/promissory_markers.py
+<rect x="652.45" y="630.62" width="126.57" height="126.55" fill="#d3cfd1" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/structure_drift.py
+7,569 est. tokens · 342 loc · ccn 90 · commits (last 12mo) 3</title></rect>
+<rect x="779.03" y="173.74" width="132.92" height="109.66" fill="#d5cbca" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/promissory_markers.py
 6,888 est. tokens · 415 loc · ccn 101 · commits (last 12mo) 7</title></rect>
-<rect x="910.69" y="161.27" width="128.20" height="114.23" fill="#d7cac7" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/git_churn.py
+<rect x="911.95" y="173.74" width="129.20" height="109.66" fill="#d7cbc8" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/git_churn.py
 6,695 est. tokens · 325 loc · ccn 92 · commits (last 12mo) 9</title></rect>
-<rect x="1038.89" y="161.27" width="112.21" height="114.23" fill="#d4cbcc" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/change_coupling.py
+<rect x="1041.15" y="173.74" width="113.08" height="109.66" fill="#d4cccc" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/change_coupling.py
 5,860 est. tokens · 303 loc · ccn 111 · commits (last 12mo) 5</title></rect>
-<rect x="1151.09" y="161.27" width="104.40" height="114.23" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/jvm_capabilities.py
+<rect x="1154.23" y="173.74" width="105.21" height="109.66" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/jvm_capabilities.py
 5,452 est. tokens · 307 loc · ccn 80 · commits (last 12mo) 2</title></rect>
-<rect x="778.80" y="275.50" width="110.29" height="104.42" fill="#d3cfd1" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/structure_graph.py
-5,265 est. tokens · 306 loc · ccn 89 · commits (last 12mo) 3</title></rect>
-<rect x="778.80" y="379.93" width="110.29" height="97.80" fill="#d2cfd2" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/instruction_claims.py
+<rect x="779.03" y="283.40" width="107.39" height="105.38" fill="#d4cece" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/structure_graph.py
+5,348 est. tokens · 309 loc · ccn 89 · commits (last 12mo) 5</title></rect>
+<rect x="779.03" y="388.78" width="107.39" height="97.17" fill="#d2cfd2" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/instruction_claims.py
 4,931 est. tokens · 269 loc · ccn 97 · commits (last 12mo) 2</title></rect>
-<rect x="778.80" y="477.73" width="110.29" height="95.46" fill="#d2cfd3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/ownership_parser.py
+<rect x="779.03" y="485.95" width="107.39" height="94.84" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/ownership_parser.py
 4,813 est. tokens · 253 loc · ccn 86 · commits (last 12mo) 2</title></rect>
-<rect x="778.80" y="573.18" width="110.29" height="88.60" fill="#d1cfd4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/config_drift.py
+<rect x="779.03" y="580.79" width="107.39" height="88.36" fill="#d4cfd0" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/agent_instructions_grader.py
+4,484 est. tokens · 264 loc · ccn 70 · commits (last 12mo) 5</title></rect>
+<rect x="779.03" y="669.14" width="107.39" height="88.02" fill="#d1cfd4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/config_drift.py
 4,467 est. tokens · 229 loc · ccn 134 · commits (last 12mo) 1</title></rect>
-<rect x="778.80" y="661.78" width="110.29" height="87.92" fill="#d3cfd1" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/agent_instructions_grader.py
-4,433 est. tokens · 260 loc · ccn 70 · commits (last 12mo) 4</title></rect>
-<rect x="889.08" y="275.50" width="93.38" height="98.90" fill="#d3cfd1" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/raw_source.py
+<rect x="886.42" y="283.40" width="95.06" height="93.99" fill="#d3cfd1" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/raw_source.py
 4,222 est. tokens · 133 loc · ccn 86 · commits (last 12mo) 3</title></rect>
-<rect x="982.46" y="275.50" width="91.34" height="98.90" fill="#d2d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/archetype.py
+<rect x="981.48" y="283.40" width="92.99" height="93.99" fill="#d2d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/archetype.py
 4,130 est. tokens · 254 loc · ccn 53 · commits (last 12mo) 2</title></rect>
-<rect x="1073.80" y="275.50" width="90.97" height="98.90" fill="#d4d0d1" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_complexity_join.py
+<rect x="1074.47" y="283.40" width="92.61" height="93.99" fill="#d4d0d1" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_complexity_join.py
 4,113 est. tokens · 155 loc · ccn 46 · commits (last 12mo) 5</title></rect>
-<rect x="1164.77" y="275.50" width="90.72" height="98.90" fill="#d8cfcb" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/assess_config.py
+<rect x="1167.08" y="283.40" width="92.36" height="93.99" fill="#d7cfcb" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/assess_config.py
 4,102 est. tokens · 159 loc · ccn 56 · commits (last 12mo) 10</title></rect>
-<rect x="889.08" y="374.40" width="94.53" height="93.67" fill="#d3d0d2" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_focus.py
+<rect x="886.42" y="377.39" width="94.98" height="90.19" fill="#d3d0d2" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/test_focus.py
 4,048 est. tokens · 176 loc · ccn 62 · commits (last 12mo) 3</title></rect>
-<rect x="983.62" y="374.40" width="94.14" height="93.67" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/sibling_tests.py
+<rect x="981.40" y="377.39" width="94.58" height="90.19" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/sibling_tests.py
 4,031 est. tokens · 189 loc · ccn 80 · commits (last 12mo) 2</title></rect>
-<rect x="1077.75" y="374.40" width="91.75" height="93.67" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/accretion_ratchet.py
+<rect x="1075.98" y="377.39" width="92.19" height="90.19" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/accretion_ratchet.py
 3,929 est. tokens · 210 loc · ccn 39 · commits (last 12mo) 2</title></rect>
-<rect x="1169.50" y="374.40" width="85.99" height="93.67" fill="#d1d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/evidence_check.py
+<rect x="1168.17" y="377.39" width="91.27" height="90.19" fill="#d1d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/coverage_gate.py
+3,890 est. tokens · 241 loc · ccn 73 · commits (last 12mo) 1</title></rect>
+<rect x="886.42" y="467.58" width="77.29" height="100.81" fill="#d1d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/evidence_check.py
 3,682 est. tokens · 211 loc · ccn 94 · commits (last 12mo) 1</title></rect>
-<rect x="889.08" y="468.07" width="77.12" height="98.33" fill="#d5d0cf" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/treemap_render.py
-3,467 est. tokens · 240 loc · ccn 60 · commits (last 12mo) 6</title></rect>
-<rect x="889.08" y="566.40" width="77.12" height="94.02" fill="#d1d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_links.py
-3,315 est. tokens · 195 loc · ccn 71 · commits (last 12mo) 1</title></rect>
-<rect x="889.08" y="660.42" width="77.12" height="89.28" fill="#d1d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/dart_complexity.py
+<rect x="886.42" y="568.39" width="77.29" height="95.91" fill="#d5cfce" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/treemap_render.py
+3,503 est. tokens · 241 loc · ccn 60 · commits (last 12mo) 7</title></rect>
+<rect x="886.42" y="664.30" width="77.29" height="92.87" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_links.py
+3,392 est. tokens · 200 loc · ccn 71 · commits (last 12mo) 2</title></rect>
+<rect x="963.71" y="467.58" width="85.47" height="77.94" fill="#d1d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/dart_complexity.py
 3,148 est. tokens · 217 loc · ccn 87 · commits (last 12mo) 1</title></rect>
-<rect x="966.21" y="468.07" width="85.14" height="77.18" fill="#d1d0d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/review_reality.py
-3,004 est. tokens · 164 loc · ccn 86 · commits (last 12mo) 1</title></rect>
-<rect x="966.21" y="545.25" width="85.14" height="72.07" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/understanding_analysis.py
+<rect x="963.71" y="545.52" width="85.47" height="74.60" fill="#d2d0d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/review_reality.py
+3,013 est. tokens · 168 loc · ccn 86 · commits (last 12mo) 2</title></rect>
+<rect x="963.71" y="620.12" width="85.47" height="69.45" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/understanding_analysis.py
 2,805 est. tokens · 111 loc · ccn 32 · commits (last 12mo) 2</title></rect>
-<rect x="966.21" y="617.31" width="85.14" height="70.14" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/coupling_analysis.py
+<rect x="963.71" y="689.57" width="85.47" height="67.59" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/coupling_analysis.py
 2,730 est. tokens · 97 loc · ccn 19 · commits (last 12mo) 1</title></rect>
-<rect x="966.21" y="687.45" width="85.14" height="62.25" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/vault_queries.py
+<rect x="1049.18" y="467.58" width="71.20" height="72.01" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/vault_queries.py
 2,423 est. tokens · 129 loc · ccn 49 · commits (last 12mo) 1</title></rect>
-<rect x="1051.34" y="468.07" width="69.80" height="74.62" fill="#d3d1d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/ci_workflow.py
+<rect x="1120.39" y="467.58" width="69.97" height="72.01" fill="#d3d1d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/ci_workflow.py
 2,381 est. tokens · 138 loc · ccn 37 · commits (last 12mo) 3</title></rect>
-<rect x="1121.14" y="468.07" width="68.92" height="74.62" fill="#d1d0d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_provenance.py
+<rect x="1190.35" y="467.58" width="69.09" height="72.01" fill="#d1d0d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_provenance.py
 2,351 est. tokens · 126 loc · ccn 57 · commits (last 12mo) 1</title></rect>
-<rect x="1190.06" y="468.07" width="65.43" height="74.62" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/dart_capabilities.py
+<rect x="1049.18" y="539.59" width="72.94" height="64.76" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/dart_capabilities.py
 2,232 est. tokens · 134 loc · ccn 36 · commits (last 12mo) 1</title></rect>
-<rect x="1051.34" y="542.69" width="73.14" height="65.65" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/coverage_report.py
+<rect x="1122.12" y="539.59" width="71.73" height="64.76" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/coverage_report.py
 2,195 est. tokens · 110 loc · ccn 44 · commits (last 12mo) 2</title></rect>
-<rect x="1124.48" y="542.69" width="66.87" height="65.65" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/scan_registry.py
+<rect x="1193.85" y="539.59" width="65.59" height="64.76" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/scan_registry.py
 2,007 est. tokens · 99 loc · ccn 28 · commits (last 12mo) 1</title></rect>
-<rect x="1191.35" y="542.69" width="64.14" height="65.65" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/decline_markers.py
+<rect x="1049.18" y="604.35" width="52.94" height="76.95" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/decline_markers.py
 1,925 est. tokens · 117 loc · ccn 37 · commits (last 12mo) 1</title></rect>
-<rect x="1051.34" y="608.33" width="55.42" height="74.91" fill="#d4d1d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/badge.py
+<rect x="1049.18" y="681.30" width="52.94" height="75.87" fill="#d4d1d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/badge.py
 1,898 est. tokens · 80 loc · ccn 24 · commits (last 12mo) 5</title></rect>
-<rect x="1051.34" y="683.24" width="55.42" height="66.46" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/generated_files.py
+<rect x="1102.13" y="604.35" width="64.91" height="54.91" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/generated_files.py
 1,684 est. tokens · 74 loc · ccn 22 · commits (last 12mo) 1</title></rect>
-<rect x="1106.77" y="608.33" width="68.44" height="49.83" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/gh_cli.py
+<rect x="1102.13" y="659.26" width="64.91" height="50.83" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/gh_cli.py
 1,559 est. tokens · 93 loc · ccn 32 · commits (last 12mo) 1</title></rect>
-<rect x="1106.77" y="658.16" width="68.44" height="46.15" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/agent_ops.py
+<rect x="1102.13" y="710.09" width="64.91" height="47.08" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/agent_ops.py
 1,444 est. tokens · 109 loc · ccn 28 · commits (last 12mo) 1</title></rect>
-<rect x="1106.77" y="704.32" width="68.44" height="45.39" fill="#d3d1d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/stats_diff.py
-1,420 est. tokens · 78 loc · ccn 31 · commits (last 12mo) 3</title></rect>
-<rect x="1175.20" y="608.33" width="40.99" height="62.33" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_graph_layout.py
-1,168 est. tokens · 54 loc · ccn 29 · commits (last 12mo) 1</title></rect>
-<rect x="1216.19" y="608.33" width="39.30" height="62.33" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/interactivity.py
+<rect x="1167.03" y="604.35" width="49.93" height="60.73" fill="#d3d1d3" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/stats_diff.py
+1,433 est. tokens · 80 loc · ccn 31 · commits (last 12mo) 4</title></rect>
+<rect x="1216.97" y="604.35" width="42.48" height="60.73" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/doc_graph_layout.py
+1,219 est. tokens · 58 loc · ccn 29 · commits (last 12mo) 2</title></rect>
+<rect x="1167.03" y="665.08" width="50.40" height="47.03" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/interactivity.py
 1,120 est. tokens · 40 loc · ccn 9 · commits (last 12mo) 2</title></rect>
-<rect x="1175.20" y="670.67" width="56.71" height="41.39" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/gap_actions.py
+<rect x="1167.03" y="712.11" width="50.40" height="45.05" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/gap_actions.py
 1,073 est. tokens · 54 loc · ccn 20 · commits (last 12mo) 1</title></rect>
-<rect x="1175.20" y="712.06" width="56.71" height="37.65" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/gate_cost.py
+<rect x="1217.43" y="665.08" width="42.01" height="49.16" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/gate_cost.py
 976 est. tokens · 60 loc · ccn 17 · commits (last 12mo) 1</title></rect>
-<rect x="1231.91" y="670.67" width="23.58" height="68.65" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/anomaly_detector.py
+<rect x="1217.43" y="714.25" width="42.01" height="37.28" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/anomaly_detector.py
 740 est. tokens · 52 loc · ccn 14 · commits (last 12mo) 1</title></rect>
-<rect x="1231.91" y="739.31" width="23.58" height="10.39" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/__init__.py
+<rect x="1217.43" y="751.52" width="42.01" height="5.64" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/lib/__init__.py
 112 est. tokens · 1 loc · ccn 1 · commits (last 12mo) 1</title></rect>
-<rect x="649.09" y="749.70" width="201.60" height="250.30" fill="#8a0000" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/assess_core.py
-23,069 est. tokens · 1093 loc · ccn 251 · commits (last 12mo) 63</title></rect>
-<rect x="850.69" y="749.70" width="152.72" height="250.30" fill="#c67576" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/complexity-treemap.py
-17,475 est. tokens · 846 loc · ccn 214 · commits (last 12mo) 29</title></rect>
-<rect x="1003.41" y="749.70" width="145.74" height="137.93" fill="#d6bcbb" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/assess_finalize.py
-9,190 est. tokens · 438 loc · ccn 148 · commits (last 12mo) 12</title></rect>
-<rect x="1003.41" y="887.63" width="145.74" height="112.37" fill="#d8c2bd" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/doc-graph-svg.py
-7,487 est. tokens · 440 loc · ccn 119 · commits (last 12mo) 12</title></rect>
-<rect x="1149.15" y="749.70" width="106.34" height="123.30" fill="#d8c6c1" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/assess_report.py
-5,994 est. tokens · 368 loc · ccn 107 · commits (last 12mo) 11</title></rect>
-<rect x="1149.15" y="873.00" width="106.34" height="66.75" fill="#d4cfcf" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/assess_gate.py
-3,245 est. tokens · 199 loc · ccn 76 · commits (last 12mo) 5</title></rect>
-<rect x="1149.15" y="939.75" width="106.34" height="60.25" fill="#d3cfd1" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/assess_emit_workflow.py
+<rect x="652.45" y="757.17" width="201.87" height="242.83" fill="#8a0000" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/assess_core.py
+23,165 est. tokens · 1097 loc · ccn 251 · commits (last 12mo) 65</title></rect>
+<rect x="854.33" y="757.17" width="152.53" height="242.83" fill="#c67273" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/complexity-treemap.py
+17,503 est. tokens · 848 loc · ccn 214 · commits (last 12mo) 31</title></rect>
+<rect x="1006.86" y="757.17" width="146.41" height="132.87" fill="#d7bbb9" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/assess_finalize.py
+9,193 est. tokens · 439 loc · ccn 148 · commits (last 12mo) 13</title></rect>
+<rect x="1006.86" y="890.04" width="146.41" height="109.96" fill="#d9c2bc" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/doc-graph-svg.py
+7,608 est. tokens · 444 loc · ccn 119 · commits (last 12mo) 13</title></rect>
+<rect x="1153.27" y="757.17" width="106.17" height="119.63" fill="#d9c5c0" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/assess_report.py
+6,002 est. tokens · 369 loc · ccn 107 · commits (last 12mo) 12</title></rect>
+<rect x="1153.27" y="876.80" width="106.17" height="64.82" fill="#d5cfce" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/assess_gate.py
+3,252 est. tokens · 200 loc · ccn 76 · commits (last 12mo) 6</title></rect>
+<rect x="1153.27" y="941.62" width="106.17" height="58.38" fill="#d3cfd1" stroke="white" stroke-width="0.5"><title>skills/assess/scripts/assess_emit_workflow.py
 2,929 est. tokens · 171 loc · ccn 71 · commits (last 12mo) 4</title></rect>
-<rect x="1255.49" y="0.00" width="1.03" height="1000.00" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/skill-forge/tests/fixtures/flawed-instruction-file/check_counts.py
+<rect x="1259.44" y="0.00" width="1.00" height="1000.00" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>skills/skill-forge/tests/fixtures/flawed-instruction-file/check_counts.py
 472 est. tokens · 14 loc · ccn 4 · commits (last 12mo) 1</title></rect>
-<rect x="1256.52" y="0.00" width="132.80" height="227.14" fill="#d2c7ca" stroke="white" stroke-width="0.5"><title>scripts/tests/test_floor_check.py
+<rect x="1260.44" y="0.00" width="131.28" height="222.29" fill="#d2c7ca" stroke="white" stroke-width="0.5"><title>scripts/tests/test_floor_check.py
 13,790 est. tokens · 998 loc · ccn 159 · commits (last 12mo) 5</title></rect>
-<rect x="1389.32" y="0.00" width="210.68" height="123.20" fill="#d5ccca" stroke="white" stroke-width="0.5"><title>scripts/tests/test_floor_anchor.py
+<rect x="1391.72" y="0.00" width="208.28" height="120.56" fill="#d5ccca" stroke="white" stroke-width="0.5"><title>scripts/tests/test_floor_anchor.py
 11,866 est. tokens · 847 loc · ccn 94 · commits (last 12mo) 7</title></rect>
-<rect x="1389.32" y="123.20" width="94.19" height="103.95" fill="#d5d0cf" stroke="white" stroke-width="0.5"><title>scripts/tests/test_transform.py
+<rect x="1391.72" y="120.56" width="93.11" height="101.73" fill="#d5d0d0" stroke="white" stroke-width="0.5"><title>scripts/tests/test_transform.py
 4,476 est. tokens · 338 loc · ccn 53 · commits (last 12mo) 6</title></rect>
-<rect x="1483.51" y="123.20" width="84.97" height="103.95" fill="#d8cac6" stroke="white" stroke-width="0.5"><title>scripts/tests/test_integration.py
+<rect x="1484.83" y="120.56" width="84.00" height="101.73" fill="#d7cbc7" stroke="white" stroke-width="0.5"><title>scripts/tests/test_integration.py
 4,038 est. tokens · 245 loc · ccn 89 · commits (last 12mo) 10</title></rect>
-<rect x="1568.48" y="123.20" width="31.52" height="103.95" fill="#d3d2d4" stroke="white" stroke-width="0.5"><title>scripts/tests/test_cli_source.py
+<rect x="1568.84" y="120.56" width="31.16" height="101.73" fill="#d3d2d4" stroke="white" stroke-width="0.5"><title>scripts/tests/test_cli_source.py
 1,498 est. tokens · 69 loc · ccn 13 · commits (last 12mo) 4</title></rect>
-<rect x="1256.52" y="227.14" width="143.56" height="82.00" fill="#d3cfd1" stroke="white" stroke-width="0.5"><title>scripts/contract/freeze.py
+<rect x="1260.44" y="222.29" width="114.79" height="99.22" fill="#d3cfd1" stroke="white" stroke-width="0.5"><title>scripts/contract/freeze.py
 5,382 est. tokens · 338 loc · ccn 87 · commits (last 12mo) 3</title></rect>
-<rect x="1256.52" y="309.15" width="143.56" height="80.46" fill="#d3ced0" stroke="white" stroke-width="0.5"><title>scripts/contract/validate_completion.py
+<rect x="1375.23" y="222.29" width="112.63" height="99.22" fill="#d3ced1" stroke="white" stroke-width="0.5"><title>scripts/contract/validate_completion.py
 5,281 est. tokens · 290 loc · ccn 100 · commits (last 12mo) 3</title></rect>
-<rect x="1400.08" y="227.14" width="115.87" height="89.50" fill="#d3d1d3" stroke="white" stroke-width="0.5"><title>scripts/contract/spawn_verifier.py
+<rect x="1260.44" y="321.51" width="72.61" height="138.17" fill="#d3d1d3" stroke="white" stroke-width="0.5"><title>scripts/contract/spawn_verifier.py
 4,741 est. tokens · 222 loc · ccn 33 · commits (last 12mo) 3</title></rect>
-<rect x="1400.08" y="316.64" width="115.87" height="72.96" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/verifier.py
+<rect x="1333.05" y="321.51" width="90.05" height="90.82" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/verifier.py
 3,865 est. tokens · 207 loc · ccn 51 · commits (last 12mo) 1</title></rect>
-<rect x="1515.95" y="227.14" width="84.05" height="52.44" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/tiers.py
+<rect x="1333.05" y="412.34" width="90.05" height="47.35" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/tiers.py
 2,015 est. tokens · 55 loc · ccn 12 · commits (last 12mo) 2</title></rect>
-<rect x="1515.95" y="279.58" width="43.62" height="74.71" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/start_gate.py
+<rect x="1423.11" y="321.51" width="64.75" height="48.69" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/start_gate.py
 1,490 est. tokens · 77 loc · ccn 10 · commits (last 12mo) 2</title></rect>
-<rect x="1559.57" y="279.58" width="40.43" height="74.71" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/record_readiness.py
+<rect x="1423.11" y="370.21" width="64.75" height="45.13" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/record_readiness.py
 1,381 est. tokens · 72 loc · ccn 14 · commits (last 12mo) 2</title></rect>
-<rect x="1515.95" y="354.30" width="47.76" height="35.31" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/complete_gate.py
+<rect x="1423.11" y="415.34" width="36.79" height="44.35" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/complete_gate.py
 771 est. tokens · 36 loc · ccn 4 · commits (last 12mo) 2</title></rect>
-<rect x="1563.70" y="354.30" width="36.30" height="35.31" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/contract_location.py
+<rect x="1459.90" y="415.34" width="27.96" height="44.35" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>scripts/contract/contract_location.py
 586 est. tokens · 23 loc · ccn 7 · commits (last 12mo) 1</title></rect>
-<rect x="1256.52" y="389.61" width="195.93" height="140.44" fill="#d1bec1" stroke="white" stroke-width="0.5"><title>scripts/floor_anchor.py
+<rect x="1487.86" y="222.29" width="112.14" height="237.40" fill="#d1bfc2" stroke="white" stroke-width="0.5"><title>scripts/floor_anchor.py
 12,580 est. tokens · 646 loc · ccn 188 · commits (last 12mo) 7</title></rect>
-<rect x="1256.52" y="530.05" width="171.80" height="123.56" fill="#d1cfd3" stroke="white" stroke-width="0.5"><title>scripts/canaries/run_canaries.py
+<rect x="1260.44" y="459.69" width="129.90" height="158.10" fill="#d1cfd4" stroke="white" stroke-width="0.5"><title>scripts/canaries/run_canaries.py
 9,705 est. tokens · 535 loc · ccn 147 · commits (last 12mo) 1</title></rect>
-<rect x="1428.32" y="530.05" width="24.13" height="123.56" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>scripts/canaries/drive_interactive.mjs
+<rect x="1260.44" y="617.79" width="129.90" height="22.20" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>scripts/canaries/drive_interactive.mjs
 1,363 est. tokens · 131 loc · ccn 37 · commits (last 12mo) 1</title></rect>
-<rect x="1452.45" y="389.61" width="147.55" height="151.36" fill="#d1c5c8" stroke="white" stroke-width="0.5"><title>scripts/floor_check.py
+<rect x="1390.34" y="459.69" width="119.83" height="180.30" fill="#d1c5c8" stroke="white" stroke-width="0.5"><title>scripts/floor_check.py
 10,210 est. tokens · 579 loc · ccn 179 · commits (last 12mo) 5</title></rect>
-<rect x="1452.45" y="540.97" width="93.34" height="112.65" fill="#e0d8d1" stroke="white" stroke-width="0.5"><title>scripts/standalone_skill_config.py
-4,807 est. tokens · 246 loc · ccn 1 · commits (last 12mo) 21</title></rect>
-<rect x="1545.79" y="540.97" width="54.21" height="112.65" fill="#d5d1d0" stroke="white" stroke-width="0.5"><title>scripts/transform_skill.py
+<rect x="1510.18" y="459.69" width="89.82" height="114.52" fill="#e0d8d1" stroke="white" stroke-width="0.5"><title>scripts/standalone_skill_config.py
+4,861 est. tokens · 248 loc · ccn 1 · commits (last 12mo) 22</title></rect>
+<rect x="1510.18" y="574.21" width="89.82" height="65.78" fill="#d5d1d0" stroke="white" stroke-width="0.5"><title>scripts/transform_skill.py
 2,792 est. tokens · 165 loc · ccn 44 · commits (last 12mo) 6</title></rect>
-<rect x="1256.52" y="653.62" width="129.46" height="86.37" fill="#d3d0d3" stroke="white" stroke-width="0.5"><title>tests/contract/test_freeze.py
+<rect x="1260.44" y="639.99" width="123.33" height="87.71" fill="#d3d0d3" stroke="white" stroke-width="0.5"><title>tests/contract/test_freeze.py
 5,112 est. tokens · 310 loc · ccn 50 · commits (last 12mo) 3</title></rect>
-<rect x="1385.98" y="653.62" width="129.26" height="86.37" fill="#d3d0d2" stroke="white" stroke-width="0.5"><title>tests/contract/test_custody.py
+<rect x="1383.77" y="639.99" width="123.14" height="87.71" fill="#d3d0d2" stroke="white" stroke-width="0.5"><title>tests/contract/test_custody.py
 5,104 est. tokens · 283 loc · ccn 66 · commits (last 12mo) 3</title></rect>
-<rect x="1256.52" y="739.99" width="101.46" height="108.72" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>tests/contract/test_completion_record.py
+<rect x="1260.44" y="727.70" width="96.66" height="110.41" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>tests/contract/test_completion_record.py
 5,043 est. tokens · 317 loc · ccn 38 · commits (last 12mo) 2</title></rect>
-<rect x="1256.52" y="848.71" width="101.46" height="69.35" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>tests/contract/test_verifier.py
+<rect x="1260.44" y="838.11" width="96.66" height="70.43" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>tests/contract/test_verifier.py
 3,217 est. tokens · 222 loc · ccn 28 · commits (last 12mo) 2</title></rect>
-<rect x="1357.98" y="739.99" width="83.61" height="74.43" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>tests/contract/test_readiness.py
+<rect x="1357.10" y="727.70" width="79.65" height="75.59" fill="#d2d1d4" stroke="white" stroke-width="0.5"><title>tests/contract/test_readiness.py
 2,845 est. tokens · 168 loc · ccn 32 · commits (last 12mo) 2</title></rect>
-<rect x="1441.59" y="739.99" width="73.64" height="74.43" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/contract/test_canary_harness.py
+<rect x="1436.75" y="727.70" width="70.16" height="75.59" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/contract/test_canary_harness.py
 2,506 est. tokens · 118 loc · ccn 34 · commits (last 12mo) 1</title></rect>
-<rect x="1357.98" y="814.42" width="52.57" height="103.64" fill="#d3d1d4" stroke="white" stroke-width="0.5"><title>tests/contract/test_tiers.py
+<rect x="1357.10" y="803.29" width="88.05" height="59.87" fill="#d3d1d4" stroke="white" stroke-width="0.5"><title>tests/contract/test_tiers.py
 2,491 est. tokens · 139 loc · ccn 15 · commits (last 12mo) 3</title></rect>
-<rect x="1410.55" y="814.42" width="74.88" height="55.15" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/contract/test_contract_location.py
+<rect x="1357.10" y="863.16" width="88.05" height="45.38" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/contract/test_contract_location.py
 1,888 est. tokens · 119 loc · ccn 20 · commits (last 12mo) 1</title></rect>
-<rect x="1410.55" y="869.57" width="74.88" height="48.49" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>tests/contract/test_start_gate.py
+<rect x="1445.15" y="803.29" width="61.77" height="56.87" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>tests/contract/test_start_gate.py
 1,660 est. tokens · 82 loc · ccn 14 · commits (last 12mo) 2</title></rect>
-<rect x="1485.43" y="814.42" width="29.80" height="103.64" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>tests/contract/test_complete_gate.py
+<rect x="1445.15" y="860.17" width="61.77" height="48.38" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>tests/contract/test_complete_gate.py
 1,412 est. tokens · 83 loc · ccn 11 · commits (last 12mo) 2</title></rect>
-<rect x="1515.23" y="653.62" width="84.77" height="117.39" fill="#d5cbca" stroke="white" stroke-width="0.5"><title>tests/test_plugin_contract.py
+<rect x="1506.91" y="639.99" width="93.09" height="103.42" fill="#d5cbca" stroke="white" stroke-width="0.5"><title>tests/test_plugin_contract.py
 4,549 est. tokens · 248 loc · ccn 97 · commits (last 12mo) 7</title></rect>
-<rect x="1515.23" y="771.00" width="84.77" height="62.24" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/test_ghreport.py
+<rect x="1506.91" y="743.41" width="93.09" height="54.83" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/test_ghreport.py
 2,412 est. tokens · 189 loc · ccn 27 · commits (last 12mo) 1</title></rect>
-<rect x="1515.23" y="833.25" width="84.77" height="46.99" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/test_skill_forge_instruction_files.py
+<rect x="1506.91" y="798.24" width="50.06" height="76.98" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/test_skill_forge_instruction_files.py
 1,821 est. tokens · 115 loc · ccn 24 · commits (last 12mo) 1</title></rect>
-<rect x="1515.23" y="880.24" width="49.38" height="37.83" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/test_ghsync_porcelain.py
+<rect x="1556.98" y="798.24" width="43.02" height="76.98" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/test_file_size_ratchet.py
+1,565 est. tokens · 110 loc · ccn 26 · commits (last 12mo) 1</title></rect>
+<rect x="1506.91" y="875.22" width="54.23" height="33.33" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/test_ghsync_porcelain.py
 854 est. tokens · 66 loc · ccn 5 · commits (last 12mo) 1</title></rect>
-<rect x="1564.61" y="880.24" width="35.39" height="37.83" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/canaries/known-good/reference_implementation/porcelain.py
+<rect x="1561.14" y="875.22" width="38.86" height="33.33" fill="#d1d1d5" stroke="white" stroke-width="0.5"><title>tests/canaries/known-good/reference_implementation/porcelain.py
 612 est. tokens · 38 loc · ccn 13 · commits (last 12mo) 1</title></rect>
-<rect x="1256.52" y="918.07" width="199.61" height="81.93" fill="#e8ddcf" stroke="white" stroke-width="0.5"><title>CLAUDE.md
-7,477 est. tokens · 159 loc · ccn 0 · commits (last 12mo) 33</title></rect>
-<rect x="1456.13" y="918.07" width="75.82" height="81.93" fill="#d1d1d6" stroke="white" stroke-width="0.5"><title>LICENSE
+<rect x="1260.44" y="908.54" width="197.12" height="91.46" fill="#ecdfce" stroke="white" stroke-width="0.5"><title>CLAUDE.md
+8,519 est. tokens · 162 loc · ccn 0 · commits (last 12mo) 39</title></rect>
+<rect x="1457.56" y="908.54" width="65.71" height="91.46" fill="#d1d1d6" stroke="white" stroke-width="0.5"><title>LICENSE
 2,840 est. tokens · 169 loc · ccn 0 · commits (last 12mo) 1</title></rect>
-<rect x="1531.95" y="918.07" width="68.05" height="50.53" fill="#d3d2d5" stroke="white" stroke-width="0.5"><title>action.yml
+<rect x="1523.27" y="908.54" width="76.73" height="43.36" fill="#d3d2d5" stroke="white" stroke-width="0.5"><title>action.yml
 1,572 est. tokens · 78 loc · ccn 0 · commits (last 12mo) 4</title></rect>
-<rect x="1531.95" y="968.60" width="68.05" height="31.40" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>FLOOR.md
+<rect x="1523.27" y="951.90" width="42.98" height="48.10" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>FLOOR.md
 977 est. tokens · 67 loc · ccn 0 · commits (last 12mo) 2</title></rect>
+<rect x="1566.26" y="951.90" width="33.74" height="48.10" fill="#d2d1d5" stroke="white" stroke-width="0.5"><title>.file-size-ratchet.toml
+767 est. tokens · 56 loc · ccn 0 · commits (last 12mo) 2</title></rect>
+<rect x="1487.86" y="222.29" width="112.14" height="237.40" fill="url(#survivor-diag)" stroke="none" pointer-events="none"/>
+<line x1="0" y1="1000.0" x2="1600.0" y2="1000.0" stroke="#cccccc" stroke-width="1"/>
+<text x="14" y="1018.0" font-size="13" text-anchor="start" font-weight="bold">Survivor-density overlay (hatched = covered but unpinned)</text>
+<rect x="14" y="1034.0" width="16" height="16" fill="#f2f2f2" stroke="#888888" stroke-width="0.5"/>
+<rect x="14" y="1034.0" width="16" height="16" fill="url(#survivor-diag)" stroke="none" pointer-events="none"/>
+<text x="40" y="1042.0" font-size="12" text-anchor="start">&gt;30% survivor density - covered but unpinned (tests run this code without constraining it)</text>
+<rect x="14" y="1056.0" width="16" height="16" fill="#f2f2f2" stroke="#888888" stroke-width="0.5"/>
+<rect x="14" y="1056.0" width="16" height="16" fill="url(#survivor-cross)" stroke="none" pointer-events="none"/>
+<text x="40" y="1064.0" font-size="12" text-anchor="start">&gt;50% survivor density - severe; most mutations survive the suite</text>
 </svg>

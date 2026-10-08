@@ -107,3 +107,16 @@
 
 ---
 <!-- chain:3287cc08dc4b7312 -->
+<!-- assess:run_id=20261008085555-417634ee artifact_schema_version=1.3.0 -->
+## 2026-10-08 (v1.92.8, run 417634ee)
+
+- **Files scored:** 184
+- **AI Readiness:** 7.0 / 8 (AI-Native)
+- **Instructions grade:** A
+- **Hotspot transitions:** 1 graduated, 1 regressed, 0 restructured, 1 new, 8 persistent
+- **Top action:** Decide how FLOOR.md clause iii and floor_core_changed agree, then pin floor_anchor.py behaviour with clause-derived tests (#410; 43% mutant survival)
+
+[Full report](./assess-report.md)
+
+---
+<!-- chain:981698290f9d2107 -->

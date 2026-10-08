@@ -1,10 +1,10 @@
 {
   "schema": 2,
-  "run_id": "20261007204013-4ace52ea",
+  "run_id": "20261008085555-417634ee",
   "actions": [
     {
       "rank": 1,
-      "action": "Decide how FLOOR.md clause iii and floor_core_changed should agree, then add the clause-derived tests for floor_anchor.py",
+      "action": "Decide how FLOOR.md clause iii and floor_core_changed should agree, then pin floor_anchor.py with clause-derived tests",
       "layer": 4,
       "effort": "medium",
       "files": [
@@ -13,7 +13,7 @@
         "FLOOR.md"
       ],
       "first_step": "Read the #410 review comment and choose widen-the-classifier or narrow-the-clause",
-      "done_when": "Each FLOOR.md clause maps to a test written from its text, and a scripts/contract/ change requests floor-signoff (or clause iii no longer lists it)",
+      "done_when": "Each FLOOR.md clause maps to a test written from its text, and floor_anchor.py mutation survivor density falls below 0.3",
       "scope_fence": "Floor files: changes need the maintainer's out-of-band floor-signoff approval; no agent edits",
       "finding": "self_referential_tests",
       "status": "pending",
@@ -41,15 +41,16 @@
     },
     {
       "rank": 3,
-      "action": "Annotate test_keyhole_signals.py as a tracked large file and split it by finding family only when a change needs most of it",
+      "action": "Split test_keyhole_signals.py into one test module per finding family, moving tests unchanged",
       "layer": 4,
-      "effort": "small",
+      "effort": "medium",
       "files": [
-        "skills/assess/tests/test_keyhole_signals.py"
+        "skills/assess/tests/test_keyhole_signals.py",
+        ".file-size-ratchet.toml"
       ],
-      "first_step": "Add a large-file: tracked note naming the finding families as the split seams",
-      "done_when": "The file carries the tracked note. The accretion_ratchet finding persists until the engine honours such a note, so expect this row next run; any later split keeps every test passing with no test logic changed",
-      "scope_fence": "Annotation only; no pre-emptive split of a working test file",
+      "first_step": "Move each finding family's tests into its own test_keyhole_<family>.py",
+      "done_when": "test_keyhole_signals.py is under 800 lines, its .file-size-ratchet.toml entry is removed, and the test count is unchanged",
+      "scope_fence": "Move tests only; no assertion or fixture logic changes",
       "finding": "accretion_ratchet",
       "status": "pending",
       "claimed_by": null,
