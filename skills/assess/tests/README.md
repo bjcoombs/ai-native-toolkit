@@ -31,7 +31,8 @@ Every `test_*.py` file in this directory has a row below.
 
 | Suite | Pins |
 |---|---|
-| `test_assess_core.py` | `scripts/assess_core.py` - end-to-end orchestrator; drives `build_run_context` without running lizard/scc |
+| `test_assess_core.py` | `scripts/assess_core.py` - end-to-end orchestrator; drives `build_run_context` without running lizard/scc; tests of code that moved into a `lib/` module sit in that module's suite below |
+| `assess_core_helpers.py` | repo-seeding helpers shared by `test_assess_core.py` and the lib suites split from it (not a test module) |
 | `test_assess_finalize.py` | `scripts/assess_finalize.py` - LLM write-back; placeholder substitution in `log.md` and `hotspots/*.md` |
 | `test_assess_gate.py` | `scripts/assess_gate.py` - CI regression gate; complexity and containment threshold checks and exit codes |
 | `test_assess_report.py` | `scripts/assess_report.py` - deterministic report renderer; template substitution, section renderers, conditional fallbacks |
@@ -98,6 +99,12 @@ Every `test_*.py` file in this directory has a row below.
 | `test_review_reality.py` | `lib/review_reality.py` - review-automation evidence from merged PRs |
 | `test_scan_registry.py` | `lib/scan_registry.py` - the declared scan table and the loop that runs it |
 | `test_sibling_tests.py` | `lib/sibling_tests.py` - the one sibling-test resolver |
+| `test_instruction_files.py` | `lib/instruction_files.py` - instruction-file discovery and grading, alias grade inheritance, broken references, sensitive content, ancestor cascade (through `build_run_context`) |
+| `test_diff_reliability.py` | `lib/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
+| `test_wiki_state.py` | `lib/wiki_state.py` - first-flagged dates and their rekeying through the rename map |
+| `test_run_wiki.py` | `lib/run_wiki.py` - hotspot pages, `index.md` rows and graduation records for one run |
+| `test_context_blocks.py` | `lib/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
+| `test_mutation_cap.py` | `lib/mutation_cap.py` - the `test_pressure` block shape and the Layer 6 mutation-not-run cap |
 | `test_structure_drift.py` | `lib/structure_drift.py` - Tier 0 path-existence structure-drift signal |
 | `test_test_focus.py` | `lib/test_focus.py` - `compute_test_focus` and mutation scope |
 | `test_vault_queries.py` | `lib/vault_queries.py` - vault-native navigation query parser |
