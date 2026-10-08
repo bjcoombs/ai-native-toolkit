@@ -34,8 +34,8 @@ one-line ``fix``:
 - ``malformed_frontmatter``: frontmatter the minimal parser cannot read; the
   scan reports it and moves on, it never raises.
 - ``unreadable_file``: a configuration file the scan could not read.
-- ``stray_markdown``: a repository document (``README.md`` ...) under a
-  commands or agents path, which Claude Code loads as a command or agent.
+- ``stray_markdown``: a repository document (``README.md`` ... with no
+  frontmatter) under a commands or agents path, which Claude Code loads as a command or agent.
 - ``missing_frontmatter``: an agent file with no frontmatter, which loads with
   no description and every field ignored.
 
@@ -331,9 +331,9 @@ def _skill_target(rel: str, origin: str) -> str:
 # Basenames of repository documents, not configuration. Under a commands or
 # agents path Claude Code still loads one: `commands/README.md` becomes the
 # `/README` command and `agents/README.md` an agent named README.
-_DOC_STEMS = frozenset({
-    "readme", "changelog", "contributing", "license", "licence", "notes", "todo",
-})
+# Only a file with no frontmatter counts: a doc-named file that carries
+# frontmatter was meant as configuration and is checked like any other.
+_DOC_STEMS = frozenset({"readme", "changelog", "contributing", "license", "licence"})
 
 
 def _stray_fix(rel: str, kind: str) -> str:
@@ -346,14 +346,14 @@ def _stray_fix(rel: str, kind: str) -> str:
 
 def check_file(rel: str, kind: FileKind, origin: Origin, text: str) -> list[ClaudeConfigFinding]:
     """Every finding for one configuration file, in line order."""
-    if kind != "skill" and Path(rel).stem.lower() in _DOC_STEMS:
+    fm = parse_frontmatter(text)
+    if fm is None and kind != "skill" and Path(rel).stem.lower() in _DOC_STEMS:
         return [_finding("stray_markdown", rel, 1, None, None, _stray_fix(rel, kind))]
     out: list[ClaudeConfigFinding] = []
     if kind == "command":
         out.append(_finding(
             "legacy_command", rel, 1, None, None,
             f"Move to `{_skill_target(rel, origin)}`; `commands/` is the older form of skills."))
-    fm = parse_frontmatter(text)
     if fm is None:
         if kind == "agent":
             out.append(_finding(

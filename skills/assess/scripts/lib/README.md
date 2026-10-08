@@ -1231,7 +1231,7 @@ case-sensitive, unlike `vault_queries.parse_frontmatter`, because `maxTurns` and
 raising. Finding kinds: `legacy_command`, `unknown_key` (with a rename hint when
 the key normalises to a documented one), `unsupported_value` (closed sets and the
 `model` pattern), `command_unsupported_key` (`name` / `paths`),
-`plugin_agent_ignored`, `malformed_frontmatter`, `unreadable_file`, `stray_markdown` (a `README.md`-style document under a commands or agents path, which loads as a command or agent; reported instead of the other kinds for that file) and `missing_frontmatter` (an agent file with none); each carries `file`, `line`,
+`plugin_agent_ignored`, `malformed_frontmatter`, `unreadable_file`, `stray_markdown` (a `README.md`-style document with no frontmatter under a commands or agents path, which loads as a command or agent; reported instead of the other kinds for that file) and `missing_frontmatter` (an agent file with none); each carries `file`, `line`,
 `key`, `value` and `fix`. The run-context block `claude_config` is
 `{available, reason, snapshot_date, source_urls, plugin_repo, manifest_error,
 files_scanned, files_by_kind, finding_count, counts_by_kind, findings[]}`, or

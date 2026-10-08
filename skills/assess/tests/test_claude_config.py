@@ -193,6 +193,14 @@ def test_document_under_a_commands_or_agents_path_is_stray(
     assert loaded_as in f["fix"]
 
 
+def test_doc_named_file_with_frontmatter_is_checked_not_stray() -> None:
+    kinds = [f["kind"] for f in check_file("agents/README.md", "agent", "plugin",
+                                           _fm("name: readme", "color: teal"))]
+    assert kinds == ["unsupported_value"]
+    assert [f["kind"] for f in check_file("commands/notes.md", "command", "plugin", "x\n")] == [
+        "legacy_command"]
+
+
 def test_readme_in_a_skill_folder_is_not_stray() -> None:
     assert check_file("skills/readme/SKILL.md", "skill", "plugin", "# Body\n") == []
 
