@@ -49,9 +49,10 @@ ENVELOPE_TAG_RE = re.compile(
 # markers are 7+ identical chars at line start; the angle/pipe forms are
 # unambiguous (a `=======` separator collides with markdown setext headings, and
 # is always bracketed by the angle markers anyway, so we don't need it).
-# Regression guard for #211/#216, where commands/tm.md (now skills/tm/SKILL.md) shipped on main for ~3
-# weeks with three unresolved conflict regions (535 stale lines). Reference a
-# marker illustratively as inline code (`` `<<<<<<<` ``) so it never starts a line.
+# Regression guard for #211/#216, where commands/tm.md (now
+# skills/tm/SKILL.md) shipped on main for ~3 weeks with three unresolved
+# conflict regions (535 stale lines). Reference a marker illustratively as
+# inline code (`` `<<<<<<<` ``) so it never starts a line.
 CONFLICT_MARKER_RE = re.compile(r"(?:<{7,}|>{7,}|\|{7,})(?: |$)")
 # A quoted jq program on one line, and inside it a read of the *whole*
 # doc_graph block: `.doc_graph` not followed by a field (`.doc_graph.orphans` is
