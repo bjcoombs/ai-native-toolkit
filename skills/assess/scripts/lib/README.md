@@ -461,7 +461,9 @@ degrades. `stage` exists to keep
 `run-context.json` key order unchanged while scans migrate here; it goes when the
 hand-wired assignments between the stages are gone. Currently registered:
 `agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
-`instruction_claims`.
+`instruction_claims`, `claude_config`. Besides `repo_root` and
+`instruction_files`, the core provides `scope` (the absolute `--scope` path, or
+None) and `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`).
 
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads
@@ -1211,6 +1213,40 @@ nothing matched; `{available: false, reason}` with no counts when the scan itsel
 raised, since it runs from the `scan_registry` table); failures feed Layer 0 evidence and a Lying Signals row. A new
 claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
 (which returns the extra failure fields). Tests: `tests/test_instruction_claims.py`.
+
+**`claude_config.py`**
+Flags Claude Code configuration the runtime treats as legacy or silently ignores
+(issue #502), no model. `scan_claude_config(repo_root, scope, excludes)` reads,
+under the run root (the `--scope` directory, else the repo root),
+`.claude/skills/*/SKILL.md`, `.claude/commands/**/*.md` and
+`.claude/agents/**/*.md`, and for a plugin repository (`.claude-plugin/plugin.json`
+present) `skills/*/SKILL.md` plus the manifest's `skills` directories (which add
+to the default; a root `SKILL.md` when neither exists), and flat `commands/*.md`
+and recursive `agents/` or the paths the manifest's
+`commands` / `agents` keys name instead (those replace the default; a path that
+escapes the root is skipped; a file reached twice through a symlink is read once,
+as plugin configuration). The frontmatter parser is a dependency-free line
+parser for the YAML subset frontmatter uses (top-level keys with their lines,
+block scalars, block lists, one level of nested keys for `experimental`); it is
+case-sensitive, unlike `vault_queries.parse_frontmatter`, because `maxTurns` and
+`maxturns` are different fields, and it records malformed lines rather than
+raising. Finding kinds: `legacy_command`, `unknown_key` (with a rename hint when
+the key normalises to a documented one), `unsupported_value` (closed sets and the
+`model` pattern), `command_unsupported_key` (`name` / `paths`),
+`plugin_agent_ignored`, `malformed_frontmatter`, `unreadable_file`, `stray_markdown` (a `README.md`-style document with no frontmatter under a commands or agents path, which loads as a command or agent; reported instead of the other kinds for that file) and `missing_frontmatter` (an agent file with none); each carries `file`, `line`,
+`key`, `value` and `fix`. The run-context block `claude_config` is
+`{available, reason, snapshot_date, source_urls, plugin_repo, manifest_error,
+files_scanned, files_by_kind, finding_count, counts_by_kind, findings[]}`, or
+`{available: false, reason, snapshot_date}` when the root has no `.claude/` and no
+plugin manifest. It feeds Layer 0 evidence and is not counted in the badge.
+Tests: `tests/test_claude_config.py` (fixture: `tests/fixtures/claude_config_plugin/`).
+
+**`claude_config_fields.py`**
+The documented frontmatter field sets `claude_config` checks against: skill and
+command fields, agent fields, the agent `experimental` keys, the fields plugin
+agents ignore, the closed-value fields and the `model` pattern, with
+`SOURCE_URLS` and `SNAPSHOT_DATE`. Data only, never fetched at run time: updating
+it is one reviewed edit (re-read the pages, change the sets, move the date).
 
 **`anomaly_detector.py`**
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible

@@ -88,7 +88,7 @@ This step produces **two** views of the codebase, both colour-blind-safe (OrRd r
 - **Complexity heatmap** (`complexity-heatmap.svg`) - a treemap of the *code*. Size = LOC, colour = cyclomatic complexity, saturation = recent churn. Vivid red = complex AND active = "hard to change safely".
 - **Doc navigability graph** (`doc-graph.svg`) - a node-graph of the *docs*. Structure shows connectivity (centre = entry point, rings = link-distance, rim = unreachable; orphans carry a dashed ring; solid edges are links, dotted edges references); colour shows staleness in the same grammar as the code heatmap (vivid red = a frozen doc beside churning code = a lying map); size = file length. It folds both Layer 0 doc signals - navigability and the decaying-map - into one artifact. Beyond static wikilinks and CommonMark links, it counts a backticked path to an existing doc as a reference edge (a cited `.claude/` file included) and recognises Obsidian vault-native navigation - `.base` view hubs and `dataview` query blocks - as edges (resolved statically by folder / tag / frontmatter predicate), so a vault navigated by dynamic queries isn't mis-scored as orphaned. The SVG and the scored signal compute over the identical doc set: both honour the same excludes (`.assess/config.toml`).
 
-Feed the complexity stats into the linter/complexity layer (Layer 3) and the `doc_graph` / `doc_staleness` blocks of `run-context.json` into **Layer 0** (the graph SVG is the visual; the score reads the structured blocks).
+Feed the complexity stats into the linter/complexity layer (Layer 3) and the `doc_graph` / `doc_staleness` blocks of `run-context.json` into **Layer 0** (the graph SVG is the visual; the score reads the structured blocks). The core also reads the repo's Claude Code configuration - `.claude/skills/`, `.claude/commands/`, `.claude/agents/`, and for a plugin repo `skills/`, `commands/`, `agents/` or the paths `.claude-plugin/plugin.json` names - and writes the `claude_config` block: legacy command files, and frontmatter keys or values Claude Code silently ignores, checked against documented field sets pinned in `scripts/lib/claude_config_fields.py` with their snapshot date. It is Layer 0 evidence, not a badge finding; `available: false` (no `.claude/` and no plugin manifest) means not checked, never clean.
 
 ### The consent lifecycle (read `references/consent-lifecycle.md`)
 
@@ -290,8 +290,9 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/complexity-treemap.py" "$REPO_ROOT" -o "$REP
 <!-- chat-replace:uv-doc-graph -->
 uv run "${CLAUDE_SKILL_DIR}/scripts/doc-graph-svg.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess/doc-graph.svg"
 
-# Run the deterministic core (instruction grading, doc link-graph, doc staleness,
-# liveness/dead-code, observability rungs, stats diff, wiki files, run-context.json)
+# Run the deterministic core (instruction grading, Claude Code config frontmatter,
+# doc link-graph, doc staleness, liveness/dead-code, observability rungs, stats
+# diff, wiki files, run-context.json)
 # On a headless/CI run (as in Phase 1), append `--non-interactive` so every consent
 # offer records as skipped; a normal interactive /assess omits the flag.
 <!-- chat-replace:uv-core -->

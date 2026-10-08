@@ -1,0 +1,6 @@
+{
+  "name": "fixture-plugin",
+  "skills": ["./extra-skills/"],
+  "commands": ["./cmds/"],
+  "agents": ["./bots/helper.md", "../outside.md"]
+}

@@ -77,6 +77,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_archetype.py` | `lib/archetype.py` - repository archetype detection |
 | `test_assess_config.py` | `lib/assess_config.py` - the working-notes keys in `.assess/config.toml` |
 | `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge and its producers |
+| `test_claude_config.py` | `lib/claude_config.py` - legacy command files and Claude Code frontmatter the runtime ignores, plugin path overrides, scope, and the unchanged run-context of an unconfigured repo |
 | `test_config_drift.py` | `lib/config_drift.py` + `lib/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
 | `test_context_blocks.py` | `lib/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
 | `test_coverage_gate.py` | `lib/coverage_gate.py` - enforced coverage-threshold detector |
@@ -158,6 +159,7 @@ ambient commit signing or hooks cannot break the git-backed tests.
 | `coverage.xml`, `lcov.info` | `test_coverage_report.py` |
 | `prior_stats.json`, `current_stats.json` | `test_stats_diff.py` |
 | `maven_project/` | `test_jvm_capabilities.py` |
+| `claude_config_plugin/` | `test_claude_config.py` - a plugin repo whose manifest overrides the skills, commands and agents paths |
 | `structure_drift/` | `test_structure_drift.py` |
 
 ## Markers
