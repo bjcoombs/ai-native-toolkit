@@ -466,11 +466,13 @@ hand-wired assignments between the stages are gone. Currently registered:
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads
 (broken links, doc-to-code edges, dead-code candidates, source trees, the raw-source
-and working-notes classifier signals, bulk commits, the `test_pressure` block), plus
-the other row shapes of the blocks those belong to: the `doc_graph`, `dead_code` and
-`test_pressure` blocks keep all their rows here. `JsonDict` (`dict[str, Any]`) names
-a block whose keys are genuinely dynamic. Any other shape, including a block only the
-orchestrator reads back, stays in the module that builds it.
+and working-notes classifier signals, bulk commits, co-change pairs, B3 coupling rows,
+the keyhole blocks, derived findings and attention rows that `context_blocks` and
+`mutation_refresh` read back from `keyhole_signals`, and the `test_pressure` block),
+plus the other row shapes of the blocks those belong to: the `doc_graph`, `dead_code`,
+keyhole and `test_pressure` blocks keep all their rows here. `JsonDict`
+(`dict[str, Any]`) names a block whose keys are genuinely dynamic. Any other shape,
+including a block only the orchestrator reads back, stays in the module that builds it.
 Annotations only: no runtime behaviour, so the serialised run-context is unchanged.
 Part of the `disallow_any_generics` ratchet in `pyproject.toml` `[tool.mypy]`; modules
 outside it still read some of these blocks as bare `dict`.
@@ -1358,7 +1360,8 @@ Layer 1 write-side truth pressure. Two tiers:
   a `pyproject.toml` with a `[project]` table; no optional extras), else the `mutmut` on
   PATH.
   This repo dogfoods the tier: `[tool.mutmut]` in `skills/assess/pyproject.toml` scopes
-  mutmut 3 to three core modules and `.github/workflows/mutation.yml` runs it weekly,
+  mutmut 3 to five core modules (`stats_diff`, `promissory_markers`, `doc_staleness`,
+  `doc_graph` and `keyhole_signals`, per `only_mutate`) and `.github/workflows/mutation.yml` runs it weekly,
   scoring per module with `_parse_mutmut3_meta`, so CI and `/assess` count mutants alike.
   That config and workflow are also what `detect_mutation_config` credits on this repo.
   That config mutates through `skills/assess/src`, a committed symlink to `scripts`, so the

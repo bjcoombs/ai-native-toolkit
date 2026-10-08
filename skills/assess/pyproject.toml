@@ -89,8 +89,8 @@ ignore_missing_imports = true
 # stats sidecars, finding rows). The fix is a TypedDict per known shape
 # (shared row shapes in ``lib/run_context_types.py``) and ``dict[str, Any]``
 # only where the keys are genuinely dynamic, applied module by module through
-# the overrides below. 134 remain (mypy's count with the flag on), all in the
-# not-yet-covered modules.
+# the override below. 56 remain (measured with the global flag set to true),
+# all in the orchestrators the override does not cover.
 strict = true
 disallow_any_generics = false
 # strict does not reject a bare ``# type: ignore``; this makes the error code
@@ -98,19 +98,14 @@ disallow_any_generics = false
 enable_error_code = ["ignore-without-code"]
 
 # disallow_any_generics ratchet. Every lib/ module is covered by the wildcard,
-# so a new lib module joins the stricter gate by construction; the second
-# override lists the modules not yet converted. Ratchet rule: the exception
-# list only shrinks and the covered list only grows. When no exception and no
-# uncovered script is left, flip the global flag above to true and delete both
-# overrides. Uncovered today: the exceptions below plus the orchestrators
-# assess_core, assess_finalize, assess_report and complexity-treemap.
+# so a new lib module joins the stricter gate by construction. Ratchet rule:
+# the covered list only grows. When no uncovered script is left, flip the
+# global flag above to true and delete the override. Uncovered today: the
+# orchestrators assess_core, assess_finalize, assess_report and
+# complexity-treemap.
 [[tool.mypy.overrides]]
 module = ["lib.*", "assess_emit_workflow", "assess_gate", "doc-graph-svg"]
 disallow_any_generics = true
-
-[[tool.mypy.overrides]]
-module = ["lib.keyhole_signals"]
-disallow_any_generics = false
 
 [tool.mutmut]
 # Layer 6 truth-pressure: line coverage shows the tests execute this code,

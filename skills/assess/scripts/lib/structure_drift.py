@@ -77,7 +77,7 @@ from lib.ownership_parser import (
     parse_codeowners,
 )
 from lib.git_churn import tracked_files
-from lib.run_context_types import JsonDict
+from lib.run_context_types import CoChangePair, JsonDict
 
 
 class EmptyOwnershipPattern(TypedDict):
@@ -471,7 +471,7 @@ def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
 
 
 def cochange_grouping_relation(
-    coupling_pairs: list[JsonDict], threshold_pct: float = 5.0,
+    coupling_pairs: list[CoChangePair], threshold_pct: float = 5.0,
 ) -> set[Pair]:
     """The historical co-change grouping as a relation over file pairs.
 
@@ -604,7 +604,7 @@ def apply_seam_allowlist(
 def detect_grouping_disagreement(
     repo_root: Path,
     communities: list[set[str]] | None = None,
-    coupling_pairs: list[JsonDict] | None = None,
+    coupling_pairs: list[CoChangePair] | None = None,
     cochange_threshold_pct: float = 5.0,
     allowlist: tuple[tuple[str, str], ...] = SEAM_ALLOWLIST,
 ) -> JsonDict:
@@ -737,7 +737,7 @@ def _compute_communities(repo_root: Path) -> list[set[str]]:
     return _detect_communities(import_digraph(imap).to_undirected())
 
 
-def _compute_coupling_pairs(repo_root: Path) -> list[JsonDict]:
+def _compute_coupling_pairs(repo_root: Path) -> list[CoChangePair]:
     """Co-change pairs for the repo, or ``[]`` when there is no git history."""
     try:
         from lib.change_coupling import (
