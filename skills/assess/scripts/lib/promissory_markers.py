@@ -437,7 +437,9 @@ def _hit_is_comment_text(
     regions = (
         load_regions(repo_root, path, cache) if suffix in PYTHON_SUFFIXES else None
     )
-    comment_only = text.lstrip().startswith(COMMENT_LEADERS)
+    # Python's only comment leader is ``#``; ``*rest, = x`` opens with code.
+    leaders = ("#",) if suffix in PYTHON_SUFFIXES else COMMENT_LEADERS
+    comment_only = text.lstrip().startswith(leaders)
     quoted = (
         [m.span() for m in _CODE_SPAN_RE.finditer(text)]
         if family == "suppression" and comment_only else []

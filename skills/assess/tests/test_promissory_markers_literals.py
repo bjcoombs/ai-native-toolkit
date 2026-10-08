@@ -85,11 +85,12 @@ def test_python_suppression_counts_only_in_a_comment(tmp_path: Path) -> None:
         "# carry an explicit ``# noqa: C901`` with a note\n"   # 5 quoted
         "y = 1  # noqa: E501  # see the ``# noqa`` docs\n"     # 6 real + quoted
         "z = 1  # see ``# noqa: E501``\n"                     # 7 quoted after code
+        "*r, = [1]  # see ``# noqa: E501``\n"                 # 8 star opens code
     )
     got = _scan_files(tmp_path, {"m.py": src})
     # Row 7 stays: ruff reads a noqa anywhere in a trailing comment, so a
     # quoted directive after code still suppresses that code.
-    assert {line for _, line, fam in got if fam == "suppression"} == {3, 4, 6, 7}
+    assert {line for _, line, fam in got if fam == "suppression"} == {3, 4, 6, 7, 8}
 
 
 def test_python_disabled_test_in_string_is_data(tmp_path: Path) -> None:
