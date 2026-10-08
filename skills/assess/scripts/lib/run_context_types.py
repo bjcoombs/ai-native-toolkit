@@ -18,7 +18,7 @@ to these types when their module joins the ratchet.
 """
 from __future__ import annotations
 
-from typing import Any, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 # A run-context block read back from JSON (or about to be written to it) whose
 # keys vary with the run: config sections, another module's block consumed
@@ -319,7 +319,8 @@ class TestPressureBlock(TypedDict):
 class TestPressureUnavailable(TypedDict):
     """``test_pressure`` when the scan failed: "not assessed", never a negative."""
 
-    available: bool
-    reason: Any
+    available: Literal[False]
+    # Whatever the failed scan reported, or a fixed message.
+    reason: object
     mutation_config_present: None
     cheap_heuristics: CheapHeuristics
