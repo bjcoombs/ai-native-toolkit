@@ -1,6 +1,6 @@
 # Design history
 
-The plans and specs behind the skills, captured as they were built. These are historical design records - the shipped behaviour lives in the [skills](../../skills/README.md) and [commands](../../commands/README.md) themselves - but they document the reasoning and trade-offs that produced each feature. Back to the [Map of Content](../index.md).
+The plans and specs behind the skills, captured as they were built. These are historical design records - the shipped behaviour lives in the [skills](../../skills/README.md) themselves - but they document the reasoning and trade-offs that produced each feature. Back to the [Map of Content](../index.md).
 
 ## Plans
 
