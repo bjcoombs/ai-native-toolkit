@@ -54,16 +54,25 @@ def _rebuilt_findings(findings: list[Any], untrusted: list[str]) -> list[dict[st
     return rebuilt
 
 
-def _merge_config_exclusions(ctx: dict[str, Any], excluded: list[str]) -> None:
+def _merge_config_exclusions(
+    ctx: dict[str, Any], excluded: list[str],
+    exclude_dirs: set[str], exclude_patterns: list[str],
+) -> None:
     """Rebuild the ``excluded_by_config`` paths with this pass's E1 exclusions.
 
     Paths an earlier pass added are removed first, so the disclosure never
     names a suppressed E1 path this pass did not suppress. A path the default
     run already disclosed is never recorded as added, so it is never removed.
+    A run-context with no well-formed block gets one, built from the excludes
+    this pass applied, so an E1 path it suppresses is still disclosed.
     """
     block = ctx.get("excluded_by_config")
     if not isinstance(block, dict):
-        return
+        if not excluded:
+            return
+        block = {"dirs": sorted(exclude_dirs), "patterns": list(exclude_patterns),
+                 "affected_finding_paths": [], "count": 0}
+        ctx["excluded_by_config"] = block
     prior_added = set(block.pop(_PASS_ADDED_KEY, None) or [])
     if not excluded and not prior_added:
         return
@@ -132,7 +141,7 @@ def refresh_mutation_findings(
     ctx["excluded_as_archive"] = {
         "affected_finding_paths": archived, "count": len(archived),
     }
-    _merge_config_exclusions(ctx, excluded)
+    _merge_config_exclusions(ctx, excluded, exclude_dirs, exclude_patterns)
     return True
 
 

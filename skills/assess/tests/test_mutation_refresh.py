@@ -402,3 +402,24 @@ def test_recorded_excludes_prefer_the_disclosed_filter(tmp_path: Path) -> None:
     assert recorded_excludes(ctx, tmp_path) == ({"vendor"}, ["*.gen.py"])
     fresh_dirs, _ = recorded_excludes({}, tmp_path)
     assert "fresh" in fresh_dirs
+
+
+def test_missing_disclosure_block_is_created_for_a_suppressed_path() -> None:
+    """An older run-context with findings but no excluded_by_config block still
+    discloses an E1 path the config suppresses, rather than dropping it silently."""
+    ctx = _ctx(_empty_findings(), [{"file": "vendor/hot.py", "survived": 5, "total": 10}])
+    del ctx["excluded_by_config"]
+    refresh_mutation_findings(ctx, _stats("vendor/hot.py"), {"vendor"}, ["*.gen.py"])
+    assert _untrusted(ctx) == []
+    assert ctx["excluded_by_config"] == {
+        "dirs": ["vendor"], "patterns": ["*.gen.py"],
+        "affected_finding_paths": ["vendor/hot.py"], "count": 1,
+        "added_by_mutation_pass": ["vendor/hot.py"],
+    }
+
+
+def test_missing_disclosure_block_stays_absent_when_nothing_is_suppressed() -> None:
+    ctx = _ctx(_empty_findings(), [{"file": "src/hot.py", "survived": 5, "total": 10}])
+    del ctx["excluded_by_config"]
+    refresh_mutation_findings(ctx, _stats("src/hot.py"), {"vendor"}, [])
+    assert "excluded_by_config" not in ctx
