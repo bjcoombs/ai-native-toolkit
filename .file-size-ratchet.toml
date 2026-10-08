@@ -16,8 +16,8 @@
 # that ceiling fails until the ceiling is lowered to the current count, a
 # one-line edit. 20 lines or 2%: a typical edit to these files (a new import,
 # a reworded docstring, a small fix) moves them by single digits, so honest
-# edits never force a bump, while the largest ceiling (1798) leaves at most
-# 35 lines to regrow without review - not the hundreds a split would free.
+# edits never force a ceiling edit, while even a ceiling near 2000 leaves only
+# about 2% to regrow without review - not the hundreds a split would free.
 #
 # 800 lines: the current distribution has a median of 276, p75 of 473 and
 # p90 of 876 across 159 files, so 800 sits above the shape of a well-split
