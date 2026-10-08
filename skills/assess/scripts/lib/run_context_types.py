@@ -1,10 +1,13 @@
 """TypedDict shapes for the run-context.json rows the lib modules build.
 
-Each shape here is a record a ``lib/`` module constructs and another module, or
-the orchestrator, reads back: a dead-code candidate, a broken doc link, a gap
-action. Typing them turns the shape from a docstring comment into a contract
-mypy checks at every construction site. A shape used by one module only stays
-in that module; it moves here once a second module reads it.
+A shape lives here when a second ``lib/`` module builds or reads it (a broken
+doc link, a doc-to-code edge, a dead-code candidate, a bulk commit), or when it
+belongs to the same run-context block as one that does: the ``doc_graph`` and
+``dead_code`` blocks keep every row shape together here, so a block is read in
+one place. Any other shape, including a block read back only by the
+orchestrator, stays in the module that builds it. Typing them turns the shape
+from a docstring comment into a contract mypy checks at every construction
+site.
 
 These are annotations only. A TypedDict is a plain ``dict`` at runtime, so the
 serialised run-context is byte-identical to the untyped version.
@@ -165,16 +168,6 @@ class DocGraphBlock(TypedDict):
     directory_breakdown: list[DirectoryBreakdownRow]
     directory_count: int
     link_parents: list[LinkParent]
-
-
-# --- gap_actions ------------------------------------------------------------
-
-class GapAction(TypedDict):
-    """A Top 3 candidate read from a measured gap: ``{signal, action, paths}``."""
-
-    signal: str
-    action: str
-    paths: list[str]
 
 
 # --- git_churn / doc_staleness ---------------------------------------------

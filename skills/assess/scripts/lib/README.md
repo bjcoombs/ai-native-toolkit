@@ -419,12 +419,13 @@ hand-wired assignments between the stages are gone. Currently registered:
 `instruction_claims`.
 
 **`run_context_types.py`**
-`TypedDict` shapes for the run-context rows and blocks that more than one module
-builds or reads: the `dead_code` block and its candidate and tool rows, the
-`doc_graph` block and its rows (broken links, hubs, link parents, excluded trees),
-the raw-source and working-notes classifier signals, gap actions and bulk commits.
-`JsonDict` (`dict[str, Any]`) names a block whose keys are genuinely dynamic. A shape
-used by one module stays in that module and moves here when a second module reads it.
+`TypedDict` shapes for run-context records a second `lib/` module builds or reads
+(broken links, doc-to-code edges, dead-code candidates, source trees, the raw-source
+and working-notes classifier signals, bulk commits), plus the other row shapes of the
+blocks those belong to: the `doc_graph` and `dead_code` blocks keep all their rows
+here. `JsonDict` (`dict[str, Any]`) names a block whose keys are genuinely dynamic.
+Any other shape, including a block only the orchestrator reads back, stays in the
+module that builds it.
 Annotations only: no runtime behaviour, so the serialised run-context is unchanged.
 Part of the `disallow_any_generics` ratchet in `pyproject.toml` `[tool.mypy]`; modules
 outside it still read some of these blocks as bare `dict`.

@@ -20,8 +20,18 @@ it, and the layer scorer owns that check.
 """
 from __future__ import annotations
 
+from typing import TypedDict
+
 from lib.keyhole_signals import is_archive_path
-from lib.run_context_types import GapAction, JsonDict
+from lib.run_context_types import JsonDict
+
+
+class GapAction(TypedDict):
+    """A Top 3 candidate read from a measured gap: ``{signal, action, paths}``."""
+
+    signal: str
+    action: str
+    paths: list[str]
 
 # Reachability floor for the doc_graph gap. Below half, most of the docs cannot
 # be reached by following links from README / AGENTS.md / an index page, so an
