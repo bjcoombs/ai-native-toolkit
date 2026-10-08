@@ -47,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.badge import maturity_band
 from lib.evidence_check import check_evidence, describe
 from lib.keyhole_signals import mode_for_finding
+from lib.mutation_cap import layer6_cap_violation
 from lib.wiki_writer import (
     find_log_entry,
     log_entry_date,
@@ -71,7 +72,8 @@ class FinalizeValidationError(Exception):
     contract that lets a downstream reader trust the finalised wiki: the score
     fits its denominator, the maturity label matches the score band, every
     hotspot action names a real hotspot, the input came from *this* run (run_id),
-    Layer 6 never claims proof (Present) the run never gathered (no mutation),
+    Layer 6 never claims proof (Present) the run never gathered (no mutation,
+    or only partial mutation),
     and no layer verdict rests only on evidence that fails its re-check.
     """
 
@@ -81,12 +83,6 @@ class FinalizeValidationError(Exception):
 # "Knowledge Base · Solid (3 applicable layers)"). No pair is a substring of
 # another, so a single containment test per keyword is unambiguous.
 _MATURITY_KEYWORDS = ("AI-Native", "Not Ready", "Solid", "Basic")
-
-# The annotation the LLM must attach to Layer 6 when mutation testing never ran.
-# Mirrors ``lib.mutation_cap.MUTATION_NOT_RUN_ANNOTATION`` (this script does not
-# import it, so the literal is duplicated); the finalize error names it so a caller
-# knows the required remediation.
-MUTATION_NOT_RUN_ANNOTATION = "truth-pressure unproven (mutation not run)"
 
 
 def _log_target(assess_dir: Path, run_id: str | None) -> int | None:
@@ -618,32 +614,15 @@ def _validate_hotspot_actions(data: dict, ctx: dict) -> None:
 
 
 def _validate_layer6_cap(data: dict, ctx: dict) -> None:
-    """Layer 6 cannot exceed Partial when mutation testing never ran.
+    """Layer 6 cannot exceed Partial without complete mutation evidence.
 
-    ``mutation_not_run_cap.mutation_run`` (or, for a run-context that predates
-    the block, ``test_pressure.mutation_run``) is True only when the bounded
-    mutation pass actually executed. Without it, a Present verdict (score > 0.5)
-    for Layer 6 is an unproven self-description - the guardrail-erosion failure
-    /assess exists to catch - so finalize refuses it. A legacy input carrying no
-    ``layer_scores`` is exempt (nothing to check).
+    The rule lives in ``lib.mutation_cap.layer6_cap_violation``: Present is
+    refused when mutation did not run, or ran with every group stopped at the
+    budget. A legacy input carrying no ``layer_scores`` is exempt.
     """
-    cap = ctx.get("mutation_not_run_cap")
-    if isinstance(cap, dict):
-        mutation_ran = bool(cap.get("mutation_run", False))
-    else:
-        tp = ctx.get("test_pressure")
-        mutation_ran = bool(isinstance(tp, dict) and tp.get("mutation_run", False))
-    if mutation_ran:
-        return
-    layer6 = _layer_score(data, 6)
-    if layer6 is None:
-        return
-    if layer6 > 0.5:
-        raise FinalizeValidationError(
-            "Layer 6 cannot exceed Partial when mutation testing was not run "
-            f"(scored {layer6}). Annotation required: "
-            f"'{MUTATION_NOT_RUN_ANNOTATION}'"
-        )
+    violation = layer6_cap_violation(ctx, _layer_score(data, 6))
+    if violation:
+        raise FinalizeValidationError(violation)
 
 
 def _evidence_layer(entry: object) -> int | None:
