@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml  # required: the plugin contract job installs pyyaml
 
 REPO = Path(__file__).resolve().parent.parent
 SKILLS = REPO / "skills"
@@ -199,7 +200,6 @@ def test_skill_frontmatter_is_valid_yaml(d):
     # The regex checks above read one key at a time and pass on frontmatter
     # that no YAML parser accepts, such as an unquoted argument-hint opening
     # with "[" (a flow sequence) followed by more text.
-    yaml = pytest.importorskip("yaml")
     fm, _ = _split_frontmatter(d / "SKILL.md")
     assert fm is not None, f"{d.name}/SKILL.md missing YAML frontmatter"
     try:
@@ -207,6 +207,44 @@ def test_skill_frontmatter_is_valid_yaml(d):
     except yaml.YAMLError as exc:
         pytest.fail(f"{d.name}/SKILL.md frontmatter is not valid YAML: {exc}")
     assert isinstance(data, dict), f"{d.name}/SKILL.md frontmatter is not a mapping"
+
+
+GATE_CODE_DIRS = (REPO / "scripts" / "contract", REPO / "scripts" / "canaries")
+
+
+def _top_level_imports(path: Path) -> set[str]:
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(a.name.split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            names.add(node.module.split(".")[0])
+    return names
+
+
+@pytest.mark.parametrize(
+    "p",
+    sorted(p for d in GATE_CODE_DIRS if d.is_dir() for p in d.glob("*.py")),
+    ids=lambda p: str(p.relative_to(REPO)),
+)
+def test_gate_code_is_stdlib_only(p):
+    # The acceptance-contract gates and canary harness run under a bare
+    # `uv run python`, so they may import only the standard library and each other's
+    # flat modules. This job installs pyyaml for the frontmatter check
+    # above, so an `import yaml` here would no longer fail on a missing module;
+    # this test is what keeps the gates dependency-free.
+    import sys
+
+    # The canary harness imports the gates through the same flat-path trick.
+    siblings = {q.stem for d in GATE_CODE_DIRS if d.is_dir() for q in d.glob("*.py")}
+    foreign = sorted(_top_level_imports(p) - set(sys.stdlib_module_names) - siblings
+                     - {"__future__"})
+    assert not foreign, (
+        f"{p.relative_to(REPO)} imports {foreign}; gate code is stdlib-only"
+    )
 
 
 def test_no_legacy_command_files():

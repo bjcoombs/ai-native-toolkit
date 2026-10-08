@@ -41,8 +41,9 @@ boundary as data.
 
 The parser is stdlib-only (a small purpose-built reader for the constrained
 contract grammar documented in `tests/canaries/README.md`) so behaviour is
-identical locally and in the `plugin contract pytest` CI job, which runs
-`uv run --with pytest pytest tests/` with no PyYAML available.
+identical locally and in the `plugin contract pytest` CI job. That job installs
+PyYAML for a frontmatter check, so `test_gate_code_is_stdlib_only` in
+`tests/test_plugin_contract.py` is what keeps this module dependency-free.
 """
 from __future__ import annotations
 
