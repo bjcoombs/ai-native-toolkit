@@ -48,7 +48,7 @@
     --wide: 76rem;
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
+    :root {
       --bg: oklch(0.17 0.012 var(--hue));
       --surface: oklch(0.21 0.016 var(--hue));
       --ink: oklch(0.94 0.008 var(--hue));
@@ -59,17 +59,6 @@
       --link: oklch(0.78 0.12 45);
       --plate: #ffffff;
     }
-  }
-  :root[data-theme="dark"] {
-    --bg: oklch(0.17 0.012 var(--hue));
-    --surface: oklch(0.21 0.016 var(--hue));
-    --ink: oklch(0.94 0.008 var(--hue));
-    --muted: oklch(0.76 0.018 var(--hue));
-    --rule: oklch(0.33 0.02 var(--hue));
-    --brand: oklch(0.31 0.11 var(--hue));
-    --brand-deep: oklch(0.23 0.08 var(--hue));
-    --link: oklch(0.78 0.12 45);
-    --plate: #ffffff;
   }
 
   *, *::before, *::after { box-sizing: border-box; }
@@ -251,7 +240,7 @@
         <p class="lede">A Claude Code plugin, and standalone skills for any AI assistant, built so a fresh agent works like an engineer who has been in the org <strong>eighteen months</strong>: a navigable map, load-bearing contracts made explicit, and guardrails that make the wrong change hard.</p>
       </div>
 
-      <div class="install" aria-labelledby="install-title">
+      <section class="install" aria-labelledby="install-title">
         <h2 id="install-title">Install in Claude Code</h2>
         <p>Run these inside a Claude Code session, not a shell. <code>/plugin</code> is a Claude Code command.</p>
         <div class="cmd">
@@ -261,7 +250,7 @@
         </div>
         <p>Skills appear namespaced, for example <code>/ai-native-toolkit:assess</code>. Update with <code>/plugin update ai-native-toolkit</code>.</p>
         <p>No Claude Code? <a href="https://github.com/bjcoombs/ai-native-toolkit/releases/latest">Download the standalone skill ZIPs</a> from the latest release and upload them to claude.ai, Claude Desktop, Cowork, or any assistant that reads the Agent Skills format.</p>
-      </div>
+      </section>
     </div>
   </div>
 </header>
