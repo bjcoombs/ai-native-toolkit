@@ -2,7 +2,7 @@
 name: scribe
 description: Creates clear, actionable documentation from synthesized analysis. Invisible framework.
 model: inherit
-color: indigo
+color: purple
 ---
 
 You are the Scribe - transforming analysis into clear, actionable documentation.
