@@ -343,6 +343,36 @@ def test_manifest_commands_object_map_and_single_skill_dir(tmp_path: Path) -> No
     ]
 
 
+def test_plugin_commands_are_flat_and_project_commands_recursive(tmp_path: Path) -> None:
+    _write(tmp_path, ".claude-plugin/plugin.json", '{"name": "p"}')
+    _write(tmp_path, "commands/top.md", "Body\n")
+    _write(tmp_path, "commands/sub/nested.md", "Body\n")
+    _write(tmp_path, ".claude/commands/ns/deep.md", "Body\n")
+    files = [f["file"] for f in scan_claude_config(tmp_path)["findings"]]
+    assert files == [".claude/commands/ns/deep.md", "commands/top.md"]
+
+
+def test_root_skill_md_plugin_loads_as_a_single_skill(tmp_path: Path) -> None:
+    _write(tmp_path, ".claude-plugin/plugin.json", '{"name": "p"}')
+    _write(tmp_path, "SKILL.md", _fm("allowed_tools: Read"))
+    block = scan_claude_config(tmp_path)
+    assert block["files_by_kind"]["skill"] == 1
+    assert _rows(block) == [("unknown_key", "SKILL.md", 2, "allowed_tools", "Read")]
+    _write(tmp_path, "skills/s/SKILL.md", _fm("name: s"))
+    assert [f["file"] for f in scan_claude_config(tmp_path)["findings"]] == []
+
+
+def test_symlinked_project_skills_are_reported_once(tmp_path: Path) -> None:
+    _write(tmp_path, ".claude-plugin/plugin.json", '{"name": "p"}')
+    _write(tmp_path, "skills/s/SKILL.md", _fm("bogus: 1"))
+    _write(tmp_path, "agents/a.md", _fm("permissionMode: plan"))
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "skills").symlink_to("../skills")
+    (tmp_path / ".claude" / "agents").symlink_to("../agents")
+    assert [(f["kind"], f["file"]) for f in scan_claude_config(tmp_path)["findings"]] == [
+        ("plugin_agent_ignored", "agents/a.md"), ("unknown_key", "skills/s/SKILL.md")]
+
+
 def test_project_and_plugin_config_together_tag_their_origin(tmp_path: Path) -> None:
     _write(tmp_path, ".claude-plugin/plugin.json", '{"name": "p"}')
     _write(tmp_path, ".claude/agents/local.md", _fm("permissionMode: plan"))

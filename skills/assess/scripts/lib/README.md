@@ -1221,9 +1221,11 @@ under the run root (the `--scope` directory, else the repo root),
 `.claude/skills/*/SKILL.md`, `.claude/commands/**/*.md` and
 `.claude/agents/**/*.md`, and for a plugin repository (`.claude-plugin/plugin.json`
 present) `skills/*/SKILL.md` plus the manifest's `skills` directories (which add
-to the default), and `commands/` and `agents/` or the paths the manifest's
+to the default; a root `SKILL.md` when neither exists), and flat `commands/*.md`
+and recursive `agents/` or the paths the manifest's
 `commands` / `agents` keys name instead (those replace the default; a path that
-escapes the root is skipped). The frontmatter parser is a dependency-free line
+escapes the root is skipped; a file reached twice through a symlink is read once,
+as plugin configuration). The frontmatter parser is a dependency-free line
 parser for the YAML subset frontmatter uses (top-level keys with their lines,
 block scalars, block lists, one level of nested keys for `experimental`); it is
 case-sensitive, unlike `vault_queries.parse_frontmatter`, because `maxTurns` and

@@ -386,12 +386,16 @@ def _inside(root: Path, rel: str) -> Path | None:
     return path if path.is_relative_to(root) else None
 
 
-def _md_files(path: Path | None) -> list[Path]:
+def _md_files(path: Path | None, recursive: bool = True) -> list[Path]:
+    """A ``.md`` file, or the ``.md`` files in a directory (``recursive`` or flat)."""
     if path is None:
         return []
     if path.is_file():
         return [path] if path.suffix == ".md" else []
-    return sorted(p for p in path.rglob("*.md") if p.is_file()) if path.is_dir() else []
+    if not path.is_dir():
+        return []
+    found = path.rglob("*.md") if recursive else path.glob("*.md")
+    return sorted(p for p in found if p.is_file())
 
 
 def _skill_files(path: Path | None) -> list[Path]:
@@ -430,10 +434,19 @@ def _plugin_files(root: Path, manifest: dict[str, object]) -> Discovered:
         p for p in (_inside(root, s) for s in _paths_value(manifest.get("skills"))) if p]
     for d in skill_dirs:
         found.extend((p, "skill", "plugin") for p in _skill_files(d))
+    # A plugin with SKILL.md at its root, no skills/ and no skills key loads as
+    # a single skill (plugins-reference.md, "Standard layout").
+    root_skill = root / "SKILL.md"
+    if root_skill.is_file() and not (root / "skills").is_dir() and "skills" not in manifest:
+        found.append((root_skill, "skill", "plugin"))
     cmd_paths = (_command_sources(manifest["commands"]) if "commands" in manifest
                  else ["commands"])
+    # Plugin command directories hold flat files ("Flat Markdown command
+    # files", plugins-reference.md); only project .claude/commands/ namespaces
+    # subfolders.
     for c in cmd_paths:
-        found.extend((p, "command", "plugin") for p in _md_files(_inside(root, c)))
+        found.extend((p, "command", "plugin")
+                     for p in _md_files(_inside(root, c), recursive=False))
     found.extend((p, "agent", "plugin") for p in _plugin_agent_files(root, manifest))
     return found
 
@@ -459,11 +472,14 @@ def _project_files(root: Path) -> Discovered:
 
 
 def _dedupe(found: Discovered) -> Discovered:
+    """Drop a file reached twice, by resolved path (a `.claude/skills -> ../skills`
+    symlink); the first occurrence wins, so list plugin files first."""
     seen: set[Path] = set()
     out: Discovered = []
     for item in found:
-        if item[0] not in seen:
-            seen.add(item[0])
+        key = item[0].resolve()
+        if key not in seen:
+            seen.add(key)
             out.append(item)
     return out
 
@@ -494,9 +510,10 @@ def scan_claude_config(
             "no Claude Code configuration: no .claude/ directory and no "
             ".claude-plugin/plugin.json")
     manifest, manifest_error = _load_manifest(manifest_path) if plugin_repo else ({}, None)
-    found = _project_files(root)
-    if plugin_repo:
-        found.extend(_plugin_files(root, manifest))
+    # Plugin files first: a file reachable both ways is reported once, with the
+    # plugin rules (plugin agents ignore more fields).
+    found = _plugin_files(root, manifest) if plugin_repo else []
+    found.extend(_project_files(root))
     dirs, pats = excludes or (set(), [])
     findings: list[ClaudeConfigFinding] = []
     by_kind = {"skill": 0, "command": 0, "agent": 0}
