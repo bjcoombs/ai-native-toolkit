@@ -17,7 +17,17 @@ import subprocess
 import tempfile
 import time
 import xml.etree.ElementTree as ET
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import TypedDict
+
+from lib.run_context_types import (
+    MutationConfig,
+    MutationFileResult,
+    MutationRunResult,
+    SurvivorCluster,
+    SurvivorDensity,
+)
 
 from .common import MUTATION_TIMEOUT, _iter_files, _read
 from .mutmut3 import _no_records_reason, _run_mutmut3
@@ -55,7 +65,7 @@ _MUTATION_CI_TOKENS: dict[str, str] = {
 _CI_FILE_NAMES = (".gitlab-ci.yml", ".gitlab-ci.yaml", "Jenkinsfile")
 
 
-def detect_mutation_config(repo_root: Path) -> dict:
+def detect_mutation_config(repo_root: Path) -> MutationConfig:
     """Detect mutation-testing configuration and CI integration. Never raises.
 
     Returns ``{present, tools, ci_integrated}``. ``present`` is true if any
@@ -119,14 +129,14 @@ def _ci_files(repo_root: Path) -> list[Path]:
 
 # ── mutation output parsers ──────────────────────────────────────────────────
 
-def _parse_stryker_json(stdout: str) -> list[dict]:
+def _parse_stryker_json(stdout: str) -> list[MutationFileResult]:
     """Stryker JSON report (mutation-testing-elements schema):
     ``{"files": {"<path>": {"mutants": [{"status": "Killed"|"Survived"|...}]}}}``."""
     try:
         data = json.loads(stdout)
     except (json.JSONDecodeError, ValueError):
         return []
-    out: list[dict] = []
+    out: list[MutationFileResult] = []
     for path, info in (data.get("files") or {}).items():
         killed = survived = 0
         for m in info.get("mutants", []):
@@ -142,7 +152,7 @@ def _parse_stryker_json(stdout: str) -> list[dict]:
     return out
 
 
-def _parse_mutmut(stdout: str) -> list[dict]:
+def _parse_mutmut(stdout: str) -> list[MutationFileResult]:
     """mutmut survivor listing: lines of ``<path>:<line>``. We can only see
     survivors, so killed and total are unknown (None) - density treats them as
     missing rather than guessing."""
@@ -174,7 +184,7 @@ def _testcase_file(testcase: ET.Element) -> str | None:
     return None
 
 
-def _parse_mutmut_junitxml(xml_path: Path) -> list[dict]:
+def _parse_mutmut_junitxml(xml_path: Path) -> list[MutationFileResult]:
     """Parse ``mutmut junitxml`` output into per-file killed/survived/total.
 
     Unlike the survivor-only stdout listing, junitxml reports *every* mutant -
@@ -204,7 +214,7 @@ def _parse_mutmut_junitxml(xml_path: Path) -> list[dict]:
             for f, d in per_file.items()]
 
 
-def _parse_gremlins(stdout: str) -> list[dict]:
+def _parse_gremlins(stdout: str) -> list[MutationFileResult]:
     """gremlins per-mutant lines: ``KILLED|LIVED|TIMED OUT|NOT COVERED ... <file>:<line>``.
     LIVED / NOT COVERED == survived."""
     killed: dict[str, int] = {}
@@ -222,7 +232,7 @@ def _parse_gremlins(stdout: str) -> list[dict]:
     return _merge_killed_survived(killed, survived)
 
 
-def _parse_cargo_mutants(stdout: str) -> list[dict]:
+def _parse_cargo_mutants(stdout: str) -> list[MutationFileResult]:
     """cargo-mutants text outcomes: ``MISSED|CAUGHT|TIMEOUT|UNVIABLE ... <file>:<line>``.
     MISSED == survived; CAUGHT == killed; UNVIABLE/TIMEOUT ignored."""
     killed: dict[str, int] = {}
@@ -241,8 +251,8 @@ def _parse_cargo_mutants(stdout: str) -> list[dict]:
 
 
 def _merge_killed_survived(killed: dict[str, int],
-                           survived: dict[str, int]) -> list[dict]:
-    out: list[dict] = []
+                           survived: dict[str, int]) -> list[MutationFileResult]:
+    out: list[MutationFileResult] = []
     for fname in sorted(set(killed) | set(survived)):
         k = killed.get(fname, 0)
         s = survived.get(fname, 0)
@@ -256,7 +266,15 @@ def _merge_killed_survived(killed: dict[str, int],
 # `parser` maps stdout -> list[{file, killed, survived, total}]. Tried in order;
 # the first whose language is present and which is on PATH wins (config-detected
 # tools are preferred via _select_mutation_tool).
-_MUTATION_TOOLS: list[dict] = [
+class _MutationToolSpec(TypedDict):
+    language: str
+    tool: str
+    exts: set[str]
+    cmd: Callable[[Path, list[str]], list[str]]
+    parser: Callable[[str], list[MutationFileResult]]
+
+
+_MUTATION_TOOLS: list[_MutationToolSpec] = [
     {"language": "typescript", "tool": "stryker", "exts": {".ts", ".tsx", ".js", ".jsx"},
      "cmd": lambda root, files: ["stryker", "run", "--reporters", "json"],
      "parser": _parse_stryker_json},
@@ -278,7 +296,8 @@ def _has_ext(repo_root: Path, exts: set[str]) -> bool:
     return False
 
 
-def _select_mutation_tool(repo_root: Path, detected_tools: list[str]) -> dict | None:
+def _select_mutation_tool(repo_root: Path,
+                          detected_tools: list[str]) -> _MutationToolSpec | None:
     """Pick a tool: prefer one whose config we detected, else any whose language
     is present. Must be on PATH (first argv token). Returns the spec or None."""
     by_pref = sorted(
@@ -385,8 +404,9 @@ def _mutmut_major(exe: str | None) -> int | None:
     return major if major is not None else _mutmut_major_from_cli()
 
 
-def run_bounded_mutation(repo_root: Path, hot_files: list | None = None,
-                         opt_in: bool = False) -> dict:
+def run_bounded_mutation(repo_root: Path,
+                         hot_files: Sequence[str | Path] | None = None,
+                         opt_in: bool = False) -> MutationRunResult:
     """Time-boxed, opt-in mutation pass over the hottest files. Never raises.
 
     Mutation testing mutates source and *runs* the suite, so it is never part of
@@ -460,7 +480,7 @@ def run_bounded_mutation(repo_root: Path, hot_files: list | None = None,
             "scope": scope, "per_file": per_file}
 
 
-def _run_mutmut_junitxml(repo_root: Path, timeout: float) -> list[dict]:
+def _run_mutmut_junitxml(repo_root: Path, timeout: float) -> list[MutationFileResult]:
     """Run ``mutmut junitxml`` (after a completed ``mutmut run``) and parse it
     into per-file totals. mutmut writes the XML report to stdout, so we capture
     it to a temp file and hand that to ``_parse_mutmut_junitxml``. Best-effort:
@@ -494,7 +514,7 @@ def _run_mutmut_junitxml(repo_root: Path, timeout: float) -> list[dict]:
 
 # ── aggregation over per-file mutation results ────────────────────────────────
 
-def compute_survivor_density(per_file: list[dict]) -> dict:
+def compute_survivor_density(per_file: list[MutationFileResult]) -> SurvivorDensity:
     """Survivors normalised by total mutants. Returns ``{overall, total_survived,
     total_mutants, by_file}``. ``overall`` is None when no totals are known
     (e.g. mutmut, which only lists survivors)."""
@@ -519,11 +539,11 @@ def compute_survivor_density(per_file: list[dict]) -> dict:
     }
 
 
-def identify_survivor_clusters(per_file: list[dict]) -> list[dict]:
+def identify_survivor_clusters(per_file: list[MutationFileResult]) -> list[SurvivorCluster]:
     """Files whose survivor count clears ``CLUSTER_MIN_SURVIVORS`` - a cluster of
     survivors in one file points at a specific under-tested unit. Sorted by
     survivor count, descending."""
-    clusters = [
+    clusters: list[SurvivorCluster] = [
         {"file": f.get("file", "?"), "survived": f.get("survived") or 0}
         for f in per_file or []
         if (f.get("survived") or 0) >= CLUSTER_MIN_SURVIVORS

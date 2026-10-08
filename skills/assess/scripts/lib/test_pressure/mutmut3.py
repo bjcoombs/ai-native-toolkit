@@ -42,6 +42,14 @@ import time
 import tomllib
 from fnmatch import fnmatch
 from pathlib import Path, PurePosixPath
+from typing import TypedDict, cast
+
+from lib.run_context_types import (
+    MutationFileResult,
+    MutationGroup,
+    MutationGroupRecord,
+    MutationRunResult,
+)
 
 from .common import MUTATION_TIMEOUT, _read
 
@@ -96,9 +104,9 @@ _RUNNER_PROBE_TIMEOUT = 15.0
 
 # ── results ──────────────────────────────────────────────────────────────────
 
-def _parse_mutmut3_meta(mutants_dir: Path) -> list[dict]:
+def _parse_mutmut3_meta(mutants_dir: Path) -> list[MutationFileResult]:
     """Per-file killed/survived/total from mutmut 3's ``mutants/**/*.meta``."""
-    out: list[dict] = []
+    out: list[MutationFileResult] = []
     if not mutants_dir.is_dir():
         return out
     for meta in sorted(mutants_dir.rglob("*.meta")):
@@ -116,7 +124,7 @@ def _parse_mutmut3_meta(mutants_dir: Path) -> list[dict]:
     return out
 
 
-def _tool_error_line(proc: subprocess.CompletedProcess) -> str:
+def _tool_error_line(proc: subprocess.CompletedProcess[str]) -> str:
     """The most telling line of a failed tool run: the last non-blank stderr
     line that is not a Python warning (a traceback ends with the exception),
     else the last of stdout. mutmut 3 prints its own stop messages ("failed to
@@ -130,7 +138,7 @@ def _tool_error_line(proc: subprocess.CompletedProcess) -> str:
     return ""
 
 
-def _likely_cause(proc: subprocess.CompletedProcess) -> str:
+def _likely_cause(proc: subprocess.CompletedProcess[str]) -> str:
     """The first unresolved import in the tool's output, else the first
     failing test pytest summarised. mutmut's own stop message ("failed to
     collect stats") says the baseline run failed, not why."""
@@ -161,7 +169,7 @@ def _cut_prefix(detail: str, path: Path, label: str | None) -> str:
     return detail
 
 
-def _no_records_reason(tool: str, proc: subprocess.CompletedProcess,
+def _no_records_reason(tool: str, proc: subprocess.CompletedProcess[str],
                        scratch: Path | None = None,
                        labels: dict[Path, str] | None = None) -> str:
     """``scratch`` is the directory the tool ran in when that was a temporary
@@ -616,13 +624,20 @@ def _prepare_group(work: Path, pkg_rel: str, rel_scope: list[str],
     return None
 
 
-def _group_record(pkg_rel: str, config: str, scope: list[str]) -> dict:
+class _Outcome(TypedDict):
+    """A group's outcome when it recovered no records."""
+
+    mutation_run: bool
+    reason: str
+
+
+def _group_record(pkg_rel: str, config: str, scope: list[str]) -> MutationGroupRecord:
     return {"root": pkg_rel or ".", "config": config, "scope": scope}
 
 
 def _run_mutmut(pkg: Path, pkg_on_disk: Path, config: str, cfg_scope: list[str],
                 tmp: Path, deadline: float,
-                record: dict) -> subprocess.CompletedProcess | None:
+                record: MutationGroupRecord) -> subprocess.CompletedProcess[str] | None:
     """Resolve the runner (recorded on ``record``) and run mutmut in ``pkg``
     with what remains of the budget; None when nothing remains. Raises
     ``subprocess.TimeoutExpired`` / ``OSError`` like ``subprocess.run``."""
@@ -638,7 +653,7 @@ def _run_mutmut(pkg: Path, pkg_on_disk: Path, config: str, cfg_scope: list[str],
 
 
 def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
-               deadline: float) -> tuple[dict, list[dict]]:
+               deadline: float) -> tuple[MutationGroup, list[MutationFileResult]]:
     """One package's run in its own scratch copy. Returns the group record
     and its per-file results (repo-relative paths, focus files only)."""
     pkg_on_disk = repo_root / pkg_rel if pkg_rel else repo_root
@@ -648,7 +663,7 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
                else {f: f for f in rel_scope})
     cfg_scope = list(spelled.values())
     back = {v: k for k, v in spelled.items()}
-    timeout_reason = {"mutation_run": False,
+    timeout_reason: _Outcome = {"mutation_run": False,
                       "reason": f"exceeded {MUTATION_TIMEOUT}s timeout"}
     # ignore_cleanup_errors: a read-only directory carried over by the copy, or
     # debris from the test run, must not raise on the way out of the block
@@ -683,9 +698,9 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
     return _group_result(record, pkg_rel, cfg_scope, per_file, no_records, back)
 
 
-def _stopped_result(timed_out: dict, pkg_rel: str, rel_scope: list[str],
-                    per_file: list[dict],
-                    back: dict[str, str]) -> tuple[dict, list[dict]]:
+def _stopped_result(timed_out: MutationGroup, pkg_rel: str, rel_scope: list[str],
+                    per_file: list[MutationFileResult],
+                    back: dict[str, str]) -> tuple[MutationGroup, list[MutationFileResult]]:
     """A run stopped at the budget keeps the verdicts mutmut already saved.
     mutmut 3 writes each mutant's exit code to its ``.meta`` as the result
     lands, and an untested mutant stays ``null`` (left out of the totals), so
@@ -693,7 +708,8 @@ def _stopped_result(timed_out: dict, pkg_rel: str, rel_scope: list[str],
     marked ``partial``: mutmut tests the fastest mutants first, so the figures
     are a real sample but not the whole file. With no focus-file verdict saved
     yet, the timeout record stands."""
-    record = {k: v for k, v in timed_out.items() if k not in ("mutation_run", "reason")}
+    record = cast(MutationGroupRecord, {k: v for k, v in timed_out.items()
+                                        if k not in ("mutation_run", "reason")})
     result, rows = _group_result(record, pkg_rel, rel_scope, per_file, "", back)
     if not rows:
         return timed_out, []
@@ -702,9 +718,9 @@ def _stopped_result(timed_out: dict, pkg_rel: str, rel_scope: list[str],
                        f"cover only the mutants tested before it")}, rows
 
 
-def _group_result(record: dict, pkg_rel: str, rel_scope: list[str],
-                  per_file: list[dict], no_records: str,
-                  back: dict[str, str]) -> tuple[dict, list[dict]]:
+def _group_result(record: MutationGroupRecord, pkg_rel: str, rel_scope: list[str],
+                  per_file: list[MutationFileResult], no_records: str,
+                  back: dict[str, str]) -> tuple[MutationGroup, list[MutationFileResult]]:
     """``rel_scope`` and the parsed files use the config's spelling; ``back``
     maps that spelling to the package-relative path the focus set named."""
     produced = len(per_file)
@@ -728,7 +744,7 @@ def _group_result(record: dict, pkg_rel: str, rel_scope: list[str],
     return {**record, "mutation_run": True}, per_file
 
 
-def _run_mutmut3(repo_root: Path, scope: list[str]) -> dict:
+def _run_mutmut3(repo_root: Path, scope: list[str]) -> MutationRunResult:
     """The mutmut 3 pass: one run per package root, each in a scratch copy.
 
     Only the focus files are reported, so the result's ``scope`` names the
@@ -740,15 +756,15 @@ def _run_mutmut3(repo_root: Path, scope: list[str]) -> dict:
     no-records-no-run rule as ``run_bounded_mutation``."""
     deadline = time.monotonic() + MUTATION_TIMEOUT
     grouped = _group_scope(repo_root, scope) if scope else {"": []}
-    groups: list[dict] = []
-    per_file: list[dict] = []
+    groups: list[MutationGroup] = []
+    per_file: list[MutationFileResult] = []
     for pkg_rel, files in grouped.items():
         rel_scope = [_to_package(pkg_rel, f) for f in files]
         record, results = _run_group(repo_root, pkg_rel, rel_scope, deadline)
         groups.append(record)
         per_file += results
     out_scope = scope or [f for g in groups for f in g["scope"]]
-    result = {"available": True, "tool": "mutmut", "scope": out_scope,
+    result: MutationRunResult = {"available": True, "tool": "mutmut", "scope": out_scope,
               "groups": groups, "mutation_run": bool(per_file), "per_file": per_file}
     if not per_file:
         reasons = [g["reason"] for g in groups]
