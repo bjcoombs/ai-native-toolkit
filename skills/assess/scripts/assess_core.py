@@ -57,6 +57,7 @@ from lib.assess_config import (
     is_user_excluded, load_excludes, load_structure_config, load_working_notes_config,
 )
 from lib.change_coupling import build_rename_map
+from lib.coverage_gate import detect_coverage_gate
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
 from lib.interactivity import build_offers_block
@@ -1724,6 +1725,11 @@ def build_run_context(
     cov_detect = detect_coverage_report(repo_root)
     coverage_data = load_coverage_data(repo_root)
     ctx["coverage_report"] = _coverage_report_block(cov_detect, coverage_data)
+    # Layer 6: is a coverage threshold *enforced*, not just measured? Each gate
+    # names its file, line and threshold as written; none found reads
+    # enforced: false, never inferred from the report above.
+    ctx["coverage_gate"] = _safe(
+        "coverage_gate", lambda: detect_coverage_gate(repo_root))
     test_pressure = _safe(
         "test_pressure",
         lambda: scan_test_pressure(repo_root, hot_files=hot_files, opt_in=False,

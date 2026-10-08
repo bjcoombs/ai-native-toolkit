@@ -69,6 +69,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_assess_config.py` | `lib/assess_config.py` - the working-notes keys in `.assess/config.toml` |
 | `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge and its producers |
 | `test_config_drift.py` | `lib/config_drift.py` + `lib/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
+| `test_coverage_gate.py` | `lib/coverage_gate.py` - enforced coverage-threshold detector |
 | `test_coverage_report.py` | `lib/coverage_report.py` - coverage-report parser |
 | `test_dart_capabilities.py` | `lib/dart_capabilities.py` - Dart linting and liveness capability entries |
 | `test_dart_complexity.py` | `lib/dart_complexity.py` - the approximate Dart per-function scanner |
