@@ -9,6 +9,7 @@ baseline run fails.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -231,6 +232,40 @@ def test_reason_does_not_repeat_the_detail() -> None:
         "ModuleNotFoundError: No module named 'grimp'")
 
 
+def test_reason_cuts_scratch_env_and_package_paths(tmp_path: Path,
+                                                   monkeypatch) -> None:
+    """An ImportError names the file it imported from: in the uv runner's
+    scratch environment, or in the assessed package's own venv. Neither
+    absolute path (gone, or a home directory) reaches the stored reason."""
+    _write(tmp_path, "pkg/pyproject.toml", _PROJECT)
+    _write(tmp_path, "pkg/calc.py", "x = 1\n")
+    monkeypatch.setattr(mutmut3.shutil, "which", lambda t: "/opt/bin/" + t)
+    pkg_on_disk = tmp_path / "pkg"
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "git":
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="")
+        scratch = Path(kwargs["cwd"]).parents[1]
+        out = (f"E   ImportError: cannot import name 'G' from 'nx' "
+               f"({scratch}/venv/lib/nx.py)\n"
+               f"E   ImportError: from {pkg_on_disk}/.venv/lib/y.py\n"
+               "failed to collect stats. runner returned 1\n")
+        return subprocess.CompletedProcess(cmd, 1, stdout=out, stderr="")
+    monkeypatch.setattr(mutmut3.subprocess, "run", fake_run)
+
+    record, _ = mutmut3._run_group(tmp_path, "pkg", ["calc.py"], time.monotonic() + 60)
+
+    assert record["reason"].endswith(
+        "first failure: ImportError: cannot import name 'G' from 'nx' "
+        "(<scratch>/venv/lib/nx.py)")
+    assert str(tmp_path) not in record["reason"]
+    proc = subprocess.CompletedProcess(
+        ["m"], 1, stdout="", stderr=f"ImportError: from {pkg_on_disk}/.venv/lib/y.py\n")
+    assert mutmut3._no_records_reason(
+        "mutmut", proc, labels={pkg_on_disk: "pkg"}).endswith(
+        "ImportError: from pkg/.venv/lib/y.py")
+
+
 def test_clean_exit_adds_no_cause() -> None:
     proc = subprocess.CompletedProcess(["mutmut", "run"], 0,
                                        stdout=_STATS_FAILED_OUTPUT, stderr="")
@@ -240,11 +275,15 @@ def test_clean_exit_adds_no_cause() -> None:
 
 # ── integration: a real uv environment ──────────────────────────────────────
 
-@pytest.mark.skipif(shutil.which("uv") is None, reason="uv not on PATH")
+@pytest.mark.skipif(shutil.which("uv") is None
+                    or os.environ.get("ASSESS_UV_INTEGRATION") != "1",
+                    reason="opt-in: set ASSESS_UV_INTEGRATION=1 with uv on PATH")
 def test_uv_runner_imports_the_package_dependencies(tmp_path: Path) -> None:
     """A suite importing a dependency the PATH mutmut's environment lacks
-    (here a local path dependency, so no index is needed for it) runs under
-    the uv runner, and the assessed tree gets no virtualenv or lock file."""
+    (here a local path dependency) runs under the uv runner, and the assessed
+    tree gets no virtualenv or lock file. Opt-in: uv resolves hatchling,
+    mutmut and pytest from the package index, and a network hiccup must not
+    turn the required suite red."""
     _write(tmp_path, "pyproject.toml",
            '[project]\nname = "demo"\nversion = "0.1.0"\n'
            'requires-python = ">=3.11"\ndependencies = ["helperdep"]\n'

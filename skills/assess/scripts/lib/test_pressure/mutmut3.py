@@ -144,11 +144,30 @@ def _likely_cause(proc: subprocess.CompletedProcess) -> str:
     return ""
 
 
+def _cut_prefix(detail: str, path: Path, label: str | None) -> str:
+    """Cut ``path`` from ``detail``: with no ``label`` a path under it becomes
+    relative and the directory itself ``.``; with one, the prefix becomes the
+    label. Longest spelling first: where the directory sits behind a symlink
+    (macOS /var -> /private/var) the unresolved form is a substring of the
+    resolved one, and cutting it first would leave "/private" glued on."""
+    for prefix in sorted({str(path.resolve()), str(path)}, key=len, reverse=True):
+        if label is None:
+            detail = detail.replace(prefix + os.sep, "").replace(prefix, ".")
+        else:
+            detail = detail.replace(prefix, label)
+    return detail
+
+
 def _no_records_reason(tool: str, proc: subprocess.CompletedProcess,
-                       scratch: Path | None = None) -> str:
+                       scratch: Path | None = None,
+                       labels: dict[Path, str] | None = None) -> str:
     """``scratch`` is the directory the tool ran in when that was a temporary
     copy: its prefix is cut from the detail, leaving repo-relative paths, since
-    the reason is stored in run-context.json and the directory is gone."""
+    the reason is stored in run-context.json and the directory is gone.
+    ``labels`` names other directories the output may cite (the scratch
+    environment, the assessed package and its venv) by a stable label, so no
+    absolute path (a home directory) reaches the report; cut after
+    ``scratch``, longest first."""
     reason = (f"no mutant records recovered from {tool} "
               f"output (exit code {proc.returncode})")
     detail = _tool_error_line(proc) if proc.returncode != 0 else ""
@@ -156,13 +175,10 @@ def _no_records_reason(tool: str, proc: subprocess.CompletedProcess,
     if cause and cause not in detail:
         detail = f"{detail}; first failure: {cause}" if detail else cause
     if scratch is not None:
-        # Longest first: where the temp dir sits behind a symlink (macOS /var
-        # -> /private/var) the unresolved form is a substring of the resolved
-        # one, and cutting it first would leave "/private" glued to the rest.
-        prefixes = sorted({str(scratch.resolve()), str(scratch)},
-                          key=len, reverse=True)
-        for prefix in prefixes:
-            detail = detail.replace(prefix + os.sep, "").replace(prefix, ".")
+        detail = _cut_prefix(detail, scratch, None)
+    for path, label in sorted((labels or {}).items(),
+                              key=lambda kv: len(str(kv[0])), reverse=True):
+        detail = _cut_prefix(detail, path, label)
     detail = detail[:_MAX_REASON_DETAIL]
     return f"{reason}: {detail}" if detail else reason
 
@@ -652,7 +668,9 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
         except OSError as e:
             return {**record, "mutation_run": False, "reason": str(e)}, []
         per_file = _parse_mutmut3_meta(pkg / "mutants")
-        no_records = _no_records_reason("mutmut", proc, scratch=work)
+        no_records = _no_records_reason(
+            "mutmut", proc, scratch=work,
+            labels={Path(tmp): "<scratch>", pkg_on_disk: pkg_rel or "."})
     return _group_result(record, pkg_rel, cfg_scope, per_file, no_records, back)
 
 
