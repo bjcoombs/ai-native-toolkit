@@ -148,8 +148,9 @@ def known_skill_names():
 
 
 def known_agent_names():
-    names = {p.stem for p in AGENTS.glob("*.md")} if AGENTS.is_dir() else set()
-    return names | BUILTIN_AGENTS
+    # Same walk as agent_files(), so the frontmatter contract and the
+    # subagent_type reference check agree on what counts as an agent.
+    return {p.stem for p in agent_files()} | BUILTIN_AGENTS
 
 
 @pytest.mark.parametrize("d", skill_dirs(), ids=lambda d: d.name)
@@ -162,7 +163,8 @@ def test_skill_frontmatter(d):
 
 def agent_files():
     # Every .md under agents/ is an agent definition: Claude Code registers each
-    # one as an agent, so none is exempt (a README there loaded as a bogus
+    # one as an agent, so none is exempt. The walk is recursive as a precaution:
+    # holding a nested doc to the agent contract is strict but harmless (a README there loaded as a bogus
     # `ai-native-toolkit:README` agent until it moved to docs/index.md).
     if not AGENTS.is_dir():
         return []
