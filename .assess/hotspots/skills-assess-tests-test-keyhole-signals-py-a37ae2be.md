@@ -1,7 +1,8 @@
 <!-- assess:run_id=20261008085555-417634ee artifact_schema_version=1.3.0 -->
 # Hotspot: `skills/assess/tests/test_keyhole_signals.py`
 
-_First flagged: 2026-06-19. Last seen: 2026-10-08. Status: persistent._
+_First flagged: 2026-06-19. Last seen: 2026-10-08. Status: retired - file deleted._
+> **Retired:** the source file was absent from disk at the latest run (deleted, moved, or renamed). This page is preserved for history and no longer describes a live file.
 
 ## Current metrics
 
