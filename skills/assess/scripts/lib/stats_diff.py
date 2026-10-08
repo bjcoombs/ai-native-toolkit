@@ -25,6 +25,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from lib.run_context_types import JsonDict
+
 
 @dataclass(frozen=True)
 class HotspotTransition:
@@ -55,15 +57,15 @@ class StatsDiff:
         }
 
 
-def load_stats(path: Path) -> dict | None:
+def load_stats(path: Path) -> JsonDict | None:
     """Load stats JSON from path, or None if file doesn't exist."""
     if not path.exists():
         return None
-    stats: dict = json.loads(path.read_text(encoding="utf-8"))
+    stats: JsonDict = json.loads(path.read_text(encoding="utf-8"))
     return stats
 
 
-def hotspot_commits(h: dict) -> int:
+def hotspot_commits(h: JsonDict) -> int:
     """Commit count for a hotspot entry.
 
     Reads `commits` (current field name), falling back to the legacy `churn`
@@ -75,7 +77,7 @@ def hotspot_commits(h: dict) -> int:
     return int(val or 0)
 
 
-def diff_stats(*, prior: dict | None, current: dict) -> StatsDiff:
+def diff_stats(*, prior: JsonDict | None, current: JsonDict) -> StatsDiff:
     """Compute hotspot transitions between two stats snapshots."""
     diff = StatsDiff()
 
@@ -109,7 +111,7 @@ def diff_stats(*, prior: dict | None, current: dict) -> StatsDiff:
     return diff
 
 
-def _max_fn_delta(prior_h: dict, current_h: dict) -> float | None:
+def _max_fn_delta(prior_h: JsonDict, current_h: JsonDict) -> float | None:
     """Worst-function ccn change, or None when either side has no breakdown."""
     before, after = prior_h.get("max_fn_ccn"), current_h.get("max_fn_ccn")
     if before is None or after is None:

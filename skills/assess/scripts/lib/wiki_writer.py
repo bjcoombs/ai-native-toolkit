@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
+from lib.run_context_types import JsonDict
 
 # Templates live alongside the scripts/lib/ package, one directory up under templates/
 _TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates"
@@ -31,7 +32,7 @@ UNFINALIZED_ACTIONS_POINTER = (
 )
 
 
-def _growth_profile_line(accretion: dict | None) -> str:
+def _growth_profile_line(accretion: JsonDict | None) -> str:
     """One briefing line naming a hotspot's monotonic-growth profile, or "".
 
     ``accretion`` is the per-file accretion-ratchet entry for *this* hotspot
@@ -709,7 +710,7 @@ def write_hotspot_page(
     has_tests: bool | None,
     briefing: str,
     actions: str,
-    accretion_data: dict | None = None,
+    accretion_data: JsonDict | None = None,
     run_id: str | None = None,
     schema_version: str | None = None,
     max_fn_ccn: float | None = None,

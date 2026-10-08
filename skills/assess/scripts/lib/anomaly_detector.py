@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from lib.run_context_types import JsonDict
+
 
 @dataclass(frozen=True)
 class Anomaly:
@@ -18,7 +20,7 @@ class Anomaly:
     detail: str  # sanitized - no paths, no code
 
 
-def detect_anomalies(context: dict) -> list[Anomaly]:
+def detect_anomalies(context: JsonDict) -> list[Anomaly]:
     """Inspect a run-context dict and return any anomalies found."""
     found: list[Anomaly] = []
     stats = context.get("stats_summary", {})

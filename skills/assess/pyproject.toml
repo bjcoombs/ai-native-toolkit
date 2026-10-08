@@ -84,22 +84,41 @@ namespace_packages = true
 # ``# type: ignore[assignment, unused-ignore]``: without stubs nx is Any and the
 # ignore is unused; with stubs installed the None assignment is a real mismatch.
 ignore_missing_imports = true
-# Strict, minus one flag. disallow_any_generics stays off: it flags ~430 bare
+# Strict, minus one flag globally. disallow_any_generics flagged 444 bare
 # ``dict`` / ``list`` annotations, almost all on JSON blobs (run-context,
-# stats sidecars, finding rows). Rewriting each as ``dict[str, Any]`` adds
-# noise and no information; the honest fix is a TypedDict per known shape,
-# which is the next ratchet step.
+# stats sidecars, finding rows). The fix is a TypedDict per known shape
+# (shared row shapes in ``lib/run_context_types.py``) and ``dict[str, Any]``
+# only where the keys are genuinely dynamic, applied module by module through
+# the overrides below. 235 remain, all in the not-yet-covered modules.
 strict = true
 disallow_any_generics = false
 # strict does not reject a bare ``# type: ignore``; this makes the error code
 # mandatory. The trailing ``  # reason`` stays a house convention mypy cannot check.
 enable_error_code = ["ignore-without-code"]
 
+# disallow_any_generics ratchet. Every lib/ module is covered by the wildcard,
+# so a new lib module joins the stricter gate by construction; the second
+# override lists the modules not yet converted. Ratchet rule: the exception
+# list only shrinks and the covered list only grows. When no exception and no
+# uncovered script is left, flip the global flag above to true and delete both
+# overrides. Uncovered today: the exceptions below plus the orchestrators
+# assess_core, assess_finalize, assess_report and complexity-treemap.
+[[tool.mypy.overrides]]
+module = ["lib.*", "assess_emit_workflow", "assess_gate", "doc-graph-svg"]
+disallow_any_generics = true
+
+[[tool.mypy.overrides]]
+module = ["lib.keyhole_signals", "lib.test_pressure.*"]
+disallow_any_generics = false
+
 [tool.mutmut]
 # Layer 6 truth-pressure: line coverage shows the tests execute this code,
-# mutation testing shows they would fail if it were wrong. Scoped to three
-# deterministic, well-tested lib/ modules from /assess's own test-focus list;
-# widening the scope is a deliberate ratchet, since a run is O(mutants).
+# mutation testing shows they would fail if it were wrong. Scoped to five
+# deterministic lib/ modules: three small ones from /assess's own test-focus
+# list plus the two largest complexity hotspots (doc_graph, keyhole_signals),
+# about 4.5k mutants as of 2026-10 (the weekly job summary has the live count).
+# Widening the scope is a deliberate ratchet, since a run is O(mutants): keep
+# the weekly run well inside the workflow's 45m budget.
 # Run weekly and on demand by .github/workflows/mutation.yml, never per PR.
 #
 # "src" is a committed relative symlink to scripts/. mutmut 3 names a mutant
@@ -118,6 +137,8 @@ only_mutate = [
     "src/lib/stats_diff.py",
     "src/lib/promissory_markers.py",
     "src/lib/doc_staleness.py",
+    "src/lib/doc_graph.py",
+    "src/lib/keyhole_signals.py",
 ]
 # Each mutant runs only the tests mutmut's coverage pass maps to it; this list
 # bounds that pass to the suites that own the modules in scope. (tests_dir is
@@ -126,4 +147,6 @@ pytest_add_cli_args_test_selection = [
     "tests/test_stats_diff.py",
     "tests/test_promissory_markers.py",
     "tests/test_doc_staleness.py",
+    "tests/test_doc_graph.py",
+    "tests/test_keyhole_signals.py",
 ]

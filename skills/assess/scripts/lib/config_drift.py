@@ -217,11 +217,11 @@ def _canonical(item: Any) -> str:
     return json.dumps(item, sort_keys=True, default=str)
 
 
-def _as_names(items: list) -> list | None:
+def _as_names(items: list[Any]) -> list[str] | None:
     """Project read-shape objects onto the name a write-shape payload lists
     (``restrictions.users: ["octocat"]`` against ``[{"login": "octocat", ...}]``);
     None when an item carries none of the name fields."""
-    out = []
+    out: list[str] = []
     for item in items:
         name = next((item.get(f) for f in _NAME_FIELDS
                      if isinstance(item, dict) and isinstance(item.get(f), str)), None)
@@ -231,7 +231,7 @@ def _as_names(items: list) -> list | None:
     return out
 
 
-def _scalar_list_change(tracked: list, live: list, key: str) -> list[tuple[str, Any, Any]]:
+def _scalar_list_change(tracked: list[Any], live: list[Any], key: str) -> list[tuple[str, Any, Any]]:
     """Scalar lists as multisets. A change is recorded as what was removed from
     and added to the tracked list - counts plus a sorted sample of at most
     ``MAX_SAMPLE`` names per side - never the whole live list."""
@@ -252,7 +252,7 @@ def _is_scalar(x: Any) -> bool:
     return not isinstance(x, (dict, list))
 
 
-def _diff_lists(tracked: list, live: list, key: str) -> list[tuple[str, Any, Any]]:
+def _diff_lists(tracked: list[Any], live: list[Any], key: str) -> list[tuple[str, Any, Any]]:
     """Lists in GitHub configuration are sets: compare without regard to order."""
     if all(_is_scalar(x) for x in [*tracked, *live]):
         return _scalar_list_change(tracked, live, key)
@@ -302,7 +302,9 @@ def _strip(value: Any) -> Any:
     return value
 
 
-def _live_ruleset(slug: str, doc: dict, summaries: list) -> dict | None:
+def _live_ruleset(
+    slug: str, doc: dict[str, Any], summaries: list[dict[str, Any]],
+) -> dict[str, Any] | None:
     tid, tname = doc.get("id"), doc.get("name")
     match = next((s for s in summaries if tid is not None and s.get("id") == tid), None)
     if match is None:
@@ -317,7 +319,7 @@ def _live_ruleset(slug: str, doc: dict, summaries: list) -> dict | None:
 Missing = tuple[str, Any, Any]
 
 
-def _live_protection(slug: str, branch: str) -> dict | Missing:
+def _live_protection(slug: str, branch: str) -> dict[str, Any] | Missing:
     try:
         live = gh_api(f"repos/{slug}/branches/{quote(branch, safe='')}/protection")
     except GhUnavailable as e:
@@ -342,7 +344,7 @@ def scan_config_drift(repo_root: Path) -> dict[str, Any]:
         return {"available": True, "entries": [], "dropped": 0, "snapshots": []}
     try:
         repo = open_github(repo_root)
-        summaries: list | None = None
+        summaries: list[dict[str, Any]] | None = None
         entries: list[dict[str, Any]] = []
         for snap in snapshots:
             if snap["kind"] == "ruleset":
@@ -358,7 +360,7 @@ def scan_config_drift(repo_root: Path) -> dict[str, Any]:
                     summaries = [s for s in got if isinstance(s, dict)] if isinstance(got, list) else []
                 found = _live_ruleset(repo.slug, snap["doc"], summaries)
                 name = snap["doc"].get("name") or snap["doc"].get("id")
-                live: dict | Missing = ("ruleset", name, "absent") if found is None else found
+                live: dict[str, Any] | Missing = ("ruleset", name, "absent") if found is None else found
             else:
                 live = _live_protection(repo.slug, snap["branch"])
             diffs = [live] if isinstance(live, tuple) else diff_values(snap["doc"], live)

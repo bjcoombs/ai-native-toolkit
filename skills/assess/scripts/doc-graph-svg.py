@@ -40,8 +40,9 @@ import argparse
 import html
 import math
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -52,6 +53,7 @@ from lib.doc_graph import DocGraphResult, build_doc_graph
 from lib.doc_graph_layout import classify_node, group_broken_links, radial_shells
 from lib.assess_config import load_working_notes_config, resolve_excludes
 from lib.doc_staleness import analyze_doc_staleness
+from lib.run_context_types import BrokenLink
 from lib.treemap_render import adaptive_cap, blend_to_grey, plural, rgba_to_hex
 
 # Colour-blind-safe by default. The status palette uses the Okabe-Ito set
@@ -100,7 +102,15 @@ _STATUS_COLOR = {
 }
 
 
-def _fit_rect(pos: dict, nodes: list[str], rect: tuple[float, float, float, float]) -> dict:
+# Node rel-path -> (x, y) canvas position.
+Positions = dict[str, tuple[float, float]]
+# Per-doc staleness row keyed by its rel path. Read-only, and typed as a
+# Mapping so ``.get(x, {})`` can fall back to an empty row.
+StalenessByDoc = Mapping[str, Mapping[str, Any]]
+
+
+def _fit_rect(pos: dict[str, Any], nodes: list[str],
+              rect: tuple[float, float, float, float]) -> Positions:
     """Normalise spring-layout coords into a sub-rectangle (x, y, w, h)."""
     rx, ry, rw, rh = rect
     xs = np.array([pos[n][0] for n in nodes])
@@ -113,7 +123,7 @@ def _fit_rect(pos: dict, nodes: list[str], rect: tuple[float, float, float, floa
                 ry + ((pos[n][1] - y0) * sy if sy else rh / 2)) for n in nodes}
 
 
-def _grid_positions(nodes: list[str], rect: tuple[float, float, float, float]) -> dict:
+def _grid_positions(nodes: list[str], rect: tuple[float, float, float, float]) -> Positions:
     """Lay nodes out in a tidy grid inside (x, y, w, h)."""
     rx, ry, rw, rh = rect
     count = len(nodes)
@@ -123,7 +133,7 @@ def _grid_positions(nodes: list[str], rect: tuple[float, float, float, float]) -
     rows = math.ceil(count / cols)
     cw = rw / cols
     ch = rh / max(rows, 1)
-    out = {}
+    out: Positions = {}
     for i, node in enumerate(nodes):
         c, r = i % cols, i // cols
         out[node] = (rx + cw * (c + 0.5), ry + ch * (r + 0.5))
@@ -137,7 +147,8 @@ def _doc_lines(repo_root: Path, rel: str) -> int:
         return 1
 
 
-def _radial_positions(graph: nx.DiGraph, entries: set[str], cx: float, cy: float, fit: float) -> dict:
+def _radial_positions(graph: nx.DiGraph, entries: set[str], cx: float, cy: float,
+                      fit: float) -> Positions:
     """Concentric rings by link-distance from the entry points.
 
     Centre = entry; ring k = docs k hops away (following links); everything
@@ -157,7 +168,7 @@ def _radial_positions(graph: nx.DiGraph, entries: set[str], cx: float, cy: float
     return {n: (cx + x / max_r * fit, cy + y / max_r * fit) for n, (x, y) in raw.items()}
 
 
-def _render_ghosts(broken_links: list[dict], pos: dict, radius: Callable[[str], float],
+def _render_ghosts(broken_links: list[BrokenLink], pos: Positions, radius: Callable[[str], float],
                    show_labels: bool = False) -> str:
     """Draw one 'ghost' node per missing file — not per broken link. Several links
     to the same absent target (e.g. README.md and CONTRIBUTING.md both pointing at
@@ -236,14 +247,16 @@ def _edge_legend(mid: float, y: float) -> list[str]:
 
 
 def _node_sizes(nodes: list[str], size_mode: str, repo_root: Path,
-                pr: dict) -> tuple[dict, str]:
+                pr: dict[str, float]) -> tuple[dict[str, float], str]:
     """Node size metric: file length (lines) or link-graph centrality."""
     if size_mode == "lines":
         return {x: _doc_lines(repo_root, x) for x in nodes}, "file length (lines)"
     return {x: pr.get(x, 0.0) for x in nodes}, "link-graph centrality"
 
 
-def _staleness_channels(nodes: list[str], staleness: dict) -> tuple[dict, dict, dict]:
+def _staleness_channels(
+    nodes: list[str], staleness: StalenessByDoc,
+) -> tuple[dict[str, float], dict[str, float], dict[str, str]]:
     """Per-node days stale, subject churn, and the hatch fill for unmeasured docs.
 
     A node the staleness scan never measured (a `.claude/` doc a reference
@@ -265,7 +278,7 @@ class _NodePainter:
     option."""
 
     def __init__(self, result: DocGraphResult, nodes: list[str], repo_root: Path, *,
-                 size_mode: str, colour: str, staleness: dict | None) -> None:
+                 size_mode: str, colour: str, staleness: StalenessByDoc | None) -> None:
         graph = result.graph
         assert graph is not None, "main() rejects a doc graph result with no graph"
         pr = result.pagerank or {x: 1.0 / max(len(nodes), 1) for x in nodes}
@@ -340,11 +353,11 @@ def _canvas(layout: str) -> tuple[float, float, float, float]:
 
 
 def _web_positions(graph: nx.DiGraph, nodes: list[str], painter: _NodePainter, cw: float,
-                   ch: float) -> tuple[dict, list[str], float]:
+                   ch: float) -> tuple[Positions, list[str], float]:
     """Two-panel: linked web (force) + isolated-docs grid.
 
     Returns the positions, the isolated docs, and the web panel's right edge."""
-    pos: dict = {}
+    pos: Positions = {}
     linked = [x for x in nodes if painter.degree(x) > 0]
     isolated = [x for x in nodes if x not in set(linked)]
     web_right = (0.60 * cw) if isolated else (cw - MARGIN)
@@ -396,7 +409,7 @@ def _isolated_panel(count: int, web_right: float, cw: float, ch: float) -> list[
     ]
 
 
-def _edge_lines(graph: nx.DiGraph, pos: dict, radius: Callable[[str], float]) -> list[str]:
+def _edge_lines(graph: nx.DiGraph, pos: Positions, radius: Callable[[str], float]) -> list[str]:
     """Edges, drawn first so they sit under the nodes. Each arrow is pulled back
     to the target's rim."""
     out: list[str] = []
@@ -417,7 +430,7 @@ def _edge_lines(graph: nx.DiGraph, pos: dict, radius: Callable[[str], float]) ->
     return out
 
 
-def _node_circles(nodes: list[str], pos: dict, painter: _NodePainter,
+def _node_circles(nodes: list[str], pos: Positions, painter: _NodePainter,
                   show_labels: bool) -> list[str]:
     """One circle per doc, its path and stats in a hover tooltip, then the
     opt-in (--labels) filename labels drawn above all circles."""
@@ -445,7 +458,7 @@ def _node_circles(nodes: list[str], pos: dict, painter: _NodePainter,
 
 def render(result: DocGraphResult, out_path: Path, repo_root: Path, *, layout: str = "radial",
            size_mode: str = "lines", colour: str = "staleness",
-           staleness: dict | None = None, show_labels: bool = False) -> None:
+           staleness: StalenessByDoc | None = None, show_labels: bool = False) -> None:
     graph = result.graph
     assert graph is not None, "main() rejects a doc graph result with no graph"
     nodes = list(graph.nodes())

@@ -20,7 +20,18 @@ it, and the layer scorer owns that check.
 """
 from __future__ import annotations
 
+from typing import TypedDict
+
 from lib.keyhole_signals import is_archive_path
+from lib.run_context_types import JsonDict
+
+
+class GapAction(TypedDict):
+    """A Top 3 candidate read from a measured gap: ``{signal, action, paths}``."""
+
+    signal: str
+    action: str
+    paths: list[str]
 
 # Reachability floor for the doc_graph gap. Below half, most of the docs cannot
 # be reached by following links from README / AGENTS.md / an index page, so an
@@ -38,8 +49,8 @@ MAX_UNREACHABLE_PATHS = 10
 
 
 def _coverage_gap(
-    coverage_report: dict, top_hotspots: list[dict], archetype: dict,
-) -> dict | None:
+    coverage_report: JsonDict, top_hotspots: list[JsonDict], archetype: JsonDict,
+) -> GapAction | None:
     # A knowledge base marks the test layers N/A, so no coverage remediation is
     # proposed there; an unknown archetype is not assumed to be software.
     if archetype.get("archetype") != "software":
@@ -64,7 +75,7 @@ def _coverage_gap(
     }
 
 
-def _reachability_gap(doc_graph: dict) -> dict | None:
+def _reachability_gap(doc_graph: JsonDict) -> GapAction | None:
     # A repo with no markdown reports reachability 0.0 with available: true.
     # Nothing is unreachable there, so no link-the-docs action applies; a
     # missing README or instruction file is the layer scorer's finding.
@@ -86,11 +97,11 @@ def _reachability_gap(doc_graph: dict) -> dict | None:
 
 
 def build_gap_actions(
-    coverage_report: dict | None,
-    doc_graph: dict | None,
-    top_hotspots: list[dict] | None,
-    archetype: dict | None,
-) -> list[dict]:
+    coverage_report: JsonDict | None,
+    doc_graph: JsonDict | None,
+    top_hotspots: list[JsonDict] | None,
+    archetype: JsonDict | None,
+) -> list[GapAction]:
     """Return the gap actions that fire, coverage first; ``[]`` when none do."""
     gaps = [
         _coverage_gap(coverage_report or {}, top_hotspots or [], archetype or {}),

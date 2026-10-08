@@ -63,6 +63,7 @@ from __future__ import annotations
 
 from itertools import combinations
 from pathlib import Path
+from typing import TypedDict
 
 from lib.ownership_parser import (
     _discover_arch_docs,
@@ -76,9 +77,50 @@ from lib.ownership_parser import (
     parse_codeowners,
 )
 from lib.git_churn import tracked_files
+from lib.run_context_types import JsonDict
 
 
-def _empty_codeowners_patterns(repo_root: Path) -> list[dict]:
+class EmptyOwnershipPattern(TypedDict):
+    """A declared boundary (CODEOWNERS glob or architecture-doc path) that
+    matches no tracked file. ``owners`` is always empty today; it keeps the
+    CODEOWNERS and architecture rows one shape."""
+
+    pattern: str
+    declared_in: str
+    owners: list[str]
+
+
+class LegacyEmptyGlob(TypedDict):
+    """The ``empty_globs`` mirror of an :class:`EmptyOwnershipPattern`."""
+
+    pattern: str
+    file: str
+    owner: str
+
+
+class PathDriftBlock(TypedDict):
+    """Tier 0: :func:`detect_path_existence_drift`'s result."""
+
+    available: bool
+    reason: str
+    tier_0_available: bool
+    empty_ownership_patterns: list[EmptyOwnershipPattern]
+    total_patterns: int
+    matched_patterns: int
+    coverage_ratio: float
+    empty_globs: list[LegacyEmptyGlob]
+    declared_paths: int
+    matched_paths: int
+
+
+class FilePair(TypedDict):
+    """A serialised canonical file pair."""
+
+    file_a: str
+    file_b: str
+
+
+def _empty_codeowners_patterns(repo_root: Path) -> list[EmptyOwnershipPattern]:
     """CODEOWNERS globs that match zero tracked, non-excluded files.
 
     Pure reuse of task 8: ``parse_codeowners`` resolves each glob against the
@@ -95,7 +137,7 @@ def _empty_codeowners_patterns(repo_root: Path) -> list[dict]:
     ]
 
 
-def _empty_architecture_refs(repo_root: Path) -> list[dict]:
+def _empty_architecture_refs(repo_root: Path) -> list[EmptyOwnershipPattern]:
     """Architecture-doc path references that resolve to zero tracked files.
 
     ``parse_architecture_md`` (task 8) drops references that resolve to nothing -
@@ -120,7 +162,7 @@ def _empty_architecture_refs(repo_root: Path) -> list[dict]:
     tracked = tracked_files(repo_root)
     rel_paths = set(_tracked_rel_paths(repo_root, tracked))
 
-    out: list[dict] = []
+    out: list[EmptyOwnershipPattern] = []
     for doc in docs:
         try:
             text = doc.read_text(encoding="utf-8", errors="ignore")
@@ -135,7 +177,7 @@ def _empty_architecture_refs(repo_root: Path) -> list[dict]:
 
 def _empty_refs_in_doc(
     text: str, doc_rel: str, repo_root: Path, rel_paths: set[str],
-) -> list[dict]:
+) -> list[EmptyOwnershipPattern]:
     """Path references in one architecture doc that resolve to no tracked file.
 
     Mirrors ``ownership_parser._parse_one_arch_doc``: strip fenced code (a fence
@@ -148,7 +190,7 @@ def _empty_refs_in_doc(
     body = _FENCE_RE.sub("\n", text)
     current = f"{doc_rel}::{Path(doc_rel).name}"
     buffer: list[str] = []
-    rows: list[dict] = []
+    rows: list[EmptyOwnershipPattern] = []
 
     def flush(boundary: str, lines: list[str]) -> None:
         if not lines:
@@ -239,7 +281,7 @@ def _declared_refs_in_doc(
 
 def detect_path_existence_drift(
     repo_root: Path, extra_exclude_dirs: set[str] | None = None,
-) -> dict:
+) -> PathDriftBlock:
     """Tier 0 structure drift: declared ownership patterns that match zero files.
 
     The cheapest, zero-threshold drift cut. Enumerates both sides - side A every
@@ -429,7 +471,7 @@ def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
 
 
 def cochange_grouping_relation(
-    coupling_pairs: list[dict], threshold_pct: float = 5.0,
+    coupling_pairs: list[JsonDict], threshold_pct: float = 5.0,
 ) -> set[Pair]:
     """The historical co-change grouping as a relation over file pairs.
 
@@ -454,7 +496,7 @@ def cochange_grouping_relation(
 
 def compute_grouping_disagreement(
     human_rel: set[Pair], static_rel: set[Pair], cochange_rel: set[Pair],
-) -> dict:
+) -> JsonDict:
     """Six set-operation metrics over the three grouping relations.
 
     Each metric is a set difference or intersection of two relations - pure pair
@@ -488,16 +530,18 @@ def compute_grouping_disagreement(
         "human_static_agree": human_rel & static_rel,
         "human_cochange_agree": human_rel & cochange_rel,
     }
-    out: dict = {}
+    # Keys are built per metric (``<name>`` and ``<name>_count``), so the
+    # block is a plain dict rather than a TypedDict.
+    out: JsonDict = {}
     for name, pairs in sets.items():
         out[name] = _serialize_pairs(pairs)
         out[f"{name}_count"] = len(pairs)
     return out
 
 
-def _serialize_pairs(pairs: set[Pair]) -> list[dict]:
+def _serialize_pairs(pairs: set[Pair]) -> list[FilePair]:
     """Pairs as a sorted ``[{file_a, file_b}]`` list (no set order leaks out)."""
-    rows = [
+    rows: list[FilePair] = [
         {"file_a": a.as_posix(), "file_b": b.as_posix()} for a, b in pairs
     ]
     rows.sort(key=lambda r: (r["file_a"], r["file_b"]))
@@ -524,7 +568,7 @@ def _under(path_str: str, prefix: str) -> bool:
     return path_str == prefix or path_str.startswith(prefix + "/")
 
 
-def _pair_on_seam(pair_row: dict, seam: tuple[str, str]) -> bool:
+def _pair_on_seam(pair_row: FilePair, seam: tuple[str, str]) -> bool:
     """True if a serialised pair straddles a seam's two directory prefixes."""
     lo, hi = seam
     a, b = pair_row["file_a"], pair_row["file_b"]
@@ -532,8 +576,8 @@ def _pair_on_seam(pair_row: dict, seam: tuple[str, str]) -> bool:
 
 
 def apply_seam_allowlist(
-    disagreement: dict, allowlist: tuple[tuple[str, str], ...] = SEAM_ALLOWLIST,
-) -> dict:
+    disagreement: JsonDict, allowlist: tuple[tuple[str, str], ...] = SEAM_ALLOWLIST,
+) -> JsonDict:
     """Drop allowlisted known-good seams from every disagreement pair list.
 
     A seam on the allowlist names two directory trees that co-change by design.
@@ -544,7 +588,7 @@ def apply_seam_allowlist(
     filtered list; the ``agree`` lists are filtered too so a seam pair is not
     double-counted as both agreement and (suppressed) disagreement.
     """
-    out: dict = {}
+    out: JsonDict = {}
     for key, value in disagreement.items():
         if key.endswith("_count"):
             continue  # recomputed from the filtered list below
@@ -560,10 +604,10 @@ def apply_seam_allowlist(
 def detect_grouping_disagreement(
     repo_root: Path,
     communities: list[set[str]] | None = None,
-    coupling_pairs: list[dict] | None = None,
+    coupling_pairs: list[JsonDict] | None = None,
     cochange_threshold_pct: float = 5.0,
     allowlist: tuple[tuple[str, str], ...] = SEAM_ALLOWLIST,
-) -> dict:
+) -> JsonDict:
     """Tier 1 structure drift: where the three grouping lenses disagree.
 
     Builds the declared grouping from the repo's ownership map (CODEOWNERS +
@@ -625,7 +669,7 @@ def detect_grouping_disagreement(
     }
 
 
-def _tier1_unavailable(reason: str) -> dict:
+def _tier1_unavailable(reason: str) -> JsonDict:
     """The Tier 1 degraded block: every pair list empty, every count zero."""
     names = (
         "human_grouped_static_splits",
@@ -635,7 +679,7 @@ def _tier1_unavailable(reason: str) -> dict:
         "human_static_agree",
         "human_cochange_agree",
     )
-    block: dict = {
+    block: JsonDict = {
         "available": False,
         "reason": reason,
         "tier_1_available": False,
@@ -700,7 +744,7 @@ def _compute_communities(repo_root: Path) -> list[set[str]]:
     return _detect_communities(graph.to_undirected())
 
 
-def _compute_coupling_pairs(repo_root: Path) -> list[dict]:
+def _compute_coupling_pairs(repo_root: Path) -> list[JsonDict]:
     """Co-change pairs for the repo, or ``[]`` when there is no git history."""
     try:
         from lib.change_coupling import (

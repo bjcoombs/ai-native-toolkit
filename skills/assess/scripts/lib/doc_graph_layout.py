@@ -7,16 +7,26 @@ navigability class, and the grouping of broken links into one ghost per missing
 file. No layout maths and no plotting here -- graph traversal and bookkeeping
 only -- so all of it is unit-testable without numpy or matplotlib.
 
-Inward-only: stdlib only, no ``lib`` import.
+Inward-only: stdlib only, no runtime ``lib`` import (the row shapes come from
+``lib.run_context_types`` under ``TYPE_CHECKING`` only).
 """
 from __future__ import annotations
 
 import posixpath
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:  # annotation only; this module stays stdlib-only at runtime
     import networkx as nx
+
+    from lib.run_context_types import BrokenLink
+
+
+class GhostGroup(TypedDict):
+    """One missing link target and the docs that link to it."""
+
+    target: str
+    sources: list[str]
 
 
 def radial_shells(graph: nx.DiGraph, entries: Iterable[str], ring: int = 24) -> list[list[str]]:
@@ -48,7 +58,7 @@ def radial_shells(graph: nx.DiGraph, entries: Iterable[str], ring: int = 24) -> 
     return [s for s in shells if s]
 
 
-def classify_node(node: str, entries: set, unreachable: set, orphans: set) -> str:
+def classify_node(node: str, entries: set[str], unreachable: set[str], orphans: set[str]) -> str:
     """Navigability status of a node: entry / reachable / orphan / island."""
     if node in entries:
         return "entry"
@@ -87,7 +97,7 @@ def _broken_link_key(src: str, target: str, kind: str | None) -> str:
     return posixpath.normpath(posixpath.join(posixpath.dirname(src), target))
 
 
-def group_broken_links(broken_links: list[dict]) -> list[dict]:
+def group_broken_links(broken_links: list[BrokenLink]) -> list[GhostGroup]:
     """Collapse broken links by the missing file they point at.
 
     Several links can name the same non-existent target - `README.md` and

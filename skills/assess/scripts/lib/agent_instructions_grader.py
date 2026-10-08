@@ -20,6 +20,28 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypedDict
 
+from lib.run_context_types import JsonDict
+
+
+class SensitiveFinding(TypedDict):
+    """One REDACTED sensitive-content hit in an instruction file."""
+
+    category: str
+    evidence: str
+
+
+class SizeMetrics(TypedDict):
+    line_count: int
+    word_count: int
+    exceeds_line_threshold: bool
+    exceeds_word_threshold: bool
+
+
+class SkillsDelegation(TypedDict):
+    delegates_to_skills: bool
+    delegation_pointers: int
+    delegation_samples: list[str]
+
 
 POSITIVE_DIRECTIVE_PATTERNS = [
     r"\bUse\b",
@@ -126,7 +148,7 @@ def _scan_ip_addresses(text: str) -> list[str]:
     return findings
 
 
-def scan_sensitive_content(text: str) -> list[dict]:
+def scan_sensitive_content(text: str) -> list[SensitiveFinding]:
     """Scan an instruction file for content unsafe to commit (issue #56).
 
     Returns a list of ``{"category": str, "evidence": str}`` findings with the
@@ -144,7 +166,7 @@ def scan_sensitive_content(text: str) -> list[dict]:
     obviously sensitive found" - not a guarantee, so the prose still advises a
     human glance before committing to a public repo.
     """
-    findings: list[dict] = []
+    findings: list[SensitiveFinding] = []
     seen: set[tuple[str, str]] = set()
 
     def add(category: str, evidence: str) -> None:
@@ -265,7 +287,7 @@ def count_verifiable_outcomes(text: str) -> int:
     return _count(text, VERIFIABLE_PATTERNS)
 
 
-def compute_size_metrics(text: str) -> dict:
+def compute_size_metrics(text: str) -> SizeMetrics:
     """Return line_count, word_count, and threshold-exceeded flags."""
     lines = text.splitlines()
     words = len(text.split())
@@ -277,7 +299,7 @@ def compute_size_metrics(text: str) -> dict:
     }
 
 
-def detect_skills_delegation(text: str) -> dict:
+def detect_skills_delegation(text: str) -> SkillsDelegation:
     """Detect if an instruction file delegates to skills (progressive-disclosure
     pointers). Presence means the repo factors guidance into on-demand skills
     rather than inlining everything into one monolithic file."""
@@ -292,7 +314,7 @@ def detect_skills_delegation(text: str) -> dict:
     }
 
 
-def detect_skills_dir(repo_root: Path) -> dict:
+def detect_skills_dir(repo_root: Path) -> JsonDict:
     """Check for the presence of skills directories in the repo.
 
     Looks for `.claude/skills/` and `skills/` and counts the `*/SKILL.md`
@@ -319,7 +341,7 @@ def detect_skills_dir(repo_root: Path) -> dict:
 
 
 def compute_bloat_penalty(
-    size_metrics: dict,
+    size_metrics: SizeMetrics,
     skills_present: bool,
     delegates_to_skills: bool,
 ) -> tuple[int, str | None]:

@@ -418,6 +418,18 @@ hand-wired assignments between the stages are gone. Currently registered:
 `agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
 `instruction_claims`.
 
+**`run_context_types.py`**
+`TypedDict` shapes for run-context records a second `lib/` module builds or reads
+(broken links, doc-to-code edges, dead-code candidates, source trees, the raw-source
+and working-notes classifier signals, bulk commits), plus the other row shapes of the
+blocks those belong to: the `doc_graph` and `dead_code` blocks keep all their rows
+here. `JsonDict` (`dict[str, Any]`) names a block whose keys are genuinely dynamic.
+Any other shape, including a block only the orchestrator reads back, stays in the
+module that builds it.
+Annotations only: no runtime behaviour, so the serialised run-context is unchanged.
+Part of the `disallow_any_generics` ratchet in `pyproject.toml` `[tool.mypy]`; modules
+outside it still read some of these blocks as bare `dict`.
+
 **`keyhole_signals.py`** *(co-change hotspot)*
 Integration barrier between the individual signal modules and `assess_core`. Derives
 the per-directory containment view from the commit-file sets the orchestrator parses
@@ -1207,7 +1219,11 @@ Layer 1 write-side truth pressure. Two tiers:
   counts as run when any group recovered records. Every group draws on one `MUTATION_TIMEOUT` budget: the
   snapshot and the run are bounded by what remains, and a copy (not interruptible) is
   checked against the deadline before and after, so a later group can record a timeout
-  without copying. On this path the
+  without copying. mutmut 3 saves each verdict to its `.meta` as it lands, so a run stopped
+  at the budget keeps the mutants it tested: the group reports them with `partial: true`
+  and a `reason` saying the figures cover only the mutants tested before the stop (mutmut
+  tests the fastest first), and records a timeout only when no focus-file verdict was
+  saved. On this path the
   assessed tree is never written to. A version neither probe can
   read takes the mutmut 2 path, which runs in the assessed repo and leaves mutmut's
   `.mutmut-cache` there. Whichever path runs, a tool that exits non-zero without yielding mutants

@@ -42,6 +42,10 @@ from pathlib import Path
 
 from lib.doc_links import INLINE_CODE_RE, LinkHarvest, harvest_links, strip_fenced_lines
 from lib.git_churn import tracked_files
+from lib.run_context_types import (
+    BrokenLink, DeclaredMoc, DirectoryBreakdownRow, DocGraphBlock, DocHub, DocSignal,
+    DocToCodeEdge, ExcludedTree, LinkParent, MissingXref, SourceTree,
+)
 
 # Maps an absolute doc path to its repo-relative string form (the graph's node key).
 RelFn = Callable[[Path], str]
@@ -151,20 +155,20 @@ class DocGraphResult:
     reason: str = ""
     doc_count: int = 0
     edge_count: int = 0
-    hubs: list[dict] = field(default_factory=list)        # [{path, pagerank, out_degree, in_degree}]
+    hubs: list[DocHub] = field(default_factory=list)
     orphans: list[str] = field(default_factory=list)      # in_degree == 0 and not an entry
     orphan_rate: float = 0.0
     island_count: int = 0
     reachability_pct: float = 0.0
     entry_points: list[str] = field(default_factory=list)
     unreachable: list[str] = field(default_factory=list)
-    declared_mocs: list[dict] = field(default_factory=list)  # [{path, out_degree, is_structural_hub}]
+    declared_mocs: list[DeclaredMoc] = field(default_factory=list)
     moc_named_but_not_wired: list[str] = field(default_factory=list)
-    doc_to_code_edges: list[dict] = field(default_factory=list)  # [{doc, code}]
+    doc_to_code_edges: list[DocToCodeEdge] = field(default_factory=list)
     dangling_links: int = 0
     # Broken links: a link whose target file doesn't exist (a "ghost"). The
     # renderer draws these as ghost nodes - the missing name is the suggested fix.
-    broken_links: list[dict] = field(default_factory=list)  # [{from, target, kind}]
+    broken_links: list[BrokenLink] = field(default_factory=list)
     # Raw-source-tree exclusion (issue #225). The headline read-side metrics
     # above (orphan_rate, reachability_pct, orphans, unreachable, island_count,
     # broken_links, dangling_links) describe the *curated* wiki layer: subtrees
@@ -172,7 +176,7 @@ class DocGraphResult:
     # converted .msg/.pdf files) are detected and excluded so they don't inflate
     # the figures. Each excluded tree is named with its file count so the
     # exclusion stays legible; the raw layer's own figures are reported alongside.
-    excluded_raw_trees: list[dict] = field(default_factory=list)  # [{path, file_count}]
+    excluded_raw_trees: list[ExcludedTree] = field(default_factory=list)
     raw_source_doc_count: int = 0       # total docs across all excluded raw trees
     curated_doc_count: int = 0          # docs in the curated layer (== doc_count)
     raw_source_orphan_rate: float = 0.0  # orphan rate within the raw layer
@@ -180,7 +184,7 @@ class DocGraphResult:
     # Working-notes exclusion (issue #366): pattern-named notes hung off one or
     # two index files (plans, session logs, tickets) leave the headline the
     # same way, named with a file count, with the notes layer's own figures.
-    excluded_working_notes_trees: list[dict] = field(default_factory=list)  # [{path, file_count}]
+    excluded_working_notes_trees: list[ExcludedTree] = field(default_factory=list)
     working_notes_doc_count: int = 0
     working_notes_orphan_rate: float = 0.0
     working_notes_broken_links: int = 0
@@ -193,8 +197,7 @@ class DocGraphResult:
     # as the headline. While len(directory_breakdown) == directory_count the
     # rows sum to doc_count, len(unreachable) and dangling_links; a list cut
     # at MAX_DIRECTORY_BREAKDOWN sums to less.
-    # [{path, doc_count, unreachable_count, broken_link_count}]
-    directory_breakdown: list[dict] = field(default_factory=list)
+    directory_breakdown: list[DirectoryBreakdownRow] = field(default_factory=list)
     directory_count: int = 0
     # One link-path parent per doc (PRD item 1c), over link edges alone - the
     # same edge set as link_only_reachability_pct, so a doc a reference edge
@@ -206,10 +209,10 @@ class DocGraphResult:
     # Exported despite the pagerank precedent below: a path strip needs the
     # exact doc a run flags. LLM readers of the block drop it with
     # del(.link_parents), since nothing they score reads it.
-    link_parents: list[dict] = field(default_factory=list)
+    link_parents: list[LinkParent] = field(default_factory=list)
     # Missing cross-references: a doc names another doc but never links to it
-    # (Karpathy Lint). [{from, to}].
-    missing_xrefs: list[dict] = field(default_factory=list)
+    # (Karpathy Lint).
+    missing_xrefs: list[MissingXref] = field(default_factory=list)
     ambiguous_wikilinks: int = 0
     vault_detected: bool = False
     obsidiantools_available: bool = False
@@ -223,7 +226,7 @@ class DocGraphResult:
     # None until build_doc_graph fills it (and on the degrade paths).
     graph: nx.DiGraph | None = None
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> DocGraphBlock:
         return {
             "available": self.available,
             "reason": self.reason,
@@ -515,7 +518,7 @@ def _settle_references(
 
 def _missing_xrefs(
     docs: list[Path], texts: dict[Path, str], graph: nx.DiGraph, repo_root: Path, rel: RelFn,
-) -> list[dict]:
+) -> list[MissingXref]:
     """Docs that name another doc's filename in prose but never link to it
     (Karpathy Lint: "missing cross-references").
 
@@ -531,7 +534,7 @@ def _missing_xrefs(
     alt = "|".join(re.escape(n) for n in sorted(name_to_doc, key=len, reverse=True))
     pattern = re.compile(r"(?<![\w./-])(" + alt + r")\b", re.IGNORECASE)
     edges = set(graph.edges())
-    out: list[dict] = []
+    out: list[MissingXref] = []
     for d in docs:
         text = texts.get(d)
         if not text:
@@ -552,7 +555,7 @@ def _settle_reference_pairs(
     docs: list[Path], texts: dict[Path, str], rel: RelFn, repo_root: Path,
     scope: Path | None, extra_exclude_dirs: set[str] | None,
     extra_exclude_patterns: list[str] | None,
-) -> list:
+) -> list[tuple[Path, Path]]:
     """Reference edges (issue #353) settle first: a backticked token naming an
     existing doc. A cited `.claude/` doc joins `docs` here, before the name
     index and the link pass, so links and wikilinks reach it from any doc."""
@@ -572,7 +575,7 @@ def _excluded_layers(
     graph: nx.DiGraph, docs: list[Path], repo_root: Path, rel: RelFn, base_hubs: list[str],
     machine_links: dict[str, int], working_notes_dirs: list[str] | None,
     working_notes_ignore: list[str] | None,
-) -> tuple[set[str], list, set[str], list]:
+) -> tuple[set[str], list[SourceTree], set[str], list[SourceTree]]:
     """Raw-source and working-notes trees, detected on the final graph.
 
     Raw-source-tree exclusion (issue #225). Detect subtrees of raw,
@@ -596,7 +599,7 @@ def _excluded_layers(
 
 def _curated_result(
     graph: nx.DiGraph, docs: list[Path], repo_root: Path, rel: RelFn, harvest: LinkHarvest,
-    missing: list[dict], excluded_docs: set[str], vault: bool, obs: bool,
+    missing: list[MissingXref], excluded_docs: set[str], vault: bool, obs: bool,
     base_hubs: list[str],
 ) -> DocGraphResult:
     """Derive the headline and link-only signals over the curated layer
@@ -742,7 +745,7 @@ def build_doc_graph(
     return result
 
 
-def _link_parents(graph: nx.DiGraph, entry_points: list[str]) -> list[dict]:
+def _link_parents(graph: nx.DiGraph, entry_points: list[str]) -> list[LinkParent]:
     """One ``{path, link_parent, link_entry}`` record per node in ``graph``.
 
     ``graph`` is the link-only subgraph, so a doc reachable only over a
@@ -799,8 +802,8 @@ def _top_dir(rel_path: str) -> str:
 
 
 def _directory_breakdown(
-    nodes: Iterable[str], unreachable: list[str], broken: list[dict],
-) -> list[dict]:
+    nodes: Iterable[str], unreachable: list[str], broken: list[BrokenLink],
+) -> list[DirectoryBreakdownRow]:
     """Doc, unreachable and broken-link counts per top-level directory, largest
     gap first. A broken link counts toward the directory of the doc it is
     written in (``from``)."""
@@ -819,8 +822,8 @@ def _directory_breakdown(
 
 
 def _layer_figures(
-    graph: nx.DiGraph, broken: list[dict], layer_docs: set[str], trees: list[dict],
-) -> tuple[list[dict], int, float, int]:
+    graph: nx.DiGraph, broken: list[BrokenLink], layer_docs: set[str], trees: list[SourceTree],
+) -> tuple[list[ExcludedTree], int, float, int]:
     """An excluded layer's own figures: its trees as ``{path, file_count}``,
     doc count, orphan rate over the full graph, and broken links it holds."""
     in_deg = dict(graph.in_degree())
@@ -836,7 +839,7 @@ def _layer_figures(
 
 def _detect_working_notes_trees(
     graph: nx.DiGraph, doc_rels: set[str], *, force: list[str], ignore: list[str],
-) -> tuple[set[str], list[dict]]:
+) -> tuple[set[str], list[SourceTree]]:
     """Detect working-notes subtrees and return (excluded_doc_rels, trees).
 
     ``doc_rels`` is the doc set minus raw-source docs; like the raw pass it
@@ -849,7 +852,7 @@ def _detect_working_notes_trees(
     """
     from lib.raw_source import classify_working_notes_trees
 
-    signals: dict[str, dict] = {}
+    signals: dict[str, DocSignal] = {}
     for r in sorted(doc_rels):
         sources = [u for u in graph.predecessors(r) if u in doc_rels]
         signals[r] = {"in_degree": len(sources), "inbound_sources": sources}
@@ -860,7 +863,7 @@ def _detect_working_notes_trees(
 def _detect_raw_trees(
     graph: nx.DiGraph, docs: list[Path], repo_root: Path, rel: RelFn, base_hubs: list[str],
     machine_links: dict[str, int],
-) -> tuple[set[str], list[dict]]:
+) -> tuple[set[str], list[SourceTree]]:
     """Detect raw-source subtrees and return (excluded_doc_rels, raw_trees).
 
     Assembles the per-doc graph signals (in/out degree from the final graph plus
@@ -874,7 +877,7 @@ def _detect_raw_trees(
     in_deg = dict(graph.in_degree())
     out_deg = dict(graph.out_degree())
     doc_rels = {rel(d) for d in docs}
-    doc_signals = {
+    doc_signals: dict[str, DocSignal] = {
         r: {
             "in_degree": in_deg.get(r, 0),
             "out_degree": out_deg.get(r, 0),
@@ -1027,7 +1030,7 @@ def _pick_entry_points(
 
 def _derive_signals(
     *, graph: nx.DiGraph, docs: list[Path], repo_root: Path, rel: RelFn,
-    doc_to_code: list[dict], dangling: int, ambiguous: int,
+    doc_to_code: list[DocToCodeEdge], dangling: int, ambiguous: int,
     vault: bool, obs: bool, base_hubs: list[str] | None = None,
     entries: list[str] | None = None,
 ) -> DocGraphResult:
@@ -1062,13 +1065,13 @@ def _derive_signals(
     unreachable = sorted(set(nodes) - reachable)
 
     hubs = sorted(
-        ({"path": x, "pagerank": round(pagerank.get(x, 0.0), 4),
-          "out_degree": out_deg.get(x, 0), "in_degree": in_deg.get(x, 0)}
+        (DocHub(path=x, pagerank=round(pagerank.get(x, 0.0), 4),
+                out_degree=out_deg.get(x, 0), in_degree=in_deg.get(x, 0))
          for x in nodes),
         key=lambda h: (-h["pagerank"], -h["out_degree"], h["path"]),
     )[:10]
 
-    declared: list[dict] = []
+    declared: list[DeclaredMoc] = []
     not_wired: list[str] = []
     for d in docs:
         if not _is_declared_moc(d):

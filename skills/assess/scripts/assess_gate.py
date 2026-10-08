@@ -35,13 +35,36 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
-from lib.assess_config import load_gate_config, load_gate_config_file
+from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
+from lib.run_context_types import JsonDict
 
 
-def _findings_by_name(ctx: dict) -> dict[str, dict]:
+class FindingHit(TypedDict):
+    """A finding that fired: its name, path count and the first five paths."""
+
+    finding: str
+    count: int
+    paths: list[str]
+
+
+class GateVerdict(TypedDict):
+    """``evaluate``'s result, rendered by ``format_verdict``."""
+
+    enabled: bool
+    failed: bool
+    failures: list[FindingHit]
+    warnings: list[FindingHit]
+    # A threshold breach carries ``value``/``threshold`` and a regression
+    # breach ``count``/``paths``; ``metric`` tells them apart.
+    threshold_breaches: list[JsonDict]
+    excluded_by_config: JsonDict | None
+    excluded_generated: list[JsonDict] | None
+
+
+def _findings_by_name(ctx: JsonDict) -> dict[str, JsonDict]:
     """Index ``derived_findings`` by finding name for O(1) lookup."""
     return {
         f["name"]: f
@@ -51,8 +74,8 @@ def _findings_by_name(ctx: dict) -> dict[str, dict]:
 
 
 def check_finding_regressions(
-    ctx: dict, gate: dict
-) -> tuple[list[dict], list[dict]]:
+    ctx: JsonDict, gate: GateConfig
+) -> tuple[list[FindingHit], list[FindingHit]]:
     """Split flagged findings into (failures, warnings) per the gate config.
 
     A finding "fires" when it has a non-empty ``paths`` list - that is the
@@ -62,10 +85,10 @@ def check_finding_regressions(
     """
     findings = _findings_by_name(ctx)
     fail_on = gate.get("fail_on", [])
-    failures: list[dict] = []
-    warnings: list[dict] = []
+    failures: list[FindingHit] = []
+    warnings: list[FindingHit] = []
 
-    def _fired(name: str) -> dict | None:
+    def _fired(name: str) -> FindingHit | None:
         f = findings.get(name)
         if f and f.get("paths"):
             return {"finding": name, "count": len(f["paths"]), "paths": f["paths"][:5]}
@@ -84,7 +107,7 @@ def check_finding_regressions(
     return failures, warnings
 
 
-def check_complexity_threshold(ctx: dict, gate: dict) -> list[dict]:
+def check_complexity_threshold(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     """Return a one-element list when p95 file CCN exceeds ``ccn_p95_max``."""
     threshold = gate.get("ccn_p95_max")
     if threshold is None:
@@ -95,7 +118,7 @@ def check_complexity_threshold(ctx: dict, gate: dict) -> list[dict]:
     return []
 
 
-def _containment_ratio(ctx: dict) -> float | None:
+def _containment_ratio(ctx: JsonDict) -> float | None:
     """Safe zones / (safe zones + total concerns) from the keyhole summary.
 
     The deterministic core already rolls the findings into a keyhole summary
@@ -114,7 +137,7 @@ def _containment_ratio(ctx: dict) -> float | None:
     return safe / denom
 
 
-def check_containment_threshold(ctx: dict, gate: dict) -> list[dict]:
+def check_containment_threshold(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     """Return a one-element list when the containment ratio drops below the floor."""
     floor = gate.get("containment_min")
     if floor is None:
@@ -125,7 +148,7 @@ def check_containment_threshold(ctx: dict, gate: dict) -> list[dict]:
     return []
 
 
-def check_diff_regression(ctx: dict, gate: dict) -> list[dict]:
+def check_diff_regression(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     """Return a regression breach when the cross-run diff reports a worsening.
 
     Only fires when ``fail_on_regression`` is set AND there is a reliable diff
@@ -151,7 +174,7 @@ def check_diff_regression(ctx: dict, gate: dict) -> list[dict]:
     }]
 
 
-def evaluate(ctx: dict, gate: dict) -> dict:
+def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
     """Run every check and return a structured verdict.
 
     ``failed`` is the gate decision; ``warnings`` are reported but never fail.
@@ -180,7 +203,7 @@ def evaluate(ctx: dict, gate: dict) -> dict:
     }
 
 
-def format_verdict(verdict: dict) -> str:
+def format_verdict(verdict: GateVerdict) -> str:
     """Render a human-readable summary for the CI log."""
     lines: list[str] = ["/assess gate"]
     if not verdict["enabled"]:
@@ -215,7 +238,7 @@ def format_verdict(verdict: dict) -> str:
     return "\n".join(lines)
 
 
-def _format_exclusion_disclosure(excluded_by_config: dict | None) -> str:
+def _format_exclusion_disclosure(excluded_by_config: JsonDict | None) -> str:
     """One indented line disclosing findings the config excludes suppressed.
 
     Returns ``""`` when nothing was suppressed, so a clean run's log is
@@ -240,7 +263,7 @@ def _format_exclusion_disclosure(excluded_by_config: dict | None) -> str:
 GENERATED_DISCLOSURE_MAX_PATHS = 10
 
 
-def _format_generated_disclosure(excluded_generated: list | None) -> str:
+def _format_generated_disclosure(excluded_generated: list[JsonDict] | None) -> str:
     """A summary line naming each distinct reason files were excluded as
     generated, then one indented ``path (reason)`` line per file (capped at
     ``GENERATED_DISCLOSURE_MAX_PATHS``), or ``""`` when none were, so a clean
