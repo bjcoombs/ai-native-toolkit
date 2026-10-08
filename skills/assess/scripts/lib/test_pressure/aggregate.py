@@ -5,8 +5,18 @@ Merges the mutation tier and the cheap always-on heuristics into one
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
+
+from lib.run_context_types import (
+    CheapHeuristics,
+    MutationFileResult,
+    SurvivorCluster,
+    SurvivorDensity,
+    TestPressureBlock,
+)
 
 from .heuristics import CoverageData, compute_cheap_heuristics
 from .mutation import (
@@ -21,17 +31,20 @@ from .mutation import (
 @dataclass
 class TestPressureResult:
     mutation_config_present: bool = False
-    mutation_tools_detected: list = field(default_factory=list)
+    mutation_tools_detected: list[str] = field(default_factory=list)
     ci_integrated: bool = False
     mutation_run: bool = False
-    mutation_scope: list = field(default_factory=list)
-    per_file: list = field(default_factory=list)
-    survivor_density: dict = field(default_factory=dict)
-    survivor_clusters: list = field(default_factory=list)
+    mutation_scope: list[str] = field(default_factory=list)
+    per_file: list[MutationFileResult] = field(default_factory=list)
+    # Empty until scan_test_pressure fills it; the cast names that, not a shape.
+    survivor_density: SurvivorDensity = field(
+        default_factory=lambda: cast(SurvivorDensity, {}))
+    survivor_clusters: list[SurvivorCluster] = field(default_factory=list)
     gap_signal: str = "not assessed"
-    cheap_heuristics: dict = field(default_factory=dict)
+    cheap_heuristics: CheapHeuristics = field(
+        default_factory=lambda: cast(CheapHeuristics, {}))
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> TestPressureBlock:
         return {
             "mutation_config_present": self.mutation_config_present,
             "mutation_tools_detected": self.mutation_tools_detected,
@@ -58,9 +71,9 @@ def _overall_coverage(coverage_data: CoverageData | None) -> float | None:
     return None
 
 
-def scan_test_pressure(repo_root: Path, hot_files: list | None = None,
+def scan_test_pressure(repo_root: Path, hot_files: Sequence[str | Path] | None = None,
                        opt_in: bool = False,
-                       coverage_data: CoverageData | None = None) -> dict:
+                       coverage_data: CoverageData | None = None) -> TestPressureBlock:
     """Top-level Layer-1 write-side scan. Merges the mutation tier and the cheap
     always-on heuristics into one ``test_pressure`` block ready to drop into
     run-context.json. Never raises.

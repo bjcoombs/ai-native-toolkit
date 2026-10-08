@@ -17,8 +17,16 @@ from __future__ import annotations
 
 import ast
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+
+from lib.run_context_types import (
+    AssertionOnInternalFinding,
+    CheapHeuristics,
+    DuplicateTruthFinding,
+    UntestedBoundaryFinding,
+)
 
 from .common import MAX_FINDINGS, _is_test_file, _iter_files, _read, _rel
 
@@ -83,7 +91,7 @@ def _classify_assertion(expr: ast.AST) -> tuple[list[tuple[str, str]], bool]:
     return internal, has_public
 
 
-def _py_assertion_internal(path: Path, rel: str) -> list[dict]:
+def _py_assertion_internal(path: Path, rel: str) -> list[AssertionOnInternalFinding]:
     """Python (AST): test functions that assert on a private ``_field`` but on no
     public attribute or method. Conservative - both conditions must hold.
 
@@ -96,7 +104,7 @@ def _py_assertion_internal(path: Path, rel: str) -> list[dict]:
         tree = ast.parse(_read(path))
     except (SyntaxError, ValueError):
         return []
-    findings: list[dict] = []
+    findings: list[AssertionOnInternalFinding] = []
     for func in ast.walk(tree):
         if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -127,12 +135,13 @@ _GO_ASSERT_INTERNAL_RE = re.compile(
     r"(?:assert|require)\.\w+\([^)]*?\b\w+\.([a-z]\w*)")
 
 
-def _regex_assertion_internal(path: Path, rel: str, lang: str) -> list[dict]:
+def _regex_assertion_internal(path: Path, rel: str,
+                              lang: str) -> list[AssertionOnInternalFinding]:
     """TS/JS and Go: conservative regex for assertions reading a private field.
     Lower confidence than the Python AST path - no per-test public-side-effect
     check, just the presence of an internal-field assertion."""
     text = _read(path)
-    findings: list[dict] = []
+    findings: list[AssertionOnInternalFinding] = []
     seen: set[str] = set()
     if lang == "ts":
         # Only flag genuinely private accessors: _underscore or #private.
@@ -156,7 +165,8 @@ def _regex_assertion_internal(path: Path, rel: str, lang: str) -> list[dict]:
 
 
 def detect_assertion_on_internal(repo_root: Path,
-                                 test_files: list | None = None) -> list[dict]:
+                                 test_files: Sequence[str | Path] | None = None,
+                                 ) -> list[AssertionOnInternalFinding]:
     """Tests that pin private/internal state instead of public behaviour.
 
     The meridian resume-guard fingerprint. Returns
@@ -170,7 +180,7 @@ def detect_assertion_on_internal(repo_root: Path,
             if _is_test_file(p)]
     else:
         files = [Path(f) for f in test_files]
-    findings: list[dict] = []
+    findings: list[AssertionOnInternalFinding] = []
     for path in files:
         rel = _rel(repo_root, path)
         try:
@@ -216,12 +226,12 @@ def _normalise_coverage(coverage_data: CoverageData | None) -> set[tuple[str, in
 
 
 def _py_boundaries(path: Path, rel: str,
-                   covered: set[tuple[str, int]]) -> list[dict]:
+                   covered: set[tuple[str, int]]) -> list[UntestedBoundaryFinding]:
     try:
         tree = ast.parse(_read(path))
     except (SyntaxError, ValueError):
         return []
-    out: list[dict] = []
+    out: list[UntestedBoundaryFinding] = []
     for node in ast.walk(tree):
         op_symbol = None
         if isinstance(node, ast.Compare):
@@ -243,8 +253,8 @@ def _py_boundaries(path: Path, rel: str,
 
 
 def _regex_boundaries(path: Path, rel: str,
-                      covered: set[tuple[str, int]]) -> list[dict]:
-    out: list[dict] = []
+                      covered: set[tuple[str, int]]) -> list[UntestedBoundaryFinding]:
+    out: list[UntestedBoundaryFinding] = []
     for i, line in enumerate(_read(path).splitlines(), start=1):
         if (rel, i) not in covered:
             continue
@@ -257,7 +267,8 @@ def _regex_boundaries(path: Path, rel: str,
 
 
 def detect_untested_boundaries(repo_root: Path,
-                               coverage_data: CoverageData | None = None) -> list[dict]:
+                               coverage_data: CoverageData | None = None,
+                               ) -> list[UntestedBoundaryFinding]:
     """Boundary comparisons that are covered but, as far as we can tell, exercised
     on only one side. Off-by-one territory.
 
@@ -271,7 +282,7 @@ def detect_untested_boundaries(repo_root: Path,
     covered = _normalise_coverage(coverage_data)
     if not covered:
         return []
-    findings: list[dict] = []
+    findings: list[UntestedBoundaryFinding] = []
     for path in _iter_files(repo_root, {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs"}):
         if _is_test_file(path):
             continue
@@ -343,13 +354,13 @@ def _collect_field_assignments(
     return assignments
 
 
-def _py_duplicate_truth(path: Path, rel: str) -> list[dict]:
+def _py_duplicate_truth(path: Path, rel: str) -> list[DuplicateTruthFinding]:
     try:
         tree = ast.parse(_read(path))
     except (SyntaxError, ValueError):
         return []
     assignments = _collect_field_assignments(tree)
-    findings: list[dict] = []
+    findings: list[DuplicateTruthFinding] = []
     for fieldname, recs in assignments.items():
         if not recs:
             continue
@@ -372,7 +383,7 @@ _TS_DERIVE_RE = re.compile(r"this\.(\w+)\s*=\s*this\.(\w+)\s*(?:[+-]\s*\d+\s*)?;
 _TS_ANY_ASSIGN_RE = re.compile(r"this\.(\w+)\s*=")
 
 
-def _ts_duplicate_truth(path: Path, rel: str) -> list[dict]:
+def _ts_duplicate_truth(path: Path, rel: str) -> list[DuplicateTruthFinding]:
     """TS/JS regex: ``this.x = this.y (+ k)`` where *every* assignment of ``x``
     matches the derive pattern. Conservative - any non-derive assignment of the
     same field disqualifies it. ``this.x`` is already an instance attribute, so
@@ -387,7 +398,7 @@ def _ts_duplicate_truth(path: Path, rel: str) -> list[dict]:
     total_assign: dict[str, int] = {}
     for m in _TS_ANY_ASSIGN_RE.finditer(text):
         total_assign[m.group(1)] = total_assign.get(m.group(1), 0) + 1
-    findings: list[dict] = []
+    findings: list[DuplicateTruthFinding] = []
     for fieldname, sources in derive_sources.items():
         # Every assignment of the field must be a derivation.
         if total_assign.get(fieldname, 0) != derive_count.get(fieldname, 0):
@@ -402,7 +413,7 @@ def _ts_duplicate_truth(path: Path, rel: str) -> list[dict]:
     return findings
 
 
-def detect_duplicate_truth(repo_root: Path) -> list[dict]:
+def detect_duplicate_truth(repo_root: Path) -> list[DuplicateTruthFinding]:
     """Fields only ever assigned from another field, never independently computed
     - two names for one fact. A test asserting on one says nothing about the
     other; a refactor that decouples them silently breaks the invariant.
@@ -415,7 +426,7 @@ def detect_duplicate_truth(repo_root: Path) -> list[dict]:
     Returns ``[{file, field_name, derives_from, confidence}]``. Degrades per-file.
     """
     repo_root = Path(repo_root)
-    findings: list[dict] = []
+    findings: list[DuplicateTruthFinding] = []
     for path in _iter_files(repo_root, {".py", ".ts", ".tsx", ".js", ".jsx"}):
         if _is_test_file(path):
             continue
@@ -433,7 +444,8 @@ def detect_duplicate_truth(repo_root: Path) -> list[dict]:
 
 
 def compute_cheap_heuristics(repo_root: Path,
-                             coverage_data: CoverageData | None = None) -> dict:
+                             coverage_data: CoverageData | None = None,
+                             ) -> CheapHeuristics:
     """Aggregate the three always-on hollow-test heuristics. Never raises - each
     detector degrades independently, so a failure in one still returns the
     others. Every finding is a *candidate*, flagged by ``confidence_note``.
