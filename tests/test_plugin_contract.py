@@ -3,8 +3,10 @@
 No AI, no network. Encodes the invariants documented in CLAUDE.md as executable
 assertions so a broken reference or dropped frontmatter fails the PR.
 """
+import ast
 import json
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,6 +16,11 @@ REPO = Path(__file__).resolve().parent.parent
 SKILLS = REPO / "skills"
 LEGACY_COMMANDS = REPO / "commands"
 AGENTS = REPO / "agents"
+# Acceptance-contract gates and canary harness: stdlib-only by contract.
+GATE_CODE_DIRS = (REPO / "scripts" / "contract", REPO / "scripts" / "canaries")
+GATE_CODE_FILES = sorted(
+    p for d in GATE_CODE_DIRS if d.is_dir() for p in d.glob("*.py")
+)
 PLUGIN = REPO / ".claude-plugin"
 
 # Skills referenced by name that live outside this plugin (superpowers, etc.).
@@ -209,14 +216,9 @@ def test_skill_frontmatter_is_valid_yaml(d):
     assert isinstance(data, dict), f"{d.name}/SKILL.md frontmatter is not a mapping"
 
 
-GATE_CODE_DIRS = (REPO / "scripts" / "contract", REPO / "scripts" / "canaries")
-
-
 def _top_level_imports(path: Path) -> set[str]:
-    import ast
-
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    names = set()
+    names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             names.update(a.name.split(".")[0] for a in node.names)
@@ -225,23 +227,19 @@ def _top_level_imports(path: Path) -> set[str]:
     return names
 
 
-@pytest.mark.parametrize(
-    "p",
-    sorted(p for d in GATE_CODE_DIRS if d.is_dir() for p in d.glob("*.py")),
-    ids=lambda p: str(p.relative_to(REPO)),
-)
-def test_gate_code_is_stdlib_only(p):
-    # The acceptance-contract gates and canary harness run under a bare
-    # `uv run python`, so they may import only the standard library and each other's
-    # flat modules. This job installs pyyaml for the frontmatter check
-    # above, so an `import yaml` here would no longer fail on a missing module;
-    # this test is what keeps the gates dependency-free.
-    import sys
-
-    # The canary harness imports the gates through the same flat-path trick.
-    siblings = {q.stem for d in GATE_CODE_DIRS if d.is_dir() for q in d.glob("*.py")}
-    foreign = sorted(_top_level_imports(p) - set(sys.stdlib_module_names) - siblings
-                     - {"__future__"})
+@pytest.mark.parametrize("p", GATE_CODE_FILES, ids=lambda p: str(p.relative_to(REPO)))
+def test_gate_code_is_stdlib_only(p: Path) -> None:
+    # The gates and the canary harness run under a bare `uv run python`, so
+    # they may import only the standard library and each other's flat modules
+    # (the harness imports the gates by path). This job installs pyyaml for the
+    # frontmatter check above, so a stray `import yaml` here would no longer
+    # fail on a missing module; this test keeps the gates dependency-free.
+    allowed = (
+        set(sys.stdlib_module_names)
+        | {q.stem for q in GATE_CODE_FILES}
+        | {"__future__"}
+    )
+    foreign = sorted(_top_level_imports(p) - allowed)
     assert not foreign, (
         f"{p.relative_to(REPO)} imports {foreign}; gate code is stdlib-only"
     )
