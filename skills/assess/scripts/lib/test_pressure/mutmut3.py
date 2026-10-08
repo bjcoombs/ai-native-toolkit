@@ -165,9 +165,10 @@ def _no_records_reason(tool: str, proc: subprocess.CompletedProcess,
     copy: its prefix is cut from the detail, leaving repo-relative paths, since
     the reason is stored in run-context.json and the directory is gone.
     ``labels`` names other directories the output may cite (the scratch
-    environment, the assessed package and its venv) by a stable label, so no
-    absolute path (a home directory) reaches the report; cut after
-    ``scratch``, longest first."""
+    environment, the assessed package and its venv, the home directory that
+    holds uv's cache and tool environments) by a stable label, so no
+    home-directory path reaches the report; cut after ``scratch``, longest
+    first."""
     reason = (f"no mutant records recovered from {tool} "
               f"output (exit code {proc.returncode})")
     detail = _tool_error_line(proc) if proc.returncode != 0 else ""
@@ -295,8 +296,9 @@ def _mutmut_command(pkg: Path, config: str, cfg_scope: list[str],
 
 def _venv_mutmut3(pkg_on_disk: Path, deadline: float) -> str | None:
     """The interpreter of a virtualenv in the assessed package that already
-    has mutmut 3 installed, or None. Only read: nothing is installed into it.
-    The version probe is bounded by the deadline."""
+    has mutmut 3 installed, or None. Only read: nothing is installed into it,
+    and the probe (``-B``) writes no bytecode there. The probe is bounded by
+    the deadline."""
     for d in _VENV_DIRS:
         for rel in _VENV_PYTHONS:
             python = pkg_on_disk / d / rel
@@ -307,7 +309,7 @@ def _venv_mutmut3(pkg_on_disk: Path, deadline: float) -> str | None:
                 return None
             try:
                 proc = subprocess.run(
-                    [str(python), "-c", "from importlib.metadata import version; "
+                    [str(python), "-B", "-c", "from importlib.metadata import version; "
                      "print(version('mutmut'))"],
                     capture_output=True, text=True, timeout=remaining, check=False)
             except (subprocess.TimeoutExpired, OSError):
@@ -354,8 +356,11 @@ def _resolve_runner(pkg_on_disk: Path, deadline: float) -> tuple[str, tuple[str,
 def _runner_env(runner: str, tmp: Path) -> dict[str, str] | None:
     """The uv runner's environment: its project environment goes in ``tmp``
     (an inherited ``UV_PROJECT_ENVIRONMENT`` could name the user's own), and
-    an active ``VIRTUAL_ENV`` is dropped so uv does not target it. The other
-    runners inherit the caller's environment."""
+    an active ``VIRTUAL_ENV`` is dropped so uv does not target it. The venv
+    runner's interpreter lives in the assessed tree, so it writes no bytecode
+    there. The PATH runner inherits the caller's environment."""
+    if runner == "venv":
+        return {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
     if runner != "uv":
         return None
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
@@ -670,7 +675,8 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
         per_file = _parse_mutmut3_meta(pkg / "mutants")
         no_records = _no_records_reason(
             "mutmut", proc, scratch=work,
-            labels={Path(tmp): "<scratch>", pkg_on_disk: pkg_rel or "."})
+            labels={Path(tmp): "<scratch>", pkg_on_disk: pkg_rel or ".",
+                    Path.home(): "~"})
     return _group_result(record, pkg_rel, cfg_scope, per_file, no_records, back)
 
 

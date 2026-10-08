@@ -51,7 +51,7 @@ def test_package_venv_with_mutmut3_wins(tmp_path: Path, monkeypatch) -> None:
 
     python = str(tmp_path / ".venv" / "bin" / "python")
     assert (runner, mutmut) == ("venv", (python, "-m", "mutmut"))
-    assert calls[0][0] == python and "version('mutmut')" in calls[0][2]
+    assert calls[0][:3] == [python, "-B", "-c"] and "version('mutmut')" in calls[0][3]
     assert mutmut3._mutmut_command(tmp_path, "generated", ["calc.py"], mutmut) == [
         python, "-m", "mutmut", "run"]
 
@@ -132,7 +132,8 @@ def test_runner_env_puts_the_uv_environment_in_scratch(tmp_path: Path,
     assert env["UV_PROJECT_ENVIRONMENT"] == str(tmp_path / "venv")
     assert "VIRTUAL_ENV" not in env
     assert mutmut3._runner_env("path", tmp_path) is None
-    assert mutmut3._runner_env("venv", tmp_path) is None
+    venv_env = mutmut3._runner_env("venv", tmp_path)
+    assert venv_env is not None and venv_env["PYTHONDONTWRITEBYTECODE"] == "1"
 
 
 def test_run_group_records_the_runner_and_scratch_env(tmp_path: Path,
@@ -259,6 +260,11 @@ def test_reason_cuts_scratch_env_and_package_paths(tmp_path: Path,
         "first failure: ImportError: cannot import name 'G' from 'nx' "
         "(<scratch>/venv/lib/nx.py)")
     assert str(tmp_path) not in record["reason"]
+    home = Path.home()
+    tool = subprocess.CompletedProcess(
+        ["m"], 1, stdout="", stderr=f"ImportError: x ({home}/.cache/uv/a/b.py)\n")
+    assert mutmut3._no_records_reason(
+        "mutmut", tool, labels={home: "~"}).endswith("ImportError: x (~/.cache/uv/a/b.py)")
     proc = subprocess.CompletedProcess(
         ["m"], 1, stdout="", stderr=f"ImportError: from {pkg_on_disk}/.venv/lib/y.py\n")
     assert mutmut3._no_records_reason(
