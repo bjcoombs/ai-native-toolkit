@@ -147,7 +147,7 @@ The maturity band bounds how much agent **autonomy** this repo's contracts can s
 
 ## Cross-Layer Findings (Keyhole Readiness)
 
-Read the findings with three notes. `untrusted_hotspot` now fires on its own after the mutation pass (#473): `scripts/floor_anchor.py` is listed because 437 of its 1,017 mutants survived. All three `unactioned_intent` paths are false positives: `lib/promissory_markers.py` is the scanner matching its own pattern table, `tests/test_promissory_markers.py` holds marker fixtures, and `skills/assess/pyproject.toml` is flagged for a comment describing a deprecated mutmut option. `lib/test_pressure/mutmut3.py` is a new `accretion_ratchet` path: #471, #476 and #482 each added to it, and it is 757 lines against the 800-line limit.
+Read the findings with three notes. `untrusted_hotspot` now fires on its own after the mutation pass (#473): `scripts/floor_anchor.py` is listed because 437 of its 1,017 mutants survived. All three `unactioned_intent` paths are false positives: `lib/promissory_markers.py` is the scanner matching its own pattern table, `tests/test_promissory_markers.py` holds marker fixtures, and `skills/assess/pyproject.toml` is flagged for config comments. Those three files hold all 11 stale markers on the badge (up from 2), because this run's PRs edited them repeatedly and each edit ages the markers they contain; none is an unkept promise. `lib/test_pressure/mutmut3.py` is a new `accretion_ratchet` path: #471, #476 and #482 each added to it, and it is 757 lines against the 800-line limit.
 
 ### hidden_coupling
 
@@ -240,6 +240,7 @@ _... 5 more omitted; top 10 ranked rows in `.assess/run-context.json` `attention
 
 - **Layer 2 to Present:** extend `disallow_any_generics` to `lib/keyhole_signals.py` and `lib/test_pressure/`, then the orchestrators, and flip the global flag.
 - **Layer 6 to Present:** after #410, Action 1; then pin `doc_graph.py`'s survivor clusters (`_derive_signals` 39, `build_doc_graph` 33) and `keyhole_signals.py`'s (`_integrate_blocks` 71) from the weekly run.
+- **Marker scanner false positives:** skip `promissory_markers.py`'s own pattern table and the fixtures in `tests/test_promissory_markers.py`, which inflate the badge's stale-marker count.
 - **Report:** say the structure signals are partial when `structure.name_collisions` is non-empty.
 - **CodeQL alert #3** (`py/clear-text-storage-sensitive-data`, sink in `lib/wiki_writer.py`): triage, then fix or dismiss with a reason.
 - **Coverage-gate detector refinements (#469 review):** honour scope and config excludes; record templated thresholds as `threshold: null`; fix the nyc/c8 double count; label `fail_under` as the total.
