@@ -200,11 +200,18 @@ PYTHON_SUFFIXES = {".py", ".pyi"}
 # Config formats no directive in SUPPRESSION_DIRECTIVES is read from: a noqa
 # in a pyproject.toml comment documents a directive, it suppresses nothing.
 CONFIG_SUFFIXES = {".toml", ".ini", ".cfg", ".yaml", ".yml", ".json"}
-# An inline code span on a comment-only line: a directive inside one is quoted.
-# There it has no code to suppress (ruff would apply it to the comment line
-# alone). After code it stays: ruff reads a noqa anywhere in a trailing
-# comment, so a quoted one still suppresses that code.
+# An inline code span on a comment-only line: a line-scoped directive inside
+# one is quoted. There it has no code to suppress (ruff would apply it to the
+# comment line alone). After code it stays: ruff reads a noqa anywhere in a
+# trailing comment, so a quoted one still suppresses that code.
 _CODE_SPAN_RE = re.compile(r"``.+?``|`[^`]+`")
+# Directives that stay in force past their own line: a comment-only rubocop or
+# pylint disable (both read anywhere in a comment) silences the rest of the
+# scope, and an ESLint block disable the rest of the file. Quoting one does not
+# make it inert, so it never takes the quoted exemption.
+_BLOCK_SCOPED_RE = re.compile(
+    r"rubocop:disable|pylint:\s*disable|eslint-disable(?!-(?:next-)?line)"
+)
 # The token regions of a Python line each family may count in. A docstring is
 # prose about the code, so a promise there is a promise; any other string is
 # data. Only a comment can carry a suppression a linter reads.
@@ -382,12 +389,13 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
             # Syntactic families in prose files are code examples, not debt.
             if family in ("suppression", "disabled_test") and is_prose:
                 continue
-            if not _hit_is_comment_text(
+            offset = _marker_offset(
                 repo_root, path, int(line_s), text, family, regions
-            ):
+            )
+            if offset is None:
                 continue
             if family in ("todo", "deprecation") and not _comment_context(
-                is_prose, text, pattern
+                is_prose, text, pattern, offset
             ):
                 continue
             if family == "todo" and not _todo_in_marker_position(text, is_prose):
@@ -413,27 +421,38 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
     return markers
 
 
-def _hit_is_comment_text(
+def _is_quoted(text: str, start: int, spans: list[tuple[int, int]]) -> bool:
+    """A line-scoped directive at ``start`` sits inside one of the code spans."""
+    # The block-scoped directives match with no leader, so the match opens on
+    # the directive word itself.
+    if _BLOCK_SCOPED_RE.match(text, start):
+        return False
+    return any(a <= start < b for a, b in spans)
+
+
+def _marker_offset(
     repo_root: Path,
     path: str,
     row: int,
     text: str,
     family: str,
     cache: dict[str, PyRegions | None],
-) -> bool:
-    """False when every match of the family on the line is data, not a marker.
+) -> int | None:
+    """The column of the first match on the line that is a marker, or None.
 
     A match is data when it sits in a region its family may not count in
     (``_PY_REGIONS_ALLOWED``, Python files that tokenize), or, for a
-    suppression, inside a backtick code span on a comment-only line or
-    anywhere in a config file.
-    Prose files are not this function's concern and always pass.
+    suppression, is a line-scoped directive inside a backtick code span on a
+    comment-only line, or sits anywhere in a config file. The later filters
+    judge the match at the returned column, so a string-literal marker earlier
+    on the line cannot hide a real one after it. Prose files are not this
+    function's concern: they get column 0.
     """
     suffix = Path(path).suffix.lower()
     if suffix in PROSE_SUFFIXES:
-        return True
+        return 0
     if family == "suppression" and suffix in CONFIG_SUFFIXES:
-        return False
+        return None
     regions = (
         load_regions(repo_root, path, cache) if suffix in PYTHON_SUFFIXES else None
     )
@@ -446,14 +465,16 @@ def _hit_is_comment_text(
     )
     allowed = _PY_REGIONS_ALLOWED[family]
     for m in re.finditer(FAMILY_PATTERNS[family], text):
-        if any(a <= m.start() < b for a, b in quoted):
+        if quoted and _is_quoted(text, m.start(), quoted):
             continue
         if regions is None or regions.region(row, m.start()) in allowed:
-            return True
-    return False
+            return m.start()
+    return None
 
 
-def _comment_context(is_prose: bool, text: str, pattern: str) -> bool:
+def _comment_context(
+    is_prose: bool, text: str, pattern: str, start: int = 0
+) -> bool:
     """Keep a todo/deprecation hit only when it sits in a comment-ish context.
 
     Prose files count whole-line; code files require a comment leader at or
@@ -462,11 +483,12 @@ def _comment_context(is_prose: bool, text: str, pattern: str) -> bool:
     leader does not count: in a code file it is as likely a YAML or TOML list
     item (``  - TODO`` in a status enum) as a docstring line. This is a
     line-local heuristic, not a parser - string-literal mentions are the
-    false-positive it exists to drop.
+    false-positive it exists to drop. ``start`` is the column of the match to
+    judge (see ``_marker_offset``); the prefix before it is the whole line.
     """
     if is_prose:
         return True
-    m = re.search(pattern, text)
+    m = re.compile(pattern).search(text, start)
     if not m:
         return False
     prefix = text[: m.start()]

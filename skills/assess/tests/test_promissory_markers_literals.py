@@ -60,6 +60,17 @@ def test_python_string_literal_markers_are_data(tmp_path: Path) -> None:
     assert {line for _, line, fam in got if fam == "todo"} == {6, 9}
 
 
+def test_marker_after_a_string_literal_marker_is_judged_on_its_own(
+    tmp_path: Path,
+) -> None:
+    """The later filters judge the first match that is not data, so a string
+    literal holding marker text cannot hide a real comment marker after it."""
+    got = _scan_files(tmp_path, {
+        "m.py": 'x = "TODO: data"  # FIXME: real\ny = "TODO: data only"\n',
+    })
+    assert {line for _, line, fam in got if fam == "todo"} == {1}
+
+
 def test_python_docstring_todo_is_prose_and_counts(tmp_path: Path) -> None:
     src = (
         '"""Module doc.\n\nTODO: document the CLI flags.\n"""\n'  # row 3
@@ -131,6 +142,15 @@ def test_bom_file_columns_line_up(tmp_path: Path) -> None:
     assert {line for _, line, fam in got if fam == "suppression"} == {1}
 
 
+def test_lone_carriage_return_does_not_shift_rows(tmp_path: Path) -> None:
+    """rg counts rows by newline only; a lone carriage return mid-file must not
+    split a row for the region map, or every later lookup lands a row off."""
+    got = _scan_files(tmp_path, {
+        "cr.py": 'a = 1  # note\rb = 2\nx = "# noqa: E501"\ny = 1  # noqa: E501\n',
+    })
+    assert {line for _, line, fam in got if fam == "suppression"} == {3}
+
+
 # ---------------------------------------------------------------------------
 # Other languages and config files
 # ---------------------------------------------------------------------------
@@ -147,12 +167,18 @@ def test_other_languages_keep_line_based_filters(tmp_path: Path) -> None:
             "y(); // see `// eslint-disable-line`\n"           # 5 after code
         ),
         "b.go": "return nil //nolint:nilerr\n// TODO wire it\n",
+        # Block-scoped directives stay live when quoted: each silences the
+        # rest of its scope, so the quoted exemption never applies to them.
+        "c.rb": "# see `# rubocop:disable Style/Foo` here\n",
+        "d.js": "// see `eslint-disable no-console` below\n",
+        "e.py": "# see ``pylint: disable=broad-except`` here\n",
     })
     assert {(p, ln) for p, ln, fam in got if fam == "todo"} == {
         ("a.js", 1), ("a.js", 2), ("b.go", 2),
     }
     assert {(p, ln) for p, ln, fam in got if fam == "suppression"} == {
         ("a.js", 3), ("a.js", 5), ("b.go", 1),
+        ("c.rb", 1), ("d.js", 1), ("e.py", 1),
     }
 
 

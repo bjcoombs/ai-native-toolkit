@@ -915,8 +915,9 @@ test fixture, a pattern table) is dropped while a todo or deprecation in a
 docstring still counts as prose about the code; a suppression counts only in a
 comment and a disabled test only in code or a comment. A file that does not
 tokenize, and every other language, keeps the line-based filters below. In any
-code file a suppression quoted in a backtick code span on a comment-only line is
-a quotation (after code, ruff still reads it), and config files (TOML, YAML, INI,
+code file a line-scoped suppression quoted in a backtick code span on a
+comment-only line is a quotation (after code, ruff still reads it; a block-scoped
+`rubocop:disable`, `pylint: disable` or ESLint block disable stays live quoted), and config files (TOML, YAML, INI,
 JSON) carry no suppression family, since no listed directive is read from them.
 A `todo` token counts only in marker position -
 it opens its comment or prose line (after an optional bullet or checkbox) or a
@@ -954,7 +955,8 @@ concatenated literals each form one span) and each comment's
 opening column, and `PyRegions.region(row, col)` answers `comment` / `docstring`
 / `string` / `code`. Returns `None` for a source that does not tokenize, so the
 caller falls back to its line filters; `load_regions` memoises per file and
-reads with `utf-8-sig` so a BOM does not shift row 1 against rg's output.
+decodes the bytes with `utf-8-sig`, so a BOM does not shift row 1 against rg's
+output and a lone carriage return is not split into a second row.
 Pure stdlib. Tested with the marker scan in
 `tests/test_promissory_markers_literals.py`.
 

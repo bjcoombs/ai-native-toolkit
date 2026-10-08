@@ -126,10 +126,13 @@ def load_regions(
     """Per-file memo of ``python_regions``; None for an unreadable file.
 
     ``utf-8-sig`` drops a BOM, as rg does, so columns on row 1 line up.
+    Decoding bytes rather than ``read_text`` keeps a lone ``\\r`` as it is:
+    universal-newline translation would split a row rg counts as one.
     """
     if path not in cache:
         try:
-            source = (repo_root / path).read_text(encoding="utf-8-sig", errors="replace")
+            raw = (repo_root / path).read_bytes()
+            source = raw.decode("utf-8-sig", errors="replace")
         except OSError:
             cache[path] = None
         else:
