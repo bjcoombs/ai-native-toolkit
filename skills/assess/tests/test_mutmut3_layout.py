@@ -353,10 +353,15 @@ def test_groups_share_one_timeout_budget(tmp_path: Path, monkeypatch) -> None:
             clock["now"] += tp.MUTATION_TIMEOUT
         return out
 
+    copies: list[Path] = []
+    real_copy = mutmut3._copy_repo
+    monkeypatch.setattr(mutmut3, "_copy_repo",
+                        lambda src, dest: copies.append(dest) or real_copy(src, dest))
     monkeypatch.setattr(tp.subprocess, "run", run)
     r = run_bounded_mutation(tmp_path, hot_files=["a/alpha.py", "b/src/calc.py"],
                              opt_in=True)
     assert len(runs) == 1
+    assert len(copies) == 1  # a spent budget skips the second copy too
     assert r["groups"][1]["reason"] == f"exceeded {tp.MUTATION_TIMEOUT}s timeout"
 
 
@@ -409,7 +414,10 @@ def test_scratch_git_snapshot_includes_the_mirrored_tree(
         proc = subprocess.run(["git", "grep", "-l", "ANCHOR", "HEAD"], cwd=root,
                               capture_output=True, text=True, check=False)
         found = [line.split(":", 1)[1] for line in proc.stdout.splitlines()]
-        return found == ["skills/m/SKILL.md"] and (root / found[0]).is_file()
+        status = subprocess.run(["git", "status", "--porcelain"], cwd=root,
+                                capture_output=True, text=True, check=False).stdout
+        clean = all(line.endswith("mutants/") for line in status.splitlines())
+        return found == ["skills/m/SKILL.md"] and (root / found[0]).is_file() and clean
 
     monkeypatch.setattr(tp.subprocess, "run", _fake_mutmut(suite, []))
     r = run_bounded_mutation(tmp_path, hot_files=["tools/calc.py"], opt_in=True)

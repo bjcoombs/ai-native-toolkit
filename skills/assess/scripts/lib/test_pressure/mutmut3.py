@@ -18,8 +18,10 @@ package root:
   mirrors the rest of the repository around ``mutants/``, so a test that climbs
   from its own file to a repository file still finds it.
 
-The assessed tree is never written to. Copies and runs share one
-``MUTATION_TIMEOUT`` budget; a group that cannot run records its own ``reason``.
+The assessed tree is never written to. Every group draws on one
+``MUTATION_TIMEOUT`` budget: the git snapshot and the mutmut run are bounded by
+what remains, a copy is not interruptible but is checked against the deadline
+before and after, and a group that cannot run records its own ``reason``.
 """
 from __future__ import annotations
 
@@ -364,7 +366,8 @@ def _prepare_group(work: Path, pkg_rel: str, rel_scope: list[str],
     A package with its own config runs it unchanged. Any other package gets a
     generated section whose ``also_copy`` lists its own entries, after the
     ancestors are mirrored down (``_mirror_ancestors``); the git snapshot
-    comes last so it records the mirrored tree (``snapshot_by`` is its
+    comes last so it records the mirrored tree and the generated section,
+    leaving the copy clean against ``HEAD`` (``snapshot_by`` is its
     deadline; None when the copy did not come from git and needs none)."""
     pkg = work / pkg_rel if pkg_rel else work
     generate = bool(rel_scope) and not _mutmut3_reads_config(pkg)
@@ -375,11 +378,10 @@ def _prepare_group(work: Path, pkg_rel: str, rel_scope: list[str],
     own = _package_entries(pkg, [Path(f).parts[0] for f in rel_scope]) if generate else []
     if generate:
         _mirror_ancestors(work, pkg_rel)
-    if snapshot_by is not None:
-        _snapshot_git(work, snapshot_by)
-    if generate:
         with open(pkg / "setup.cfg", "a", encoding="utf-8") as fh:
             fh.write("\n" + _mutmut3_config(rel_scope, own))
+    if snapshot_by is not None:
+        _snapshot_git(work, snapshot_by)
     return None
 
 
@@ -403,6 +405,8 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
                                      ignore_cleanup_errors=True) as tmp:
         work = Path(tmp) / "repo"
         work.mkdir()
+        if deadline - time.monotonic() <= 0:
+            return timed_out, []
         try:
             from_git = _copy_repo(repo_root, work)
             gap = _prepare_group(work, pkg_rel, rel_scope,

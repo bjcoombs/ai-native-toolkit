@@ -1164,8 +1164,10 @@ Layer 1 write-side truth pressure. Two tiers:
   so the result's `scope` names the files its figures describe. `groups` records each
   package's run (`root`, `config` of `repo` or `generated`, `scope`, `mutation_run`, and a
   `reason` when it could not run), surfaced as `test_pressure.mutation_groups`; the pass
-  counts as run when any group recovered records. Copies and runs of every group share
-  one `MUTATION_TIMEOUT` budget, so a later group can record a timeout. On this path the
+  counts as run when any group recovered records. Every group draws on one `MUTATION_TIMEOUT` budget: the
+  snapshot and the run are bounded by what remains, and a copy (not interruptible) is
+  checked against the deadline before and after, so a later group can record a timeout
+  without copying. On this path the
   assessed tree is never written to. A version neither probe can
   read takes the mutmut 2 path, which runs in the assessed repo and leaves mutmut's
   `.mutmut-cache` there. Whichever path runs, a tool that exits non-zero without yielding mutants
