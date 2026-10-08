@@ -1,7 +1,7 @@
-<!-- assess:run_id=20261007204013-4ace52ea artifact_schema_version=1.3.0 -->
+<!-- assess:run_id=20261008085555-417634ee artifact_schema_version=1.3.0 -->
 # Hotspot: `scripts/floor_anchor.py`
 
-_First flagged: 2026-09-19. Last seen: 2026-10-07. Status: persistent._
+_First flagged: 2026-09-19. Last seen: 2026-10-08. Status: persistent._
 
 ## Current metrics
 
@@ -21,6 +21,7 @@ _First flagged: 2026-09-19. Last seen: 2026-10-07. Status: persistent._
 | 2026-10-07 | f520a0c5 | 646 | 188 | 7 | persistent |
 | 2026-10-07 | e950cb1b | 646 | 188 | 7 | persistent |
 | 2026-10-07 | 4ace52ea | 646 | 188 | 7 | persistent |
+| 2026-10-08 | 417634ee | 646 | 188 | 7 | persistent |
 
 ## Briefing for editing this file
 
@@ -30,6 +31,6 @@ Hotspot (persistent). 646 LOC, aggregate cyclomatic complexity 188 (worst functi
 
 ## Suggested actions
 
-- Maintainer decision on #410: widen floor_core_changed to all seven clause-iii paths or narrow the clause
-- Add the clause-derived tests the #410 review lists; floor file, so changes need floor-signoff approval
+- Maintainer decision on #410, then clause-derived tests; 437 of 1,017 mutants survive (density 0.43)
+- Floor file: test changes need floor-signoff approval
 

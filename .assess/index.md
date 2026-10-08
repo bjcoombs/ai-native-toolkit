@@ -1,22 +1,23 @@
-<!-- assess:run_id=20261007204013-4ace52ea artifact_schema_version=1.3.0 -->
+<!-- assess:run_id=20261008085555-417634ee artifact_schema_version=1.3.0 -->
 # Assess Wiki Index
 
-_Last updated: 2026-10-07_
+_Last updated: 2026-10-08_
 
 Catalog of every hotspot ever flagged by `/assess` in this repo. Status reflects the most recent run.
 
 | File | First Flagged | Last Seen | Status | Latest CCN | Latest LOC |
 |------|---------------|-----------|--------|------------|------------|
-| `skills/assess/scripts/assess_core.py` | 2026-05-31 | 2026-10-07 | regressed | 251.0 | 1093 |
-| `skills/assess/tests/test_assess_core.py` | 2026-05-31 | 2026-10-07 | persistent | 240.0 | 1843 |
-| `skills/assess/scripts/complexity-treemap.py` | 2026-05-31 | 2026-10-07 | regressed | 214.0 | 846 |
-| `skills/assess/scripts/lib/keyhole_signals.py` | 2026-06-01 | 2026-10-07 | persistent | 260.0 | 885 |
-| `skills/assess/tests/test_keyhole_signals.py` | 2026-06-19 | 2026-10-07 | persistent | 213.0 | 1152 |
-| `skills/assess/scripts/lib/doc_graph.py` | 2026-05-31 | 2026-10-07 | persistent | 209.0 | 695 |
-| `skills/assess/tests/test_complexity_treemap.py` | 2026-09-19 | 2026-10-07 | regressed | 189.0 | 1227 |
-| `skills/assess/scripts/lib/wiki_writer.py` | 2026-10-07 | 2026-10-07 | persistent | 170.0 | 533 |
-| `scripts/floor_anchor.py` | 2026-09-19 | 2026-10-07 | persistent | 188.0 | 646 |
-| `skills/assess/scripts/lib/doc_staleness.py` | 2026-05-31 | 2026-10-07 | new | 119.0 | 453 |
+| `skills/assess/scripts/assess_core.py` | 2026-05-31 | 2026-10-08 | persistent | 251.0 | 1097 |
+| `skills/assess/tests/test_assess_core.py` | 2026-05-31 | 2026-10-08 | regressed | 241.0 | 1853 |
+| `skills/assess/scripts/complexity-treemap.py` | 2026-05-31 | 2026-10-08 | persistent | 214.0 | 848 |
+| `skills/assess/scripts/lib/keyhole_signals.py` | 2026-06-01 | 2026-10-08 | persistent | 260.0 | 886 |
+| `skills/assess/scripts/lib/doc_graph.py` | 2026-05-31 | 2026-10-08 | persistent | 209.0 | 701 |
+| `skills/assess/tests/test_keyhole_signals.py` | 2026-06-19 | 2026-10-08 | persistent | 213.0 | 1152 |
+| `skills/assess/tests/test_complexity_treemap.py` | 2026-09-19 | 2026-10-08 | persistent | 189.0 | 1227 |
+| `skills/assess/scripts/lib/wiki_writer.py` | 2026-10-07 | 2026-10-08 | persistent | 170.0 | 533 |
+| `scripts/floor_anchor.py` | 2026-09-19 | 2026-10-08 | persistent | 188.0 | 646 |
+| `skills/assess/scripts/assess_finalize.py` | 2026-10-08 | 2026-10-08 | new | 148.0 | 439 |
+| `skills/assess/scripts/lib/doc_staleness.py` | 2026-05-31 | 2026-10-08 | graduated | - | - |
 | `skills/assess/scripts/doc-graph-svg.py` | 2026-05-31 | 2026-10-07 | graduated | - | - |
 | `skills/assess/scripts/lib/liveness_scan.py` | 2026-05-31 | 2026-09-19 | graduated | - | - |
 | `skills/assess/scripts/lib/change_coupling.py` | 2026-06-01 | 2026-09-19 | graduated | - | - |
