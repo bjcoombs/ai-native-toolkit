@@ -44,7 +44,7 @@ is treated the same way per-directory (no static evidence for *that* dir).
 """
 from __future__ import annotations
 
-from lib.run_context_types import JsonDict
+from lib.run_context_types import CouplingRow, JsonDict
 
 # Per-directory static metrics (``modularity_q`` / ``front_door_ratio``), keyed
 # by directory, as keyhole_signals projects them from the structure block.
@@ -96,7 +96,7 @@ def detect_hidden_coupling(
     threshold_low_containment: float = DEFAULT_LOW_CONTAINMENT,
     high_modularity_q: float = DEFAULT_HIGH_MODULARITY_Q,
     high_front_door_ratio: float = DEFAULT_HIGH_FRONT_DOOR_RATIO,
-) -> list[JsonDict]:
+) -> list[CouplingRow]:
     """B3: cross static modularity with historical containment to find lying boundaries.
 
     For each directory in ``containment_by_dir`` whose containment is **below**
@@ -123,9 +123,7 @@ def detect_hidden_coupling(
     reported, so a caller can see the directory was evaluated and consciously
     left alone).
     """
-    # Plain dicts, not a TypedDict: keyhole_signals adds keys to the
-    # hidden-coupling rows after they are returned.
-    results: list[JsonDict] = []
+    results: list[CouplingRow] = []
     for path in sorted(containment_by_dir):
         containment = containment_by_dir[path]
         if containment >= threshold_low_containment:
@@ -175,7 +173,7 @@ def find_refactor_boundaries(
     static_modularity: StaticModularity | None = None,
     high_modularity_q: float = DEFAULT_HIGH_MODULARITY_Q,
     high_front_door_ratio: float = DEFAULT_HIGH_FRONT_DOOR_RATIO,
-) -> list[JsonDict]:
+) -> list[CouplingRow]:
     """B3 positive finding: directories an agent can safely refactor in isolation.
 
     A directory whose containment is **above** ``threshold_high_containment`` is
@@ -196,9 +194,7 @@ def find_refactor_boundaries(
     'recommendation'}`` entries, sorted by containment descending (safest first),
     then path.
     """
-    # Plain dicts, not a TypedDict: keyhole_signals adds keys to the
-    # hidden-coupling rows after they are returned.
-    results: list[JsonDict] = []
+    results: list[CouplingRow] = []
     for path in sorted(containment_by_dir):
         containment = containment_by_dir[path]
         if containment <= threshold_high_containment:

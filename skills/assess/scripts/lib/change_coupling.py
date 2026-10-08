@@ -27,9 +27,9 @@ import subprocess
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import TypedDict
 
-from lib.run_context_types import JsonDict
+from lib.run_context_types import CoChangePair as CoChangePair
 
 # Cap every git call so a stuck invocation (huge repo, lock contention, a hung
 # credential prompt) degrades to "no data" rather than blocking the run. Same
@@ -244,15 +244,6 @@ def fold_renames(
     ]
 
 
-class CoChangePair(TypedDict):
-    """B1: two files that changed together in ``co_change_count`` commits."""
-
-    file_a: str
-    file_b: str
-    co_change_count: int
-    support_pct: float
-
-
 class Contributor(TypedDict):
     """B4: one author's commit and line totals on a path."""
 
@@ -283,7 +274,7 @@ class SelfReferentialTest(TypedDict):
 
 def change_coupling_pairs(
     commit_sets: list[set[Path]], min_support: int = 3,
-) -> list[JsonDict]:
+) -> list[CoChangePair]:
     """B1: file pairs that co-change, from :func:`parse_commit_file_sets` output.
 
     For every commit, all unordered file pairs are tallied; a pair is reported
@@ -318,10 +309,7 @@ def change_coupling_pairs(
         if count >= min_support
     ]
     pairs.sort(key=lambda d: (-d["co_change_count"], d["file_a"], d["file_b"]))
-    # Rows are CoChangePair; returned as plain dicts because keyhole_signals,
-    # outside the disallow_any_generics ratchet, passes them on as bare
-    # ``list[dict]``. Return list[CoChangePair] once it joins.
-    return cast("list[JsonDict]", pairs)
+    return pairs
 
 
 def _normalise_module(repo_root: Path, module_path: Path | str) -> Path:

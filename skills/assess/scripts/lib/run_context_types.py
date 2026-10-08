@@ -1,10 +1,11 @@
 """TypedDict shapes for the run-context.json rows the lib modules build.
 
 A shape lives here when a second ``lib/`` module builds or reads it (a broken
-doc link, a doc-to-code edge, a dead-code candidate, a bulk commit), or when it
-belongs to the same run-context block as one that does: the ``doc_graph`` and
-``dead_code`` blocks keep every row shape together here, so a block is read in
-one place. Any other shape, including a block read back only by the
+doc link, a doc-to-code edge, a dead-code candidate, a bulk commit, a co-change
+pair, a keyhole block that ``context_blocks`` copies into the run-context), or
+when it belongs to the same run-context block as one that does: the
+``doc_graph``, ``dead_code`` and keyhole blocks keep every row shape together
+here, so a block is read in one place. Any other shape, including a block read back only by the
 orchestrator, stays in the module that builds it. Typing them turns the shape
 from a docstring comment into a contract mypy checks at every construction
 site.
@@ -179,3 +180,177 @@ class BulkCommit(TypedDict):
     date: str
     docs_touched: int
     doc_count: int
+
+
+# --- change_coupling / coupling_analysis: the behaviour block rows ---------
+
+class CoChangePair(TypedDict):
+    """B1: two files that changed together in ``co_change_count`` commits."""
+
+    file_a: str
+    file_b: str
+    co_change_count: int
+    support_pct: float
+
+
+class CouplingRow(TypedDict):
+    """One B3 row from ``coupling_analysis``: a disagreement or a refactor boundary."""
+
+    path: str
+    containment_ratio: float
+    # ``hidden_coupling``, ``bleeding_module``, ``refactor_boundary``, or None
+    # for a directory evaluated and consciously left alone.
+    finding: str | None
+    recommendation: str
+    # ``keyhole_signals`` writes these onto the hidden-coupling rows only.
+    coupled_pairs: NotRequired[list[CoChangePair]]
+    coupled_pairs_total: NotRequired[int]
+
+
+# --- keyhole_signals: the cross-layer blocks and derived findings ----------
+
+class BehaviourFields(TypedDict):
+    """The behaviour block's data keys, present on every path."""
+
+    containment_by_dir: dict[str, float]
+    change_coupling_pairs: list[CoChangePair]
+    change_coupling_pairs_total: int
+    static_history_disagreement: list[CouplingRow]
+    hidden_coupling_findings: list[CouplingRow]
+    refactor_boundaries: list[CouplingRow]
+
+
+class BehaviourBlock(BehaviourFields):
+    """``run-context.json`` ``behaviour``: B1 coupling, B2 containment, B3."""
+
+    available: bool
+    reason: NotRequired[str]
+    static_modularity_projection: NotRequired[str]
+
+
+class ComplexityCoverage(TypedDict):
+    complexity_summarised: float
+    subject_code_count: int
+    doc_value: float
+
+
+class DocumentationBlock(TypedDict):
+    """``run-context.json`` ``documentation``: freshness, coverage, Signal C."""
+
+    available: bool
+    reason: NotRequired[str]
+    high_ccn_threshold: NotRequired[float | None]
+    freshness_by_doc: dict[str, float]
+    complexity_coverage: dict[str, ComplexityCoverage]
+    # ``doc_complexity_join.DocUnit`` rows, read from its JSON-shaped result.
+    stale_doc_on_complexity: list[JsonDict]
+    unexplained_complexity: list[JsonDict]
+    good_contracts: NotRequired[list[JsonDict]]
+
+
+class UnderstandingBlock(TypedDict):
+    """``run-context.json`` ``understanding``: anchor, intent source, authorship."""
+
+    available: bool
+    reason: NotRequired[str]
+    high_ccn_threshold: NotRequired[float | None]
+    human_anchor_by_path: dict[str, bool]
+    intent_source_by_path: dict[str, bool]
+    authorship_class_by_path: dict[str, str]
+    orphaned_understanding: list[str]
+    # ``understanding_analysis.UnderstandingModule`` rows, read from its
+    # JSON-shaped result.
+    modules: NotRequired[list[JsonDict]]
+
+
+class StaticReachability(TypedDict):
+    """``runtime.static_reachability``: the dead-code candidates, re-exposed."""
+
+    available: bool
+    candidate_count: int
+    candidates: list[DeadCodeCandidate]
+    # Absent only on the fallback a failed runtime build degrades to.
+    tools: NotRequired[list[DeadCodeTool]]
+    caveat: NotRequired[str]
+
+
+class RuntimeBlock(TypedDict):
+    """``run-context.json`` ``runtime``: D1 static reachability + observability rung."""
+
+    available: bool
+    reason: NotRequired[str]
+    static_reachability: StaticReachability
+    observability_rung: int | None
+    runtime_evidence_available: bool
+
+
+class FindingPaths(TypedDict):
+    """The part of a derived finding the path filters read and rewrite."""
+
+    name: str
+    paths: list[str]
+
+
+class DerivedFinding(FindingPaths):
+    """One ``derived_findings`` row: a named finding, its paths and its action."""
+
+    action: str
+
+
+class AttentionRow(TypedDict):
+    """One ``attention`` row: a unit and the negative findings that name it."""
+
+    path: str
+    findings: list[str]
+    score: int
+
+
+class PrescribedAction(TypedDict):
+    """One ``prescribed_actions`` row: an attention unit's mandatory action."""
+
+    path: str
+    action: str
+    findings: list[str]
+    rank: int
+
+
+class KeyholeConcern(TypedDict):
+    name: str
+    count: int
+
+
+class KeyholeSummary(TypedDict):
+    """``run-context.json`` ``keyhole_summary``."""
+
+    concerns: list[KeyholeConcern]
+    safe_zones: int
+    total_concerns: int
+    summary_text: str
+
+
+class FindingProducts(TypedDict):
+    """The attention list and report products derived from the findings."""
+
+    attention: list[AttentionRow]
+    findings_markdown: str
+    keyhole_summary: KeyholeSummary
+    attention_low_signal: bool
+    prescribed_actions: list[PrescribedAction]
+    archived_finding_paths: list[str]
+
+
+class KeyholeIntegration(FindingProducts):
+    """``keyhole_signals.integrate``'s result, which ``context_blocks`` copies into ctx."""
+
+    # The structure block and the Tier 1 grouping disagreement come from other
+    # modules as JSON-shaped dicts.
+    structure: JsonDict
+    behaviour: BehaviourBlock
+    documentation: DocumentationBlock
+    understanding: UnderstandingBlock
+    runtime: RuntimeBlock
+    derived_findings: list[DerivedFinding]
+    excluded_finding_paths: list[str]
+    pruned_finding_paths: list[str]
+    rename_map_complete: bool
+    structure_drift_tier1: JsonDict
