@@ -45,3 +45,13 @@ def test_svg_cascade_check_catches_a_bare_text_rule():
            'text-anchor: middle; }</style><text x="14" text-anchor="start">'
            'legend</text><text>label</text></svg>')
     assert overridden_text_attributes(svg) == [("legend", "text-anchor")]
+
+
+@pytest.mark.parametrize("selector", ["*", "svg *", "g text"])
+def test_svg_cascade_check_rejects_selectors_it_cannot_judge(selector):
+    """A selector that can reach <text> but is not `text` or
+    `text:not([attr])` fails loudly instead of being skipped."""
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg"><style>{selector} '
+           '{ fill: #000; }</style><text fill="#444">x</text></svg>')
+    with pytest.raises(ValueError):
+        overridden_text_attributes(svg)

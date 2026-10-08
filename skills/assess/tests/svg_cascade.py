@@ -12,7 +12,8 @@ lack the attribute.
 ``overridden_text_attributes`` parses the stylesheet and returns every
 (text, property) pair where a matching rule sets a property the element also
 carries as an attribute. Only ``text`` and ``text:not([attr])...`` selectors are
-understood; any other selector naming ``text`` raises, so a new stylesheet
+understood; any other selector naming ``text``, and any selector using the
+universal ``*`` (which reaches ``<text>`` as well), raises, so a new stylesheet
 shape fails loudly instead of slipping past the check.
 """
 from __future__ import annotations
@@ -34,6 +35,8 @@ def _text_rules(css: str) -> list[tuple[list[str], set[str]]]:
         props = {d.split(":", 1)[0].strip()
                  for d in body.split(";") if ":" in d}
         for sel in (s.strip() for s in selectors.split(",")):
+            if "*" in sel:
+                raise ValueError(f"universal selector reaches <text>: {sel!r}")
             if not re.search(r"\btext\b", sel):
                 continue
             m = _TEXT_SELECTOR.fullmatch(sel)
