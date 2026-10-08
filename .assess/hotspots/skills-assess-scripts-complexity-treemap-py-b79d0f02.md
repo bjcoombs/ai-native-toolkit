@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261008155039-de900b5c artifact_schema_version=1.3.0 -->
+<!-- assess:run_id=20261008175925-32cb78d4 artifact_schema_version=1.3.0 -->
 # Hotspot: `skills/assess/scripts/complexity-treemap.py`
 
 _First flagged: 2026-05-31. Last seen: 2026-10-08. Status: persistent._
@@ -24,6 +24,7 @@ _First flagged: 2026-05-31. Last seen: 2026-10-08. Status: persistent._
 | 2026-10-08 | 417634ee | 848 | 214 | 31 | persistent |
 | 2026-10-08 | d0c68d2e | 848 | 214 | 32 | persistent |
 | 2026-10-08 | de900b5c | 847 | 214 | 33 | persistent |
+| 2026-10-08 | 32cb78d4 | 847 | 214 | 33 | persistent |
 
 ## Briefing for editing this file
 

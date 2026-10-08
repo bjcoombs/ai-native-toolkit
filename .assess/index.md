@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261008155039-de900b5c artifact_schema_version=1.3.0 -->
+<!-- assess:run_id=20261008175925-32cb78d4 artifact_schema_version=1.3.0 -->
 # Assess Wiki Index
 
 _Last updated: 2026-10-08_
@@ -9,7 +9,7 @@ Catalog of every hotspot ever flagged by `/assess` in this repo. Status reflects
 |------|---------------|-----------|--------|------------|------------|
 | `skills/assess/scripts/complexity-treemap.py` | 2026-05-31 | 2026-10-08 | persistent | 214.0 | 847 |
 | `skills/assess/scripts/lib/keyhole_signals.py` | 2026-06-01 | 2026-10-08 | persistent | 247.0 | 860 |
-| `skills/assess/scripts/assess_core.py` | 2026-05-31 | 2026-10-08 | persistent | 26.0 | 394 |
+| `skills/assess/scripts/assess_core.py` | 2026-05-31 | 2026-10-08 | persistent | 26.0 | 397 |
 | `skills/assess/scripts/lib/doc_graph.py` | 2026-05-31 | 2026-10-08 | persistent | 209.0 | 705 |
 | `skills/assess/tests/test_complexity_treemap.py` | 2026-09-19 | 2026-10-08 | persistent | 189.0 | 1227 |
 | `skills/assess/scripts/lib/wiki_writer.py` | 2026-10-07 | 2026-10-08 | persistent | 170.0 | 534 |

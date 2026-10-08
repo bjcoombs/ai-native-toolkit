@@ -1,35 +1,35 @@
 {
   "artifact_schema_version": "1.3.0",
-  "run_id": "20261008155312-85a81156",
-  "plugin_version": "1.94.0",
+  "run_id": "20261008180155-83713abe",
+  "plugin_version": "1.95.0",
   "schema_version": 5,
   "lizard_version": "1.23.0",
   "scc_version": "3.7.0",
-  "files_scored": 219,
+  "files_scored": 224,
   "excluded_generated": [],
   "scoring_coverage": {
-    "lizard": 214,
+    "lizard": 219,
     "scc": 5
   },
   "churn_window": "commits (last 12mo)",
   "churn_degenerate": false,
   "loc": {
     "p50": 166.0,
-    "p95": 579.9,
+    "p95": 569.8499999999998,
     "max": 1227.0,
     "max_code": 1227.0,
     "max_data": 78.0,
-    "total": 47080
+    "total": 48032
   },
   "est_tokens": {
     "p50": 2845.0,
-    "p95": 9755.499999999996,
+    "p95": 9648.149999999998,
     "max": 19417.0,
     "max_code": 19417.0,
     "max_data": 1572.0,
-    "total": 806155,
+    "total": 821893,
     "budget": {
-      "total": 806155,
+      "total": 821893,
       "budget": 200000,
       "budget_basis": "estimate (~4 chars/token, documented default)",
       "chars_per_token": 4,
@@ -38,7 +38,7 @@
       "over_budget_subtrees": [
         {
           "path": "skills",
-          "est_tokens": 644849
+          "est_tokens": 657618
         }
       ]
     }
@@ -46,7 +46,7 @@
   "ccn": {
     "basis": "file-aggregate",
     "p50": 33.0,
-    "p95": 147.0,
+    "p95": 146.54999999999998,
     "max": 247.0
   },
   "fn_ccn": {
@@ -60,15 +60,15 @@
     "backend_by_language": {
       "TOML": null
     },
-    "function_count": 4060,
+    "function_count": 4151,
     "p50": 1.0,
     "p95": 8.0,
     "max": 33.0
   },
   "churn": {
     "p50": 2.0,
-    "p95": 15.099999999999994,
-    "max": 68.0
+    "p95": 15.0,
+    "max": 69.0
   },
   "top_hotspots": [
     {
@@ -95,13 +95,13 @@
     },
     {
       "path": "skills/assess/scripts/assess_core.py",
-      "loc": 394,
-      "est_tokens": 9221,
+      "loc": 397,
+      "est_tokens": 9247,
       "ccn": 26.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 13.0,
       "max_fn_name": "build_run_context",
-      "commits": 68,
+      "commits": 69,
       "source": "lizard"
     },
     {
@@ -162,12 +162,12 @@
     {
       "path": "skills/assess/scripts/lib/doc_staleness.py",
       "loc": 499,
-      "est_tokens": 8340,
+      "est_tokens": 8402,
       "ccn": 119.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 14.0,
       "max_fn_name": "analyze_doc_staleness",
-      "commits": 14,
+      "commits": 15,
       "source": "lizard"
     },
     {
@@ -283,14 +283,14 @@
       "source": "lizard"
     },
     {
-      "path": "skills/assess/tests/test_doc_graph.py",
-      "loc": 686,
-      "est_tokens": 11572,
-      "ccn": 149.0,
+      "path": "skills/assess/scripts/lib/claude_config.py",
+      "loc": 359,
+      "est_tokens": 5610,
+      "ccn": 152.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 5.0,
-      "max_fn_name": "_notes_and_wiki",
-      "commits": 17,
+      "max_fn_ccn": 13.0,
+      "max_fn_name": "_plugin_files",
+      "commits": 1,
       "source": "lizard"
     }
   ],
@@ -395,14 +395,14 @@
       "source": "lizard"
     },
     {
-      "path": "skills/assess/tests/test_doc_staleness.py",
-      "loc": 593,
-      "est_tokens": 9054,
-      "ccn": 147.0,
+      "path": "skills/assess/tests/test_promissory_markers.py",
+      "loc": 588,
+      "est_tokens": 8002,
+      "ccn": 116.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 6.0,
-      "max_fn_name": "test_doc_frozen_before_window_keeps_file_commit_ratio",
-      "commits": 13,
+      "max_fn_ccn": 15.0,
+      "max_fn_name": "test_todo_position_matrix",
+      "commits": 7,
       "source": "lizard"
     }
   ]
