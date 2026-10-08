@@ -39,6 +39,9 @@ def _write(root: Path, rel: str, text: str = "") -> None:
 def _as_mutmut3(monkeypatch) -> None:
     monkeypatch.setattr(tp.shutil, "which", lambda t: "/usr/bin/" + t)
     monkeypatch.setattr(mutation, "_mutmut_major", lambda _exe: 3)
+    # the PATH runner: these tests fake ``mutmut run`` itself, so a uv or
+    # package-venv invocation (``_resolve_runner``) is tested on its own
+    monkeypatch.setattr(mutmut3, "_resolve_runner", lambda *_a: ("path", ("mutmut",)))
 
 
 def _mutmut_config(cwd: Path) -> tuple[list[str], list[str]]:
@@ -154,7 +157,8 @@ def test_generated_config_mirrors_root_files_the_tests_read(
     assert r["per_file"] == [
         {"file": "tools/calc.py", "killed": 1, "survived": 1, "total": 2}]
     assert r["groups"] == [{"root": "tools", "config": "generated",
-                            "scope": ["tools/calc.py"], "mutation_run": True}]
+                            "scope": ["tools/calc.py"], "runner": "path",
+                            "mutation_run": True}]
     assert [run.name for run in runs] == ["tools"]
     assert _tree(tmp_path) == before
     assert not (tmp_path / "tools" / "setup.cfg").exists()
@@ -469,7 +473,8 @@ def test_root_config_and_suite_never_shadow_a_setup_cfg_package(
     monkeypatch.setattr(tp.subprocess, "run", _fake_mutmut(suite, runs))
     r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
     assert r["groups"] == [{"root": "pkg", "config": "generated",
-                            "scope": ["pkg/calc.py"], "mutation_run": True}]
+                            "scope": ["pkg/calc.py"], "runner": "path",
+                            "mutation_run": True}]
     assert r["per_file"] == [
         {"file": "pkg/calc.py", "killed": 1, "survived": 1, "total": 2}]
 
