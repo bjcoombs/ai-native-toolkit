@@ -6,10 +6,26 @@ write the same block shape and derive the cap from it the same way.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict, cast
+
+from lib.run_context_types import TestPressureBlock, TestPressureUnavailable
+
+# The block as ``normalize_test_pressure`` hands it on: a scan that ran, or the
+# explicit unavailable marker.
+TestPressure = TestPressureBlock | TestPressureUnavailable
 
 
-def normalize_test_pressure(test_pressure: Any) -> dict[str, Any]:
+class MutationNotRunCap(TypedDict):
+    """``run-context.json`` ``mutation_not_run_cap``."""
+
+    applies: bool
+    mutation_run: bool
+    partial: bool
+    max_layer6_band: str
+    annotation: str | None
+
+
+def normalize_test_pressure(test_pressure: Any) -> TestPressure:
     """Normalize a ``scan_test_pressure`` result into the run-context block shape.
 
     A failed (or malformed) scan must not read as "no mutation setup": that
@@ -26,7 +42,8 @@ def normalize_test_pressure(test_pressure: Any) -> dict[str, Any]:
     if (isinstance(test_pressure, dict)
             and "mutation_config_present" in test_pressure
             and "cheap_heuristics" in test_pressure):
-        return test_pressure
+        # The scan's own block: the two keys mark it as one that ran.
+        return cast(TestPressureBlock, test_pressure)
     return {
         "available": False,
         "reason": (test_pressure.get("reason")
@@ -57,7 +74,7 @@ MUTATION_NOT_RUN_ANNOTATION = "truth-pressure unproven (mutation not run)"
 MUTATION_PARTIAL_ANNOTATION = "truth-pressure partial (mutation stopped at budget)"
 
 
-def _partial_only(test_pressure_block: dict[str, Any]) -> bool:
+def _partial_only(test_pressure_block: TestPressure) -> bool:
     """True when every mutation group that produced records is ``partial``.
 
     A group with no records (``mutation_run`` false) adds no evidence either
@@ -74,7 +91,7 @@ def _partial_only(test_pressure_block: dict[str, Any]) -> bool:
     return bool(ran) and all(g.get("partial") is True for g in ran)
 
 
-def mutation_not_run_cap(test_pressure_block: dict[str, Any]) -> dict[str, Any]:
+def mutation_not_run_cap(test_pressure_block: TestPressure) -> MutationNotRunCap:
     """The Layer 6 cap the LLM reads: does mutation evidence exist this run?
 
     ``mutation_run`` is True only when the (opt-in, code-executing) bounded

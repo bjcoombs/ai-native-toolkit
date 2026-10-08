@@ -19,7 +19,7 @@ to these types when their module joins the ratchet.
 """
 from __future__ import annotations
 
-from typing import Any, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 # A run-context block read back from JSON (or about to be written to it) whose
 # keys vary with the run: config sections, another module's block consumed
@@ -180,6 +180,151 @@ class BulkCommit(TypedDict):
     date: str
     docs_touched: int
     doc_count: int
+
+
+# --- test_pressure: the Layer-1 write-side block ---------------------------
+#
+# Built by the ``test_pressure`` package (``aggregate``, ``mutation``,
+# ``mutmut3``, ``heuristics``) and read by ``mutation_cap``,
+# ``untrusted_hotspot`` and ``keyhole_signals``, so the whole block lives here.
+
+class MutationFileResult(TypedDict):
+    """One file's mutation figures, the row of ``test_pressure.per_file``."""
+
+    file: str
+    # The mutmut 2 survivor-only listing cannot see killed mutants, so killed
+    # and total are None there; every other parser counts them.
+    killed: int | None
+    survived: int
+    total: int | None
+
+
+class SurvivorDensity(TypedDict):
+    """``test_pressure.survivor_density``."""
+
+    overall: float | None
+    total_survived: int
+    total_mutants: int | None
+    by_file: dict[str, int]
+
+
+class SurvivorCluster(TypedDict):
+    """A file whose survivor count clears the cluster threshold."""
+
+    file: str
+    survived: int
+
+
+class MutationGroupRecord(TypedDict):
+    """A mutmut 3 package run before ``mutation_run`` is decided.
+
+    The optional keys are filled as the run reaches them, so a record spreads
+    into a finished :class:`MutationGroup` without dropping any of them.
+    """
+
+    root: str
+    # "repo" (the package's own config) or "generated".
+    config: str
+    scope: list[str]
+    # "venv", "uv" or "path"; absent when the run stopped before resolving it.
+    runner: NotRequired[str]
+    # Focus files the run produced no figures for.
+    unmeasured: NotRequired[list[str]]
+    reason: NotRequired[str]
+    # Present (True) only on a run stopped at the budget with saved verdicts.
+    partial: NotRequired[bool]
+
+
+class MutationGroup(MutationGroupRecord):
+    """One entry of ``test_pressure.mutation_groups``."""
+
+    mutation_run: bool
+
+
+class MutationConfig(TypedDict):
+    """``detect_mutation_config``: mutation-testing setup the repo carries."""
+
+    present: bool
+    tools: list[str]
+    ci_integrated: bool
+
+
+class MutationRunResult(TypedDict):
+    """``run_bounded_mutation``: the mutation tier's result before aggregation.
+
+    Keys beyond the first two appear only on the paths that reach them; the
+    mutmut 3 pass adds ``groups``.
+    """
+
+    mutation_run: bool
+    available: bool
+    tool: NotRequired[str]
+    scope: NotRequired[list[str]]
+    per_file: NotRequired[list[MutationFileResult]]
+    reason: NotRequired[str]
+    groups: NotRequired[list[MutationGroup]]
+
+
+class AssertionOnInternalFinding(TypedDict):
+    test_file: str
+    subject_function: str
+    internal_field: str
+    confidence: str
+
+
+class UntestedBoundaryFinding(TypedDict):
+    file: str
+    line: int
+    operator: str
+    covered: bool
+    boundary_tested: bool
+
+
+class DuplicateTruthFinding(TypedDict):
+    file: str
+    field_name: str
+    derives_from: str
+    confidence: str
+
+
+class CheapHeuristics(TypedDict):
+    """``test_pressure.cheap_heuristics``."""
+
+    assertion_on_internal: list[AssertionOnInternalFinding]
+    untested_boundaries: list[UntestedBoundaryFinding]
+    duplicate_truth: list[DuplicateTruthFinding]
+    # The unavailable marker (``mutation_cap.normalize_test_pressure``)
+    # carries the three buckets only.
+    confidence_note: NotRequired[str]
+
+
+class TestPressureBlock(TypedDict):
+    """``run-context.json`` ``test_pressure`` from a scan that ran."""
+
+    mutation_config_present: bool
+    mutation_tools_detected: list[str]
+    ci_integrated: bool
+    mutation_run: bool
+    mutation_scope: list[str]
+    per_file: list[MutationFileResult]
+    survivor_density: SurvivorDensity
+    survivor_clusters: list[SurvivorCluster]
+    gap_signal: str
+    cheap_heuristics: CheapHeuristics
+    # Why the mutation pass did not run, when it did not.
+    mutation_note: NotRequired[str]
+    # One record per package root the mutmut 3 pass ran.
+    mutation_groups: NotRequired[list[MutationGroup]]
+
+
+class TestPressureUnavailable(TypedDict):
+    """``test_pressure`` when the scan failed: "not assessed", never a negative."""
+
+    available: Literal[False]
+    # Whatever the failed scan reported, or a fixed message.
+    reason: object
+    mutation_config_present: None
+    cheap_heuristics: CheapHeuristics
 
 
 # --- change_coupling / coupling_analysis: the behaviour block rows ---------
