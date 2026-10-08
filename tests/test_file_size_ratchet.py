@@ -25,7 +25,11 @@ CONFIG = REPO / CONFIG_NAME
 
 
 def load_config(path: Path = CONFIG) -> dict[str, Any]:
-    """Parse the ratchet config: `default_limit`, `roots` and `[ceilings]`."""
+    """Parse the ratchet config.
+
+    Keys: `default_limit`, `roots`, `shrink_slack_lines`,
+    `shrink_slack_percent` and `[ceilings]`.
+    """
     with path.open("rb") as fh:
         return tomllib.load(fh)
 
@@ -55,8 +59,8 @@ def shrink_slack(ceiling: int, config: dict[str, Any]) -> int:
     `max(shrink_slack_lines, shrink_slack_percent of the ceiling)`, rounded
     down; `.file-size-ratchet.toml` states why.
     """
-    lines = config.get("shrink_slack_lines", 0)
-    percent = config.get("shrink_slack_percent", 0)
+    lines: int = config["shrink_slack_lines"]
+    percent: int = config["shrink_slack_percent"]
     return max(lines, ceiling * percent // 100)
 
 
