@@ -60,7 +60,8 @@ jobs:
 
             Context:
             - This is a Claude Code plugin repo. The deliverable is markdown
-              (skills/commands/agents); the only runtime code is the Python
+              (skills at skills/<name>/SKILL.md, agents at agents/<name>.md);
+              the only runtime code is the Python
               `/assess` deterministic core under `skills/assess/`. It is a PUBLIC repo.
             - The latest Claude models are the 4.x family (Opus 4.x / Sonnet 4.x /
               Haiku 4.x) - do not flag these as invalid versions.
