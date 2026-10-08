@@ -33,6 +33,7 @@ one-line ``fix``:
   ``hooks``, ``mcpServers``, ``initialPrompt``).
 - ``malformed_frontmatter``: frontmatter the minimal parser cannot read; the
   scan reports it and moves on, it never raises.
+- ``unreadable_file``: a configuration file the scan could not read.
 
 No ``.claude/`` directory and no plugin manifest gives ``available: false``
 with a reason: there is nothing to check, which is not a clean pass.
@@ -114,6 +115,8 @@ class FmEntry:
 
 @dataclass
 class Frontmatter:
+    """The parsed top-level entries and the malformed lines, as (line, message)."""
+
     entries: list[FmEntry] = field(default_factory=list)
     errors: list[tuple[int, str]] = field(default_factory=list)
 
@@ -143,6 +146,7 @@ class _Parser:
         self.seen: set[str] = set()
 
     def feed(self, line: str, lineno: int) -> None:
+        """Consume one frontmatter line (``lineno`` is its 1-based file line)."""
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             return
@@ -232,7 +236,8 @@ def _unknown_key_fix(key: str, kind: str) -> str:
             return f"Rename `{key}` to `{known}`; Claude Code ignores the misspelt key."
     other = "agent" if kind != "agent" else "skill"
     if key in _ALLOWED[other]:
-        return f"`{key}` is a{'n' if other == 'agent' else ''} {other} field; {kind} files ignore it - remove it."
+        article = "an" if other == "agent" else "a"
+        return f"`{key}` is {article} {other} field; {kind} files ignore it - remove it."
     return f"Remove `{key}` or fix its spelling; Claude Code ignores unknown fields."
 
 
@@ -474,6 +479,6 @@ def _scan_one(path: Path, rel: str, kind: FileKind, origin: Origin) -> list[Clau
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError as e:
-        return [_finding("malformed_frontmatter", rel, 1, None, None,
+        return [_finding("unreadable_file", rel, 1, None, None,
                          f"Make the file readable: {e.strerror or e}.")]
     return check_file(rel, kind, origin, text)

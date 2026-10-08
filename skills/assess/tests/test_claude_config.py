@@ -14,7 +14,7 @@ import pytest
 
 import lib.scan_registry as reg
 from assess_core import build_run_context
-from lib.claude_config import check_file, parse_frontmatter, scan_claude_config
+from lib.claude_config import FileKind, check_file, parse_frontmatter, scan_claude_config
 from lib.claude_config_fields import (
     AGENT_FIELDS,
     COMMAND_FIELDS,
@@ -87,9 +87,9 @@ def test_legacy_command_file_is_flagged_with_its_skill_target(tmp_path: Path) ->
     ("agent", "max_turns", "maxTurns"),
     ("agent", "disallowed-tools", "disallowedTools"),
 ])
-def test_misspelt_key_is_unknown_with_a_rename_hint(kind: str, key: str, hint: str) -> None:
-    [f] = [f for f in check_file("x.md", kind, "project", _fm(f"{key}: x"))  # type: ignore[arg-type]  # parametrized literal
-           if f["kind"] == "unknown_key"]
+def test_misspelt_key_is_unknown_with_a_rename_hint(kind: FileKind, key: str, hint: str) -> None:
+    findings = check_file("x.md", kind, "project", _fm(f"{key}: x"))
+    [f] = [f for f in findings if f["kind"] == "unknown_key"]
     assert (f["line"], f["key"], f["value"]) == (2, key, "x")
     assert f"Rename `{key}` to `{hint}`" in f["fix"]
 
@@ -119,8 +119,8 @@ def test_unrelated_unknown_key_says_remove() -> None:
     ("skill", "model: gpt-4o", "full model ID"),
     ("agent", "model: o3", "full model ID"),
 ])
-def test_unsupported_value(kind: str, line: str, expect: str) -> None:
-    [f] = check_file("f.md", kind, "project", _fm(line))  # type: ignore[arg-type]  # parametrized literal
+def test_unsupported_value(kind: FileKind, line: str, expect: str) -> None:
+    [f] = check_file("f.md", kind, "project", _fm(line))
     assert f["kind"] == "unsupported_value"
     assert f["value"] == line.split(": ", 1)[1]
     assert expect in f["fix"]
@@ -336,7 +336,7 @@ def test_unreadable_file_is_reported(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(Path, "read_text", boom)
     [f] = scan_claude_config(tmp_path)["findings"]
-    assert f["kind"] == "malformed_frontmatter" and "Permission denied" in f["fix"]
+    assert f["kind"] == "unreadable_file" and "Permission denied" in f["fix"]
 
 
 # --- run-context wiring -------------------------------------------------------
