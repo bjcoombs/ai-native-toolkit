@@ -6,6 +6,10 @@ files only grow. Every Python file under the roots in `.file-size-ratchet.toml`
 gets `default_limit` lines; a file already over it is allowlisted with its
 line count as its ceiling. The failure messages point at splitting first and
 at the allowlist only for justified growth.
+
+The ceiling also follows a file down: once an allowlisted file sits more than
+the shrink slack below its ceiling, the test fails until the ceiling is
+lowered, so a refactor's savings cannot be silently regrown.
 """
 
 import subprocess
@@ -45,6 +49,17 @@ def count_lines(path: Path) -> int:
     return len(path.read_text(encoding="utf-8").splitlines())
 
 
+def shrink_slack(ceiling: int, config: dict[str, Any]) -> int:
+    """Lines a file may sit below its ceiling before the ceiling must follow it.
+
+    `max(shrink_slack_lines, shrink_slack_percent of the ceiling)`, rounded
+    down; `.file-size-ratchet.toml` states why.
+    """
+    lines = config.get("shrink_slack_lines", 0)
+    percent = config.get("shrink_slack_percent", 0)
+    return max(lines, ceiling * percent // 100)
+
+
 def ratchet_violations(
     counts: dict[str, int], config: dict[str, Any]
 ) -> list[str]:
@@ -74,6 +89,13 @@ def ratchet_violations(
                 f"{limit}. Delete its [ceilings] entry from {CONFIG_NAME} so the "
                 "default applies and the file cannot regrow past it."
             )
+        elif entry["lines"] - lines > (slack := shrink_slack(entry["lines"], config)):
+            problems.append(
+                f"{path} is {lines} lines, {entry['lines'] - lines} below its "
+                f"ceiling of {entry['lines']} (slack {slack}). Lower its ceiling "
+                f"in {CONFIG_NAME} to {lines}, so the lines it shed cannot "
+                "silently regrow."
+            )
     for path in sorted(set(ceilings) - set(counts)):
         problems.append(
             f"{path} has a [ceilings] entry in {CONFIG_NAME} but is not a "
@@ -86,6 +108,10 @@ def ratchet_violations(
 def test_config_entries_are_well_formed() -> None:
     config = load_config()
     assert type(config.get("default_limit")) is int and config["default_limit"] > 0
+    for key in ("shrink_slack_lines", "shrink_slack_percent"):
+        assert type(config.get(key)) is int and config[key] >= 0, (
+            f"{CONFIG_NAME} must set a non-negative integer `{key}`"
+        )
     assert config.get("roots"), f"{CONFIG_NAME} must list the roots it covers"
     bad = [
         path for path, entry in config.get("ceilings", {}).items()
@@ -114,7 +140,12 @@ def test_python_files_stay_within_their_size_limit() -> None:
 
 SYNTHETIC: dict[str, Any] = {
     "default_limit": 100,
-    "ceilings": {"big.py": {"lines": 150, "reason": "pre-existing"}},
+    "shrink_slack_lines": 20,
+    "shrink_slack_percent": 2,
+    "ceilings": {
+        "big.py": {"lines": 150, "reason": "pre-existing"},
+        "huge.py": {"lines": 2000, "reason": "pre-existing"},
+    },
 }
 
 
@@ -124,10 +155,14 @@ SYNTHETIC: dict[str, Any] = {
         ({"new.py": 101}, "over the default limit of 100. Split it"),
         ({"big.py": 151}, "past its ceiling of 150. Split it, or"),
         ({"big.py": 100}, "Delete its [ceilings] entry"),
+        ({"big.py": 129},
+         "Lower its ceiling in .file-size-ratchet.toml to 129, so"),
+        ({"huge.py": 1959},
+         "Lower its ceiling in .file-size-ratchet.toml to 1959, so"),
         ({}, "is not a Python file under its `roots`"),
     ],
     ids=["over-default", "allowlisted-grew", "allowlisted-shrank-under-default",
-         "allowlisted-file-gone"],
+         "beyond-line-slack", "beyond-percent-slack", "allowlisted-file-gone"],
 )
 def test_ratchet_fails_with_an_actionable_message(
     counts: dict[str, int], expected_fragment: str
@@ -139,10 +174,13 @@ def test_ratchet_fails_with_an_actionable_message(
 @pytest.mark.parametrize(
     "counts",
     [
-        {"small.py": 100, "big.py": 150},  # at the limit / at the ceiling
-        {"big.py": 120},  # allowlisted file shrank but is still over the default
+        {"small.py": 100, "big.py": 150, "huge.py": 2000},  # at limit / ceilings
+        # exactly the 20-line floor of slack below its ceiling
+        {"big.py": 130, "huge.py": 2000},
+        # exactly 2% (40 lines) below: the percent beats the line floor
+        {"big.py": 150, "huge.py": 1960},
     ],
-    ids=["at-limits", "allowlisted-shrank-above-default"],
+    ids=["at-limits", "within-line-slack", "within-percent-slack"],
 )
 def test_ratchet_passes_within_limits(counts: dict[str, int]) -> None:
     assert ratchet_violations(counts, SYNTHETIC) == []

@@ -11,12 +11,22 @@
 # drops to `default_limit` or below, delete its entry; the test fails until
 # you do.
 #
+# The ceiling follows a file down. An allowlisted file more than
+# max(shrink_slack_lines, shrink_slack_percent% of its ceiling) lines below
+# that ceiling fails until the ceiling is lowered to the current count, a
+# one-line edit. 20 lines or 2%: a typical edit to these files (a new import,
+# a reworded docstring, a small fix) moves them by single digits, so honest
+# edits never force a bump, while the largest ceiling (1798) leaves at most
+# 35 lines to regrow without review - not the hundreds a split would free.
+#
 # 800 lines: the current distribution has a median of 276, p75 of 473 and
 # p90 of 876 across 159 files, so 800 sits above the shape of a well-split
 # module and test file (88% of files already fit) while biting on the
 # monoliths that only ever grow.
 
 default_limit = 800
+shrink_slack_lines = 20
+shrink_slack_percent = 2
 roots = ["skills/assess", "scripts"]
 
 [ceilings."scripts/canaries/run_canaries.py"]
@@ -40,12 +50,12 @@ lines = 1422
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."skills/assess/scripts/assess_finalize.py"]
-lines = 820
-reason = "raised by #468: mypy strict type annotations"
+lines = 819
+reason = "raised by #468: mypy strict type annotations; lowered to 819 after #497"
 
 [ceilings."skills/assess/scripts/complexity-treemap.py"]
-lines = 1534
-reason = "raised by #468: mypy strict type annotations"
+lines = 1533
+reason = "raised by #468: mypy strict type annotations; lowered to 1533 after #497"
 
 [ceilings."skills/assess/scripts/lib/doc_graph.py"]
 lines = 1107
@@ -76,6 +86,6 @@ lines = 846
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."skills/assess/tests/test_structure_drift.py"]
-lines = 885
-reason = "pre-existing; ratchet from 2026-10-07"
+lines = 882
+reason = "pre-existing; ratchet from 2026-10-07; lowered to 882 after #477"
 
