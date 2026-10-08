@@ -236,7 +236,11 @@ def _mirror_ancestors(work: Path, pkg_rel: str) -> None:
     level first so no level receives copies meant for the one below it.
     Names already present are skipped, so nothing a directory owns is
     overwritten, and the way down is skipped so the package is not nested in
-    itself. Runs before the git snapshot, so the copies are in ``HEAD`` too.
+    itself. The package itself is mutmut's working directory, so it never
+    receives the parent's ``pyproject.toml``, ``setup.cfg``, ``tests/`` or
+    ``test/``: mutmut would read a parent ``[tool.mutmut]`` before the
+    generated section, and pytest the parent's settings or suite. Runs before
+    the git snapshot, so the copies are in ``HEAD`` too.
     Cost is at most one copy of the repository per level of depth."""
     parts = PurePosixPath(pkg_rel).parts if pkg_rel else ()
     for k in range(1, len(parts) + 1):
@@ -246,6 +250,8 @@ def _mirror_ancestors(work: Path, pkg_rel: str) -> None:
         for e in sorted(ancestor.iterdir()):
             if e.name in _NEVER_MIRROR or e.name == down or (below / e.name).exists():
                 continue
+            if k == 1 and e.name in _MUTMUT_DEFAULT_COPY:
+                continue  # the package is mutmut's cwd: never its config or suite
             _copy_entry(e, below / e.name)
 
 

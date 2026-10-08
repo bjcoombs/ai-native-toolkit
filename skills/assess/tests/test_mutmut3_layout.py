@@ -424,6 +424,31 @@ def test_scratch_git_snapshot_includes_the_mirrored_tree(
     assert r["mutation_run"] is True
 
 
+def test_root_config_and_suite_never_shadow_a_setup_cfg_package(
+        tmp_path: Path, monkeypatch) -> None:
+    """A package marked only by setup.py under a root pyproject.toml with its
+    own [tool.mutmut]: the mirror must not carry the root config (mutmut reads
+    it before setup.cfg) or the root suite into the package."""
+    _write(tmp_path, "pyproject.toml", '[tool.mutmut]\nsource_paths = ["lib"]\n')
+    _write(tmp_path, "tests/test_root.py", "")
+    _write(tmp_path, "lib/x.py", "")
+    _write(tmp_path, "pkg/setup.py", "")
+    _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
+    _as_mutmut3(monkeypatch)
+    runs: list[Path] = []
+
+    def suite(cwd: Path) -> bool:  # other root entries still mirror
+        return (not (cwd / "pyproject.toml").exists() and not (cwd / "tests").exists()
+                and (cwd / "lib" / "x.py").is_file())
+
+    monkeypatch.setattr(tp.subprocess, "run", _fake_mutmut(suite, runs))
+    r = run_bounded_mutation(tmp_path, hot_files=["pkg/calc.py"], opt_in=True)
+    assert r["groups"] == [{"root": "pkg", "config": "generated",
+                            "scope": ["pkg/calc.py"], "mutation_run": True}]
+    assert r["per_file"] == [
+        {"file": "pkg/calc.py", "killed": 1, "survived": 1, "total": 2}]
+
+
 def test_tool_error_line_skips_python_warnings() -> None:
     proc = subprocess.CompletedProcess(["mutmut"], 1, stdout=f"x\n{_STATS_FAILED}\n",
                                        stderr=_DEPRECATION)
