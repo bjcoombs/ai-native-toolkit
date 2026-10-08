@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261008133519-d0c68d2e artifact_schema_version=1.3.0 -->
+<!-- assess:run_id=20261008155039-de900b5c artifact_schema_version=1.3.0 -->
 # Hotspot: `skills/assess/tests/test_assess_core.py`
 
 _First flagged: 2026-05-31. Last seen: 2026-10-08. Status: persistent._
@@ -23,6 +23,7 @@ _First flagged: 2026-05-31. Last seen: 2026-10-08. Status: persistent._
 | 2026-10-07 | 4ace52ea | 1843 | 240 | 42 | persistent |
 | 2026-10-08 | 417634ee | 1853 | 241 | 43 | regressed |
 | 2026-10-08 | d0c68d2e | 518 | 62 | 45 | persistent |
+| 2026-10-08 | de900b5c | 518 | 62 | 45 | persistent |
 
 ## Briefing for editing this file
 
