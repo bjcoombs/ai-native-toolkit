@@ -244,6 +244,7 @@ def discover_packages(
 
 
 def _is_importable_name(name: str) -> bool:
+    """True when an ``import`` statement could name a package called ``name``."""
     return name.isidentifier() and not keyword.iskeyword(name)
 
 
@@ -270,7 +271,10 @@ class _PathPackageFinder:
 
 @contextmanager
 def _path_package_finder(dirs: dict[str, Path]) -> Iterator[None]:
-    """Point grimp's package finder at ``dirs`` for one build, then restore it."""
+    """Point grimp's package finder at ``dirs`` for one build, then restore it.
+
+    Callers reach this only after ``analyze_structure``'s grimp-available check.
+    """
     original = _grimp_settings.PACKAGE_FINDER
     _grimp_settings.configure(PACKAGE_FINDER=_PathPackageFinder(dirs))
     try:
@@ -551,6 +555,7 @@ def _qualified_name(package_dir: Path, repo_root: Path) -> str:
 
 
 def _rename(module: str, renames: dict[str, str]) -> str:
+    """Swap a module name's top component for its graph-level (qualified) name."""
     top, sep, rest = module.partition(".")
     return renames.get(top, top) + sep + rest
 
