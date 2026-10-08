@@ -4,7 +4,7 @@ _Generated 2026-10-08 by `/assess` at `main` 34ee318 (plugin 1.94.0 plus #492-#4
 
 **Score: 7.5 / 8 - AI-Native** - a readiness snapshot, not a verdict · Keyhole: 25 structural concerns (13 hidden coupling, 1 untrusted hotspot, 2 self-referential tests, 9 accretion ratchet), 3 safe zones.
 
-The type gate is finished. mypy runs `strict` with `disallow_any_generics = true` across all of `skills/assess`, with no per-module exceptions (#493, #495, #497), so Layer 2 moves to Present and the score rises from 7.0 to 7.5. The signals `/assess` reports about itself are cleaner too: the stale-marker count fell from 11 to 0 because the scan now ignores marker text inside string literals (#494); `keyhole_signals.py` is credited with the eight test files that import it (#496); and the three CodeQL alerts were traced to `ccn` matching CodeQL's credit-card-number heuristic and dismissed with the trace on #487.
+The `/assess` type gate now covers all of `skills/assess`: mypy runs `strict` with `disallow_any_generics = true` and no per-module exceptions (#493, #495, #497), so Layer 2 moves to Present and the score rises from 7.0 to 7.5. The signals `/assess` reports about itself are cleaner too: the stale-marker count fell from 11 to 0 because the scan now ignores marker text inside string literals (#494); `keyhole_signals.py` is credited with the eight test files that import it (#496); and the three CodeQL alerts were traced to `ccn` matching CodeQL's credit-card-number heuristic and dismissed with the trace on #487.
 
 The last half point is Layer 6. `scripts/floor_anchor.py` keeps 87% line coverage while 43% of its mutants survive, and pinning it needs the maintainer's floor decision in #410.
 
@@ -24,7 +24,7 @@ The top rows score 3 and 2, so the ranking separates them. No gap action is pend
 
 ### Why these three?
 
-The floor is the repo's constitutional gate, and its anchor checker is the one file the mutation pass proves hollow. Both floor actions wait on the maintainer, and Action 1 is the one that moves Layer 6. Action 3 retires the largest remaining test-file ceiling, the accretion the ratchet exists to prompt; since #498 the ratchet also follows a file down, so the split's savings cannot be quietly refilled.
+The floor is the repo's constitutional gate, and its anchor checker is the one file the mutation pass proves hollow. Both floor actions wait on the maintainer, and Action 1 is the one that moves Layer 6. Action 3 retires the largest remaining test-file ceiling, the accretion the ratchet exists to prompt; since #498 the ratchet also follows a file down, so lines a split removes can come back only through a ceiling raise someone reviews.
 
 ## Snapshots
 
@@ -45,7 +45,7 @@ Every doc is reachable from an entry point, with no orphans, one island and no l
 
 #### Complexity profile
 
-- **Measured at commit:** `338a2a3` (2026-10-08): `main` 34ee318 plus this PR's README and `CLAUDE.md` fix
+- **Measured at commit:** `338a2a3` (2026-10-08): `main` 34ee318 plus the README tree and `CLAUDE.md` ratchet-note corrections in 338a2a3
 - **Files scored:** 219
 - **Churn window chosen:** last 12mo
 - **Complexity profile:** per-function ccn p95 8 (max 33, `authorship_analysis` in `lib/change_coupling.py`, under an explicit `# noqa: C901` with a reason; ruff's mccabe scores it 19, lizard counts boolean operators too); file-aggregate ccn p95 147 (max 247); p95 est. tokens 9,756 (max 19,417); p95 NLOC 580 (max 1,227)
@@ -80,7 +80,7 @@ The test files show as unmeasured because coverage measures source, not the test
 
 Of 113 docs, all are reachable from `CLAUDE.md`, `README.md` or `docs/index.md` by links and backticked doc paths, with no orphans and one connected island. Links alone reach 93%; backticked citations carry the rest.
 
-**Lying maps:** none after this PR. The first pass flagged `README.md`: its repository tree listed six of the eight workflows, missing `codeql` and `mutation` from loop 4, and omitted `.file-size-ratchet.toml`. Both are corrected here. The top stale hubs (`FLOOR.md`, `docs/floor-anchor-proof.md`) are matched only against whole-repo churn (low confidence).
+**Lying maps:** none after 338a2a3. The first pass flagged `README.md`: its repository tree listed six of the eight workflows, missing `codeql` and `mutation` from loop 4, and omitted `.file-size-ratchet.toml`. Both are corrected in 338a2a3. The top stale hubs (`FLOOR.md`, `docs/floor-anchor-proof.md`) are matched only against whole-repo churn (low confidence).
 
 #### What changed since last run
 
@@ -145,7 +145,7 @@ The maturity band bounds how much agent **autonomy** this repo's contracts can s
 
 ## Cross-Layer Findings (Keyhole Readiness)
 
-`untrusted_hotspot` names `scripts/floor_anchor.py` on the mutation pass's own evidence (435 of 1,017 mutants survive). `unactioned_intent` and `lying_map` are gone: the marker scan now counts only comment markers (#494), and the one lying map this run first found, the README's repository tree omitting the `codeql` and `mutation` workflows, is fixed in this PR. `lib/test_pressure/mutmut3.py` remains an `accretion_ratchet` path at 773 lines against the 800 default.
+`untrusted_hotspot` names `scripts/floor_anchor.py` on the mutation pass's own evidence (435 of 1,017 mutants survive). `unactioned_intent` and `lying_map` are gone: the marker scan now counts only comment markers (#494), and the one lying map this run first found, the README's repository tree omitting the `codeql` and `mutation` workflows, is fixed in 338a2a3. `lib/test_pressure/mutmut3.py` remains an `accretion_ratchet` path at 773 lines against the 800 default.
 
 ### hidden_coupling
 
@@ -219,7 +219,7 @@ _... 5 more omitted; top 10 ranked rows in `.assess/run-context.json` `attention
 
 ### Strengths
 
-- **A finished type gate.** Every `/assess` module is under `strict` plus `disallow_any_generics`, with run-context shapes as `TypedDict`s; the ratchet that got there (#475, #493, #495, #497) proved byte-identical output at each step.
+- **A complete `/assess` type gate.** Every `/assess` module is under `strict` plus `disallow_any_generics`, with run-context shapes as `TypedDict`s; the ratchet that got there (#475, #493, #495, #497) proved byte-identical output at each step.
 - **Self-signals that hold up.** The marker scan reads tokens, not lines (#494), and its output is now deterministic: `rg`'s parallel hit order had reordered `stale_by_file` between runs. Test credit follows imports, so split test files still count (#496).
 - **A ratchet in both directions.** File ceilings may not grow and now follow a file down (#498).
 - **Security findings triaged, not ignored.** The three CodeQL alerts were traced end to end before dismissal (#487).
