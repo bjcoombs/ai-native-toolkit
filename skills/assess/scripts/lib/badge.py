@@ -186,7 +186,7 @@ def write_badge(assess_dir: Path, badge: dict[str, Any]) -> None:
 
 
 def write_findings_badge(
-    assess_dir: Path, promissory: Any, derived_findings: list[dict],
+    assess_dir: Path, promissory: Any, derived_findings: list[dict[str, Any]],
     run_id: str | None = None, scope: str | None = None,
 ) -> None:
     """Write the deterministic default badge, always.

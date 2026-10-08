@@ -36,7 +36,7 @@ _PRODUCT_KEYS = (
 _PASS_ADDED_KEY = "added_by_mutation_pass"
 
 
-def _rebuilt_findings(findings: list[Any], untrusted: list[str]) -> list[dict]:
+def _rebuilt_findings(findings: list[Any], untrusted: list[str]) -> list[dict[str, Any]]:
     """``findings`` in ``FINDING_ORDER`` with ``untrusted_hotspot`` replaced.
 
     Stored actions are kept (the ``unactioned_intent`` action carries the stale
@@ -93,7 +93,7 @@ def recorded_excludes(ctx: dict[str, Any], repo_root: Path) -> tuple[set[str], l
 
 def refresh_mutation_findings(
     ctx: dict[str, Any],
-    complexity_stats: dict,
+    complexity_stats: dict[str, Any],
     exclude_dirs: set[str],
     exclude_patterns: list[str],
 ) -> bool:
@@ -137,9 +137,9 @@ def refresh_mutation_findings(
 
 
 def _recompute(
-    ctx: dict[str, Any], findings: list[Any], complexity_stats: dict,
+    ctx: dict[str, Any], findings: list[Any], complexity_stats: dict[str, Any],
     exclude_dirs: set[str], exclude_patterns: list[str],
-) -> tuple[list[dict], list[str], dict]:
+) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
     """The rebuilt findings, newly excluded E1 paths and finding products."""
     paths = untrusted_hotspot_paths(complexity_stats, ctx.get("test_pressure"))
     filtered, excluded = apply_config_excludes(

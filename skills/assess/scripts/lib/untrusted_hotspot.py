@@ -10,6 +10,8 @@ after the opt-in pass. A leaf module: it imports no other ``lib`` module.
 
 from __future__ import annotations
 
+from typing import Any
+
 # A hotspot is "untrusted" when at least this fraction of its mutants survive -
 # the suite runs the code but doesn't pin it. Asymmetric like dead-weight: this
 # fires only on positive mutation evidence, so a read-only /assess (no opt-in
@@ -18,8 +20,8 @@ DEFAULT_SURVIVOR_DENSITY_THRESHOLD = 0.3
 
 
 def find_untrusted_hotspots(
-    complexity_stats: dict,
-    test_pressure: dict,
+    complexity_stats: dict[str, Any],
+    test_pressure: dict[str, Any],
     threshold_survivor_density: float = DEFAULT_SURVIVOR_DENSITY_THRESHOLD,
 ) -> list[str]:
     """E1: complexity hotspots whose tests are hollow (mutants survive).
@@ -57,7 +59,7 @@ def find_untrusted_hotspots(
 
 
 def untrusted_hotspot_paths(
-    complexity_stats: dict, test_pressure: dict | None,
+    complexity_stats: dict[str, Any], test_pressure: dict[str, Any] | None,
 ) -> list[str]:
     """E1 trust axis: complexity hotspots whose tests are hollow.
 
