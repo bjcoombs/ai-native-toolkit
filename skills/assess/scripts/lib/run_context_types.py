@@ -5,17 +5,19 @@ doc link, a doc-to-code edge, a dead-code candidate, a bulk commit, a co-change
 pair, a keyhole block that ``context_blocks`` copies into the run-context), or
 when it belongs to the same run-context block as one that does: the
 ``doc_graph``, ``dead_code`` and keyhole blocks keep every row shape together
-here, so a block is read in one place. Any other shape, including a block read back only by the
-orchestrator, stays in the module that builds it. Typing them turns the shape
-from a docstring comment into a contract mypy checks at every construction
-site.
+here, so a block is read in one place. The orchestrators' file shapes (the
+stats sidecar ``complexity-treemap.py`` writes, the ``finalize-input.json``
+``assess_finalize`` reads) also live here, which keeps those scripts under their
+file-size ceilings. Any other shape stays in the module that builds it. Typing
+them turns the shape from a docstring comment into a contract mypy checks at
+every construction site.
 
 These are annotations only. A TypedDict is a plain ``dict`` at runtime, so the
 serialised run-context is byte-identical to the untyped version.
 
-Consumers outside the ``disallow_any_generics`` ratchet (see ``[tool.mypy]`` in
-``pyproject.toml``) still read some of these blocks as bare ``dict``; they move
-to these types when their module joins the ratchet.
+mypy runs with ``disallow_any_generics`` on for every script (``[tool.mypy]`` in
+``pyproject.toml``), so a bare ``dict`` fails the gate: a known shape belongs
+here or beside its builder, and ``JsonDict`` names a block whose keys vary.
 """
 from __future__ import annotations
 
@@ -499,3 +501,120 @@ class KeyholeIntegration(FindingProducts):
     pruned_finding_paths: list[str]
     rename_map_complete: bool
     structure_drift_tier1: JsonDict
+
+
+# --- complexity-treemap: the stats sidecar --------------------------------
+#
+# Written by ``complexity-treemap.py`` to ``complexity-stats.json`` and read
+# back as JSON by ``assess_core`` and ``stats_diff``. Kept here so the
+# treemap stays under its file-size ceiling.
+
+class GeneratedExclusion(TypedDict):
+    """A file ``collect`` dropped as generated, in ``excluded_generated``."""
+
+    path: str
+    reason: str
+
+
+class Distribution(TypedDict):
+    """``{p50, p95, max}`` of one metric; every field 0.0 when empty."""
+
+    p50: float
+    p95: float
+    max: float
+
+
+class SizeBlock(Distribution):
+    """The ``loc`` / ``est_tokens`` block: distribution, code/data maxima, total."""
+
+    max_code: float
+    max_data: float
+    total: int
+
+
+class SubtreeTokens(TypedDict):
+    path: str
+    est_tokens: int
+
+
+class KeyholeBudget(TypedDict):
+    """``est_tokens.budget``: per-file tokens against one context window."""
+
+    total: int
+    budget: int
+    budget_basis: str
+    chars_per_token: int
+    files_over_budget: int
+    subtrees_over_budget: int
+    over_budget_subtrees: list[SubtreeTokens]
+
+
+class FnBackendSource(TypedDict):
+    name: str
+    approximate: bool
+
+
+class FnCcnBlock(Distribution):
+    """``fn_ccn``: the per-function complexity distribution and its backends."""
+
+    basis: str
+    source: list[FnBackendSource]
+    backend_by_language: dict[str, str | None]
+    function_count: int
+
+
+class HotspotRow(TypedDict):
+    """One ``top_hotspots`` / ``top_complex`` / ``top_large`` row."""
+
+    path: str
+    loc: int
+    est_tokens: int
+    ccn: float
+    ccn_basis: str
+    max_fn_ccn: float | None
+    max_fn_name: str | None
+    # None when churn is unavailable (no git), distinct from a real 0.
+    commits: int | None
+    source: str
+
+
+class ScoredHotspotRow(HotspotRow):
+    """A row before ranking, carrying the private composite score."""
+
+    _score: float
+
+
+# --- assess_finalize: the LLM write-back input -----------------------------
+#
+# Read only by the ``assess_finalize`` orchestrator; kept here so the
+# orchestrator stays under its file-size ceiling.
+
+class FinalizeInput(TypedDict):
+    """``finalize-input.json``: the values the model derived for the wiki.
+
+    Model-authored, so untrusted: ``assess_finalize`` re-checks each value
+    before it writes. The types are what the contract asks for, not a proof.
+    """
+
+    score: float
+    maturity_label: str
+    top_action: str
+    run_id: NotRequired[str]
+    # 8 for a software repo, the applicable-layer count for a knowledge base.
+    denominator: NotRequired[int]
+    hotspot_actions: NotRequired[dict[str, list[str]]]
+    # Layer id to its 0.0/0.5/1.0 band; an int key is tolerated beside the
+    # JSON string key, so the keys are not uniform.
+    layer_scores: NotRequired[JsonDict]
+    # Action-contract rows keep whatever extra keys the model supplied.
+    actions: NotRequired[list[JsonDict]]
+    evidence: NotRequired[list[JsonDict]]
+
+
+class ActionLifecycle(TypedDict):
+    """The executor fields ``actions.json`` carries forward across runs."""
+
+    status: str
+    # Copied as found from the prior contract, which is hand-editable JSON.
+    claimed_by: Any
+    completed_sha: Any

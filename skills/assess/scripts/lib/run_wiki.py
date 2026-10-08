@@ -43,7 +43,8 @@ def _has_sibling_test(
     ``test_focus`` signal also reads, so the hotspot page's ``Has test file`` row
     and the focus table agree. ``True``/``False`` from a filesystem check of the
     naming idioms (``foo.ts`` next to ``foo.test.ts``, ``FooTest.java``, an
-    adjacent ``__tests__/``, a mirrored ``tests/`` tree, ...); ``None`` only when
+    adjacent ``__tests__/``, a mirrored ``tests/`` tree, ..., or a test file
+    that imports it, as a split test does); ``None`` only when
     the file isn't on disk (a since-deleted path in a stats snapshot).
     """
     return has_sibling_test(repo_root, rel_path, shared_names, index)

@@ -470,12 +470,14 @@ and working-notes classifier signals, bulk commits, co-change pairs, B3 coupling
 the keyhole blocks, derived findings and attention rows that `context_blocks` and
 `mutation_refresh` read back from `keyhole_signals`, and the `test_pressure` block),
 plus the other row shapes of the blocks those belong to: the `doc_graph`, `dead_code`,
-keyhole and `test_pressure` blocks keep all their rows here. `JsonDict`
-(`dict[str, Any]`) names a block whose keys are genuinely dynamic. Any other shape,
-including a block only the orchestrator reads back, stays in the module that builds it.
-Annotations only: no runtime behaviour, so the serialised run-context is unchanged.
-Part of the `disallow_any_generics` ratchet in `pyproject.toml` `[tool.mypy]`; modules
-outside it still read some of these blocks as bare `dict`.
+keyhole and `test_pressure` blocks keep all their rows here. The orchestrators' file
+shapes live here too, so those scripts stay under their file-size ceilings: the stats
+sidecar rows and blocks `complexity-treemap.py` writes, and the `finalize-input.json`
+and action-lifecycle shapes `assess_finalize.py` reads. `JsonDict` (`dict[str, Any]`)
+names a block whose keys are genuinely dynamic. Any other shape stays in the module
+that builds it. Annotations only: no runtime behaviour, so the serialised run-context
+is unchanged. mypy runs with `disallow_any_generics` on for every script
+(`pyproject.toml` `[tool.mypy]`), so a bare `dict` fails the gate.
 
 **`keyhole_signals.py`** *(co-change hotspot)*
 Integration barrier between the individual signal modules and `assess_core`. Derives
@@ -1266,7 +1268,8 @@ layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
 ancestor mirroring the source path, then a conventionally named test anywhere in
 the repository - a parallel tree such as `app/unit-tests/` or Dart's
-`test/unit/` - then a flat tree within two components),
+`test/unit/` - then a test file that imports the source (`import_credit.py`), then a flat
+tree within two components),
 and `has_sibling_test` (the yes/no/unknown verdict, dropping a flat-only match
 on a bare name more than one hot file shares). Three consumers read it and must
 agree in one run: the hotspot page's `Has test file` row
@@ -1285,6 +1288,32 @@ while the path probes see untracked files, and a helper named like a test
 (`test_utils.py`) can credit a lone `utils.py`. Imports `git_churn` and `doc_graph`;
 existence checks bounded to 16 ancestor levels; never raises.
 `tests/test_sibling_tests.py` pins the three-way agreement.
+
+**`import_credit.py`**
+The import tier of the sibling-test probe (issue #485): a source counts as having
+a test file when a test file imports it, so a large test split by concern
+(`test_keyhole_<family>.py`, none named after `keyhole_signals.py`) still credits
+its subject. Reads only files that are tests by name and define a test (a
+top-level `test*` function, or a `Test*` class, `*TestCase` subclass or class
+with `test*` methods; an `it(` / `test(` / `describe(` call outside a
+line-leading comment), so a `conftest.py`, a helper module, or a `test_utils.py` that defines no
+test credits nothing. Python is parsed with `ast`: absolute names credit the
+source whose module path ends with the name (closest unique source to the test;
+a one-part name needs a common directory below the root unless the module sits
+at the root, and a one-part standard-library name such as `json` - from a pinned
+union over CPython 3.10-3.14 - never credits), relative imports resolve exactly, and `from pkg import mod` names
+`pkg/mod.py` when it exists, else `pkg/__init__.py`. JS/TS is a regex over
+relative specifiers only (`import ... from`, `export ... from`, side-effect and
+dynamic `import`, `require`; `import type` and line-leading comments skipped;
+string literals are not parsed; a NodeNext `./foo.js` specifier also resolves to
+`foo.ts`); alias and package
+specifiers keep the name match, as do all other languages. Modules inside a test
+directory are support, never credited. Every module a qualifying test imports
+directly is credited. Runs lazily, once per `TestIndex`, over the index's test
+and source lists (so the same excludes and tracked-files rule apply), capped at
+10,000 test files of at most 1 MB in sorted order (measured: 0.2 s for this
+repo's 110 tests; 0.05 s for 272 TS tests in a 4,600-file monorepo). Stdlib only; never raises.
+Tests: `tests/test_import_credit.py`.
 
 **`test_focus.py`**
 Cross-joins four inputs - the hotspot risk band (position in

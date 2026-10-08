@@ -124,7 +124,7 @@ def _fmt(value: Any) -> str:
     return str(value)
 
 
-def render_hotspots_table(ctx: dict) -> str:
+def render_hotspots_table(ctx: dict[str, Any]) -> str:
     """Render the top hotspots as a Markdown table (capped at MAX_HOTSPOT_ROWS)."""
     hotspots = ctx.get("stats_summary", {}).get("top_hotspots", [])
     if not hotspots:
@@ -138,14 +138,14 @@ def render_hotspots_table(ctx: dict) -> str:
     return "\n".join(lines)
 
 
-def render_keyhole_summary(ctx: dict) -> str:
+def render_keyhole_summary(ctx: dict[str, Any]) -> str:
     """Return the pre-built keyhole-readiness summary line (consumed verbatim)."""
     summary = ctx.get("keyhole_summary") or {}
     text = summary.get("summary_text")
     return text if text else "_Keyhole readiness summary unavailable._"
 
 
-def render_exclusion_disclosure(ctx: dict) -> str:
+def render_exclusion_disclosure(ctx: dict[str, Any]) -> str:
     """Lines disclosing config-excluded findings and archive paths, or ``""``.
 
     Config excludes silently drop paths from every scan; when at least one path
@@ -212,7 +212,7 @@ def render_exclusion_disclosure(ctx: dict) -> str:
 GENERATED_DISCLOSURE_VISIBLE = 10
 
 
-def render_generated_disclosure(ctx: dict) -> str:
+def render_generated_disclosure(ctx: dict[str, Any]) -> str:
     """Name each file the treemap excluded as generated, with its reason.
 
     One line per file (``- `path` (reason)``) under a count line, or ``""`` when
@@ -239,7 +239,7 @@ def render_generated_disclosure(ctx: dict) -> str:
     return "\n".join(lines)
 
 
-def render_findings_section(ctx: dict) -> str:
+def render_findings_section(ctx: dict[str, Any]) -> str:
     """Return the pre-rendered cross-layer findings section, verbatim.
 
     The deterministic core already renders the six findings + attention list
@@ -252,7 +252,7 @@ def render_findings_section(ctx: dict) -> str:
     return markdown.strip()
 
 
-def _render_tier0_drift(tier_0: dict) -> list[str]:
+def _render_tier0_drift(tier_0: dict[str, Any]) -> list[str]:
     """Tier 0 ownership-map drift: declared globs matching zero tracked files.
 
     Each empty pattern is a slice of the tree the ownership map *claims* to
@@ -294,7 +294,7 @@ def _render_tier0_drift(tier_0: dict) -> list[str]:
     return lines
 
 
-def _render_tier1_disagreement(tier_1: dict, repo_name: str) -> list[str]:
+def _render_tier1_disagreement(tier_1: dict[str, Any], repo_name: str) -> list[str]:
     """Tier 1 grouping disagreement: six set-algebra counts over the declared,
     static-import, and co-change groupings, plus the seam-allowlist note.
 
@@ -340,7 +340,7 @@ def _is_self_assessment(repo_name: str) -> bool:
 
 
 def format_structure_drift_findings(
-    structure_drift: dict | None, repo_name: str = "",
+    structure_drift: dict[str, Any] | None, repo_name: str = "",
 ) -> str:
     """Render the run-context ``structure_drift`` block as a Markdown section.
 
@@ -372,7 +372,7 @@ def _signed(value: float) -> str:
     return f"{value:+g}"
 
 
-def _format_transition(category: str, entry: dict) -> str:
+def _format_transition(category: str, entry: dict[str, Any]) -> str:
     """Render one hotspot transition as a bullet, with deltas where they explain it.
 
     Regressed and restructured entries carry the deltas that put them there:
@@ -395,7 +395,7 @@ def _format_transition(category: str, entry: dict) -> str:
     return f"  - `{path}`{suffix}"
 
 
-def render_diff_section(ctx: dict) -> str:
+def render_diff_section(ctx: dict[str, Any]) -> str:
     """Render the regression deltas, honouring the first-run and reliability flags.
 
     No prior snapshot -> say so. An unreliable diff (plugin-version mismatch in
@@ -431,7 +431,7 @@ def render_diff_section(ctx: dict) -> str:
     return "\n".join(lines)
 
 
-def _render_commit_note(ctx: dict) -> str:
+def _render_commit_note(ctx: dict[str, Any]) -> str:
     """Render the measured-commit provenance suffix for the generated-by line.
 
     Pins the SHA the absolute LOC/CCN numbers were measured at and warns when
@@ -458,7 +458,7 @@ def _render_commit_note(ctx: dict) -> str:
     return note + "."
 
 
-def _render_churn_window(ctx: dict) -> str:
+def _render_churn_window(ctx: dict[str, Any]) -> str:
     """Surface the churn-window label the treemap/doc-staleness pass settled on.
 
     When the history is degenerate (every file ~1 commit - a snapshot with no
@@ -474,7 +474,7 @@ def _render_churn_window(ctx: dict) -> str:
     return label
 
 
-def _render_loc_split(loc: dict) -> str:
+def _render_loc_split(loc: dict[str, Any]) -> str:
     """The code and data LOC maxima (scc language split in the stats file), as
     ``; code N, data M`` after the overall max, so a large JSON fixture is not
     read as the largest source file. Empty on a snapshot written before the
@@ -484,7 +484,7 @@ def _render_loc_split(loc: dict) -> str:
     return f"; code {_fmt(loc['max_code'])}, data {_fmt(loc['max_data'])}"
 
 
-def render_report(ctx: dict, repo_name: str) -> str:
+def render_report(ctx: dict[str, Any], repo_name: str) -> str:
     """Render the full deterministic Markdown report from a run-context dict.
 
     Pure: takes the loaded context and the repo name, returns the report string.
@@ -526,7 +526,7 @@ def render_report(ctx: dict, repo_name: str) -> str:
     return report.rstrip() + "\n"
 
 
-def _structure_drift_section(ctx: dict, repo_name: str) -> str:
+def _structure_drift_section(ctx: dict[str, Any], repo_name: str) -> str:
     """Template-ready structure-drift block: the rendered section followed by a
     blank line, or ``""`` when there's nothing to render (the surrounding blank
     line in the template then collapses on the final ``rstrip``)."""
@@ -534,10 +534,10 @@ def _structure_drift_section(ctx: dict, repo_name: str) -> str:
     return f"\n{section.rstrip()}\n" if section else ""
 
 
-def load_context(repo_root: Path) -> dict:
+def load_context(repo_root: Path) -> dict[str, Any]:
     """Load ``.assess/run-context.json`` from a repo root."""
     ctx_path = repo_root / ".assess" / "run-context.json"
-    ctx: dict = json.loads(ctx_path.read_text(encoding="utf-8"))
+    ctx: dict[str, Any] = json.loads(ctx_path.read_text(encoding="utf-8"))
     return ctx
 
 
