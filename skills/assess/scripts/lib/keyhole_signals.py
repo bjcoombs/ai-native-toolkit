@@ -1491,7 +1491,7 @@ def integrate(
     degrades to silent. ``promissory_markers`` is the marker-scan summary
     (``promissory_markers.MarkerScan.summary()``); when absent or unreliable the
     ``unactioned_intent`` finding degrades to silent. ``accretion_ratchet`` is the
-    serialized ``AccretionScan`` block from ``assess_core._accretion_block``; when
+    serialized ``AccretionScan`` block from ``context_blocks.accretion_block``; when
     absent or unavailable the ``accretion_ratchet`` finding degrades to silent.
     ``archetype`` is the run-context archetype block; when its
     ``override_contradicts_signals`` flag is set the ``override_contradicts_signals``

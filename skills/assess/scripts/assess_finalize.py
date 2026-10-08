@@ -83,8 +83,8 @@ class FinalizeValidationError(Exception):
 _MATURITY_KEYWORDS = ("AI-Native", "Not Ready", "Solid", "Basic")
 
 # The annotation the LLM must attach to Layer 6 when mutation testing never ran.
-# Mirrors ``assess_core.MUTATION_NOT_RUN_ANNOTATION`` (the two scripts share no
-# import, so the literal is duplicated); the finalize error names it so a caller
+# Mirrors ``lib.mutation_cap.MUTATION_NOT_RUN_ANNOTATION`` (this script does not
+# import it, so the literal is duplicated); the finalize error names it so a caller
 # knows the required remediation.
 MUTATION_NOT_RUN_ANNOTATION = "truth-pressure unproven (mutation not run)"
 

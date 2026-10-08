@@ -1,7 +1,7 @@
 """The one home for test-file naming conventions and the sibling-test probe.
 
 Three consumers ask "does this file have a test file?" and must answer the same
-way in one run: the hotspot wiki page (`assess_core._has_sibling_test`, the
+way in one run: the hotspot wiki page (`run_wiki._has_sibling_test`, the
 ``Has test file`` row), the E2 test-to-code map (`keyhole_signals`), and the
 test-focus signal (`test_focus`). Each used to carry its own copy of the idiom
 list, and the copies drifted: a Java ``src/FooTest.java`` credited ``Foo.java``

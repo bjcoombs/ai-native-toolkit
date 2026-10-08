@@ -754,9 +754,9 @@ def render(files: list[tuple[Path, int, float, str]],
 
 # Artifact schema version for complexity-stats.json - the run_id provenance
 # schema (distinct from STATS_SCHEMA_VERSION below, which versions the stats
-# *layout* for diff comparability). Mirrors assess_core's
-# ARTIFACT_SCHEMA_VERSION - the treemap runs as a separate process, so the
-# constant is duplicated rather than imported (no dependency on assess_core).
+# *layout* for diff comparability). Mirrors lib/artifact_schema.py's
+# ARTIFACT_SCHEMA_VERSION, which assess_core stamps on run-context.json; the
+# treemap keeps its own copy of the constant.
 # test_complexity_treemap asserts the two stay equal.
 ARTIFACT_SCHEMA_VERSION = "1.3.0"
 
@@ -789,7 +789,7 @@ def _read_plugin_version() -> str:
 # diff is only trustworthy when both snapshots share this schema; a bump here
 # is a structural change to the sidecar shape (a metric added/removed/redefined)
 # that voids the diff against an older snapshot until the next clean run
-# re-seeds the baseline (assess_core._diff_is_reliable reads it).
+# re-seeds the baseline (lib.diff_reliability._diff_is_reliable reads it).
 STATS_SCHEMA_VERSION = 5  # 2: generated-file content excludes + excluded_generated
                           # 3: generated test-report excludes + loc/est_tokens max_code/max_data
                           # 4: fn_ccn.source list + backend_by_language, rows max_fn_name
@@ -1130,7 +1130,7 @@ def _provenance(files: list[tuple[Path, int, float, str]]) -> dict:
         "run_id": _new_run_id(),
         "plugin_version": _read_plugin_version(),
         # Layout version of this sidecar. A cross-run diff is only comparable
-        # when both snapshots share it (assess_core._diff_is_reliable).
+        # when both snapshots share it (lib.diff_reliability._diff_is_reliable).
         "schema_version": STATS_SCHEMA_VERSION,
         # The complexity backends and their captured versions. A backend version
         # change can shift scores, so a later run flags the diff as not

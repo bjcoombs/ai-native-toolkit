@@ -39,10 +39,6 @@ reason = "pre-existing; ratchet from 2026-10-07"
 lines = 1422
 reason = "pre-existing; ratchet from 2026-10-07"
 
-[ceilings."skills/assess/scripts/assess_core.py"]
-lines = 1968
-reason = "raised by #468 and #469, then lowered by #473 (badge writer moved to lib/badge.py)"
-
 [ceilings."skills/assess/scripts/assess_finalize.py"]
 lines = 841
 reason = "raised by #468: mypy strict type annotations"
@@ -64,8 +60,8 @@ lines = 1016
 reason = "pre-existing; ratchet from 2026-10-07; +1 for the run_context_types import (disallow_any_generics ratchet)"
 
 [ceilings."skills/assess/tests/test_assess_core.py"]
-lines = 2601
-reason = "raised by #469: coverage-gate tests"
+lines = 2602
+reason = "raised by #469: coverage-gate tests, then by one import line when assess_core split into lib modules"
 
 [ceilings."skills/assess/tests/test_assess_finalize.py"]
 lines = 1354

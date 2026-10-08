@@ -17,10 +17,11 @@ from pathlib import Path
 import pytest
 
 import assess_core
-from assess_core import build_run_context, resolve_scope
+from assess_core import build_run_context
 from lib.badge import fallback_badge, score_badge
 from lib.doc_graph import build_doc_graph, discover_doc_files
 from lib.git_churn import git_churn_scores
+from lib.run_scope import resolve_scope
 from lib.wiki_writer import HotspotEntry, write_index
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "complexity-treemap.py"

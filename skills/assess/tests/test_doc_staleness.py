@@ -481,11 +481,11 @@ def test_no_git_reports_no_bulk_commits(tmp_path: Path) -> None:
 
 def test_instruction_freshness_skips_bulk_commit(git_repo) -> None:
     """The instruction grader's clock shares the bulk-commit skip."""
-    from assess_core import _grade_instruction_files
+    from lib.instruction_files import grade_instruction_files
 
     repo, commit = git_repo
     _bulk_fixture(repo, commit)
-    files = _grade_instruction_files(repo)[0]
+    files = grade_instruction_files(repo)[0]
     assert files["CLAUDE.md"]["freshness_days"] in (299, 300)  # DST slack
 
 
@@ -588,7 +588,7 @@ def test_shallow_clone_marks_scan_incomplete(git_repo, tmp_path: Path) -> None:
 def test_non_doc_instruction_file_skips_bulk_commit(git_repo) -> None:
     """`.cursorrules` is outside the docs' pathspec; the per-file route applies
     the same bulk skip."""
-    from assess_core import _grade_instruction_files
+    from lib.instruction_files import grade_instruction_files
 
     repo, commit = git_repo
     _write(repo, ".cursorrules", "Prefer small functions.\n")
@@ -600,7 +600,7 @@ def test_non_doc_instruction_file_skips_bulk_commit(git_repo) -> None:
         p = repo / rel
         p.write_text("<!-- again -->\n" + p.read_text(), encoding="utf-8")
     commit("chore: headers everywhere", days_ago=5)
-    files = _grade_instruction_files(repo)[0]
+    files = grade_instruction_files(repo)[0]
     assert files[".cursorrules"]["freshness_days"] in (399, 400)  # DST slack
 
 

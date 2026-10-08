@@ -12,6 +12,7 @@ import pytest
 
 import assess_core
 from assess_core import build_run_context
+from lib import artifact_schema, context_blocks, diff_reliability, run_wiki, wiki_state
 from lib.wiki_writer import (
     hotspot_page_source_path,
     hotspot_page_status,
@@ -889,7 +890,7 @@ def test_stale_hubs_sort_deweights_low_confidence(tmp_path: Path) -> None:
     """A precise-subject hub at half the raw priority of a baseline hub still
     outranks it. The sort multiplies low-confidence priority by 0.5.
     """
-    from assess_core import _build_stale_hubs
+    from lib.context_blocks import build_stale_hubs
 
     doc_graph = {
         "available": True,
@@ -909,7 +910,7 @@ def test_stale_hubs_sort_deweights_low_confidence(tmp_path: Path) -> None:
              "subject_method": "nearest-ancestor", "confidence": "high"},
         ],
     }
-    hubs = _build_stale_hubs(doc_graph, doc_staleness)
+    hubs = build_stale_hubs(doc_graph, doc_staleness)
     # Raw priorities: baseline = 100.0 * 1.0 = 100; precise = 80.0 * 0.6 = 48.
     # After the 0.5x low-confidence multiplier in the sort: baseline -> 50,
     # precise -> 48; baseline still wins. Test the inverse case directly.
@@ -922,7 +923,7 @@ def test_stale_hubs_sort_deweights_low_confidence(tmp_path: Path) -> None:
          "code_churn_in_window": 20, "ratio": 70.0,
          "subject_method": "nearest-ancestor", "confidence": "high"},
     ]
-    hubs = _build_stale_hubs(doc_graph, doc_staleness_b)
+    hubs = build_stale_hubs(doc_graph, doc_staleness_b)
     # baseline raw = 80.0 -> sorted at 40; precise raw = 42.0 -> wins.
     assert hubs[0]["path"] == "precise.md"
     # Raw priority still reflects the unweighted composite (for transparency).
@@ -1141,14 +1142,14 @@ def test_has_sibling_test_detects_colocated_and_adjacent(tmp_path: Path) -> None
     (repo / "svc" / "__tests__").mkdir()
     (repo / "svc" / "__tests__" / "test_api.py").write_text("t")  # adjacent dir
 
-    assert assess_core._has_sibling_test(repo, "go/foo.go") is True
-    assert assess_core._has_sibling_test(repo, "ts/bar.ts") is True
-    assert assess_core._has_sibling_test(repo, "py/baz.py") is False
-    assert assess_core._has_sibling_test(repo, "svc/api.py") is True
+    assert run_wiki._has_sibling_test(repo, "go/foo.go") is True
+    assert run_wiki._has_sibling_test(repo, "ts/bar.ts") is True
+    assert run_wiki._has_sibling_test(repo, "py/baz.py") is False
+    assert run_wiki._has_sibling_test(repo, "svc/api.py") is True
     # The file is itself a test -> counts as covered.
-    assert assess_core._has_sibling_test(repo, "go/foo_test.go") is True
+    assert run_wiki._has_sibling_test(repo, "go/foo_test.go") is True
     # Not on disk (e.g. a since-deleted path in a stats snapshot) -> unknown.
-    assert assess_core._has_sibling_test(repo, "go/gone.go") is None
+    assert run_wiki._has_sibling_test(repo, "go/gone.go") is None
 
 
 def test_hotspot_page_shows_yes_when_sibling_test_exists(tmp_path: Path) -> None:
@@ -1191,7 +1192,7 @@ def test_commits_read_from_legacy_churn_field(tmp_path: Path) -> None:
 def test_diff_is_reliable_pure_matrix() -> None:
     """Direct unit coverage of the pure reliability decision, independent of the
     full pipeline."""
-    from assess_core import _diff_is_reliable
+    from lib.diff_reliability import _diff_is_reliable
 
     # Missing prior version stamp.
     assert _diff_is_reliable(None, "1.0.0", 1, 1) == (
@@ -1812,7 +1813,7 @@ def test_first_flagged_rekeyed_through_rename_map(git_repo) -> None:
 
 def test_first_flagged_rekeyed_keeps_earliest_known_date() -> None:
     rename_map = {"a.py": "b.py", "c.py": "d.py"}
-    assert assess_core._rekey_first_flagged(
+    assert wiki_state.rekey_first_flagged(
         {"a.py": "2026-03-01", "b.py": "2026-01-01", "c.py": "2026-02-02",
          "d.py": "unknown", "e.py": "2026-04-04"},
         rename_map,
@@ -1879,7 +1880,7 @@ def test_structure_drift_block_builder_tier1_available() -> None:
         "human_static_agree_count": 2,
         "human_cochange_agree_count": 1,
     }
-    block = assess_core._structure_drift_block(repo, tier_1)
+    block = context_blocks._structure_drift_block(repo, tier_1)
     assert block is not None
     assert block["tier_1"]["available"] is True
     assert block["tier_1"]["human_grouped_static_splits_count"] == 3
@@ -1895,7 +1896,7 @@ def test_structure_drift_block_builder_tier1_unavailable() -> None:
     the block still carries the cheap Tier 0 data and a half-block-free tier_1.
     """
     repo = Path(__file__).resolve().parents[3]
-    block = assess_core._structure_drift_block(repo, {"available": False})
+    block = context_blocks._structure_drift_block(repo, {"available": False})
     assert block is not None
     assert block["tier_0"]["available"] is True
     assert block["tier_1"] == {"available": False}
@@ -2041,7 +2042,7 @@ def test_run_opt_in_mutation_degrades_on_scan_failure(tmp_path: Path, monkeypatc
 def test_run_context_carries_run_id_and_schema_version(tmp_path: Path) -> None:
     repo = _minimal_repo(tmp_path)
     ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
-    assert ctx["artifact_schema_version"] == assess_core.ARTIFACT_SCHEMA_VERSION == "1.3.0"
+    assert ctx["artifact_schema_version"] == artifact_schema.ARTIFACT_SCHEMA_VERSION == "1.3.0"
     # run_id shape: YYYYMMDDHHMMSS-<8 hex>
     run_id = ctx["run_id"]
     stamp, _, suffix = run_id.partition("-")
@@ -2189,21 +2190,21 @@ def test_no_override_no_contradiction_finding_end_to_end(git_repo) -> None:
 
 
 def test_mutation_run_requires_parsed_mutants_for_cap_lift() -> None:
-    """_mutation_not_run_cap trusts mutation_run only when per_file carries a real
+    """mutation_not_run_cap trusts mutation_run only when per_file carries a real
     mutant record (#317). An empty per_file keeps the cap; a record lifts it."""
-    from assess_core import _mutation_not_run_cap
+    from lib.mutation_cap import mutation_not_run_cap
 
-    empty = _mutation_not_run_cap(
+    empty = mutation_not_run_cap(
         {"mutation_run": True, "mutation_scope": ["src/a.ts"], "per_file": []})
     assert empty["applies"] is True
     assert empty["mutation_run"] is False
     assert empty["max_layer6_band"] == "Partial"
     assert empty["annotation"] == "truth-pressure unproven (mutation not run)"
 
-    missing = _mutation_not_run_cap({"mutation_run": True})
+    missing = mutation_not_run_cap({"mutation_run": True})
     assert missing["applies"] is True
 
-    real = _mutation_not_run_cap({
+    real = mutation_not_run_cap({
         "mutation_run": True, "mutation_scope": ["src/a.ts"],
         "per_file": [{"path": "src/a.ts", "killed": 3, "survived": 1, "total": 4}],
     })
@@ -2362,7 +2363,7 @@ def test_stats_tool_versions_reads_every_backend_by_language_tool() -> None:
     """_stats_tool_versions reads any `<tool>_version` stamp, not a fixed
     lizard/scc tuple, so a per-function backend added later is compared too;
     the layout and plugin stamps are not tools."""
-    got = assess_core._stats_tool_versions({
+    got = diff_reliability.stats_tool_versions({
         "lizard_version": "1.23.0", "scc_version": "3.7.0",
         "dart-scanner_version": "1", "schema_version": 4,
         "artifact_schema_version": "1", "plugin_version": "1.80.0",
