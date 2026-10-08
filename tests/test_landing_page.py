@@ -11,6 +11,7 @@ a `data-kind="skill"` list. `commands/` is read when present, so the check
 holds before and after commands move to `skills/<name>/SKILL.md`.
 """
 
+import importlib.util
 import re
 from pathlib import Path
 
@@ -31,7 +32,8 @@ NOT_USER_INVOCABLE = {
 FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 MANUAL_RE = re.compile(r"^disable-model-invocation:\s*true\s*$", re.MULTILINE)
 LIST_RE = re.compile(
-    r'<dl class="legend" data-kind="(skill|manual)">(.*?)</dl>', re.DOTALL
+    r'<dl class="legend" data-kind="(skill|manual)"( data-standalone="true")?>(.*?)</dl>',
+    re.DOTALL,
 )
 DT_RE = re.compile(r"<dt>/([a-z0-9][a-z0-9-]*)</dt>")
 
@@ -57,8 +59,10 @@ def _on_disk() -> dict[str, set[str]]:
 
 def _on_page() -> dict[str, set[str]]:
     kinds: dict[str, set[str]] = {"skill": set(), "manual": set()}
-    for kind, body in LIST_RE.findall(PAGE.read_text(encoding="utf-8")):
+    for kind, standalone, body in LIST_RE.findall(PAGE.read_text(encoding="utf-8")):
         kinds[kind].update(DT_RE.findall(body))
+        if standalone:
+            kinds.setdefault("standalone", set()).update(DT_RE.findall(body))
     return kinds
 
 
@@ -82,4 +86,23 @@ def test_page_manual_lists_match_disk() -> None:
     assert page == disk, (
         f"docs/index.html command lists are missing {sorted(disk - page)} "
         f"and list {sorted(page - disk)}, which have no disable-model-invocation: true file on disk"
+    )
+
+
+def _standalone_skills() -> set[str]:
+    path = REPO / "scripts" / "standalone_skill_config.py"
+    spec = importlib.util.spec_from_file_location("standalone_skill_config", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return set(module.SKILLS)
+
+
+def test_page_standalone_list_matches_zip_build() -> None:
+    """The ZIP group must name exactly the skills the standalone build ships."""
+    built, page = _standalone_skills(), _on_page().get("standalone", set())
+    assert page == built, (
+        f"docs/index.html standalone ZIP list is missing {sorted(built - page)} "
+        f"and lists {sorted(page - built)}, which SKILLS in "
+        "scripts/standalone_skill_config.py does not build"
     )
