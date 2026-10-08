@@ -269,13 +269,10 @@ def test_doc_graph_stylesheet_never_overrides_text_attributes(doc_graph_svg):
     legend captions stay grey and the right-anchored "stable" stays put."""
     from svg_cascade import overridden_text_attributes
 
+    # The render carries attribute-styled text, so the check is not vacuous.
+    # (The golden treemap renders no <text>; test_svg_cascade covers it.)
+    assert 'fill="#555"' in doc_graph_svg
     assert overridden_text_attributes(doc_graph_svg) == []
-
-
-def test_treemap_stylesheet_never_overrides_text_attributes(treemap_svg):
-    from svg_cascade import overridden_text_attributes
-
-    assert overridden_text_attributes(treemap_svg) == []
 
 
 def test_doc_graph_per_node_labels_carry_path_and_staleness(doc_graph_svg):
