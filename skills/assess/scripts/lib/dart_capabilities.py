@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.doc_graph import is_excluded_path
+from lib.run_context_types import JsonDict
 
 _LINTING_CANDIDATE = "dart analyze / flutter analyze"
 LIVENESS_CANDIDATE = "dart analyze (unused_* lints)"
@@ -144,7 +145,7 @@ def _analyzer_command(repo_root: Path, pubspecs: list[str]) -> str:
     return "dart analyze"
 
 
-def _linting(repo_root: Path, pubspecs: list[str], configured: list[str]) -> dict:
+def _linting(repo_root: Path, pubspecs: list[str], configured: list[str]) -> JsonDict:
     cap: dict[str, Any] = {
         "candidate_tool": _LINTING_CANDIDATE,
         "gloss": _CAPABILITY_GLOSS["linting"],
@@ -172,7 +173,7 @@ def _linting(repo_root: Path, pubspecs: list[str], configured: list[str]) -> dic
     return cap
 
 
-def _liveness() -> dict:
+def _liveness() -> JsonDict:
     return {
         "state": "honest_degrade",
         "candidate_tool": LIVENESS_CANDIDATE,
@@ -184,7 +185,7 @@ def _liveness() -> dict:
 def scan_dart_capabilities(repo_root: Path, *,
                            extra_exclude_dirs: set[str] | None = None,
                            extra_exclude_patterns: list[str] | None = None,
-                           ) -> dict:
+                           ) -> JsonDict:
     """Capability-driven Dart scan. Read-only: runs no tool.
 
     Returns ``{"available": False, "pubspec_files": []}`` for a repository with

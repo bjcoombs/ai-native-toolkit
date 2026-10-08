@@ -29,6 +29,7 @@ from lib.assess_config import (
     ASSESS_DIR as ASSESS_OUTPUT_DIR,
     CONFIG_FILE as ASSESS_CONFIG_FILE,
 )
+from lib.run_context_types import BulkCommit, JsonDict
 
 # Cap every git call so a stuck invocation (huge repo, lock contention, a hung
 # credential prompt) degrades to "no churn data" rather than blocking the run.
@@ -113,7 +114,7 @@ def git_churn_scores(
     return counts
 
 
-def git_commit_info(root: Path) -> dict:
+def git_commit_info(root: Path) -> JsonDict:
     """Capture the commit the scan measured, so the report can pin its absolute
     LOC/CCN figures to a snapshot and warn when that snapshot is stale.
 
@@ -174,7 +175,7 @@ def git_commit_info(root: Path) -> dict:
         _git("status", "--porcelain", "--untracked-files=no",
              "--", ASSESS_CONFIG_PATHSPEC))
 
-    info: dict = {
+    info: JsonDict = {
         "available": True,
         "head_sha": head_sha,
         "head_short": head_sha[:12],
@@ -284,7 +285,7 @@ class ContentClock(NamedTuple):
 
     epochs: dict[Path, int]
     bulk_shas: frozenset[str]
-    skipped: tuple[dict, ...]
+    skipped: tuple[BulkCommit, ...]
     skipped_total: int
     doc_count: int
     complete: bool
@@ -413,7 +414,7 @@ def content_commit_clock(
         epochs[p] = oldest[p][1]
         skipped.update(s for s in shas if s != oldest[p][0])
 
-    records = [
+    records: list[BulkCommit] = [
         {"sha": sha,
          "date": _dt_date(at),
          "docs_touched": len(touched),

@@ -129,7 +129,7 @@ class _BotClassifier:
         return isinstance(user, dict) and user.get("type") == "Bot"
 
 
-def _has_bot_comment(pr: dict, bots: _BotClassifier) -> bool | None:
+def _has_bot_comment(pr: dict[str, Any], bots: _BotClassifier) -> bool | None:
     """True on a bot comment, False on none, None when an unknown author decides."""
     unknown = False
     for comment in pr.get("comments") or []:
@@ -144,7 +144,7 @@ def _has_bot_comment(pr: dict, bots: _BotClassifier) -> bool | None:
     return None if unknown else False
 
 
-def _reviewed_by_other(pr: dict, approving: bool = False) -> bool:
+def _reviewed_by_other(pr: dict[str, Any], approving: bool = False) -> bool:
     """A review by an account other than the author; ``approving`` counts only
     reviews in the ``APPROVED`` state."""
     author = _login(pr.get("author"))
@@ -159,7 +159,7 @@ def _reviewed_by_other(pr: dict, approving: bool = False) -> bool:
     return False
 
 
-def _self_merged(pr: dict) -> bool:
+def _self_merged(pr: dict[str, Any]) -> bool:
     author, merger = _login(pr.get("author")), _login(pr.get("mergedBy"))
     return author is not None and author == merger
 
@@ -246,7 +246,7 @@ def _days_ago(stamp: Any, now: datetime) -> int | None:
     return max(0, (now - when).days)
 
 
-def summarize(prs: list[dict], required: bool | None,
+def summarize(prs: list[dict[str, Any]], required: bool | None,
               bots: _BotClassifier | None = None,
               now: datetime | None = None) -> dict[str, Any]:
     """The available block from sampled pull requests (pure except bot probes)."""

@@ -15,6 +15,7 @@ from __future__ import annotations
 import html
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -22,15 +23,19 @@ import numpy as np
 # helpers (rgba_to_hex / blend_to_grey / adaptive_cap) - e.g. the doc-graph
 # renderer - don't have to depend on it.
 
+# An RGB(A) fill in 0-1 floats. Matplotlib colormaps return four channels;
+# ``blend_to_grey`` returns three plus a fixed alpha, so the length is open.
+Rgba = tuple[float, ...]
+
 # One coloured treemap input row: (path, size, metric, source, rgba fill).
-ColoredFile = tuple[Path, int, float, str, tuple]
+ColoredFile = tuple[Path, int, float, str, Rgba]
 
 
 @dataclass
 class Node:
     name: str
     size: int = 0
-    color: tuple = (0.5, 0.5, 0.5, 1.0)
+    color: Rgba = (0.5, 0.5, 0.5, 1.0)
     loc: int = 0
     # Estimated token count (chars/4). The code heatmap sizes blocks by this so
     # the layout reflects context-window burden, not line count; ``loc`` stays
@@ -55,10 +60,14 @@ class Node:
     hatch: str = ""
 
 
+# One placed treemap block: (x, y, width, height, leaf node).
+Rect = tuple[float, float, float, float, Node]
+
+
 def build_tree(files_with_color: list[ColoredFile], root: Path,
                aux_data: dict[Path, int] | None = None,
                aux_label: str = "",
-               node_overrides: dict[Path, dict] | None = None,
+               node_overrides: dict[Path, dict[str, Any]] | None = None,
                size_by: dict[Path, int] | None = None) -> Node:
     """Build the directory tree of Nodes. `files_with_color` is a list of
     (path, size, metric, source, color). `node_overrides` optionally maps a
@@ -109,7 +118,7 @@ def build_tree(files_with_color: list[ColoredFile], root: Path,
 
 
 def layout(node: Node, x: float, y: float, w: float, h: float,
-           out: list) -> None:
+           out: list[Rect]) -> None:
     import squarify
     if node.is_file:
         out.append((x, y, w, h, node))
@@ -125,7 +134,7 @@ def layout(node: Node, x: float, y: float, w: float, h: float,
         layout(child, r["x"], r["y"], r["dx"], r["dy"], out)
 
 
-def rgba_to_hex(rgba: tuple) -> str:
+def rgba_to_hex(rgba: Rgba) -> str:
     r, g, b = rgba[0], rgba[1], rgba[2]
     return f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
 
@@ -133,7 +142,7 @@ def rgba_to_hex(rgba: tuple) -> str:
 GREY = (0.82, 0.82, 0.84)  # cool light grey for "stable" / no recent churn
 
 
-def blend_to_grey(rgba: tuple, factor: float) -> tuple:
+def blend_to_grey(rgba: Rgba, factor: float) -> Rgba:
     """factor=0 returns full grey, factor=1 returns the original colour."""
     factor = max(0.0, min(1.0, factor))
     return tuple(
@@ -266,7 +275,7 @@ def _label_size_text(node: Node) -> str:
     return f"{node.loc} loc"
 
 
-def write_svg(rects: list, root: Path, W: float, H: float,
+def write_svg(rects: list[Rect], root: Path, W: float, H: float,
               out_path: Path, show_labels: bool,
               metric_label: str,
               show_survivor_legend: bool = False,

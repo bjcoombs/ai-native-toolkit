@@ -41,7 +41,9 @@ from __future__ import annotations
 
 import datetime as _dt
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
+from typing import Any, TypedDict
 
 # Reuse the shared, deliberately conservative agent-detection primitives from
 # the change-coupling module rather than re-implementing them: agent/human
@@ -53,6 +55,19 @@ from lib.change_coupling import (
     _identity_is_agent,
     repo_top,
 )
+from lib.run_context_types import JsonDict
+
+
+class UnderstandingModule(TypedDict):
+    """One ``understanding.modules`` row: B4 + D2 signals for a path."""
+
+    path: str
+    human_anchor: bool
+    intent_source: bool
+    authorship_class: str
+    days_since_comprehension_event: int | None
+    finding: str | None
+    recommendation: str | None
 
 # McCabe's classic "moderate risk" line, used as the floor for "high
 # complexity". We gate the orphaned-understanding finding on the *higher* of
@@ -73,7 +88,7 @@ _ORPHANED_RECOMMENDATION = (
 )
 
 
-def _extract_file_ccn(complexity_stats: dict) -> dict[str, float]:
+def _extract_file_ccn(complexity_stats: JsonDict) -> dict[str, float]:
     """Build path -> max-CCN from the per-file lists the stats expose.
 
     ``complexity-stats.json`` carries per-file CCN in its ranked lists
@@ -93,13 +108,13 @@ def _extract_file_ccn(complexity_stats: dict) -> dict[str, float]:
     return ccn
 
 
-def _high_ccn_threshold(complexity_stats: dict) -> float:
+def _high_ccn_threshold(complexity_stats: JsonDict) -> float:
     """The CCN at or above which a module counts as 'high complexity'."""
     p95 = float((complexity_stats.get("ccn") or {}).get("p95", 0.0) or 0.0)
     return max(p95, MIN_HIGH_CCN)
 
 
-def _doc_dirs(doc_staleness: dict) -> list[tuple[str, ...]]:
+def _doc_dirs(doc_staleness: JsonDict) -> list[tuple[str, ...]]:
     """Directory parts of every doc, only when the staleness signal is available.
 
     A repo-root doc yields ``()`` (it is an ancestor of everything), matching the
@@ -169,10 +184,10 @@ def _days_since_last_human_commit(repo_top: str, path: str) -> int | None:
 
 def analyze_understanding(
     repo_root: Path,
-    authorship_by_path: dict[str, dict],
-    doc_staleness: dict,
-    complexity_stats: dict,
-) -> dict:
+    authorship_by_path: Mapping[str, Mapping[str, Any]],
+    doc_staleness: JsonDict,
+    complexity_stats: JsonDict,
+) -> JsonDict:
     """Signals B4 + D2: per-module understanding signals and the orphaned finding.
 
     Args:
@@ -209,7 +224,7 @@ def analyze_understanding(
     threshold = _high_ccn_threshold(complexity_stats)
     doc_dirs = _doc_dirs(doc_staleness)
 
-    modules: list[dict] = []
+    modules: list[UnderstandingModule] = []
     orphaned: list[str] = []
 
     for path in sorted(authorship_by_path):

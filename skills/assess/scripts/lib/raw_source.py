@@ -59,7 +59,8 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import Any
+
+from lib.run_context_types import DocSignal, SourceTree
 
 # Conservative, precision-first thresholds. A false positive (excluding a
 # curated folder) is the costly error - it hides real navigability gaps - so the
@@ -87,7 +88,7 @@ def _is_ancestor_path(ancestor: str, path: str) -> bool:
     return path == ancestor or path.startswith(ancestor + "/")
 
 
-def _is_isolated(signal: dict[str, Any], rel: str, entries: frozenset[str] | set[str]) -> bool:
+def _is_isolated(signal: DocSignal, rel: str, entries: frozenset[str] | set[str]) -> bool:
     """A doc with no inbound and no outbound internal links, and not an entry."""
     if rel in entries:
         return False
@@ -95,13 +96,13 @@ def _is_isolated(signal: dict[str, Any], rel: str, entries: frozenset[str] | set
 
 
 def classify_raw_trees(
-    doc_signals: dict[str, dict],
+    doc_signals: dict[str, DocSignal],
     *,
     entries: frozenset[str] | set[str] | None = None,
     min_files: int = RAW_TREE_MIN_FILES,
     isolation_density: float = RAW_TREE_ISOLATION_DENSITY,
     machine_density: float = RAW_TREE_MACHINE_DENSITY,
-) -> list[dict]:
+) -> list[SourceTree]:
     """Identify maximal raw-source subtrees from per-doc graph signals.
 
     ``doc_signals`` maps a doc's repo-relative posix path to a dict with
@@ -200,7 +201,7 @@ def _name_key(rel: str) -> str | None:
     return seq.group(1) if seq else None
 
 
-def _is_working_notes(docs: list[str], doc_signals: dict[str, dict]) -> bool:
+def _is_working_notes(docs: list[str], doc_signals: dict[str, DocSignal]) -> bool:
     """All three legs of the working-notes fingerprint over one directory."""
     n = len(docs)
     families = Counter(k for k in map(_name_key, docs) if k is not None)
@@ -218,7 +219,7 @@ def _is_working_notes(docs: list[str], doc_signals: dict[str, dict]) -> bool:
     return held >= WORKING_NOTES_INDEX_SHARE * n
 
 
-def _tree_docs(directory: str, docs: list[str], doc_signals: dict[str, dict],
+def _tree_docs(directory: str, docs: list[str], doc_signals: dict[str, DocSignal],
                trees: dict[str, list[str]]) -> list[str] | None:
     """The docs ``directory`` takes out of the headline, or None to refuse.
 
@@ -255,9 +256,9 @@ def _tree_docs(directory: str, docs: list[str], doc_signals: dict[str, dict],
 
 
 def classify_working_notes_trees(
-    doc_signals: dict[str, dict], *,
+    doc_signals: dict[str, DocSignal], *,
     force: list[str] | tuple[str, ...] = (), ignore: list[str] | tuple[str, ...] = (),
-) -> list[dict]:
+) -> list[SourceTree]:
     """Identify working-notes subtrees from per-doc graph signals.
 
     ``doc_signals`` maps a doc's repo-relative posix path to a dict with
@@ -300,14 +301,14 @@ def classify_working_notes_trees(
         trees[d] = trees.get(d, set()) | {r for r in kept_docs if _is_ancestor_path(d, r)}
     trees = {d: docs for d, docs in trees.items() if docs}
     kept = [d for d in trees if not any(o != d and _is_ancestor_path(o, d) for o in trees)]
-    out = []
+    out: list[SourceTree] = []
     for d in sorted(kept):
         docs = sorted(set().union(*(t for o, t in trees.items() if _is_ancestor_path(d, o))))
         out.append({"path": d, "file_count": len(docs), "docs": docs})
     return out
 
 
-def _fingerprint_trees(doc_signals: dict[str, dict]) -> dict[str, list[str]]:
+def _fingerprint_trees(doc_signals: dict[str, DocSignal]) -> dict[str, list[str]]:
     """The directories the fingerprint alone classifies, each mapped to the
     docs it takes out of the headline. Nested trees are all returned; the
     caller keeps the outermost."""

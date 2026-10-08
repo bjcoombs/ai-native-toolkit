@@ -168,7 +168,7 @@ def fallback_badge(
     return badge
 
 
-def concern_count_from_findings(derived_findings: list[dict]) -> int:
+def concern_count_from_findings(derived_findings: list[dict[str, Any]]) -> int:
     """Count negative findings that actually fired (non-empty paths)."""
     return sum(
         1

@@ -84,16 +84,32 @@ namespace_packages = true
 # ``# type: ignore[assignment, unused-ignore]``: without stubs nx is Any and the
 # ignore is unused; with stubs installed the None assignment is a real mismatch.
 ignore_missing_imports = true
-# Strict, minus one flag. disallow_any_generics stays off: it flags ~430 bare
+# Strict, minus one flag globally. disallow_any_generics flagged 444 bare
 # ``dict`` / ``list`` annotations, almost all on JSON blobs (run-context,
-# stats sidecars, finding rows). Rewriting each as ``dict[str, Any]`` adds
-# noise and no information; the honest fix is a TypedDict per known shape,
-# which is the next ratchet step.
+# stats sidecars, finding rows). The fix is a TypedDict per known shape
+# (shared row shapes in ``lib/run_context_types.py``) and ``dict[str, Any]``
+# only where the keys are genuinely dynamic, applied module by module through
+# the overrides below. 235 remain, all in the not-yet-covered modules.
 strict = true
 disallow_any_generics = false
 # strict does not reject a bare ``# type: ignore``; this makes the error code
 # mandatory. The trailing ``  # reason`` stays a house convention mypy cannot check.
 enable_error_code = ["ignore-without-code"]
+
+# disallow_any_generics ratchet. Every lib/ module is covered by the wildcard,
+# so a new lib module joins the stricter gate by construction; the second
+# override lists the modules not yet converted. Ratchet rule: the exception
+# list only shrinks and the covered list only grows. When no exception and no
+# uncovered script is left, flip the global flag above to true and delete both
+# overrides. Uncovered today: the exceptions below plus the orchestrators
+# assess_core, assess_finalize, assess_report and complexity-treemap.
+[[tool.mypy.overrides]]
+module = ["lib.*", "assess_emit_workflow", "assess_gate", "doc-graph-svg"]
+disallow_any_generics = true
+
+[[tool.mypy.overrides]]
+module = ["lib.keyhole_signals", "lib.test_pressure.*"]
+disallow_any_generics = false
 
 [tool.mutmut]
 # Layer 6 truth-pressure: line coverage shows the tests execute this code,

@@ -418,6 +418,18 @@ hand-wired assignments between the stages are gone. Currently registered:
 `agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
 `instruction_claims`.
 
+**`run_context_types.py`**
+`TypedDict` shapes for run-context records a second `lib/` module builds or reads
+(broken links, doc-to-code edges, dead-code candidates, source trees, the raw-source
+and working-notes classifier signals, bulk commits), plus the other row shapes of the
+blocks those belong to: the `doc_graph` and `dead_code` blocks keep all their rows
+here. `JsonDict` (`dict[str, Any]`) names a block whose keys are genuinely dynamic.
+Any other shape, including a block only the orchestrator reads back, stays in the
+module that builds it.
+Annotations only: no runtime behaviour, so the serialised run-context is unchanged.
+Part of the `disallow_any_generics` ratchet in `pyproject.toml` `[tool.mypy]`; modules
+outside it still read some of these blocks as bare `dict`.
+
 **`keyhole_signals.py`** *(co-change hotspot)*
 Integration barrier between the individual signal modules and `assess_core`. Derives
 the per-directory containment view from the commit-file sets the orchestrator parses

@@ -50,7 +50,28 @@ import fnmatch
 import sys
 import tomllib
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple, TypedDict
+
+# A parsed ``.assess/config.toml`` (or one of its sections): whatever TOML the
+# user wrote, validated key by key by the loaders below.
+TomlTable = dict[str, Any]
+
+
+class StructureConfig(TypedDict):
+    """``load_structure_config``: the ``[structure]`` settings."""
+
+    keyhole_budget: int
+
+
+class GateConfig(TypedDict):
+    """``load_gate_config``: the normalised ``[gate]`` settings."""
+
+    enabled: bool
+    fail_on: list[str]
+    warn_on: list[str]
+    ccn_p95_max: float | None
+    containment_min: float | None
+    fail_on_regression: bool
 
 
 # The tool's own directory under the scanned repo root: this config file lives
@@ -85,7 +106,7 @@ def is_user_excluded(rel: Path, extra_dirs: set[str],
     return False
 
 
-def load_config(repo_root: Path) -> dict:
+def load_config(repo_root: Path) -> TomlTable:
     """Read `<repo_root>/.assess/config.toml` and return the parsed dict.
 
     Returns `{}` when the file does not exist, isn't readable, or fails to
@@ -106,7 +127,7 @@ def load_config(repo_root: Path) -> dict:
         return {}
 
 
-def _string_list(config: dict, key: str) -> list[str]:
+def _string_list(config: TomlTable, key: str) -> list[str]:
     """Return `config[key]` filtered to strings only.
 
     Honours the "degrade silently" contract on three failure modes:
@@ -135,7 +156,7 @@ def _string_list(config: dict, key: str) -> list[str]:
 DEFAULT_KEYHOLE_BUDGET = 2000
 
 
-def load_structure_config(repo_root: Path) -> dict:
+def load_structure_config(repo_root: Path) -> StructureConfig:
     """Return the `[structure]` settings from `.assess/config.toml`.
 
     Currently a single key, `keyhole_budget` (the A1 comprehension-footprint
@@ -176,7 +197,7 @@ GATE_CONCERN_FINDINGS = [
 ]
 
 
-def _positive_number(section: dict, key: str) -> float | None:
+def _positive_number(section: TomlTable, key: str) -> float | None:
     """Return ``section[key]`` as a float when it is a positive real, else None.
 
     A threshold of zero or below is meaningless (every run would trip it), and a
@@ -190,7 +211,7 @@ def _positive_number(section: dict, key: str) -> float | None:
     return float(value) if value > 0 else None
 
 
-def _parse_gate_section(cfg: dict) -> dict:
+def _parse_gate_section(cfg: TomlTable) -> GateConfig:
     """Build the gate settings from an already-parsed config dict.
 
     Split from ``load_gate_config`` so the same normalization serves both the
@@ -220,7 +241,7 @@ def _parse_gate_section(cfg: dict) -> dict:
     }
 
 
-def load_gate_config(repo_root: Path) -> dict:
+def load_gate_config(repo_root: Path) -> GateConfig:
     """Return the ``[gate]`` settings from ``.assess/config.toml``.
 
     The gate is the CI check run by ``assess_gate.py``. Its defaults are
@@ -252,7 +273,7 @@ def load_gate_config(repo_root: Path) -> dict:
     return _parse_gate_section(load_config(repo_root))
 
 
-def load_gate_config_file(config_path: Path) -> dict:
+def load_gate_config_file(config_path: Path) -> GateConfig:
     """Return the ``[gate]`` settings from an explicit TOML file path.
 
     Used to honour ``assess_gate.py --config <path>`` when the gate config lives
@@ -332,7 +353,7 @@ def load_excludes(repo_root: Path) -> tuple[set[str], list[str]]:
     return dirs, pats
 
 
-def _dir_list(config: dict, key: str) -> list[str]:
+def _dir_list(config: TomlTable, key: str) -> list[str]:
     """``_string_list`` normalised to repo-relative posix directory paths:
     ``./journal/`` -> ``journal``; an entry that names no directory is dropped."""
     out = []

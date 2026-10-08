@@ -28,6 +28,7 @@ import fnmatch
 import re
 import sys
 from pathlib import Path
+from typing import TypedDict
 
 from lib.doc_graph import is_excluded_path, is_repo_file
 from lib.git_churn import tracked_files
@@ -418,7 +419,34 @@ def is_glob(pattern: str) -> bool:
     return any(c in _GLOB_CHARS for c in pattern) or pattern.endswith("/")
 
 
-def find_empty_globs(ownership_map: dict[str, set[Path]]) -> list[dict]:
+class EmptyGlob(TypedDict):
+    """A CODEOWNERS pattern that matches no tracked file."""
+
+    pattern: str
+    declared_in: str
+
+
+class CodeownersGlob(TypedDict):
+    pattern: str
+    matched_files: list[str]
+
+
+class ArchitectureModule(TypedDict):
+    module: str
+    files: list[str]
+
+
+class OwnershipSummary(TypedDict):
+    """:func:`parse_ownership`'s result."""
+
+    available: bool
+    reason: str
+    codeowners_globs: list[CodeownersGlob]
+    architecture_modules: list[ArchitectureModule]
+    empty_globs: list[EmptyGlob]
+
+
+def find_empty_globs(ownership_map: dict[str, set[Path]]) -> list[EmptyGlob]:
     """CODEOWNERS patterns that match zero tracked files.
 
     An empty glob is the cheapest structure-drift signal: a declared boundary
@@ -427,7 +455,7 @@ def find_empty_globs(ownership_map: dict[str, set[Path]]) -> list[dict]:
     pattern for deterministic output. ``declared_in`` is the fixed source
     ``"CODEOWNERS"`` - the only producer of these glob keys.
     """
-    empties = [
+    empties: list[EmptyGlob] = [
         {"pattern": pattern, "declared_in": "CODEOWNERS"}
         for pattern, files in ownership_map.items()
         if not files
@@ -435,7 +463,7 @@ def find_empty_globs(ownership_map: dict[str, set[Path]]) -> list[dict]:
     return sorted(empties, key=lambda e: e["pattern"])
 
 
-def parse_ownership(repo_root: Path) -> dict:
+def parse_ownership(repo_root: Path) -> OwnershipSummary:
     """Combined ownership parse with the module-shape degradation contract.
 
     Runs both parsers and the empty-glob detector and returns a JSON-serialisable
