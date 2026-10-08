@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.generated_files import matches_generated_name
+from lib.run_context_types import KeyholeIntegration
 from lib.scan_registry import safe as _safe
 from lib.structure_drift import SEAM_ALLOWLIST, detect_path_existence_drift
 
@@ -300,7 +301,7 @@ def coverage_report_block(cov_detect: Any, coverage_data: Any) -> dict[str, Any]
     return {"available": False, "source": "none found"}
 
 
-def attach_keyhole_blocks(ctx: dict[str, Any], keyhole: dict[str, Any]) -> None:
+def attach_keyhole_blocks(ctx: dict[str, Any], keyhole: KeyholeIntegration) -> None:
     """Copy the keyhole signal blocks and report-skeleton products into ctx."""
     ctx["structure"] = keyhole["structure"]
     ctx["behaviour"] = keyhole["behaviour"]
@@ -320,7 +321,7 @@ def attach_keyhole_blocks(ctx: dict[str, Any], keyhole: dict[str, Any]) -> None:
 
 
 def attach_exclusion_disclosures(
-    ctx: dict[str, Any], keyhole: dict[str, Any],
+    ctx: dict[str, Any], keyhole: KeyholeIntegration,
     extra_exclude_dirs: Any, extra_exclude_patterns: Any,
 ) -> None:
     """Set the config / archive / dead-path finding-exclusion disclosure blocks."""
