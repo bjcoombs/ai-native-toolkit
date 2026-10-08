@@ -25,6 +25,15 @@ introducing commit is also classified agent/human (reusing the conservative B4
 identity rules from ``change_coupling``), so "agent-introduced unactioned
 intent" is a measured quantity, not an article of faith.
 
+Marker text that is data is not a marker. In a Python file ``tokenize`` places
+each hit: one inside a string literal (f-strings included) is a fixture or a
+pattern and is dropped, but a todo or deprecation in a triple-quoted docstring
+is prose about the code and counts. A suppression counts only in a comment, where linters read
+it; a disabled test in code or a comment. A file that does not tokenize, and
+every other language, keeps the line-based filters. A suppression quoted in a
+backtick code span on a comment-only line is a quotation, and config files (TOML, YAML, INI, JSON)
+carry no suppressions: no listed linter reads them.
+
 Pure subprocess (rg + git) and stdlib. No LLM calls. Degrades to
 ``available: False`` when ``rg`` is missing or the directory is not a git
 repo; never raises out of ``scan_promissory_markers``.
@@ -50,10 +59,12 @@ from typing import Any
 try:
     from lib.change_coupling import _coauthors_have_agent, _identity_is_agent
     from lib.git_churn import churn_is_degenerate
+    from lib.python_regions import PyRegions, load_regions
 except ImportError:  # standalone CLI: script dir is lib/, put scripts/ on path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from lib.change_coupling import _coauthors_have_agent, _identity_is_agent
     from lib.git_churn import churn_is_degenerate
+    from lib.python_regions import PyRegions, load_regions
 
 # Default: a marker is stale once this many commits to its file landed after it.
 STALE_TOUCHES_DEFAULT = 5
@@ -184,6 +195,32 @@ _BLOCKQUOTE_RE = re.compile(r"^(?:>\s*)+")
 # for the syntactic families (a t.Skip in a guide is an example, not debt).
 COMMENT_LEADERS = ("#", "//", "/*", "*", "<!--", "--", ";;", "%", '"""', "'''")
 PROSE_SUFFIXES = {".md", ".markdown", ".rst", ".txt", ".adoc"}
+# Files ``tokenize`` can classify: a hit's position is decided, not guessed.
+PYTHON_SUFFIXES = {".py", ".pyi"}
+# Config formats no directive in SUPPRESSION_DIRECTIVES is read from: a noqa
+# in a pyproject.toml comment documents a directive, it suppresses nothing.
+CONFIG_SUFFIXES = {".toml", ".ini", ".cfg", ".yaml", ".yml", ".json"}
+# An inline code span on a comment-only line: a line-scoped directive inside
+# one is quoted. There it has no code to suppress (ruff would apply it to the
+# comment line alone). After code it stays: ruff reads a noqa anywhere in a
+# trailing comment, so a quoted one still suppresses that code.
+_CODE_SPAN_RE = re.compile(r"``.+?``|`[^`]+`")
+# Directives that stay in force past their own line: a comment-only rubocop or
+# pylint disable (both read anywhere in a comment) silences the rest of the
+# scope, and an ESLint block disable the rest of the file. Quoting one does not
+# make it inert, so it never takes the quoted exemption.
+_BLOCK_SCOPED_RE = re.compile(
+    r"rubocop:disable|pylint:\s*disable|eslint-disable(?!-(?:next-)?line)"
+)
+# The token regions of a Python line each family may count in. A docstring is
+# prose about the code, so a promise there is a promise; any other string is
+# data. Only a comment can carry a suppression a linter reads.
+_PY_REGIONS_ALLOWED = {
+    "todo": {"comment", "docstring", "code"},
+    "deprecation": {"comment", "docstring", "code"},
+    "suppression": {"comment"},
+    "disabled_test": {"comment", "code"},
+}
 
 # Generated / vendored / lockfile noise that rg's gitignore pass won't catch
 # when the files are committed. Mirrors the treemap's exclude spirit; the
@@ -268,7 +305,8 @@ class MarkerScan:
             entry["families"].add(m.family)
             entry["max_survived"] = max(entry["max_survived"], m.survived_touches)
         return {
-            p: {**e, "families": sorted(e["families"])} for p, e in rollup.items()
+            p: {**e, "families": sorted(e["families"])}
+            for p, e in sorted(rollup.items())
         }
 
     def summary(self) -> dict[str, Any]:
@@ -287,7 +325,9 @@ class MarkerScan:
         bare = sum(1 for m in self.markers if m.family == "todo" and not m.linked)
         linked = sum(1 for m in self.markers if m.family == "todo" and m.linked)
         stale = self.stale
-        top = sorted(stale, key=lambda m: -m.severity)[:MAX_TOP_OFFENDERS]
+        top = sorted(
+            stale, key=lambda m: (-m.severity, m.path, m.line, m.family)
+        )[:MAX_TOP_OFFENDERS]
         return {
             "available": self.available,
             "reason": self.reason,
@@ -333,6 +373,7 @@ def _extra_globs(
 def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
     """Stage 1: one rg pass per family, comment-context filtered."""
     markers: list[Marker] = []
+    regions: dict[str, PyRegions | None] = {}
     for family, pattern in FAMILY_PATTERNS.items():
         cmd = ["rg", "-n", "--no-heading", "--no-messages", "-e", pattern]
         for g in [*EXCLUDE_GLOBS, *extra_globs]:
@@ -348,11 +389,18 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
             # Syntactic families in prose files are code examples, not debt.
             if family in ("suppression", "disabled_test") and is_prose:
                 continue
+            offset = _marker_offset(
+                repo_root, path, int(line_s), text, family, regions
+            )
+            if offset is None:
+                continue
             if family in ("todo", "deprecation") and not _comment_context(
-                is_prose, text, pattern
+                is_prose, text, pattern, offset
             ):
                 continue
-            if family == "todo" and not _todo_in_marker_position(text, is_prose):
+            if family == "todo" and not _todo_in_marker_position(
+                text, is_prose, offset
+            ):
                 continue
             justified = family == "suppression" and bool(
                 JUSTIFIED_SUPPRESSION_RE.search(text)
@@ -367,10 +415,68 @@ def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
                     justified=justified,
                 )
             )
+    # rg searches files on parallel threads, so its output order varies run to
+    # run; every rollup built from this list inherits whatever order it has.
+    # Sorting here keeps run-context.json byte-stable on an unchanged tree.
+    family_rank = {f: i for i, f in enumerate(FAMILY_PATTERNS)}
+    markers.sort(key=lambda m: (family_rank[m.family], m.path, m.line))
     return markers
 
 
-def _comment_context(is_prose: bool, text: str, pattern: str) -> bool:
+def _is_quoted(text: str, start: int, spans: list[tuple[int, int]]) -> bool:
+    """A line-scoped directive at ``start`` sits inside one of the code spans."""
+    # The block-scoped directives match with no leader, so the match opens on
+    # the directive word itself.
+    if _BLOCK_SCOPED_RE.match(text, start):
+        return False
+    return any(a <= start < b for a, b in spans)
+
+
+def _marker_offset(
+    repo_root: Path,
+    path: str,
+    row: int,
+    text: str,
+    family: str,
+    cache: dict[str, PyRegions | None],
+) -> int | None:
+    """The column of the first match on the line that is a marker, or None.
+
+    A match is data when it sits in a region its family may not count in
+    (``_PY_REGIONS_ALLOWED``, Python files that tokenize), or, for a
+    suppression, is a line-scoped directive inside a backtick code span on a
+    comment-only line, or sits anywhere in a config file. The later filters
+    judge the match at the returned column, so a string-literal marker earlier
+    on the line cannot hide a real one after it. Prose files are not this
+    function's concern: they get column 0.
+    """
+    suffix = Path(path).suffix.lower()
+    if suffix in PROSE_SUFFIXES:
+        return 0
+    if family == "suppression" and suffix in CONFIG_SUFFIXES:
+        return None
+    regions = (
+        load_regions(repo_root, path, cache) if suffix in PYTHON_SUFFIXES else None
+    )
+    # Python's only comment leader is ``#``; ``*rest, = x`` opens with code.
+    leaders = ("#",) if suffix in PYTHON_SUFFIXES else COMMENT_LEADERS
+    comment_only = text.lstrip().startswith(leaders)
+    quoted = (
+        [m.span() for m in _CODE_SPAN_RE.finditer(text)]
+        if family == "suppression" and comment_only else []
+    )
+    allowed = _PY_REGIONS_ALLOWED[family]
+    for m in re.finditer(FAMILY_PATTERNS[family], text):
+        if quoted and _is_quoted(text, m.start(), quoted):
+            continue
+        if regions is None or regions.region(row, m.start()) in allowed:
+            return m.start()
+    return None
+
+
+def _comment_context(
+    is_prose: bool, text: str, pattern: str, start: int = 0
+) -> bool:
     """Keep a todo/deprecation hit only when it sits in a comment-ish context.
 
     Prose files count whole-line; code files require a comment leader at or
@@ -379,11 +485,12 @@ def _comment_context(is_prose: bool, text: str, pattern: str) -> bool:
     leader does not count: in a code file it is as likely a YAML or TOML list
     item (``  - TODO`` in a status enum) as a docstring line. This is a
     line-local heuristic, not a parser - string-literal mentions are the
-    false-positive it exists to drop.
+    false-positive it exists to drop. ``start`` is the column of the match to
+    judge (see ``_marker_offset``); the prefix before it is the whole line.
     """
     if is_prose:
         return True
-    m = re.search(pattern, text)
+    m = re.compile(pattern).search(text, start)
     if not m:
         return False
     prefix = text[: m.start()]
@@ -417,18 +524,23 @@ def _opener(prefix: str, is_prose: bool) -> str:
     return rest.strip()
 
 
-def _todo_in_marker_position(text: str, is_prose: bool = False) -> bool:
+def _todo_in_marker_position(
+    text: str, is_prose: bool = False, start: int = 0
+) -> bool:
     """Keep a todo hit when a marker token sits in marker position, or when
     the line carries a phrase alternative (``remove after ...``).
 
     A line matched only by a phrase alternative has no token and passes; the
     comment-context filter already vetted it. The token is in marker position
     when nothing but an optional list bullet or checkbox sits between its
-    opening position (see ``_opener``) and the token.
+    opening position (see ``_opener``) and the token. Only tokens and phrases
+    at or after ``start`` (the accepted match, see ``_marker_offset``) count:
+    anything before it on the line was ruled data, and a comment runs to the
+    end of the line, so nothing after an accepted comment match is a string.
     """
-    tokens = list(TODO_TOKEN_RE.finditer(text))
+    tokens = [m for m in TODO_TOKEN_RE.finditer(text) if m.start() >= start]
     if not tokens:
-        return _phrase_is_marker(text, is_prose)
+        return _phrase_is_marker(text[start:], is_prose)
     for m in tokens:
         if _TODO_SUFFIX_RE.match(text, m.end()):
             return True
@@ -437,7 +549,7 @@ def _todo_in_marker_position(text: str, is_prose: bool = False) -> bool:
             return True
     # No token in marker position: a phrase alternative on the same line (a
     # stopgap phrase beside a mid-sentence token) still makes it a marker.
-    return _phrase_is_marker(text, is_prose)
+    return _phrase_is_marker(text[start:], is_prose)
 
 
 def _phrase_is_marker(text: str, is_prose: bool) -> bool:

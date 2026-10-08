@@ -911,7 +911,19 @@ pass). A marker that survived many edits to an actively-maintained file is
 unactioned intent; calendar age alone can't tell that from dormancy. Classifies
 markers as tracked (issue/ticket/URL/date reference, or a justified suppression)
 vs bare, and each introducing commit as agent/human (reusing `change_coupling`'s
-conservative B4 identity rules). A `todo` token counts only in marker position -
+conservative B4 identity rules). Marker text that is data is not a marker: in a
+Python file `python_regions` places each hit, so one inside a string literal (a
+test fixture, a pattern table) is dropped while a todo or deprecation in a
+triple-quoted docstring still counts as prose about the code (a single-quoted
+docstring opens with a quote, which the comment-context filter does not read as
+a leader); a suppression counts only in a
+comment and a disabled test only in code or a comment. A file that does not
+tokenize, and every other language, keeps the line-based filters below. In any
+code file a line-scoped suppression quoted in a backtick code span on a
+comment-only line is a quotation (after code, ruff still reads it; a block-scoped
+`rubocop:disable`, `pylint: disable` or ESLint block disable stays live quoted), and config files (TOML, YAML, INI,
+JSON) carry no suppression family, since no listed directive is read from them.
+A `todo` token counts only in marker position -
 it opens its comment or prose line (after an optional bullet or checkbox) or a
 leaderless docstring interior line, or carries a colon or a `(owner)` - so a
 sentence that lists marker names is not a marker. In prose a comment leader opens
@@ -938,6 +950,19 @@ degrades aging to `aging_reliable: False` on degenerate history (same verdict as
 Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
 sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
+
+**`python_regions.py`**
+Token regions of a Python source for `promissory_markers`: `tokenize` records
+each string literal's span (classed `docstring` when it is a statement of its
+own, `string` otherwise; an f-string, a t-string and a run of implicitly
+concatenated literals each form one span) and each comment's
+opening column, and `PyRegions.region(row, col)` answers `comment` / `docstring`
+/ `string` / `code`. Returns `None` for a source that does not tokenize, so the
+caller falls back to its line filters; `load_regions` memoises per file and
+decodes the bytes with `utf-8-sig`, so a BOM does not shift row 1 against rg's
+output and a lone carriage return is not split into a second row.
+Pure stdlib. Tested with the marker scan in
+`tests/test_promissory_markers_literals.py`.
 
 **`agent_ops.py`**
 Layer 8 workflow-maturity evidence: scans the repo-observable agent-operations
@@ -1389,8 +1414,9 @@ Layer 1 write-side truth pressure. Two tiers:
   a `pyproject.toml` with a `[project]` table; no optional extras), else the `mutmut` on
   PATH.
   This repo dogfoods the tier: `[tool.mutmut]` in `skills/assess/pyproject.toml` scopes
-  mutmut 3 to five core modules (`stats_diff`, `promissory_markers`, `doc_staleness`,
-  `doc_graph` and `keyhole_signals`, per `only_mutate`) and `.github/workflows/mutation.yml` runs it weekly,
+  mutmut 3 to six core modules (`stats_diff`, `promissory_markers` and its
+  `python_regions` helper, `doc_staleness`, `doc_graph` and `keyhole_signals`, per
+  `only_mutate`) and `.github/workflows/mutation.yml` runs it weekly,
   scoring per module with `_parse_mutmut3_meta`, so CI and `/assess` count mutants alike.
   That config and workflow are also what `detect_mutation_config` credits on this repo.
   That config mutates through `skills/assess/src`, a committed symlink to `scripts`, so the
