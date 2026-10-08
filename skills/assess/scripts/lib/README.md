@@ -346,7 +346,10 @@ source-vs-doc verdict. `last_commit_days` and the instruction grader's `freshnes
 commits are reported as `bulk_commits_skipped` (newest first, capped) with
 `bulk_commits_skipped_total`. A doc dated by the creation fallback carries
 `last_change_basis: "creation"` and confidence `low`, which keeps it out of the stale-hub
-finding; `creation_date_fallback_count` counts them.
+finding; `creation_date_fallback_count` counts them. The `modularity` block's `base_doc_dir_ratio`
+is code directories holding a base doc over all code directories; a base doc in a
+directory with no code (`docs/`, `agents/`) counts in neither, so the ratio stays
+within 0-1 (tests: `tests/test_doc_modularity.py`).
 
 **`doc_provenance.py`**
 Provenance-aware staleness for generated docs (issue #178). Parses a doc's YAML

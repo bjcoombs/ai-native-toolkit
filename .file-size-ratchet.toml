@@ -82,8 +82,8 @@ lines = 1047
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."skills/assess/tests/test_doc_staleness.py"]
-lines = 846
-reason = "pre-existing; ratchet from 2026-10-07"
+lines = 814
+reason = "pre-existing; ratchet from 2026-10-07; lowered to 814 after the modularity tests moved to test_doc_modularity.py"
 
 [ceilings."skills/assess/tests/test_structure_drift.py"]
 lines = 882
