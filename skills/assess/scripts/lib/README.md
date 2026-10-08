@@ -1280,7 +1280,8 @@ union over CPython 3.10-3.14 - never credits), relative imports resolve exactly,
 `pkg/mod.py` when it exists, else `pkg/__init__.py`. JS/TS is a regex over
 relative specifiers only (`import ... from`, `export ... from`, side-effect and
 dynamic `import`, `require`; `import type` and line-leading comments skipped;
-string literals are not parsed); alias and package
+string literals are not parsed; a NodeNext `./foo.js` specifier also resolves to
+`foo.ts`); alias and package
 specifiers keep the name match, as do all other languages. Modules inside a test
 directory are support, never credited. Every module a qualifying test imports
 directly is credited. Runs lazily, once per `TestIndex`, over the index's test

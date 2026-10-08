@@ -207,10 +207,24 @@ def python_imports(source: str, test_dirs: Module) -> list[Target]:
     return targets
 
 
+# TypeScript ESM (``NodeNext`` / ``Node16``) writes a relative specifier with
+# the emitted extension: ``'../src/foo.js'`` for the file ``src/foo.ts``.
+_EMITTED_TO_SOURCE: dict[str, tuple[str, ...]] = {
+    ".js": (".ts", ".tsx"), ".jsx": (".tsx",), ".mjs": (".mts",), ".cjs": (".cts",),
+}
+
+
+def _emitted_to_source(target: str) -> list[str]:
+    stem, ext = posixpath.splitext(target)
+    return [stem + s for s in _EMITTED_TO_SOURCE.get(ext, ())]
+
+
 def js_imports(source: str, test_dir: str, files: frozenset[str]) -> list[str]:
     """Repo-relative files a JS/TS test imports through relative specifiers, or
     an empty list when it defines no test. A specifier resolves to the file as
-    written, then with each JS/TS suffix, then to an ``index`` file."""
+    written, then as the TypeScript source of an emitted ``.js`` / ``.jsx`` /
+    ``.mjs`` / ``.cjs`` name, then with each JS/TS suffix, then to an
+    ``index`` file."""
     source = _JS_COMMENT_RE.sub("", source)
     if not _JS_TEST_RE.search(source):
         return []
@@ -222,7 +236,8 @@ def js_imports(source: str, test_dir: str, files: frozenset[str]) -> list[str]:
         target = posixpath.normpath(posixpath.join(test_dir, spec))
         if target.startswith("../") or target == "..":
             continue  # above the repository root
-        candidates = [target, *(target + s for s in JS_SUFFIXES),
+        candidates = [target, *_emitted_to_source(target),
+                      *(target + s for s in JS_SUFFIXES),
                       *(f"{target}/index{s}" for s in JS_SUFFIXES)]
         hit = next((c for c in candidates if c in files), None)
         if hit is not None:

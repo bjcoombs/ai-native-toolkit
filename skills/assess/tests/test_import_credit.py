@@ -227,6 +227,8 @@ def test_js_relative_specifiers_credit_and_aliases_do_not(tmp_path: Path) -> Non
             "import x from '@/src/aliased';\n"
             "import type { T } from '../src/types';\n"
             "export { e } from '../src/epsilon';\n"
+            "import { n } from '../src/nodenext.js';\n"
+            "import { m } from '../src/modern.mjs';\n"
             "import y from 'react';\n"
             "describe('alpha', () => { it('works', () => {}); });\n")
     _write(tmp_path, {
@@ -235,10 +237,12 @@ def test_js_relative_specifiers_credit_and_aliases_do_not(tmp_path: Path) -> Non
         "web/spec/alpha_split.test.ts": test,
         "web/spec/no_tests.test.ts": "import { b } from '../src/beta';\n",
         "web/src/beta.ts": "", "web/src/types.ts": "", "web/src/epsilon.ts": "",
+        "web/src/nodenext.ts": "", "web/src/modern.mts": "",
     })
     index = tc.build_test_index(tmp_path)
     for src in ("web/src/alpha.ts", "web/src/side.js", "web/src/gamma/index.js",
-                "web/src/delta.tsx", "web/src/epsilon.ts"):
+                "web/src/delta.tsx", "web/src/epsilon.ts", "web/src/nodenext.ts",
+                "web/src/modern.mts"):
         assert tc.has_sibling_test(tmp_path, src, index=index) is True, src
     for src in ("web/src/aliased.ts", "web/src/beta.ts", "web/src/types.ts"):
         assert tc.has_sibling_test(tmp_path, src, index=index) is False, src
