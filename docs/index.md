@@ -1,6 +1,6 @@
 # Map of Content
 
-The navigation index for `ai-native-toolkit`. Every shipped doc in this repo is reachable from here by following links - no directory-walking required. Start at the [README](../README.md) for the project overview, the [CLAUDE.md](../CLAUDE.md) contract for the rules that govern edits, then use the trails below to reach any agent or skill.
+The navigation index for `ai-native-toolkit`. Every shipped doc in this repo is reachable from here by following links - no directory-walking required. The public landing page is the [GitHub Pages site](https://bjcoombs.github.io/ai-native-toolkit/), served as-is from `docs/index.html`. Start at the [README](../README.md) for the project overview, the [CLAUDE.md](../CLAUDE.md) contract for the rules that govern edits, then use the trails below to reach any agent or skill.
 
 ## Subtrees at a glance
 

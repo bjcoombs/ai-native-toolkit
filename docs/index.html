@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Native Toolkit</title>
+<meta name="description" content="A Claude Code plugin and standalone Agent Skills that make a codebase legible to AI contributors: /assess scores AI-readiness and maps complexity hotspots, /huddle runs Six Thinking Hats deliberation, /deslop removes the signs of AI writing.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#7a1712">
+<link rel="canonical" href="https://bjcoombs.github.io/ai-native-toolkit/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AI Native Toolkit">
+<meta property="og:title" content="AI Native Toolkit">
+<meta property="og:description" content="An AI contributor is always the new hire. Skills for Claude Code and any AI assistant that make the codebase supply the tenure: a navigable map, explicit contracts, and guardrails.">
+<meta property="og:url" content="https://bjcoombs.github.io/ai-native-toolkit/">
+<meta name="twitter:card" content="summary">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,600;0,800;1,400&display=swap">
+<style>
+  :root {
+    --hue: 28;
+    --bg: oklch(0.985 0.004 var(--hue));
+    --surface: oklch(0.955 0.008 var(--hue));
+    --ink: oklch(0.22 0.02 var(--hue));
+    --muted: oklch(0.43 0.025 var(--hue));
+    --rule: oklch(0.87 0.012 var(--hue));
+    --brand: oklch(0.38 0.135 var(--hue));
+    --brand-deep: oklch(0.29 0.105 var(--hue));
+    --on-brand: oklch(0.97 0.012 50);
+    --on-brand-muted: oklch(0.86 0.04 40);
+    --ember: oklch(0.76 0.14 48);
+    --link: oklch(0.45 0.15 var(--hue));
+    --plate: #ffffff;
+    --focus: oklch(0.62 0.17 48);
+
+    --sans: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+    --step--1: clamp(0.86rem, 0.84rem + 0.1vw, 0.92rem);
+    --step-0: clamp(1.02rem, 0.98rem + 0.2vw, 1.12rem);
+    --step-1: clamp(1.3rem, 1.2rem + 0.5vw, 1.55rem);
+    --step-2: clamp(1.65rem, 1.45rem + 1vw, 2.2rem);
+    --step-3: clamp(2.2rem, 1.7rem + 2.6vw, 4rem);
+
+    --gutter: clamp(1rem, 0.6rem + 2vw, 2.5rem);
+    --measure: 68ch;
+    --wide: 76rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: oklch(0.17 0.012 var(--hue));
+      --surface: oklch(0.21 0.016 var(--hue));
+      --ink: oklch(0.94 0.008 var(--hue));
+      --muted: oklch(0.76 0.018 var(--hue));
+      --rule: oklch(0.33 0.02 var(--hue));
+      --brand: oklch(0.31 0.11 var(--hue));
+      --brand-deep: oklch(0.23 0.08 var(--hue));
+      --link: oklch(0.78 0.12 45);
+      --plate: #ffffff;
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: var(--step-0);
+    line-height: 1.6;
+    overflow-wrap: break-word;
+  }
+  h1, h2, h3 { line-height: 1.12; text-wrap: balance; margin: 0; letter-spacing: -0.015em; }
+  p { margin: 0; text-wrap: pretty; }
+  a { color: var(--link); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+  a:hover { text-decoration-thickness: 2px; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 2px; }
+  code, kbd, pre { font-family: var(--mono); font-size: 0.92em; }
+  img { max-width: 100%; height: auto; display: block; }
+
+  .skip { position: absolute; left: var(--gutter); top: -4rem; background: var(--ink); color: var(--bg); padding: 0.5rem 0.9rem; z-index: 10; }
+  .skip:focus { top: 0.75rem; }
+
+  .wrap { max-width: var(--wide); margin-inline: auto; padding-inline: var(--gutter); }
+
+  /* Masthead and hero: one drenched oxblood band */
+  .hero { background: var(--brand); color: var(--on-brand); }
+  .hero a { color: var(--on-brand); }
+  .masthead {
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+    gap: 0.5rem 1.5rem; padding-block: 1.25rem;
+    border-bottom: 1px solid color-mix(in oklch, var(--on-brand) 22%, transparent);
+  }
+  .wordmark { font-weight: 800; letter-spacing: -0.01em; text-decoration: none; font-size: var(--step-0); }
+  .masthead nav ul { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; list-style: none; margin: 0; padding: 0; font-size: var(--step--1); }
+  .masthead nav a { text-decoration: none; color: var(--on-brand-muted); }
+  .masthead nav a:hover { color: var(--on-brand); text-decoration: underline; }
+
+  .hero-body {
+    display: grid; gap: clamp(2rem, 4vw, 4rem);
+    padding-block: clamp(3rem, 8vw, 6.5rem) clamp(3rem, 7vw, 5.5rem);
+  }
+  @media (min-width: 60rem) { .hero-body { grid-template-columns: 1fr 1.1fr; align-items: start; } .hero-body h1 { grid-column: 1 / -1; } }
+  .hero-body > * { min-width: 0; }
+  p code, dd code, li code { overflow-wrap: anywhere; }
+  .hero h1 { font-size: var(--step-3); font-weight: 800; letter-spacing: -0.025em; max-width: 22ch; }
+  .hero h1 span { color: var(--ember); }
+  .lede { margin-top: 0; font-size: var(--step-1); line-height: 1.45; max-width: 36ch; color: var(--on-brand-muted); }
+  .lede strong { color: var(--on-brand); font-weight: 600; }
+
+  .install h2 { font-size: var(--step-0); font-weight: 600; margin-bottom: 0.25rem; }
+  .install p { font-size: var(--step--1); color: var(--on-brand-muted); max-width: 46ch; }
+  .install p + p { margin-top: 0.85rem; }
+
+  .cmd {
+    position: relative; margin: 0.9rem 0 1rem;
+    background: var(--brand-deep); border-radius: 6px;
+    border: 1px solid color-mix(in oklch, var(--on-brand) 16%, transparent);
+  }
+  .cmd pre { margin: 0; padding: 1rem 1.1rem; overflow-x: auto; line-height: 1.75; font-size: var(--step--1); }
+  .cmd pre code { font-size: 1em; }
+  .cmd .prompt { color: var(--ember); user-select: none; }
+  .cmd-bar {
+    display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+    padding: 0.45rem 0.5rem 0.45rem 1.1rem; font-size: 0.78rem; color: var(--on-brand-muted);
+    border-bottom: 1px solid color-mix(in oklch, var(--on-brand) 14%, transparent);
+  }
+  .copy {
+    font: 600 0.78rem/1 var(--sans); padding: 0.45rem 0.65rem; border-radius: 4px; cursor: pointer;
+    color: var(--on-brand); background: color-mix(in oklch, var(--on-brand) 12%, transparent);
+    border: 1px solid color-mix(in oklch, var(--on-brand) 28%, transparent);
+  }
+  .copy:hover { background: color-mix(in oklch, var(--on-brand) 22%, transparent); }
+  .copy[hidden] { display: none; }
+
+  /* Sections */
+  main section { padding-block: clamp(3.5rem, 8vw, 6rem); }
+  main section + section { border-top: 1px solid var(--rule); }
+  .section-head { max-width: var(--measure); margin-bottom: clamp(2rem, 4vw, 3rem); }
+  .section-head h2 { font-size: var(--step-2); font-weight: 800; }
+  .section-head p { margin-top: 0.9rem; color: var(--muted); }
+
+  /* Thesis: two halves of one ethic */
+  .thesis { display: grid; gap: 2rem clamp(2rem, 5vw, 5rem); }
+  @media (min-width: 52rem) { .thesis { grid-template-columns: 1fr 1fr; } }
+  .thesis h3 { font-size: var(--step-1); font-weight: 600; margin-bottom: 0.6rem; }
+  .thesis p { max-width: 52ch; color: var(--muted); }
+  .thesis p strong { color: var(--ink); font-weight: 600; }
+  .pull {
+    margin: clamp(2.5rem, 5vw, 3.5rem) 0 0; font-size: var(--step-2); font-weight: 800;
+    letter-spacing: -0.02em; line-height: 1.15; max-width: 24ch; text-wrap: balance;
+  }
+  .pull em { font-style: normal; color: var(--link); }
+
+  /* Skill index: a ruled legend, not cards */
+  .legend { margin: 0; display: grid; }
+  .legend > div {
+    display: grid; gap: 0.25rem 2rem; padding-block: 1.1rem;
+    border-top: 1px solid var(--rule);
+  }
+  .legend > div:last-child { border-bottom: 1px solid var(--rule); }
+  @media (min-width: 46rem) { .legend > div { grid-template-columns: 13rem 1fr; align-items: baseline; } }
+  .legend dt { font-family: var(--mono); font-weight: 600; font-size: var(--step-0); }
+  .legend dd { margin: 0; max-width: var(--measure); }
+  .group-label { font-size: var(--step-1); font-weight: 600; margin: 2.75rem 0 0.75rem; }
+  .group-label:first-of-type { margin-top: 0; }
+  .note { margin-top: 1rem; font-size: var(--step--1); color: var(--muted); max-width: var(--measure); }
+
+  /* Showcase */
+  .figure-row { display: grid; gap: 1.25rem; }
+  @media (min-width: 48rem) { .figure-row { grid-template-columns: 1fr 1fr; } }
+  .figure-row + .figure-row, .delta + .figure-row { margin-top: clamp(3rem, 6vw, 4.5rem); }
+  .row-title { font-size: var(--step-1); font-weight: 600; grid-column: 1 / -1; }
+  .row-title + p { grid-column: 1 / -1; color: var(--muted); max-width: var(--measure); margin-top: -0.5rem; }
+  figure { margin: 0; }
+  .plate {
+    display: block; background: var(--plate); border: 1px solid var(--rule); border-radius: 4px;
+    padding: clamp(0.4rem, 1vw, 0.75rem); transition: border-color 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .plate:hover { border-color: var(--link); }
+  figcaption { margin-top: 0.7rem; font-size: var(--step--1); color: var(--muted); }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  .delta { margin-top: clamp(2.5rem, 5vw, 3.5rem); display: grid; gap: 0; border-top: 2px solid var(--ink); }
+  @media (min-width: 40rem) { .delta { grid-template-columns: repeat(4, 1fr); } }
+  .delta div { padding: 1rem 1rem 1rem 0; border-bottom: 1px solid var(--rule); }
+  .delta dt { font-size: var(--step--1); color: var(--muted); }
+  .delta dd { margin: 0.2rem 0 0; font-family: var(--mono); font-size: var(--step-1); }
+  .delta dd s { color: var(--muted); text-decoration-thickness: 1px; }
+
+  .howto { margin-top: clamp(2.5rem, 5vw, 3.5rem); display: grid; gap: 1.5rem clamp(2rem, 5vw, 4rem); }
+  @media (min-width: 52rem) { .howto { grid-template-columns: 1fr 1fr; } }
+  .howto h3 { font-size: var(--step-0); font-weight: 600; margin-bottom: 0.5rem; }
+  .howto ul { margin: 0; padding-left: 1.1rem; color: var(--muted); }
+  .howto li + li { margin-top: 0.35rem; }
+  .howto li strong { color: var(--ink); font-weight: 600; }
+
+  /* Elsewhere */
+  .links { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+  .links li { border-top: 1px solid var(--rule); padding-block: 1.1rem; display: grid; gap: 0.2rem 2rem; }
+  .links li:last-child { border-bottom: 1px solid var(--rule); }
+  @media (min-width: 46rem) { .links li { grid-template-columns: 22rem 1fr; align-items: baseline; } }
+  .links a { font-weight: 600; }
+  .links span { color: var(--muted); max-width: var(--measure); }
+
+  footer { background: var(--surface); padding-block: 2rem; font-size: var(--step--1); color: var(--muted); }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; justify-content: space-between; }
+
+  /* One page-load move: the headline settles in, then the install panel */
+  @media (prefers-reduced-motion: no-preference) {
+    .hero h1, .hero .lede, .install { animation: settle 700ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .hero .lede { animation-delay: 90ms; }
+    .install { animation-delay: 180ms; }
+    @keyframes settle { from { opacity: 0.001; transform: translateY(0.6rem); } }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="masthead">
+      <a class="wordmark" href="./">ai-native-toolkit</a>
+      <nav aria-label="Primary">
+        <ul>
+          <li><a href="#skills">Skills</a></li>
+          <li><a href="#assess">What /assess draws</a></li>
+          <li><a href="#elsewhere">Elsewhere</a></li>
+          <li><a href="https://github.com/bjcoombs/ai-native-toolkit">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+
+    <div class="hero-body">
+      <h1>An AI contributor is always the new hire. <span>Make the codebase supply the tenure.</span></h1>
+      <div>
+        <p class="lede">A Claude Code plugin, and standalone skills for any AI assistant, built so a fresh agent works like an engineer who has been in the org <strong>eighteen months</strong>: a navigable map, load-bearing contracts made explicit, and guardrails that make the wrong change hard.</p>
+      </div>
+
+      <section class="install" aria-labelledby="install-title">
+        <h2 id="install-title">Install in Claude Code</h2>
+        <p>Run these inside a Claude Code session, not a shell. <code>/plugin</code> is a Claude Code command.</p>
+        <div class="cmd">
+          <div class="cmd-bar"><span>Claude Code prompt</span><button class="copy" type="button" hidden data-copy="/plugin marketplace add https://github.com/bjcoombs/ai-native-toolkit&#10;/plugin install ai-native-toolkit@ai-native-toolkit">Copy</button></div>
+          <pre tabindex="0" aria-label="Install commands"><code><span class="prompt" aria-hidden="true">&gt; </span>/plugin marketplace add https://github.com/bjcoombs/ai-native-toolkit
+<span class="prompt" aria-hidden="true">&gt; </span>/plugin install ai-native-toolkit@ai-native-toolkit</code></pre>
+        </div>
+        <p>Skills appear namespaced, for example <code>/ai-native-toolkit:assess</code>. Update with <code>/plugin update ai-native-toolkit</code>.</p>
+        <p>No Claude Code? <a href="https://github.com/bjcoombs/ai-native-toolkit/releases/latest">Download the standalone skill ZIPs</a> from the latest release and upload them to claude.ai, Claude Desktop, Cowork, or any assistant that reads the Agent Skills format.</p>
+      </section>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <section aria-labelledby="why-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="why-title">The difference is context, not capability</h2>
+        <p>Every agent session starts with an empty head and one narrow context window. The question is how much of a tenured engineer's implicit map the codebase has made explicit.</p>
+      </div>
+      <div class="thesis">
+        <div>
+          <h3>The map</h3>
+          <p>Where things live, which contracts are load-bearing, where the minefields are. The aim is a codebase legible enough that <strong>the relevant slice fits one context window</strong>, with the agent's answers anchored to code a person can check in ten seconds.</p>
+        </div>
+        <div>
+          <h3>The guardrails</h3>
+          <p>When a contributor makes a mistake, ask what made it possible and what would make it impossible next time. Linters, architecture tests, CI gates, coverage and review bots <strong>protect the contributor by design</strong>, the way staged environments protect a new engineer.</p>
+        </div>
+      </div>
+      <p class="pull">Legibility you can trust, <em>not omniscience you can't.</em></p>
+    </div>
+  </section>
+
+  <section id="skills" aria-labelledby="skills-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="skills-title">Skills</h2>
+        <p>Invoke each one in Claude Code as <code>/ai-native-toolkit:&lt;name&gt;</code>. The standalone ZIPs fire on the same slash name or on a natural-language request.</p>
+      </div>
+
+      <h3 class="group-label">Portable, also as standalone ZIPs</h3>
+      <dl class="legend" data-kind="skill" data-standalone="true">
+        <div>
+          <dt>/assess</dt>
+          <dd>Scores a codebase's readiness for AI contributors against a 0-8 layered contract model, with a complexity hotspot treemap and a doc-navigability graph. Writes a report with the Top 3 Actions, naming files.</dd>
+        </div>
+        <div>
+          <dt>/huddle</dt>
+          <dd>Structured multi-perspective deliberation using Six Thinking Hats, sized by Fibonacci from solo to board.</dd>
+        </div>
+        <div>
+          <dt>/deslop</dt>
+          <dd>Detects and removes the telltale signs of AI writing, derived from Wikipedia's "Signs of AI writing". Runs as a silent gate or an explicit edit pass.</dd>
+        </div>
+        <div>
+          <dt>/skill-forge</dt>
+          <dd>Hardens a skill or agent instruction file through judge-panel refinement rounds until it clears a 3-tier promotion gate.</dd>
+        </div>
+        <div>
+          <dt>/semantic-compress</dt>
+          <dd>Shrinks an LLM-directed document while preserving what it does, gating whole-document distillation on an A/B behavioural-equivalence check.</dd>
+        </div>
+      </dl>
+
+      <h3 class="group-label">Claude Code only</h3>
+      <dl class="legend" data-kind="skill">
+        <div>
+          <dt>/ghsync</dt>
+          <dd>Bulk-clones and fast-forward syncs every GitHub repo you can access across an org or personal account.</dd>
+        </div>
+        <div>
+          <dt>/ghreport</dt>
+          <dd>Read-only org repo state report: open PRs, default-branch CI, security alerts and branch protection per repo.</dd>
+        </div>
+      </dl>
+
+      <h3 class="group-label">Portable commands</h3>
+      <dl class="legend" data-kind="manual">
+        <div><dt>/6hats</dt><dd>Solo Six Thinking Hats analysis: <code>/huddle</code> at team size 1.</dd></div>
+        <div><dt>/understand</dt><dd>Deep understanding mode (nemawashi): exhaustive context-gathering before action.</dd></div>
+      </dl>
+
+      <h3 class="group-label">Workflow commands</h3>
+      <dl class="legend" data-kind="manual">
+        <div><dt>/tm</dt><dd>Task Master orchestration: starts, reviews, or cleans up tasks based on current state.</dd></div>
+        <div><dt>/issues</dt><dd>Triages open GitHub issues, then runs the agent-ready ones to merge with Agent Teams.</dd></div>
+        <div><dt>/fix-pr</dt><dd>Iterates on a PR's CI failures and review comments until it is green.</dd></div>
+        <div><dt>/fix-develop</dt><dd>Fix loop for failing CI on the repo's default branch.</dd></div>
+      </dl>
+      <p class="note">The workflow commands bake in one author's daily setup: a <code>&lt;repo&gt;-main/</code> plus <code>worktree/</code> layout, GitHub and the <code>gh</code> CLI, Task Master, review bots, and the Agent Teams flag. Read the <a href="https://github.com/bjcoombs/ai-native-toolkit#adapting-for-your-workflow">adapting notes</a> before relying on them elsewhere.</p>
+    </div>
+  </section>
+
+  <section id="assess" aria-labelledby="assess-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="assess-title">What <code>/assess</code> draws</h2>
+        <p>Two views from one run on a real monorepo of about 650k lines, file paths sanitized: before, and after its maintainers worked through the report's Top 3 Actions. The analysis is conventional static analysis and git history, not the model, so the findings reproduce run to run. Open any image for the full interactive SVG.</p>
+      </div>
+
+      <div class="figure-row">
+        <h3 class="row-title">Doc-navigability graph</h3>
+        <p>Can an agent traverse the docs to the right place, and is what it finds still true?</p>
+        <figure>
+          <a class="plate" href="./example-doc-graph.svg"><img src="./example-doc-graph.svg" width="1180" height="1230" loading="lazy" decoding="async" alt="Doc-navigability graph before the action sweep: 254 docs, 30% reachable from the entry point, 43 islands, 15 broken links."></a>
+          <figcaption><b>Before.</b> 30% reachable, 24% orphaned, 43 islands, 15 broken links.</figcaption>
+        </figure>
+        <figure>
+          <a class="plate" href="./example-doc-graph-after.svg"><img src="./example-doc-graph-after.svg" width="1180" height="1230" loading="lazy" decoding="async" alt="Doc-navigability graph after the action sweep: 247 docs, 89% reachable from the entry point, 20 islands, 0 broken links."></a>
+          <figcaption><b>After the Top 3 Actions.</b> 89% reachable, 11% orphaned, 20 islands, no broken links.</figcaption>
+        </figure>
+      </div>
+
+      <dl class="delta" aria-label="Doc graph change after the Top 3 Actions">
+        <div><dt>Reachable from entry</dt><dd><s>30%</s> 89%</dd></div>
+        <div><dt>Orphaned docs</dt><dd><s>24%</s> 11%</dd></div>
+        <div><dt>Disconnected islands</dt><dd><s>43</s> 20</dd></div>
+        <div><dt>Broken links</dt><dd><s>15</s> 0</dd></div>
+      </dl>
+
+      <div class="figure-row">
+        <h3 class="row-title">Complexity hotspot heatmap</h3>
+        <p>Which files are riskiest to change next week? The heatmap stays the same repo's complexity profile throughout: it shows which territory is dangerous, while the graph shows whether the map is honest.</p>
+        <figure>
+          <a class="plate" href="./example-heatmap.svg"><img src="./example-heatmap.svg" width="1600" height="1000" loading="lazy" decoding="async" alt="Complexity hotspot heatmap before the action sweep."></a>
+          <figcaption><b>Before.</b> Size is estimated tokens, hue is complexity, saturation is churn.</figcaption>
+        </figure>
+        <figure>
+          <a class="plate" href="./example-heatmap-after.svg"><img src="./example-heatmap-after.svg" width="1600" height="1000" loading="lazy" decoding="async" alt="Complexity hotspot heatmap for the same repo after the action sweep."></a>
+          <figcaption><b>After.</b> The same repo, same encoding.</figcaption>
+        </figure>
+      </div>
+
+      <div class="howto">
+        <div>
+          <h3>Reading the doc graph</h3>
+          <ul>
+            <li><strong>Position is reachability.</strong> The centre is the entry doc, rings are link distance from it, the rim is unreachable, and a dashed ring marks an orphan.</li>
+            <li><strong>Colour is staleness.</strong> Vivid red is a frozen doc beside churning code: a lying map.</li>
+            <li><strong>Size is file length.</strong> Solid edges are links, dotted edges are references.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Reading the heatmap</h3>
+          <ul>
+            <li><strong>Size is estimated tokens</strong> (about chars/4, the context-window unit). Lines of code are in the tooltip.</li>
+            <li><strong>Hue is cyclomatic complexity</strong>, red for high. <strong>Saturation is recent git churn</strong>, vivid for active.</li>
+            <li>The vivid-red blocks are what an agent or a person is most likely to break next week. Both views use the colour-blind-safe OrRd ramp, with no red-green.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="elsewhere" aria-labelledby="elsewhere-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="elsewhere-title">Elsewhere</h2>
+      </div>
+      <ul class="links">
+        <li><a href="./huddle-explainer/visualization.html">Huddle explainer</a><span>A narrated visual walkthrough of how <code>/huddle</code> sizes a team and seats its hats.</span></li>
+        <li><a href="https://github.com/marketplace/actions/ai-readiness-assess-gate">AI-Readiness Assess Gate</a><span>The <code>/assess</code> deterministic core as a GitHub Action. Runs on every PR with no model and no API keys; warn-only unless <code>.assess/config.toml</code> opts in to failing.</span></li>
+        <li><a href="https://github.com/bjcoombs/ai-native-toolkit">Source on GitHub</a><span>The README, the Map of Content, and every skill's <code>SKILL.md</code>.</span></li>
+        <li><a href="https://github.com/bjcoombs/ai-native-toolkit/releases/latest">Latest release</a><span>Release notes and the link to that version's standalone skill ZIPs.</span></li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Licensed under <a href="https://github.com/bjcoombs/ai-native-toolkit/blob/main/LICENSE">Apache 2.0</a>.</span>
+    <span><a href="https://github.com/bjcoombs/ai-native-toolkit">github.com/bjcoombs/ai-native-toolkit</a></span>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    if (!navigator.clipboard) return;
+    document.querySelectorAll('.copy').forEach(function (btn) {
+      btn.hidden = false;
+      btn.addEventListener('click', function () {
+        navigator.clipboard.writeText(btn.dataset.copy).then(function () {
+          btn.textContent = 'Copied';
+          setTimeout(function () { btn.textContent = 'Copy'; }, 1600);
+        }, function () {
+          btn.textContent = 'Select and copy';
+          setTimeout(function () { btn.textContent = 'Copy'; }, 2400);
+        });
+      });
+    });
+  })();
+</script>
+</body>
+</html>
