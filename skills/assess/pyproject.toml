@@ -113,9 +113,12 @@ disallow_any_generics = false
 
 [tool.mutmut]
 # Layer 6 truth-pressure: line coverage shows the tests execute this code,
-# mutation testing shows they would fail if it were wrong. Scoped to three
-# deterministic, well-tested lib/ modules from /assess's own test-focus list;
-# widening the scope is a deliberate ratchet, since a run is O(mutants).
+# mutation testing shows they would fail if it were wrong. Scoped to five
+# deterministic lib/ modules: three small ones from /assess's own test-focus
+# list plus the two largest complexity hotspots (doc_graph, keyhole_signals),
+# about 4.5k mutants as of 2026-10 (the weekly job summary has the live count).
+# Widening the scope is a deliberate ratchet, since a run is O(mutants): keep
+# the weekly run well inside the workflow's 45m budget.
 # Run weekly and on demand by .github/workflows/mutation.yml, never per PR.
 #
 # "src" is a committed relative symlink to scripts/. mutmut 3 names a mutant
@@ -134,6 +137,8 @@ only_mutate = [
     "src/lib/stats_diff.py",
     "src/lib/promissory_markers.py",
     "src/lib/doc_staleness.py",
+    "src/lib/doc_graph.py",
+    "src/lib/keyhole_signals.py",
 ]
 # Each mutant runs only the tests mutmut's coverage pass maps to it; this list
 # bounds that pass to the suites that own the modules in scope. (tests_dir is
@@ -142,4 +147,6 @@ pytest_add_cli_args_test_selection = [
     "tests/test_stats_diff.py",
     "tests/test_promissory_markers.py",
     "tests/test_doc_staleness.py",
+    "tests/test_doc_graph.py",
+    "tests/test_keyhole_signals.py",
 ]

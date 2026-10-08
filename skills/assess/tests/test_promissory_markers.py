@@ -476,6 +476,18 @@ def test_generated_and_prose_exclusions(tmp_path: Path) -> None:
     assert paths_by_family["todo"] == {"docs/plan.md"}
 
 
+def test_local_mutmut_tree_is_not_scanned(tmp_path: Path) -> None:
+    """A leftover mutants/ tree copies the sources, so a repo that does not
+    gitignore it must not see each marker twice."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit(repo, {"src/app.py": "# TODO fix this\n"}, day=1)
+    copy = repo / "mutants" / "src" / "app.py"
+    copy.parent.mkdir(parents=True)
+    copy.write_text("# TODO fix this\n", encoding="utf-8")
+    assert {m.path for m in _scan(repo).markers} == {"src/app.py"}
+
+
 # ---------------------------------------------------------------------------
 # Aging: survived touches
 # ---------------------------------------------------------------------------
