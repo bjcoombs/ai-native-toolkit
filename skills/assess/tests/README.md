@@ -109,6 +109,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_run_wiki.py` | `lib/run_wiki.py` - hotspot pages, `index.md` rows and graduation records for one run |
 | `test_scan_registry.py` | `lib/scan_registry.py` - the declared scan table and the loop that runs it |
 | `test_sibling_tests.py` | `lib/sibling_tests.py` - the one sibling-test resolver |
+| `test_import_credit.py` | `lib/import_credit.py` - the import tier of the sibling-test probe |
 | `test_structure_drift.py` | `lib/structure_drift.py` - Tier 0 path-existence structure-drift signal |
 | `test_test_focus.py` | `lib/test_focus.py` - `compute_test_focus` and mutation scope |
 | `test_vault_queries.py` | `lib/vault_queries.py` - vault-native navigation query parser |

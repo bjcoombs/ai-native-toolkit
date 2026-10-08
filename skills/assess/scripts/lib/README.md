@@ -1245,7 +1245,8 @@ layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
 ancestor mirroring the source path, then a conventionally named test anywhere in
 the repository - a parallel tree such as `app/unit-tests/` or Dart's
-`test/unit/` - then a flat tree within two components),
+`test/unit/` - then a test file that imports the source (`import_credit.py`), then a flat
+tree within two components),
 and `has_sibling_test` (the yes/no/unknown verdict, dropping a flat-only match
 on a bare name more than one hot file shares). Three consumers read it and must
 agree in one run: the hotspot page's `Has test file` row
@@ -1264,6 +1265,32 @@ while the path probes see untracked files, and a helper named like a test
 (`test_utils.py`) can credit a lone `utils.py`. Imports `git_churn` and `doc_graph`;
 existence checks bounded to 16 ancestor levels; never raises.
 `tests/test_sibling_tests.py` pins the three-way agreement.
+
+**`import_credit.py`**
+The import tier of the sibling-test probe (issue #485): a source counts as having
+a test file when a test file imports it, so a large test split by concern
+(`test_keyhole_<family>.py`, none named after `keyhole_signals.py`) still credits
+its subject. Reads only files that are tests by name and define a test (a
+top-level `test*` function, or a `Test*` class, `*TestCase` subclass or class
+with `test*` methods; an `it(` / `test(` / `describe(` call outside a
+line-leading comment), so a `conftest.py`, a helper module, or a `test_utils.py` that defines no
+test credits nothing. Python is parsed with `ast`: absolute names credit the
+source whose module path ends with the name (closest unique source to the test;
+a one-part name needs a common directory below the root unless the module sits
+at the root, and a one-part standard-library name such as `json` - from a pinned
+union over CPython 3.10-3.14 - never credits), relative imports resolve exactly, and `from pkg import mod` names
+`pkg/mod.py` when it exists, else `pkg/__init__.py`. JS/TS is a regex over
+relative specifiers only (`import ... from`, `export ... from`, side-effect and
+dynamic `import`, `require`; `import type` and line-leading comments skipped;
+string literals are not parsed; a NodeNext `./foo.js` specifier also resolves to
+`foo.ts`); alias and package
+specifiers keep the name match, as do all other languages. Modules inside a test
+directory are support, never credited. Every module a qualifying test imports
+directly is credited. Runs lazily, once per `TestIndex`, over the index's test
+and source lists (so the same excludes and tracked-files rule apply), capped at
+10,000 test files of at most 1 MB in sorted order (measured: 0.2 s for this
+repo's 110 tests; 0.05 s for 272 TS tests in a 4,600-file monorepo). Stdlib only; never raises.
+Tests: `tests/test_import_credit.py`.
 
 **`test_focus.py`**
 Cross-joins four inputs - the hotspot risk band (position in
