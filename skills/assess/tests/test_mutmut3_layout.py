@@ -479,3 +479,11 @@ def test_a_leftover_mutants_tree_is_never_walked() -> None:
     local run; the shared walks skip it so nothing is counted twice."""
     assert "mutants" in doc_graph.EXCLUDE_DIRS
     assert "mutants" in structure_graph.EXCLUDE_DIRS
+
+
+def test_tool_error_line_keeps_a_raised_warning() -> None:
+    """A suite under ``filterwarnings = error`` fails with the warning as its
+    exception; that line is the cause, not noise."""
+    proc = subprocess.CompletedProcess(
+        ["mutmut"], 1, stdout="", stderr=_DEPRECATION + "DeprecationWarning: old api\n")
+    assert mutmut3._tool_error_line(proc) == "DeprecationWarning: old api"

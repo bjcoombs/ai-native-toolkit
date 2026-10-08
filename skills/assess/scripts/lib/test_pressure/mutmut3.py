@@ -67,8 +67,10 @@ _TOML_MUTMUT_SECTION_RE = re.compile(r"^[ \t]*\[tool\.mutmut\][ \t]*(#.*)?$", re
 _INI_MUTMUT_SECTION_RE = re.compile(r"^\[mutmut\][ \t]*$", re.M)
 
 # Python's warnings module prints "<file>:<line>: UserWarning: <text>" and then
-# the source line that raised it; neither is the reason a run failed.
-_WARNING_LINE_RE = re.compile(r"\b\w*Warning: |^warnings\.warn\(")
+# the source line that raised it; neither is the reason a run failed. Anchored
+# to that format, so a traceback ending in a raised Warning (a suite run with
+# filterwarnings = error) still yields its last line.
+_WARNING_LINE_RE = re.compile(r"^\S+:\d+: \w*Warning: |^warnings\.warn\(")
 
 _MAX_REASON_DETAIL = 300        # chars of tool error kept in a stored reason
 
@@ -188,6 +190,27 @@ def _config_file(pkg: Path, pkg_rel: str) -> str:
     name = ("pyproject.toml" if _TOML_MUTMUT_SECTION_RE.search(_read(pkg / "pyproject.toml"))
             else "setup.cfg")
     return f"{pkg_rel}/{name}" if pkg_rel else name
+
+
+def _config_spellings(pkg: Path, rel_scope: list[str]) -> dict[str, str]:
+    """Each focus file (package-relative) as the package's own config sees it.
+    A ``source_paths`` entry may be a link (this repo's ``src -> scripts``):
+    mutmut walks and keys files under the link's name, so ``scripts/lib/x.py``
+    is ``src/lib/x.py`` to its ``only_mutate`` and in ``mutants/``."""
+    cfg = _read_mutmut3_config(pkg)
+    links = [s.rstrip("/") for s in (cfg["source_paths"] or cfg["paths_to_mutate"])
+             if (pkg / s.rstrip("/")).is_symlink()]
+    out: dict[str, str] = {}
+    for f in rel_scope:
+        out[f] = f
+        real = (pkg / f).resolve()
+        for s in links:
+            try:
+                out[f] = f"{s}/{real.relative_to((pkg / s).resolve()).as_posix()}"
+                break
+            except ValueError:
+                continue
+    return out
 
 
 def _repo_config_gap(pkg: Path, pkg_rel: str, rel_scope: list[str]) -> str | None:
@@ -318,7 +341,8 @@ def _to_repo(pkg_rel: str, rel: str) -> str:
 def _copy_repo(repo_root: Path, dest: Path) -> bool:
     """Copy the working tree (tracked plus untracked-but-not-ignored files) to
     ``dest``. Falls back to a filtered tree copy outside a git repository.
-    Returns True when the copy came from a git listing."""
+    Symlinks are copied as links. Returns True when the copy came from a git
+    listing."""
     try:
         proc = subprocess.run(
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
@@ -329,15 +353,22 @@ def _copy_repo(repo_root: Path, dest: Path) -> bool:
     except (subprocess.TimeoutExpired, OSError):
         listed = []
     if not listed:
-        shutil.copytree(repo_root, dest, ignore=_COPY_IGNORE, dirs_exist_ok=True)
+        shutil.copytree(repo_root, dest, ignore=_COPY_IGNORE, dirs_exist_ok=True,
+                        symlinks=True)
         return False
     for rel in listed:
         if rel.split("/", 1)[0] in {".assess", "mutants"}:
             continue
         src = repo_root / rel
+        target = dest / rel
+        if src.is_symlink():
+            # git tracks a link as one entry; recreate it, never its target's
+            # contents (a directory link would otherwise be skipped as no file).
+            target.parent.mkdir(parents=True, exist_ok=True)
+            os.symlink(os.readlink(src), target)
+            continue
         if not src.is_file():
             continue
-        target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, target)
     return True
@@ -402,6 +433,10 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
     pkg_on_disk = repo_root / pkg_rel if pkg_rel else repo_root
     config = "repo" if _mutmut3_reads_config(pkg_on_disk) else "generated"
     record = _group_record(pkg_rel, config, [_to_repo(pkg_rel, f) for f in rel_scope])
+    spelled = (_config_spellings(pkg_on_disk, rel_scope) if config == "repo"
+               else {f: f for f in rel_scope})
+    cfg_scope = list(spelled.values())
+    back = {v: k for k, v in spelled.items()}
     timed_out = {**record, "mutation_run": False,
                  "reason": f"exceeded {MUTATION_TIMEOUT}s timeout"}
     # ignore_cleanup_errors: a read-only directory carried over by the copy, or
@@ -415,7 +450,7 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
             return timed_out, []
         try:
             from_git = _copy_repo(repo_root, work)
-            gap = _prepare_group(work, pkg_rel, rel_scope,
+            gap = _prepare_group(work, pkg_rel, cfg_scope,
                                  deadline if from_git else None)
             if gap:
                 return {**record, "mutation_run": False, "reason": gap}, []
@@ -432,16 +467,20 @@ def _run_group(repo_root: Path, pkg_rel: str, rel_scope: list[str],
             return {**record, "mutation_run": False, "reason": str(e)}, []
         per_file = _parse_mutmut3_meta(pkg / "mutants")
         no_records = _no_records_reason("mutmut", proc, scratch=work)
-    return _group_result(record, pkg_rel, rel_scope, per_file, no_records)
+    return _group_result(record, pkg_rel, cfg_scope, per_file, no_records, back)
 
 
 def _group_result(record: dict, pkg_rel: str, rel_scope: list[str],
-                  per_file: list[dict], no_records: str) -> tuple[dict, list[dict]]:
+                  per_file: list[dict], no_records: str,
+                  back: dict[str, str]) -> tuple[dict, list[dict]]:
+    """``rel_scope`` and the parsed files use the config's spelling; ``back``
+    maps that spelling to the package-relative path the focus set named."""
     produced = len(per_file)
     if rel_scope:
         wanted = set(rel_scope)
         per_file = [p for p in per_file if p["file"] in wanted]
-    per_file = [{**p, "file": _to_repo(pkg_rel, p["file"])} for p in per_file]
+    per_file = [{**p, "file": _to_repo(pkg_rel, back.get(p["file"], p["file"]))}
+                for p in per_file]
     if not rel_scope:
         record["scope"] = [p["file"] for p in per_file]
     if not per_file:

@@ -102,18 +102,17 @@ enable_error_code = ["ignore-without-code"]
 # widening the scope is a deliberate ratchet, since a run is O(mutants).
 # Run weekly and on demand by .github/workflows/mutation.yml, never per PR.
 #
-# "src" is a link to scripts/ made at run time (`ln -sfn scripts src`, ignored
-# by git). mutmut 3 names a mutant after its file path with only a leading
-# "src." stripped, so scripts/lib/x.py would be keyed scripts.lib.x while the
-# tests import it as lib.x (pythonpath = scripts) and no mutant would match.
-# Run locally from skills/assess, then clean up: /assess's file walks skip
-# mutants/ but not the src link, so a later /assess of this checkout would
-# count the linked files twice. The /assess opt-in mutation pass does not make the
-# link (it is declared only here and in the workflow) and reports it missing.
-#   ln -sfn scripts src
+# "src" is a committed relative symlink to scripts/. mutmut 3 names a mutant
+# after its file path with only a leading "src." stripped, so scripts/lib/x.py
+# would be keyed scripts.lib.x while the tests import it as lib.x
+# (pythonpath = scripts) and no mutant would match. Committing the link keeps
+# this config self-contained: CI and the /assess opt-in mutation pass run it as
+# checked out. /assess's walks do not descend the link (treemap entries are
+# keyed by resolved path), so nothing is counted twice. Run locally from
+# skills/assess, then remove mutants/ (gitignored, and skipped by /assess):
 #   uv run --with mutmut==3.8.0 --with pytest mutmut run
 #   uv run --with mutmut==3.8.0 --with pytest mutmut results   # survivors
-#   rm -rf mutants src
+#   rm -rf mutants
 source_paths = ["src"]
 only_mutate = [
     "src/lib/stats_diff.py",

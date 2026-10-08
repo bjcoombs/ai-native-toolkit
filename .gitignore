@@ -62,7 +62,6 @@ dist/standalone-skills/
 # always-loaded CLAUDE.md with a count-surface trap (issue #226). Committed so
 # the contract test has an input on CI.
 !/skills/skill-forge/tests/fixtures/flawed-instruction-file/CLAUDE.md
-# mutmut 3 working tree and the run-time src -> scripts link it needs (see
-# [tool.mutmut] in skills/assess/pyproject.toml).
+# mutmut 3 working tree (see [tool.mutmut] in skills/assess/pyproject.toml).
+# The src -> scripts link that config mutates through is committed, not ignored.
 /skills/assess/mutants/
-/skills/assess/src
