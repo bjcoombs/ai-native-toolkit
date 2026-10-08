@@ -490,7 +490,7 @@ The E1 trust axis, a leaf module. `find_untrusted_hotspots` crosses the complexi
 and returns the hotspots at or over `DEFAULT_SURVIVOR_DENSITY_THRESHOLD` (0.3);
 `untrusted_hotspot_paths` wraps it so a malformed block degrades to `[]`. Silent without
 per-file mutation data, so the default read-only run never fires it. `keyhole_signals`
-re-exports `find_untrusted_hotspots` and `DEFAULT_SURVIVOR_DENSITY_THRESHOLD`. Tests: `tests/test_keyhole_signals.py` (E1 cases) and
+re-exports `find_untrusted_hotspots` and `DEFAULT_SURVIVOR_DENSITY_THRESHOLD`. Tests: `tests/test_keyhole_untrusted_hotspot.py` (E1 cases) and
 `tests/test_mutation_refresh.py`.
 
 **`mutation_refresh.py`**

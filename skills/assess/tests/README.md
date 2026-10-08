@@ -46,7 +46,15 @@ Every `test_*.py` file in this directory has a row below.
 | `test_doc_graph.py` | `lib/doc_graph.py` - doc link-graph, link parsing (unit level: `test_doc_links.py`), orphan detection, connectivity, MOC validation, doc->code edges |
 | `test_doc_links.py` | `lib/doc_links.py` - link pass called directly: wikilink and markdown-link edges, ghosts, directory links, machine-link counts, code-span skipping, ambiguity, fence stripping |
 | `test_doc_graph_layout.py` | `lib/doc_graph_layout.py` - radial shells, node classification, broken-link ghost grouping |
-| `test_keyhole_signals.py` | `lib/keyhole_signals.py` - integration barrier; derivation of the run-context blocks and the derived findings named in `FINDING_ORDER` from mocked upstream signal outputs |
+| `test_keyhole_hidden_coupling.py` | `lib/keyhole_signals.py` - containment by directory, static-modularity projection, behaviour block, coupled pairs on hidden_coupling, structure-drift seams |
+| `test_keyhole_blocks.py` | `lib/keyhole_signals.py` - documentation, understanding and runtime run-context blocks |
+| `test_keyhole_attention.py` | `lib/keyhole_signals.py` - `assemble_findings` in `FINDING_ORDER`, candidate dead weight, attention ranking and tie-break, `FINDING_MODES` |
+| `test_keyhole_render.py` | `lib/keyhole_signals.py` - findings markdown, keyhole summary, prescribed actions |
+| `test_keyhole_untrusted_hotspot.py` | `lib/keyhole_signals.py` - E1 untrusted hotspots, E2 test-to-code mapping |
+| `test_keyhole_accretion.py` | `lib/keyhole_signals.py` - accretion_ratchet finding |
+| `test_keyhole_override_contradicts.py` | `lib/keyhole_signals.py` - override_contradicts_signals finding |
+| `test_keyhole_suppression.py` | `lib/keyhole_signals.py` - degenerate churn, config excludes, archive paths, pruning of renamed or deleted paths |
+| `keyhole_helpers.py` | shared `integrate()` fixtures for the `test_keyhole_*.py` files (not a test module) |
 | `test_change_coupling.py` | `lib/change_coupling.py` - B1 change-coupling pairs, B2 containment ratio, B4 authorship; synthetic git histories built in tmp dirs |
 | `test_coupling_analysis.py` | `lib/coupling_analysis.py` - B3 static-vs-historical disagreement; hidden-coupling, bleeding-module, and refactor-boundary classification with mocked inputs |
 | `test_doc_complexity_join.py` | `lib/doc_complexity_join.py` - Signal C: doc_value formula, slop-doc guard, threshold behaviour; mocked complexity-stats and staleness inputs |
