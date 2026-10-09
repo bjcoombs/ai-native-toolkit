@@ -74,7 +74,7 @@ def _scan(root: Path, instruction: tuple[str, ...] = (), harness: object = None)
 
 
 def test_ci_only_repo_caps_at_partial_with_both_reasons(tmp_path: Path) -> None:
-    root = _repo(tmp_path, {".github/workflows/ci.yml": CI, "package.json": "{}"})
+    root = _repo(tmp_path, {".github/workflows/ci.yml": CI, "package.json": '{"dependencies": {"a": "1"}}'})
     block = _scan(root)
     cap = block["layer5_cap"]
     assert cap == {
@@ -227,6 +227,17 @@ def test_untracked_settings_is_not_setup(tmp_path: Path) -> None:
     ("go test ./...", True), ("cargo test", True), ("tox -e py311", True), ("just check", True),
     ("./scripts/ci.sh", True), ("make build", False), ("cd tests", False), ("ls tests", False),
     ("npm install", False), ("pytest", True), ("", False), ("make --check build", False),
+    # Install commands are setup, not checks, even with a check word in them.
+    ("npm ci", False), ("uv sync --extra test", False), ("poetry install --with test", False),
+    ("uv run --with pytest pytest -v", True), ("uv run python -m pytest", True),
+    ("uv run --project skills/assess --with pytest-cov pytest skills/assess", True),
+    ("uv run ruff check .", True), ("uvx tox", True), ("poetry run pytest", True),
+    ("npm run ci", True), ("pnpm test", True), ("yarn run build", False), ("npm run", False),
+    ("python -m pytest -q", True), ("python -m pip install x", False),
+    ("python scripts/run_tests.py", True), ("python app.py", False),
+    ("bash scripts/check.sh", True), ("bash deploy.sh", False), ("./gradlew check", True),
+    ("mvn install", False), ("mvn verify", True), ("cargo check", True), ("go build ./...", False),
+    ("make -C sub test", True), ("make ci", True), ("python -m", False),
 ])
 def test_is_check_command(text: str, expected: bool) -> None:
     assert is_check_command(text) is expected
@@ -267,8 +278,11 @@ def test_entry_points_per_family(tmp_path: Path) -> None:
 
 def test_pinning_rows(tmp_path: Path) -> None:
     root = _repo(tmp_path, {
-        "package.json": "{}", "pnpm-lock.yaml": "",
-        "packages/web/package.json": "{}",  # workspace package: the root lock covers it
+        "package.json": '{"dependencies": {"react": "18"}}', "pnpm-lock.yaml": "",
+        # workspace package: the root lock covers it
+        "packages/web/package.json": '{"devDependencies": {"vite": "5"}}',
+        "scripts-only/package.json": '{"scripts": {"test": "x"}}',  # nothing to lock
+        "bad/package.json": "{",  # does not parse: skipped
         "tools/pyproject.toml": "[tool.ruff]\nline-length = 100\n",  # tool config only
         "svc/pyproject.toml": "[project]\nname='s'\ndependencies=['httpx']\n", "svc/uv.lock": "",
         "poet/pyproject.toml": "[tool.poetry.dependencies]\npython='^3.11'\n",
@@ -293,7 +307,8 @@ def test_pinning_rows(tmp_path: Path) -> None:
 
 def test_locked_bootstrap_satisfies_setup(tmp_path: Path) -> None:
     root = _repo(tmp_path, {
-        "package.json": json.dumps({"scripts": {"test": "jest"}}), "package-lock.json": "{}",
+        "package.json": json.dumps({"scripts": {"test": "jest"}, "devDependencies": {"jest": "29"}}),
+        "package-lock.json": "{}",
         "CLAUDE.md": "Run `npm test`.\n",
     })
     block = _scan(root, ("CLAUDE.md",))

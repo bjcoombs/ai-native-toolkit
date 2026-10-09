@@ -24,8 +24,11 @@ at HEAD (``lib.command_index.repo_files``):
 - ``check``: the test and check entry points the repository defines (package
   scripts, Makefile and justfile targets, tox, nox, pytest, go, cargo, maven,
   gradle), and the check commands each graded instruction file names, resolved
-  with ``lib.command_resolver``. ``named`` lists the ones that resolve.
-- ``pinning``: one row per dependency manifest (``package.json``, a
+  with ``lib.command_resolver``. ``named`` lists the ones that resolve. A check
+  is classified by the target it runs (``make test``, ``npm run ci``, the
+  program after ``uv run``), so an install command such as ``npm ci`` or
+  ``uv sync --extra test`` is never a check.
+- ``pinning``: one row per dependency manifest (a ``package.json`` or
   ``pyproject.toml`` that declares dependencies, ``Pipfile``,
   ``requirements*.txt``, ``go.mod``, ``Cargo.toml``, ``Gemfile``,
   ``composer.json``) and the lockfile beside it or in a parent directory. A
@@ -60,7 +63,7 @@ import statistics
 import tomllib
 from datetime import datetime
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 from lib.command_index import RepoIndex, build_index
 from lib.command_resolver import RUNNERS, command_words, extract_commands, resolve
@@ -87,6 +90,13 @@ SETUP_SCRIPTS = ("script/setup", "script/bootstrap", "bin/setup", "init.sh")
 SETUP_TARGETS = frozenset({"setup", "bootstrap"})
 CHECK_WORDS = frozenset({
     "test", "tests", "check", "checks", "verify", "ci", "validate", "pytest", "tox", "nox",
+})
+_ALWAYS_CHECK = frozenset({"pytest", "py.test", "tox", "nox"})
+_PM_TEST = frozenset({"test", "t", "tst"})
+_VALUED_FLAGS = frozenset({
+    "-C", "-f", "--file", "--makefile", "--directory", "--dir", "--cwd", "--prefix", "--project",
+    "--with", "--extra", "--group", "--only-group", "--python", "-p", "--package", "--from",
+    "--filter", "-F", "--workspace", "-w", "-e", "-s", "--manifest-path",
 })
 CI_TARGET_SECONDS = 600
 CI_RUN_LIMIT = 50
@@ -157,14 +167,44 @@ class Layer5Cap(TypedDict):
     reason: str
 
 
+class SetupBlock(TypedDict):
+    present: bool
+    sources: list[SetupSource]
+
+
+class CheckBlock(TypedDict):
+    entry_points: list[CheckEntry]
+    named: list[NamedCheck]
+    named_total: int
+    unresolved: list[NamedCheck]
+
+
+class PinningBlock(TypedDict):
+    manifests: list[PinRow]
+    all_locked: bool | None
+
+
+class CiDuration(TypedDict):
+    """``available: false`` carries only ``reason``; a measurement carries the rest."""
+
+    available: bool
+    reason: NotRequired[str]
+    branch: NotRequired[str]
+    runs_sampled: NotRequired[int]
+    slowest_median_seconds: NotRequired[int]
+    target_seconds: NotRequired[int]
+    over_target: NotRequired[bool]
+    workflows: NotRequired[list[WorkflowDuration]]
+
+
 class AgentEnvironmentBlock(TypedDict):
     """``run-context.json`` ``agent_environment``."""
 
     available: bool
-    setup: dict[str, Any]
-    check: dict[str, Any]
-    pinning: dict[str, Any]
-    ci_duration: dict[str, Any]
+    setup: SetupBlock
+    check: CheckBlock
+    pinning: PinningBlock
+    ci_duration: CiDuration
     findings: list[EnvFinding]
     layer5_cap: Layer5Cap
 
@@ -187,8 +227,9 @@ def _finding(kind: FindingKind, line: int | None, detail: str, fix: str,
 def _keys(text: str) -> list[tuple[int, int, str, str]]:
     """``(line, indent, key, value)`` for every mapping-key line, comments dropped.
 
-    Lines inside a block scalar (``key: |``) are skipped, so a script body never
-    reads as keys.
+    A sequence item (``- run: x``) reads as its key two columns in. Lines inside
+    a block scalar (``key: |`` or ``- run: |``) are skipped, so a script body
+    never reads as keys.
     """
     out: list[tuple[int, int, str, str]] = []
     scalar_indent: int | None = None
@@ -201,6 +242,9 @@ def _keys(text: str) -> list[tuple[int, int, str, str]]:
                 continue
             scalar_indent = None
         line = _COMMENT.sub("", raw).rstrip()
+        if line.lstrip(" ").startswith("- "):
+            line = " " * (indent + 2) + line.lstrip(" ")[2:].lstrip(" ")
+            indent += 2
         m = _KEY.match(line)
         if not m:
             continue
@@ -357,15 +401,68 @@ def _is_check_name(name: str) -> bool:
     return any(part in CHECK_WORDS for part in re.split(r"[:_./-]", name.lower()))
 
 
+def _positionals(args: list[str]) -> list[str]:
+    """Non-flag words, with the value of a known valued flag (``--with pytest``) dropped."""
+    out: list[str] = []
+    skip = False
+    for word in args:
+        if skip:
+            skip = False
+        elif word.startswith("-"):
+            skip = word in _VALUED_FLAGS
+        else:
+            out.append(word)
+    return out
+
+
+def _drop_leading_flags(args: list[str]) -> list[str]:
+    """``args`` from the first positional on: the program ``uv run --with x`` runs."""
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        i += 2 if args[i] in _VALUED_FLAGS else 1
+    return args[i:]
+
+
+def _check_target(words: list[str]) -> bool:
+    """Whether the program, subcommand or target a command runs is a check."""
+    head, pos = words[0], _positionals(words[1:])
+    if head in _ALWAYS_CHECK:
+        return True
+    if head in ("uv", "poetry", "uvx"):
+        rest = words[1:]
+        if head != "uvx":
+            if not pos or pos[0] != "run":
+                return False  # sync, install, add: setup, not a check
+            rest = rest[rest.index("run") + 1:]
+        program = _drop_leading_flags(rest)
+        return bool(program) and _check_target(program)
+    if head in ("npm", "pnpm", "yarn", "bun"):
+        if pos and pos[0] in ("run", "run-script"):
+            return len(pos) > 1 and _is_check_name(pos[1])
+        # Built-in subcommands: only the test aliases check; `npm ci` installs.
+        return bool(pos) and pos[0] in _PM_TEST
+    if head in ("python", "python3"):
+        if "-m" in words:
+            module = words[words.index("-m") + 1:words.index("-m") + 2]
+            return bool(module) and module[0] in _ALWAYS_CHECK
+        return bool(pos) and _is_check_name(PurePosixPath(pos[0]).name)
+    if head in ("bash", "sh", "zsh", "source"):
+        return bool(pos) and _is_check_name(PurePosixPath(pos[0]).name)
+    if head.startswith("./") and head not in RUNNERS:
+        return _is_check_name(PurePosixPath(head).name)
+    # make, just, go, cargo, mvn, gradle: the first target or goal names the work.
+    return bool(pos) and _is_check_name(pos[0])
+
+
 def is_check_command(text: str) -> bool:
-    """A command an agent runs to check its work: a modelled runner or script with a check word."""
+    """A command an agent runs to check its work: a check target of a modelled runner or script."""
     words = command_words(text)
     if not words:
         return False
     head = words[0]
     if head not in RUNNERS and not head.startswith("./"):
         return False
-    return any(_is_check_name(w) for w in words if not w.startswith("-"))
+    return _check_target(words)
 
 
 def _entry_points(index: RepoIndex) -> list[CheckEntry]:
@@ -409,7 +506,22 @@ def _named(index: RepoIndex, instruction_files: Any) -> list[NamedCheck]:
 
 
 def _declares_deps(root: Path, rel: str) -> bool:
-    """A pyproject.toml that declares installable dependencies, not only tool config."""
+    """A ``package.json`` or ``pyproject.toml`` that declares installable dependencies.
+
+    A manifest that only holds scripts or tool configuration has nothing to lock;
+    one that does not parse is skipped. Other manifests always count.
+    """
+    name = PurePosixPath(rel).name
+    if name == "package.json":
+        try:
+            pkg = json.loads(_read(root, rel) or "{}")
+        except json.JSONDecodeError:
+            return False
+        return isinstance(pkg, dict) and any(
+            pkg.get(k) for k in ("dependencies", "devDependencies", "optionalDependencies",
+                                 "peerDependencies"))
+    if name != "pyproject.toml":
+        return True
     try:
         data = tomllib.loads(_read(root, rel))
     except tomllib.TOMLDecodeError:
@@ -449,7 +561,7 @@ def _pinning(index: RepoIndex) -> list[PinRow]:
         if is_excluded_path(Path(rel)):
             continue
         if p.name in _LOCKS:
-            if p.name == "pyproject.toml" and not _declares_deps(index.root, rel):
+            if not _declares_deps(index.root, rel):
                 continue
             ecosystem, locks = _LOCKS[p.name]
             lock = _lock_near(index, rel, locks)
@@ -475,7 +587,7 @@ def _seconds(run: dict[str, Any]) -> float | None:
     return secs if secs >= 0 else None
 
 
-def ci_duration(repo_root: Path) -> dict[str, Any]:
+def ci_duration(repo_root: Path) -> CiDuration:
     """Median wall time per workflow over recent successful push runs on the default branch."""
     try:
         repo = open_github(repo_root, CI_TIMEOUT_SECONDS)
