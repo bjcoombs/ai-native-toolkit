@@ -1360,7 +1360,7 @@ a layer or count toward the badge. Tests: `tests/test_agent_harness.py`.
 
 **`agent_environment.py`**
 Can an agent set up the repository and check its own work (issue #514)?
-`scan_agent_environment(repo_root, instruction_files, agent_harness)` reads the
+`scan_agent_environment(repo_root, instruction_files, agent_harness, excludes)` reads the
 files at HEAD through `command_index.build_index` and writes `{available,
 setup{present, sources[]}, check{entry_points[], named[], named_total,
 unresolved[]}, pinning{manifests[], all_locked}, ci_duration, findings[],
@@ -1369,9 +1369,11 @@ layer5_cap{applies, ceiling, unmet[], reason}}`. Setup sources:
 container, `.cursor/environment.json`, a `SessionStart` hook in a tracked
 `.claude/settings.json` (from the `agent_harness` block), `script/setup`,
 `script/bootstrap`, `bin/setup`, `init.sh`, or a Makefile / justfile `setup` or
-`bootstrap` target. Named checks are the check commands a graded instruction
-file gives, resolved by `command_resolver.resolve`, so the verdict matches the
-grader's. Findings are `copilot-setup-steps.yml` breaches of GitHub's documented
+`bootstrap` target. Named checks are the check commands a session-loaded
+instruction file gives (root `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,
+`.cursorrules`, `.github/copilot-instructions.md`), resolved by
+`command_resolver.resolve`, so the verdict matches the grader's. Manifests honour
+the built-in and `.assess/config.toml` excludes. Findings are `copilot-setup-steps.yml` breaches of GitHub's documented
 constraints (one `copilot-setup-steps` job, allowed keys, `timeout-minutes` at
 most 59, the `.yml` path). `layer5_cap` is Partial unless a named check resolves
 and committed setup or a lockfile per manifest exists. `ci_duration` is the one

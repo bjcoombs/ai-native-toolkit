@@ -442,4 +442,34 @@ def test_registered_after_agent_harness() -> None:
     keys = [s.key for s in SCANS]
     spec = next(s for s in SCANS if s.key == "agent_environment")
     assert keys.index("agent_environment") > keys.index("agent_harness")
-    assert spec.reads == ("repo_root", "instruction_files", "agent_harness")
+    assert spec.reads == ("repo_root", "instruction_files", "agent_harness", "excludes")
+
+
+def test_user_excludes_drop_a_manifest(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {
+        "package.json": '{"dependencies": {"a": "1"}}', "package-lock.json": "{}",
+        "examples/demo/package.json": '{"dependencies": {"b": "1"}}',
+        "tools/x/requirements.txt": "httpx\n",
+    })
+    rows = scan_agent_environment(root, {}, None, ({"examples"}, ["requirements.txt"]),
+                                  probe_ci=False)["pinning"]
+    assert [r["manifest"] for r in rows["manifests"]] == ["package.json"]
+    assert rows["all_locked"] is True
+    unexcluded = _scan(root)["pinning"]["manifests"]
+    assert [r["manifest"] for r in unexcluded] == [
+        "examples/demo/package.json", "package.json", "tools/x/requirements.txt"]
+
+
+def test_only_agent_loaded_files_name_a_check(tmp_path: Path) -> None:
+    files = {
+        "Makefile": "test:\n\tx\n",
+        ".github/claude-review-instructions.md": "Run `make test`.\n",
+        "docs/CLAUDE.md": "Run `make test`.\n",
+    }
+    root = _repo(tmp_path, files)
+    block = _scan(root, (".github/claude-review-instructions.md", "docs/CLAUDE.md"))
+    assert block["check"]["named"] == [] and "check_named" in block["layer5_cap"]["unmet"]
+    (root / ".github/copilot-instructions.md").write_text("Run `make test`.\n")
+    _git(root, "add", "-A")
+    block = _scan(root, (".github/copilot-instructions.md", "docs/CLAUDE.md"))
+    assert [n["file"] for n in block["check"]["named"]] == [".github/copilot-instructions.md"]

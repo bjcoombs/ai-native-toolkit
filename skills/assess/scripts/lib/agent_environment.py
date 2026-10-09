@@ -24,14 +24,16 @@ at HEAD (``lib.command_index.repo_files``):
 - ``check``: the test and check entry points the repository defines (package
   scripts, Makefile and justfile targets, tox, nox, pytest, go, cargo, maven,
   gradle), and the check commands each graded instruction file names, resolved
-  with ``lib.command_resolver``. ``named`` lists the ones that resolve. A check
+  with ``lib.command_resolver``; only the files an agent loads at session start
+  count (``AGENT_LOADED``), not a review-bot prompt. ``named`` lists the ones that resolve. A check
   is classified by the target it runs (``make test``, ``npm run ci``, the
   program after ``uv run``), so an install command such as ``npm ci`` or
   ``uv sync --extra test`` is never a check.
 - ``pinning``: one row per dependency manifest (a ``package.json`` or
   ``pyproject.toml`` that declares dependencies, ``Pipfile``,
   ``requirements*.txt``, ``go.mod``, ``Cargo.toml``, ``Gemfile``,
-  ``composer.json``) and the lockfile beside it or in a parent directory. A
+  ``composer.json``) outside the built-in and ``.assess/config.toml`` excludes,
+  and the lockfile beside it or in a parent directory. A
   ``requirements*.txt`` counts as its own lock when every requirement is
   pinned with ``==``.
 - ``findings``: a ``copilot-setup-steps.yml`` that breaks GitHub's documented
@@ -65,6 +67,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, NotRequired, TypedDict
 
+from lib.assess_config import is_user_excluded
 from lib.command_index import RepoIndex, build_index
 from lib.command_resolver import RUNNERS, command_words, extract_commands, resolve
 from lib.doc_graph import is_excluded_path
@@ -97,6 +100,12 @@ _VALUED_FLAGS = frozenset({
     "-C", "-f", "--file", "--makefile", "--directory", "--dir", "--cwd", "--prefix", "--project",
     "--with", "--extra", "--group", "--only-group", "--python", "-p", "--package", "--from",
     "--filter", "-F", "--workspace", "-w", "-e", "-s", "--manifest-path",
+})
+# Instruction files a coding agent loads at session start. A bot prompt
+# (`.github/claude-review-instructions.md`) or `docs/CLAUDE.md` is graded, but
+# naming a check there does not put it in front of the agent doing the work.
+AGENT_LOADED = frozenset({
+    "CLAUDE.md", "AGENTS.md", "GEMINI.md", ".cursorrules", ".github/copilot-instructions.md",
 })
 CI_TARGET_SECONDS = 600
 CI_RUN_LIMIT = 50
@@ -492,7 +501,7 @@ def _entry_points(index: RepoIndex) -> list[CheckEntry]:
 def _named(index: RepoIndex, instruction_files: Any) -> list[NamedCheck]:
     rows: list[NamedCheck] = []
     files = sorted(instruction_files) if isinstance(instruction_files, dict) else []
-    for rel in files:
+    for rel in (f for f in files if f in AGENT_LOADED):
         for cmd in extract_commands(_read(index.root, rel)):
             if not is_check_command(cmd.text):
                 continue
@@ -554,11 +563,12 @@ def _lock_near(index: RepoIndex, rel: str, locks: tuple[str, ...]) -> str | None
         parent = parent.parent
 
 
-def _pinning(index: RepoIndex) -> list[PinRow]:
+def _pinning(index: RepoIndex, excludes: tuple[set[str], list[str]] | None) -> list[PinRow]:
+    dirs, pats = excludes if excludes else (set(), [])
     rows: list[PinRow] = []
     for rel in sorted(index.files):
         p = PurePosixPath(rel)
-        if is_excluded_path(Path(rel)):
+        if is_excluded_path(Path(rel)) or is_user_excluded(Path(rel), dirs, pats):
             continue
         if p.name in _LOCKS:
             if not _declares_deps(index.root, rel):
@@ -654,13 +664,13 @@ def layer5_cap(named: list[NamedCheck], setup: list[SetupSource], pins: list[Pin
 
 def scan_agent_environment(
     repo_root: Path, instruction_files: Any = None, agent_harness: Any = None,
-    *, probe_ci: bool = True,
+    excludes: tuple[set[str], list[str]] | None = None, *, probe_ci: bool = True,
 ) -> AgentEnvironmentBlock:
     """Build the ``agent_environment`` block for the repository at ``repo_root``."""
     index = build_index(repo_root)
     setup, findings = _setup(index, agent_harness)
     named = _named(index, instruction_files)
-    pins = _pinning(index)
+    pins = _pinning(index, excludes)
     resolved = [n for n in named if n["verdict"] == "resolved"]
     return {
         "available": True,

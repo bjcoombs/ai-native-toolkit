@@ -222,7 +222,7 @@ SCANS: tuple[ScanSpec, ...] = (
     # `gh` CI-duration probe. Reads agent_harness for the SessionStart hooks.
     ScanSpec(
         "agent_environment", scan_agent_environment,
-        ("repo_root", "instruction_files", "agent_harness"), STAGE_POST_OFFERS,
+        ("repo_root", "instruction_files", "agent_harness", "excludes"), STAGE_POST_OFFERS,
     ),
 )
 
