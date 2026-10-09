@@ -319,6 +319,11 @@ def test_verified_commands_outgrade_a_directive_monolith(
     assert mono.subscores["directory_trees"] == 1
     assert mono.subscores["overview_sections"] >= 2
     assert mono.subscores["content_penalty"] >= 15
+    # Before the penalties the monolith's capped floor credit (10 + 10 + 10)
+    # cleared the F cutoff, so the anomaly detector reads its F as explained;
+    # the lean file had no penalties to subtract.
+    assert mono.subscores["score_before_penalties"] == 30
+    assert lean.subscores["score_before_penalties"] == lean.score
 
 
 def test_missing_script_and_stale_path_are_findings(grading_repo: RepoContext) -> None:

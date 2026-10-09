@@ -112,6 +112,7 @@ jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .brok
 - `subscores.line_count` / `subscores.word_count` - file size (feeds the size curve below)
 - `subscores.bloat_penalty` - the size-curve penalty (0 when within 200 lines and 2400 words, or when the repo delegates to skills)
 - `subscores.directory_trees` / `subscores.overview_sections` / `subscores.readme_overlap_pct` / `subscores.content_penalty` - directory-tree blocks, repository-overview headings and the share of lines repeated from the root README, and the points they cost
+- `subscores.score_before_penalties` - the score before the size and content penalties (unclamped); an F with this at 25 or more was caused by the penalties, not the content
 - `findings` - `unresolved_command` (a command naming a missing script, target or file), `stale_path` and `stale_symbol` (a backticked path or code symbol nothing at HEAD has), each with `line`, `reference` and `reason`. **A finding is a lead, not a verdict**: about a quarter of flagged stale references are false positives on manual review (a path the sentence says was removed, an external name), so read the line before citing one. Cite a confirmed `unresolved_command` like a confirmed `instruction_claims` failure ("`CLAUDE.md:12` tells the agent to run `npm run lint`; package.json has no `lint` script"); cite stale references as a list to prune, never as a lowered bucket on their own.
 - `freshness_days` - days since the last content edit (bulk mechanical commits that touch most of the repo's docs, such as a licence-header sweep, are skipped; when `.doc_staleness.bulk_commit_scan_complete` is false the history was unreadable or shallow and the value may still count one)
 - `is_alias: true` / `alias_target` - this file is a thin alias (symlink or stub) to a canonical instruction file; it has **inherited** that file's grade. Report it as an alias to `<alias_target>`, not as a standalone doc to rewrite (see "AGENTS.md as an alias" below).
@@ -155,7 +156,7 @@ For a dangling reference, the right verb depends on the target's actual state - 
 
 When multiple instruction files are present (e.g. CLAUDE.md and AGENTS.md as symlinks of the same content), list each in the report.
 
-This replaces the prior subjective "is it generic?" check. The grader rewards positive directives and tradeoff reasoning; it penalizes pure-negative framing and staleness.
+This replaces the prior subjective "is it generic?" check. The grader credits verified commands most and existing paths next, gives directives and tradeoff reasoning only a capped floor, and penalizes size past 200 lines (without skills), directory trees, overview sections, README repetition and staleness.
 
 #### 0b - Navigability (measured as a graph, not a presence check)
 

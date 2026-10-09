@@ -90,17 +90,19 @@ def _mismatch(score: int, line_count: int, subscores: dict[str, int]) -> bool:
 
 
 def test_grade_mismatch_skips_an_f_the_penalties_explain() -> None:
-    """A long file that would clear the F cutoff without the size curve or
+    """A long file that scored above the F cutoff before the size curve and
     content penalties is the grader working as designed."""
-    assert not _mismatch(10, 400, {"bloat_penalty": 20})
-    assert not _mismatch(15, 300, {"bloat_penalty": 5, "content_penalty": 5})
+    assert not _mismatch(0, 400, {"score_before_penalties": 30, "bloat_penalty": 30})
+    assert not _mismatch(15, 300, {"score_before_penalties": 25, "bloat_penalty": 10})
 
 
 def test_grade_mismatch_fires_when_the_penalties_do_not_explain_the_f() -> None:
-    """A 1-point size penalty does not excuse an F that would be an F anyway."""
-    assert _mismatch(5, 210, {"bloat_penalty": 1})
-    assert _mismatch(0, 400, {"content_penalty": 10})
-    assert _mismatch(14, 300, {"bloat_penalty": 10})  # 24: one short of the cutoff
+    """An F the content earned is suspicious, even when penalties also apply."""
+    assert _mismatch(5, 210, {"score_before_penalties": 6, "bloat_penalty": 1})
+    # The clamp case: 20 points of content, 25 of size penalty, stored score 0.
+    assert _mismatch(0, 450, {"score_before_penalties": 20, "bloat_penalty": 25})
+    assert _mismatch(14, 300, {"score_before_penalties": 24})  # one short of the cutoff
+    assert _mismatch(10, 300, {"bloat_penalty": 10})  # pre-#512 context: no key
 
 
 def test_all_hotspots_new_means_rotation_failed() -> None:

@@ -172,6 +172,7 @@ UNKNOWN_ANYWHERE = [
     "cargo install ripgrep",
     "cargo nextest run",
     "python -c 'print(1)'",
+    "python3 -c 'print(open(\"docs/x.md\").read())'",  # a / in the program is not a path
     "python -m http.server",
     "bash -c 'echo hi'",
     "python",

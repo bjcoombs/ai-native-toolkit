@@ -599,6 +599,9 @@ def grade_instructions(
     )
     sub["bloat_penalty"] = bloat_penalty
     sub["content_penalty"] = _content_penalty(sub)
+    # Before the size and content penalties and before clamping, so a reader
+    # can tell an F the penalties caused from one the content earned.
+    sub["score_before_penalties"] = score
     score -= bloat_penalty + sub["content_penalty"]
 
     score = max(0, min(score, 100))

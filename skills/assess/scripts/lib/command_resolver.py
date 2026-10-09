@@ -555,6 +555,8 @@ def _pytest(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
 
 def _python(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
     args = words[1:]
+    if "-c" in args:
+        return _UNKNOWN_RUNNER  # an inline program, not a path
     if "-m" in args:
         rest = args[args.index("-m") + 1:]
         if not rest:
