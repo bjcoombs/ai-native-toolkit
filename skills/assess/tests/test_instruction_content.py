@@ -145,6 +145,16 @@ def test_git_repo_symbols_and_gitignored_paths(git_repo) -> None:
     assert "link" in ctx.index.files  # but the tracked symlink is listed as itself
 
 
+def test_symbol_check_without_a_self_path(git_repo) -> None:
+    """A direct caller with no instruction-file path still gets symbol findings."""
+    repo, commit = git_repo
+    _write(repo, {"x.py": "def kept_name(): pass\n"})
+    commit("init")
+    ctx = build_repo_context(repo)
+    stale = check_symbols("`kept_name` `gone_name`\n", ctx, "")
+    assert [s["reference"] for s in stale] == ["gone_name"]
+
+
 def test_symbol_only_in_the_instruction_file_is_stale(git_repo) -> None:
     repo, commit = git_repo
     _write(repo, {"AGENTS.md": "`only_here_symbol`\n", "x.py": "pass\n"})

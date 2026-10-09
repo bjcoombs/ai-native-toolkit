@@ -443,6 +443,10 @@ def compute_bloat_penalty(
     return penalty, remediation
 
 
+# Scores below this are an F (see ``_letter_grade``).
+F_GRADE_CUTOFF = 25
+
+
 def _letter_grade(score: int) -> str:
     if score >= 80:
         return "A"
@@ -454,7 +458,7 @@ def _letter_grade(score: int) -> str:
         return "B"
     if score >= 40:
         return "C"
-    if score >= 25:
+    if score >= F_GRADE_CUTOFF:
         return "D"
     return "F"
 

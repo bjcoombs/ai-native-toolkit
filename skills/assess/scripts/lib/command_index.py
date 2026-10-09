@@ -28,7 +28,8 @@ import os
 import re
 import subprocess
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from functools import lru_cache
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -120,6 +121,19 @@ def _git_ls_files(root: Path) -> frozenset[str] | None:
     return frozenset(rel for rel in raw.split("\0") if rel)
 
 
+@lru_cache(maxsize=1024)
+def is_gitignored(root: Path, rel: str) -> bool:
+    """True when git would ignore ``rel`` under ``root``; False outside git or on error."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "check-ignore", "-q", "--", rel],
+            capture_output=True, timeout=GIT_TIMEOUT_SECONDS, check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    return proc.returncode == 0
+
+
 def repo_files(repo_root: Path) -> frozenset[str]:
     """Repo-relative POSIX paths of the files at HEAD (tracked), or a walk when not git."""
     root = repo_root.resolve()
@@ -154,7 +168,7 @@ def _read(root: Path, rel: str) -> str:
         return ""
 
 
-def _config_files(files: frozenset[str], pred: Any) -> list[str]:
+def _config_files(files: frozenset[str], pred: Callable[[PurePosixPath], bool]) -> list[str]:
     return sorted(
         f for f in files
         if pred(PurePosixPath(f)) and not is_excluded_path(Path(f))

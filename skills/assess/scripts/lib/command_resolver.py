@@ -35,8 +35,12 @@ verbatim; otherwise it is ``unknown``.
 
 Leniency is deliberate: config files are unioned across the repo (a workspace
 package's script resolves), and a computed Makefile target or tox brace
-expansion makes the family accept any name. A false ``missing`` costs trust; a
-false ``resolved`` costs one point of credit.
+expansion makes the family accept any name. A false ``missing`` puts a wrong
+finding in front of a reader; a false ``resolved`` earns the grader's per-command
+credit (``COMMAND_POINTS``, 12) for a command that would fail, so built-in lists
+stay exact. A path the repo keeps out of git by design (absolute, ``~`` or
+``$VAR``-led, under an excluded tree such as ``.venv`` or ``node_modules``, or
+gitignored) is ``unknown``, never ``missing``.
 """
 from __future__ import annotations
 
@@ -48,7 +52,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from lib.command_index import RepoIndex, TargetSet, build_index
+from lib.command_index import RepoIndex, TargetSet, build_index, is_gitignored
+from lib.doc_graph import is_excluded_path
 
 __all__ = [
     "Command", "Resolution", "RepoIndex", "RUNNERS",
@@ -273,9 +278,19 @@ def _path_exists(index: RepoIndex, rel: str, cwd: str) -> bool:
     return any(index.has_path(c) for c in candidates)
 
 
+def _outside_git_by_design(index: RepoIndex, rel: str, cwd: str) -> bool:
+    """Absolute, home or variable paths, excluded trees and gitignored paths."""
+    if rel.startswith(("/", "~", "$")):
+        return True
+    norm = posixpath.normpath(posixpath.join(cwd, rel[2:] if rel.startswith("./") else rel))
+    return is_excluded_path(Path(norm)) or is_gitignored(index.root, norm)
+
+
 def _file_outcome(index: RepoIndex, rel: str, cwd: str) -> Outcome:
     if _path_exists(index, rel, cwd):
         return "resolved", f"file `{rel}` exists"
+    if _outside_git_by_design(index, rel, cwd):
+        return "unknown", f"unresolved: `{rel}` is outside what git tracks by design"
     return "missing", f"no file `{rel}` at HEAD"
 
 
@@ -295,7 +310,7 @@ _PM_BUILTINS = frozenset({
     "view", "global", "workspace", "workspaces", "patch", "rebuild", "import",
     "prune", "dedupe", "licenses", "version", "login", "logout", "cache", "bin",
     "root", "env", "setup", "help", "set", "plugin", "constraints", "node", "npm",
-    "fund", "doctor", "explain", "pm", "self-update", "build", "upgrade-interactive",
+    "fund", "doctor", "explain", "pm", "self-update", "upgrade-interactive",
 })
 _PM_VALUED = frozenset({"--prefix", "-C", "--dir", "--cwd", "--filter", "-F", "--workspace", "-w"})
 _NPM_TEST = frozenset({"test", "t", "tst"})
@@ -335,6 +350,8 @@ def _pnpm_like(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
     if pos[0] == "run":
         return _script(index, pos[1]) if len(pos) > 1 else _builtin(index, f"{tool} run")
     name = pos[0]
+    if tool == "bun" and name == "build":
+        return _builtin(index, "bun build")  # bun's bundler; pnpm/yarn `build` is a script
     if tool == "bun" and name == "test":
         if index.npm_scripts is not None and index.npm_scripts.has("test"):
             return "resolved", "script `test` in package.json"

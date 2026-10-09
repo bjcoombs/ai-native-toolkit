@@ -78,18 +78,29 @@ def test_instruction_file_grade_mismatch_for_agents_md() -> None:
     assert "INSTRUCTION_FILE_GRADE_MISMATCH" in {a.code for a in anomalies}
 
 
+def _mismatch(score: int, line_count: int, subscores: dict[str, int]) -> bool:
+    anomalies = detect_anomalies(_ctx(
+        instruction_files={"CLAUDE.md": {
+            "present": True, "grade": "F", "score": score, "line_count": line_count,
+            "subscores": subscores,
+        }},
+        instructions_grade="F",
+    ))
+    return "INSTRUCTION_FILE_GRADE_MISMATCH" in {a.code for a in anomalies}
+
+
 def test_grade_mismatch_skips_an_f_the_penalties_explain() -> None:
-    """A long file graded F by the size curve or content penalties is the
-    grader working as designed, not a suspicious result."""
-    for subscores in ({"bloat_penalty": 20}, {"content_penalty": 10}):
-        anomalies = detect_anomalies(_ctx(
-            instruction_files={"CLAUDE.md": {
-                "present": True, "grade": "F", "score": 0, "line_count": 400,
-                "subscores": subscores,
-            }},
-            instructions_grade="F",
-        ))
-        assert "INSTRUCTION_FILE_GRADE_MISMATCH" not in {a.code for a in anomalies}
+    """A long file that would clear the F cutoff without the size curve or
+    content penalties is the grader working as designed."""
+    assert not _mismatch(10, 400, {"bloat_penalty": 20})
+    assert not _mismatch(15, 300, {"bloat_penalty": 5, "content_penalty": 5})
+
+
+def test_grade_mismatch_fires_when_the_penalties_do_not_explain_the_f() -> None:
+    """A 1-point size penalty does not excuse an F that would be an F anyway."""
+    assert _mismatch(5, 210, {"bloat_penalty": 1})
+    assert _mismatch(0, 400, {"content_penalty": 10})
+    assert _mismatch(14, 300, {"bloat_penalty": 10})  # 24: one short of the cutoff
 
 
 def test_all_hotspots_new_means_rotation_failed() -> None:

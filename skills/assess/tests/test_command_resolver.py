@@ -66,7 +66,7 @@ RESOLVED_IN_FULL = [
     "npm test", "npm t", "npm run lint", "npm run-script build", "npm start", "npm install",
     "npm run dev", "npm --prefix web run dev", "npm run",
     "pnpm lint", "pnpm run build", "pnpm install", "pnpm --filter web dev", "yarn test",
-    "yarn add left-pad", "bun test", "bun run lint", "bun scripts/tool.py",
+    "yarn add left-pad", "bun test", "bun build ./src/index.ts", "pnpm build", "yarn build", "bun run lint", "bun scripts/tool.py",
     "npx jest", "npx @scope/tool@1 --fix", "bunx jest",
     "make", "make check", "make lint check", "make -C . check", "make check VERBOSE=1",
     "make -j 4 check", "gmake check",
@@ -100,6 +100,7 @@ MISSING_IN_FULL = [
     ("npm run deploy", "script `deploy`"),
     ("npm stop", "script `stop`"),
     ("pnpm deploy", "script `deploy`"),
+    ("pnpm typecheck", "script `typecheck`"),
     ("yarn run e2e", "script `e2e`"),
     ("make release", "target `release`"),
     ("make check release", "target `release`"),
@@ -153,6 +154,13 @@ def test_missing_config(empty: Path, command: str, reason: str) -> None:
 
 UNKNOWN_ANYWHERE = [
     "rg -n TODO src",            # runner not modelled
+    "source .venv/bin/activate",  # excluded tree, never tracked
+    "./node_modules/.bin/eslint .",
+    "./target/release/app",
+    "bash /tmp/x.sh",            # absolute
+    "source ~/.bashrc",          # home
+    "bash $HOME/x.sh",           # variable
+    "./dist/cli.js",             # gitignored in the git test below; excluded tree here
     "git status",
     "make <target>",             # placeholder
     "npm run ${SCRIPT}",
@@ -254,6 +262,24 @@ def test_tracked_files_only_in_a_git_repo(git_repo) -> None:
     assert resolve("npm test", index=index).resolved
     assert resolve("make check", index=index).verdict == "missing"
     assert "link.sh" not in index.files  # untracked symlink is not at HEAD
+
+
+def test_build_is_a_script_except_for_bun(tmp_path: Path) -> None:
+    repo = _repo(tmp_path, {"package.json": json.dumps({"scripts": {"test": "x"}})})
+    index = build_index(repo)
+    for cmd in ("pnpm build", "yarn build", "npm run build"):
+        result = resolve(cmd, index=index)
+        assert result.verdict == "missing" and "script `build`" in result.reason, cmd
+    assert resolve("bun build ./x.ts", index=index).resolved
+
+
+def test_gitignored_script_path_is_unknown(git_repo) -> None:
+    repo, commit = git_repo
+    _repo(repo, {".gitignore": "out/\n", "README.md": ""})
+    commit("init")
+    index = build_index(repo)
+    assert resolve("./out/run.sh", index=index).verdict == "unknown"
+    assert resolve("bash scripts/missing.sh", index=index).verdict == "missing"
 
 
 def test_ci_line_resolves_only_unknown_runners(tmp_path: Path) -> None:

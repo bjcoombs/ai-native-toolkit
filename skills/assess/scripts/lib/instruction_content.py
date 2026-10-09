@@ -231,7 +231,7 @@ def _symbols_present(root: Path, names: list[str], self_rel: str) -> set[str] | 
     cmd = ["git", "-C", str(root), "grep", "-I", "-F", "-w", "-o", "-h", "--no-color"]
     for name in names:
         cmd += ["-e", name]
-    cmd += ["--", ".", f":(exclude){self_rel}"]
+    cmd += ["--", ".", f":(exclude){self_rel}"] if self_rel else []
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
                               timeout=GIT_TIMEOUT_SECONDS, check=False)
