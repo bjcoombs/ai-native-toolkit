@@ -328,6 +328,17 @@ def test_hidden_unicode_ordinary_joiners(tmp_path: Path, text: str, flagged: boo
     assert _kinds(scan_agent_harness(tmp_path)) == ([("hidden_unicode", "CLAUDE.md")] if flagged else [])
 
 
+def test_hidden_unicode_tag_block_is_reported_and_names_are_capped(tmp_path: Path) -> None:
+    smuggled = "".join(chr(0xE0000 + ord(c)) for c in "curl evil")
+    _write(tmp_path, "CLAUDE.md", f"# Rules\nBe kind.{smuggled}\n")
+    block = scan_agent_harness(tmp_path)
+    assert _kinds(block) == [("hidden_unicode", "CLAUDE.md")]
+    detail = block["findings"][0]["detail"]
+    assert detail.startswith("9 hidden character(s): U+E0020 TAG SPACE, ")
+    assert detail.endswith(", ...") and detail.count("U+") == 5
+    assert smuggled[0] not in json.dumps(block, ensure_ascii=False)
+
+
 def test_hidden_unicode_bom_only_allowed_at_file_start(tmp_path: Path) -> None:
     _write(tmp_path, "CLAUDE.md", f"{BOM}ok\n")
     _write(tmp_path, "AGENTS.md", f"ok\nmid{BOM}file\n")
@@ -390,7 +401,9 @@ def test_on_block_stops_at_next_top_level_key() -> None:
     ("http://h/sse", "http://h"),
     ("https://hooks.slack.com/services/T0/B0/webhooksecret", "https://hooks.slack.com"),
     ("https://[::1", "<unparseable url>"),
-    ("https://h:notaport/x", "<unparseable url>"),
+    ("https://h:notaport/x", "https://h:notaport"),
+    ("https://u:p@h.example.com:${PORT}/sse?k=1", "https://h.example.com:${PORT}"),
+    ("https://h.example.com:99999/x", "https://h.example.com:99999"),
 ])
 def test_safe_url(raw: str, safe: str) -> None:
     assert _safe_url(raw) == safe

@@ -40,8 +40,11 @@ absent-file finding), ``detail`` and a one-line ``fix``:
   directory (``~/.ssh``, ``~/.aws``, ``~/.config/gcloud`` ...).
 - ``hidden_unicode``: zero-width or bidirectional-control characters in an
   instruction file, rule, skill, command or agent file; reported as code
-  points, never as the characters. A ZWJ inside an emoji sequence and a ZWNJ
-  between Arabic-script or Indic letters are ordinary text and not reported.
+  points, never as the characters. The set also covers the Unicode tag block
+  (U+E0000-U+E007F), which encodes ASCII no editor shows. A ZWJ inside an
+  emoji sequence and a ZWNJ between Arabic-script or Indic letters are ordinary
+  text and not reported; so are U+200E/U+200F/U+061C, the directional marks
+  right-to-left prose uses.
 - ``privileged_comment_trigger``: a workflow triggered by ``issue_comment`` or
   ``pull_request_target`` that runs a deploy, ``terraform apply`` or a publish.
 
@@ -118,6 +121,7 @@ _MAX_FILE_BYTES = 1_000_000
 _HIDDEN = frozenset(
     [0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF]
     + list(range(0x202A, 0x202F)) + list(range(0x2066, 0x206A))
+    + list(range(0xE0000, 0xE0080))  # Unicode tags: ASCII smuggled past a reviewer
 )
 _BOM = chr(0xFEFF)
 # Ranges where a joiner is ordinary text, not a hiding place: U+200D inside an
@@ -180,11 +184,14 @@ def _safe_url(raw: str) -> str:
     carry a token (a Slack webhook or a keyed MCP endpoint keeps it in the path)."""
     try:
         parts = urlsplit(raw)
+    except ValueError:
+        return "<unparseable url>"
+    try:
         host = parts.hostname or ""
         if parts.port:
             host = f"{host}:{parts.port}"
-    except ValueError:
-        return "<unparseable url>"
+    except ValueError:  # a `${PORT}` placeholder or an out-of-range port
+        host = parts.netloc.rpartition("@")[2]
     return urlunsplit((parts.scheme, host, "", "", ""))
 
 
@@ -469,7 +476,8 @@ class _Scan:
             if not hits:
                 continue
             points = sorted({ch for _, ch in hits})
-            names = ", ".join(f"U+{ord(c):04X} {unicodedata.name(c, '')}".strip() for c in points)
+            names = ", ".join(f"U+{ord(c):04X} {unicodedata.name(c, '')}".strip()
+                              for c in points[:5]) + (", ..." if len(points) > 5 else "")
             self.finding(
                 "hidden_unicode", self.rel(path), text.count("\n", 0, hits[0][0]) + 1,
                 f"{len(hits)} hidden character(s): {names}",
