@@ -23,7 +23,11 @@ A leaf module so the orchestrator and the lib modules that write artifacts
 # on every hidden_coupling finding, and change_coupling_pairs_total on the block
 # so a list cut by the repository-wide cap never reads as complete.
 # complexity-stats.json is unchanged, so STATS_SCHEMA_VERSION stays put.
-# 1.4.0: run-context.json gains the agent_harness block (#513): the committed
+# 1.4.0: run-context.json gains nested_instructions (issue #511): nested and
+# path-scoped instruction files graded with their scope, the always-loaded
+# budget per tool, and the scope-integrity findings. Additive: no existing key
+# moves, and complexity-stats.json is unchanged.
+# 1.4.0 (also): run-context.json gains the agent_harness block (#513): the committed
 # hooks, env names, apiKeyHelper and MCP servers that run on every agent
 # session, and the findings that expose a secret or widen that surface.
 # Additive; complexity-stats.json is unchanged.

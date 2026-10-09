@@ -35,6 +35,7 @@ from lib.claude_config import scan_claude_config
 from lib.config_drift import scan_config_drift
 from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
+from lib.instruction_files import nested_instruction_surface
 from lib.review_reality import scan_review_reality
 
 # Names the core passes to ``run_scans``. A spec may read these, or the key of
@@ -194,6 +195,15 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec(
         "claude_config", scan_claude_config,
         ("repo_root", "scope", "excludes"), STAGE_POST_OFFERS,
+    ),
+    # Nested and path-scoped instruction files (Layer 0, issue #511): nested
+    # CLAUDE.md / AGENTS.md / GEMINI.md, .claude/rules, Copilot and Cursor
+    # rules, each graded with its scope; the always-loaded budget per tool;
+    # and dead scope globs, ignored .cursor .md files, a CLAUDE.md shadowing a
+    # different AGENTS.md, and nested files that repeat their parent.
+    ScanSpec(
+        "nested_instructions", nested_instruction_surface,
+        ("repo_root", "excludes"), STAGE_POST_OFFERS,
     ),
     # Committed agent harness (informational): what the repo's agent config
     # runs on every session (settings and frontmatter hooks, env, apiKeyHelper,
