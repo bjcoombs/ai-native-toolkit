@@ -921,7 +921,7 @@ exist (and stale ones, with URLs, globs, placeholders, absolute paths, excluded 
 gitignored paths and `owner/repo`-shaped slugs left unchecked), backticked code symbols
 no other tracked file names (`git grep`, skipped outside git), directory-tree blocks,
 repository-overview headings and the share of lines repeated from the root README.
-`build_repo_context` reads the repo once per run. Tests:
+`build_repo_context` reads the repo once per call; the root and nested instruction scans each build one. Paths and symbols are checked against the tracked files (`git ls-files`, `git grep`), so on a dirty checkout an uncommitted edit counts. Tests:
 `tests/test_instruction_content.py`.
 
 **`liveness_scan.py`**

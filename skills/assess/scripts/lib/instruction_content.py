@@ -95,7 +95,7 @@ class Reference(NamedTuple):
 
 
 class StaleReference(TypedDict):
-    """A backticked path or symbol that does not exist at HEAD."""
+    """A backticked path or symbol that no tracked file has (``git ls-files`` / ``git grep``)."""
 
     kind: Literal["stale_path", "stale_symbol"]
     line: int
