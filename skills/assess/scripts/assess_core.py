@@ -404,9 +404,9 @@ def build_run_context(
     ctx["ancestor_instruction_files"] = detect_ancestor_instructions(repo_root)
     # Progressive-disclosure signals (Layer 0): does the repo factor guidance
     # into on-demand skills, and is any instruction file an oversized monolith?
-    # An oversized instruction file with no skills factoring carries a bloat
-    # penalty (instruction_file_size[path].bloat_penalty > 0) that LOWERS its
-    # grade - it scores strictly below an equivalent lean-file-plus-skills repo.
+    # An instruction file past the size curve carries a bloat penalty
+    # (instruction_file_size[path].bloat_penalty > 0) that LOWERS its grade;
+    # skills factoring halves it and never waives it.
     ctx["skills_present"] = skills_info["skills_dirs_present"]
     ctx["skills_count"] = skills_info["skills_count"]
     ctx["skill_files"] = skills_info["skill_files"]

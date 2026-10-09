@@ -149,7 +149,11 @@ SIZE_GRADE_CAP_SCORE = 59
 BASELINE_POINTS = 10
 COMMAND_POINTS, COMMAND_CAP = 12, 40
 # A standard CLI (``lib.command_resolver.EXTERNAL_TOOLS``) is a real command
-# with no repo target to verify: partial credit, inside COMMAND_CAP.
+# with no repo target to verify: partial credit, inside COMMAND_CAP. A package
+# manager's built-in (``npm ci``, ``uv sync``) stays at full credit because
+# its precondition is checked against the repo (the manifest it reads exists),
+# so the resolver has confirmed it will run here; ``gh pr checks`` gets no
+# such check.
 EXTERNAL_POINTS, EXTERNAL_CAP = 4, 16
 DIRECTIVE_POINTS, DIRECTIVE_CAP = 2, 10
 TRADEOFF_POINTS, TRADEOFF_CAP = 3, 10

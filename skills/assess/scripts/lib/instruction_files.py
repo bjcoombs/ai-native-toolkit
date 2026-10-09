@@ -89,8 +89,8 @@ def grade_instruction_files(
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
     # Detect skills directories once, before grading any file. A repo that
-    # factors guidance into on-demand skills uses progressive disclosure, so a
-    # large instruction file is not penalized as bloat (see compute_bloat_penalty).
+    # factors guidance into on-demand skills has its size penalty halved, never
+    # waived: the root file still loads on every task (see compute_bloat_penalty).
     skills_info = detect_skills_dir(repo_root)
     skills_present = skills_info["skills_dirs_present"]
     clock = content_clock(repo_root)  # one build for every candidate

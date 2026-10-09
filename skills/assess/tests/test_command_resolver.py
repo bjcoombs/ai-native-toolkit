@@ -100,6 +100,7 @@ def test_resolves_when_target_exists(full: Path, command: str) -> None:
 
 
 MISSING_IN_FULL = [
+    ("npm lint", "the script runs as `npm run lint`"),  # npm has no lint command
     ("npm run deploy", "script `deploy`"),
     ("npm stop", "script `stop`"),
     ("pnpm run typecheck", "script `typecheck`"),
@@ -167,6 +168,9 @@ UNKNOWN_ANYWHERE = [
     "npm run ${SCRIPT}",
     "npm run {script}",          # a single-word brace placeholder
     "npx some-random-tool",      # undeclared package
+    "npm frobnicate",            # not an npm command, and no such script
+    "poetry frobnicate",
+    "poetry run",
     "uv run undeclared-tool",
     "uvx black",
     "go install golang.org/x/tools/cmd/goimports@latest",
@@ -475,3 +479,11 @@ def test_unterminated_fence_and_unbalanced_quotes() -> None:
     cmds = extract_commands("```bash\nnpm test 'oops\n")
     assert cmds == []  # quote never closes: nothing complete to extract
     assert [c.text for c in extract_commands("```bash\nnpm test\n")] == ["npm test"]
+
+
+def test_npm_subcommand_naming_a_script_is_missing(full: Path) -> None:
+    result = resolve("npm build", full)
+    assert result.verdict == "missing"
+    assert "npm run build" in result.reason
+    assert resolve("npm ci", full).resolved
+    assert resolve("npm whoami", full).resolved

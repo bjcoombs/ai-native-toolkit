@@ -357,6 +357,15 @@ _PM_BUILTINS = frozenset({
 _PNPM_ONLY_BUILTINS = frozenset({"deploy", "setup"})
 _PM_VALUED = frozenset({"--prefix", "-C", "--dir", "--cwd", "--filter", "-F", "--workspace", "-w"})
 _NPM_TEST = frozenset({"test", "t", "tst"})
+# npm's own commands beyond the shared list. Anything else is not an npm
+# command: ``npm lint`` fails in a shell even when a ``lint`` script exists.
+_NPM_BUILTINS = _PM_BUILTINS | frozenset({
+    "whoami", "search", "owner", "dist-tag", "deprecate", "query", "pkg", "sbom",
+    "token", "team", "access", "hook", "star", "unstar", "stars", "unpublish",
+    "shrinkwrap", "completion", "diff", "edit", "explore", "find-dupes", "org",
+    "ping", "prefix", "profile", "repo", "docs", "bugs", "home", "it", "cit",
+    "install-test", "install-ci-test", "isntall", "s", "se", "find", "author",
+})
 
 
 def _script(index: RepoIndex, name: str) -> Outcome:
@@ -382,7 +391,11 @@ def _npm(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
         if sub == "start" and _path_exists(index, "server.js", cwd):
             return "resolved", "`npm start` runs server.js"
         return _script(index, sub)
-    return _builtin(index, "npm")
+    if sub in _NPM_BUILTINS:
+        return _builtin(index, "npm")
+    if index.npm_scripts is not None and index.npm_scripts.has(sub):
+        return "missing", f"npm has no `{sub}` command; the script runs as `npm run {sub}`"
+    return "unknown", f"unresolved: `npm {sub}` is not an npm command this module knows"
 
 
 def _pnpm_like(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
@@ -544,10 +557,21 @@ def _uvx(index: RepoIndex, args: list[str]) -> Outcome:
     return "unknown", "runs a tool the repo does not declare"
 
 
+_POETRY_BUILTINS = frozenset({
+    "install", "add", "remove", "update", "lock", "show", "build", "publish", "check",
+    "shell", "env", "config", "init", "new", "export", "version", "search", "cache",
+    "source", "self", "sync", "about", "list", "debug", "help",
+})
+
+
 def _poetry(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
     pos = _positionals(words[1:], frozenset({"-C", "--directory", "-P", "--project"}))
-    if pos[:1] == ["run"] and len(pos) > 1:
+    if pos[:1] == ["run"]:
+        if len(pos) == 1:
+            return _UNKNOWN_RUNNER
         return _python_target(index, words[words.index("run") + 1:], cwd, set())
+    if pos and pos[0] not in _POETRY_BUILTINS:
+        return "unknown", f"unresolved: `poetry {pos[0]}` is not a poetry command this module knows"
     if not index.has_pyproject:
         return "missing", "no pyproject.toml in the repo"
     return "resolved", "`poetry` built-in"
