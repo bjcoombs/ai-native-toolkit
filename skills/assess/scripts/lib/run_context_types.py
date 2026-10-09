@@ -618,3 +618,107 @@ class ActionLifecycle(TypedDict):
     # Copied as found from the prior contract, which is hand-editable JSON.
     claimed_by: Any
     completed_sha: Any
+
+
+# --- instruction_discovery: the nested_instructions block -----------------
+
+class InstructionScope(TypedDict):
+    """Where a discovered instruction file applies.
+
+    ``directory`` is the repo-relative directory a nested file governs ("."
+    for the root); ``globs`` the path patterns a rule file names (empty for a
+    directory file or a rule with none). ``always_loaded`` is True when the
+    tool loads the file at session start for the root context.
+    """
+
+    directory: str | None
+    globs: list[str]
+    always_loaded: bool
+
+
+class NestedInstructionFile(TypedDict):
+    """One graded entry in ``nested_instructions.files``."""
+
+    path: str
+    tool: str
+    kind: str
+    scope: InstructionScope
+    grade: str
+    score: int
+    subscores: dict[str, int]
+    freshness_days: int
+    line_count: int
+
+
+class InstructionFinding(TypedDict):
+    """One integrity finding in ``nested_instructions.findings``.
+
+    ``kind`` is ``dead_glob``, ``ignored_cursor_md``, ``claude_shadows_agents``
+    or ``repeats_parent``; ``detail`` is a one-line description and ``pattern``
+    / ``parent`` / ``overlap`` carry the kind's evidence.
+    """
+
+    kind: str
+    path: str
+    detail: str
+    pattern: NotRequired[str]
+    parent: NotRequired[str]
+    overlap: NotRequired[float]
+
+
+class SkippedImport(TypedDict):
+    """An ``@import`` the Claude Code budget did not follow, and why."""
+
+    source: str
+    target: str
+    reason: str
+
+
+class InstructionTotals(TypedDict):
+    """Size of a set of always-loaded instruction files."""
+
+    files: list[str]
+    lines: int
+    words: int
+    bytes: int
+    est_tokens: int
+
+
+class ClaudeCodeBudget(InstructionTotals):
+    """Root CLAUDE.md, its ``@imports`` and the unscoped ``.claude/rules``."""
+
+    skipped_imports: list[SkippedImport]
+
+
+class CodexChain(InstructionTotals):
+    """The root-down AGENTS.md chain Codex joins for one directory."""
+
+    directory: str
+    exceeds_limit: bool
+
+
+class CodexBudget(InstructionTotals):
+    """Root AGENTS.md against Codex's ``project_doc_max_bytes``."""
+
+    limit_bytes: int
+    exceeds_limit: bool
+    deepest_chain: CodexChain | None
+
+
+class InstructionBudget(TypedDict):
+    """Always-loaded instruction text per tool for the root context."""
+
+    chars_per_token: int
+    claude_code: ClaudeCodeBudget
+    codex: CodexBudget
+
+
+class NestedInstructionsBlock(TypedDict):
+    """``run-context.json`` ``nested_instructions``."""
+
+    available: bool
+    files: list[NestedInstructionFile]
+    files_total: int
+    budget: InstructionBudget
+    findings: list[InstructionFinding]
+    findings_total: int
