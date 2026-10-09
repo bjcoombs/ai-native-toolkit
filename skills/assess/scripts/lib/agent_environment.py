@@ -96,6 +96,11 @@ CHECK_WORDS = frozenset({
 })
 _ALWAYS_CHECK = frozenset({"pytest", "py.test", "tox", "nox"})
 _PM_TEST = frozenset({"test", "t", "tst"})
+_PM_INSTALL = frozenset({
+    "install", "i", "add", "remove", "rm", "update", "up", "upgrade", "dlx", "exec",
+    "create", "init", "link", "publish", "setup", "x",
+})
+_JS_TEST_RUNNERS = frozenset({"jest", "vitest", "mocha", "ava", "jasmine", "cypress"})
 _VALUED_FLAGS = frozenset({
     "-C", "-f", "--file", "--makefile", "--directory", "--dir", "--cwd", "--prefix", "--project",
     "--with", "--extra", "--group", "--only-group", "--python", "-p", "--package", "--from",
@@ -432,6 +437,24 @@ def _drop_leading_flags(args: list[str]) -> list[str]:
     return args[i:]
 
 
+def _js_check(head: str, pos: list[str]) -> bool:
+    """A package-manager or ``npx`` / ``bunx`` command that runs a check."""
+    if not pos:
+        return False
+    if head in ("npx", "bunx"):
+        if pos[0] == "playwright":
+            return pos[1:2] == ["test"]
+        return pos[0] in _JS_TEST_RUNNERS or _is_check_name(pos[0])
+    if pos[0] in ("run", "run-script"):
+        return len(pos) > 1 and _is_check_name(pos[1])
+    # npm runs only its test aliases without `run`; `npm ci` installs.
+    # `bun ci` is a frozen install; in pnpm and yarn `ci` is a script name.
+    if head == "npm" or pos[0] in _PM_INSTALL or (head == "bun" and pos[0] == "ci"):
+        return pos[0] in _PM_TEST
+    # pnpm, yarn and bun run a package script named as the subcommand.
+    return pos[0] in _PM_TEST or _is_check_name(pos[0])
+
+
 def _check_target(words: list[str]) -> bool:
     """Whether the program, subcommand or target a command runs is a check."""
     head, pos = words[0], _positionals(words[1:])
@@ -445,11 +468,8 @@ def _check_target(words: list[str]) -> bool:
             rest = rest[rest.index("run") + 1:]
         program = _drop_leading_flags(rest)
         return bool(program) and _check_target(program)
-    if head in ("npm", "pnpm", "yarn", "bun"):
-        if pos and pos[0] in ("run", "run-script"):
-            return len(pos) > 1 and _is_check_name(pos[1])
-        # Built-in subcommands: only the test aliases check; `npm ci` installs.
-        return bool(pos) and pos[0] in _PM_TEST
+    if head in ("npx", "bunx", "npm", "pnpm", "yarn", "bun"):
+        return _js_check(head, pos)
     if head in ("python", "python3"):
         if "-m" in words:
             module = words[words.index("-m") + 1:words.index("-m") + 2]

@@ -238,6 +238,12 @@ def test_untracked_settings_is_not_setup(tmp_path: Path) -> None:
     ("bash scripts/check.sh", True), ("bash deploy.sh", False), ("./gradlew check", True),
     ("mvn install", False), ("mvn verify", True), ("cargo check", True), ("go build ./...", False),
     ("make -C sub test", True), ("make ci", True), ("python -m", False),
+    # JS runners through npx / bunx, and scripts pnpm, yarn and bun run without `run`.
+    ("npx vitest run", True), ("npx jest", True), ("npx playwright test", True),
+    ("npx playwright install", False), ("bunx mocha", True), ("npx prettier --write .", False),
+    ("npx", False), ("pnpm check", True), ("yarn ci", True), ("pnpm lint:check", True),
+    ("bun verify", True), ("bun ci", False), ("yarn install", False), ("pnpm add -D vitest", False),
+    ("yarn", False), ("npm check", False), ("pnpm build", False),
 ])
 def test_is_check_command(text: str, expected: bool) -> None:
     assert is_check_command(text) is expected
