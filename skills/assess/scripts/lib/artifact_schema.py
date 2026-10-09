@@ -39,4 +39,8 @@ A leaf module so the orchestrator and the lib modules that write artifacts
 # readme_overlap_pct, directory_trees, overview_sections, content_penalty,
 # score_before_penalties and size_grade_capped. Additive: no existing key moves
 # or changes type, and complexity-stats.json is unchanged.
+# 1.4.0 (also): run-context.json gains agent_environment (issue #514): committed
+# agent setup, the check command an instruction file names, lockfiles per
+# manifest, copilot-setup-steps.yml findings, the Layer 5 Partial cap and the
+# optional gh CI-duration probe. Additive; complexity-stats.json is unchanged.
 ARTIFACT_SCHEMA_VERSION = "1.4.0"

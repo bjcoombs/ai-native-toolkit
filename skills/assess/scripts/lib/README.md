@@ -464,7 +464,8 @@ degrades. `stage` exists to keep
 `run-context.json` key order unchanged while scans migrate here; it goes when the
 hand-wired assignments between the stages are gone. Currently registered:
 `agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
-`instruction_claims`, `claude_config`, `nested_instructions`, `agent_harness`. Besides
+`instruction_claims`, `claude_config`, `nested_instructions`, `agent_harness`,
+`agent_environment`. Besides
 `repo_root` and
 `instruction_files`, the core provides `scope` (the absolute `--scope` path, or
 None) and `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`).
@@ -1356,6 +1357,28 @@ The block is `{available, tracked_known, executes[], executes_by_kind,
 finding_count, counts_by_kind, findings[]}`; `tracked_known: false` (no git)
 means the tracking findings were not checked. Informational: it does not score
 a layer or count toward the badge. Tests: `tests/test_agent_harness.py`.
+
+**`agent_environment.py`**
+Can an agent set up the repository and check its own work (issue #514)?
+`scan_agent_environment(repo_root, instruction_files, agent_harness)` reads the
+files at HEAD through `command_index.build_index` and writes `{available,
+setup{present, sources[]}, check{entry_points[], named[], named_total,
+unresolved[]}, pinning{manifests[], all_locked}, ci_duration, findings[],
+layer5_cap{applies, ceiling, unmet[], reason}}`. Setup sources:
+`copilot-setup-steps.yml` (credited only when it passes the checks), a dev
+container, `.cursor/environment.json`, a `SessionStart` hook in a tracked
+`.claude/settings.json` (from the `agent_harness` block), `script/setup`,
+`script/bootstrap`, `bin/setup`, `init.sh`, or a Makefile / justfile `setup` or
+`bootstrap` target. Named checks are the check commands a graded instruction
+file gives, resolved by `command_resolver.resolve`, so the verdict matches the
+grader's. Findings are `copilot-setup-steps.yml` breaches of GitHub's documented
+constraints (one `copilot-setup-steps` job, allowed keys, `timeout-minutes` at
+most 59, the `.yml` path). `layer5_cap` is Partial unless a named check resolves
+and committed setup or a lockfile per manifest exists. `ci_duration` is the one
+network read, through `gh_cli` with a 10-second per-call cap: per-workflow
+median wall time of successful push runs on the default branch, or
+`{available: false, reason}`. Evidence only; it caps nothing.
+Tests: `tests/test_agent_environment.py`.
 
 **`claude_config_fields.py`**
 The documented frontmatter field sets `claude_config` checks against: skill and
