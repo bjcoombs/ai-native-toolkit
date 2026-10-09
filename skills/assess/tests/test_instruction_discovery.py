@@ -283,3 +283,16 @@ def test_glob_matching_symlink_or_untracked_tree_is_not_dead(git_repo: Any) -> N
     commit("symlink and ignored tree")
     dead = sorted(f["pattern"] for f in _block(repo)["findings"] if f["kind"] == "dead_glob")
     assert dead == ["../real/*.py", "gone/**/*.js"]
+
+
+def test_dead_glob_is_per_rule_and_skips_always_loaded(git_repo: Any) -> None:
+    repo, commit = git_repo
+    _write(repo, "src/a.ts", "export {}\n")
+    _write(repo, ".claude/rules/mixed.md", "---\npaths: [\"**/*.ts\", \"**/*.tsx\"]\n---\nTS.")
+    _write(repo, ".claude/rules/allgone.md", "---\npaths: [\"x/**/*.rb\", \"y/*.go\"]\n---\nNo.")
+    _write(repo, ".cursor/rules/always.mdc",
+           "---\nglobs: legacy/**/*.rb\nalwaysApply: true\n---\nAlways.")
+    commit("multi-pattern rules")
+    dead = [f for f in _block(repo)["findings"] if f["kind"] == "dead_glob"]
+    assert [(f["path"], f["pattern"]) for f in dead] == [
+        (".claude/rules/allgone.md", "x/**/*.rb, y/*.go")]

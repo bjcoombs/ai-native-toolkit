@@ -631,7 +631,7 @@ class InstructionScope(TypedDict):
     tool loads the file at session start for the root context.
     """
 
-    directory: str | None
+    directory: str
     globs: list[str]
     always_loaded: bool
 
@@ -655,7 +655,8 @@ class InstructionFinding(TypedDict):
 
     ``kind`` is ``dead_glob``, ``ignored_cursor_md``, ``claude_shadows_agents``
     or ``repeats_parent``; ``detail`` is a one-line description and ``pattern``
-    / ``parent`` / ``overlap`` carry the kind's evidence.
+    (a dead rule's comma-joined patterns) / ``parent`` / ``overlap`` carry the
+    kind's evidence.
     """
 
     kind: str

@@ -79,12 +79,12 @@ def test_follow_imports_guards_cycles(tmp_path: Path) -> None:
     assert skipped == [{"source": "b.md", "target": "gone.md", "reason": "missing"}]
 
 
-def test_follow_imports_stops_after_five_hops(tmp_path: Path) -> None:
+def test_follow_imports_stops_after_four_hops(tmp_path: Path) -> None:
     _write(tmp_path, "CLAUDE.md", "@f1.md")
     for i in range(1, 8):
         _write(tmp_path, f"f{i}.md", f"@f{i + 1}.md")
     loaded, _ = follow_imports(["CLAUDE.md"], tmp_path, _all_tracked)
-    assert loaded == ["CLAUDE.md", "f1.md", "f2.md", "f3.md", "f4.md", "f5.md"]
+    assert loaded == ["CLAUDE.md", "f1.md", "f2.md", "f3.md", "f4.md"]
 
 
 def test_follow_imports_caps_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

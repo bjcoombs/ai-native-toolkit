@@ -843,8 +843,9 @@ rules (#511), no model: nested `CLAUDE.md` / `AGENTS.md` / `AGENTS.override.md` 
 `.claude`, where rules live) and `.assess/config.toml`; only tracked files count.
 Each file not already graded at an `INSTRUCTION_FILE_PATHS` location gets a
 `grade_instructions` entry with its scope (`directory`, `globs`, `always_loaded`).
-Findings: `dead_glob` (a scope pattern matching no tracked file, also tried
-relative to a nested rule's directory), `ignored_cursor_md`, `claude_shadows_agents`
+Findings: `dead_glob` (a rule, not always loaded, none of whose scope patterns
+matches a tracked file or names a directory on disk; a nested rule's patterns are
+also tried relative to its own directory), `ignored_cursor_md`, `claude_shadows_agents`
 (a directory's `CLAUDE.md` differs from its `AGENTS.md` and does not import it) and
 `repeats_parent` (at least half of a nested file's distinct lines, over five or
 more, copy the nearest ancestor's). Files and findings are capped with `_total`
@@ -854,7 +855,7 @@ counts. Tests: `tests/test_instruction_discovery.py`.
 The always-loaded instruction text per tool for the root context, in lines, words,
 bytes and estimated tokens (4 characters per token, as the treemap). Claude Code:
 the root `CLAUDE.md` and `.claude/CLAUDE.md` (else the root `AGENTS.md`), their
-`@imports` resolved relative to the importing file (outside code, five hops,
+`@imports` resolved relative to the importing file (outside code, four hops,
 cycle-guarded, tracked files inside the repo only; the rest listed in
 `skipped_imports`), and root `.claude/rules` files with no `paths`. Codex: the
 root `AGENTS.override.md` or `AGENTS.md` against 32 KiB, plus the heaviest

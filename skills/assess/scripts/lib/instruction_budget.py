@@ -1,7 +1,7 @@
 """The instruction text each agent tool loads before it starts, per tool.
 
 Claude Code loads the root ``CLAUDE.md`` (and ``.claude/CLAUDE.md``), every
-file those ``@import`` (recursively, up to five hops), and each
+file those ``@import`` (recursively, up to four hops), and each
 ``.claude/rules`` file with no ``paths`` frontmatter at launch; a root
 ``AGENTS.md`` stands in only when no root ``CLAUDE.md`` exists
 (https://code.claude.com/docs/en/memory). Codex joins ``AGENTS.md`` files
@@ -32,8 +32,9 @@ from lib.run_context_types import (
 CHARS_PER_TOKEN = 4
 # Codex's default ``project_doc_max_bytes``.
 CODEX_MAX_BYTES = 32 * 1024
-# Claude Code follows imports at most five hops deep.
-MAX_IMPORT_DEPTH = 5
+# Claude Code follows imports "with a maximum depth of four hops"
+# (https://code.claude.com/docs/en/memory).
+MAX_IMPORT_DEPTH = 4
 MAX_SKIPPED_IMPORTS = 40
 
 _FENCE_RE = re.compile(r"^\s*(```|~~~)")

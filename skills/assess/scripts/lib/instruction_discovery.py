@@ -251,22 +251,34 @@ def _prefix_on_disk(repo_root: Path, pattern: str) -> bool:
     return target.is_relative_to(repo_root) and target.is_dir()
 
 
+def _pattern_live(repo_root: Path, surface: _Surface, cand: _Candidate, pattern: str) -> bool:
+    # A rule under a nested `.claude/rules` or `.cursor/rules` may name paths
+    # relative to its own directory; either reading counts.
+    local = pattern if cand.directory == "." else f"{cand.directory}/{pattern}"
+    return (pattern_matches_any(pattern, surface.universe)
+            or pattern_matches_any(local, surface.universe)
+            or _prefix_on_disk(repo_root, pattern)
+            or _prefix_on_disk(repo_root, local))
+
+
 def _dead_globs(repo_root: Path, surface: _Surface) -> list[InstructionFinding]:
+    """Rules that never load: every scope pattern matches nothing.
+
+    One live pattern loads the rule, and an always-loaded rule (Cursor
+    ``alwaysApply: true``) loads whatever its globs say, so neither is dead.
+    """
     out: list[InstructionFinding] = []
     for cand in surface.candidates:
-        for pattern in cand.globs:
-            # A rule under a nested `.claude/rules` or `.cursor/rules` may name
-            # paths relative to its own directory; either reading counts.
-            local = pattern if cand.directory == "." else f"{cand.directory}/{pattern}"
-            if not (pattern_matches_any(pattern, surface.universe)
-                    or pattern_matches_any(local, surface.universe)
-                    or _prefix_on_disk(repo_root, pattern)
-                    or _prefix_on_disk(repo_root, local)):
-                out.append({
-                    "kind": "dead_glob", "path": cand.rel, "pattern": pattern,
-                    "detail": f"scope pattern `{pattern}` matches no tracked file, "
-                              "so the rule never loads",
-                })
+        if not cand.globs or cand.always_loaded:
+            continue
+        if any(_pattern_live(repo_root, surface, cand, p) for p in cand.globs):
+            continue
+        shown = ", ".join(f"`{p}`" for p in cand.globs)
+        out.append({
+            "kind": "dead_glob", "path": cand.rel, "pattern": ", ".join(cand.globs),
+            "detail": f"no scope pattern ({shown}) matches a tracked file, "
+                      "so the rule never loads",
+        })
     return out
 
 
