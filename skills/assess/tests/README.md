@@ -95,7 +95,10 @@ Every `test_*.py` file in this directory has a row below.
 | `test_generated_files.py` | `lib/generated_files.py` - generated-file header sniff and long-line detector |
 | `test_git_churn.py` | `lib/git_churn.py` - churn-degeneracy detector |
 | `test_instruction_claims.py` | `lib/instruction_claims.py` - verifying claims in agent instruction files |
+| `test_instruction_budget.py` | `lib/instruction_budget.py` - `@import` resolution and the always-loaded budget per tool |
+| `test_instruction_discovery.py` | `lib/instruction_discovery.py` - nested and path-scoped instruction files, their scopes and integrity findings (fixture monorepo) |
 | `test_instruction_files.py` | `lib/instruction_files.py` - instruction-file discovery and grading, alias grade inheritance, broken references, sensitive content, ancestor cascade (through `build_run_context`) |
+| `test_instruction_globs.py` | `lib/instruction_globs.py` - scope frontmatter parsing and glob matching |
 | `test_interactivity.py` | `lib/interactivity.py` - the non-interactive consent contract |
 | `test_jvm_capabilities.py` | `lib/jvm_capabilities.py` - the capability-driven JVM offer flow |
 | `test_mutation_cap.py` | `lib/mutation_cap.py` - the `test_pressure` block shape and the Layer 6 mutation-not-run cap |

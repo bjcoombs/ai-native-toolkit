@@ -830,6 +830,44 @@ the best grade (`None` when no committed file exists, distinct from `F`).
 `detect_ancestor_instructions` names the ancestor and global files a clone never sees
 (#57); `instruction_file_size` feeds the bloat signal. Tests:
 `tests/test_instruction_files.py`, `tests/test_doc_staleness.py`.
+`nested_instruction_surface(repo_root, excludes)` builds the `nested_instructions`
+block from `instruction_discovery` with the same tracked set, clock and skills
+detection, and runs from the `scan_registry` table.
+
+**`instruction_discovery.py`**
+Finds the instruction files agent tools load below the root or through path-scoped
+rules (#511), no model: nested `CLAUDE.md` / `AGENTS.md` / `AGENTS.override.md` /
+`GEMINI.md` (and `.claude/CLAUDE.md`), `.claude/rules/**/*.md` (`paths`),
+`.github/instructions/**/*.instructions.md` (`applyTo`) and `.cursor/rules/**/*.mdc`
+(`globs`, `alwaysApply`). One pruned walk honours the built-in excludes (minus
+`.claude`, where rules live) and `.assess/config.toml`; only tracked files count.
+Each file not already graded at an `INSTRUCTION_FILE_PATHS` location gets a
+`grade_instructions` entry with its scope (`directory`, `globs`, `always_loaded`).
+Findings: `dead_glob` (a rule, not always loaded, none of whose scope patterns
+matches a tracked file or names a directory on disk; a nested rule's patterns are
+also tried relative to its own directory), `ignored_cursor_md`, `claude_shadows_agents`
+(a directory's `CLAUDE.md` differs from its `AGENTS.md` and does not import it) and
+`repeats_parent` (at least half of a nested file's distinct lines, over five or
+more, copy the nearest ancestor's). Files and findings are capped with `_total`
+counts. Tests: `tests/test_instruction_discovery.py`.
+
+**`instruction_budget.py`**
+The always-loaded instruction text per tool for the root context, in lines, words,
+bytes and estimated tokens (4 characters per token, as the treemap). Claude Code:
+the root `CLAUDE.md` and `.claude/CLAUDE.md` (else the root `AGENTS.md`), their
+`@imports` resolved relative to the importing file (outside code, four hops,
+cycle-guarded, tracked files inside the repo only; the rest listed in
+`skipped_imports`), and root `.claude/rules` files with no `paths`. Codex: the
+root `AGENTS.override.md` or `AGENTS.md` against 32 KiB, plus the heaviest
+root-down chain (`deepest_chain`). Tests: `tests/test_instruction_budget.py`.
+
+**`instruction_globs.py`**
+The scope frontmatter line parser (`paths`, `applyTo`, `globs`, `alwaysApply`; no
+YAML dependency) and the glob matcher behind `dead_glob`: brace sets, `**`, a
+slashless pattern matching at any depth and a pattern matching a directory prefix.
+Lenient on purpose, since a false dead glob would send a maintainer to delete a
+working rule; a negated or uncompilable pattern never reads as dead. Tests:
+`tests/test_instruction_globs.py`.
 
 **`agent_instructions_grader.py`**
 Heuristic scoring of agent instruction files (CLAUDE.md, AGENTS.md, GEMINI.md,

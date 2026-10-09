@@ -22,6 +22,8 @@ from lib.agent_instructions_grader import (
 from lib.doc_graph import is_repo_file
 from lib.doc_staleness import content_clock
 from lib.git_churn import ContentClock, tracked_files
+from lib.instruction_discovery import discover_nested_instructions
+from lib.run_context_types import NestedInstructionsBlock
 
 
 # Known agent instruction file locations (relative to repo root).
@@ -268,3 +270,31 @@ def instruction_file_size(instruction_files: dict[str, Any]) -> dict[str, Any]:
         }
         for path, meta in instruction_files.items()
     }
+
+
+def nested_instruction_surface(
+    repo_root: Path,
+    excludes: tuple[set[str], list[str]] | None = None,
+) -> NestedInstructionsBlock:
+    """Nested and path-scoped instruction files beyond the root locations.
+
+    The ``nested_instructions`` block (issue #511): every tracked nested
+    ``CLAUDE.md`` / ``AGENTS.md`` / ``GEMINI.md``, ``.claude/rules`` file,
+    Copilot ``.instructions.md`` and Cursor ``.mdc`` rule, graded with the same
+    grader, clock and skills detection as the root files, plus the
+    always-loaded budget per tool and the scope-integrity findings. The root
+    locations keep their entries in ``instruction_files`` and are not graded
+    twice. ``excludes`` is the ``(dirs, patterns)`` pair from
+    ``.assess/config.toml``.
+    """
+    repo_root = repo_root.resolve()
+    extra_dirs, extra_pats = excludes if excludes is not None else (set(), [])
+    return discover_nested_instructions(
+        repo_root,
+        tracked=tracked_files(repo_root),
+        clock=content_clock(repo_root),
+        skills_present=bool(detect_skills_dir(repo_root)["skills_dirs_present"]),
+        graded_elsewhere=frozenset(INSTRUCTION_FILE_PATHS),
+        extra_exclude_dirs=extra_dirs,
+        extra_exclude_patterns=extra_pats,
+    )
