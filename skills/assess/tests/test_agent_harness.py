@@ -392,9 +392,29 @@ def test_malformed_and_odd_shaped_json_degrade(tmp_path: Path) -> None:
 
 
 def test_long_command_is_clipped(tmp_path: Path) -> None:
-    _json(tmp_path, ".claude/settings.json", {"apiKeyHelper": "x " * 200})
+    _json(tmp_path, ".claude/settings.json", {"apiKeyHelper": "./" + "x" * 300})
     detail = scan_agent_harness(tmp_path)["executes"][0]["detail"]
     assert len(detail) == 160 and detail.endswith("...")
+
+
+@pytest.mark.parametrize(("command", "detail"), [
+    ("./hooks/guard.sh", "./hooks/guard.sh"),
+    ("curl -H 'Authorization: Bearer tok123' https://x", "curl ..."),
+    ("TOKEN=tok123 DEBUG=1 ./run.sh --flag", "./run.sh ..."),
+    ("'./my hook.sh'", "./my ..."),
+    ("TOKEN=tok123", "<command>"),
+])
+def test_commands_report_the_program_never_arguments(tmp_path: Path, command: str,
+                                                     detail: str) -> None:
+    _json(tmp_path, ".claude/settings.json", {
+        "apiKeyHelper": command,
+        "hooks": {"Stop": [{"hooks": [{"type": "command", "command": command}]}]}})
+    _json(tmp_path, ".mcp.json", {"mcpServers": {"s": {"command": command}}})
+    _write(tmp_path, ".claude/agents/a.md",
+           f"---\nname: a\nhooks:\n  Stop:\n    - hooks:\n        - command: {command}\n---\n")
+    block = scan_agent_harness(tmp_path)
+    assert [i["detail"] for i in block["executes"]] == [detail] * 4
+    assert "tok123" not in json.dumps(block)
 
 
 def test_excludes_and_scope(git_repo) -> None:

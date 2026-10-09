@@ -18,9 +18,10 @@ dependency (the core ships none). Paths are relative to the repository root.
 ``.claude/settings.json``), ``frontmatter_hook`` (``hooks`` in skill or agent
 frontmatter), ``env`` (one row per ``env`` variable in project settings, name
 only), ``api_key_helper``, ``mcp_server`` (``.mcp.json``, command or URL) and
-``cursor_hook`` (``.cursor/hooks.json``). A command is reported as written; a
-URL loses its credentials, query and fragment; an ``env`` value or MCP
-argument is never reported.
+``cursor_hook`` (``.cursor/hooks.json``). A command is reported as the program
+it runs (``./hooks/guard.sh ...``), without arguments or leading ``VAR=value``
+assignments; a URL loses its credentials, query and fragment; an ``env`` value
+or MCP argument is never reported.
 
 ``findings``, each with ``kind``, ``file``, ``line`` (None for a whole-file or
 absent-file finding), ``detail`` and a one-line ``fix``:
@@ -165,6 +166,20 @@ def _safe_url(raw: str) -> str:
     return urlunsplit((parts.scheme, host, parts.path, "", ""))
 
 
+_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def _safe_command(raw: str) -> str:
+    """The program a command runs, without its arguments or leading ``VAR=value``
+    assignments, either of which can carry a token; `` ...`` marks dropped arguments."""
+    words = raw.split()
+    while words and _ASSIGN.match(words[0]):
+        words.pop(0)
+    if not words:
+        return "<command>"
+    return words[0].strip("'\"") + (" ..." if len(words) > 1 else "")
+
+
 def _line_of(text: str, needle: str) -> int | None:
     """The 1-based line of the first occurrence of ``needle``, else None."""
     pos = text.find(needle)
@@ -249,7 +264,7 @@ class _Scan:
     @staticmethod
     def hook_detail(hook: dict[str, Any]) -> str | None:
         if isinstance(hook.get("command"), str):
-            return str(hook["command"])
+            return _safe_command(hook["command"])
         if isinstance(hook.get("url"), str):
             return _safe_url(hook["url"])
         kind = hook.get("type")
@@ -268,7 +283,8 @@ class _Scan:
                 self.item("env", path, _line_of(text, f'"{var}"'), str(var), None)
         helper = data.get("apiKeyHelper")
         if isinstance(helper, str):
-            self.item("api_key_helper", path, _line_of(text, '"apiKeyHelper"'), "apiKeyHelper", helper)
+            self.item("api_key_helper", path, _line_of(text, '"apiKeyHelper"'), "apiKeyHelper",
+                      _safe_command(helper))
         return data
 
     def mcp(self) -> None:
@@ -283,7 +299,8 @@ class _Scan:
             if isinstance(spec.get("url"), str):
                 detail: str | None = _safe_url(spec["url"])
             else:
-                detail = spec["command"] if isinstance(spec.get("command"), str) else None
+                command = spec.get("command")
+                detail = _safe_command(command) if isinstance(command, str) else None
             self.item("mcp_server", self.root / ".mcp.json", _line_of(text, f'"{name}"'),
                       str(name), detail)
 
@@ -328,7 +345,7 @@ class _Scan:
             if m and current:
                 raw = m.group(2).strip("'\"")
                 self.item("frontmatter_hook", path, lineno, current[1],
-                          _safe_url(raw) if m.group(1) == "url" else raw)
+                          _safe_url(raw) if m.group(1) == "url" else _safe_command(raw))
                 reported.add(current[0])
         for lineno, event in events.items():
             if lineno not in reported:

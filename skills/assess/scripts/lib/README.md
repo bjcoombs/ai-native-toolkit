@@ -1250,8 +1250,9 @@ static and dependency-free. `scan_agent_harness(repo_root, scope, excludes)`
 inventories under the run root, as `executes`, the hooks in
 `.claude/settings.json` and in skill / agent frontmatter, the `env` variable
 names (never values), `apiKeyHelper`, `.mcp.json` servers (command, or URL
-without credentials, query or fragment; arguments are never reported) and
-`.cursor/hooks.json`. Finding kinds: `tracked_local_settings`,
+without credentials, query or fragment) and
+`.cursor/hooks.json`; a command is reported as its program only, never its
+arguments or leading `VAR=value` assignments. Finding kinds: `tracked_local_settings`,
 `tracked_env_file` (path only), `missing_env_deny` (only where Claude Code is
 configured: a `.claude/` directory or a `CLAUDE.md`), `hooks_forced_on`
 (`disableAllHooks: false`), `broad_allow` (`Bash`, `Bash(*)`, `Bash(:*)`,
