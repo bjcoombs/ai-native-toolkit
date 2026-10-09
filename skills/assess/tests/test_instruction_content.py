@@ -178,6 +178,11 @@ def test_directory_trees() -> None:
     assert count_directory_trees(tree + "\ntext\n" + tree) == 2
     assert count_directory_trees("├── one\n└── two\n") == 0  # under TREE_MIN_LINES
     assert count_directory_trees("plain text") == 0
+    flags = "- `--dry-run`: print only\n- `--fix`: apply\n- `--verbose`: log more\n"
+    table = "| a | b |\n|---|---|\n|--x| y |\n| `--fix` | z |\n"
+    assert count_directory_trees(flags) == 0
+    assert count_directory_trees(table) == 0
+    assert count_directory_trees("    |-- a\n    |-- b\n    `-- c\n") == 1
 
 
 @pytest.mark.parametrize(("heading", "is_overview"), [

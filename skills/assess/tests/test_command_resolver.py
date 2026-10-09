@@ -325,6 +325,13 @@ def test_extract_fenced_shell_and_inline() -> None:
     assert not any(c.text.startswith(("git", "make =", "├")) for c in cmds)
 
 
+def test_inline_bare_tool_names_are_prose() -> None:
+    text = "Use `pnpm`, not `npm` or `yarn`; we do not use `tox`. Run `./deploy` or `make check`.\n"
+    assert [c.text for c in extract_commands(text)] == ["./deploy", "make check"]
+    # In a fence, a bare runner line is still a command.
+    assert [c.text for c in extract_commands("```bash\nmake\n```\n")] == ["make"]
+
+
 def test_extract_console_only_reads_prompt_lines() -> None:
     text = "```console\n$ npm test\nPASS  all tests\n> npm run lint\n```\n"
     assert [c.text for c in extract_commands(text)] == ["npm test", "npm run lint"]

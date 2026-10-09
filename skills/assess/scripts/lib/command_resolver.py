@@ -169,11 +169,18 @@ def _line_commands(line: str, lineno: int, cwd: str, source: Literal["fenced", "
         new_cwd = _cd_target(words, cwd)
         if new_cwd is not None:
             cwd = new_cwd
-        elif words and (not require_runner or _is_runner(words[0])):
+        elif words and _counts_as_command(words, source, require_runner):
             out.append(Command(text=segment, line=lineno, cwd=cwd, source=source))
         if raw.endswith(")") and segment != raw:
             cwd = saved
     return out, cwd
+
+
+def _counts_as_command(words: list[str], source: str, require_runner: bool) -> bool:
+    """A runner-led segment; inline, a bare tool name (`` `npm` ``) is prose, not a command."""
+    if require_runner and not _is_runner(words[0]):
+        return False
+    return source != "inline" or len(words) > 1 or words[0].startswith("./")
 
 
 def _is_runner(word: str) -> bool:

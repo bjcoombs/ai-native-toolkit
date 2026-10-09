@@ -69,7 +69,11 @@ _SYMBOL = re.compile(r"^(_*[A-Za-z][A-Za-z0-9_]{3,})(?:\(\))?$")
 _SNAKE = re.compile(r"[a-z0-9]_[a-z0-9]")
 _CAMEL = re.compile(r"^_*[a-z][a-z0-9]*[A-Z]")
 _PASCAL = re.compile(r"^[A-Z][a-z0-9]+[A-Z]")
-_TREE_LINE = re.compile(r"(?:├──|└──|│\s|\|--|`--|\+--|\\--)")
+# Unicode tree glyphs anywhere on the line; the ASCII forms (``|--``, `` `-- ``)
+# only at the line's start after indentation or ``|``, and not followed by a
+# third dash, so a flag list (``- `--fix`: ...``) or a table rule (``|---|``)
+# is not a tree.
+_TREE_LINE = re.compile(r"(?:├──|└──|│\s)|^[\s|│]*(?:\|--|`--|\+--|\\--)(?!-)")
 TREE_MIN_LINES = 3
 _OVERVIEW_HEADING = re.compile(
     r"^#{1,6}\s+(?:"
