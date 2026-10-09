@@ -12,6 +12,10 @@ from pathlib import Path
 import pytest
 
 from lib.agent_instructions_grader import (
+    BASELINE_POINTS,
+    COMMAND_CAP,
+    EXTERNAL_CAP,
+    EXTERNAL_POINTS,
     compute_size_metrics,
     count_positive_directives,
     count_tradeoff_phrases,
@@ -355,10 +359,38 @@ def test_duplicate_commands_count_once(grading_repo: RepoContext) -> None:
 
 
 def test_unknown_runner_is_neither_credit_nor_finding(grading_repo: RepoContext) -> None:
-    grade = grade_instructions("```bash\nrg -n TODO src\n```\n", freshness_days=1, repo=grading_repo)
+    grade = grade_instructions("```bash\nshellcheck -x a\n```\n", freshness_days=1, repo=grading_repo)
     assert grade.subscores["unknown_commands"] == 1
     assert grade.subscores["verified_commands"] == 0
+    assert grade.subscores["external_commands"] == 0
+    assert grade.score == BASELINE_POINTS
     assert grade.findings == []
+
+
+def test_external_tool_earns_partial_credit_and_no_finding(grading_repo: RepoContext) -> None:
+    grade = grade_instructions("```bash\nfd -e py\n```\n", freshness_days=1, repo=grading_repo)
+    assert grade.subscores["external_commands"] == 1
+    assert grade.subscores["unknown_commands"] == 0
+    assert grade.subscores["verified_commands"] == 0
+    assert grade.score == BASELINE_POINTS + EXTERNAL_POINTS
+    assert grade.findings == []
+
+
+def test_external_credit_is_capped_and_shares_the_command_cap(grading_repo: RepoContext) -> None:
+    externals = "\n".join(f"gh api repos/o/r/issues/{n}" for n in range(10))
+    only_external = grade_instructions(f"```bash\n{externals}\n```\n", 1, repo=grading_repo)
+    assert only_external.subscores["external_commands"] == 10
+    assert only_external.score == BASELINE_POINTS + EXTERNAL_CAP
+    verified = "`npm test` `make check` `make fmt` `make lint`\n"
+    both = grade_instructions(f"{verified}```bash\n{externals}\n```\n", 1, repo=grading_repo)
+    assert both.subscores["verified_commands"] == 4
+    assert both.score == BASELINE_POINTS + COMMAND_CAP
+
+
+def test_external_tool_without_repo_earns_nothing() -> None:
+    grade = grade_instructions("```bash\nfd -e py\n```\n", 1, repo=None)
+    assert grade.subscores["external_commands"] == 0
+    assert grade.score == BASELINE_POINTS
 
 
 def test_text_only_grading_counts_paths_unverified(good_text: str) -> None:

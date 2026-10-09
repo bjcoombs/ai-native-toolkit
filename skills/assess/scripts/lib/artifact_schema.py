@@ -31,12 +31,12 @@ A leaf module so the orchestrator and the lib modules that write artifacts
 # hooks, env names, apiKeyHelper and MCP servers that run on every agent
 # session, and the findings that expose a secret or widen that surface.
 # Additive; complexity-stats.json is unchanged.
-# 1.5.0: instruction files are graded on verified commands and size (issue
-# #512). Each instruction_files entry and nested_instructions.files entry gains
-# findings (unresolved commands, stale paths and symbols) and the subscores
-# verified_commands, unresolved_commands, unknown_commands,
-# path_references_existing, stale_references, readme_overlap_pct,
-# directory_trees, overview_sections, content_penalty and
-# score_before_penalties. Additive: no existing key moves or changes type, and
-# complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.5.0"
+# 1.4.0 (also): instruction files are graded on verified commands and size
+# (issue #512). Each instruction_files entry and nested_instructions.files entry
+# gains findings (unresolved commands, stale paths and symbols) and the
+# subscores verified_commands, external_commands, unresolved_commands,
+# unknown_commands, path_references_existing, stale_references,
+# readme_overlap_pct, directory_trees, overview_sections, content_penalty,
+# score_before_penalties and size_grade_capped. Additive: no existing key moves
+# or changes type, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.4.0"

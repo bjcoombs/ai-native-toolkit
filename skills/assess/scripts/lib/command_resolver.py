@@ -16,9 +16,12 @@ without running anything. Public API:
 - ``resolve(command, repo_root=None, *, index=None) -> Resolution``: one
   verdict per command. ``resolved`` (the script, target, recipe, environment,
   session, file or tool config exists), ``missing`` (the runner's config is
-  absent or lacks the named target: a finding), or ``unknown`` (a runner this
-  module does not model, a placeholder, or a tool the repo does not declare:
-  no evidence either way, never a failure). ``reason`` says which.
+  absent or lacks the named target: a finding), ``external`` (a widely
+  installed standard CLI such as ``gh``, ``git`` or ``kubectl``,
+  ``EXTERNAL_TOOLS``: real, but defined outside the repo, so never a finding,
+  placeholder or not), or ``unknown`` (any other program this module does not
+  model, a placeholder, or a tool the repo does not declare: no evidence either way,
+  never a failure). ``reason`` says which.
 - ``build_index(repo_root)`` (re-exported from ``lib.command_index``) reads the
   repo's config once; pass the index to ``resolve`` when resolving many.
 
@@ -31,7 +34,10 @@ arguments exist), ``python X.py``, go (any ``go.mod``), cargo (``Cargo.toml``,
 aliases), mvn / ``./mvnw`` (``pom.xml``), gradle / ``./gradlew`` (a Gradle
 build file), ``bash X.sh`` and ``./X`` (the file exists). A command whose
 runner is not modelled resolves when a CI configuration line runs it
-verbatim; otherwise it is ``unknown``.
+verbatim; otherwise it is ``external`` when its program is in
+``EXTERNAL_TOOLS`` and ``unknown`` when not. Inline code still has to start
+with a modelled runner to count as a command; an external tool counts in a
+shell fence.
 
 Leniency is deliberate: config files are unioned across the repo (a workspace
 package's script resolves), and a computed Makefile target or tox brace
@@ -56,11 +62,11 @@ from lib.command_index import RepoIndex, TargetSet, build_index, is_gitignored
 from lib.doc_graph import is_excluded_path
 
 __all__ = [
-    "Command", "Resolution", "RepoIndex", "RUNNERS",
+    "Command", "EXTERNAL_TOOLS", "Resolution", "RepoIndex", "RUNNERS",
     "build_index", "extract_commands", "resolve",
 ]
 
-Verdict = Literal["resolved", "missing", "unknown"]
+Verdict = Literal["resolved", "missing", "external", "unknown"]
 
 
 @dataclass(frozen=True)
@@ -90,7 +96,11 @@ SHELL_FENCE_LANGS = frozenset({
 })
 _FENCE = re.compile(r"^\s*(`{3,}|~{3,})\s*([\w+-]*)")
 _INLINE = re.compile(r"(?<!`)`([^`\n]+)`(?!`)")
-_PLACEHOLDER = re.compile(r"<[^<>\s][^<>]*>|\{\{|\$\{|\$\(|…|\[[a-z_-]+\]")
+# ``<target>``, ``{{x}}``, ``${X}``, ``$(cmd)``, ``…``, ``[name]`` and a
+# single-word ``{PR_NUMBER}`` / ``{id}`` (brace expansion such as
+# ``py{311,312}`` has a comma, and ``find -exec {}`` has no word, so neither
+# matches).
+_PLACEHOLDER = re.compile(r"<[^<>\s][^<>]*>|\{\{|\$\{|\$\(|…|\[[a-z_-]+\]|\{[A-Za-z_]\w*\}")
 _REDIRECT = re.compile(r"(?:^|\s)\d*(?:>>?|<)&?\s*\S+")
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 _PREFIXES = frozenset({"sudo", "time", "env", "exec", "command", "nohup"})
@@ -272,6 +282,19 @@ Outcome = tuple[Verdict, str]
 _Resolver = Callable[[RepoIndex, list[str], str], Outcome]
 
 _UNKNOWN_RUNNER: Outcome = ("unknown", "unresolved: unknown runner")
+
+# Standard CLIs a contributor's machine or CI image has installed, whose
+# subcommands are defined by the tool, not the repo. A command naming one is
+# real (agents run the tools a file names, Gloaguen et al., 2026) but has no
+# repo target to check, so it is ``external``: partial credit, never a
+# finding, even with a placeholder in its arguments (there is no repo target
+# for the placeholder to hide). Kept to developer tools; coreutils such as
+# ``echo`` and ``cat`` are not listed, so ``echo hi`` earns nothing.
+EXTERNAL_TOOLS = frozenset({
+    "gh", "git", "glab", "rg", "fd", "jq", "yq", "curl", "wget", "ssh", "openssl",
+    "docker", "docker-compose", "podman", "kubectl", "helm", "kustomize", "stern",
+    "aws", "gcloud", "az", "terraform", "brew",
+})
 
 
 def _positionals(args: list[str], valued: frozenset[str]) -> list[str]:
@@ -697,12 +720,19 @@ def resolve(command: Command | str, repo_root: Path | None = None, *,
         if repo_root is None:
             raise ValueError("resolve needs repo_root or index")
         index = build_index(repo_root)
-    if _PLACEHOLDER.search(cmd.text):
-        return Resolution(cmd.text, "unknown", "unresolved: contains a placeholder")
     words = _tokens(cmd.text)
     if not words:
         return Resolution(cmd.text, "unknown", "unresolved: empty command")
     head = words[0]
+    # A placeholder hides the repo target a modelled runner would be checked
+    # against. A standard CLI has no repo target, so ``gh pr view {PR_NUMBER}``
+    # is still that tool's command: external, placeholder or not.
+    if head in EXTERNAL_TOOLS and head not in RUNNERS:
+        if _ci_runs(index, cmd.text):
+            return Resolution(cmd.text, "resolved", "a CI configuration step runs it")
+        return Resolution(cmd.text, "external", f"`{head}` is a standard CLI defined outside the repo")
+    if _PLACEHOLDER.search(cmd.text):
+        return Resolution(cmd.text, "unknown", "unresolved: contains a placeholder")
     resolver = RUNNERS.get(head)
     if resolver is not None:
         verdict, reason = resolver(index, words, cmd.cwd)

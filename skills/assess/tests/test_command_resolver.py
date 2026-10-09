@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.command_resolver import Command, build_index, extract_commands, resolve
+from lib.command_resolver import EXTERNAL_TOOLS, Command, build_index, extract_commands, resolve
 
 FULL_REPO: dict[str, str] = {
     "package.json": json.dumps({
@@ -155,7 +155,6 @@ def test_missing_config(empty: Path, command: str, reason: str) -> None:
 
 
 UNKNOWN_ANYWHERE = [
-    "rg -n TODO src",            # runner not modelled
     "source .venv/bin/activate",  # excluded tree, never tracked
     "./node_modules/.bin/eslint .",
     "./target/release/app",
@@ -164,10 +163,9 @@ UNKNOWN_ANYWHERE = [
     "bash $HOME/x.sh",           # variable
     "./dist/cli.js",             # gitignored in the git test below; excluded tree here
     "pytest /tmp/scratch/test_x.py",  # an absolute pytest path is outside git by design
-    "git status",
     "make <target>",             # placeholder
     "npm run ${SCRIPT}",
-    "gh pr view {PR_NUMBER}",
+    "npm run {script}",          # a single-word brace placeholder
     "npx some-random-tool",      # undeclared package
     "uv run undeclared-tool",
     "uvx black",
@@ -342,8 +340,65 @@ def test_ci_fallback_needs_the_whole_line(tmp_path: Path) -> None:
         "        run: git diff --exit-code\n      # git status\n"
     )}))
     assert resolve("git diff --exit-code", index=index).resolved
-    assert resolve("git diff", index=index).verdict == "unknown"     # a prefix, not the step
-    assert resolve("git status", index=index).verdict == "unknown"   # only in a comment
+    assert resolve("git diff", index=index).verdict == "external"    # a prefix, not the step
+    assert resolve("git status", index=index).verdict == "external"  # only in a comment
+
+
+EXTERNAL_COMMANDS = [
+    "gh api repos/o/r/pulls/1/comments",
+    "git log --oneline -5",
+    "rg -n TODO src",
+    "fd -e py",
+    "jq .version plugin.json",
+    "yq .name x.yaml",
+    "curl -fsSL https://example.com",
+    "docker compose up -d",
+    "kubectl get pods -n prod",
+    "aws s3 ls",
+    "gcloud auth list",
+    "sudo docker ps",           # a prefix is dropped before the program is read
+    "FOO=1 gh pr checks 5",     # so is an env assignment
+]
+
+
+@pytest.mark.parametrize("command", EXTERNAL_COMMANDS)
+def test_standard_cli_is_external(full: Path, empty: Path, command: str) -> None:
+    for repo in (full, empty):
+        result = resolve(command, repo)
+        assert result.verdict == "external"
+        assert "standard CLI" in result.reason
+
+
+@pytest.mark.parametrize("command", ["shellcheck x", "terraformer plan", "echo hi", "cat x", "ghx api"])
+def test_other_unknown_programs_stay_unknown(empty: Path, command: str) -> None:
+    assert resolve(command, empty).verdict == "unknown"
+
+
+def test_a_repo_path_named_like_a_tool_is_a_file(empty: Path) -> None:
+    assert resolve("./gh api", empty).verdict == "missing"
+
+
+def test_external_with_placeholder_is_still_external(empty: Path) -> None:
+    # A placeholder hides a repo target; a standard CLI has none to hide.
+    for command in ("gh pr view {PR_NUMBER}", "kubectl logs <pod>", 'gh api "repos/{REPO}/pulls"'):
+        assert resolve(command, empty).verdict == "external"
+    # A modelled runner with a placeholder stays unknown, never missing.
+    assert resolve("make <target>", empty).verdict == "unknown"
+
+
+def test_ci_step_upgrades_external_to_resolved(tmp_path: Path) -> None:
+    index = build_index(_repo(tmp_path, {".github/workflows/ci.yml": (
+        "jobs:\n  t:\n    steps:\n      - run: gh pr checks --watch\n"
+    )}))
+    assert resolve("gh pr checks --watch", index=index).resolved
+
+
+def test_external_tools_are_not_inline_runners() -> None:
+    # Inline code still needs a modelled runner; an external tool counts only in a fence.
+    assert extract_commands("Use `gh pr view 5` here.\n") == []
+    fenced = extract_commands("```bash\ngh pr view 5\n```\n")
+    assert [c.text for c in fenced] == ["gh pr view 5"]
+    assert {"gh", "git", "kubectl"} <= EXTERNAL_TOOLS
 
 
 # --- Extraction ---------------------------------------------------------------

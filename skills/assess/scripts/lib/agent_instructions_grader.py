@@ -8,13 +8,16 @@ studies say helps an agent, not on how much the file says:
                          resolve to a real script, target, recipe, tool config
                          or CI step in the repo (``lib.command_resolver``) -
                          the largest credit, because agents run the tools a
-                         file names (Gloaguen et al., 2026)
+                         file names (Gloaguen et al., 2026); a standard CLI
+                         such as ``gh`` or ``kubectl`` earns partial credit
     path_references_existing: backticked paths that exist at HEAD
     positive_directives / tradeoff_phrases / verifiable_outcomes: credited up
                          to a small floor only; past it, more instructions
                          lower instruction-following accuracy (IFScale)
     size curve:          a penalty growing from 200 lines for an always-loaded
-                         file, waived when the repo delegates to skills
+                         file, halved (never waived) when the repo delegates
+                         to skills; past about twice the curve's start the
+                         grade is capped at B
     content penalties:   directory-tree blocks, repository-overview sections,
                          and lines repeated from the root README
     freshness:           days since last content change
@@ -128,6 +131,16 @@ SIZE_THRESHOLD_WORDS = 2400
 SIZE_LINES_PER_POINT = 10
 SIZE_WORDS_PER_POINT = 120
 SIZE_MAX_PENALTY = 30
+# Delegating to skills (a skills directory or pointers in the text) moves
+# topic guidance out of the always-loaded file, but the file itself is still
+# read on every task, so its size is still paid: delegation divides the
+# penalty by SKILLS_DELEGATION_DIVISOR and never waives it.
+SKILLS_DELEGATION_DIVISOR = 2
+# Past about twice the curve's start, no amount of other credit makes the file
+# lean: the grade is capped at B (score SIZE_GRADE_CAP_SCORE), skills or not.
+SIZE_GRADE_CAP_LINES = 2 * SIZE_THRESHOLD_LINES
+SIZE_GRADE_CAP_WORDS = 2 * SIZE_THRESHOLD_WORDS
+SIZE_GRADE_CAP_SCORE = 59
 
 # Scoring weights (points each, cap). Verified commands carry the most credit;
 # counts of directives, tradeoff phrases and paths are a small floor, because
@@ -135,6 +148,9 @@ SIZE_MAX_PENALTY = 30
 # (IFScale, https://arxiv.org/abs/2507.11538).
 BASELINE_POINTS = 10
 COMMAND_POINTS, COMMAND_CAP = 12, 40
+# A standard CLI (``lib.command_resolver.EXTERNAL_TOOLS``) is a real command
+# with no repo target to verify: partial credit, inside COMMAND_CAP.
+EXTERNAL_POINTS, EXTERNAL_CAP = 4, 16
 DIRECTIVE_POINTS, DIRECTIVE_CAP = 2, 10
 TRADEOFF_POINTS, TRADEOFF_CAP = 3, 10
 PATH_POINTS, PATH_CAP = 3, 15
@@ -403,11 +419,12 @@ def compute_bloat_penalty(
 
     - Within ``SIZE_THRESHOLD_LINES`` lines and ``SIZE_THRESHOLD_WORDS`` words
       -> no penalty.
-    - Over it, with skills factoring (a skills dir or delegation pointers)
-      -> no penalty; the file may be a hub that points to on-demand skills.
-    - Over it with no skills -> one point per ``SIZE_LINES_PER_POINT`` lines
-      (or ``SIZE_WORDS_PER_POINT`` words) over, the larger of the two, capped
-      at ``SIZE_MAX_PENALTY``.
+    - Over it -> one point per ``SIZE_LINES_PER_POINT`` lines (or
+      ``SIZE_WORDS_PER_POINT`` words) over, the larger of the two, capped at
+      ``SIZE_MAX_PENALTY``.
+    - With skills factoring (a skills dir or delegation pointers) -> that
+      penalty divided by ``SKILLS_DELEGATION_DIVISOR``, rounded up. The file
+      is still loaded on every task, so delegation never waives it.
     """
     lines = size_metrics["line_count"]
     words = size_metrics["word_count"]
@@ -415,12 +432,20 @@ def compute_bloat_penalty(
         size_metrics["exceeds_line_threshold"]
         or size_metrics["exceeds_word_threshold"]
     )
-    if not is_oversized or skills_present or delegates_to_skills:
+    if not is_oversized:
         return 0, None
 
     line_penalty = math.ceil(max(0, lines - SIZE_THRESHOLD_LINES) / SIZE_LINES_PER_POINT)
     word_penalty = math.ceil(max(0, words - SIZE_THRESHOLD_WORDS) / SIZE_WORDS_PER_POINT)
     penalty = min(max(line_penalty, word_penalty), SIZE_MAX_PENALTY)
+    if skills_present or delegates_to_skills:
+        return math.ceil(penalty / SKILLS_DELEGATION_DIVISOR), (
+            f"Instruction file exceeds size threshold ({lines} lines, {words} words; "
+            f"the curve starts at {SIZE_THRESHOLD_LINES} lines). The repo delegates "
+            "to skills, which halves the penalty, but this file still loads on "
+            "every task. Remediation: move more topic guidance into the skills "
+            "and keep the root file to commands and constraints."
+        )
 
     remediation = (
         f"Instruction file exceeds size threshold ({lines} lines, {words} words; "
@@ -462,6 +487,7 @@ def _repo_signals(text: str, repo: RepoContext, path: str) -> tuple[dict[str, in
     """Subscores and findings that need the repository: commands and references."""
     findings: list[GradeFinding] = []
     verified: set[str] = set()
+    external: set[str] = set()
     missing: set[str] = set()
     unknown: set[str] = set()
     for cmd in extract_commands(text):
@@ -469,6 +495,8 @@ def _repo_signals(text: str, repo: RepoContext, path: str) -> tuple[dict[str, in
         key = " ".join(cmd.text.split())
         if res.verdict == "resolved":
             verified.add(key)
+        elif res.verdict == "external":
+            external.add(key)
         elif res.verdict == "unknown":
             unknown.add(key)
         elif key not in missing:
@@ -481,6 +509,7 @@ def _repo_signals(text: str, repo: RepoContext, path: str) -> tuple[dict[str, in
                      "reason": r["reason"]} for r in [*stale_paths, *stale_symbols])
     sub = {
         "verified_commands": len(verified),
+        "external_commands": len(external),
         "unresolved_commands": len(missing),
         "unknown_commands": len(unknown),
         "path_references_existing": len({r.text for r in existing}),
@@ -520,13 +549,17 @@ def grade_instructions(
     Scoring (max 95, clamped to 0-100):
         baseline:                 +10 for any content
         verified_commands:        12 points each, capped at 40
+        external_commands:        4 points each, capped at 16; verified and
+                                  external together capped at 40
         positive_directives:      2 points each, capped at 10
         tradeoff_phrases:         3 points each, capped at 10
         path_references_existing: 3 points each, capped at 15
         verifiable_outcomes:      5 points each, capped at 10
         freshness penalty:        -10 if > 365 days, -5 if > 180
         bloat_penalty:            the size curve (``compute_bloat_penalty``),
-                                  0 when the repo delegates to skills
+                                  halved when the repo delegates to skills
+        size grade cap:           over 400 lines or 4800 words the score is
+                                  capped at 59 (a B), skills or not
         content_penalty:          -10 for a directory-tree block, -5 for a
                                   repository-overview section, -8 / -15 when
                                   25% / 50% of the file's lines repeat the README
@@ -572,14 +605,19 @@ def grade_instructions(
         repo_sub, findings = _repo_signals(text, repo, path)
         sub.update(repo_sub)
     else:
-        sub.update({"verified_commands": 0, "unresolved_commands": 0, "unknown_commands": 0,
+        sub.update({"verified_commands": 0, "external_commands": 0,
+                    "unresolved_commands": 0, "unknown_commands": 0,
                     "path_references_existing": sub["path_references"],
                     "stale_references": 0, "readme_overlap_pct": 0})
     sub["directory_trees"] = count_directory_trees(text)
     sub["overview_sections"] = len(overview_headings(text))
 
     score = BASELINE_POINTS
-    score += _capped(sub["verified_commands"], COMMAND_POINTS, COMMAND_CAP)
+    score += min(
+        _capped(sub["verified_commands"], COMMAND_POINTS, COMMAND_CAP)
+        + _capped(sub["external_commands"], EXTERNAL_POINTS, EXTERNAL_CAP),
+        COMMAND_CAP,
+    )
     score += _capped(sub["positive_directives"], DIRECTIVE_POINTS, DIRECTIVE_CAP)
     score += _capped(sub["tradeoff_phrases"], TRADEOFF_POINTS, TRADEOFF_CAP)
     score += _capped(sub["path_references_existing"], PATH_POINTS, PATH_CAP)
@@ -597,4 +635,9 @@ def grade_instructions(
     score -= bloat_penalty + sub["content_penalty"]
 
     score = max(0, min(score, 100))
+    sub["size_grade_capped"] = int(
+        sub["line_count"] > SIZE_GRADE_CAP_LINES or sub["word_count"] > SIZE_GRADE_CAP_WORDS
+    )
+    if sub["size_grade_capped"]:
+        score = min(score, SIZE_GRADE_CAP_SCORE)
     return Grade(score=score, grade=_letter_grade(score), subscores=sub, findings=findings)

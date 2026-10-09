@@ -877,10 +877,13 @@ working rule; a negated or uncompilable pattern never reads as dead. Tests:
 Heuristic scoring of agent instruction files (CLAUDE.md, AGENTS.md, GEMINI.md,
 .cursorrules, .github/copilot-instructions.md), filename-agnostic, no model calls. Since
 #512 it grades on what outcome studies say helps an agent: verified commands earn the most
-credit (12 each, cap 40, resolved by `command_resolver.py`), backticked paths count only
+credit (12 each, cap 40, resolved by `command_resolver.py`; a standard CLI such as `gh` earns
+4 each, cap 16, inside the same 40), backticked paths count only
 when they exist at HEAD, and directives, tradeoff phrases and verifiable outcomes are a
 small capped floor. A size curve subtracts one point per 10 lines past 200 (or per 120
-words past 2400), capped at 30, waived when the repo delegates to skills; directory-tree
+words past 2400), capped at 30, halved (never waived) when the repo delegates to skills,
+because the file still loads on every task; past 400 lines or 4800 words the score is
+capped at 59 (a B), skills or not. Directory-tree
 blocks, repository-overview sections and lines repeated from the root README cost points
 too (`instruction_content.py`). The A-F scale and the subscore keys downstream code reads
 (`positive_directives`, `tradeoff_phrases`, `path_references`, `verifiable_outcomes`,
@@ -894,11 +897,13 @@ Extracts the shell commands an instruction file gives (shell-fenced blocks, and 
 code that starts with a known runner) and checks each names a real target at HEAD without
 running it. Public API: `extract_commands(text) -> list[Command]`,
 `resolve(command, repo_root=None, *, index=None) -> Resolution` (verdict `resolved`,
-`missing` or `unknown`, plus a `reason`) and `build_index(repo_root)`. Covers npm / pnpm /
+`missing`, `external` or `unknown`, plus a `reason`) and `build_index(repo_root)`. Covers npm / pnpm /
 yarn / bun scripts, npx, make, just, uv / poetry run, uvx, tox, nox, pytest, python, go,
 cargo, mvn and gradle, and script paths; an unmodelled runner resolves when a CI line runs
-it verbatim, else it is `unknown` ("unresolved: unknown runner"), which is no evidence
-either way. Independent of the grader so other checks (such as whether an instruction
+it verbatim, else it is `external` when its program is a standard CLI in `EXTERNAL_TOOLS`
+(`gh`, `git`, `rg`, `jq`, `docker`, `kubectl`, `aws` and similar: real, but defined outside
+the repo, so never a finding, even with a `{PLACEHOLDER}` argument) and `unknown` ("unresolved: unknown runner") otherwise, which
+is no evidence either way. Independent of the grader so other checks (such as whether an instruction
 file names the repo's check command) can reuse it. Tests: `tests/test_command_resolver.py`.
 
 **`command_index.py`**
