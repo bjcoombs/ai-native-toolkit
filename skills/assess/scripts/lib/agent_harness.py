@@ -180,7 +180,7 @@ def _ordinary_joiner(text: str, pos: int) -> bool:
 # A subdivision flag (UTS #51): U+1F3F4, then a tag-encoded region code of two
 # lowercase letters and one to four lowercase letters or digits (`gbeng`), then
 # U+E007F CANCEL TAG. Any other tag run is a payload, flag-wrapped or not.
-_FLAG_RE = re.compile("\U0001F3F4([\U000E0061-\U000E007A]{2}[\U000E0061-\U000E007A\U000E0030-\U000E0039]{1,4})\U000E007F")
+_FLAG_RE = re.compile(r"\U0001F3F4([\U000E0061-\U000E007A]{2}[\U000E0061-\U000E007A\U000E0030-\U000E0039]{1,4})\U000E007F")
 
 
 def _flag_spans(text: str) -> list[tuple[int, int]]:
