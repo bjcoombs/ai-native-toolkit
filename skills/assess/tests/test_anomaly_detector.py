@@ -78,6 +78,33 @@ def test_instruction_file_grade_mismatch_for_agents_md() -> None:
     assert "INSTRUCTION_FILE_GRADE_MISMATCH" in {a.code for a in anomalies}
 
 
+def _mismatch(score: int, line_count: int, subscores: dict[str, int]) -> bool:
+    anomalies = detect_anomalies(_ctx(
+        instruction_files={"CLAUDE.md": {
+            "present": True, "grade": "F", "score": score, "line_count": line_count,
+            "subscores": subscores,
+        }},
+        instructions_grade="F",
+    ))
+    return "INSTRUCTION_FILE_GRADE_MISMATCH" in {a.code for a in anomalies}
+
+
+def test_grade_mismatch_skips_an_f_the_penalties_explain() -> None:
+    """A long file that scored above the F cutoff before the size curve and
+    content penalties is the grader working as designed."""
+    assert not _mismatch(0, 400, {"score_before_penalties": 30, "bloat_penalty": 30})
+    assert not _mismatch(15, 300, {"score_before_penalties": 25, "bloat_penalty": 10})
+
+
+def test_grade_mismatch_fires_when_the_penalties_do_not_explain_the_f() -> None:
+    """An F the content earned is suspicious, even when penalties also apply."""
+    assert _mismatch(5, 210, {"score_before_penalties": 6, "bloat_penalty": 1})
+    # The clamp case: 20 points of content, 25 of size penalty, stored score 0.
+    assert _mismatch(0, 450, {"score_before_penalties": 20, "bloat_penalty": 25})
+    assert _mismatch(14, 300, {"score_before_penalties": 24})  # one short of the cutoff
+    assert _mismatch(10, 300, {"bloat_penalty": 10})  # pre-#512 context: no key
+
+
 def test_all_hotspots_new_means_rotation_failed() -> None:
     anomalies = detect_anomalies(_ctx(
         diff={"new": 8, "graduated": 0, "regressed": 0, "persistent": 0},

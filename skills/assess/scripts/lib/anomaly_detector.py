@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from lib.agent_instructions_grader import F_GRADE_CUTOFF
 from lib.run_context_types import JsonDict
 
 
@@ -54,7 +55,16 @@ def detect_anomalies(context: JsonDict) -> list[Anomaly]:
 
     # Iterate over all present instruction files - the same check applies to each.
     for filename, file_info in instruction_files.items():
-        if file_info.get("grade") == "F" and file_info.get("line_count", 0) > 200:
+        # The size curve and content penalties (#512) grade a long monolith of
+        # directives, a tree and an overview F by design. The F is explained
+        # only when the file scored above the F cutoff before those penalties
+        # (``score_before_penalties``, unclamped); an F the content earned is
+        # still suspicious. Older run contexts lack the key and fall back to
+        # the stored score, which never reads as explained.
+        subscores = file_info.get("subscores") or {}
+        before = subscores.get("score_before_penalties", file_info.get("score", 0))
+        explained = before >= F_GRADE_CUTOFF
+        if file_info.get("grade") == "F" and file_info.get("line_count", 0) > 200 and not explained:
             # Use the file's basename for the detail so we don't leak any
             # repo-relative directory structure (e.g. .github/copilot-instructions.md).
             kind = filename.rsplit("/", 1)[-1]

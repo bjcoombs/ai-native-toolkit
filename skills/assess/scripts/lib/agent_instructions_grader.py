@@ -1,26 +1,55 @@
 """Heuristic agent-instructions grader.
 
 Filename-agnostic. Scores any agent instruction file - CLAUDE.md, AGENTS.md,
-GEMINI.md, .cursorrules, .github/copilot-instructions.md - on signals that
-correlate with usefulness to an LLM contributor:
+GEMINI.md, .cursorrules, .github/copilot-instructions.md - on what outcome
+studies say helps an agent, not on how much the file says:
 
-    positive_directives: "Use X", "Prefer Y", "Default to Z" (positive framing)
-    tradeoff_phrases:    "because", "over X", "instead of", "rather than"
-    path_references:     file paths like src/foo/bar.py, tests/..., etc.
-    verifiable_outcomes: "Working if", "verify:", "success criteria", or a
-                         runnable verification command (mvn/gradle/rg)
-    freshness:           days since last git modification
+    verified_commands:   commands (fenced shell block or inline code) that
+                         resolve to a real script, target, recipe, tool config
+                         or CI step in the repo (``lib.command_resolver``) -
+                         the largest credit, because agents run the tools a
+                         file names (Gloaguen et al., 2026); a standard CLI
+                         such as ``gh`` or ``kubectl`` earns partial credit
+    path_references_existing: backticked paths that are tracked
+    positive_directives / tradeoff_phrases / verifiable_outcomes: credited up
+                         to a small floor only; past it, more instructions
+                         lower instruction-following accuracy (IFScale)
+    size curve:          a penalty growing from 200 lines for an always-loaded
+                         file, halved (never waived) when the repo delegates
+                         to skills; past about twice the curve's start the
+                         grade is capped at B
+    content penalties:   directory-tree blocks, repository-overview sections,
+                         and lines repeated from the root README
+    freshness:           days since last content change
 
-No LLM calls. Pure regex + arithmetic. Deterministic.
+Commands that name a missing target and backticked paths or symbols that do
+not exist in the tracked files are returned as ``Grade.findings``, never a hard fail.
+The repository-checked signals need ``repo`` (a
+``lib.instruction_content.RepoContext``); without it, commands earn no credit
+and path references are counted unverified.
+
+No LLM calls. Pure regex + arithmetic over the text and the tracked files (the working tree, so a clean checkout is HEAD).
+Deterministic.
 """
 from __future__ import annotations
 
+import math
+import posixpath
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TypedDict
 
-from lib.run_context_types import JsonDict
+from lib.command_resolver import Command, Resolution, extract_commands, resolve
+from lib.instruction_content import (
+    RepoContext,
+    check_paths,
+    check_symbols,
+    count_directory_trees,
+    overview_headings,
+    readme_overlap_pct,
+)
+from lib.run_context_types import GradeFinding, JsonDict
 
 
 class SensitiveFinding(TypedDict):
@@ -88,13 +117,56 @@ VERIFIABLE_PATTERNS = [
     r"\brg\s+(?:(?:-{1,2}[\w-]+\s+)+\S|(?:-{1,2}[\w-]+\s+)*['\"]\S)",
 ]
 
-# Size/bloat metrics with CONSERVATIVE thresholds.
-# Conservative threshold rationale: small/legitimate instruction files must
-# never be penalized. 500 lines / 3000 words covers the common case of a
-# well-structured CLAUDE.md with sections, examples, and patterns - only
-# genuinely bloated files cross this threshold.
-SIZE_THRESHOLD_LINES = 500
-SIZE_THRESHOLD_WORDS = 3000
+# Size curve for an always-loaded instruction file. Claude Code's memory docs
+# say "target under 200 lines per CLAUDE.md file"
+# (https://code.claude.com/docs/en/memory); OpenAI keeps AGENTS.md near 100
+# lines (https://openai.com/index/harness-engineering/). Gloaguen et al.
+# (2026, https://arxiv.org/html/2602.11988v1) measured context files raising
+# agent cost 19-23% while lifting success about 4% at best, so every line past
+# the ceiling is paid on every task. The penalty starts above
+# SIZE_THRESHOLD_LINES and grows one point per SIZE_LINES_PER_POINT lines (300
+# lines: -10, 400: -20), capped at SIZE_MAX_PENALTY. Words get the same curve
+# at about 12 words a line, so a file of very long lines cannot dodge it.
+SIZE_THRESHOLD_LINES = 200
+SIZE_THRESHOLD_WORDS = 2400
+SIZE_LINES_PER_POINT = 10
+SIZE_WORDS_PER_POINT = 120
+SIZE_MAX_PENALTY = 30
+# Delegating to skills (a skills directory or pointers in the text) moves
+# topic guidance out of the always-loaded file, but the file itself is still
+# read on every task, so its size is still paid: delegation divides the
+# penalty by SKILLS_DELEGATION_DIVISOR and never waives it.
+SKILLS_DELEGATION_DIVISOR = 2
+# Past about twice the curve's start, no amount of other credit makes the file
+# lean: the grade is capped at B (score SIZE_GRADE_CAP_SCORE), skills or not.
+SIZE_GRADE_CAP_LINES = 2 * SIZE_THRESHOLD_LINES
+SIZE_GRADE_CAP_WORDS = 2 * SIZE_THRESHOLD_WORDS
+SIZE_GRADE_CAP_SCORE = 59
+
+# Scoring weights (points each, cap). Verified commands carry the most credit;
+# counts of directives, tradeoff phrases and paths are a small floor, because
+# instruction-following accuracy falls as instruction count rises
+# (IFScale, https://arxiv.org/abs/2507.11538).
+BASELINE_POINTS = 10
+COMMAND_POINTS, COMMAND_CAP = 12, 40
+# A standard CLI (``lib.command_resolver.EXTERNAL_TOOLS``) is a real command
+# with no repo target to verify: partial credit, inside COMMAND_CAP. A package
+# manager's built-in (``npm ci``, ``uv sync``) stays at full credit because
+# its precondition is checked against the repo (the manifest it reads exists),
+# so the resolver has confirmed it will run here; ``gh pr checks`` gets no
+# such check.
+EXTERNAL_POINTS, EXTERNAL_CAP = 4, 16
+DIRECTIVE_POINTS, DIRECTIVE_CAP = 2, 10
+TRADEOFF_POINTS, TRADEOFF_CAP = 3, 10
+PATH_POINTS, PATH_CAP = 3, 15
+VERIFIABLE_POINTS, VERIFIABLE_CAP = 5, 10
+
+# Content the evidence says does not help (Gloaguen et al.: repository
+# overviews did not improve success). README overlap is the share of the
+# file's substantive lines repeated from the root README.
+TREE_PENALTY = 10
+OVERVIEW_PENALTY = 5
+README_OVERLAP_STEPS = ((50, 15), (25, 8))  # (overlap % at least, penalty)
 
 # Skills delegation detection - text patterns that indicate progressive
 # disclosure (guidance factored into on-demand skills rather than inlined).
@@ -262,6 +334,7 @@ class Grade:
     score: int
     grade: str
     subscores: dict[str, int] = field(default_factory=dict)
+    findings: list[GradeFinding] = field(default_factory=list)
 
 
 def _count(text: str, patterns: list[str]) -> int:
@@ -318,8 +391,8 @@ def detect_skills_dir(repo_root: Path) -> JsonDict:
     """Check for the presence of skills directories in the repo.
 
     Looks for `.claude/skills/` and `skills/` and counts the `*/SKILL.md`
-    files within. A repo with skills is using progressive disclosure, so a
-    large instruction file is not necessarily bloat.
+    files within. A repo with skills is using progressive disclosure, which
+    halves a large instruction file's size penalty but never waives it.
     """
     skills_paths = [
         repo_root / ".claude" / "skills",
@@ -345,63 +418,54 @@ def compute_bloat_penalty(
     skills_present: bool,
     delegates_to_skills: bool,
 ) -> tuple[int, str | None]:
-    """Compute the point penalty for an oversized monolithic instruction file.
+    """Compute the size-curve penalty for an always-loaded instruction file.
 
     Returns: (penalty_points, remediation_message)
 
-    Asymmetric scoring:
-    - Lean file (not oversized) -> no penalty
-    - Oversized file + skills factoring (dir present or delegation pointers)
-      -> no penalty; the repo uses progressive disclosure
-    - Oversized file + NO skills -> PENALTY scaled by overage
-
-    Penalty scale (conservative - only clear bloat is penalized):
-    - 500-750 lines: -5, 750-1000: -10, 1000+: -15
-    - Word count applies the same tiers at 3000/4500/6000 words
-    - Take the higher penalty of the two metrics
+    - Within ``SIZE_THRESHOLD_LINES`` lines and ``SIZE_THRESHOLD_WORDS`` words
+      -> no penalty.
+    - Over it -> one point per ``SIZE_LINES_PER_POINT`` lines (or
+      ``SIZE_WORDS_PER_POINT`` words) over, the larger of the two, capped at
+      ``SIZE_MAX_PENALTY``.
+    - With skills factoring (a skills dir or delegation pointers) -> that
+      penalty divided by ``SKILLS_DELEGATION_DIVISOR``, rounded up. The file
+      is still loaded on every task, so delegation never waives it.
     """
+    lines = size_metrics["line_count"]
+    words = size_metrics["word_count"]
     is_oversized = (
         size_metrics["exceeds_line_threshold"]
         or size_metrics["exceeds_word_threshold"]
     )
-
     if not is_oversized:
         return 0, None
 
+    line_penalty = math.ceil(max(0, lines - SIZE_THRESHOLD_LINES) / SIZE_LINES_PER_POINT)
+    word_penalty = math.ceil(max(0, words - SIZE_THRESHOLD_WORDS) / SIZE_WORDS_PER_POINT)
+    penalty = min(max(line_penalty, word_penalty), SIZE_MAX_PENALTY)
     if skills_present or delegates_to_skills:
-        # Repo uses progressive disclosure - no penalty even if the
-        # instruction file is large (it may be a hub that points to skills).
-        return 0, None
-
-    lines = size_metrics["line_count"]
-    line_penalty = 0
-    if lines > 1000:
-        line_penalty = 15
-    elif lines > 750:
-        line_penalty = 10
-    elif lines > SIZE_THRESHOLD_LINES:
-        line_penalty = 5
-
-    words = size_metrics["word_count"]
-    word_penalty = 0
-    if words > 6000:
-        word_penalty = 15
-    elif words > 4500:
-        word_penalty = 10
-    elif words > SIZE_THRESHOLD_WORDS:
-        word_penalty = 5
-
-    penalty = max(line_penalty, word_penalty)
+        return math.ceil(penalty / SKILLS_DELEGATION_DIVISOR), (
+            f"Instruction file exceeds size threshold ({lines} lines, {words} words; "
+            f"the curve starts at {SIZE_THRESHOLD_LINES} lines). The repo delegates "
+            "to skills, which halves the penalty, but this file still loads on "
+            "every task. Remediation: move more topic guidance into the skills "
+            "and keep the root file to commands and constraints."
+        )
 
     remediation = (
-        f"Instruction file exceeds size threshold ({lines} lines, {words} words) "
-        "without factoring guidance into on-demand skills. Remediation: factor "
-        "guidance into on-demand skills - extract topic-specific guidance into "
+        f"Instruction file exceeds size threshold ({lines} lines, {words} words; "
+        f"the curve starts at {SIZE_THRESHOLD_LINES} lines) without factoring "
+        "guidance into on-demand skills. Remediation: factor guidance into "
+        "on-demand skills - extract topic-specific guidance into "
         "`.claude/skills/*/SKILL.md` files loaded when relevant, keeping the root "
         "instruction file lean."
     )
 
     return penalty, remediation
+
+
+# Scores below this are an F (see ``_letter_grade``).
+F_GRADE_CUTOFF = 25
 
 
 def _letter_grade(score: int) -> str:
@@ -415,9 +479,80 @@ def _letter_grade(score: int) -> str:
         return "B"
     if score >= 40:
         return "C"
-    if score >= 25:
+    if score >= F_GRADE_CUTOFF:
         return "D"
     return "F"
+
+
+def _capped(count: int, points: int, cap: int) -> int:
+    return min(count * points, cap)
+
+
+def _resolve_for_file(cmd: Command, repo: RepoContext, path: str) -> Resolution:
+    """Resolve from the repo root, then, for a nested file, from its directory.
+
+    A nested ``packages/api/AGENTS.md`` may mean ``./scripts/dev.sh`` relative
+    to itself or to the root; a ``missing`` from the root is retried from the
+    file's directory so neither reading produces a false finding.
+    """
+    res = resolve(cmd, index=repo.index)
+    self_dir = posixpath.dirname(path)
+    if res.verdict != "missing" or not self_dir:
+        return res
+    local = resolve(replace(cmd, cwd=posixpath.join(self_dir, cmd.cwd)), index=repo.index)
+    return res if local.verdict == "missing" else local
+
+
+def _repo_signals(text: str, repo: RepoContext, path: str) -> tuple[dict[str, int], list[GradeFinding]]:
+    """Subscores and findings that need the repository: commands and references."""
+    findings: list[GradeFinding] = []
+    verified: set[str] = set()
+    external: set[str] = set()
+    missing: set[str] = set()
+    unknown: set[str] = set()
+    for cmd in extract_commands(text):
+        res = _resolve_for_file(cmd, repo, path)
+        key = " ".join(cmd.text.split())
+        if res.verdict == "resolved":
+            verified.add(key)
+        elif res.verdict == "external":
+            external.add(key)
+        elif res.verdict == "unknown":
+            unknown.add(key)
+        elif key not in missing:
+            missing.add(key)
+            findings.append({"kind": "unresolved_command", "line": cmd.line,
+                             "reference": key, "reason": res.reason})
+    existing, stale_paths = check_paths(text, repo, path)
+    stale_symbols = check_symbols(text, repo, path)
+    findings.extend({"kind": r["kind"], "line": r["line"], "reference": r["reference"],
+                     "reason": r["reason"]} for r in [*stale_paths, *stale_symbols])
+    sub = {
+        "verified_commands": len(verified),
+        "external_commands": len(external),
+        "unresolved_commands": len(missing),
+        "unknown_commands": len(unknown),
+        "path_references_existing": len({r.text for r in existing}),
+        "stale_references": len(stale_paths) + len(stale_symbols),
+        "readme_overlap_pct": readme_overlap_pct(text, repo.readme_text),
+    }
+    return sub, sorted(findings, key=lambda f: (f["line"], f["kind"], f["reference"]))
+
+
+def _content_penalty(sub: dict[str, int]) -> int:
+    penalty = TREE_PENALTY if sub["directory_trees"] else 0
+    penalty += OVERVIEW_PENALTY if sub["overview_sections"] else 0
+    for floor, points in README_OVERLAP_STEPS:
+        if sub["readme_overlap_pct"] >= floor:
+            penalty += points
+            break
+    return penalty
+
+
+def _freshness_penalty(freshness_days: int) -> int:
+    if freshness_days > 365:
+        return 10
+    return 5 if freshness_days > 180 else 0
 
 
 def grade_instructions(
@@ -426,29 +561,47 @@ def grade_instructions(
     *,
     skills_present: bool = False,
     delegates_to_skills: bool | None = None,
+    repo: RepoContext | None,
+    path: str = "",
 ) -> Grade:
     """Score an agent instruction file (CLAUDE.md / AGENTS.md / GEMINI.md / etc.) and return a Grade.
 
-    Scoring weights (max 100):
-        positive_directives:  3 points each, capped at 30
-        tradeoff_phrases:     5 points each, capped at 25
-        path_references:      3 points each, capped at 20
-        verifiable_outcomes:  10 points each, capped at 15
-        freshness penalty:    -10 if > 365 days, -5 if > 180, 0 otherwise
-                              +10 baseline if file has any content
-        bloat penalty:        -5/-10/-15 for an oversized monolithic file that
-                              does NOT factor guidance into on-demand skills
+    Scoring (max 95, clamped to 0-100):
+        baseline:                 +10 for any content
+        verified_commands:        12 points each, capped at 40
+        external_commands:        4 points each, capped at 16; verified and
+                                  external together capped at 40
+        positive_directives:      2 points each, capped at 10
+        tradeoff_phrases:         3 points each, capped at 10
+        path_references_existing: 3 points each, capped at 15
+        verifiable_outcomes:      5 points each, capped at 10
+        freshness penalty:        -10 if > 365 days, -5 if > 180
+        bloat_penalty:            the size curve (``compute_bloat_penalty``),
+                                  halved when the repo delegates to skills
+        size grade cap:           over 400 lines or 4800 words the score is
+                                  capped at 59 (a B), skills or not
+        content_penalty:          -10 for a directory-tree block, -5 for a
+                                  repository-overview section, -8 / -15 when
+                                  25% / 50% of the file's lines repeat the README
 
     Args:
         skills_present: whether the repo has a skills directory (auto-detected
             by the caller via ``detect_skills_dir``).
         delegates_to_skills: whether the text itself contains progressive-
             disclosure pointers. ``None`` (the default) auto-detects from text.
+        repo: the repository context, required so a caller cannot drop it
+            by accident. ``None`` is the explicit text-only opt-out: no
+            command earns credit, path references are counted unverified, and
+            no finding is produced (a file graded this way tops out at 55, a B).
+        path: the file's repo-relative path, so a relative path reference
+            resolves from its directory and its own text is not searched for
+            the symbols it names.
 
-    The bloat penalty makes an oversized monolith score STRICTLY BELOW an
-    equivalent lean-file-plus-skills repo - the monolith is penalized, not
-    merely annotated. Conservative thresholds (500 lines / 3000 words) ensure
-    small/legitimate instruction files are never penalized.
+    Subscore keys read downstream (``positive_directives``,
+    ``tradeoff_phrases``, ``path_references``, ``verifiable_outcomes``,
+    ``line_count``, ``word_count``, ``bloat_penalty``) keep their meaning:
+    ``path_references`` stays the raw count, and the credited count is
+    ``path_references_existing``.
     """
     if not text.strip():
         return Grade(score=0, grade="F", subscores={})
@@ -463,29 +616,48 @@ def grade_instructions(
         "path_references": count_path_references(text),
         "verifiable_outcomes": count_verifiable_outcomes(text),
     }
-
     size_metrics = compute_size_metrics(text)
     sub["line_count"] = size_metrics["line_count"]
     sub["word_count"] = size_metrics["word_count"]
 
-    score = 10  # baseline for non-empty content
-    score += min(sub["positive_directives"] * 3, 30)
-    score += min(sub["tradeoff_phrases"] * 5, 25)
-    score += min(sub["path_references"] * 3, 20)
-    score += min(sub["verifiable_outcomes"] * 10, 15)
+    findings: list[GradeFinding] = []
+    if repo is not None:
+        repo_sub, findings = _repo_signals(text, repo, path)
+        sub.update(repo_sub)
+    else:
+        sub.update({"verified_commands": 0, "external_commands": 0,
+                    "unresolved_commands": 0, "unknown_commands": 0,
+                    "path_references_existing": sub["path_references"],
+                    "stale_references": 0, "readme_overlap_pct": 0})
+    sub["directory_trees"] = count_directory_trees(text)
+    sub["overview_sections"] = len(overview_headings(text))
 
-    if freshness_days > 365:
-        score -= 10
-    elif freshness_days > 180:
-        score -= 5
+    score = BASELINE_POINTS
+    score += min(
+        _capped(sub["verified_commands"], COMMAND_POINTS, COMMAND_CAP)
+        + _capped(sub["external_commands"], EXTERNAL_POINTS, EXTERNAL_CAP),
+        COMMAND_CAP,
+    )
+    score += _capped(sub["positive_directives"], DIRECTIVE_POINTS, DIRECTIVE_CAP)
+    score += _capped(sub["tradeoff_phrases"], TRADEOFF_POINTS, TRADEOFF_CAP)
+    score += _capped(sub["path_references_existing"], PATH_POINTS, PATH_CAP)
+    score += _capped(sub["verifiable_outcomes"], VERIFIABLE_POINTS, VERIFIABLE_CAP)
+    score -= _freshness_penalty(freshness_days)
 
-    # Bloat penalty - the core change. Oversized monolithic files with no
-    # skills factoring lose points, scoring strictly below lean-file-plus-skills.
     bloat_penalty, _bloat_remediation = compute_bloat_penalty(
         size_metrics, skills_present, delegates_to_skills
     )
-    score -= bloat_penalty
     sub["bloat_penalty"] = bloat_penalty
+    sub["content_penalty"] = _content_penalty(sub)
+    # Before the size and content penalties and before clamping, so a reader
+    # can tell an F the penalties caused from one the content earned.
+    sub["score_before_penalties"] = score
+    score -= bloat_penalty + sub["content_penalty"]
 
     score = max(0, min(score, 100))
-    return Grade(score=score, grade=_letter_grade(score), subscores=sub)
+    sub["size_grade_capped"] = int(
+        sub["line_count"] > SIZE_GRADE_CAP_LINES or sub["word_count"] > SIZE_GRADE_CAP_WORDS
+    )
+    if sub["size_grade_capped"]:
+        score = min(score, SIZE_GRADE_CAP_SCORE)
+    return Grade(score=score, grade=_letter_grade(score), subscores=sub, findings=findings)
