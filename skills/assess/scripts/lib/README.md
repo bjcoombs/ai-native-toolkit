@@ -829,8 +829,9 @@ the best grade (`None` when no committed file exists, distinct from `F`).
 `broken_instruction_refs` adds doc links to a missing instruction file;
 `detect_ancestor_instructions` names the ancestor and global files a clone never sees
 (#57); `instruction_file_size` feeds the bloat signal. Each graded entry carries the
-grader's `findings` (unresolved commands, stale paths and symbols), graded against one
-`instruction_content.RepoContext` built per run. Tests:
+grader's `findings` (unresolved commands, stale paths and symbols), graded against an
+`instruction_content.RepoContext`; `grade_instruction_files` and `nested_instruction_surface`
+each build one from the same tree. Tests:
 `tests/test_instruction_files.py`, `tests/test_doc_staleness.py`.
 `nested_instruction_surface(repo_root, excludes)` builds the `nested_instructions`
 block from `instruction_discovery` with the same tracked set, clock and skills

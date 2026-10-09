@@ -328,7 +328,7 @@ _PM_BUILTINS = frozenset({
     "view", "global", "workspace", "workspaces", "patch", "rebuild", "import",
     "prune", "dedupe", "licenses", "version", "login", "logout", "cache", "bin",
     "root", "env", "setup", "help", "set", "plugin", "constraints", "node", "npm",
-    "fund", "doctor", "explain", "pm", "self-update", "upgrade-interactive",
+    "fund", "doctor", "explain", "pm", "self-update", "upgrade-interactive", "deploy",
 })
 _PM_VALUED = frozenset({"--prefix", "-C", "--dir", "--cwd", "--filter", "-F", "--workspace", "-w"})
 _NPM_TEST = frozenset({"test", "t", "tst"})
@@ -376,7 +376,20 @@ def _pnpm_like(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
         return _builtin(index, "bun test")
     if tool == "bun" and _path_exists(index, name, cwd):
         return "resolved", f"file `{name}` exists"
-    return _script(index, name)
+    return _script_or_bin(index, name)
+
+
+def _script_or_bin(index: RepoIndex, name: str) -> Outcome:
+    """``pnpm X`` / ``yarn X`` / ``bun X`` runs script X, else a dependency's binary X."""
+    outcome = _script(index, name)
+    if outcome[0] != "missing" or index.npm_scripts is None:
+        return outcome
+    if name in index.npm_packages:
+        return "resolved", f"package `{name}` declared in package.json"
+    if index.npm_packages:
+        # A bin name can differ from its package (`typescript` ships `tsc`).
+        return "unknown", f"`{name}` is no script; it may be a dependency's binary"
+    return outcome
 
 
 def _package_name(spec: str) -> str:

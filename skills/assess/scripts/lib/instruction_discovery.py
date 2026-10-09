@@ -422,8 +422,8 @@ def discover_nested_instructions(
     """Build the ``nested_instructions`` run-context block.
 
     ``repo`` is the context commands and references resolve against
-    (``lib.instruction_content.build_repo_context``), the same one the root
-    files are graded with. ``graded_elsewhere`` holds the root locations ``grade_instruction_files``
+    (``lib.instruction_content.build_repo_context``), built from the same tree
+    as the one the root files are graded with. ``graded_elsewhere`` holds the root locations ``grade_instruction_files``
     already grades; they feed the budget and the findings but get no second
     graded entry here.
     """

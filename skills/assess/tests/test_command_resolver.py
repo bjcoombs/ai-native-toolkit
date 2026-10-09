@@ -68,6 +68,7 @@ RESOLVED_IN_FULL = [
     "pnpm lint", "pnpm run build", "pnpm install", "pnpm --filter web dev", "yarn test",
     "yarn add left-pad", "bun test", "bun build ./src/index.ts", "pnpm build", "yarn build", "bun run lint", "bun scripts/tool.py",
     "npx jest", "npx @scope/tool@1 --fix", "bunx jest",
+    "pnpm jest", "yarn jest --watch", "bun jest", "pnpm deploy",
     "make", "make check", "make lint check", "make -C . check", "make check VERBOSE=1",
     "make -j 4 check", "gmake check",
     "just", "just test", "just t", "just fmt", "just --list",
@@ -99,8 +100,7 @@ def test_resolves_when_target_exists(full: Path, command: str) -> None:
 MISSING_IN_FULL = [
     ("npm run deploy", "script `deploy`"),
     ("npm stop", "script `stop`"),
-    ("pnpm deploy", "script `deploy`"),
-    ("pnpm typecheck", "script `typecheck`"),
+    ("pnpm run typecheck", "script `typecheck`"),
     ("yarn run e2e", "script `e2e`"),
     ("make release", "target `release`"),
     ("make check release", "target `release`"),
@@ -263,6 +263,18 @@ def test_tracked_files_only_in_a_git_repo(git_repo) -> None:
     assert resolve("npm test", index=index).resolved
     assert resolve("make check", index=index).verdict == "missing"
     assert "link.sh" not in index.files  # untracked symlink is not at HEAD
+
+
+def test_dependency_binary_shorthand(tmp_path: Path) -> None:
+    """``yarn tsc`` runs a dependency's binary: a declared name resolves, an
+    undeclared one is unknown while the repo has dependencies, missing without."""
+    with_deps = build_index(_repo(tmp_path / "a", {"package.json": json.dumps(
+        {"scripts": {}, "devDependencies": {"vitest": "2", "typescript": "5"}})}))
+    assert resolve("pnpm vitest", index=with_deps).resolved
+    assert resolve("yarn tsc --noEmit", index=with_deps).verdict == "unknown"
+    assert resolve("pnpm run tsc", index=with_deps).verdict == "missing"  # run means a script
+    no_deps = build_index(_repo(tmp_path / "b", {"package.json": json.dumps({"scripts": {}})}))
+    assert resolve("yarn tsc", index=no_deps).verdict == "missing"
 
 
 def test_build_is_a_script_except_for_bun(tmp_path: Path) -> None:
