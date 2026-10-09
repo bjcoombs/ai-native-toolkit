@@ -69,10 +69,13 @@ Every `test_*.py` file in this directory has a row below.
 | `test_stats_diff.py` | `lib/stats_diff.py` - hotspot transition classification (graduated, regressed, restructured, new, persistent; restructured when the worst function falls while summed complexity rises) and sidecar loading |
 | `test_wiki_writer.py` | `lib/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
 | `test_git_commit_info.py` | `lib/git_churn.py` (`git_commit_info`) - commit snapshot with SHA/timestamp for staleness warnings |
-| `test_instruction_bloat.py` | `lib/agent_instructions_grader.py` - bloat penalty, skills-delegation credit, conservative thresholds |
+| `test_instruction_bloat.py` | `lib/agent_instructions_grader.py` - size-curve penalty from 200 lines, skills-delegation exemption |
+| `test_command_resolver.py` | `lib/command_resolver.py` - command extraction and per-runner resolution (resolved / missing / unknown) |
+| `test_command_index.py` | `lib/command_index.py` - the per-repo target index: config parsing, tracked files, lenient families |
+| `test_instruction_content.py` | `lib/instruction_content.py` - stale path and symbol references, directory trees, overview headings, README overlap |
 | `test_accretion_ratchet.py` | `lib/accretion_ratchet.py` - the accretion-ratchet scanner (files that only ever grow) |
 | `test_accretion_ratchet_threshold.py` | `lib/accretion_ratchet.py` - regression: the caller's `--deletion-threshold` is the cut applied |
-| `test_agent_instructions_grader.py` | `lib/agent_instructions_grader.py` - heuristic grading of agent instruction files |
+| `test_agent_instructions_grader.py` | `lib/agent_instructions_grader.py` - heuristic grading of agent instruction files, the verified-commands vs directive-monolith fixture pair, findings |
 | `test_agent_ops.py` | `lib/agent_ops.py` - agent-operations guardrail scan (Layer 8 evidence) |
 | `test_anomaly_detector.py` | `lib/anomaly_detector.py` - anomaly detection on run output |
 | `test_archetype.py` | `lib/archetype.py` - repository archetype detection |
@@ -157,6 +160,7 @@ ambient commit signing or hooks cannot break the git-backed tests.
 | `hollow_test_repo/`, `honest_test_repo/` | `test_test_pressure.py` - weak versus real tests |
 | `mutmut-junitxml.xml` | `test_test_pressure.py`, `test_complexity_treemap.py` - mutation output |
 | `good_instructions.md`, `bad_instructions.md`, `monolithic_instructions.md`, `lean_with_skills/` | the instruction grader and bloat suites |
+| `instruction_grading/` | the #512 fixture pair: `verified_commands.md` (59 lines of commands that resolve in `repo/`) and `directive_monolith.md` (400 lines of directives, overview and a directory tree) |
 | `coverage.xml`, `lcov.info` | `test_coverage_report.py` |
 | `prior_stats.json`, `current_stats.json` | `test_stats_diff.py` |
 | `maven_project/` | `test_jvm_capabilities.py` |

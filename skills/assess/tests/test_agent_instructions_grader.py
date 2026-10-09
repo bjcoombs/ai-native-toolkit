@@ -6,6 +6,7 @@ so it's filename-agnostic - the file selection lives in assess_core.
 """
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from lib.agent_instructions_grader import (
     grade_instructions,
     scan_sensitive_content,
 )
+from lib.instruction_content import RepoContext, build_repo_context
 
 
 @pytest.fixture
@@ -136,7 +138,11 @@ def test_grade_returns_letter_grade(good_text: str, bad_text: str) -> None:
     good = grade_instructions(good_text, freshness_days=10)
     bad = grade_instructions(bad_text, freshness_days=10)
 
-    assert good.grade in {"A", "A-", "B+", "B"}
+    # Graded as text alone (no repo), no command can be verified, so the
+    # largest credit is out of reach: a directive-rich file tops out at B/C
+    # since the #512 rescoring. Verified-command credit is tested with a repo
+    # in the fixture-pair tests below.
+    assert good.grade in {"B", "C"}
     assert bad.grade in {"D", "F"}
     assert good.score > bad.score
 
@@ -269,3 +275,113 @@ def test_detect_alias_rejects_full_standalone_doc(good_text: str) -> None:
 
 def test_detect_alias_rejects_stub_with_no_canonical_reference() -> None:
     assert detect_alias("# Notes\n\nThis project is great.")["is_alias"] is False
+
+
+# --- Rescoring on verified commands and size (issue #512) -------------------
+
+@pytest.fixture
+def grading_repo(tmp_path: Path, fixtures_dir: Path) -> RepoContext:
+    """The instruction_grading fixture repo, copied out of the git checkout."""
+    root = tmp_path / "repo"
+    shutil.copytree(fixtures_dir / "instruction_grading" / "repo", root)
+    return build_repo_context(root)
+
+
+def _fixture(fixtures_dir: Path, name: str) -> str:
+    return (fixtures_dir / "instruction_grading" / name).read_text()
+
+
+def test_verified_commands_outgrade_a_directive_monolith(
+    fixtures_dir: Path, grading_repo: RepoContext,
+) -> None:
+    """Success criterion: a 60-line file of verified commands outgrades a
+    400-line file of directives, overview and directory tree."""
+    lean_text = _fixture(fixtures_dir, "verified_commands.md")
+    mono_text = _fixture(fixtures_dir, "directive_monolith.md")
+    assert len(lean_text.splitlines()) <= 60
+    assert len(mono_text.splitlines()) == 400
+
+    lean = grade_instructions(lean_text, freshness_days=10, repo=grading_repo, path="CLAUDE.md")
+    mono = grade_instructions(mono_text, freshness_days=10, repo=grading_repo, path="CLAUDE.md")
+
+    assert lean.grade in {"A", "A-"}
+    assert mono.grade == "F"
+    assert lean.score - mono.score >= 40
+    assert lean.subscores["verified_commands"] >= 6
+    assert lean.subscores["unresolved_commands"] == 0
+    assert lean.subscores["bloat_penalty"] == 0
+    assert lean.findings == []
+    # The monolith out-counts the lean file on every old signal...
+    assert mono.subscores["positive_directives"] > 10 * lean.subscores["positive_directives"]
+    assert mono.subscores["tradeoff_phrases"] > lean.subscores["tradeoff_phrases"]
+    # ...and pays for its size, its tree and its overview sections.
+    assert mono.subscores["bloat_penalty"] >= 20
+    assert mono.subscores["directory_trees"] == 1
+    assert mono.subscores["overview_sections"] >= 2
+    assert mono.subscores["content_penalty"] >= 15
+
+
+def test_missing_script_and_stale_path_are_findings(grading_repo: RepoContext) -> None:
+    """Success criterion: a command naming a missing script and a backticked
+    path that does not exist each produce a finding."""
+    text = (
+        "# CLAUDE.md\n\n"
+        "Run `npm test`, then `npm run deploy`.\n"
+        "Handlers live in `src/routes/index.ts`; the old `src/legacy/router.ts` is gone.\n"
+    )
+    grade = grade_instructions(text, freshness_days=1, repo=grading_repo, path="CLAUDE.md")
+    assert grade.findings == [
+        {"kind": "unresolved_command", "line": 3, "reference": "npm run deploy",
+         "reason": "no script `deploy` in package.json"},
+        {"kind": "stale_path", "line": 4, "reference": "src/legacy/router.ts",
+         "reason": "no tracked file or directory at this path"},
+    ]
+    assert grade.subscores["verified_commands"] == 1
+    assert grade.subscores["unresolved_commands"] == 1
+    assert grade.subscores["path_references_existing"] == 1
+    assert grade.subscores["stale_references"] == 1
+
+
+def test_duplicate_commands_count_once(grading_repo: RepoContext) -> None:
+    text = "`npm test` and `npm  test` and `npm run nope` twice: `npm run nope`\n"
+    grade = grade_instructions(text, freshness_days=1, repo=grading_repo)
+    assert grade.subscores["verified_commands"] == 1
+    assert [f["reference"] for f in grade.findings] == ["npm run nope"]
+
+
+def test_unknown_runner_is_neither_credit_nor_finding(grading_repo: RepoContext) -> None:
+    grade = grade_instructions("```bash\nrg -n TODO src\n```\n", freshness_days=1, repo=grading_repo)
+    assert grade.subscores["unknown_commands"] == 1
+    assert grade.subscores["verified_commands"] == 0
+    assert grade.findings == []
+
+
+def test_text_only_grading_counts_paths_unverified(good_text: str) -> None:
+    grade = grade_instructions(good_text, freshness_days=10)
+    assert grade.subscores["verified_commands"] == 0
+    assert grade.subscores["path_references_existing"] == grade.subscores["path_references"]
+    assert grade.findings == []
+
+
+def test_command_credit_is_capped(grading_repo: RepoContext) -> None:
+    # No "run" in the commands, so no directive credit muddies the sum.
+    few = grade_instructions("`npm test` `make check` `make fmt`\n", 1, repo=grading_repo)
+    many = grade_instructions(
+        "`npm test` `make check` `make fmt` `make lint` `make test` `npm t`\n",
+        1, repo=grading_repo,
+    )
+    assert many.subscores["verified_commands"] == 6
+    assert few.score == 10 + 3 * 12
+    assert many.score == 10 + 40  # COMMAND_CAP
+
+
+def test_readme_overlap_penalty(tmp_path: Path) -> None:
+    lines = [f"This sentence number {i} explains the orders service in some detail." for i in range(10)]
+    root = tmp_path / "r"
+    root.mkdir()
+    (root / "README.md").write_text("\n".join(lines), encoding="utf-8")
+    ctx = build_repo_context(root)
+    half = "\n".join(lines[:5] + [f"Agent-only guidance line {i} that the README lacks." for i in range(5)])
+    quarter = "\n".join(lines[:3] + [f"Agent-only guidance line {i} that the README lacks." for i in range(9)])
+    assert grade_instructions(half, 1, repo=ctx).subscores["content_penalty"] == 15
+    assert grade_instructions(quarter, 1, repo=ctx).subscores["content_penalty"] == 8

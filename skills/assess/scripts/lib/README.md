@@ -828,14 +828,56 @@ files, the skills-directory info and the redacted sensitive-content findings alo
 the best grade (`None` when no committed file exists, distinct from `F`).
 `broken_instruction_refs` adds doc links to a missing instruction file;
 `detect_ancestor_instructions` names the ancestor and global files a clone never sees
-(#57); `instruction_file_size` feeds the bloat signal. Tests:
+(#57); `instruction_file_size` feeds the bloat signal. Each graded entry carries the
+grader's `findings` (unresolved commands, stale paths and symbols), graded against one
+`instruction_content.RepoContext` built per run. Tests:
 `tests/test_instruction_files.py`, `tests/test_doc_staleness.py`.
 
 **`agent_instructions_grader.py`**
 Heuristic scoring of agent instruction files (CLAUDE.md, AGENTS.md, GEMINI.md,
-.cursorrules, .github/copilot-instructions.md) on signals that correlate with LLM
-usefulness: positive directives, tradeoff phrases, path references, verifiable
-outcomes, and freshness. Pure regex + arithmetic, filename-agnostic.
+.cursorrules, .github/copilot-instructions.md), filename-agnostic, no model calls. Since
+#512 it grades on what outcome studies say helps an agent: verified commands earn the most
+credit (12 each, cap 40, resolved by `command_resolver.py`), backticked paths count only
+when they exist at HEAD, and directives, tradeoff phrases and verifiable outcomes are a
+small capped floor. A size curve subtracts one point per 10 lines past 200 (or per 120
+words past 2400), capped at 30, waived when the repo delegates to skills; directory-tree
+blocks, repository-overview sections and lines repeated from the root README cost points
+too (`instruction_content.py`). The A-F scale and the subscore keys downstream code reads
+(`positive_directives`, `tradeoff_phrases`, `path_references`, `verifiable_outcomes`,
+`line_count`, `word_count`, `bloat_penalty`) are unchanged; new keys are added beside them.
+Commands naming a missing target and stale paths or symbols are `Grade.findings`, never a
+hard fail. Tests: `tests/test_agent_instructions_grader.py`,
+`tests/test_instruction_bloat.py`.
+
+**`command_resolver.py`**
+Extracts the shell commands an instruction file gives (shell-fenced blocks, and inline
+code that starts with a known runner) and checks each names a real target at HEAD without
+running it. Public API: `extract_commands(text) -> list[Command]`,
+`resolve(command, repo_root=None, *, index=None) -> Resolution` (verdict `resolved`,
+`missing` or `unknown`, plus a `reason`) and `build_index(repo_root)`. Covers npm / pnpm /
+yarn / bun scripts, npx, make, just, uv / poetry run, uvx, tox, nox, pytest, python, go,
+cargo, mvn and gradle, and script paths; an unmodelled runner resolves when a CI line runs
+it verbatim, else it is `unknown` ("unresolved: unknown runner"), which is no evidence
+either way. Independent of the grader so other checks (such as whether an instruction
+file names the repo's check command) can reuse it. Tests: `tests/test_command_resolver.py`.
+
+**`command_index.py`**
+The per-repo index `command_resolver.py` resolves against, read once from the files at
+HEAD (`git ls-files`, tracked symlinks as themselves; a walk outside git): package.json
+scripts and dependencies, Makefile targets, justfile recipes, pyproject names (dependencies,
+`[project.scripts]`, `[tool.*]` tables), pytest presence, tox environments, nox sessions
+and CI configuration lines. Config files are unioned across the repo and a computed target
+makes its family lenient, so a false `missing` stays rare. Tests:
+`tests/test_command_index.py`.
+
+**`instruction_content.py`**
+The repository-checked content signals of the grader: backticked path references that
+exist (and stale ones, with URLs, globs, placeholders, absolute paths, excluded trees,
+gitignored paths and `owner/repo`-shaped slugs left unchecked), backticked code symbols
+no other tracked file names (`git grep`, skipped outside git), directory-tree blocks,
+repository-overview headings and the share of lines repeated from the root README.
+`build_repo_context` reads the repo once per run. Tests:
+`tests/test_instruction_content.py`.
 
 **`liveness_scan.py`**
 Layer 1 liveness inputs, three tiers:

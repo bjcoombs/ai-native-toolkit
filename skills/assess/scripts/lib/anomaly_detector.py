@@ -54,7 +54,12 @@ def detect_anomalies(context: JsonDict) -> list[Anomaly]:
 
     # Iterate over all present instruction files - the same check applies to each.
     for filename, file_info in instruction_files.items():
-        if file_info.get("grade") == "F" and file_info.get("line_count", 0) > 200:
+        # The size curve and content penalties (#512) mean a long monolith of
+        # directives, a tree and an overview grades F by design; only an F the
+        # grader's own penalties do not explain is suspicious.
+        subscores = file_info.get("subscores") or {}
+        explained = subscores.get("bloat_penalty", 0) + subscores.get("content_penalty", 0) > 0
+        if file_info.get("grade") == "F" and file_info.get("line_count", 0) > 200 and not explained:
             # Use the file's basename for the detail so we don't leak any
             # repo-relative directory structure (e.g. .github/copilot-instructions.md).
             kind = filename.rsplit("/", 1)[-1]

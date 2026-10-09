@@ -159,10 +159,12 @@ def test_build_run_context_with_claude_md(tmp_path: Path, fixtures_dir: Path) ->
 
     ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
     assert "CLAUDE.md" in ctx["instruction_files"]
-    assert ctx["instruction_files"]["CLAUDE.md"]["grade"] in {"A", "A-", "B+", "B"}
+    # The fixture names paths this repo lacks and no command, so since the
+    # #512 rescoring it grades low but above the directive-free bad fixture.
+    assert ctx["instruction_files"]["CLAUDE.md"]["grade"] != "F"
     assert ctx["instruction_files"]["CLAUDE.md"]["subscores"]["positive_directives"] >= 5
     # Top-level instructions_grade reflects the best of the present files
-    assert ctx["instructions_grade"] in {"A", "A-", "B+", "B"}
+    assert ctx["instructions_grade"] == ctx["instruction_files"]["CLAUDE.md"]["grade"]
 
 
 def test_build_run_context_with_agents_md(tmp_path: Path, fixtures_dir: Path) -> None:
@@ -180,7 +182,7 @@ def test_build_run_context_with_agents_md(tmp_path: Path, fixtures_dir: Path) ->
 
     ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
     assert "AGENTS.md" in ctx["instruction_files"]
-    assert ctx["instruction_files"]["AGENTS.md"]["grade"] in {"A", "A-", "B+", "B"}
+    assert ctx["instruction_files"]["AGENTS.md"]["grade"] != "F"
 
 
 def test_build_run_context_with_multiple_instruction_files(tmp_path: Path, fixtures_dir: Path) -> None:
@@ -204,7 +206,8 @@ def test_build_run_context_with_multiple_instruction_files(tmp_path: Path, fixtu
     keys = set(ctx["instruction_files"].keys())
     assert {"CLAUDE.md", "AGENTS.md", "GEMINI.md"} <= keys
     # Top-level grade reflects the BEST of the present files
-    assert ctx["instructions_grade"] in {"A", "A-", "B+", "B"}
+    assert ctx["instruction_files"]["GEMINI.md"]["grade"] == "F"
+    assert ctx["instructions_grade"] == ctx["instruction_files"]["CLAUDE.md"]["grade"] != "F"
 
 
 def test_instructions_grade_is_None_when_no_files(tmp_path: Path) -> None:

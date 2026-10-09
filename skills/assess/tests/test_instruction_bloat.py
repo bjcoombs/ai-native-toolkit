@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from lib.agent_instructions_grader import (
+    SIZE_MAX_PENALTY,
     SIZE_THRESHOLD_LINES,
     compute_bloat_penalty,
     compute_size_metrics,
@@ -148,38 +149,42 @@ def test_threshold_boundary_lines() -> None:
     penalty, _ = compute_bloat_penalty(
         over_size, skills_present=False, delegates_to_skills=False
     )
-    assert penalty == 5
+    assert penalty == 1
 
 
-def test_penalty_tiers_by_lines() -> None:
-    """Penalty escalates with overage: -5 / -10 / -15."""
+def test_penalty_curve_by_lines() -> None:
+    """One point per SIZE_LINES_PER_POINT lines past 200, capped at SIZE_MAX_PENALTY."""
     def lines_penalty(n: int) -> int:
         size = compute_size_metrics("x\n" * n)
         return compute_bloat_penalty(size, False, False)[0]
 
-    assert lines_penalty(600) == 5    # 500-750
-    assert lines_penalty(800) == 10   # 750-1000
-    assert lines_penalty(1200) == 15  # 1000+
+    assert lines_penalty(200) == 0
+    assert lines_penalty(210) == 1
+    assert lines_penalty(300) == 10
+    assert lines_penalty(400) == 20
+    assert lines_penalty(500) == SIZE_MAX_PENALTY
+    assert lines_penalty(1200) == SIZE_MAX_PENALTY
 
 
-def test_penalty_tiers_by_words() -> None:
-    """Word-count tiers mirror the line tiers at 3000/4500/6000."""
+def test_penalty_curve_by_words() -> None:
+    """Words follow the same curve from 2400 words, one point per 120."""
     def words_penalty(n: int) -> int:
         # Few lines, many words: isolates the word-count metric.
         size = compute_size_metrics(" ".join(["word"] * n))
         return compute_bloat_penalty(size, False, False)[0]
 
-    assert words_penalty(3500) == 5    # 3000-4500
-    assert words_penalty(5000) == 10   # 4500-6000
-    assert words_penalty(7000) == 15   # 6000+
+    assert words_penalty(2400) == 0
+    assert words_penalty(2401) == 1
+    assert words_penalty(3600) == 10
+    assert words_penalty(9000) == SIZE_MAX_PENALTY
 
 
 def test_penalty_takes_higher_of_two_metrics() -> None:
     """When both metrics exceed, the higher penalty wins."""
-    # 600 lines (-5 by lines) but 7000 words (-15 by words) -> expect -15.
-    text = ("word " * 12 + "\n") * 600
+    # 250 lines (-5 by lines) but 4791 words (-20 by words) -> expect -20.
+    text = ("word " * 19 + "word\n") * 239 + "x\n" * 11
     size = compute_size_metrics(text)
-    assert size["line_count"] > SIZE_THRESHOLD_LINES
-    assert size["word_count"] > 6000
+    assert size["line_count"] == 250
+    assert size["word_count"] == 4791
     penalty, _ = compute_bloat_penalty(size, False, False)
-    assert penalty == 15
+    assert penalty == 20

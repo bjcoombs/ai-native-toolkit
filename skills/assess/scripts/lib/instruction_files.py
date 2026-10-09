@@ -20,6 +20,7 @@ from lib.agent_instructions_grader import (
     scan_sensitive_content,
 )
 from lib.doc_graph import is_repo_file
+from lib.instruction_content import build_repo_context
 from lib.doc_staleness import content_clock
 from lib.git_churn import ContentClock, tracked_files
 
@@ -91,6 +92,7 @@ def grade_instruction_files(
     skills_info = detect_skills_dir(repo_root)
     skills_present = skills_info["skills_dirs_present"]
     clock = content_clock(repo_root)  # one build for every candidate
+    repo_ctx = build_repo_context(repo_root)  # commands and references resolve against it
     found: dict[str, dict[str, Any]] = {}
     untracked: list[str] = []
     dangling_refs: list[dict[str, Any]] = []
@@ -124,12 +126,14 @@ def grade_instruction_files(
         text = disk_text
         freshness = _file_freshness_days(candidate, clock)
         grade = grade_instructions(
-            text, freshness_days=freshness, skills_present=skills_present
+            text, freshness_days=freshness, skills_present=skills_present,
+            repo=repo_ctx, path=rel_path,
         )
         entry = {
             "grade": grade.grade,
             "score": grade.score,
             "subscores": grade.subscores,
+            "findings": grade.findings,
             "freshness_days": freshness,
             "line_count": len(text.splitlines()),
             "present": True,
