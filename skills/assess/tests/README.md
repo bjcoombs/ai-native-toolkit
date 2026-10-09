@@ -73,6 +73,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_accretion_ratchet.py` | `lib/accretion_ratchet.py` - the accretion-ratchet scanner (files that only ever grow) |
 | `test_accretion_ratchet_threshold.py` | `lib/accretion_ratchet.py` - regression: the caller's `--deletion-threshold` is the cut applied |
 | `test_agent_instructions_grader.py` | `lib/agent_instructions_grader.py` - heuristic grading of agent instruction files |
+| `test_agent_harness.py` | `lib/agent_harness.py` - the committed agent harness inventory and its secret-exposure findings: a planted fixture with one of each finding kind, a clean fixture with the near misses, and this repository |
 | `test_agent_ops.py` | `lib/agent_ops.py` - agent-operations guardrail scan (Layer 8 evidence) |
 | `test_anomaly_detector.py` | `lib/anomaly_detector.py` - anomaly detection on run output |
 | `test_archetype.py` | `lib/archetype.py` - repository archetype detection |

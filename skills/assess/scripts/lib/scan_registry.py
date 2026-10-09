@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
+from lib.agent_harness import scan_agent_harness
 from lib.agent_ops import scan_agent_ops
 from lib.claude_config import scan_claude_config
 from lib.config_drift import scan_config_drift
@@ -192,6 +193,15 @@ SCANS: tuple[ScanSpec, ...] = (
     # manifest. Last in the table so every earlier key keeps its position.
     ScanSpec(
         "claude_config", scan_claude_config,
+        ("repo_root", "scope", "excludes"), STAGE_POST_OFFERS,
+    ),
+    # Committed agent harness (informational): what the repo's agent config
+    # runs on every session (settings and frontmatter hooks, env, apiKeyHelper,
+    # .mcp.json, .cursor/hooks.json) and the settings that expose a secret or
+    # widen it (tracked settings.local.json or .env, broad Bash allow, hidden
+    # Unicode, credential mounts, comment-triggered deploys). Issue #513.
+    ScanSpec(
+        "agent_harness", scan_agent_harness,
         ("repo_root", "scope", "excludes"), STAGE_POST_OFFERS,
     ),
 )

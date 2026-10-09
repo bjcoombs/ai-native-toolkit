@@ -464,7 +464,7 @@ degrades. `stage` exists to keep
 `run-context.json` key order unchanged while scans migrate here; it goes when the
 hand-wired assignments between the stages are gone. Currently registered:
 `agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
-`instruction_claims`, `claude_config`. Besides `repo_root` and
+`instruction_claims`, `claude_config`, `agent_harness`. Besides `repo_root` and
 `instruction_files`, the core provides `scope` (the absolute `--scope` path, or
 None) and `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`).
 
@@ -1243,6 +1243,28 @@ files_scanned, files_by_kind, finding_count, counts_by_kind, findings[]}`, or
 `{available: false, reason, snapshot_date}` when the root has no `.claude/` and no
 plugin manifest. It feeds Layer 0 evidence and is not counted in the badge.
 Tests: `tests/test_claude_config.py` (fixture: `tests/fixtures/claude_config_plugin/`).
+
+**`agent_harness.py`**
+The committed agent surface that runs code or exposes secrets (issue #513),
+static and dependency-free. `scan_agent_harness(repo_root, scope, excludes)`
+inventories under the run root, as `executes`, the hooks in
+`.claude/settings.json` and in skill / agent frontmatter, the `env` variable
+names (never values), `apiKeyHelper`, `.mcp.json` servers (command, or URL
+without credentials, query or fragment; arguments are never reported) and
+`.cursor/hooks.json`. Finding kinds: `tracked_local_settings`,
+`tracked_env_file` (path only), `missing_env_deny`, `hooks_forced_on`
+(`disableAllHooks: false`), `broad_allow` (`Bash`, `Bash(*)`, `Bash(:*)`),
+`credential_mount` (a devcontainer file mounting `~/.ssh`, `~/.aws`,
+`~/.config/gcloud` ...), `hidden_unicode` (zero-width and bidi controls in an
+instruction, rule, skill, command or agent file, reported as code points) and
+`privileged_comment_trigger` (an `issue_comment` / `pull_request_target`
+workflow that runs a deploy, apply or publish). Workflow and devcontainer files
+are read line by line, not parsed as YAML; the module docstring lists what that
+misses. It reuses `claude_config.parse_frontmatter` for the frontmatter hooks.
+The block is `{available, tracked_known, executes[], executes_by_kind,
+finding_count, counts_by_kind, findings[]}`; `tracked_known: false` (no git)
+means the tracking findings were not checked. Informational: it does not score
+a layer or count toward the badge. Tests: `tests/test_agent_harness.py`.
 
 **`claude_config_fields.py`**
 The documented frontmatter field sets `claude_config` checks against: skill and

@@ -23,4 +23,8 @@ A leaf module so the orchestrator and the lib modules that write artifacts
 # on every hidden_coupling finding, and change_coupling_pairs_total on the block
 # so a list cut by the repository-wide cap never reads as complete.
 # complexity-stats.json is unchanged, so STATS_SCHEMA_VERSION stays put.
-ARTIFACT_SCHEMA_VERSION = "1.3.0"
+# 1.4.0: run-context.json gains the agent_harness block (#513): the committed
+# hooks, env names, apiKeyHelper and MCP servers that run on every agent
+# session, and the findings that expose a secret or widen that surface.
+# Additive; complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.4.0"
