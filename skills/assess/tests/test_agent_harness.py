@@ -238,6 +238,8 @@ def test_outside_git_tracking_findings_are_not_checked(tmp_path: Path) -> None:
     (".env\n", False, [], True),
     ("/.env*\n", False, [], True),
     ("**/.env.local\n", False, [], True),
+    (".env*.local\n", False, [], True),
+    ("*.env\n", False, [], True),
     ("", True, [], True),
     (".env\n", False, ["Read(./.env)"], False),
     (".env\n", False, ["Read( ./.env.* )"], False),
@@ -337,6 +339,30 @@ def test_hidden_unicode_tag_block_is_reported_and_names_are_capped(tmp_path: Pat
     assert detail.startswith("9 hidden character(s): U+E0020 TAG SPACE, ")
     assert detail.endswith(", ...") and detail.count("U+") == 5
     assert smuggled[0] not in json.dumps(block, ensure_ascii=False)
+
+
+def _flag(code: str, cancel: bool = True) -> str:
+    return chr(0x1F3F4) + "".join(chr(0xE0000 + ord(c)) for c in code) + (chr(0xE007F) if cancel else "")
+
+
+@pytest.mark.parametrize(("text", "flagged"), [
+    (f"Made in {_flag('gbeng')} and {_flag('gbsct')}.\n", False),
+    (f"{_flag('gbeng', cancel=False)} x\n", True),                              # no cancel tag
+    ("x" + "".join(chr(0xE0000 + ord(c)) for c in "gbeng") + chr(0xE007F) + "\n", True),  # no black flag
+    (f"{_flag('gbeng')}{chr(0xE0041)}\n", True),                                # tags after the flag
+])
+def test_hidden_unicode_subdivision_flags(tmp_path: Path, text: str, flagged: bool) -> None:
+    _write(tmp_path, "CLAUDE.md", text)
+    assert _kinds(scan_agent_harness(tmp_path)) == ([("hidden_unicode", "CLAUDE.md")] if flagged else [])
+
+
+def test_hook_line_points_at_the_hook_for_a_command_with_arguments(tmp_path: Path) -> None:
+    _json(tmp_path, ".claude/settings.json", {"hooks": {"PreToolUse": [
+        {"matcher": "Bash", "hooks": [{"type": "command", "command": "./a.sh --x"},
+                                      {"type": "command", "command": "./b.sh --y"}]}]}})
+    lines = [i["line"] for i in scan_agent_harness(tmp_path)["executes"]]
+    text = (tmp_path / ".claude/settings.json").read_text().splitlines()
+    assert [text[n - 1].strip()[:20] for n in lines] == ['"command": "./a.sh -', '"command": "./b.sh -']
 
 
 def test_hidden_unicode_bom_only_allowed_at_file_start(tmp_path: Path) -> None:

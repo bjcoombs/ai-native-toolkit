@@ -42,7 +42,7 @@ absent-file finding), ``detail`` and a one-line ``fix``:
   instruction file, rule, skill, command or agent file; reported as code
   points, never as the characters. The set also covers the Unicode tag block
   (U+E0000-U+E007F), which encodes ASCII no editor shows. A ZWJ inside an
-  emoji sequence and a ZWNJ between Arabic-script or Indic letters are ordinary
+  emoji sequence, the tag run of a subdivision flag (England, Scotland) and a ZWNJ between Arabic-script or Indic letters are ordinary
   text and not reported; so are U+200E/U+200F/U+061C, the directional marks
   right-to-left prose uses.
 - ``privileged_comment_trigger``: a workflow triggered by ``issue_comment`` or
@@ -136,7 +136,7 @@ _HIDDEN_RE = re.compile("[" + "".join(chr(c) for c in sorted(_HIDDEN)) + "]")
 
 _ENV_NAME = re.compile(r"^\.env(\..+)?$")
 _ENV_EXAMPLE_PARTS = frozenset({"example", "sample", "template", "dist", "tmpl", "tpl"})
-_ENV_IGNORE_LINE = re.compile(r"^/?(\*\*/)?\.env(\*|\.\*|\.[\w.*-]+)?/?$")
+_ENV_IGNORE_LINE = re.compile(r"^/?(\*\*/)?\*?\.env(\*|[.*][\w.*-]*)?/?$")
 _ENV_DENY = re.compile(r"^Read\(.*\.env")
 _BROAD_BASH = re.compile(r"^Bash(\((\*|:\*|\*\*|\*:\*)\))?$")
 
@@ -147,6 +147,8 @@ _CRED_MOUNT = re.compile(_HOME_REF + r"[/\\](?P<dir>" + _CRED_DIRS + r")(?![\w-]
 
 _RISKY_TRIGGERS = ("issue_comment", "pull_request_target")
 _TRIGGER_RE = re.compile(r"\b(issue_comment|pull_request_target)\b")
+# `true:` is how a YAML 1.1 loader (PyYAML) reads and re-serialises the bare
+# `on` key, so a workflow round-tripped through one carries it.
 _ON_KEY = re.compile(r"""^(?:on|"on"|'on'|true)\s*:(?P<rest>.*)$""")
 _PRIVILEGED = re.compile(
     r"\b(?:terraform|tofu)\s+(?:apply|destroy)\b"
@@ -172,6 +174,19 @@ def _ordinary_joiner(text: str, pos: int) -> bool:
     if ranges is None or pos == 0 or pos + 1 >= len(text):
         return False
     return _in(text[pos - 1], ranges) and _in(text[pos + 1], ranges)
+
+
+def _flag_tag(text: str, pos: int) -> bool:
+    """A tag character inside a subdivision flag: U+1F3F4, tag letters, U+E007F."""
+    if not 0xE0000 <= ord(text[pos]) <= 0xE007F:
+        return False
+    start, end = pos, pos
+    while start > 0 and 0xE0020 <= ord(text[start - 1]) <= 0xE007E:
+        start -= 1
+    while end + 1 < len(text) and 0xE0020 <= ord(text[end + 1]) <= 0xE007F and text[end] != chr(0xE007F):
+        end += 1
+    return (start > 0 and text[start - 1] == chr(0x1F3F4) and text[end] == chr(0xE007F)
+            and end > start)
 
 
 def _clip(text: str) -> str:
@@ -287,7 +302,7 @@ class _Scan:
                 for hook in inner if isinstance(inner, list) else [group]:
                     if isinstance(hook, dict):
                         detail = self.hook_detail(hook)
-                        line = _line_of(text, json.dumps(detail)[1:-1]) if detail else None
+                        line = _line_of(text, json.dumps(detail.removesuffix(" ..."))[1:-1]) if detail else None
                         self.item(kind, path, line or _line_of(text, f'"{event}"'), name, detail)
 
     @staticmethod
@@ -472,7 +487,7 @@ class _Scan:
             seen.add(path.resolve())
             hits = [(m.start(), m.group()) for m in _HIDDEN_RE.finditer(text)
                     if not (m.start() == 0 and m.group() == _BOM)
-                    and not _ordinary_joiner(text, m.start())]
+                    and not _ordinary_joiner(text, m.start()) and not _flag_tag(text, m.start())]
             if not hits:
                 continue
             points = sorted({ch for _, ch in hits})
