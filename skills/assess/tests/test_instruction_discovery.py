@@ -259,3 +259,27 @@ def test_run_context_carries_block(git_repo: Any) -> None:
     assert block["available"] is True
     assert block["budget"]["claude_code"]["files"][0] == "CLAUDE.md"
     assert "CLAUDE.md" in ctx["instruction_files"]
+
+
+def test_empty_override_falls_back_to_agents_md(git_repo: Any) -> None:
+    repo, commit = git_repo
+    _write(repo, "AGENTS.md", "root agents")
+    _write(repo, "AGENTS.override.md", "   \n")
+    commit("empty override")
+    assert _block(repo)["budget"]["codex"]["files"] == ["AGENTS.md"]
+
+
+def test_glob_matching_symlink_or_untracked_tree_is_not_dead(git_repo: Any) -> None:
+    repo, commit = git_repo
+    _write(repo, "real/target.py", "x = 1\n")
+    (repo / "links").mkdir()
+    os.symlink("../real/target.py", repo / "links" / "alias.py")
+    _write(repo, ".gitignore", "dist/\n")
+    _write(repo, "dist/bundle.js", "built")
+    _write(repo, ".claude/rules/link.md", "---\npaths: [\"links/*.py\"]\n---\nLinks.")
+    _write(repo, ".claude/rules/dist.md", "---\npaths: [\"./dist/**/*.js\"]\n---\nBuilt.")
+    _write(repo, ".claude/rules/gone.md", "---\npaths: [\"gone/**/*.js\"]\n---\nGone.")
+    _write(repo, ".claude/rules/up.md", "---\npaths: [\"../real/*.py\"]\n---\nUp.")
+    commit("symlink and ignored tree")
+    dead = sorted(f["pattern"] for f in _block(repo)["findings"] if f["kind"] == "dead_glob")
+    assert dead == ["../real/*.py", "gone/**/*.js"]

@@ -24,13 +24,14 @@ its parent. Deterministic and read-only: no network, no model.
 from __future__ import annotations
 
 import os
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from lib.agent_instructions_grader import grade_instructions
 from lib.assess_config import is_user_excluded
 from lib.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_repo_file
-from lib.git_churn import ContentClock
+from lib.git_churn import GIT_TIMEOUT_SECONDS, ContentClock
 from lib.instruction_budget import (
     CHARS_PER_TOKEN,
     follow_imports,
@@ -200,11 +201,28 @@ def _collect(
                     _universe(repo_root, tracked))
 
 
+def _ls_files(repo_root: Path) -> set[str]:
+    """Tracked paths as git names them, so a tracked symlink keeps its own name."""
+    try:
+        raw = subprocess.run(
+            ["git", "-C", str(repo_root), "ls-files", "-z"],
+            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return set()
+    return {name for name in raw.split("\0") if name}
+
+
 def _universe(repo_root: Path, tracked: frozenset[Path] | None) -> list[str]:
-    """Repo-relative POSIX paths a scope glob may match: every tracked file."""
+    """Repo-relative POSIX paths a scope glob may match: every tracked file.
+
+    ``tracked`` holds resolved paths, which name a tracked symlink by its
+    target; git's own names are added so a glob naming the link still matches.
+    """
     if tracked is not None:
-        return sorted(p.relative_to(repo_root).as_posix()
-                      for p in tracked if p.is_relative_to(repo_root))
+        names = {p.relative_to(repo_root).as_posix()
+                 for p in tracked if p.is_relative_to(repo_root)}
+        return sorted(names | _ls_files(repo_root))
     out: list[str] = []
     for dirpath, dirnames, filenames in os.walk(repo_root):
         dirnames[:] = [d for d in dirnames if d != ".git"]
@@ -213,7 +231,27 @@ def _universe(repo_root: Path, tracked: frozenset[Path] | None) -> list[str]:
     return sorted(out)
 
 
-def _dead_globs(surface: _Surface) -> list[InstructionFinding]:
+def _prefix_on_disk(repo_root: Path, pattern: str) -> bool:
+    """True when the pattern's wildcard-free leading directory exists on disk.
+
+    A rule for a generated or git-ignored tree (``dist/**``) matches no tracked
+    file yet still loads when the agent works there, so it is not dead.
+    """
+    pat = pattern.strip()
+    while pat.startswith("./"):
+        pat = pat[2:]
+    parts: list[str] = []
+    for part in pat.lstrip("/").split("/")[:-1]:
+        if any(ch in part for ch in "*?[{!"):
+            break
+        parts.append(part)
+    if not parts:
+        return False
+    target = (repo_root / "/".join(parts)).resolve()
+    return target.is_relative_to(repo_root) and target.is_dir()
+
+
+def _dead_globs(repo_root: Path, surface: _Surface) -> list[InstructionFinding]:
     out: list[InstructionFinding] = []
     for cand in surface.candidates:
         for pattern in cand.globs:
@@ -221,7 +259,9 @@ def _dead_globs(surface: _Surface) -> list[InstructionFinding]:
             # paths relative to its own directory; either reading counts.
             local = pattern if cand.directory == "." else f"{cand.directory}/{pattern}"
             if not (pattern_matches_any(pattern, surface.universe)
-                    or pattern_matches_any(local, surface.universe)):
+                    or pattern_matches_any(local, surface.universe)
+                    or _prefix_on_disk(repo_root, pattern)
+                    or _prefix_on_disk(repo_root, local)):
                 out.append({
                     "kind": "dead_glob", "path": cand.rel, "pattern": pattern,
                     "detail": f"scope pattern `{pattern}` matches no tracked file, "
@@ -344,9 +384,12 @@ def _budget_inputs(
     agents_by_dir: dict[str, str] = {}
     for directory, cands in by_dir.items():
         names = {PurePosixPath(c.rel).name: c for c in cands}
-        chosen = names.get("AGENTS.override.md") or names.get("AGENTS.md")
-        if chosen is not None and chosen.body.strip():
-            agents_by_dir[directory] = chosen.rel
+        # Codex reads the first non-empty file of override, then AGENTS.md.
+        for name in ("AGENTS.override.md", "AGENTS.md"):
+            chosen = names.get(name)
+            if chosen is not None and chosen.body.strip():
+                agents_by_dir[directory] = chosen.rel
+                break
     return claude_roots, unscoped, agents_by_dir
 
 
@@ -376,7 +419,7 @@ def discover_nested_instructions(
 
     graded = [_grade(c, repo_root, clock, skills_present)
               for c in surface.candidates if c.rel not in graded_elsewhere]
-    findings = (_dead_globs(surface) + _stray_md(surface)
+    findings = (_dead_globs(repo_root, surface) + _stray_md(surface)
                 + _shadowing(repo_root, by_dir, tracked) + _repeats(by_dir))
     claude_roots, unscoped, agents_by_dir = _budget_inputs(surface, by_dir)
     return {
