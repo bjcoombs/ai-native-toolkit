@@ -42,7 +42,8 @@ absent-file finding), ``detail`` and a one-line ``fix``:
   instruction file, rule, skill, command or agent file; reported as code
   points, never as the characters. The set also covers the Unicode tag block
   (U+E0000-U+E007F), which encodes ASCII no editor shows. A ZWJ inside an
-  emoji sequence, the tag run of a subdivision flag (England, Scotland) and a ZWNJ between Arabic-script or Indic letters are ordinary
+  emoji sequence, the tag run of a well-formed subdivision flag (England, Scotland: two
+  region letters and one to four letters or digits) and a ZWNJ between Arabic-script or Indic letters are ordinary
   text and not reported; so are U+200E/U+200F/U+061C, the directional marks
   right-to-left prose uses.
 - ``privileged_comment_trigger``: a workflow triggered by ``issue_comment`` or
@@ -176,17 +177,15 @@ def _ordinary_joiner(text: str, pos: int) -> bool:
     return _in(text[pos - 1], ranges) and _in(text[pos + 1], ranges)
 
 
-def _flag_tag(text: str, pos: int) -> bool:
-    """A tag character inside a subdivision flag: U+1F3F4, tag letters, U+E007F."""
-    if not 0xE0000 <= ord(text[pos]) <= 0xE007F:
-        return False
-    start, end = pos, pos
-    while start > 0 and 0xE0020 <= ord(text[start - 1]) <= 0xE007E:
-        start -= 1
-    while end + 1 < len(text) and 0xE0020 <= ord(text[end + 1]) <= 0xE007F and text[end] != chr(0xE007F):
-        end += 1
-    return (start > 0 and text[start - 1] == chr(0x1F3F4) and text[end] == chr(0xE007F)
-            and end > start)
+# A subdivision flag (UTS #51): U+1F3F4, then a tag-encoded region code of two
+# lowercase letters and one to four lowercase letters or digits (`gbeng`), then
+# U+E007F CANCEL TAG. Any other tag run is a payload, flag-wrapped or not.
+_FLAG_RE = re.compile("\U0001F3F4([\U000E0061-\U000E007A]{2}[\U000E0061-\U000E007A\U000E0030-\U000E0039]{1,4})\U000E007F")
+
+
+def _flag_spans(text: str) -> list[tuple[int, int]]:
+    """The tag spans of well-formed subdivision flags in ``text``."""
+    return [(m.start(1), m.end()) for m in _FLAG_RE.finditer(text)]
 
 
 def _clip(text: str) -> str:
@@ -485,9 +484,11 @@ class _Scan:
             if text is None or path.resolve() in seen:
                 continue
             seen.add(path.resolve())
+            flags = _flag_spans(text)
             hits = [(m.start(), m.group()) for m in _HIDDEN_RE.finditer(text)
                     if not (m.start() == 0 and m.group() == _BOM)
-                    and not _ordinary_joiner(text, m.start()) and not _flag_tag(text, m.start())]
+                    and not _ordinary_joiner(text, m.start())
+                    and not any(lo <= m.start() < hi for lo, hi in flags)]
             if not hits:
                 continue
             points = sorted({ch for _, ch in hits})
