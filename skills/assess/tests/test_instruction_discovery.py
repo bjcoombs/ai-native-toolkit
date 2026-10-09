@@ -296,3 +296,22 @@ def test_dead_glob_is_per_rule_and_skips_always_loaded(git_repo: Any) -> None:
     dead = [f for f in _block(repo)["findings"] if f["kind"] == "dead_glob"]
     assert [(f["path"], f["pattern"]) for f in dead] == [
         (".claude/rules/allgone.md", "x/**/*.rb, y/*.go")]
+
+
+def test_nested_files_grade_against_the_repo(git_repo: Any) -> None:
+    """A nested file is graded with the repository context (#512): its
+    resolvable commands earn credit and its stale references are findings,
+    exactly as at the root."""
+    repo, commit = git_repo
+    _write(repo, "packages/api/package.json", '{"scripts": {"test": "vitest"}}')
+    _write(repo, "packages/api/src/app.ts", "export {}\n")
+    _write(repo, "packages/api/AGENTS.md",
+           "Run `npm test` and `npm run deploy`.\nCode is in `src/app.ts`, not `src/old.ts`.\n")
+    commit("nested")
+    block = _block(repo)
+    entry = next(f for f in block["files"] if f["path"] == "packages/api/AGENTS.md")
+    assert entry["subscores"]["verified_commands"] == 1
+    assert entry["subscores"]["path_references_existing"] == 1
+    assert [(f["kind"], f["reference"]) for f in entry["findings"]] == [
+        ("unresolved_command", "npm run deploy"), ("stale_path", "src/old.ts"),
+    ]

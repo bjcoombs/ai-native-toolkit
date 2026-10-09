@@ -636,6 +636,15 @@ class InstructionScope(TypedDict):
     always_loaded: bool
 
 
+class GradeFinding(TypedDict):
+    """A grader finding: a command naming a missing target, or a stale path or symbol (#512)."""
+
+    kind: Literal["unresolved_command", "stale_path", "stale_symbol"]
+    line: int
+    reference: str
+    reason: str
+
+
 class NestedInstructionFile(TypedDict):
     """One graded entry in ``nested_instructions.files``."""
 
@@ -646,6 +655,7 @@ class NestedInstructionFile(TypedDict):
     grade: str
     score: int
     subscores: dict[str, int]
+    findings: list[GradeFinding]
     freshness_days: int
     line_count: int
 

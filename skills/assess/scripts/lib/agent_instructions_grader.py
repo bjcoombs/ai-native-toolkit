@@ -34,7 +34,7 @@ import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import TypedDict
 
 from lib.command_resolver import extract_commands, resolve
 from lib.instruction_content import (
@@ -45,16 +45,7 @@ from lib.instruction_content import (
     overview_headings,
     readme_overlap_pct,
 )
-from lib.run_context_types import JsonDict
-
-
-class InstructionFinding(TypedDict):
-    """A command naming a missing target, or a stale path or symbol reference."""
-
-    kind: Literal["unresolved_command", "stale_path", "stale_symbol"]
-    line: int
-    reference: str
-    reason: str
+from lib.run_context_types import GradeFinding, JsonDict
 
 
 class SensitiveFinding(TypedDict):
@@ -322,7 +313,7 @@ class Grade:
     score: int
     grade: str
     subscores: dict[str, int] = field(default_factory=dict)
-    findings: list[InstructionFinding] = field(default_factory=list)
+    findings: list[GradeFinding] = field(default_factory=list)
 
 
 def _count(text: str, patterns: list[str]) -> int:
@@ -467,9 +458,9 @@ def _capped(count: int, points: int, cap: int) -> int:
     return min(count * points, cap)
 
 
-def _repo_signals(text: str, repo: RepoContext, path: str) -> tuple[dict[str, int], list[InstructionFinding]]:
+def _repo_signals(text: str, repo: RepoContext, path: str) -> tuple[dict[str, int], list[GradeFinding]]:
     """Subscores and findings that need the repository: commands and references."""
-    findings: list[InstructionFinding] = []
+    findings: list[GradeFinding] = []
     verified: set[str] = set()
     missing: set[str] = set()
     unknown: set[str] = set()
@@ -521,7 +512,7 @@ def grade_instructions(
     *,
     skills_present: bool = False,
     delegates_to_skills: bool | None = None,
-    repo: RepoContext | None = None,
+    repo: RepoContext | None,
     path: str = "",
 ) -> Grade:
     """Score an agent instruction file (CLAUDE.md / AGENTS.md / GEMINI.md / etc.) and return a Grade.
@@ -545,9 +536,10 @@ def grade_instructions(
             by the caller via ``detect_skills_dir``).
         delegates_to_skills: whether the text itself contains progressive-
             disclosure pointers. ``None`` (the default) auto-detects from text.
-        repo: the repository context. ``None`` grades the text alone: no
+        repo: the repository context, required so a caller cannot drop it
+            by accident. ``None`` is the explicit text-only opt-out: no
             command earns credit, path references are counted unverified, and
-            no finding is produced.
+            no finding is produced (a file graded this way tops out at 55, C).
         path: the file's repo-relative path, so a relative path reference
             resolves from its directory and its own text is not searched for
             the symbols it names.
@@ -575,7 +567,7 @@ def grade_instructions(
     sub["line_count"] = size_metrics["line_count"]
     sub["word_count"] = size_metrics["word_count"]
 
-    findings: list[InstructionFinding] = []
+    findings: list[GradeFinding] = []
     if repo is not None:
         repo_sub, findings = _repo_signals(text, repo, path)
         sub.update(repo_sub)

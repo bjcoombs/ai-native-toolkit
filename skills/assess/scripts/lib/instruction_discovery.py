@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from lib.agent_instructions_grader import grade_instructions
+from lib.instruction_content import RepoContext
 from lib.assess_config import is_user_excluded
 from lib.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_repo_file
 from lib.git_churn import GIT_TIMEOUT_SECONDS, ContentClock
@@ -368,11 +369,12 @@ def _repeats(by_dir: dict[str, list[_Candidate]]) -> list[InstructionFinding]:
 
 def _grade(
     cand: _Candidate, repo_root: Path, clock: ContentClock, skills_present: bool,
+    repo: RepoContext | None,
 ) -> NestedInstructionFile:
     days = clock.days(repo_root / cand.rel)
     freshness = days if days is not None else 0
     grade = grade_instructions(cand.body, freshness_days=freshness,
-                               skills_present=skills_present)
+                               skills_present=skills_present, repo=repo, path=cand.rel)
     scope: InstructionScope = {
         "directory": cand.directory, "globs": cand.globs,
         "always_loaded": cand.always_loaded,
@@ -380,6 +382,7 @@ def _grade(
     return {
         "path": cand.rel, "tool": cand.tool, "kind": cand.kind, "scope": scope,
         "grade": grade.grade, "score": grade.score, "subscores": dict(grade.subscores),
+        "findings": grade.findings,
         "freshness_days": freshness, "line_count": len(cand.body.splitlines()),
     }
 
@@ -411,13 +414,16 @@ def discover_nested_instructions(
     tracked: frozenset[Path] | None,
     clock: ContentClock,
     skills_present: bool,
+    repo: RepoContext | None,
     graded_elsewhere: frozenset[str],
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
 ) -> NestedInstructionsBlock:
     """Build the ``nested_instructions`` run-context block.
 
-    ``graded_elsewhere`` holds the root locations ``grade_instruction_files``
+    ``repo`` is the context commands and references resolve against
+    (``lib.instruction_content.build_repo_context``), the same one the root
+    files are graded with. ``graded_elsewhere`` holds the root locations ``grade_instruction_files``
     already grades; they feed the budget and the findings but get no second
     graded entry here.
     """
@@ -429,7 +435,7 @@ def discover_nested_instructions(
     def is_tracked(p: Path) -> bool:
         return is_repo_file(p, repo_root, tracked)
 
-    graded = [_grade(c, repo_root, clock, skills_present)
+    graded = [_grade(c, repo_root, clock, skills_present, repo)
               for c in surface.candidates if c.rel not in graded_elsewhere]
     findings = (_dead_globs(repo_root, surface) + _stray_md(surface)
                 + _shadowing(repo_root, by_dir, tracked) + _repeats(by_dir))

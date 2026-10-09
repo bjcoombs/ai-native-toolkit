@@ -85,11 +85,9 @@ def test_monolith_scores_strictly_below_lean_plus_skills(fixtures_dir: Path) -> 
     text = (fixtures_dir / "monolithic_instructions.md").read_text()
 
     monolith_grade = grade_instructions(
-        text, freshness_days=10, skills_present=False, delegates_to_skills=False
-    )
+        text, freshness_days=10, skills_present=False, delegates_to_skills=False, repo=None)
     factored_grade = grade_instructions(
-        text, freshness_days=10, skills_present=True
-    )
+        text, freshness_days=10, skills_present=True, repo=None)
 
     assert monolith_grade.subscores["bloat_penalty"] >= 5
     assert factored_grade.subscores["bloat_penalty"] == 0
@@ -108,8 +106,7 @@ def test_lean_fixture_repo_detects_skills_and_avoids_penalty(fixtures_dir: Path)
     assert any("java-conventions" in f for f in skills["skill_files"])
 
     grade = grade_instructions(
-        text, freshness_days=10, skills_present=skills["skills_dirs_present"]
-    )
+        text, freshness_days=10, skills_present=skills["skills_dirs_present"], repo=None)
     assert grade.subscores["bloat_penalty"] == 0
 
 

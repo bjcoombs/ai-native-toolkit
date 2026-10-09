@@ -89,13 +89,13 @@ def test_maven_instructions_score_nonzero_verifiable_outcomes() -> None:
     # Success criterion for issue #116: a Maven CLAUDE.md with runnable
     # mvn/rg verification must score a NON-ZERO verifiable_outcomes.
     assert count_verifiable_outcomes(MAVEN_INSTRUCTIONS) >= 1
-    grade = grade_instructions(MAVEN_INSTRUCTIONS, freshness_days=10)
+    grade = grade_instructions(MAVEN_INSTRUCTIONS, freshness_days=10, repo=None)
     assert grade.subscores["verifiable_outcomes"] >= 1
 
 
 def test_gradle_instructions_score_nonzero_verifiable_outcomes() -> None:
     assert count_verifiable_outcomes(GRADLE_INSTRUCTIONS) >= 1
-    grade = grade_instructions(GRADLE_INSTRUCTIONS, freshness_days=10)
+    grade = grade_instructions(GRADLE_INSTRUCTIONS, freshness_days=10, repo=None)
     assert grade.subscores["verifiable_outcomes"] >= 1
 
 
@@ -135,8 +135,8 @@ def test_rg_recipe_with_flag_is_credited() -> None:
 
 
 def test_grade_returns_letter_grade(good_text: str, bad_text: str) -> None:
-    good = grade_instructions(good_text, freshness_days=10)
-    bad = grade_instructions(bad_text, freshness_days=10)
+    good = grade_instructions(good_text, freshness_days=10, repo=None)
+    bad = grade_instructions(bad_text, freshness_days=10, repo=None)
 
     # Graded as text alone (no repo), no command can be verified, so the
     # largest credit is out of reach: a directive-rich file tops out at B/C
@@ -148,19 +148,19 @@ def test_grade_returns_letter_grade(good_text: str, bad_text: str) -> None:
 
 
 def test_grade_penalizes_staleness(good_text: str) -> None:
-    fresh = grade_instructions(good_text, freshness_days=10)
-    stale = grade_instructions(good_text, freshness_days=400)
+    fresh = grade_instructions(good_text, freshness_days=10, repo=None)
+    stale = grade_instructions(good_text, freshness_days=400, repo=None)
     assert stale.score < fresh.score
 
 
 def test_grade_empty_string_is_F() -> None:
-    empty = grade_instructions("", freshness_days=0)
+    empty = grade_instructions("", freshness_days=0, repo=None)
     assert empty.grade == "F"
     assert empty.score == 0
 
 
 def test_subscores_in_result(good_text: str) -> None:
-    result = grade_instructions(good_text, freshness_days=10)
+    result = grade_instructions(good_text, freshness_days=10, repo=None)
     assert result.subscores["positive_directives"] >= 5
     assert result.subscores["path_references"] >= 4
     assert "tradeoff_phrases" in result.subscores
@@ -198,7 +198,7 @@ def test_no_skills_delegation_in_generic_text() -> None:
 
 
 def test_size_subscores_in_grade(good_text: str) -> None:
-    result = grade_instructions(good_text, freshness_days=10)
+    result = grade_instructions(good_text, freshness_days=10, repo=None)
     assert "line_count" in result.subscores
     assert "word_count" in result.subscores
     assert "bloat_penalty" in result.subscores
@@ -362,7 +362,7 @@ def test_unknown_runner_is_neither_credit_nor_finding(grading_repo: RepoContext)
 
 
 def test_text_only_grading_counts_paths_unverified(good_text: str) -> None:
-    grade = grade_instructions(good_text, freshness_days=10)
+    grade = grade_instructions(good_text, freshness_days=10, repo=None)
     assert grade.subscores["verified_commands"] == 0
     assert grade.subscores["path_references_existing"] == grade.subscores["path_references"]
     assert grade.findings == []

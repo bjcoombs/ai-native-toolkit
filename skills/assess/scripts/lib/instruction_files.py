@@ -298,6 +298,7 @@ def nested_instruction_surface(
         tracked=tracked_files(repo_root),
         clock=content_clock(repo_root),
         skills_present=bool(detect_skills_dir(repo_root)["skills_dirs_present"]),
+        repo=build_repo_context(repo_root),
         graded_elsewhere=frozenset(INSTRUCTION_FILE_PATHS),
         extra_exclude_dirs=extra_dirs,
         extra_exclude_patterns=extra_pats,

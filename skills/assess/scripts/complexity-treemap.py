@@ -757,7 +757,7 @@ def render(files: list[tuple[Path, int, float, str]],
 # ARTIFACT_SCHEMA_VERSION, which assess_core stamps on run-context.json; the
 # treemap keeps its own copy of the constant.
 # test_complexity_treemap asserts the two stay equal.
-ARTIFACT_SCHEMA_VERSION = "1.4.0"
+ARTIFACT_SCHEMA_VERSION = "1.5.0"
 
 
 def _new_run_id() -> str:
