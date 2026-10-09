@@ -10,7 +10,7 @@ studies say helps an agent, not on how much the file says:
                          the largest credit, because agents run the tools a
                          file names (Gloaguen et al., 2026); a standard CLI
                          such as ``gh`` or ``kubectl`` earns partial credit
-    path_references_existing: backticked paths that exist at HEAD
+    path_references_existing: backticked paths that are tracked
     positive_directives / tradeoff_phrases / verifiable_outcomes: credited up
                          to a small floor only; past it, more instructions
                          lower instruction-following accuracy (IFScale)
@@ -23,23 +23,24 @@ studies say helps an agent, not on how much the file says:
     freshness:           days since last content change
 
 Commands that name a missing target and backticked paths or symbols that do
-not exist at HEAD are returned as ``Grade.findings``, never a hard fail.
+not exist in the tracked files are returned as ``Grade.findings``, never a hard fail.
 The repository-checked signals need ``repo`` (a
 ``lib.instruction_content.RepoContext``); without it, commands earn no credit
 and path references are counted unverified.
 
-No LLM calls. Pure regex + arithmetic over the text and the files at HEAD.
+No LLM calls. Pure regex + arithmetic over the text and the tracked files (the working tree, so a clean checkout is HEAD).
 Deterministic.
 """
 from __future__ import annotations
 
 import math
+import posixpath
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TypedDict
 
-from lib.command_resolver import extract_commands, resolve
+from lib.command_resolver import Command, Resolution, extract_commands, resolve
 from lib.instruction_content import (
     RepoContext,
     check_paths,
@@ -487,6 +488,21 @@ def _capped(count: int, points: int, cap: int) -> int:
     return min(count * points, cap)
 
 
+def _resolve_for_file(cmd: Command, repo: RepoContext, path: str) -> Resolution:
+    """Resolve from the repo root, then, for a nested file, from its directory.
+
+    A nested ``packages/api/AGENTS.md`` may mean ``./scripts/dev.sh`` relative
+    to itself or to the root; a ``missing`` from the root is retried from the
+    file's directory so neither reading produces a false finding.
+    """
+    res = resolve(cmd, index=repo.index)
+    self_dir = posixpath.dirname(path)
+    if res.verdict != "missing" or not self_dir:
+        return res
+    local = resolve(replace(cmd, cwd=posixpath.join(self_dir, cmd.cwd)), index=repo.index)
+    return res if local.verdict == "missing" else local
+
+
 def _repo_signals(text: str, repo: RepoContext, path: str) -> tuple[dict[str, int], list[GradeFinding]]:
     """Subscores and findings that need the repository: commands and references."""
     findings: list[GradeFinding] = []
@@ -495,7 +511,7 @@ def _repo_signals(text: str, repo: RepoContext, path: str) -> tuple[dict[str, in
     missing: set[str] = set()
     unknown: set[str] = set()
     for cmd in extract_commands(text):
-        res = resolve(cmd, index=repo.index)
+        res = _resolve_for_file(cmd, repo, path)
         key = " ".join(cmd.text.split())
         if res.verdict == "resolved":
             verified.add(key)

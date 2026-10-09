@@ -315,3 +315,19 @@ def test_nested_files_grade_against_the_repo(git_repo: Any) -> None:
     assert [(f["kind"], f["reference"]) for f in entry["findings"]] == [
         ("unresolved_command", "npm run deploy"), ("stale_path", "src/old.ts"),
     ]
+
+
+def test_nested_file_commands_resolve_from_its_directory(git_repo: Any) -> None:
+    """A nested file's local script resolves from its own directory as well as
+    the root, so neither reading is a false finding; a script in neither is."""
+    repo, commit = git_repo
+    _write(repo, "packages/api/scripts/dev.sh", "echo dev\n")
+    _write(repo, "scripts/root.sh", "echo root\n")
+    _write(repo, "packages/api/AGENTS.md",
+           "```bash\n./scripts/dev.sh\nbash scripts/root.sh\n./scripts/gone.sh\n```\n")
+    commit("nested scripts")
+    entry = next(f for f in _block(repo)["files"] if f["path"] == "packages/api/AGENTS.md")
+    assert entry["subscores"]["verified_commands"] == 2
+    assert [(f["kind"], f["reference"]) for f in entry["findings"]] == [
+        ("unresolved_command", "./scripts/gone.sh"),
+    ]

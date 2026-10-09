@@ -5,7 +5,7 @@ agent. Three of its signals need the repository, not just the text, and live
 here:
 
 - **References that exist.** A backticked path (``src/auth/login.py``,
-  ``scripts/``, ``CLAUDE.md``) counts only when it exists at HEAD; a backticked
+  ``scripts/``, ``CLAUDE.md``) counts only when it is tracked (``git ls-files``); a backticked
   code symbol (``grade_instructions``, ``parseConfig()``) only when some other
   tracked file names it. A reference that resolves to nothing is reported as a
   stale reference. Treude and Baltes (2026, https://arxiv.org/html/2606.09090v1)
