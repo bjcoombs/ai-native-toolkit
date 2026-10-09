@@ -68,7 +68,9 @@ RESOLVED_IN_FULL = [
     "pnpm lint", "pnpm run build", "pnpm install", "pnpm --filter web dev", "yarn test",
     "yarn add left-pad", "bun test", "bun build ./src/index.ts", "pnpm build", "yarn build", "bun run lint", "bun scripts/tool.py",
     "npx jest", "npx @scope/tool@1 --fix", "bunx jest",
-    "pnpm jest", "yarn jest --watch", "bun jest", "pnpm deploy",
+    "pnpm jest", "yarn jest --watch", "bun jest", "pnpm deploy", "pnpm setup",
+    "uv run pytest -m slow", "uv run pytest -m 'not integration' -q",
+    "poetry run python -m pytest", "uv run -m pytest -k x",
     "make", "make check", "make lint check", "make -C . check", "make check VERBOSE=1",
     "make -j 4 check", "gmake check",
     "just", "just test", "just t", "just fmt", "just --list",
@@ -161,6 +163,7 @@ UNKNOWN_ANYWHERE = [
     "source ~/.bashrc",          # home
     "bash $HOME/x.sh",           # variable
     "./dist/cli.js",             # gitignored in the git test below; excluded tree here
+    "pytest /tmp/scratch/test_x.py",  # an absolute pytest path is outside git by design
     "git status",
     "make <target>",             # placeholder
     "npm run ${SCRIPT}",
@@ -277,6 +280,14 @@ def test_dependency_binary_shorthand(tmp_path: Path) -> None:
     assert resolve("yarn tsc", index=no_deps).verdict == "missing"
 
 
+def test_deploy_and_setup_are_pnpm_only_builtins(tmp_path: Path) -> None:
+    index = build_index(_repo(tmp_path, {"package.json": json.dumps({"scripts": {"test": "x"}})}))
+    assert resolve("pnpm deploy", index=index).resolved
+    for cmd in ("yarn deploy", "bun deploy", "yarn setup", "bun setup"):
+        result = resolve(cmd, index=index)
+        assert result.verdict == "missing" and "script" in result.reason, cmd
+
+
 def test_build_is_a_script_except_for_bun(tmp_path: Path) -> None:
     repo = _repo(tmp_path, {"package.json": json.dumps({"scripts": {"test": "x"}})})
     index = build_index(repo)
@@ -292,7 +303,25 @@ def test_gitignored_script_path_is_unknown(git_repo) -> None:
     commit("init")
     index = build_index(repo)
     assert resolve("./out/run.sh", index=index).verdict == "unknown"
+    _repo(repo, {"pyproject.toml": "[project]\nname='x'\ndependencies=['pytest']\n"})
+    commit("py")
+    index = build_index(repo)
+    assert resolve("pytest out/test_gen.py", index=index).verdict == "unknown"
+    assert resolve("pytest tests/test_gone.py", index=index).verdict == "missing"
     assert resolve("bash scripts/missing.sh", index=index).verdict == "missing"
+
+
+def test_inherited_git_dir_does_not_redirect_the_index(git_repo, tmp_path: Path, monkeypatch) -> None:
+    repo, commit = git_repo
+    _repo(repo, {"Makefile": "check:\n\ttrue\n"})
+    commit("init")
+    other = tmp_path / "other"
+    other.mkdir()
+    import subprocess
+    subprocess.run(["git", "-C", str(other), "init", "-q"], check=True)
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(other))
+    assert resolve("make check", index=build_index(repo)).resolved
 
 
 def test_ci_line_resolves_only_unknown_runners(tmp_path: Path) -> None:

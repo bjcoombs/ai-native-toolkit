@@ -155,6 +155,15 @@ def test_symbol_check_without_a_self_path(git_repo) -> None:
     assert [s["reference"] for s in stale] == ["gone_name"]
 
 
+def test_gitignored_relative_to_a_nested_file(git_repo) -> None:
+    repo, commit = git_repo
+    _write(repo, {"packages/api/.gitignore": "coverage.xml\n", "packages/api/AGENTS.md": "x\n"})
+    commit("init")
+    ctx = build_repo_context(repo)
+    _, stale = check_paths("`coverage.xml` and `gone.md`\n", ctx, "packages/api/AGENTS.md")
+    assert [s["reference"] for s in stale] == ["gone.md"]
+
+
 def test_symbol_only_in_the_instruction_file_is_stale(git_repo) -> None:
     repo, commit = git_repo
     _write(repo, {"AGENTS.md": "`only_here_symbol`\n", "x.py": "pass\n"})

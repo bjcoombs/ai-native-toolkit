@@ -107,6 +107,16 @@ class RepoIndex:
 
 
 GIT_TIMEOUT_SECONDS = 30
+# Inherited from a git hook, these point `git -C <root>` at another repository.
+GIT_LOCATION_VARS = (
+    "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_NAMESPACE",
+)
+
+
+def git_env() -> dict[str, str]:
+    """The environment with git's repository-location variables removed."""
+    return {k: v for k, v in os.environ.items() if k not in GIT_LOCATION_VARS}
 
 
 def _git_ls_files(root: Path) -> frozenset[str] | None:
@@ -115,6 +125,7 @@ def _git_ls_files(root: Path) -> frozenset[str] | None:
         raw = subprocess.run(
             ["git", "-C", str(root), "ls-files", "-z"],
             capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            env=git_env(),
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return None
@@ -127,7 +138,7 @@ def is_gitignored(root: Path, rel: str) -> bool:
     try:
         proc = subprocess.run(
             ["git", "-C", str(root), "check-ignore", "-q", "--", rel],
-            capture_output=True, timeout=GIT_TIMEOUT_SECONDS, check=False,
+            capture_output=True, timeout=GIT_TIMEOUT_SECONDS, check=False, env=git_env(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False

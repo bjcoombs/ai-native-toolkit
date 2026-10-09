@@ -539,7 +539,7 @@ def grade_instructions(
         repo: the repository context, required so a caller cannot drop it
             by accident. ``None`` is the explicit text-only opt-out: no
             command earns credit, path references are counted unverified, and
-            no finding is produced (a file graded this way tops out at 55, C).
+            no finding is produced (a file graded this way tops out at 55, a B).
         path: the file's repo-relative path, so a relative path reference
             resolves from its directory and its own text is not searched for
             the symbols it names.

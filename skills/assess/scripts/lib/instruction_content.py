@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Literal, NamedTuple, TypedDict
 
-from lib.command_index import RepoIndex, build_index
+from lib.command_index import RepoIndex, build_index, git_env
 from lib.doc_graph import is_excluded_path
 
 GIT_TIMEOUT_SECONDS = 30
@@ -117,7 +117,7 @@ def _is_git(root: Path) -> bool:
     try:
         subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"],
-            capture_output=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, check=True, timeout=GIT_TIMEOUT_SECONDS, env=git_env(),
         )
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return False
@@ -221,7 +221,7 @@ def _gitignored(root: Path, paths: list[str]) -> set[str]:
         proc = subprocess.run(
             ["git", "-C", str(root), "check-ignore", "--stdin"],
             input="\n".join(paths), capture_output=True, text=True,
-            timeout=GIT_TIMEOUT_SECONDS, check=False,
+            timeout=GIT_TIMEOUT_SECONDS, check=False, env=git_env(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return set()
@@ -238,7 +238,7 @@ def _symbols_present(root: Path, names: list[str], self_rel: str) -> set[str] | 
     cmd += ["--", ".", f":(exclude){self_rel}"] if self_rel else []
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
-                              timeout=GIT_TIMEOUT_SECONDS, check=False)
+                              timeout=GIT_TIMEOUT_SECONDS, check=False, env=git_env())
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
     if proc.returncode not in (0, 1):
@@ -257,11 +257,17 @@ def check_paths(text: str, ctx: RepoContext, self_rel: str) -> tuple[list[Refere
             existing.append(ref)
         elif not _uncheckable_slash_path(ctx.index, ref.text):
             missing.append(ref)
-    ignored = _gitignored(ctx.root, sorted({r.text.rstrip("/") for r in missing})) if ctx.git else set()
+    def forms(ref: str) -> set[str]:
+        """The path as written and relative to the instruction file's directory."""
+        bare = ref.rstrip("/")
+        return {bare, f"{self_dir}/{bare}"} if self_dir else {bare}
+
+    queries = sorted(set().union(*(forms(r.text) for r in missing)))
+    ignored = _gitignored(ctx.root, queries) if ctx.git else set()
     stale: list[StaleReference] = [
         {"kind": "stale_path", "line": r.line, "reference": r.text,
          "reason": "no tracked file or directory at this path"}
-        for r in missing if r.text.rstrip("/") not in ignored
+        for r in missing if not forms(r.text) & ignored
     ]
     return existing, stale
 

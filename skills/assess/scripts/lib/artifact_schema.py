@@ -27,6 +27,10 @@ A leaf module so the orchestrator and the lib modules that write artifacts
 # path-scoped instruction files graded with their scope, the always-loaded
 # budget per tool, and the scope-integrity findings. Additive: no existing key
 # moves, and complexity-stats.json is unchanged.
+# 1.4.0 (also): run-context.json gains the agent_harness block (#513): the committed
+# hooks, env names, apiKeyHelper and MCP servers that run on every agent
+# session, and the findings that expose a secret or widen that surface.
+# Additive; complexity-stats.json is unchanged.
 # 1.5.0: instruction files are graded on verified commands and size (issue
 # #512). Each instruction_files entry and nested_instructions.files entry gains
 # findings (unresolved commands, stale paths and symbols) and the subscores

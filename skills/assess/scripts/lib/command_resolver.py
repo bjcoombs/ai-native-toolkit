@@ -327,9 +327,11 @@ _PM_BUILTINS = frozenset({
     "pack", "why", "outdated", "list", "ls", "audit", "config", "store", "info",
     "view", "global", "workspace", "workspaces", "patch", "rebuild", "import",
     "prune", "dedupe", "licenses", "version", "login", "logout", "cache", "bin",
-    "root", "env", "setup", "help", "set", "plugin", "constraints", "node", "npm",
-    "fund", "doctor", "explain", "pm", "self-update", "upgrade-interactive", "deploy",
+    "root", "env", "help", "set", "plugin", "constraints", "node", "npm",
+    "fund", "doctor", "explain", "pm", "self-update", "upgrade-interactive",
 })
+# pnpm's own commands that yarn and bun would run as a package.json script.
+_PNPM_ONLY_BUILTINS = frozenset({"deploy", "setup"})
 _PM_VALUED = frozenset({"--prefix", "-C", "--dir", "--cwd", "--filter", "-F", "--workspace", "-w"})
 _NPM_TEST = frozenset({"test", "t", "tst"})
 
@@ -363,7 +365,7 @@ def _npm(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
 def _pnpm_like(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
     tool = words[0]
     pos = _positionals(words[1:], _PM_VALUED)
-    if not pos or pos[0] in _PM_BUILTINS:
+    if not pos or pos[0] in _PM_BUILTINS or (tool == "pnpm" and pos[0] in _PNPM_ONLY_BUILTINS):
         return _builtin(index, tool)
     if pos[0] == "run":
         return _script(index, pos[1]) if len(pos) > 1 else _builtin(index, f"{tool} run")
@@ -468,18 +470,22 @@ def _with_packages(args: list[str]) -> set[str]:
     return names
 
 
-def _python_target(index: RepoIndex, pos: list[str], cwd: str, provided: set[str]) -> Outcome:
-    """Resolve what ``uv run`` / ``poetry run`` would execute: ``pos[0]`` and its args."""
+def _python_target(index: RepoIndex, run_args: list[str], cwd: str, provided: set[str]) -> Outcome:
+    """Resolve what ``uv run`` / ``poetry run`` would execute, from the words after ``run``."""
+    pos = _positionals(run_args, _UV_VALUED)
+    if not pos:
+        return _UNKNOWN_RUNNER
     name = pos[0]
+    rest = run_args[run_args.index(name) + 1:]  # the target's own args, flags kept
     lowered = name.lower()
     if lowered in provided:
         return "resolved", f"`{name}` provided by --with"
     if "/" in name or name.endswith((".py", ".sh")):
         return _file_outcome(index, name, cwd)
     if lowered in ("python", "python3"):
-        return _python(index, pos, cwd)
+        return _python(index, [name, *rest], cwd)
     if lowered in ("pytest", "py.test"):
-        return _pytest_outcome(index, pos[1:], cwd)
+        return _pytest_outcome(index, rest, cwd)
     if lowered in index.python_names:
         return "resolved", f"`{name}` declared in pyproject.toml"
     return "unknown", f"`{name}` is not declared in pyproject.toml"
@@ -495,12 +501,13 @@ def _uv(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
         return _uvx(index, words[words.index("run") + 1:])
     if pos[0] == "run":
         run_args = words[words.index("run") + 1:]
-        if "-m" in run_args or "--module" in run_args:
-            return _python(index, ["python", *run_args], cwd)
         target = _positionals(run_args, _UV_VALUED)
-        if not target:
-            return _UNKNOWN_RUNNER
-        return _python_target(index, target, cwd, _with_packages(run_args))
+        # uv's own -m/--module sits before the target; after it, -m is the
+        # target's flag (`uv run pytest -m slow` selects a marker).
+        head = run_args[:run_args.index(target[0])] if target else run_args
+        if "-m" in head or "--module" in head:
+            return _python(index, ["python", *run_args], cwd)
+        return _python_target(index, run_args, cwd, _with_packages(run_args))
     if pos[0] in _PY_BUILTIN_SUBS:
         return ("resolved", "`uv` built-in") if index.has_pyproject else \
             ("unknown", "`uv` built-in outside a Python project")
@@ -517,7 +524,7 @@ def _uvx(index: RepoIndex, args: list[str]) -> Outcome:
 def _poetry(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
     pos = _positionals(words[1:], frozenset({"-C", "--directory", "-P", "--project"}))
     if pos[:1] == ["run"] and len(pos) > 1:
-        return _python_target(index, pos[1:], cwd, set())
+        return _python_target(index, words[words.index("run") + 1:], cwd, set())
     if not index.has_pyproject:
         return "missing", "no pyproject.toml in the repo"
     return "resolved", "`poetry` built-in"
@@ -568,8 +575,10 @@ def _pytest_outcome(index: RepoIndex, args: list[str], cwd: str) -> Outcome:
     valued = frozenset({"-k", "-m", "-c", "-p", "-o", "--rootdir", "--cov", "-n", "--maxfail"})
     for arg in _positionals(args, valued):
         path = arg.split("::", 1)[0]
-        if ("/" in path or path.endswith(".py")) and not _path_exists(index, path, cwd):
-            return "missing", f"no file `{path}` at HEAD"
+        if "/" in path or path.endswith(".py"):
+            outcome = _file_outcome(index, path, cwd)
+            if outcome[0] != "resolved":
+                return outcome
     return "resolved", "pytest configured"
 
 
