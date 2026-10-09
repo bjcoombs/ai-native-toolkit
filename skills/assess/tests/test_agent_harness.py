@@ -250,8 +250,20 @@ def test_missing_env_deny_matrix(tmp_path: Path, gitignore: str, example: bool,
     _write(tmp_path, ".gitignore", gitignore)
     if example:
         _write(tmp_path, ".env.example", "X=\n")
-    if deny:
-        _json(tmp_path, ".claude/settings.json", {"permissions": {"deny": deny}})
+    _json(tmp_path, ".claude/settings.json", {"permissions": {"deny": deny}})
+    got = _kinds(scan_agent_harness(tmp_path))
+    assert got == ([("missing_env_deny", ".claude/settings.json")] if flagged else [])
+
+
+@pytest.mark.parametrize(("marker", "flagged"), [
+    (None, False), (".claude/agents/a.md", True), ("CLAUDE.md", True), ("AGENTS.md", False),
+])
+def test_missing_env_deny_needs_claude_code_configured(tmp_path: Path, marker: str | None,
+                                                       flagged: bool) -> None:
+    """A stock `.gitignore` ignores `.env`; without Claude Code there is no deny rule to add."""
+    _write(tmp_path, ".gitignore", ".env\n")
+    if marker:
+        _write(tmp_path, marker, "# x\n")
     got = _kinds(scan_agent_harness(tmp_path))
     assert got == ([("missing_env_deny", ".claude/settings.json")] if flagged else [])
 

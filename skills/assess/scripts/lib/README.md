@@ -1252,8 +1252,10 @@ inventories under the run root, as `executes`, the hooks in
 names (never values), `apiKeyHelper`, `.mcp.json` servers (command, or URL
 without credentials, query or fragment; arguments are never reported) and
 `.cursor/hooks.json`. Finding kinds: `tracked_local_settings`,
-`tracked_env_file` (path only), `missing_env_deny`, `hooks_forced_on`
-(`disableAllHooks: false`), `broad_allow` (`Bash`, `Bash(*)`, `Bash(:*)`),
+`tracked_env_file` (path only), `missing_env_deny` (only where Claude Code is
+configured: a `.claude/` directory or a `CLAUDE.md`), `hooks_forced_on`
+(`disableAllHooks: false`), `broad_allow` (`Bash`, `Bash(*)`, `Bash(:*)`,
+`Bash(**)`, `Bash(*:*)`),
 `credential_mount` (a devcontainer file mounting `~/.ssh`, `~/.aws`,
 `~/.config/gcloud` ...), `hidden_unicode` (zero-width and bidi controls in an
 instruction, rule, skill, command or agent file, reported as code points) and

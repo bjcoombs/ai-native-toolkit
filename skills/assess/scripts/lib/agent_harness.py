@@ -28,11 +28,13 @@ absent-file finding), ``detail`` and a one-line ``fix``:
 - ``tracked_local_settings``: ``.claude/settings.local.json`` is tracked.
 - ``tracked_env_file``: a tracked ``.env`` / ``.env.*`` that is not an
   example, sample, template or dist file. The path only, never a value.
-- ``missing_env_deny``: ``.gitignore`` ignores a ``.env`` pattern or an example
-  file exists, but ``.claude/settings.json`` has no ``Read(...env...)`` deny.
+- ``missing_env_deny``: Claude Code is configured (a ``.claude/`` directory or a
+  ``CLAUDE.md``), ``.gitignore`` ignores a ``.env`` pattern or an example file
+  exists, and ``.claude/settings.json`` has no ``Read(...env...)`` deny.
 - ``hooks_forced_on``: ``disableAllHooks: false`` in project settings, which
   overrides a user who disabled hooks.
-- ``broad_allow``: ``Bash``, ``Bash(*)`` or ``Bash(:*)`` in ``permissions.allow``.
+- ``broad_allow``: ``Bash``, ``Bash(*)``, ``Bash(:*)``, ``Bash(**)`` or
+  ``Bash(*:*)`` in ``permissions.allow`` (spaces ignored).
 - ``credential_mount``: a devcontainer file that mounts a host credential
   directory (``~/.ssh``, ``~/.aws``, ``~/.config/gcloud`` ...).
 - ``hidden_unicode``: zero-width or bidirectional-control characters in an
@@ -115,6 +117,7 @@ _HIDDEN = frozenset(
     [0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF]
     + list(range(0x202A, 0x202F)) + list(range(0x2066, 0x206A))
 )
+_BOM = chr(0xFEFF)
 _HIDDEN_RE = re.compile("[" + "".join(chr(c) for c in sorted(_HIDDEN)) + "]")
 
 _ENV_NAME = re.compile(r"^\.env(\..+)?$")
@@ -355,6 +358,8 @@ class _Scan:
                 "commit a `.env.example` with placeholder values instead.")
 
     def env_deny(self, settings: dict[str, Any]) -> None:
+        if not ((self.root / ".claude").is_dir() or (self.root / "CLAUDE.md").is_file()):
+            return  # Claude Code is not configured here: a deny rule has nowhere to live
         ignore = self.read(self.root / ".gitignore") or ""
         ignored = any(_ENV_IGNORE_LINE.match(ln.strip()) for ln in ignore.splitlines())
         example = any(
@@ -420,7 +425,7 @@ class _Scan:
                 continue
             seen.add(path.resolve())
             hits = [(m.start(), m.group()) for m in _HIDDEN_RE.finditer(text)
-                    if not (m.start() == 0 and m.group() == "﻿")]
+                    if not (m.start() == 0 and m.group() == _BOM)]
             if not hits:
                 continue
             points = sorted({ch for _, ch in hits})
