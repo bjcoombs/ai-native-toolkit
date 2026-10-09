@@ -329,6 +329,9 @@ def test_extract_fenced_shell_and_inline() -> None:
 def test_inline_bare_tool_names_are_prose() -> None:
     text = "Use `pnpm`, not `npm` or `yarn`; we do not use `tox`. Run `./deploy` or `make check`.\n"
     assert [c.text for c in extract_commands(text)] == ["./deploy", "make check"]
+    # A ./ path alone is a command only when it looks executable.
+    docs = "See `./docs/guide.md`, `./config.json` and `./run.sh`; run `./bin/tool`.\n"
+    assert [c.text for c in extract_commands(docs)] == ["./run.sh", "./bin/tool"]
     # In a fence, a bare runner line is still a command.
     assert [c.text for c in extract_commands("```bash\nmake\n```\n")] == ["make"]
 

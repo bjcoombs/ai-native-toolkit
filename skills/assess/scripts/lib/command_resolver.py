@@ -49,7 +49,7 @@ import re
 import shlex
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from lib.command_index import RepoIndex, TargetSet, build_index, is_gitignored
@@ -180,7 +180,18 @@ def _counts_as_command(words: list[str], source: str, require_runner: bool) -> b
     """A runner-led segment; inline, a bare tool name (`` `npm` ``) is prose, not a command."""
     if require_runner and not _is_runner(words[0]):
         return False
-    return source != "inline" or len(words) > 1 or words[0].startswith("./")
+    return source != "inline" or len(words) > 1 or _looks_executable(words[0])
+
+
+_SCRIPT_SUFFIXES = frozenset({".sh", ".bash", ".zsh", ".py", ".js", ".mjs", ".cjs", ".ts", ".rb", ".pl"})
+
+
+def _looks_executable(word: str) -> bool:
+    """``./deploy`` or ``./run.sh`` alone is a command; ``./docs/guide.md`` is a file mention."""
+    if not word.startswith("./"):
+        return False
+    suffix = PurePosixPath(word).suffix.lower()
+    return suffix == "" or suffix in _SCRIPT_SUFFIXES
 
 
 def _is_runner(word: str) -> bool:
