@@ -20,7 +20,7 @@ frontmatter), ``env`` (one row per ``env`` variable in project settings, name
 only), ``api_key_helper``, ``mcp_server`` (``.mcp.json``, command or URL) and
 ``cursor_hook`` (``.cursor/hooks.json``). A command is reported as the program
 it runs (``./hooks/guard.sh ...``), without arguments or leading ``VAR=value``
-assignments; a URL loses its credentials, query and fragment; an ``env`` value
+assignments; a URL is reported as ``scheme://host[:port]``; an ``env`` value
 or MCP argument is never reported.
 
 ``findings``, each with ``kind``, ``file``, ``line`` (None for a whole-file or
@@ -40,7 +40,8 @@ absent-file finding), ``detail`` and a one-line ``fix``:
   directory (``~/.ssh``, ``~/.aws``, ``~/.config/gcloud`` ...).
 - ``hidden_unicode``: zero-width or bidirectional-control characters in an
   instruction file, rule, skill, command or agent file; reported as code
-  points, never as the characters.
+  points, never as the characters. A ZWJ inside an emoji sequence and a ZWNJ
+  between Arabic-script or Indic letters are ordinary text and not reported.
 - ``privileged_comment_trigger``: a workflow triggered by ``issue_comment`` or
   ``pull_request_target`` that runs a deploy, ``terraform apply`` or a publish.
 
@@ -119,6 +120,14 @@ _HIDDEN = frozenset(
     + list(range(0x202A, 0x202F)) + list(range(0x2066, 0x206A))
 )
 _BOM = chr(0xFEFF)
+# Ranges where a joiner is ordinary text, not a hiding place: U+200D inside an
+# emoji sequence (pictographs, U+FE0F, skin tones) and U+200C in Arabic-script
+# and Indic words, where it shapes the letters.
+_EMOJI = ((0x1F000, 0x1FAFF), (0x2300, 0x23FF), (0x2600, 0x27BF), (0x2B00, 0x2BFF),
+          (0xFE0F, 0xFE0F), (0x20E3, 0x20E3))
+_ZWNJ_SCRIPTS = ((0x0600, 0x06FF), (0x0750, 0x077F), (0x0900, 0x0DFF),
+                 (0xFB50, 0xFDFF), (0xFE70, 0xFEFC))
+_JOINER_CONTEXT = {chr(0x200D): _EMOJI, chr(0x200C): _ZWNJ_SCRIPTS}
 _HIDDEN_RE = re.compile("[" + "".join(chr(c) for c in sorted(_HIDDEN)) + "]")
 
 _ENV_NAME = re.compile(r"^\.env(\..+)?$")
@@ -149,21 +158,34 @@ _PRIVILEGED = re.compile(
 )
 
 
+def _in(ch: str, ranges: tuple[tuple[int, int], ...]) -> bool:
+    return any(lo <= ord(ch) <= hi for lo, hi in ranges)
+
+
+def _ordinary_joiner(text: str, pos: int) -> bool:
+    """A ZWJ between emoji or a ZWNJ between Arabic-script or Indic letters."""
+    ranges = _JOINER_CONTEXT.get(text[pos])
+    if ranges is None or pos == 0 or pos + 1 >= len(text):
+        return False
+    return _in(text[pos - 1], ranges) and _in(text[pos + 1], ranges)
+
+
 def _clip(text: str) -> str:
     text = " ".join(text.split())
     return text if len(text) <= _MAX_DETAIL else text[: _MAX_DETAIL - 3] + "..."
 
 
 def _safe_url(raw: str) -> str:
-    """A URL without userinfo, query or fragment, any of which can carry a token."""
+    """``scheme://host[:port]`` only: userinfo, path, query and fragment can each
+    carry a token (a Slack webhook or a keyed MCP endpoint keeps it in the path)."""
     try:
         parts = urlsplit(raw)
+        host = parts.hostname or ""
+        if parts.port:
+            host = f"{host}:{parts.port}"
     except ValueError:
         return "<unparseable url>"
-    host = parts.hostname or ""
-    if parts.port:
-        host = f"{host}:{parts.port}"
-    return urlunsplit((parts.scheme, host, parts.path, "", ""))
+    return urlunsplit((parts.scheme, host, "", "", ""))
 
 
 _ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
@@ -442,7 +464,8 @@ class _Scan:
                 continue
             seen.add(path.resolve())
             hits = [(m.start(), m.group()) for m in _HIDDEN_RE.finditer(text)
-                    if not (m.start() == 0 and m.group() == _BOM)]
+                    if not (m.start() == 0 and m.group() == _BOM)
+                    and not _ordinary_joiner(text, m.start())]
             if not hits:
                 continue
             points = sorted({ch for _, ch in hits})

@@ -127,11 +127,11 @@ def test_planted_fixture_inventory(git_repo) -> None:
         ("api_key_helper", ".claude/settings.json", "apiKeyHelper", "./bin/key.sh"),
         ("frontmatter_hook", ".claude/skills/deploy/SKILL.md", "PreToolUse", "./scripts/check.sh"),
         ("frontmatter_hook", ".claude/skills/deploy/SKILL.md", "PostToolUse",
-         "https://hooks.example.com/x"),
+         "https://hooks.example.com"),
         ("frontmatter_hook", ".claude/skills/deploy/SKILL.md", "Stop", None),
         ("cursor_hook", ".cursor/hooks.json", "afterFileEdit", "./fmt.sh"),
         ("mcp_server", ".mcp.json", "db", "npx"),
-        ("mcp_server", ".mcp.json", "remote", "https://mcp.example.com/sse"),
+        ("mcp_server", ".mcp.json", "remote", "https://mcp.example.com"),
     ]
 
 
@@ -141,7 +141,7 @@ def test_no_secret_value_or_hidden_character_reaches_the_block(git_repo) -> None
     _force_add(repo, ".claude/settings.local.json")
     commit("init")
     dumped = json.dumps(scan_agent_harness(repo), ensure_ascii=False)
-    for secret in ("s3cr3t-value", "hunter2", "argsecret", "token=abc", "pw@", "key=zzz", ZWSP):
+    for secret in ("s3cr3t-value", "hunter2", "argsecret", "token=abc", "pw@", "key=zzz", "/sse", "/x", ZWSP):
         assert secret not in dumped
     hidden = next(f for f in scan_agent_harness(repo)["findings"] if f["kind"] == "hidden_unicode")
     assert hidden["line"] == 3
@@ -311,6 +311,23 @@ def test_hidden_unicode_locations(tmp_path: Path, rel: str) -> None:
                            "U+202E RIGHT-TO-LEFT OVERRIDE")
 
 
+@pytest.mark.parametrize(("text", "flagged"), [
+    (f"dev {chr(0x1F469)}{chr(0x200D)}{chr(0x1F4BB)} here\n", False),        # woman technologist
+    (f"{chr(0x1F3F3)}{chr(0xFE0F)}{chr(0x200D)}{chr(0x1F308)}\n", False),    # rainbow flag
+    (f"{chr(0x0645)}{chr(0x06CC)}{chr(0x200C)}{chr(0x062E)}\n", False),     # Persian word
+    (f"{chr(0x0915)}{chr(0x094D)}{chr(0x200C)}{chr(0x0937)}\n", False),     # Devanagari
+    (f"a{chr(0x200D)}b\n", True),
+    (f"{chr(0x1F469)}{chr(0x200D)}\n", True),
+    (f"{chr(0x200D)}{chr(0x1F469)}\n", True),
+    (f"a{chr(0x200C)}b\n", True),
+    (f"{chr(0x1F469)}{chr(0x200C)}{chr(0x1F4BB)}\n", True),
+    (f"{chr(0x0645)}{chr(0x200B)}{chr(0x062E)}\n", True),
+])
+def test_hidden_unicode_ordinary_joiners(tmp_path: Path, text: str, flagged: bool) -> None:
+    _write(tmp_path, "CLAUDE.md", text)
+    assert _kinds(scan_agent_harness(tmp_path)) == ([("hidden_unicode", "CLAUDE.md")] if flagged else [])
+
+
 def test_hidden_unicode_bom_only_allowed_at_file_start(tmp_path: Path) -> None:
     _write(tmp_path, "CLAUDE.md", f"{BOM}ok\n")
     _write(tmp_path, "AGENTS.md", f"ok\nmid{BOM}file\n")
@@ -369,9 +386,11 @@ def test_on_block_stops_at_next_top_level_key() -> None:
 
 
 @pytest.mark.parametrize(("raw", "safe"), [
-    ("https://u:p@h.example.com:8443/p?q=1#f", "https://h.example.com:8443/p"),
-    ("http://h/sse", "http://h/sse"),
+    ("https://u:p@h.example.com:8443/p?q=1#f", "https://h.example.com:8443"),
+    ("http://h/sse", "http://h"),
+    ("https://hooks.slack.com/services/T0/B0/webhooksecret", "https://hooks.slack.com"),
     ("https://[::1", "<unparseable url>"),
+    ("https://h:notaport/x", "<unparseable url>"),
 ])
 def test_safe_url(raw: str, safe: str) -> None:
     assert _safe_url(raw) == safe

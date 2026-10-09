@@ -1249,8 +1249,8 @@ The committed agent surface that runs code or exposes secrets (issue #513),
 static and dependency-free. `scan_agent_harness(repo_root, scope, excludes)`
 inventories under the run root, as `executes`, the hooks in
 `.claude/settings.json` and in skill / agent frontmatter, the `env` variable
-names (never values), `apiKeyHelper`, `.mcp.json` servers (command, or URL
-without credentials, query or fragment) and
+names (never values), `apiKeyHelper`, `.mcp.json` servers (command, or URL as
+`scheme://host[:port]`) and
 `.cursor/hooks.json`; a command is reported as its program only, never its
 arguments or leading `VAR=value` assignments. Finding kinds: `tracked_local_settings`,
 `tracked_env_file` (path only), `missing_env_deny` (only where Claude Code is
@@ -1259,7 +1259,8 @@ configured: a `.claude/` directory or a `CLAUDE.md`), `hooks_forced_on`
 `Bash(**)`, `Bash(*:*)`),
 `credential_mount` (a devcontainer file mounting `~/.ssh`, `~/.aws`,
 `~/.config/gcloud` ...), `hidden_unicode` (zero-width and bidi controls in an
-instruction, rule, skill, command or agent file, reported as code points) and
+instruction, rule, skill, command or agent file, reported as code points; a
+ZWJ inside an emoji sequence or a ZWNJ in Arabic-script or Indic text is not) and
 `privileged_comment_trigger` (an `issue_comment` / `pull_request_target`
 workflow that runs a deploy, apply or publish). Workflow and devcontainer files
 are read line by line, not parsed as YAML; the module docstring lists what that
