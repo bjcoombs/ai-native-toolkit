@@ -180,6 +180,9 @@ UNKNOWN_ANYWHERE = [
     "python3 -c 'print(open(\"docs/x.md\").read())'",  # a / in the program is not a path
     "python -m http.server",
     "bash -c 'echo hi'",
+    "bash -lc 'make test'",      # -c combined with other flags
+    "sh -ec 'npm run x'",
+    "bash -xc gone.sh",
     "python",
     "uv",
     "uv frobnicate",
