@@ -336,6 +336,16 @@ def test_ci_line_resolves_only_unknown_runners(tmp_path: Path) -> None:
     assert resolve("ls", index=index).verdict == "unknown"  # too short to match a CI line
 
 
+def test_ci_fallback_needs_the_whole_line(tmp_path: Path) -> None:
+    index = build_index(_repo(tmp_path, {".github/workflows/ci.yml": (
+        "jobs:\n  t:\n    steps:\n      - name: Check git diff\n"
+        "        run: git diff --exit-code\n      # git status\n"
+    )}))
+    assert resolve("git diff --exit-code", index=index).resolved
+    assert resolve("git diff", index=index).verdict == "unknown"     # a prefix, not the step
+    assert resolve("git status", index=index).verdict == "unknown"   # only in a comment
+
+
 # --- Extraction ---------------------------------------------------------------
 
 def test_extract_fenced_shell_and_inline() -> None:

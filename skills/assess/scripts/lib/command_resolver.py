@@ -679,8 +679,10 @@ RUNNERS: dict[str, _Resolver] = {
 
 
 def _ci_runs(index: RepoIndex, text: str) -> bool:
+    """True when a CI configuration line is exactly this command (after the
+    ``run:`` / ``script:`` / ``- `` strip), not merely contains it."""
     needle = " ".join(text.split())
-    return len(needle) > 3 and any(needle in line for line in index.ci_lines)
+    return len(needle) > 3 and needle in index.ci_lines
 
 
 def resolve(command: Command | str, repo_root: Path | None = None, *,
