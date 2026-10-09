@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
+from lib.agent_environment import scan_agent_environment
 from lib.agent_harness import scan_agent_harness
 from lib.agent_ops import scan_agent_ops
 from lib.claude_config import scan_claude_config
@@ -213,6 +214,15 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec(
         "agent_harness", scan_agent_harness,
         ("repo_root", "scope", "excludes"), STAGE_POST_OFFERS,
+    ),
+    # Agent working environment (Layer 5, issue #514): committed setup
+    # (copilot-setup-steps.yml, devcontainer, Cursor environment, SessionStart
+    # hook, setup script or target), the check command a graded instruction file
+    # names, lockfiles per manifest, the Layer 5 Partial cap, and the optional
+    # `gh` CI-duration probe. Reads agent_harness for the SessionStart hooks.
+    ScanSpec(
+        "agent_environment", scan_agent_environment,
+        ("repo_root", "instruction_files", "agent_harness", "excludes"), STAGE_POST_OFFERS,
     ),
 )
 
