@@ -529,6 +529,9 @@ def _declares_deps(root: Path, rel: str) -> bool:
         return isinstance(pkg, dict) and any(
             pkg.get(k) for k in ("dependencies", "devDependencies", "optionalDependencies",
                                  "peerDependencies"))
+    if name == "go.mod":
+        # Go writes no go.sum for a module that requires nothing.
+        return re.search(r"^\s*require\b", _read(root, rel), re.MULTILINE) is not None
     if name != "pyproject.toml":
         return True
     try:
@@ -544,9 +547,14 @@ def _declares_deps(root: Path, rel: str) -> bool:
                 or (isinstance(poetry, dict) and poetry.get("dependencies")))
 
 
-def _requirements_pinned(text: str) -> bool:
+def _requirement_lines(text: str) -> list[str]:
+    """Direct requirements, without comments, options and ``-r`` / ``-c`` includes."""
     reqs = [ln.split("#")[0].strip() for ln in text.splitlines()]
-    reqs = [r for r in reqs if r and not r.startswith("-")]
+    return [r for r in reqs if r and not r.startswith("-")]
+
+
+def _requirements_pinned(text: str) -> bool:
+    reqs = _requirement_lines(text)
     return bool(reqs) and all("==" in r for r in reqs)
 
 
@@ -578,7 +586,10 @@ def _pinning(index: RepoIndex, excludes: tuple[set[str], list[str]] | None) -> l
             rows.append({"ecosystem": ecosystem, "manifest": rel, "locked": lock is not None,
                          "lockfile": lock})
         elif _REQUIREMENTS.match(p.name):
-            pinned = _requirements_pinned(_read(index.root, rel))
+            text = _read(index.root, rel)
+            if not _requirement_lines(text):
+                continue  # only `-r` / `-c` includes or options: nothing to pin here
+            pinned = _requirements_pinned(text)
             rows.append({"ecosystem": "python", "manifest": rel, "locked": pinned,
                          "lockfile": rel if pinned else None})
     return rows

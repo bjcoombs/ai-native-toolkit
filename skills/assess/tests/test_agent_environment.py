@@ -289,11 +289,15 @@ def test_pinning_rows(tmp_path: Path) -> None:
         "broken/pyproject.toml": "[[[",
         "requirements.txt": "httpx==0.27.0\n# c\n-r base.txt\n",
         "requirements-dev.txt": "pytest>=8\n",
-        "go.mod": "module x\n", "go.sum": "",
+        "go.mod": "module x\nrequire example.com/y v1.0.0\n", "go.sum": "",
+        "lib/go.mod": "module lib\n\ngo 1.22\n",  # requires nothing: no go.sum to expect
+        "cli/go.mod": "module cli\nrequire (\n\texample.com/z v1\n)\n",
+        "app/requirements.txt": "-r requirements/production.txt\n-c constraints.txt\n",  # includes only
         "tests/fixtures/app/package.json": "{}",  # fixture tree: not a real manifest
     })
     rows = {r["manifest"]: (r["locked"], r["lockfile"]) for r in _scan(root)["pinning"]["manifests"]}
     assert rows == {
+        "cli/go.mod": (True, "go.sum"),
         "go.mod": (True, "go.sum"),
         "package.json": (True, "pnpm-lock.yaml"),
         "packages/web/package.json": (True, "pnpm-lock.yaml"),
