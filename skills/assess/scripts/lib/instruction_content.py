@@ -221,6 +221,7 @@ def _gitignored(root: Path, paths: list[str]) -> set[str]:
         proc = subprocess.run(
             ["git", "-C", str(root), "check-ignore", "--stdin"],
             input="\n".join(paths), capture_output=True, text=True,
+            encoding="utf-8", errors="surrogateescape",
             timeout=GIT_TIMEOUT_SECONDS, check=False, env=git_env(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -238,6 +239,7 @@ def _symbols_present(root: Path, names: list[str], self_rel: str) -> set[str] | 
     cmd += ["--", ".", f":(exclude){self_rel}"] if self_rel else []
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
+                              encoding="utf-8", errors="surrogateescape",
                               timeout=GIT_TIMEOUT_SECONDS, check=False, env=git_env())
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
@@ -302,8 +304,19 @@ def count_directory_trees(text: str) -> int:
 
 
 def overview_headings(text: str) -> list[str]:
-    """Headings that open a repository-overview section ("## Project structure")."""
-    return [line.strip() for line in text.splitlines() if _OVERVIEW_HEADING.match(line.strip())]
+    """Headings that open a repository-overview section ("## Project structure").
+
+    Lines inside fenced code are skipped: a ``# Overview`` comment in a shell
+    or Python fence is not a markdown heading.
+    """
+    headings: list[str] = []
+    in_fence = False
+    for line in text.splitlines():
+        if _FENCE.match(line):
+            in_fence = not in_fence
+        elif not in_fence and _OVERVIEW_HEADING.match(line.strip()):
+            headings.append(line.strip())
+    return headings
 
 
 def _comparable_lines(text: str) -> set[str]:

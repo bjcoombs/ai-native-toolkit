@@ -391,8 +391,8 @@ def detect_skills_dir(repo_root: Path) -> JsonDict:
     """Check for the presence of skills directories in the repo.
 
     Looks for `.claude/skills/` and `skills/` and counts the `*/SKILL.md`
-    files within. A repo with skills is using progressive disclosure, so a
-    large instruction file is not necessarily bloat.
+    files within. A repo with skills is using progressive disclosure, which
+    halves a large instruction file's size penalty but never waives it.
     """
     skills_paths = [
         repo_root / ".claude" / "skills",

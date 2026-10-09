@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import lib.command_index as command_index
@@ -155,3 +156,19 @@ def test_repo_files_in_git_lists_tracked_only(git_repo) -> None:
     _write(sub, {"inner.txt": ""})
     commit("nested")
     assert repo_files(sub) == frozenset({"inner.txt"})  # relative to the given root
+
+
+def test_non_utf8_tracked_filename_does_not_abort(git_repo) -> None:  # type: ignore[no-untyped-def]  # conftest fixture
+    """A tracked name that is not UTF-8 (added straight to the index, since
+    some filesystems refuse to create one) degrades, never raises."""
+    repo, commit = git_repo
+    _write(repo, {"Makefile": "check:\n\ttrue\n"})
+    commit("init")
+    blob = subprocess.run(["git", "-C", str(repo), "hash-object", "-w", "Makefile"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+    subprocess.run([b"git", b"-C", str(repo).encode(), b"update-index", b"--add", b"--cacheinfo",
+                    b"100644," + blob.encode() + b",caf\xe9.txt"], check=True)
+    files = repo_files(repo)
+    assert "Makefile" in files
+    assert len(files) == 2
+    assert build_index(repo).make_targets is not None

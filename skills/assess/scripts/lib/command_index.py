@@ -125,6 +125,8 @@ def _git_ls_files(root: Path) -> frozenset[str] | None:
         raw = subprocess.run(
             ["git", "-C", str(root), "ls-files", "-z"],
             capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            # A tracked filename that is not UTF-8 must not abort the run.
+            encoding="utf-8", errors="surrogateescape",
             env=git_env(),
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):

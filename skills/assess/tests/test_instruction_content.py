@@ -211,6 +211,12 @@ def test_overview_headings(heading: str, is_overview: bool) -> None:
     assert bool(overview_headings(heading + "\n")) is is_overview
 
 
+def test_overview_comment_inside_a_fence_is_not_a_heading() -> None:
+    text = "```bash\n# Overview\nmake check\n```\n```python\n## Project structure\n```\n"
+    assert overview_headings(text) == []
+    assert overview_headings(text + "## Overview\n") == ["## Overview"]
+
+
 def test_readme_overlap() -> None:
     readme = "\n".join(f"- This README line number {i} describes the project in detail." for i in range(10))
     copied = "\n".join(f"## This README line number {i} describes the project in detail." for i in range(5))

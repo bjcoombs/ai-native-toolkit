@@ -70,7 +70,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_wiki_writer.py` | `lib/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
 | `test_git_commit_info.py` | `lib/git_churn.py` (`git_commit_info`) - commit snapshot with SHA/timestamp for staleness warnings |
 | `test_instruction_bloat.py` | `lib/agent_instructions_grader.py` - size-curve penalty from 200 lines, halved by skills delegation, B cap past 400 lines or 4800 words |
-| `test_command_resolver.py` | `lib/command_resolver.py` - command extraction and per-runner resolution (resolved / missing / unknown) |
+| `test_command_resolver.py` | `lib/command_resolver.py` - command extraction and per-runner resolution (resolved / missing / external / unknown) |
 | `test_command_index.py` | `lib/command_index.py` - the per-repo target index: config parsing, tracked files, lenient families |
 | `test_instruction_content.py` | `lib/instruction_content.py` - stale path and symbol references, directory trees, overview headings, README overlap |
 | `test_accretion_ratchet.py` | `lib/accretion_ratchet.py` - the accretion-ratchet scanner (files that only ever grow) |
