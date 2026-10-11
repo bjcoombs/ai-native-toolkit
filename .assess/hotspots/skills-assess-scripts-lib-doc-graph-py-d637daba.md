@@ -35,4 +35,5 @@ Hotspot (persistent). 705 LOC, aggregate cyclomatic complexity 209 (worst functi
 
 ## Suggested actions
 
-This file is flagged but outside this run's Top 3. See the report's Top 3 Actions, or run a focused /assess pass for file-specific guidance.
+- Pin the survivor clusters in _derive_signals and build_doc_graph (305 of 1,315 mutants survive)
+

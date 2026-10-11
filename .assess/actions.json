@@ -44,7 +44,7 @@
       "files": [
         "skills/assess/tests/test_complexity_treemap.py"
       ],
-      "first_step": "Group its tests by the treemap stage they exercise (scoring backends, stats sidecar, layout, render) into test_complexity_treemap_<stage>.py files",
+      "first_step": "Group its tests by the treemap stage they exercise (scoring backends, stats sidecar, layout, render) into test_complexity_treemap_<stage>.py files, as #478 split the keyhole tests",
       "done_when": "Every new file is under 800 lines, the file's .file-size-ratchet.toml ceiling is deleted, and the collected test names and the treemap's line coverage are identical before and after",
       "scope_fence": "Move tests only; no assertion or fixture logic changes",
       "finding": "accretion_ratchet",
