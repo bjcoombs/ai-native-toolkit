@@ -100,11 +100,11 @@ runs:
       working-directory: ${{ github.action_path }}/skills/assess
       run: |
         mkdir -p "${GITHUB_WORKSPACE}/.assess"
-        uv run --no-dev scripts/complexity-treemap.py "${GITHUB_WORKSPACE}" \
+        uv run scripts/complexity-treemap.py "${GITHUB_WORKSPACE}" \
           -o "${GITHUB_WORKSPACE}/.assess/complexity-heatmap.svg" \
           --stats "${GITHUB_WORKSPACE}/.assess/complexity-stats.json"
-        uv run --no-dev scripts/assess_core.py "${GITHUB_WORKSPACE}"
-        uv run --no-dev scripts/assess_report.py "${GITHUB_WORKSPACE}"
+        uv run scripts/assess_core.py "${GITHUB_WORKSPACE}"
+        uv run scripts/assess_report.py "${GITHUB_WORKSPACE}"
 
     - name: Report a skipped assessment
       # Fires only when the render actually failed (not when it was skipped for
@@ -125,5 +125,5 @@ runs:
       # The single step whose exit code can fail the consumer's PR - and only
       # per their own config.toml opt-ins.
       run: |
-        uv run --no-dev scripts/assess_gate.py "${GITHUB_WORKSPACE}" \
+        uv run scripts/assess_gate.py "${GITHUB_WORKSPACE}" \
           --config "${GITHUB_WORKSPACE}/${{ inputs.config }}"

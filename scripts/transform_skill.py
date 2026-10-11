@@ -21,8 +21,13 @@ _FRONTMATTER_STRIP_PATTERN = re.compile(
 )
 
 # Always excluded from the ZIP regardless of per-skill config — these are tooling
-# artefacts that should never ship.
-REQUIRED_EXCLUDES: frozenset[str] = frozenset({"__pycache__", ".pytest_cache", ".venv"})
+# artefacts that should never ship. Matched against every path part, so a file
+# name works as well as a directory name. uv.lock pins the skill's dev
+# environment; the shipped scripts resolve from their PEP 723 blocks and never
+# read it.
+REQUIRED_EXCLUDES: frozenset[str] = frozenset(
+    {"__pycache__", ".pytest_cache", ".venv", "uv.lock"}
+)
 
 
 def strip_chat_skip(text: str) -> str:
@@ -182,8 +187,8 @@ def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly
     Returns validation issues; empty list means success. ZIP is not written if
     there are issues.
 
-    ``REQUIRED_EXCLUDES`` (``__pycache__``, ``.pytest_cache``, ``.venv``) are
-    always excluded in addition to *exclude_dirs* — callers cannot opt out of
+    ``REQUIRED_EXCLUDES`` (``__pycache__``, ``.pytest_cache``, ``.venv``,
+    ``uv.lock``) are always excluded in addition to *exclude_dirs* — callers cannot opt out of
     these tooling artefacts.
 
     ``bundle_files`` maps destination paths (relative to the skill root inside

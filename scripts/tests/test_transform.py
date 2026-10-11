@@ -182,6 +182,7 @@ def _make_fake_skill(root: Path) -> Path:
     (src / ".pytest_cache" / "v").write_text("cache")
     (src / ".venv").mkdir()
     (src / ".venv" / "pyvenv.cfg").write_text("home = /usr/bin")
+    (src / "uv.lock").write_text("version = 1\n")
     return src
 
 
@@ -202,6 +203,9 @@ def test_required_excludes_applied_even_when_caller_passes_empty_set(tmp_path):
         assert not any(forbidden in n for n in names), (
             f"{forbidden!r} leaked into ZIP: {names}"
         )
+    # Named explicitly: the loop above passes vacuously if an entry is dropped
+    # from REQUIRED_EXCLUDES itself.
+    assert not any(n.endswith("uv.lock") for n in names), names
 
 
 def test_bundled_markdown_is_marker_transformed(tmp_path):

@@ -12,8 +12,9 @@ dependencies = [
 # beyond the core deps, pinned by the committed uv.lock beside this file.
 # pyyaml: eight structural guards in tests/test_action_contract.py parse
 # action.yml / assess-gate.yml and pytest.skip without it.
-# The Assess Gate action runs the core with `uv run --no-dev`, so consumers
-# install only the [project] dependencies above.
+# This group never reaches Assess Gate consumers: every script the action runs
+# carries a PEP 723 inline block, so uv builds its environment from that block
+# and ignores this project, its groups and uv.lock.
 [dependency-groups]
 dev = [
     "pytest>=8.0",
