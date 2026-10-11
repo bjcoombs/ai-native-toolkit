@@ -7,13 +7,14 @@ name: Security
 #   themselves (the `actions` language catches untrusted-input injection in
 #   `run:` steps). Findings land in the Security tab as code-scanning alerts.
 # - pip-audit over the Python packages CI and the Assess Gate install: the
-#   deps declared in skills/assess/pyproject.toml and scripts/pyproject.toml,
-#   the test and lint tools tests.yml adds with `uv run --with`, and the PEP 723
+#   two uv projects (skills/assess/ and scripts/), read from their committed
+#   uv.lock files with the dev group the tests.yml jobs install, and the PEP 723
 #   inline deps of every `uv run` script (complexity-treemap.py runs in every
-#   consumer's Assess Gate, so it has the widest reach). Nothing commits a
-#   lockfile, so the audit resolves the same specifiers fresh, which is what a
-#   run installs that day. Each set is audited on its own because the scripts
-#   pin different Python floors and can resolve a shared package differently.
+#   consumer's Assess Gate, so it has the widest reach). The projects audit the
+#   exact pins CI runs; the scripts commit no lock, so their specifiers resolve
+#   fresh, which is what a run installs that day. Each set is audited on its
+#   own because the scripts pin different Python floors and can resolve a
+#   shared package differently.
 #
 # Runs on PRs and pushes to main, and weekly so new advisories against
 # unchanged code still surface.
@@ -63,17 +64,17 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
 
-      # Keep the tool list in step with the `uv run --with` flags in tests.yml.
-      # Every set is resolved with hashes so pip-audit can read the pins
-      # directly (--disable-pip) instead of installing them into a venv.
+      # Every set carries hashes so pip-audit can read the pins directly
+      # (--disable-pip) instead of installing them into a venv. --locked fails
+      # on a lock that no longer matches its pyproject.toml.
       - name: Resolve dependency sets
         run: |
           out="$RUNNER_TEMP/audit"
           mkdir -p "$out"
-          printf '%s\n' pytest pytest-cov pyyaml ruff mypy > "$out/ci-tools.in"
-          uv pip compile --quiet --generate-hashes --python-version 3.11 \
-            skills/assess/pyproject.toml scripts/pyproject.toml \
-            "$out/ci-tools.in" -o "$out/requirements-projects.txt"
+          uv export --locked --quiet --no-header --project skills/assess \
+            -o "$out/requirements-project-assess.txt"
+          uv export --locked --quiet --no-header --project scripts \
+            -o "$out/requirements-project-scripts.txt"
           grep -rl --include='*.py' --exclude-dir=.git --exclude-dir=fixtures \
             '^# /// script' . | sort | while read -r script; do
             # Name each set by its full path so same-named scripts never collide.

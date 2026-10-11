@@ -29,16 +29,18 @@ jobs:
       - name: Install ripgrep
         run: sudo apt-get update -q && sudo apt-get install -y -q ripgrep
 
-      # --with pyyaml: eight structural guards in tests/test_action_contract.py
-      # parse action.yml / assess-gate.yml and pytest.skip without PyYAML - a
-      # skipped guard is a decorative guard. skills/assess/pyproject.toml does
-      # not declare it, so the CI invocation supplies it.
+      # Tools come from the dev group in skills/assess/pyproject.toml, pinned
+      # by the committed uv.lock; --locked fails the step if the lock no longer
+      # matches pyproject.toml. pyyaml is in that group because eight structural
+      # guards in tests/test_action_contract.py parse action.yml /
+      # assess-gate.yml and pytest.skip without it - a skipped guard is a
+      # decorative guard. `make check` runs the same command.
       # Line coverage is gated by a floor: [tool.coverage.report] fail_under
       # in skills/assess/pyproject.toml fails this step below it. A ratchet -
       # raise it when coverage rises (CLAUDE.md, "What this repo doesn't have").
       - name: Run pytest
         run: >-
-          uv run --with pytest --with pytest-cov --with pyyaml pytest -v
+          uv run --locked pytest -v
           --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
         working-directory: skills/assess
 
@@ -64,7 +66,7 @@ jobs:
       # it when coverage rises (CLAUDE.md, "What this repo doesn't have").
       - name: Run pytest
         run: >-
-          uv run --with pytest --with pytest-cov pytest -v
+          uv run --locked pytest -v
           --cov=. --cov-report=term --cov-report=xml:coverage.xml
         working-directory: scripts
 
@@ -118,15 +120,24 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
 
+      # Lock freshness: each package's uv.lock must match its pyproject.toml.
+      # The --locked runs below would also refuse a stale lock; this step fails
+      # first and names the cause, so a pyproject edit without `uv lock` reads
+      # as a lock problem rather than a lint or type failure.
+      - name: Lockfiles match pyproject.toml
+        run: |
+          (cd skills/assess && uv lock --check)
+          (cd scripts && uv lock --check)
+
       # Layer 3 complexity ratchet + pyflakes/pycodestyle gate (issue #77).
       # Config (threshold, exclusions, per-function noqa) lives in each
       # pyproject.toml so the gate is identical locally and in CI.
       - name: Ruff lint + complexity gate (skills/assess)
-        run: uv run --with ruff ruff check .
+        run: uv run --locked ruff check .
         working-directory: skills/assess
 
       - name: Ruff lint + complexity gate (scripts)
-        run: uv run --with ruff ruff check .
+        run: uv run --locked ruff check .
         working-directory: scripts
 
       # Layer 2 type gate (issue #79). mypy strict, disallow_any_generics
@@ -134,7 +145,7 @@ jobs:
       # (lib/), the orchestrators and the SVG renderers. Config in
       # skills/assess/pyproject.toml selects the files and checks.
       - name: Mypy type gate (skills/assess)
-        run: uv run --with mypy mypy
+        run: uv run --locked mypy
         working-directory: skills/assess
 
       # Same gate, full strict, for the build pipeline and contract tooling;
@@ -142,5 +153,5 @@ jobs:
       # excluded) and relaxes per module only the flags floor-protected code
       # fails today.
       - name: Mypy type gate (scripts)
-        run: uv run --with mypy mypy
+        run: uv run --locked mypy
         working-directory: scripts

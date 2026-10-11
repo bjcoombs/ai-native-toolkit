@@ -4,9 +4,14 @@ version = "0.1.0"
 description = "Build pipeline for standalone skill ZIPs"
 requires-python = ">=3.11"
 
+# Everything the CI jobs in .github/workflows/tests.yml and `make check` run,
+# pinned by the committed uv.lock beside this file.
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
 ]
 
 [tool.pytest.ini_options]
