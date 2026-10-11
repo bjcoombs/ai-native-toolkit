@@ -83,6 +83,12 @@ The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.m
 
 ## Docs
 
+- [Contributing: north star](./contributing/north-star.md) - the goal every skill and report serves, the three contributor tendencies the guardrails trace to, and the feature test for any change.
+- [Contributing: CI and merge gates](./contributing/ci.md) - workflows, branch protection, the type gate, the file-size ratchet, the floor, mutation testing, CodeQL and the coverage floor.
+- [Contributing: marathon notes](./contributing/marathon.md) - the reasoning behind the `## Marathon Configuration` values in `CLAUDE.md`: bot reviewers, the claude-review four-state rule, non-blocking checks, the version hot file.
+- [Contributing: releasing](./contributing/release.md) - cutting the per-marathon release and refreshing the Marketplace listing.
+- [Contributing: standalone skill pipeline](./contributing/standalone-skills.md) - how the standalone ZIPs are built, vendored and marker-transformed.
+- [Contributing: /assess architecture](./contributing/assess-architecture.md) - the deterministic core, the inward-only layering, the `.assess/` wiki and the LLM write-back.
 - [Testing a branch locally](./testing-a-branch-locally.md) - run an unmerged branch's `SKILL.md` and scripts as a real plugin against a target repo.
 - [Design history](./superpowers/README.md) - the plans and specs behind the skills as they were built.
 - [Modernization programme (2026-09)](./design/2026-09-modernization/README.md) - intent, recorded probes, and the eleven workstream specs behind the multi-plugin split.

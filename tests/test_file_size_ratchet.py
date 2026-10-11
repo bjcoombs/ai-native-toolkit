@@ -1,11 +1,12 @@
 """File-size ratchet: Python files under the configured roots may shrink, not grow.
 
-Guards the accretion tendency named in CLAUDE.md's North star: an agent
-appends feature after feature and nothing in that loop asks for a split, so
-files only grow. Every Python file under the roots in `.file-size-ratchet.toml`
-gets `default_limit` lines; a file already over it is allowlisted with its
-line count as its ceiling. The failure messages point at splitting first and
-at the allowlist only for justified growth.
+Guards the accretion tendency named in the North star (CLAUDE.md, in full in
+docs/contributing/north-star.md): an agent appends feature after feature
+and nothing in that loop asks for a split, so files only grow. Every Python
+file under the roots in `.file-size-ratchet.toml` gets `default_limit` lines;
+a file already over it is allowlisted with its line count as its ceiling.
+The failure messages point at splitting first and at the allowlist only for
+justified growth.
 
 The ceiling also follows a file down: once an allowlisted file sits more than
 the shrink slack below its ceiling, the test fails until the ceiling is

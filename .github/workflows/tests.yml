@@ -35,7 +35,7 @@ jobs:
       # not declare it, so the CI invocation supplies it.
       # Line coverage is gated by a floor: [tool.coverage.report] fail_under
       # in skills/assess/pyproject.toml fails this step below it. A ratchet -
-      # raise it when coverage rises (CLAUDE.md, "What this repo doesn't have").
+      # raise it when coverage rises (docs/contributing/ci.md, "Coverage floor").
       - name: Run pytest
         run: >-
           uv run --with pytest --with pytest-cov --with pyyaml pytest -v
@@ -61,7 +61,7 @@ jobs:
 
       # Line coverage is gated by a floor: [tool.coverage.report] fail_under
       # in scripts/pyproject.toml fails this step below it. A ratchet - raise
-      # it when coverage rises (CLAUDE.md, "What this repo doesn't have").
+      # it when coverage rises (docs/contributing/ci.md, "Coverage floor").
       - name: Run pytest
         run: >-
           uv run --with pytest --with pytest-cov pytest -v
