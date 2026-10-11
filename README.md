@@ -379,6 +379,7 @@ ai-native-toolkit/
 ├── FLOOR.md                           # Constitutional floor of the acceptance-contract workflow
 ├── .file-size-ratchet.toml            # Line limits for Python files: 800 by default, recorded ceilings for larger files
 ├── action.yml                         # AI-Readiness Assess Gate composite action
+├── Makefile                           # make setup (locked uv environments), make check (the required CI checks)
 ├── .claude-plugin/
 │   ├── plugin.json                    # Plugin manifest (enables /plugin install)
 │   └── marketplace.json               # Marketplace entry (enables /plugin marketplace add)

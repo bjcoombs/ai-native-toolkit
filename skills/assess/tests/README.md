@@ -185,14 +185,17 @@ than widening a budget to fit the tracer.
 
 ```bash
 # From skills/assess/
-uv run --with pytest --with pyyaml pytest tests/ -v
+uv run --locked pytest tests/ -v
 
 # With line coverage, as CI runs it (fails below fail_under in pyproject.toml)
-uv run --with pytest --with pytest-cov --with pyyaml pytest -v \
+uv run --locked pytest -v \
   --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
 ```
 
-`pyyaml` lets the structural guards in `test_action_contract.py` parse YAML; without it
-they skip. `conftest.py` neutralises global git config, so the suite needs no
+From the repository root, `make test-assess` runs the coverage command and `make check`
+runs every required CI check. The dev group in `pyproject.toml`, pinned by `uv.lock`,
+supplies pytest, pytest-cov, `pyyaml`, ruff and mypy; `--locked` refuses a lock that
+no longer matches `pyproject.toml` (run `uv lock` after editing it). `pyyaml` lets the
+structural guards in `test_action_contract.py` parse YAML; without it they skip. `conftest.py` neutralises global git config, so the suite needs no
 `GIT_CONFIG_GLOBAL=/dev/null` prefix. Scripts run outside pytest, such as
 `assess_core.py`, still read global config.
