@@ -129,8 +129,8 @@ enable_error_code = ["ignore-without-code"]
 # checked out. /assess's walks do not descend the link (treemap entries are
 # keyed by resolved path), so nothing is counted twice. Run locally from
 # skills/assess, then remove mutants/ (gitignored, and skipped by /assess):
-#   uv run --with mutmut==3.8.0 --with pytest mutmut run
-#   uv run --with mutmut==3.8.0 --with pytest mutmut results   # survivors
+#   uv run --locked --with mutmut==3.8.0 mutmut run
+#   uv run --locked --with mutmut==3.8.0 mutmut results   # survivors
 #   rm -rf mutants
 source_paths = ["src"]
 only_mutate = [
