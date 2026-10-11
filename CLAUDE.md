@@ -16,18 +16,17 @@ Make an AI contributor feel like an engineer eighteen months into the org: the c
 
 ## Commands
 
-Run from the repo root unless a `cd` says otherwise.
+Run from the repo root.
 
 ```bash
-make setup                  # install the tooling the checks need
-make check                  # every CI suite plus ruff and mypy: run before pushing
+make setup                  # sync the locked dev environments (uv), warn if rg is missing
+make check                  # every merge-gating suite, lint and type check: run before pushing
 
-# The same checks one at a time, as CI runs them:
-(cd skills/assess && uv run --with pytest --with pytest-cov --with pyyaml pytest -q)
-(cd scripts && uv run --with pytest --with pytest-cov pytest -q)
-uv run --with pytest --with pyyaml pytest -q tests/
-(cd skills/assess && uv run --with ruff ruff check . && uv run --with mypy mypy)
-(cd scripts && uv run --with ruff ruff check . && uv run --with mypy mypy)
+# One gate at a time (Makefile targets mirroring the tests.yml jobs; `make help` lists them):
+make test-assess            # skills/assess pytest, with its coverage floor
+make test-scripts           # scripts/ pytest, with its coverage floor
+make test-contract          # plugin contract pytest (tests/)
+make lint                   # ruff and mypy for both packages
 
 bash scripts/build-standalone-skills.sh   # standalone ZIPs into dist/standalone-skills/
 ```
@@ -82,7 +81,7 @@ Claude Code's docs call flat `commands/<name>.md` files the older form of skills
 - A user-invoked skill that orchestrates agents names the agent explicitly; a pure orchestrator (no subagent invocation) says so in its body.
 - Relative markdown links resolve. For an illustrative file mention use inline code (`` `CLAUDE.md` ``), not a clickable link.
 - No line-starting git conflict marker in any authored markdown; write a marker as inline code.
-- mypy `strict` with `disallow_any_generics`: no bare `dict` or `list` (use a `TypedDict` from `lib/run_context_types.py`), and every `# type: ignore` carries a code.
+- mypy `strict` with `disallow_any_generics`: no bare `dict` or `list` (use a `TypedDict`; shared run-context and orchestrator file shapes live in `lib/run_context_types.py`), and every `# type: ignore` carries a code.
 - **File-size ratchet.** Python files under `skills/assess/` and `scripts/` stay under 800 lines, or under their `[ceilings]` entry in `.file-size-ratchet.toml`. Split a file rather than raise its ceiling; a ceiling follows its file down.
 - **Coverage floor.** `fail_under` in each package's `pyproject.toml` (93 for `skills/assess`, 91 for `scripts/`) only rises; lowering it needs a stated reason in the PR.
 - `/assess` layering is inward-only: a `lib/` module never imports an orchestrator script (`skills/assess/tests/test_self_architecture.py`). Add a test alongside any change to a deterministic module, and update `skills/assess/scripts/lib/README.md` (the per-module reference and co-change seam map) with it.
