@@ -244,6 +244,8 @@ _... 5 more omitted; top 10 ranked rows in `.assess/run-context.json` `attention
 - **Layer 3:** the new `agent_environment.py` and `agent_harness.py` functions at lizard ccn 17-20 pass ruff's mccabe at 15; watch them rather than refactor.
 - **Layer 6 to Present:** Action 1 after #410; then the `doc_graph.py` and `keyhole_signals.py` survivor clusters.
 - **Coverage for `/assess`:** `make check` writes `coverage.xml` per package, which `/assess` does not read; a `make coverage` target running the root recipe would remove a manual step.
+- **Floor follow-up (sign-off needed):** `scripts/floor_check.py` still accepts the old `commands/<x>.md` component paths, as `scripts/tests/test_floor_check.py` asserts.
+- **claude-review prompt:** `.github/claude-review-instructions.md` still says the only runtime code is the `/assess` core, which leaves out `scripts/`.
 - **Open issues:** coverage-gate detector refinements (#488); whether to detect contradicting docs (#491).
 
 </details>
