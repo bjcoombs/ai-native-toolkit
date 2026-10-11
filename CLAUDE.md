@@ -91,9 +91,9 @@ Claude Code's docs call flat `commands/<name>.md` files the older form of skills
 
 ## CI
 
-`main` has branch protection (`enforce_admins: true`, 0 required approvals). Seven checks must be green: `skills/assess pytest`, `scripts/ pytest`, `plugin contract pytest`, `ruff + mypy gates`, `Validate PR title`, `floor enforcement`, `floor self-anchor`. PR titles follow conventional-commit format. CI runs only on PRs to `main` and pushes to `main`. A red test is a real regression; the core is deterministic.
+`main` has branch protection (`enforce_admins: true`, 0 required approvals). Seven checks must be green: `skills/assess pytest`, `scripts/ pytest`, `plugin contract pytest`, `ruff + mypy gates`, `Validate PR title`, `floor enforcement`, `floor self-anchor`. PR titles follow conventional-commit format. CI installs from the committed `uv.lock` files (`uv run --locked`), and the `Lockfiles match pyproject.toml` step fails on a stale one: a dependency edit commits the re-locked `uv.lock` (run `uv lock` in that package). CI runs only on PRs to `main` and pushes to `main`. A red test is a real regression; the core is deterministic.
 
-Workflows, the type gate, the ratchet and coverage details, mutation testing, CodeQL and the coverage recipe for `/assess`: `docs/contributing/ci.md`.
+Workflows, lockfiles, the type gate, the ratchet and coverage details, mutation testing, CodeQL and the coverage recipe for `/assess`: `docs/contributing/ci.md`.
 
 ## Marathon Configuration
 

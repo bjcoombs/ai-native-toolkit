@@ -14,6 +14,10 @@ The CI reference for `ai-native-toolkit`, moved out of the root `CLAUDE.md` so i
 
 **CI triggers only on `main`** (`pull_request`/`push` to `main`, plus the weekly `schedule` in `codeql.yml`). A PR targeting `main` gets `tests.yml` + `pr-lint.yml` on every synchronize; pushes to other branches with no open PR run neither.
 
+## Lockfiles
+
+`skills/assess/` and `scripts/` each commit a `uv.lock`, and CI installs from them with `uv run --locked`. The `Lockfiles match pyproject.toml` step in `ruff + mypy gates` runs `uv lock --check` in both packages and fails first on a stale lock, so a `pyproject.toml` edit without `uv lock` reads as a lock problem rather than a lint or type failure. A dependency edit commits the re-locked `uv.lock` in the same PR.
+
 ## The type gate
 
 mypy runs `strict` over all of `skills/assess/scripts/` (lib, orchestrators, renderers) with `disallow_any_generics` on for every module and no per-module exception, so a bare `dict` or `list` fails. Known shapes are `TypedDict`s: shared run-context rows and the orchestrators' file shapes, the stats sidecar and `finalize-input.json`, live in `lib/run_context_types.py`; `dict[str, Any]` is for blocks whose keys genuinely vary.
@@ -72,7 +76,7 @@ The `/assess` opt-in mutation pass runs this config as checked out, narrowed to 
 
 ## Security scanning
 
-`.github/workflows/codeql.yml` (workflow `Security`) runs CodeQL over Python, JavaScript (`scripts/canaries/*.mjs`) and the workflows themselves, plus `pip-audit` over the Python packages CI and the Assess Gate install (both `pyproject.toml` files, the `tests.yml` tools, and every script's PEP 723 inline deps), on every PR, push to `main` and weekly. Advisory, and the two parts fail differently:
+`.github/workflows/codeql.yml` (workflow `Security`) runs CodeQL over Python, JavaScript (`scripts/canaries/*.mjs`) and the workflows themselves, plus `pip-audit` over the Python packages CI and the Assess Gate install (the locked dependency sets of both uv projects, `skills/assess/` and `scripts/`, exported with their dev groups from the committed `uv.lock` files, and every script's PEP 723 inline deps, which commit no lock and resolve fresh), on every PR, push to `main` and weekly. Advisory, and the two parts fail differently:
 
 - A `CodeQL (<lang>)` job goes red only when analysis itself fails. Its alerts land in the Security tab and in a separate `CodeQL` code-scanning check, so a green job does not mean no findings.
 - `pip-audit` goes red on a known vulnerability or, under `--strict`, on a resolver error, so read the log before acting.
