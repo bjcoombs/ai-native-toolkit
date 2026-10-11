@@ -127,7 +127,7 @@ No human reviewers on this repo.
 - **Required (merge-gating) checks**: `skills/assess pytest`, `scripts/ pytest`, `plugin contract pytest`, `ruff + mypy gates`, `Validate PR title`, `floor enforcement`, `floor self-anchor`.
 - **Non-blocking checks**: `CodeRabbit`, `Auto-label from PR title`, `canary suite (semantic layer)`, `canary path filter`, `floor sign-off summary`, `floor sign-off` (gates indirectly via `floor enforcement`), `build`, `mutmut (assess core)`, `CodeQL (python)`, `CodeQL (javascript-typescript)`, `CodeQL (actions)`, `CodeQL`, `pip-audit`, `claude-review` (confirm its `Commit:` line matches the head).
 - **`AI-readiness regression gate`**: effectively required and re-runs on every base advance; not in the branch-protection list, but `gh pr merge` is refused while it runs. Wait for it per PR, or merge with `--admin` once the seven required checks are green.
-- **Hot file on every PR**: `.claude-plugin/plugin.json` `.version`. Assign each teammate its target version at spawn (final) and merge sequentially, highest wins. Never give parallel PRs identical bumps: the last-merging PR bumps one step higher so the standalone bundle republishes.
+- **Hot file on every PR**: `.claude-plugin/plugin.json` `.version`. Assign each teammate its target version at spawn (final) and merge sequentially, highest wins. Never give parallel PRs identical bumps: the last-merging PR bumps one step higher (or the wave bumps once at the end) so the standalone bundle republishes.
 
 ### GitHub Issues (for `/issues`)
 
