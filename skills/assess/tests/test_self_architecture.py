@@ -86,7 +86,7 @@ def test_core_does_not_import_orchestrators() -> None:
 
     assert not violations, (
         "deterministic core must not import the orchestrator layer "
-        "(dependencies point inward - see CLAUDE.md /assess architecture):\n  "
+        "(dependencies point inward - see docs/contributing/assess-architecture.md):\n  "
         + "\n  ".join(violations)
     )
 

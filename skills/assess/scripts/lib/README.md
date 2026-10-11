@@ -70,7 +70,7 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
 - **`scripts/` (standalone build) <-> `skills/`.** The standalone-skill build under
   `scripts/` vendors and transforms the very skills it packages, so a change to a skill's
   shape and the build that ships it co-change by construction. That seam is documented in
-  `CLAUDE.md`'s "Standalone skill pipeline" section; it is cohesion between a packager and
+  `docs/contributing/standalone-skills.md`; it is cohesion between a packager and
   the thing it packages, not a leak.
 - **The `actions/checkout` pin across `.github/workflows/*`,
   `skills/assess/templates/assess-gate.yml.template` and `README.md`.** The gate the
