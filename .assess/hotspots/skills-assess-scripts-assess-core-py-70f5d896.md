@@ -1,7 +1,7 @@
-<!-- assess:run_id=20261008175925-32cb78d4 artifact_schema_version=1.3.0 -->
+<!-- assess:run_id=20261011125246-0d249381 artifact_schema_version=1.4.0 -->
 # Hotspot: `skills/assess/scripts/assess_core.py`
 
-_First flagged: 2026-05-31. Last seen: 2026-10-08. Status: persistent._
+_First flagged: 2026-05-31. Last seen: 2026-10-11. Status: persistent._
 
 ## Current metrics
 
@@ -10,7 +10,7 @@ _First flagged: 2026-05-31. Last seen: 2026-10-08. Status: persistent._
 | LOC | 397 |
 | Cyclomatic complexity (file aggregate) | 26 |
 | Worst function | `build_run_context` (13) |
-| Commits in churn window | 69 |
+| Commits in churn window | 70 |
 | Has test file | yes |
 
 ## History across runs
@@ -25,12 +25,13 @@ _First flagged: 2026-05-31. Last seen: 2026-10-08. Status: persistent._
 | 2026-10-08 | d0c68d2e | 394 | 26 | 67 | persistent |
 | 2026-10-08 | de900b5c | 394 | 26 | 68 | persistent |
 | 2026-10-08 | 32cb78d4 | 397 | 26 | 69 | persistent |
+| 2026-10-11 | 0d249381 | 397 | 26 | 70 | persistent |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/scripts/assess_core.py`:
 
-Hotspot (persistent). 397 LOC, aggregate cyclomatic complexity 26 (worst function `build_run_context` 13), 69 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
+Hotspot (persistent). 397 LOC, aggregate cyclomatic complexity 26 (worst function `build_run_context` 13), 70 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
 
 ## Suggested actions
 

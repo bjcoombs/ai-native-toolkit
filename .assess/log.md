@@ -159,3 +159,16 @@
 
 ---
 <!-- chain:5fc603afefd3a63b -->
+<!-- assess:run_id=20261011125246-0d249381 artifact_schema_version=1.4.0 -->
+## 2026-10-11 (v1.96.0, run 0d249381)
+
+- **Files scored:** 244
+- **AI Readiness:** 7.5 / 8 (AI-Native)
+- **Instructions grade:** A
+- **Hotspot transitions:** 0 graduated, 0 regressed, 0 restructured, 0 new, 10 persistent
+- **Top action:** Strengthen scripts/floor_anchor.py's tests to pin observable behaviour, written from FLOOR.md's clause text, once the #410 decision on clause iii is made
+
+[Full report](./assess-report.md)
+
+---
+<!-- chain:08dc3a03e8e5e473 -->

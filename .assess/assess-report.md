@@ -1,18 +1,16 @@
 # Codebase Assessment: ai-native-toolkit
 
-_Generated 2026-10-08 by `/assess` 1.95.0 (`main` 08735da with #503-#509, plus this branch's version bump), measuring `0bd9b71`: `main` plus the dangling-link fix in this assessment's branch._
+_Generated 2026-10-11 by `/assess` 1.96.0 (`main` ef225e2 with #516-#522, plus this branch's version bump), measuring `0e884f26fdb7`: `main` plus the docs-index link fix and the version bump in this assessment's branch._
 
 **Score: 7.5 / 8 - AI-Native** - a readiness snapshot, not a verdict · Keyhole: 24 structural concerns (12 hidden coupling, 1 untrusted hotspot, 2 self-referential tests, 9 accretion ratchet), 3 safe zones.
 
-The plugin now has the layout Claude Code documents. The seven slash workflows moved from the legacy `commands/` directory to user-invoked skills with unchanged names (#505); the agent catalog stopped loading as a bogus `README` agent (#507); every agent uses a documented colour, and a contract test keeps it that way (#503). `/assess` can now see this class of problem in any repo: its `claude_config` scan (#506) flagged all of it on the old tree and reports nothing today. The project also has a front door at https://bjcoombs.github.io/ai-native-toolkit/ (#504).
-
-The score holds at 7.5. One figure fell because it was corrected, not because anything got worse: `base_doc_dir_ratio` used to count READMEs in directories with no code, and the honest reading is 0.154 (#508). The last half point is still Layer 6, `scripts/floor_anchor.py`, which waits on the maintainer's floor decision in #410.
+This loop taught `/assess` to grade instruction files on commands that resolve and on size (#517), to score the agent's working environment inside Layer 5 (#520), and to list what committed agent configuration runs (#516) and how nested instruction files load (#518). Both new rules would have marked this repo down a week ago: before #521 there was no setup target and no lockfile, so Layer 5 capped at Partial, and before #522 `CLAUDE.md` was 5,202 words and graded B/59 under the size cap. Both are fixed, so the score holds at 7.5; the last half point is still Layer 6, `scripts/floor_anchor.py`, which waits on the maintainer's floor decision in #410.
 
 > **Agents start here.** The prioritized Top 3 actions below are also machine-readable in `.assess/actions.json` (schema v2: every entry carries `rank`, `action`, `done_when`, and `scope_fence`, plus the lifecycle fields `status` / `claimed_by` / `completed_sha` and a derived execution `mode`). Read that file to pick up the work - even with a smaller model - without parsing this report's prose.
 
 ## Top 3 Actions
 
-All three are the prescribed attention rows, unchanged from #499: the two floor scripts with same-commit tests, then the test file that only ever grows. Action 1 is the only path to Layer 6 Present.
+All three are the prescribed attention rows, unchanged from #510: the two floor scripts with same-commit tests, then the test file that only ever grows. Action 1 is the only path to Layer 6 Present.
 
 | # | Action | Layer | Effort | Command / First Step | Done when | Scope fence | Hotspot files this addresses | Issue |
 |---|--------|-------|--------|---------------------|-----------|-------------|------------------------------|-------|
@@ -24,7 +22,7 @@ The top rows score 3 and 2, so the ranking separates them. No gap action is pend
 
 ### Why these three?
 
-The floor is the repo's constitutional gate, and its anchor checker is the one file the mutation pass proves hollow. Both floor actions wait on the maintainer, and Action 1 is the one that moves Layer 6. Action 3 retires the largest remaining test-file ceiling; since #498 the ratchet follows a file down, so lines a split removes can come back only through a ceiling raise someone reviews.
+The floor is the repo's constitutional gate, and its anchor checker is the one file the mutation pass proves hollow. Both floor actions wait on the maintainer, and Action 1 is the one that moves Layer 6. Action 3 retires the largest remaining test-file ceiling; the ratchet follows a file down, so lines a split removes can come back only through a ceiling raise someone reviews.
 
 ## Snapshots
 
@@ -32,40 +30,41 @@ The floor is the repo's constitutional gate, and its anchor checker is the one f
 
 [![Complexity hotspot](./complexity-heatmap.svg)](./complexity-heatmap.svg)
 
-The risk sits in `skills/assess/`, and no function in the top hotspots exceeds ccn 15. `floor_anchor.py` carries the survivor hatching.
+The risk sits in `skills/assess/`. No top-five hotspot has a function above ccn 15, though the loop's new modules add several functions lizard scores at 17-20 that ruff's mccabe passes (Layer 3 below). `floor_anchor.py` carries the survivor hatching.
 
 ### Doc navigability - can an agent find its way?
 
 [![Doc map](./doc-graph.svg)](./doc-graph.svg)
 
-Every doc is reachable from an entry point, with no orphans, one island, no broken links and no lying maps.
+Every doc is reachable from an entry point, with no orphans, one island, no broken links and no lying maps, after this branch linked the one orphan the first pass found.
 
 <details>
 <summary>📈 Snapshot detail (commit, hotspots, navigability, lying maps)</summary>
 
 #### Complexity profile
 
-- **Measured at commit:** `0bd9b71` (2026-10-08)
-- **Files scored:** 224
+- **Measured at commit:** `0e884f26fdb7` (2026-10-11)
+- **Files scored:** 244
 - **Churn window chosen:** last 12mo
-- **Complexity profile:** per-function ccn p95 8 (max 33, `authorship_analysis` in `lib/change_coupling.py`, under an explicit `# noqa: C901` with a reason; ruff's mccabe scores it 19); file-aggregate ccn p95 147 (max 247); p95 est. tokens 9,648 (max 19,417); p95 NLOC 570 (max 1,227)
-- **Top hotspots** (composite `sqrt(ccn) × sqrt(1 + commits) × sqrt(est_tokens)`). Sizes are NLOC (code lines); `ccn` is the **file aggregate**, with the worst single function in parentheses:
-  1. `skills/assess/scripts/complexity-treemap.py` - 17,610 est. tokens (847 NLOC), aggregate ccn 214 (worst function `lizard_scores` 14), 33 commits in window
+- **Complexity profile:** per-function ccn p95 9 (max 33, `authorship_analysis` in `lib/change_coupling.py`, under an explicit `# noqa: C901` with a reason); file-aggregate ccn p95 152 (max 264, `lib/command_resolver.py`, new in #517, worst function 15); p95 est. tokens 9,313 (max 19,417; code 19,417, data 1,572); p95 NLOC 545 (max 1,227; code 1,227, data 78)
+- **Top hotspots** (composite `sqrt(effective_ccn) × sqrt(1 + commits) × sqrt(est_tokens)`, with `effective_ccn` the file aggregate weighted toward its worst function; a co-change breadth term was tested and left out, see `skills/assess/references/hotspot-cochange-experiment.md`). Sizes are NLOC (code lines); `ccn` is the **file aggregate**, with the worst single function in parentheses:
+  1. `skills/assess/scripts/complexity-treemap.py` - 17,610 est. tokens (847 NLOC), aggregate ccn 214 (worst function `lizard_scores` 14), 34 commits in window
   2. `skills/assess/scripts/lib/keyhole_signals.py` - 17,957 est. tokens (860 NLOC), aggregate ccn 247 (worst function `render_findings_markdown` 11), 26 commits in window
-  3. `skills/assess/scripts/assess_core.py` - 9,247 est. tokens (397 NLOC), aggregate ccn 26 (worst function `build_run_context` 13), 69 commits in window
+  3. `skills/assess/scripts/assess_core.py` - 9,238 est. tokens (397 NLOC), aggregate ccn 26 (worst function `build_run_context` 13), 70 commits in window
   4. `skills/assess/scripts/lib/doc_graph.py` - 12,110 est. tokens (705 NLOC), aggregate ccn 209 (worst function `_derive_signals` 15), 23 commits in window
-  5. `skills/assess/tests/test_complexity_treemap.py` - 19,417 est. tokens (1,227 NLOC), aggregate ccn 189 (worst function `test_write_stats_tie_break_by_path_takes_first_ten_in_path_order` 6), 25 commits in window
-- **Keyhole budget:** the repo is ~822k est. tokens. No single file exceeds the ~200k keyhole budget; 1 subtree does: `skills`.
+  5. `skills/assess/tests/test_complexity_treemap.py` - 19,417 est. tokens (1,227 NLOC), aggregate ccn 189 (worst function `test_write_stats_tie_break_by_path_takes_first_ten_in_path_order` 6), 26 commits in window
+- **Per-function coverage:** no per-function data for Makefile, TOML (scored at file level only).
+- **Keyhole budget:** the repo is ~889k est. tokens. No single file exceeds the ~200k keyhole budget; 1 subtree does: `skills` (~730k).
 
 Size encodes estimated tokens, colour cyclomatic complexity, saturation recent churn.
 
-**Hatching:** the opt-in mutation pass ran, and both groups produced records through the `uv` runner. `scripts/floor_anchor.py` (437 of 1,017 survive, density 0.43) is hatched; `skills/assess/scripts/lib/doc_graph.py` (305 of 1,315, density 0.23) is not. The pass mutates only focus files, so `keyhole_signals.py` and `mutmut3.py` have no figure here; the weekly CI run covers `keyhole_signals.py`.
+**Hatching:** the opt-in mutation pass ran two complete groups through the `uv` runner. `scripts/floor_anchor.py` (437 of 1,017 survive, density 0.43) is hatched; `skills/assess/scripts/lib/doc_graph.py` (305 of 1,315, density 0.23) is not. Both figures equal #510's: neither file changed this loop. The pass mutates only focus files, so `keyhole_signals.py` has no figure here; the weekly CI run covers it.
 
 #### Where to focus testing
 
 Coverage data: `coverage.xml` (Cobertura)
 
-Coverage gate: `scripts/pyproject.toml:41` (`[tool.coverage.report] fail_under` 91); `skills/assess/pyproject.toml:38` (`[tool.coverage.report] fail_under` 93)
+Coverage gate: `scripts/pyproject.toml:46` (`[tool.coverage.report] fail_under` 91); `skills/assess/pyproject.toml:49` (`[tool.coverage.report] fail_under` 93)
 
 | File | Risk | Test Signal | Suggested Action |
 |------|------|-------------|------------------|
@@ -74,20 +73,20 @@ Coverage gate: `scripts/pyproject.toml:41` (`[tool.coverage.report] fail_under` 
 | `skills/assess/tests/test_assess_core.py` | Medium | Test file present, coverage unmeasured | Measure coverage |
 | `scripts/floor_anchor.py` | Low | Covered but hollow | Strengthen assertions |
 
-The test files show as unmeasured because coverage measures source, not the tests themselves. The mutation pass confirms `floor_anchor.py` as hollow (the `untrusted_hotspot` finding) and puts `doc_graph.py` under the hollow threshold.
+The test files show as unmeasured because coverage measures source, not the tests themselves. The mutation pass confirms `floor_anchor.py` as hollow (the `untrusted_hotspot` finding) and puts `doc_graph.py` under the hollow threshold. The `coverage.xml` comes from the repo-root recipe in `docs/contributing/ci.md`; `make check` writes per-package reports that `/assess` does not read.
 
 #### Doc navigability
 
-Of 111 docs, all are reachable from `CLAUDE.md`, `README.md` or `docs/index.md` by links and backticked doc paths, with no orphans, one connected island and no broken links. Links alone reach 93%; backticked citations carry the rest. The first pass of this run found one broken link, `docs/superpowers/README.md` pointing at the `commands/README.md` that #505 removed; it is fixed in 0bd9b71. The plugin contract suite's link check covers shipped skill files, not `docs/`, which is why #505 did not catch it.
+Of 118 docs, all are reachable from `CLAUDE.md`, `README.md` or `docs/index.md` by links and backticked doc paths, with no orphans, one connected island and no broken links. Links alone reach 93%; backticked citations carry the rest. The first pass of this run found one orphan, `skills/assess/references/hotspot-cochange-experiment.md` from #519: the report template cites it as `references/hotspot-cochange-experiment.md`, a path that does not resolve from `skills/assess-findings/`. This branch links it from `docs/index.md`.
 
-**Base docs per code directory:** 2 of 13 code-containing directories hold their own base doc (`skills/assess/scripts/lib/`, `skills/assess/tests/`), a ratio of 0.154. The figure read 0.769 before #508 because READMEs in directories with no code (the root, `docs/`, `agents/`, `skills/`) counted. Undocumented code directories include `scripts/`, `scripts/contract/`, `scripts/canaries/`, `skills/assess/scripts/` and `lib/test_pressure/`; `CLAUDE.md` covers them in prose, so an agent still reaches them through one hub.
+**Base docs per code directory:** 2 of 13 code-containing directories hold their own base doc (`skills/assess/scripts/lib/`, `skills/assess/tests/`), a ratio of 0.154, unchanged from #510. `CLAUDE.md` covers the rest in prose, so an agent still reaches them through one hub.
 
 **Lying maps:** none. The top stale hubs (`FLOOR.md`, `docs/floor-anchor-proof.md`) are matched only against whole-repo churn (low confidence).
 
 #### What changed since last run
 
 - **Graduated, regressed, restructured, new:** none.
-- **Persistent:** the same ten top hotspots as #499.
+- **Persistent:** the same ten top hotspots as #510.
 
 </details>
 
@@ -98,19 +97,21 @@ The two headline metrics measure different things and are never combined: the 0-
 
 | Layer | What it asks | Band | Status | Evidence | Gap |
 |-------|--------------|------|--------|----------|-----|
-| 0: Agent Instructions & Navigability | Can I build a true map of this codebase before I touch it? | read | Present | `CLAUDE.md` (grade A, claims 2 of 2 verified); base docs at `skills/assess/scripts/lib/README.md` and `skills/assess/tests/README.md`; 100% reachable, 0 orphans, 0 broken links; `claude_config` 0 findings over 27 files; `commands/README.md` gone | No `scripts/README.md`: 11 of 13 code dirs rely on `CLAUDE.md` alone (ratio 0.154), so Layer 0 rests on one hub staying accurate |
+| 0: Agent Instructions & Navigability | Can I build a true map of this codebase before I touch it? | read | Present | `CLAUDE.md` grades A/85 under the #517 rules: 157 lines, 1,760 words, 8 verified commands including `make check`, 0 stale references, no size penalty; base doc at `skills/assess/scripts/lib/README.md`; 100% reachable, 0 orphans, 0 broken links; `claude_config` 0 findings over 27 files; `nested_instructions` 0 findings, start-up budget ~3,310 tokens | No `scripts/README.md`: 11 of 13 code dirs rely on `CLAUDE.md` alone (ratio 0.154). `.github/claude-review-instructions.md` grades B/58 (bloat penalty 3) |
 | 1: Runtime Legibility / Liveness | Can I see which parts are live, which need attention, and which are dead weight? | read | Missing | No `OBSERVABILITY.md`, no `.mcp.json`. There is no deployed runtime, so liveness is read through complexity, churn and reachability; vulture found 0 dead-code candidates | No runtime by design; the JS canaries are unscanned (knip not installed) |
-| 2: Code Design | Will the type-checker catch my mistakes? | write | Present | `strict = true` in `skills/assess/pyproject.toml` with `disallow_any_generics` and no per-module exceptions; `mypy` in `.github/workflows/tests.yml` | `scripts/` floor overrides remain (`floor_anchor`, `floor_check.py` need floor sign-off; `start_gate`, `run_canaries` need only the canary suite) |
-| 3: Linters | Are complexity and style bounds enforced, or will my code drift? | write | Present | ruff `C901` with `max-complexity = 15` in both `pyproject.toml` files, run by `ruff check` in `.github/workflows/tests.yml`; `.file-size-ratchet.toml` (`default_limit = 800`); 0 stale of 78 suppressions | Lizard scores some functions above 15 that ruff's mccabe passes (e.g. `floor_check.cmd_markers` 22) |
-| 4: Architecture Tests | Are the structural conventions executable, or just folklore? | write | Present | `skills/assess/tests/test_self_architecture.py`; `tests/test_file_size_ratchet.py`; plugin contract tests now cover skill and agent frontmatter, no legacy `commands/`, documented colours and the `$0` guard | One import rule |
-| 5: CI Pipeline | Does something automatically catch a bad change before it merges? | write | Present | `.github/workflows/tests.yml` (`pytest` suites) and `.github/workflows/floor.yml` under seven required checks | CodeQL and pip-audit are advisory; claude-review cannot review a PR that edits its own workflow (#509) |
-| 6: Coverage Gates | Do the tests constrain behaviour, or just execute lines? | write | Partial | `fail_under = 93` in `skills/assess/pyproject.toml`, `fail_under` 91 in `scripts/pyproject.toml`; `mutmut` weekly in `.github/workflows/mutation.yml`; the opt-in pass ran with no cap | `scripts/floor_anchor.py`: 437 of 1,017 survive (density 0.43); the hottest code has no figure from this pass |
+| 2: Code Design | Will the type-checker catch my mistakes? | write | Present | `disallow_any_generics = true` in `skills/assess/pyproject.toml` with strict mode and no per-module exceptions; `mypy` in `.github/workflows/tests.yml` | `scripts/` keeps three floor-protected mypy overrides |
+| 3: Linters | Are complexity and style bounds enforced, or will my code drift? | write | Present | ruff `max-complexity = 15` in `skills/assess/pyproject.toml`, run by `ruff check` in `.github/workflows/tests.yml`; `.file-size-ratchet.toml` (`default_limit = 800`) enforced by `tests/test_file_size_ratchet.py`; 0 stale of 81 suppressions | Lizard scores functions above 15 that ruff's mccabe passes: `floor_check.cmd_markers` 22, and in this loop's new modules `agent_environment.check_copilot_setup` 20, `agent_harness.frontmatter_hooks` 19 |
+| 4: Architecture Tests | Are the structural conventions executable, or just folklore? | write | Present | `skills/assess/tests/test_self_architecture.py`; `tests/test_plugin_contract.py`; the file-size ratchet test | One import rule |
+| 5: CI Pipeline | Does something automatically catch a bad change before it merges? | write | Present | `.github/workflows/tests.yml` (`uv run --locked pytest`) under seven required checks; the #520 cap does not apply: `CLAUDE.md:23` names `make check`, setup is the `Makefile`'s `make setup`, and both manifests are locked (`skills/assess/uv.lock`, `scripts/uv.lock`); slowest CI median 100s against a 600s target | CodeQL and pip-audit are advisory |
+| 6: Coverage Gates | Do the tests constrain behaviour, or just execute lines? | write | Partial | `fail_under = 93` in `skills/assess/pyproject.toml`, `fail_under = 91` in `scripts/pyproject.toml`; `mutmut` weekly in `.github/workflows/mutation.yml`; the opt-in pass ran two complete groups, so no cap | `scripts/floor_anchor.py`: 437 of 1,017 survive (density 0.43); overall 742 of 2,332 |
 | 7: Code Review Bots | Is there design-level feedback on every change? | write | Present | `.github/workflows/claude-review.yml` with `.github/claude-review-instructions.md`; 93% of 30 merged PRs reviewed by someone other than the author, 63% approved | Review is advisory (solo-maintainer repo) |
-| 8: AI Project Mgmt (capstone) | Do learnings feed back into the contracts, or evaporate? | meta | Present | `CLAUDE.md` `## Marathon Configuration`; `skills/marathon/SKILL.md` | Retro log is per-machine; no `.taskmaster/` in the repo; agent_ops all false (neutral) |
+| 8: AI Project Mgmt (capstone) | Do learnings feed back into the contracts, or evaporate? | meta | Present | `CLAUDE.md` `## Marathon Configuration` with the `marathon-retros.md` retro log; `skills/marathon/SKILL.md` | Retro log is per-machine; no `.taskmaster` in the repo; agent_ops all false (neutral) |
 
 ### Score derivation (worked)
 
-L0 1 + L1 0 + L2 1 + L3 1 + L4 1 + L5 1 + L6 0.5 + L7 1 + L8 1 = **7.5**, under the cap of 8: 0.94 of 8, AI-Native. Unchanged since #499.
+L0 1 + L1 0 + L2 1 + L3 1 + L4 1 + L5 1 + L6 0.5 + L7 1 + L8 1 = **7.5**, under the cap of 8: 0.94 of 8, AI-Native. Every verdict equals #510's.
+
+**Against the new method.** Run on `6157131` (#520 merged, before #521), this version caps Layer 5 at Partial (`setup_or_lockfile` unmet), which would read 7.0. Run on `a714747` (before #522), `CLAUDE.md` grades B/59 (5,202 words, size-capped, bloat penalty 12), a passing grade that leaves Layer 0 Present. The repo, not the method, holds the score.
 
 ### Maturity Level
 
@@ -145,9 +146,20 @@ The maturity band bounds how much agent **autonomy** this repo's contracts can s
 |-------|-------------|----------|-------------|
 | 6 | Green-but-hollow | `scripts/floor_anchor.py` (coverage 87% vs mutation 57%) | Tests execute 87% of the floor anchor's lines, but 437 of 1,017 mutants survive. The coverage gate reads "tested" while behaviour is unpinned. Across both mutated files the score is 68% (742 of 2,332 survived) |
 
+### Agent harness
+
+No committed hooks, env, apiKeyHelper or MCP servers. No findings: no tracked `.env` or `settings.local.json`, no hidden Unicode in instruction files.
+
+### Agent environment
+
+- **Setup:** `Makefile` (`make setup`)
+- **Check:** `CLAUDE.md:23` `make check`
+- **Pinning:** every manifest locked (`scripts/uv.lock`, `skills/assess/uv.lock`)
+- **CI duration:** slowest median 1.7 minutes on `main` over 50 runs, against the 10-minute guidance
+
 ## Cross-Layer Findings (Keyhole Readiness)
 
-`untrusted_hotspot` names `scripts/floor_anchor.py` on the mutation pass's own evidence (437 of 1,017 mutants survive). There is still no `lying_map` and no `unactioned_intent`. The new `claude_config` scan (#506) checked 27 Claude Code skill and agent files and found nothing: the legacy `commands/` directory, its stray README, `agents/README.md` and `scribe`'s undocumented colour are all gone (#503, #505, #507).
+`untrusted_hotspot` names `scripts/floor_anchor.py` on the mutation pass's own evidence (437 of 1,017 mutants survive). There is still no `lying_map` and no `unactioned_intent`, and the findings match #510 path for path.
 
 ### hidden_coupling
 
@@ -221,19 +233,17 @@ _... 5 more omitted; top 10 ranked rows in `.assess/run-context.json` `attention
 
 ### Strengths
 
-- **The documented plugin layout, enforced.** Skills only, user-invoked workflows marked `disable-model-invocation: true`, valid frontmatter, documented agent colours; contract tests fail if a command file, a stray agent doc or an undocumented value comes back (#503, #505, #507).
-- **`/assess` checks Claude Code configuration.** The `claude_config` scan pins the documented field sets to a dated snapshot and reports legacy commands, ignored keys, unsupported values and stray docs (#506).
-- **Honest modularity.** `base_doc_dir_ratio` now measures code directories only, and the report shows the lower figure rather than the flattering one (#508).
-- **A finished type gate and a two-way size ratchet,** carried over from #497 and #498.
+- **The repo passes its own new rules.** A Makefile with `make setup` and `make check`, committed `uv.lock` files checked in CI, and a `CLAUDE.md` cut to 1,760 words that grades A (#521, #522).
+- **`/assess` sees the agent's environment.** `agent_environment` (#520), `agent_harness` (#516) and `nested_instructions` (#518) read what an agent loads and runs, and each reports `available: false` rather than a clean zero when it cannot check.
+- **Instruction grades rest on checks.** #517 counts commands that resolve and penalises size, so a long file can no longer earn an A by directive counts.
+- **A finished type gate and a two-way size ratchet,** carried over.
 
 ### Additional Opportunities
 
 - **Layer 0 margin:** add base docs for `scripts/` and `skills/assess/scripts/` first, so the map does not rest on `CLAUDE.md` alone; extend the plugin contract link check to `docs/`.
+- **Layer 3:** the new `agent_environment.py` and `agent_harness.py` functions at lizard ccn 17-20 pass ruff's mccabe at 15; watch them rather than refactor.
 - **Layer 6 to Present:** Action 1 after #410; then the `doc_graph.py` and `keyhole_signals.py` survivor clusters.
-- **Floor follow-up (sign-off needed):** `scripts/floor_check.py` and its tests still accept the old `commands/<x>.md` paths.
-- **claude-review prompt:** it still says the only runtime code is the `/assess` core, which leaves out `scripts/`; actionlint flags `outputs.conclusion` as undeclared.
-- **Landing page:** self-host the web font instead of loading it from Google Fonts (visitor privacy and the one layout-shift audit).
-- **`claude_config`:** type the finding `kind` as a `Literal` so a misspelt kind fails mypy.
+- **Coverage for `/assess`:** `make check` writes `coverage.xml` per package, which `/assess` does not read; a `make coverage` target running the root recipe would remove a manual step.
 - **Open issues:** coverage-gate detector refinements (#488); whether to detect contradicting docs (#491).
 
 </details>
@@ -247,7 +257,7 @@ This is an improvement roadmap, not a verdict: **is the codebase kept honest, no
 
 **Layer 1 on a repo with no runtime.** The complexity heatmap and the dead-code scan are its observability; a Missing means look through those instruments.
 
-**The legacy-transition lens.** Characterization tests before refactoring (Feathers), Strangler Fig over rewrites (Fowler), hotspots and change-coupling as the worklist (Tornhill). The commands migration followed it: move the files with history, prove the names unchanged, then add the test that stops the old layout returning.
+**The legacy-transition lens.** Characterization tests before refactoring (Feathers), Strangler Fig over rewrites (Fowler), hotspots and change-coupling as the worklist (Tornhill).
 
 **How it's measured.** Static analysis, git history and graph metrics; the model writes only the prose.
 

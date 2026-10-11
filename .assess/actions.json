@@ -1,18 +1,18 @@
 {
   "schema": 2,
-  "run_id": "20261008175925-32cb78d4",
+  "run_id": "20261011125246-0d249381",
   "actions": [
     {
       "rank": 1,
-      "action": "Strengthen scripts/floor_anchor.py tests to pin observable behaviour, written from FLOOR.md clause text, once the #410 decision on clause iii is made",
+      "action": "Strengthen scripts/floor_anchor.py's tests to pin observable behaviour, written from FLOOR.md's clause text, once the #410 decision on clause iii is made",
       "layer": 6,
       "effort": "medium",
       "files": [
         "scripts/floor_anchor.py"
       ],
-      "first_step": "Read the #410 review; decide whether floor_core_changed widens to all seven clause-iii paths or the clause narrows to four; write one test per clause",
-      "done_when": "floor_anchor.py survivor density in the opt-in mutation pass falls below 0.3, and a change under scripts/contract/ requests floor-signoff or clause iii no longer lists it",
-      "scope_fence": "Floor files: any change needs the maintainer out-of-band floor-signoff approval; no agent self-applies it",
+      "first_step": "Read the review comment on #410; decide whether floor_core_changed widens to all seven clause-iii paths or the clause narrows to four; then write one test per clause",
+      "done_when": "floor_anchor.py's survivor density in the opt-in mutation pass falls below 0.3 (437 of 1,017 today), and a change under scripts/contract/ requests floor-signoff or clause iii no longer lists it",
+      "scope_fence": "Floor files: any change needs the maintainer's out-of-band floor-signoff approval; no agent self-applies it",
       "finding": "untrusted_hotspot",
       "status": "pending",
       "claimed_by": null,
@@ -21,15 +21,15 @@
     },
     {
       "rank": 2,
-      "action": "Add the clause-integrity and token-floor tests for scripts/floor_check.py from the #410 review (tests 2-4), independent of REQUIRED_CLAUSES and MINIMUM_TOKEN_COUNT",
+      "action": "Add the clause-integrity and token-floor tests for floor_check.py from the #410 review (tests 2-4), written independently of REQUIRED_CLAUSES and MINIMUM_TOKEN_COUNT",
       "layer": 4,
       "effort": "medium",
       "files": [
         "scripts/floor_check.py"
       ],
-      "first_step": "Write each test from the FLOOR.md sentence, not from the constants",
+      "first_step": "Write each test from FLOOR.md's sentence, not from the constants",
       "done_when": "Deleting a REQUIRED_CLAUSES entry or lowering MINIMUM_TOKEN_COUNT turns a test red",
-      "scope_fence": "Same floor sign-off rule as action 1; tests only, no change to checker behaviour",
+      "scope_fence": "Same floor sign-off rule as Action 1; tests only, no change to the checker's behaviour",
       "finding": "self_referential_tests",
       "status": "pending",
       "claimed_by": null,
@@ -38,14 +38,14 @@
     },
     {
       "rank": 3,
-      "action": "Split skills/assess/tests/test_complexity_treemap.py by concern, moving tests unchanged",
+      "action": "Split skills/assess/tests/test_complexity_treemap.py (accretion_ratchet; 1,798 lines, held at its .file-size-ratchet.toml ceiling) by concern, moving tests unchanged",
       "layer": 3,
       "effort": "medium",
       "files": [
         "skills/assess/tests/test_complexity_treemap.py"
       ],
-      "first_step": "Group tests by treemap stage (scoring backends, stats sidecar, layout, render) into test_complexity_treemap_<stage>.py files, as #478 split the keyhole tests",
-      "done_when": "Every new file is under 800 lines, the .file-size-ratchet.toml ceiling is deleted, and collected test names and treemap line coverage are identical before and after",
+      "first_step": "Group its tests by the treemap stage they exercise (scoring backends, stats sidecar, layout, render) into test_complexity_treemap_<stage>.py files",
+      "done_when": "Every new file is under 800 lines, the file's .file-size-ratchet.toml ceiling is deleted, and the collected test names and the treemap's line coverage are identical before and after",
       "scope_fence": "Move tests only; no assertion or fixture logic changes",
       "finding": "accretion_ratchet",
       "status": "pending",
