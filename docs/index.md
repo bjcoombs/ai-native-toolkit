@@ -41,6 +41,8 @@ Team-orchestration library skills (invoked by the workflow skills, not standalon
 
 The deterministic core's per-module reference is [`skills/assess/scripts/lib/README.md`](../skills/assess/scripts/lib/README.md); its test suites are mapped to the modules they pin in [`skills/assess/tests/README.md`](../skills/assess/tests/README.md).
 
+The hotspot score's formula, and why a co-change breadth term was tested and left out, is recorded in the [co-change experiment note](../skills/assess/references/hotspot-cochange-experiment.md).
+
 ## User-invoked skills
 
 Slash-command-only skills (`disable-model-invocation: true`): Claude never loads them on its own, only when you type the command. Indexed in [`skills/README.md`](../skills/README.md#user-invoked).
