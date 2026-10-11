@@ -8,9 +8,20 @@ dependencies = [
     "grimp>=3.0",
 ]
 
+# Everything the CI jobs in .github/workflows/tests.yml and `make check` run
+# beyond the core deps, pinned by the committed uv.lock beside this file.
+# pyyaml: eight structural guards in tests/test_action_contract.py parse
+# action.yml / assess-gate.yml and pytest.skip without it.
+# This group never reaches Assess Gate consumers: every script the action runs
+# carries a PEP 723 inline block, so uv builds its environment from that block
+# and ignores this project, its groups and uv.lock.
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pyyaml>=6.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
 ]
 
 [tool.pytest.ini_options]
@@ -118,8 +129,8 @@ enable_error_code = ["ignore-without-code"]
 # checked out. /assess's walks do not descend the link (treemap entries are
 # keyed by resolved path), so nothing is counted twice. Run locally from
 # skills/assess, then remove mutants/ (gitignored, and skipped by /assess):
-#   uv run --with mutmut==3.8.0 --with pytest mutmut run
-#   uv run --with mutmut==3.8.0 --with pytest mutmut results   # survivors
+#   uv run --locked --with mutmut==3.8.0 mutmut run
+#   uv run --locked --with mutmut==3.8.0 mutmut results   # survivors
 #   rm -rf mutants
 source_paths = ["src"]
 only_mutate = [

@@ -25,11 +25,14 @@ jq '(.doc_graph | del(.link_parents)), .doc_staleness.association, .stale_hubs[:
 open .assess/complexity-heatmap.svg .assess/docs-staleness-heatmap.svg
 ```
 
-Run the test suites too:
+Run the merge-gating checks too. `make setup` syncs both uv projects from their
+committed lockfiles; `make check` runs what the required jobs in
+`.github/workflows/tests.yml` run (both pytest suites with their coverage floors,
+the plugin contract tests, and the ruff and mypy gates). `make help` lists the
+single-suite targets.
 
 ```bash
-cd "$WT/skills/assess" && uv run --with pytest pytest -q   # deterministic core
-cd "$WT/scripts"       && uv run --with pytest pytest -q   # standalone-build pipeline
+cd "$WT" && make setup && make check
 ```
 
 ## 2. Install the branch as a local plugin (non-destructive)

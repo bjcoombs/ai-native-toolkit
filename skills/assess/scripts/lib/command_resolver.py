@@ -63,7 +63,7 @@ from lib.doc_graph import is_excluded_path
 
 __all__ = [
     "Command", "EXTERNAL_TOOLS", "Resolution", "RepoIndex", "RUNNERS",
-    "build_index", "extract_commands", "resolve",
+    "build_index", "command_words", "extract_commands", "resolve",
 ]
 
 Verdict = Literal["resolved", "missing", "external", "unknown"]
@@ -154,6 +154,11 @@ def _tokens(segment: str) -> list[str]:
     while words and (_ENV_ASSIGN.match(words[0]) or words[0] in _PREFIXES):
         words.pop(0)
     return words
+
+
+def command_words(text: str) -> list[str]:
+    """Public form of the tokeniser ``resolve`` uses, for callers that classify commands."""
+    return _tokens(text)
 
 
 def _cd_target(words: list[str], cwd: str) -> str | None:

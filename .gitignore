@@ -16,6 +16,7 @@ dist/standalone-skills/
 !/.github/
 !/action.yml
 !/.file-size-ratchet.toml
+!/Makefile
 
 # /assess output: we dogfood /assess on this repo, so its compounding wiki and
 # latest report ARE tracked (the report, both SVGs, the stats baseline for the
@@ -35,6 +36,11 @@ dist/standalone-skills/
 **/.pytest_cache/
 **/.venv/
 **/uv.lock
+# The two uv projects commit their lockfiles: CI runs `uv run --locked` against
+# them and `make setup` syncs from them. Any other uv.lock (a scratch copy, a
+# test run inside a fixture) stays ignored.
+!/skills/assess/uv.lock
+!/scripts/uv.lock
 **/.coverage
 **/.coverage.*
 # Line-coverage reports (pytest-cov / coverage.py output). The parser fixtures

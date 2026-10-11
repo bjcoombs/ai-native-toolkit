@@ -464,6 +464,8 @@ This should bump the test-less repo's score down and make "add tests" the #1 act
 # Common CI configs
 ls -la "$REPO_ROOT"/.github/workflows/*.yml "$REPO_ROOT"/.github/workflows/*.yaml 2>/dev/null
 ls -la "$REPO_ROOT"/{.gitlab-ci.yml,.circleci/config.yml,Jenkinsfile,.travis.yml,bitbucket-pipelines.yml} 2>/dev/null
+# Agent setup, named check command, lockfiles, Layer 5 cap, CI duration
+jq '.agent_environment' "$REPO_ROOT/.assess/run-context.json"
 ```
 
 **If found, assess pipeline completeness** by reading CI configs:
@@ -484,7 +486,8 @@ gh api repos/{owner}/{repo}/branches/develop/protection 2>/dev/null
 ```
 
 **Scoring:**
-- Present: CI runs on every PR with build+lint+test+coverage, failures block merge
+- Present: CI runs on every PR with build+lint+test+coverage, failures block merge, **and** an agent can check and set up locally: an instruction file the agent loads at session start (root `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`; not a review-bot prompt) names a check command that resolves, plus committed setup or a lockfile per manifest
+- **Agent-environment cap**: read `agent_environment.layer5_cap`. When `applies` is true, cap at **Partial** and state its `reason` (`unmet` holds `check_named` and/or `setup_or_lockfile`). Evidence: `check.named[0]` as `<file>:<line>` `<command>`; `setup.sources` paths; unlocked `pinning.manifests`. A `copilot-setup-steps.yml` entry in `findings` is evidence too (cite `file:line` and `fix`); a file that fails earns no setup credit. `ci_duration` is report evidence only (the 10-minute target is guidance without outcome data): cite `slowest_median_seconds` when available, never cap on it. `available: false` on the block means the scan failed: score from the CI read alone. This cap is a method change (#514): Layer 5 can drop to Partial for a repo with an unchanged pipeline.
 - **Erosion cap**: even with a complete pipeline, cap at **Partial** when `promissory_markers.families.disabled_test.stale` is greater than ~10 with `aging_reliable` true - each stale skip is a guardrail switched off while still counting as "tests exist" (a skip whose reason describes an obsolete scenario is a delete candidate, not a fix candidate). Cite the count and worst offender.
 - Partial: CI exists but missing key steps, or failures are advisory
 - Missing: No CI configuration found

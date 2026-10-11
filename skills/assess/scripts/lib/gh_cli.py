@@ -109,19 +109,19 @@ def resolve_github_remote(repo_root: Path) -> GithubRepo | None:
     return parse_github_remote(url) if url else None
 
 
-def _run_gh(args: list[str]) -> str:
+def _run_gh(args: list[str], timeout: int = GH_TIMEOUT_SECONDS) -> str:
     """Run ``gh`` and return stdout, raising GhUnavailable with a mapped reason."""
     cmd = ["gh", *args]
     shown = " ".join(cmd)
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=GH_TIMEOUT_SECONDS,
+            cmd, capture_output=True, text=True, timeout=timeout,
         )
     except FileNotFoundError:
         raise GhUnavailable("gh_not_installed: the gh CLI is not on PATH") from None
     except subprocess.TimeoutExpired:
         raise GhUnavailable(
-            f"gh_timeout: `{shown}` gave no answer within {GH_TIMEOUT_SECONDS}s"
+            f"gh_timeout: `{shown}` gave no answer within {timeout}s"
         ) from None
     if proc.returncode == 0:
         return proc.stdout
@@ -135,7 +135,7 @@ def _run_gh(args: list[str]) -> str:
     raise GhUnavailable(f"gh_error: `{shown}` failed ({detail})")
 
 
-def open_github(repo_root: Path) -> GithubRepo:
+def open_github(repo_root: Path, timeout: int = GH_TIMEOUT_SECONDS) -> GithubRepo:
     """Resolve the remote, then confirm ``gh`` is authenticated.
 
     Raises GhUnavailable (without invoking ``gh``) when there is no github.com
@@ -145,7 +145,7 @@ def open_github(repo_root: Path) -> GithubRepo:
     if repo is None:
         raise GhUnavailable("no_remote: no github.com remote to compare against")
     try:
-        _run_gh(["auth", "status", "--hostname", "github.com"])
+        _run_gh(["auth", "status", "--hostname", "github.com"], timeout)
     except GhUnavailable as e:
         if e.reason.startswith("gh_not_installed"):
             raise
@@ -165,7 +165,8 @@ def gh_api(path: str) -> Any:
     return _parse(_run_gh(["api", path]), f"gh api {path}")
 
 
-def gh_json(args: list[str]) -> Any:
+def gh_json(args: list[str], timeout: int = GH_TIMEOUT_SECONDS) -> Any:
     """Any other ``gh`` command whose output is JSON, e.g.
-    ``["pr", "list", "--repo", slug, "--state", "merged", "--json", "number"]``."""
-    return _parse(_run_gh(list(args)), "gh " + " ".join(args))
+    ``["pr", "list", "--repo", slug, "--state", "merged", "--json", "number"]``.
+    ``timeout`` shortens the per-call cap for an optional probe."""
+    return _parse(_run_gh(list(args), timeout), "gh " + " ".join(args))
