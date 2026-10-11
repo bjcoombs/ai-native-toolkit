@@ -31,7 +31,7 @@ make lint                   # ruff and mypy for both packages
 bash scripts/build-standalone-skills.sh   # standalone ZIPs into dist/standalone-skills/
 ```
 
-The git-backed tests null out global git config themselves. Scripts run outside pytest (for example `assess_core.py`) do not: prefix them with `GIT_CONFIG_GLOBAL=/dev/null` if your config signs commits or runs hooks.
+`skills/assess/tests/conftest.py` nulls out global git config for that suite only. The `scripts/` tests and scripts run outside pytest (for example `assess_core.py`) still read it: prefix them with `GIT_CONFIG_GLOBAL=/dev/null` if your config signs commits or runs hooks.
 
 ## Versioning
 

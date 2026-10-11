@@ -100,4 +100,4 @@ GIT_CONFIG_GLOBAL=/dev/null uv run --project skills/assess --with pytest --with 
 
 ## Local runs and git config
 
-`skills/assess/tests/conftest.py` points `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device at import time, so ambient commit signing or hooks cannot fail the git-backed tests. Scripts run outside pytest (for example `assess_core.py`) still read global config; prefix those with `GIT_CONFIG_GLOBAL=/dev/null` if it signs commits or runs hooks.
+`skills/assess/tests/conftest.py` points `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device at import time, so ambient commit signing or hooks cannot fail the git-backed tests in that suite. Nothing does the same for `scripts/tests/` (`test_floor_check.py` runs `git commit` in temp repos), and scripts run outside pytest (for example `assess_core.py`) still read global config; prefix those with `GIT_CONFIG_GLOBAL=/dev/null` if it signs commits or runs hooks.
