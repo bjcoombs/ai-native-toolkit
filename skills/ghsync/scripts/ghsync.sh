@@ -667,7 +667,7 @@ else
 fi
 if [ "$gitlab_list_only" = false ]; then
     if [[ ! -d "$ROOT" ]]; then
-        echo "Error: root directory does not exist: $ROOT"
+        echo "Error: root directory does not exist: $ROOT (create it first: mkdir -p \"$ROOT\")"
         exit 1
     fi
     ROOT="$(cd "$ROOT" && pwd)"

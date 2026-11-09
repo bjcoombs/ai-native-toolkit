@@ -350,7 +350,9 @@ def test_explicit_missing_root_fails(env: Env) -> None:
     missing = env.tmp / "typo-root"
     res = env.sync_at(missing)
     assert res.returncode != 0
-    assert "root directory does not exist" in res.stdout + res.stderr
+    out = res.stdout + res.stderr
+    assert "root directory does not exist" in out
+    assert f"mkdir -p \"{missing}\"" in out
     assert not missing.exists()
 
 
