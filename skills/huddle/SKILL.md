@@ -363,7 +363,9 @@ In autonomous/headless runs (`/tm`, `/issues`, marathon) the critic pass still r
 
 ### Step 5: Deliver the Verdict
 
-After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. Deliver the chairperson's summary directly:
+After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. Deliver the chairperson's summary directly.
+
+Write the summary for a reader who was not in the huddle. Every option, term, file path and numbered item it refers to must be defined or resolvable inside the summary: give a file path with its repository, and refer to a list item by the label that list uses.
 
 **Structure:**
 
@@ -372,6 +374,9 @@ After all hat phases complete, do NOT spawn a blue-hat agent. You ARE Blue Hat. 
 
 ### Topic
 [The Topic line. If a hat reframed the problem during deliberation, state both: "Convened on X; reframed to X' at the White Hat phase because Y." A frame that moved is a finding - often the most valuable one the huddle produced.]
+
+### Options
+[Every option the huddle considered, lettered A, B, C. For each: one line on how it works, the terms a reader needs to follow the rest of the summary, and where it came from when it emerged during deliberation (e.g. "proposed by platform-eng at Green Hat"). Later sections refer to options only by these letters. Omit this section when the topic has no options to choose between.]
 
 ### Team
 [List of professional lenses and why they were chosen]
