@@ -861,7 +861,8 @@ def test_group_above_membership_unreadable_names_what_is_skipped(env: Env) -> No
     assert res.stdout.splitlines() == SUB_TREE
     warnings = [ln for ln in res.stderr.splitlines() if ln.startswith("Warning")]
     assert len(warnings) == 1, warnings
-    assert "grp" in warnings[0] and "grp/sub" in warnings[0]
+    assert f"could not read group grp on {HOST};" in warnings[0]
+    assert "(grp/sub, grp/sub/deep)" in warnings[0]
 
 
 def test_group_at_membership_level(env: Env) -> None:

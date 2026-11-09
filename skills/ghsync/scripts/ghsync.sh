@@ -519,9 +519,10 @@ read_from_list() {
 # grp/.dotfiles is kept. On top of that: no empty, "." or ".." segment, no
 # segment ending in .git or .atom (GitLab's suffix rule), and no segment
 # that is .git in any case, since a case-folding filesystem (the macOS
-# default) would read .GIT as a stray git directory. A real project never
-# trips this; a hand-edited --from-list line with a quote, a space, an
-# absolute path or ../ does.
+# default) would read .GIT as a stray git directory. A real project trips
+# this only through that case-folded .git rule (GitLab allows grp/.GIT); a
+# hand-edited --from-list line with a quote, a space, an absolute path or
+# ../ does.
 gitlab_reject_unsafe_paths() {
     local kept line folded
     kept=$(mktemp)
