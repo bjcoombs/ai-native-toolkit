@@ -469,3 +469,156 @@ def test_help_prints_only_the_header() -> None:
     assert all(ln.startswith("#") for ln in lines), res.stdout
     assert any("--provider P" in ln for ln in lines)
     assert any("--render-dir DIR" in ln for ln in lines)
+
+
+def test_help_ends_at_the_closing_header_line() -> None:
+    res = subprocess.run(
+        ["bash", str(GHREPORT), "--help"], capture_output=True, check=False, text=True, timeout=60,
+    )
+    header = GHREPORT.read_text().splitlines()
+    closing = next(i for i, ln in enumerate(header) if i > 3 and ln.startswith("# ===="))
+    assert res.stdout.splitlines() == header[3 : closing + 1]
+    assert "(skips discovery + querying; replay / testing)" in res.stdout
+
+
+@pytest.mark.parametrize("edit", ["add", "remove"])
+def test_help_range_follows_header_edits(tmp_path: Path, edit: str) -> None:
+    """The help range is not a fixed line count: a header line added or
+    removed still leaves --help ending at the closing rule."""
+    lines = GHREPORT.read_text().splitlines()
+    closing = next(i for i, ln in enumerate(lines) if i > 3 and ln.startswith("# ===="))
+    if edit == "add":
+        lines[closing:closing] = ["#   --extra X        An added header line"]
+    else:
+        del lines[closing - 2]
+    copy = tmp_path / "ghreport.sh"
+    copy.write_text("\n".join(lines) + "\n")
+    res = subprocess.run(
+        ["bash", str(copy), "--help"], capture_output=True, check=False, text=True, timeout=60,
+    )
+    assert res.returncode == 0
+    out = res.stdout.splitlines()
+    new_closing = next(i for i, ln in enumerate(lines) if i > 3 and ln.startswith("# ===="))
+    assert out == lines[3 : new_closing + 1]
+    assert out[-1].startswith("# ====")
+    assert all(ln.startswith("#") for ln in out)
+
+
+# Paths with `__` at every position. Flattening `/` to `__` maps each pair
+# onto one fragment name. The stub keys its data the same way, so each pair
+# shares one metadata file and their rows carry the same cells; the point is
+# that both rows appear.
+COLLIDING = ["grp/a__b", "grp__a/b", "grp/__c", "grp__/c", "grp/d__/e", "grp/d/__e"]
+
+
+def _collision_overrides() -> Endpoints:
+    overrides: Endpoints = {"groups/grp/projects": [[_project(p) for p in ["grp/alpha", *COLLIDING]]]}
+    for p in COLLIDING:
+        overrides[f"projects/{p}"] = [_project(p)]
+    return overrides
+
+
+def _listed_projects(endpoints: Endpoints) -> int:
+    """Distinct projects across the group listings discovery reads."""
+    paths = {
+        str(proj["path_with_namespace"])
+        for key, pages in endpoints.items()
+        if key.startswith("groups/") and key.endswith(("/projects", "/projects/shared"))
+        and not isinstance(pages, int)
+        for page in pages
+        if isinstance(page, list)
+        for proj in page
+    }
+    return len(paths)
+
+
+def test_fragment_names_do_not_collide(tmp_path: Path) -> None:
+    overrides = _collision_overrides()
+    expected = _listed_projects({**_endpoints(), **overrides})
+    env = Env(tmp_path, overrides)
+    res = env.run("--host", HOST, "--group", "grp", "--no-file")
+    assert res.returncode == 0, res.stderr
+    for p in COLLIDING:
+        assert _cells(_row(res.stdout, p))[0] == p
+    assert f"{expected} project(s)" in res.stdout
+    assert _cells(_row(res.stdout, "grp/alpha")) == [
+        "grp/alpha", "main", "2", "success", "no-access", "protected",
+    ]
+
+
+def _empty_project(path: str) -> dict[str, object]:
+    # GitLab's shape for a repository with no commits.
+    return {**_project(path), "default_branch": None, "empty_repo": True}
+
+
+# The listing ghsync reads still shows a branch (ghsync skips empty
+# projects), but the project's own metadata says it is empty: a repository
+# emptied between the two calls.
+EMPTY = {ALPHA: [_empty_project("grp/alpha")]}
+
+
+def test_empty_repository_reports_empty(tmp_path: Path) -> None:
+    env = Env(tmp_path, EMPTY)
+    res = env.run("--host", HOST)
+    assert res.returncode == 0, res.stderr
+    cells = _cells(_row(res.stdout, "grp/alpha"))
+    assert cells[1] == "empty" and cells[3] == "empty" and cells[5] == "empty", cells
+    calls = env.api_calls()
+    assert not any("grp%2Falpha/pipelines" in c for c in calls), calls
+    assert not any("grp%2Falpha/protected_branches" in c for c in calls), calls
+    assert "grp/alpha" not in _attention(res.stdout)
+    assert "1 with an unprotected default branch" in res.stdout
+    assert ", 1 empty" in res.stdout
+    # The neighbours are unchanged.
+    assert _cells(_row(res.stdout, "grp/sub/beta"))[1:] == ["main", "0", "none", "no-access", "unprotected"]
+    assert _cells(_row(res.stdout, "grp/sub/deep/gamma"))[1:] == ["main", "no-access", "failed", "2", "protected"]
+    report = next(env.root.glob(f"org-state-{HOST}-*.md")).read_text()
+    assert "`empty`" in report.split("## Legend")[-1]
+
+
+def test_empty_repository_with_limit(tmp_path: Path) -> None:
+    env = Env(tmp_path, EMPTY)
+    res = env.run("--host", HOST, "--limit", "1", "--no-file")
+    assert res.returncode == 0, res.stderr
+    assert "1 project(s)" in res.stdout
+    assert _cells(_row(res.stdout, "grp/alpha"))[1:] == ["empty", "2", "empty", "no-access", "empty"]
+    assert "Needs attention: none" in res.stdout
+
+
+def test_empty_repository_with_open_vulnerabilities_needs_attention(tmp_path: Path) -> None:
+    """GitLab keeps vulnerability records from earlier scans. Emptiness does
+    not hide them: the project is listed under Needs attention for them, and
+    for nothing about its pipeline or protection."""
+    vulns: Endpoints = {f"{ALPHA}/vulnerabilities": [[{"id": 7, "state": "detected"}]]}
+    env = Env(tmp_path, {**EMPTY, **vulns})
+    res = env.run("--host", HOST, "--limit", "1", "--no-file")
+    assert res.returncode == 0, res.stderr
+    assert _cells(_row(res.stdout, "grp/alpha"))[1:] == ["empty", "2", "empty", "1", "empty"]
+    assert "Needs attention: none" not in res.stdout
+    lines = [ln for ln in _attention(res.stdout).splitlines() if "**grp/alpha**" in ln]
+    assert lines == ["- **grp/alpha**: 1 open vulnerability"], res.stdout
+
+
+def test_render_dir_tells_an_empty_repo_from_a_branch_named_empty(tmp_path: Path) -> None:
+    """The fragment marks emptiness with empty_repo and a null branch, so a
+    replay keeps a real branch named `empty` apart from an empty project."""
+    frags = tmp_path / "frags"
+    frags.mkdir()
+    base = {"unreachable": False, "open_mrs": 0, "draft_mrs": 0, "vulnerabilities": "no-access"}
+    (frags / "0.json").write_text(json.dumps({
+        **base, "repo": "grp/real", "default_branch": "empty", "empty_repo": False,
+        "pipeline": "success", "protection": "protected",
+    }))
+    (frags / "1.json").write_text(json.dumps({
+        **base, "repo": "grp/blank", "default_branch": None, "empty_repo": True,
+        "pipeline": "empty", "protection": "empty",
+    }))
+    res = subprocess.run(
+        ["bash", str(GHREPORT), "--provider", "gitlab", "--render-dir", str(frags), "--no-file"],
+        capture_output=True, check=False, text=True, timeout=60,
+    )
+    assert res.returncode == 0, res.stderr
+    assert _cells(_row(res.stdout, "grp/real"))[1:] == ["empty", "0", "success", "no-access", "protected"]
+    assert _cells(_row(res.stdout, "grp/blank"))[1:] == ["empty", "0", "empty", "no-access", "empty"]
+    assert ", 1 empty" in res.stdout
+    assert "Needs attention: none" in res.stdout

@@ -71,7 +71,8 @@ while [[ $# -gt 0 ]]; do
     --render-dir) RENDER_DIR=$2; shift 2 ;;
     --render-dir=*) RENDER_DIR=${1#*=}; shift ;;
     -h|--help)
-      sed -n '4,39p' "$0"
+      # The header runs from the first rule line to the next one.
+      awk '/^# ====/ { print; if (++rules == 2) exit; next } rules == 1' "$0"
       exit 0
       ;;
     *)
@@ -235,10 +236,11 @@ gitlab_count() {
 
 # Same contract as query_repo, with GitLab fields: open_mrs / draft_mrs,
 # pipeline ("success" or "failed" from the newest finished pipeline,
-# "none" with no finished pipeline), and
-# vulnerabilities. Every call is judged by its exit status and its body
-# shape only: any failure is "no-access" (counts) or "unknown" (status,
-# protection), never 0.
+# "none" with no finished pipeline), vulnerabilities, and empty_repo. An
+# empty repository (null default branch) writes default_branch null,
+# empty_repo true, and "empty" for pipeline and protection. Every call is
+# judged by its exit status and its body shape only: any failure is
+# "no-access" (counts) or "unknown" (status, protection), never 0.
 query_project_gitlab() {
     local path=$1 out=$2 enc
     enc=$(gitlab_encode "$path")
@@ -252,8 +254,13 @@ query_project_gitlab() {
         return
     fi
 
-    local branch
-    branch=$(jq -r '.default_branch // "main"' <<< "$proj_json")
+    # GitLab gives an empty repository (no commits) a null default branch.
+    # There is no branch to judge, so pipeline and protection read "empty"
+    # and no per-branch call is made: guessing "main" would report a verdict
+    # for a branch that does not exist.
+    local branch empty=false
+    branch=$(jq -r '.default_branch // ""' <<< "$proj_json")
+    [ -z "$branch" ] && empty=true
     local benc
     benc=$(gitlab_encode "$branch")
 
@@ -274,7 +281,9 @@ query_project_gitlab() {
     # passed over, so an in-flight or cancelled run cannot hide a failure.
     # The ref filter is repeated client-side for the same reason as above.
     local pl_json pipeline="unknown"
-    if pl_json=$(gitlab_api "projects/$enc/pipelines?ref=$benc&order_by=id&sort=desc&per_page=20" 2>/dev/null); then
+    if [ "$empty" = true ]; then
+        pipeline="empty"
+    elif pl_json=$(gitlab_api "projects/$enc/pipelines?ref=$benc&order_by=id&sort=desc&per_page=20" 2>/dev/null); then
         pipeline=$(jq -rs --arg b "$branch" '
             if all(.[]; type=="array") then
               [.[][] | select((.ref // $b)==$b and (.status=="success" or .status=="failed"))]
@@ -294,7 +303,9 @@ query_project_gitlab() {
     # protected", so only a readable list can say "unprotected". Names may
     # be wildcards (`release/*`); `*` is the only wildcard GitLab supports.
     local prot_json protection="unknown"
-    if prot_json=$(gitlab_api_all "projects/$enc/protected_branches?per_page=100" 2>/dev/null) \
+    if [ "$empty" = true ]; then
+        protection="empty"
+    elif prot_json=$(gitlab_api_all "projects/$enc/protected_branches?per_page=100" 2>/dev/null) \
         && protection=$(jq -rs --arg b "$branch" '
             def glob_re: gsub("(?<c>[.+?^$()\\[\\]{}|\\\\])"; "\\\(.c)") | gsub("\\*"; ".*") | "^" + . + "$";
             if all(.[]; type=="array") then
@@ -309,10 +320,11 @@ query_project_gitlab() {
     fi
 
     jq -n \
-        --arg repo "$path" --arg branch "$branch" \
+        --arg repo "$path" --arg branch "$branch" --argjson empty "$empty" \
         --arg mrs "$open_mrs" --argjson drafts "${draft_mrs:-0}" \
         --arg pipeline "$pipeline" --arg vulns "$vulns" --arg protection "$protection" \
-        '{repo:$repo, unreachable:false, default_branch:$branch,
+        '{repo:$repo, unreachable:false,
+          default_branch:(if $empty then null else $branch end), empty_repo:$empty,
           open_mrs:(if $mrs=="no-access" then "no-access" else ($mrs|tonumber) end),
           draft_mrs:$drafts,
           pipeline:$pipeline,
@@ -379,7 +391,7 @@ render_table_gitlab() {
       "| \(.repo) | "
       + (if .unreachable then "- | - | - | - | could not assess |"
          else
-           "\(.default_branch) | "
+           "\(if .empty_repo==true then "empty" else .default_branch end) | "
            + "\(.open_mrs)\(if (.draft_mrs // 0)>0 then " (\(.draft_mrs) draft)" else "" end) | "
            + "\(.pipeline) | \(.vulnerabilities) | \(.protection) |"
          end)'
@@ -407,13 +419,15 @@ headline_gitlab() {
         + "\([.[]|.open_mrs|numbers]|add // 0) open MR(s) total"
         + (([$ok[]|select(.open_mrs=="no-access")]|length) as $n | if $n>0 then ", MRs unreadable on \($n)" else "" end)
         + (([$ok[]|select(.vulnerabilities=="no-access")]|length) as $n | if $n>0 then ", vulnerabilities no-access on \($n)" else "" end)
-        + (([.[]|select(.unreachable==true)]|length) as $n | if $n>0 then ", \($n) could not be assessed" else "" end)'
+        + (([.[]|select(.unreachable==true)]|length) as $n | if $n>0 then ", \($n) could not be assessed" else "" end)
+        + (([$ok[]|select(.empty_repo==true)]|length) as $n | if $n>0 then ", \($n) empty" else "" end)'
 }
 
 legend_gitlab() {
     echo "- **Pipeline**: status of the latest finished pipeline (\`success\` or \`failed\`) among the last 20 on the default branch; running, pending, canceled, skipped and manual pipelines are passed over. \`none\` means no finished pipeline was found, \`unknown\` that the pipelines API could not be read."
     echo "- **no-access** in a count column: the API refused or failed. For vulnerabilities that is the tier, the role, or the endpoint being unavailable on this GitLab version (GitLab documents the REST vulnerabilities endpoint as deprecated). It is not the same as a confirmed zero."
     echo "- **Protection**: \`unknown\` means the protected-branches API could not be read; \`unprotected\` means it listed no rule covering the default branch."
+    echo "- \`empty\` in Branch, Pipeline and Protection: the repository has no commits, so GitLab reports no default branch. Pipeline and protection are not checked, so emptiness alone does not put a project under Needs attention; its open vulnerabilities, which GitLab keeps from earlier scans, still do."
 }
 
 assemble() {
@@ -574,9 +588,11 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 i=0
 for repo in "${repos[@]}"; do
     # Fragment filenames must be flat. GitHub names have no slashes
-    # (single-org); a GitLab path does, so it is flattened.
+    # (single-org); a GitLab path does, and no flattening of it is
+    # collision-free (`grp/a__b` and `grp__a/b`), so GitLab fragments are
+    # named by index. The report reads the path from inside each fragment.
     if [ "$PROVIDER" = gitlab ]; then
-        query_project_gitlab "$repo" "$TMP_DIR/${repo//\//__}.json" &
+        query_project_gitlab "$repo" "$TMP_DIR/$i.json" &
     else
         query_repo "$repo" "$TMP_DIR/$repo.json" &
     fi
