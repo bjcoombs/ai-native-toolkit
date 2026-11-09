@@ -70,7 +70,7 @@ while [[ $# -gt 0 ]]; do
     --render-dir) RENDER_DIR=$2; shift 2 ;;
     --render-dir=*) RENDER_DIR=${1#*=}; shift ;;
     -h|--help)
-      sed -n '4,44p' "$0"
+      sed -n '4,39p' "$0"
       exit 0
       ;;
     *)

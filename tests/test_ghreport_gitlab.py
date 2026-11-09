@@ -235,6 +235,7 @@ class Env:
         return subprocess.run(
             ["bash", str(GHREPORT), "--provider", "gitlab", "--root", str(self.root), *args],
             capture_output=True,
+            check=False,
             text=True,
             timeout=120,
             env=self.env,
@@ -384,7 +385,7 @@ def test_rejects_github_flags(env: Env, args: list[str], message: str) -> None:
 def test_rejects_gitlab_flags_on_github(tmp_path: Path) -> None:
     res = subprocess.run(
         ["bash", str(GHREPORT), "--host", HOST, "--render-dir", str(tmp_path)],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True, check=False, text=True, timeout=60,
     )
     assert res.returncode == 1
     assert "--host applies to --provider gitlab only" in res.stderr
@@ -432,3 +433,16 @@ def test_failed_pipeline_needs_attention_other_statuses_do_not(tmp_path: Path) -
     env = Env(tmp_path, {f"{ALPHA}/pipelines": [[_pipeline(14, "canceled")]]})
     res = env.run("--host", HOST, "--limit", "1", "--no-file")
     assert "Needs attention: none" in res.stdout
+
+
+def test_help_prints_only_the_header() -> None:
+    res = subprocess.run(
+        ["bash", str(GHREPORT), "--help"], capture_output=True, check=False, text=True, timeout=60,
+    )
+    assert res.returncode == 0
+    lines = res.stdout.splitlines()
+    assert lines, "help printed nothing"
+    assert not any('=""' in ln for ln in lines), res.stdout
+    assert all(ln.startswith("#") for ln in lines), res.stdout
+    assert any("--provider P" in ln for ln in lines)
+    assert any("--render-dir DIR" in ln for ln in lines)
