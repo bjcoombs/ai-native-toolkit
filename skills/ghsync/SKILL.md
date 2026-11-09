@@ -84,7 +84,8 @@ sibling worktrees.
 
 ## Sync safety rules
 
-- Repos with **uncommitted changes** are fetched but not pulled (reported under
+- Repos with **uncommitted changes** (staged or unstaged edits to tracked files;
+  untracked files do not count) are fetched but not pulled (reported under
   *Uncommitted changes*).
 - Repos **not on their default branch** are fetched but not pulled (reported
   under *Not on default branch*).
