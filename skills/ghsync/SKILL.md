@@ -1,9 +1,9 @@
 ---
 name: ghsync
-description: "Bulk clone and keep in sync every GitHub repo you can access across an org or personal account. For an org it unions the repos reachable through the teams you belong to with the org's repo list (so direct-collaborator and public repos count even with no team membership); for a personal account it uses the account's repo list. Deduplicates them, then clones new ones and fast-forward syncs existing ones (and their worktrees) into a consistent <repo>/<repo>-main + <repo>/worktree layout. The org defaults to the directory you run from, so dropping into ~/dev/github.com/<org> mirrors that org. TRIGGER when the user types /ghsync, wants to clone or sync all org repos or their own personal repos, asks to mirror everything they have access to, is onboarding into a new enterprise/org, or wants to refresh their local checkouts to latest."
+description: "Bulk clone and keep in sync every repo you can access on GitHub or GitLab. GitHub: an org's repos via your teams plus the org repo list, or a personal account's repos. GitLab (--provider gitlab --host <host>): every project in every group you belong to, with nested subgroups and projects shared into those groups, laid out under its path_with_namespace; --group narrows to one subtree, and --porcelain / --from-list split discovery from cloning for hosts reachable only from another network. Deduplicates, then clones new repos and fast-forward syncs existing ones (and their worktrees) into a <path>/<repo>-main + <path>/worktree layout. TRIGGER when the user types /ghsync, wants to clone or sync all org repos, their personal repos or all GitLab group projects, asks to mirror everything they have access to on GitHub or a GitLab host, is onboarding into a new enterprise, org or GitLab group, or wants to refresh their local checkouts to latest."
 ---
 
-# ghsync: mirror and sync every repo you can access
+# ghsync: mirror and sync every repo you can access on GitHub or GitLab
 
 Onboarding into a new enterprise means finding and cloning dozens of repos by
 hand, then drifting out of date. This skill does both halves: it **discovers**
@@ -15,8 +15,9 @@ everything you can reach and **keeps it in sync**.
   local work: repos with uncommitted changes or on a non-default branch are
   fetched but not pulled, and reported in the summary.
 
-It is **org-agnostic** — point it at any GitHub org, GitHub Enterprise host, or
-**personal account**. The script detects the account type itself: for an
+It is **org-agnostic**: point it at any GitHub org, GitHub Enterprise host,
+**personal account**, or a **GitLab host** (gitlab.com or self-managed) with
+`--provider gitlab`; see [GitLab](#gitlab) below. On GitHub: the script detects the account type itself. For an
 organization it unions the teams you belong to with the org's repo list (so
 direct-collaborator and public repos are included even with no team
 membership); for a personal account it uses the account's repo list (private
@@ -61,19 +62,73 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org meridianhub --root ~/dev/gith
 
 | Flag | Effect |
 |------|--------|
-| `--org NAME` | Org or personal account to sync (default: basename of `--root` / cwd) |
-| `--root DIR` | Directory to clone into (default: current directory) |
-| `--list-teams` | List your teams in the org (with repo counts) and exit; orgs only |
+| `--provider github\|gitlab` | Which host type to sync (default: `github`) |
+| `--root DIR` | Directory to clone into (GitHub default: current directory; GitLab default: `~/dev/<host>`, created if missing) |
 | `--list-repos` | List the deduplicated accessible repos and exit |
-| `--porcelain` | Machine-readable repo list: one name per line to stdout, all chatter to stderr; implies `--list-repos`. Consumed by downstream tooling such as `/ghreport`. |
+| `--porcelain` | Machine-readable repo list: one path per line to stdout (GitHub: the repo name; GitLab: `path_with_namespace`), all chatter to stderr; implies `--list-repos`. Consumed by `/ghreport` and by `--from-list`. |
 | `--dry-run` | Show what would be cloned/updated without making changes |
 | `--limit N` | Process only the first N repos (useful for a quick test) |
 | `--quiet` | Suppress per-repository chatter; keep the final summary |
+| `--org NAME` | GitHub only. Org or personal account to sync (default: basename of `--root` / cwd) |
+| `--list-teams` | GitHub only. List your teams in the org (with repo counts) and exit; orgs only |
+| `--host HOST` | GitLab only. Host to sync (default: `gitlab.com`); `https://` and a trailing `/` are accepted |
+| `--group PATH` | GitLab only. Sync one group and its subgroups instead of every group you belong to |
+| `--from-list FILE` | GitLab only. Sync the paths in FILE (the `--porcelain` format; blank lines and `#` comments ignored) with no discovery and no `glab` |
+
+A flag that belongs to the other provider is rejected with an error, not
+ignored.
+
+## GitLab
+
+```bash
+# Every project in every group you belong to on gitlab.com, into ~/dev/gitlab.com/
+bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab --list-repos
+bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab
+
+# One group subtree on a self-managed host, into ~/dev/gitlab.example.com/
+bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab --host gitlab.example.com --group platform/infra
+```
+
+- **Discovery** runs through `glab api --paginate`: the groups you belong to
+  (`groups?min_access_level=10`), each group's `descendant_groups`, and each
+  group's `projects` and `projects/shared`. Dedupe is on
+  `path_with_namespace`, so a project reachable directly and through sharing,
+  or shared into two groups, is cloned once.
+- **Layout:** each project lands under its own `path_with_namespace`, so
+  nested subgroups become nested directories and a shared project from
+  another namespace sits under that namespace, not under the group it was
+  shared into: `~/dev/<host>/<group>/<subgroup>/<repo>/<repo>-main` plus a
+  sibling `worktree/`.
+- **Archived** and **empty** projects are skipped, as on GitHub.
+- **Clone URLs** are built from the host: `https://<host>/<path>.git`, or
+  `git@<host>:<path>.git` with `GHSYNC_GIT_PROTOCOL=ssh`. For HTTPS on a
+  private project, let `glab auth login` set up git credentials.
+- **Fail fast:** before any discovery call, the script checks that `glab` and
+  `jq` are installed and that `glab auth status --hostname <host>` passes. A
+  failure prints one line naming the host and the check (installed,
+  authentication or reachability) and exits non-zero. It does not retry, and
+  it never tunnels or works around network controls.
+
+### Hosts reachable only from another network
+
+Discovery needs the GitLab API; cloning needs only git. When the two are
+reachable from different places, split the run:
+
+```bash
+# 1. Where the API answers: save the project list.
+bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab --host gitlab.example.com --porcelain > projects.txt
+
+# 2. Where git reaches the host: clone and sync from the list. No glab needed.
+bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab --host gitlab.example.com --from-list projects.txt
+```
+
+Step 2 builds the same layout as a discovery run and makes no API call.
+Edit the list to drop projects; `--limit` applies to it too.
 
 ## Layout produced
 
 ```
-<root>/<repo>/
+<root>/<path>/       # GitHub: the repo name; GitLab: path_with_namespace
   ├── <repo>-main/   # default-branch checkout, kept clean and up to date
   └── worktree/      # ready for `git worktree add ...`
 ```
@@ -97,8 +152,10 @@ sibling worktrees.
 
 ## Requirements & configuration
 
-- **`gh` and `jq`** on `PATH`, and `gh auth status` must be authenticated. The
-  script checks both up front.
+- **GitHub:** `gh` and `jq` on `PATH`, and `gh auth status` must be
+  authenticated. The script checks both up front.
+- **GitLab:** `glab` and `jq` on `PATH`, and `glab auth status --hostname
+  <host>` must pass (`--from-list` needs only `git` and `jq`).
 - **GitHub Enterprise:** `gh` uses its configured host. Target a GHE instance by
   setting `GH_HOST=github.example.com` or running
   `gh auth login --hostname github.example.com` first.
@@ -112,7 +169,8 @@ sibling worktrees.
   when authenticated as that account). Empty repos with no default branch are
   skipped in both cases.
 - **Blacklist:** export `GHSYNC_BLACKLIST="repo-a repo-b"` to skip oversized or
-  problematic repos.
+  problematic repos. Entries are repository paths (`group/sub/repo` on
+  GitLab).
 - **`timeout`:** optional but recommended (`brew install coreutils`) — caps each
   repo at 5 minutes so one hung clone can't stall the run.
 - **Archived repos** are skipped from cloning and cached to
