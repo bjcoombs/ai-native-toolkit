@@ -24,7 +24,8 @@ set -euo pipefail
 # those groups. Each project is laid out under its own path_with_namespace,
 # which is also the dedupe key, so a project shared into two groups is
 # cloned once. --group narrows the run to one group subtree. The root
-# defaults to ~/dev/<host>/. Requires glab, authenticated for the host.
+# defaults to ~/dev/<host>/, without any :port. Requires glab, authenticated
+# for the host.
 #
 # Layout produced (per repo path under the root; for GitHub the path is the
 # repo name, for GitLab the path_with_namespace, and the -main directory
@@ -46,8 +47,9 @@ set -euo pipefail
 #                    GitHub: [--org NAME] [--list-teams]
 #                    GitLab: [--host HOST] [--group PATH] [--from-list FILE]
 #   --provider P     github (default) or gitlab
-#   --root DIR       Directory to clone into (GitHub default: current
-#                    directory; GitLab default: ~/dev/<host>)
+#   --root DIR       Directory to clone into; must already exist (GitHub
+#                    default: current directory; GitLab default:
+#                    ~/dev/<host> without any :port)
 #   --quiet          Suppress per-repository messages during sync
 #   --limit N        Process only N repositories (useful for testing)
 #   --dry-run        Show what would be done without making changes
@@ -60,13 +62,24 @@ set -euo pipefail
 #   --list-teams     List your teams in the org and exit (GitHub orgs only)
 #   --host HOST      GitLab host (default: gitlab.com); a scheme and
 #                    trailing slash are accepted and stripped
-#   --group PATH     Sync only this GitLab group and its subgroups
+#   --group PATH     Sync only this GitLab group and its subgroups,
+#                    including a parent of the subgroups you belong to
 #   --from-list F    Sync the GitLab paths listed in F (the --porcelain
 #                    format; blank lines and # comments are ignored) instead
 #                    of discovering them. Clone URLs are built from --host:
 #                    https://<host>/<path>.git, or git@<host>:<path>.git when
 #                    GHSYNC_GIT_PROTOCOL=ssh. Needs no glab.
 # ===================================================================
+
+# Names ghsync owns directly under the root, lowercase. The archived-repos
+# cache is written on every real sync. The legacy status directory is no
+# longer created, but older ghsync versions still remove it at the start and
+# end of each run against the same root, so a checkout there would be lost.
+# gitlab_reject_unsafe_paths skips any path whose first segment is one of
+# these, so add a new root entry here, not as a bare literal.
+ARCHIVED_CACHE_NAME=".gh_archived_repos"
+LEGACY_STATUS_DIR_NAME=".gh_sync_tmp"
+RESERVED_ROOT_ENTRIES=("$ARCHIVED_CACHE_NAME" "$LEGACY_STATUS_DIR_NAME")
 
 # Process command line args
 ORG=""
@@ -437,7 +450,7 @@ gitlab_group_projects() {
 # subtree), their nested subgroups, and the projects shared into them. Lines
 # of the groups file are "<api ref><TAB><full path>"; dedupe is on the path.
 discover_gitlab() {
-    local groups_file member_json g ref full_path desc_json
+    local groups_file member_json g ref full_path desc_json covered
     groups_file=$(mktemp)
 
     echo "Fetching your groups on $GITLAB_HOST..."
@@ -461,16 +474,27 @@ discover_gitlab() {
     if [ -n "$GITLAB_GROUP" ]; then
         g=${GITLAB_GROUP%/}
         awk -F'\t' -v g="$g" '$2 == g || index($2, g "/") == 1' "$groups_file" > "$groups_file.sub"
-        if [ ! -s "$groups_file.sub" ]; then
-            # Not one of your groups (a public group, say): look it up by path.
+        # The group itself is one of yours (or under one): its subtree is
+        # already complete. Otherwise (a public group, or a parent of the
+        # subgroups you belong to) look it up by path and add everything it
+        # shows you, so projects directly in it and in sibling subgroups
+        # count too. The lookup failing is fatal only when you belong to
+        # nothing under it; otherwise one line names what was left out.
+        if ! cut -f2 "$groups_file.sub" | grep -qxF -- "$g"; then
             ref=$(gitlab_encode "$g")
-            if ! desc_json=$(gitlab_api "groups/$ref/descendant_groups?per_page=100" 2>/dev/null); then
+            if desc_json=$(gitlab_api "groups/$ref/descendant_groups?per_page=100" 2>/dev/null); then
+                printf '%s\t%s\n' "$ref" "$g" >> "$groups_file.sub"
+                jq -r '.[] | "\(.id)\t\(.full_path)"' <<< "$desc_json" >> "$groups_file.sub"
+            elif [ -s "$groups_file.sub" ]; then
+                covered=$(cut -f2 "$groups_file.sub" | sort -u | paste -sd, - | sed 's/,/, /g')
+                echo "Warning: could not read group $g on $GITLAB_HOST; syncing only your" \
+                    "subgroups under it ($covered) and skipping projects directly in $g" \
+                    "or in its other subgroups" >&2
+            else
                 rm -f "$groups_file" "$groups_file.sub"
                 echo "Error: group $g not found or not accessible on $GITLAB_HOST" >&2
                 exit 1
             fi
-            printf '%s\t%s\n' "$ref" "$g" > "$groups_file.sub"
-            jq -r '.[] | "\(.id)\t\(.full_path)"' <<< "$desc_json" >> "$groups_file.sub"
         fi
         mv "$groups_file.sub" "$groups_file"
     fi
@@ -499,16 +523,35 @@ read_from_list() {
 }
 
 # Keep only paths that are safe to use as directories and to splice into
-# the per-repo `bash -c` string: slash-separated segments of letters,
-# digits, dot, dash and underscore, with no empty, "." or ".." segment. That
-# is the GitLab path charset, so a real project never trips it; a hand-edited
-# --from-list line with a quote, a space, an absolute path or ../ does.
+# the per-repo `bash -c` string. GitLab's own rule (lib/gitlab/path_regex.rb:
+# PATH_START_CHAR = '[a-zA-Z0-9_\.]', then [a-zA-Z0-9_\-\.], and
+# NO_SUFFIX_REGEX = /(?<!\.git|\.atom)/) allows a leading dot, so
+# grp/.dotfiles is kept. On top of that: no empty, "." or ".." segment, no
+# segment ending in .git or .atom (GitLab's suffix rule), and no segment
+# that is .git in any case, since a case-folding filesystem (the macOS
+# default) would read .GIT as a stray git directory. A real project trips
+# this only through that case-folded .git rule (GitLab allows grp/.GIT); a
+# hand-edited --from-list line with a quote, a space, an absolute path or
+# ../ does. A first segment that names one of ghsync's own root entries
+# (RESERVED_ROOT_ENTRIES, in any case) is skipped too, so a checkout never
+# shares a directory with the archived-repos cache or the legacy status
+# directory; the same names deeper down (grp/.gh_sync_tmp) are safe.
 gitlab_reject_unsafe_paths() {
-    local kept line
+    local kept line folded first reserved is_reserved
     kept=$(mktemp)
     while IFS= read -r line; do
-        if [[ "$line" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*$ ]] \
-            && [[ "/$line/" != */../* && "/$line/" != */./* ]]; then
+        folded=$(tr '[:upper:]' '[:lower:]' <<< "/$line/")
+        first=${folded#/}
+        first=${first%%/*}
+        is_reserved=false
+        for reserved in "${RESERVED_ROOT_ENTRIES[@]}"; do
+            [ "$first" = "$reserved" ] && is_reserved=true
+        done
+        if [[ "$line" =~ ^[A-Za-z0-9_.][A-Za-z0-9._-]*(/[A-Za-z0-9_.][A-Za-z0-9._-]*)*$ ]] \
+            && [[ "/$line/" != */../* && "/$line/" != */./* ]] \
+            && [[ "$line/" != *.git/* && "$line/" != *.atom/* ]] \
+            && [[ "$folded" != */.git/* ]] \
+            && [ "$is_reserved" = false ]; then
             echo "$line" >> "$kept"
         else
             echo "Warning: skipping unsafe repository path: $line" >&2
@@ -650,28 +693,30 @@ discover_repos() {
 provider_preflight
 
 # Derive the root, after preflight so a failed host check leaves no
-# directory behind. An explicit --root must exist on either provider, so a
-# typo fails rather than starting a new tree. GitHub: the root defaults to
-# cwd, and the org defaults to its basename, so dropping into
-# ~/dev/github.com/<org> just works. GitLab: the root defaults to
-# ~/dev/<host>, created on first sync. A GitLab list-only run (--list-repos,
-# --porcelain) never touches the root: the list may be produced on a machine
+# directory behind. An explicit --root must exist on either provider and in
+# every mode, so a typo fails rather than starting a new tree. GitHub: the
+# root defaults to cwd, and the org defaults to its basename, so dropping
+# into ~/dev/github.com/<org> just works. GitLab: the root defaults to
+# ~/dev/<host> with any :port dropped (gitlab.example.com:8443 syncs into
+# ~/dev/gitlab.example.com), created on the first real sync. A GitLab
+# preview run (--list-repos, --porcelain, --dry-run) creates no directory
+# and writes no file under the root: the list may be produced on a machine
 # that will never hold the checkouts.
-gitlab_list_only=false
-[ "$PROVIDER" = gitlab ] && [ "$LIST_REPOS" = true ] && gitlab_list_only=true
+gitlab_preview=false
+if [ "$PROVIDER" = gitlab ] && { [ "$LIST_REPOS" = true ] || [ "$DRY_RUN" = true ]; }; then
+    gitlab_preview=true
+fi
 if [ "$PROVIDER" = gitlab ] && [ -z "$ROOT" ]; then
-    ROOT="$HOME/dev/$GITLAB_HOST"
-    [ "$gitlab_list_only" = true ] || mkdir -p "$ROOT"
-else
-    ROOT="${ROOT:-$PWD}"
+    ROOT="$HOME/dev/${GITLAB_HOST%%:*}"
+    [ "$gitlab_preview" = true ] || mkdir -p "$ROOT"
+elif [ -z "$ROOT" ]; then
+    ROOT="$PWD"
+elif [[ ! -d "$ROOT" ]]; then
+    echo "Error: root directory does not exist: $ROOT (create it first: mkdir -p \"$ROOT\")"
+    exit 1
 fi
-if [ "$gitlab_list_only" = false ]; then
-    if [[ ! -d "$ROOT" ]]; then
-        echo "Error: root directory does not exist: $ROOT (create it first: mkdir -p \"$ROOT\")"
-        exit 1
-    fi
-    ROOT="$(cd "$ROOT" && pwd)"
-fi
+# A previewed default root may not exist yet; keep it as written.
+[[ -d "$ROOT" ]] && ROOT="$(cd "$ROOT" && pwd)"
 if [ "$PROVIDER" = gitlab ]; then
     ORG="$GITLAB_HOST"
 else
@@ -717,15 +762,15 @@ mapfile -t repo_paths < <(sort -u "$all_repos_file")
 rm -f "$all_repos_file"
 
 # Save archived repos to persistent cache (handy for downstream tooling).
-# A GitLab list-only run writes nothing under the root.
-if [ "$gitlab_list_only" = true ]; then
+# A GitLab preview run writes nothing under the root.
+if [ "$gitlab_preview" = true ]; then
     archived_count=$(sort -u "$archived_repos_file" | wc -l | tr -d ' ')
     echo "Found $archived_count archived repositories (skipped)"
 else
-    archived_repos_cache="${GITHUB_DEV_PATH}/.gh_archived_repos"
+    archived_repos_cache="${GITHUB_DEV_PATH}/${ARCHIVED_CACHE_NAME}"
     sort -u "$archived_repos_file" > "$archived_repos_cache"
     archived_count=$(wc -l < "$archived_repos_cache" | tr -d ' ')
-    echo "Found $archived_count archived repositories (cached to .gh_archived_repos)"
+    echo "Found $archived_count archived repositories (cached to ${ARCHIVED_CACHE_NAME})"
 fi
 rm -f "$archived_repos_file"
 
@@ -775,13 +820,18 @@ if [ "$LIST_REPOS" = true ]; then
     exit 0
 fi
 
-# Create temp directory for status files
-temp_dir="${GITHUB_DEV_PATH}/.gh_sync_tmp"
-rm -rf "$temp_dir"
+# Per-run status files live in a temp directory outside the root, so a dry
+# run leaves the root untouched (and a missing default root missing). The
+# in-root status directory older versions used (LEGACY_STATUS_DIR_NAME) is
+# left alone: those versions removed it at the end of every run, and
+# deleting it here could only ever hit something that is not ours.
+temp_dir=$(mktemp -d)
 mkdir -p "$temp_dir/status"
 status_dir="$temp_dir/status"
+GHSYNC_STATUS_DIR="$status_dir"
+trap 'rm -f "$all_repos_file" "$archived_repos_file"; rm -rf "$temp_dir"' EXIT
 
-export QUIET_MODE DRY_RUN GITHUB_DEV_PATH ORG PROVIDER GITLAB_HOST GITLAB_SCHEME
+export QUIET_MODE DRY_RUN GITHUB_DEV_PATH ORG PROVIDER GITLAB_HOST GITLAB_SCHEME GHSYNC_STATUS_DIR
 
 # Progress indicator
 show_progress() {
@@ -856,7 +906,7 @@ update_worktrees() {
                         elif git pull --ff-only origin "$current_branch" &>/dev/null; then
                             clear_line
                             echo "*** Updated worktree: $repo:$worktree"
-                            echo "$repo:$worktree" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/worktree_updated"
+                            echo "$repo:$worktree" >> "${GHSYNC_STATUS_DIR}/worktree_updated"
                         else
                             clear_line
                             echo "*** Failed to update worktree: $repo:$worktree"
@@ -884,7 +934,7 @@ ensure_worktree_structure() {
         clear_line
         echo "*** Repository $repo exists but doesn't have the worktree structure"
         echo "*** To fix: move it aside and run this script again"
-        echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/wrong_structure"
+        echo "$repo" >> "${GHSYNC_STATUS_DIR}/wrong_structure"
         return 1
     fi
 
@@ -908,7 +958,7 @@ update_repo() {
             cd "$main_path" &>/dev/null || {
                 clear_line
                 echo "*** Failed to cd to $main_path"
-                echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/failed"
+                echo "$repo" >> "${GHSYNC_STATUS_DIR}/failed"
                 exit 1
             }
 
@@ -919,7 +969,7 @@ update_repo() {
             if ! git rev-parse --git-dir > /dev/null 2>&1; then
                 clear_line
                 echo "*** $repo is not a valid git repository"
-                echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/failed"
+                echo "$repo" >> "${GHSYNC_STATUS_DIR}/failed"
                 exit 1
             fi
 
@@ -935,7 +985,7 @@ update_repo() {
                     clear_line
                     echo "*** $repo has uncommitted changes (will fetch but not pull)"
                 fi
-                echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/uncommitted"
+                echo "$repo" >> "${GHSYNC_STATUS_DIR}/uncommitted"
                 has_uncommitted=true
                 can_update=false
             fi
@@ -956,7 +1006,7 @@ update_repo() {
                     clear_line
                     echo "*** $repo is not on default branch ($current_branch != $default_branch)"
                 fi
-                echo "$repo ($current_branch)" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/skipped"
+                echo "$repo ($current_branch)" >> "${GHSYNC_STATUS_DIR}/skipped"
                 non_default_branch=true
                 can_update=false
             fi
@@ -966,7 +1016,7 @@ update_repo() {
                     clear_line
                     echo "*** Failed to fetch updates for $repo"
                 fi
-                echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/failed"
+                echo "$repo" >> "${GHSYNC_STATUS_DIR}/failed"
                 exit 1
             fi
 
@@ -974,7 +1024,7 @@ update_repo() {
                 if ! git branch -r | grep -q "origin/$default_branch"; then
                     clear_line
                     echo "*** Remote branch $default_branch does not exist for $repo"
-                    echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/failed"
+                    echo "$repo" >> "${GHSYNC_STATUS_DIR}/failed"
                     exit 1
                 fi
 
@@ -985,23 +1035,23 @@ update_repo() {
                     if [ "$DRY_RUN" = true ]; then
                         clear_line
                         echo "*** [DRY-RUN] Would update $repo"
-                        echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/updated"
+                        echo "$repo" >> "${GHSYNC_STATUS_DIR}/updated"
                     elif git pull --ff-only origin "$default_branch" &>/dev/null; then
                         if [ "$QUIET_MODE" = false ]; then
                             clear_line
                             echo "*** Updated $repo"
                         fi
-                        echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/updated"
+                        echo "$repo" >> "${GHSYNC_STATUS_DIR}/updated"
                     else
                         if [ "$QUIET_MODE" = false ]; then
                             clear_line
                             echo "*** Failed to update $repo"
                         fi
-                        echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/failed"
+                        echo "$repo" >> "${GHSYNC_STATUS_DIR}/failed"
                         exit 1
                     fi
                 else
-                    echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/current"
+                    echo "$repo" >> "${GHSYNC_STATUS_DIR}/current"
                 fi
 
                 update_worktrees "$repo" "$default_branch"
@@ -1022,7 +1072,7 @@ update_repo() {
         else
             clear_line
             echo "*** $repo exists but is not a valid git repository"
-            echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/failed"
+            echo "$repo" >> "${GHSYNC_STATUS_DIR}/failed"
         fi
     else
         # Clone new repo
@@ -1031,7 +1081,7 @@ update_repo() {
 
         if [ "$DRY_RUN" = true ]; then
             echo "*** [DRY-RUN] Would clone $repo into proper structure"
-            echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/updated"
+            echo "$repo" >> "${GHSYNC_STATUS_DIR}/updated"
         else
             mkdir -p "$main_path"
             mkdir -p "$repo_path/worktree"
@@ -1040,13 +1090,13 @@ update_repo() {
                 # Enable long path support — required on Windows for repos with
                 # deep directory trees (200+ char filenames)
                 git -C "$main_path" config core.longpaths true
-                echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/updated"
+                echo "$repo" >> "${GHSYNC_STATUS_DIR}/updated"
                 clear_line
                 echo "*** Cloned $repo"
             else
                 clear_line
                 echo "*** Failed to clone $repo"
-                echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/failed"
+                echo "$repo" >> "${GHSYNC_STATUS_DIR}/failed"
                 # Remove only what this clone created: the checkout, the empty
                 # worktree dir, then each parent directory left empty up to
                 # the root. A shared parent (a/b for a/b/repo) that holds
@@ -1063,7 +1113,7 @@ update_repo() {
 }
 
 # Clean up status files
-rm -f "${GITHUB_DEV_PATH}/.gh_sync_tmp/status"/{updated,failed,skipped,uncommitted,current,worktree_updated,wrong_structure} 2>/dev/null || true
+rm -f "${GHSYNC_STATUS_DIR}"/{updated,failed,skipped,uncommitted,current,worktree_updated,wrong_structure} 2>/dev/null || true
 
 # Apply limit if specified
 if [ "$REPO_LIMIT" -gt 0 ] && [ "$REPO_LIMIT" -lt "$total_repos" ]; then
@@ -1102,7 +1152,7 @@ for repo in "${repo_paths[@]}"; do
         " || {
             clear_line
             echo "*** Timeout processing $repo"
-            echo "$repo" >> "${GITHUB_DEV_PATH}/.gh_sync_tmp/status/failed"
+            echo "$repo" >> "${GHSYNC_STATUS_DIR}/failed"
             show_progress
         }
     } &
