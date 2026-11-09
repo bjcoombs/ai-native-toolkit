@@ -29,9 +29,9 @@ deduplicated repo list, then queries each repo's remote state over `gh api`
 | Signal | Source (`projects/{url-encoded path}/...`) | Reported as |
 |--------|--------|-------------|
 | Open MRs | `merge_requests?state=opened`, every page | count (drafts noted) |
-| Pipeline on default branch | `pipelines?ref={default}`, newest finished of the last 20 | `success` / `failed` / `none` / `unknown` |
+| Pipeline on default branch | `pipelines?ref={default}`, newest finished of the last 20 | `success` / `failed` / `none` / `unknown` / `empty` |
 | Vulnerabilities | `vulnerabilities`, state `detected` or `confirmed` | count, or `no-access` |
-| Branch protection | `protected_branches` (wildcards such as `release/*` honoured), then `protected_branches/{default}` | `protected` / `unprotected` / `unknown` |
+| Branch protection | `protected_branches` (wildcards such as `release/*` honoured), then `protected_branches/{default}` | `protected` / `unprotected` / `unknown` / `empty` |
 
 The table gains a Branch column naming each project's default branch, and the
 PRs column becomes MRs.
@@ -42,6 +42,12 @@ The pipeline mirrors the GitHub latest-completed rule: only `success` and
 cannot hide a failure from Needs attention. A cancelled pipeline says nothing
 about whether the code passes, which is why it is skipped like `skipped` and
 `manual`. With no finished pipeline among the last 20 the column reads `none`.
+
+A project with no commits has a null default branch. Its Branch, Pipeline and
+Protection cells read `empty`, no pipeline or protection call is made, it stays
+out of Needs attention, and the headline counts it. (`ghsync`'s discovery
+already skips projects listed as empty, so this covers a project emptied
+between discovery and the query.)
 
 `no-access` on vulnerabilities is the common case, not a fault: it means the
 tier, the role, or the endpoint being unavailable on this GitLab version
