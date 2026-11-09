@@ -404,6 +404,20 @@ def test_uncommitted_change_is_fetched_not_pulled(env: Env) -> None:
     assert _section(res.stdout, "Uncommitted changes") == ["grp/alpha"]
 
 
+def test_untracked_file_does_not_block_fast_forward(env: Env) -> None:
+    """Pins the documented rule: only tracked changes count as uncommitted."""
+    assert env.sync().returncode == 0
+    checkout = env.checkout("grp/sub/beta")
+    new = env.advance("grp/sub/beta")
+    (checkout / "scratch.txt").write_text("untracked\n")
+    res = env.sync()
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert env.head("grp/sub/beta") == new
+    assert (checkout / "scratch.txt").read_text() == "untracked\n"
+    assert _section(res.stdout, "Uncommitted changes") == []
+    assert _section(res.stdout, "Updated") == ["grp/sub/beta"]
+
+
 def test_behind_checkout_fast_forwards(env: Env) -> None:
     assert env.sync().returncode == 0
     new = env.advance("grp/sub/deep/gamma")
