@@ -518,13 +518,29 @@ def _collision_overrides() -> Endpoints:
     return overrides
 
 
+def _listed_projects(endpoints: Endpoints) -> int:
+    """Distinct projects across the group listings discovery reads."""
+    paths = {
+        str(proj["path_with_namespace"])
+        for key, pages in endpoints.items()
+        if key.startswith("groups/") and key.endswith(("/projects", "/projects/shared"))
+        and not isinstance(pages, int)
+        for page in pages
+        if isinstance(page, list)
+        for proj in page
+    }
+    return len(paths)
+
+
 def test_fragment_names_do_not_collide(tmp_path: Path) -> None:
-    env = Env(tmp_path, _collision_overrides())
+    overrides = _collision_overrides()
+    expected = _listed_projects({**_endpoints(), **overrides})
+    env = Env(tmp_path, overrides)
     res = env.run("--host", HOST, "--group", "grp", "--no-file")
     assert res.returncode == 0, res.stderr
     for p in COLLIDING:
         assert _cells(_row(res.stdout, p))[0] == p
-    assert f"{len(COLLIDING) + 5} project(s)" in res.stdout
+    assert f"{expected} project(s)" in res.stdout
     assert _cells(_row(res.stdout, "grp/alpha")) == [
         "grp/alpha", "main", "2", "success", "no-access", "protected",
     ]
@@ -567,6 +583,20 @@ def test_empty_repository_with_limit(tmp_path: Path) -> None:
     assert "1 project(s)" in res.stdout
     assert _cells(_row(res.stdout, "grp/alpha"))[1:] == ["empty", "2", "empty", "no-access", "empty"]
     assert "Needs attention: none" in res.stdout
+
+
+def test_empty_repository_with_open_vulnerabilities_needs_attention(tmp_path: Path) -> None:
+    """GitLab keeps vulnerability records from earlier scans. Emptiness does
+    not hide them: the project is listed under Needs attention for them, and
+    for nothing about its pipeline or protection."""
+    vulns: Endpoints = {f"{ALPHA}/vulnerabilities": [[{"id": 7, "state": "detected"}]]}
+    env = Env(tmp_path, {**EMPTY, **vulns})
+    res = env.run("--host", HOST, "--limit", "1", "--no-file")
+    assert res.returncode == 0, res.stderr
+    assert _cells(_row(res.stdout, "grp/alpha"))[1:] == ["empty", "2", "empty", "1", "empty"]
+    assert "Needs attention: none" not in res.stdout
+    lines = [ln for ln in _attention(res.stdout).splitlines() if "**grp/alpha**" in ln]
+    assert lines == ["- **grp/alpha**: 1 open vulnerability"], res.stdout
 
 
 def test_render_dir_tells_an_empty_repo_from_a_branch_named_empty(tmp_path: Path) -> None:

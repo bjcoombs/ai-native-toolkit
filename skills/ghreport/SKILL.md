@@ -44,10 +44,12 @@ about whether the code passes, which is why it is skipped like `skipped` and
 `manual`. With no finished pipeline among the last 20 the column reads `none`.
 
 A project with no commits has a null default branch. Its Branch, Pipeline and
-Protection cells read `empty`, no pipeline or protection call is made, it stays
-out of Needs attention, and the headline counts it. (`ghsync`'s discovery
-already skips projects listed as empty, so this covers a project emptied
-between discovery and the query.)
+Protection cells read `empty`, no pipeline or protection call is made, and the
+headline counts it. Emptiness alone does not put it under Needs attention:
+pipeline and protection are not judged, but merge requests and vulnerabilities
+are still queried, and open vulnerabilities GitLab kept from earlier scans
+still list it. (`ghsync`'s discovery already skips projects listed as empty,
+so this covers a project emptied between discovery and the query.)
 
 `no-access` on vulnerabilities is the common case, not a fault: it means the
 tier, the role, or the endpoint being unavailable on this GitLab version

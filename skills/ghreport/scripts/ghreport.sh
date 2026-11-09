@@ -427,7 +427,7 @@ legend_gitlab() {
     echo "- **Pipeline**: status of the latest finished pipeline (\`success\` or \`failed\`) among the last 20 on the default branch; running, pending, canceled, skipped and manual pipelines are passed over. \`none\` means no finished pipeline was found, \`unknown\` that the pipelines API could not be read."
     echo "- **no-access** in a count column: the API refused or failed. For vulnerabilities that is the tier, the role, or the endpoint being unavailable on this GitLab version (GitLab documents the REST vulnerabilities endpoint as deprecated). It is not the same as a confirmed zero."
     echo "- **Protection**: \`unknown\` means the protected-branches API could not be read; \`unprotected\` means it listed no rule covering the default branch."
-    echo "- \`empty\` in Branch, Pipeline and Protection: the repository has no commits, so GitLab reports no default branch. Pipeline and protection are not checked, and an empty project is not listed under Needs attention."
+    echo "- \`empty\` in Branch, Pipeline and Protection: the repository has no commits, so GitLab reports no default branch. Pipeline and protection are not checked, so emptiness alone does not put a project under Needs attention; its open vulnerabilities, which GitLab keeps from earlier scans, still do."
 }
 
 assemble() {
