@@ -574,6 +574,28 @@ def test_from_list_with_scheme_host(env: Env, tmp_path: Path) -> None:
     assert _checkouts(env.root) == {"grp/sub/beta"}
 
 
+def test_from_list_skips_reserved_root_entry(env: Env, tmp_path: Path) -> None:
+    """A path under ghsync's own root entry is never cloned, and nothing in
+    that entry or in the other checkouts is removed by a later sync."""
+    legacy = env.root / ".gh_sync_tmp"
+    legacy.mkdir()
+    (legacy / "keep").write_text("left by an older version\n")
+    saved = tmp_path / "list.txt"
+    saved.write_text(".gh_sync_tmp/proj\ngrp/alpha\n")
+    res = env.run("--host", HOST, "--from-list", str(saved), "--quiet", root=env.root)
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "skipping unsafe repository path: .gh_sync_tmp/proj" in res.stderr
+    assert _checkouts(env.root) == {"grp/alpha"}
+    assert not (legacy / "proj").exists()
+    sentinel = env.root / "grp" / "alpha" / "alpha-main" / "uncommitted.txt"
+    sentinel.write_text("work in progress\n")
+    res = env.sync()
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert (legacy / "keep").read_text() == "left by an older version\n"
+    assert sentinel.read_text() == "work in progress\n"
+    assert "grp/alpha" in _checkouts(env.root)
+
+
 def test_from_list_skips_unsafe_paths(env: Env, tmp_path: Path) -> None:
     """A quote, ../ or absolute path never reaches the sync loop or the disk."""
     saved = tmp_path / "list.txt"
@@ -762,6 +784,17 @@ def test_dot_leading_project_is_synced(env: Env) -> None:
         ("grp/x.atom", False),
         (".git/proj", False),
         ("grp.git/proj", False),
+        # ghsync's own root entries, rejected as a first segment in any case.
+        (".gh_sync_tmp/proj", False),
+        (".gh_archived_repos/proj", False),
+        (".gh_sync_tmp", False),
+        (".gh_archived_repos", False),
+        (".GH_SYNC_TMP/proj", False),
+        (".Gh_Archived_Repos/proj", False),
+        # Only root-level entries are reserved, so nested uses are safe.
+        ("grp/.gh_sync_tmp", True),
+        ("grp/.gh_archived_repos/proj", True),
+        (".gh_sync_tmp2/proj", True),
     ],
 )
 def test_path_segment_rules(env: Env, tmp_path: Path, path: str, kept: bool) -> None:

@@ -118,7 +118,9 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab --host gitlab.exa
   starts with a letter, digit, `_` or `.` (so `grp/.dotfiles` syncs), then
   letters, digits, `_`, `-` and `.`. Segments `.` and `..`, any segment
   ending in `.git` or `.atom`, and `.git` in any case are skipped with a
-  warning.
+  warning. So is a first segment, in any case, that names one of ghsync's
+  own root entries (`.gh_archived_repos`, or `.gh_sync_tmp`, which older
+  versions delete on every run); deeper segments may use those names.
 - **Fail fast:** before any discovery call, the script checks that `glab` and
   `jq` are installed and that `glab auth status --hostname <host>` passes. A
   failure prints one line naming the host and the check (installed,

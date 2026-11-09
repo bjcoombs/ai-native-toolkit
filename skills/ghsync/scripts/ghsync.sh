@@ -71,6 +71,16 @@ set -euo pipefail
 #                    GHSYNC_GIT_PROTOCOL=ssh. Needs no glab.
 # ===================================================================
 
+# Names ghsync owns directly under the root, lowercase. The archived-repos
+# cache is written on every real sync. The legacy status directory is no
+# longer created, but older ghsync versions still remove it at the start and
+# end of each run against the same root, so a checkout there would be lost.
+# gitlab_reject_unsafe_paths skips any path whose first segment is one of
+# these, so add a new root entry here, not as a bare literal.
+ARCHIVED_CACHE_NAME=".gh_archived_repos"
+LEGACY_STATUS_DIR_NAME=".gh_sync_tmp"
+RESERVED_ROOT_ENTRIES=("$ARCHIVED_CACHE_NAME" "$LEGACY_STATUS_DIR_NAME")
+
 # Process command line args
 ORG=""
 ROOT=""
@@ -522,16 +532,26 @@ read_from_list() {
 # default) would read .GIT as a stray git directory. A real project trips
 # this only through that case-folded .git rule (GitLab allows grp/.GIT); a
 # hand-edited --from-list line with a quote, a space, an absolute path or
-# ../ does.
+# ../ does. A first segment that names one of ghsync's own root entries
+# (RESERVED_ROOT_ENTRIES, in any case) is skipped too, so a checkout never
+# shares a directory with the archived-repos cache or the legacy status
+# directory; the same names deeper down (grp/.gh_sync_tmp) are safe.
 gitlab_reject_unsafe_paths() {
-    local kept line folded
+    local kept line folded first reserved is_reserved
     kept=$(mktemp)
     while IFS= read -r line; do
         folded=$(tr '[:upper:]' '[:lower:]' <<< "/$line/")
+        first=${folded#/}
+        first=${first%%/*}
+        is_reserved=false
+        for reserved in "${RESERVED_ROOT_ENTRIES[@]}"; do
+            [ "$first" = "$reserved" ] && is_reserved=true
+        done
         if [[ "$line" =~ ^[A-Za-z0-9_.][A-Za-z0-9._-]*(/[A-Za-z0-9_.][A-Za-z0-9._-]*)*$ ]] \
             && [[ "/$line/" != */../* && "/$line/" != */./* ]] \
             && [[ "$line/" != *.git/* && "$line/" != *.atom/* ]] \
-            && [[ "$folded" != */.git/* ]]; then
+            && [[ "$folded" != */.git/* ]] \
+            && [ "$is_reserved" = false ]; then
             echo "$line" >> "$kept"
         else
             echo "Warning: skipping unsafe repository path: $line" >&2
@@ -747,10 +767,10 @@ if [ "$gitlab_preview" = true ]; then
     archived_count=$(sort -u "$archived_repos_file" | wc -l | tr -d ' ')
     echo "Found $archived_count archived repositories (skipped)"
 else
-    archived_repos_cache="${GITHUB_DEV_PATH}/.gh_archived_repos"
+    archived_repos_cache="${GITHUB_DEV_PATH}/${ARCHIVED_CACHE_NAME}"
     sort -u "$archived_repos_file" > "$archived_repos_cache"
     archived_count=$(wc -l < "$archived_repos_cache" | tr -d ' ')
-    echo "Found $archived_count archived repositories (cached to .gh_archived_repos)"
+    echo "Found $archived_count archived repositories (cached to ${ARCHIVED_CACHE_NAME})"
 fi
 rm -f "$archived_repos_file"
 
@@ -801,9 +821,10 @@ if [ "$LIST_REPOS" = true ]; then
 fi
 
 # Per-run status files live in a temp directory outside the root, so a dry
-# run leaves the root untouched (and a missing default root missing).
-# A real run also clears the in-root status directory older versions used.
-[ "$DRY_RUN" = true ] || rm -rf "${GITHUB_DEV_PATH}/.gh_sync_tmp"
+# run leaves the root untouched (and a missing default root missing). The
+# in-root status directory older versions used (LEGACY_STATUS_DIR_NAME) is
+# left alone: those versions removed it at the end of every run, and
+# deleting it here could only ever hit something that is not ours.
 temp_dir=$(mktemp -d)
 mkdir -p "$temp_dir/status"
 status_dir="$temp_dir/status"
