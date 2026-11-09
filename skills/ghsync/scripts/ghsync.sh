@@ -24,7 +24,8 @@ set -euo pipefail
 # those groups. Each project is laid out under its own path_with_namespace,
 # which is also the dedupe key, so a project shared into two groups is
 # cloned once. --group narrows the run to one group subtree. The root
-# defaults to ~/dev/<host>/. Requires glab, authenticated for the host.
+# defaults to ~/dev/<host>/, without any :port. Requires glab, authenticated
+# for the host.
 #
 # Layout produced (per repo path under the root; for GitHub the path is the
 # repo name, for GitLab the path_with_namespace, and the -main directory
