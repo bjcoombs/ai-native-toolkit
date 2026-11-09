@@ -63,16 +63,16 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org meridianhub --root ~/dev/gith
 | Flag | Effect |
 |------|--------|
 | `--provider github\|gitlab` | Which host type to sync (default: `github`) |
-| `--root DIR` | Directory to clone into; an explicit `--root` must already exist (GitHub default: current directory; GitLab default: `~/dev/<host>`, created on the first sync) |
+| `--root DIR` | Directory to clone into; an explicit `--root` must already exist, in every mode (GitHub default: current directory; GitLab default: `~/dev/<host>` with any `:port` dropped, created on the first real sync) |
 | `--list-repos` | List the deduplicated accessible repos and exit |
 | `--porcelain` | Machine-readable repo list: one path per line to stdout (GitHub: the repo name; GitLab: `path_with_namespace`), all chatter to stderr; implies `--list-repos`. Consumed by `/ghreport` and by `--from-list`. |
-| `--dry-run` | Show what would be cloned/updated without making changes |
+| `--dry-run` | Show what would be cloned/updated without making changes. On GitLab it creates no directory and writes no `.gh_archived_repos`; on GitHub it still refreshes `.gh_archived_repos` in the root |
 | `--limit N` | Process only the first N repos (useful for a quick test) |
 | `--quiet` | Suppress per-repository chatter; keep the final summary |
 | `--org NAME` | GitHub only. Org or personal account to sync (default: basename of `--root` / cwd) |
 | `--list-teams` | GitHub only. List your teams in the org (with repo counts) and exit; orgs only |
 | `--host HOST` | GitLab only. Host to sync (default: `gitlab.com`); `https://` and a trailing `/` are accepted, and so is a web port (`host:8443`) |
-| `--group PATH` | GitLab only. Sync one group and its subgroups instead of every group you belong to |
+| `--group PATH` | GitLab only. Sync one group and its subgroups instead of every group you belong to. Covers every project the group shows you, including when you belong only to a subgroup of it (projects directly in the group and in sibling subgroups count). If the group itself cannot be read, the run syncs your subgroups under it and prints one stderr warning naming them and what was skipped; it fails only when nothing under the group is reachable |
 | `--from-list FILE` | GitLab only. Sync the paths in FILE (the `--porcelain` format; blank lines and `#` comments ignored) with no discovery and no `glab` |
 
 A flag that belongs to the other provider is rejected with an error, not
@@ -106,9 +106,19 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab --host gitlab.exa
   `--host` is the web and API port: it stays in the HTTPS URL and is dropped
   from the SSH URL. Set a non-standard SSH port for the host in
   `~/.ssh/config`.
-- **List-only runs** (`--list-repos`, `--porcelain`) create no root
+- **Default root:** `~/dev/<host>`, with any port dropped, so
+  `--host gitlab.example.com:8443` syncs into `~/dev/gitlab.example.com/`.
+  Two instances on one host name but different ports would share that
+  root: give one an explicit `--root`.
+- **Preview runs** (`--list-repos`, `--porcelain`, `--dry-run`) create no
   directory and write no `.gh_archived_repos`, so the list can be produced
-  on a machine that will never hold the checkouts.
+  on a machine that will never hold the checkouts. An explicit `--root`
+  must still exist.
+- **Path rules** follow GitLab's (`lib/gitlab/path_regex.rb`): a segment
+  starts with a letter, digit, `_` or `.` (so `grp/.dotfiles` syncs), then
+  letters, digits, `_`, `-` and `.`. Segments `.` and `..`, any segment
+  ending in `.git` or `.atom`, and `.git` in any case are skipped with a
+  warning.
 - **Fail fast:** before any discovery call, the script checks that `glab` and
   `jq` are installed and that `glab auth status --hostname <host>` passes. A
   failure prints one line naming the host and the check (installed,

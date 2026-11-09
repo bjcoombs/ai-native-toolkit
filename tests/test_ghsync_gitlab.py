@@ -11,7 +11,8 @@ Fixture tree on the host `gl.test`:
 
 - `grp` (id 1), the only group the user is a member of, with descendants
   `grp/sub` (2), `grp/sub/deep` (3) and the empty `grp/empty` (4).
-- Projects: `grp/alpha`, `grp/omega` (served on a second page, so it is
+- Projects: `grp/.dotfiles` (a leading dot, which GitLab allows),
+  `grp/alpha`, `grp/omega` (served on a second page, so it is
   found only when discovery passes `--paginate`), `grp/sub/beta`,
   `grp/sub/alpha` (shares a basename with `grp/alpha`),
   `grp/sub/deep/gamma`, and the archived `grp/old`.
@@ -32,6 +33,7 @@ GHSYNC = REPO / "skills" / "ghsync" / "scripts" / "ghsync.sh"
 HOST = "gl.test"
 
 SYNCED = [
+    "grp/.dotfiles",
     "grp/alpha",
     "grp/omega",
     "grp/sub/alpha",
@@ -82,7 +84,7 @@ ENDPOINTS: dict[str, list[list[dict[str, object]]]] = {
     "groups/grp/sub/deep/descendant_groups": [[]],
     "groups/grp/empty/descendant_groups": [[]],
     "groups/grp/projects": [
-        [_project("grp/alpha"), _project("grp/old", True)],
+        [_project("grp/.dotfiles"), _project("grp/alpha"), _project("grp/old", True)],
         [_project("grp/omega")],
     ],
     "groups/grp/projects/shared": [
@@ -202,6 +204,7 @@ class Env:
             "[commit]\n\tgpgsign = false\n"
             f'[url "{base}"]\n'
             f"\tinsteadOf = https://{HOST}/\n"
+            f"\tinsteadOf = https://{HOST}:8443/\n"
             f"\tinsteadOf = http://{HOST}/\n"
             f"\tinsteadOf = ssh://git@{HOST}/\n"
             f"\tinsteadOf = git@{HOST}:\n"
@@ -446,14 +449,14 @@ def test_first_run_clones_nested_layout_then_up_to_date(env: Env) -> None:
         assert (checkout / "README").read_text() == f"{path}\n"
     assert not (env.root / "grp" / "old").exists()
     assert not (env.root / "grp" / "other").exists()
-    assert "Up-to-date: 0 | Updated: 6 | Failed: 0" in res.stdout
+    assert f"Up-to-date: 0 | Updated: {len(SYNCED)} | Failed: 0" in res.stdout
     assert "GitLab Sync Summary" in res.stdout
 
     before = {p: env.head(p) for p in SYNCED}
     res = env.sync()
     assert res.returncode == 0, res.stdout + res.stderr
     assert {p: env.head(p) for p in SYNCED} == before
-    assert "Up-to-date: 6 | Updated: 0 | Failed: 0" in res.stdout
+    assert f"Up-to-date: {len(SYNCED)} | Updated: 0 | Failed: 0" in res.stdout
     assert not env.gh_log.exists()
 
 
@@ -723,3 +726,153 @@ def test_help_documents_gitlab_flags(env: Env) -> None:
     # The whole header block prints, ending at its closing rule.
     assert res.stdout.rstrip().splitlines()[-1].startswith("# ====")
     assert "#\n# GitHub Enterprise" in res.stdout
+
+
+# ---- path rules ---------------------------------------------------------------
+#
+# GitLab's lib/gitlab/path_regex.rb: PATH_START_CHAR = '[a-zA-Z0-9_\.]', the
+# rest of a segment is [a-zA-Z0-9_\-\.], and NO_SUFFIX_REGEX forbids a
+# segment ending in .git or .atom.
+
+
+def test_dot_leading_project_is_synced(env: Env) -> None:
+    res = env.sync()
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "grp/.dotfiles" in _checkouts(env.root)
+    assert "unsafe repository path" not in res.stderr
+
+
+@pytest.mark.parametrize(
+    ("path", "kept"),
+    [
+        ("grp/alpha", True),
+        ("grp/9lives", True),
+        ("grp/_under", True),
+        ("grp/.github", True),
+        ("grp/...", True),
+        (".hidden/proj", True),
+        ("grp/a.b-c_d", True),
+        ("grp/-dash", False),
+        ("grp/.", False),
+        ("grp/..", False),
+        ("grp/.git", False),
+        ("grp/.GIT", False),
+        ("grp/Proj.GIT", True),
+        ("grp/x.git", False),
+        ("grp/x.atom", False),
+        (".git/proj", False),
+        ("grp.git/proj", False),
+    ],
+)
+def test_path_segment_rules(env: Env, tmp_path: Path, path: str, kept: bool) -> None:
+    saved = tmp_path / "list.txt"
+    saved.write_text(f"{path}\n")
+    res = env.run("--host", HOST, "--from-list", str(saved), "--porcelain")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == ([path] if kept else [])
+    assert ("skipping unsafe repository path" in res.stderr) is not kept
+
+
+# ---- side effects -------------------------------------------------------------
+
+
+@pytest.mark.parametrize("flag", ["--dry-run", "--porcelain", "--list-repos"])
+def test_preview_modes_leave_default_root_absent(env: Env, flag: str) -> None:
+    res = env.run("--host", HOST, flag)
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert not (env.tmp / "dev").exists()
+
+
+@pytest.mark.parametrize("flag", ["--dry-run", "--porcelain", "--list-repos"])
+def test_preview_modes_leave_explicit_root_empty(env: Env, flag: str) -> None:
+    res = env.run("--host", HOST, flag, root=env.root)
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert list(env.root.iterdir()) == []
+
+
+@pytest.mark.parametrize("flag", ["--dry-run", "--porcelain", "--list-repos"])
+def test_preview_modes_fail_on_missing_explicit_root(env: Env, flag: str) -> None:
+    missing = env.tmp / "typo-root"
+    res = env.run("--host", HOST, flag, root=missing)
+    assert res.returncode != 0
+    assert "root directory does not exist" in res.stdout + res.stderr
+    assert not missing.exists()
+
+
+def test_dry_run_reports_would_clone(env: Env) -> None:
+    res = env.run("--host", HOST, "--dry-run")
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "[DRY-RUN] Would clone grp/alpha" in res.stdout
+    assert f"Updated ({len(SYNCED)})" in res.stdout
+
+
+def test_dry_run_with_port_leaves_no_root(env: Env) -> None:
+    res = env.run(
+        "--host",
+        f"{HOST}:8443",
+        "--dry-run",
+        env={"GLAB_OK_HOSTS": f"{HOST}:8443"},
+    )
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert not (env.tmp / "dev").exists()
+
+
+def test_default_root_strips_port(env: Env) -> None:
+    """--host gl.test:8443 syncs into ~/dev/gl.test, not ~/dev/gl.test:8443."""
+    res = env.run(
+        "--host",
+        f"{HOST}:8443",
+        "--quiet",
+        "--group",
+        "grp/sub/deep",
+        env={"GLAB_OK_HOSTS": f"{HOST}:8443"},
+    )
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert [p.name for p in (env.tmp / "dev").iterdir()] == [HOST]
+    checkout = env.checkout("grp/sub/deep/gamma", env.tmp / "dev" / HOST)
+    assert (
+        env.git("config", "remote.origin.url", cwd=checkout)
+        == f"https://{HOST}:8443/grp/sub/deep/gamma.git"
+    )
+
+
+# ---- --group with partial membership -----------------------------------------
+
+
+def _member_of_sub_only(env: Env) -> None:
+    groups = Path(env.env["GLAB_DATA"]) / "groups.1.json"
+    groups.write_text(json.dumps([_group("grp/sub")]))
+
+
+def test_group_above_membership_covers_accessible_projects(env: Env) -> None:
+    """A member of grp/sub only, naming grp, gets everything visible under grp."""
+    _member_of_sub_only(env)
+    res = env.run("--host", HOST, "--group", "grp", "--porcelain")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == SYNCED
+    assert "Warning" not in res.stderr
+
+
+def test_group_above_membership_unreadable_names_what_is_skipped(env: Env) -> None:
+    _member_of_sub_only(env)
+    (Path(env.env["GLAB_DATA"]) / "groups__grp__descendant_groups.1.json").unlink()
+    res = env.run("--host", HOST, "--group", "grp", "--porcelain")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == SUB_TREE
+    warnings = [ln for ln in res.stderr.splitlines() if ln.startswith("Warning")]
+    assert len(warnings) == 1, warnings
+    assert "grp" in warnings[0] and "grp/sub" in warnings[0]
+
+
+def test_group_at_membership_level(env: Env) -> None:
+    _member_of_sub_only(env)
+    res = env.run("--host", HOST, "--group", "grp/sub", "--porcelain")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == SUB_TREE
+
+
+def test_group_naming_a_sibling_of_membership(env: Env) -> None:
+    _member_of_sub_only(env)
+    res = env.run("--host", HOST, "--group", "grp/empty", "--list-repos")
+    assert res.returncode == 0, res.stderr
+    assert "No repositories found" in res.stdout
