@@ -18,6 +18,7 @@ Fixture tree on the host `gl.test`:
 - `other/ns/shared` lives outside `grp` and is shared into both `grp` and
   `grp/sub`; `grp/sub/beta` is also shared into `grp`. Each is listed once.
 """
+
 import json
 import os
 import shutil
@@ -63,23 +64,30 @@ def _project(path: str, archived: bool = False) -> dict[str, object]:
 
 
 def _group(full_path: str) -> dict[str, object]:
-    return {"id": GROUPS[full_path], "full_path": full_path,
-            "path": full_path.rsplit("/", 1)[-1]}
+    return {
+        "id": GROUPS[full_path],
+        "full_path": full_path,
+        "path": full_path.rsplit("/", 1)[-1],
+    }
 
 
 # Endpoint (decoded, no query string) -> list of pages. A second page is
 # served only when the caller passes --paginate.
 ENDPOINTS: dict[str, list[list[dict[str, object]]]] = {
     "groups": [[_group("grp")]],
-    "groups/grp/descendant_groups": [[_group("grp/sub"), _group("grp/sub/deep"),
-                                      _group("grp/empty")]],
+    "groups/grp/descendant_groups": [
+        [_group("grp/sub"), _group("grp/sub/deep"), _group("grp/empty")]
+    ],
     "groups/grp/sub/descendant_groups": [[_group("grp/sub/deep")]],
     "groups/grp/sub/deep/descendant_groups": [[]],
     "groups/grp/empty/descendant_groups": [[]],
-    "groups/grp/projects": [[_project("grp/alpha"), _project("grp/old", True)],
-                            [_project("grp/omega")]],
-    "groups/grp/projects/shared": [[_project("other/ns/shared"),
-                                    _project("grp/sub/beta")]],
+    "groups/grp/projects": [
+        [_project("grp/alpha"), _project("grp/old", True)],
+        [_project("grp/omega")],
+    ],
+    "groups/grp/projects/shared": [
+        [_project("other/ns/shared"), _project("grp/sub/beta")]
+    ],
     "groups/grp/sub/projects": [[_project("grp/sub/beta"), _project("grp/sub/alpha")]],
     "groups/grp/sub/projects/shared": [[_project("other/ns/shared")]],
     "groups/grp/sub/deep/projects": [[_project("grp/sub/deep/gamma")]],
@@ -218,8 +226,12 @@ class Env:
 
     def git(self, *args: str, cwd: Path) -> str:
         res = subprocess.run(
-            ["git", *args], cwd=cwd, env=self.env,
-            capture_output=True, text=True, check=True,
+            ["git", *args],
+            cwd=cwd,
+            env=self.env,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         return res.stdout.strip()
 
@@ -249,14 +261,19 @@ class Env:
     def head(self, path: str) -> str:
         return self.git("rev-parse", "HEAD", cwd=self.checkout(path))
 
-    def run(self, *args: str, env: dict[str, str] | None = None,
-            root: Path | None = None) -> subprocess.CompletedProcess[str]:
+    def run(
+        self, *args: str, env: dict[str, str] | None = None, root: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
         cmd = ["bash", str(GHSYNC), "--provider", "gitlab", *args]
         if root is not None:
             cmd += ["--root", str(root)]
         return subprocess.run(
-            cmd, capture_output=True, text=True, env={**self.env, **(env or {})},
-            cwd=self.tmp, timeout=120,
+            cmd,
+            capture_output=True,
+            text=True,
+            env={**self.env, **(env or {})},
+            cwd=self.tmp,
+            timeout=120,
         )
 
     def sync(self, *args: str) -> subprocess.CompletedProcess[str]:
@@ -265,8 +282,11 @@ class Env:
     def api_calls(self) -> list[str]:
         if not self.glab_log.exists():
             return []
-        return [ln for ln in self.glab_log.read_text().splitlines()
-                if ln.startswith("glab api")]
+        return [
+            ln
+            for ln in self.glab_log.read_text().splitlines()
+            if ln.startswith("glab api")
+        ]
 
 
 def _section(output: str, heading: str) -> list[str]:
@@ -274,7 +294,7 @@ def _section(output: str, heading: str) -> list[str]:
     for i, line in enumerate(lines):
         if line.startswith(f"{heading} ("):
             body = []
-            for entry in lines[i + 1:]:
+            for entry in lines[i + 1 :]:
                 if not entry.strip():
                     break
                 body.append(entry)
@@ -283,8 +303,7 @@ def _section(output: str, heading: str) -> list[str]:
 
 
 def _checkouts(root: Path) -> set[str]:
-    return {str(p.parent.parent.relative_to(root))
-            for p in root.rglob("*-main/.git")}
+    return {str(p.parent.parent.relative_to(root)) for p in root.rglob("*-main/.git")}
 
 
 @pytest.fixture
@@ -293,6 +312,7 @@ def env(tmp_path: Path) -> Env:
 
 
 # ---- discovery --------------------------------------------------------------
+
 
 def test_porcelain_lists_every_project_once(env: Env) -> None:
     res = env.run("--host", HOST, "--porcelain")
@@ -360,6 +380,7 @@ def test_unknown_group_fails(env: Env) -> None:
 
 
 # ---- sync -------------------------------------------------------------------
+
 
 def test_dry_run_creates_no_checkout(env: Env) -> None:
     res = env.sync("--dry-run")
@@ -429,6 +450,7 @@ def test_behind_checkout_fast_forwards(env: Env) -> None:
 
 # ---- --from-list ------------------------------------------------------------
 
+
 def test_from_list_reproduces_layout_without_api(env: Env) -> None:
     listing = env.run("--host", HOST, "--porcelain")
     assert listing.returncode == 0, listing.stderr
@@ -439,12 +461,21 @@ def test_from_list_reproduces_layout_without_api(env: Env) -> None:
     saved.write_text(
         "# saved from another network\n\n"
         + "\n".join(f"  {ln}\r" if i == 0 else ln for i, ln in enumerate(lines))
-        + "\n\n# trailing comment\n" + lines[0] + "\n"
+        + "\n\n# trailing comment\n"
+        + lines[0]
+        + "\n"
     )
     env.glab_log.unlink()
     root2 = env.tmp / "root2"
-    res = env.run("--host", HOST, "--from-list", str(saved), "--quiet",
-                  env={"GLAB_API_FAIL": "1"}, root=root2)
+    res = env.run(
+        "--host",
+        HOST,
+        "--from-list",
+        str(saved),
+        "--quiet",
+        env={"GLAB_API_FAIL": "1"},
+        root=root2,
+    )
     assert res.returncode == 0, res.stdout + res.stderr
     assert _checkouts(root2) == _checkouts(env.root) == set(SYNCED)
     assert env.api_calls() == []
@@ -453,8 +484,15 @@ def test_from_list_reproduces_layout_without_api(env: Env) -> None:
 def test_from_list_works_without_glab(env: Env, tmp_path: Path) -> None:
     saved = tmp_path / "list.txt"
     saved.write_text("grp/alpha\nother/ns/shared\n")
-    res = env.run("--host", HOST, "--from-list", str(saved), "--quiet",
-                  env={"PATH": _path_without_glab(tmp_path)}, root=env.root)
+    res = env.run(
+        "--host",
+        HOST,
+        "--from-list",
+        str(saved),
+        "--quiet",
+        env={"PATH": _path_without_glab(tmp_path)},
+        root=env.root,
+    )
     assert res.returncode == 0, res.stdout + res.stderr
     assert _checkouts(env.root) == {"grp/alpha", "other/ns/shared"}
 
@@ -462,8 +500,16 @@ def test_from_list_works_without_glab(env: Env, tmp_path: Path) -> None:
 def test_from_list_respects_limit(env: Env, tmp_path: Path) -> None:
     saved = tmp_path / "list.txt"
     saved.write_text("\n".join(SYNCED) + "\n")
-    res = env.run("--host", HOST, "--from-list", str(saved), "--limit", "2",
-                  "--quiet", root=env.root)
+    res = env.run(
+        "--host",
+        HOST,
+        "--from-list",
+        str(saved),
+        "--limit",
+        "2",
+        "--quiet",
+        root=env.root,
+    )
     assert res.returncode == 0, res.stdout + res.stderr
     assert _checkouts(env.root) == set(SYNCED[:2])
 
@@ -471,28 +517,74 @@ def test_from_list_respects_limit(env: Env, tmp_path: Path) -> None:
 def test_from_list_with_scheme_host(env: Env, tmp_path: Path) -> None:
     saved = tmp_path / "list.txt"
     saved.write_text("grp/sub/beta\n")
-    res = env.run("--host", f"https://{HOST}", "--from-list", str(saved),
-                  "--quiet", root=env.root)
+    res = env.run(
+        "--host", f"https://{HOST}", "--from-list", str(saved), "--quiet", root=env.root
+    )
     assert res.returncode == 0, res.stdout + res.stderr
     assert _checkouts(env.root) == {"grp/sub/beta"}
 
 
+def test_from_list_skips_unsafe_paths(env: Env, tmp_path: Path) -> None:
+    """A quote, ../ or absolute path never reaches the sync loop or the disk."""
+    saved = tmp_path / "list.txt"
+    saved.write_text(
+        "grp/alpha\n"
+        "grp/x'; touch pwned; '\n"
+        "../escape\n"
+        "grp/../../escape\n"
+        "/abs/path\n"
+        "grp/./alpha\n"
+        "grp/has space\n"
+    )
+    res = env.run("--host", HOST, "--from-list", str(saved), "--quiet", root=env.root)
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert _checkouts(env.root) == {"grp/alpha"}
+    assert res.stderr.count("skipping unsafe repository path") == 6
+    assert not (env.tmp / "escape").exists()
+    assert not list(env.tmp.rglob("pwned"))
+
+
 def test_from_list_missing_file_fails(env: Env) -> None:
-    res = env.run("--host", HOST, "--from-list", str(env.tmp / "nope.txt"),
-                  root=env.root)
+    res = env.run(
+        "--host", HOST, "--from-list", str(env.tmp / "nope.txt"), root=env.root
+    )
     assert res.returncode != 0
     assert "nope.txt" in res.stdout + res.stderr
 
 
 # ---- fail fast --------------------------------------------------------------
 
+
 def _path_without_glab(tmp_path: Path) -> str:
     """A PATH holding only the tools the script needs, and no glab."""
     bin_dir = tmp_path / "noglab"
     bin_dir.mkdir(exist_ok=True)
-    for tool in ("bash", "git", "jq", "mktemp", "sort", "wc", "tr", "basename",
-                 "dirname", "cat", "rm", "rmdir", "mkdir", "sed", "grep", "awk",
-                 "cut", "head", "env", "timeout", "gtimeout", "ssh"):
+    for tool in (
+        "bash",
+        "git",
+        "jq",
+        "mktemp",
+        "sort",
+        "wc",
+        "tr",
+        "basename",
+        "dirname",
+        "cat",
+        "rm",
+        "rmdir",
+        "mkdir",
+        "sed",
+        "grep",
+        "awk",
+        "cut",
+        "mv",
+        "cp",
+        "head",
+        "env",
+        "timeout",
+        "gtimeout",
+        "ssh",
+    ):
         found = shutil.which(tool)
         if found and not (bin_dir / tool).exists():
             (bin_dir / tool).symlink_to(found)
@@ -504,17 +596,21 @@ def _path_without_glab(tmp_path: Path) -> str:
 
 
 def test_missing_glab_fails_fast(env: Env, tmp_path: Path) -> None:
-    res = env.run("--host", HOST, "--list-repos",
-                  env={"PATH": _path_without_glab(tmp_path)})
+    res = env.run(
+        "--host", HOST, "--list-repos", env={"PATH": _path_without_glab(tmp_path)}
+    )
     assert res.returncode != 0
     out = res.stdout + res.stderr
     assert HOST in out and "glab" in out
 
 
-@pytest.mark.parametrize("host,reason", [
-    ("gl.unreachable", "not authenticated"),
-    ("gl.down", "unreachable"),
-])
+@pytest.mark.parametrize(
+    "host,reason",
+    [
+        ("gl.unreachable", "not authenticated"),
+        ("gl.down", "unreachable"),
+    ],
+)
 def test_failed_host_check_fails_fast(env: Env, host: str, reason: str) -> None:
     res = env.run("--host", host, "--list-repos")
     assert res.returncode != 0
@@ -522,8 +618,9 @@ def test_failed_host_check_fails_fast(env: Env, host: str, reason: str) -> None:
     assert host in out and reason in out, out
     assert len([ln for ln in out.splitlines() if ln.strip()]) == 1, out
     assert env.api_calls() == []
-    auth_calls = [ln for ln in env.glab_log.read_text().splitlines()
-                  if ln.startswith("glab auth")]
+    auth_calls = [
+        ln for ln in env.glab_log.read_text().splitlines() if ln.startswith("glab auth")
+    ]
     assert len(auth_calls) == 1
     assert not (env.tmp / "dev" / host).exists()
 
@@ -537,19 +634,27 @@ def test_failed_membership_call_fails(env: Env) -> None:
 
 # ---- flag validation --------------------------------------------------------
 
-@pytest.mark.parametrize("args,needle", [
-    (["--provider", "gitlab", "--org", "x"], "--org"),
-    (["--provider", "gitlab", "--list-teams"], "--list-teams"),
-    (["--provider", "github", "--from-list", "f"], "--from-list"),
-    (["--provider", "github", "--group", "g"], "--group"),
-    (["--provider", "github", "--host", "h"], "--host"),
-    (["--provider", "gitlab", "--group", "g", "--from-list", "f"], "--group"),
-    (["--provider", "bitbucket"], "bitbucket"),
-])
+
+@pytest.mark.parametrize(
+    "args,needle",
+    [
+        (["--provider", "gitlab", "--org", "x"], "--org"),
+        (["--provider", "gitlab", "--list-teams"], "--list-teams"),
+        (["--provider", "github", "--from-list", "f"], "--from-list"),
+        (["--provider", "github", "--group", "g"], "--group"),
+        (["--provider", "github", "--host", "h"], "--host"),
+        (["--provider", "gitlab", "--group", "g", "--from-list", "f"], "--group"),
+        (["--provider", "bitbucket"], "bitbucket"),
+    ],
+)
 def test_rejected_flag_combinations(env: Env, args: list[str], needle: str) -> None:
     res = subprocess.run(
         ["bash", str(GHSYNC), *args, "--list-repos"],
-        capture_output=True, text=True, env=env.env, cwd=env.tmp, timeout=60,
+        capture_output=True,
+        text=True,
+        env=env.env,
+        cwd=env.tmp,
+        timeout=60,
     )
     assert res.returncode != 0
     assert needle in res.stdout + res.stderr
@@ -558,8 +663,13 @@ def test_rejected_flag_combinations(env: Env, args: list[str], needle: str) -> N
 
 
 def test_help_documents_gitlab_flags(env: Env) -> None:
-    res = subprocess.run(["bash", str(GHSYNC), "--help"], capture_output=True,
-                         text=True, env=env.env, timeout=60)
+    res = subprocess.run(
+        ["bash", str(GHSYNC), "--help"],
+        capture_output=True,
+        text=True,
+        env=env.env,
+        timeout=60,
+    )
     assert res.returncode == 0
     for flag in ("--provider", "--host", "--group", "--from-list", "--porcelain"):
         assert flag in res.stdout, flag

@@ -498,6 +498,25 @@ read_from_list() {
         | grep -v -e '^$' -e '^#' >> "$all_repos_file" || true
 }
 
+# Keep only paths that are safe to use as directories and to splice into
+# the per-repo `bash -c` string: slash-separated segments of letters,
+# digits, dot, dash and underscore, with no empty, "." or ".." segment. That
+# is the GitLab path charset, so a real project never trips it; a hand-edited
+# --from-list line with a quote, a space, an absolute path or ../ does.
+gitlab_reject_unsafe_paths() {
+    local kept line
+    kept=$(mktemp)
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*$ ]] \
+            && [[ "/$line/" != */../* && "/$line/" != */./* ]]; then
+            echo "$line" >> "$kept"
+        else
+            echo "Warning: skipping unsafe repository path: $line" >&2
+        fi
+    done < "$all_repos_file"
+    mv "$kept" "$all_repos_file"
+}
+
 # Clone URL for one GitLab path, built from the host. Used for both
 # discovery and --from-list runs, so both produce the same checkouts.
 gitlab_clone_url() {
@@ -620,6 +639,7 @@ discover_repos() {
             else
                 discover_gitlab
             fi
+            gitlab_reject_unsafe_paths
             ;;
         *) echo "Unknown provider: $PROVIDER"; exit 1 ;;
     esac
