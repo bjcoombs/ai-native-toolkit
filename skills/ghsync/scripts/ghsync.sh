@@ -2,46 +2,70 @@
 set -euo pipefail
 
 # ===================================================================
-# ghsync.sh - Bulk clone + sync every repo you can access in an org
+# ghsync.sh - Bulk clone + sync every repo you can access on GitHub or GitLab
 #
-# Discovers every GitHub repository you can access in an org - both through
-# the teams you belong to and through the org's repo list (which surfaces
-# public repos and repos reachable via direct collaborator grants outside
-# any team) - deduplicates them, and clones or fast-forward updates each
-# into a worktree-friendly layout. Built for onboarding into a new
-# enterprise: drop into the org directory, run it, and you have a local
-# mirror of everything you can touch.
+# Discovers every repository you can access, deduplicates them, and clones
+# or fast-forward updates each into a worktree-friendly layout. Built for
+# onboarding into a new enterprise: run it once and you have a local mirror
+# of everything you can touch; run it again to bring it up to date.
 #
-# Personal accounts work too: when the target is a User rather than an
-# Organization, repos are discovered from the account's repo list instead
-# of team membership (empty repos, which have no default branch, are
-# skipped).
+# GitHub (--provider github, the default): discovers every repo in an org
+# through both the teams you belong to and the org's repo list (which
+# surfaces public repos and repos reachable via direct collaborator grants
+# outside any team). When the target is a personal account rather than an
+# Organization, repos come from the account's repo list instead (empty
+# repos, which have no default branch, are skipped). The org defaults to the
+# basename of the directory you run from, so running inside
+# ~/dev/github.com/meridianhub syncs the "meridianhub" org into that
+# directory. Override with --org / --root.
 #
-# Org detection:
-#   The org defaults to the basename of the directory you run from, so
-#   running inside ~/dev/github.com/meridianhub syncs the "meridianhub"
-#   org into that directory. Override with --org / --root.
+# GitLab (--provider gitlab): discovers every project in every group you
+# belong to on --host, with all nested subgroups, plus projects shared into
+# those groups. Each project is laid out under its own path_with_namespace,
+# which is also the dedupe key, so a project shared into two groups is
+# cloned once. --group narrows the run to one group subtree. The root
+# defaults to ~/dev/<host>/. Requires glab, authenticated for the host.
 #
-# Layout produced (per repo path under the org root; for GitHub the path
-# is the repo name, and the -main directory takes the path's last segment):
+# Layout produced (per repo path under the root; for GitHub the path is the
+# repo name, for GitLab the path_with_namespace, and the -main directory
+# takes the path's last segment):
 #   <root>/<path>/       # e.g. <root>/a/b/repo/ for the path a/b/repo
 #     ├── <repo>-main/   # default-branch checkout
 #     └── worktree/      # empty dir, ready for git worktrees
+#
 # GitHub Enterprise: the CLI uses its configured host. To target a GHE
 # host, set GH_HOST (e.g. GH_HOST=github.example.com) or log the CLI in
 # with `auth login --hostname github.example.com` first.
 #
-# Usage: ./ghsync.sh [--org NAME] [--root DIR] [--quiet] [--limit N]
-#                    [--dry-run] [--list-teams] [--list-repos] [--porcelain]
-#   --org NAME     Org to sync (default: basename of --root / cwd)
-#   --root DIR     Directory to clone into (default: current directory)
-#   --quiet        Suppress per-repository messages during sync
-#   --limit N      Process only N repositories (useful for testing)
-#   --dry-run      Show what would be done without making changes
-#   --list-teams   List your teams in the org and exit (orgs only)
-#   --list-repos   List the deduplicated accessible repos and exit
-#   --porcelain    Machine-readable repo list: one name per line to stdout,
-#                  all progress/status chatter to stderr; implies --list-repos
+# Hosts reachable only from another network: run --porcelain where the host
+# answers the API and save the list, then run --from-list <file> wherever
+# git can reach the host. --from-list makes no API call.
+#
+# Usage: ./ghsync.sh [--provider github|gitlab] [--root DIR] [--quiet]
+#                    [--limit N] [--dry-run] [--list-repos] [--porcelain]
+#                    GitHub: [--org NAME] [--list-teams]
+#                    GitLab: [--host HOST] [--group PATH] [--from-list FILE]
+#   --provider P     github (default) or gitlab
+#   --root DIR       Directory to clone into (GitHub default: current
+#                    directory; GitLab default: ~/dev/<host>)
+#   --quiet          Suppress per-repository messages during sync
+#   --limit N        Process only N repositories (useful for testing)
+#   --dry-run        Show what would be done without making changes
+#   --list-repos     List the deduplicated accessible repos and exit
+#   --porcelain      Machine-readable repo list: one path per line to stdout
+#                    (GitHub: the repo name; GitLab: path_with_namespace),
+#                    all progress/status chatter to stderr; implies
+#                    --list-repos
+#   --org NAME       GitHub org to sync (default: basename of --root / cwd)
+#   --list-teams     List your teams in the org and exit (GitHub orgs only)
+#   --host HOST      GitLab host (default: gitlab.com); a scheme and
+#                    trailing slash are accepted and stripped
+#   --group PATH     Sync only this GitLab group and its subgroups
+#   --from-list F    Sync the GitLab paths listed in F (the --porcelain
+#                    format; blank lines and # comments are ignored) instead
+#                    of discovering them. Clone URLs are built from --host:
+#                    https://<host>/<path>.git, or git@<host>:<path>.git when
+#                    GHSYNC_GIT_PROTOCOL=ssh. Needs no glab.
 # ===================================================================
 
 # Process command line args
@@ -53,11 +77,17 @@ DRY_RUN=false
 LIST_TEAMS=false
 LIST_REPOS=false
 PORCELAIN_MODE=false
+GITLAB_HOST=""
+GITLAB_GROUP=""
+FROM_LIST=""
+# Flags that belong to one provider only, recorded as given so the
+# validation below can reject them on the other provider.
+github_only_flags=()
+gitlab_only_flags=()
 
 # Provider seam: discovery, the default-branch lookup and the clone dispatch
 # on PROVIDER. Each repository is identified by its path relative to the
-# root, which also keys dedupe, the status files and the blacklist. GitHub is
-# the only provider so far, so there is no flag to choose one yet.
+# root, which also keys dedupe, the status files and the blacklist.
 PROVIDER=github
 
 # Repositories to never sync (oversized, checkout issues, etc.).
@@ -67,12 +97,52 @@ read -r -a REPO_BLACKLIST <<< "${GHSYNC_BLACKLIST:-}"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --provider)
+      PROVIDER=$2
+      shift 2
+      ;;
+    --provider=*)
+      PROVIDER=${1#*=}
+      shift
+      ;;
     --org)
       ORG=$2
+      github_only_flags+=(--org)
       shift 2
       ;;
     --org=*)
       ORG=${1#*=}
+      github_only_flags+=(--org)
+      shift
+      ;;
+    --host)
+      GITLAB_HOST=$2
+      gitlab_only_flags+=(--host)
+      shift 2
+      ;;
+    --host=*)
+      GITLAB_HOST=${1#*=}
+      gitlab_only_flags+=(--host)
+      shift
+      ;;
+    --group)
+      GITLAB_GROUP=$2
+      gitlab_only_flags+=(--group)
+      shift 2
+      ;;
+    --group=*)
+      GITLAB_GROUP=${1#*=}
+      gitlab_only_flags+=(--group)
+      shift
+      ;;
+    --from-list)
+      FROM_LIST=$2
+      gitlab_only_flags+=(--from-list)
+      shift 2
+      ;;
+    --from-list=*)
+      FROM_LIST=${1#*=}
+      gitlab_only_flags+=(--from-list)
       shift
       ;;
     --root)
@@ -101,6 +171,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --list-teams)
       LIST_TEAMS=true
+      github_only_flags+=(--list-teams)
       shift
       ;;
     --list-repos)
@@ -117,12 +188,14 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      sed -n '4,44p' "$0"
+      # The header between the first two rule lines, wherever it ends.
+      awk '/^# =====/ { n++; print; if (n == 2) exit; next } n == 1' "$0"
       exit 0
       ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: $0 [--org NAME] [--root DIR] [--quiet] [--limit N] [--dry-run] [--list-teams] [--list-repos] [--porcelain]"
+      echo "Usage: $0 [--provider github|gitlab] [--root DIR] [--quiet] [--limit N] [--dry-run] [--list-repos] [--porcelain]"
+      echo "       GitHub: [--org NAME] [--list-teams]   GitLab: [--host HOST] [--group PATH] [--from-list FILE]"
       exit 1
       ;;
   esac
@@ -138,17 +211,42 @@ if [ "$PORCELAIN_MODE" = true ]; then
     exec 3>&1 1>&2
 fi
 
-# Derive root and org. Root is where repos land (default: cwd). Org defaults
-# to the basename of root, so dropping into ~/dev/github.com/<org> just works.
-ROOT="${ROOT:-$PWD}"
-if [[ ! -d "$ROOT" ]]; then
-    echo "Error: root directory does not exist: $ROOT"
-    exit 1
-fi
-ROOT="$(cd "$ROOT" && pwd)"
-ORG="${ORG:-$(basename "$ROOT")}"
-
-GITHUB_DEV_PATH="$ROOT"
+# Reject flags that belong to the other provider rather than ignoring them.
+case "$PROVIDER" in
+    github)
+        if [ ${#gitlab_only_flags[@]} -gt 0 ]; then
+            echo "Error: ${gitlab_only_flags[0]} applies to --provider gitlab only" >&2
+            exit 1
+        fi
+        ;;
+    gitlab)
+        if [ ${#github_only_flags[@]} -gt 0 ]; then
+            echo "Error: ${github_only_flags[0]} applies to --provider github only" >&2
+            exit 1
+        fi
+        if [ -n "$GITLAB_GROUP" ] && [ -n "$FROM_LIST" ]; then
+            echo "Error: --group and --from-list cannot be combined; filter the list file instead" >&2
+            exit 1
+        fi
+        # Accept a host written as a URL: drop the scheme and any trailing
+        # slash, but keep an http scheme for the clone URLs built from it.
+        GITLAB_HOST="${GITLAB_HOST:-gitlab.com}"
+        GITLAB_SCHEME=https
+        case "$GITLAB_HOST" in
+            http://*) GITLAB_SCHEME=http; GITLAB_HOST=${GITLAB_HOST#http://} ;;
+            https://*) GITLAB_HOST=${GITLAB_HOST#https://} ;;
+        esac
+        GITLAB_HOST=${GITLAB_HOST%%/*}
+        if [ -z "$GITLAB_HOST" ]; then
+            echo "Error: --host is empty" >&2
+            exit 1
+        fi
+        ;;
+    *)
+        echo "Error: unknown provider '$PROVIDER' (expected github or gitlab)" >&2
+        exit 1
+        ;;
+esac
 
 # ---- provider seam ------------------------------------------------------
 # Every provider call sits behind the functions below, dispatched on
@@ -283,12 +381,165 @@ discover_github() {
     fi
 }
 
+# One line naming the host and the check that failed, then exit. No retry:
+# a host that fails a check once fails it on the next attempt too.
+gitlab_fail() {
+    echo "Error: GitLab host $GITLAB_HOST failed the $1 check: $2" >&2
+    exit 1
+}
+
+# Fail fast before discovery: glab and jq present, glab authenticated for
+# the host. `glab auth status` contacts the host, so a network failure shows
+# up here too and is reported as unreachable. No other probe runs, and no
+# `glab api` call happens until these pass. --from-list skips this: it
+# clones with git and needs no glab.
+gitlab_preflight() {
+    command -v jq &> /dev/null || gitlab_fail "jq installed" "jq not found. Install it using: brew install jq"
+    [ -n "$FROM_LIST" ] && return 0
+    command -v glab &> /dev/null || gitlab_fail "glab installed" "glab not found. Install it using: brew install glab"
+    local status_out
+    if ! status_out=$(glab auth status --hostname "$GITLAB_HOST" 2>&1); then
+        if grep -qiE 'no such host|dial tcp|connection refused|timed? ?out|could not resolve|network is unreachable|tls handshake|i/o timeout' <<< "$status_out"; then
+            gitlab_fail "reachability (glab auth status --hostname $GITLAB_HOST)" "host unreachable from this network"
+        fi
+        gitlab_fail "authentication (glab auth status --hostname $GITLAB_HOST)" "not authenticated. Run: glab auth login --hostname $GITLAB_HOST"
+    fi
+}
+
+# glab api against the run's host, every page.
+gitlab_api() {
+    glab api --hostname "$GITLAB_HOST" --paginate "$1"
+}
+
+gitlab_encode() {
+    jq -rn --arg p "$1" '$p | @uri'
+}
+
+# Append one group's projects and the projects shared into it. $1 is the
+# group's API reference (numeric id or URL-encoded path), $2 its full path
+# for messages. A group whose listing fails is warned about and skipped,
+# so one unreadable subgroup does not hide the rest.
+gitlab_group_projects() {
+    local ref=$1 full_path=$2 endpoint json
+    for endpoint in "groups/$ref/projects?per_page=100" "groups/$ref/projects/shared?per_page=100"; do
+        if ! json=$(gitlab_api "$endpoint" 2>/dev/null); then
+            echo "Warning: could not list ${endpoint%%\?*} for $full_path; skipping it" >&2
+            continue
+        fi
+        # Empty projects have no default branch and nothing to check out,
+        # mirroring the GitHub rule; archived ones go to the archive cache.
+        jq -r '.[] | select(.archived != true and (.default_branch // "") != "" and .empty_repo != true) | .path_with_namespace' <<< "$json" >> "$all_repos_file"
+        jq -r '.[] | select(.archived == true) | .path_with_namespace' <<< "$json" >> "$archived_repos_file"
+    done
+}
+
+# Discover every project in the groups you belong to (or in --group's
+# subtree), their nested subgroups, and the projects shared into them. Lines
+# of the groups file are "<api ref><TAB><full path>"; dedupe is on the path.
+discover_gitlab() {
+    local groups_file member_json g ref full_path desc_json
+    groups_file=$(mktemp)
+
+    echo "Fetching your groups on $GITLAB_HOST..."
+    member_json=$(gitlab_api "groups?min_access_level=10&per_page=100") || {
+        rm -f "$groups_file"
+        echo "Error: could not list your groups on $GITLAB_HOST (glab api groups failed)" >&2
+        exit 1
+    }
+    jq -r '.[] | "\(.id)\t\(.full_path)"' <<< "$member_json" > "$groups_file.members"
+    cp "$groups_file.members" "$groups_file"
+    while IFS=$'\t' read -r ref full_path; do
+        [ -n "$ref" ] || continue
+        if desc_json=$(gitlab_api "groups/$ref/descendant_groups?per_page=100" 2>/dev/null); then
+            jq -r '.[] | "\(.id)\t\(.full_path)"' <<< "$desc_json" >> "$groups_file"
+        else
+            echo "Warning: could not list the subgroups of $full_path; skipping them" >&2
+        fi
+    done < "$groups_file.members"
+    rm -f "$groups_file.members"
+
+    if [ -n "$GITLAB_GROUP" ]; then
+        g=${GITLAB_GROUP%/}
+        awk -F'\t' -v g="$g" '$2 == g || index($2, g "/") == 1' "$groups_file" > "$groups_file.sub"
+        if [ ! -s "$groups_file.sub" ]; then
+            # Not one of your groups (a public group, say): look it up by path.
+            ref=$(gitlab_encode "$g")
+            if ! desc_json=$(gitlab_api "groups/$ref/descendant_groups?per_page=100" 2>/dev/null); then
+                rm -f "$groups_file" "$groups_file.sub"
+                echo "Error: group $g not found or not accessible on $GITLAB_HOST" >&2
+                exit 1
+            fi
+            printf '%s\t%s\n' "$ref" "$g" > "$groups_file.sub"
+            jq -r '.[] | "\(.id)\t\(.full_path)"' <<< "$desc_json" >> "$groups_file.sub"
+        fi
+        mv "$groups_file.sub" "$groups_file"
+    fi
+
+    sort -t$'\t' -k2,2 -u "$groups_file" -o "$groups_file"
+    gitlab_group_count=$(wc -l < "$groups_file" | tr -d ' ')
+    echo "Fetching projects from $gitlab_group_count group(s)..."
+    while IFS=$'\t' read -r ref full_path; do
+        [ -n "$ref" ] || continue
+        gitlab_group_projects "$ref" "$full_path"
+    done < "$groups_file"
+    rm -f "$groups_file"
+}
+
+# --from-list: the --porcelain format, one path per line. Surrounding
+# whitespace, CRs, blank lines and # comments are dropped; dedupe happens
+# with the discovered paths later.
+read_from_list() {
+    if [ ! -f "$FROM_LIST" ] || [ ! -r "$FROM_LIST" ]; then
+        echo "Error: cannot read --from-list file: $FROM_LIST" >&2
+        exit 1
+    fi
+    echo "Reading repository paths from $FROM_LIST (no discovery)"
+    sed -e 's/\r$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#/*$##' "$FROM_LIST" \
+        | grep -v -e '^$' -e '^#' >> "$all_repos_file" || true
+}
+
+# Keep only paths that are safe to use as directories and to splice into
+# the per-repo `bash -c` string: slash-separated segments of letters,
+# digits, dot, dash and underscore, with no empty, "." or ".." segment. That
+# is the GitLab path charset, so a real project never trips it; a hand-edited
+# --from-list line with a quote, a space, an absolute path or ../ does.
+gitlab_reject_unsafe_paths() {
+    local kept line
+    kept=$(mktemp)
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*$ ]] \
+            && [[ "/$line/" != */../* && "/$line/" != */./* ]]; then
+            echo "$line" >> "$kept"
+        else
+            echo "Warning: skipping unsafe repository path: $line" >&2
+        fi
+    done < "$all_repos_file"
+    mv "$kept" "$all_repos_file"
+}
+
+# Clone URL for one GitLab path, built from the host. Used for both
+# discovery and --from-list runs, so both produce the same checkouts. A port
+# on --host (host:8443) is the web and API port, so it stays in the HTTPS
+# URL but is dropped for SSH; set a custom SSH port in ~/.ssh/config.
+gitlab_clone_url() {
+    if [ "${GHSYNC_GIT_PROTOCOL:-https}" = ssh ]; then
+        echo "git@${GITLAB_HOST%%:*}:$1.git"
+    else
+        echo "$GITLAB_SCHEME://$GITLAB_HOST/$1.git"
+    fi
+}
+
 # Default branch of one repository, for checkouts whose origin HEAD is unset.
 provider_default_branch() {
     local path=$1
     case "$PROVIDER" in
         github)
             gh repo view "$ORG/$path" --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null || echo "main"
+            ;;
+        gitlab)
+            # A fresh clone sets origin HEAD, so this is rarely reached. No
+            # API call: a --from-list run must work while the API is down.
+            echo "main"
             ;;
         *)
             echo "main"
@@ -304,6 +555,9 @@ provider_clone() {
         github)
             gh repo clone "$ORG/$path" "$dest" 2>&1
             ;;
+        gitlab)
+            git clone -q "$(gitlab_clone_url "$path")" "$dest" 2>&1
+            ;;
         *)
             echo "Unknown provider: $PROVIDER"
             return 1
@@ -314,6 +568,7 @@ provider_clone() {
 provider_preflight() {
     case "$PROVIDER" in
         github) github_preflight ;;
+        gitlab) gitlab_preflight ;;
         *) echo "Unknown provider: $PROVIDER"; exit 1 ;;
     esac
 }
@@ -328,6 +583,13 @@ report_no_repos() {
                 echo "No repositories found in $ORG (no team repos and an empty org repo list)"
             fi
             ;;
+        gitlab)
+            if [ -n "$FROM_LIST" ]; then
+                echo "No repositories listed in $FROM_LIST"
+            else
+                echo "No repositories found on $GITLAB_HOST${GITLAB_GROUP:+ in $GITLAB_GROUP}"
+            fi
+            ;;
     esac
 }
 
@@ -340,6 +602,13 @@ report_found_repos() {
                 echo "Found $total_repos unique repositories across ${#user_teams[@]} team(s) and the $ORG repo list"
             else
                 echo "Found $total_repos repositories in $ORG"
+            fi
+            ;;
+        gitlab)
+            if [ -n "$FROM_LIST" ]; then
+                echo "Found $total_repos repositories in $FROM_LIST"
+            else
+                echo "Found $total_repos unique projects across $gitlab_group_count group(s) on $GITLAB_HOST"
             fi
             ;;
     esac
@@ -357,17 +626,59 @@ report_summary_header() {
                 echo -e "\n====== GitHub Sync Summary ($ORG) ======"
             fi
             ;;
+        gitlab)
+            echo -e "\n====== GitLab Sync Summary ($GITLAB_HOST${GITLAB_GROUP:+ - $GITLAB_GROUP}) ======"
+            ;;
     esac
 }
 
 discover_repos() {
     case "$PROVIDER" in
         github) discover_github ;;
+        gitlab)
+            if [ -n "$FROM_LIST" ]; then
+                read_from_list
+            else
+                discover_gitlab
+            fi
+            gitlab_reject_unsafe_paths
+            ;;
         *) echo "Unknown provider: $PROVIDER"; exit 1 ;;
     esac
 }
 
 provider_preflight
+
+# Derive the root, after preflight so a failed host check leaves no
+# directory behind. An explicit --root must exist on either provider, so a
+# typo fails rather than starting a new tree. GitHub: the root defaults to
+# cwd, and the org defaults to its basename, so dropping into
+# ~/dev/github.com/<org> just works. GitLab: the root defaults to
+# ~/dev/<host>, created on first sync. A GitLab list-only run (--list-repos,
+# --porcelain) never touches the root: the list may be produced on a machine
+# that will never hold the checkouts.
+gitlab_list_only=false
+[ "$PROVIDER" = gitlab ] && [ "$LIST_REPOS" = true ] && gitlab_list_only=true
+if [ "$PROVIDER" = gitlab ] && [ -z "$ROOT" ]; then
+    ROOT="$HOME/dev/$GITLAB_HOST"
+    [ "$gitlab_list_only" = true ] || mkdir -p "$ROOT"
+else
+    ROOT="${ROOT:-$PWD}"
+fi
+if [ "$gitlab_list_only" = false ]; then
+    if [[ ! -d "$ROOT" ]]; then
+        echo "Error: root directory does not exist: $ROOT (create it first: mkdir -p \"$ROOT\")"
+        exit 1
+    fi
+    ROOT="$(cd "$ROOT" && pwd)"
+fi
+if [ "$PROVIDER" = gitlab ]; then
+    ORG="$GITLAB_HOST"
+else
+    ORG="${ORG:-$(basename "$ROOT")}"
+fi
+
+GITHUB_DEV_PATH="$ROOT"
 
 # Check for timeout command
 if ! command -v timeout &> /dev/null; then
@@ -381,11 +692,17 @@ if ! command -v timeout &> /dev/null; then
     fi
 fi
 
-echo "Org:  $ORG"
+if [ "$PROVIDER" = gitlab ]; then
+    echo "Host: $GITLAB_HOST"
+    [ -n "$GITLAB_GROUP" ] && echo "Group: $GITLAB_GROUP"
+else
+    echo "Org:  $ORG"
+fi
 echo "Root: $GITHUB_DEV_PATH"
 
 account_type=""
 user_teams=()
+gitlab_group_count=0
 all_repos_file=$(mktemp)
 archived_repos_file=$(mktemp)
 # Remove the temp files on any exit path, including the --list-teams early
@@ -399,12 +716,18 @@ discover_repos
 mapfile -t repo_paths < <(sort -u "$all_repos_file")
 rm -f "$all_repos_file"
 
-# Save archived repos to persistent cache (handy for downstream tooling)
-archived_repos_cache="${GITHUB_DEV_PATH}/.gh_archived_repos"
-sort -u "$archived_repos_file" > "$archived_repos_cache"
-archived_count=$(wc -l < "$archived_repos_cache" | tr -d ' ')
+# Save archived repos to persistent cache (handy for downstream tooling).
+# A GitLab list-only run writes nothing under the root.
+if [ "$gitlab_list_only" = true ]; then
+    archived_count=$(sort -u "$archived_repos_file" | wc -l | tr -d ' ')
+    echo "Found $archived_count archived repositories (skipped)"
+else
+    archived_repos_cache="${GITHUB_DEV_PATH}/.gh_archived_repos"
+    sort -u "$archived_repos_file" > "$archived_repos_cache"
+    archived_count=$(wc -l < "$archived_repos_cache" | tr -d ' ')
+    echo "Found $archived_count archived repositories (cached to .gh_archived_repos)"
+fi
 rm -f "$archived_repos_file"
-echo "Found $archived_count archived repositories (cached to .gh_archived_repos)"
 
 # Filter out blacklisted repos
 filtered_repos=()
@@ -458,7 +781,7 @@ rm -rf "$temp_dir"
 mkdir -p "$temp_dir/status"
 status_dir="$temp_dir/status"
 
-export QUIET_MODE DRY_RUN GITHUB_DEV_PATH ORG PROVIDER
+export QUIET_MODE DRY_RUN GITHUB_DEV_PATH ORG PROVIDER GITLAB_HOST GITLAB_SCHEME
 
 # Progress indicator
 show_progress() {
@@ -774,7 +1097,7 @@ for repo in "${repo_paths[@]}"; do
         export DRY_RUN="$DRY_RUN"
         export PROVIDER="$PROVIDER"
         timeout 300 bash -c "
-            $(declare -f update_repo update_worktrees ensure_worktree_structure clear_line show_progress provider_clone provider_default_branch)
+            $(declare -f update_repo update_worktrees ensure_worktree_structure clear_line show_progress provider_clone provider_default_branch gitlab_clone_url)
             update_repo '$repo'
         " || {
             clear_line

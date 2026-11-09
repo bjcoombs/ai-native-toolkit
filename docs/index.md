@@ -24,7 +24,7 @@ Portable (work in any Claude Code session, also shipped as standalone ZIPs):
 
 Plugin-only (Claude Code, no standalone ZIP):
 
-- [`/ghsync`](../skills/ghsync/SKILL.md) - bulk-clone and fast-forward sync every GitHub repo you can access across an org.
+- [`/ghsync`](../skills/ghsync/SKILL.md) - bulk-clone and fast-forward sync every GitHub repo you can access across an org, or every GitLab project across your groups, subgroups and shared projects.
 - [`/ghreport`](../skills/ghreport/SKILL.md) - read-only org repo state report: open PRs, default-branch CI, security alerts and branch protection per repo, reusing `/ghsync`'s repo discovery.
 
 Team-orchestration library skills (invoked by the workflow skills, not standalone):
