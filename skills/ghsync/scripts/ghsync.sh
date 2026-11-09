@@ -439,7 +439,7 @@ gitlab_group_projects() {
 # subtree), their nested subgroups, and the projects shared into them. Lines
 # of the groups file are "<api ref><TAB><full path>"; dedupe is on the path.
 discover_gitlab() {
-    local groups_file member_json g ref full_path desc_json
+    local groups_file member_json g ref full_path desc_json covered
     groups_file=$(mktemp)
 
     echo "Fetching your groups on $GITLAB_HOST..."
@@ -469,13 +469,16 @@ discover_gitlab() {
         # shows you, so projects directly in it and in sibling subgroups
         # count too. The lookup failing is fatal only when you belong to
         # nothing under it; otherwise one line names what was left out.
-        if ! awk -F'\t' -v g="$g" '$2 == g { found = 1 } END { exit !found }' "$groups_file.sub"; then
+        if ! cut -f2 "$groups_file.sub" | grep -qxF -- "$g"; then
             ref=$(gitlab_encode "$g")
             if desc_json=$(gitlab_api "groups/$ref/descendant_groups?per_page=100" 2>/dev/null); then
                 printf '%s\t%s\n' "$ref" "$g" >> "$groups_file.sub"
                 jq -r '.[] | "\(.id)\t\(.full_path)"' <<< "$desc_json" >> "$groups_file.sub"
             elif [ -s "$groups_file.sub" ]; then
-                echo "Warning: could not read group $g on $GITLAB_HOST; syncing only your subgroups under it ($(cut -f2 "$groups_file.sub" | sort -u | paste -sd, - | sed 's/,/, /g')) and skipping projects directly in $g or in its other subgroups" >&2
+                covered=$(cut -f2 "$groups_file.sub" | sort -u | paste -sd, - | sed 's/,/, /g')
+                echo "Warning: could not read group $g on $GITLAB_HOST; syncing only your" \
+                    "subgroups under it ($covered) and skipping projects directly in $g" \
+                    "or in its other subgroups" >&2
             else
                 rm -f "$groups_file" "$groups_file.sub"
                 echo "Error: group $g not found or not accessible on $GITLAB_HOST" >&2
@@ -519,12 +522,14 @@ read_from_list() {
 # trips this; a hand-edited --from-list line with a quote, a space, an
 # absolute path or ../ does.
 gitlab_reject_unsafe_paths() {
-    local kept line
+    local kept line folded
     kept=$(mktemp)
     while IFS= read -r line; do
+        folded=$(tr '[:upper:]' '[:lower:]' <<< "/$line/")
         if [[ "$line" =~ ^[A-Za-z0-9_.][A-Za-z0-9._-]*(/[A-Za-z0-9_.][A-Za-z0-9._-]*)*$ ]] \
             && [[ "/$line/" != */../* && "/$line/" != */./* ]] \
-            && [[ "$line/" != *.git/* && "$line/" != *.atom/* && "/${line,,}/" != */.git/* ]]; then
+            && [[ "$line/" != *.git/* && "$line/" != *.atom/* ]] \
+            && [[ "$folded" != */.git/* ]]; then
             echo "$line" >> "$kept"
         else
             echo "Warning: skipping unsafe repository path: $line" >&2
@@ -676,7 +681,9 @@ provider_preflight
 # and writes no file under the root: the list may be produced on a machine
 # that will never hold the checkouts.
 gitlab_preview=false
-[ "$PROVIDER" = gitlab ] && { [ "$LIST_REPOS" = true ] || [ "$DRY_RUN" = true ]; } && gitlab_preview=true
+if [ "$PROVIDER" = gitlab ] && { [ "$LIST_REPOS" = true ] || [ "$DRY_RUN" = true ]; }; then
+    gitlab_preview=true
+fi
 if [ "$PROVIDER" = gitlab ] && [ -z "$ROOT" ]; then
     ROOT="$HOME/dev/${GITLAB_HOST%%:*}"
     [ "$gitlab_preview" = true ] || mkdir -p "$ROOT"
@@ -793,6 +800,8 @@ fi
 
 # Per-run status files live in a temp directory outside the root, so a dry
 # run leaves the root untouched (and a missing default root missing).
+# A real run also clears the in-root status directory older versions used.
+[ "$DRY_RUN" = true ] || rm -rf "${GITHUB_DEV_PATH}/.gh_sync_tmp"
 temp_dir=$(mktemp -d)
 mkdir -p "$temp_dir/status"
 status_dir="$temp_dir/status"
