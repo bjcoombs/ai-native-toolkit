@@ -17,9 +17,20 @@ set -euo pipefail
 #
 # Org detection mirrors ghsync: defaults to the basename of --root / cwd.
 #
-# Usage: ./ghreport.sh [--org NAME] [--root DIR] [--limit N] [--quiet]
-#                      [--no-file] [--render-dir DIR]
+# GitLab (--provider gitlab): discovery runs through ghsync's GitLab provider
+# (every group you belong to on --host, nested subgroups and shared projects,
+# or --group's subtree). Per project, through `glab api`: open merge requests,
+# the latest pipeline on the default branch, open vulnerabilities (a paid-tier
+# endpoint, so no-access is the common case) and default-branch protection.
+# Any failed call is no-access / unknown, never 0.
+#
+# Usage: ./ghreport.sh [--provider github|gitlab] [--root DIR] [--limit N]
+#                      [--quiet] [--no-file] [--render-dir DIR]
+#                      GitHub: [--org NAME]   GitLab: [--host HOST] [--group PATH]
+#   --provider P      github (default) or gitlab
 #   --org NAME        Org / account to report on (default: basename of --root/cwd)
+#   --host HOST       GitLab host (default: gitlab.com)
+#   --group PATH      GitLab: report on this group's subtree only
 #   --root DIR        Org root; where the report file lands (default: cwd)
 #   --limit N         Only the first N repos (quick test)
 #   --quiet           Suppress per-repo progress dots
@@ -34,11 +45,22 @@ LIMIT=0
 QUIET_MODE=false
 NO_FILE=false
 RENDER_DIR=""
+PROVIDER=github
+GITLAB_HOST=""
+GITLAB_GROUP=""
+github_only_flags=()
+gitlab_only_flags=()
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --org) ORG=$2; shift 2 ;;
-    --org=*) ORG=${1#*=}; shift ;;
+    --provider) PROVIDER=$2; shift 2 ;;
+    --provider=*) PROVIDER=${1#*=}; shift ;;
+    --org) ORG=$2; github_only_flags+=(--org); shift 2 ;;
+    --org=*) ORG=${1#*=}; github_only_flags+=(--org); shift ;;
+    --host) GITLAB_HOST=$2; gitlab_only_flags+=(--host); shift 2 ;;
+    --host=*) GITLAB_HOST=${1#*=}; gitlab_only_flags+=(--host); shift ;;
+    --group) GITLAB_GROUP=$2; gitlab_only_flags+=(--group); shift 2 ;;
+    --group=*) GITLAB_GROUP=${1#*=}; gitlab_only_flags+=(--group); shift ;;
     --root) ROOT=$2; shift 2 ;;
     --root=*) ROOT=${1#*=}; shift ;;
     --limit) LIMIT=$2; shift 2 ;;
@@ -48,18 +70,53 @@ while [[ $# -gt 0 ]]; do
     --render-dir) RENDER_DIR=$2; shift 2 ;;
     --render-dir=*) RENDER_DIR=${1#*=}; shift ;;
     -h|--help)
-      sed -n '4,28p' "$0"
+      sed -n '4,44p' "$0"
       exit 0
       ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Usage: $0 [--org NAME] [--root DIR] [--limit N] [--quiet] [--no-file] [--render-dir DIR]" >&2
+      echo "Usage: $0 [--provider github|gitlab] [--root DIR] [--limit N] [--quiet] [--no-file] [--render-dir DIR]" >&2
+      echo "       GitHub: [--org NAME]   GitLab: [--host HOST] [--group PATH]" >&2
       exit 1
       ;;
   esac
 done
 
-for cmd in gh jq; do
+# Reject flags that belong to the other provider rather than ignoring them,
+# matching ghsync.
+case "$PROVIDER" in
+    github)
+        if [ ${#gitlab_only_flags[@]} -gt 0 ]; then
+            echo "Error: ${gitlab_only_flags[0]} applies to --provider gitlab only" >&2
+            exit 1
+        fi
+        required_cmds=(gh jq)
+        ;;
+    gitlab)
+        if [ ${#github_only_flags[@]} -gt 0 ]; then
+            echo "Error: ${github_only_flags[0]} applies to --provider github only" >&2
+            exit 1
+        fi
+        # Normalise the host as ghsync does: ghreport calls `glab api
+        # --hostname` itself, so a URL-form --host must not reach it.
+        GITLAB_HOST="${GITLAB_HOST:-gitlab.com}"
+        GITLAB_HOST=${GITLAB_HOST#http://}
+        GITLAB_HOST=${GITLAB_HOST#https://}
+        GITLAB_HOST=${GITLAB_HOST%%/*}
+        if [ -z "$GITLAB_HOST" ]; then
+            echo "Error: --host is empty" >&2
+            exit 1
+        fi
+        # glab itself is checked, with auth, by ghsync's preflight.
+        required_cmds=(jq)
+        ;;
+    *)
+        echo "Error: unknown provider '$PROVIDER' (expected github or gitlab)" >&2
+        exit 1
+        ;;
+esac
+
+for cmd in "${required_cmds[@]}"; do
     if ! command -v "$cmd" &>/dev/null; then
         echo "Error: $cmd not found. Install it (e.g. brew install $cmd)." >&2
         exit 1
@@ -72,7 +129,12 @@ if [[ ! -d "$ROOT" ]]; then
     exit 1
 fi
 ROOT="$(cd "$ROOT" && pwd)"
-ORG="${ORG:-$(basename "$ROOT")}"
+if [ "$PROVIDER" = gitlab ]; then
+    # The report names the host and, when narrowed, the group.
+    ORG="$GITLAB_HOST${GITLAB_GROUP:+/$GITLAB_GROUP}"
+else
+    ORG="${ORG:-$(basename "$ROOT")}"
+fi
 
 # ---- per-repo worker --------------------------------------------------------
 # Queries one repo's remote state and writes a single JSON fragment. Every
@@ -148,6 +210,110 @@ query_repo() {
           protection:$protection}' > "$out"
 }
 
+# ---- GitLab per-project worker ----------------------------------------------
+# glab api against the run's host. gitlab_api_all follows every page; a page
+# may arrive as one merged array or as concatenated arrays, so every reader
+# below slurps (jq -s) and flattens.
+gitlab_api() {
+    glab api --hostname "$GITLAB_HOST" "$1"
+}
+gitlab_api_all() {
+    glab api --hostname "$GITLAB_HOST" --paginate "$1"
+}
+
+gitlab_encode() {
+    jq -rn --arg p "$1" '$p | @uri'
+}
+
+# Count the items of a (possibly multi-page) array response on stdin that
+# match a jq filter. A non-array value (an error body) fails, so the caller
+# reports it as unreadable instead of 0.
+gitlab_count() {
+    jq -s "if all(.[]; type==\"array\") then [.[][] | select($1)] | length else error(\"not a list\") end"
+}
+
+# Same contract as query_repo, with GitLab fields: open_mrs / draft_mrs,
+# pipeline (the literal GitLab status, "none" with no pipeline), and
+# vulnerabilities. Every call is judged by its exit status and its body
+# shape only: any failure is "no-access" (counts) or "unknown" (status,
+# protection), never 0.
+query_project_gitlab() {
+    local path=$1 out=$2 enc
+    enc=$(gitlab_encode "$path")
+
+    local proj_json
+    if ! proj_json=$(gitlab_api "projects/$enc" 2>/dev/null) \
+        || ! jq -e 'type=="object" and has("path_with_namespace")' <<< "$proj_json" >/dev/null 2>&1; then
+        jq -n --arg repo "$path" \
+            '{repo:$repo, unreachable:true, default_branch:"?", open_mrs:"no-access", draft_mrs:0,
+              pipeline:"unknown", vulnerabilities:"no-access", protection:"unknown"}' > "$out"
+        return
+    fi
+
+    local branch
+    branch=$(jq -r '.default_branch // "main"' <<< "$proj_json")
+    local benc
+    benc=$(gitlab_encode "$branch")
+
+    # Open merge requests (count + drafts). The state filter is repeated
+    # client-side so a server that ignores the query string still counts
+    # only open ones.
+    local mr_json open_mrs="no-access" draft_mrs=0
+    if mr_json=$(gitlab_api_all "projects/$enc/merge_requests?state=opened&per_page=100" 2>/dev/null) \
+        && open_mrs=$(gitlab_count '(.state // "opened")=="opened"' <<< "$mr_json" 2>/dev/null); then
+        draft_mrs=$(gitlab_count '(.state // "opened")=="opened" and (.draft==true or .work_in_progress==true)' <<< "$mr_json" 2>/dev/null || echo 0)
+    else
+        open_mrs="no-access"
+    fi
+
+    # Latest pipeline on the default branch: one page, newest first. The
+    # ref filter is repeated client-side for the same reason as above.
+    local pl_json pipeline="unknown"
+    if pl_json=$(gitlab_api "projects/$enc/pipelines?ref=$benc&order_by=id&sort=desc&per_page=1" 2>/dev/null); then
+        pipeline=$(jq -rs --arg b "$branch" '
+            if all(.[]; type=="array") then
+              [.[][] | select((.ref // $b)==$b)]
+              | if length==0 then "none" else (max_by(.id // 0) | .status // "unknown") end
+            else "unknown" end' <<< "$pl_json" 2>/dev/null || echo "unknown")
+    fi
+
+    # Open vulnerabilities (detected or confirmed). Ultimate-tier only, so a
+    # 403 or 404 here is the normal case on most hosts: no-access, not 0.
+    local vuln_json vulns="no-access"
+    if vuln_json=$(gitlab_api_all "projects/$enc/vulnerabilities?per_page=100" 2>/dev/null); then
+        vulns=$(gitlab_count '((.state // "detected") | . == "detected" or . == "confirmed")' <<< "$vuln_json" 2>/dev/null) || vulns="no-access"
+    fi
+
+    # Protection. On GitLab a 404 usually means "no access", not "not
+    # protected", so only a readable list can say "unprotected". Names may
+    # be wildcards (`release/*`); `*` is the only wildcard GitLab supports.
+    local prot_json protection="unknown"
+    if prot_json=$(gitlab_api_all "projects/$enc/protected_branches?per_page=100" 2>/dev/null) \
+        && protection=$(jq -rs --arg b "$branch" '
+            def glob_re: gsub("(?<c>[.+?^$()\\[\\]{}|\\\\])"; "\\\(.c)") | gsub("\\*"; ".*") | "^" + . + "$";
+            if all(.[]; type=="array") then
+              if any(.[][]; (.name // "") as $n | $n==$b or ($b | test($n | glob_re)))
+              then "protected" else "unprotected" end
+            else error("not a list") end' <<< "$prot_json" 2>/dev/null); then
+        :
+    elif gitlab_api "projects/$enc/protected_branches/$benc" >/dev/null 2>&1; then
+        protection="protected"
+    else
+        protection="unknown"
+    fi
+
+    jq -n \
+        --arg repo "$path" --arg branch "$branch" \
+        --arg mrs "$open_mrs" --argjson drafts "${draft_mrs:-0}" \
+        --arg pipeline "$pipeline" --arg vulns "$vulns" --arg protection "$protection" \
+        '{repo:$repo, unreachable:false, default_branch:$branch,
+          open_mrs:(if $mrs=="no-access" then "no-access" else ($mrs|tonumber) end),
+          draft_mrs:$drafts,
+          pipeline:$pipeline,
+          vulnerabilities:(if $vulns=="no-access" then "no-access" else ($vulns|tonumber) end),
+          protection:$protection}' > "$out"
+}
+
 # ---- assembler --------------------------------------------------------------
 # Shared jq helpers, so the headline/table/attention views agree on what
 # "has an open alert" means and how a no-access cell renders.
@@ -191,6 +357,59 @@ render_attention() {
       ] | join("; "))'
 }
 
+# GitLab views. Unreadable cells render as the literal "no-access" /
+# "unknown" so the report says exactly what the API said.
+JQ_DEFS_GITLAB='
+  def has_open_vulns: (.vulnerabilities|type)=="number" and .vulnerabilities>0;
+  def needs_attention:
+    .pipeline=="failed" or has_open_vulns or .protection=="unprotected" or (.unreachable==true);
+'
+
+render_table_gitlab() {
+    echo "| Project | Branch | MRs | Pipeline | Vulnerabilities | Protection |"
+    echo "|---------|--------|-----|----------|-----------------|------------|"
+    jq -r "$JQ_DEFS_GITLAB"'
+      sort_by(.repo)[] |
+      "| \(.repo) | "
+      + (if .unreachable then "- | - | - | - | could not assess |"
+         else
+           "\(.default_branch) | "
+           + "\(.open_mrs)\(if (.draft_mrs // 0)>0 then " (\(.draft_mrs) draft)" else "" end) | "
+           + "\(.pipeline) | \(.vulnerabilities) | \(.protection) |"
+         end)'
+}
+
+render_attention_gitlab() {
+    jq -r "$JQ_DEFS_GITLAB"'
+      sort_by(.repo)[] | select(needs_attention) |
+      "- **\(.repo)**: " + ([
+        (if .unreachable then "could not assess (project metadata unreadable)" else empty end),
+        (if .pipeline=="failed" then "pipeline failed on \(.default_branch)" else empty end),
+        (if has_open_vulns then "\(.vulnerabilities) open vulnerabilit\(if .vulnerabilities==1 then "y" else "ies" end)" else empty end),
+        (if .protection=="unprotected" then "default branch unprotected" else empty end)
+      ] | join("; "))'
+}
+
+# One line of headline counts for a JSON array on stdin. Unreadable MR and
+# vulnerability counts are named, so a total of 0 is never read as clean.
+headline_gitlab() {
+    jq -r "$JQ_DEFS_GITLAB"'
+      ([.[]|select(.unreachable!=true)]) as $ok
+      | "\(length) project(s): \([.[]|select(.pipeline=="failed")]|length) with a failed pipeline, "
+        + "\([.[]|select(has_open_vulns)]|length) with open vulnerabilities, "
+        + "\([.[]|select(.protection=="unprotected")]|length) with an unprotected default branch, "
+        + "\([.[]|.open_mrs|numbers]|add // 0) open MR(s) total"
+        + (([$ok[]|select(.open_mrs=="no-access")]|length) as $n | if $n>0 then ", MRs unreadable on \($n)" else "" end)
+        + (([$ok[]|select(.vulnerabilities=="no-access")]|length) as $n | if $n>0 then ", vulnerabilities no-access on \($n)" else "" end)
+        + (([.[]|select(.unreachable==true)]|length) as $n | if $n>0 then ", \($n) could not be assessed" else "" end)'
+}
+
+legend_gitlab() {
+    echo "- **Pipeline**: status of the latest pipeline on the default branch, as GitLab reports it (\`success\`, \`failed\`, \`running\`, ...); \`none\` means the branch has no pipeline, \`unknown\` that the pipelines API could not be read."
+    echo "- **no-access** in a count column: the API refused or failed (vulnerabilities need GitLab Ultimate and Developer access). It is not the same as a confirmed zero."
+    echo "- **Protection**: \`unknown\` means the protected-branches API could not be read; \`unprotected\` means it listed no rule covering the default branch."
+}
+
 assemble() {
     local dir=$1
     shopt -s nullglob
@@ -200,6 +419,12 @@ assemble() {
         data='[]'
     else
         data=$(jq -s '.' "${frags[@]}")
+    fi
+
+    if [ "$PROVIDER" = gitlab ]; then
+        emit_report "$data" "$(echo "$data" | headline_gitlab)" \
+            render_table_gitlab render_attention_gitlab legend_gitlab "Projects" "projects"
+        return
     fi
 
     # Headline counts.
@@ -214,30 +439,46 @@ assemble() {
             ([.[]|.open_prs // 0]|add // 0)
           ] | @tsv')
 
-    local today
-    today=$(date +%Y-%m-%d)
     local headline="$total repo(s): $failing_ci with failing CI, $with_alerts with open security alerts, $unprotected with an unprotected default branch, $open_prs_total open PR(s) total"
     [ "$unreachable" -gt 0 ] && headline="$headline, $unreachable could not be assessed"
+
+    emit_report "$data" "$headline" render_table render_attention legend_github "Repos" "repos"
+}
+
+legend_github() {
+    echo "- **CI**: latest completed run per workflow on the default branch (\`pass\` / \`fail\` / \`none\`)."
+    echo "- **n/a** in an alert column: the alert API returned no access - the feature is disabled on the repo or admin access is required. Either way it is not the same as a confirmed zero."
+    echo "- **Protection**: \`unknown\` means the protection API denied access; \`unprotected\` means it confirmed no protection."
+}
+
+# Terminal summary plus the markdown file, shared by both providers.
+# $1 data, $2 headline, $3 table fn, $4 attention fn, $5 legend fn,
+# $6 table heading, $7 noun for the clean message.
+emit_report() {
+    local data=$1 headline=$2 table_fn=$3 attention_fn=$4 legend_fn=$5 heading=$6 noun=$7
+    local today
+    today=$(date +%Y-%m-%d)
 
     # ---- terminal ----
     echo ""
     echo "====== Org State: $ORG ($today) ======"
     echo "$headline"
     echo ""
-    echo "$data" | render_table
+    echo "$data" | "$table_fn"
     echo ""
     local attention
-    attention=$(echo "$data" | render_attention)
+    attention=$(echo "$data" | "$attention_fn")
     if [ -n "$attention" ]; then
         echo "Needs attention:"
         echo "$attention"
     else
-        echo "Needs attention: none - all assessed repos are clean."
+        echo "Needs attention: none - all assessed $noun are clean."
     fi
 
     # ---- file ----
     if [ "$NO_FILE" = false ]; then
-        local report_file="$ROOT/org-state-$ORG-$today.md"
+        # A GitLab label can hold a group path; keep the file name flat.
+        local report_file="$ROOT/org-state-${ORG//\//-}-$today.md"
         {
             echo "# Org state: $ORG"
             echo ""
@@ -245,23 +486,21 @@ assemble() {
             echo ""
             echo "$headline"
             echo ""
-            echo "## Repos"
+            echo "## $heading"
             echo ""
-            echo "$data" | render_table
+            echo "$data" | "$table_fn"
             echo ""
             echo "## Needs attention"
             echo ""
             if [ -n "$attention" ]; then
-                echo "$data" | render_attention
+                echo "$attention"
             else
-                echo "None - all assessed repos are clean."
+                echo "None - all assessed $noun are clean."
             fi
             echo ""
             echo "## Legend"
             echo ""
-            echo "- **CI**: latest completed run per workflow on the default branch (\`pass\` / \`fail\` / \`none\`)."
-            echo "- **n/a** in an alert column: the alert API returned no access - the feature is disabled on the repo or admin access is required. Either way it is not the same as a confirmed zero."
-            echo "- **Protection**: \`unknown\` means the protection API denied access; \`unprotected\` means it confirmed no protection."
+            "$legend_fn"
         } > "$report_file"
         echo ""
         echo "Report written to: $report_file"
@@ -294,10 +533,18 @@ echo "Discovering repos in $ORG ..." >&2
 # would discard ghsync's exit code (it is not a pipeline, so pipefail does not
 # apply), masking an auth/deps failure as "no repositories". Capturing lets us
 # distinguish a genuine empty org from a failed discovery.
-disc_out=$(bash "$GHSYNC_SH" --porcelain --org "$ORG" --root "$ROOT") || {
-    echo "Error: repo discovery via ghsync failed (see its output above)." >&2
-    exit 1
-}
+if [ "$PROVIDER" = gitlab ]; then
+    # ghsync's preflight checks glab and its auth for the host, and its one
+    # error line already names the host, so a failure adds nothing here.
+    gl_args=(--provider gitlab --host "$GITLAB_HOST" --porcelain)
+    [ -n "$GITLAB_GROUP" ] && gl_args+=(--group "$GITLAB_GROUP")
+    disc_out=$(bash "$GHSYNC_SH" "${gl_args[@]}") || exit 1
+else
+    disc_out=$(bash "$GHSYNC_SH" --porcelain --org "$ORG" --root "$ROOT") || {
+        echo "Error: repo discovery via ghsync failed (see its output above)." >&2
+        exit 1
+    }
+fi
 repos=()
 [ -n "$disc_out" ] && mapfile -t repos <<< "$disc_out"
 if [ ${#repos[@]} -eq 0 ]; then
@@ -305,7 +552,7 @@ if [ ${#repos[@]} -eq 0 ]; then
     exit 0
 fi
 
-# --limit caps the expensive querying (~5 REST calls per repo), so apply it
+# --limit caps the expensive querying (~5 API calls per repo), so apply it
 # here rather than passing it to ghsync: ghsync's --porcelain implies
 # --list-repos, which exits before ghsync applies its own --limit, so a
 # passed-through limit would be silently ignored.
@@ -320,8 +567,13 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 i=0
 for repo in "${repos[@]}"; do
-    # Fragment filenames must be flat; repo names have no slashes (single-org).
-    query_repo "$repo" "$TMP_DIR/$repo.json" &
+    # Fragment filenames must be flat. GitHub names have no slashes
+    # (single-org); a GitLab path does, so it is flattened.
+    if [ "$PROVIDER" = gitlab ]; then
+        query_project_gitlab "$repo" "$TMP_DIR/${repo//\//__}.json" &
+    else
+        query_repo "$repo" "$TMP_DIR/$repo.json" &
+    fi
     if (( ++i % 5 == 0 )); then
         wait
     fi
