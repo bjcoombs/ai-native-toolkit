@@ -63,7 +63,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org meridianhub --root ~/dev/gith
 | Flag | Effect |
 |------|--------|
 | `--provider github\|gitlab` | Which host type to sync (default: `github`) |
-| `--root DIR` | Directory to clone into (GitHub default: current directory; GitLab default: `~/dev/<host>`, created if missing) |
+| `--root DIR` | Directory to clone into; an explicit `--root` must already exist (GitHub default: current directory; GitLab default: `~/dev/<host>`, created on the first sync) |
 | `--list-repos` | List the deduplicated accessible repos and exit |
 | `--porcelain` | Machine-readable repo list: one path per line to stdout (GitHub: the repo name; GitLab: `path_with_namespace`), all chatter to stderr; implies `--list-repos`. Consumed by `/ghreport` and by `--from-list`. |
 | `--dry-run` | Show what would be cloned/updated without making changes |
@@ -71,7 +71,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org meridianhub --root ~/dev/gith
 | `--quiet` | Suppress per-repository chatter; keep the final summary |
 | `--org NAME` | GitHub only. Org or personal account to sync (default: basename of `--root` / cwd) |
 | `--list-teams` | GitHub only. List your teams in the org (with repo counts) and exit; orgs only |
-| `--host HOST` | GitLab only. Host to sync (default: `gitlab.com`); `https://` and a trailing `/` are accepted |
+| `--host HOST` | GitLab only. Host to sync (default: `gitlab.com`); `https://` and a trailing `/` are accepted, and so is a web port (`host:8443`) |
 | `--group PATH` | GitLab only. Sync one group and its subgroups instead of every group you belong to |
 | `--from-list FILE` | GitLab only. Sync the paths in FILE (the `--porcelain` format; blank lines and `#` comments ignored) with no discovery and no `glab` |
 
@@ -102,7 +102,13 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab --host gitlab.exa
 - **Archived** and **empty** projects are skipped, as on GitHub.
 - **Clone URLs** are built from the host: `https://<host>/<path>.git`, or
   `git@<host>:<path>.git` with `GHSYNC_GIT_PROTOCOL=ssh`. For HTTPS on a
-  private project, let `glab auth login` set up git credentials.
+  private project, let `glab auth login` set up git credentials. A port on
+  `--host` is the web and API port: it stays in the HTTPS URL and is dropped
+  from the SSH URL. Set a non-standard SSH port for the host in
+  `~/.ssh/config`.
+- **List-only runs** (`--list-repos`, `--porcelain`) create no root
+  directory and write no `.gh_archived_repos`, so the list can be produced
+  on a machine that will never hold the checkouts.
 - **Fail fast:** before any discovery call, the script checks that `glab` and
   `jq` are installed and that `glab auth status --hostname <host>` passes. A
   failure prints one line naming the host and the check (installed,

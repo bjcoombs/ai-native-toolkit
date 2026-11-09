@@ -518,10 +518,12 @@ gitlab_reject_unsafe_paths() {
 }
 
 # Clone URL for one GitLab path, built from the host. Used for both
-# discovery and --from-list runs, so both produce the same checkouts.
+# discovery and --from-list runs, so both produce the same checkouts. A port
+# on --host (host:8443) is the web and API port, so it stays in the HTTPS
+# URL but is dropped for SSH; set a custom SSH port in ~/.ssh/config.
 gitlab_clone_url() {
     if [ "${GHSYNC_GIT_PROTOCOL:-https}" = ssh ]; then
-        echo "git@$GITLAB_HOST:$1.git"
+        echo "git@${GITLAB_HOST%%:*}:$1.git"
     else
         echo "$GITLAB_SCHEME://$GITLAB_HOST/$1.git"
     fi
@@ -648,20 +650,28 @@ discover_repos() {
 provider_preflight
 
 # Derive the root, after preflight so a failed host check leaves no
-# directory behind. GitHub: the root defaults to cwd and must exist, and the
-# org defaults to its basename, so dropping into ~/dev/github.com/<org> just
-# works. GitLab: the root defaults to ~/dev/<host> and is created if missing.
-if [ "$PROVIDER" = gitlab ]; then
-    ROOT="${ROOT:-$HOME/dev/$GITLAB_HOST}"
-    mkdir -p "$ROOT"
+# directory behind. An explicit --root must exist on either provider, so a
+# typo fails rather than starting a new tree. GitHub: the root defaults to
+# cwd, and the org defaults to its basename, so dropping into
+# ~/dev/github.com/<org> just works. GitLab: the root defaults to
+# ~/dev/<host>, created on first sync. A GitLab list-only run (--list-repos,
+# --porcelain) never touches the root: the list may be produced on a machine
+# that will never hold the checkouts.
+gitlab_list_only=false
+[ "$PROVIDER" = gitlab ] && [ "$LIST_REPOS" = true ] && gitlab_list_only=true
+if [ "$PROVIDER" = gitlab ] && [ -z "$ROOT" ]; then
+    ROOT="$HOME/dev/$GITLAB_HOST"
+    [ "$gitlab_list_only" = true ] || mkdir -p "$ROOT"
 else
     ROOT="${ROOT:-$PWD}"
 fi
-if [[ ! -d "$ROOT" ]]; then
-    echo "Error: root directory does not exist: $ROOT"
-    exit 1
+if [ "$gitlab_list_only" = false ]; then
+    if [[ ! -d "$ROOT" ]]; then
+        echo "Error: root directory does not exist: $ROOT"
+        exit 1
+    fi
+    ROOT="$(cd "$ROOT" && pwd)"
 fi
-ROOT="$(cd "$ROOT" && pwd)"
 if [ "$PROVIDER" = gitlab ]; then
     ORG="$GITLAB_HOST"
 else
@@ -706,12 +716,18 @@ discover_repos
 mapfile -t repo_paths < <(sort -u "$all_repos_file")
 rm -f "$all_repos_file"
 
-# Save archived repos to persistent cache (handy for downstream tooling)
-archived_repos_cache="${GITHUB_DEV_PATH}/.gh_archived_repos"
-sort -u "$archived_repos_file" > "$archived_repos_cache"
-archived_count=$(wc -l < "$archived_repos_cache" | tr -d ' ')
+# Save archived repos to persistent cache (handy for downstream tooling).
+# A GitLab list-only run writes nothing under the root.
+if [ "$gitlab_list_only" = true ]; then
+    archived_count=$(sort -u "$archived_repos_file" | wc -l | tr -d ' ')
+    echo "Found $archived_count archived repositories (skipped)"
+else
+    archived_repos_cache="${GITHUB_DEV_PATH}/.gh_archived_repos"
+    sort -u "$archived_repos_file" > "$archived_repos_cache"
+    archived_count=$(wc -l < "$archived_repos_cache" | tr -d ' ')
+    echo "Found $archived_count archived repositories (cached to .gh_archived_repos)"
+fi
 rm -f "$archived_repos_file"
-echo "Found $archived_count archived repositories (cached to .gh_archived_repos)"
 
 # Filter out blacklisted repos
 filtered_repos=()

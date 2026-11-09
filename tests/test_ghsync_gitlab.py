@@ -276,6 +276,9 @@ class Env:
             timeout=120,
         )
 
+    def sync_at(self, root: Path) -> subprocess.CompletedProcess[str]:
+        return self.run("--host", HOST, "--quiet", root=root)
+
     def sync(self, *args: str) -> subprocess.CompletedProcess[str]:
         return self.run("--host", HOST, "--quiet", *args, root=self.root)
 
@@ -324,11 +327,52 @@ def test_porcelain_lists_every_project_once(env: Env) -> None:
     assert not env.gh_log.exists(), env.gh_log.read_text()
 
 
-def test_default_root_is_dev_host(env: Env) -> None:
-    res = env.run("--host", HOST, "--porcelain")
+def test_list_only_runs_leave_no_root(env: Env) -> None:
+    """--porcelain and --list-repos create no root and write no cache."""
+    for flag in ("--porcelain", "--list-repos"):
+        res = env.run("--host", HOST, flag)
+        assert res.returncode == 0, res.stderr
+    assert not (env.tmp / "dev").exists()
+    res = env.run("--host", HOST, "--porcelain", root=env.root)
     assert res.returncode == 0, res.stderr
-    cache = env.tmp / "dev" / HOST / ".gh_archived_repos"
-    assert cache.read_text().split() == ARCHIVED
+    assert list(env.root.iterdir()) == []
+
+
+def test_default_root_is_dev_host(env: Env) -> None:
+    res = env.run("--host", HOST, "--quiet", "--group", "grp/sub/deep")
+    assert res.returncode == 0, res.stdout + res.stderr
+    root = env.tmp / "dev" / HOST
+    assert (env.checkout("grp/sub/deep/gamma", root) / ".git").is_dir()
+    assert (root / ".gh_archived_repos").read_text() == ""
+
+
+def test_explicit_missing_root_fails(env: Env) -> None:
+    missing = env.tmp / "typo-root"
+    res = env.sync_at(missing)
+    assert res.returncode != 0
+    assert "root directory does not exist" in res.stdout + res.stderr
+    assert not missing.exists()
+
+
+def test_ssh_clone_url_drops_web_port(env: Env, tmp_path: Path) -> None:
+    """--host host:8443 keeps the port for HTTPS but not in the scp-style SSH URL."""
+    saved = tmp_path / "list.txt"
+    saved.write_text("grp/alpha\n")
+    res = env.run(
+        "--host",
+        f"{HOST}:8443",
+        "--from-list",
+        str(saved),
+        "--quiet",
+        env={"GHSYNC_GIT_PROTOCOL": "ssh"},
+        root=env.root,
+    )
+    assert res.returncode == 0, res.stdout + res.stderr
+    checkout = env.checkout("grp/alpha")
+    assert (
+        env.git("config", "remote.origin.url", cwd=checkout)
+        == f"git@{HOST}:grp/alpha.git"
+    )
 
 
 def test_list_repos_names_each_project(env: Env) -> None:
@@ -343,7 +387,7 @@ def test_host_with_scheme_is_normalised(env: Env) -> None:
     res = env.run("--host", f"https://{HOST}/", "--porcelain")
     assert res.returncode == 0, res.stderr
     assert res.stdout.splitlines() == SYNCED
-    assert (env.tmp / "dev" / HOST).is_dir()
+    assert not (env.tmp / "dev").exists()
 
 
 def test_group_narrows_to_subtree(env: Env) -> None:
@@ -467,6 +511,7 @@ def test_from_list_reproduces_layout_without_api(env: Env) -> None:
     )
     env.glab_log.unlink()
     root2 = env.tmp / "root2"
+    root2.mkdir()
     res = env.run(
         "--host",
         HOST,
