@@ -409,10 +409,17 @@ ALPHA = "projects/grp/alpha"
         ({f"{ALPHA}/merge_requests": [[]]}, 2, "0"),
         # An error body served with exit 0 is unreadable too.
         ({f"{ALPHA}/merge_requests": [{"message": "403 Forbidden"}]}, 2, "no-access"),
-        # Pipeline statuses pass through as GitLab reports them.
-        ({f"{ALPHA}/pipelines": [[_pipeline(11, "running")]]}, 3, "running"),
-        ({f"{ALPHA}/pipelines": [[_pipeline(12, "canceled")]]}, 3, "canceled"),
+        # Pipeline: the newest finished (success or failed) one, as on GitHub.
+        # running, canceled, skipped and manual never mask the last result.
+        ({f"{ALPHA}/pipelines": [[_pipeline(12, "running"), _pipeline(11, "failed")]]}, 3, "failed"),
+        ({f"{ALPHA}/pipelines": [[_pipeline(12, "running"), _pipeline(11, "success")]]}, 3, "success"),
+        ({f"{ALPHA}/pipelines": [[_pipeline(14, "canceled"), _pipeline(13, "skipped"),
+                                  _pipeline(12, "manual"), _pipeline(11, "failed")]]}, 3, "failed"),
+        ({f"{ALPHA}/pipelines": [[_pipeline(12, "failed"), _pipeline(11, "success")]]}, 3, "failed"),
+        ({f"{ALPHA}/pipelines": [[_pipeline(11, "running")]]}, 3, "none"),
+        ({f"{ALPHA}/pipelines": [[_pipeline(12, "canceled")]]}, 3, "none"),
         ({f"{ALPHA}/pipelines": [[]]}, 3, "none"),
+        ({f"{ALPHA}/pipelines": [{"message": "403 Forbidden"}]}, 3, "unknown"),
         ({f"{ALPHA}/pipelines": [[_pipeline(13, "failed", ref="feature")]]}, 3, "none"),
         # Protection: none, wildcard, and the single-branch fallback.
         ({f"{ALPHA}/protected_branches": [[]]}, 5, "unprotected"),
@@ -433,6 +440,22 @@ def test_failed_pipeline_needs_attention_other_statuses_do_not(tmp_path: Path) -
     env = Env(tmp_path, {f"{ALPHA}/pipelines": [[_pipeline(14, "canceled")]]})
     res = env.run("--host", HOST, "--limit", "1", "--no-file")
     assert "Needs attention: none" in res.stdout
+
+
+def test_running_pipeline_does_not_hide_an_earlier_failure(tmp_path: Path) -> None:
+    env = Env(tmp_path, {f"{ALPHA}/pipelines": [[_pipeline(15, "running"), _pipeline(14, "failed")]]})
+    res = env.run("--host", HOST, "--limit", "1", "--no-file")
+    assert res.returncode == 0, res.stderr
+    assert "Needs attention: none" not in res.stdout
+    assert "pipeline failed on main" in res.stdout
+
+
+def test_pipelines_request_asks_for_more_than_one(tmp_path: Path) -> None:
+    env = Env(tmp_path, {})
+    env.run("--host", HOST, "--limit", "1", "--no-file")
+    calls = [ln for ln in env.glab_log.read_text().splitlines() if "/pipelines" in ln]
+    assert calls, "no pipelines call made"
+    assert all("per_page=20" in ln for ln in calls), calls
 
 
 def test_help_prints_only_the_header() -> None:

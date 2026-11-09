@@ -20,8 +20,9 @@ set -euo pipefail
 # GitLab (--provider gitlab): discovery runs through ghsync's GitLab provider
 # (every group you belong to on --host, nested subgroups and shared projects,
 # or --group's subtree). Per project, through `glab api`: open merge requests,
-# the latest pipeline on the default branch, open vulnerabilities (a paid-tier
-# endpoint, so no-access is the common case) and default-branch protection.
+# the latest finished (success or failed) pipeline on the default branch, open
+# vulnerabilities (a paid-tier endpoint, so no-access is the common case) and
+# default-branch protection.
 # Any failed call is no-access / unknown, never 0.
 #
 # Usage: ./ghreport.sh [--provider github|gitlab] [--root DIR] [--limit N]
@@ -233,7 +234,8 @@ gitlab_count() {
 }
 
 # Same contract as query_repo, with GitLab fields: open_mrs / draft_mrs,
-# pipeline (the literal GitLab status, "none" with no pipeline), and
+# pipeline ("success" or "failed" from the newest finished pipeline,
+# "none" with no finished pipeline), and
 # vulnerabilities. Every call is judged by its exit status and its body
 # shape only: any failure is "no-access" (counts) or "unknown" (status,
 # protection), never 0.
@@ -266,19 +268,23 @@ query_project_gitlab() {
         open_mrs="no-access"
     fi
 
-    # Latest pipeline on the default branch: one page, newest first. The
-    # ref filter is repeated client-side for the same reason as above.
+    # Latest finished pipeline on the default branch, matching the GitHub
+    # path's latest-completed run: the newest of the last 20 whose status is
+    # success or failed. running, pending, canceled, skipped and manual are
+    # passed over, so an in-flight or cancelled run cannot hide a failure.
+    # The ref filter is repeated client-side for the same reason as above.
     local pl_json pipeline="unknown"
-    if pl_json=$(gitlab_api "projects/$enc/pipelines?ref=$benc&order_by=id&sort=desc&per_page=1" 2>/dev/null); then
+    if pl_json=$(gitlab_api "projects/$enc/pipelines?ref=$benc&order_by=id&sort=desc&per_page=20" 2>/dev/null); then
         pipeline=$(jq -rs --arg b "$branch" '
             if all(.[]; type=="array") then
-              [.[][] | select((.ref // $b)==$b)]
-              | if length==0 then "none" else (max_by(.id // 0) | .status // "unknown") end
+              [.[][] | select((.ref // $b)==$b and (.status=="success" or .status=="failed"))]
+              | if length==0 then "none" else (max_by(.id // 0) | .status) end
             else "unknown" end' <<< "$pl_json" 2>/dev/null || echo "unknown")
     fi
 
-    # Open vulnerabilities (detected or confirmed). Ultimate-tier only, so a
-    # 403 or 404 here is the normal case on most hosts: no-access, not 0.
+    # Open vulnerabilities (detected or confirmed). Ultimate-tier only, and the
+    # REST endpoint is deprecated, so a 403 or 404 here is the normal case on
+    # most hosts: no-access, not 0.
     local vuln_json vulns="no-access"
     if vuln_json=$(gitlab_api_all "projects/$enc/vulnerabilities?per_page=100" 2>/dev/null); then
         vulns=$(gitlab_count '((.state // "detected") | . == "detected" or . == "confirmed")' <<< "$vuln_json" 2>/dev/null) || vulns="no-access"
@@ -405,8 +411,8 @@ headline_gitlab() {
 }
 
 legend_gitlab() {
-    echo "- **Pipeline**: status of the latest pipeline on the default branch, as GitLab reports it (\`success\`, \`failed\`, \`running\`, ...); \`none\` means the branch has no pipeline, \`unknown\` that the pipelines API could not be read."
-    echo "- **no-access** in a count column: the API refused or failed (vulnerabilities need GitLab Ultimate and Developer access). It is not the same as a confirmed zero."
+    echo "- **Pipeline**: status of the latest finished pipeline (\`success\` or \`failed\`) among the last 20 on the default branch; running, pending, canceled, skipped and manual pipelines are passed over. \`none\` means no finished pipeline was found, \`unknown\` that the pipelines API could not be read."
+    echo "- **no-access** in a count column: the API refused or failed. For vulnerabilities that is the tier, the role, or the endpoint being unavailable on this GitLab version (GitLab documents the REST vulnerabilities endpoint as deprecated). It is not the same as a confirmed zero."
     echo "- **Protection**: \`unknown\` means the protected-branches API could not be read; \`unprotected\` means it listed no rule covering the default branch."
 }
 
