@@ -236,10 +236,11 @@ gitlab_count() {
 
 # Same contract as query_repo, with GitLab fields: open_mrs / draft_mrs,
 # pipeline ("success" or "failed" from the newest finished pipeline,
-# "none" with no finished pipeline), and
-# vulnerabilities. Every call is judged by its exit status and its body
-# shape only: any failure is "no-access" (counts) or "unknown" (status,
-# protection), never 0.
+# "none" with no finished pipeline), vulnerabilities, and empty_repo. An
+# empty repository (null default branch) writes default_branch null,
+# empty_repo true, and "empty" for pipeline and protection. Every call is
+# judged by its exit status and its body shape only: any failure is
+# "no-access" (counts) or "unknown" (status, protection), never 0.
 query_project_gitlab() {
     local path=$1 out=$2 enc
     enc=$(gitlab_encode "$path")
@@ -259,10 +260,7 @@ query_project_gitlab() {
     # for a branch that does not exist.
     local branch empty=false
     branch=$(jq -r '.default_branch // ""' <<< "$proj_json")
-    if [ -z "$branch" ]; then
-        empty=true
-        branch="empty"
-    fi
+    [ -z "$branch" ] && empty=true
     local benc
     benc=$(gitlab_encode "$branch")
 
@@ -322,10 +320,11 @@ query_project_gitlab() {
     fi
 
     jq -n \
-        --arg repo "$path" --arg branch "$branch" \
+        --arg repo "$path" --arg branch "$branch" --argjson empty "$empty" \
         --arg mrs "$open_mrs" --argjson drafts "${draft_mrs:-0}" \
         --arg pipeline "$pipeline" --arg vulns "$vulns" --arg protection "$protection" \
-        '{repo:$repo, unreachable:false, default_branch:$branch,
+        '{repo:$repo, unreachable:false,
+          default_branch:(if $empty then null else $branch end), empty_repo:$empty,
           open_mrs:(if $mrs=="no-access" then "no-access" else ($mrs|tonumber) end),
           draft_mrs:$drafts,
           pipeline:$pipeline,
@@ -392,7 +391,7 @@ render_table_gitlab() {
       "| \(.repo) | "
       + (if .unreachable then "- | - | - | - | could not assess |"
          else
-           "\(.default_branch) | "
+           "\(if .empty_repo==true then "empty" else .default_branch end) | "
            + "\(.open_mrs)\(if (.draft_mrs // 0)>0 then " (\(.draft_mrs) draft)" else "" end) | "
            + "\(.pipeline) | \(.vulnerabilities) | \(.protection) |"
          end)'
@@ -421,7 +420,7 @@ headline_gitlab() {
         + (([$ok[]|select(.open_mrs=="no-access")]|length) as $n | if $n>0 then ", MRs unreadable on \($n)" else "" end)
         + (([$ok[]|select(.vulnerabilities=="no-access")]|length) as $n | if $n>0 then ", vulnerabilities no-access on \($n)" else "" end)
         + (([.[]|select(.unreachable==true)]|length) as $n | if $n>0 then ", \($n) could not be assessed" else "" end)
-        + (([$ok[]|select(.pipeline=="empty")]|length) as $n | if $n>0 then ", \($n) empty" else "" end)'
+        + (([$ok[]|select(.empty_repo==true)]|length) as $n | if $n>0 then ", \($n) empty" else "" end)'
 }
 
 legend_gitlab() {

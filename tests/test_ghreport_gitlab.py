@@ -567,3 +567,28 @@ def test_empty_repository_with_limit(tmp_path: Path) -> None:
     assert "1 project(s)" in res.stdout
     assert _cells(_row(res.stdout, "grp/alpha"))[1:] == ["empty", "2", "empty", "no-access", "empty"]
     assert "Needs attention: none" in res.stdout
+
+
+def test_render_dir_tells_an_empty_repo_from_a_branch_named_empty(tmp_path: Path) -> None:
+    """The fragment marks emptiness with empty_repo and a null branch, so a
+    replay keeps a real branch named `empty` apart from an empty project."""
+    frags = tmp_path / "frags"
+    frags.mkdir()
+    base = {"unreachable": False, "open_mrs": 0, "draft_mrs": 0, "vulnerabilities": "no-access"}
+    (frags / "0.json").write_text(json.dumps({
+        **base, "repo": "grp/real", "default_branch": "empty", "empty_repo": False,
+        "pipeline": "success", "protection": "protected",
+    }))
+    (frags / "1.json").write_text(json.dumps({
+        **base, "repo": "grp/blank", "default_branch": None, "empty_repo": True,
+        "pipeline": "empty", "protection": "empty",
+    }))
+    res = subprocess.run(
+        ["bash", str(GHREPORT), "--provider", "gitlab", "--render-dir", str(frags), "--no-file"],
+        capture_output=True, check=False, text=True, timeout=60,
+    )
+    assert res.returncode == 0, res.stderr
+    assert _cells(_row(res.stdout, "grp/real"))[1:] == ["empty", "0", "success", "no-access", "protected"]
+    assert _cells(_row(res.stdout, "grp/blank"))[1:] == ["empty", "0", "empty", "no-access", "empty"]
+    assert ", 1 empty" in res.stdout
+    assert "Needs attention: none" in res.stdout
