@@ -152,7 +152,7 @@ Naming a sibling skill, command, or concept as analogy or aside when the reader 
 
 > "This dispersal works **exactly as `marathon` composes `pr-review-merge`.**"
 
-Distinct from a load-bearing composition pointer the reader must actually follow ("composes `skill-forge`'s A/B equivalence capability") - that one is legitimate, don't flag it.
+Distinct from a required composition pointer the reader must actually follow ("composes `skill-forge`'s A/B equivalence capability") - that one is legitimate, don't flag it.
 
 **Fix:** Cut the analogy. If the reader genuinely needs the referenced skill, make it a declared dependency, not a passing mention. This is prose-level judgment only - it catches decorative name-drops, not whether a document's real composition graph is correct.
 
