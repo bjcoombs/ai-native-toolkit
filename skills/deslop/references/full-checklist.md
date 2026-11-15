@@ -1,10 +1,10 @@
 # Full checklist: Signs of AI writing
 
-Exhaustive companion to SKILL.md, adapted from Wikipedia's "Signs of AI writing" at **revision 1374941330** (dated 14 September 2026, captured 19 September 2026). Use when doing a thorough audit. The summary in SKILL.md covers the most common offenders; this file adds the rest plus extra detail. No single sign is conclusive - look for clusters.
+Exhaustive companion to SKILL.md, adapted from Wikipedia's "Signs of AI writing" at **revision 1385842594** (dated and captured 15 November 2026), with its Style subpage at revision 1382924605 and Markup subpage at revision 1385161688. Use when doing a thorough audit. The summary in SKILL.md covers the most common offenders; this file adds the rest plus extra detail. No single sign is conclusive - look for clusters.
 
 > **Freshness:** these tells track current models and will drift. If this checklist has not been refreshed in a while, re-derive it from the live Wikipedia page before trusting an audit - see the "Provenance and freshness" note in SKILL.md, which also lists what was adapted and what was deliberately left out.
 
-> **Historical entries.** Entries marked *(historical)* were common in older models and are rare in current output. They help date a text; on fresh output they are weak evidence, so don't let one carry a verdict.
+> **Historical entries.** Entries marked *(historical)* sit in the source's "Historical indicators" section, with the dates it gives: common in older models, rare in current output. They help date a text; on fresh output they are weak evidence, so don't let one carry a verdict.
 
 ## Table of contents
 - A. Content tells
@@ -19,13 +19,17 @@ Exhaustive companion to SKILL.md, adapted from Wikipedia's "Signs of AI writing"
 
 ## A. Content tells
 
-**A1. Puffery - significance, legacy, broader trends.** Inflates importance, claims the subject represents a wider movement, leaves an "indelible mark," etc. Applied even to etymology or population figures. Sometimes prefaced with a fake-humble hedge ("though little-known, X nonetheless…") before puffing anyway. More characteristic of ChatGPT and Grok than of Gemini or Claude. *Watch:* stands/serves as, testament/reminder, crucial/pivotal/vital/significant/key role or moment, underscores/highlights its importance, reflects broader, enduring legacy, setting the stage for, marks a shift, evolving landscape, focal point, deeply rooted, rich cultural heritage. **Fix:** cut, or substitute a concrete fact.
+**A1. Puffery - significance, legacy, broader trends.** Inflates importance, claims the subject represents a wider movement, leaves an "indelible mark," etc. Applied even to etymology or population figures. Sometimes prefaced with a fake-humble hedge ("though little-known, X nonetheless…") before puffing anyway. More characteristic of ChatGPT and Grok than of Gemini or Claude. *Watch:* stands/serves as, testament/reminder, crucial/pivotal/vital/significant/key role or moment, underscores/highlights its importance, reflects broader, enduring legacy, setting the stage for, marks a shift, evolving landscape, focal point, deeply rooted, the distinction matters because. **Fix:** cut, or substitute a concrete fact.
+
+**A1a. Claims that the subject shaped wider debate.** Places the subject inside a larger "discussion" it is said to have influenced, often closing on three abstract nouns: "has generated debate about authenticity, consent, and the psychological effects of…", "shaped emerging policy discussions about ownership, consent, and dignity", "prompted broader reflection on mortality", "remained part of debates about women's rights." *Watch:* has/have shaped conversations/discussions/debate about, generated debate, prompted broader reflection, raising questions about, contributed to wider discussions. **Fix:** name the specific outcome (a law, a ruling, a cited reply) with a source, or cut.
 
 **A2. Biology/ecology over-emphasis.** For species, over-stresses ecosystem connections and conservation status even when tenuous or unknown ("the general health of the ecosystem is crucial for this species"). **Fix:** keep only documented facts.
 
-**A3. Canned notability / source-narration.** Lists *types* of outlets, echoes sourcing-guideline jargon ("independent coverage," "national/regional media," "trade publications," "cited/featured/profiled in," "leading expert"), narrates the evidence rather than stating facts. The source ties this vocabulary to the mid-2025-on model generation. **Fix:** state the fact, cite once.
+**A3. Canned notability / source-narration.** Lists *types* of outlets, echoes sourcing-guideline jargon ("independent coverage," "national/regional media," "trade publications," "cited/featured/profiled in," "leading expert"), narrates the evidence rather than stating facts. Often attributes the model's own superficial analysis to the outlets it lists. The source ties this vocabulary to 2025-on output. **Fix:** state the fact, cite once.
 
-**A4. "Active social media presence."** Idiosyncratic AI phrasing: "maintains a strong digital presence," "consistently demonstrated excellence in digital promotions." **Fix:** delete or replace with a specific, sourced detail.
+**A3a. Identification by primary or tertiary sources.** Common from 2026. Wraps a fact in a stilted report of the record that holds it: "his personal website identifies him as a retired officer," "his parliamentary biography records that he served as…," "databases list her as…," "was identified by [source] as…," "is listed in," "his professional profile lists." Feeds A14: "sources identified John Doe as being associated with leadership of ExampleCorp." *Watch:* identifies/lists/describes/records [subject] as, is listed in, profile lists. **Fix:** state the fact in its own words and cite the record.
+
+**A4. "Active social media presence."** The source marks its examples as outdated (2024-2025). Idiosyncratic AI phrasing: "maintains a strong digital presence," "consistently demonstrated excellence in digital promotions." **Fix:** delete or replace with a specific, sourced detail.
 
 **A5. Superficial analysis via trailing "-ing" clause.** Editorializing tacked on the end: "…, highlighting its role as a regional hub," "…, contributing to the socio-economic development of the region," "…, enhancing its significance." Often unsupported synthesis. **Fix:** amputate the clause.
 
@@ -41,19 +45,19 @@ Exhaustive companion to SKILL.md, adapted from Wikipedia's "Signs of AI writing"
 
 **A11. Date-handling tells.** Vague or self-dating temporal references that will rot or that hide a missing fact: "in recent years," "currently," "to date," "as of this writing," "the latest," present-tense claims about things that change, round-number estimates with false precision. Also inconsistent or silently US-default date formats (Month DD, YYYY) where the document otherwise uses DMY/ISO. Distinct from D3 (chatbot knowledge-cutoff disclaimers): this is the prose itself failing to anchor a time-bound fact. **Fix:** anchor to a specific, sourced, dated fact ("as of the 2021 census"), or remove the claim; match the document's established date format.
 
-**A12. Gratuitous cross-references.** Names a sibling skill, command, or concept as analogy or aside when the reader doesn't need to understand that reference to follow the document's instructions. The reference adds comprehension cost ("what's `marathon` - do I need to read that first?") without contributing behaviour; the sentence would instruct identically without it. Distinct from a load-bearing composition pointer ("composes `skill-forge`'s A/B equivalence capability"), which the reader MUST follow to use the document - that one is legitimate, don't flag it. *Watch:* "exactly as X does Y", "similar to how Z works", "like the X skill", "in the style of Y", "mirrors the approach in Z" - when illustrative rather than instructional. **Fix:** cut the analogy; if the reference is load-bearing, make it explicit via the document's declared dependencies. *Advisory and prose-level only: it flags apparent decorative references from textual context and can't see the document's real dependency graph, so it surfaces candidates for human judgment, not violations.*
+**A12. Gratuitous cross-references.** Names a sibling skill, command, or concept as analogy or aside when the reader doesn't need to understand that reference to follow the document's instructions. The reference adds comprehension cost ("what's `marathon` - do I need to read that first?") without contributing behaviour; the sentence would instruct identically without it. Distinct from a required composition pointer ("composes `skill-forge`'s A/B equivalence capability"), which the reader MUST follow to use the document - that one is legitimate, don't flag it. *Watch:* "exactly as X does Y", "similar to how Z works", "like the X skill", "in the style of Y", "mirrors the approach in Z" - when illustrative rather than instructional. **Fix:** cut the analogy; if the reader needs the reference, make it explicit via the document's declared dependencies. *Advisory and prose-level only: it flags apparent decorative references from textual context and can't see the document's real dependency graph, so it surfaces candidates for human judgment, not violations.*
 
 Decorative (flag):
 - "This dispersal works exactly as `marathon` composes `pr-review-merge`" - the dispersal is understandable without knowing `marathon`.
 - "Similar to how the `huddle` skill gathers perspectives" - an illustrative aside, not a required pre-read.
 - "In the style of `assess`'s tiered severity model" - the severity model is described inline; the name adds nothing.
 
-Load-bearing (do NOT flag):
+Required (do NOT flag):
 - "Composes `skill-forge`'s A/B equivalence capability for behavioural validation" - the reader must understand `skill-forge` to use this.
 - "Inherits the transfer-set format from `semantic-compress`'s distill mode" - a functional dependency.
 - "See `assess`'s severity-tier table for rating guidance" - an explicit pointer to a required reference.
 
-**A13. Promotional and advertisement-like language.** Travel-guide or brochure tone where a neutral writer would describe. Appears even when nobody is trying to advertise, and when a rewrite claims to have "removed promotional tone." Older models are blatantly positive; current ones avoid "the best" and stay subtly positive throughout, so judge the tone across the passage rather than hunting superlatives. *Watch:* boasts a, vibrant, rich, profound, nestled, in the heart of, groundbreaking, renowned, diverse array, commitment to, natural beauty, exemplifies, enhancing, showcasing, featuring. **Fix:** describe what is there ("The town has a weekly market"); cut adjectives no source would support.
+**A13. Promotional and advertisement-like language** *(historical, 2023-2025)*. Travel-guide or brochure tone where a neutral writer would describe. Appeared even when nobody was trying to advertise, and when a rewrite claimed to have "removed promotional tone." The source moved this to its historical section in November 2026: newer models rarely write brochure prose unless asked. What survives is promotion by selection - awards, coverage, reach (C8, A3) - rather than by adjective, so judge what the passage chose to include as well as its tone. *Watch:* boasts a, vibrant, rich, profound, nestled, in the heart of, groundbreaking, renowned, diverse array, commitment to, natural beauty, exemplifies, enhancing, showcasing, featuring. **Fix:** describe what is there ("The town has a weekly market"); cut adjectives no source would support.
 
 **A14. Vague expression of connection or association.** Alludes to a link instead of stating it: "sources identified John Doe as being associated with leadership of ExampleCorp" for "John Doe was the CEO of ExampleCorp"; "has been associated with residential water management applications"; "referenced the inventor in connection with environmental award recognition." Often stacked with promotional words ("widely associated"). Indirection alone is weak evidence - the tell is a relationship the writer should know, left unstated. *Watch:* in connection with/to, connected with/to, in association with, associated with. **Fix:** name the relationship with its verb (was CEO of, taught at, won, sued) when the text or its source supports one. If it can't be established, cut the sentence or return it as a question for the author; never supply a guessed verb.
 
@@ -62,11 +66,12 @@ Load-bearing (do NOT flag):
 ## B. Language and grammar tells
 
 **B1. High-density AI diction.** The overused words change with the model generation; the source dates them:
-- *Mid-2025 on (GPT-5 era):* emphasizing, enhance, highlighting, showcasing - plus the notability phrases in A3.
+- *Mid-2026 on (GPT-6 era):* challenge, clearer, dependable, echoed, foster, leverage, matters, multifaceted, practical, prioritize, quietly, steady, universally - with more period and comma use and shorter sentences, held to roughly 8-20 words. These are everyday words; only a cluster in that clipped rhythm counts (see B5a).
+- *Mid-2025 to mid-2026 (GPT-5 era):* emphasizing, enhance, highlighting, showcasing - plus the notability phrases in A3.
 - *Mid-2024 to mid-2025 (GPT-4o era):* align with, bolstered, crucial, emphasizing, enhance, enduring, fostering, highlighting, pivotal, showcasing, underscore, vibrant.
 - *2023 to mid-2024 (GPT-4 era):* Additionally (opening a sentence), boasts, bolstered, crucial, delve, emphasizing, enduring, garner, intricate/intricacies, interplay, key, landscape, meticulous, pivotal, underscore, tapestry, testament, valuable, vibrant. *Delve* dropped off sharply in 2025; a cluster from this era dates a text more than it convicts it.
 - *Undated in the source:* robust, showcase, deep dive. Grok is idiosyncratic: causal, empirical, correlate, and it still overuses underscore.
-- *Not in the source's list, kept from wider reports:* realm, navigate, nuanced, multifaceted, leverage, seamless, holistic, comprehensive, resonate, stark, ever-evolving, treasure trove, game-changer, in the realm of, when it comes to, it's worth noting, it's important to note.
+- *Not in the source's list, kept from wider reports:* realm, navigate, nuanced, seamless, holistic, comprehensive, resonate, stark, ever-evolving, treasure trove, game-changer, in the realm of, when it comes to. ("It's important to note" and "worth noting" are in the source, as didactic disclaimers: D3.)
 
 Read the list literally: overuse of a word does not extend to its synonyms, and context matters (an underscore can be a character; a landscape can be a view). The words co-occur - one suggests looking for others. **Fix:** plain synonyms or cut.
 
@@ -76,7 +81,9 @@ Read the list literally: overuse of a word does not extend to its synonyms, and 
 
 **B4. Excessive hedging / both-sides padding.** "While some may argue… others contend…" balancing where no real controversy exists. This is structural padding, not word-level qualification: a natural "perhaps" or "tends to" is a human marker (see G) and stays. **Fix:** cut to the substantive point.
 
-**B5. Em dashes.** The signal is the formulaic em dash: spaced on both sides, punching up a clause or a parallelism in the manner of sales copy, in places a person would use a comma, parentheses or a colon. Raw frequency is vendor-dependent and falling - GPT-5.1 suppresses em dashes, and a July 2026 study found only Claude used them more than professional writers while ChatGPT used them less. The source is considering retiring the sign. Supporting evidence inside a cluster, never a tell alone. A spaced hyphen or en dash in the same role is not this tell: the source notes that people use those where models use the em dash. **Fix:** where the dash only adds drama, use a comma, period or parentheses; follow the house style for dashes.
+**B5. Em dashes** *(historical, 2022-September 2026)*. The signal is the formulaic em dash: spaced on both sides, punching up a clause or a parallelism in the manner of sales copy, in places a person would use a comma, parentheses or a colon. GPT-5.1 suppressed em dashes, a July 2026 study found only Claude used them more than professional writers while ChatGPT used them less, and from September 2026 the newest models are often hard-coded not to use them. Still produced by older models, so useful for dating; supporting evidence inside a cluster, never a tell alone. A spaced hyphen or en dash in the same role is not this tell: the source notes that people use those where models use the em dash. **Fix:** where the dash only adds drama, cut the drama; don't mechanically swap every dash for a comma or period (that produces B5a). Follow the house style for dashes.
+
+**B5a. Flat punctuation.** The side effect of suppressing the em dash: models stopped using other marks too, so colons, semicolons, parentheses and dashes thin out and the prose runs on periods and commas, more of them than human text has. Pairs with the short, even sentences of the GPT-6 era (B1). The source flags this as new and uncited: never a tell alone, and it counts only alongside a cluster of B1 GPT-6 words. **Fix:** use the mark the sentence needs; vary sentence length with the thought.
 
 **B6. Transitional adverbs - only in a cluster.** Additionally, Moreover, Furthermore, Consequently, Notably, Importantly opening many sentences. The source lists transition words in isolation as an *ineffective* indicator: only a few are overused, essay-writing humans do the same, and style guides accept it. Never flag on this alone - and that includes *Additionally*, which B1 lists: it counts only alongside other B1 words. **Fix:** inside an otherwise sloppy passage, thin them out and let sentences connect by content.
 
@@ -108,15 +115,26 @@ Read the list literally: overuse of a word does not extend to its synonyms, and 
 
 **Fix:** delete the duplicate title; give each heading text or remove it; keep levels contiguous; name the section for what it contains.
 
+**C9. Throat-clearing and signposting.** This skill's own entry, not from the source: an editing standard rather than an AI detector, so it counts toward the quality verdict, not provenance. Sentences about the text rather than the subject. *Watch:* it's worth noting that, it goes without saying, here's the thing, great question, let's dive in, in this article we will, first let's look at, below is an overview of, to be clear, honestly, frankly, in short, to sum up. Overlaps D3's didactic disclaimers and A9's section summaries; cite the more specific id. **Fix:** delete the warm-up and start with the point. One navigational signpost in a long document is fine.
+
+**C10. Stock metaphors.** This skill's own entry, from Orwell's first rule in "Politics and the English Language" (1946): never use a figure of speech you are used to seeing in print. An editing standard, not an AI detector, though models adopt a fresh figure and repeat it until it dies. *Watch:* load-bearing, north star, double-edged sword, tip of the iceberg, moving the needle, low-hanging fruit, heavy lifting, game-changer, paradigm shift, perfect storm, elephant in the room, seat at the table, bridge the gap, unlock value/potential, at the end of the day, paints a picture, deep dive, navigating the landscape, the quiet part out loud, secret sauce, canary in the coal mine. The test is predictability, not the list: if you could guess the figure before reading it, it is stock. Literal technical uses ("load-bearing wall") are not this tell. Overlaps B1 for *deep dive* and *game-changer*; cite C10 when the phrase is used as a figure. **Fix:** say the literal thing; keep a figure only if it was made for this sentence.
+
 ---
 
 ## D. Communication / chatbot-leakage tells
 
-**D1. Collaborative communication aimed at a user.** "Certainly!", "I hope this helps!", "Here's a draft…", "Would you like me to expand?", "Let me know if…". **Fix:** strip entirely.
+**D1. Collaborative communication aimed at a user.** "Certainly!", "I hope this helps!", "Here's a draft…", "here is a Wikipedia-style article," "Would you like me to expand?", "Let me know if…", and advice to check or verify something "before publishing/submitting" left in the deliverable - sometimes as a whole section of tips for the user. **Fix:** strip entirely.
 
 **D2. Self-reference / "as an AI."** Any mention of being a model, assistant, or language model. **Fix:** delete.
 
-**D3. Knowledge-cutoff disclaimers & speculation about source gaps.** "As of my last update," "up to my last training update," "while specific details are limited/scarce," "not widely documented," "in the provided sources/search results," "based on available information." **Fix:** delete; if a fact is genuinely uncertain, verify it instead of hedging.
+**D3. Hedging disclaimers about sources and usage.** The source lists this among the commonest current signs and splits it by era:
+- *Source-gap hedges (2024 on):* "while specific details are limited/scarce," "not widely documented/available/disclosed," "in the provided sources/search results," "based on available information," "lyrics and production details aren't fully documented in public sources."
+- *Corrective framings (mid-2026 on):* a "rather than" warning about how to read a claim ("described as undergoing testing and evaluation, rather than validated production systems"; "should be treated as symbolic rather than literal"); "does not by itself establish…"; and, less reliably, "should not be confused with" another topic. Close to unheard of before GPT-5.6 in July 2026, so on older text this is weak evidence.
+- *Didactic disclaimers (historical, 2023-2024):* "it's important/critical to note/remember," "worth noting," "may vary" - advice to an imagined reader about safety, controversy or jurisdiction.
+
+**Fix:** state what the sources say and stop; verify an uncertain fact instead of hedging it. Keep a caveat only when it heads off a specific wrong conclusion.
+
+**D3a. Knowledge-cutoff disclaimers** *(historical, 2022-2023)*. "As of my last update," "up to my last training update." **Fix:** delete, and check whether the fact it hedged has changed since.
 
 **D4. Prompt-refusal artifacts** *(historical)*. Leftover safety/refusal language ("I cannot assist with that," "as an AI I'm unable to…") embedded in a deliverable. Rare now, unambiguous when found. **Fix:** remove.
 
@@ -137,11 +155,11 @@ Read the list literally: overuse of a word does not extend to its synonyms, and 
 
 **E1. Markdown bleeding into a non-Markdown target.** `**bold**`, `## headings`, `- bullets`, and bracket-then-parenthesis links pasted into wikitext, plain-text email, or a CMS that doesn't render it. Two structural forms of the same leak: a top-level `#` heading on every section, and a `---` thematic break between every section. All of E1 applies only where the target does not render Markdown; in a Markdown document this is correct markup and stays. **Fix:** convert to the target's real markup or remove.
 
-**E2. Broken / placeholder markup.** Malformed links, leftover `[[ ]]` or `{{ }}` fragments, `[insert citation]`, `[Source]`, `[Year]` placeholders. **Fix:** complete or remove.
+**E2. Broken / placeholder markup.** Malformed links, leftover `[[ ]]` or `{{ }}` fragments, `[insert citation]`, `[Source]`, `[Year]` placeholders. Two placeholder forms the source names separately: dates such as `2026-xx-xx` in an access-date or date field, and source URLs pointing at subpages of `example.com` (`example.com/source1`). **Fix:** complete or remove; a placeholder citation means the claim it supports has no source yet.
 
 **E3. Vendor citation markers.** The chatbot's internal reference format pasted along with the text. Unambiguous: no human types these.
 - *ChatGPT:* `contentReference`, `oaicite`, `oai_citation`, `turn0search0`, `attributableIndex`, a stray `+1`.
-- *Gemini:* `[cite: 1]`, `[cite: 3, 12, 13]`, and `[span_1]` followed by `(start_span)`.
+- *Gemini:* `[cite: 1]`, `[cite: 3, 12, 13]`, and `[span_1]` followed by `(start_span)`; HTML `<mark>` tags wrapping a phrase, left over from its double-check highlighting.
 - *Grok:* `grok_card` tags, `grok_render_citation_card_json`.
 - *DeepSeek and derivatives:* lenticular brackets with a dagger, such as `【85†L261-269】`.
 - *Perplexity:* `[attached_file:1]`, `[web:1]`; source URLs containing `ppl-ai-file-upload`.
