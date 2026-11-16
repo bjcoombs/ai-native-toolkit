@@ -14,7 +14,7 @@ So the rule is absolute: **every quality the frame proposes is a hypothesis to b
 
 Treat instruction text as having an **ergonomic cost** distinct from its **content**. Two documents can say the same thing and induce the same behaviour, yet one forces the reading model through more interpretive work to get there - unpacking a prohibition into an action, inferring an action from a stated fact, resolving a vague pointer. The frame's claim is narrow and testable: **reducing that interpretive work, while holding content constant, is a real and measurable improvement** - measurable as a directness gain at zero behavioural regression.
 
-"While holding content constant" is the load-bearing constraint. An ergonomic transform is *behaviour-preserving by construction* or it is not an ergonomic transform - it is an edit that changes what the document does, which is a different and riskier operation. The whole family is defined by the pairing: **lighter to act on, and proven to behave the same.**
+"While holding content constant" is the essential constraint. An ergonomic transform is *behaviour-preserving by construction* or it is not an ergonomic transform - it is an edit that changes what the document does, which is a different and riskier operation. The whole family is defined by the pairing: **lighter to act on, and proven to behave the same.**
 
 ## Candidate qualities
 

@@ -650,7 +650,7 @@ def test_scan_test_pressure_never_raises_on_empty(tmp_path: Path) -> None:
 # The two fixture repos under tests/fixtures/ carry an IDENTICAL source file
 # (src/processor.py) and differ ONLY in what their test asserts on: the hollow
 # repo pins the private `_last_processed_line` cursor; the honest repo pins the
-# public `process` return value. This is the load-bearing claim of the whole
+# public `process` return value. This is the essential claim of the whole
 # module - a suite can have full line coverage yet pin the implementation, and
 # the assertion-on-internal heuristic is what tells those two apart.
 # ════════════════════════════════════════════════════════════════════════════

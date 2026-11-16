@@ -129,7 +129,7 @@ The loop **composes `ab-equivalence`** (`skills/ab-equivalence/references/ab-equ
 2. **Capture the teacher.** Run the **original** document over each case and record the behaviour it induces (the disciplines enforced, the outputs produced). This baseline is the equivalence target, captured **once** and cached across rounds.
 3. **Compress = regenerate, not edit.** Produce a smaller candidate against the behavioural spec: the local core->pointer move (Local Mode above), de-duplication, and dropping prose the baseline proves was never acted on. Regeneration - rewriting to function - is what lets it get genuinely smaller; trimming alone cannot.
 4. **A/B validate.** Run the **candidate** over the same transfer set; the equivalence judge compares candidate-vs-teacher behaviour per case under **strict no-regression**. This is the only acceptance gate.
-5. **On any regression, the divergence names what was load-bearing.** The judge's behaviour delta names the lost behaviour; add back the minimum that restores it, then re-validate.
+5. **On any regression, the divergence names what was necessary.** The judge's behaviour delta names the lost behaviour; add back the minimum that restores it, then re-validate.
 6. **Converge** on the smallest candidate that still passes. Stop at diminishing returns (a round that can only shrink further by regressing) or a budget ceiling (default 5 rounds).
 7. **Output** the minimal equivalent document plus an **A/B distillation report** (`references/distillation-report-template.md`).
 
@@ -137,7 +137,7 @@ The loop **composes `ab-equivalence`** (`skills/ab-equivalence/references/ab-equ
 
 ### Distill mode example
 **Input:** "Distill this CLAUDE.md to the smallest version that behaves the same"
-**Output:** The minimal equivalent document plus an A/B distillation report (`<document-name>-distillation-report.md`) recording the size delta, the transfer set and its coverage, per-case equivalence verdicts, what was dropped vs load-bearing, and the distribution-shift caveat.
+**Output:** The minimal equivalent document plus an A/B distillation report (`<document-name>-distillation-report.md`) recording the size delta, the transfer set and its coverage, per-case equivalence verdicts, what was dropped vs kept as necessary, and the distribution-shift caveat.
 
 ## Distribution-Shift Guard
 
@@ -146,7 +146,7 @@ A distillation is only valid over the transfer set it was tested against - the s
 ### Mitigations
 
 1. **Push for diverse coverage.** The transfer set should span all four case types (happy / edge / adversarial / composition). A narrow transfer set (all happy-path) permits aggressive compression that breaks on edge or adversarial inputs - the breadth of the set bounds the safety of the compression.
-2. **Stay conservative.** Keep anything not **proven** behaviourally inert by the A/B. If a section was never exercised by any case, it is **not proven inert** - it might be load-bearing for untested inputs. The conservative default is to keep it.
+2. **Stay conservative.** Keep anything not **proven** behaviourally inert by the A/B. If a section was never exercised by any case, it is **not proven inert** - it might be necessary for untested inputs. The conservative default is to keep it.
 3. **Name the coverage.** The report explicitly states which sections were exercised and which were not. Silence about untested behaviour is forbidden.
 
 ### What the guard prevents
@@ -165,7 +165,7 @@ If **fewer than 70%** of the identified behaviour-inducing sections are covered 
 For each section in the original:
   if exercised_by_at_least_one_case(section):
     if A/B says inert:        can drop
-    if A/B says load-bearing: must keep (pointed or de-duped, never dropped)
+    if A/B says necessary: must keep (pointed or de-duped, never dropped)
   else:
     section is NOT PROVEN INERT
     keep by default (conservative)
@@ -178,7 +178,7 @@ The A/B distillation report (`references/distillation-report-template.md`) makes
 
 - Transfer-set coverage percentage in the header.
 - Thin-coverage warnings listed in the Transfer Set section.
-- Uncovered-but-kept sections labelled "conservative default" under What Proved Load-Bearing.
+- Uncovered-but-kept sections labelled "conservative default" under What Proved Necessary.
 - The distribution-shift caveat stated verbatim: behaviour outside the transfer set is not guaranteed equivalent.
 
 ## Transform #2: Directive-clarity
@@ -194,7 +194,7 @@ Compression (Local + Distill above) is Transform #1 of this skill's optimizer fa
 ### The loop
 
 1. **Detect patterns.** Scan the document for the four latent-action shapes - bare negation, fact-not-action, vague pointer, ordering/policy rule - per `references/directive-clarity-patterns.md`. Detection over-includes on purpose: it optimises for recall, flagging every candidate shape.
-2. **Classify each candidate convert-for-free vs battle-scar.** Route every detected pattern through `references/battle-scar-classifier.md`. A battle-scar - a prohibition earned from a specific past failure, where the wording is the load-bearing content - is flagged for preservation and never rewritten. The classifier is the precision half: it holds back scars to a sub-10% false-positive target, defaulting to preserve on uncertainty. Only the convert-for-free set proceeds.
+2. **Classify each candidate convert-for-free vs battle-scar.** Route every detected pattern through `references/battle-scar-classifier.md`. A battle-scar - a prohibition earned from a specific past failure, where the wording is the substance - is flagged for preservation and never rewritten. The classifier is the precision half: it holds back scars to a sub-10% false-positive target, defaulting to preserve on uncertainty. Only the convert-for-free set proceeds.
 3. **Rewrite.** Turn each released candidate into a concrete directive per `references/directive-clarity-rewrites.md`, under the two acceptance checks (names-the-concrete-action, semantic-equivalence). Keep every qualifier that scopes a prohibition; keep the fact behind a fact-not-action rewrite; never fabricate a referent for a vague pointer - flag it for human confirmation and leave the original in place.
 4. **A/B validate.** Run the candidate against the teacher over the transfer set via ab-equivalence's harness (`skills/ab-equivalence/references/ab-equivalence.md`). The harness emits, per case, an equivalence verdict (`equivalent` / `candidate-regressed` / `candidate-diverged`) and an efficiency signal (`original_directness`, `candidate_directness`, `interpretation_notes`).
 5. **Present for approval.** Surface the per-rewrite diffs, the A/B verdicts, the preserved battle-scars, and any vague pointers held for confirmation. The user approves before the rewritten document is emitted.

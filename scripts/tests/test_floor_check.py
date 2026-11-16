@@ -89,7 +89,7 @@ _PROSE_MENTION = f"- the `{MARKER}` markers in all four marked files"
 
 
 def test_anchor_removed_but_prose_mention_retained_is_flagged():
-    # Exact reproduction of the Attack A false-negative: the load-bearing
+    # Exact reproduction of the Attack A false-negative: the essential
     # standalone anchor line is deleted, but an incidental backtick-wrapped
     # prose mention of the same string survives. Count drops 2 -> 1, so the
     # marker MUST be flagged even though the substring is still "present".

@@ -246,7 +246,7 @@ def test_integration_lib_readme_seam_paths_are_not_false_positives() -> None:
     """This repo's lib README seam declaration does not false-positive.
 
     ``skills/assess/scripts/lib/README.md`` names ``doc_graph.py`` and the
-    ``skills/assess/...`` seam directories as load-bearing boundaries; they all
+    ``skills/assess/...`` seam directories as essential boundaries; they all
     resolve to real tracked paths, so none of them appears in
     ``empty_ownership_patterns``. This is the dogfood guard that Tier 0 reads a
     genuine, human-written ownership map on real data without manufacturing drift.

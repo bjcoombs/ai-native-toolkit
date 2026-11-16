@@ -52,7 +52,7 @@ Per case, the judge returns exactly one verdict:
 | `candidate-regressed` | A behaviour or discipline the original induced is **absent** in the candidate. This is the failing verdict. | The **specific behaviour lost** - the discipline, step, or output the original produced and the candidate did not. |
 | `candidate-diverged` | The candidate behaves **differently** but no behaviour the original induced was lost - a different-but-not-worse change (including incidental improvements). | The **difference** - what the candidate did differently. Not necessarily worse; documented for the caller's judgement. |
 
-The regressed-vs-diverged decision is the load-bearing distinction, stated authoritatively in `references/equivalence-judge-prompt.md`:
+The regressed-vs-diverged decision is the essential distinction, stated authoritatively in `references/equivalence-judge-prompt.md`:
 
 - **regressed** = a behaviour or discipline the original induced is **missing** from the candidate (essence lost).
 - **diverged** = the candidate did something **different**, but every behaviour the original induced is **still present** (nothing lost).

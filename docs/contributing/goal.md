@@ -1,10 +1,10 @@
-# North star
+# Goal
 
 The goal every skill and report in `ai-native-toolkit` serves, in full. The root `CLAUDE.md` carries the short form and the feature test. Back to the [Map of Content](../index.md).
 
 ## Externalized context
 
-Make an AI contributor feel like an engineer who has been in the org eighteen months, not a brand-new hire. The difference is *externalized context*, not capability. An AI is structurally always the new hire - each session starts with an empty head and one narrow context window - so the codebase has to supply the tenure: a navigable map, load-bearing contracts made explicit, complexity made *locally* legible so the relevant slice fits one keyhole.
+Make an AI contributor feel like an engineer who has been in the org eighteen months, not a brand-new hire. The difference is *externalized context*, not capability. An AI is structurally always the new hire - each session starts with an empty head and one narrow context window - so the codebase has to supply the tenure: a navigable map, the contracts other code relies on made explicit, complexity made *locally* legible so the relevant slice fits one keyhole.
 
 ## Legibility you can trust
 

@@ -123,7 +123,7 @@ def test_load_bearing_surface_is_outside_folds() -> None:
     <details> folds (an agent reading the file still sees all of it).
 
     A section-ablation A/B established the split: the score headline and the
-    Top 3 Actions are load-bearing (folding the Top 3 made a fresh agent act on
+    Top 3 Actions are necessary (folding the Top 3 made a fresh agent act on
     the wrong item), so they must stay on the visible surface; the verbose
     scorecard / findings / framing are foldable. This guard fails loudly if that
     split ever regresses in either direction.
@@ -132,7 +132,7 @@ def test_load_bearing_surface_is_outside_folds() -> None:
     surface, sep, folded = report.partition("<details>")
     assert sep, "report must contain at least one <details> fold"
 
-    # Load-bearing: must be on the default-visible surface, never folded.
+    # Essential: must be on the default-visible surface, never folded.
     assert "## Top 3 Actions" in surface
     assert "Score: 6.0 / 8" in surface
     # The two SVG snapshots carry the human value up top.

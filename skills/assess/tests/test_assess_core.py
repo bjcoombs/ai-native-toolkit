@@ -369,7 +369,7 @@ def test_config_excludes_apply_to_all_scans(tmp_path: Path) -> None:
     """`.assess/config.toml` excludes are loaded once by the orchestrator
     and applied uniformly to the doc graph, doc staleness, and liveness
     scan. A `regulatory-raw/` dir vanishes from every layer's view, not
-    just the treemap. This is the single load-bearing test for the
+    just the treemap. This is the single essential test for the
     consistent-excludes design - if it passes, the schema rename and the
     per-scan plumbing are wired correctly end-to-end."""
     repo = _minimal_repo(tmp_path)

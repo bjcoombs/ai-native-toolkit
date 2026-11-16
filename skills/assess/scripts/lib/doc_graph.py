@@ -6,7 +6,7 @@ wiki uses -- ``[[wikilinks]]`` (Obsidian / Karpathy-pattern) and
 ``[text](relative/path)`` (CommonMark) -- resolve them to real files, and build
 a directed graph. From that graph we derive:
 
-  - **PageRank / centrality** -> the load-bearing docs (hubs / MOCs) surface
+  - **PageRank / centrality** -> the most central docs (hubs / MOCs) surface
     automatically, no filename guessing.
   - **Orphans** -> docs with no inbound links are unreachable by traversal;
     a navigability gap.

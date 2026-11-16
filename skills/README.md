@@ -106,7 +106,7 @@ The executable spine is `start_gate.py` -> chokepoint -> `validate_completion.py
 
 ### Honest narrowness
 
-For the interactive/visual class that motivated this - the class where the machine tiers are thinnest - the machine checks are a backstop, not the load-bearing test. **Tier-3 human launch is.** The machinery's value there is that the launch becomes *required, recorded, and un-removable* rather than informal and skippable; the elaborate canary/blind/chokepoint apparatus carries the full load only for the CLI/report/refactor classes. Canary green is likewise necessary, never sufficient.
+For the interactive/visual class that motivated this - the class where the machine tiers are thinnest - the machine checks are a backstop, not the essential test. **Tier-3 human launch is.** The machinery's value there is that the launch becomes *required, recorded, and un-removable* rather than informal and skippable; the elaborate canary/blind/chokepoint apparatus carries the full load only for the CLI/report/refactor classes. Canary green is likewise necessary, never sufficient.
 
 ### Artifact paths
 

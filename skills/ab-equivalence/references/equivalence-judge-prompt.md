@@ -10,13 +10,13 @@ The judge does **not** read the two transcripts for prose similarity - textual s
 
 1. **Outputs produced.** Did the candidate produce every output the original produced (the *output produced* field on both)? An output the original produced and the candidate did not is a loss.
 2. **Disciplines enforced.** Did the candidate enforce every discipline, rule, or guard the original enforced (read from *steps followed / skipped*, *improvisation beyond the skill*, and *any point it wanted to deviate but followed literally*)? A discipline the original held the runner to and the candidate let slide is a loss.
-3. **Steps followed.** Did the candidate lead the runner through the same load-bearing steps in a behaviourally-equivalent order (read from *steps followed / skipped*)? A step the original induced and the candidate dropped is a loss; a re-ordering with no behavioural consequence is not.
+3. **Steps followed.** Did the candidate lead the runner through the same essential steps in a behaviourally-equivalent order (read from *steps followed / skipped*)? A step the original induced and the candidate dropped is a loss; a re-ordering with no behavioural consequence is not.
 
 A behaviour counts as *induced by the original* only if it actually appears in the teacher transcript - the judge compares observed behaviour to observed behaviour, never the candidate against what the original document *says* it should do. (That latter question is Fidelity's, judged against intent, not this judge's.)
 
 ## The regressed-vs-diverged decision rule
 
-The single load-bearing decision. Apply it after the three-dimension comparison:
+The single essential decision. Apply it after the three-dimension comparison:
 
 - **`candidate-regressed`** - on any of the three dimensions, a behaviour, discipline, output, or step that the original **induced** is **absent** from the candidate transcript. Essence lost. Cite the specific behaviour lost in `behaviour_delta`. This is the only failing verdict.
 - **`candidate-diverged`** - the candidate did something **different** on some dimension, but **every** behaviour the original induced is **still present** in the candidate transcript. Nothing the original did was lost; the candidate merely also did something else, or did it differently (including doing it *better*). Cite the difference in `behaviour_delta`. Not a failure - surfaced for the caller's judgement.

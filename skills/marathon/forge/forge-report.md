@@ -102,5 +102,5 @@ real gap in the primary mechanic and broke the teammate Scope guard) rather than
 - **Usability** independently corroborated 4 of the Adversarial findings (the value of >1 lens on the same transcript) and owned the combined-group-identity + mandatory-retro gaps.
 - **Trigger/routing** (static) caught the one defect no behavioural lens could see: the description's missing "library skill" self-label and the direct over-fire path.
 - **Fidelity** was the safety net on the self-introduced round-4 regression — it alone ruled that the batch's additive edit had pulled happy-1 away from clause C, and correctly graded it MED (advisory) not HIGH so it didn't false-block Gate 1.
-- **Compression** was lowest-yield (all LOW), but its "decorative metrics vs load-bearing calibration" distinction kept the round-2/3/4 additions honest and flagged the one real bloat (lead-side restatement).
+- **Compression** was lowest-yield (all LOW), but its "decorative metrics vs essential calibration" distinction kept the round-2/3/4 additions honest and flagged the one real bloat (lead-side restatement).
 - **Strongest signal heuristic confirmed:** a contradiction two independent runners tripped over (shutdown-ordering: comp-1 + adv-1) was the highest-confidence finding of the run — evidence, not speculation.
