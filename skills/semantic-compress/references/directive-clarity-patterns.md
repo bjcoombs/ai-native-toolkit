@@ -6,7 +6,7 @@ What this doc does: name the instruction shapes that force a reading model to **
 
 An instruction is **directive-clear** when it names the action to take in the words the reader acts on. It has **latent action** when the reader must first run an inference step - derive the positive action from a prohibition, infer an action from a stated fact, or resolve a vague pointer - before any work happens. Latent action is a tax paid on every read. The four patterns below are the surface shapes that carry it.
 
-A pattern match is a *candidate* for rewrite, not a verdict. Some latent-action instructions are **battle-scars** - prohibitions earned from a specific past failure, where the prohibition itself is the load-bearing content. Those are flagged for preservation, never rewritten. This doc finds candidates; the classifier decides which survive.
+A pattern match is a *candidate* for rewrite, not a verdict. Some latent-action instructions are **battle-scars** - prohibitions earned from a specific past failure, where the prohibition itself is the substance. Those are flagged for preservation, never rewritten. This doc finds candidates; the classifier decides which survive.
 
 ## Pattern 1: Bare negation
 

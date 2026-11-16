@@ -224,7 +224,7 @@ _PY_REGIONS_ALLOWED = {
 
 # Generated / vendored / lockfile noise that rg's gitignore pass won't catch
 # when the files are committed. Mirrors the treemap's exclude spirit; the
-# generated-Dart entries proved load-bearing (1,684 of a Flutter repo's 1,698
+# generated-Dart entries proved necessary (1,684 of a Flutter repo's 1,698
 # suppressions were codegen ``ignore_for_file`` boilerplate). ``mutants/`` is
 # mutmut 3's local tree: copies of the sources and tests, so every marker in it
 # would count twice in a repo that does not gitignore it.

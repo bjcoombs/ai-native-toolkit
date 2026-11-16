@@ -20,7 +20,7 @@ never fakes an observation across that seam:
 - **Deterministic / machine-executable layer** (always runs, no live agent):
   - The CLI-class fixtures are driven directly - the reference implementation is a
     real `python3` program, so "driving the build" is running it on real input and
-    comparing exit code + bytes (criteria 2 and 12, the load-bearing
+    comparing exit code + bytes (criteria 2 and 12, the essential
     machine-verifiable path).
   - Blind-pair GENERATION, the behaviour-preserving transform, the
     behaviour-breaking mutation, the vacuous/sound contract synthesis, the

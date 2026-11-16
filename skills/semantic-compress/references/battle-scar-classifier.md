@@ -1,6 +1,6 @@
 # Battle-scar classifier - the precision safeguard
 
-What this doc does: decide which detected negations are **convert-for-free** (rewrite into a positive directive) and which are **battle-scars** (preserve verbatim), *without* a human confirmation on every pattern. This is the precision half of directive-clarity: detection (`directive-clarity-patterns.md`) over-includes on purpose; this classifier holds back the prohibitions whose wording is the load-bearing content.
+What this doc does: decide which detected negations are **convert-for-free** (rewrite into a positive directive) and which are **battle-scars** (preserve verbatim), *without* a human confirmation on every pattern. This is the precision half of directive-clarity: detection (`directive-clarity-patterns.md`) over-includes on purpose; this classifier holds back the prohibitions whose wording is the substance.
 
 ## Why this exists
 

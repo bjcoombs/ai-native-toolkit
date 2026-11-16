@@ -4,7 +4,7 @@ What this doc does: turn each latent-action pattern (`directive-clarity-patterns
 
 ## Precondition: classify before rewriting
 
-Every detected pattern passes through the battle-scar classifier before reaching a rewrite rule. **Battle-scars are flagged for preservation, not rewritten.** A battle-scar's prohibition is the load-bearing content - the earned knowledge of a specific past failure - and a positive paraphrase can drop the failure-mode that justifies it. This doc assumes its input is the convert-for-free set the classifier released. It never overrides a preserve flag.
+Every detected pattern passes through the battle-scar classifier before reaching a rewrite rule. **Battle-scars are flagged for preservation, not rewritten.** A battle-scar's prohibition is the substance - the earned knowledge of a specific past failure - and a positive paraphrase can drop the failure-mode that justifies it. This doc assumes its input is the convert-for-free set the classifier released. It never overrides a preserve flag.
 
 ## The two acceptance checks
 

@@ -1,6 +1,6 @@
 """Accretion-ratchet scan: files that only ever grow.
 
-The first of the three write-side tendencies named in this repo's north star.
+The first of the three write-side tendencies named in this repo's goal statement.
 An agent does what is asked, and what is asked is feature after feature -
 nothing in that loop ever asks for a refactor, so files only grow. Absent a
 consciously requested restructuring, size and complexity ratchet monotonically
@@ -172,7 +172,7 @@ def _accumulate_history(repo_top: str) -> dict[str, _FileHistory]:
     Returns ``{repo-relative-path: _FileHistory}``. Each commit contributes its
     author time (``%at``) plus the numstat rows that follow it. The history is
     sorted by (author_time, sha) before accumulation so the running net-delta
-    sequence is built in a clone-independent order - the load-bearing
+    sequence is built in a clone-independent order - the essential
     reproducibility guarantee. Binary files (numstat ``-`` for added/removed)
     are skipped: they carry no line-count signal.
     """

@@ -8,11 +8,11 @@ Source for the `ai-native-toolkit` Claude Code plugin. Portable skills (`/assess
 
 The deliverable is markdown, plus a Python deterministic core under `skills/assess/scripts/` (with `lib/`) and a standalone-skill build under `scripts/`. No application runtime. The pytest suites, the ruff + mypy gates and the floor checks gate merge.
 
-## North star
+## Goal
 
 Make an AI contributor feel like an engineer eighteen months into the org: the codebase supplies the tenure through *externalized context*. Aim for **legibility you can trust, not omniscience you can't**: answers anchored to code a human can spot-check. Guardrails protect the contributor by construction (poka-yoke) against three known tendencies: **accretion** (files only grow), **unactioned intent** (TODO and "remove after" markers nobody keeps) and **guardrail erosion** (loosening a check to turn red green).
 
-**Feature test.** Does the change help a fresh agent (the map), keep answers verifiable (trust), *and* make the wrong action hard (guardrails)? Name the tendency each new signal or rule compensates for; one that traces to no failure mode is decoration. Prefer honest-degrade over impressive-but-wrong. Full text: `docs/contributing/north-star.md`.
+**Feature test.** Does the change help a fresh agent (the map), keep answers verifiable (trust), *and* make the wrong action hard (guardrails)? Name the tendency each new signal or rule compensates for; one that traces to no failure mode is decoration. Prefer honest-degrade over impressive-but-wrong. Full text: `docs/contributing/goal.md`.
 
 ## Commands
 
@@ -145,7 +145,7 @@ The final step, once every PR is merged and the retro is done: one GitHub releas
 
 ## Reference
 
-- North star in full: `docs/contributing/north-star.md`
+- Goal in full: `docs/contributing/goal.md`
 - CI, gates, coverage, mutation, CodeQL: `docs/contributing/ci.md`
 - Marathon settings explained: `docs/contributing/marathon.md`
 - Releasing: `docs/contributing/release.md`

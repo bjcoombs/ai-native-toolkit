@@ -369,7 +369,7 @@ def test_integration_parses_lib_readme_seam_declaration() -> None:
     ``skills/assess/scripts/lib/README.md`` declares the module-ownership seam
     map (the ``assess_core.py -> lib`` seam and the wider co-change seams). Its
     boundary-declaring prose admits it as an architecture doc, and its seam
-    section names ``doc_graph.py`` as a load-bearing module, which resolves to
+    section names ``doc_graph.py`` as an essential module, which resolves to
     the real tracked file. This is the dogfood guard that the parser reads a
     genuine, human-written ownership declaration on real data.
     """

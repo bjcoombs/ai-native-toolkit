@@ -21,7 +21,7 @@ Record the runner's full self-report per case - all five required fields - and e
 - **`ambiguities_hit`** - each ambiguity in the document and how the runner proceeded despite it.
 - **`improvisations`** - anything the runner did that the document did not explicitly instruct, and why.
 - **`wanted_to_deviate`** - any point where following the document felt wrong but the runner did it anyway.
-- **`disciplines_enforced`** - extracted from the self-report (read from `steps_followed`, `improvisations`, and `wanted_to_deviate`): the rules, guards, and disciplines the original actually held the runner to. This is the load-bearing list - a candidate that lets any of these slide has regressed.
+- **`disciplines_enforced`** - extracted from the self-report (read from `steps_followed`, `improvisations`, and `wanted_to_deviate`): the rules, guards, and disciplines the original actually held the runner to. This is the essential list - a candidate that lets any of these slide has regressed.
 
 A behaviour counts as part of the baseline **only if it actually appears in the teacher transcript** - the engine compares observed behaviour to observed behaviour, never a candidate against what the original document *says* it should do. A faithful distillation preserves the original's gaps as well as its disciplines.
 
@@ -80,18 +80,18 @@ The original does not change across the loop, so its baseline is **captured once
 
 **Regenerate, do not trim.** Producing a smaller candidate is rewriting the document to function on the behavioural spec - not deleting spans from the original. Trimming can only ever remove text locally; regeneration is what lets a document get genuinely smaller while still inducing the same behaviour. The candidate is written against the baseline (what the document *does*), not against the original's prose.
 
-Three micro-operations, applied **in this fixed order**, each preserving the load-bearing identifications the prior step made:
+Three micro-operations, applied **in this fixed order**, each preserving the essential identifications the prior step made:
 
 1. **Core -> pointer** (the v1 inner micro-op). For each span explaining a concept the model already holds from training, replace the explanation with the smallest pointer that activates it (the concept name, optionally one disambiguating cue). Keep every bespoke/project-specific detail verbatim, including non-standard twists on a known concept - the v1 rules in `../SKILL.md` govern this step exactly. Pointing is not deletion.
-2. **De-duplicate repeated concepts.** Where the document states the same concept, rule, or instruction in more than one place, keep one authoritative statement and drop the repetitions - provided no repetition carries a bespoke detail the others lack. De-dup runs *after* core->pointer so it operates on already-pointed spans and never merges two spans that look alike but differ in a load-bearing twist.
-3. **Drop behaviourally-inert prose.** Remove prose the **baseline proves was never acted on** - text that induced no behaviour, discipline, step, or output in any teacher transcript. This is the only license to delete, and it is evidence-gated: a span is inert only if the baseline shows no case's behaviour depended on it. Inert-prose removal runs last so it cannot delete a span that core->pointer turned into a load-bearing pointer or that de-dup chose as the authoritative statement.
+2. **De-duplicate repeated concepts.** Where the document states the same concept, rule, or instruction in more than one place, keep one authoritative statement and drop the repetitions - provided no repetition carries a bespoke detail the others lack. De-dup runs *after* core->pointer so it operates on already-pointed spans and never merges two spans that look alike but differ in an essential twist.
+3. **Drop behaviourally-inert prose.** Remove prose the **baseline proves was never acted on** - text that induced no behaviour, discipline, step, or output in any teacher transcript. This is the only license to delete, and it is evidence-gated: a span is inert only if the baseline shows no case's behaviour depended on it. Inert-prose removal runs last so it cannot delete a span that core->pointer turned into an essential pointer or that de-dup chose as the authoritative statement.
 
 **Two hard constraints across all three steps:**
 
-- **Never delete a section that induced a baseline behaviour.** If any teacher transcript's behaviour, discipline, step, or output traces to a section, that section is load-bearing and is kept (pointed or de-duped, never dropped). The baseline is the record of what is load-bearing.
+- **Never delete a section that induced a baseline behaviour.** If any teacher transcript's behaviour, discipline, step, or output traces to a section, that section is necessary and is kept (pointed or de-duped, never dropped). The baseline is the record of what is necessary.
 - **Keep every bespoke/project-specific detail verbatim.** Specific facts, local decisions, constraints, exceptions, and non-standard redefinitions have no training source - the model cannot recover them from a pointer. They survive every step unchanged.
 
-Each step preserves the prior step's load-bearing identifications: core->pointer marks which spans became activating pointers, de-dup must not drop a span another step marked authoritative, and inert-prose removal must not touch any span the earlier steps or the baseline marked load-bearing.
+Each step preserves the prior step's essential identifications: core->pointer marks which spans became activating pointers, de-dup must not drop a span another step marked authoritative, and inert-prose removal must not touch any span the earlier steps or the baseline marked essential.
 
 ### Size-tracking schema
 
@@ -123,7 +123,7 @@ Track size before and after regeneration so the report can state the delta. Toke
 
 ## Part 3 - The loop controller
 
-The iterate-to-minimal loop. It drives the baseline and the candidate through the A/B gate, and on every regression lets the divergence tell it what was load-bearing.
+The iterate-to-minimal loop. It drives the baseline and the candidate through the A/B gate, and on every regression lets the divergence tell it what was necessary.
 
 ### The loop
 
@@ -134,7 +134,7 @@ COMPRESS -> regenerate a smaller candidate: core->pointer, de-dup, inert-prose r
 VALIDATE -> call ab-equivalence (ab-equivalence.md) on (original, candidate, transfer set),
             passing the cached teacher transcripts so only the candidate is re-run this round.
   | on regression (any case candidate-regressed):
-  |     the behaviour_delta NAMES the load-bearing behaviour that was lost.
+  |     the behaviour_delta NAMES the essential behaviour that was lost.
   |     ADD BACK the minimum that restores it (see add-back mechanism), then re-VALIDATE.
   | on no regression (zero candidate-regressed):
   |     check diminishing returns -> shrink again (back to COMPRESS) or CONVERGE.
@@ -159,7 +159,7 @@ A regression is a signal, not a dead end: the judge's `behaviour_delta` for a `c
 2. **Restore the minimum.** Add back the smallest piece of that section that restores the lost behaviour - prefer a pointer or a single bespoke detail over restoring the whole section. The goal is the minimal restoration, not reverting the compression.
 3. **Re-validate.** Run A/B again. If the same behaviour is still lost, the restoration was insufficient - add back more. If a *different* behaviour regressed, treat it as a new add-back. Record each as a round.
 
-The add-back is why the loop converges on a *minimal* document rather than just a *passing* one: it removes aggressively, then restores only what the A/B proves load-bearing.
+The add-back is why the loop converges on a *minimal* document rather than just a *passing* one: it removes aggressively, then restores only what the A/B proves necessary.
 
 ### Convergence criteria
 
@@ -206,7 +206,7 @@ One object per round, for the A/B distillation report.
 - `gate_truncated_cases` - the `case_id`s whose equivalence was judged only up to a gate this round (empty when no case was truncated).
 - `coverage_notes` - a plain-language note on any gate-truncation this round, e.g. "Cases T3, T5 gate-truncated at AskUserQuestion; behaviour beyond gate not measured" (empty string when coverage was full).
 - `hypothesis` - what this round attempted (e.g. "drop the rationale paragraph in section 3 - baseline shows no case acted on it").
-- `outcome` - what the A/B proved (e.g. "passed: paragraph was inert" or "regressed case adversarial-2: the soft rule was load-bearing").
+- `outcome` - what the A/B proved (e.g. "passed: paragraph was inert" or "regressed case adversarial-2: the soft rule was necessary").
 
 ### Budget math
 

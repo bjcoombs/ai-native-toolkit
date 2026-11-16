@@ -17,7 +17,7 @@ Save the report as `<document-name>-distillation-report.md` **alongside the outp
 | Gate-Truncated Coverage | **Mandatory if any gate-truncation** | Honest about partial measurement where a case stopped at a gate. |
 | Distribution-Shift Caveat | **Mandatory** | The honesty clause - the boundary of the claim. Stated verbatim, never edited away. |
 | What Was Dropped | Optional | Include if anything was removed (almost always). |
-| What Proved Load-Bearing | Optional | Include if any add-back occurred, and to list uncovered-but-kept sections. |
+| What Proved Necessary | Optional | Include if any add-back occurred, and to list uncovered-but-kept sections. |
 | Per-Round Log | Optional | Include for multi-round runs. |
 
 A report missing any mandatory field is incomplete and the distillation is not validated. The caveat in particular is **never** dropped or softened: a distillation with no stated boundary is a distillation claiming universal validity it does not have.
@@ -81,7 +81,7 @@ Verdicts are `equivalent` | `candidate-regressed` | `candidate-diverged`. **PASS
 
 <List each section/phrase removed and the evidence it was inert: the baseline shows no case's behaviour depended on it. This is the only license to delete - evidence-gated, never a guess.>
 
-## What Proved Load-Bearing (Kept or Added Back)
+## What Proved Necessary (Kept or Added Back)
 
 <List each section that initially seemed droppable but was restored after an A/B regression named it - with the case that regressed and the behaviour it lost.>
 
@@ -92,7 +92,7 @@ Verdicts are `equivalent` | `candidate-regressed` | `candidate-diverged`. **PASS
 | Round | Action | Size (chars) | A/B result | Hypothesis | Outcome |
 |-------|--------|--------------|------------|------------|---------|
 | 1 | shrink | M1 | pass | drop rationale para in §3 - baseline shows no case acted on it | passed: inert |
-| 2 | shrink | M2 | regressed (1) | drop the soft rule in §5 | regressed adversarial-2: soft rule was load-bearing |
+| 2 | shrink | M2 | regressed (1) | drop the soft rule in §5 | regressed adversarial-2: soft rule was necessary |
 | 3 | add-back | M3 | pass | restore §5 soft-rule pointer | passed: minimal restoration sufficient |
 | ... | ... | ... | ... | ... | ... |
 
@@ -109,7 +109,7 @@ Verdicts are `equivalent` | `candidate-regressed` | `candidate-diverged`. **PASS
 - **Coverage % (header and Transfer Set).** `sections_covered / sections_identified`. Below 70%, the run should have warned before proceeding (the coverage threshold in the Distribution-Shift Guard); if it proceeded anyway, the report says so.
 - **Behaviour delta.** For a regressed or diverged case, name the specific behaviour - the discipline, step, or output that changed. "Different" is not enough; the report names *what*.
 - **Directness (orig->cand).** The per-case `original_directness`->`candidate_directness` (1-5) the A/B harness records on every run (`skills/ab-equivalence/references/ab-equivalence.md`). For a **directive-clarity** run this column is the audit trail for the gated directness gain (`candidate_directness` > `original_directness` with no `candidate-regressed`) - omitting it makes the gate unauditable, so it is mandatory there. For a **compress** run the gain is not required; the column is informational and typically reads unchanged (e.g. `3->3`).
-- **Conservative-default sections.** Every section not exercised by any case is listed under What Proved Load-Bearing as "kept (uncovered, conservative default)" - this is how the report makes the guard's conservatism legible rather than silent.
+- **Conservative-default sections.** Every section not exercised by any case is listed under What Proved Necessary as "kept (uncovered, conservative default)" - this is how the report makes the guard's conservatism legible rather than silent.
 - **Gate-truncated coverage (the honest-degrade rules).** When a case stopped at a gate with no scripted answer (`gate_truncated` in `distill-loop.md`), the report must degrade loudly, never silently:
   - The **verdict header** carries the `(gate-truncated)` suffix if any case was truncated, e.g. `**Verdict:** PASS (gate-truncated)`. The suffix is mandatory whenever the Gate-Truncated Coverage table is non-empty.
   - `sections_covered` **excludes** any section reachable only beyond a gate-truncation point - a section behind an unanswered gate was not measured and must not inflate the coverage count or percentage.

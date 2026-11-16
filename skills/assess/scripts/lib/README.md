@@ -1171,7 +1171,7 @@ multi-commit gate drops single-touch rename artifacts; binary files (numstat
 `-`) are skipped, and documentation files (`DOC_SUFFIXES`: `.md`, `.markdown`, `.mdx`,
 `.rst`, `.adoc`; not `.txt`, which covers `CMakeLists.txt` and `requirements.txt`) are never
 flagged, since an appended-to document carries no change risk. Compensates the *Accretion* contributor tendency named in the
-repo north star. Degrades to `available: False` on git failure and
+repo goal statement. Degrades to `available: False` on git failure and
 `reliable: False` on degenerate history (same verdict as `git_churn`). Reuses
 `git_churn`'s `GIT_TIMEOUT_SECONDS` and `churn_is_degenerate`; imports no
 orchestrator. `net_additions` is net physical lines (numstat additions minus

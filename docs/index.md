@@ -85,7 +85,7 @@ The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.m
 
 ## Docs
 
-- [Contributing: north star](./contributing/north-star.md) - the goal every skill and report serves, the three contributor tendencies the guardrails trace to, and the feature test for any change.
+- [Contributing: goal](./contributing/goal.md) - the goal every skill and report serves, the three contributor tendencies the guardrails trace to, and the feature test for any change.
 - [Contributing: CI and merge gates](./contributing/ci.md) - workflows, branch protection, the type gate, the file-size ratchet, the floor, mutation testing, CodeQL and the coverage floor.
 - [Contributing: marathon notes](./contributing/marathon.md) - the reasoning behind the `## Marathon Configuration` values in `CLAUDE.md`: bot reviewers, the claude-review four-state rule, non-blocking checks, the version hot file.
 - [Contributing: releasing](./contributing/release.md) - cutting the per-marathon release and refreshing the Marketplace listing.
