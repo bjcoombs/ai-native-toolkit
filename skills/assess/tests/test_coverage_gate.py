@@ -261,3 +261,92 @@ def test_excluded_dirs_are_not_scanned(tmp_path: Path) -> None:
     _write(tmp_path, "tests/fixtures/pyproject.toml",
            "[tool.coverage.report]\nfail_under = 99\n")
     assert detect_coverage_gate(tmp_path)["gates"] == []
+
+
+# --- issue #488 -----------------------------------------------------------
+
+def test_scoped_run_keeps_root_ci_and_drops_other_packages(tmp_path: Path) -> None:
+    """A scoped run reads the scope plus root CI and task-runner files; a
+    package-level config outside the scope, and a user exclude, are dropped."""
+    _write(tmp_path, "packages/web/jest.config.js",
+           "module.exports = { coverageThreshold: { global: { lines: 80 } } };\n")
+    _write(tmp_path, "packages/api/pyproject.toml",
+           "[tool.coverage.report]\nfail_under = 90\n")
+    _write(tmp_path, "pyproject.toml", "[tool.coverage.report]\nfail_under = 70\n")
+    _write(tmp_path, ".github/workflows/ci.yml",
+           "jobs:\n  t:\n    steps:\n      - run: pytest --cov-fail-under=88\n")
+    _write(tmp_path, "Makefile", "cov:\n\tcoverage report --fail-under=75\n")
+    _write(tmp_path, "packages/web/legacy/.nycrc", '{ "check-coverage": true }\n')
+
+    block = detect_coverage_gate(tmp_path, scope=tmp_path / "packages/web",
+                                 excludes=({"legacy"}, []))
+    files = sorted(g["file"] for g in block["gates"])
+    assert files == [".github/workflows/ci.yml", "Makefile",
+                     "packages/web/jest.config.js"]
+
+    unscoped = {g["file"] for g in detect_coverage_gate(tmp_path)["gates"]}
+    assert {"packages/api/pyproject.toml", "pyproject.toml",
+            "packages/web/legacy/.nycrc"} <= unscoped
+
+
+def test_user_exclude_pattern_drops_a_file(tmp_path: Path) -> None:
+    _write(tmp_path, "pyproject.toml", "[tool.coverage.report]\nfail_under = 70\n")
+    block = detect_coverage_gate(tmp_path, excludes=(set(), ["pyproject.toml"]))
+    assert block["gates"] == []
+
+
+def test_templated_threshold_is_a_gate_with_null_threshold(tmp_path: Path) -> None:
+    _write(tmp_path, ".github/workflows/ci.yml",
+           "jobs:\n  t:\n    steps:\n"
+           "      - run: pytest --cov=src --cov-fail-under=${{ env.COV_MIN }}\n"
+           "      - run: coverage report --fail-under=$COV_MIN\n")
+    _write(tmp_path, "Makefile", "cov:\n\tpytest --cov-fail-under $(COV_MIN)\n")
+    block = detect_coverage_gate(tmp_path)
+    assert sorted((g["file"], g["line"], g["tool"], g["threshold"]) for g in block["gates"]) == [
+        (".github/workflows/ci.yml", 4, "pytest-cov", None),
+        (".github/workflows/ci.yml", 5, "coverage.py", None),
+        ("Makefile", 2, "pytest-cov", None),
+    ]
+    assert block["enforced"] is True
+
+
+def test_single_line_c8_config_is_counted_once(tmp_path: Path) -> None:
+    _write(tmp_path, "package.json",
+           '{\n  "name": "x",\n  "c8": {"check-coverage": true, "lines": 95}\n}\n')
+    gate = _only_gate(tmp_path)
+    assert (gate["tool"], gate["line"], gate["threshold"]) == ("nyc/c8", 3, 95.0)
+
+
+def test_jest_project_threshold_does_not_bleed_into_another(tmp_path: Path) -> None:
+    _write(tmp_path, "jest.config.js",
+           "module.exports = {\n  projects: [\n"
+           "    { displayName: 'a', coverageThreshold: { global: {} } },\n"
+           "    {\n      displayName: 'b',\n      coverageThreshold: {\n"
+           "        global: { lines: 80 },\n      },\n    },\n  ],\n};\n")
+    gates = detect_coverage_gate(tmp_path)["gates"]
+    assert [(g["line"], g["threshold"]) for g in gates] == [(3, None), (6, 80.0)]
+
+
+def test_fail_under_with_branch_coverage_is_total(tmp_path: Path) -> None:
+    """``branch = true`` in the same config makes ``fail_under`` gate the
+    line-and-branch total; without it the metric stays ``lines``."""
+    _write(tmp_path, "pyproject.toml",
+           "[tool.coverage.run]\nbranch = true\n\n[tool.coverage.report]\nfail_under = 85\n")
+    assert _only_gate(tmp_path)["metric"] == "total"
+    _write(tmp_path, "pyproject.toml",
+           "[tool.coverage.run]\nbranch = false\n[tool.coverage.report]\nfail_under = 85\n")
+    assert _only_gate(tmp_path)["metric"] == "lines"
+
+
+def test_cov_fail_under_with_cov_branch_is_total(tmp_path: Path) -> None:
+    _write(tmp_path, ".github/workflows/ci.yml",
+           "jobs:\n  t:\n    steps:\n      - run: pytest --cov-branch --cov-fail-under=88\n")
+    assert _only_gate(tmp_path)["metric"] == "total"
+
+
+def test_this_repository_block_is_unchanged() -> None:
+    """The repo sets no branch coverage, so its own gates stay ``lines``."""
+    repo = Path(__file__).resolve().parents[3]
+    gates = [g for g in detect_coverage_gate(repo)["gates"]
+             if g["file"] in {"skills/assess/pyproject.toml", "scripts/pyproject.toml"}]
+    assert gates and all(g["metric"] == "lines" for g in gates)

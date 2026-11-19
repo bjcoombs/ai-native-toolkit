@@ -1413,8 +1413,13 @@ separately. Stdlib only, imports no orchestrator. Add fixtures + cases in
 
 **`coverage_gate.py`**
 Answers the Layer 6 question measurement cannot: is a line-coverage threshold
-*enforced*? `detect_coverage_gate` walks config files (built-in excludes, depth 4,
-so a monorepo package's own config counts) and emits the run-context
+*enforced*? `detect_coverage_gate(repo_root, scope, excludes)` runs from the scan
+registry and walks config files (built-in and user excludes via
+`assess_config.is_user_excluded`, depth 4 below the walk base, so a monorepo
+package's own config counts). A scoped run walks the scope plus the root CI and
+task-runner files (`.github/workflows/`, composite actions, CircleCI, root
+`Makefile`, `justfile`, `.gitlab-ci.yml`, ...), which run the gates for the scoped
+package; a package-level config outside the scope is dropped. It emits the run-context
 `coverage_gate` block: `{available, enforced, gates, not_detected}`, each gate
 `{file, line, tool, form, threshold, unit, metric}`. Forms read: coverage.py
 `fail_under` in `[tool.coverage.report]` (`pyproject.toml`), `[report]`
@@ -1427,16 +1432,24 @@ task-runner files; Jest `coverageThreshold` (config or
 `package.json`, or `--check-coverage --lines N`); JaCoCo `<minimum>` in a `pom.xml`
 and `minimum =` in a `build.gradle(.kts)` that applies JaCoCo. The threshold is
 reported as written (`unit` `percent`, `ratio` for a JaCoCo `0.80`, or
-`uncovered_count` for a negative Jest value), never rescaled. Gates are typed by the `CoverageGate` TypedDict. `enforced` is true when
+`uncovered_count` for a negative Jest value), never rescaled; a templated value
+(`--cov-fail-under=${{ env.COV_MIN }}`, `$COV_MIN`, `$(COV_MIN)`) is a gate with
+`threshold: null`. coverage.py and pytest-cov gates carry `metric: total` when the
+same config sets `branch = true` in its run section (or the line passes
+`--cov-branch`), `lines` otherwise. Jest, Vitest and nyc/c8 metrics are read inside
+the braced object the anchor opens or sits in, so one Jest project's threshold is
+never credited to another and a one-line `"c8": {...}` is counted once. Gates are
+typed by the `CoverageGate` TypedDict. `enforced` is true when
 any gate has a non-zero threshold, or a null one from nyc/c8 (which check at a
-built-in default); `fail_under = 0` and a Jest/Vitest anchor whose threshold was
+built-in default) or a templated coverage.py / pytest-cov flag; `fail_under = 0` and a Jest/Vitest anchor whose threshold was
 not read are listed but gate nothing.
 Nothing found is `enforced: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
 other CI systems, Codecov / Coveralls status targets, Kover, scoverage, tarpaulin, SimpleCov) so an empty
 result reads as "none of these forms". A configured threshold proves the tool
 fails below it when coverage runs; whether CI runs coverage is the Layer 5 read.
-Stdlib plus `lib.doc_graph.is_excluded_path`. Tests: `tests/test_coverage_gate.py`.
+Stdlib plus `lib.doc_graph.is_excluded_path` and `lib.assess_config.is_user_excluded`.
+Tests: `tests/test_coverage_gate.py`.
 
 **`sibling_tests.py`**
 The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
