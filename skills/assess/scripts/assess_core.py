@@ -40,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.accretion_ratchet import scan_accretion_ratchet
 from lib.anomaly_detector import detect_anomalies
 from lib.archetype import analyze_archetype
-from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION
+from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION, ASSESS_METHOD_VERSION
 from lib.badge import write_findings_badge
 from lib.assess_config import load_excludes, load_structure_config, load_working_notes_config
 from lib.change_coupling import build_rename_map
@@ -64,6 +64,7 @@ from lib.decline_markers import build_decline_block
 from lib.diff_reliability import compute_diff_reliability, prior_stamps, stats_tool_versions
 from lib.interactivity import build_offers_block
 from lib.doc_graph import build_doc_graph
+from lib.findings_snapshot import build_snapshot, load_snapshot, write_snapshot
 from lib.gap_actions import build_gap_actions
 from lib.doc_staleness import analyze_doc_staleness
 from lib.git_churn import git_commit_info
@@ -266,6 +267,9 @@ def build_run_context(
         # `schema_version` set further below (from #244).
         "run_id": run_id,
         "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+        # Which rules decided this run's findings (independent of the plugin
+        # version); the gate compares it with the committed findings.json.
+        "assess_method_version": ASSESS_METHOD_VERSION,
         "run_date": run_date,
         # Monorepo scope (`/assess <path>`): the repo-relative subtree this run
         # covers, and its artifact-directory slug (.assess/<slug>/). Both null /
@@ -581,6 +585,11 @@ def build_run_context(
         {"code": a.code, "description": a.description, "detail": a.detail}
         for a in detect_anomalies(ctx)
     ]
+    # The committed findings snapshot (#554): read the previous one back before
+    # overwriting it, so the gate can explain a method-version change by the
+    # findings that appeared and cleared since.
+    ctx["prior_findings_snapshot"] = load_snapshot(assess_dir)
+    write_snapshot(assess_dir, build_snapshot(ctx["derived_findings"], ASSESS_METHOD_VERSION))
     (assess_dir / "run-context.json").write_text(json.dumps(ctx, indent=2), encoding="utf-8")
     return ctx
 

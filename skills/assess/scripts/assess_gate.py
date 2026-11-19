@@ -13,6 +13,12 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   reliable diff; on a first run or an unreliable diff it is skipped, never
   fired - a freshly-cloned repo never trips a regression gate on its first PR.
 
+A third, explanatory part: when the committed ``.assess/findings.json`` was
+written under another finding method version (``ASSESS_METHOD_VERSION``), the
+log states that no code changed, lists the findings that appeared and cleared
+by path against that snapshot, and prints the re-freeze command. It explains
+the other checks' results and never fails the gate by itself.
+
 The defaults are warn-only: with no config, every finding is reported but
 nothing fails, so adopting the emitted workflow never blocks a pipeline by
 surprise.
@@ -35,11 +41,12 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
-from lib.run_context_types import JsonDict
+from lib.findings_snapshot import method_change
+from lib.run_context_types import JsonDict, MethodChange
 
 
 class FindingHit(TypedDict):
@@ -62,6 +69,9 @@ class GateVerdict(TypedDict):
     threshold_breaches: list[JsonDict]
     excluded_by_config: JsonDict | None
     excluded_generated: list[JsonDict] | None
+    # Set when the committed findings snapshot was written by another finding
+    # method version: the findings moved because the method did.
+    method_change: NotRequired[MethodChange | None]
 
 
 def _findings_by_name(ctx: JsonDict) -> dict[str, JsonDict]:
@@ -200,6 +210,9 @@ def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
         "excluded_by_config": ctx.get("excluded_by_config"),
         # Files the treemap dropped as generated, so the log names the reasons.
         "excluded_generated": ctx.get("excluded_generated"),
+        # Explanation only: a method change never fails the gate by itself, but
+        # it states why the findings below moved.
+        "method_change": method_change(ctx),
     }
 
 
@@ -208,6 +221,7 @@ def format_verdict(verdict: GateVerdict) -> str:
     lines: list[str] = ["/assess gate"]
     if not verdict["enabled"]:
         lines.append("  gate disabled in config - reporting only, never failing")
+    lines.extend(_format_method_change(verdict.get("method_change")))
     for breach in verdict["threshold_breaches"]:
         if breach["metric"] == "regressed_hotspots":
             sample = ", ".join(breach["paths"])
@@ -257,6 +271,36 @@ def _format_exclusion_disclosure(excluded_by_config: JsonDict | None) -> str:
         f"  {count} {noun} suppressed by config excludes "
         f"(dirs: {dirs}; patterns: {patterns})"
     )
+
+
+# Per-direction lines the method-change note lists before "+N more".
+METHOD_CHANGE_MAX_PATHS = 20
+
+
+def _format_method_change(change: MethodChange | None) -> list[str]:
+    """The method-version note: no code changed, the findings that appeared
+    and cleared against the committed snapshot, and the re-freeze command.
+    Empty when the versions match or there is no committed snapshot."""
+    if not change:
+        return []
+    lines = [
+        f"  NOTE method change: the /assess finding method changed from "
+        f"version {change['prior_method_version']} to {change['method_version']} "
+        f"since {change['snapshot']} was committed.",
+        "    No code changed to cause this: the rules that decide findings did. "
+        "Findings against the committed snapshot:",
+    ]
+    for label, moves in (("appeared", change["appeared"]), ("cleared", change["cleared"])):
+        if not moves:
+            lines.append(f"    {label}: none")
+            continue
+        lines.append(f"    {label} ({len(moves)}):")
+        shown = moves[:METHOD_CHANGE_MAX_PATHS]
+        lines.extend(f"      {m['finding']}: {m['path']}" for m in shown)
+        if len(moves) > len(shown):
+            lines.append(f"      +{len(moves) - len(shown)} more")
+    lines.append(f"    Re-freeze: {change['refreeze']}")
+    return lines
 
 
 # Per-file lines the gate log lists before summarising the rest as "+N more".

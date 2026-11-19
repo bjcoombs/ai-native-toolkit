@@ -356,6 +356,8 @@ enabled = true           # set false to mute the gate without deleting the workf
 
 `fail_on` finding names are the cross-layer findings (`hidden_coupling`, `lying_map`, `unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`, `orphaned_understanding`, `candidate_dead_weight`). The floors evaluate the current snapshot, so they read as an AI-readiness *floor* (a clean repo never trips them; a long-standing concern trips them every run until fixed). `fail_on_regression` is the true cross-run check - it fires only when the diff against the prior committed snapshot reports a worsening, and is skipped entirely on a first run or an unreliable diff, so a freshly-cloned repo never fails its first gated PR. The asymmetric-caution default - never block a pipeline by surprise - means a repo that adopts the workflow without writing config gets reports, not red builds. The same asymmetry covers infrastructure: a failed toolkit fetch, tool install, or uv setup degrades to a skip notice rather than a red check, even on an opted-in repo - only the assessment itself can fail a PR.
 
+**Commit `.assess/findings.json` with the workflow.** Each run writes it: the finding method version and every finding's paths. When a later toolkit release changes how findings are decided, the gate compares that committed snapshot with its own run, states that no code changed, lists the findings that appeared and cleared by path, and prints the re-freeze command (re-run `/assess` and commit the new `findings.json`). Without the committed file the gate has nothing to compare and gives no such explanation.
+
 
 ## Step 7: Tool Feedback (Optional)
 

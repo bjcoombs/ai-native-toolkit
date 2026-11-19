@@ -691,6 +691,22 @@ no prompts and an audit trail. Pure stdlib, no side effects. Called by
 writes (run-context.json, the badge, the wiki pages); the version history is in the
 module comment. `complexity-treemap.py` carries a copy that
 `tests/test_complexity_treemap.py` holds equal to it.
+It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
+independent of plugin releases, bumped by one in any change that moves which findings
+a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
+`findings.json`.
+
+**`findings_snapshot.py`**
+The committed findings snapshot (#554). `build_snapshot` reduces `derived_findings` to
+names and sorted paths plus `ASSESS_METHOD_VERSION`; `write_snapshot` writes it to
+`findings.json` in the run's artifact directory, with no run id or date so an unchanged
+finding set leaves the file byte-identical. `load_snapshot` reads the previous file back
+before the run overwrites it (`None` when absent or malformed), and `build_run_context`
+records it as `prior_findings_snapshot`. `method_change` compares that snapshot with
+the current findings: on a method-version mismatch it lists the paths that appeared and
+cleared per finding, the snapshot path and the re-freeze command, which `assess_gate`
+prints as an explanation (it never fails the gate by itself). Tests:
+`tests/test_findings_snapshot.py`.
 
 **`run_wiki.py`**
 Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
