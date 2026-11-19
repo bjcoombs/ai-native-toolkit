@@ -692,6 +692,35 @@ writes (run-context.json, the badge, the wiki pages); the version history is in 
 module comment. `complexity-treemap.py` carries a copy that
 `tests/test_complexity_treemap.py` holds equal to it.
 
+**`counts_only.py`**
+The content-free run-context mode for scans of repositories you do not own (#546).
+`counts_only(ctx, hash_paths=, salt=)` returns a copy that keeps every number, boolean
+and null and only the strings whose field `counts_only_rules` classifies as a path or a
+short token (kind, grade, band, date, version); free text, commands, commit subjects,
+program names and identities are dropped, and a dropped list of strings becomes its
+length. A string field with no rule is dropped too (allow-list, not deny-list). Path
+hashing is opt-in: HMAC-SHA256 under a random per-call salt, or a fixed `--hash-salt`
+so hashes join across runs. `unclassified_strings` lists the string fields a
+run-context holds with no rule. `add_cli_arguments` / `validate_cli_args` /
+`apply_cli` give `assess_core.py --counts-only` (which writes
+`run-context.counts-only.json` beside `run-context.json`) and the headless entry point
+one set of flags. `render_doc` generates `references/counts-only.md`, the per-block
+field list. Tests: `tests/test_counts_only.py`.
+
+**`counts_only_rules.py`**
+The counts-only allow-list: `RULES` maps each block's field patterns (dotted keys, list
+levels left out, `{}` for a path-keyed map key) to path, token or dropped text, with
+`PATH_KEYED_MAPS`, the global path field names and `classify`. Adding a run-context
+string field means adding its rule here and regenerating `references/counts-only.md`.
+Tests: `tests/test_counts_only.py`.
+
+**`counts_only_schema.py`**
+Derives the string fields the allow-list must cover from the block TypedDicts in
+`run_context_types.py` and beside their builders (`ROOTS` places each shape in
+run-context.json). `typed_string_fields` walks them, so a typed shape that gains a
+string field fails `tests/test_counts_only.py` until the field is classified, even when
+no fixture run populates the block.
+
 **`run_wiki.py`**
 Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
 top hotspot (status from the stats diff, first-flagged date, the `Has test file` row

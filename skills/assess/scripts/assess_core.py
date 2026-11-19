@@ -58,6 +58,9 @@ from lib.context_blocks import (
     excluded_generated,
     generated_exclusion,
 )
+from lib.counts_only import COUNTS_ONLY_FILE
+from lib.counts_only import add_cli_arguments as add_counts_only_arguments
+from lib.counts_only import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.coverage_gate import detect_coverage_gate
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
@@ -702,7 +705,9 @@ def main(argv: list[str] | None = None) -> int:
             "run (unchanged). Pass the same `--scope` to `--opt-in-mutation`."
         ),
     )
+    add_counts_only_arguments(parser)
     parsed = parser.parse_args(argv)
+    validate_counts_only_args(parser, parsed)
     repo_root = Path(parsed.repo_root).resolve()
     if parsed.opt_in_mutation:
         return run_opt_in_mutation(repo_root, scope=parsed.scope)
@@ -718,6 +723,10 @@ def main(argv: list[str] | None = None) -> int:
         # with a non-zero exit rather than a traceback.
         print(f"error: {e}", file=sys.stderr)
         return 2
+    content_free = apply_counts_only(ctx, parsed)
+    if content_free is not None:
+        out = assess_dir_for(repo_root, ctx.get("scope_slug") or "") / COUNTS_ONLY_FILE
+        out.write_text(json.dumps(content_free, indent=2), encoding="utf-8")
     print(json.dumps(ctx["diff"]))
     return 0
 

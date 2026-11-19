@@ -1,0 +1,131 @@
+"""The typed run-context block shapes the counts-only allow-list is checked against.
+
+``lib.counts_only_rules`` is an allow-list by field pattern. This module walks
+the TypedDicts that describe run-context blocks - the shared ones in
+``lib/run_context_types.py`` and the block shapes kept beside their builders -
+and lists every field that can hold a string, so a test can fail when a typed
+string field has no rule. A shape that gains a text field then fails the
+suite until the field is classified as a path, a token or dropped text,
+instead of being dropped silently (or, worse, kept by a looser rule).
+
+Fixture runs leave many blocks empty (``agent_harness.executes``,
+``decline_markers``, ``claude_config.findings``); the type walk covers them
+whether or not a run populated them.
+"""
+from __future__ import annotations
+
+import types
+import typing
+from collections.abc import Iterator
+from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
+
+from lib.agent_environment import AgentEnvironmentBlock
+from lib.agent_harness import AgentHarnessBlock
+from lib.agent_instructions_grader import SensitiveFinding
+from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
+from lib.counts_only_rules import PATH_KEYED_MAPS
+from lib.coverage_gate import CoverageGate
+from lib.doc_complexity_join import DocUnit
+from lib.doc_staleness import DocStalenessBlock, DocStalenessRow
+from lib.gap_actions import GapAction
+from lib.liveness_scan import ObservabilityBlock
+from lib.mutation_cap import MutationNotRunCap
+from lib.run_context_types import (
+    AttentionRow,
+    DeadCodeBlock,
+    DerivedFinding,
+    DocGraphBlock,
+    DocumentationBlock,
+    FnCcnBlock,
+    GeneratedExclusion,
+    HotspotRow,
+    KeyholeSummary,
+    NestedInstructionsBlock,
+    PrescribedAction,
+    RuntimeBlock,
+    TestPressureBlock,
+    UnderstandingBlock,
+)
+from lib.run_context_types import (
+    BehaviourBlock as _BehaviourBlock,
+)
+from lib.structure_drift import EmptyOwnershipPattern
+from lib.structure_graph import StructureBlock
+from lib.understanding_analysis import UnderstandingModule
+
+# Where each typed shape sits in run-context.json, as a field pattern. A list
+# shape is rooted at the list's pattern (list levels add no segment).
+ROOTS: dict[str, Any] = {
+    "dead_code": DeadCodeBlock,
+    "observability": ObservabilityBlock,
+    "doc_graph": DocGraphBlock,
+    "doc_staleness": DocStalenessBlock,
+    "stale_hubs": DocStalenessRow,
+    "test_pressure": TestPressureBlock,
+    "mutation_not_run_cap": MutationNotRunCap,
+    "behaviour": _BehaviourBlock,
+    "documentation": DocumentationBlock,
+    "documentation.stale_doc_on_complexity": DocUnit,
+    "documentation.unexplained_complexity": DocUnit,
+    "documentation.good_contracts": DocUnit,
+    "understanding": UnderstandingBlock,
+    "understanding.modules": UnderstandingModule,
+    "runtime": RuntimeBlock,
+    "derived_findings": DerivedFinding,
+    "attention": AttentionRow,
+    "prescribed_actions": PrescribedAction,
+    "keyhole_summary": KeyholeSummary,
+    "stats_summary.fn_ccn": FnCcnBlock,
+    "stats_summary.top_hotspots": HotspotRow,
+    "stats_summary.top_complex": HotspotRow,
+    "stats_summary.top_large": HotspotRow,
+    "excluded_generated": GeneratedExclusion,
+    "nested_instructions": NestedInstructionsBlock,
+    "agent_harness": AgentHarnessBlock,
+    "agent_environment": AgentEnvironmentBlock,
+    "claude_config": ClaudeConfigBlock,
+    "claude_config.findings": ClaudeConfigFinding,
+    "coverage_gate.gates": CoverageGate,
+    "gap_actions": GapAction,
+    "structure": StructureBlock,
+    "structure_drift.tier_0.empty_ownership_patterns": EmptyOwnershipPattern,
+    "sensitive_instruction_content.{}": SensitiveFinding,
+}
+
+_UNIONS = (Union, types.UnionType)
+
+
+def _is_typeddict(tp: Any) -> bool:
+    return isinstance(tp, type) and typing.is_typeddict(tp)
+
+
+def _walk(pattern: str, tp: Any, seen: frozenset[Any]) -> Iterator[str]:
+    origin = get_origin(tp)
+    if tp is str or tp is Any or tp is object:
+        yield pattern
+    elif origin is Literal:
+        if any(isinstance(a, str) for a in get_args(tp)):
+            yield pattern
+    elif origin in _UNIONS:
+        for arm in get_args(tp):
+            yield from _walk(pattern, arm, seen)
+    elif origin is list:
+        yield from _walk(pattern, get_args(tp)[0], seen)
+    elif origin is dict:
+        value = get_args(tp)[1]
+        if pattern in PATH_KEYED_MAPS:
+            yield from _walk(f"{pattern}.{{}}", value, seen)
+        elif value is not Any:
+            # A map with identifier keys (a kind, a tool): rules use ``*``.
+            yield from _walk(f"{pattern}.*", value, seen)
+    elif _is_typeddict(tp) and tp not in seen:
+        for name, field_tp in get_type_hints(tp).items():
+            yield from _walk(f"{pattern}.{name}", field_tp, seen | {tp})
+
+
+def typed_string_fields() -> list[str]:
+    """Every field pattern a typed run-context block can put a string at."""
+    found: set[str] = set()
+    for root, tp in ROOTS.items():
+        found.update(_walk(root, tp, frozenset()))
+    return sorted(found)

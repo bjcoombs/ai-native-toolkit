@@ -1,0 +1,275 @@
+"""Counts-only output: a content-free copy of a run-context (issue #546).
+
+A run-context carries text a third party should not redistribute: finding
+lines, commands, commit subjects, program names, author identities. When a
+scan of someone else's repository is meant to leave the machine it ran on,
+``counts_only`` keeps the derived values and drops the rest:
+
+- every number, boolean and null is kept;
+- a string is kept only when ``lib.counts_only_rules`` classifies its field
+  as a path or a short token (kind, grade, band, date, version);
+- every other string is dropped, and a dropped list of strings becomes its
+  length, so "6 signals" survives where the six sentences do not.
+
+Paths are kept as written by default. With ``hash_paths`` every path value and
+every key of a path-keyed map becomes ``h:`` plus 16 hex digits of an
+HMAC-SHA256 under a salt. The salt is random per call unless one is given, so
+two runs' hashes join only when the caller fixes the salt (``--hash-salt``).
+The salt itself is never written to the output.
+
+Pure: the input is never mutated, and nothing here reads the filesystem. The
+CLI helpers at the bottom give ``assess_core`` (and the headless entry point
+of #545) one set of flags.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import hmac
+import secrets
+from collections.abc import Mapping
+from typing import Any
+
+from lib.counts_only_rules import (
+    DROP,
+    KEY_RE,
+    PATH,
+    PATH_KEYED_MAPS,
+    RULES,
+    TOKEN,
+    TOKEN_RE,
+    FieldClass,
+    classify,
+)
+from lib.run_context_types import JsonDict
+
+# The longest path kept; a longer "path" is more likely prose than a file.
+_MAX_PATH = 400
+HASH_PREFIX = "h:"
+# Written beside run-context.json by ``--counts-only``.
+COUNTS_ONLY_FILE = "run-context.counts-only.json"
+
+
+def _child(pattern: str, key: str) -> str:
+    return f"{pattern}.{key}" if pattern else key
+
+
+def _is_pathlike(value: str) -> bool:
+    """A repo-relative path, glob or module name: not absolute, not a URL."""
+    return (
+        0 < len(value) <= _MAX_PATH
+        and value.isprintable()
+        and not value.startswith(("/", "~", "\\"))
+        and "://" not in value
+        and not (len(value) > 1 and value[1] == ":")  # a Windows drive letter
+    )
+
+
+class _Filter:
+    def __init__(self, hash_paths: bool, salt: str | None) -> None:
+        self.hash_paths = hash_paths
+        key = salt if salt is not None else secrets.token_hex(16)
+        self._key = key.encode("utf-8")
+
+    def path(self, value: str) -> str | None:
+        if not _is_pathlike(value):
+            return None
+        if not self.hash_paths:
+            return value
+        digest = hmac.new(self._key, value.encode("utf-8"), hashlib.sha256)
+        return HASH_PREFIX + digest.hexdigest()[:16]
+
+    def string(self, cls: FieldClass | None, value: str) -> str | None:
+        if cls == PATH:
+            return self.path(value)
+        if cls == TOKEN and TOKEN_RE.match(value):
+            return value
+        return None
+
+    def value(self, pattern: str, value: Any) -> tuple[bool, Any]:
+        """``(keep, filtered)`` for one value at ``pattern``."""
+        if value is None or isinstance(value, (bool, int, float)):
+            return True, value
+        if isinstance(value, str):
+            out = self.string(classify(pattern), value)
+            return out is not None, out
+        if isinstance(value, Mapping):
+            if classify(pattern) == DROP:
+                return False, None
+            return True, self.mapping(pattern, value)
+        if isinstance(value, list):
+            return self.sequence(pattern, value)
+        return False, None
+
+    def mapping(self, pattern: str, value: Mapping[str, Any]) -> JsonDict:
+        out: JsonDict = {}
+        path_keyed = pattern in PATH_KEYED_MAPS
+        for key, item in value.items():
+            if path_keyed:
+                new_key = self.path(str(key))
+                child = _child(pattern, "{}")
+            else:
+                new_key = key if isinstance(key, str) and KEY_RE.match(key) else None
+                child = _child(pattern, str(key))
+            if new_key is None:
+                continue
+            keep, filtered = self.value(child, item)
+            if keep:
+                out[new_key] = filtered
+        return out
+
+    def sequence(self, pattern: str, value: list[Any]) -> tuple[bool, Any]:
+        cls = classify(pattern)
+        if cls == DROP and not any(isinstance(v, (Mapping, list)) for v in value):
+            return True, len(value)
+        if value and all(isinstance(v, str) for v in value) and cls not in (PATH, TOKEN):
+            return True, len(value)
+        out: list[Any] = []
+        for item in value:
+            keep, filtered = self.value(pattern, item)
+            if keep:
+                out.append(filtered)
+        return True, out
+
+
+def counts_only(
+    ctx: Mapping[str, Any], *, hash_paths: bool = False, salt: str | None = None,
+) -> JsonDict:
+    """A content-free copy of ``ctx``: counts, flags, tokens and paths only.
+
+    ``hash_paths`` replaces every kept path (and every path-keyed map key) with
+    a salted hash; ``salt`` fixes the hash key so hashes join across runs, and
+    None draws a random one for this call.
+    """
+    return _Filter(hash_paths, salt).mapping("", ctx)
+
+
+def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
+    """Field patterns in ``ctx`` that hold a string but have no rule.
+
+    Run over an unfiltered run-context. The filter drops these fields, so the
+    output is safe either way; an entry here means a field is being dropped by
+    default rather than by decision, and the tests fail until it is classified.
+    Data keys of a map that is not declared path-keyed are reported as
+    ``<map>.<key?>``.
+    """
+    found: set[str] = set()
+
+    def walk(pattern: str, value: Any) -> None:
+        if isinstance(value, str):
+            if classify(pattern) is None:
+                found.add(pattern)
+        elif isinstance(value, Mapping):
+            if classify(pattern) == DROP:
+                return
+            path_keyed = pattern in PATH_KEYED_MAPS
+            for key, item in value.items():
+                if path_keyed:
+                    walk(_child(pattern, "{}"), item)
+                    continue
+                if not (isinstance(key, str) and KEY_RE.match(key)):
+                    found.add(_child(pattern, "<key?>"))
+                    continue
+                walk(_child(pattern, key), item)
+        elif isinstance(value, list):
+            for item in value:
+                walk(pattern, item)
+
+    walk("", ctx)
+    return sorted(found)
+
+
+_CLASS_LABEL = {PATH: "path (hashed when hashing is on)", TOKEN: "token", DROP: "dropped"}
+
+
+def render_doc() -> str:
+    """The per-block field list in ``references/counts-only.md``."""
+    lines = [
+        "# Counts-only output: fields kept per block",
+        "",
+        "Generated from `skills/assess/scripts/lib/counts_only_rules.py` by",
+        "`lib.counts_only.render_doc`; `test_counts_only.py` fails when this file",
+        "and the table disagree. Regenerate with:",
+        "",
+        "```bash",
+        "cd skills/assess && uv run python -c \"import sys; sys.path.insert(0, 'scripts');"
+        " from lib.counts_only import render_doc; print(render_doc(), end='')\""
+        " > references/counts-only.md",
+        "```",
+        "",
+        "`assess_core.py --counts-only` writes `run-context.counts-only.json` beside",
+        "`run-context.json`. Every number, boolean and null in every block is kept.",
+        "A string is kept only when its field is listed below as a path or a",
+        "token; every other string, listed or not, is dropped. A dropped list of",
+        "strings is replaced by its length. A token is kept only while it is a",
+        "slug of at most 40 characters (no spaces, `/` or `@`).",
+        "",
+        "Paths are kept as written unless `--hash-paths` (or `--hash-salt VALUE`)",
+        "is given; then each path value and each key of a path-keyed map becomes",
+        "`h:` plus 16 hex digits of an HMAC-SHA256. The salt is random per run",
+        "unless `--hash-salt` fixes it, which makes hashes join across runs. The",
+        "salt is never written to the output.",
+        "",
+        "A field pattern is the dotted run of keys from the top of",
+        "`run-context.json`, list levels left out, `{}` for the key of a",
+        "path-keyed map and `*` for any key. A field named `path`, `file`,",
+        "`file_a`, `file_b`, `test_file` or `source_file` is a path in every block.",
+        "",
+        "Not filtered: the wiki pages, hotspot pages, badge and report the run",
+        "also writes stay in the target repository's `.assess/` directory and",
+        "carry full text. Only `run-context.counts-only.json` is content-free.",
+        "",
+        "## Path-keyed maps",
+        "",
+    ]
+    lines += [f"- `{m}`" for m in sorted(PATH_KEYED_MAPS)]
+    for block, rules in RULES.items():
+        lines += ["", f"## {block}", "", "| Field | Kept as |", "|---|---|"]
+        lines += [f"| `{p}` | {_CLASS_LABEL[c]} |" for p, c in rules.items()]
+    return "\n".join(lines) + "\n"
+
+
+# --- CLI helpers shared by assess_core and the headless entry point -------
+
+def add_cli_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add ``--counts-only``, ``--hash-paths`` and ``--hash-salt``."""
+    parser.add_argument(
+        "--counts-only", action="store_true",
+        help=(
+            "Also write run-context.counts-only.json: counts, grades, scores, "
+            "booleans, kinds and repo-relative paths only, with free text, "
+            "commands, commit subjects and identities dropped. For sharing a "
+            "scan of a repository you do not own. "
+            "Fields kept: references/counts-only.md."
+        ),
+    )
+    parser.add_argument(
+        "--hash-paths", action="store_true",
+        help=(
+            "With --counts-only, replace every repo-relative path with a salted "
+            "hash. The salt is random per run unless --hash-salt fixes it."
+        ),
+    )
+    parser.add_argument(
+        "--hash-salt", metavar="VALUE",
+        help=(
+            "With --counts-only, hash paths under this salt (implies "
+            "--hash-paths), so hashes from different runs join."
+        ),
+    )
+
+
+def validate_cli_args(parser: argparse.ArgumentParser, parsed: argparse.Namespace) -> None:
+    """Reject a hashing flag without ``--counts-only`` (exits via ``parser.error``)."""
+    if (parsed.hash_paths or parsed.hash_salt is not None) and not parsed.counts_only:
+        parser.error("--hash-paths and --hash-salt need --counts-only")
+    if parsed.hash_salt == "":
+        parser.error("--hash-salt needs a non-empty value")
+
+
+def apply_cli(ctx: Mapping[str, Any], parsed: argparse.Namespace) -> JsonDict | None:
+    """The counts-only copy the parsed flags ask for, or None without ``--counts-only``."""
+    if not parsed.counts_only:
+        return None
+    salt: str | None = parsed.hash_salt
+    return counts_only(ctx, hash_paths=bool(parsed.hash_paths) or salt is not None, salt=salt)

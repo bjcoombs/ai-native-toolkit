@@ -24,6 +24,7 @@ dist/standalone-skills/
 # regenerated every run, so they stay ignored to keep diffs clean.
 !/.assess/
 /.assess/run-context.json
+/.assess/run-context.counts-only.json
 /.assess/complexity-stats.prior.json
 /.assess/.cache/
 
