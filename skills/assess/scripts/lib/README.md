@@ -469,6 +469,35 @@ hand-wired assignments between the stages are gone. Currently registered:
 `repo_root` and
 `instruction_files`, the core provides `scope` (the absolute `--scope` path, or
 None) and `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`).
+A spec sets `network=True` when it reads GitHub through `gh` (`config_drift`,
+`review_reality`, `gate_cost_estimate`, `agent_environment`), and may name an
+`offline_fn` - the same scan with its probe off, taking the same reads
+(`agent_environment` with `probe_ci=False`). `assess_core` ignores both; the headless
+runner in `signals.py` reads them. `validate` rejects an `offline_fn` on a scan that is
+not `network`, or one that cannot take the spec's reads.
+
+**`signals.py`**
+The headless, signals-only run behind `assess_signals.py` (issue #545). `collect` runs
+the selected registry scans, plus the registry keys they read, through `run_scans` with
+inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
+`grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`), so a raising
+scan degrades through `safe` and the run completes. A `network` scan runs its
+`offline_fn` or is reported `{"available": false, "reason": NETWORK_REASON}`. Names in
+`UNREGISTERED_SCANS` (run-context blocks `assess_core` still assigns by hand) are
+reported unavailable with `UNREGISTERED_REASON`; a name the registry also holds is
+dropped at runtime, so migrating a scan needs no edit here. `select_scans` raises
+`UnknownScanError` naming every name in neither set. `build_stamp` records the toolkit
+commit, plugin version, UTC scan date, `--window` and the target's HEAD and dirty flag
+(each nullable outside git). The window is validated and stamped only: no registered
+scan reads a history window yet. Nothing here writes or reaches the network.
+
+**`signals_schema.py`**
+Generates the published `references/signals.schema.json` from the `SignalsDocument` and
+`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, open per-scan
+blocks, and an `if`/`then` rule that an `"available": false` block carries a string
+`reason`. `tests/test_signals.py` fails when the checked-in file differs from
+`build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
+from `skills/assess`.
 
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads

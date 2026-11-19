@@ -60,6 +60,12 @@ class ScanSpec:
     ``degrade`` routes the call through ``safe``; a scan opts out only by
     setting ``gate_reason``, because a gate is the one kind of scan whose
     failure should stop the run.
+
+    ``network`` marks a scan that reads beyond the checkout (GitHub via
+    ``gh``). The headless signals runner (``lib/signals.py``) never calls such
+    a scan's ``fn``: it calls ``offline_fn`` when one is declared - the same
+    scan with its network probe turned off, taking the same reads - and
+    otherwise reports the scan unavailable. ``assess_core`` ignores both fields.
     """
 
     key: str
@@ -68,6 +74,8 @@ class ScanSpec:
     stage: str
     degrade: bool = True
     gate_reason: str = ""
+    network: bool = False
+    offline_fn: Callable[..., Any] | None = None
 
 
 def safe(label: str, fn: Callable[[], Any]) -> Any:
@@ -128,6 +136,13 @@ def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUT
                 f"scan {spec.key!r} declares {len(spec.reads)} read(s) but its callable "
                 f"cannot be called with that many positional arguments"
             )
+        if spec.offline_fn is not None and not spec.network:
+            raise ScanRegistryError(f"scan {spec.key!r} declares an offline_fn but is not a network scan")
+        if spec.offline_fn is not None and not _accepts(spec.offline_fn, len(spec.reads)):
+            raise ScanRegistryError(
+                f"scan {spec.key!r} declares {len(spec.reads)} read(s) but its offline_fn "
+                f"cannot be called with that many positional arguments"
+            )
         if not spec.degrade and not spec.gate_reason:
             raise ScanRegistryError(f"scan {spec.key!r} opts out of degrading without a gate_reason")
         produced_at[spec.key] = stage_index
@@ -178,9 +193,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # branch-protection snapshots diffed against the live GitHub setting via
     # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
     # available: false with the reason, never a clean result.
-    ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE),
-    ScanSpec("review_reality", scan_review_reality, ("repo_root",), STAGE_READ_SIDE),
-    ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE),
+    ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE, network=True),
+    ScanSpec("review_reality", scan_review_reality, ("repo_root",), STAGE_READ_SIDE, network=True),
+    ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE, network=True),
     # Checkable claims in the graded instruction files ("`x.sh` is enforced in
     # CI", "Node 20.11.0 is pinned in `.nvmrc`"), verified against the repo; a
     # failed claim is a Layer 0 lying signal. Zeros when none.
@@ -220,9 +235,11 @@ SCANS: tuple[ScanSpec, ...] = (
     # hook, setup script or target), the check command a graded instruction file
     # names, lockfiles per manifest, the Layer 5 Partial cap, and the optional
     # `gh` CI-duration probe. Reads agent_harness for the SessionStart hooks.
+    # Headless runs call it with the probe off (ci_duration reports not_probed).
     ScanSpec(
         "agent_environment", scan_agent_environment,
         ("repo_root", "instruction_files", "agent_harness", "excludes"), STAGE_POST_OFFERS,
+        network=True, offline_fn=partial(scan_agent_environment, probe_ci=False),
     ),
 )
 
