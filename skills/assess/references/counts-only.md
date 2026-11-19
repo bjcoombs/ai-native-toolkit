@@ -1,11 +1,12 @@
 # Counts-only output: fields kept per block
 
-Generated from `skills/assess/scripts/lib/counts_only_rules.py` by
+Generated from `scripts/lib/counts_only_rules.py` (in the assess skill) by
 `lib.counts_only.render_doc`; `test_counts_only.py` fails when this file
 and the table disagree. Regenerate with:
 
 ```bash
-cd skills/assess && uv run python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only import render_doc; print(render_doc(), end='')" > references/counts-only.md
+# from the assess skill directory
+uv run python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only import render_doc; print(render_doc(), end='')" > references/counts-only.md
 ```
 
 `assess_core.py --counts-only` writes `run-context.counts-only.json` beside
@@ -232,7 +233,8 @@ carry full text. Only `run-context.counts-only.json` is content-free.
 
 | Field | Kept as |
 |---|---|
-| `coverage_report.source` | token |
+| `coverage_report.source` | path (hashed when hashing is on) |
+| `coverage_report.format` | token |
 | `coverage_gate.gates.tool` | token |
 | `coverage_gate.gates.form` | dropped |
 | `coverage_gate.gates.unit` | token |
@@ -289,6 +291,9 @@ carry full text. Only `run-context.counts-only.json` is content-free.
 | `config_drift.snapshots.kind` | token |
 | `review_reality.reason` | dropped |
 | `gate_cost_estimate.reason` | dropped |
+| `gate_cost_estimate.assumption` | dropped |
+| `capability_offers.build_system` | token |
+| `capability_offers.build_files` | path (hashed when hashing is on) |
 | `accretion_ratchet.reason` | dropped |
 
 ## agent_harness

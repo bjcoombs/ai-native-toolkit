@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import hmac
+import re
 import secrets
 from collections.abc import Mapping
 from typing import Any
@@ -54,14 +55,24 @@ def _child(pattern: str, key: str) -> str:
     return f"{pattern}.{key}" if pattern else key
 
 
+# A URL or other ``scheme:`` value, and an e-mail address: never a repo path.
+_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+_EMAIL_RE = re.compile(r"[^\s/@]+@[^\s/@]+\.[A-Za-z]{2,}")
+
+
 def _is_pathlike(value: str) -> bool:
-    """A repo-relative path, glob or module name: not absolute, not a URL."""
+    """A repo-relative path, glob or module name.
+
+    Not absolute, not a URL or ``scheme:`` value, no whitespace (so a sentence
+    read from a doc or an instruction file never passes as a path), no e-mail.
+    """
     return (
         0 < len(value) <= _MAX_PATH
         and value.isprintable()
+        and not any(c.isspace() for c in value)
         and not value.startswith(("/", "~", "\\"))
-        and "://" not in value
-        and not (len(value) > 1 and value[1] == ":")  # a Windows drive letter
+        and not _SCHEME_RE.match(value)
+        and not _EMAIL_RE.search(value)
     )
 
 
@@ -187,12 +198,13 @@ def render_doc() -> str:
     lines = [
         "# Counts-only output: fields kept per block",
         "",
-        "Generated from `skills/assess/scripts/lib/counts_only_rules.py` by",
+        "Generated from `scripts/lib/counts_only_rules.py` (in the assess skill) by",
         "`lib.counts_only.render_doc`; `test_counts_only.py` fails when this file",
         "and the table disagree. Regenerate with:",
         "",
         "```bash",
-        "cd skills/assess && uv run python -c \"import sys; sys.path.insert(0, 'scripts');"
+        "# from the assess skill directory",
+        "uv run python -c \"import sys; sys.path.insert(0, 'scripts');"
         " from lib.counts_only import render_doc; print(render_doc(), end='')\""
         " > references/counts-only.md",
         "```",
@@ -265,6 +277,8 @@ def validate_cli_args(parser: argparse.ArgumentParser, parsed: argparse.Namespac
         parser.error("--hash-paths and --hash-salt need --counts-only")
     if parsed.hash_salt == "":
         parser.error("--hash-salt needs a non-empty value")
+    if parsed.counts_only and getattr(parsed, "opt_in_mutation", False):
+        parser.error("--counts-only applies to a full run, not --opt-in-mutation")
 
 
 def apply_cli(ctx: Mapping[str, Any], parsed: argparse.Namespace) -> JsonDict | None:

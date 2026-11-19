@@ -39,11 +39,14 @@ from lib.run_context_types import (
     FnCcnBlock,
     GeneratedExclusion,
     HotspotRow,
+    KeyholeBudget,
     KeyholeSummary,
     NestedInstructionsBlock,
     PrescribedAction,
     RuntimeBlock,
+    SizeBlock,
     TestPressureBlock,
+    TestPressureUnavailable,
     UnderstandingBlock,
 )
 from lib.run_context_types import (
@@ -55,42 +58,46 @@ from lib.understanding_analysis import UnderstandingModule
 
 # Where each typed shape sits in run-context.json, as a field pattern. A list
 # shape is rooted at the list's pattern (list levels add no segment).
-ROOTS: dict[str, Any] = {
-    "dead_code": DeadCodeBlock,
-    "observability": ObservabilityBlock,
-    "doc_graph": DocGraphBlock,
-    "doc_staleness": DocStalenessBlock,
-    "stale_hubs": DocStalenessRow,
-    "test_pressure": TestPressureBlock,
-    "mutation_not_run_cap": MutationNotRunCap,
-    "behaviour": _BehaviourBlock,
-    "documentation": DocumentationBlock,
-    "documentation.stale_doc_on_complexity": DocUnit,
-    "documentation.unexplained_complexity": DocUnit,
-    "documentation.good_contracts": DocUnit,
-    "understanding": UnderstandingBlock,
-    "understanding.modules": UnderstandingModule,
-    "runtime": RuntimeBlock,
-    "derived_findings": DerivedFinding,
-    "attention": AttentionRow,
-    "prescribed_actions": PrescribedAction,
-    "keyhole_summary": KeyholeSummary,
-    "stats_summary.fn_ccn": FnCcnBlock,
-    "stats_summary.top_hotspots": HotspotRow,
-    "stats_summary.top_complex": HotspotRow,
-    "stats_summary.top_large": HotspotRow,
-    "excluded_generated": GeneratedExclusion,
-    "nested_instructions": NestedInstructionsBlock,
-    "agent_harness": AgentHarnessBlock,
-    "agent_environment": AgentEnvironmentBlock,
-    "claude_config": ClaudeConfigBlock,
-    "claude_config.findings": ClaudeConfigFinding,
-    "coverage_gate.gates": CoverageGate,
-    "gap_actions": GapAction,
-    "structure": StructureBlock,
-    "structure_drift.tier_0.empty_ownership_patterns": EmptyOwnershipPattern,
-    "sensitive_instruction_content.{}": SensitiveFinding,
-}
+ROOTS: tuple[tuple[str, Any], ...] = (
+    ("dead_code", DeadCodeBlock),
+    ("observability", ObservabilityBlock),
+    ("doc_graph", DocGraphBlock),
+    ("doc_staleness", DocStalenessBlock),
+    ("stale_hubs", DocStalenessRow),
+    ("test_pressure", TestPressureBlock),
+    ("mutation_not_run_cap", MutationNotRunCap),
+    ("behaviour", _BehaviourBlock),
+    ("documentation", DocumentationBlock),
+    ("documentation.stale_doc_on_complexity", DocUnit),
+    ("documentation.unexplained_complexity", DocUnit),
+    ("documentation.good_contracts", DocUnit),
+    ("understanding", UnderstandingBlock),
+    ("understanding.modules", UnderstandingModule),
+    ("runtime", RuntimeBlock),
+    ("derived_findings", DerivedFinding),
+    ("attention", AttentionRow),
+    ("prescribed_actions", PrescribedAction),
+    ("keyhole_summary", KeyholeSummary),
+    ("stats_summary.fn_ccn", FnCcnBlock),
+    ("stats_summary.top_hotspots", HotspotRow),
+    ("stats_summary.top_complex", HotspotRow),
+    ("stats_summary.top_large", HotspotRow),
+    ("excluded_generated", GeneratedExclusion),
+    ("nested_instructions", NestedInstructionsBlock),
+    ("agent_harness", AgentHarnessBlock),
+    ("agent_environment", AgentEnvironmentBlock),
+    ("claude_config", ClaudeConfigBlock),
+    ("claude_config.findings", ClaudeConfigFinding),
+    ("coverage_gate.gates", CoverageGate),
+    ("gap_actions", GapAction),
+    ("structure", StructureBlock),
+    ("structure_drift.tier_0.empty_ownership_patterns", EmptyOwnershipPattern),
+    ("sensitive_instruction_content.{}", SensitiveFinding),
+    ("test_pressure", TestPressureUnavailable),
+    ("stats_summary.loc", SizeBlock),
+    ("stats_summary.est_tokens", SizeBlock),
+    ("stats_summary.est_tokens.budget", KeyholeBudget),
+)
 
 _UNIONS = (Union, types.UnionType)
 
@@ -126,6 +133,21 @@ def _walk(pattern: str, tp: Any, seen: frozenset[Any]) -> Iterator[str]:
 def typed_string_fields() -> list[str]:
     """Every field pattern a typed run-context block can put a string at."""
     found: set[str] = set()
-    for root, tp in ROOTS.items():
+    for root, tp in ROOTS:
         found.update(_walk(root, tp, frozenset()))
     return sorted(found)
+
+
+def _typeddicts_in(tp: Any) -> Iterator[Any]:
+    if _is_typeddict(tp):
+        yield tp
+        for field_tp in get_type_hints(tp).values():
+            yield from _typeddicts_in(field_tp)
+    else:
+        for arg in get_args(tp):
+            yield from _typeddicts_in(arg)
+
+
+def reached_typeddicts() -> set[Any]:
+    """Every TypedDict the ``ROOTS`` walk visits, nested shapes included."""
+    return {td for _root, tp in ROOTS for td in _typeddicts_in(tp)}

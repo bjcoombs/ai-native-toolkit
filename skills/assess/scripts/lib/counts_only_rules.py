@@ -216,7 +216,8 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "observability.reachable.signals": DROP,
     },
     "coverage": {
-        "coverage_report.source": TOKEN,
+        "coverage_report.source": PATH,
+        "coverage_report.format": TOKEN,
         "coverage_gate.gates.tool": TOKEN,
         "coverage_gate.gates.form": DROP,
         "coverage_gate.gates.unit": TOKEN,
@@ -264,6 +265,9 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "config_drift.snapshots.kind": TOKEN,
         "review_reality.reason": DROP,
         "gate_cost_estimate.reason": DROP,
+        "gate_cost_estimate.assumption": DROP,
+        "capability_offers.build_system": TOKEN,
+        "capability_offers.build_files": PATH,
         "accretion_ratchet.reason": DROP,
     },
     "agent_harness": {
