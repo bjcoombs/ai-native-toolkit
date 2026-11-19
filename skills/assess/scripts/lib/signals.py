@@ -177,11 +177,10 @@ def read_plugin_version(toolkit_root: Path = TOOLKIT_ROOT) -> str:
         return "unknown"
 
 
-def toolkit_commit(toolkit_root: Path = TOOLKIT_ROOT) -> str | None:
-    """The toolkit checkout's HEAD, or None for an install that is not a git checkout."""
+def _git(root: Path, *args: str) -> str | None:
     try:
         out = subprocess.run(
-            ["git", "-C", str(toolkit_root), "rev-parse", "HEAD"],
+            ["git", "-C", str(root), *args],
             capture_output=True, text=True, check=True, timeout=30,
         )
     except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired):
@@ -189,9 +188,27 @@ def toolkit_commit(toolkit_root: Path = TOOLKIT_ROOT) -> str | None:
     return out.stdout.strip() or None
 
 
+def is_repo_root(path: Path) -> bool:
+    """True when ``path`` is itself a git work-tree root.
+
+    ``git -C`` walks up parent directories, so without this a non-git plugin
+    install or target nested in another checkout would be stamped with the
+    outer repository's HEAD.
+    """
+    top = _git(path, "rev-parse", "--show-toplevel")
+    return top is not None and Path(top).resolve() == path.resolve()
+
+
+def toolkit_commit(toolkit_root: Path = TOOLKIT_ROOT) -> str | None:
+    """The toolkit checkout's HEAD, or None for an install that is not a git checkout."""
+    if not is_repo_root(toolkit_root):
+        return None
+    return _git(toolkit_root, "rev-parse", "HEAD")
+
+
 def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT) -> SignalsStamp:
     """Toolkit commit, plugin version, scan date, window and the target's HEAD."""
-    head = git_commit_info(repo_root)
+    head = git_commit_info(repo_root) if is_repo_root(repo_root) else {}
     available = bool(head.get("available"))
     return {
         "toolkit_commit": toolkit_commit(toolkit_root),

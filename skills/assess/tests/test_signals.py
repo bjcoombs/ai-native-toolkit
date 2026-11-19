@@ -173,7 +173,10 @@ def test_unregistered_names_are_run_context_keys_the_core_assigns():
     """Guards the names-only list against typos: each is a key assess_core writes."""
     sources = (SCRIPTS / "assess_core.py").read_text(encoding="utf-8") + (
         SCRIPTS / "lib" / "context_blocks.py").read_text(encoding="utf-8")
+    registered = {spec.key for spec in reg.SCANS}
     for name in signals.UNREGISTERED_SCANS:
+        if name in registered:  # migrated; dropped at runtime, the core may no longer assign it
+            continue
         assert f'"{name}"' in sources, name
 
 
@@ -190,6 +193,13 @@ def test_window_parsing():
     for bad in ("0d", "6", "6m", "-1y", ""):
         with pytest.raises(ValueError):
             signals.parse_window(bad)
+
+
+def test_stamp_ignores_an_enclosing_repository(fixture_repo):
+    nested = fixture_repo / "sub"
+    nested.mkdir()
+    stamp = signals.build_stamp(nested, "6mo", toolkit_root=nested)
+    assert stamp["target_head"] is None and stamp["toolkit_commit"] is None
 
 
 def test_stamp_degrades_outside_git(tmp_path):

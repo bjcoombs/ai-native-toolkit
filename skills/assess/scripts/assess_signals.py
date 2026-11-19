@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -87,6 +88,9 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    # git status may refresh the target's index; optional locks off keeps the
+    # run from writing anything under the target's .git either.
+    os.environ.setdefault("GIT_OPTIONAL_LOCKS", "0")
     document = build_document(repo_root, requested, args.window)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(document, indent=2, default=str) + "\n", encoding="utf-8")
