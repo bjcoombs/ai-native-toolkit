@@ -86,9 +86,9 @@ class DistinctIds(TypedDict):
 
 
 _TOP_LEVEL_INCLUDE = re.compile(r"^include\s*:(.*)$")
-_INCLUDE_KEY = re.compile(
-    r"""(?:^|[\s{,\-])(project|component)\s*:\s*("[^"]*"|'[^']*'|(?:\$\{[^}]*\}|[^\s,}#])+)"""
-)
+_INCLUDE_VALUE = r"""("[^"]*"|'[^']*'|(?:\$\{[^}]*\}|[^\s,}#])+)"""
+_INCLUDE_KEY = re.compile(r"(?:^|[\s{,])(project|component)\s*:\s*" + _INCLUDE_VALUE)
+_BLOCK_KEY = re.compile(r"^(project|component)\s*:\s*" + _INCLUDE_VALUE)
 _REUSABLE_USES = re.compile(
     r"""\buses\s*:\s*["']?([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)/\.github/workflows/[^\s"'#]+"""
 )
@@ -125,15 +125,15 @@ def _component_source(raw: str) -> str:
     return path
 
 
-def _include_lines(text: str) -> list[tuple[int, str]]:
-    """The top-level ``include:`` section as (line number, text) pairs.
+def _include_lines(text: str) -> list[tuple[int, str, bool]]:
+    """The top-level ``include:`` section as (line number, text, inline) rows.
 
-    The section is the ``include:`` line itself (its inline value) and every
-    following line until the next top-level key. ``include:`` nested under a
-    job's ``trigger:`` is a child pipeline, not a shared source, and is
-    indented, so it never starts a section.
+    The section is the ``include:`` line itself (its inline value, ``inline``
+    true) and every following line until the next top-level key. ``include:``
+    nested under a job's ``trigger:`` is a child pipeline, not a shared source,
+    and is indented, so it never starts a section.
     """
-    out: list[tuple[int, str]] = []
+    out: list[tuple[int, str, bool]] = []
     inside = False
     for number, raw in enumerate(text.splitlines(), start=1):
         line = _strip_comment(raw).rstrip()
@@ -144,35 +144,78 @@ def _include_lines(text: str) -> list[tuple[int, str]]:
             match = _TOP_LEVEL_INCLUDE.match(line)
             inside = match is not None
             if match:
-                out.append((number, match.group(1)))
+                out.append((number, match.group(1).strip(), True))
             continue
         if inside:
-            out.append((number, line))
+            out.append((number, line, False))
     return out
+
+
+def _flow_keys(text: str) -> list[tuple[str, str]]:
+    """``project`` / ``component`` keys of a flow-style include item.
+
+    Only keys one brace deep count - the item's own keys - so a nested
+    ``inputs: {project: x}`` is not read as a source.
+    """
+    keys: list[tuple[str, str]] = []
+    for match in _INCLUDE_KEY.finditer(text):
+        prefix = text[: match.start(1)]
+        if prefix.count("{") - prefix.count("}") == 1:
+            keys.append((match.group(1), match.group(2)))
+    return keys
+
+
+def _include_keys(text: str) -> list[tuple[int, str, str]]:
+    """(line, key, raw value) for each include item's own source key.
+
+    A block-style key counts only at the include item's own indentation, so
+    ``project:`` under a component's ``inputs:`` is an input, not a source.
+    """
+    keys: list[tuple[int, str, str]] = []
+    item_col: int | None = None
+    for number, line, inline in _include_lines(text):
+        if inline:
+            keys += [(number, k, v) for k, v in _flow_keys(line)]
+            continue
+        content = line.lstrip()
+        col = len(line) - len(content)
+        if content.startswith("-"):
+            rest = content[1:].lstrip()
+            col += len(content) - len(rest)
+            content = rest
+            item_col = col
+        if content.startswith(("{", "[")):
+            keys += [(number, k, v) for k, v in _flow_keys(content)]
+            continue
+        if item_col is None:
+            item_col = col
+        match = _BLOCK_KEY.match(content)
+        if match and col == item_col:
+            keys.append((number, match.group(1), match.group(2)))
+    return keys
 
 
 def gitlab_includes(text: str, path: str, tracked: bool) -> list[CiInclude]:
     """``include: project:`` / ``include: component:`` entries in a GitLab CI file."""
     entries: list[CiInclude] = []
-    for number, line in _include_lines(text):
-        for key, raw_value in _INCLUDE_KEY.findall(line):
-            value = _unquote(raw_value)
-            if not value:
-                continue
-            if key == "project":
-                source = value.strip("/")
-                kind: CiKind = "gitlab_project"
-            else:
-                source = _component_source(value)
-                kind = "gitlab_component"
-            entries.append({
-                "kind": kind,
-                "source": source,
-                "id": f"{kind}:{source.lower()}",
-                "path": path,
-                "line": number,
-                "tracked": tracked,
-            })
+    for number, key, raw_value in _include_keys(text):
+        value = _unquote(raw_value)
+        if not value:
+            continue
+        if key == "project":
+            source = value.strip("/")
+            kind: CiKind = "gitlab_project"
+        else:
+            source = _component_source(value)
+            kind = "gitlab_component"
+        entries.append({
+            "kind": kind,
+            "source": source,
+            "id": f"{kind}:{source.lower()}",
+            "path": path,
+            "line": number,
+            "tracked": tracked,
+        })
     return entries
 
 

@@ -31,8 +31,10 @@ include:
     ref: main
     file: '/templates/build.yml'
   - component: $CI_SERVER_FQDN/platform/components/sast@1.2.0
+    inputs:
+      project: my-app                 # a component input, not a source
   - template: Auto-DevOps.gitlab-ci.yml
-  - { project: "security/scanners", file: "scan.yml" }
+  - { project: "security/scanners", file: "scan.yml", inputs: {project: nested} }
   # - project: commented/out
 build:
   script: make
@@ -52,7 +54,7 @@ def test_gitlab_includes_report_project_and_component_sources() -> None:
          "gitlab_component:platform/components/sast"),
         ("gitlab_project", "security/scanners", "gitlab_project:security/scanners"),
     ]
-    assert [e["line"] for e in entries] == [4, 7, 9]
+    assert [e["line"] for e in entries] == [4, 7, 11]
 
 
 def test_gitlab_component_host_and_version_are_dropped() -> None:
@@ -63,6 +65,17 @@ def test_gitlab_component_host_and_version_are_dropped() -> None:
     )
     ids = {e["id"] for e in gitlab_includes(text, ".gitlab-ci.yml", tracked=True)}
     assert ids == {"gitlab_component:g/p/lint"}
+
+
+def test_gitlab_mapping_form_reads_keys_at_its_own_indentation() -> None:
+    text = (
+        "include:\n"
+        "  project: g/p\n"
+        "  file: x.yml\n"
+        "  inputs:\n"
+        "    component: not/a/source\n"
+    )
+    assert [e["source"] for e in gitlab_includes(text, "f", True)] == ["g/p"]
 
 
 def test_gitlab_inline_include_and_no_include() -> None:
