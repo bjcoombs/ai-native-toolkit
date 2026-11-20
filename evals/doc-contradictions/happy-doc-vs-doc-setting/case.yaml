@@ -1,0 +1,4 @@
+schema_version: "1"
+name: happy-doc-vs-doc-setting
+context:
+  scaffold_script: scaffold.sh
