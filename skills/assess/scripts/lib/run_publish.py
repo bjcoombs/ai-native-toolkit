@@ -1,6 +1,7 @@
 """The side effects of a run, applied after every scan has finished.
 
-The scan table only reads. This step writes: the artifact directory, the
+The scan table only reads, so ``assess_core.build_run_context`` writes nothing;
+``assess_core.build_and_publish_run`` (the CLI run) calls this step. It writes: the artifact directory, the
 ``.assess/`` wiki (hotspot pages, index.md, the log.md entry and its checksum
 chain, first-flagged.json), the findings badge, the committed findings snapshot
 (findings.json) and ``run-context.json``. The

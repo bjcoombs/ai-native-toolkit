@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from lib import diff_reliability
 
 
@@ -56,7 +56,7 @@ def test_diff_unreliable_when_prior_snapshot_lacks_version_stamp(tmp_path: Path)
         "files_scored": 55, "loc": {}, "ccn": {},
         "top_hotspots": [{"path": "src/new.go", "loc": 400, "ccn": 18, "commits": 4}],
     }))
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["diff_reliable"] is False
     assert ctx["diff_version_note"] == "version not stamped in prior snapshot"
     assert ctx["diff_trend_reset"] is False
@@ -73,7 +73,7 @@ def test_diff_reliable_when_plugin_versions_match(tmp_path: Path) -> None:
     }
     (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(stats))
     (assess_dir / "complexity-stats.json").write_text(json.dumps(stats))
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["diff_reliable"] is True
     assert ctx["diff_version_note"] is None
 
@@ -109,7 +109,7 @@ def test_diff_reliable_across_patch_bump_keeps_gate_armed(tmp_path: Path) -> Non
         {"plugin_version": "1.54.0", **stamp},
         {"plugin_version": "1.54.1", **stamp},
     )
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["diff_reliable"] is True
     assert ctx["diff_version_note"] is None
     assert ctx["diff_trend_reset"] is False
@@ -123,7 +123,7 @@ def test_diff_unreliable_on_lizard_version_change_names_tool(tmp_path: Path) -> 
         {"plugin_version": "1.54.1", "schema_version": 1, "lizard_version": "1.22.0"},
         {"plugin_version": "1.54.1", "schema_version": 1, "lizard_version": "1.23.0"},
     )
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["diff_reliable"] is False
     assert "lizard" in ctx["diff_version_note"]
     assert "1.22.0->1.23.0" in ctx["diff_version_note"]
@@ -139,7 +139,7 @@ def test_diff_major_bump_resets_trend(tmp_path: Path) -> None:
         {"plugin_version": "1.54.1", **stamp},
         {"plugin_version": "2.0.0", **stamp},
     )
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["diff_reliable"] is False
     assert ctx["diff_trend_reset"] is True
     assert "major version changed 1.54.1->2.0.0" in ctx["diff_version_note"]
@@ -153,7 +153,7 @@ def test_diff_unreliable_on_schema_change(tmp_path: Path) -> None:
         {"plugin_version": "1.54.1", "schema_version": 1, "lizard_version": "1.23.0"},
         {"plugin_version": "1.54.2", "schema_version": 2, "lizard_version": "1.23.0"},
     )
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["diff_reliable"] is False
     assert "schema version changed 1->2" in ctx["diff_version_note"]
     assert ctx["diff_trend_reset"] is False
@@ -168,7 +168,7 @@ def test_tool_versions_surface_in_run_context(tmp_path: Path) -> None:
         {"plugin_version": "1.54.1", "schema_version": 1, "lizard_version": "1.23.0",
          "scc_version": "3.7.0"},
     )
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["tool_versions"] == {"lizard": "1.23.0", "scc": "3.7.0"}
     assert ctx["prior_tool_versions"] == {"lizard": "1.23.0"}
     assert ctx["schema_version"] == 1

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from lib.agent_harness import _on_block, _safe_url, scan_agent_harness
 
 ZWSP, RLO, BOM = chr(0x200B), chr(0x202E), chr(0xFEFF)
@@ -508,7 +508,7 @@ def test_build_run_context_carries_the_block(git_repo) -> None:
     _write(repo, "app.py", "x = 1\n")
     _json(repo, ".mcp.json", {"mcpServers": {"gh": {"command": "gh-mcp"}}})
     commit("init")
-    ctx = build_run_context(repo_root=repo, run_date="2026-10-09")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-10-09")
     block = ctx["agent_harness"]
     assert block["executes_by_kind"] == {"mcp_server": 1}
     assert block["findings"] == []

@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 import assess_core
-from assess_core import build_run_context
+from assess_core import build_and_publish_run, build_run_context
 from assess_core_helpers import _minimal_repo, _seed_assess, _write_min_stats
 from lib import artifact_schema, core_scans
 
@@ -31,7 +31,7 @@ def test_archetype_block_emitted_for_software_repo(git_repo) -> None:
     (repo / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
     commit("software repo")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     arch = ctx["archetype"]
     assert arch["available"] is True
     assert arch["archetype"] == "software"
@@ -54,7 +54,7 @@ def test_archetype_block_detects_knowledge_base(git_repo) -> None:
     )
     commit("knowledge base")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     arch = ctx["archetype"]
     assert arch["archetype"] == "knowledge-base"
     assert arch["na_layers"] == [2, 3, 4, 5, 6, 7]
@@ -76,7 +76,7 @@ def test_archetype_override_marker_suppresses(git_repo) -> None:
     )
     commit("override to software")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     arch = ctx["archetype"]
     assert arch["archetype"] == "software"
     assert arch["detected_via"] == "override"
@@ -107,7 +107,7 @@ def test_build_run_context_first_run(
     # interactive regardless of where the suite runs (locally or under CI).
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.delenv("ASSESS_NON_INTERACTIVE", raising=False)
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
 
     assert ctx["run_date"] == "2026-05-22"
     assert ctx["stats_summary"]["files_scored"] == 50
@@ -129,7 +129,7 @@ def test_build_run_context_first_run(
     # Explicit headless signal: every offer is pre-recorded as skipped and the
     # orchestrator makes zero prompts. This is the wiring the CLI --non-interactive
     # flag drives, verified independent of the ambient environment.
-    ctx_headless = build_run_context(
+    ctx_headless = build_and_publish_run(
         repo_root=repo, run_date="2026-05-22", non_interactive=True
     )
     assert ctx_headless["interactive"] is False
@@ -153,7 +153,7 @@ def test_build_run_context_surfaces_decline_markers(tmp_path: Path) -> None:
         "plugin_version": "0.9.0",
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
 
     markers = ctx["decline_markers"]
     assert len(markers) == 1
@@ -193,7 +193,7 @@ def test_build_run_context_second_run_sees_diff(tmp_path: Path) -> None:
     }
     (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["diff"]["graduated"] == 1
     assert ctx["diff"]["new"] == 1
 
@@ -210,7 +210,7 @@ def test_build_run_context_includes_anomalies_field(tmp_path: Path) -> None:
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "anomalies" in ctx
     codes = {a["code"] for a in ctx["anomalies"]}
     assert "ZERO_FILES_SCORED" in codes
@@ -232,7 +232,7 @@ def test_run_context_has_deterministic_keyhole_products(tmp_path: Path) -> None:
         "top_large": [{"path": "src/a.py", "loc": 100}],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
 
     # Task 2: deterministic findings markdown is present and well-formed.
     assert "findings_markdown" in ctx
@@ -274,7 +274,7 @@ def test_repo_root_not_in_ctx(tmp_path: Path) -> None:
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "repo_root" not in ctx
 
 
@@ -284,7 +284,7 @@ def test_readside_blocks_present_in_ctx(tmp_path: Path) -> None:
     (repo / "README.md").write_text("# Project\nsee [code](app.py)\n")
     (repo / "app.py").write_text("x = 1\n")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     for key in ("doc_graph", "doc_staleness", "stale_hubs", "dead_code", "observability"):
         assert key in ctx, f"missing read-side block: {key}"
     assert ctx["doc_graph"]["available"] is True
@@ -304,7 +304,7 @@ def test_keyhole_signal_failure_degrades_not_crashes(tmp_path: Path, monkeypatch
         raise RuntimeError("simulated structure failure")
 
     monkeypatch.setattr(core_scans, "analyze_structure", boom)
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-29")
     assert ctx["structure"]["available"] is False
     assert "failed" in ctx["structure"]["reason"]
     # The rest of the run is intact, including the other keyhole blocks.
@@ -321,7 +321,7 @@ def test_readside_scan_failure_degrades_not_crashes(tmp_path: Path, monkeypatch)
         raise RuntimeError("simulated scan failure")
 
     monkeypatch.setattr(core_scans, "build_doc_graph", boom)
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     assert ctx["doc_graph"]["available"] is False
     assert "failed" in ctx["doc_graph"]["reason"]
     # downstream blocks still present
@@ -333,12 +333,12 @@ def test_coverage_gate_block_reports_configured_threshold(tmp_path: Path) -> Non
     """The run context carries the coverage_gate block: absent by default, and
     the file, line and threshold once a fail_under is configured."""
     repo = _minimal_repo(tmp_path)
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     assert ctx["coverage_gate"]["enforced"] is False
     assert ctx["coverage_gate"]["gates"] == []
 
     (repo / ".coveragerc").write_text("[report]\nfail_under = 80\n")
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     gate = ctx["coverage_gate"]["gates"][0]
     assert ctx["coverage_gate"]["enforced"] is True
     assert (gate["file"], gate["line"], gate["threshold"]) == (".coveragerc", 2, 80.0)
@@ -359,7 +359,7 @@ def test_plugin_version_in_ctx(tmp_path: Path) -> None:
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "plugin_version" in ctx
     assert isinstance(ctx["plugin_version"], str)
     assert ctx["plugin_version"].count(".") >= 1
@@ -386,7 +386,7 @@ def test_config_excludes_apply_to_all_scans(tmp_path: Path) -> None:
     (repo / "regulatory-raw" / "notes.md").write_text("ref data note\n", encoding="utf-8")
     (repo / "regulatory-raw" / "loader.py").write_text("x = 1\n", encoding="utf-8")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-29")
 
     # Doc graph: only README.md is counted.
     assert ctx["doc_graph"]["doc_count"] == 1
@@ -424,7 +424,7 @@ def test_test_pressure_passes_hotspots_as_hot_files(tmp_path: Path, monkeypatch)
         return {"mutation_config_present": False, "cheap_heuristics": {}}
 
     monkeypatch.setattr(core_scans, "scan_test_pressure", fake_scan)
-    build_run_context(repo_root=repo, run_date="2026-05-29")
+    build_and_publish_run(repo_root=repo, run_date="2026-05-29")
     assert captured["hot_files"] == ["src/hot.py"]
     assert captured["opt_in"] is False  # read-only by default
 
@@ -441,7 +441,7 @@ def test_core_always_writes_deterministic_badge_linking_to_report(tmp_path: Path
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }), encoding="utf-8")
 
-    build_run_context(repo_root=repo, run_date="2026-06-12")
+    build_and_publish_run(repo_root=repo, run_date="2026-06-12")
     badge = json.loads((assess_dir / "badge.json").read_text(encoding="utf-8"))
     assert badge["label"] == "AI-readiness"
     assert "findings" in badge["message"]        # deterministic form
@@ -454,7 +454,7 @@ def test_core_always_writes_deterministic_badge_linking_to_report(tmp_path: Path
         "schemaVersion": 1, "label": "AI-readiness",
         "message": "7.0/8 · AI-Native", "color": "brightgreen",
     }), encoding="utf-8")
-    build_run_context(repo_root=repo, run_date="2026-06-13")
+    build_and_publish_run(repo_root=repo, run_date="2026-06-13")
     badge2 = json.loads((assess_dir / "badge.json").read_text(encoding="utf-8"))
     assert "findings" in badge2["message"]
     assert badge2["message"] != "7.0/8 · AI-Native"
@@ -600,7 +600,7 @@ def test_run_opt_in_mutation_degrades_on_scan_failure(tmp_path: Path, monkeypatc
 
 def test_run_context_carries_run_id_and_schema_version(tmp_path: Path) -> None:
     repo = _minimal_repo(tmp_path)
-    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
     assert ctx["artifact_schema_version"] == artifact_schema.ARTIFACT_SCHEMA_VERSION == "1.14.0"
     # run_id shape: YYYYMMDDHHMMSS-<8 hex>
     run_id = ctx["run_id"]
@@ -615,15 +615,15 @@ def test_run_context_carries_run_id_and_schema_version(tmp_path: Path) -> None:
 
 def test_run_context_run_id_is_unique_per_run(tmp_path: Path) -> None:
     repo = _minimal_repo(tmp_path)
-    a = build_run_context(repo_root=repo, run_date="2026-07-07")["run_id"]
-    b = build_run_context(repo_root=repo, run_date="2026-07-07")["run_id"]
+    a = build_and_publish_run(repo_root=repo, run_date="2026-07-07")["run_id"]
+    b = build_and_publish_run(repo_root=repo, run_date="2026-07-07")["run_id"]
     assert a != b
 
 
 def test_run_context_run_id_stamped_on_badge(tmp_path: Path) -> None:
     """The deterministic fallback badge carries the run_id (no prior badge)."""
     repo = _minimal_repo(tmp_path)
-    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
     badge = json.loads((repo / ".assess" / "badge.json").read_text())
     assert badge["run_id"] == ctx["run_id"]
 
@@ -647,7 +647,7 @@ def test_override_contradiction_fires_finding_end_to_end(git_repo) -> None:
     )
     commit("init")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
     arch = ctx["archetype"]
     assert arch["archetype"] == "software"  # override wins
     assert arch["override_contradicts_signals"] is True
@@ -669,7 +669,7 @@ def test_no_override_no_contradiction_finding_end_to_end(git_repo) -> None:
     (repo / "pyproject.toml").write_text("[project]\nname='app'\n")
     commit("init")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
     assert ctx["archetype"]["override_contradicts_signals"] is False
     finding = next(
         f for f in ctx["derived_findings"]
@@ -703,22 +703,64 @@ def _gap_repo(tmp_path: Path, *, lcov: bool, linked_docs: int) -> Path:
 
 
 def test_run_context_gap_actions_coverage_first_names_hotspots(tmp_path: Path) -> None:
-    ctx = build_run_context(repo_root=_gap_repo(tmp_path, lcov=False, linked_docs=9),
+    ctx = build_and_publish_run(repo_root=_gap_repo(tmp_path, lcov=False, linked_docs=9),
                             run_date="2026-05-22")
     assert [g["signal"] for g in ctx["gap_actions"]] == ["coverage_report"]
     assert sorted(ctx["gap_actions"][0]["paths"]) == ["src/mid.py", "src/zeta.py"]
 
 
 def test_run_context_gap_actions_empty_with_coverage_and_reachable_docs(tmp_path: Path) -> None:
-    ctx = build_run_context(repo_root=_gap_repo(tmp_path, lcov=True, linked_docs=9),
+    ctx = build_and_publish_run(repo_root=_gap_repo(tmp_path, lcov=True, linked_docs=9),
                             run_date="2026-05-22")
     assert ctx["gap_actions"] == []
 
 
 def test_run_context_gap_actions_flags_low_doc_reachability(tmp_path: Path) -> None:
-    ctx = build_run_context(repo_root=_gap_repo(tmp_path, lcov=True, linked_docs=2),
+    ctx = build_and_publish_run(repo_root=_gap_repo(tmp_path, lcov=True, linked_docs=2),
                             run_date="2026-05-22")
     assert ctx["doc_graph"]["reachability_pct"] == 0.3
     gaps = ctx["gap_actions"]
     assert [g["signal"] for g in gaps] == ["doc_graph"]
     assert "docs/d8.md" in gaps[0]["paths"]
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# build_run_context has no file-system side effects (contract I557-1, #660)
+# ════════════════════════════════════════════════════════════════════════════
+
+def _tree(repo: Path) -> list[str]:
+    return sorted(
+        str(p.relative_to(repo)) for p in repo.rglob("*")
+        if p.is_file() and ".git" not in p.relative_to(repo).parts
+    )
+
+
+def test_build_run_context_writes_nothing_on_a_fresh_repo(git_repo) -> None:
+    """Called directly on a fresh committed repo with no .assess directory,
+    build_run_context returns the context and creates no file: the publish step
+    (index.md, log.md, badge.json, findings.json, run-context.json) is
+    ``publish_run``'s, run by ``build_and_publish_run`` and ``main``."""
+    repo, commit = git_repo
+    (repo / "app.py").write_text("def f():\n    return 1\n")
+    (repo / "CLAUDE.md").write_text("# Proj\n")
+    commit("init")
+    before = _tree(repo)
+
+    ctx = build_run_context(repo_root=repo, run_date="2026-11-20", non_interactive=True)
+
+    assert ctx["derived_findings"] is not None
+    assert not (repo / ".assess").exists()
+    assert _tree(repo) == before
+
+
+def test_build_and_publish_run_writes_the_artifacts(git_repo) -> None:
+    repo, commit = git_repo
+    (repo / "app.py").write_text("def f():\n    return 1\n")
+    commit("init")
+
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-11-20", non_interactive=True)
+
+    assess = repo / ".assess"
+    for name in ("run-context.json", "index.md", "log.md", "badge.json", "findings.json"):
+        assert (assess / name).is_file(), name
+    assert ctx["log_integrity"]["valid"] is True

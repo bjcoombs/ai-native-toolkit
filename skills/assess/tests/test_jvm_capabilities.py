@@ -232,6 +232,15 @@ def test_platform_wrapper_cordova_package_json_alone_is_not_jvm(
     assert detect_build_system(tmp_path) == (None, [])
 
 
+def test_cordova_root_needs_namespace_uri_not_bare_host(tmp_path: Path) -> None:
+    # A config.xml that only mentions the Cordova host (say, a docs link) is
+    # not in the Cordova namespace, so platforms/android/ still counts.
+    _cordova_app(tmp_path, config_xml=False)
+    _write(tmp_path, "config.xml",
+           '<!-- see https://cordova.apache.org/docs --><widget></widget>')
+    assert detect_build_system(tmp_path)[0] == "gradle"
+
+
 @pytest.mark.parametrize("package", ["react-native", "@capacitor/android"])
 def test_platform_wrapper_platforms_android_other_wrapper_package_counts(
         tmp_path: Path, package: str) -> None:

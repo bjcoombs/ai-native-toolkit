@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 import lib.scan_registry as reg
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from lib.claude_config import FileKind, check_file, parse_frontmatter, scan_claude_config
 from lib.claude_config_fields import (
     AGENT_FIELDS,
@@ -429,7 +429,7 @@ def _run_context_without(repo: Path, drop: bool) -> dict:
     original = reg.SCANS
     reg.SCANS = specs
     try:
-        build_run_context(repo_root=repo, run_date="2026-10-08")
+        build_and_publish_run(repo_root=repo, run_date="2026-10-08")
     finally:
         reg.SCANS = original
     return json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
@@ -461,7 +461,7 @@ def test_build_run_context_carries_the_block_for_a_scoped_run(git_repo) -> None:
     _write(repo, "svc/.claude/agents/a.md", _fm("color: indigo"))
     _write(repo, "svc/app.py", "x = 1\n")
     commit("init")
-    ctx = build_run_context(repo_root=repo, run_date="2026-10-08", scope=Path("svc"))
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-10-08", scope=Path("svc"))
     block = ctx["claude_config"]
     assert block["available"] is True
     assert _rows(block) == [("unsupported_value", "svc/.claude/agents/a.md", 2, "color", "indigo")]

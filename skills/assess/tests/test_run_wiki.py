@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from lib import run_wiki
 from lib.wiki_writer import (
     hotspot_page_source_path,
@@ -46,7 +46,7 @@ def test_unfinalized_hotspot_page_uses_neutral_pointer_not_placeholder(tmp_path:
         "top_large": [{"path": "src/a.go", "loc": 500}],
     }))
 
-    build_run_context(repo_root=repo, run_date="2026-05-22")
+    build_and_publish_run(repo_root=repo, run_date="2026-05-22")
 
     page = (assess_dir / "hotspots" / f"{slug_for_path('src/a.go')}.md").read_text(encoding="utf-8")
     # The "## Suggested actions" heading the finalizer keys off must survive.
@@ -84,7 +84,7 @@ def test_hotspot_page_carries_growth_profile_when_file_accretes(git_repo) -> Non
         "top_large": [{"path": "src/grower.go", "loc": 200}],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-06-17")
     # Precondition: the scan actually flagged this file (else the test proves nothing).
     flagged = {f["path"] for f in ctx["accretion_ratchet"].get("files", [])}
     assert "src/grower.go" in flagged
@@ -123,7 +123,7 @@ def test_hotspot_page_omits_growth_profile_when_scan_unavailable(tmp_path: Path)
         "top_large": [{"path": "src/a.go", "loc": 500}],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-06-17")
     assert ctx["accretion_ratchet"]["available"] is False
 
     page = (assess_dir / "hotspots" / f"{slug_for_path('src/a.go')}.md").read_text(
@@ -184,7 +184,7 @@ def test_graduated_index_row_carries_current_metrics(tmp_path: Path) -> None:
     }
     (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
 
-    build_run_context(repo_root=repo, run_date="2026-05-29")
+    build_and_publish_run(repo_root=repo, run_date="2026-05-29")
     index = (assess_dir / "index.md").read_text(encoding="utf-8")
 
     # The graduated row must reflect reality: 1,096 LOC, ccn 172. NEVER 0.
@@ -227,7 +227,7 @@ def test_graduated_index_row_uses_dash_when_metrics_unknown(tmp_path: Path) -> N
     }
     (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
 
-    build_run_context(repo_root=repo, run_date="2026-05-29")
+    build_and_publish_run(repo_root=repo, run_date="2026-05-29")
     index = (assess_dir / "index.md").read_text(encoding="utf-8")
     legacy_row = next(line for line in index.splitlines() if "src/legacy.go" in line)
     # Sentinel "-" not "0" - never lie about the size.
@@ -249,7 +249,7 @@ def test_build_run_context_writes_hotspot_pages(tmp_path: Path) -> None:
         "top_large": [{"path": "src/foo.go", "loc": 500}],
     }))
 
-    build_run_context(repo_root=repo, run_date="2026-05-22")
+    build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     hotspots = list((assess_dir / "hotspots").iterdir())
     assert len(hotspots) == 1
     assert hotspots[0].name.startswith("src-foo-go-")
@@ -271,7 +271,7 @@ def test_briefing_includes_loc_ccn_commits_and_status(tmp_path: Path) -> None:
         "top_complex": [{"path": "src/foo.go", "ccn": 20}],
         "top_large": [{"path": "src/foo.go", "loc": 500}],
     }))
-    build_run_context(repo_root=repo, run_date="2026-05-22")
+    build_and_publish_run(repo_root=repo, run_date="2026-05-22")
 
     page = next((assess_dir / "hotspots").iterdir())
     content = page.read_text(encoding="utf-8")
@@ -322,7 +322,7 @@ def test_hotspot_page_shows_yes_when_sibling_test_exists(tmp_path: Path) -> None
         "top_hotspots": [{"path": "src/foo.go", "loc": 500, "ccn": 20, "commits": 5}],
         "top_complex": [], "top_large": [],
     }))
-    build_run_context(repo_root=repo, run_date="2026-05-22")
+    build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     content = next((assess_dir / "hotspots").iterdir()).read_text(encoding="utf-8")
     assert "Has test file | yes" in content
 
@@ -340,7 +340,7 @@ def test_commits_read_from_legacy_churn_field(tmp_path: Path) -> None:
         "top_hotspots": [{"path": "src/foo.go", "loc": 500, "ccn": 20, "churn": 33}],
         "top_complex": [], "top_large": [],
     }))
-    build_run_context(repo_root=repo, run_date="2026-05-22")
+    build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     content = next((assess_dir / "hotspots").iterdir()).read_text(encoding="utf-8")
     assert "33 commits" in content
     assert "Commits in churn window | 33" in content
@@ -371,7 +371,7 @@ def test_generated_header_exclusion_is_not_recorded_as_graduation(tmp_path: Path
     }
     (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
     assert ctx["diff"]["graduated"] == 1
     assert ctx["excluded_generated"] == [
         {"path": "db/schema.sql", "reason": "generated-header"}
@@ -405,7 +405,7 @@ def test_generated_header_free_name_glob_is_not_recorded_as_graduation(tmp_path:
     }
     (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-09-19")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-19")
     assert ctx["diff"]["graduated"] == 1
     index = (assess_dir / "index.md").read_text()
     assert "src/legacy.go" in index
@@ -437,14 +437,14 @@ def test_index_keeps_graduated_row_absent_from_later_diff(tmp_path: Path) -> Non
     # Run one: legacy graduates, new enters.
     (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(_stats([legacy])))
     (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats([new])))
-    build_run_context(repo_root=repo, run_date="2026-05-29")
+    build_and_publish_run(repo_root=repo, run_date="2026-05-29")
     index_one = (assess_dir / "index.md").read_text(encoding="utf-8")
     assert "graduated" in next(r for r in index_one.splitlines() if "src/legacy.go" in r)
 
     # Run two: new persists; legacy is in neither top_hotspots nor graduated.
     (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(_stats([new])))
     (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats([new_later])))
-    build_run_context(repo_root=repo, run_date="2026-06-05")
+    build_and_publish_run(repo_root=repo, run_date="2026-06-05")
     index_two = (assess_dir / "index.md").read_text(encoding="utf-8")
     legacy_row = next(r for r in index_two.splitlines() if "src/legacy.go" in r)
     assert "| graduated |" in legacy_row
@@ -485,7 +485,7 @@ def _run(repo: Path, top: list[dict], day: str, **extra: object) -> dict:
     if current.exists():
         (assess_dir / "complexity-stats.prior.json").write_text(current.read_text())
     current.write_text(json.dumps({**_stats(top), **extra}))
-    return build_run_context(repo_root=repo, run_date=day)
+    return build_and_publish_run(repo_root=repo, run_date=day)
 
 
 def _index_row(assess_dir: Path, path: str) -> str | None:
@@ -607,7 +607,7 @@ def test_every_live_hotspot_page_has_an_index_row(tmp_path: Path) -> None:
     (assess_dir / "index.md").write_text("# Assess Wiki Index\n\n| File |\n")
     (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats(
         [{"path": "src/foo.go", "loc": 500, "ccn": 20, "commits": 5}])))
-    build_run_context(repo_root=repo, run_date="2026-06-05")
+    build_and_publish_run(repo_root=repo, run_date="2026-06-05")
 
     index = (assess_dir / "index.md").read_text(encoding="utf-8")
     for page in (assess_dir / "hotspots").glob("*.md"):
@@ -631,7 +631,7 @@ def test_hotspot_page_names_worst_function_and_aggregate(tmp_path: Path) -> None
         {"path": "src/b.go", "loc": 400, "ccn": 30, "commits": 2,
          "max_fn_ccn": None, "max_fn_name": None},
     ])))
-    build_run_context(repo_root=repo, run_date="2026-06-05")
+    build_and_publish_run(repo_root=repo, run_date="2026-06-05")
     hot = assess_dir / "hotspots"
     a = (hot / f"{slug_for_path('src/a.py')}.md").read_text()
     b = (hot / f"{slug_for_path('src/b.go')}.md").read_text()
