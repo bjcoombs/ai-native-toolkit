@@ -38,14 +38,14 @@ The risk is still concentrated in `skills/assess/`: nine of the ten top hotspots
 
 [![Doc map](./doc-graph.svg)](./doc-graph.svg)
 
-All 135 docs are reachable, with no orphans, no broken links and no lying maps. Links alone reach 93%; backticked doc paths carry the rest.
+All 135 docs are reachable, with no orphans, no broken links and no lying maps. Links alone reach 94%; backticked doc paths carry the rest.
 
 <details>
 <summary>📈 Snapshot detail (commit, hotspots, navigability, lying maps)</summary>
 
 #### Complexity profile
 
-- **Measured at commit:** `3e966b6793c9` (2026-11-20)
+- **Measured at commit:** `6380fcaacee8` (2026-11-20)
 - **Files scored:** 326
 - **Churn window chosen:** last 12mo
 - **Complexity profile:** per-function ccn p95 9 (max 33, over 6,121 functions); file-aggregate ccn p95 147 (max 264); p95 est. tokens 8,939 (max 19,418; code 19,418, data 0); p95 NLOC 532 (max 1,227; code 1,227, data 0)
@@ -83,7 +83,7 @@ Coverage gate: `scripts/pyproject.toml:46` (`[tool.coverage.report] fail_under` 
 
 #### Doc navigability
 
-Of 135 docs, all are reachable from `CLAUDE.md`, `README.md` or `docs/index.md` by following links and backticked doc paths. There are no orphans (docs nothing links to or cites), one connected island and no broken links. Links alone reach 93%; backticked citations carry the rest. The first pass of this run found four orphans, the `prompt.md` of each `evals/doc-contradictions/` case. This branch links each from its case `README.md`.
+Of 135 docs, all are reachable from `CLAUDE.md`, `README.md` or `docs/index.md` by following links and backticked doc paths. There are no orphans (docs nothing links to or cites), one connected island and no broken links. Links alone reach 94%; backticked citations carry the rest. The first pass of this run found four orphans, the `prompt.md` of each `evals/doc-contradictions/` case. This branch links each from its case `README.md`.
 
 **Base docs per code directory:** the base-doc ratio is 0.333 (one in three code-containing directories holds its own base doc). `CLAUDE.md`, `skills/README.md` and the two `skills/assess/` READMEs cover the rest, so an agent still reaches them through a hub.
 

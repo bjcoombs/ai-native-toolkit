@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261120124339-d8481c65 artifact_schema_version=1.14.0 -->
+<!-- assess:run_id=20261120130057-2e2af36e artifact_schema_version=1.14.0 -->
 # Assess Wiki Index
 
 _Last updated: 2026-11-20_

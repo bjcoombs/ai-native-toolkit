@@ -172,8 +172,8 @@
 
 ---
 <!-- chain:08dc3a03e8e5e473 -->
-<!-- assess:run_id=20261120124339-d8481c65 artifact_schema_version=1.14.0 -->
-## 2026-11-20 (v1.225.0, run d8481c65)
+<!-- assess:run_id=20261120130057-2e2af36e artifact_schema_version=1.14.0 -->
+## 2026-11-20 (v1.225.0, run 2e2af36e)
 
 - **Files scored:** 326
 - **AI Readiness:** 7.5 / 8 (AI-Native)
@@ -184,4 +184,4 @@
 [Full report](./assess-report.md)
 
 ---
-<!-- chain:0ef38a53a6937073 -->
+<!-- chain:aa22539638f12da6 -->
