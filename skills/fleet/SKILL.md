@@ -53,9 +53,11 @@ no third-party dependencies.
 when some repositories failed (each is a `failed` row; stderr prints the count
 and the failed ids). `2`: usage error - no `ROOT` and no `--from-list`, a root
 or list that does not exist, no repositories found, `--out` inside a target, an
-invalid `--rubric` or `--settings`, an unknown scan, a bad window, or a `DIR`
-that cannot be created (checked before any scan, so `--delete-after` never
-removes a clone whose results could not be written).
+invalid `--rubric` or `--settings` (a settings directory with no `*.json` fragment
+file included), a list entry whose `~user` cannot be expanded, an unknown scan, a bad
+window, or a `DIR` that cannot be created or written to (checked before any scan, so
+`--delete-after` never removes a clone whose results could not be written). A window
+reaching back before year 1 is accepted: every dated `HEAD` is inside it.
 
 ## Output: `repos.jsonl`
 
@@ -98,7 +100,7 @@ Logic: `skills/assess/scripts/lib/fleet_groups.py`.
 | `shared_tooling_repos` | Repositories whose `shared_tooling` block is available: the evidence the two counts below rest on. |
 | `distinct_ci_sources`, `distinct_marketplaces` | Distinct shared CI sources and agent marketplaces the group's scanned repositories reference (`shared_tooling` ids, git-tracked files only). A marketplace manifest and a settings entry naming it count once. `null` when `shared_tooling_repos` is 0 (every scan failed or degraded, or `--scans` left the block out), never a false 0. |
 | `settings_scope` | The settings fragment joined: the one whose `scope` equals the group, else the nearest ancestor (a top-level GitLab group covers its subgroups); `null` when none matches. |
-| `settings` | That fragment's settings, each `{value, reason}` or `{available: false, reason}` when ghreport read it as `unknown`. Counts-only (the default) keeps a value that is a short token (`on`, `off`, `full`) and writes any value that is not a short token (a list of rule or ruleset names) as `set`, with reasons reduced to `unknown`; `--full` keeps them. `null` without a match. |
+| `settings` | That fragment's settings, each `{value, reason}` or `{available: false, reason}` when ghreport read it as `unknown`. Counts-only (the default) keeps a value that is a short token (`on`, `off`, `full`) and writes any value that is not a short token (a list of rule or ruleset names) as `set`, with an unavailable setting's reason reduced to `unknown` and a value's reason to `null`; `--full` keeps them. `null` without a match. |
 | `rubric_version` | The rubric's `version`; `null` without `--rubric`. |
 | `rubric` | One entry per rubric row: `id`, `scope`, `status` (`level` or `unknown`), `level` (a whole number, `null` when unknown), `aggregation` (the team rule, `{rule, share}`; `null` for org rows), `missing_signals`, `unknown_repos`. |
 
@@ -134,7 +136,7 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `rubric_version` | The `--rubric` file's `version`; `null` without `--rubric`. |
 | `counts_only` | `false` with `--full`. |
 | `paths_hashed` | `true` with `--hash-paths` or `--hash-salt` (never the salt). |
-| `scans` | The `--scans` names, sorted; `null` for all. |
+| `scans` | The `--scans` names, deduplicated and sorted (`--scans a,a` stamps `["a"]`); `null` for all. |
 | `repositories` | `selected` (every row), `scanned_ok` (rows `ok`), `failed` (rows `failed`) and `qualifying` (rows `ok` with `active` true). |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and

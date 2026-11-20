@@ -22,8 +22,9 @@ Exit codes:
        count is printed to stderr. Failures never change the exit code.
     2  usage error: no root and no --from-list, a root or list that does not
        exist, no repositories found, --out inside a target, an unreadable
-       --rubric or --settings, bad scan arguments, or an --out that cannot be
-       created
+       --rubric or --settings (a settings directory with no fragment files included),
+       a list entry whose ~user cannot be expanded, bad scan arguments, or an --out
+       that cannot be created or written (checked before any scan)
 
 Run:
     uv run fleet.py ROOT --out DIR [--rubric FILE] [--settings PATH] [--jobs N] [--window 6mo]
@@ -39,6 +40,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -172,8 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.settings is not None:
             settings = load_settings(Path(args.settings))
         if args.scans is not None:
-            scans = [s.strip() for s in args.scans.split(",") if s.strip()]
-            select_scans(scans)
+            scans = select_scans([s.strip() for s in args.scans.split(",") if s.strip()])
         if args.window is not None:
             parse_window(args.window)
         targets = _targets(args)
@@ -201,6 +202,11 @@ def main(argv: list[str] | None = None) -> int:
         out_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         print(f"error: cannot create --out {args.out}: {e.strerror}", file=sys.stderr)
+        return 2
+    try:
+        tempfile.TemporaryFile(dir=out_dir).close()  # writable: the results land after every scan
+    except OSError as e:
+        print(f"error: cannot write to --out {args.out}: {e.strerror}", file=sys.stderr)
         return 2
     deleter = CloneDeleter([out_dir, Path.cwd(), TOOLKIT_ROOT]) if args.delete_after else None
     rows = run_fleet(targets, options, args.jobs, after=deleter)

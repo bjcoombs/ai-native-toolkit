@@ -618,7 +618,8 @@ ghsync root or a list, one JSONL row per repository. `discover_root` walks
 `<root>/<path>/<repo>-main` at any depth (by layout, not by a valid `.git`, so a broken
 checkout is reported rather than skipped), never descending into a found repository,
 `worktree/` or a hidden directory. `targets_from_list` takes a checkout, its repository
-directory, a plain checkout or a root-relative path; `layout_id` gives both inputs the
+directory, a plain checkout or a root-relative path (an entry whose `~user` cannot be
+expanded is a `ValueError`, a usage error); `layout_id` gives both inputs the
 same `repo` id (the path under the root, prefixed with the root's name when one
 segment), a listed path outside the root falling back to `remote_path` (the `origin`
 URL's path) and then to its last two directory names. `scan_target` checks
@@ -649,11 +650,13 @@ shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanne
 only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each rubric row's level through `rubric.evaluate`, with
 no threshold config of its own. `load_settings` reads ghreport settings fragments
 (#565) from a file, an array or a directory (a render dir's `settings/`), keyed by
-`scope`; `settings_for` joins a group to the exact scope or the nearest ancestor;
+`scope`, and raises `SettingsError` on a directory with no `*.json` fragment file;
+`settings_for` joins a group to the exact scope or the nearest ancestor;
 `normalise_settings` keeps each `{value, reason}` or, for `unknown`, turns it into
 `{available: false, reason}` so `rubric.resolve_signal` reads it unavailable and the
 org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
-else `set`). Rubric data follows `rubric_signals`' namespaces: `repo_signals` is a
+else `set`; a value's reason `null`, an unavailable one's `unknown`). Rubric data follows
+`rubric_signals`' namespaces: `repo_signals` is a
 repository's `scans` map (a failed repository's is empty, so it is an unknown
 repository, never a passing one) and `settings_signals` the normalised settings plus
 the fragment's `scope` and `provider`. The CLI loads the rubric with
@@ -697,7 +700,7 @@ permission). Every signal of `rubrics/default.toml` has wording (tested).
 
 **`fleet_group_schema.py`**
 Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
-`RubricRowLevel` (lists and floats included, `settings` values as `{value}` or
+`RubricRowLevel` (lists and floats included, `settings` values as `{value, reason}` or
 `{available: false, reason}`). `tests/test_fleet_groups.py` fails when the checked-in
 file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
 from `skills/assess`.
@@ -713,9 +716,11 @@ reads (`FleetViewError` names the line), refuses a duplicate
 group and sorts by group; an empty file (no repository scanned) is `[]`, and the heat
 map exits 2 on it while the team pages write an empty index. `rubric_columns` gives the rubric row ids in rubric order (the
 same for every group; a run without `--rubric` is refused), `run_rubric_version` the one
-version, `check_rubric` matches a rubric file (titles, top levels) to the run, and
+version, `check_rubric` matches a rubric file (titles, top levels) to the run (a run
+without `--rubric` is refused as such, before any version check), and
 `compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,
-`delta` or `was`), marking the comparison not comparable across rubric versions.
+`delta` or `was`), marking the comparison not comparable across rubric versions (a run
+without a rubric is named as having none, not as rubric `None`).
 
 **`fleet_heatmap.py`**
 The leadership heat map behind `skills/fleet/scripts/heatmap.py` (#570), stdlib only (no
@@ -752,7 +757,8 @@ Whether a fleet repository is active (issue #569): `is_active` compares the chec
 `HEAD` committer date (`head_commit_date`, UTC, read
 from git with optional locks off) with `window_start(window, today)`, which counts back
 in whole days, months and years by calendar (clamped to month end), validating the
-window with `signals.parse_window`. Close to `ghsync --active-since`, not identical:
+window with `signals.parse_window`; a window reaching back before year 1 starts at
+`date.min`. Close to `ghsync --active-since`, not identical:
 ghsync counts 30-day months from now on platform dates. `scan_target` sets
 each ok row's `active` from `ScanOptions.active_since`, so it is read before
 `--delete-after` can remove the clone. An unreadable `HEAD` is not active.
@@ -760,7 +766,8 @@ each ok row's `active` from `ScanOptions.active_since`, so it is read before
 **`fleet_cleanup.py`**
 `--delete-after` (issue #569). `CloneDeleter` is a `run_fleet` `after` hook;
 `delete_clone` removes only the scanned `<repo>/<repo>-main` checkout, then `rmdir`s an
-empty `worktree/` and repository directory. `deletion_problem` fails closed with a
+empty `worktree/` and repository directory (a missing `worktree/` does not stop the
+repository directory's `rmdir`). `deletion_problem` fails closed with a
 keep-reason token (`KEEP_REASONS`): a non-ok row, a non-layout or symlinked path, a
 checkout that is not a main clone at its work-tree root, one holding a protected path
 (`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
@@ -1188,8 +1195,9 @@ some shell quoting and scores a 2,000-line script near zero. `complexity-treemap
 writes the rows (`UnreliableCcnRow`, defined here) as `complexity_unreliable` in the stats sidecar
 (`STATS_SCHEMA_VERSION` 7), `run_setup.py` copies them into `stats_summary`,
 `anomaly_detector.py` reports `COMPLEXITY_UNRELIABLE`, and `assess_report.py` labels
-scc-only CCN cells `~N` and flagged ones `(unreliable)`. Ranking is unchanged. Stdlib
-only. Tests: `tests/test_scc_coverage.py`.
+scc-only CCN cells `~N (approximate)` and flagged ones `~N (unreliable)` (the skills' prose
+adds the `ccn` prefix: `ccn ~N (approximate)`, `ccn ~N (unreliable)`). Ranking is
+unchanged. Stdlib only. Tests: `tests/test_scc_coverage.py`.
 
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
