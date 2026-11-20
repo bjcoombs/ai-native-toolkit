@@ -2140,7 +2140,7 @@ The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
 hyphenated stem also matched as underscores, plus the one cross-extension rule
 from issue #593: `<stem>.bats` for a `.sh` or extensionless script, and any
 `*.bats` file is a test; `run.sh` and an extensionless `run` share the flat
-key `run.bats`), the adjacent test directories
+key `run.bats` and are rivals for a parallel-tree `run.bats`, issue #635), the adjacent test directories
 (`__tests__/` / `tests/` / `test/` / `spec/`), and the is-this-a-test rule, plus a
 layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
