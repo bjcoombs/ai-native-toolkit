@@ -75,7 +75,12 @@ constant each.
 # lib.doc_ownership (issue #555). A repo-baseline row's subject_code_count is now
 # 0 (it owns no subject), the same value the documentation block reports.
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.10.0"
+# 1.11.0: complexity-stats.json gains complexity_unreliable, the scc-only files
+# whose ccn is an order of magnitude below their language's median density
+# (lib.scc_coverage, issue #590), and run-context.json copies it into
+# stats_summary and reports a COMPLEXITY_UNRELIABLE anomaly when it is non-empty.
+# Additive. STATS_SCHEMA_VERSION moves 6->7. No ranking or finding moves.
+ARTIFACT_SCHEMA_VERSION = "1.11.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -95,6 +100,9 @@ ARTIFACT_SCHEMA_VERSION = "1.10.0"
 # 4: the complexity join takes doc ownership from the doc-staleness rule
 #    (lib.doc_ownership, issue #555): a README beside a design doc owns the
 #    directory's code, and a non-base doc owns none by directory.
-# 5: a bats suite is a test file and credits its shell script (issue #593), so a
+# 5: a CLAUDE.md identical to its AGENTS.md below the header (H1 and leading
+#    HTML comments) is the informational mirrored_instruction_files, not the
+#    capping claude_shadows_agents (issue #589).
+# 6: a bats suite is a test file and credits its shell script (issue #593), so a
 #    co-located ``<stem>.bats`` can now produce self_referential_tests (E2).
-ASSESS_METHOD_VERSION = 5
+ASSESS_METHOD_VERSION = 6

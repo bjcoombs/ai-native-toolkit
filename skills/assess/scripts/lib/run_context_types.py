@@ -698,10 +698,11 @@ class NestedInstructionFile(TypedDict):
 class InstructionFinding(TypedDict):
     """One integrity finding in ``nested_instructions.findings``.
 
-    ``kind`` is ``dead_glob``, ``ignored_cursor_md``, ``claude_shadows_agents``
-    or ``repeats_parent``; ``detail`` is a one-line description and ``pattern``
-    (a dead rule's comma-joined patterns) / ``parent`` / ``overlap`` carry the
-    kind's evidence.
+    ``kind`` is ``dead_glob``, ``ignored_cursor_md``, ``claude_shadows_agents``,
+    ``repeats_parent`` or the informational ``mirrored_instruction_files``;
+    ``detail`` is a one-line description and ``pattern`` (a dead rule's
+    comma-joined patterns) / ``parent`` / ``overlap`` / ``diff_lines`` (lines a
+    shadowing pair differs by below the header) carry the kind's evidence.
     """
 
     kind: str
@@ -710,6 +711,7 @@ class InstructionFinding(TypedDict):
     pattern: NotRequired[str]
     parent: NotRequired[str]
     overlap: NotRequired[float]
+    diff_lines: NotRequired[int]
 
 
 class SkippedImport(TypedDict):
