@@ -115,8 +115,14 @@ _NOT_A_TOOL = frozenset({
     "on", "or", "pin", "pinned", "pins", "require", "requires", "run", "runs", "set",
     "than", "the", "to", "use", "uses", "using", "v", "version", "versions", "was",
     "with",
+    # Qualifiers: "Node LTS 18", "the runtime 3.12", "stable 1.78".
+    "current", "default", "engine", "latest", "lts", "max", "maximum", "min",
+    "minimum", "release", "runtime", "sdk", "stable", "toolchain",
 })
-_TOOL_ALIASES = {"nodejs": "node", "node.js": "node", "golang": "go", "python3": "python"}
+_TOOL_ALIASES = {
+    "nodejs": "node", "node.js": "node", "golang": "go", "python3": "python",
+    "cpython": "python",
+}
 _VERSION = re.compile(r"(?<![\d.])(\d+(?:\.\d+)+)(?!\.?\d)")
 
 # A count: an integer, not part of a version, decimal, list or percentage,

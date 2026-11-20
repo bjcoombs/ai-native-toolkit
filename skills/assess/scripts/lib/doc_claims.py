@@ -20,7 +20,9 @@ can disagree on) and a verifier per kind in ``CROSS_DOC_AGREE`` (two values ->
 whether they agree). Pins are grouped by pinned file and tool (issue #610):
 a shared file such as ``.tool-versions`` holds one version per tool, so a Node
 pin never contradicts a Python pin, even when one of them is stale or the file
-is missing. The tool is the claim's ``subject`` (the word before the version);
+is missing. A file in ``SINGLE_TOOL_PIN_FILES`` (``.nvmrc``, ``.python-version``)
+pins one tool, so its pins are never split. The tool is the claim's ``subject``
+(the word before the version);
 a pin naming no tool joins its file's one named tool, or, when the file's pins
 name several, the other unnamed pins only. A pin finding whose every version
 the file contains is still dropped (``_reconciled``), for two true pins whose
@@ -109,6 +111,14 @@ HISTORICAL_DOC_TREES = (
     "docs/design", "docs/superpowers", "docs/adr", "docs/adrs", "docs/decisions",
     "docs/rfcs", "docs/rfc",
 )
+# Version files that pin exactly one tool: every pin in one is about that tool,
+# however a document words it, so its pins are never split by subject.
+SINGLE_TOOL_PIN_FILES = frozenset({
+    ".nvmrc", ".node-version", ".python-version", ".ruby-version", ".go-version",
+    ".java-version", ".terraform-version", ".bun-version", ".deno-version",
+    ".php-version", ".elixir-version", ".erlang-version", ".crystal-version",
+    ".dvmrc", ".sdkmanrc", "rust-toolchain", "rust-toolchain.toml", "go.mod",
+})
 # List caps; the counts beside each list carry the full total.
 MAX_FAILURES = 50
 MAX_CONTRADICTIONS = 25
@@ -264,18 +274,22 @@ def find_contradictions(claims_by_file: Iterable[tuple[str, Path, list[Claim]]])
                     (claim.subject, _Site(rel, claim.line, value_of(claim), real)))
     found = (_contradiction(kind, path, sites)
              for (kind, path), subjects in sorted(groups.items())
-             for sites in _by_subject(subjects))
+             for sites in _by_subject(path, subjects))
     return [c for c in found if c is not None]
 
 
-def _by_subject(sites: list[tuple[str | None, _Site]]) -> list[list[_Site]]:
+def _by_subject(path: str, sites: list[tuple[str | None, _Site]]) -> list[list[_Site]]:
     """Split one (kind, path) group so only claims about the same subject meet.
 
-    A pin naming its tool is compared with the pins naming the same tool. A
-    claim naming none (every count; a pin with no tool word) joins the group's
-    one named subject, or, when the group names several, forms its own group:
-    which tool it means is a guess.
+    A file in ``SINGLE_TOOL_PIN_FILES`` pins one tool, so its pins are one
+    group whatever words name the tool ("Python 3.11", "CPython 3.12",
+    "Node LTS 18"). Elsewhere a pin naming its tool is compared with the pins
+    naming the same tool. A claim naming none (every count; a pin with no tool
+    word) joins the group's one named subject, or, when the group names several,
+    forms its own group: which tool it means is a guess.
     """
+    if Path(path).name in SINGLE_TOOL_PIN_FILES:
+        return [[site for _, site in sites]]
     named: dict[str, list[_Site]] = {}
     unnamed: list[_Site] = []
     for subject, site in sites:

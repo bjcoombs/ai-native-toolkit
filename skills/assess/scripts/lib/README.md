@@ -1927,7 +1927,9 @@ takes part. A skill's `SKILL.md` and `references/` claims resolve against
 exists), before verification and grouping. Pins group by pinned file and tool
 (issue #610): the tool is the pin claim's `subject`, the word before the version
 (`Node 20.11.0` -> `node`), so a Node pin never contradicts a Python pin in one
-`.tool-versions`, even when one is stale or the file is missing. A pin naming no
+`.tool-versions`, even when one is stale or the file is missing. A file in
+`SINGLE_TOOL_PIN_FILES` (`.nvmrc`, `.python-version`, ...) pins one tool, so its
+pins are one group however they word it (`CPython 3.12`, `Node LTS 18`). A pin naming no
 tool joins its file's one named tool, or the other unnamed pins when several are
 named. A pin finding whose every version the file contains is still dropped. The kind is a pair of tables, `CROSS_DOC_VALUE` (claim -> value) and
 `CROSS_DOC_AGREE` (two values -> agree), mirroring `_EXTRACTORS` and

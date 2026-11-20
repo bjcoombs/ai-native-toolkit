@@ -206,6 +206,19 @@ def test_a_same_tool_disagreement_in_a_shared_file_still_contradicts(tmp_path: P
         ["CLAUDE.md", 1, "20.11.0"], ["docs/b.md", 1, "18.19.0"]]
 
 
+@pytest.mark.parametrize(("pin_file", "a", "b"), [
+    (".python-version", "Python 3.11", "CPython 3.12"),
+    (".nvmrc", "Node 20.11.0", "Node LTS 18.19.0"),
+    (".python-version", "Python 3.11", "The runtime 3.12"),
+    (".ruby-version", "Ruby 3.2.2", "MRI 3.3.0"),
+])
+def test_a_single_tool_pin_file_is_never_split_by_wording(
+        tmp_path: Path, pin_file: str, a: str, b: str) -> None:
+    _write(tmp_path, "docs/a.md", f"{a} is pinned in `{pin_file}`.\n")
+    _write(tmp_path, "docs/b.md", f"{b} is pinned in `{pin_file}`.\n")
+    assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
+
+
 def test_a_pin_naming_no_tool_joins_the_one_tool_named(tmp_path: Path) -> None:
     _write(tmp_path, "docs/a.md", "Node 20.11.0 is pinned in `.nvmrc`.\n")
     _write(tmp_path, "docs/b.md", "Version 18.19.0 is pinned in `.nvmrc`.\n")

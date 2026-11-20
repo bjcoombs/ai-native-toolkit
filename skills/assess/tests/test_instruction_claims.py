@@ -465,6 +465,8 @@ def test_count_claim_is_extracted_with_its_number_and_pattern() -> None:
     ("Version 3.11 is pinned in `.python-version`.", None),
     ("It is 3.11, pinned in `.python-version`.", None),
     ("3.11 is pinned in `.python-version`.", None),
+    ("CPython 3.12 is pinned in `.python-version`.", "python"),
+    ("Node LTS 18.19.0 is pinned in `.nvmrc`.", None),
 ])
 def test_a_pin_keeps_the_tool_it_names_as_its_subject(sentence: str, subject: str | None) -> None:
     [claim] = extract_claims(sentence + "\n")
