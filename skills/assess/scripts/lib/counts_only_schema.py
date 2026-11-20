@@ -28,6 +28,7 @@ from lib.coverage_gate import CoverageGate
 from lib.doc_complexity_join import DocUnit
 from lib.doc_staleness import DocStalenessBlock, DocStalenessRow
 from lib.gap_actions import GapAction
+from lib.instruction_placement import InstructionPlacementBlock
 from lib.liveness_scan import ObservabilityBlock
 from lib.mutation_cap import MutationNotRunCap
 from lib.run_context_types import (
@@ -97,6 +98,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("sensitive_instruction_content.{}", SensitiveFinding),
     ("shared_tooling", SharedToolingBlock),
     ("prior_findings_snapshot", FindingsSnapshot),
+    ("instruction_placement", InstructionPlacementBlock),
     ("test_pressure", TestPressureUnavailable),
     ("stats_summary.loc", SizeBlock),
     ("stats_summary.est_tokens", SizeBlock),

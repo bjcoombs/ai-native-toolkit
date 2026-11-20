@@ -146,6 +146,22 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `sensitive_instruction_content.{}.category` | token |
 | `sensitive_instruction_content.{}.evidence` | dropped |
 
+## instruction_placement
+
+| Field | Kept as |
+|---|---|
+| `instruction_placement.flagged` | path (hashed when hashing is on) |
+| `instruction_placement.files.kind` | token |
+| `instruction_placement.files.relocatable.heading` | dropped |
+| `instruction_placement.files.relocatable.signals` | token |
+| `instruction_placement.files.relocatable.home.kind` | token |
+| `instruction_placement.files.relocatable.home.target` | path (hashed when hashing is on) |
+| `instruction_placement.loaded_in_full.kind` | token |
+| `instruction_placement.loaded_in_full.relocatable.heading` | dropped |
+| `instruction_placement.loaded_in_full.relocatable.signals` | token |
+| `instruction_placement.loaded_in_full.relocatable.home.kind` | token |
+| `instruction_placement.loaded_in_full.relocatable.home.target` | path (hashed when hashing is on) |
+
 ## nested_instructions
 
 | Field | Kept as |

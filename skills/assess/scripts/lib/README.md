@@ -1006,6 +1006,47 @@ cycle-guarded, tracked files inside the repo only; the rest listed in
 root `AGENTS.override.md` or `AGENTS.md` against 32 KiB, plus the heaviest
 root-down chain (`deepest_chain`). Tests: `tests/test_instruction_budget.py`.
 
+**`instruction_placement.py`**
+Per-section placement of instruction text (#559, part of #419), no model, no grade
+effect. `split_sections` splits a file on ATX headings outside fences (`fence_mask`, CommonMark closing: same character, at least the opening length, nothing after) and
+frontmatter, at the shallowest level (the next one down when a single heading is a
+document title); deeper headings roll into their section, text before the first
+heading is a section with an empty heading, and a file with no headings is one
+section. `classify` labels each section `always_on`, `fetch_on_need` or
+`unclassified` (counted as always-on), precision over recall: any always-on signal
+(`identity_or_rules` heading, `hard_rules` directive density, `pointer_list` of links
+to documents) keeps a section, even one a skill restates, so a guardrail is never
+told to become a pointer; otherwise a section whose substantive lines overlap an
+existing `SKILL.md` by `SKILL_OVERLAP_MIN_PCT` (the
+`instruction_content.readme_overlap_pct` line overlap) is `duplicates_skill`, and
+any other section moves only when
+`MIN_FETCH_SIGNALS` of `scoped_heading` (one tool, language or platform),
+`scoped_paths` (backticked paths mostly under one top-level directory),
+`command_reference` (fence density) and `long_section` fire. Each threshold is a
+named constant with its rationale. Suggested homes: `existing_skill` (the
+duplicated `SKILL.md`), `nested_instruction_file` (`<dir>/<basename>` for
+`scoped_paths`), `skill` (`<skills dir>/<slug>/SKILL.md`), and for agent and skill
+files `reference_doc` (`<skill dir>/references/<slug>.md`, or `null` for an agent), or
+`existing_skill` when the text is already in another skill. Between two skills the
+pointer is one-way: a skill counts as the duplicate's home only when its path sorts
+before the file's, so the lexically first keeps the canonical copy.
+`scan_instruction_placement(repo_root, instruction_files, nested_instructions,
+scope, excludes)` runs from the `scan_registry` table. The block, which #560 reads
+to score on always-on size:
+`{available, thresholds {always_on_lines, always_on_share,
+loaded_in_full_min_lines}, files[], flagged[], loaded_in_full[],
+loaded_in_full_considered}`. Each file record (`files`: the root instruction files
+that are present and not aliases, plus `nested_instructions.files`, each real file
+once; `loaded_in_full`: agent and `SKILL.md` files from
+`claude_config.loaded_config_files` over 200 lines, largest first) is `{path, kind
+(instruction | agent | skill), total_lines, always_on_lines, always_on_share,
+fetch_on_need_lines, unclassified_lines, sections_total, flagged, relocatable[],
+relocatable_total}`, where `flagged` (instruction files only; always `false` in `loaded_in_full`) is always-on lines over 200 and share over
+0.5 and each `relocatable` entry (largest first, capped at 10) is `{heading,
+start_line, end_line, lines, signals[], home {kind, target}}`. `flagged` at block
+level lists the instruction files only; `loaded_in_full` is informational.
+Tests: `tests/test_instruction_placement.py`.
+
 **`instruction_globs.py`**
 The scope frontmatter line parser (`paths`, `applyTo`, `globs`, `alwaysApply`; no
 YAML dependency) and the glob matcher behind `dead_glob`: brace sets, `**`, a
@@ -1500,6 +1541,8 @@ the key normalises to a documented one), `unsupported_value` (closed sets and th
 files_scanned, files_by_kind, finding_count, counts_by_kind, findings[]}`, or
 `{available: false, reason, snapshot_date}` when the root has no `.claude/` and no
 plugin manifest. It feeds Layer 0 evidence and is not counted in the badge.
+`loaded_config_files(root)` exposes the same discovery (plugin files first, then
+`.claude/`, deduplicated) as `(path, kind)` pairs for `instruction_placement`.
 Tests: `tests/test_claude_config.py` (fixture: `tests/fixtures/claude_config_plugin/`).
 
 **`agent_harness.py`**
