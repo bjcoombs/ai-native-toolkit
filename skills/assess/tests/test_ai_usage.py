@@ -162,7 +162,7 @@ def test_ai_assistant_excludes_automation_bots(trailer: str, assistant: bool) ->
     assert agent_identity.coauthors_have_ai_assistant(trailer) is assistant
 
 
-def test_registered_after_agent_environment() -> None:
+def test_registered_last() -> None:
     keys = [spec.key for spec in SCANS]
     assert keys[-1] == "ai_usage"
     spec = SCANS[-1]

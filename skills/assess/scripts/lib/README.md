@@ -1450,6 +1450,7 @@ the headless `--window`), or None for full history (`window: "all-time"`);
 fixed `LIMITS` tuple (squash merges, stripped or missing trailers, agents outside
 `COVERED_AGENTS`, automation bots not counted). Counts, a share and fixed strings only: no name, e-mail or
 subject. No git history degrades to `available: false`. Tests: `tests/test_ai_usage.py`.
+
 **`shared_tooling.py`**
 Shared CI sources and agent marketplaces, per repository (issue #566), the
 file-content half of the organisation-wide evidence in #550.
