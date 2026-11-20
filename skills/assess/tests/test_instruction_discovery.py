@@ -1,6 +1,7 @@
 """Tests for lib/instruction_discovery.py (issue #511): nested and path-scoped
 instruction files are discovered, graded with their scope, measured into the
-always-loaded budget, and checked for the four scope-integrity defects."""
+always-loaded budget, and checked for the four scope-integrity defects and
+the informational mirror (issue #589)."""
 from __future__ import annotations
 
 import os
@@ -146,6 +147,65 @@ def test_identical_or_imported_or_symlinked_agents_not_shadowed(git_repo: Any) -
     commit("aliases")
     block = _block(repo)
     assert [f for f in block["findings"] if f["kind"] == "claude_shadows_agents"] == []
+    # A byte-identical copy is a hand-kept mirror; a symlink or an import is not.
+    assert [(f["kind"], f["path"], f["parent"]) for f in block["findings"]] == [
+        ("mirrored_instruction_files", "same/CLAUDE.md", "same/AGENTS.md")]
+
+
+def _mirror(title: str, comment: str, body: str) -> str:
+    """The shape of a documented mirror: H1, blank, multi-line comment, body."""
+    return f"# {title}\n\n<!--\n  {comment}\n  Keep both files identical below the H1.\n-->\n\n{body}\n"
+
+
+MIRROR_BODY = "## Required reading\n\n" + ROOT_AGENTS + "\n\n## Build\nRun `make check`.\n"
+
+
+def test_mirror_differing_only_in_header_is_informational(git_repo: Any) -> None:
+    repo, commit = git_repo
+    _write(repo, "CLAUDE.md", _mirror("Project notes", "Read by Claude Code.", MIRROR_BODY))
+    _write(repo, "AGENTS.md", _mirror("AGENTS.md", "Read by agents.md tools.", MIRROR_BODY))
+    commit("documented mirror")
+    findings = _block(repo)["findings"]
+    assert [(f["kind"], f["path"], f["parent"]) for f in findings] == [
+        ("mirrored_instruction_files", "CLAUDE.md", "AGENTS.md")]
+    assert "diff_lines" not in findings[0]
+    assert "drift" not in findings[0]["detail"]
+
+
+def test_mirror_with_one_changed_body_line_still_shadows_with_count(git_repo: Any) -> None:
+    repo, commit = git_repo
+    changed = MIRROR_BODY.replace("Run `make check`.", "Run `make test`.")
+    _write(repo, "CLAUDE.md", _mirror("Project notes", "Read by Claude Code.", MIRROR_BODY))
+    _write(repo, "AGENTS.md", _mirror("AGENTS.md", "Read by agents.md tools.", changed))
+    commit("diverged mirror")
+    findings = _block(repo)["findings"]
+    assert [(f["kind"], f["path"]) for f in findings] == [("claude_shadows_agents", "CLAUDE.md")]
+    assert findings[0]["diff_lines"] == 1
+    assert "1 line(s)" in findings[0]["detail"]
+
+
+def test_mirror_lines_strips_only_the_leading_header() -> None:
+    body = "## A\n# Not a title\n<!-- inline -->\ntext"
+    assert discovery.mirror_lines("<!-- c -->\n# T\n\n<!-- d\n e -->\n" + body) == [
+        "## A", "# Not a title", "<!-- inline -->", "text"]
+    # An unterminated comment is body, not a header that swallows the file.
+    assert discovery.mirror_lines("# T\n<!-- open\nrule one") == ["<!-- open", "rule one"]
+    # Whitespace collapses and blank lines go, so reflowed spacing still matches.
+    assert discovery.mirror_lines("a   b\n\n\n  c ") == ["a b", "c"]
+
+
+def test_diff_line_count() -> None:
+    assert discovery.diff_line_count(["a", "b", "c"], ["a", "b", "c"]) == 0
+    assert discovery.diff_line_count(["a", "b", "c"], ["a", "x", "c"]) == 1
+    assert discovery.diff_line_count(["a", "b"], ["a", "b", "c", "d"]) == 2
+
+
+def test_empty_pair_reports_nothing(git_repo: Any) -> None:
+    repo, commit = git_repo
+    _write(repo, "pkg/CLAUDE.md", "# Title only\n")
+    _write(repo, "pkg/AGENTS.md", "")
+    commit("empty pair")
+    assert _block(repo)["findings"] == []
 
 
 def test_root_shadowing_reported(git_repo: Any) -> None:
@@ -155,6 +215,7 @@ def test_root_shadowing_reported(git_repo: Any) -> None:
     commit("root pair")
     findings = _block(repo)["findings"]
     assert [(f["kind"], f["path"]) for f in findings] == [("claude_shadows_agents", "CLAUDE.md")]
+    assert findings[0]["diff_lines"] == 1
 
 
 def test_agents_only_root_feeds_claude_budget_and_override_wins_for_codex(git_repo: Any) -> None:
