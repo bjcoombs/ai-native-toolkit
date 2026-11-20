@@ -69,6 +69,8 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org meridianhub --root ~/dev/gith
 | `--dry-run` | Show what would be cloned/updated without making changes. On GitLab it creates no directory and writes no `.gh_archived_repos`; on GitHub it still refreshes `.gh_archived_repos` in the root |
 | `--limit N` | Process only the first N repos (useful for a quick test) |
 | `--quiet` | Suppress per-repository chatter, including the `Cloning` / `Cloned` lines; keep failures and the final summary |
+| `--porcelain-json` | Like `--porcelain`, but one JSON object per line: `path`, `default_branch`, `last_activity_at`, `head_committed_at`, `archived`, `forked_from` (path or `null`), `mirror` and `head_sha`. Reads each default-branch head (one API call per repository). See [Active repositories and metadata](#active-repositories-and-metadata) |
+| `--active-since DURATION` | Keep only repositories with a default-branch commit inside the window (`90d`, `2w`, `6mo`, `1y`). With `--dry-run`, prints qualifying and total counts per group. See [Active repositories and metadata](#active-repositories-and-metadata) |
 | `--partial` | Shorthand for `--filter blob:none` |
 | `--filter SPEC` | New clones only: pass `--filter=SPEC` to `git clone` (after `--` on `gh repo clone`). `blob:none` keeps full history and fetches file contents only for the checkout. See [Analysis-only mirrors](#analysis-only-mirrors) |
 | `--shallow-since DATE` | New clones only: pass `--shallow-since=DATE` to `git clone`, cutting history before DATE (single-branch). See [Analysis-only mirrors](#analysis-only-mirrors) |
@@ -145,6 +147,42 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab --host gitlab.exa
 
 Step 2 builds the same layout as a discovery run and makes no API call.
 Edit the list to drop projects; `--limit` applies to it too.
+
+## Active repositories and metadata
+
+For a fleet measurement across hundreds of repositories, `--active-since`
+drops the dormant ones and `--porcelain-json` hands each repository's
+metadata to the next tool, so it does not have to call the API again:
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab --host gitlab.example.com --porcelain-json --active-since 6mo > projects.jsonl
+bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org my-org --dry-run --active-since 90d
+```
+
+- **Active means a commit on the default branch.** Discovery's own
+  activity date is only a prefilter: GitHub's `pushed_at` moves for a
+  push to any branch, and GitLab's `last_activity_at` moves for issue and
+  merge request activity too. A repository whose activity date is older
+  than the window is dropped without another call; every other one is
+  confirmed with the committed date of its default branch's head commit,
+  one API call each. A repository whose head cannot be read is dropped
+  with a warning on stderr.
+- **Durations** are `Nd`, `Nw`, `Nmo` (30 days) or `Ny` (365 days),
+  counted back from now.
+- **`--dry-run --active-since`** prints the qualifying and total counts per
+  GitLab group, where a project counts in each group whose listing
+  returned it (its own group and any group it is shared into). On GitHub,
+  where teams overlap, it prints one count for the whole org or account.
+  These lines print under `--quiet` too.
+- **`--porcelain-json` fields.** `last_activity_at` is GitHub's `pushed_at`
+  or GitLab's `last_activity_at`. `forked_from` is the parent's path
+  (`owner/name` on GitHub) or `null`. `mirror` is `true` or `false`, or
+  `null` when the token cannot read it (GitLab shows it only to some
+  roles); `null` never means "not a mirror". `head_sha` and
+  `head_committed_at` are `null` when the head could not be read.
+- **Plain `--porcelain` is unchanged**: one path per line, no extra API
+  calls, so `/ghreport` and `--from-list` keep working. Neither new flag
+  works with `--from-list`, which makes no API call to read metadata from.
 
 ## Analysis-only mirrors
 

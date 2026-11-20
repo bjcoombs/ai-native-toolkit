@@ -7,7 +7,10 @@ checks: ``tests/test_signals.py`` fails when ``SCHEMA_PATH`` differs from
 
     cd skills/assess && uv run --locked python scripts/lib/signals_schema.py
 
-The envelope is strict (every stamp field, no extra top-level keys). Per-scan
+The envelope is strict (every stamp field, no extra top-level keys). The
+``scans`` map names only the scans the runner knows (``signals.known_scans``),
+so the schema publishes the block namespace rubric signal paths are checked
+against (``lib/rubric_signals.py``); regenerate after adding a scan. Per-scan
 blocks stay open objects - each scan owns its own shape - except that a block
 reporting ``"available": false`` must carry a string ``reason``.
 """
@@ -16,6 +19,7 @@ from __future__ import annotations
 import json
 import sys
 import types
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Union, get_args, get_origin, get_type_hints, is_typeddict
 
@@ -23,6 +27,8 @@ if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lib.run_context_types import JsonDict, SignalsDocument  # noqa: E402
+from lib.scan_registry import SCANS, ScanSpec  # noqa: E402
+from lib.signals import known_scans  # noqa: E402
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "references" / "signals.schema.json"
 SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/assess/references/signals.schema.json"
@@ -60,8 +66,11 @@ def type_schema(tp: Any) -> JsonDict:
     raise TypeError(f"no JSON schema mapping for {tp!r}")
 
 
-def build_schema() -> JsonDict:
-    """The full document schema, ready to serialise."""
+def build_schema(specs: Sequence[ScanSpec] = SCANS) -> JsonDict:
+    """The full document schema, ready to serialise (``specs``: the scan table)."""
+    document = type_schema(SignalsDocument)
+    # Sorted, so a scan added anywhere in the registry adds one line here.
+    document["properties"]["scans"]["propertyNames"] = {"enum": sorted(known_scans(specs))}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": SCHEMA_ID,
@@ -70,7 +79,7 @@ def build_schema() -> JsonDict:
             "Output of skills/assess/scripts/assess_signals.py: a run stamp plus one block "
             "per scan. Generated from lib/run_context_types.py by lib/signals_schema.py."
         ),
-        **type_schema(SignalsDocument),
+        **document,
     }
 
 

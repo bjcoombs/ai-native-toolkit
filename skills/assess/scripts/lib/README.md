@@ -586,10 +586,46 @@ the network.
 
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
-`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, open per-scan
+`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, a `scans` map
+whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
+custom table, and the namespace `rubric_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
 `reason`. `tests/test_signals.py` fails when the checked-in file differs from
 `build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
+from `skills/assess`.
+
+**`fleet.py`**
+The core of `skills/fleet/scripts/fleet.py` (issue #567): headless signals across a
+ghsync root or a list, one JSONL row per repository. `discover_root` walks
+`<root>/<path>/<repo>-main` at any depth (by layout, not by a valid `.git`, so a broken
+checkout is reported rather than skipped), never descending into a found repository,
+`worktree/` or a hidden directory. `targets_from_list` takes a checkout, its repository
+directory, a plain checkout or a root-relative path; `layout_id` gives both inputs the
+same `repo` id (the path under the root, prefixed with the root's name when one
+segment), a listed path outside the root falling back to `remote_path` (the `origin`
+URL's path) and then to its last two directory names. `scan_target` checks
+`checkout_problem` first (`assess_signals` exits 0 on a broken `.git`), then runs
+`assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0`, counts-only unless
+told otherwise, from a scratch directory, with a timeout; every failure becomes a
+`failed` row with a reason token (`FAILURE_REASONS` or `scan_exit_<code>`), never
+message text. A `scan_exit_<code>` failure's stderr tail goes to `write_stderr_tail`
+(`<out>/logs/<repo>.stderr`, when `ScanOptions.log_dir` is set), never into the row;
+`run_fleet` first removes the `*.stderr` files there (`clear_stderr_logs`, nothing else), and a path resolving outside it is not written.
+`remote_path` drops `.`, `..` and empty segments, so a remote-derived id cannot climb out,
+and treats a host-less URL (`file:///...`) as no remote, so no local path becomes an id.
+A list entry repeating an earlier id is skipped with a note on stderr. `run_fleet` maps targets over a thread pool of those processes, isolates
+a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
+`repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
+its schema version - no stamp field, path or timing - so reruns are byte-identical.
+`run_salt` draws one salt per run for `--hash-paths`. The row shape is the `FleetRow`
+TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
+readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
+
+**`fleet_schema.py`**
+Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
+`signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
+`if`/`then` tying `ok` to non-null `scans`. `tests/test_fleet.py` fails when the
+checked-in file differs; regenerate with `uv run --locked python scripts/lib/fleet_schema.py`
 from `skills/assess`.
 
 **`run_context_types.py`**
@@ -1031,8 +1067,24 @@ only when both agree; `unknown_repos` names the repositories whose level is open
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
 rejects. `evaluate` stamps the rubric version; `dumps_result` is byte-identical on
-rerun. No default rubric ships here. Tests: `tests/test_rubric.py` with fixtures under
-`tests/fixtures/rubric/`.
+rerun. Tests: `tests/test_rubric.py` with fixtures under `tests/fixtures/rubric/`.
+
+**`rubric_signals.py`**
+The real `PathValidator` for `rubric.py`, and the default rubric. A `team` path's first
+segment must be a block name the published headless schema lists
+(`references/signals.schema.json`, `scans.propertyNames`, generated from
+`signals.known_scans`), so one rubric reads a headless document's `scans` or a full
+`run-context.json`; run-context keys outside the schema (`instructions_grade`) are
+rejected. Where `counts_only_schema.ROOTS` types the block, every further segment must
+name a field and end on a scalar (no list, no object); an untyped block is open. An
+`org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
+`<setting>.value` / `.reason`). `load_default_rubric` loads
+`skills/assess/rubrics/default.toml`: one team row per layer with a deterministic
+signal (0, 1, 5, 6, 7, 8), level 1 for Partial and 2 for Present. It can disagree with
+the `/assess` layer verdicts (the file header lists where); no instruction file reads
+level 0 through a never-null byte count, not `unknown`. Tests:
+`tests/test_rubric_signals.py`, on headless runs of the golden fixture repositories
+and the golden `run-context.json`.
 
 **`instruction_files.py`**
 Finds and grades the instruction files at `INSTRUCTION_FILE_PATHS` through
