@@ -16,8 +16,8 @@ studies say helps an agent, not on how much the file says:
                          lower instruction-following accuracy (IFScale)
     always-on size and share: the file split on its headings
                          (``lib.instruction_placement.analyse_file``); a
-                         penalty for always-on lines past 200 when they are
-                         more than half the file, another for the lines that
+                         penalty for always-on lines past 200, another for
+                         the lines that
                          belong in a skill or a nested file but load on every
                          task, and a B cap past 400 always-on lines
     content penalties:   directory-tree blocks, repository-overview sections,
@@ -116,15 +116,20 @@ VERIFIABLE_PATTERNS = [
 #
 # - always-on lines past ``ALWAYS_ON_FLAG_LINES`` (200, Claude Code's own
 #   "target under 200 lines per CLAUDE.md file",
-#   https://code.claude.com/docs/en/memory), only when the file is flagged:
-#   those lines are also more than half the file. Pointers, rules and
-#   identity are what the layer is for; past 200 lines even they cost.
+#   https://code.claude.com/docs/en/memory). Pointers, rules and identity are
+#   what the layer is for; past 200 lines even they cost. Not gated on the
+#   block's ``flagged`` (which also needs more than half the file): with that
+#   gate, adding reference lines to a file could drop it under half and lower
+#   its penalty, so the score would reward the wrong action. ``flagged`` stays
+#   the block's advice flag.
 # - fetch-on-need lines: sections that belong in a skill, a nested file or an
 #   existing SKILL.md, which a two-line pointer would replace. This is the
 #   share term: a file that is mostly reference pays for it at any size, and a
 #   large file that is mostly always-on content pays nothing for the share.
 #
-# Past ``ALWAYS_ON_GRADE_CAP_LINES`` always-on lines no amount of other credit
+# Both terms only grow as lines are added, so no edit lowers the penalty
+# except moving or cutting text. Past ``ALWAYS_ON_GRADE_CAP_LINES`` always-on
+# lines no amount of other credit
 # makes the file lean: the grade is capped at B (``SIZE_GRADE_CAP_SCORE``).
 # Skills beside the file no longer halve anything: the placement split names
 # what to move, so delegation is credited by moving it.
@@ -353,23 +358,22 @@ def placement_penalty(record: PlacementFile) -> PlacementPenalty:
     """Score one ``instruction_placement`` record on always-on size and share.
 
     ``always_on_penalty``: one point per ``ALWAYS_ON_LINES_PER_POINT``
-    always-on lines past ``ALWAYS_ON_FLAG_LINES``, when the record is
-    ``flagged`` (those lines are also more than half the file), capped at
+    always-on lines past ``ALWAYS_ON_FLAG_LINES``, capped at
     ``ALWAYS_ON_MAX_PENALTY``. ``relocatable_penalty``: one point per
     ``RELOCATABLE_LINES_PER_POINT`` fetch-on-need lines, capped at
-    ``RELOCATABLE_MAX_PENALTY``. ``capped``: a flagged file past
-    ``ALWAYS_ON_GRADE_CAP_LINES`` always-on lines grades at most B.
+    ``RELOCATABLE_MAX_PENALTY``. ``capped``: a file past
+    ``ALWAYS_ON_GRADE_CAP_LINES`` always-on lines grades at most B. Neither
+    reads ``flagged``, so both are monotone in the lines a file adds.
     """
-    flagged = record["flagged"]
     always_on = record["always_on_lines"]
-    over = max(0, always_on - ALWAYS_ON_FLAG_LINES) if flagged else 0
+    over = max(0, always_on - ALWAYS_ON_FLAG_LINES)
     return {
         "always_on_penalty": min(math.ceil(over / ALWAYS_ON_LINES_PER_POINT),
                                  ALWAYS_ON_MAX_PENALTY),
         "relocatable_penalty": min(
             math.ceil(record["fetch_on_need_lines"] / RELOCATABLE_LINES_PER_POINT),
             RELOCATABLE_MAX_PENALTY),
-        "capped": flagged and always_on > ALWAYS_ON_GRADE_CAP_LINES,
+        "capped": always_on > ALWAYS_ON_GRADE_CAP_LINES,
     }
 
 
@@ -486,10 +490,9 @@ def grade_instructions(
         freshness penalty:        -10 if > 365 days, -5 if > 180
         bloat_penalty:            always-on size and share
                                   (``placement_penalty``): -1 per 10 always-on
-                                  lines past 200 when they are over half the
-                                  file (cap 30), plus -1 per 10 fetch-on-need
-                                  lines (cap 30)
-        size grade cap:           a flagged file over 400 always-on lines is
+                                  lines past 200 (cap 30), plus -1 per 10
+                                  fetch-on-need lines (cap 30)
+        size grade cap:           over 400 always-on lines the score is
                                   capped at 59 (a B)
         content_penalty:          -10 for a directory-tree block, -5 for a
                                   repository-overview section, -8 / -15 when

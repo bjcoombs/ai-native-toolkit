@@ -1119,9 +1119,10 @@ small capped floor. Size is scored on always-on size and share (#560, replacing 
 #517 whole-file curve, its skills halving and its word leg): `grade_instructions` splits
 the file with `instruction_placement.analyse_file` (given `skills`, the
 `skill_texts` map) and `placement_penalty` charges one point per 10 always-on lines
-past 200 when the file is `flagged` (those lines are also over half the file), capped
-at 30, plus one point per 10 fetch-on-need lines, capped at 30; a flagged file over
-400 always-on lines is capped at 59 (a B). The subscores `always_on_lines`,
+past 200, capped at 30, plus one point per 10 fetch-on-need lines, capped at 30; a
+file over 400 always-on lines is capped at 59 (a B). Neither term reads the block's
+`flagged` (which also needs over half the file): gated on it, adding reference lines
+could lower a file's penalty. `always_on_flagged` mirrors `flagged` as evidence. The subscores `always_on_lines`,
 `always_on_pct`, `fetch_on_need_lines`, `always_on_flagged`, `always_on_penalty` and
 `relocatable_penalty` carry the split; `bloat_penalty` is their sum. Directory-tree
 blocks, repository-overview sections and lines repeated from the root README cost points

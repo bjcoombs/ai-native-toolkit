@@ -1,8 +1,8 @@
 """Tests for the instruction-file score on always-on size and share (issue #560).
 
 The grader splits the file on its headings (``lib.instruction_placement``) and
-charges two kinds of line: always-on lines past 200 when they are more than
-half the file, and fetch-on-need lines that a pointer would replace. This
+charges two kinds of line: always-on lines past 200, and fetch-on-need lines
+that a pointer would replace. Both only grow as lines are added. This
 replaced the #517 whole-file curve, its skills-delegation halving and its word
 leg. The core thesis (``test_600_line_file_scores_below_the_same_file_with_a_pointer``):
 a long file whose bulk belongs in a skill scores below the same file with that
@@ -71,6 +71,7 @@ def test_600_line_file_scores_below_the_same_file_with_a_pointer(tmp_path: Path)
     sub = with_section.subscores
     assert (sub["always_on_lines"], sub["fetch_on_need_lines"], sub["always_on_pct"]) == (300, 300, 50)
     assert sub["always_on_flagged"] == 0  # half the file, not more
+    assert sub["always_on_penalty"] == 10  # charged whether flagged or not
     assert sub["relocatable_penalty"] == RELOCATABLE_MAX_PENALTY
     ptr = with_pointer.subscores
     assert (ptr["always_on_lines"], ptr["fetch_on_need_lines"], ptr["always_on_flagged"]) == (302, 0, 1)
@@ -117,18 +118,28 @@ def test_section_a_skill_already_holds_costs_points(tmp_path: Path) -> None:
     (200, 0), (201, 1), (210, 1), (211, 2), (300, 10), (400, 20), (500, ALWAYS_ON_MAX_PENALTY),
     (1200, ALWAYS_ON_MAX_PENALTY),
 ])
-def test_always_on_curve_when_flagged(always_on: int, penalty: int) -> None:
+def test_always_on_curve(always_on: int, penalty: int) -> None:
     result = placement_penalty(_record(always_on, 0, flagged=always_on > ALWAYS_ON_FLAG_LINES))
     assert result["always_on_penalty"] == penalty
     assert result["relocatable_penalty"] == 0
 
 
-def test_always_on_lines_cost_nothing_when_not_flagged() -> None:
-    """Half the file or less always-on: the size term is off and the share term
-    (the fetch-on-need lines) carries the penalty."""
-    result = placement_penalty(_record(300, 300, flagged=False))
-    assert result["always_on_penalty"] == 0
-    assert result["relocatable_penalty"] == RELOCATABLE_MAX_PENALTY
+def test_always_on_term_ignores_the_share_flag() -> None:
+    """The size term does not read ``flagged``: half the file or less
+    always-on still pays for always-on lines past 200."""
+    assert placement_penalty(_record(300, 300, flagged=False))["always_on_penalty"] == 10
+
+
+def test_adding_reference_lines_never_lowers_the_penalty() -> None:
+    """Monotone: a file that grows its reference section past half the file
+    pays more, not less (the inversion a share-gated size term would have)."""
+    def total(kube_lines: int) -> int:
+        text = _rules_block() + _kubernetes_section(kube_lines) + _filler(260)
+        return grade_instructions(text, 1, repo=None).subscores["bloat_penalty"]
+
+    totals = [total(n) for n in (260, 280, 300, 320, 400)]
+    assert totals == sorted(totals)
+    assert total(280) == 38 and total(300) == 40
 
 
 @pytest.mark.parametrize(("fetch", "penalty"), [
@@ -138,11 +149,11 @@ def test_relocatable_curve(fetch: int, penalty: int) -> None:
     assert placement_penalty(_record(50, fetch, flagged=False))["relocatable_penalty"] == penalty
 
 
-def test_cap_needs_a_flagged_file_past_the_cap_lines() -> None:
+def test_cap_past_the_cap_lines_flagged_or_not() -> None:
     assert ALWAYS_ON_GRADE_CAP_LINES == 2 * ALWAYS_ON_FLAG_LINES
     assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES, 0, True))["capped"] is False
     assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES + 1, 0, True))["capped"] is True
-    assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES + 1, 500, False))["capped"] is False
+    assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES + 1, 500, False))["capped"] is True
 
 
 # --- grade_instructions ------------------------------------------------------------
