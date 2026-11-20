@@ -114,6 +114,26 @@ def test_an_org_row_moves_with_settings_not_with_the_set():
     assert g["settings_changed"]
 
 
+def test_an_org_row_on_both_sides_is_a_level_change_even_when_the_set_moved():
+    earlier_rows = [_row("g/a", _scans(1)), _row("g/b", _scans(1))]
+    later_rows = [_row("g/a", _scans(1))]
+    earlier = _run(earlier_rows)
+    later = _run(later_rows)
+    for entry in later.groups[0]["rubric"]:
+        if entry["scope"] == "org":  # a level move with the settings unchanged
+            entry["status"], entry["level"] = "level", 1
+    comparison = compare(earlier, later)
+    (g,) = comparison["groups"]
+    assert g["set_changed"] and not g["settings_changed"]
+    move = _row_move(comparison, "g", "org2fa")
+    assert move["moved"] and move["cause"] == fc.CAUSE_LEVEL
+
+
+def test_an_org_row_on_one_side_is_a_set_change():
+    comparison = compare(_run([_row("old/x", _scans(1))]), _run([_row("new/x", _scans(1))]))
+    assert _row_move(comparison, "old", "org2fa")["cause"] == fc.CAUSE_SET
+
+
 def test_an_unchanged_rerun_shows_no_movement():
     comparison = compare(_run(EARLIER), _run(EARLIER))
     assert comparison["comparable"] and not comparison["movement"]

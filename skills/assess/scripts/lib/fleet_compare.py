@@ -23,12 +23,13 @@ Each rubric row of each group carries its level then and now
 (``{status, level}``, or null when the group or row is absent) and, when it
 moved, a ``cause``:
 
-- ``level``: the measured set is identical, so the change is real;
-- ``set``: the set moved and nothing else did (no signal change in the
-  repositories present on both sides for a team row, no settings change for
-  an org row);
-- ``set_and_level``: the set moved and so did the evidence; the change cannot
-  be split.
+- ``level``: the measured set is identical, so the change is real; an org
+  row present on both sides is always ``level``, because it reads the group's
+  settings (``settings_changed`` says whether they moved), not its repositories;
+- ``set``: the group or row is on one side only, or (team rows) the set moved
+  and no repository present on both sides changed a signal;
+- ``set_and_level``: (team rows) the set moved and so did the evidence; the
+  change cannot be split.
 
 Per repository scanned on both sides, ``signals`` lists every leaf of the
 ``scans`` map whose value changed (dotted path, value then and now; a side
@@ -302,16 +303,15 @@ def _levels(group: GroupRow | None) -> dict[str, tuple[str, LevelState]]:
             for row in group["rubric"]}
 
 
-def _cause(scope: str, present_both: bool, set_moved: bool, evidence_moved: bool,
-           settings_moved: bool) -> str:
+def _cause(scope: str, present_both: bool, set_moved: bool, evidence_moved: bool) -> str:
+    """Why a moved row moved. An org row reads the group's settings, not its
+    repositories, so on both sides it is always ``level``; it is ``set`` only
+    when the group or row is on one side."""
     if not present_both:
         return CAUSE_SET
-    moved_inputs = settings_moved if scope == "org" else evidence_moved
-    if scope == "org":
-        set_moved = False  # org rows read the group's settings, not its repositories
-    if set_moved:
-        return CAUSE_SET_AND_LEVEL if moved_inputs else CAUSE_SET
-    return CAUSE_LEVEL
+    if scope == "org" or not set_moved:
+        return CAUSE_LEVEL
+    return CAUSE_SET_AND_LEVEL if evidence_moved else CAUSE_SET
 
 
 def _by_group(rows: Iterable[FleetRow]) -> dict[str, dict[str, FleetRow]]:
@@ -337,8 +337,8 @@ def group_change(name: str, then_rows: dict[str, FleetRow], now_rows: dict[str, 
         then = then_levels[row_id][1] if row_id in then_levels else None
         now = now_levels[row_id][1] if row_id in now_levels else None
         moved = then != now
-        cause = _cause(scope, then is not None and now is not None, set_moved, evidence_moved,
-                       settings_moved) if moved else None
+        cause = _cause(scope, then is not None and now is not None, set_moved,
+                       evidence_moved) if moved else None
         rows.append({"id": row_id, "scope": scope, "then": then, "now": now, "moved": moved, "cause": cause})
     return {"group": name, "set_changed": set_moved, "set": moved_set,
             "settings_changed": settings_moved, "rows": rows}

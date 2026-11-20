@@ -159,10 +159,24 @@ def test_no_anomaly_without_flagged_files():
 
 def test_report_labels_scc_ccn_approximate():
     out = render_hotspots_table(_unreliable_ctx())
-    assert "| `scripts/launcher-common.sh` | 1229 | ~208 | 9 |" in out
+    assert "| `scripts/launcher-common.sh` | 1229 | ~208 (approximate) | 9 |" in out
     assert "| `scripts/doctor.sh` | 2150 | ~5 (unreliable) | 4 |" in out
     assert "| `src/app.py` | 300 | 40 | 3 |" in out
-    assert "approximate CCN" in out
+    assert "`~N (approximate)` is scc's file-level keyword count" in out
+
+
+# Every place a ccn caveat is spelled out (issue #630): one spelling per case.
+CCN_CAVEAT_DOCS = ["skills/assess-findings/SKILL.md", "skills/assess-pr/SKILL.md"]
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+@pytest.mark.parametrize("doc", CCN_CAVEAT_DOCS)
+def test_ccn_caveats_use_one_spelling_per_case(doc):
+    text = (REPO_ROOT / doc).read_text(encoding="utf-8")
+    assert "ccn ~N (approximate)" in text or "ccn ~<N> (approximate)" in text
+    assert "ccn ~N (unreliable)" in text or "ccn ~<N> (unreliable)" in text
+    for variant in ("file-level scc)", "aggregate ccn ~", "ccn unreliable", "scc under-count"):
+        assert variant not in text, f"{doc} spells a ccn caveat as {variant!r}"
 
 
 def test_report_without_scc_rows_has_no_footnote():

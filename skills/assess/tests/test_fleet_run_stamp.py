@@ -81,6 +81,11 @@ def test_window_start_rejects_a_bad_window():
         window_start("soon", date(2026, 1, 1))
 
 
+@pytest.mark.parametrize("window", ["3000y", "999999999d", "99999999999w", "999999mo"])
+def test_a_window_before_year_one_starts_at_date_min(window):
+    assert window_start(window, date(2026, 11, 20)) == date.min
+
+
 def test_is_active_reads_the_head_commit_date(tmp_path):
     since = window_start("6mo", date.today())
     assert is_active(make_checkout(tmp_path / "recent"), since)
@@ -136,6 +141,16 @@ def test_write_stamp_leaves_no_temp_file_on_failure(tmp_path, monkeypatch):
 
 def test_a_pushed_clean_clone_is_deleted_and_its_empty_dirs_go(tmp_path):
     checkout = _pushed_repo(tmp_path / "root", "grp/svc")
+    assert delete_clone(_target(checkout), _row("grp/svc"), []) == fleet_cleanup.DELETED
+    assert not (tmp_path / "root" / "grp" / "svc").exists()
+    assert (tmp_path / "root" / "grp").is_dir()
+
+
+def test_a_clone_without_a_worktree_dir_still_removes_its_repo_dir(tmp_path):
+    checkout = _pushed_repo(tmp_path / "root", "grp/svc")
+    worktree = checkout.parent / "worktree"
+    if worktree.exists():
+        worktree.rmdir()
     assert delete_clone(_target(checkout), _row("grp/svc"), []) == fleet_cleanup.DELETED
     assert not (tmp_path / "root" / "grp" / "svc").exists()
     assert (tmp_path / "root" / "grp").is_dir()
@@ -319,6 +334,78 @@ def test_an_out_that_cannot_be_created_exits_2_before_scanning(tmp_path, monkeyp
                            "--delete-after"]) == 2
     assert capsys.readouterr().err.startswith("error: cannot create --out")
     assert safe.is_dir()
+
+
+def _no_scan(*_args: object, **_kwargs: object) -> list[FleetRow]:
+    raise AssertionError("a scan ran before --out was checked")
+
+
+def test_an_out_that_is_a_regular_file_exits_2_before_scanning(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _pushed_repo(tmp_path / "root", "grp/safe")
+    (tmp_path / "file").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(fleet_cli, "run_fleet", _no_scan)
+    assert fleet_cli.main([str(tmp_path / "root"), "--out", str(tmp_path / "file")]) == 2
+    assert capsys.readouterr().err.startswith("error: cannot create --out")
+
+
+@pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0, reason="needs POSIX permissions, not root")
+def test_an_out_that_cannot_be_written_exits_2_before_scanning(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _pushed_repo(tmp_path / "root", "grp/safe")
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0o500)
+    monkeypatch.setattr(fleet_cli, "run_fleet", _no_scan)
+    try:
+        assert fleet_cli.main([str(tmp_path / "root"), "--out", str(locked)]) == 2
+    finally:
+        locked.chmod(0o700)
+    assert capsys.readouterr().err.startswith("error: cannot write to --out")
+    assert list(locked.iterdir()) == []
+
+
+def test_a_writable_out_is_left_empty_by_the_probe(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _pushed_repo(tmp_path / "root", "grp/safe")
+    seen: list[list[str]] = []
+
+    def no_rows(*_args: object, **_kwargs: object) -> list[FleetRow]:
+        seen.append(sorted(p.name for p in (tmp_path / "out").iterdir()))
+        return []
+    monkeypatch.setattr(fleet_cli, "run_fleet", no_rows)
+    assert fleet_cli.main([str(tmp_path / "root"), "--out", str(tmp_path / "out")]) == 0
+    assert seen == [[]]
+
+
+def test_an_unexpandable_list_entry_exits_2(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "list.txt").write_text("~nosuchuser-fleet-616/repo\n", encoding="utf-8")
+    monkeypatch.setattr(fleet_cli, "run_fleet", _no_scan)
+    assert fleet_cli.main(["--from-list", str(tmp_path / "list.txt"), "--out", str(tmp_path / "o")]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("error: list entry '~nosuchuser-fleet-616/repo'")
+    assert "Traceback" not in err
+
+
+def test_repeated_scans_stamp_the_same_run_json(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _pushed_repo(tmp_path / "root", "grp/safe")
+    stamps = []
+    for name, scans in (("once", "agent_ops"), ("twice", "agent_ops,agent_ops")):
+        assert fleet_cli.main([str(tmp_path / "root"), "--out", str(tmp_path / name), "--scans", scans]) == 0
+        stamps.append((tmp_path / name / "run.json").read_bytes())
+    assert stamps[0] == stamps[1]
+    assert json.loads(stamps[0])["scans"] == ["agent_ops"]
+
+
+def test_an_extreme_window_completes_the_run(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _pushed_repo(tmp_path / "root", "grp/safe")
+    assert fleet_cli.main([str(tmp_path / "root"), "--out", str(tmp_path / "out"), "--scans", "agent_ops",
+                           "--window", "999999999d"]) == 0
+    rows = [json.loads(line) for line in (tmp_path / "out" / "repos.jsonl").read_text().splitlines()]
+    assert [(r["status"], r["active"]) for r in rows] == [("ok", True)]
 
 
 def test_the_checked_in_stamp_schema_matches_the_type():
