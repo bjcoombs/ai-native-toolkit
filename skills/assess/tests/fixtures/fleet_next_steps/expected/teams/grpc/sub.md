@@ -14,6 +14,7 @@ Each numbered step is one change: take or leave it on its own. "Done when" is ch
 | Runtime legibility | unknown | every repository (min) |
 | Agent permissions | 1 of 1 (top) | 50% of repositories (share) |
 | Shared tooling | 1 of 1 (top) | every repository (min) |
+| Agent environment | 1 of 1 (top) | every repository (min) |
 
 ## Group settings
 
@@ -45,5 +46,9 @@ Level unknown (between 0 and 1 of 1). This is a measurement gap, not a failure: 
 Level 1 of 1: the top level. No next step.
 
 ## Shared tooling
+
+Level 1 of 1: the top level. No next step.
+
+## Agent environment
 
 Level 1 of 1: the top level. No next step.

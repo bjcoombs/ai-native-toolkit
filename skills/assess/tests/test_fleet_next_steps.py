@@ -36,10 +36,12 @@ RUBRIC = load_rubric(RUBRIC_PATH, signal_path_validator())
 
 
 def _scans(*, bytes_: int = 900, lines: int = 40, named: int = 1, enforced: bool = True,
-           mutation: bool = False, permissions: bool = True, tooling: bool = True) -> dict[str, Any]:
+           mutation: bool = False, permissions: bool = True, tooling: bool = True,
+           cap: tuple[str, ...] = ()) -> dict[str, Any]:
     return {
         "nested_instructions": {"available": True, "budget": {"claude_code": {"bytes": bytes_, "lines": lines}}},
-        "agent_environment": {"available": True, "check": {"named_total": named}},
+        "agent_environment": {"available": True, "check": {"named_total": named},
+                              "layer5_cap": {"applies": bool(cap), "unmet": list(cap)}},
         "coverage_gate": {"available": True, "enforced": enforced},
         "test_pressure": {"available": True, "mutation_run": mutation},
         "agent_ops": {"available": True, "summary": {"permissions_encoded": permissions}},
@@ -69,9 +71,10 @@ SETTINGS = [
 
 REPOS = [
     _row("grpa/svc1", _scans()),
-    _row("grpa/svc2", _scans(named=0, lines=340, permissions=False)),
+    _row("grpa/svc2", _scans(named=0, lines=340, permissions=False, cap=("check_named",))),
     _row("grpa/svc3", None, "scan_timeout"),
-    _row("grpb/lib1", _scans(named=0, enforced=False, tooling=False)),
+    _row("grpb/lib1", _scans(named=0, enforced=False, tooling=False,
+                             cap=("check_named", "setup_or_lockfile"))),
     _row("grpc/sub/app", _scans(mutation=True)),
 ]
 
@@ -196,7 +199,7 @@ def test_non_token_values_print_as_set_never_in_clear(tmp_path):
 def test_failed_repository_below_target_is_listed_as_not_measured(tmp_path):
     page = _pages(tmp_path)["teams/grpa.md"]
     section = page.split("## Coverage \\| mutation\n", 1)[1].split("\n## ", 1)[0]
-    assert "0 of 3 repositories reach it; the rule needs 2" in section
+    assert "0 of 3 repositories already there; the rule needs 2" in section
     assert "`grpa/svc3` (scan failed: `scan_timeout`)" in section
 
 
@@ -376,3 +379,34 @@ def test_index_links_are_percent_encoded():
     group = {"group": "my team", "repos": 1, "rubric": []}
     page = ns.index_page(RUBRIC, [group])  # type: ignore[list-item]
     assert "(teams/my%20team.md)" in page
+
+
+def test_layer5_step_names_only_the_unmet_part(tmp_path):
+    pages = _pages(tmp_path)
+    grpa = pages["teams/grpa.md"].split("## Agent environment\n", 1)[1]
+    assert "**Name a check command that resolves" in grpa and "lockfile" not in grpa
+    assert "`grpa/svc2` (now true; unmet: `check_named`)" in grpa
+    grpb = pages["teams/grpb.md"].split("## Agent environment\n", 1)[1]
+    assert "check command that resolves" in grpb and "lockfile" in grpb
+
+
+@pytest.mark.parametrize(("unmet", "has_check", "has_lock"), [
+    (["check_named"], True, False), (["setup_or_lockfile"], False, True),
+    (["check_named", "setup_or_lockfile"], True, True), ([], True, True),
+])
+def test_layer5_wording_follows_the_unmet_parts(unmet, has_check, has_lock):
+    words = guidance("agent_environment.layer5_cap.applies", "eq", False, unmet)
+    assert words is not None
+    assert ("check command" in words["change"]) == has_check
+    assert ("lockfile" in words["change"]) == has_lock
+    assert ("check command" in words["done_when"]) == has_check
+
+
+def test_parts_reads_the_cap_tokens():
+    from lib.next_step_guidance import parts
+    scans = {"agent_environment": {"layer5_cap": {"unmet": ["setup_or_lockfile", "check_named"]}}}
+    assert parts("agent_environment.layer5_cap.applies", scans) == ["check_named", "setup_or_lockfile"]
+    assert parts("agent_environment.layer5_cap.applies",
+                 {"agent_environment": {"layer5_cap": {"unmet": "check_named"}}}) == ["check_named"]
+    assert parts("agent_environment.layer5_cap.applies", {}) == []
+    assert parts("coverage_gate.enforced", scans) == []

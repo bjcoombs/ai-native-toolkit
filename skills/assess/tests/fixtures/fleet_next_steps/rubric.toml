@@ -78,3 +78,13 @@ aggregation = "min"
   [[rows.levels]]
   level = 1
   criteria = [{ signal = "shared_tooling.available", op = "eq", value = true }]
+
+[[rows]]
+id = "environment"
+title = "Agent environment"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "agent_environment.layer5_cap.applies", op = "eq", value = false }]

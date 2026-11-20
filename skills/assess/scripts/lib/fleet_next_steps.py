@@ -46,6 +46,7 @@ from lib.counts_only_rules import TOKEN_RE
 from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_groups import GroupRow, repo_signals, settings_for, settings_signals
 from lib.next_step_guidance import guidance, measure_hint
+from lib.next_step_guidance import parts as unmet_parts_of
 from lib.rubric import Criterion, CriterionOutcome, Evaluation, Row, RowResult, Rubric, evaluate
 from lib.run_context_types import JsonDict
 
@@ -176,8 +177,9 @@ def _outcomes(evaluation: Evaluation | RowResult, target: int) -> dict[tuple[str
     return out
 
 
-def _step(number: int, criterion: Criterion, where: Sequence[str]) -> list[str]:
-    words = guidance(criterion["signal"], criterion["op"], criterion["value"])
+def _step(number: int, criterion: Criterion, where: Sequence[str],
+          unmet_parts: Sequence[str] = ()) -> list[str]:
+    words = guidance(criterion["signal"], criterion["op"], criterion["value"], unmet_parts)
     if words is None:
         return [f"{number}. **Meet {expression(criterion)}.** No repository-native wording exists "
                 "for this signal.",
@@ -190,7 +192,7 @@ def _step(number: int, criterion: Criterion, where: Sequence[str]) -> list[str]:
 
 
 def _team_steps(row: Row, result: RowResult, target: int, failed: Mapping[str, str],
-                report_unmeasured: bool = True) -> list[str]:
+                signals: Mapping[str, JsonDict], report_unmeasured: bool = True) -> list[str]:
     evaluations = result.get("repos", {})
     below = sorted(name for name, ev in evaluations.items() if ev["bounds"][0] < target)
     per_repo = {name: _outcomes(evaluations[name], target) for name in below}
@@ -204,8 +206,13 @@ def _team_steps(row: Row, result: RowResult, target: int, failed: Mapping[str, s
             continue
         number += 1
         blocking.update(name for name, _ in hits)
-        listed = ", ".join(f"{code(name)} (now {scalar(o['actual'])})" for name, o in hits)
-        lines += _step(number, criterion, [f"   - Holding the group back ({len(hits)}): {listed}."])
+        found = {name: unmet_parts_of(criterion["signal"], signals.get(name, {})) for name, _ in hits}
+        listed = ", ".join(
+            f"{code(name)} (now {scalar(o['actual'])}"
+            + (f"; unmet: {', '.join(code(p) for p in found[name])})" if found[name] else ")")
+            for name, o in hits)
+        union = sorted({p for found_parts in found.values() for p in found_parts})
+        lines += _step(number, criterion, [f"   - Holding the group back ({len(hits)}): {listed}."], union)
     unmeasured = [name for name in below if name not in blocking]
     if unmeasured and report_unmeasured:
         parts = []
@@ -250,7 +257,7 @@ def _rolled(result: RowResult, top: int, bound: int) -> int:
 
 
 def _unknown_section(row: Row, result: RowResult, settings_scope: str | None,
-                     failed: Mapping[str, str]) -> list[str]:
+                     failed: Mapping[str, str], signals: Mapping[str, JsonDict]) -> list[str]:
     gap = "This is a measurement gap, not a failure: the run could not measure every signal the level depends on."
     if result["scope"] == "org":
         if settings_scope is None:
@@ -275,19 +282,20 @@ def _unknown_section(row: Row, result: RowResult, settings_scope: str | None,
                  for n in undetermined]
         lines.append(f"- Repositories whose own level is undetermined ({len(parts)}): {', '.join(parts)}.")
     if evaluations and high < top:
-        steps = _team_steps(row, result, high + 1, failed, report_unmeasured=False)
+        steps = _team_steps(row, result, high + 1, failed, signals, report_unmeasured=False)
         if steps:
             lines += ["", f"Measured unmet criteria already cap the group at level {high}, whatever the "
                           f"missing signals show. Toward level {high + 1}:", ""] + steps
     return lines
 
 
-def _row_section(row: Row, result: RowResult, group: GroupRow, failed: Mapping[str, str]) -> list[str]:
+def _row_section(row: Row, result: RowResult, group: GroupRow, failed: Mapping[str, str],
+                 signals: Mapping[str, JsonDict]) -> list[str]:
     top = len(row["levels"])
     lines = ["", f"## {text(row['title'])}", ""]
     level = result["level"]
     if result["status"] != "level" or level is None:
-        return lines + _unknown_section(row, result, group["settings_scope"], failed)
+        return lines + _unknown_section(row, result, group["settings_scope"], failed, signals)
     if level >= top:
         return lines + [f"Level {top} of {top}: the top level. No next step."]
     target = level + 1
@@ -295,10 +303,10 @@ def _row_section(row: Row, result: RowResult, group: GroupRow, failed: Mapping[s
         evaluations = result.get("repos", {})
         reached = sum(1 for ev in evaluations.values() if ev["bounds"][0] >= target)
         lines.append(f"Level {level} of {top}. To reach level {target}: {reached} of "
-                     f"{_repos(len(evaluations))} reach it; the rule needs "
+                     f"{_repos(len(evaluations))} already there; the rule needs "
                      f"{_needed(result, len(evaluations))}.")
         lines.append("")
-        return lines + _team_steps(row, result, target, failed)
+        return lines + _team_steps(row, result, target, failed, signals)
     lines += [f"Level {level} of {top}. To reach level {target}:", ""]
     return lines + _org_steps(row, result, target, group["settings_scope"], group["repos"])
 
@@ -310,6 +318,7 @@ def group_page(rubric: Rubric, group: GroupRow, rows: Sequence[FleetRow],
                results: Sequence[RowResult]) -> str:
     """One group's page."""
     failed = {row["repo"]: row["reason"] or "failed" for row in rows if row["status"] != STATUS_OK}
+    signals = {row["repo"]: repo_signals(row) for row in rows}
     lines = [f"# Next steps: {code(group['group'])}", "",
              f"Rubric {code(rubric['version'])}. {_repos(group['repos'])}: "
              f"{group['scanned']} scanned, {group['failed']} failed.", "",
@@ -320,7 +329,7 @@ def group_page(rubric: Rubric, group: GroupRow, rows: Sequence[FleetRow],
         lines.append(f"| {text(row['title'])} | {_level_cell(result, len(row['levels']))} | "
                      f"{_rule_cell(result, group['settings_scope'])} |")
     for row, result in zip(rubric["rows"], results):
-        lines += _row_section(row, result, group, failed)
+        lines += _row_section(row, result, group, failed, signals)
     return "\n".join(lines) + "\n"
 
 

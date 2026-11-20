@@ -672,7 +672,10 @@ module's docstring).
 Repository-native wording for a rubric criterion. `guidance(signal, op, value)` gives
 the one change and a "done when" a maintainer checks without the plugin (a file
 state, a command, a platform setting), templated on the criterion's own operator and
-value; it returns `None` for a signal or shape it has no wording for, and the page
+value. A compound check (`agent_environment.layer5_cap.applies`) is worded on the
+parts actually unmet: `parts` reads a repository's `layer5_cap.unmet` tokens, the page
+passes their union across the repositories a step lists and annotates each repository
+with its own. `guidance` returns `None` for a signal or shape it has no wording for, and the page
 then states the signal expression alone. `measure_hint(signal)` says why a signal can
 be unavailable (a full `/assess` run only, a network read, an opt-in pass, a ghreport
 permission). Every signal of `rubrics/default.toml` has wording (tested).

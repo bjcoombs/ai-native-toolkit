@@ -14,6 +14,7 @@ Each numbered step is one change: take or leave it on its own. "Done when" is ch
 | Runtime legibility | unknown | every repository (min) |
 | Agent permissions | unknown | 50% of repositories (share) |
 | Shared tooling | unknown | every repository (min) |
+| Agent environment | 0 of 1 | every repository (min) |
 
 ## Group settings
 
@@ -47,7 +48,7 @@ Measured unmet criteria already cap the group at level 1, whatever the missing s
 
 ## Coverage \| mutation
 
-Level 1 of 2. To reach level 2: 0 of 3 repositories reach it; the rule needs 2.
+Level 1 of 2. To reach level 2: 0 of 3 repositories already there; the rule needs 2.
 
 1. **Run mutation testing against the test suite.**
    - Done when: A mutation tool (mutmut, Stryker, PIT or similar) is configured in the repository and a run of it completes.
@@ -76,3 +77,14 @@ Level unknown (between 0 and 1 of 1). This is a measurement gap, not a failure: 
 
 - `shared_tooling.available`: not measured in 1 of 3 repositories. The repository scan failed in each of them; the reason token is listed below.
 - Repositories whose own level is undetermined (1): `grpa/svc3` (scan failed: `scan_timeout`).
+
+## Agent environment
+
+Level 0 of 1. To reach level 1: 1 of 3 repositories already there; the rule needs 3.
+
+1. **Name a check command that resolves (a Makefile target, a package script or a committed script) in the agent instruction file.**
+   - Done when: `CLAUDE.md` or `AGENTS.md` names a check command that exists in the repository.
+   - Re-run check (optional): the next fleet run reads `agent_environment.layer5_cap.applies` = false.
+   - Holding the group back (1): `grpa/svc2` (now true; unmet: `check_named`).
+
+Below level 1 with no unmet criterion found, because a signal was not measured (1): `grpa/svc3` (scan failed: `scan_timeout`).

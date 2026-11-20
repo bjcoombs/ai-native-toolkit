@@ -24,8 +24,8 @@ Every signal in the shipped ``rubrics/default.toml`` has wording here
 """
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import TypedDict
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, TypedDict
 
 from lib.rubric import Scalar
 
@@ -37,6 +37,7 @@ class Guidance(TypedDict):
 
 Operand = Scalar | list[Scalar]
 Wording = Callable[[str, Operand], Guidance | None]
+PartsWording = Callable[[str, Operand, Sequence[str]], Guidance | None]
 
 # The setting names ghreport reports, as a maintainer reads them.
 SETTING_NAMES = {
@@ -116,15 +117,28 @@ def _claims_hold(op: str, value: Operand) -> Guidance | None:
                          "configuration, and each pin and count they state matches the files."}
 
 
-def _layer5_cap(op: str, value: Operand) -> Guidance | None:
+_CHECK_NAMED = "check_named"
+_SETUP = "setup_or_lockfile"
+_LAYER5_PARTS = {
+    _CHECK_NAMED: ("name a check command that resolves (a Makefile target, a package script or a "
+                   "committed script) in the agent instruction file",
+                   "`CLAUDE.md` or `AGENTS.md` names a check command that exists in the repository"),
+    _SETUP: ("commit a lockfile for every dependency manifest, or a setup (`.devcontainer/`, a "
+             "setup script, `copilot-setup-steps`)",
+             "every dependency manifest has its lockfile committed, or a devcontainer or setup "
+             "script is committed"),
+}
+
+
+def _layer5_cap(op: str, value: Operand, parts: Sequence[str] = ()) -> Guidance | None:
+    """Worded on the cap's ``unmet`` tokens when known; both halves when not."""
     if not _is_false(op, value):
         return None
-    return {"change": "Make the agent's environment reproducible: commit a lockfile for every "
-                      "dependency manifest, or a setup (`.devcontainer/`, a setup script, "
-                      "`copilot-setup-steps`).",
-            "done_when": "Every dependency manifest has its lockfile committed, or a devcontainer "
-                         "or setup script is committed, and the instruction file names a check "
-                         "command that exists."}
+    known = [p for p in (_CHECK_NAMED, _SETUP) if p in parts]
+    chosen = known or [_CHECK_NAMED, _SETUP]
+    change = " and ".join(_LAYER5_PARTS[p][0] for p in chosen)
+    done = ", and ".join(_LAYER5_PARTS[p][1] for p in chosen)
+    return {"change": change[0].upper() + change[1:] + ".", "done_when": done[0].upper() + done[1:] + "."}
 
 
 _RUNGS = {
@@ -195,7 +209,6 @@ _WORDING: dict[str, Wording] = {
     "nested_instructions.budget.claude_code.lines": _instructions_lines,
     "agent_environment.check.named_total": _check_named,
     "instruction_claims.failed": _claims_hold,
-    "agent_environment.layer5_cap.applies": _layer5_cap,
     "observability.rung": _observability,
     "coverage_gate.enforced": _flag(
         "Make the test run fail when line coverage drops below a floor.",
@@ -235,8 +248,29 @@ _SETTING_HINT = ("ghreport could not read this setting (token scope or provider 
                  "`--settings`.")
 
 
-def guidance(signal: str, op: str, value: Operand) -> Guidance | None:
-    """The repository-native change and done-when for one criterion, or None."""
+# Signals whose wording depends on which part of a compound check is unmet,
+# read from the repository's own block by ``parts``.
+_PARTS_WORDING: dict[str, PartsWording] = {"agent_environment.layer5_cap.applies": _layer5_cap}
+_PARTS_PATH = {"agent_environment.layer5_cap.applies": ("agent_environment", "layer5_cap", "unmet")}
+
+
+def parts(signal: str, scans: Mapping[str, Any]) -> list[str]:
+    """The unmet-part tokens a repository's block reports for ``signal`` (empty when none)."""
+    node: Any = scans
+    for key in _PARTS_PATH.get(signal, ()):
+        node = node.get(key) if isinstance(node, dict) else None
+    if isinstance(node, str):
+        return [node]
+    return sorted(str(p) for p in node) if isinstance(node, list) and signal in _PARTS_PATH else []
+
+
+def guidance(signal: str, op: str, value: Operand, unmet_parts: Sequence[str] = ()) -> Guidance | None:
+    """The repository-native change and done-when for one criterion, or None.
+
+    ``unmet_parts`` (from ``parts``, across the repositories the step lists)
+    narrows the wording of a compound check to the parts actually unmet."""
+    if signal in _PARTS_WORDING:
+        return _PARTS_WORDING[signal](op, value, unmet_parts)
     wording = _WORDING.get(signal)
     return wording(op, value) if wording else None
 
