@@ -130,7 +130,7 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --rubric rubric.toml -
 |------|---------|
 | `RUN` | The run's `--out` directory or its `groups.jsonl`. |
 | `--rubric FILE` | The rubric file the run used: column titles and each row's top level, so a row's top level is always the darkest colour. Without it the columns show row ids and the level indexes the colour ramp directly. A file whose version or rows differ from the run's exits 2. |
-| `--compare EARLIER_RUN` | An earlier run (directory or `groups.jsonl`): each cell shows its change (`+1`, `-1`, `=`, `new`, `was 2`, `was ?`) and groups only the earlier run has are listed. Runs on different rubric versions are not compared; a note says why. |
+| `--compare EARLIER_RUN` | An earlier run (directory or `groups.jsonl`): each cell shows its change (`+1`, `-1`, `=`, `new`, `was 2`, `was ?`) and groups only the earlier run has are listed. Runs on different rubric versions are not compared; a note says why. The change is level-only: it does not check the scan window or separate a change in the measured repositories from a change in level (#552 owns that). |
 | `--output FILE` | The SVG path (default `heatmap.svg` beside `groups.jsonl`). |
 
 Encoding: the ColorBrewer OrRd ramp (colour-blind safe), pale for level 0 and

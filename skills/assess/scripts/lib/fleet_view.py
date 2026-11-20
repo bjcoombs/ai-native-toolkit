@@ -66,9 +66,15 @@ def _check_row(data: Any, where: str) -> GroupRow:
             f"this renderer reads {FLEET_GROUP_VERSION}")
     if not isinstance(data.get("group"), str) or not isinstance(data.get("rubric"), list):
         raise FleetViewError(f"{where}: needs a string 'group' and a 'rubric' list")
+    if "rubric_version" not in data or not isinstance(data["rubric_version"], (str, type(None))):
+        raise FleetViewError(f"{where}: needs 'rubric_version' (a string or null)")
     for entry in data["rubric"]:
         if not isinstance(entry, dict) or any(key not in entry for key in _ROW_FIELDS):
             raise FleetViewError(f"{where}: a rubric entry lacks one of {', '.join(_ROW_FIELDS)}")
+        lists = (entry["missing_signals"], entry["unknown_repos"])
+        if not isinstance(entry["id"], str) or not all(
+                isinstance(items, list) and all(isinstance(i, str) for i in items) for items in lists):
+            raise FleetViewError(f"{where}: rubric row {entry['id']!r} has a malformed id or signal list")
         known = entry["status"] == STATUS_LEVEL and isinstance(entry["level"], int)
         if not known and entry["status"] != STATUS_UNKNOWN:
             raise FleetViewError(f"{where}: rubric row {entry['id']!r} has no whole level")

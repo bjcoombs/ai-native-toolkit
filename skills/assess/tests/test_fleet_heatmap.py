@@ -22,6 +22,7 @@ from lib import fleet_view as fv
 from lib.fleet_group_schema import build_schema
 from lib.fleet_groups import GroupRow
 from lib.rubric import load_rubric
+from fleet_heatmap_fixture import build
 from svg_cascade import overridden_text_attributes
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_heatmap"
@@ -83,6 +84,12 @@ def test_rerender_is_byte_identical(tmp_path):
     assert _render(tmp_path, "--compare", str(FIXTURES / "earlier")) == first
 
 
+def test_committed_fixture_runs_match_a_fresh_build(tmp_path):
+    build(tmp_path)
+    for name in ("groups.jsonl", "earlier/groups.jsonl"):
+        assert (tmp_path / name).read_bytes() == (FIXTURES / name).read_bytes(), name
+
+
 def test_fixture_runs_match_the_group_schema():
     for path in (FIXTURES / "groups.jsonl", FIXTURES / "earlier" / "groups.jsonl"):
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -116,6 +123,14 @@ def test_long_group_name_keeps_its_tail_and_the_full_name_on_hover(tmp_path):
     svg = _render(tmp_path)
     assert "…ement-and-reconciliation/batch-services" in svg
     assert "<title>platform/payments/settlement-and-reconciliation/batch-services</title>" in svg
+    assert "1 repository without a level" in svg and "1 repositories" not in svg
+
+
+def test_counts_in_the_subtitle_agree_in_number():
+    groups = _groups()[:1]
+    columns = fh.columns_for(groups, None)[:1]
+    svg = fh.render_heatmap(groups, columns)
+    assert "1 group \u00b7 1 rubric row \u00b7" in svg
 
 
 def test_svg_parses_has_a_background_and_no_stylesheet_override(tmp_path):
@@ -155,7 +170,10 @@ def test_default_output_is_beside_groups_jsonl(tmp_path):
     run.mkdir()
     (run / "groups.jsonl").write_bytes((FIXTURES / "groups.jsonl").read_bytes())
     assert cli.main([str(run)]) == 0
-    assert (run / cli.HEATMAP_FILE).read_text(encoding="utf-8").startswith("<?xml")
+    out = run / cli.HEATMAP_FILE
+    assert out.read_text(encoding="utf-8").startswith("<?xml")
+    assert out.stat().st_mode & 0o777 == 0o644
+    assert sorted(p.name for p in run.iterdir()) == sorted(["groups.jsonl", cli.HEATMAP_FILE])
 
 
 # --- encoding helpers -----------------------------------------------------
@@ -230,6 +248,12 @@ def _one() -> dict[str, object]:
     ([dict(_one(), rubric=[{"id": "x", "status": "maybe", "level": None,
                             "missing_signals": [], "unknown_repos": []}])], "no whole level"),
     ([_one(), _one()], "appears twice"),
+    ([{k: v for k, v in _one().items() if k != "rubric_version"}], "rubric_version"),
+    ([dict(_one(), rubric_version=3)], "rubric_version"),
+    ([dict(_one(), rubric=[{"id": "x", "status": "unknown", "level": None,
+                            "missing_signals": "sig", "unknown_repos": []}])], "malformed"),
+    ([dict(_one(), rubric=[{"id": 1, "status": "unknown", "level": None,
+                            "missing_signals": [], "unknown_repos": []}])], "malformed"),
 ])
 def test_load_groups_refuses_malformed_runs(tmp_path, rows, message):
     path = tmp_path / "groups.jsonl"

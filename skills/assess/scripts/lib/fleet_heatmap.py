@@ -74,7 +74,7 @@ CHAR_W = 7.0  # average glyph advance at 12px, used in place of font metrics
 LINE_H = 18.0
 SWATCH = 16.0
 MAX_ROW_LABEL = 40
-MAX_COL_LABEL = 32
+MAX_COL_LABEL = 48
 KEY_WRAP = 96
 MIN_WIDTH = 640.0
 HEAD_H = 58.0  # title and subtitle
@@ -121,6 +121,10 @@ def truncate(text: str, limit: int, keep_tail: bool = False) -> str:
     if len(text) <= limit:
         return text
     return "…" + text[-(limit - 1):] if keep_tail else text[:limit - 1] + "…"
+
+
+def _count(n: int, noun: str) -> str:
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
 
 def change_text(change: Change) -> str:
@@ -194,7 +198,8 @@ def _cell_parts(x: float, y: float, group: GroupRow, column: Column, keys: dict[
         label = f"? {keys[missing]}"
         tip = f"unknown: {missing}"
         if entry["unknown_repos"]:
-            tip += f"; {len(entry['unknown_repos'])} repositories without a level"
+            count = len(entry["unknown_repos"])
+            tip += f"; {count} {'repository' if count == 1 else 'repositories'} without a level"
     if change is not None:
         tip += f"; change: {change_text(change)}"
     title = html.escape(f"{group['group']} · {column['title']}: {tip}", quote=False)
@@ -231,8 +236,8 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
     show_change = comparison is not None and comparison["comparable"]
 
     body: list[str] = []
-    subtitle = (f"rubric {version} · {len(groups)} groups · {len(columns)} rubric rows"
-                " · darker = higher level reached")
+    subtitle = (f"rubric {version} · {_count(len(groups), 'group')} · "
+                f"{_count(len(columns), 'rubric row')} · darker = higher level reached")
     body.append(_text(PAD, PAD + 18, SVG_TITLE, size=18, weight="bold"))
     body.append(_text(PAD, PAD + 40, subtitle, fill=MUTED))
     for index, label in enumerate(col_labels):
@@ -254,7 +259,7 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
                 f'height="{grid_h:.1f}" fill="none" stroke="{FRAME_STROKE}" stroke-width="1"/>')
 
     y = grid_y + grid_h + 28
-    widest = 0
+    widest = len(subtitle)
     notes: list[str] = []
     if comparison is not None:
         if comparison["note"]:

@@ -11,10 +11,13 @@ A fixture fleet run for `tests/test_fleet_heatmap.py`:
   only in the earlier run.
 - `expected.svg`, `expected-compare.svg`: the golden renders.
 
-The goldens are generated output: never hand-edit or hand-merge them. After a deliberate
-render change, regenerate from `skills/assess` and review the diff:
+Everything here except `rubric.toml` is generated output: never hand-edit or hand-merge it.
+`tests/fleet_heatmap_fixture.py` builds both `groups.jsonl` files (a test fails when the
+committed ones differ from a fresh build). After a deliberate change, regenerate from
+`skills/assess` and review the diff:
 
 ```bash
+uv run --locked python tests/fleet_heatmap_fixture.py
 F=tests/fixtures/fleet_heatmap
 uv run --locked python ../fleet/scripts/heatmap.py $F --rubric $F/rubric.toml --output $F/expected.svg
 uv run --locked python ../fleet/scripts/heatmap.py $F --rubric $F/rubric.toml --compare $F/earlier --output $F/expected-compare.svg
