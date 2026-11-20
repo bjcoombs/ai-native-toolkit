@@ -37,7 +37,7 @@ the check may live there, so the signal is null (unknown), never false.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from lib.check_command import is_check_command, is_lint_command
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
@@ -48,9 +48,10 @@ CiChecksBasis = Literal["check_command", "included_jobs", "no_check_command", "n
 
 
 class CiChecksBlock(TypedDict):
-    """``run-context.json`` ``ci_checks``."""
+    """``run-context.json`` ``ci_checks``; a degraded block is ``{available: false, reason}``."""
 
     available: bool
+    reason: NotRequired[str]
     ci_files: int
     check_commands: int
     included_files: int
