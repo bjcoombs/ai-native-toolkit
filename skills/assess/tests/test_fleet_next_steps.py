@@ -356,6 +356,8 @@ def test_a_strict_bound_is_never_worded_at_least(signal):
     ("nested_instructions.budget.claude_code.bytes", "lt", 5), ("unknown.signal", "eq", 1),
     ("review_reality.approved_share", "lt", 0.5), ("structure.modularity_q", "lt", 0.3),
     ("promissory_markers.families.suppression.total", "eq", 0), ("stats_summary.loc.p95", "gt", 5),
+    ("structure.front_door_ratio", "lt", 0.9), ("structure_drift.tier_0.matched_patterns", "eq", 0),
+    ("promissory_markers.families.suppression.stale", "gt", 10),
 ])
 def test_guidance_declines_shapes_it_does_not_fit(signal, op, value):
     assert guidance(signal, op, value) is None

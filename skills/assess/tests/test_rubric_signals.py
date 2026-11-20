@@ -334,9 +334,12 @@ def test_a_rubric_row_on_a_layer_grade_loads_and_evaluates(
 
 def test_counts_only_output_reaches_the_same_levels(
     golden_repos: dict[str, dict[str, Any]], instructed_repo: dict[str, Any],
+    suppressed_repo: dict[str, Any],
 ) -> None:
     """A fleet run is counts-only by default; the rubric reads only kept fields."""
-    full = {**golden_repos, "instructed": instructed_repo}
+    run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
+    full = {**golden_repos, "instructed": instructed_repo, "suppressed": suppressed_repo,
+            "run_context": {k: v for k, v in run_context.items() if k in scan_names()}}
     counts = {name: counts_only_scans(scans) for name, scans in full.items()}
     for name in full:
         assert _levels(_run({name: counts[name]})) == _levels(_run({name: full[name]}))

@@ -1317,7 +1317,8 @@ name a field and end on a scalar (no list, no object); an untyped block is open.
 Partial and 2 for Present. Layers 2-4 have no deterministic grade, so their rows read
 proxies from full-run blocks (import-graph modularity and front doors; lint
 suppressions; an ownership map and file size), each starting from positive evidence
-so an absent practice is never credited. It can disagree with the `/assess` layer verdicts (the file header lists
+so an absent signal is never credited (the practice /assess looks for can still be
+absent: the header says where). It can disagree with the `/assess` layer verdicts (the file header lists
 where); no instruction file reads level 0 through the never-null
 `layer_grades.instruction_file_present`, not `unknown`. Tests:
 `tests/test_rubric_signals.py`, on headless runs of the golden fixture repositories

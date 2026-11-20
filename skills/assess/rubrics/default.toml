@@ -16,8 +16,9 @@
 #   deterministic grade: /assess judges them by reading type-checker and linter
 #   configuration, architecture tests and code. Their rows read proxies the
 #   run context already exposes, so they disagree with /assess most often.
-#   Each starts from positive evidence at level 1, so an absent practice is
-#   level 0 or unknown, never credit. The structure, structure_drift,
+#   Each starts from positive evidence at level 1, so an absent signal is
+#   level 0 or unknown, never credit; a practice /assess looks for can still
+#   be absent at level 2 (see each row below). The structure, structure_drift,
 #   stats_summary and promissory_markers blocks are assembled by a full
 #   /assess run only: a headless run reports them unavailable, so these three
 #   rows are unknown there.
@@ -29,8 +30,8 @@
 #   low here and Present in /assess; a loosely typed one with clean modules
 #   the reverse.
 # - Layer 3 reads the linter's footprint, not its configuration: level 1 is
-#   at least one lint suppression comment (noqa, eslint-disable, nolint),
-#   which only exists where a linter runs; level 2 holds the stale bare
+#   at least one suppression comment (noqa, eslint-disable, nolint,
+#   type: ignore), which only exists where a linter or type checker runs; level 2 holds the stale bare
 #   suppressions to 10 or fewer, the erosion cap /assess applies. The
 #   promissory_markers scan lists a family only when it found a marker, so a
 #   repository with no suppressions (a clean linter, or none) is unknown, not
