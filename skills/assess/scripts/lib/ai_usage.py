@@ -50,12 +50,12 @@ reason of their own (``REASON_*``).
 """
 from __future__ import annotations
 
-import re
 import subprocess
 from pathlib import Path
 from typing import Literal, TypedDict
 
 from lib.agent_identity import COVERED_AGENTS, coauthors_have_ai_assistant
+from lib.history_window import split_window
 
 GIT_TIMEOUT_SECONDS = 20
 
@@ -71,7 +71,6 @@ LIMITS = (
     "Merge commits are excluded; each merged commit counts once.",
 )
 
-_WINDOW = re.compile(r"^([1-9][0-9]*)(d|w|mo|y)$")
 _UNIT = {"d": "days", "w": "weeks", "mo": "months", "y": "years"}
 
 
@@ -103,10 +102,11 @@ def resolve_window(window: str | None) -> tuple[str, str | None]:
     """
     if window is None:
         return ALL_TIME, None
-    m = _WINDOW.match(window)
-    if m is None:
-        raise ValueError(f"unrecognised history window {window!r}")
-    return window, f"{m.group(1)} {_UNIT[m.group(2)]} ago"
+    try:
+        count, unit = split_window(window)
+    except ValueError:
+        raise ValueError(f"unrecognised history window {window!r}") from None
+    return window, f"{count} {_UNIT[unit]} ago"
 
 
 REASON_NO_GIT = "git is not installed"

@@ -9,8 +9,9 @@ rerun on the same day is byte-identical.
 This is close to, but not the same as, ``ghsync --active-since``: ghsync reads
 the platform's activity and head-commit dates and counts 30-day months and
 365-day years back from the current time, so the two cutoffs can differ by a
-few days. #601 tracks unifying the window grammar. Each ``ok`` fleet row carries it as
-``active``; the run stamp counts those rows as ``qualifying``.
+few days. The window grammar itself is the shared one in lib/history_window.py
+(#601). Each ``ok`` fleet row carries it as ``active``; the run stamp counts
+those rows as ``qualifying``.
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ import subprocess
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from lib.signals import parse_window
+from lib.history_window import split_window
 
 
 def window_start(window: str, today: date) -> date:
@@ -29,9 +30,7 @@ def window_start(window: str, today: date) -> date:
     A window reaching back before year 1 (``3000y``, ``999999999d``) starts at
     ``date.min``: every dated ``HEAD`` is inside it.
     """
-    parse_window(window)  # the one window grammar (lib/signals.py); raises ValueError
-    unit = "mo" if window.endswith("mo") else window[-1]
-    n = int(window[: -len(unit)])
+    n, unit = split_window(window)  # the one window grammar (lib/history_window.py); raises ValueError
     try:
         if unit in ("d", "w"):
             return today - timedelta(days=n * (7 if unit == "w" else 1))

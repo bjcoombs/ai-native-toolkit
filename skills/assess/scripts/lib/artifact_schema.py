@@ -96,7 +96,13 @@ constant each.
 # and instruction_file_present as one registered block, so the headless signals
 # document carries them and a rubric can name them. Additive; the top-level
 # instructions_grade key stays, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.13.0"
+# 1.14.0: each run-context.json nested_instructions claude_shadows_agents finding
+# gains diff_lines, the lines that differ between the two files' comparable
+# lines (body, plus any header comment only one file carries), and the
+# informational finding kind mirrored_instruction_files reports a CLAUDE.md kept
+# identical to its AGENTS.md below the header (issue #589; entry added by #632).
+# Additive: no existing key moves, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.14.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -131,7 +137,11 @@ ARTIFACT_SCHEMA_VERSION = "1.13.0"
 #    hotspot "Has test file" row can move.
 # 10: a skill's SKILL.md is a base doc ranked after README.md (issue #614), so it
 #     owns its skill directory's code in doc staleness and the complexity join.
-# 11: doc_claims compares pins per (pinned file, tool) (issue #610), so a Node pin
+# 11: a leading HTML comment only one of a CLAUDE.md / AGENTS.md pair carries is
+#     compared, not stripped, so it turns a mirrored_instruction_files into a
+#     claude_shadows_agents; text after a header comment's ``-->`` (an H1
+#     included) is body (issue #632).
+# 12: doc_claims compares pins per (pinned file, tool) (issue #610), so a Node pin
 #     no longer contradicts a Python pin in one ``.tool-versions``; the L0
 #     "conflicting doc claims" row and scorer evidence can move.
-ASSESS_METHOD_VERSION = 11
+ASSESS_METHOD_VERSION = 12
