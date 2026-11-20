@@ -44,6 +44,7 @@ set -euo pipefail
 #
 # Usage: ./ghsync.sh [--provider github|gitlab] [--root DIR] [--quiet]
 #                    [--limit N] [--dry-run] [--list-repos] [--porcelain]
+#                    [--partial | --filter SPEC] [--shallow-since DATE]
 #                    GitHub: [--org NAME] [--list-teams]
 #                    GitLab: [--host HOST] [--group PATH] [--from-list FILE]
 #   --provider P     github (default) or gitlab
@@ -58,6 +59,17 @@ set -euo pipefail
 #                    (GitHub: the repo name; GitLab: path_with_namespace),
 #                    all progress/status chatter to stderr; implies
 #                    --list-repos
+#   --partial        Shorthand for --filter blob:none
+#   --filter SPEC    New clones only: pass --filter=SPEC to git clone.
+#                    blob:none keeps full history and fetches file contents
+#                    on demand; meant for analysis-only mirrors.
+#   --shallow-since DATE
+#                    New clones only: pass --shallow-since=DATE to git
+#                    clone, cutting history before DATE (single-branch:
+#                    other branches are not fetched).
+#                    A sync never converts an existing clone. Git records
+#                    the mode per clone: remote.origin.partialclonefilter
+#                    and git rev-parse --is-shallow-repository.
 #   --org NAME       GitHub org to sync (default: basename of --root / cwd)
 #   --list-teams     List your teams in the org and exit (GitHub orgs only)
 #   --host HOST      GitLab host (default: gitlab.com); a scheme and
@@ -93,6 +105,11 @@ PORCELAIN_MODE=false
 GITLAB_HOST=""
 GITLAB_GROUP=""
 FROM_LIST=""
+# Extra git clone options for new clones (--partial / --filter,
+# --shallow-since). Scalars, not an array, so they survive the export into
+# the per-repository bash -c subshell; provider_clone builds the arguments.
+CLONE_FILTER=""
+CLONE_SHALLOW_SINCE=""
 # Flags that belong to one provider only, recorded as given so the
 # validation below can reject them on the other provider.
 github_only_flags=()
@@ -158,6 +175,30 @@ while [[ $# -gt 0 ]]; do
       gitlab_only_flags+=(--from-list)
       shift
       ;;
+    --partial)
+      CLONE_FILTER=blob:none
+      shift
+      ;;
+    --filter)
+      CLONE_FILTER=${2:-}
+      case $CLONE_FILTER in ''|-*) echo "--filter needs a filter spec (e.g. blob:none)"; exit 1 ;; esac
+      shift 2
+      ;;
+    --filter=*)
+      CLONE_FILTER=${1#*=}
+      case $CLONE_FILTER in ''|-*) echo "--filter needs a filter spec (e.g. blob:none)"; exit 1 ;; esac
+      shift
+      ;;
+    --shallow-since)
+      CLONE_SHALLOW_SINCE=${2:-}
+      case $CLONE_SHALLOW_SINCE in ''|-*) echo "--shallow-since needs a date"; exit 1 ;; esac
+      shift 2
+      ;;
+    --shallow-since=*)
+      CLONE_SHALLOW_SINCE=${1#*=}
+      case $CLONE_SHALLOW_SINCE in ''|-*) echo "--shallow-since needs a date"; exit 1 ;; esac
+      shift
+      ;;
     --root)
       ROOT=$2
       shift 2
@@ -208,6 +249,7 @@ while [[ $# -gt 0 ]]; do
     *)
       echo "Unknown option: $1"
       echo "Usage: $0 [--provider github|gitlab] [--root DIR] [--quiet] [--limit N] [--dry-run] [--list-repos] [--porcelain]"
+      echo "       [--partial | --filter SPEC] [--shallow-since DATE]"
       echo "       GitHub: [--org NAME] [--list-teams]   GitLab: [--host HOST] [--group PATH] [--from-list FILE]"
       exit 1
       ;;
@@ -594,18 +636,29 @@ provider_default_branch() {
 provider_clone() {
     local path=$1
     local dest=$2
+    # --partial / --filter and --shallow-since apply to new clones only.
+    local -a opts=()
+    if [ -n "${CLONE_FILTER:-}" ]; then
+        opts+=("--filter=$CLONE_FILTER")
+    fi
+    if [ -n "${CLONE_SHALLOW_SINCE:-}" ]; then
+        opts+=("--shallow-since=$CLONE_SHALLOW_SINCE")
+    fi
     case "$PROVIDER" in
         github)
             # gh passes arguments after -- to git clone; -q silences git's
             # own "Cloning into" line under --quiet.
             if [ "$QUIET_MODE" = true ]; then
-                gh repo clone "$ORG/$path" "$dest" -- -q 2>&1
+                opts+=(-q)
+            fi
+            if [ ${#opts[@]} -gt 0 ]; then
+                gh repo clone "$ORG/$path" "$dest" -- "${opts[@]}" 2>&1
             else
                 gh repo clone "$ORG/$path" "$dest" 2>&1
             fi
             ;;
         gitlab)
-            git clone -q "$(gitlab_clone_url "$path")" "$dest" 2>&1
+            git clone -q ${opts[@]+"${opts[@]}"} "$(gitlab_clone_url "$path")" "$dest" 2>&1
             ;;
         *)
             echo "Unknown provider: $PROVIDER"
@@ -838,6 +891,7 @@ GHSYNC_STATUS_DIR="$status_dir"
 trap 'rm -f "$all_repos_file" "$archived_repos_file"; rm -rf "$temp_dir"' EXIT
 
 export QUIET_MODE DRY_RUN GITHUB_DEV_PATH ORG PROVIDER GITLAB_HOST GITLAB_SCHEME GHSYNC_STATUS_DIR
+export CLONE_FILTER CLONE_SHALLOW_SINCE
 
 # Progress indicator
 show_progress() {
