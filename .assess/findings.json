@@ -21,6 +21,7 @@
     {
       "name": "lying_map",
       "paths": [
+        "README.md",
         "skills/README.md"
       ]
     },
