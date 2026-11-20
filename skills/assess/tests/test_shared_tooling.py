@@ -384,8 +384,11 @@ include:
         ("grp/a", None), ("grp/b", "v2"), ("grp/c", None), ("grp/d", None)]
 
 
-def test_a_ref_holding_a_ci_variable_is_not_a_pin() -> None:
-    text = "include:\n  - project: grp/a\n    ref: $TPL_REF\n  - component: grp/c/x@${VERSION}\n"
-    assert [e["ref"] for e in gitlab_includes(text, ".gitlab-ci.yml", True)] == [None, None]
+def test_a_ref_holding_a_ci_variable_is_a_pin_of_unknown_value() -> None:
+    text = ("include:\n  - project: grp/a\n    ref: $TPL_REF\n  - component: grp/c/x@${VERSION}\n"
+            "  - project: grp/b\n    ref: v2\n  - project: grp/d\n")
+    got = [(e["ref"], e["ref_variable"]) for e in gitlab_includes(text, ".gitlab-ci.yml", True)]
+    assert got == [(None, True), (None, True), ("v2", False), (None, False)]
     workflow = "jobs:\n  a:\n    uses: org/ci/.github/workflows/b.yml@$REF\n"
-    assert [e["ref"] for e in github_reusable_workflows(workflow, ".github/workflows/x.yml", True)] == [None]
+    assert [(e["ref"], e["ref_variable"]) for e in
+            github_reusable_workflows(workflow, ".github/workflows/x.yml", True)] == [(None, True)]

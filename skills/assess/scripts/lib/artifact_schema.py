@@ -106,7 +106,11 @@ constant each.
 # import edges front_door_ratio is measured over; 0 marks that ratio's 1.0 as
 # vacuous. Additive: no existing key moves, and complexity-stats.json is
 # unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.15.0"
+# 1.16.0: each run-context.json shared_tooling ci_includes entry gains
+# ref_variable (issue #684): true when the ref holds a CI variable ($TPL_REF), so
+# a fleet map draws that include as "pin unknown" rather than unpinned. Additive:
+# ref stays null for it, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.16.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

@@ -9,10 +9,11 @@ Drift: a CI include whose pinned ``ref`` differs from the most common ref the
 fleet pins for that source is drawn dashed in the warning colour (ties go to
 the lexically greatest ref). An unpinned include (``ref`` null) follows the
 source's default branch: it is not drift, and the item counts it as unpinned.
-An include whose ``ref`` key is absent (counts-only dropped it) is "pin
-unknown", drawn dotted, never "in step". A run whose ``shared_tooling`` blocks
-carry no ``ref`` at all (before #674) says so in the subtitle and draws no
-dashes.
+An include whose ``ref`` key is absent (counts-only dropped it), or whose ref
+holds a CI variable (``ref_variable``, #684: pinned, to a version the file does
+not say), is "pin unknown", drawn dotted, never "in step", unpinned or drift. A
+run whose ``shared_tooling`` blocks carry no ``ref`` or ``ref_variable`` at all
+(before #674) says so in the subtitle and draws no dashes.
 
 A repository whose ``shared_tooling`` evidence is missing (a failed scan, an
 unavailable or absent block) is named on a hatched strip, never shown as
@@ -55,14 +56,14 @@ class Link(TypedDict):
     item: str  # shared_tooling id, e.g. "gitlab_project:platform/ci"
     refs: list[str]  # pinned refs seen for this item in this repository, sorted
     unpinned: bool  # an include of this item with no pin (ref null): follows the default branch
-    pin_unknown: bool  # an include whose ref is absent: not collected, or dropped by counts-only
+    pin_unknown: bool  # ref absent (not collected, dropped by counts-only) or a CI variable
 
 
 class ToolingView(TypedDict):
     links: list[Link]  # sorted by (repo, item)
     none: list[str]  # repositories with evidence and no shared item
     unknown: list[str]  # repositories with no shared_tooling evidence
-    refs_collected: bool  # any CI include carries a ref key (absent before #674)
+    refs_collected: bool  # any CI include carries a ref or ref_variable key (absent before #674)
 
 
 def _block(row: FleetRow) -> Mapping[str, Any] | None:
@@ -74,17 +75,20 @@ UNPINNED = "(unpinned)"
 UNKNOWN = "(pin unknown)"
 
 
-def _refs(block: Mapping[str, Any]) -> dict[str, set[str]]:
-    """Item -> the pins its tracked includes carry; ``UNPINNED`` for a null ref and
-    ``UNKNOWN`` for an absent one (a run before #674, or a ref counts-only dropped)."""
+def _refs(block: Mapping[str, Any]) -> tuple[dict[str, set[str]], bool]:
+    """Item -> the pins its tracked includes carry, and whether any include carries a pin
+    field at all. ``UNPINNED`` for a null ref; ``UNKNOWN`` for a ref that holds a CI
+    variable (``ref_variable``) or is absent (a run before #674, or a ref counts-only dropped)."""
     refs: dict[str, set[str]] = {}
+    collected = False
     for entry in block.get("ci_includes") or []:
         if isinstance(entry, dict) and entry.get("tracked") is True and isinstance(entry.get("id"), str):
-            ref = entry.get("ref", UNKNOWN)
+            collected = collected or "ref" in entry or "ref_variable" in entry
+            ref = UNKNOWN if entry.get("ref_variable") is True else entry.get("ref", UNKNOWN)
             pin = ref if isinstance(ref, str) and ref and ref != UNKNOWN else (
                 UNPINNED if ref is None else UNKNOWN)
             refs.setdefault(entry["id"], set()).add(pin)
-    return refs
+    return refs, collected
 
 
 def _link(repo: str, item: str, pins: set[str]) -> Link:
@@ -97,6 +101,7 @@ def tooling_view(repos: Sequence[FleetRow]) -> ToolingView:
     links: list[Link] = []
     none: list[str] = []
     unknown: list[str] = []
+    collected = False
     for row in sorted(repos, key=lambda r: r["repo"]):
         block = _block(row)
         if block is None:
@@ -106,10 +111,11 @@ def tooling_view(repos: Sequence[FleetRow]) -> ToolingView:
                       for i in block.get(key) or [] if isinstance(i, str)})
         if not ids:
             none.append(row["repo"])
-        refs = _refs(block)
+        refs, has_pins = _refs(block)
+        collected = collected or has_pins
         links.extend(_link(row["repo"], i, refs.get(i, set())) for i in ids)
     return {"links": links, "none": none, "unknown": unknown,
-            "refs_collected": any(link["refs"] or link["unpinned"] for link in links)}
+            "refs_collected": collected}
 
 
 def common_refs(links: Sequence[Link]) -> dict[str, str]:

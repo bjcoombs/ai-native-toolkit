@@ -831,8 +831,9 @@ pins (`ci_includes[].ref`), the repositories that share nothing, and those with 
 (failed, absent or unavailable block). `common_refs` is each item's most pinned ref (ties:
 lexically greatest); `drifted` marks a link pinned off it, drawn dashed. An unpinned include
 is not drift (counted as unpinned); an include whose `ref` key is absent (dropped by
-counts-only) is "pin unknown", drawn dotted. A run whose blocks carry no `ref` (before #674)
-says "drift not shown" instead. `render_tooling_map` draws
+counts-only) or whose ref is a CI variable (`ref_variable`, #684) is "pin unknown", drawn
+dotted, never unpinned or drift. A run whose blocks carry neither `ref` nor `ref_variable`
+(before #674) says "drift not shown" instead. `render_tooling_map` draws
 repositories left, items right with their dependent counts, and the unknown repositories on
 a hatched strip.
 
@@ -2275,14 +2276,16 @@ Shared CI sources and agent marketplaces, per repository (issue #566), the
 file-content half of the organisation-wide evidence in #550.
 `scan_shared_tooling(repo_root)` writes `{available, ci_includes[], marketplaces[],
 ci_source_ids[], marketplace_ids[]}`. `ci_includes` rows (`kind`, `source`, `id`,
-`ref`, `path`, `line`, `tracked`) come from the top-level `include:` section of
+`ref`, `ref_variable`, `path`, `line`, `tracked`) come from the top-level `include:` section of
 `.gitlab-ci.yml` (`project:` -> `gitlab_project`, `component:` ->
 `gitlab_component` with the host and `@version` dropped) and from `uses:
 <owner>/<repo>/.github/workflows/...` in `.github/workflows/*.yml`
 (`github_reusable_workflow`, keyed on the repository). `ref` is the pin kept apart
 from the id (#674): a GitLab include item's own `ref:` (joined by include item, so a
 `ref:` under `inputs:` is not it), a component's or workflow's `@ref`, `null` when
-unpinned; counts-only keeps it when it is a token (`v4`, `1.2.0`, a SHA) and drops it otherwise (`release/1.2`). Local includes, templates,
+unpinned. A ref holding a CI variable (`$TPL_REF`, `@${VERSION}`) is recorded as `ref`
+`null` with `ref_variable` true (#684): pinned, to a value the file does not say, so `--full`
+and counts-only agree and the map draws it as "pin unknown". Counts-only keeps a `ref` that is a token (`v4`, `1.2.0`, a SHA) and drops it otherwise (`release/1.2`). Local includes, templates,
 `./.github/workflows` references, a job's `trigger:`, keys in nested lists
 (`inputs:`, `rules:`), step-level `uses:` and `run:` script text are skipped.
 Symlinks and paths resolving outside the repository are not read. `marketplaces`

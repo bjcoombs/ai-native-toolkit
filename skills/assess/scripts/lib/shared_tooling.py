@@ -18,7 +18,10 @@ Every entry carries a stable ``id`` so a roll-up dedupes on it. A CI source is
 identified by the project, component or repository it comes from (lowercased;
 the version and the GitLab host are dropped); the pinned version is kept apart
 as ``ref`` (a GitLab include's ``ref:``, a component's or reusable workflow's
-``@ref``; null when unpinned), so a fleet map can show a pin that drifted (#674). A marketplace is identified by
+``@ref``; null when unpinned), so a fleet map can show a pin that drifted (#674). A ref
+that holds a CI variable (``$TPL_REF``) names no version the file states: ``ref`` is null
+and ``ref_variable`` true, so the map draws it as "pin unknown", never as unpinned or as
+drift (#684). A marketplace is identified by
 its name, the key Claude Code itself uses to tell marketplaces apart, so a
 manifest and a settings entry naming the same marketplace collapse to one.
 ``distinct_ids`` is that roll-up over several blocks.
@@ -55,6 +58,7 @@ class CiInclude(TypedDict):
     source: str
     id: str
     ref: str | None  # the pinned version: GitLab ``ref:``, component or workflow ``@ref``
+    ref_variable: bool  # the ref holds a CI variable: pinned, to a version the file does not say
     path: str
     line: int
     tracked: bool
@@ -126,12 +130,17 @@ def pin(ref: str | None) -> str | None:
     """A pinned ref as recorded: None when absent or when it holds a CI variable (``$TPL_REF``),
     whose value the file does not say, so ``--full`` and counts-only agree."""
     ref = (ref or "").strip()
-    return None if not ref or "$" in ref else ref
+    return None if not ref or is_variable(ref) else ref
 
 
-def _component_ref(raw: str) -> str | None:
-    """``host/group/project/name@1.0`` -> ``1.0``; None without a version."""
-    return pin(raw.partition("@")[2])
+def is_variable(ref: str | None) -> bool:
+    """The ref holds a CI variable (``$TPL_REF``, ``${VERSION}``): pinned, value unknown."""
+    return "$" in (ref or "")
+
+
+def _component_ref(raw: str) -> str:
+    """``host/group/project/name@1.0`` -> ``1.0``; empty without a version."""
+    return raw.partition("@")[2]
 
 
 def _component_source(raw: str) -> str:
@@ -283,7 +292,7 @@ def gitlab_includes(text: str, path: str, tracked: bool) -> list[CiInclude]:
     """``include: project:`` / ``include: component:`` entries in a GitLab CI file."""
     entries: list[CiInclude] = []
     keys = _include_keys(text)
-    refs = {item: pin(_unquote(v)) for _, k, v, item in keys if k == "ref"}
+    refs = {item: _unquote(v) for _, k, v, item in keys if k == "ref"}
     for number, key, raw_value, item in keys:
         value = _unquote(raw_value)
         if not value or key == "ref":
@@ -291,16 +300,17 @@ def gitlab_includes(text: str, path: str, tracked: bool) -> list[CiInclude]:
         if key == "project":
             source = value.strip("/")
             kind: CiKind = "gitlab_project"
-            ref = refs.get(item)
+            raw_ref = refs.get(item)
         else:
             source = _component_source(value)
             kind = "gitlab_component"
-            ref = _component_ref(value)
+            raw_ref = _component_ref(value)
         entries.append({
             "kind": kind,
             "source": source,
             "id": f"{kind}:{source.lower()}",
-            "ref": ref,
+            "ref": pin(raw_ref),
+            "ref_variable": is_variable(raw_ref),
             "path": path,
             "line": number,
             "tracked": tracked,
@@ -366,6 +376,7 @@ def github_reusable_workflows(text: str, path: str, tracked: bool) -> list[CiInc
             "source": repo,
             "id": f"github_reusable_workflow:{repo.lower()}",
             "ref": pin(match.group(2)),
+            "ref_variable": is_variable(match.group(2)),
             "path": path,
             "line": number,
             "tracked": tracked,
