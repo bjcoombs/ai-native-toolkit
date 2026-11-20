@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from floor_check import main
+from floor_check import CANARY_PREFIXES, GATE_CODE_PREFIXES, main
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FLOOR_TEXT = (REPO_ROOT / "FLOOR.md").read_text(encoding="utf-8")
@@ -136,6 +136,17 @@ def test_nothing_beyond_clause_iii_requests_sign_off(scratch_repo):
     assert _floor_core(scratch_repo, unlisted) == set()
 
 
+def test_canary_gated_sentence_matches_the_classifier(scratch_repo):
+    # The paths clause iii hands to the canary suite are the ones the
+    # classifier gates there, and none of them requests sign-off.
+    body = _clause_body(FLOOR_TEXT, "iii")
+    span = re.search(r"rely on \((.+?)\) are\s+gated by the canary suite", body, re.DOTALL)
+    assert span, "clause iii no longer names the canary-gated paths"
+    named = re.findall(r"`([^`]+)`", span.group(1))
+    assert sorted(named) == sorted(GATE_CODE_PREFIXES + CANARY_PREFIXES)
+    assert _floor_core(scratch_repo, [_sample(path) for path in named]) == set()
+
+
 # ── 2. Gutting any clause body, or dropping its anchor, goes red ─────────────
 
 @pytest.mark.parametrize("clause_id", CLAUSE_IDS)
@@ -174,6 +185,21 @@ def test_clause_loses_a_load_bearing_word(tmp_path, clause_id, phrase):
     rc, out = _run_clauses(tmp_path, text)
     assert rc == 1, out
     assert _named_clauses(out) == [clause_id]
+
+
+@pytest.mark.parametrize("clause_id", CLAUSE_IDS)
+def test_decoy_anchor_with_its_phrases_does_not_mask_a_gutted_clause(
+    tmp_path, clause_id
+):
+    # A copy of the intact clause planted ahead of the real one, which is then
+    # gutted: the check must not read the decoy as the clause.
+    anchor = f"<!-- floor-clause:{clause_id} -->"
+    body = _clause_body(FLOOR_TEXT, clause_id)
+    gutted = FLOOR_TEXT.replace(body, "Intentionally left blank.\n\n", 1)
+    text = f"{anchor}\n{body}\n## Preamble\n\n{gutted}"
+    rc, out = _run_clauses(tmp_path, text)
+    assert rc == 1, out
+    assert clause_id in _named_clauses(out)
 
 
 # ── 3. Clause iv cannot be negated while keeping its keyword ─────────────────

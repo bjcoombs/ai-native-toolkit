@@ -365,9 +365,9 @@ def missing_clauses(floor_text: str | None) -> list[str]:
         return list(REQUIRED_CLAUSES)
     missing = []
     for clause_id, (anchor, *phrases) in REQUIRED_CLAUSES.items():
-        _, found, rest = floor_text.partition(anchor)
+        _, _, rest = floor_text.partition(anchor)  # one anchor: no decoy section
         section = re.split(r"<!-- floor-clause:|\n## ", rest, maxsplit=1)[0]
-        if not found or any(phrase not in section for phrase in phrases):
+        if floor_text.count(anchor) != 1 or any(p not in section for p in phrases):
             missing.append(clause_id)
     return missing
 
