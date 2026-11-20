@@ -20,7 +20,12 @@ evidence is static, read from the files at HEAD:
   run as the program (``ruff``, ``eslint``, ``mypy``, ``uv run flake8``), or a
   lint target of a runner or script (``make lint``, ``npm run lint``,
   ``go vet``, ``cargo clippy``, ``./scripts/lint.sh``). An install that names a
-  linter (``npm install eslint``) never counts.
+  linter (``npm install eslint``, ``uv sync --extra lint``) never counts, nor
+  does a bare list item that only names a linter (``- mypy`` under
+  ``matrix:``, ``needs:`` or ``stages:``); ``- ruff check .`` does.
+- Known limit of the line-based scan (no YAML parser): every line is a
+  candidate, so a command inside a non-script value, such as an ``env:`` block
+  scalar holding ``pytest``, counts as a run.
 - Each line is classified on its own, so an apostrophe in a step name or a
   fenced block inside a script cannot swallow the lines after it; a command
   continued with ``\\`` is read from its first line.
@@ -36,12 +41,13 @@ the check may live there, so the signal is null (unknown), never false.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
-from lib.check_command import is_check_command, is_lint_command
+from lib.check_command import LINT_PROGRAMS, is_check_command, is_lint_command
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
-from lib.command_resolver import extract_commands
+from lib.command_resolver import command_words, extract_commands
 from lib.shared_tooling import pulls_jobs_from_elsewhere
 
 CiChecksBasis = Literal["check_command", "included_jobs", "no_check_command", "no_ci"]
@@ -59,13 +65,28 @@ class CiChecksBlock(TypedDict):
     basis: CiChecksBasis
 
 
+# A YAML list item with no key (``- mypy``), as opposed to ``- run: ...``.
+_BARE_ITEM = re.compile(r"^\s*-\s+(?![\w.-]+:(?:\s|$))")
+
+
 def _line_runs_check(line: str) -> bool:
     """One CI line, classified on its own so an open quote or a stray fence cannot carry over."""
     text = ci_line_text(line).removesuffix("\\").strip()
     if not text:
         return False
     commands = extract_commands(f"```bash\n{text}\n```\n")
-    return any(is_check_command(c.text) or is_lint_command(c.text) for c in commands)
+    bare_item = _BARE_ITEM.match(line) is not None
+    return any(
+        is_check_command(c.text)
+        or (is_lint_command(c.text) and not (bare_item and _lone_linter(c.text)))
+        for c in commands
+    )
+
+
+def _lone_linter(text: str) -> bool:
+    """A linter name with no argument: under ``matrix:`` / ``needs:`` / ``stages:`` a value, not a run."""
+    words = command_words(text)
+    return len(words) == 1 and words[0] in LINT_PROGRAMS
 
 
 def check_commands(text: str) -> int:

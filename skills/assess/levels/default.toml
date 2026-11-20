@@ -91,6 +91,9 @@
 #   local check: layer5_cap does not apply, so an instruction file names a
 #   check command that resolves and setup or a locked bootstrap is committed.
 #   A repository that names a check but has no CI check line is 0.
+#   The scan reads CI files line by line, with no YAML parser: a command
+#   inside a non-script value (an env: block scalar holding pytest) counts as
+#   a run, a known limit.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures.
 #

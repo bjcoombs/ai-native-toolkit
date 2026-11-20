@@ -2305,8 +2305,10 @@ with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
 cannot swallow the next); `check_commands` counts the lines with a segment that
-`check_command.is_check_command` or `is_lint_command` credits. Triggers are not
-read. `test_or_lint_runs` is true with any check
+`check_command.is_check_command` or `is_lint_command` credits; a bare list item
+that only names a linter (`- mypy` under `matrix:`) does not count. Triggers are
+not read. Known limit: lines are read without a YAML parser, so a command inside a
+non-script value (an `env:` block scalar holding `pytest`) counts as a run. `test_or_lint_runs` is true with any check
 line; with none it is null (`basis: included_jobs`) when a CI file pulls jobs
 from elsewhere (`shared_tooling.pulls_jobs_from_elsewhere`: any top-level GitLab
 `include:`, a job-level `uses:` of another repository's reusable workflow), else

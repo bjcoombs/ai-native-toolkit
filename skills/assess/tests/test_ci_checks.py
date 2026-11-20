@@ -26,6 +26,8 @@ from lib.shared_tooling import pulls_jobs_from_elsewhere
     "- name: Don't skip tests\n  run: pytest",
     "run: |\n  echo '```' >> $GITHUB_STEP_SUMMARY\n  pytest",
     "run: pytest \\\n  -q",
+    "script:\n  - ruff check .",
+    "script:\n  - pytest",
 ])
 def test_a_ci_line_that_runs_a_check_counts(text: str) -> None:
     assert check_commands(text) >= 1
@@ -50,6 +52,9 @@ def test_a_ci_line_that_runs_a_check_counts(text: str) -> None:
     "make build # then lint",
     "stages:\n  - lint\n  - build",
     "needs:\n  - lint",
+    "uv sync --extra lint",
+    "strategy:\n  matrix:\n    tool:\n      - mypy\n      - ruff",
+    "needs:\n  - ruff",
 ])
 def test_a_ci_line_that_runs_no_check_does_not_count(text: str) -> None:
     assert check_commands(text) == 0
