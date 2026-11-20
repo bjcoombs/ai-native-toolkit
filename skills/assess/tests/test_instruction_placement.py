@@ -334,3 +334,27 @@ def test_a_section_that_is_the_whole_file_is_not_long() -> None:
     record = analyse_file(text, "CLAUDE.md", "instruction", {})
     assert record["fetch_on_need_lines"] == 0
     assert record["unclassified_lines"] == 61
+
+
+def test_a_preamble_line_above_the_only_heading_does_not_make_it_long() -> None:
+    """``long_section`` needs two headed sections, so a comment line above a
+    file's single heading leaves the file unclassified, as without it."""
+    body = "## Layout\n" + "\n".join(f"- `src/mod{i}.py` holds part {i}." for i in range(99)) + "\n"
+    for text in (body, "<!-- generated -->\n" + body):
+        record = analyse_file(text, "CLAUDE.md", "instruction", {})
+        assert record["fetch_on_need_lines"] == 0, text[:20]
+    two = body + "## Other\n" + "Prose line.\n" * 5
+    assert analyse_file(two, "CLAUDE.md", "instruction", {})["fetch_on_need_lines"] == 100
+
+
+def test_nested_file_about_its_own_subtree_is_not_scoped_elsewhere() -> None:
+    """``scoped_paths`` does not fire when the file already sits under the
+    dominant directory: a nested file about its own subtree is in place."""
+    paths = "\n".join(f"- `src/api/handlers/h{i}.py` handles route {i}." for i in range(60))
+    text = "# API\n\n## Intro\n\nSmall.\n\n## Handlers\n\n" + paths + "\n"
+    nested = analyse_file(text, "src/api/CLAUDE.md", "instruction", {})
+    assert nested["fetch_on_need_lines"] == 0
+    root = analyse_file(text, "CLAUDE.md", "instruction", {})
+    [move] = root["relocatable"]
+    assert set(move["signals"]) == {"scoped_paths", "long_section"}
+    assert move["home"] == {"kind": "nested_instruction_file", "target": "src/CLAUDE.md"}

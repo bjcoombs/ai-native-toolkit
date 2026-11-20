@@ -2,7 +2,7 @@
 
 The grader splits the file on its headings (``lib.instruction_placement``) and
 charges two kinds of line: always-on lines past 200, and fetch-on-need lines
-that a pointer would replace. Both only grow as lines are added. This
+that a pointer would replace. For a fixed split, both only grow as lines are added. This
 replaced the #517 whole-file curve, its skills-delegation halving and its word
 leg. The core thesis (``test_600_line_file_scores_below_the_same_file_with_a_pointer``):
 a long file whose bulk belongs in a skill scores below the same file with that

@@ -127,8 +127,10 @@ VERIFIABLE_PATTERNS = [
 #   share term: a file that is mostly reference pays for it at any size, and a
 #   large file that is mostly always-on content pays nothing for the share.
 #
-# Both terms only grow as lines are added, so no edit lowers the penalty
-# except moving or cutting text. Past ``ALWAYS_ON_GRADE_CAP_LINES`` always-on
+# For a fixed classification both terms only grow as lines are added. A
+# section's classification can still change with the file around it (a
+# ``long_section`` share shrinks as other sections grow), so the guarantee is
+# per term, not end to end. Past ``ALWAYS_ON_GRADE_CAP_LINES`` always-on
 # lines no amount of other credit
 # makes the file lean: the grade is capped at B (``SIZE_GRADE_CAP_SCORE``).
 # Skills beside the file no longer halve anything: the placement split names
@@ -363,7 +365,7 @@ def placement_penalty(record: PlacementFile) -> PlacementPenalty:
     ``RELOCATABLE_LINES_PER_POINT`` fetch-on-need lines, capped at
     ``RELOCATABLE_MAX_PENALTY``. ``capped``: a file past
     ``ALWAYS_ON_GRADE_CAP_LINES`` always-on lines grades at most B. Neither
-    reads ``flagged``, so both are monotone in the lines a file adds.
+    reads ``flagged``, so for a fixed split each grows with the lines added.
     """
     always_on = record["always_on_lines"]
     over = max(0, always_on - ALWAYS_ON_FLAG_LINES)

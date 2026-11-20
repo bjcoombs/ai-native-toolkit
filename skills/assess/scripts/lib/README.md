@@ -1089,9 +1089,10 @@ existing `SKILL.md` by `SKILL_OVERLAP_MIN_PCT` (the
 `instruction_content.readme_overlap_pct` line overlap) is `duplicates_skill`, and
 any other section moves only when
 `MIN_FETCH_SIGNALS` of `scoped_heading` (one tool, language or platform),
-`scoped_paths` (backticked paths mostly under one top-level directory),
-`command_reference` (fence density) and `long_section` (a quarter of the file, never
-the whole file) fire. Each threshold is a
+`scoped_paths` (backticked paths mostly under one top-level directory, unless the
+file already sits under it),
+`command_reference` (fence density) and `long_section` (a quarter of the file, in a
+file with at least two headed sections) fire. Each threshold is a
 named constant with its rationale. Suggested homes: `existing_skill` (the
 duplicated `SKILL.md`), `nested_instruction_file` (`<dir>/<basename>` for
 `scoped_paths`), `skill` (`<skills dir>/<slug>/SKILL.md`), and for agent and skill

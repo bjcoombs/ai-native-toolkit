@@ -60,7 +60,8 @@ FENCE_DENSITY_MIN = 0.5
 FENCE_MIN_LINES = 20
 # long_section: one section holding a quarter of the file is a topic that
 # outgrew the file. The floor stops a 12-line section of a 40-line file firing,
-# and a section that is the whole file (no headings) is not long relative to it.
+# and it needs two headed sections: a file with one heading (or none) is not
+# long relative to itself.
 LONG_SECTION_SHARE = 0.25
 LONG_SECTION_MIN_LINES = 40
 # duplicates_skill: share of the section's substantive lines (30+ characters,
@@ -326,18 +327,30 @@ def always_on_signals(section: Section) -> list[str]:
     return signals
 
 
-def fetch_signals(section: Section, file_lines: int) -> list[str]:
+def fetch_signals(
+    section: Section, file_lines: int, headed_sections: int = 2, rel: str = "",
+) -> list[str]:
+    """The fetch-on-need signals for one section of a ``file_lines``-line file.
+
+    ``long_section`` needs ``headed_sections`` (the file's sections that have a
+    heading) to be two or more: a section is long only relative to other
+    headed sections, so a file with one heading, with or without a preamble
+    line above it, is never long relative to itself. ``scoped_paths`` does not
+    fire when ``rel`` already sits under the dominant directory: a nested file
+    about its own subtree is already where that guidance belongs.
+    """
     signals: list[str] = []
     words = set(re.findall(r"[a-z0-9]+", section.heading.lower()))
     if words & SCOPED_HEADING_TERMS:
         signals.append("scoped_heading")
-    if dominant_directory(section):
+    directory = dominant_directory(section)
+    if directory and not rel.startswith(f"{directory}/"):
         signals.append("scoped_paths")
     fenced, _prose = _fenced_and_prose(section.lines)
     size = len(section.lines)
     if fenced >= FENCE_MIN_LINES and fenced / size >= FENCE_DENSITY_MIN:
         signals.append("command_reference")
-    if (LONG_SECTION_MIN_LINES <= size < file_lines
+    if (headed_sections >= 2 and size >= LONG_SECTION_MIN_LINES
             and size / max(file_lines, 1) >= LONG_SECTION_SHARE):
         signals.append("long_section")
     return signals
@@ -370,6 +383,7 @@ def suggest_home(
 def classify(
     section: Section, file_lines: int, rel: str, kind: FileKind,
     skills: Mapping[str, str], skills_dir: str = ".claude/skills",
+    headed_sections: int = 2,
 ) -> Classified:
     # Always-on signals win, even over a duplicate: a rules, identity or
     # pointer section a skill restates is still a guardrail every session needs,
@@ -381,7 +395,7 @@ def classify(
     if duplicate:
         return Classified(section, "fetch_on_need", ("duplicates_skill",),
                           {"kind": "existing_skill", "target": duplicate})
-    fetch = fetch_signals(section, file_lines)
+    fetch = fetch_signals(section, file_lines, headed_sections, rel)
     if len(fetch) >= MIN_FETCH_SIGNALS:
         return Classified(section, "fetch_on_need", tuple(fetch),
                           suggest_home(section, rel, kind, fetch, skills_dir))
@@ -394,7 +408,9 @@ def analyse_file(
 ) -> PlacementFile:
     """One file's placement record (see ``PlacementFile``)."""
     total = len(text.splitlines())
-    results = [classify(s, total, rel, kind, skills, skills_dir) for s in split_sections(text)]
+    sections = split_sections(text)
+    headed = sum(1 for s in sections if s.heading)
+    results = [classify(s, total, rel, kind, skills, skills_dir, headed) for s in sections]
     lines_by: Counter[str] = Counter()
     for c in results:
         lines_by[c.status] += len(c.section.lines)
