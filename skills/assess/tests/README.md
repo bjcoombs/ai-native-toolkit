@@ -70,6 +70,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_test_pressure.py` | `lib/test_pressure/` - mutation tier output parsing, cheap heuristics (test/source ratio, assertion density, gap signal) |
 | `test_ci_workflow.py` | `lib/ci_workflow.py` - template substitution (version, branch, tool steps, path filters), path-filtered workflow detection, literal-dollar escaping, YAML well-formedness, and the `actions/checkout` pin matching this repo's gate workflow and `README.md` |
 | `test_stats_diff.py` | `lib/stats_diff.py` - hotspot transition classification (graduated, regressed, restructured, new, persistent; restructured when the worst function falls while summed complexity rises) and sidecar loading |
+| `test_stats_rows.py` | `lib/stats_rows.py` + `scripts/complexity-treemap.py` - the top-10 lists and the uncapped `files` key, that the doc-complexity join sees a complex file outside every top list, and the one-time diff disarm from the stats schema bump |
 | `test_wiki_writer.py` | `lib/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
 | `test_git_commit_info.py` | `lib/git_churn.py` (`git_commit_info`) - commit snapshot with SHA/timestamp for staleness warnings |
 | `test_instruction_bloat.py` | `lib/agent_instructions_grader.py` - size-curve penalty from 200 lines, halved by skills delegation, B cap past 400 lines or 4800 words |

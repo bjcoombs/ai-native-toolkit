@@ -61,13 +61,17 @@ constant each.
 # commits in the history window with an AI-assistant Co-authored-by trailer, as
 # a lower bound with its window, merge rule and limits. Additive;
 # complexity-stats.json is unchanged.
-# 1.8.0: each run-context.json doc_staleness.docs row gains subject_roots (the
+# 1.8.0: complexity-stats.json gains `files`, every scored file as {path, ccn},
+# uncapped and sorted by path, read by the doc-complexity join (issue #556).
+# Additive; run-context.json is unchanged. STATS_SCHEMA_VERSION moves 5->6, so
+# the cross-run diff is disarmed once against a pre-#556 snapshot.
+# 1.9.0: each run-context.json doc_staleness.docs row gains subject_roots (the
 # ownership rule's roots), base_doc_dir (the directory the doc is the base doc
 # of, or null) and subject_paths (up to 20 sorted subject paths), from
 # lib.doc_ownership (issue #555). A repo-baseline row's subject_code_count is now
 # 0 (it owns no subject), the same value the documentation block reports.
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.8.0"
+ARTIFACT_SCHEMA_VERSION = "1.9.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -78,7 +82,10 @@ ARTIFACT_SCHEMA_VERSION = "1.8.0"
 # 1: the baseline (issue #554).
 # 2: churn counts follow renames, moving staleness ratios, lying_map and hotspot
 # ranks for files renamed inside the churn window (issue #425).
-# 3: the complexity join takes doc ownership from the doc-staleness rule
+# 3: the doc-complexity join reads complexity-stats.json's uncapped `files` list,
+#    so a complex file outside every top-10 list can now produce lying_map,
+#    unexplained_complexity or good_contract (issue #556).
+# 4: the complexity join takes doc ownership from the doc-staleness rule
 #    (lib.doc_ownership, issue #555): a README beside a design doc owns the
 #    directory's code, and a non-base doc owns none by directory.
-ASSESS_METHOD_VERSION = 3
+ASSESS_METHOD_VERSION = 4
