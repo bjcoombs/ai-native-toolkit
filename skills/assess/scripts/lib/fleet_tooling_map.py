@@ -7,8 +7,12 @@ if that template changes.
 
 Drift: a CI include whose pinned ``ref`` differs from the most common ref the
 fleet pins for that source is drawn dashed in the warning colour (ties go to
-the lexically greatest ref). A run whose ``shared_tooling`` blocks carry no
-``ref`` says so in the subtitle and draws no dashes, never a false "in step".
+the lexically greatest ref). An unpinned include (``ref`` null) follows the
+source's default branch: it is not drift, and the item counts it as unpinned.
+An include whose ``ref`` key is absent (counts-only dropped it) is "pin
+unknown", drawn dotted, never "in step". A run whose ``shared_tooling`` blocks
+carry no ``ref`` at all (before #674) says so in the subtitle and draws no
+dashes.
 
 A repository whose ``shared_tooling`` evidence is missing (a failed scan, an
 unavailable or absent block) is named on a hatched strip, never shown as
@@ -50,13 +54,15 @@ class Link(TypedDict):
     repo: str
     item: str  # shared_tooling id, e.g. "gitlab_project:platform/ci"
     refs: list[str]  # pinned refs seen for this item in this repository, sorted
+    unpinned: bool  # an include of this item with no pin (ref null): follows the default branch
+    pin_unknown: bool  # an include whose ref is absent: not collected, or dropped by counts-only
 
 
 class ToolingView(TypedDict):
     links: list[Link]  # sorted by (repo, item)
     none: list[str]  # repositories with evidence and no shared item
     unknown: list[str]  # repositories with no shared_tooling evidence
-    refs_collected: bool  # any link carries a ref
+    refs_collected: bool  # any CI include carries a ref key (absent before #674)
 
 
 def _block(row: FleetRow) -> Mapping[str, Any] | None:
@@ -64,14 +70,26 @@ def _block(row: FleetRow) -> Mapping[str, Any] | None:
     return block if isinstance(block, dict) and block.get("available") is True else None
 
 
+UNPINNED = "(unpinned)"
+UNKNOWN = "(pin unknown)"
+
+
 def _refs(block: Mapping[str, Any]) -> dict[str, set[str]]:
+    """Item -> the pins its tracked includes carry; ``UNPINNED`` for a null ref and
+    ``UNKNOWN`` for an absent one (a run before #674, or a ref counts-only dropped)."""
     refs: dict[str, set[str]] = {}
     for entry in block.get("ci_includes") or []:
         if isinstance(entry, dict) and entry.get("tracked") is True and isinstance(entry.get("id"), str):
-            ref = entry.get("ref")
-            if isinstance(ref, str) and ref:
-                refs.setdefault(entry["id"], set()).add(ref)
+            ref = entry.get("ref", UNKNOWN)
+            pin = ref if isinstance(ref, str) and ref and ref != UNKNOWN else (
+                UNPINNED if ref is None else UNKNOWN)
+            refs.setdefault(entry["id"], set()).add(pin)
     return refs
+
+
+def _link(repo: str, item: str, pins: set[str]) -> Link:
+    return {"repo": repo, "item": item, "refs": sorted(pins - {UNPINNED, UNKNOWN}),
+            "unpinned": UNPINNED in pins, "pin_unknown": UNKNOWN in pins}
 
 
 def tooling_view(repos: Sequence[FleetRow]) -> ToolingView:
@@ -89,9 +107,9 @@ def tooling_view(repos: Sequence[FleetRow]) -> ToolingView:
         if not ids:
             none.append(row["repo"])
         refs = _refs(block)
-        links.extend({"repo": row["repo"], "item": i, "refs": sorted(refs.get(i, set()))} for i in ids)
+        links.extend(_link(row["repo"], i, refs.get(i, set())) for i in ids)
     return {"links": links, "none": none, "unknown": unknown,
-            "refs_collected": any(link["refs"] for link in links)}
+            "refs_collected": any(link["refs"] or link["unpinned"] for link in links)}
 
 
 def common_refs(links: Sequence[Link]) -> dict[str, str]:
@@ -137,7 +155,9 @@ def render_tooling_map(view: ToolingView) -> str:
           for i, item in enumerate(items)}
     bar = {item: min(max(26.0, dependents[item] * 14.0), 140.0) for item in items}
 
+    unknown_pins = sum(1 for link in links if link["pin_unknown"])
     drift_note = (f"{len(drift)} pinned off the fleet's most common ref (dashed)"
+                  + (f", {unknown_pins} pins unknown (dotted)" if unknown_pins else "")
                   if view["refs_collected"] else "pinned refs not collected in this run: drift not shown")
     body = [svg.text(PAD, PAD + 18, TITLE, size=18, weight="bold", cls="fg"),
             svg.text(PAD, PAD + 40, f"{len(repos)} repositories → {len(items)} shared CI sources "
@@ -147,9 +167,15 @@ def render_tooling_map(view: ToolingView) -> str:
     for link in links:
         y0, y1 = ry[link["repo"]], iy[link["item"]]
         late = (link["repo"], link["item"]) in drift
-        style = ('class="s-warn" stroke-width="2" stroke-dasharray="5 4"' if late
-                 else 'class="s-accent" stroke-width="1.4" opacity="0.55"')
-        refs = f" @ {', '.join(link['refs'])}" if link["refs"] else ""
+        if late:
+            style = 'class="s-warn" stroke-width="2" stroke-dasharray="5 4"'
+        elif link["pin_unknown"] and view["refs_collected"]:
+            style = 'class="s-muted" stroke-width="1.4" stroke-dasharray="1 3"'
+        else:
+            style = 'class="s-accent" stroke-width="1.4" opacity="0.55"'
+        pins = [*link["refs"], *([UNPINNED] if link["unpinned"] else []),
+                *([UNKNOWN] if link["pin_unknown"] else [])]
+        refs = f" @ {', '.join(pins)}" if pins else ""
         tip = f"{link['repo']} → {link['item']}{refs}"
         body.append(f'<path d="M{lx:.1f} {y0:.1f} C {lx + 140:.1f} {y0:.1f}, {rx - 140:.1f} {y1:.1f}, '
                     f'{rx:.1f} {y1:.1f}" fill="none" {style}><title>{svg.esc(tip)}</title></path>')
@@ -162,8 +188,10 @@ def render_tooling_map(view: ToolingView) -> str:
         name, kind = item_parts(item)
         label = svg.truncate(name, MAX_ITEM_LABEL)
         off = sum(1 for link in links if link["item"] == item and (link["repo"], item) in drift)
+        loose = sum(1 for link in links if link["item"] == item and link["unpinned"])
         sub = kind + (f" · {off} off {common[item]}" if off else
                       (f" · pinned {common[item]}" if item in common else ""))
+        sub += f" · {loose} unpinned" if loose and item in common else ""
         y = iy[item]
         body.append(f'<rect x="{rx:.1f}" y="{y - 12:.1f}" width="{bar[item]:.1f}" height="24.0" rx="3" '
                     f'class="f-{"warn" if off else "accent"}"/>')

@@ -258,7 +258,7 @@ code, and the run history still keeps only its three files. `--no-diagrams` turn
 | File | Question | Built from |
 |------|----------|------------|
 | `quadrant.svg` | Which busy repositories are least mature? | Each repository's commits in the window (`ai_usage.total_commits`, non-merge) across, and up its mean maturity: every `team` row of the `--rubric` maturity model evaluated on that repository alone, as a share of the row's top level, averaged over the rows that could be measured. The busy (at or above the median) and below-half quadrant is shaded. Skipped without `--rubric` or without team rows. |
-| `shared-tooling.svg` | What breaks if a shared template changes, and who drifted off it? | `shared_tooling`: repositories linked to the CI sources and marketplaces they reference, with each item's dependent count. A CI include pinned to a ref other than the fleet's most common one for that source is dashed. |
+| `shared-tooling.svg` | What breaks if a shared template changes, and who drifted off it? | `shared_tooling`: repositories linked to the CI sources and marketplaces they reference, with each item's dependent count. A CI include pinned to a ref other than the fleet's most common one for that source is dashed; an unpinned include is counted as unpinned, not drift; a pin counts-only could not keep is dotted as unknown. |
 
 Unknown is never drawn as zero: a repository with no measured row or no commit count, or no
 `shared_tooling` evidence, is named on a hatched strip. Colours follow the viewer's light or

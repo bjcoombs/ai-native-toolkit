@@ -15,6 +15,8 @@ in a fixed order, no date in the report.
 """
 from __future__ import annotations
 
+import os
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TypedDict
@@ -89,16 +91,23 @@ def clear_diagrams(out_dir: Path) -> None:
             path.unlink()
 
 
+def _write(path: Path, content: str) -> Path:
+    """Replace ``path`` atomically (temp file and ``os.replace``), never writing through a symlink."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(content)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+    return path
+
+
 def write_diagrams(out_dir: Path, diagrams: Sequence[Diagram]) -> list[Path]:
     """Write the drawn SVGs and ``report.md`` under ``out_dir``; returns the paths written."""
     clear_diagrams(out_dir)
-    written: list[Path] = []
-    for diagram in diagrams:
-        if diagram["svg"] is not None:
-            path = out_dir / diagram["file"]
-            path.write_text(diagram["svg"], encoding="utf-8", newline="\n")
-            written.append(path)
-    report = out_dir / REPORT_FILE
-    report.write_text(report_markdown(diagrams), encoding="utf-8", newline="\n")
-    written.append(report)
+    written = [_write(out_dir / d["file"], d["svg"]) for d in diagrams if d["svg"] is not None]
+    written.append(_write(out_dir / REPORT_FILE, report_markdown(diagrams)))
     return written

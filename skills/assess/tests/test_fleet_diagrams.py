@@ -136,6 +136,43 @@ def test_tooling_view_splits_users_none_and_unknown():
     by_repo = {(link["repo"], link["item"]): link["refs"] for link in view["links"]}
     assert by_repo[("payments/api", "gitlab_project:ci/python")] == ["v4"]
     assert by_repo[("mobile/ios", "gitlab_project:ci/mobile")] == []
+    ios = next(link for link in view["links"] if link["repo"] == "mobile/ios")
+    assert ios["unpinned"] is True and ios["pin_unknown"] is False
+
+
+def _rows_with(includes: list[dict[str, object]]) -> list[FleetRow]:
+    rows: list[FleetRow] = []
+    for index, entry in enumerate(includes):
+        block = {"available": True, "ci_includes": [entry], "marketplaces": [],
+                 "ci_source_ids": [entry["id"]], "marketplace_ids": []}
+        rows.append({"fleet_row_version": 2, "repo": f"g/r{index}", "group": "g", "status": "ok",
+                     "reason": None, "signals_schema_version": 1, "active": True,
+                     "scans": {"shared_tooling": block}})
+    return rows
+
+
+def test_a_dropped_ref_is_pin_unknown_never_in_step():
+    base = {"kind": "gitlab_project", "id": "gitlab_project:x", "tracked": True}
+    view = ftm.tooling_view(_rows_with([{**base, "ref": "v1"}, {**base, "ref": "v1"}, base,
+                                        {**base, "ref": None}]))
+    flags = [(link["refs"], link["unpinned"], link["pin_unknown"]) for link in view["links"]]
+    assert flags == [(["v1"], False, False), (["v1"], False, False), ([], False, True), ([], True, False)]
+    common = ftm.common_refs(view["links"])
+    assert not any(ftm.drifted(link, common) for link in view["links"])  # unpinned is not drift
+    text = ftm.render_tooling_map(view)
+    assert "1 pins unknown (dotted)" in text
+    assert 'stroke-dasharray="1 3"><title>g/r2 → gitlab_project:x @ (pin unknown)' in text
+    assert "pinned v1 · 1 unpinned" in text
+
+
+def test_counts_only_keeps_a_ref_with_a_slash():
+    from lib.counts_only import counts_only_scans
+    block = {"available": True, "ci_includes": [{"kind": "gitlab_project", "source": "s",
+                                                 "id": "gitlab_project:x", "ref": "release/1.2",
+                                                 "path": ".gitlab-ci.yml", "line": 1, "tracked": True}],
+             "marketplaces": [], "ci_source_ids": ["gitlab_project:x"], "marketplace_ids": []}
+    out = counts_only_scans({"shared_tooling": block})
+    assert out["shared_tooling"]["ci_includes"][0]["ref"] == "release/1.2"
 
 
 def test_drift_is_a_pin_off_the_fleets_most_common_ref():

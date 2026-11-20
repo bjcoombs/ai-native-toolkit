@@ -139,6 +139,48 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     assert svc1["nested_instructions"]["budget"]["claude_code"]["files"] == ["CLAUDE.md"]
 
 
+TEAM_LEVELS = """\
+version = "diagrams-e2e-1"
+
+[[rows]]
+id = "instructions"
+title = "Agent instructions"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "nested_instructions.budget.claude_code.lines", op = "gt", value = 0 }]
+"""
+
+
+def _ci(ref: str) -> str:
+    return f"include:\n  - project: grp/ci-templates\n    ref: {ref}\n    file: /build.yml\n"
+
+
+def test_diagrams_are_drawn_from_a_real_run_and_byte_identical(tmp_path, monkeypatch):
+    root = tmp_path / "droot"
+    make_repo(root, "grpa/svc1", files={"CLAUDE.md": "rules\n", ".gitlab-ci.yml": _ci("v4")})
+    make_repo(root, "grpa/svc2", files={".gitlab-ci.yml": _ci("v4")})
+    make_repo(root, "grpb/lib1", files={".gitlab-ci.yml": _ci("release/1.2")})
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
+    for out in ("d1", "d2"):
+        assert fleet_cli.main([str(root), "--rubric", "levels.toml", "--out", out, "--no-history"]) == 0
+    for name in ("quadrant.svg", "shared-tooling.svg", "report.md"):
+        assert (tmp_path / "d1" / name).read_bytes() == (tmp_path / "d2" / name).read_bytes()
+    rows = {r["repo"]: r for r in _rows(tmp_path / "d1")}
+    scans = rows["grpb/lib1"]["scans"]
+    assert isinstance(scans, dict)
+    assert isinstance(scans["ai_usage"]["total_commits"], int)
+    assert [e["ref"] for e in scans["shared_tooling"]["ci_includes"]] == ["release/1.2"]
+    quadrant = (tmp_path / "d1" / "quadrant.svg").read_text(encoding="utf-8")
+    assert "grpa/svc1: " in quadrant  # plotted, with its tooltip
+    tooling = (tmp_path / "d1" / "shared-tooling.svg").read_text(encoding="utf-8")
+    assert "1 pinned off the fleet's most common ref (dashed)" in tooling
+    assert 'stroke-dasharray="5 4"><title>grpb/lib1 → gitlab_project:grp/ci-templates @ release/1.2' in tooling
+
+
 def test_no_diagrams_draws_nothing_and_removes_a_previous_runs(froot, tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     assert fleet_cli.main([str(froot), "--out", "out", "--no-history"]) == 0

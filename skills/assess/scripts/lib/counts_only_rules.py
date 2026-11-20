@@ -389,8 +389,10 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "shared_tooling.ci_includes.kind": TOKEN,
         "shared_tooling.ci_includes.source": DROP,
         "shared_tooling.ci_includes.id": ID,
-        # A pinned version (v4, 1.2.0, main, a SHA): kept when it is a short token (#674).
-        "shared_tooling.ci_includes.ref": TOKEN,
+        # A pinned version (v4, release/1.2, a SHA) names another repository's
+        # revision, compared for equality across the fleet (#674): an id like the
+        # source it pins, kept and hashed with --hash-paths.
+        "shared_tooling.ci_includes.ref": ID,
         "shared_tooling.marketplaces.kind": TOKEN,
         "shared_tooling.marketplaces.name": DROP,
         "shared_tooling.marketplaces.source": DROP,

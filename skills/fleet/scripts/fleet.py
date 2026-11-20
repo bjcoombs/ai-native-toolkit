@@ -414,8 +414,8 @@ def main(argv: list[str] | None = None) -> int:
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
     )
     write_stamp(out_dir, stamp)
-    _diagrams(out_dir, args.no_diagrams, rubric, rows, window)
     _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
+    _diagrams(out_dir, args.no_diagrams, rubric, rows, window)
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)

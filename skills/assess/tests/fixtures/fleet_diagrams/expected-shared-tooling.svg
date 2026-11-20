@@ -13,7 +13,7 @@
 <path d="M149.0 96.0 C 289.0 96.0, 309.0 324.8, 449.0 324.8" fill="none" class="s-accent" stroke-width="1.4" opacity="0.55"><title>data/pipeline → marketplace:data</title></path>
 <path d="M149.0 122.0 C 289.0 122.0, 309.0 153.2, 449.0 153.2" fill="none" class="s-warn" stroke-width="2" stroke-dasharray="5 4"><title>data/warehouse → gitlab_project:ci/python @ v3</title></path>
 <path d="M149.0 122.0 C 289.0 122.0, 309.0 324.8, 449.0 324.8" fill="none" class="s-accent" stroke-width="1.4" opacity="0.55"><title>data/warehouse → marketplace:data</title></path>
-<path d="M149.0 148.0 C 289.0 148.0, 309.0 382.0, 449.0 382.0" fill="none" class="s-accent" stroke-width="1.4" opacity="0.55"><title>mobile/ios → gitlab_project:ci/mobile</title></path>
+<path d="M149.0 148.0 C 289.0 148.0, 309.0 382.0, 449.0 382.0" fill="none" class="s-accent" stroke-width="1.4" opacity="0.55"><title>mobile/ios → gitlab_project:ci/mobile @ (unpinned)</title></path>
 <path d="M149.0 174.0 C 289.0 174.0, 309.0 153.2, 449.0 153.2" fill="none" class="s-accent" stroke-width="1.4" opacity="0.55"><title>payments/api → gitlab_project:ci/python @ v4</title></path>
 <path d="M149.0 174.0 C 289.0 174.0, 309.0 96.0, 449.0 96.0" fill="none" class="s-accent" stroke-width="1.4" opacity="0.55"><title>payments/api → marketplace:platform</title></path>
 <path d="M149.0 200.0 C 289.0 200.0, 309.0 153.2, 449.0 153.2" fill="none" class="s-accent" stroke-width="1.4" opacity="0.55"><title>payments/fraud → gitlab_project:ci/python @ v4</title></path>

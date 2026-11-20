@@ -22,11 +22,8 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_diagrams"
 
 
 def _include(source: str, ref: str | None, tracked: bool = True) -> JsonDict:
-    entry: JsonDict = {"kind": "gitlab_project", "id": f"gitlab_project:{source}", "path": ".gitlab-ci.yml",
-                       "line": 2, "tracked": tracked}
-    if ref is not None:
-        entry["ref"] = ref
-    return entry
+    return {"kind": "gitlab_project", "id": f"gitlab_project:{source}", "ref": ref,
+            "path": ".gitlab-ci.yml", "line": 2, "tracked": tracked}
 
 
 def _scans(lines: int | None, commits: int | None, agent: int = 0,
