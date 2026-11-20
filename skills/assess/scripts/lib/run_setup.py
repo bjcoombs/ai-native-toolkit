@@ -1,0 +1,232 @@
+"""Setup-stage adapters for the scan table: the run's own state and header.
+
+``build_run_context`` used to open with about a hundred lines of locals - the
+scope, the artifact directory, the run id, the complexity stats and their diff,
+the instruction grading, the first-flagged map - before assembling the
+25-key run-context header by hand. Each of those is now a ``STAGE_SETUP``
+entry in ``lib/scan_registry.py`` whose callable lives here, so the order they
+depend on each other is declared rather than implied by statement order.
+
+Every function is a read: the wiki, the badge and ``run-context.json`` are
+written after the scans by ``lib/run_publish.py``.
+"""
+from __future__ import annotations
+
+import json
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION
+from lib.assess_config import load_excludes
+from lib.change_coupling import RenameMap, build_rename_map
+from lib.context_blocks import generated_exclusion
+from lib.diff_reliability import compute_diff_reliability, prior_stamps, stats_tool_versions
+from lib.git_churn import git_commit_info
+from lib.instruction_files import grade_instruction_files
+from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
+from lib.stats_diff import StatsDiff, diff_stats, load_stats
+from lib.wiki_state import (
+    excluded_after_unfinalized_run,
+    load_first_flagged,
+    rekey_first_flagged,
+    same_measurement_prior_run,
+)
+
+# The run-context keys a wiki write fills. The header reserves them (``None``)
+# so they keep their place in run-context.json; lib/run_publish.py assigns them
+# after the wiki is written.
+WIKI_KEYS = (
+    "pruned_hotspots", "retired_excluded_hotspots", "dropped_first_flagged",
+    "log_integrity",
+)
+
+# The run header's keys, in their published order.
+RUN_HEADER_KEYS = (
+    "run_id", "artifact_schema_version", "run_date", "scope", "scope_slug",
+    "measured_commit", "prior_stats_exists", "stats_summary", "instruction_files",
+    "instructions_grade", "diff", "diff_reliable", "diff_version_note", "diff_trend_reset",
+    "prior_plugin_version", "schema_version", "prior_schema_version", "tool_versions",
+    "prior_tool_versions", "diff_detail", "pruned_hotspots", "retired_excluded_hotspots",
+    "dropped_first_flagged", "provisional_first_flagged", "log_integrity",
+)
+
+PLUGIN_JSON = Path(__file__).resolve().parents[4] / ".claude-plugin" / "plugin.json"
+
+
+def new_run_id() -> str:
+    """A unique id for this run: a sortable wall-clock stamp plus random suffix.
+
+    ``YYYYMMDDHHMMSS-<8 hex>`` - the timestamp orders runs, the uuid suffix makes
+    two runs in the same second still distinct. Stamped on every artifact so
+    finalize can prove the finalize-input and run-context came from one run.
+    """
+    return f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
+
+
+def read_plugin_version(plugin_json: Path = PLUGIN_JSON) -> str:
+    """The plugin version from ``.claude-plugin/plugin.json``, or ``unknown``."""
+    try:
+        data = json.loads(plugin_json.read_text(encoding="utf-8"))
+        return str(data.get("version", "unknown"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return "unknown"
+
+
+def run_scope(repo_root: Path, requested_scope: Path | None) -> tuple[Path | None, str | None, str]:
+    """``(scope_abs, scope_rel, scope_slug)``; raises ValueError for a bad scope."""
+    return resolve_scope(repo_root, requested_scope)
+
+
+def scope_root(scope: tuple[Path | None, str | None, str]) -> Path | None:
+    """The absolute subtree the file-enumerating scans see (None: whole repo)."""
+    return scope[0]
+
+
+def run_assess_dir(repo_root: Path, scope: tuple[Path | None, str | None, str]) -> Path:
+    """``.assess/`` or ``.assess/<slug>/``. Created by the publish step, not here."""
+    return assess_dir_for(repo_root, scope[2])
+
+
+def current_stats(assess_dir: Path) -> dict[str, Any]:
+    """This run's complexity stats sidecar, or an empty snapshot."""
+    return load_current_stats(assess_dir)
+
+
+def prior_stats(assess_dir: Path) -> dict[str, Any] | None:
+    """The previous run's rotated stats sidecar, or None on a first run."""
+    return load_stats(assess_dir / "complexity-stats.prior.json")
+
+
+def stats_diff(prior: dict[str, Any] | None, current: dict[str, Any], excluded_as_generated: Any) -> StatsDiff:
+    """The hotspot diff against the prior stats.
+
+    A hotspot that left the ranking because this run excluded it as generated
+    did not graduate: the filter changed, not the file. It is dropped from the
+    graduated list so the append-only log and index never record it as one.
+    """
+    diff = diff_stats(prior=prior, current=current)
+    diff.graduated = [h for h in diff.graduated if not excluded_as_generated(h.path)]
+    return diff
+
+
+def generated_paths(current: dict[str, Any]) -> Any:
+    """Predicate: is a path excluded as generated by this run's stats?"""
+    return generated_exclusion(current)
+
+
+def instruction_grading(repo_root: Path) -> tuple[Any, ...]:
+    """``grade_instruction_files``: files, grade, untracked, dangling, skills, sensitive."""
+    return grade_instruction_files(repo_root)
+
+
+def graded_instruction_files(grading: tuple[Any, ...]) -> dict[str, Any]:
+    """The per-file grades the instruction scans read."""
+    files: dict[str, Any] = grading[0]
+    return files
+
+
+def rename_map(repo_root: Path) -> RenameMap:
+    """Historical path -> current path, from git's rename detection.
+
+    One of the git-churn call sites issues #424 and #425 rewrite.
+    """
+    return build_rename_map(repo_root)
+
+
+def measured_commit(repo_root: Path) -> dict[str, Any]:
+    """The commit the scan measured (HEAD, dirty state, upstream lag).
+
+    One of the git-churn call sites issues #424 and #425 rewrite.
+    """
+    return git_commit_info(repo_root)
+
+
+def config_excludes(repo_root: Path) -> tuple[set[str], list[str]]:
+    """``.assess/config.toml`` excludes, read by every scan."""
+    return load_excludes(repo_root)
+
+
+def first_flagged(assess_dir: Path, rename_map: RenameMap) -> dict[str, str]:
+    """The persisted first-flagged dates, with renamed files moved to their current path."""
+    return rekey_first_flagged(load_first_flagged(assess_dir), rename_map.paths)
+
+
+def superseded_run(assess_dir: Path, run_date: str, measured_commit: dict[str, Any]) -> dict[str, Any] | None:
+    """The previous run's context when this run supersedes it (same date and commit)."""
+    return same_measurement_prior_run(assess_dir, run_date=run_date, measured_commit=measured_commit)
+
+
+def unfinalized_exclusions(
+    assess_dir: Path, superseded: dict[str, Any] | None, first_flagged_map: dict[str, str],
+    current: dict[str, Any], diff: StatsDiff, excludes: tuple[set[str], list[str]],
+) -> tuple[set[str], list[str]]:
+    """``(provisional, excluded)``: files excluded after a never-finalized run (#356)."""
+    return excluded_after_unfinalized_run(
+        assess_dir, superseded=superseded, first_flagged_map=first_flagged_map,
+        current=current, diff=diff, excludes=excludes,
+    )
+
+
+def run_header(
+    run_id: str, run_date: str, scope: tuple[Path | None, str | None, str],
+    measured_commit: dict[str, Any], current: dict[str, Any], prior: dict[str, Any] | None,
+    grading: tuple[Any, ...], diff: StatsDiff, unfinalized: tuple[set[str], list[str]],
+) -> dict[str, Any]:
+    """The first 25 run-context keys, in their published order.
+
+    Run provenance (``run_id``; ``artifact_schema_version``, distinct from the
+    stats-layout ``schema_version``), the monorepo scope (both null / "" for a
+    whole-repo run), the measured commit, the stats summary, the instruction
+    grades, the hotspot diff and its comparability (a MAJOR plugin bump resets
+    the trend; a backend version change or an unstamped prior voids the diff),
+    and the wiki-state keys. The four ``WIKI_KEYS`` are reserved here and filled
+    by the publish step after the wiki is written.
+    """
+    _, scope_rel, scope_slug = scope
+    prior_version, prior_schema = prior_stamps(prior)
+    diff_reliable, diff_version_note, diff_trend_reset = compute_diff_reliability(
+        prior is not None, prior, current,
+    )
+    provisional, _ = unfinalized
+    header: dict[str, Any] = {
+        "run_id": run_id,
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+        "run_date": run_date,
+        "scope": scope_rel,
+        "scope_slug": scope_slug or None,
+        "measured_commit": measured_commit,
+        "prior_stats_exists": prior is not None,
+        "stats_summary": {
+            "files_scored": current.get("files_scored", 0),
+            "loc": current.get("loc", {}),
+            "est_tokens": current.get("est_tokens", {}),
+            "ccn": current.get("ccn", {}),
+            "top_hotspots": current.get("top_hotspots", []),
+        },
+        "instruction_files": grading[0],
+        "instructions_grade": grading[1],
+        "diff": diff.summary(),
+        "diff_reliable": diff_reliable,
+        "diff_version_note": diff_version_note,
+        "diff_trend_reset": diff_trend_reset,
+        "prior_plugin_version": prior_version,
+        "schema_version": current.get("schema_version"),
+        "prior_schema_version": prior_schema,
+        "tool_versions": stats_tool_versions(current),
+        "prior_tool_versions": stats_tool_versions(prior),
+        "diff_detail": {
+            "graduated": [h.__dict__ for h in diff.graduated],
+            "regressed": [h.__dict__ for h in diff.regressed],
+            "restructured": [h.__dict__ for h in diff.restructured],
+            "new": [h.__dict__ for h in diff.new],
+            "persistent": [h.__dict__ for h in diff.persistent],
+        },
+        "pruned_hotspots": None,
+        "retired_excluded_hotspots": None,
+        "dropped_first_flagged": None,
+        "provisional_first_flagged": sorted(provisional),
+        "log_integrity": None,
+    }
+    return header

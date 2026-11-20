@@ -61,7 +61,7 @@ def _running_version() -> str | None:
     """The running plugin's version from ``.claude-plugin/plugin.json``.
 
     scripts/assess_emit_workflow.py -> scripts/ -> skills/assess/ -> skills/ -> repo root.
-    Same lookup as ``assess_core._read_plugin_version``; not imported from there
+    Same lookup as ``lib.run_setup.read_plugin_version``; not imported from there
     because that module pulls the whole analysis stack and its dependencies.
     """
     plugin_json = Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json"

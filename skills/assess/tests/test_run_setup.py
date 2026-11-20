@@ -1,0 +1,110 @@
+"""Tests for the setup-stage adapters and the publish step (issue #557)."""
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+from assess_core_helpers import _minimal_repo
+from lib import core_scans, run_setup
+from lib.run_publish import publish_run
+from lib.scan_registry import STAGE_SETUP, run_scans
+from lib.stats_diff import StatsDiff
+
+
+def _setup(repo: Path, scope: Path | None = None) -> tuple[dict, dict]:
+    ctx: dict = {}
+    state: dict = {"repo_root": repo, "requested_scope": scope,
+                   "run_date": "2026-11-20", "non_interactive": True}
+    run_scans(ctx, state, STAGE_SETUP)
+    return ctx, state
+
+
+def test_new_run_id_is_a_stamp_plus_suffix() -> None:
+    assert re.fullmatch(r"\d{14}-[0-9a-f]{8}", run_setup.new_run_id())
+    assert run_setup.new_run_id() != run_setup.new_run_id()
+
+
+def test_read_plugin_version_degrades_to_unknown(tmp_path: Path) -> None:
+    assert run_setup.read_plugin_version(tmp_path / "missing.json") == "unknown"
+    bad = tmp_path / "plugin.json"
+    bad.write_text("{not json", encoding="utf-8")
+    assert run_setup.read_plugin_version(bad) == "unknown"
+    bad.write_text('{"version": "9.9.9"}', encoding="utf-8")
+    assert run_setup.read_plugin_version(bad) == "9.9.9"
+
+
+def test_run_header_emits_its_declared_keys_in_order(tmp_path: Path) -> None:
+    header = run_setup.run_header(
+        "id", "2026-11-20", (None, None, ""), {"available": False},
+        {"files_scored": 0}, None,
+        ({}, None, [], [], {}, {}), StatsDiff(), ({"b.py", "a.py"}, []),
+    )
+    assert tuple(header) == run_setup.RUN_HEADER_KEYS
+    assert all(header[key] is None for key in run_setup.WIKI_KEYS)
+    assert header["provisional_first_flagged"] == ["a.py", "b.py"]
+    assert header["prior_stats_exists"] is False
+    assert header["scope_slug"] is None
+
+
+def test_stats_diff_drops_a_graduation_caused_by_the_generated_filter() -> None:
+    prior = {"top_hotspots": [{"path": "gen.py", "score": 9}, {"path": "src.py", "score": 8}]}
+    current = {"top_hotspots": []}
+    kept = run_setup.stats_diff(prior, current, lambda path: path == "gen.py")
+    assert [h.path for h in kept.graduated] == ["src.py"]
+
+
+def test_setup_stage_only_reads(tmp_path: Path) -> None:
+    """The table writes nothing: the scoped artifact directory does not exist
+    until the publish step creates it."""
+    repo = _minimal_repo(tmp_path)
+    (repo / "sub").mkdir()
+    ctx, state = _setup(repo, scope=repo / "sub")
+    assert state["assess_dir"] == repo / ".assess" / "sub"
+    assert not state["assess_dir"].exists()
+    assert ctx["scope"] == "sub" and ctx["scope_slug"] == "sub"
+    assert state["scope"] == repo / "sub"
+
+
+def test_an_invalid_scope_stops_the_run(tmp_path: Path) -> None:
+    repo = _minimal_repo(tmp_path)
+    with pytest.raises(ValueError):
+        _setup(repo, scope=repo / "missing")
+
+
+def test_publish_fills_the_reserved_wiki_keys_in_place(tmp_path: Path) -> None:
+    repo = _minimal_repo(tmp_path)
+    ctx, state = _setup(repo)
+    order = list(ctx)
+    ctx["derived_findings"] = []
+    publish_run(ctx, state)
+    assert list(ctx)[: len(order)] == order
+    assert ctx["pruned_hotspots"] == [] and ctx["dropped_first_flagged"] == []
+    assert ctx["log_integrity"] == {"valid": True, "broken_at_entry": None}
+    on_disk = json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
+    assert on_disk == ctx
+    for name in ("index.md", "log.md", "badge.json", "first-flagged.json"):
+        assert (repo / ".assess" / name).exists(), name
+
+
+def test_core_scan_adapters_split_their_sources() -> None:
+    grading = ({}, "B", ["u.md"], [], {"skills_dirs_present": [".claude/skills"],
+                                       "skills_count": 2, "skill_files": ["a", "b"]},
+               {"CLAUDE.md": []})
+    assert core_scans.untracked_instruction_files(grading) == ["u.md"]
+    assert core_scans.sensitive_instruction_content(grading) == {"CLAUDE.md": []}
+    assert core_scans.skills_blocks(grading) == {
+        "skills_present": [".claude/skills"], "skills_count": 2, "skill_files": ["a", "b"],
+    }
+    assert core_scans.offers_blocks(True)["interactive"] is False
+    assert core_scans.uninstall_instructions_path() == "references/uninstall.md"
+    assert core_scans.promissory_block({"available": True}) == {"available": True}
+
+
+def test_anomalies_read_only_the_run_header() -> None:
+    header = {"stats_summary": {"files_scored": 10, "ccn": {"p95": 0, "max": 0}},
+              "instruction_files": {}, "diff": {}, "prior_stats_exists": False}
+    codes = [a["code"] for a in core_scans.anomalies(header)]
+    assert codes

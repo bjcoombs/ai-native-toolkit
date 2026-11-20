@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION
-from lib.sibling_tests import TestIndex, build_test_index, has_sibling_test, shared_name_keys
+from lib.sibling_tests import TestIndex, has_sibling_test, shared_name_keys
 from lib.stats_diff import StatsDiff, hotspot_commits
 from lib.wiki_state import (
     drop_superseded_log_entry,
@@ -149,9 +149,9 @@ def _write_current_hotspot_pages(
     current: dict[str, Any], *, assess_dir: Path, repo_root: Path, run_date: str,
     run_id: str, status_map: dict[str, str], first_flagged_map: dict[str, str],
     superseded: dict[str, Any] | None, marker_debt_by_file: dict[str, Any],
-    accretion_by_file: dict[str, Any],
-) -> tuple[list[HotspotEntry], TestIndex | None]:
-    """Write a page per current top hotspot; return the entries and test index.
+    accretion_by_file: dict[str, Any], hot_test_index: TestIndex | None,
+) -> list[HotspotEntry]:
+    """Write a page per current top hotspot; return the entries.
 
     Sweeps the superseded run's history before the first page is written.
     """
@@ -159,8 +159,6 @@ def _write_current_hotspot_pages(
     # Same flat-tree disambiguation the test_focus block applies to these files.
     hot_shared_names = shared_name_keys(
         h["path"] for h in current.get("top_hotspots", []))
-    # One repository index for every hot file's parallel-tree (basename) probe.
-    hot_test_index = build_test_index(repo_root) if current.get("top_hotspots") else None
     sweep_superseded_history(assess_dir, superseded)
     for h in current.get("top_hotspots", []):
         hotspot_entries.append(_write_current_hotspot_page(
@@ -171,7 +169,7 @@ def _write_current_hotspot_pages(
             marker_debt_by_file=marker_debt_by_file,
             accretion_by_file=accretion_by_file,
         ))
-    return hotspot_entries, hot_test_index
+    return hotspot_entries
 
 
 def _graduated_hotspot_entries(
@@ -220,7 +218,6 @@ def _current_metrics_by_path(current: dict[str, Any]) -> tuple[dict[str, int], d
 class RunWiki:
     """What writing the wiki hands back to the run-context assembly."""
 
-    hot_test_index: TestIndex | None
     pruned_hotspots: list[str]
     retired_excluded: list[str]
     dropped_first_flagged: list[str]
@@ -235,21 +232,25 @@ def write_run_wiki(
     accretion_by_file: dict[str, dict[str, Any]], excluded_unfinalized: list[str],
     excluded_as_generated: Callable[[str], bool], scope_rel: str | None,
     instructions_grade: str | None, plugin_version: str,
+    hot_test_index: TestIndex | None,
 ) -> RunWiki:
     """Write the hotspot pages, index.md and this run's log.md entry.
 
     Mutates ``first_flagged_map`` (new dates stamped, retired entries dropped)
-    and persists it to ``first-flagged.json``.
+    and persists it to ``first-flagged.json``. ``hot_test_index`` is the one
+    repository test index (``lib.sibling_tests.build_test_index``) for every hot
+    file's parallel-tree probe, built by the scan table and shared with the
+    ``test_focus`` block.
     """
     status_map = _hotspot_status_map(diff)
 
     # Wiki: hotspot pages for current top hotspots
-    hotspot_entries, hot_test_index = _write_current_hotspot_pages(
+    hotspot_entries = _write_current_hotspot_pages(
         current, assess_dir=assess_dir, repo_root=repo_root, run_date=run_date,
         run_id=run_id, status_map=status_map,
         first_flagged_map=first_flagged_map, superseded=superseded,
         marker_debt_by_file=marker_debt_by_file,
-        accretion_by_file=accretion_by_file,
+        accretion_by_file=accretion_by_file, hot_test_index=hot_test_index,
     )
 
     # Prune orphan hotspot pages: any page from a prior run whose source file no
@@ -313,7 +314,6 @@ def write_run_wiki(
     log_valid, log_broken_at = verify_log_chain(assess_dir)
 
     return RunWiki(
-        hot_test_index=hot_test_index,
         pruned_hotspots=pruned_hotspots,
         retired_excluded=retired_excluded,
         dropped_first_flagged=dropped_first_flagged,
