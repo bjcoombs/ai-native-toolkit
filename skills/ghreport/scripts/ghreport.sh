@@ -262,12 +262,14 @@ query_project_gitlab() {
         return
     fi
 
-    # GitLab gives an empty repository (no commits) a null default branch.
-    # There is no branch to judge, so pipeline and protection read "empty"
-    # and no per-branch call is made: guessing "main" would report a verdict
-    # for a branch that does not exist.
+    # GitLab gives an empty repository (no commits) a null default branch,
+    # and can also report empty_repo: true alongside a branch name. Either
+    # way there is no branch to judge, so pipeline and protection read
+    # "empty" and no per-branch call is made: guessing "main" would report a
+    # verdict for a branch that does not exist. This is the same predicate
+    # ghsync discovery uses to drop empty projects.
     local branch empty=false
-    branch=$(jq -r '.default_branch // ""' <<< "$proj_json")
+    branch=$(jq -r 'if .empty_repo == true then "" else (.default_branch // "") end' <<< "$proj_json")
     [ -z "$branch" ] && empty=true
     local benc
     benc=$(gitlab_encode "$branch")

@@ -594,6 +594,21 @@ def test_empty_repository_with_limit(tmp_path: Path) -> None:
     assert "Needs attention: none" in res.stdout
 
 
+def test_empty_repo_flag_with_a_branch_name_reports_empty(tmp_path: Path) -> None:
+    """GitLab can report empty_repo: true while still naming a default
+    branch. ghsync discovery treats that as empty, so ghreport does too:
+    no pipeline or protection call, and no false `unprotected` verdict."""
+    project = {**_project("grp/alpha"), "default_branch": "main", "empty_repo": True}
+    env = Env(tmp_path, {ALPHA: [project]})
+    res = env.run("--host", HOST, "--limit", "1", "--no-file")
+    assert res.returncode == 0, res.stderr
+    assert _cells(_row(res.stdout, "grp/alpha"))[1:] == ["empty", "2", "empty", "no-access", "empty"]
+    calls = env.api_calls()
+    assert not any("grp%2Falpha/pipelines" in c for c in calls), calls
+    assert not any("grp%2Falpha/protected_branches" in c for c in calls), calls
+    assert "Needs attention: none" in res.stdout
+
+
 def test_empty_repository_with_open_vulnerabilities_needs_attention(tmp_path: Path) -> None:
     """GitLab keeps vulnerability records from earlier scans. Emptiness does
     not hide them: the project is listed under Needs attention for them, and

@@ -43,7 +43,8 @@ cannot hide a failure from Needs attention. A cancelled pipeline says nothing
 about whether the code passes, which is why it is skipped like `skipped` and
 `manual`. With no finished pipeline among the last 20 the column reads `none`.
 
-A project with no commits has a null default branch. Its Branch, Pipeline and
+A project with no commits (a null default branch, or `empty_repo: true` from
+GitLab even when a branch name is set) is empty. Its Branch, Pipeline and
 Protection cells read `empty`, no pipeline or protection call is made, and the
 headline counts it. Emptiness alone does not put it under Needs attention:
 pipeline and protection are not judged, but merge requests and vulnerabilities
@@ -163,8 +164,9 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghreport.sh" --provider gitlab --host gitlab.e
 
 ## Requirements
 
-- **`gh` and `jq`** on `PATH`, and `gh auth status` authenticated (the same
-  prerequisites as `ghsync`; discovery is delegated to it).
+- **GitHub:** `gh` and `jq` on `PATH`, and `gh auth status` authenticated (the
+  same prerequisites as `ghsync`; discovery is delegated to it). A GitLab run
+  never calls `gh`.
 - For a **GitHub Enterprise** host, set `GH_HOST` or `gh auth login --hostname`
   first, as with `ghsync`.
 - **GitLab:** `glab` and `jq` on `PATH`, and `glab auth status --hostname <host>`
