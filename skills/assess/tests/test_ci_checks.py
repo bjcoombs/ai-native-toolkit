@@ -23,6 +23,9 @@ from lib.shared_tooling import pulls_jobs_from_elsewhere
     "run: cargo clippy -- -D warnings",
     "run: go vet ./...",
     "run: uv run --frozen mypy src",
+    "- name: Don't skip tests\n  run: pytest",
+    "run: |\n  echo '```' >> $GITHUB_STEP_SUMMARY\n  pytest",
+    "run: pytest \\\n  -q",
 ])
 def test_a_ci_line_that_runs_a_check_counts(text: str) -> None:
     assert check_commands(text) >= 1
@@ -41,6 +44,12 @@ def test_a_ci_line_that_runs_a_check_counts(text: str) -> None:
     "name: Lint with ruff",
     "echo lint",
     "run: make build",
+    "uv sync --group lint",
+    "npm install eslint",
+    "python -m pip install ruff",
+    "make build # then lint",
+    "stages:\n  - lint\n  - build",
+    "needs:\n  - lint",
 ])
 def test_a_ci_line_that_runs_no_check_does_not_count(text: str) -> None:
     assert check_commands(text) == 0

@@ -2286,9 +2286,14 @@ can use it without reaching `gh_cli`. `is_check_command(text)` is true for a tes
 or check target of a runner `command_resolver.RUNNERS` models (`make test`, `npm
 run ci`, `tox`, the program after `uv run`), or a committed script named for a
 check; an install (`npm ci`, `uv sync --extra test`) never is. `is_check_name(name)`
-splits a target name on `:_./-` and looks for a `CHECK_WORDS` word. Used by
+splits a target name on `:_./-` and looks for a `CHECK_WORDS` word.
+`is_lint_command(text)` walks the same program/target anchoring with `LINT_WORDS`
+(`lint`, `vet`, `clippy` and the linters) and `LINT_PROGRAMS` (`ruff`, `eslint`,
+`mypy` ... run directly), so `make lint` and `npx eslint` count and an install
+naming a linter does not; instruction-file classification does not use it. Used by
 `agent_environment` (instruction-file commands, entry points) and `ci_checks` (CI
-lines). Tests: `tests/test_agent_environment.py` (`test_is_check_command`).
+lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
+(`test_is_check_command`).
 
 **`ci_checks.py`**
 Does CI run a test or lint command (issue #698)? Layer 5 level 1 of the default
@@ -2296,11 +2301,12 @@ maturity model reads it, so the CI row measures CI, not the instruction file.
 `scan_ci_checks(repo_root)` reads the files `command_index.ci_config_files`
 selects (GitHub Actions workflows, `.gitlab-ci.yml`) and writes `{available,
 ci_files, check_commands, included_files, test_or_lint_runs, basis}`. Each line,
-with its `- ` / `run:` / `script:` lead dropped (`command_index.ci_line_text`), is
-split into shell segments by `command_resolver.extract_commands`; a segment counts
-when `check_command.is_check_command` credits it or `is_lint_command` does (a
-linter run directly, or a runner or committed script whose target names lint:
-`LINTERS`). Triggers are not read. `test_or_lint_runs` is true with any check
+with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
+(`command_index.ci_line_text`), is split into shell segments by
+`command_resolver.extract_commands` on its own (an apostrophe or fence on one line
+cannot swallow the next); `check_commands` counts the lines with a segment that
+`check_command.is_check_command` or `is_lint_command` credits. Triggers are not
+read. `test_or_lint_runs` is true with any check
 line; with none it is null (`basis: included_jobs`) when a CI file pulls jobs
 from elsewhere (`shared_tooling.pulls_jobs_from_elsewhere`: any top-level GitLab
 `include:`, a job-level `uses:` of another repository's reusable workflow), else
