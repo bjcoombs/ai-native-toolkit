@@ -12,39 +12,70 @@
 # the knowledge-base archetype's N/A layers); a rubric reads signals only.
 # Known gaps:
 #
-# - Layers 2 (code design), 3 (linters) and 4 (architecture tests) have no row
-#   because no deterministic signal stands for them: /assess judges them by
-#   reading configuration and code. Layer 2 has no scan. Layer 3's one
-#   deterministic input, the stale-suppression count in promissory_markers, is
-#   an erosion cap on a linter /assess has already found, not evidence that a
-#   linter exists, so as a row it would credit a repository with no linter. The
-#   linting capability state (capability_offers, language_capabilities) covers
-#   JVM and Dart only and is not in the headless schema. Layer 4 has no scan:
-#   structure_drift checks ownership maps, not architecture tests. The rubric
-#   reports nothing for these layers rather than a proxy that reads as a
-#   verdict (issue #620).
+# - Layers 2 (code design), 3 (linters) and 4 (architecture tests) have no
+#   deterministic grade: /assess judges them by reading type-checker and
+#   linter configuration, architecture tests and code. Their rows read
+#   proxies the run context already exposes, so they disagree with /assess
+#   most often. Each starts from positive evidence at level 1, so an absent
+#   signal is level 0 or unknown, never credit; a practice /assess looks for
+#   can still be absent at level 2 (see each row below). The structure,
+#   structure_drift, stats_summary and promissory_markers blocks are
+#   assembled by a full /assess run only: a headless run reports them
+#   unavailable, so these three rows are unknown there.
+# - Layer 2 reads the import graph's design, not type strictness: level 1 is
+#   real module structure (Newman modularity Q >= 0.3, the usual threshold
+#   for community structure), level 2 adds cross-package imports entering
+#   through a package's front door (its public API) rather than burrowing
+#   into its submodules, and needs at least one such import: with no
+#   package boundary crossed the ratio is a vacuous 1.0, so a single-package
+#   repository stops at level 1. A strictly typed codebase with tangled modules
+#   scores low here and Present in /assess; a loosely typed one with clean
+#   modules the reverse. The import graph is Python-only: a repository with
+#   no importable Python package reports structure unavailable, so the row
+#   is unknown there, not 0.
+# - Layer 3 reads the linter's footprint, not its configuration: level 1 is
+#   at least one suppression comment (noqa, eslint-disable, nolint, type:
+#   ignore), which only exists where a linter or type checker runs; level 2
+#   holds the stale bare suppressions to 10 or fewer, the erosion cap
+#   /assess applies. The promissory_markers scan lists a family only when it
+#   found a marker, so a repository with no suppressions (a clean linter, or
+#   none) is unknown, not 0. A suppression is stale once it survives enough
+#   edits to its file, so level 2 also needs aging_reliable: on degenerate
+#   history (a shallow clone, a squashed import) a stale count of 0 says
+#   nothing.
+# - Layer 4 reads a declared boundary and the outcome of the commonest
+#   architecture test: level 1 is a committed ownership or boundary map
+#   (CODEOWNERS, ARCHITECTURE.md, DESIGN.md, or a README.md that declares
+#   module boundaries) with at least one pattern matching a
+#   tracked file, level 2 adds a file-size outcome (95% of scored files at
+#   500 lines or fewer). Neither proves an architecture test runs in CI,
+#   which is what /assess looks for. With no map the structure_drift block
+#   is omitted, so the row is unknown rather than 0.
 # - Layer 0 level 1 reads layer_grades.instruction_file_present: a committed
-#   instruction file at any known root location (CLAUDE.md, AGENTS.md,
-#   GEMINI.md, .cursorrules, Copilot), the presence /assess scores. A boolean, never
-#   null, so "no instruction file" is level 0, as /assess scores a null
-#   instructions_grade Missing, and a missing layer_grades block is unknown.
-#   layer_grades.instructions_grade (the letter grade, null with no file) is
-#   available to a rubric too; this one does not grade on the letter, since
-#   /assess weighs it with the instruction text. Level 2 reads the size of the
-#   always-loaded Claude Code instruction text (root CLAUDE.md or, without
-#   one, AGENTS.md, its imports, unscoped .claude/rules); a repository whose
-#   only instruction file is for another tool (.cursorrules, Copilot) reaches
-#   level 1 with that size 0.
+#   instruction file at any location in
+#   instruction_files.INSTRUCTION_FILE_PATHS (root CLAUDE.md, AGENTS.md,
+#   GEMINI.md, .cursorrules; .github/copilot-instructions.md,
+#   .github/claude-instructions.md, .github/claude-review-instructions.md;
+#   docs/CLAUDE.md, docs/AGENTS.md), the presence /assess scores. A boolean,
+#   never null, so "no instruction file" is level 0, as /assess scores a
+#   null instructions_grade Missing, and a missing layer_grades block is
+#   unknown. layer_grades.instructions_grade (the letter grade, null with no
+#   file) is available to a rubric too; this one does not grade on the
+#   letter, since /assess weighs it with the instruction text. Level 2 reads
+#   the size of the always-loaded Claude Code instruction text (root
+#   CLAUDE.md or, without one, AGENTS.md, its imports, unscoped
+#   .claude/rules); a repository whose only instruction file is for another
+#   tool (.cursorrules, Copilot) reaches level 1 with that size 0.
 # - Layer 1 reads the observability rung, which only a full /assess run
 #   produces: a headless run reports it unavailable, so the row is unknown.
-# - Layer 7 reads review_reality, which needs GitHub: a headless run makes no
-#   network calls, so the row is unknown there.
-# - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence of
-#   repeated AI work cycles, which no scan measures.
+# - Layer 7 reads review_reality, which needs GitHub: a headless run makes
+#   no network calls, so the row is unknown there.
+# - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
+#   of repeated AI work cycles, which no scan measures.
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.2"
+version = "default-2026.11.3"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -79,6 +110,54 @@ aggregation = "min"
   [[rows.levels]]
   level = 2
   criteria = [{ signal = "observability.rung", op = "gte", value = 3 }]
+
+[[rows]]
+id = "layer-2-design"
+title = "Layer 2: code design (module structure)"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "structure.modularity_q", op = "gte", value = 0.3 }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [
+    { signal = "structure.cross_package_edges", op = "gt", value = 0 },
+    { signal = "structure.front_door_ratio", op = "gte", value = 0.9 },
+  ]
+
+[[rows]]
+id = "layer-3-linters"
+title = "Layer 3: linters (suppression footprint)"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "promissory_markers.families.suppression.total", op = "gt", value = 0 }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [
+    { signal = "promissory_markers.families.suppression.stale", op = "lte", value = 10 },
+    { signal = "promissory_markers.aging_reliable", op = "eq", value = true },
+  ]
+
+[[rows]]
+id = "layer-4-architecture"
+title = "Layer 4: architecture boundaries and size"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "structure_drift.tier_0.matched_patterns", op = "gt", value = 0 }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [{ signal = "stats_summary.loc.p95", op = "lte", value = 500 }]
 
 [[rows]]
 id = "layer-5-ci"
