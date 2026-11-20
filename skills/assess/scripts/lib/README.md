@@ -1542,7 +1542,10 @@ the headless `--window`), or None for full history (`window: "all-time"`);
 `resolve_window` raises on anything else, which degrades the block. `limits` is the
 fixed `LIMITS` tuple (squash merges, stripped or missing trailers, agents outside
 `COVERED_AGENTS`, automation bots not counted). Counts, a share and fixed strings only: no name, e-mail or
-subject. No git history degrades to `available: false`. Tests: `tests/test_ai_usage.py`.
+subject. A missing git, a timeout, a non-repository and a shallow clone (or one
+`rev-parse --is-shallow-repository` cannot confirm is full) each degrade to
+`available: false` with a fixed reason of their own: a truncated history can put the
+share above the true value. Tests: `tests/test_ai_usage.py`.
 
 **`shared_tooling.py`**
 Shared CI sources and agent marketplaces, per repository (issue #566), the

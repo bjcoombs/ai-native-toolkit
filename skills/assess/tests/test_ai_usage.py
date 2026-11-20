@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib import agent_identity, change_coupling  # noqa: E402
+from lib import agent_identity, ai_usage, change_coupling  # noqa: E402
 from lib.ai_usage import LIMITS, resolve_window, scan_ai_usage  # noqa: E402
 from lib.git_churn import CHURN_WINDOWS, window_from_churn_label  # noqa: E402
 from lib.scan_registry import SCANS  # noqa: E402
@@ -124,7 +124,46 @@ def test_empty_window_has_null_share(repo: Path) -> None:
 
 def test_no_git_history_degrades(tmp_path: Path) -> None:
     block = scan_ai_usage(tmp_path, None, None)
-    assert block == {"available": False, "reason": "no readable git history at the run root"}
+    assert block == {"available": False, "reason": ai_usage.REASON_NOT_A_REPO}
+
+
+def test_shallow_clone_degrades(repo: Path, tmp_path: Path) -> None:
+    clone = tmp_path / "shallow"
+    subprocess.run(
+        ["git", "clone", "-q", "--depth", "1", f"file://{repo}", str(clone)],
+        check=True, capture_output=True,
+    )
+    block = scan_ai_usage(clone, None, None)
+    assert block == {"available": False, "reason": ai_usage.REASON_SHALLOW}
+
+
+def test_missing_git_and_timeout_have_their_own_reasons(
+    repo: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def no_git(*_a: object, **_k: object) -> None:
+        raise FileNotFoundError("git")
+
+    def slow(*_a: object, **_k: object) -> None:
+        raise subprocess.TimeoutExpired("git", ai_usage.GIT_TIMEOUT_SECONDS)
+
+    monkeypatch.setattr(ai_usage.subprocess, "run", no_git)
+    assert scan_ai_usage(repo, None, None)["reason"] == ai_usage.REASON_NO_GIT  # type: ignore[typeddict-item]
+    monkeypatch.setattr(ai_usage.subprocess, "run", slow)
+    assert scan_ai_usage(repo, None, None)["reason"] == ai_usage.REASON_TIMEOUT  # type: ignore[typeddict-item]
+
+
+def test_unconfirmed_shallow_probe_degrades(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = subprocess.run
+
+    def probe_fails(cmd: list[str], **kw: object) -> object:
+        if "--is-shallow-repository" in cmd:
+            raise subprocess.CalledProcessError(128, cmd)
+        return real(cmd, **kw)  # type: ignore[call-overload]
+
+    monkeypatch.setattr(ai_usage.subprocess, "run", probe_fails)
+    assert scan_ai_usage(repo, None, None) == {
+        "available": False, "reason": ai_usage.REASON_SHALLOW_UNKNOWN,
+    }
 
 
 @pytest.mark.parametrize(("window", "expected"), [

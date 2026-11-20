@@ -2,9 +2,10 @@
 
 The readiness layers say whether a repository is set up for agents, not whether
 agents are used on it. This scan counts, over the run's history window, the
-commits that carry a ``Co-authored-by`` trailer naming an agent, using the one
-agent-identity definition in ``lib.agent_identity`` (the same matcher the
-authorship analysis uses).
+commits that carry a ``Co-authored-by`` trailer naming an AI assistant, using
+the AI-assistant subset of the shared matcher in ``lib.agent_identity``. That
+subset drops non-Copilot ``[bot]`` accounts, which ``authorship_analysis``
+counts as agents, so the two blocks need not agree.
 
 Block (``ai_usage`` in run-context.json)::
 
@@ -43,8 +44,9 @@ AI-assisted. Only AI-assistant trailers count
 non-Copilot ``[bot]`` accounts removed), which keeps the value a floor.
 
 Privacy: counts, a share and fixed strings only. No name, e-mail or commit
-subject reaches the block. No git history degrades to
-``{"available": False, "reason"}``.
+subject reaches the block. A missing git, a timeout, a non-repository and a
+shallow clone each degrade to ``{"available": False, "reason"}`` with a fixed
+reason of their own (``REASON_*``).
 """
 from __future__ import annotations
 
@@ -107,19 +109,51 @@ def resolve_window(window: str | None) -> tuple[str, str | None]:
     return window, f"{m.group(1)} {_UNIT[m.group(2)]} ago"
 
 
-def _trailer_fields(repo_root: Path, scope: Path | None, since: str | None) -> list[str] | None:
-    """One co-author field per non-merge commit in the window, or None without git."""
-    cmd = ["git", "-C", str(repo_root), "log", "--no-merges",
-           "--format=%x1e%(trailers:key=Co-authored-by,valueonly,separator=%x1d)"]
-    if since is not None:
-        cmd.append(f"--since={since}")
-    cmd += ["--", str(scope) if scope is not None else "."]
+REASON_NO_GIT = "git is not installed"
+REASON_TIMEOUT = f"git log timed out after {GIT_TIMEOUT_SECONDS}s"
+REASON_NOT_A_REPO = "not a git repository, or a repository with no commits"
+REASON_SHALLOW = "shallow clone: history is truncated, so the share is not a floor"
+REASON_SHALLOW_UNKNOWN = "could not confirm the clone is not shallow"
+
+
+class _GitUnavailable(Exception):
+    """A git read that failed, with a fixed reason for the block."""
+
+
+def _git(repo_root: Path, *args: str) -> str:
+    """``git -C repo_root <args>`` stdout; ``_GitUnavailable`` with a fixed reason."""
     try:
-        out = subprocess.run(
-            cmd, capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+        return subprocess.run(
+            ["git", "-C", str(repo_root), *args],
+            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-        return None
+    except FileNotFoundError as e:
+        raise _GitUnavailable(REASON_NO_GIT) from e
+    except subprocess.TimeoutExpired as e:
+        raise _GitUnavailable(REASON_TIMEOUT) from e
+    except subprocess.CalledProcessError as e:
+        raise _GitUnavailable(REASON_NOT_A_REPO) from e
+
+
+def _trailer_fields(repo_root: Path, scope: Path | None, since: str | None) -> list[str]:
+    """One co-author field per non-merge commit in the window.
+
+    Raises ``_GitUnavailable`` when git cannot answer, or when the clone is
+    shallow (or cannot be shown not to be): a truncated history can push the
+    share above the true value, so it is no floor.
+    """
+    args = ["log", "--no-merges",
+            "--format=%x1e%(trailers:key=Co-authored-by,valueonly,separator=%x1d)"]
+    if since is not None:
+        args.append(f"--since={since}")
+    args += ["--", str(scope) if scope is not None else "."]
+    out = _git(repo_root, *args)
+    try:
+        shallow = _git(repo_root, "rev-parse", "--is-shallow-repository").strip()
+    except _GitUnavailable as e:
+        raise _GitUnavailable(REASON_SHALLOW_UNKNOWN) from e
+    if shallow != "false":
+        raise _GitUnavailable(REASON_SHALLOW if shallow == "true" else REASON_SHALLOW_UNKNOWN)
     # Each record starts with RS; the first split element is the empty prefix.
     return out.split("\x1e")[1:]
 
@@ -129,9 +163,10 @@ def scan_ai_usage(
 ) -> AiUsageBlock | AiUsageUnavailable:
     """Count the window's commits and those with an AI-assistant co-author trailer."""
     label, since = resolve_window(history_window)
-    fields = _trailer_fields(repo_root, scope, since)
-    if fields is None:
-        return {"available": False, "reason": "no readable git history at the run root"}
+    try:
+        fields = _trailer_fields(repo_root, scope, since)
+    except _GitUnavailable as e:
+        return {"available": False, "reason": str(e)}
     total = len(fields)
     agent = sum(1 for f in fields if coauthors_have_ai_assistant(f.strip("\n")))
     return {
