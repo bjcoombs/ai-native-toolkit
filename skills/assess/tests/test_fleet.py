@@ -157,6 +157,21 @@ def test_remote_path(tmp_path, url, path):
     assert fleet.remote_path(checkout) == path
 
 
+@pytest.mark.parametrize(("url", "path"), [
+    ("https://h/../../x", "x"),
+    ("https://h/a/./../b//c.git", "a/b/c"),
+    ("https://h/../..", None),
+])
+def test_remote_path_drops_dot_segments(tmp_path, url, path):
+    assert fleet.remote_path(make_checkout(tmp_path / "r", remote=url)) == path
+
+
+def test_dot_only_remote_falls_back_to_directory_names(tmp_path):
+    checkout = make_repo(tmp_path / "elsewhere", "grp/svc", remote="https://h/../..")
+    targets = fleet.targets_from_list([str(checkout)], None, tmp_path)
+    assert [t.repo for t in targets] == ["grp/svc"]
+
+
 def test_remote_path_without_a_remote(tmp_path):
     assert fleet.remote_path(make_checkout(tmp_path / "r")) is None
 
@@ -211,6 +226,26 @@ def test_scan_exit_writes_a_stderr_tail_beside_the_rows(tmp_path, monkeypatch):
     assert "boom" not in json.dumps(row)
     tail = (logs / "grp" / "sub" / "r.stderr").read_text(encoding="utf-8")
     assert tail.endswith("Traceback: boom") and len(tail) == fleet.STDERR_TAIL_CHARS
+
+
+def test_stderr_tail_never_leaves_the_log_dir(tmp_path):
+    logs = tmp_path / "out" / "logs"
+    assert fleet.write_stderr_tail(logs, Target("../../escape", tmp_path), "err") is None
+    assert not (tmp_path / "escape.stderr").exists()
+    assert not (tmp_path / "out" / "escape.stderr").exists()
+
+
+def test_run_fleet_clears_old_logs_first(tmp_path):
+    logs = tmp_path / "out" / "logs"
+    (logs / "old").mkdir(parents=True)
+    (logs / "old" / "repo.stderr").write_text("stale", encoding="utf-8")
+
+    def scan(target: Target, scratch: Path, options: ScanOptions) -> fleet.FleetRow:
+        fleet.write_stderr_tail(options.log_dir, target, "fresh")
+        return fleet._row(target, reason="scan_exit_1")
+
+    fleet.run_fleet([Target("g/r", tmp_path)], ScanOptions(log_dir=logs), jobs=1, scan=scan)
+    assert sorted(p.relative_to(logs).as_posix() for p in logs.rglob("*.stderr")) == ["g/r.stderr"]
 
 
 def test_stderr_tail_is_skipped_without_a_log_dir_or_on_a_write_error(tmp_path):

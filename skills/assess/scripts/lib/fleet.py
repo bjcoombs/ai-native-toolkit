@@ -39,6 +39,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -156,10 +157,17 @@ def discover_root(root: Path) -> list[Target]:
 
 
 def remote_path(checkout: Path) -> str | None:
-    """The path part of the checkout's ``origin`` URL (no host, user or ``.git``)."""
+    """The path part of the checkout's ``origin`` URL (no host, user or ``.git``).
+
+    ``.``, ``..`` and empty segments are dropped, so an id built from it never
+    climbs out of a directory it names (the stderr logs); None when nothing is left.
+    """
     url = _git(checkout, "config", "--get", "remote.origin.url")
     match = _REMOTE_PATH.match(url) if url else None
-    return match.group("path").strip("/") if match else None
+    if not match:
+        return None
+    segments = [s for s in match.group("path").split("/") if s not in ("", ".", "..")]
+    return "/".join(segments) or None
 
 
 def _under(path: Path, root: Path) -> bool:
@@ -300,7 +308,9 @@ def write_stderr_tail(log_dir: Path | None, target: Target, stderr: str | None) 
     """
     if log_dir is None:
         return None
-    path = log_dir / f"{target.repo}.stderr"
+    path = (log_dir / f"{target.repo}.stderr").resolve()
+    if log_dir.resolve() not in path.parents:  # an id that would climb out of the logs
+        return None
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text((stderr or "")[-STDERR_TAIL_CHARS:], encoding="utf-8")
@@ -319,7 +329,12 @@ def _guarded(scan: ScanFn, target: Target, scratch: Path, options: ScanOptions) 
 def run_fleet(
     targets: Sequence[Target], options: ScanOptions, jobs: int, scan: ScanFn = scan_target,
 ) -> list[FleetRow]:
-    """Scan every target with ``jobs`` workers; rows sorted by ``repo``."""
+    """Scan every target with ``jobs`` workers; rows sorted by ``repo``.
+
+    ``options.log_dir`` is cleared first, so it holds only this run's logs.
+    """
+    if options.log_dir is not None:
+        shutil.rmtree(options.log_dir, ignore_errors=True)
     with tempfile.TemporaryDirectory(prefix="fleet-") as scratch, \
             ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
         rows = list(pool.map(lambda t: _guarded(scan, t, Path(scratch), options), targets))

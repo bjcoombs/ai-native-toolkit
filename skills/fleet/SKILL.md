@@ -69,7 +69,8 @@ One line per repository, sorted by `repo`, keys sorted. Schema:
 **`logs/<repo>.stderr`.** When a scan process exits non-zero, the last 4000
 characters of its stderr go to `DIR/logs/<repo>.stderr` (the id's segments as
 directories) for diagnosis. The row keeps only its `scan_exit_<code>` token. A
-log is written only for such a failure and is overwritten by the next run.
+log is written only for such a failure; `DIR/logs/` is cleared at the start of
+each run, so it holds only that run's logs.
 
 Rows carry no absolute path, timing, error text or per-repository stamp, so
 two runs over unchanged checkouts on the same day are byte-identical (except
