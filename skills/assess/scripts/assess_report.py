@@ -506,6 +506,10 @@ def _render_churn_window(ctx: dict[str, Any]) -> str:
     # ``is True``: a failed churn_degenerate entry is a marker dict, which is truthy.
     if ctx.get("churn_degenerate") is True:
         return f"{label} - snapshot / no usable history, churn signal flat"
+    if doc_staleness.get("history_truncated"):
+        # Shallow clone (issue #544): ages at the boundary are lower bounds.
+        boundary = doc_staleness.get("history_boundary_date") or "unknown"
+        return f"{label} - shallow clone, history before {boundary} missing"
     return label
 
 

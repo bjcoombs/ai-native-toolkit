@@ -517,8 +517,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # Instruction placement (Layer 0, issue #559): each instruction file split on
     # its headings, every section classified always-on or fetch-on-need, and the
     # sections to move named with line ranges and a suggested home; agent and
-    # SKILL.md files over 200 lines reported separately. Advice only, no grade
-    # change. Reads nested_instructions for the nested files.
+    # SKILL.md files over 200 lines reported separately. Advice; the grader
+    # scores instruction files on the same split (#560). Reads
+    # nested_instructions for the nested files.
     ScanSpec(
         "instruction_placement", scan_instruction_placement,
         ("repo_root", "instruction_files", "nested_instructions", "scope", "excludes"),

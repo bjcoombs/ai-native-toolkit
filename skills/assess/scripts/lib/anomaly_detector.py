@@ -55,7 +55,7 @@ def detect_anomalies(context: JsonDict) -> list[Anomaly]:
 
     # Iterate over all present instruction files - the same check applies to each.
     for filename, file_info in instruction_files.items():
-        # The size curve and content penalties (#512) grade a long monolith of
+        # The size penalty (#560) and content penalties (#512) grade a long monolith of
         # directives, a tree and an overview F by design. The F is explained
         # only when the file scored above the F cutoff before those penalties
         # (``score_before_penalties``, unclamped); an F the content earned is

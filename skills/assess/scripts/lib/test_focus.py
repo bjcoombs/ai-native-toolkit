@@ -121,6 +121,12 @@ _ACTION_BY_SIGNAL = {
 # ``sibling_test_only``, never ``unsupported``), but no test exercises it, so
 # mutating it measures nothing.
 MUTATION_SCOPE_SIGNALS = frozenset({"covered_but_hollow", "sibling_test_only"})
+# Suffixes some mutation tool in ``lib.test_pressure.mutation`` can mutate
+# (stryker, mutmut, gremlins, cargo-mutants). A credited file in another
+# language (a ``.sh`` with a bats suite) stays out of the scope: the pass keeps
+# only the first few paths, so it would push a mutable file out and come back
+# unmeasured. Pinned equal to the tool table by a test.
+MUTABLE_SUFFIXES = frozenset({".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs"})
 
 # The three hollow-test heuristic buckets, in report order. Each bucket entry
 # names the file it flags under either ``file`` (boundary / duplicate-truth, a
@@ -347,7 +353,8 @@ def mutation_scope(test_focus: Any) -> list[str]:
     """Paths the bounded mutation pass should mutate, in ranked order: the
     ``test_focus`` entries whose signal is in ``MUTATION_SCOPE_SIGNALS`` (the
     file has test evidence), minus any path that is itself a test file. Accepts
-    the block dict or its ``entries`` list; anything malformed yields ``[]``."""
+    the block dict or its ``entries`` list; anything malformed yields ``[]``.
+    Only paths with a :data:`MUTABLE_SUFFIXES` suffix are kept."""
     entries = test_focus.get("entries") if isinstance(test_focus, dict) else test_focus
     if not isinstance(entries, list):
         return []
@@ -356,4 +363,5 @@ def mutation_scope(test_focus: Any) -> list[str]:
         if isinstance(e, dict) and isinstance(e.get("path"), str) and e["path"]
         and e.get("test_signal") in MUTATION_SCOPE_SIGNALS
         and not is_test_path(e["path"])
+        and Path(e["path"]).suffix in MUTABLE_SUFFIXES
     ]

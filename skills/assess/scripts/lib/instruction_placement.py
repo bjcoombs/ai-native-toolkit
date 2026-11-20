@@ -6,8 +6,9 @@ classifies every section as always-on (who the agent is here, hard rules,
 pointer lists) or fetch-on-need (reference material for one tool, language or
 subtree, a block of commands, text an existing ``SKILL.md`` already holds), so
 the report can name the sections to move, with line ranges and a suggested
-home. No model is involved, and nothing here changes a grade: the block is
-evidence and advice only (the score on always-on size is #560).
+home. No model is involved. The block is the advice; the grader scores each
+instruction file on the same split (``analyse_file``, issue #560): always-on
+lines past the flag point and lines that belong elsewhere cost points.
 
 Precision over recall. An always-on signal keeps a section where it is, even
 when a skill restates it. Otherwise a section is relocatable only when the text
@@ -33,10 +34,10 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, TypedDict
 
-from lib.agent_instructions_grader import detect_skills_dir
 from lib.assess_config import is_user_excluded
 from lib.claude_config import loaded_config_files
 from lib.instruction_content import path_references, readme_overlap_pct
+from lib.run_context_types import JsonDict
 
 # --- thresholds (maintainer decisions on #419) ----------------------------------
 
@@ -57,10 +58,13 @@ LOADED_IN_FULL_MIN_LINES = 200
 # "Commands" block always-on.
 FENCE_DENSITY_MIN = 0.5
 FENCE_MIN_LINES = 20
-# long_section: one section holding a quarter of the file is a topic that
-# outgrew the file. The floor stops a 12-line section of a 40-line file firing.
-LONG_SECTION_SHARE = 0.25
-LONG_SECTION_MIN_LINES = 40
+# long_section: a section of LONG_SECTION_MIN_LINES lines is a topic that
+# outgrew an always-loaded file (a third of the 200-line budget on its own).
+# An absolute count, not a share of the file: with a share, lines added to an
+# unrelated section could shrink this one under the share and lower the
+# file's score (#560). It needs two headed sections, so a file with one
+# heading (or none), with or without a preamble above it, is never "long".
+LONG_SECTION_MIN_LINES = 60
 # duplicates_skill: share of the section's substantive lines (30+ characters,
 # markup stripped, at least five) also in an existing SKILL.md - the line
 # overlap the README check in lib.instruction_content uses. The text is already
@@ -150,6 +154,7 @@ class PlacementFile(TypedDict):
     total_lines: int
     always_on_lines: int
     always_on_share: float
+    always_on_words: int
     fetch_on_need_lines: int
     unclassified_lines: int
     sections_total: int
@@ -324,18 +329,30 @@ def always_on_signals(section: Section) -> list[str]:
     return signals
 
 
-def fetch_signals(section: Section, file_lines: int) -> list[str]:
+def fetch_signals(
+    section: Section, headed_sections: int = 2, rel: str = "",
+) -> list[str]:
+    """The fetch-on-need signals for one section.
+
+    ``long_section`` needs ``headed_sections`` (the file's sections that have a
+    heading) to be two or more: a section is long only relative to other
+    headed sections, so a file with one heading, with or without a preamble
+    line above it, is never long relative to itself. ``scoped_paths`` does not
+    fire when ``rel`` already sits under the dominant directory: a nested file
+    about its own subtree is already where that guidance belongs.
+    """
     signals: list[str] = []
     words = set(re.findall(r"[a-z0-9]+", section.heading.lower()))
     if words & SCOPED_HEADING_TERMS:
         signals.append("scoped_heading")
-    if dominant_directory(section):
+    directory = dominant_directory(section)
+    if directory and not rel.startswith(f"{directory}/"):
         signals.append("scoped_paths")
     fenced, _prose = _fenced_and_prose(section.lines)
     size = len(section.lines)
     if fenced >= FENCE_MIN_LINES and fenced / size >= FENCE_DENSITY_MIN:
         signals.append("command_reference")
-    if size >= LONG_SECTION_MIN_LINES and size / max(file_lines, 1) >= LONG_SECTION_SHARE:
+    if headed_sections >= 2 and size >= LONG_SECTION_MIN_LINES:
         signals.append("long_section")
     return signals
 
@@ -365,8 +382,9 @@ def suggest_home(
 
 
 def classify(
-    section: Section, file_lines: int, rel: str, kind: FileKind,
+    section: Section, rel: str, kind: FileKind,
     skills: Mapping[str, str], skills_dir: str = ".claude/skills",
+    headed_sections: int = 2,
 ) -> Classified:
     # Always-on signals win, even over a duplicate: a rules, identity or
     # pointer section a skill restates is still a guardrail every session needs,
@@ -378,7 +396,7 @@ def classify(
     if duplicate:
         return Classified(section, "fetch_on_need", ("duplicates_skill",),
                           {"kind": "existing_skill", "target": duplicate})
-    fetch = fetch_signals(section, file_lines)
+    fetch = fetch_signals(section, headed_sections, rel)
     if len(fetch) >= MIN_FETCH_SIGNALS:
         return Classified(section, "fetch_on_need", tuple(fetch),
                           suggest_home(section, rel, kind, fetch, skills_dir))
@@ -391,10 +409,15 @@ def analyse_file(
 ) -> PlacementFile:
     """One file's placement record (see ``PlacementFile``)."""
     total = len(text.splitlines())
-    results = [classify(s, total, rel, kind, skills, skills_dir) for s in split_sections(text)]
+    sections = split_sections(text)
+    headed = sum(1 for s in sections if s.heading)
+    results = [classify(s, rel, kind, skills, skills_dir, headed) for s in sections]
     lines_by: Counter[str] = Counter()
+    fetch_words = 0
     for c in results:
         lines_by[c.status] += len(c.section.lines)
+        if c.status == "fetch_on_need":
+            fetch_words += sum(len(line.split()) for line in c.section.lines)
     always_on = total - lines_by["fetch_on_need"]
     share = round(always_on / total, 2) if total else 0.0
     moves: list[RelocatableSection] = [
@@ -407,6 +430,7 @@ def analyse_file(
     return {
         "path": rel, "kind": kind, "total_lines": total,
         "always_on_lines": always_on, "always_on_share": share,
+        "always_on_words": len(text.split()) - fetch_words,
         "fetch_on_need_lines": lines_by["fetch_on_need"],
         "unclassified_lines": lines_by["unclassified"],
         "sections_total": len(results),
@@ -428,6 +452,32 @@ def _read(path: Path) -> str | None:
         return None
 
 
+def detect_skills_dir(repo_root: Path) -> JsonDict:
+    """Check for the presence of skills directories in the repo.
+
+    Looks for `.claude/skills/` and `skills/` and counts the `*/SKILL.md`
+    files within: the ``skills_present`` / ``skill_files`` evidence, and the
+    skills a section's text is compared against (``duplicates_skill``).
+    """
+    skills_paths = [
+        repo_root / ".claude" / "skills",
+        repo_root / "skills",
+    ]
+    found_dirs: list[str] = []
+    skill_files: list[str] = []
+    for sp in skills_paths:
+        if sp.is_dir():
+            found_dirs.append(str(sp.relative_to(repo_root)))
+            for skill_md in sp.glob("*/SKILL.md"):
+                skill_files.append(str(skill_md.relative_to(repo_root)))
+    return {
+        "skills_dirs_present": len(found_dirs) > 0,
+        "skills_dirs": found_dirs,
+        "skills_count": len(skill_files),
+        "skill_files": skill_files,
+    }
+
+
 def _instruction_paths(
     instruction_files: Mapping[str, Any], nested: Any,
 ) -> list[str]:
@@ -440,19 +490,16 @@ def _instruction_paths(
     return paths
 
 
-def scan_instruction_placement(
-    repo_root: Path,
-    instruction_files: Mapping[str, Any],
-    nested_instructions: Any,
-    scope: Path | None = None,
-    excludes: tuple[set[str], list[str]] | None = None,
-) -> InstructionPlacementBlock:
-    """Build the ``instruction_placement`` block (see the module doc)."""
-    repo = repo_root.resolve()
+def _config_files(
+    repo: Path, scope: Path | None, excludes: tuple[set[str], list[str]] | None,
+) -> list[tuple[Path, str]]:
     dirs, pats = excludes or (set(), [])
-    config = [(p, k) for p, k in loaded_config_files(scope or repo)
-              if k in ("skill", "agent") and p.is_relative_to(repo)
-              and not is_user_excluded(p.relative_to(repo), dirs, pats)]
+    return [(p, k) for p, k in loaded_config_files(scope or repo)
+            if k in ("skill", "agent") and p.is_relative_to(repo)
+            and not is_user_excluded(p.relative_to(repo), dirs, pats)]
+
+
+def _skill_map(repo: Path, config: list[tuple[Path, str]]) -> tuple[dict[str, str], str]:
     skill_info = detect_skills_dir(repo)
     skills: dict[str, str] = {}
     for rel in skill_info["skill_files"]:
@@ -466,6 +513,30 @@ def scan_instruction_placement(
             if text is not None:
                 skills[rel] = text
     skills_dir = skill_info["skills_dirs"][0] if skill_info["skills_dirs"] else ".claude/skills"
+    return skills, skills_dir
+
+
+def skill_texts(repo_root: Path) -> dict[str, str]:
+    """Every ``SKILL.md`` the scan compares sections against, by repo-relative path.
+
+    The grader's callers pass this to ``grade_instructions`` so a file's grade
+    rests on the same split as its ``instruction_placement`` record.
+    """
+    repo = repo_root.resolve()
+    return _skill_map(repo, _config_files(repo, None, None))[0]
+
+
+def scan_instruction_placement(
+    repo_root: Path,
+    instruction_files: Mapping[str, Any],
+    nested_instructions: Any,
+    scope: Path | None = None,
+    excludes: tuple[set[str], list[str]] | None = None,
+) -> InstructionPlacementBlock:
+    """Build the ``instruction_placement`` block (see the module doc)."""
+    repo = repo_root.resolve()
+    config = _config_files(repo, scope, excludes)
+    skills, skills_dir = _skill_map(repo, config)
 
     seen: set[Path] = set()
     files: list[PlacementFile] = []
