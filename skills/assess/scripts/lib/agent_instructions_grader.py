@@ -127,10 +127,10 @@ VERIFIABLE_PATTERNS = [
 #   share term: a file that is mostly reference pays for it at any size, and a
 #   large file that is mostly always-on content pays nothing for the share.
 #
-# For a fixed classification both terms only grow as lines are added. A
-# section's classification can still change with the file around it (a
-# ``long_section`` share shrinks as other sections grow), so the guarantee is
-# per term, not end to end. Past ``ALWAYS_ON_GRADE_CAP_LINES`` always-on
+# Both terms only grow as lines are added outside a section: a section's
+# classification reads its own text, the skills and the count of headed
+# sections (which only grows), never the file's total length, so lines added
+# elsewhere cannot declassify it. Past ``ALWAYS_ON_GRADE_CAP_LINES`` always-on
 # lines no amount of other credit
 # makes the file lean: the grade is capped at B (``SIZE_GRADE_CAP_SCORE``).
 # Skills beside the file no longer halve anything: the placement split names

@@ -58,12 +58,13 @@ LOADED_IN_FULL_MIN_LINES = 200
 # "Commands" block always-on.
 FENCE_DENSITY_MIN = 0.5
 FENCE_MIN_LINES = 20
-# long_section: one section holding a quarter of the file is a topic that
-# outgrew the file. The floor stops a 12-line section of a 40-line file firing,
-# and it needs two headed sections: a file with one heading (or none) is not
-# long relative to itself.
-LONG_SECTION_SHARE = 0.25
-LONG_SECTION_MIN_LINES = 40
+# long_section: a section of LONG_SECTION_MIN_LINES lines is a topic that
+# outgrew an always-loaded file (a third of the 200-line budget on its own).
+# An absolute count, not a share of the file: with a share, lines added to an
+# unrelated section could shrink this one under the share and lower the
+# file's score (#560). It needs two headed sections, so a file with one
+# heading (or none), with or without a preamble above it, is never "long".
+LONG_SECTION_MIN_LINES = 60
 # duplicates_skill: share of the section's substantive lines (30+ characters,
 # markup stripped, at least five) also in an existing SKILL.md - the line
 # overlap the README check in lib.instruction_content uses. The text is already
@@ -328,9 +329,9 @@ def always_on_signals(section: Section) -> list[str]:
 
 
 def fetch_signals(
-    section: Section, file_lines: int, headed_sections: int = 2, rel: str = "",
+    section: Section, headed_sections: int = 2, rel: str = "",
 ) -> list[str]:
-    """The fetch-on-need signals for one section of a ``file_lines``-line file.
+    """The fetch-on-need signals for one section.
 
     ``long_section`` needs ``headed_sections`` (the file's sections that have a
     heading) to be two or more: a section is long only relative to other
@@ -350,8 +351,7 @@ def fetch_signals(
     size = len(section.lines)
     if fenced >= FENCE_MIN_LINES and fenced / size >= FENCE_DENSITY_MIN:
         signals.append("command_reference")
-    if (headed_sections >= 2 and size >= LONG_SECTION_MIN_LINES
-            and size / max(file_lines, 1) >= LONG_SECTION_SHARE):
+    if headed_sections >= 2 and size >= LONG_SECTION_MIN_LINES:
         signals.append("long_section")
     return signals
 
@@ -381,7 +381,7 @@ def suggest_home(
 
 
 def classify(
-    section: Section, file_lines: int, rel: str, kind: FileKind,
+    section: Section, rel: str, kind: FileKind,
     skills: Mapping[str, str], skills_dir: str = ".claude/skills",
     headed_sections: int = 2,
 ) -> Classified:
@@ -395,7 +395,7 @@ def classify(
     if duplicate:
         return Classified(section, "fetch_on_need", ("duplicates_skill",),
                           {"kind": "existing_skill", "target": duplicate})
-    fetch = fetch_signals(section, file_lines, headed_sections, rel)
+    fetch = fetch_signals(section, headed_sections, rel)
     if len(fetch) >= MIN_FETCH_SIGNALS:
         return Classified(section, "fetch_on_need", tuple(fetch),
                           suggest_home(section, rel, kind, fetch, skills_dir))
@@ -410,7 +410,7 @@ def analyse_file(
     total = len(text.splitlines())
     sections = split_sections(text)
     headed = sum(1 for s in sections if s.heading)
-    results = [classify(s, total, rel, kind, skills, skills_dir, headed) for s in sections]
+    results = [classify(s, rel, kind, skills, skills_dir, headed) for s in sections]
     lines_by: Counter[str] = Counter()
     for c in results:
         lines_by[c.status] += len(c.section.lines)

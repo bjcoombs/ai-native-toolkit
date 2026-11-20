@@ -273,3 +273,20 @@ def test_analyse_file_is_the_graders_split() -> None:
     sub = grade_instructions(text, 1, repo=None, path="CLAUDE.md").subscores
     assert sub["always_on_lines"] == record["always_on_lines"]
     assert sub["fetch_on_need_lines"] == record["fetch_on_need_lines"]
+
+
+def test_lines_added_to_an_unrelated_section_never_lower_the_penalty() -> None:
+    """``long_section`` is an absolute count, so growing another section
+    cannot declassify a relocatable one (the claude-review case: a long Notes
+    section beside a scoped section; one more Notes line used to drop the
+    penalty to 0)."""
+    paths = "\n".join(f"- `src/mod{i}.py` holds part {i}." for i in range(69))
+    scoped = "## Layout\n" + paths + "\n"
+
+    def penalty(notes: int) -> int:
+        notes_section = "## Notes\n" + "A plain prose line.\n" * (notes - 1)
+        return grade_instructions(notes_section + scoped, 1, repo=None).subscores["bloat_penalty"]
+
+    penalties = [penalty(n) for n in (121, 122, 200, 280, 400)]
+    assert penalties[0] == 7  # the 70-line scoped section is relocatable
+    assert penalties == sorted(penalties)
