@@ -23,9 +23,8 @@ Two lists. ``files`` covers the repository instruction files (the root
 locations and the nested and path-scoped files ``nested_instructions``
 grades). ``loaded_in_full`` covers agent definitions and ``SKILL.md`` files
 over ``LOADED_IN_FULL_MIN_LINES``, which load whole when invoked; it is
-informational and reported separately. A root ``agents/*.md`` file with
-``name`` or ``description`` frontmatter counts as an agent definition even
-without a plugin manifest (#662).
+informational and reported separately. A root ``agents/*.md`` file shaped as
+an agent definition counts even without a plugin manifest (#662).
 
 The tendency it compensates for is accretion: an always-loaded file grows a
 section at a time, and every session pays for the growth.
@@ -40,7 +39,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Literal, TypedDict
 
 from lib.assess_config import is_user_excluded
-from lib.claude_config import loaded_config_files, parse_frontmatter
+from lib.claude_config import DOC_STEMS, loaded_config_files, parse_frontmatter
 from lib.instruction_content import path_references, readme_overlap_pct
 from lib.run_context_types import JsonDict
 
@@ -505,18 +504,27 @@ def _instruction_paths(
 
 
 def _is_agent_definition(path: Path) -> bool:
-    """A file with ``name`` or ``description`` frontmatter: an agent definition,
-    not an ordinary document that happens to sit in ``agents/``."""
+    """Whether a file under a manifest-less ``agents/`` is shaped as an agent.
+
+    ``name`` or ``description`` frontmatter is an agent definition. No
+    frontmatter is one too, as the plugin loader would treat it, unless the
+    name is a repository document's (``README``, ``CHANGELOG``: the
+    ``stray_markdown`` stems). Frontmatter without either key is a document.
+    """
     text = _read(path)
-    fm = parse_frontmatter(text) if text is not None else None
-    return fm is not None and any(e.key in ("name", "description") for e in fm.entries)
+    if text is None:
+        return False
+    fm = parse_frontmatter(text)
+    if fm is None:
+        return path.stem.lower() not in DOC_STEMS
+    return any(e.key in ("name", "description") for e in fm.entries)
 
 
 def _manifestless_agents(root: Path) -> list[tuple[Path, str]]:
     """Root ``agents/*.md`` agent definitions in a repository with no plugin
     manifest (#662). Claude Code loads them only once the directory is
     installed as a plugin, but they are written to load whole, so they belong
-    in ``loaded_in_full``. Frontmatter is required to keep docs out."""
+    in ``loaded_in_full``. ``_is_agent_definition`` keeps documents out."""
     if (root / ".claude-plugin" / "plugin.json").is_file():
         return []
     agents = root / "agents"

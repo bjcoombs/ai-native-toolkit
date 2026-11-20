@@ -334,7 +334,7 @@ def _skill_target(rel: str, origin: str) -> str:
 # `/README` command and `agents/README.md` an agent named README.
 # Only a file with no frontmatter counts: a doc-named file that carries
 # frontmatter was meant as configuration and is checked like any other.
-_DOC_STEMS = frozenset({"readme", "changelog", "contributing", "license", "licence"})
+DOC_STEMS = frozenset({"readme", "changelog", "contributing", "license", "licence"})
 
 
 def _stray_fix(rel: str, kind: str) -> str:
@@ -348,7 +348,7 @@ def _stray_fix(rel: str, kind: str) -> str:
 def check_file(rel: str, kind: FileKind, origin: Origin, text: str) -> list[ClaudeConfigFinding]:
     """Every finding for one configuration file, in line order."""
     fm = parse_frontmatter(text)
-    if fm is None and kind != "skill" and Path(rel).stem.lower() in _DOC_STEMS:
+    if fm is None and kind != "skill" and Path(rel).stem.lower() in DOC_STEMS:
         return [_finding("stray_markdown", rel, 1, None, None, _stray_fix(rel, kind))]
     out: list[ClaudeConfigFinding] = []
     if kind == "command":
