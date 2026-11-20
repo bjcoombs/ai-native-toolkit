@@ -322,7 +322,8 @@ def _venv_mutmut3(pkg_on_disk: Path, deadline: float) -> str | None:
                 proc = subprocess.run(
                     [str(python), "-B", "-c", "from importlib.metadata import version; "
                      "print(version('mutmut'))"],
-                    capture_output=True, text=True, timeout=remaining, check=False)
+                    capture_output=True, text=True,
+                    encoding="utf-8", errors="replace", timeout=remaining, check=False)
             except (subprocess.TimeoutExpired, OSError):
                 continue
             m = re.match(r"\s*(\d+)\.", proc.stdout or "")
@@ -533,6 +534,7 @@ def _copy_repo(repo_root: Path, dest: Path) -> bool:
         proc = subprocess.run(
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
             cwd=str(repo_root), env=_git_env(), capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
             timeout=60, check=False)
         listed = [f for f in (proc.stdout or "").split("\0") if f] \
             if proc.returncode == 0 else []
@@ -591,7 +593,8 @@ def _snapshot_git(work: Path, deadline: float) -> None:
             return
         try:
             proc = subprocess.run(cmd, cwd=str(work), env=env, capture_output=True,
-                                  text=True, timeout=min(60.0, remaining), check=False)
+                                  text=True, encoding="utf-8", errors="replace",
+                                  timeout=min(60.0, remaining), check=False)
         except (subprocess.TimeoutExpired, OSError):
             return
         if proc.returncode != 0:
@@ -649,6 +652,7 @@ def _run_mutmut(pkg: Path, pkg_on_disk: Path, config: str, cfg_scope: list[str],
     return subprocess.run(
         _mutmut_command(pkg, config, cfg_scope, mutmut), cwd=str(pkg),
         env=_runner_env(runner, tmp), capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
         timeout=remaining, check=False)
 
 

@@ -354,7 +354,7 @@ def _unavailable_summary(reason: str) -> dict[str, Any]:
 
 def _run(cmd: list[str], cwd: Path) -> str:
     out = subprocess.run(
-        cmd, cwd=cwd, capture_output=True, text=True, errors="replace"
+        cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     return out.stdout
 
@@ -614,7 +614,7 @@ def _classify_authorship(repo_root: Path, markers: list[Marker]) -> None:
         ["git", "log", "--no-walk", "--stdin",
          "--format=%H%x02%ae%x02%an%x02%(trailers:key=Co-Authored-By,valueonly,separator=%x1d)"],
         cwd=repo_root, input="\n".join(shas), capture_output=True,
-        text=True, errors="replace",
+        text=True, encoding="utf-8", errors="replace",
     ).stdout
     agent_by_sha: dict[str, bool] = {}
     for ln in out.splitlines():

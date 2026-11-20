@@ -392,7 +392,8 @@ def scan_dead_code(repo_root: Path, run: bool = True,
         try:
             proc = subprocess.run(
                 spec["cmd"](repo_root, extra_dirs), cwd=str(repo_root),
-                capture_output=True, text=True, timeout=DEAD_CODE_TIMEOUT,
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=DEAD_CODE_TIMEOUT,
                 check=False,
             )
         except subprocess.TimeoutExpired:
@@ -563,7 +564,7 @@ def _detect_reachable(repo_root: Path, files: list[Path],
         if mcp.name != ".mcp.json":
             continue
         if _OBS_TOOL_RE.search(_read(mcp)):
-            signals.add(f"MCP server over telemetry: {mcp.relative_to(repo_root)}")
+            signals.add(f"MCP server over telemetry: {mcp.relative_to(repo_root).as_posix()}")
 
     # 2. Repo skills named for logs/metrics/traces. These live under `skills/`
     #    or `.claude/skills/` - the latter is in EXCLUDE_DIRS (so absent from
@@ -575,12 +576,12 @@ def _detect_reachable(repo_root: Path, files: list[Path],
         if any(p in _skip for p in parts):
             continue
         if "skills" in parts and _OBS_TOOL_RE.search(path.parent.name):
-            signals.add(f"repo skill for telemetry: {rel}")
+            signals.add(f"repo skill for telemetry: {rel.as_posix()}")
 
     # 3. Runbooks whose fenced code blocks hold runnable query commands.
     for rb in runbooks:
         if _RUNNABLE_QUERY_RE.search(_fenced_code(_read(rb))):
-            signals.add(f"runbook with runnable queries: {rb.relative_to(repo_root)}")
+            signals.add(f"runbook with runnable queries: {rb.relative_to(repo_root).as_posix()}")
 
     return sorted(signals)
 

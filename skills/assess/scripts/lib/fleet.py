@@ -120,13 +120,16 @@ AfterFn = Callable[[Target, FleetRow], None]
 
 
 def _read_only_env() -> dict[str, str]:
-    return {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
+    # PYTHONUTF8: the scan child reads and writes UTF-8 whatever the host locale
+    # (a Windows code page would otherwise garble or reject non-ASCII text).
+    return {**os.environ, "GIT_OPTIONAL_LOCKS": "0", "PYTHONUTF8": "1"}
 
 
 def _git(path: Path, *args: str) -> str | None:
     try:
         out = subprocess.run(
             ["git", "-C", str(path), *args], capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
             check=True, timeout=30, env=_read_only_env(),
         )
     except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired):
@@ -304,7 +307,8 @@ def scan_target(target: Target, scratch: Path, options: ScanOptions) -> FleetRow
     try:
         done = subprocess.run(
             signals_command(target.checkout, out, options), cwd=scratch, env=_read_only_env(),
-            capture_output=True, text=True, timeout=options.timeout, check=False,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=options.timeout, check=False,
         )
     except subprocess.TimeoutExpired:
         return _row(target, reason=SCAN_TIMEOUT)

@@ -106,7 +106,7 @@ def git_churn_scores(
     try:
         repo_top = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
             timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
@@ -122,7 +122,7 @@ def git_churn_scores(
         cmd += ["--", str(scope_abs)]
     try:
         raw = subprocess.run(
-            cmd, capture_output=True, text=True, check=True,
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
             timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
@@ -163,7 +163,7 @@ def commit_epochs_by_file(
     try:
         top = subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
             timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip()
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
@@ -178,7 +178,7 @@ def commit_epochs_by_file(
     cmd += ["--", str(root)]
     try:
         raw = subprocess.run(
-            cmd, capture_output=True, text=True, check=True,
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
             timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
@@ -222,7 +222,7 @@ def git_commit_info(root: Path) -> JsonDict:
         try:
             out = subprocess.run(
                 ["git", "-C", str(root), *args],
-                capture_output=True, text=True, check=True,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
                 timeout=GIT_TIMEOUT_SECONDS,
             )
         except (subprocess.CalledProcessError, FileNotFoundError,
@@ -298,7 +298,7 @@ def file_last_commit_epoch(path: Path) -> int | None:
         out = subprocess.run(
             ["git", "log", "-1", "--format=%at", "--", str(path)],
             cwd=path.parent if path.parent.exists() else Path.cwd(),
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
             timeout=GIT_TIMEOUT_SECONDS,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -419,7 +419,7 @@ def _file_content_epoch(path: Path, bulk_shas: frozenset[str]) -> int | None:
         out = subprocess.run(
             ["git", "log", "--format=%H %at", "--", str(path)],
             cwd=path.parent if path.parent.exists() else Path.cwd(),
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
             timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -454,7 +454,8 @@ def content_commit_clock(
     try:
         top = subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return empty
@@ -467,7 +468,7 @@ def content_commit_clock(
     cmd += [f":(glob,icase)**/*{e}" for e in exts]
     try:
         raw = subprocess.run(
-            cmd, capture_output=True, text=True, check=True,
+            cmd, capture_output=True, text=True, encoding="utf-8", check=True,
             timeout=GIT_TIMEOUT_SECONDS, errors="replace",
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
@@ -542,7 +543,8 @@ def _shallow_probe(top: str) -> Literal["true", "false"] | None:
     try:
         probe = subprocess.run(
             ["git", "-C", top, "rev-parse", "--is-shallow-repository"],
-            capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=False, timeout=GIT_TIMEOUT_SECONDS,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
@@ -560,14 +562,16 @@ def _shallow_boundary(top: str) -> dict[str, int]:
     try:
         rel = subprocess.run(
             ["git", "-C", top, "rev-parse", "--git-path", "shallow"],
-            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip()
         shas = (Path(top) / rel).read_text().split()
         if not shas:
             return {}
         out = subprocess.run(
             ["git", "-C", top, "show", "-s", "--format=%H %at", *shas],
-            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError,
             subprocess.TimeoutExpired, OSError):
@@ -610,11 +614,13 @@ def tracked_files(root: Path) -> frozenset[Path] | None:
     try:
         repo_top = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip()
         raw = subprocess.run(
             ["git", "-C", str(root), "ls-files", "--full-name", "-z"],
-            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return None
