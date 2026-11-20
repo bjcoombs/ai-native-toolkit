@@ -56,17 +56,30 @@ RAISE_PIN_COMMAND = (
 )
 
 
-def _encodable(s: object) -> bool:
-    """A string that can be written back out as UTF-8. A hand-edited JSON
-    escape such as ``"\\ud800"`` loads as a lone surrogate, which would raise
-    later when the gate prints it."""
-    if not isinstance(s, str):
-        return False
+def _text(s: str) -> str:
+    """``s`` made printable as UTF-8 while staying tracked. A non-UTF-8
+    filename decodes (``surrogateescape``) to lone surrogates, and a
+    hand-edited JSON escape such as ``"\\ud800"`` loads as one; either would
+    raise when the gate prints it. The escaped bytes come back via
+    ``surrogateescape`` and show as ``\\xff``; any other lone surrogate shows
+    as ``\\ud800``. Valid text is unchanged, and the mapping is the same on
+    the write and compare paths, so a path never moves by being re-read."""
     try:
         s.encode("utf-8")
+        return s
     except UnicodeEncodeError:
-        return False
-    return True
+        pass
+    try:
+        return s.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace")
+    except UnicodeEncodeError:
+        return s.encode("utf-8", "backslashreplace").decode("utf-8")
+
+
+def _entry_name(entry: object) -> str | None:
+    """The finding name of one entry, or ``None`` when it has no string name."""
+    if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+        return None
+    return _text(entry["name"])
 
 
 def _entry_paths(entry: dict[str, Any]) -> list[str]:
@@ -75,26 +88,27 @@ def _entry_paths(entry: dict[str, Any]) -> list[str]:
     paths = entry.get("paths")
     if not isinstance(paths, list):
         return []
-    return [p for p in paths if _encodable(p)]
+    return [_text(p) for p in paths if isinstance(p, str)]
 
 
 def _entry_is_clean(entry: object) -> bool:
     """Whether ``build_snapshot`` keeps every part of a loaded entry."""
-    if not isinstance(entry, dict) or not _encodable(entry.get("name")):
+    if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
         return False
     paths = entry.get("paths", [])
-    return isinstance(paths, list) and all(_encodable(p) for p in paths)
+    return isinstance(paths, list) and all(isinstance(p, str) for p in paths)
 
 
 def build_snapshot(findings: list[Any], method_version: int) -> FindingsSnapshot:
     """The snapshot for one run's ``derived_findings``: names in run order,
     paths sorted so the committed file only changes when a finding moves.
-    Entries without a string name are skipped; non-string paths are dropped."""
+    Entries without a string name are skipped; non-string paths are dropped;
+    names and paths that are not valid UTF-8 are escaped (``_text``)."""
     rows: list[FindingPaths] = []
     for f in findings if isinstance(findings, list) else []:
-        if not isinstance(f, dict) or not _encodable(f.get("name")):
-            continue
-        rows.append({"name": f["name"], "paths": sorted(set(_entry_paths(f)))})
+        name = _entry_name(f)
+        if name is not None:
+            rows.append({"name": name, "paths": sorted(set(_entry_paths(f)))})
     return {"assess_method_version": method_version, "findings": rows}
 
 
@@ -117,7 +131,9 @@ def read_snapshot(assess_dir: Path) -> tuple[FindingsSnapshot | None, str | None
     ``reason`` is a fixed token naming what was wrong with the file, or
     ``None`` when it was absent or clean. A file that cannot establish a prior
     method version gives ``(None, reason)``: ``unreadable``, ``not_utf8``,
-    ``invalid_json`` (including an integer too long to parse), ``too_deep``,
+    ``invalid_json`` (including an integer too long to parse), ``too_deep``
+    (nesting past the recursion limit; some Python builds report it as
+    ``invalid_json`` instead),
     ``not_object``, ``version_missing``, ``version_invalid``,
     ``findings_missing`` or ``findings_not_list``. A file whose version and
     list are sound but with some unusable entries (not an object, no string
@@ -213,8 +229,9 @@ def write_snapshot(assess_dir: Path, snapshot: FindingsSnapshot) -> None:
 def _paths_by_name(findings: list[Any]) -> dict[str, set[str]]:
     out: dict[str, set[str]] = {}
     for f in findings if isinstance(findings, list) else []:
-        if isinstance(f, dict) and isinstance(f.get("name"), str):
-            out.setdefault(f["name"], set()).update(_entry_paths(f))
+        name = _entry_name(f)
+        if name is not None:
+            out.setdefault(name, set()).update(_entry_paths(f))
     return out
 
 

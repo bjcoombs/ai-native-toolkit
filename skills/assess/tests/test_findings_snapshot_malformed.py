@@ -20,6 +20,7 @@ from lib.findings_snapshot import (
     load_snapshot,
     method_change,
     read_snapshot,
+    write_snapshot,
 )
 
 # (id, file bytes, reason token). Each makes the file unable to establish a
@@ -58,10 +59,14 @@ NO_SNAPSHOT_CASES = [
 def test_unusable_snapshot_is_none_with_a_named_reason(
         tmp_path: Path, capsys: pytest.CaptureFixture[str], body: bytes, reason: str) -> None:
     (tmp_path / FINDINGS_SNAPSHOT_FILE).write_bytes(body)
-    assert read_snapshot(tmp_path) == (None, reason)
+    snap, got = read_snapshot(tmp_path)
+    # How deep nesting surfaces depends on the Python build: RecursionError
+    # (``too_deep``) on some, a JSONDecodeError (``invalid_json``) on others.
+    accepted = {"too_deep", "invalid_json"} if reason == "too_deep" else {reason}
+    assert snap is None and got in accepted
     assert load_snapshot(tmp_path) is None
     err = capsys.readouterr().err
-    assert f"is malformed ({reason}); treated as no prior snapshot." in err
+    assert f"is malformed ({got}); treated as no prior snapshot." in err
     assert err.count("\n") == 1
 
 
@@ -80,9 +85,6 @@ ENTRY_CASES = [
      [{"name": "x", "paths": []}]),
     ("name_missing", [{"paths": ["a.py"]}, {"name": "x"}], [{"name": "x", "paths": []}]),
     ("name_not_string", [{"name": 5, "paths": []}, {"name": ["x"], "paths": []}], []),
-    ("lone_surrogate", [{"name": "lying_map", "paths": ["\ud800.py", "ok.py"]},
-                        {"name": "\udfff", "paths": []}],
-     [{"name": "lying_map", "paths": ["ok.py"]}]),
 ]
 
 
@@ -141,7 +143,7 @@ def test_recorded_prior_with_non_list_findings_does_not_raise(tmp_path: Path) ->
 
 
 _SKIPPED_PRIOR = {"assess_method_version": 1, "findings": [
-    {"name": "lying_map", "paths": []}, {"name": "lying_map", "paths": []}]}
+    {"name": "lying_map", "paths": []}, {"name": "lying_map", "paths": ["\\ud800.py"]}]}
 
 
 @pytest.mark.parametrize(("body", "recorded"), [
@@ -185,15 +187,25 @@ def test_gate_passes_on_a_hand_edited_committed_snapshot(
     assert ctx["prior_findings_snapshot"] == recorded
 
 
-def test_unencodable_paths_are_dropped_on_both_sides_of_a_method_change() -> None:
-    """A path that cannot be encoded as UTF-8 (a lone surrogate, as a
-    non-UTF-8 filename decodes) would raise when the gate prints it. The
-    written snapshot and the current findings both drop it, so it never
-    shows as a move."""
-    findings = [{"name": "lying_map", "paths": ["\udcff.py", "a.py"]}]
-    assert build_snapshot(findings, 2)["findings"] == [{"name": "lying_map", "paths": ["a.py"]}]
+def test_unencodable_text_is_escaped_and_kept(tmp_path: Path) -> None:
+    """A lone surrogate (a hand-edited ``\\ud800`` escape, or a non-UTF-8
+    filename decoded with ``surrogateescape``) would raise when the gate prints
+    it. It is escaped, not dropped, so the path stays tracked, and the escape
+    is stable across a write and re-read."""
+    findings = [{"name": "lying_map", "paths": ["\udcff.py", "\ud800.py", "a.py"]},
+                {"name": "\udfff", "paths": []}]
+    snap = build_snapshot(findings, 1)
+    assert snap["findings"] == [
+        {"name": "lying_map", "paths": ["\\ud800.py", "\\xff.py", "a.py"]},
+        {"name": "\\udfff", "paths": []},
+    ]
+    (tmp_path / FINDINGS_SNAPSHOT_FILE).write_text(
+        json.dumps({"assess_method_version": 1, "findings": findings}), encoding="utf-8")
+    assert read_snapshot(tmp_path) == (snap, None)
+    write_snapshot(tmp_path, snap)
+    assert read_snapshot(tmp_path) == (snap, None)
     ctx = {"assess_method_version": 2, "derived_findings": findings,
-           "prior_findings_snapshot": build_snapshot(findings, 1)}
+           "prior_findings_snapshot": snap}
     change = method_change(ctx)
     assert change is not None
     assert change["appeared"] == [] and change["cleared"] == []
