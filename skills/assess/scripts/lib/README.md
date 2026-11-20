@@ -110,6 +110,13 @@ shares one map per HEAD between the churn reads and the content clock, and marks
 doc row `confidence: low` when the map is incomplete, which keeps it out of `lying_map`.
 Git's own rename detection is off (`--no-renames`) in both walks, so `diff.renames`
 does not move a count. Tests: `tests/test_rename_churn.py`.
+Shallow history (issue #544): `content_commit_clock` reuses its
+`--is-shallow-repository` probe, and on a shallow clone reads the boundary commits
+from `git rev-parse --git-path shallow`. The clock's `truncated`, `boundary_epoch`
+(newest boundary, author time) and `lower_bound` (docs whose newest visible change is
+a boundary commit) feed `doc_staleness`. A boundary commit lists every file like a
+root commit, so it is never counted as bulk. A failed probe is unknown, not
+truncated. Tests: `tests/test_shallow_history.py`.
 `window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
 into the `history_window` scan input (`"12mo"`, None for all-time).
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
@@ -381,7 +388,12 @@ source-vs-doc verdict. `last_commit_days` and the instruction grader's `freshnes
 commits are reported as `bulk_commits_skipped` (newest first, capped) with
 `bulk_commits_skipped_total`. A doc dated by the creation fallback carries
 `last_change_basis: "creation"` and confidence `low`, which keeps it out of the stale-hub
-finding; `creation_date_fallback_count` counts them. The `modularity` block's `base_doc_dir_ratio`
+finding; `creation_date_fallback_count` counts them. On a shallow clone the block
+carries `history_truncated: true` and `history_boundary_date`, every row is confidence
+`low`, and a doc whose newest visible change is the boundary carries
+`last_commit_days_bound: "lower"` (copied onto its `stale_hubs` entry): its age is a
+floor. Its ratio still rests only on subject commits after the boundary, so the
+boundary listing every code file does not make it stale. The `modularity` block's `base_doc_dir_ratio`
 is code directories holding a base doc over all code directories; a base doc in a
 directory with no code (`docs/`, `agents/`) counts in neither, so the ratio stays
 within 0-1 (tests: `tests/test_doc_modularity.py`).
@@ -652,6 +664,23 @@ Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 `if`/`then` tying `ok` to non-null `scans`. `tests/test_fleet.py` fails when the
 checked-in file differs; regenerate with `uv run --locked python scripts/lib/fleet_schema.py`
 from `skills/assess`.
+
+**`fleet_labels.py`**
+The deterministic half of the optional fleet label step (issue #572), driven by
+`skills/fleet/scripts/fleet_labels.py`. `digest` reduces a `FleetRow` to the facts a
+small model reads (identity plus short scalar leaves of available blocks; lists become
+lengths and kind tokens; never source), `batches` and `build_prompt` wrap them in the
+fixed instructions, `parse_answers` reads the reply tolerantly (fences and prose
+skipped), and `build_label_rows` joins it to `repos.jsonl`: one `LabelRow`
+(`path`, `label`, `confidence`, `model`) per repository, a label outside `LABELS`
+becoming `other`, a missing answer `other` at confidence 0, unknown paths dropped, the
+first duplicate kept, `model` from the caller. `write_labels` writes `labels.jsonl`
+atomically beside `repos.jsonl` (never touching it); `check_labels` validates a file
+against the repository ids; `labels_by_path` and `filter_rows` are the display and
+filter join. `build_schema` generates `skills/fleet/references/labels.schema.json`
+(regenerate with `uv run --locked python scripts/lib/fleet_labels.py` from
+`skills/assess`). No module in the gathering or scoring path imports it, and it
+imports no model, network or subprocess module: `tests/test_fleet_labels.py` pins both.
 
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads

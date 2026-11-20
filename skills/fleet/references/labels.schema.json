@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/labels.schema.json",
+  "title": "fleet repository label row",
+  "description": "One line of labels.jsonl written by skills/fleet/scripts/fleet_labels.py beside repos.jsonl. path is the repos.jsonl repo id. Display and filter only; never scored. Generated from lib/fleet_labels.py.",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "label": {
+      "enum": [
+        "service",
+        "library",
+        "infrastructure",
+        "mirror",
+        "docs",
+        "other"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "confidence",
+    "label",
+    "model",
+    "path"
+  ],
+  "additionalProperties": false
+}
