@@ -370,3 +370,26 @@ def test_bats_without_a_test_case_credits_nothing(tmp_path: Path) -> None:
                       "tests/helpers.bats":
                           'source "$BATS_TEST_DIRNAME/../scripts/common.sh"\n'})
     assert _credited(tmp_path, "scripts/common.sh") is False
+
+
+def test_bats_concatenated_shell_word_credits(tmp_path: Path) -> None:
+    """``"$BATS_TEST_DIRNAME"/../x.sh`` is one shell word: the quoted anchor
+    and the bare tail are read together."""
+    _write(tmp_path, {
+        "scripts/common.sh": "f() { :; }\n",
+        "tests/launcher.bats":
+            'source "$BATS_TEST_DIRNAME"/../scripts/common.sh' + BATS_TEST,
+    })
+    assert _credited(tmp_path, "scripts/common.sh") is True
+
+
+def test_bats_load_prefers_dot_bash_like_bats_core(tmp_path: Path) -> None:
+    """With both ``helper`` and ``helper.bash`` present, ``load helper`` loads
+    ``helper.bash``, so only that file is credited."""
+    _write(tmp_path, {
+        "scripts/helper": "f() { :; }\n", "scripts/helper.bash": "g() { :; }\n",
+        "tests/launcher.bats": "load ../scripts/helper" + BATS_TEST,
+    })
+    index = tc.build_test_index(tmp_path)
+    assert tc.sibling_test_match(tmp_path, "scripts/helper.bash", index) == tc.MATCH_IMPORT
+    assert tc.sibling_test_match(tmp_path, "scripts/helper", index) != tc.MATCH_IMPORT

@@ -2018,7 +2018,7 @@ string literals are not parsed; a NodeNext `./foo.js` specifier also resolves to
 `foo.ts`); alias and package
 specifiers keep the name match. A bats suite with an `@test` line (issue #593)
 credits the files it `source`s / `.`s / `load`s by a suite-anchored path
-(`$BATS_TEST_DIRNAME/...`, or a relative `load`, also tried with `.bash`); a
+(`$BATS_TEST_DIRNAME/...`, or a relative `load`, `.bash` appended tried first); a
 cwd-relative `source`, another variable or a glob credits nothing. All other
 languages keep the name match. Modules inside a test
 directory are support, never credited. Every module a qualifying test imports
@@ -2054,7 +2054,9 @@ the mutation offer consume. The mutation scope is `mutation_scope(block)`: the
 entries with test evidence (`covered_but_hollow`, `sibling_test_only`) in ranked
 order, minus any hot file that is itself a test (`sibling_tests.is_test_path`),
 so neither a file with no test nor a test file heads the mutation pass and comes
-back as an `untrusted_hotspot` for tests that do not exist; `assess_core --opt-in-mutation`
+back as an `untrusted_hotspot` for tests that do not exist, and limited to
+`MUTABLE_SUFFIXES` (the suffixes a mutation tool handles), so a credited `.sh`
+does not push a mutable file out of the capped pass; `assess_core --opt-in-mutation`
 and the SKILL.md Step 2d `jq` both apply it. Add cases in
 `tests/test_test_focus.py` alongside any change to a classification, ranking,
 or scope rule.

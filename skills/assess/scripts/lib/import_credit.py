@@ -29,8 +29,8 @@ The scan is static and bounded:
   it ``source``s / ``.``s / ``load``s by a path anchored at the suite's own
   directory: ``$BATS_TEST_DIRNAME/<path>`` (braces and quotes allowed), or a
   bare relative ``load <path>``, which bats itself resolves against the suite
-  (also tried with ``.bash`` appended). A path that still holds a variable, a
-  command substitution or a glob, or a bare relative ``source`` (resolved
+  (with ``.bash`` appended first, as bats-core does). A path that still holds
+  a variable, a command substitution or a glob, or a bare relative ``source`` (resolved
   against the caller's working directory, which the scan cannot know), credits
   nothing. Other languages keep only the name match.
 - Every module a qualifying test imports directly is credited, not only the
@@ -100,9 +100,12 @@ BATS_SUFFIX = ".bats"
 # A bats test case: ``@test "name" {`` at the start of a line.
 _BATS_TEST_RE = re.compile(r"^[ \t]*@test\s", re.MULTILINE)
 # A ``source`` / ``.`` / ``load`` command at the start of a line (optionally
-# after ``;``, ``&&`` or a ``{``); group 1 is the command, group 2 its first argument.
+# after ``;``, ``&&`` or a ``{``); group 1 is the command, group 2 its first
+# argument as one whole shell word, quoted and bare segments concatenated
+# (``"$BATS_TEST_DIRNAME"/../x.sh``).
 _BATS_LOAD_RE = re.compile(
-    r"""(?:^|[;&|{]\s*)[ \t]*(source|\.|load)[ \t]+("[^"\n]*"|'[^'\n]*'|[^\s;&|#]+)""",
+    r"""(?:^|[;&|{]\s*)[ \t]*(source|\.|load)[ \t]+"""
+    r"""((?:"[^"\n]*"|'[^'\n]*'|[^\s;&|#"']+)+)""",
     re.MULTILINE)
 _BATS_DIR_RE = re.compile(r"^\$(?:BATS_TEST_DIRNAME\b|\{BATS_TEST_DIRNAME\})")
 
@@ -282,8 +285,8 @@ def _bats_target(command: str, arg: str, test_dir: str) -> str | None:
 
 def bats_sources(source: str, test_dir: str, files: frozenset[str]) -> list[str]:
     """Repo-relative files a bats suite loads by a suite-anchored path, or an
-    empty list when it defines no ``@test``. A ``load`` also tries the path
-    with ``.bash`` appended, as bats does."""
+    empty list when it defines no ``@test``. A ``load`` tries the path with
+    ``.bash`` appended first, then as written, as bats-core does."""
     if not _BATS_TEST_RE.search(source):
         return []
     out: list[str] = []
@@ -294,7 +297,8 @@ def bats_sources(source: str, test_dir: str, files: frozenset[str]) -> list[str]
             target = _bats_target(command, arg, test_dir)
             if target is None:
                 continue
-            candidates = [target] + ([target + ".bash"] if command == "load" else [])
+            # bats-core ``load`` tries ``<name>.bash`` before ``<name>``.
+            candidates = ([target + ".bash"] if command == "load" else []) + [target]
             hit = next((c for c in candidates if c in files), None)
             if hit is not None:
                 out.append(hit)

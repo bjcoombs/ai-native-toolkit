@@ -133,7 +133,8 @@ PARALLEL = {
 def test_parallel_tree_basename_credits_the_three_layouts(tmp_path: Path) -> None:
     """A conventionally named test anywhere under a shared directory credits the
     source in the focus block and on the hotspot page, and enters the mutation
-    scope; a source with no test anywhere stays unsupported."""
+    scope when a mutation tool handles it (the Dart file does not); a source
+    with no test anywhere stays unsupported."""
     for src, test in PARALLEL.items():
         _touch(tmp_path, src)
         _touch(tmp_path, test)
@@ -143,7 +144,7 @@ def test_parallel_tree_basename_credits_the_three_layouts(tmp_path: Path) -> Non
     by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
     assert by_path == {**{p: "sibling_test_only" for p in PARALLEL},
                        "app/functions/bar.js": "unsupported"}
-    assert mutation_scope(block) == list(PARALLEL)
+    assert mutation_scope(block) == [p for p in PARALLEL if not p.endswith(".dart")]
     for src in PARALLEL:
         assert tc.sibling_test_match(tmp_path, src) == tc.MATCH_BASENAME, src
         assert run_wiki._has_sibling_test(tmp_path, src) is True, src

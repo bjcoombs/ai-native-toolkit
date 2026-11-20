@@ -15,7 +15,11 @@ from pathlib import Path
 # scripts/ on the path so ``lib`` imports resolve the same way the orchestrator does.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.test_focus import compute_test_focus, mutation_scope  # noqa: E402
+from lib.test_focus import (  # noqa: E402
+    MUTABLE_SUFFIXES,
+    compute_test_focus,
+    mutation_scope,
+)
 
 
 def _hot(*paths: str) -> list[dict]:
@@ -457,3 +461,28 @@ def test_skill_md_mutation_scope_jq_mirrors_test_path_rule() -> None:
     assert IS_TEST_RE.pattern.replace("\\", "\\\\") in focus_line
     assert '"__tests__"' in focus_line
     assert 'endswith(".bats")' in focus_line
+    alternation = "py|tsx?|jsx?|go|rs"
+    assert f'select(test("\\\\.({alternation})$"))' in focus_line
+    expanded = {f".{s}" for alt in alternation.split("|")
+                for s in ([alt[:-1], alt[:-2]] if alt.endswith("?") else [alt])}
+    assert expanded == set(MUTABLE_SUFFIXES)
+
+
+def test_mutable_suffixes_match_the_mutation_tool_table() -> None:
+    from lib.test_pressure.mutation import _MUTATION_TOOLS
+
+    assert MUTABLE_SUFFIXES == frozenset().union(*(t["exts"] for t in _MUTATION_TOOLS))
+
+
+def test_mutation_scope_skips_credited_files_no_tool_can_mutate(tmp_path: Path) -> None:
+    """Issue #593 review: a hot ``.sh`` credited by its bats suite ranks above
+    Python files but must not take one of the capped mutation slots."""
+    for rel in ("scripts/run.sh", "tests/run.bats", "pkg/a.py", "pkg/test_a.py"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("x\n")
+    block = compute_test_focus(["scripts/run.sh", "pkg/a.py"], None, None,
+                               repo_root=tmp_path)
+    signals = {e["path"]: e["test_signal"] for e in block["entries"]}
+    assert signals == {"scripts/run.sh": "sibling_test_only",
+                       "pkg/a.py": "sibling_test_only"}
+    assert mutation_scope(block) == ["pkg/a.py"]
