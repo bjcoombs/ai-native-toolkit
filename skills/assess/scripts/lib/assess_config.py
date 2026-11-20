@@ -118,7 +118,7 @@ def load_config(repo_root: Path) -> TomlTable:
         return {}
     try:
         return tomllib.loads(config_path.read_text(encoding="utf-8"))
-    except (tomllib.TOMLDecodeError, OSError) as e:
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as e:
         print(
             f"warning: could not read {config_path} ({e}); "
             "continuing with defaults",
@@ -285,7 +285,7 @@ def load_gate_config_file(config_path: Path) -> GateConfig:
         return _parse_gate_section({})
     try:
         cfg = tomllib.loads(config_path.read_text(encoding="utf-8"))
-    except (tomllib.TOMLDecodeError, OSError) as e:
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as e:
         print(
             f"warning: could not read {config_path} ({e}); continuing with defaults",
             file=sys.stderr,

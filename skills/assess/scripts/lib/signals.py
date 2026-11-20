@@ -1,0 +1,269 @@
+"""Headless, signals-only run of the registered scans (issue #545).
+
+``assess_core`` is built for one repository with a person in the loop: it
+writes an ``.assess/`` wiki into the target, renders treemaps and calls ``gh``.
+A scan across many repositories wants only the deterministic signals. This
+module runs the scan table in ``scan_registry`` with inputs it builds itself,
+and returns one JSON-ready document: a run stamp plus one block per scan.
+
+It never writes, never reaches the network and never prompts. A scan declared
+``network`` runs its ``offline_fn`` when it has one and is otherwise reported
+``{"available": false, "reason": ...}``; so is every scan still hand-wired in
+``assess_core.build_run_context`` (``UNREGISTERED_SCANS``). A scan that raises
+degrades through the registry's ``safe`` wrapper and the run completes.
+
+The scan list is the registry plus ``UNREGISTERED_SCANS`` minus anything the
+registry already holds, so a scan migrating into the table moves from
+unavailable to run without an edit here.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
+from dataclasses import replace
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from lib.assess_config import load_excludes
+from lib.git_churn import git_commit_info
+from lib.instruction_files import grade_instruction_files
+from lib.run_context_types import JsonDict, SignalsDocument, SignalsStamp
+from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
+
+# Bumped when the document's envelope (stamp fields, top-level keys) changes.
+# Per-scan blocks carry their own shapes and are not versioned here.
+SIGNALS_SCHEMA_VERSION = 1
+
+# Run-context blocks ``assess_core.build_run_context`` still assigns by hand
+# (#418 migrates them into the registry). Names only: the headless runner
+# reports each as unavailable until it is registered. A name the registry
+# also holds is dropped at runtime, so a migration needs no edit here.
+UNREGISTERED_SCANS: tuple[str, ...] = (
+    "stats_summary",
+    "diff",
+    "doc_graph",
+    "doc_staleness",
+    "dead_code",
+    "observability",
+    "archetype",
+    "ancestor_instruction_files",
+    "structure",
+    "behaviour",
+    "documentation",
+    "understanding",
+    "runtime",
+    "derived_findings",
+    "coverage_report",
+    "test_pressure",
+    "test_focus",
+    "promissory_markers",
+    "accretion_ratchet",
+    "structure_drift",
+    "gap_actions",
+)
+
+UNREGISTERED_REASON = (
+    "not_registered: still hand-wired in assess_core.build_run_context; "
+    "the headless runner covers registered scans only"
+)
+NETWORK_REASON = "network: reads GitHub via gh; the headless runner makes no network calls"
+
+DEFAULT_WINDOW = "6mo"
+_WINDOW = re.compile(r"^[1-9][0-9]*(d|w|mo|y)$")
+
+# skills/assess/scripts/lib/signals.py -> the toolkit checkout root.
+TOOLKIT_ROOT = Path(__file__).resolve().parents[4]
+
+
+class UnknownScanError(ValueError):
+    """``--scans`` named a scan that is neither registered nor hand-wired."""
+
+    def __init__(self, names: Sequence[str]) -> None:
+        self.names = list(names)
+        super().__init__(f"unknown scan(s): {', '.join(self.names)}")
+
+
+def known_scans(specs: Iterable[ScanSpec] = SCANS) -> list[str]:
+    """Every scan name the runner accepts, registry first, in table order."""
+    registered = [spec.key for spec in specs]
+    return registered + [name for name in UNREGISTERED_SCANS if name not in registered]
+
+
+def select_scans(requested: Sequence[str] | None, specs: Sequence[ScanSpec] = SCANS) -> list[str]:
+    """The requested names in table order, or every known name when None.
+
+    Raises ``UnknownScanError`` naming every unknown entry.
+    """
+    known = known_scans(specs)
+    if requested is None:
+        return known
+    unknown = [name for name in requested if name not in known]
+    if unknown:
+        raise UnknownScanError(unknown)
+    wanted = set(requested)
+    return [name for name in known if name in wanted]
+
+
+def parse_window(window: str) -> str:
+    """Validate a ``--window`` like ``6mo``, ``90d``, ``12w`` or ``1y``."""
+    if not _WINDOW.match(window):
+        raise ValueError(f"invalid window {window!r}: expected <n>d, <n>w, <n>mo or <n>y")
+    return window
+
+
+def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW) -> dict[str, Any]:
+    """The registry's ``PROVIDED_INPUTS``, built the way ``assess_core`` builds them.
+
+    ``scope`` is None: a headless run measures the whole checkout.
+    ``history_window`` carries ``--window`` for history-reading scans (#547);
+    ``run_scans`` resolves only the names a scan reads, so it is harmless
+    while no registered scan reads it.
+    """
+    instruction_files = grade_instruction_files(repo_root)[0]
+    return {
+        "repo_root": repo_root,
+        "instruction_files": instruction_files,
+        "scope": None,
+        "excludes": load_excludes(repo_root),
+        "history_window": window,
+    }
+
+
+def _with_dependencies(selected: Iterable[str], specs: Sequence[ScanSpec]) -> set[str]:
+    """``selected`` plus every registry key a selected scan reads, transitively."""
+    by_key = {spec.key: spec for spec in specs}
+    needed: set[str] = set()
+    pending = [name for name in selected if name in by_key]
+    while pending:
+        key = pending.pop()
+        if key in needed:
+            continue
+        needed.add(key)
+        pending.extend(name for name in by_key[key].reads if name in by_key)
+    return needed
+
+
+def _unavailable(reason: str) -> JsonDict:
+    return {"available": False, "reason": reason}
+
+
+def collect(
+    repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SCANS,
+    window: str = DEFAULT_WINDOW,
+) -> dict[str, JsonDict]:
+    """Run the selected scans (and what they read) offline; one block per name."""
+    needed = _with_dependencies(selected, specs)
+    ctx: dict[str, Any] = {}
+    runnable: list[ScanSpec] = []
+    for spec in specs:
+        if spec.key not in needed:
+            continue
+        if not spec.network:
+            runnable.append(spec)
+        elif spec.offline_fn is not None:
+            runnable.append(replace(spec, fn=spec.offline_fn))
+        else:
+            ctx[spec.key] = _unavailable(NETWORK_REASON)
+    if runnable:
+        inputs = build_inputs(repo_root, window)
+        for stage in STAGES:
+            run_scans(ctx, inputs, stage, runnable)
+    return {name: ctx.get(name, _unavailable(UNREGISTERED_REASON)) for name in selected}
+
+
+def read_plugin_version(toolkit_root: Path = TOOLKIT_ROOT) -> str:
+    """``.claude-plugin/plugin.json`` ``version``, or ``unknown``."""
+    try:
+        data = json.loads((toolkit_root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        return str(data.get("version", "unknown"))
+    except (OSError, ValueError, AttributeError):
+        return "unknown"
+
+
+def _git(root: Path, *args: str) -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), *args],
+            capture_output=True, text=True, check=True, timeout=30,
+        )
+    except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired):
+        return None
+    return out.stdout.strip() or None
+
+
+def is_repo_root(path: Path) -> bool:
+    """True when ``path`` is itself a git work-tree root.
+
+    ``git -C`` walks up parent directories, so without this a non-git plugin
+    install or target nested in another checkout would be stamped with the
+    outer repository's HEAD.
+    """
+    top = _git(path, "rev-parse", "--show-toplevel")
+    return top is not None and Path(top).resolve() == path.resolve()
+
+
+def toolkit_commit(toolkit_root: Path = TOOLKIT_ROOT) -> str | None:
+    """The toolkit checkout's HEAD, or None for an install that is not a git checkout."""
+    if not is_repo_root(toolkit_root):
+        return None
+    return _git(toolkit_root, "rev-parse", "HEAD")
+
+
+def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT) -> SignalsStamp:
+    """Toolkit commit, plugin version, scan date, window and the target's HEAD."""
+    head = git_commit_info(repo_root) if is_repo_root(repo_root) else {}
+    available = bool(head.get("available"))
+    return {
+        "toolkit_commit": toolkit_commit(toolkit_root),
+        "plugin_version": read_plugin_version(toolkit_root),
+        "scan_date": datetime.now(timezone.utc).date().isoformat(),
+        "window": window,
+        "target_head": head.get("head_sha") if available else None,
+        "target_dirty": bool(head.get("dirty")) if available else None,
+    }
+
+
+@contextmanager
+def read_only_git() -> Iterator[None]:
+    """Force ``GIT_OPTIONAL_LOCKS=0`` for the duration, restoring the prior value.
+
+    ``git status`` (run by the stamp and by scans) may otherwise refresh and
+    rewrite the target's ``.git/index``. Forced rather than defaulted, so an
+    inherited ``GIT_OPTIONAL_LOCKS=1`` cannot reopen that write; scoped, so
+    ``assess_core`` and the caller's environment are unchanged afterwards.
+    """
+    prior = os.environ.get("GIT_OPTIONAL_LOCKS")
+    os.environ["GIT_OPTIONAL_LOCKS"] = "0"
+    try:
+        yield
+    finally:
+        if prior is None:
+            os.environ.pop("GIT_OPTIONAL_LOCKS", None)
+        else:
+            os.environ["GIT_OPTIONAL_LOCKS"] = prior
+
+
+def build_document(
+    repo_root: Path, requested: Sequence[str] | None = None, window: str = DEFAULT_WINDOW,
+    toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SCANS,
+) -> SignalsDocument:
+    """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
+
+    Every git call runs with optional locks off (``read_only_git``). The stamp
+    is read once, before the scans: the caller keeps the target checkout fixed
+    for the run (a fleet caller scans checkouts it controls), and the stamp
+    describes that checkout. A checkout that moves mid-run is not detected.
+    """
+    selected = select_scans(requested, specs)
+    window = parse_window(window)
+    with read_only_git():
+        return {
+            "signals_schema_version": SIGNALS_SCHEMA_VERSION,
+            "stamp": build_stamp(repo_root, window, toolkit_root),
+            "scans": collect(repo_root, selected, specs, window),
+        }

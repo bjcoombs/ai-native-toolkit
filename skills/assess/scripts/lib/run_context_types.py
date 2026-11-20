@@ -761,3 +761,22 @@ class NestedInstructionsBlock(TypedDict):
     budget: InstructionBudget
     findings: list[InstructionFinding]
     findings_total: int
+
+
+# --- signals: the headless signals document (assess_signals.py, #545) -------
+# lib/signals_schema.py generates the published JSON schema from these.
+
+
+class SignalsStamp(TypedDict):
+    toolkit_commit: str | None  # None: the toolkit is not a git checkout
+    plugin_version: str
+    scan_date: str  # UTC date, ISO-8601
+    window: str  # e.g. "6mo"
+    target_head: str | None  # None: the target is not a git repo
+    target_dirty: bool | None
+
+
+class SignalsDocument(TypedDict):
+    signals_schema_version: int
+    stamp: SignalsStamp
+    scans: dict[str, JsonDict]  # one block per scan; unavailable ones are {"available": false, "reason": ...}

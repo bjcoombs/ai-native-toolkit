@@ -166,3 +166,16 @@ def test_every_table_scan_degrades():
     """instruction_claims ran outside the wrapper before it moved here."""
     assert all(spec.degrade for spec in reg.SCANS)
     assert "instruction_claims" in {spec.key for spec in reg.SCANS}
+
+
+def test_network_defaults_off_so_positional_entries_stay_compatible():
+    spec = _spec("plain", lambda root: 1)
+    assert spec.network is False and spec.offline_fn is None
+
+
+def test_offline_fn_requires_a_network_scan_and_matching_reads():
+    with pytest.raises(ScanRegistryError, match="not a network scan"):
+        reg.validate((_spec("x", lambda root: 1, offline_fn=lambda root: 2),))
+    with pytest.raises(ScanRegistryError, match="offline_fn"):
+        reg.validate((_spec("x", lambda root: 1, network=True, offline_fn=lambda: 2),))
+    reg.validate((_spec("x", lambda root: 1, network=True, offline_fn=lambda root: 2),))
