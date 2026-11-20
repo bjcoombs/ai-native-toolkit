@@ -268,6 +268,24 @@ def test_manifest_readers() -> None:
     assert m.csproj('<PackageReference Include="Microsoft.SemanticKernel" />') == ["Microsoft.SemanticKernel"]
 
 
+@pytest.mark.parametrize("text", [
+    '[project]\ndependencies = "anthropic"\n',
+    '[project]\noptional-dependencies = ["anthropic"]\n',
+    'dependency-groups = [1]\n',
+    '[tool.poetry]\ngroup = [1]\n',
+    '[tool.uv]\ndev-dependencies = "openai"\n',
+])
+def test_pyproject_tolerates_malformed_shapes(text: str) -> None:
+    assert m.pyproject(text) == []
+
+
+def test_a_malformed_pyproject_keeps_the_rest_of_the_block(tmp_path: Path) -> None:
+    files = {"pyproject.toml": "dependency-groups = [1]\n", "requirements.txt": "crewai\n"}
+    block = scan_agent_building(_repo(tmp_path, "bad", files))
+    assert block["available"] is True
+    assert block["sdks"] == ["crewai"]
+
+
 def test_reader_for() -> None:
     assert m.reader_for("requirements-dev.txt") is m.requirements
     assert m.reader_for("App.csproj") is m.csproj

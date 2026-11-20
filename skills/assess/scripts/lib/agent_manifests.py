@@ -68,19 +68,29 @@ def package_json(text: str) -> list[str]:
     return [name for section in _NPM_SECTIONS for name in _keys(_table(data, section))]
 
 
+def _list(data: Any) -> list[Any]:
+    """``data`` when it is a list, else empty: a string is never read per character."""
+    return data if isinstance(data, list) else []
+
+
+def _tables(data: Any) -> list[Any]:
+    """The values of ``data`` when it is a table, else empty."""
+    return list(data.values()) if isinstance(data, dict) else []
+
+
 def pyproject(text: str) -> list[str]:
     data = _toml(text)
-    lines: list[Any] = list(_table(data, "project", "dependencies") or [])
-    for group in (_table(data, "project", "optional-dependencies") or {}).values():
-        lines += group if isinstance(group, list) else []
-    for group in (_table(data, "dependency-groups") or {}).values():
-        lines += group if isinstance(group, list) else []
-    lines += list(_table(data, "tool", "uv", "dev-dependencies") or [])
+    lines: list[Any] = list(_list(_table(data, "project", "dependencies")))
+    for group in _tables(_table(data, "project", "optional-dependencies")):
+        lines += _list(group)
+    for group in _tables(_table(data, "dependency-groups")):
+        lines += _list(group)
+    lines += _list(_table(data, "tool", "uv", "dev-dependencies"))
     names = _requirement_names(lines)
     poetry = _table(data, "tool", "poetry")
     names += [k for k in _keys(_table(poetry, "dependencies")) if k.lower() != "python"]
     names += _keys(_table(poetry, "dev-dependencies"))
-    for group in (_table(poetry, "group") or {}).values():
+    for group in _tables(_table(poetry, "group")):
         names += _keys(_table(group, "dependencies"))
     return names
 
