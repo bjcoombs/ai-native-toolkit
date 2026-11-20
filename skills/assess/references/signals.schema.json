@@ -73,6 +73,44 @@
             "reason"
           ]
         }
+      },
+      "propertyNames": {
+        "enum": [
+          "accretion_ratchet",
+          "agent_environment",
+          "agent_harness",
+          "agent_ops",
+          "ai_usage",
+          "ancestor_instruction_files",
+          "archetype",
+          "behaviour",
+          "claude_config",
+          "config_drift",
+          "coverage_gate",
+          "coverage_report",
+          "dead_code",
+          "derived_findings",
+          "diff",
+          "doc_graph",
+          "doc_staleness",
+          "documentation",
+          "gap_actions",
+          "gate_cost_estimate",
+          "instruction_claims",
+          "instruction_placement",
+          "nested_instructions",
+          "observability",
+          "promissory_markers",
+          "review_reality",
+          "runtime",
+          "shared_tooling",
+          "stats_summary",
+          "structure",
+          "structure_drift",
+          "test_focus",
+          "test_pressure",
+          "understanding"
+        ]
       }
     }
   },
