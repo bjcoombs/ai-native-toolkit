@@ -1,5 +1,5 @@
 {
-  "assess_method_version": 14,
+  "assess_method_version": 16,
   "findings": [
     {
       "name": "hidden_coupling",
