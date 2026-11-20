@@ -41,18 +41,28 @@ Semantics:
   path runs through a block carrying ``available: false`` (reading that
   ``available`` flag itself is allowed). A criterion whose signal is
   unavailable, or whose value has the wrong type for the operator, is
-  ``unknown``. A row with any unknown criterion, at any level, is ``unknown``
-  with every such signal named: never 0 and never passed. Every criterion at
-  every level is evaluated, so the result does not depend on criterion order
-  and the unmet criteria of every level are exposed for next-step guidance.
+  ``unknown``. Unknown criteria give a row bounds: ``low`` is the level the
+  definitely-met levels climb to, ``high`` the level below the first level
+  above ``low`` that is definitely unmet (K when there is none). The row is
+  ``unknown`` only when the bounds differ, so it is never reported as a false 0
+  or a false pass; when a definitely unmet level caps it, the level is known
+  even with a higher-level signal missing. ``missing_signals`` names every
+  unavailable signal either way, so a non-empty list does not by itself mean
+  ``unknown``. Every criterion at every level is evaluated, so the result does
+  not depend on criterion order and the unmet criteria of every level are
+  exposed for next-step guidance.
   Consequence: a null that a scan means as "absent" (``instructions_grade:
   null``) reads as unknown here.
 - ``team`` rows run against each repository's ``run-context.json``, then roll
   up: ``min`` is the level every repository reaches, ``share`` the highest
   level reached by at least that share of the repositories passed in (the
-  caller passes the active ones). An unknown repository is bounded both ways
-  (level 0 and level K); the team level is reported only when both bounds
-  agree, otherwise the row is unknown. No repositories at all is unknown.
+  caller passes the active ones). Each unknown repository contributes its own
+  bounds; the team level is reported only when the roll-up of the low bounds
+  equals the roll-up of the high bounds, otherwise the row is unknown. No
+  repositories at all is unknown. A team row's ``missing_signals`` lists the
+  signals unavailable in any repository, so it can be non-empty while
+  ``status`` is ``level``; ``unknown_repos`` names the repositories whose own
+  level is undetermined.
 - ``org`` rows run once against the group settings; settings of ``None`` (not
   gathered) make every org row unknown.
 
@@ -156,6 +166,8 @@ class Evaluation(TypedDict):
 
     status: Literal["level", "unknown"]
     level: int | None
+    # [low, high]: the reachable level range; equal when the level is known.
+    bounds: list[int]
     missing_signals: list[str]
     levels: list[LevelOutcome]
 
@@ -412,7 +424,8 @@ def evaluate_row(row: Row, data: JsonDict | None) -> Evaluation:
     """One row against one subject, every criterion at every level."""
     outcomes: list[LevelOutcome] = []
     missing: set[str] = set()
-    reached = 0
+    low = 0
+    high = len(row["levels"])
     climbing = True
     for level in row["levels"]:
         results = [_evaluate_criterion(c, data) for c in level["criteria"]]
@@ -426,10 +439,17 @@ def evaluate_row(row: Row, data: JsonDict | None) -> Evaluation:
         outcomes.append({"level": level["level"], "met": met, "unmet": unmet})
         climbing = climbing and met is True
         if climbing:
-            reached = level["level"]
-    if missing:
-        return {"status": "unknown", "level": None, "missing_signals": sorted(missing), "levels": outcomes}
-    return {"status": "level", "level": reached, "missing_signals": [], "levels": outcomes}
+            low = level["level"]
+        elif met is False and high == len(row["levels"]):
+            high = level["level"] - 1
+    known = low == high
+    return {
+        "status": "level" if known else "unknown",
+        "level": low if known else None,
+        "bounds": [low, high],
+        "missing_signals": sorted(missing),
+        "levels": outcomes,
+    }
 
 
 def _share_level(levels: list[int], share: Fraction, top: int) -> int:
@@ -446,12 +466,11 @@ def _team_result(row: Row, repos: dict[str, JsonDict]) -> RowResult:
     assert aggregation is not None  # parse_rubric guarantees it on team rows
     evaluations = {name: evaluate_row(row, repos[name]) for name in sorted(repos)}
     unknown = [name for name, ev in evaluations.items() if ev["level"] is None]
-    missing = sorted({s for name in unknown for s in evaluations[name]["missing_signals"]})
+    missing = sorted({s for ev in evaluations.values() for s in ev["missing_signals"]})
     top = len(row["levels"])
     share = Fraction(str(aggregation["share"]))
-    known = [ev["level"] for ev in evaluations.values() if ev["level"] is not None]
-    low = _share_level(known + [0] * len(unknown), share, top)
-    high = _share_level(known + [top] * len(unknown), share, top)
+    low = _share_level([ev["bounds"][0] for ev in evaluations.values()], share, top)
+    high = _share_level([ev["bounds"][1] for ev in evaluations.values()], share, top)
     determined = bool(evaluations) and low == high
     return {
         "id": row["id"],

@@ -969,10 +969,13 @@ once per group from the group settings; `team`: per repository from its
 numbered 1..K, each a list of criteria (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`,
 `not_in`) over dotted signal paths. A row reaches level N only when every criterion of
 N and of every lower level holds. A missing key, a null, a path through an
-`available: false` block or a type mismatch makes the criterion `unknown`, and a row
-with any unknown criterion is `unknown` with the signals named, never 0. Every level's
-unmet criteria are in the result for next-step guidance. An unknown repository bounds
-a team roll-up at 0 and K; the team level is reported only when both bounds agree.
+`available: false` block or a type mismatch makes the criterion `unknown`. A row then
+carries `bounds` (`low`: the definitely-met climb; `high`: below the first definitely
+unmet level above it, else K) and is `unknown` only when they differ, so it is never a
+false 0 or a false pass. `missing_signals` names every unavailable signal even when the
+level is known. Every level's unmet criteria are in the result for next-step guidance.
+A team roll-up applies the rule to the low and the high bounds and reports a level
+only when both agree; `unknown_repos` names the repositories whose level is open.
 `load_rubric` / `parse_rubric` raise `RubricError` before evaluation on a missing
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)

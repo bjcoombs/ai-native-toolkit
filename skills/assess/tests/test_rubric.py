@@ -104,13 +104,35 @@ def test_removing_a_signal_turns_the_row_unknown_not_zero() -> None:
     assert team["missing_signals"] == ["instructions_grade"]
 
 
-def test_missing_signal_above_a_failed_level_is_still_unknown() -> None:
+def test_missing_signal_above_a_failed_level_keeps_the_known_level() -> None:
     group = _group()
     group["repos"]["beta"]["instructions_grade"] = "F"
     del group["repos"]["beta"]["coverage_report"]
     beta = _row(evaluate(load_rubric(RUBRIC), group), "agent-ready")["repos"]["beta"]
-    assert (beta["status"], beta["level"]) == ("unknown", None)
+    assert (beta["status"], beta["level"], beta["bounds"]) == ("level", 0, [0, 0])
     assert beta["missing_signals"] == ["coverage_report.line_rate"]
+
+
+def test_definitely_unmet_level_one_with_missing_level_two_is_zero() -> None:
+    levels = [_lv(1, {"signal": "a", "op": "eq", "value": True}), _lv(2, {"signal": "b", "op": "eq", "value": 1})]
+    row = parse_rubric(_rubric(_team_row(levels)))["rows"][0]
+    ev = evaluate_row(row, {"a": False})
+    assert (ev["status"], ev["level"], ev["bounds"]) == ("level", 0, [0, 0])
+    assert ev["missing_signals"] == ["b"]
+    assert [lv["met"] for lv in ev["levels"]] == [False, None]
+
+
+def test_unknown_level_below_an_unmet_level_bounds_the_row() -> None:
+    levels = [
+        _lv(1, {"signal": "a", "op": "eq", "value": 1}),
+        _lv(2, {"signal": "b", "op": "eq", "value": 1}),
+        _lv(3, {"signal": "c", "op": "eq", "value": 1}),
+    ]
+    row = parse_rubric(_rubric(_team_row(levels)))["rows"][0]
+    ev = evaluate_row(row, {"a": 1, "c": 0})
+    assert (ev["status"], ev["level"], ev["bounds"]) == ("unknown", None, [1, 2])
+    ev = evaluate_row(row, {"c": 0})
+    assert (ev["status"], ev["level"], ev["bounds"]) == ("unknown", None, [0, 2])
 
 
 def test_org_row_without_group_settings_is_unknown() -> None:
@@ -250,6 +272,8 @@ def test_min_with_a_zero_repo_is_zero_even_with_unknowns() -> None:
     del group["repos"]["gamma"]["skills_count"]
     team = _row(evaluate(rubric, group), "agent-ready")
     assert (team["status"], team["level"], team["unknown_repos"]) == ("level", 0, ["gamma"])
+    # A team row can name missing signals while its level is known.
+    assert team["missing_signals"] == ["skills_count"]
 
 
 # --- loader failures --------------------------------------------------------
