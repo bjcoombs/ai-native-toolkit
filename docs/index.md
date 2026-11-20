@@ -26,6 +26,7 @@ Plugin-only (Claude Code, no standalone ZIP):
 
 - [`/ghsync`](../skills/ghsync/SKILL.md) - bulk-clone and fast-forward sync every GitHub repo you can access across an org, or every GitLab project across your groups, subgroups and shared projects.
 - [`/ghreport`](../skills/ghreport/SKILL.md) - read-only org repo state report: open PRs, default-branch CI, security alerts and branch protection per GitHub repo, or open merge requests, the default-branch pipeline, vulnerabilities and protection per GitLab project, reusing `/ghsync`'s repo discovery.
+- [`/doc-contradictions`](../skills/doc-contradictions/SKILL.md) - find documents that contradict each other or the code they describe: clusters the doc set, fans out one read-only Haiku comparer per cluster plus a hub pass, and reports each contradiction with both sides cited as `path:line`. Its [evals](../evals/doc-contradictions/README.md) record the per-case Haiku results.
 
 Team-orchestration library skills (invoked by the workflow skills, not standalone):
 
@@ -64,7 +65,7 @@ Personal workflows (opt-in - see [Adapting for your workflow](../README.md#adapt
 
 Subagent definitions under `agents/`, invoked by the skills or directly via `Agent(subagent_type=...)`. Claude Code loads every `.md` in `agents/` as an agent, so this list is the catalog and `agents/` holds agent files only. Each carries the frontmatter contract (`name`, `description`, `model`, `color`) documented in [`CLAUDE.md`](../CLAUDE.md).
 
-The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.md) and [`/6hats`](../skills/6hats/SKILL.md), and `/assess`'s scorer:
+The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.md) and [`/6hats`](../skills/6hats/SKILL.md), `/assess`'s scorer, and `/doc-contradictions`'s comparer:
 
 - [`white-hat`](../agents/white-hat.md) - facts and evidence.
 - [`red-hat`](../agents/red-hat.md) - gut feelings and emotional drivers.
@@ -74,6 +75,7 @@ The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.m
 - [`blue-hat`](../agents/blue-hat.md) - synthesis and recommendation.
 - [`scribe`](../agents/scribe.md) - structures hat output into actionable documentation.
 - [`assess-layer-scorer`](../agents/assess-layer-scorer.md) - scores a codebase against the `/assess` layered contract model.
+- [`doc-contradictions-comparer`](../agents/doc-contradictions-comparer.md) - `/doc-contradictions`'s read-only Haiku comparer: reads one doc cluster and its code, returns contradictions as cited JSON.
 
 ## Acceptance-contract workflow
 
