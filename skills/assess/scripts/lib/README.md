@@ -1419,7 +1419,10 @@ registry and walks config files (built-in and user excludes via
 package's own config counts). A scoped run walks the scope plus the root CI and
 task-runner files (`.github/workflows/`, composite actions, CircleCI, root
 `Makefile`, `justfile`, `.gitlab-ci.yml`, ...), which run the gates for the scoped
-package; a package-level config outside the scope is dropped. It emits the run-context
+package; a package-level config outside the scope is dropped. A root CI gate is
+reported for every scoped run whether or not its command targets the scope, so a
+scoped run appends `NOT_DETECTED_SCOPED` to `not_detected` naming that and the
+dropped root package configs. It emits the run-context
 `coverage_gate` block: `{available, enforced, gates, not_detected}`, each gate
 `{file, line, tool, form, threshold, unit, metric}`. Forms read: coverage.py
 `fail_under` in `[tool.coverage.report]` (`pyproject.toml`), `[report]`
@@ -1436,7 +1439,10 @@ reported as written (`unit` `percent`, `ratio` for a JaCoCo `0.80`, or
 (`--cov-fail-under=${{ env.COV_MIN }}`, `$COV_MIN`, `$(COV_MIN)`) is a gate with
 `threshold: null`. coverage.py and pytest-cov gates carry `metric: total` when the
 same config sets `branch = true` in its run section (or the line passes
-`--cov-branch`), `lines` otherwise. Jest, Vitest and nyc/c8 metrics are read inside
+`--cov-branch`), `lines` otherwise; on a gate in a CI or task-runner file, `lines`
+means branch mode was not determined (coverage.py reads the package's own config at
+run time, which is not resolved). A templated value may also be Make's escaped
+`$$COV_MIN`. Jest, Vitest and nyc/c8 metrics are read inside
 the braced object the anchor opens or sits in, so one Jest project's threshold is
 never credited to another and a one-line `"c8": {...}` is counted once. Gates are
 typed by the `CoverageGate` TypedDict. `enforced` is true when

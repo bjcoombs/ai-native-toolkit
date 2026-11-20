@@ -284,7 +284,11 @@ def test_scoped_run_keeps_root_ci_and_drops_other_packages(tmp_path: Path) -> No
     assert files == [".github/workflows/ci.yml", "Makefile",
                      "packages/web/jest.config.js"]
 
-    unscoped = {g["file"] for g in detect_coverage_gate(tmp_path)["gates"]}
+    assert any("targets the scope" in f for f in block["not_detected"])
+
+    unscoped_block = detect_coverage_gate(tmp_path)
+    assert not any("targets the scope" in f for f in unscoped_block["not_detected"])
+    unscoped = {g["file"] for g in unscoped_block["gates"]}
     assert {"packages/api/pyproject.toml", "pyproject.toml",
             "packages/web/legacy/.nycrc"} <= unscoped
 
@@ -300,12 +304,14 @@ def test_templated_threshold_is_a_gate_with_null_threshold(tmp_path: Path) -> No
            "jobs:\n  t:\n    steps:\n"
            "      - run: pytest --cov=src --cov-fail-under=${{ env.COV_MIN }}\n"
            "      - run: coverage report --fail-under=$COV_MIN\n")
-    _write(tmp_path, "Makefile", "cov:\n\tpytest --cov-fail-under $(COV_MIN)\n")
+    _write(tmp_path, "Makefile", "cov:\n\tpytest --cov-fail-under $(COV_MIN)\n"
+           "\tpytest --cov-fail-under=$$COV_MIN\n")
     block = detect_coverage_gate(tmp_path)
     assert sorted((g["file"], g["line"], g["tool"], g["threshold"]) for g in block["gates"]) == [
         (".github/workflows/ci.yml", 4, "pytest-cov", None),
         (".github/workflows/ci.yml", 5, "coverage.py", None),
         ("Makefile", 2, "pytest-cov", None),
+        ("Makefile", 3, "pytest-cov", None),
     ]
     assert block["enforced"] is True
 

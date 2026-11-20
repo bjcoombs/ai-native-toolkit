@@ -46,9 +46,10 @@ _WINDOW = 15
 _NUM = r"(-?\d+(?:\.\d+)?)"
 # A threshold supplied by a variable: ``${{ env.COV_MIN }}`` (GitHub Actions),
 # ``${COV_MIN}`` / ``$COV_MIN`` (shell, GitLab), ``$(COV_MIN)`` (Make, Azure),
+# ``$$COV_MIN`` / ``$${COV_MIN}`` (a shell variable escaped in a Makefile),
 # ``{{ cov_min }}`` (Jinja, Taskfile). The flag still gates; the number is not
 # readable here, so the gate carries ``threshold: null``.
-_TEMPLATE = r"\$\{\{[^}]*\}\}|\$\{[^}]*\}|\$\([^)]*\)|\$\w+|\{\{[^}]*\}\}"
+_TEMPLATE = r"\$\$\{[^}]*\}|\$\$\w+|\$\{\{[^}]*\}\}|\$\{[^}]*\}|\$\([^)]*\)|\$\w+|\{\{[^}]*\}\}"
 _VALUE = r"(?:" + _NUM + r"|(?:" + _TEMPLATE + r"))"
 
 # INI-style section that holds coverage.py's ``fail_under``, by file name.
@@ -132,6 +133,15 @@ NOT_DETECTED: tuple[str, ...] = (
     "85 }` under `[tool.coverage]`)",
     "Vitest before 1.0: `lines` / `branches` directly under `coverage` with no "
     "`thresholds` key",
+)
+# Added on a scoped run: what the scope-limited walk leaves unread or unproven.
+NOT_DETECTED_SCOPED: tuple[str, ...] = (
+    "Root-level package configs on a scoped run (`pyproject.toml`, `setup.cfg`, "
+    "`tox.ini`, `pytest.ini`, `noxfile.py`, `package.json` at the repo root): "
+    "they belong to the root package and are not read",
+    "Whether a gate in a root CI or task-runner file targets the scope: such a "
+    "gate is reported for every scoped run, even one that runs another "
+    "package's suite (`cd packages/b && pytest --cov-fail-under=90`)",
 )
 
 
@@ -222,7 +232,10 @@ def _scan_cli(rel: str, lines: list[str], branch: bool = False) -> list[Coverage
     """``--cov-fail-under``, ``coverage report --fail-under`` and nyc/c8 flags.
 
     ``branch`` is the file's own coverage.py ``branch = true``; ``--cov-branch``
-    on the line has the same effect on the metric.
+    on the line has the same effect on the metric. A CI or task-runner file
+    carries no coverage.py config, and the package config coverage.py reads at
+    run time is not resolved, so ``lines`` on such a gate means branch mode was
+    not determined, not that it is off.
     """
     gates: list[CoverageGate] = []
     for idx, line in enumerate(lines, 1):
@@ -503,5 +516,6 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
         "available": True,
         "enforced": any(_gates_something(g) for g in gates),
         "gates": gates,
-        "not_detected": list(NOT_DETECTED),
+        "not_detected": list(NOT_DETECTED) + (
+            list(NOT_DETECTED_SCOPED) if scope_abs not in (None, root) else []),
     }
