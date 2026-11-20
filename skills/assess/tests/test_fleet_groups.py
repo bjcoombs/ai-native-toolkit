@@ -11,6 +11,7 @@ from lib import fleet_groups as fg
 from lib.fleet import FLEET_ROW_VERSION, FleetRow
 from lib.fleet_group_schema import SCHEMA_PATH, build_schema, render, type_schema
 from lib.rubric import parse_rubric
+from lib.rubric_signals import DEFAULT_RUBRIC, load_default_rubric
 from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture
 
 RUBRIC_TOML = """\
@@ -260,6 +261,33 @@ def test_rubric_path_outside_the_namespace_exits_2(froot, tmp_path, capsys):  # 
                       encoding="utf-8")
     assert fleet_cli.main([str(froot), "--rubric", str(rubric), "--out", str(tmp_path / "o")]) == 2
     assert "scans.shared_tooling.available" in capsys.readouterr().err
+
+
+def test_unknown_org_path_exits_2_naming_it(froot, tmp_path, capsys):  # noqa: F811
+    rubric = tmp_path / "bad.toml"
+    rubric.write_text(RUBRIC_TOML.replace("two_factor.value", "two_factor_required"), encoding="utf-8")
+    assert fleet_cli.main([str(froot), "--rubric", str(rubric), "--out", str(tmp_path / "o")]) == 2
+    assert "two_factor_required" in capsys.readouterr().err
+    assert not (tmp_path / "o").exists()
+
+
+def test_default_rubric_loads_and_rolls_up(froot, tmp_path):  # noqa: F811
+    """The shipped rubric (#564) passes the same validation and yields a level or unknown per row."""
+    assert fleet_cli.main([str(froot), "--rubric", str(DEFAULT_RUBRIC), "--out", str(tmp_path / "o"),
+                           "--jobs", "2"]) == 0
+    rows = [json.loads(line) for line in (tmp_path / "o" / fg.GROUPS_FILE).read_text().splitlines()]
+    default = load_default_rubric()
+    for row in rows:
+        assert row["rubric_version"] == default["version"]
+        assert [r["id"] for r in row["rubric"]] == [r["id"] for r in default["rows"]]
+        assert all(r["status"] in ("level", "unknown") for r in row["rubric"])
+        jsonschema.validate(row, build_schema())
+
+
+def test_additive_repo_row_fields_are_tolerated():
+    row = {**_row("g/r", _scans(1, ["marketplace:x"])), "active": True}
+    (group,) = fg.roll_up([row], RUBRIC, {})  # type: ignore[list-item]
+    assert group["distinct_marketplaces"] == 1
 
 
 def test_union_of_groups_counts_distinct_marketplaces(froot, tmp_path):  # noqa: F811
