@@ -31,9 +31,11 @@ read from ``projects/<id>/protected_branches``. A rule named exactly as the
 branch wins; otherwise the first rule, in name order, whose name read as a
 wildcard (``*`` is GitLab's only wildcard) matches. "Unprotected" is said only
 from a readable, complete list (fewer than ``PROTECTED_PAGE`` rules) with no
-covering rule. A full page with no cover falls back to the single-branch read
-(``protected_branches/<branch>``, the ``ghreport`` fallback); when that too has
-no answer the read raises ``truncated``. A 403 or 404 on GitLab usually means
+covering rule. A full page (which may continue) without an exact rule asks for
+the branch by name (``protected_branches/<branch>``, the ``ghreport``
+fallback), so an exact rule on a later page outranks a wildcard on the first;
+when that read has no answer a wildcard cover from the page stands, and
+without one the read raises ``truncated``. A 403 or 404 on GitLab usually means
 "no access", so it raises like any other refusal, never "unprotected".
 
 Typical use::
@@ -262,13 +264,15 @@ def branch_protection(project: GitlabProject, branch: str) -> dict[str, Any] | N
         return exact
     wild = sorted((r for r in rules if "*" in r["name"]), key=lambda r: str(r["name"]))
     cover = next((r for r in wild if branch_pattern(r["name"]).match(branch)), None)
-    if cover is not None:
-        return cover
     if len(got) < PROTECTED_PAGE:
-        return None
+        return cover
+    # A full page may continue: an exact rule on a later page outranks a
+    # wildcard on this one, so ask for the branch by name first.
     try:
         single = glab_api(project, f"projects/{enc}/protected_branches/{quote(branch, safe='')}")
     except GhUnavailable as e:
+        if cover is not None:
+            return cover
         raise GhUnavailable(
             f"truncated: {len(got)} protected branches listed without {branch}"
             f" and the single-branch read gave no answer ({e.reason})"

@@ -36,8 +36,10 @@ wildcard rule in name order that matches). A readable, complete list with no
 covering rule is an ``("branch_protection", "present", "absent")`` entry; a
 refused read (403 and 404 included: on GitLab a 404 usually means "no access")
 or an incomplete list degrades the whole block, never "no protection". Access
-level lists carry no identity field, so a change is reported as a count or an
-``items`` entry, never the live levels.
+level lists carry no identity field: each level is compared on
+``GITLAB_LEVEL_FIELDS`` only (its label and any key only the live API adds are
+not drift), and a change is reported as a count or an ``items`` entry, never
+the live levels.
 
 The diff is driven by the snapshot: every key it records is compared; keys only
 the live API returns (metadata, fields the export left out) are not drift.
@@ -99,6 +101,9 @@ PROTECTION_KEYS = ("required_status_checks", "enforce_admins", "required_pull_re
 GITLAB_PROTECTION_KEYS = ("push_access_levels", "merge_access_levels")
 
 GITLAB_KINDS = frozenset({"gitlab_protected_branch"})
+
+# What an access level is: who it grants. Its label and id are presentation.
+GITLAB_LEVEL_FIELDS = ("access_level", "user_id", "group_id", "deploy_key_id")
 
 # A snapshot bigger than this is not a hand-kept config export.
 MAX_SNAPSHOT_BYTES = 1_000_000
@@ -373,6 +378,19 @@ def _live_protection(slug: str, branch: str) -> dict[str, Any] | Missing:
     return live if isinstance(live, dict) else ("branch_protection", "present", "absent")
 
 
+def _gitlab_levels(doc: Any) -> Any:
+    """``*_access_levels`` items projected onto ``GITLAB_LEVEL_FIELDS``, so a
+    label, an id or a key only the live API adds is never drift."""
+    if not isinstance(doc, dict):
+        return doc
+    out = dict(doc)
+    for key, value in doc.items():
+        if key.endswith("_access_levels") and isinstance(value, list):
+            out[key] = [{f: item[f] for f in GITLAB_LEVEL_FIELDS if f in item}
+                        if isinstance(item, dict) else item for item in value]
+    return out
+
+
 def _gitlab_entries(project: GitlabProject,
                     snapshots: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Drift entries for GitLab protected-branch snapshots; raises GhUnavailable."""
@@ -380,7 +398,7 @@ def _gitlab_entries(project: GitlabProject,
     for snap in snapshots:
         live = branch_protection(project, snap["branch"])
         diffs = ([("branch_protection", "present", "absent")] if live is None
-                 else diff_values(snap["doc"], live))
+                 else diff_values(_gitlab_levels(snap["doc"]), _gitlab_levels(live)))
         entries += [{"file": snap["file"], "key": k, "tracked": t, "live": lv}
                     for k, t, lv in diffs]
     return entries
@@ -427,9 +445,11 @@ def scan_config_drift(repo_root: Path) -> dict[str, Any]:
         on_gitlab = project is not None
         compared = [s for s in snapshots if (s["kind"] in GITLAB_KINDS) == on_gitlab]
         if not compared:
-            here, other = ("GitLab", "GitHub") if on_gitlab else ("GitHub", "GitLab")
-            raise GhUnavailable(f"other_provider: the remote is {here} and every "
-                                f"tracked snapshot is a {other} export")
+            raise GhUnavailable(
+                "other_provider: the remote is GitLab and every tracked snapshot is a "
+                "GitHub export" if on_gitlab else
+                "other_provider: the remote was not resolved as GitLab and every "
+                "tracked snapshot is a GitLab export")
         listed = [{"file": s["file"], "kind": s["kind"]} for s in compared]
         entries = (_gitlab_entries(project, compared) if project is not None
                    else _github_entries(repo_root, compared))

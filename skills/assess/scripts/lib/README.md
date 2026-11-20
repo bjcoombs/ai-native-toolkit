@@ -1327,8 +1327,9 @@ comes from the assessed repository and reaches argv). `normalize_host` ports
 `ghsync.sh`'s `--host` normalisation. `branch_protection(project, branch)` returns the
 protected-branch rule covering a branch (exact name first, else the first `*` wildcard
 rule in name order, via `branch_pattern`), or None only from a readable list shorter than
-`PROTECTED_PAGE` (100) with no cover; a full page with no cover tries the single-branch
-read (the `ghreport.sh` fallback) and otherwise raises `truncated`. A 403 or 404 raises
+`PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
+branch by name (the `ghreport.sh` fallback), so an exact rule on a later page outranks a
+first-page wildcard; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
 like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.py`,
 `tests/test_gitlab_protected_branches.py` (stubbed `glab`/`gh` as the whole `PATH`, offline).
 
@@ -1343,7 +1344,8 @@ a file missing either is skipped, never reported - and classic branch-protection
 else the file stem) - and, on GitLab, protected-branch exports: tracked JSON under
 `.gitlab/` with `push_access_levels` or `merge_access_levels` at the top level (branch
 from its `name`, a name or `*` wildcard, else the file stem), diffed against
-`gitlab_cli.branch_protection`. A GitLab remote (`gitlab_cli.open_gitlab`) compares only
+`gitlab_cli.branch_protection` with each access level compared on `access_level`,
+`user_id`, `group_id` and `deploy_key_id` only. A GitLab remote (`gitlab_cli.open_gitlab`) compares only
 GitLab snapshots and any other remote only GitHub ones; `snapshots` lists the compared
 kind, and a repo whose snapshots are all of the other provider's kind is `available:
 False` with reason `other_provider`, never clean. On GitLab a refused protected-branch

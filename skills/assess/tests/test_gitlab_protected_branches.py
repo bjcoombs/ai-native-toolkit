@@ -101,6 +101,15 @@ def test_malformed_list_is_unavailable(world: World, doc: object) -> None:
     assert e.value.reason.startswith("glab_bad_json")
 
 
+def test_full_page_prefers_a_later_exact_rule_to_a_wildcard(world: World) -> None:
+    world.serve(LIST, [_rule("m*")] + [_rule(f"feature/{i}") for i in range(99)])
+    got = branch_protection(P, "main")  # single read 404: the wildcard stands
+    assert got is not None and got["name"] == "m*"
+    world.serve(f"projects/{ENC}/protected_branches/main", _rule("main", force=True))
+    got = branch_protection(P, "main")
+    assert got is not None and got["name"] == "main"
+
+
 def test_full_page_without_a_cover_falls_back_to_the_single_read(world: World) -> None:
     world.serve(LIST, [_rule(f"feature/{i}") for i in range(100)])
     with pytest.raises(GhUnavailable) as e:
@@ -136,6 +145,18 @@ def test_matching_gitlab_snapshot_has_no_drift(world: World) -> None:
         "snapshots": [{"file": ".gitlab/main.json", "kind": "gitlab_protected_branch"}],
     }
     assert world.calls("ghlog") == []
+
+
+def test_level_labels_and_live_only_keys_are_not_drift(world: World) -> None:
+    world.remote(GITLAB_REMOTE)
+    _track(world, ".gitlab/main.json", _rule("main"))
+    live = _rule("main")
+    live["push_access_levels"] = [
+        {**lv, "access_level_description": "Maintainers", "member_role_id": None}
+        for lv in _levels(40)
+    ]
+    world.serve(LIST, [live])
+    assert scan_config_drift(world.root)["entries"] == []
 
 
 def test_gitlab_drift_is_reported_without_live_levels(world: World) -> None:
