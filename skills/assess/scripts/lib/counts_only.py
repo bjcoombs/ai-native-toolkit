@@ -209,9 +209,10 @@ def counts_only(
 
 def hash_path(value: str, salt: str) -> str | None:
     """``value`` hashed as ``counts_only(..., hash_paths=True, salt=salt)`` hashes
-    a path, so a fleet file written beside the scans joins with them; None when
-    ``value`` is not path-like."""
-    return _Filter(True, salt).path(value)
+    a path-keyed map key (spaces allowed: the value is a path from config or the
+    file tree, never a sentence), so a fleet file written beside the scans joins
+    with them; None when ``value`` is not path-like."""
+    return _Filter(True, salt).path(value, allow_space=True)
 
 
 def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:

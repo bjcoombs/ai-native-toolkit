@@ -504,3 +504,16 @@ def test_history_without_doc_freshness_is_unchanged(tmp_path):
     _run_files(out, freshness=False)
     persist(out, entry, stamp, frozenset({"org/a"}))
     assert sorted(p.name for p in entry.iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
+
+
+def test_hashing_keeps_paths_with_spaces(tmp_path):
+    config = DESCRIBES.replace("services/billing.md", "services/Billing Notes.md").replace(
+        '["api/"]', '["api/", "api v2"]')
+    root, docs, svc = _fleet(tmp_path, config=config)
+    _commit(docs, {"services/Billing Notes.md": "# B\n"}, "docs: spaced", DOC_EDIT)
+    _commit(svc, {"api v2/x.py": "x\n"}, "init v2", DOC_EDIT - DAY)
+
+    row = _only(root, full=False, salt="s")
+
+    assert str(row["path"]).startswith("h:")
+    assert len(row["scope"]) == 2 and all(str(s).startswith("h:") for s in row["scope"])
