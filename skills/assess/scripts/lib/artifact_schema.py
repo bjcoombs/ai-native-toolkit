@@ -52,7 +52,11 @@ constant each.
 # prior_findings_snapshot, and each run writes .assess/findings.json, the
 # committed snapshot of finding names and paths (issue #554). Additive: no
 # existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.6.0"
+# 1.7.0: complexity-stats.json gains `files`, every scored file as {path, ccn},
+# uncapped and sorted by path, read by the doc-complexity join (issue #556).
+# Additive; run-context.json is unchanged. STATS_SCHEMA_VERSION moves 5->6, so
+# the cross-run diff is disarmed once against a pre-#556 snapshot.
+ARTIFACT_SCHEMA_VERSION = "1.7.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -61,4 +65,7 @@ ARTIFACT_SCHEMA_VERSION = "1.6.0"
 # with the version in the committed .assess/findings.json and explains the
 # finding moves instead of failing on them unexplained.
 # 1: the baseline (issue #554).
-ASSESS_METHOD_VERSION = 1
+# 2: the doc-complexity join reads complexity-stats.json's uncapped `files` list,
+#    so a complex file outside every top-10 list can now produce lying_map,
+#    unexplained_complexity or good_contract (issue #556).
+ASSESS_METHOD_VERSION = 2

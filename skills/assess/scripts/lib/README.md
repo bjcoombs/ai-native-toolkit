@@ -893,6 +893,16 @@ stamps, skipping `_NON_TOOL_VERSION_KEYS`). `prior_stamps` reads the prior snaps
 plugin and schema versions. Stdlib only. Tests: `tests/test_diff_reliability.py`,
 `tests/test_complexity_treemap.py`.
 
+**`stats_rows.py`**
+The per-file row lists `complexity-treemap.py` writes into `complexity-stats.json`.
+`top_lists` ranks the enriched rows into `top_hotspots` / `top_complex` / `top_large`
+(ten each, ties broken on path); `file_ccn_rows` emits `files`, every scored file as
+`{path, ccn}` (`FileCcnRow`), sorted by path with no cap. `doc_complexity_join.py`'s
+`_extract_file_ccn` reads `files`, so the join sees a complex file that made no top-10
+list (issue #556). Adding `files` moved `STATS_SCHEMA_VERSION` to 6, which disarms the
+cross-run diff once (`diff_reliability.py`). Stdlib only. Tests:
+`tests/test_stats_rows.py`.
+
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
 transitions: graduated (was in top list, now absent), regressed, restructured, new,
