@@ -367,19 +367,20 @@ class PlacementPenalty(TypedDict):
     capped: bool
 
 
-def loaded_equivalent_lines(record: PlacementFile, fetch_words: int = 0) -> int:
+def loaded_equivalent_lines(record: PlacementFile, *, fetch_words: int) -> int:
     """Every loaded line, or every loaded word / ``WORDS_PER_LINE`` when larger.
 
     Always-on and fetch-on-need alike: the whole file loads on every task until
     a section moves out, so this reads the same however the sections classify.
     ``fetch_words`` is the words in fetch-on-need sections (the record holds
-    only the always-on words).
+    only the always-on words); it is required so that no caller can omit it
+    and understate the loaded words.
     """
     words = record["always_on_words"] + fetch_words
     return max(record["total_lines"], math.ceil(words / WORDS_PER_LINE))
 
 
-def placement_penalty(record: PlacementFile, fetch_words: int = 0) -> PlacementPenalty:
+def placement_penalty(record: PlacementFile, *, fetch_words: int) -> PlacementPenalty:
     """Score one ``instruction_placement`` record on always-on size and share.
 
     ``relocatable_penalty``: one point per ``RELOCATABLE_LINES_PER_POINT``
@@ -406,7 +407,7 @@ def placement_penalty(record: PlacementFile, fetch_words: int = 0) -> PlacementP
 
     Neither term reads ``flagged``.
     """
-    loaded = loaded_equivalent_lines(record, fetch_words)
+    loaded = loaded_equivalent_lines(record, fetch_words=fetch_words)
     charged = min(record["fetch_on_need_lines"],
                   RELOCATABLE_MAX_PENALTY * RELOCATABLE_LINES_PER_POINT)
     over = min(max(0, loaded - charged - ALWAYS_ON_FLAG_LINES),
@@ -606,7 +607,8 @@ def grade_instructions(
     score += _capped(sub["verifiable_outcomes"], VERIFIABLE_POINTS, VERIFIABLE_CAP)
     score -= _freshness_penalty(freshness_days)
 
-    size = placement_penalty(placement, len(text.split()) - placement["always_on_words"])
+    size = placement_penalty(placement,
+                             fetch_words=len(text.split()) - placement["always_on_words"])
     sub["always_on_penalty"] = size["always_on_penalty"]
     sub["relocatable_penalty"] = size["relocatable_penalty"]
     bloat_penalty = size["always_on_penalty"] + size["relocatable_penalty"]
