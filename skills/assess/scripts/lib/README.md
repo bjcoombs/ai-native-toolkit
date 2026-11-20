@@ -117,7 +117,10 @@ does not move a count. Tests: `tests/test_rename_churn.py`.
 
 **`content_paths.py`**
 The paths one commit changed in content, from `git log --raw --no-abbrev --no-renames`
-(`RAW_LOG_ARGS`), folded to current names through the rename map. A delete and an add of
+plus `--full-diff` (`RAW_LOG_ARGS`), folded to current names through the rename map.
+`--full-diff` lets a rename from outside a pathspec (a scope, a sub-directory root, the
+clock's doc globs) pair up; `within`, the walk's pathspec as a predicate, keeps the
+counted paths to those the commit touched inside it. A delete and an add of
 the same blob under two names that fold together is a pure rename and is dropped; a
 rename that also edits changes the blob and counts. `git_churn_scores`,
 `commit_epochs_by_file` and `content_commit_clock` all read it. Tests:

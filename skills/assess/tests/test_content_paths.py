@@ -30,3 +30,11 @@ def test_without_the_map_both_names_count() -> None:
 def test_edits_count_and_non_raw_lines_are_ignored() -> None:
     lines = ["", "commit header", _line("M", A, B, "src/x.py"), "no-tab line"]
     assert content_paths(lines) == {"src/x.py"}
+
+
+def test_within_pairs_a_rename_from_outside_but_counts_only_inside() -> None:
+    inside = lambda rel: rel.startswith("pkg/")  # noqa: E731
+    moved = [_line("D", A, Z, "other/a.py"), _line("A", Z, A, "pkg/a.py")]
+    assert content_paths(moved, {"other/a.py": "pkg/a.py"}, inside) == set()
+    outside_edit = [_line("M", A, B, "other/a.py"), _line("M", A, B, "pkg/z.py")]
+    assert content_paths(outside_edit, {"other/a.py": "pkg/a.py"}, inside) == {"pkg/z.py"}

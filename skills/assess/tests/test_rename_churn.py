@@ -254,5 +254,34 @@ def test_commit_epochs_from_a_subdirectory_use_top_relative_renames(tmp_path: Pa
     assert git_churn_scores(sub, renames=renames) == {(sub / "new.py").resolve(): 2}
 
 
+def test_a_rename_into_a_scope_is_not_churn_under_a_pathspec(tmp_path: Path) -> None:
+    """A pure move from outside the scope or sub-directory root into it: the
+    pathspec alone would hide the delete side and count the add (contract I425-2)."""
+    repo = _repo(tmp_path / "p")
+    _append(repo, "other/a.py", "a = 1\n")
+    _append(repo, "pkg/z.py", "z = 1\n")
+    _commit(repo, "init", 50)
+    _append(repo, "other/a.py", "a = 2\n")
+    _commit(repo, "edit", 40)
+    (repo / "pkg").mkdir(exist_ok=True)
+    _git(repo, "mv", "other/a.py", "pkg/a.py")
+    _commit(repo, "move only", 30)
+    renames = cc.build_rename_map(repo).paths
+    assert renames == {"other/a.py": "pkg/a.py"}
+    pkg = (repo / "pkg").resolve()
+    moved = (pkg / "a.py").resolve()
+    z = (pkg / "z.py").resolve()
+    # The move is the only commit the pathspec reaches for a.py, and it is not
+    # churn; its history under other/ stays outside the scope, as before.
+    assert git_churn_scores(repo, scope=pkg, renames=renames) == {z: 1}
+    # A sub-directory root without a scope walks the whole history: two edits.
+    assert git_churn_scores(pkg, renames=renames) == {moved: 2, z: 1}
+    # commit_epochs_by_file walks with the root as its pathspec, like a scope.
+    epochs = commit_epochs_by_file(pkg, None, renames)
+    assert epochs is not None and set(epochs) == {z}
+    # Unscoped, the whole history follows the rename: two edits, no move.
+    assert git_churn_scores(repo, renames=renames)[moved] == 2
+
+
 def test_commit_epochs_outside_git(tmp_path: Path) -> None:
     assert commit_epochs_by_file(tmp_path, None) is None

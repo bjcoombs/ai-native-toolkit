@@ -12,23 +12,32 @@ Pure stdlib; imports no orchestrator.
 """
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 
 # The ``git log`` arguments whose per-file lines :func:`content_paths` reads.
-RAW_LOG_ARGS: tuple[str, ...] = ("--raw", "--no-abbrev", "--no-renames")
+# ``--full-diff``: under a pathspec (a scope, a sub-directory root, the doc
+# globs) git otherwise lists only the matching side of a rename, so a file moved
+# in from outside the pathspec reads as an add and counts. Callers filter the
+# listed paths to their own scope.
+RAW_LOG_ARGS: tuple[str, ...] = ("--raw", "--no-abbrev", "--no-renames", "--full-diff")
 
 
 def content_paths(lines: Iterable[str],
-                  renames: Mapping[str, str] | None = None) -> set[str]:
+                  renames: Mapping[str, str] | None = None,
+                  within: Callable[[str], bool] | None = None) -> set[str]:
     """Current-name paths (relative to the git top) one commit changed in content.
 
     ``lines`` are the commit's ``--raw`` lines (``:<mode> <mode> <blob> <blob>
     <status>\\t<path>``); anything else is ignored. ``renames`` maps historical
     paths to current ones. A path whose only entries are a delete and an add of
     one blob under two names that fold together is a pure rename and is left
-    out.
+    out. ``within`` is the caller's pathspec as a predicate on the listed
+    path: every line still pairs a rename, but a path is returned only when
+    the commit touched it under a name inside the pathspec, as the walk saw it
+    before ``--full-diff``.
     """
     entries: dict[str, list[tuple[str, str]]] = {}
+    inside: set[str] = set()
     for line in lines:
         meta, tab, path = line.strip().partition("\t")
         fields = meta.split()
@@ -38,7 +47,9 @@ def content_paths(lines: Iterable[str],
         blob = fields[2] if status == "D" else fields[3]
         current = renames.get(path, path) if renames else path
         entries.setdefault(current, []).append((status, blob))
-    return {p for p, e in entries.items() if not _pure_rename(e)}
+        if within is None or within(path):
+            inside.add(current)
+    return {p for p, e in entries.items() if p in inside and not _pure_rename(e)}
 
 
 def _pure_rename(entries: list[tuple[str, str]]) -> bool:

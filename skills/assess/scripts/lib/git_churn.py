@@ -16,7 +16,7 @@ import math
 import re
 import subprocess
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, NamedTuple
@@ -66,6 +66,13 @@ def rename_paths(root: Path) -> dict[str, str]:
         print("note: rename history unreadable - churn does not follow renames "
               "on this run.", file=sys.stderr)
     return rename_map.paths
+
+
+def _under(top: Path, base: Path) -> Callable[[str], bool]:
+    """A top-relative path inside ``base``: the walk's pathspec as a predicate,
+    since ``--full-diff`` lists every path a matching commit touched."""
+    prefix = base.resolve().relative_to(top).as_posix() if base.resolve() != top else ""
+    return lambda rel: not prefix or rel == prefix or rel.startswith(prefix + "/")
 
 
 def git_churn_scores(
@@ -121,10 +128,11 @@ def git_churn_scores(
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return {}
 
+    in_scope = _under(repo, scope_abs) if scope_abs is not None else None
     counts: dict[Path, int] = {}
     for commit in raw.split("\x00"):
         touched: set[Path] = set()
-        for rel in content_paths(commit.splitlines(), renames):
+        for rel in content_paths(commit.splitlines(), renames, in_scope):
             path = (repo / rel).resolve()
             if not path.is_relative_to(root):
                 continue
@@ -179,7 +187,7 @@ def commit_epochs_by_file(
     epochs: dict[Path, list[tuple[int, int]]] = {}
     for index, chunk in enumerate(raw.split("\x00")[1:]):
         at, _, rest = chunk.partition("\n")
-        for rel in content_paths(rest.splitlines(), renames):
+        for rel in content_paths(rest.splitlines(), renames, _under(top_path, root)):
             path = (top_path / rel).resolve()
             if path.is_relative_to(root):
                 epochs.setdefault(path, []).append((int(at.strip() or 0), index))
@@ -467,7 +475,8 @@ def content_commit_clock(
     for chunk in raw.split("\x01")[1:]:
         head_line, _, rest = chunk.partition("\n")
         sha, _, at_raw = head_line.strip().partition(" ")
-        touched = {top_path / rel for rel in content_paths(rest.splitlines(), rename_to)}
+        touched = {top_path / rel for rel in content_paths(
+            rest.splitlines(), rename_to, lambda rel: Path(rel).suffix.lower() in exts)}
         commits.append((sha, int(at_raw), touched & docs))
 
     # $GIT_DIR/shallow also lists other shallow refs' boundaries (#633).
