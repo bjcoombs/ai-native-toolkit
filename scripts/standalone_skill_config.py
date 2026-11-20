@@ -119,6 +119,17 @@ SKILLS: dict[str, dict[str, Any]] = {
                 "Actions - is a reusable, mostly-deterministic procedure."
             ),
             "uv-emit-workflow": 'uv run scripts/assess_emit_workflow.py "$REPO_ROOT"',
+            # The bundled layer scorer points plugin users at /doc-contradictions,
+            # a plugin-only skill; the standalone ZIP keeps the generic advice.
+            "contradictions-handoff": (
+                "- **Contradictions are out of deterministic scope - hand them to an "
+                "LLM.** The remaining lint check - contradictions between pages - "
+                "can't be detected structurally. When the doc set is non-trivial, add "
+                "a Top-3 / Additional action telling the user to have *their* agent "
+                "read the doc set for contradictions and stale claims (e.g. \"run your "
+                "LLM over `docs/` to flag pages that contradict each other or the "
+                "code\"). State plainly that `/assess` does not check this."
+            ),
             "treemap-exclude-example": (
                 'uv run scripts/complexity-treemap.py "$REPO_ROOT" '
                 "--exclude regulatory-raw --exclude vetted-context "

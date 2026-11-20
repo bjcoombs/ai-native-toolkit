@@ -31,11 +31,12 @@ The orchestrator never judges whether two statements contradict. It **only clust
 
 ## Step 1: enumerate the documents
 
-Set `REPO_ROOT` to `path`, or to `git rev-parse --show-toplevel`. List the docs with `rg`, which respects `.gitignore` and works without git:
+Set `REPO_ROOT` to `path`, or to `git rev-parse --show-toplevel`. List the docs with `rg`, which respects `.gitignore` and works without git. `--hidden` keeps docs under dot-directories such as `.github/`; the two `!` globs keep out git internals and this skill's own report:
 
 ```bash
 cd "$REPO_ROOT"
-rg --files -g '*.md' -g '*.mdx' -g '*.rst' -g '*.adoc' \
+rg --files --hidden -g '!.git/**' -g '!.doc-contradictions/**' \
+   -g '*.md' -g '*.mdx' -g '*.rst' -g '*.adoc' \
    -g '!docs/design/**' -g '!docs/superpowers/**' \
    -g '!**/node_modules/**' -g '!**/vendor/**' -g '!**/tests/fixtures/**' \
    -g '!CHANGELOG*' | sort
@@ -99,7 +100,7 @@ When there are two or more clusters and at least one hub, spawn **one more** com
 
 For each finding in every comparer's array:
 
-1. **Citation check (mechanical).** For each side, write the quote verbatim to a temporary file with your file-writing tool, not through a shell string (code quotes often hold `'` or `"`), then run `rg -nF -f <quote-file> -- '<path>'`. The `rg` hit numbers are the only evidence; never move a line number by reasoning about the file or counting lines yourself.
+1. **Citation check (mechanical).** First, drop the finding if either side's `quote` is empty, only whitespace, or contains a newline: `rg -nF -f` with an empty pattern matches every line, so such a quote would pass on any line. List it under "Dropped by citation check" with the reason. Otherwise, for each side, write the quote verbatim to a temporary file with your file-writing tool, not through a shell string (code quotes often hold `'` or `"`), then run `rg -nF -f <quote-file> -- '<path>'`. The `rg` hit numbers are the only evidence; never move a line number by reasoning about the file or counting lines yourself.
    - The cited `line` is among the hits: keep the finding as cited.
    - The cited `line` is not a hit, but exactly one hit lies within two lines of it: replace `line` with that hit.
    - Otherwise (no hit, the file is missing, or several nearby hits): drop the finding and list it under "Dropped by citation check" with the `rg` result.

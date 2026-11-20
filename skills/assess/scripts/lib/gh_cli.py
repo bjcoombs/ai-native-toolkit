@@ -84,11 +84,12 @@ def parse_github_remote(url: str) -> GithubRepo | None:
     return GithubRepo(owner=m.group("owner"), name=m.group("name"))
 
 
-def resolve_github_remote(repo_root: Path) -> GithubRepo | None:
-    """The repository's github.com remote (``origin``, else the sole remote).
+def git_remote_url(repo_root: Path) -> str | None:
+    """The URL of the repository's ``origin`` remote, else of its sole remote.
 
-    Pure git; never invokes ``gh``. None when the directory is not a git
-    repository, has no remote, or its remote is not on github.com.
+    Pure git; never invokes ``gh`` or ``glab``. None when the directory is not a
+    git repository or has no single remote to choose. Shared with ``gitlab_cli``
+    so both providers read the same remote.
     """
     def _git(*args: str) -> str | None:
         try:
@@ -106,6 +107,16 @@ def resolve_github_remote(repo_root: Path) -> GithubRepo | None:
         if len(remotes) != 1:
             return None
         url = _git("remote", "get-url", remotes[0])
+    return url or None
+
+
+def resolve_github_remote(repo_root: Path) -> GithubRepo | None:
+    """The repository's github.com remote (``origin``, else the sole remote).
+
+    Pure git; never invokes ``gh``. None when the directory is not a git
+    repository, has no remote, or its remote is not on github.com.
+    """
+    url = git_remote_url(repo_root)
     return parse_github_remote(url) if url else None
 
 
