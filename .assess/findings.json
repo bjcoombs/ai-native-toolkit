@@ -1,5 +1,5 @@
 {
-  "assess_method_version": 15,
+  "assess_method_version": 16,
   "findings": [
     {
       "name": "hidden_coupling",
@@ -48,7 +48,6 @@
       "paths": [
         "scripts/floor_anchor.py",
         "scripts/floor_check.py",
-        "scripts/tests/test_floor_anchor.py",
         "scripts/tests/test_floor_check.py",
         "skills/assess/scripts/assess_report.py",
         "skills/assess/scripts/lib/test_pressure/mutmut3.py",
