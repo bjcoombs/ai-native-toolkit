@@ -22,6 +22,7 @@ from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 from lib.agent_environment import AgentEnvironmentBlock
 from lib.agent_harness import AgentHarnessBlock
 from lib.agent_instructions_grader import SensitiveFinding
+from lib.ci_checks import CiChecksBlock
 from lib.ai_usage import AiUsageBlock
 from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
@@ -102,6 +103,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("structure_drift.tier_0.empty_ownership_patterns", EmptyOwnershipPattern),
     ("sensitive_instruction_content.{}", SensitiveFinding),
     ("shared_tooling", SharedToolingBlock),
+    ("ci_checks", CiChecksBlock),
     ("layer_grades", LayerGradesBlock),
     ("prior_findings_snapshot", FindingsSnapshot),
     ("instruction_placement", InstructionPlacementBlock),

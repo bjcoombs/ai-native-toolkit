@@ -126,7 +126,11 @@ constant each.
 # marker drops modularity_q and opens its reason with a code: no_grimp,
 # no_networkx, grimp_failed or no_python_packages). run-context.json and
 # complexity-stats.json are otherwise unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.18.0"
+# 1.19.0: run-context.json gains ci_checks (issue #698): ci_files,
+# check_commands, included_files, test_or_lint_runs (null when no CI line runs
+# a check but a CI file pulls jobs from elsewhere) and basis. Additive, and
+# complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.19.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
