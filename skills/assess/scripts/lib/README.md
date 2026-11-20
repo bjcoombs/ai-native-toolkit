@@ -110,6 +110,13 @@ shares one map per HEAD between the churn reads and the content clock, and marks
 doc row `confidence: low` when the map is incomplete, which keeps it out of `lying_map`.
 Git's own rename detection is off (`--no-renames`) in both walks, so `diff.renames`
 does not move a count. Tests: `tests/test_rename_churn.py`.
+Shallow history (issue #544): `content_commit_clock` reuses its
+`--is-shallow-repository` probe, and on a shallow clone reads the boundary commits
+from `git rev-parse --git-path shallow`. The clock's `truncated`, `boundary_epoch`
+(newest boundary, author time) and `lower_bound` (docs whose newest visible change is
+a boundary commit) feed `doc_staleness`. A boundary commit lists every file like a
+root commit, so it is never counted as bulk. A failed probe is unknown, not
+truncated. Tests: `tests/test_shallow_history.py`.
 `window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
 into the `history_window` scan input (`"12mo"`, None for all-time).
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
@@ -381,7 +388,12 @@ source-vs-doc verdict. `last_commit_days` and the instruction grader's `freshnes
 commits are reported as `bulk_commits_skipped` (newest first, capped) with
 `bulk_commits_skipped_total`. A doc dated by the creation fallback carries
 `last_change_basis: "creation"` and confidence `low`, which keeps it out of the stale-hub
-finding; `creation_date_fallback_count` counts them. The `modularity` block's `base_doc_dir_ratio`
+finding; `creation_date_fallback_count` counts them. On a shallow clone the block
+carries `history_truncated: true` and `history_boundary_date`, every row is confidence
+`low`, and a doc whose newest visible change is the boundary carries
+`last_commit_days_bound: "lower"` (copied onto its `stale_hubs` entry): its age is a
+floor. Its ratio still rests only on subject commits after the boundary, so the
+boundary listing every code file does not make it stale. The `modularity` block's `base_doc_dir_ratio`
 is code directories holding a base doc over all code directories; a base doc in a
 directory with no code (`docs/`, `agents/`) counts in neither, so the ratio stays
 within 0-1 (tests: `tests/test_doc_modularity.py`).
@@ -1193,14 +1205,18 @@ files, the skills-directory info and the redacted sensitive-content findings alo
 the best grade (`None` when no committed file exists, distinct from `F`).
 `broken_instruction_refs` adds doc links to a missing instruction file;
 `detect_ancestor_instructions` names the ancestor and global files a clone never sees
-(#57); `instruction_file_size` feeds the bloat signal. Each graded entry carries the
+(#57); `instruction_file_size` feeds the size signal (line and word counts, always-on
+lines, `bloat_penalty`). Files are graded against `instruction_placement.skill_texts`, so
+a grade rests on the same always-on split as the file's `instruction_placement` record. Each graded entry carries the
 grader's `findings` (unresolved commands, stale paths and symbols), graded against an
 `instruction_content.RepoContext`; `grade_instruction_files` and `nested_instruction_surface`
 each build one from the same tree. Tests:
 `tests/test_instruction_files.py`, `tests/test_doc_staleness.py`.
 `nested_instruction_surface(repo_root, excludes)` builds the `nested_instructions`
-block from `instruction_discovery` with the same tracked set, clock and skills
-detection, and runs from the `scan_registry` table.
+block from `instruction_discovery` with the same tracked set, clock and skill texts,
+and runs from the `scan_registry` table. A nested file is graded on its body after any
+frontmatter, so a rule file's always-on lines leave out the frontmatter lines its
+placement record counts.
 
 **`instruction_discovery.py`**
 Finds the instruction files agent tools load below the root or through path-scoped
@@ -1236,8 +1252,9 @@ root `AGENTS.override.md` or `AGENTS.md` against 32 KiB, plus the heaviest
 root-down chain (`deepest_chain`). Tests: `tests/test_instruction_budget.py`.
 
 **`instruction_placement.py`**
-Per-section placement of instruction text (#559, part of #419), no model, no grade
-effect. `split_sections` splits a file on ATX headings outside fences (`fence_mask`, CommonMark closing: same character, at least the opening length, nothing after) and
+Per-section placement of instruction text (#559, part of #419), no model. The
+grader scores each instruction file on the same split (`analyse_file`, #560); the
+block itself is advice. `split_sections` splits a file on ATX headings outside fences (`fence_mask`, CommonMark closing: same character, at least the opening length, nothing after) and
 frontmatter, at the shallowest level (the next one down when a single heading is a
 document title); deeper headings roll into their section, text before the first
 heading is a section with an empty heading, and a file with no headings is one
@@ -1250,8 +1267,11 @@ existing `SKILL.md` by `SKILL_OVERLAP_MIN_PCT` (the
 `instruction_content.readme_overlap_pct` line overlap) is `duplicates_skill`, and
 any other section moves only when
 `MIN_FETCH_SIGNALS` of `scoped_heading` (one tool, language or platform),
-`scoped_paths` (backticked paths mostly under one top-level directory),
-`command_reference` (fence density) and `long_section` fire. Each threshold is a
+`scoped_paths` (backticked paths mostly under one top-level directory, unless the
+file already sits under it),
+`command_reference` (fence density) and `long_section` (60 lines or more, an absolute count so that
+lines elsewhere cannot declassify a section, in a file with at least two headed
+sections) fire. Each threshold is a
 named constant with its rationale. Suggested homes: `existing_skill` (the
 duplicated `SKILL.md`), `nested_instruction_file` (`<dir>/<basename>` for
 `scoped_paths`), `skill` (`<skills dir>/<slug>/SKILL.md`), and for agent and skill
@@ -1259,9 +1279,11 @@ files `reference_doc` (`<skill dir>/references/<slug>.md`, or `null` for an agen
 `existing_skill` when the text is already in another skill. Between two skills the
 pointer is one-way: a skill counts as the duplicate's home only when its path sorts
 before the file's, so the lexically first keeps the canonical copy.
+`detect_skills_dir` lists the skills directories and `SKILL.md` files (the
+`skills_present` evidence); `skill_texts(repo_root)` returns every `SKILL.md` text by
+path, the map the scan and the grader's callers both compare sections against.
 `scan_instruction_placement(repo_root, instruction_files, nested_instructions,
-scope, excludes)` runs from the `scan_registry` table. The block, which #560 reads
-to score on always-on size:
+scope, excludes)` runs from the `scan_registry` table. The block:
 `{available, thresholds {always_on_lines, always_on_share,
 loaded_in_full_min_lines}, files[], flagged[], loaded_in_full[],
 loaded_in_full_considered}`. Each file record (`files`: the root instruction files
@@ -1269,7 +1291,8 @@ that are present and not aliases, plus `nested_instructions.files`, each real fi
 once; `loaded_in_full`: agent and `SKILL.md` files from
 `claude_config.loaded_config_files` over 200 lines, largest first) is `{path, kind
 (instruction | agent | skill), total_lines, always_on_lines, always_on_share,
-fetch_on_need_lines, unclassified_lines, sections_total, flagged, relocatable[],
+always_on_words, fetch_on_need_lines, unclassified_lines, sections_total, flagged,
+relocatable[],
 relocatable_total}`, where `flagged` (instruction files only; always `false` in `loaded_in_full`) is always-on lines over 200 and share over
 0.5 and each `relocatable` entry (largest first, capped at 10) is `{heading,
 start_line, end_line, lines, signals[], home {kind, target}}`. `flagged` at block
@@ -1291,10 +1314,18 @@ Heuristic scoring of agent instruction files (CLAUDE.md, AGENTS.md, GEMINI.md,
 credit (12 each, cap 40, resolved by `command_resolver.py`; a standard CLI such as `gh` earns
 4 each, cap 16, inside the same 40), backticked paths count only
 when they exist at HEAD, and directives, tradeoff phrases and verifiable outcomes are a
-small capped floor. A size curve subtracts one point per 10 lines past 200 (or per 120
-words past 2400), capped at 30, halved (never waived) when the repo delegates to skills,
-because the file still loads on every task; past 400 lines or 4800 words the score is
-capped at 59 (a B), skills or not. Directory-tree
+small capped floor. Size is scored on always-on size and share (#560, replacing the
+#517 whole-file curve, its skills halving and its word leg): `grade_instructions` splits
+the file with `instruction_placement.analyse_file` (given `skills`, the
+`skill_texts` map) and `placement_penalty` charges one point per 10 always-on lines
+past 200, capped at 30, plus one point per 10 fetch-on-need lines, capped at 30; a
+file over 400 always-on lines is capped at 59 (a B). Always-on lines are
+line-equivalents, the larger of the lines and the always-on words / 12, so a file of
+very long lines cannot dodge the term or the cap. Neither term reads the block's
+`flagged` (which also needs over half the file): gated on it, adding reference lines
+could lower a file's penalty. `always_on_flagged` mirrors `flagged` as evidence. The subscores `always_on_lines`,
+`always_on_pct`, `fetch_on_need_lines`, `always_on_flagged`, `always_on_penalty` and
+`relocatable_penalty` (and `always_on_words`) carry the split; `bloat_penalty` is their sum. Directory-tree
 blocks, repository-overview sections and lines repeated from the root README cost points
 too (`instruction_content.py`). The A-F scale and the subscore keys downstream code reads
 (`positive_directives`, `tradeoff_phrases`, `path_references`, `verifiable_outcomes`,
