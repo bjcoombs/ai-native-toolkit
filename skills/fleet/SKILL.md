@@ -61,12 +61,13 @@ One line per repository, sorted by `repo`, keys sorted. Schema:
 
 | Key | Value |
 |-----|-------|
-| `fleet_row_version` | Row envelope version (1). |
+| `fleet_row_version` | Row envelope version (2; 2 added `active`). |
 | `repo` | The repository id: its path under the root, prefixed with the root's own name when that path is one segment (a GitHub org root gives `org/repo`). A listed entry outside `ROOT` (or with no `ROOT`) takes its `origin` remote's path, else its last two directory names. The same checkout gets the same id from a root run or a list run. |
 | `group` | `repo` without its last segment (`grpa/svc1` is in `grpa`). |
 | `status` | `ok` or `failed`. |
 | `reason` | `null` when ok; a token when failed: `missing_checkout`, `not_a_git_work_tree`, `scan_timeout`, `invalid_output`, `scan_error`, or `scan_exit_<code>`. |
 | `signals_schema_version` | The `assess_signals` document version; `null` when failed. |
+| `active` | `true` when the checkout's `HEAD` was committed inside the window (`--window`, default `6mo`, counting back from the run's UTC date; the `ghsync --active-since` meaning, read locally from git); `null` when failed. |
 | `scans` | The `assess_signals.py` `scans` map (counts-only unless `--full`); the block shapes are `skills/assess/references/signals.schema.json` and `skills/assess/references/counts-only.md`. `null` when failed. |
 
 **`logs/<repo>.stderr`.** When a scan process exits non-zero, the last 4000
@@ -96,7 +97,7 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `counts_only` | `false` with `--full`. |
 | `paths_hashed` | `true` with `--hash-paths` or `--hash-salt` (never the salt). |
 | `scans` | The `--scans` names, sorted; `null` for all. |
-| `repositories` | `selected` (every row), `scanned` (rows `ok`), `failed` (rows `failed`) and `qualifying`: scanned repositories whose checkout `HEAD` was committed inside the window, counting back from `scan_date` (the `ghsync --active-since` meaning). |
+| `repositories` | `selected` (every row), `scanned_ok` (rows `ok`), `failed` (rows `failed`) and `qualifying` (rows `ok` with `active` true). |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and
 any `--jobs` over unchanged checkouts on the same day write the same bytes.

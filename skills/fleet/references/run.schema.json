@@ -56,7 +56,7 @@
         "selected": {
           "type": "integer"
         },
-        "scanned": {
+        "scanned_ok": {
           "type": "integer"
         },
         "failed": {
@@ -69,7 +69,7 @@
       "required": [
         "failed",
         "qualifying",
-        "scanned",
+        "scanned_ok",
         "selected"
       ],
       "additionalProperties": false

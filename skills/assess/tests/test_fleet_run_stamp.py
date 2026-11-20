@@ -14,7 +14,8 @@ from lib import fleet_cleanup, fleet_stamp
 from lib.fleet import STATUS_FAILED, STATUS_OK, FleetRow, ScanOptions, Target, run_fleet
 from lib.fleet_cleanup import CloneDeleter, delete_clone
 from lib.fleet_schema import STAMP_SCHEMA_PATH, build_stamp_schema, render_stamp
-from lib.fleet_stamp import ActivityProbe, build_stamp, window_start, write_stamp
+from lib.fleet_activity import is_active, window_start
+from lib.fleet_stamp import build_stamp, write_stamp
 from test_fleet import make_checkout, make_repo
 from test_fleet_cli import fleet_cli
 
@@ -23,11 +24,22 @@ def _git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout
 
 
-def _row(repo: str, status: str = STATUS_OK) -> FleetRow:
+def _row(repo: str, status: str = STATUS_OK, active: bool | None = True) -> FleetRow:
     ok = status == STATUS_OK
-    return {"fleet_row_version": 1, "repo": repo, "group": repo.rsplit("/", 1)[0], "status": status,
+    return {"fleet_row_version": 2, "repo": repo, "group": repo.rsplit("/", 1)[0], "status": status,
             "reason": None if ok else "scan_error", "signals_schema_version": 1 if ok else None,
-            "scans": {} if ok else None}
+            "scans": {} if ok else None, "active": active if ok else None}
+
+
+def _old_commit(path: Path) -> Path:
+    """A one-commit repository committed in 2001."""
+    path.mkdir(parents=True)
+    _git(path, "init", "-q")
+    (path / "f").write_text("x", encoding="utf-8")
+    _git(path, "add", "-A")
+    subprocess.run(["git", "-C", str(path), "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-q", "-m", "x"],
+                   check=True, env={**os.environ, "GIT_COMMITTER_DATE": "2001-01-01T00:00:00Z"})
+    return path
 
 
 def _pushed_repo(root: Path, slug: str) -> Path:
@@ -69,29 +81,36 @@ def test_window_start_rejects_a_bad_window():
         window_start("soon", date(2026, 1, 1))
 
 
-def test_activity_probe_counts_ok_rows_committed_inside_the_window(tmp_path):
-    recent = make_checkout(tmp_path / "recent")
-    old = tmp_path / "old"
-    old.mkdir()
-    _git(old, "init", "-q")
-    (old / "f").write_text("x", encoding="utf-8")
-    _git(old, "add", "-A")
-    subprocess.run(["git", "-C", str(old), "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-q", "-m", "x"],
-                   check=True, env={**os.environ, "GIT_COMMITTER_DATE": "2001-01-01T00:00:00Z"})
-    probe = ActivityProbe("6mo", date.today())
-    probe(Target("g/recent", recent), _row("g/recent"))
-    probe(Target("g/old", old), _row("g/old"))
-    probe(Target("g/failed", recent), _row("g/failed", STATUS_FAILED))
-    probe(Target("g/gone", tmp_path / "absent"), _row("g/gone"))
-    assert probe.active == {"g/recent"}
+def test_is_active_reads_the_head_commit_date(tmp_path):
+    since = window_start("6mo", date.today())
+    assert is_active(make_checkout(tmp_path / "recent"), since)
+    assert not is_active(_old_commit(tmp_path / "old"), since)
+    assert not is_active(tmp_path / "absent", since)
+
+
+def test_scan_target_sets_active_only_when_asked(tmp_path, monkeypatch):
+    from lib import fleet
+    monkeypatch.setattr(fleet, "checkout_problem", lambda _c: None)
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        out = Path(command[command.index("--out") + 1])
+        out.write_text(json.dumps({"signals_schema_version": 1, "scans": {}}), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "", "")
+    monkeypatch.setattr(fleet.subprocess, "run", fake_run)
+    old = Target("g/old", tmp_path / "old")
+    monkeypatch.setattr(fleet, "is_active", lambda checkout, since: checkout.name == "new")
+    assert fleet.scan_target(old, tmp_path, ScanOptions())["active"] is None
+    assert fleet.scan_target(old, tmp_path, ScanOptions(active_since=date(2026, 1, 1)))["active"] is False
+    new = Target("g/new", tmp_path / "new")
+    assert fleet.scan_target(new, tmp_path, ScanOptions(active_since=date(2026, 1, 1)))["active"] is True
 
 
 def test_build_stamp_counts_and_serialises_deterministically(tmp_path):
-    rows = [_row("a/x"), _row("a/y"), _row("b/z", STATUS_FAILED)]
-    stamp = build_stamp(rows, active={"a/x"}, toolkit_commit="abc", plugin_version="1.0.0",
+    rows = [_row("a/x"), _row("a/y", active=False), _row("b/z", STATUS_FAILED)]
+    stamp = build_stamp(rows, toolkit_commit="abc", plugin_version="1.0.0",
                         today=date(2026, 11, 20), window="6mo", rubric_version=None, counts_only=True,
                         paths_hashed=True, scans=["b", "a"])
-    assert stamp["repositories"] == {"selected": 3, "scanned": 2, "failed": 1, "qualifying": 1}
+    assert stamp["repositories"] == {"selected": 3, "scanned_ok": 2, "failed": 1, "qualifying": 1}
     assert stamp["scans"] == ["a", "b"]
     assert stamp["scan_date"] == "2026-11-20"
     path = write_stamp(tmp_path / "out", stamp)
@@ -105,7 +124,7 @@ def test_write_stamp_leaves_no_temp_file_on_failure(tmp_path, monkeypatch):
     def boom(*_args: object) -> None:
         raise OSError("disk full")
     monkeypatch.setattr(fleet_stamp.os, "replace", boom)
-    stamp = build_stamp([], active=set(), toolkit_commit=None, plugin_version="x", today=date(2026, 1, 1),
+    stamp = build_stamp([], toolkit_commit=None, plugin_version="x", today=date(2026, 1, 1),
                         window="6mo", rubric_version=None, counts_only=True, paths_hashed=False, scans=None)
     with pytest.raises(OSError):
         write_stamp(tmp_path, stamp)
@@ -265,7 +284,8 @@ def test_delete_after_removes_safe_clones_and_keeps_the_rest(tmp_path, monkeypat
     rows = [json.loads(line) for line in (tmp_path / "out" / "repos.jsonl").read_text().splitlines()]
     assert [(r["repo"], r["status"]) for r in rows] == [("grp/dirty", "ok"), ("grp/safe", "ok")]
     stamp = json.loads((tmp_path / "out" / "run.json").read_text(encoding="utf-8"))
-    assert stamp["repositories"] == {"selected": 2, "scanned": 2, "failed": 0, "qualifying": 2}
+    assert stamp["repositories"] == {"selected": 2, "scanned_ok": 2, "failed": 0, "qualifying": 2}
+    assert [r["active"] for r in rows] == [True, True]
     assert stamp["window"] == "6mo"
     assert stamp["scans"] == ["agent_ops"]
     assert stamp["rubric_version"] is None
@@ -295,3 +315,16 @@ def test_an_out_that_cannot_be_created_exits_2_before_scanning(tmp_path, monkeyp
 def test_the_checked_in_stamp_schema_matches_the_type():
     assert STAMP_SCHEMA_PATH.read_text(encoding="utf-8") == render_stamp(), (
         "regenerate: cd skills/assess && uv run --locked python scripts/lib/fleet_schema.py")
+
+
+def test_a_dormant_repository_is_scanned_but_not_qualifying(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    root = tmp_path / "root"
+    make_repo(root, "grp/live")
+    (root / "grp" / "dormant" / "worktree").mkdir(parents=True)
+    _old_commit(root / "grp" / "dormant" / "dormant-main")
+    assert fleet_cli.main([str(root), "--out", str(tmp_path / "out"), "--scans", "agent_ops"]) == 0
+    rows = [json.loads(line) for line in (tmp_path / "out" / "repos.jsonl").read_text().splitlines()]
+    assert [(r["repo"], r["active"]) for r in rows] == [("grp/dormant", False), ("grp/live", True)]
+    stamp = json.loads((tmp_path / "out" / "run.json").read_text(encoding="utf-8"))
+    assert stamp["repositories"] == {"selected": 2, "scanned_ok": 2, "failed": 0, "qualifying": 1}

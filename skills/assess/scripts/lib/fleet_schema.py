@@ -48,7 +48,8 @@ def build_schema() -> JsonDict:
         "title": "fleet repository row",
         "description": (
             "One line of repos.jsonl written by skills/fleet/scripts/fleet.py. A failed row "
-            "has a reason token and null signals_schema_version and scans. Generated from "
+            "has a reason token and null signals_schema_version, scans and active. An ok row's "
+            "active says whether its HEAD was committed inside the run's window. Generated from "
             "lib/fleet.py by lib/fleet_schema.py."
         ),
         **schema,
@@ -58,7 +59,8 @@ def build_schema() -> JsonDict:
                 "then": {"properties": {"reason": {"type": "null"}, "scans": {"type": "object"},
                                         "signals_schema_version": {"type": "integer"}}},
                 "else": {"properties": {"reason": {"type": "string"}, "scans": {"type": "null"},
-                                        "signals_schema_version": {"type": "null"}}},
+                                        "signals_schema_version": {"type": "null"},
+                                        "active": {"type": "null"}}},
             },
         ],
     }

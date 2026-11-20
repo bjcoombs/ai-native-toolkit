@@ -609,7 +609,8 @@ a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
 its schema version - no stamp field, path or timing - so reruns are byte-identical.
 `run_salt` draws one salt per run for `--hash-paths`. `run_fleet`'s optional `after`
 hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
-(`fleet_stamp.ActivityProbe`, `fleet_cleanup.CloneDeleter`). The row shape is the `FleetRow`
+(`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
+`fleet_activity.is_active`); `null` when failed or not asked. The row shape is the `FleetRow`
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
@@ -625,12 +626,18 @@ Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
 commit, plugin version, UTC scan date, effective window, rubric version, output mode
 (`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
-`scanned` = ok rows, `failed`, `qualifying` = ok rows whose checkout `HEAD` date is on
-or after `window_start(window, scan_date)`, months and years by calendar).
-`ActivityProbe` is a `run_fleet` `after` hook reading each `HEAD` date in the worker,
-before `--delete-after` can remove the clone. No path, salt, timing or input mode, so a
+`scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true). No path,
+salt, timing or input mode, so a
 root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
-writes atomically with sorted keys. Rows are untouched.
+writes atomically with sorted keys.
+
+**`fleet_activity.py`**
+Whether a fleet repository is active (issue #569), the `ghsync --active-since` meaning:
+`is_active` compares the checkout's `HEAD` commit date (`head_commit_date`, UTC, read
+from git with optional locks off) with `window_start(window, today)`, which counts back
+in whole days, months and years by calendar (clamped to month end). `scan_target` sets
+each ok row's `active` from `ScanOptions.active_since`, so it is read before
+`--delete-after` can remove the clone. An unreadable `HEAD` is not active.
 
 **`fleet_cleanup.py`**
 `--delete-after` (issue #569). `CloneDeleter` is a `run_fleet` `after` hook;

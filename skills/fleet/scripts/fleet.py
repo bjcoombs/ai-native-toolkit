@@ -47,7 +47,6 @@ from lib.fleet import (  # noqa: E402
     DEFAULT_TIMEOUT,
     LOGS_DIR,
     STATUS_FAILED,
-    FleetRow,
     ScanOptions,
     Target,
     discover_root,
@@ -59,7 +58,8 @@ from lib.fleet import (  # noqa: E402
     write_rows,
 )
 from lib.fleet_cleanup import CloneDeleter  # noqa: E402
-from lib.fleet_stamp import ActivityProbe, build_stamp, write_stamp  # noqa: E402
+from lib.fleet_activity import window_start  # noqa: E402
+from lib.fleet_stamp import build_stamp, write_stamp  # noqa: E402
 from lib.rubric import RubricError, load_rubric  # noqa: E402
 from lib.signals import (  # noqa: E402
     DEFAULT_WINDOW,
@@ -172,31 +172,24 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: --out {args.out} is inside target {inside.repo}; the fleet run never "
               "writes into a target", file=sys.stderr)
         return 2
+    today = datetime.now(timezone.utc).date()
+    window = args.window or DEFAULT_WINDOW
     options = ScanOptions(
         counts_only=not args.full,
         hash_salt=None if args.full else run_salt(args.hash_paths, args.hash_salt),
         window=args.window, scans=args.scans, timeout=args.timeout,
-        log_dir=out_dir / LOGS_DIR,
+        log_dir=out_dir / LOGS_DIR, active_since=window_start(window, today),
     )
     try:  # before any scan, so --delete-after never removes a clone whose results cannot land
         out_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         print(f"error: cannot create --out {args.out}: {e.strerror}", file=sys.stderr)
         return 2
-    today = datetime.now(timezone.utc).date()
-    window = args.window or DEFAULT_WINDOW
-    probe = ActivityProbe(window, today)
     deleter = CloneDeleter([out_dir, Path.cwd(), TOOLKIT_ROOT]) if args.delete_after else None
-
-    def after(target: Target, row: FleetRow) -> None:
-        probe(target, row)  # reads HEAD before the clone can go
-        if deleter is not None:
-            deleter(target, row)
-
-    rows = run_fleet(targets, options, args.jobs, after=after)
+    rows = run_fleet(targets, options, args.jobs, after=deleter)
     path = write_rows(out_dir, rows)
     write_stamp(out_dir, build_stamp(
-        rows, active=probe.active, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
+        rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
         today=today, window=window, rubric_version=rubric_version, counts_only=options.counts_only,
         paths_hashed=options.hash_salt is not None, scans=scans,
     ))
