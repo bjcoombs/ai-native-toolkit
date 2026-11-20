@@ -358,3 +358,12 @@ def test_a_one_line_flow_list_keeps_each_items_ref_apart() -> None:
     listed = "include:\n  - [{project: grp/c}, {ref: v2, project: grp/d}]\n  - project: grp/e\n"
     assert [(e["source"], e["ref"]) for e in gitlab_includes(listed, ".gitlab-ci.yml", True)] == [
         ("grp/c", None), ("grp/d", "v2"), ("grp/e", None)]
+
+
+def test_a_flow_mapping_across_lines_keeps_its_ref() -> None:
+    text = "include:\n  - {project: grp/a,\n     ref: v1}\n  - project: grp/b\n    ref: v2\n"
+    assert [(e["source"], e["ref"], e["line"]) for e in gitlab_includes(text, ".gitlab-ci.yml", True)] == [
+        ("grp/a", "v1", 2), ("grp/b", "v2", 4)]
+    inline = "include: [{project: grp/c,\n  ref: v3}, {project: grp/d}]\nstages: [x]\n"
+    assert [(e["source"], e["ref"]) for e in gitlab_includes(inline, ".gitlab-ci.yml", True)] == [
+        ("grp/c", "v3"), ("grp/d", None)]

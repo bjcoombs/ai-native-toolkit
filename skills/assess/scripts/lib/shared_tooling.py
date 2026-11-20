@@ -160,7 +160,22 @@ def _include_lines(text: str) -> list[tuple[int, str, bool]]:
             continue
         if inside:
             out.append((number, line, False))
-    return out
+    return _join_flow(out)
+
+
+def _join_flow(rows: list[tuple[int, str, bool]]) -> list[tuple[int, str, bool]]:
+    """Join a flow collection that spans lines (``- {project: a,`` then ``ref: v1}``)
+    into its first row, so its keys stay one item."""
+    joined: list[tuple[int, str, bool]] = []
+    depth = 0
+    for number, line, inline in rows:
+        if depth > 0:
+            first, text, flag = joined[-1]
+            joined[-1] = (first, f"{text} {line.strip()}", flag)
+        else:
+            joined.append((number, line, inline))
+        depth = max(depth + sum(line.count(c) for c in "{[") - sum(line.count(c) for c in "}]"), 0)
+    return joined
 
 
 def _flow_keys(text: str) -> list[tuple[str, str, int]]:
