@@ -340,6 +340,12 @@ def test_measure_reports_unreadable_checkout(tmp_path):
 def test_fleet_cli_writes_doc_freshness_before_delete_after(tmp_path, capsys):
     root, _docs, svc = _fleet(tmp_path)
     _api_commits(svc, 5)
+    for checkout in (_docs, svc):  # pushed to a remote, so --delete-after may remove them
+        bare = tmp_path / "remotes" / checkout.name
+        _git(tmp_path, "init", "-q", "--bare", str(bare))
+        _git(checkout, "remote", "add", "origin", str(bare))
+        _git(checkout, "push", "-q", "origin", "main")
+        _git(checkout, "fetch", "-q", "origin")
     out = tmp_path / "out"
 
     code = fleet_cli.main([str(root), "--out", str(out), "--scans", "shared_tooling",
@@ -350,6 +356,7 @@ def test_fleet_cli_writes_doc_freshness_before_delete_after(tmp_path, capsys):
     assert [(r["repo"], r["status"], r["commits_since_doc_change"], r["commits"]) for r in rows] == [
         ("grp/billing", fdf.BEHIND, 5, None)]
     assert "doc freshness: 1 declared mappings: 1 behind" in capsys.readouterr().err
+    assert not svc.exists() and not _docs.exists()  # deleted after the join read them
 
 
 def test_summary_line_orders_statuses():
@@ -367,3 +374,69 @@ def test_report_discloses_declared_mappings_and_is_silent_without():
     assert "1 declared, not measured outside fleet mode" in text
     assert "1 rejected" in text
     assert render_declared_cross_repo({"doc_staleness": {}}) == ""
+
+
+def test_shallow_service_checkout_older_than_doc_is_measured(tmp_path):
+    root, _docs, svc = _fleet(tmp_path)
+    _commit(svc, {"src/f1.py": "pre\n"}, "pre-doc work", DOC_EDIT - 10 * DAY)
+    _api_commits(svc, 3)
+    shallow = root / "grp" / "shallow" / "shallow-main"
+    shallow.parent.mkdir(parents=True)
+    subprocess.run(["git", "clone", "-q", "--depth", "4", f"file://{svc}", str(shallow)],
+                   check=True, capture_output=True)
+    (root / "grp/docs/docs-main/.assess/config.toml").write_text(
+        DESCRIBES.replace("grp/billing", "grp/shallow"))
+
+    row = _only(root, slugs=("grp/docs", "grp/shallow"))
+
+    assert (row["status"], row["commits_since_doc_change"]) == (fdf.BEHIND, 3)
+
+
+def test_shallow_docs_checkout_cannot_vouch_for_current(tmp_path):
+    root, docs, svc = _fleet(tmp_path)
+    _api_commits(svc, 1)
+    shallow = root / "grp" / "sdocs" / "sdocs-main"
+    shallow.parent.mkdir(parents=True)
+    subprocess.run(["git", "clone", "-q", "--depth", "1", f"file://{docs}", str(shallow)],
+                   check=True, capture_output=True)
+
+    row = _only(root, slugs=("grp/sdocs", "grp/billing"))
+
+    assert (row["status"], row["reason"]) == (fdf.UNKNOWN, fdf.DOC_HISTORY_TRUNCATED)
+
+
+def test_doc_without_history_is_unknown(tmp_path):
+    root, docs, _svc = _fleet(tmp_path, config=DESCRIBES.replace("billing.md", "new.md"))
+    (docs / "services" / "new.md").write_text("draft\n")  # on disk, never committed
+
+    row = _only(root)
+
+    assert (row["status"], row["reason"]) == (fdf.UNKNOWN, fdf.DOC_HISTORY_UNKNOWN)
+
+
+def test_manifest_named_as_scope_counts_its_own_changes(tmp_path):
+    root, _docs, svc = _fleet(tmp_path, config=DESCRIBES.replace('["api/"]', '["api/package.json"]'))
+    for i in range(3):
+        _commit(svc, {"api/package.json": f'{{"v": {i}}}\n'}, f"api: contract {i}", DOC_EDIT + (i + 1) * DAY)
+
+    assert _only(root)["status"] == fdf.BEHIND
+
+
+def test_counts_only_rules_keep_declared_mapping_fields():
+    from lib.assess_config import DeclaredMapping
+    from lib.counts_only import counts_only
+
+    declared: list[DeclaredMapping] = [
+        {"path": "services/billing.md", "repo": "grp/billing", "scope": ["api"],
+         "status": "declared_not_measured", "reason": None},
+        {"path": None, "repo": None, "scope": [], "status": "invalid", "reason": "invalid_mapping"},
+    ]
+    ctx = {"doc_staleness": {"declared_cross_repo": declared}}
+
+    plain = counts_only(ctx)["doc_staleness"]["declared_cross_repo"]
+    hashed = counts_only(ctx, hash_paths=True, salt="s")["doc_staleness"]["declared_cross_repo"]
+
+    assert plain == declared
+    assert hashed[0]["status"] == "declared_not_measured"
+    assert hashed[1]["reason"] == "invalid_mapping"
+    assert all(str(v).startswith("h:") for v in (hashed[0]["path"], hashed[0]["repo"], *hashed[0]["scope"]))

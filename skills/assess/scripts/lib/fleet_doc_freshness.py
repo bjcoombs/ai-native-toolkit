@@ -18,7 +18,8 @@ file is written. Trust before coverage, so every rule leans toward saying less:
 - **Noise filter.** A commit does not count when its author is an automation
   bot (Dependabot, Renovate, any ``[bot]`` account except an AI assistant's,
   ``agent_identity.is_ai_assistant``), when its only in-scope files are
-  lockfiles or dependency manifests, or when it is a bulk mechanical commit by
+  lockfiles or dependency manifests (unless the scope names that file
+  itself, as ``scope = ["package.json"]`` does), or when it is a bulk mechanical commit by
   ``git_churn``'s rule (``bulk_commit_need``), applied with the service's
   tracked files as the population. Merges are skipped.
 - **Same clock as ``doc_staleness``.** The doc side is ``git_churn``'s content
@@ -231,7 +232,7 @@ def _service_commits(checkout: Path, scope: Sequence[str], after: int) -> list[_
         in_scope = [f for f in files if _in_scope(f, scope)]
         if (not at.isdigit() or int(at) <= after or is_automation(name, email)
                 or len(files) >= need
-                or all(is_dependency_file(f) for f in in_scope)):
+                or all(is_dependency_file(f) and f not in scope for f in in_scope)):
             continue
         out.append(_Commit(sha, int(at), subject))
     return out

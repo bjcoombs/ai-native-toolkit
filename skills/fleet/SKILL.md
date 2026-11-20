@@ -107,7 +107,7 @@ path that no longer exists is `broken`; a repository absent from the run, a
 shallow checkout whose history ends after the doc's last edit, or a git failure
 is `unknown` with a `reason` token. Rejected entries (a missing `scope`, say) are
 `invalid` rows and the message is printed to stderr. Counts-only rows carry the
-count and dates only; `--full` adds up to five commit shas and subjects so a
+count and the doc's last-change date only; `--full` adds up to five commit shas and subjects so a
 human can check the verdict. `--hash-paths` hashes the doc and scope paths. The
 join runs before any scan (so `--delete-after` cannot remove a checkout it
 needs), costs one `git log` per mapping plus one content-clock pass per docs
