@@ -1,0 +1,84 @@
+{
+  "assess_method_version": 13,
+  "findings": [
+    {
+      "name": "hidden_coupling",
+      "paths": [
+        "scripts",
+        "scripts/contract",
+        "scripts/tests",
+        "skills/assess",
+        "skills/assess/scripts",
+        "skills/assess/scripts/lib",
+        "skills/assess/scripts/lib/test_pressure",
+        "skills/assess/tests",
+        "skills/assess/tests/fixtures",
+        "skills/fleet",
+        "skills/fleet/scripts",
+        "skills/skill-forge",
+        "tests",
+        "tests/contract"
+      ]
+    },
+    {
+      "name": "lying_map",
+      "paths": [
+        "skills/assess/SKILL.md",
+        "skills/assess/tests/README.md"
+      ]
+    },
+    {
+      "name": "unexplained_complexity",
+      "paths": []
+    },
+    {
+      "name": "untrusted_hotspot",
+      "paths": []
+    },
+    {
+      "name": "self_referential_tests",
+      "paths": [
+        "scripts/floor_anchor.py",
+        "scripts/floor_check.py"
+      ]
+    },
+    {
+      "name": "unactioned_intent",
+      "paths": []
+    },
+    {
+      "name": "accretion_ratchet",
+      "paths": [
+        "scripts/floor_anchor.py",
+        "scripts/floor_check.py",
+        "scripts/tests/test_floor_anchor.py",
+        "scripts/tests/test_floor_check.py",
+        "skills/assess/scripts/lib/test_pressure/mutmut3.py",
+        "skills/assess/scripts/lib/wiki_writer.py",
+        "skills/assess/tests/test_assess_finalize.py",
+        "skills/assess/tests/test_complexity_treemap.py",
+        "skills/assess/tests/test_promissory_markers.py"
+      ]
+    },
+    {
+      "name": "orphaned_understanding",
+      "paths": []
+    },
+    {
+      "name": "candidate_dead_weight",
+      "paths": []
+    },
+    {
+      "name": "override_contradicts_signals",
+      "paths": []
+    },
+    {
+      "name": "refactor_boundary",
+      "paths": [
+        "docs/design",
+        "docs/design/2026-09-modernization",
+        "skills/tm"
+      ]
+    }
+  ]
+}
