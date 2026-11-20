@@ -123,7 +123,7 @@ def test_phase_2_variant_is_scoped_to_read_only_targets() -> None:
     text = ASSESS_PR_SKILL.read_text(encoding="utf-8")
     phase2 = text.split("## Phase 2", 1)[1].split("## Step 5", 1)[0]
     bullet = next(line for line in phase2.splitlines() if "no-contributions" in line)
-    tail = bullet.split("offer the fork variant instead.", 1)[1]
+    tail = bullet.split("maintainers often decline committed generated output.", 1)[1]
     assert "read-only" in tail
 
 
@@ -261,7 +261,7 @@ def test_pr_body_template_is_shared_by_every_flow() -> None:
     step5 = _step5()
     flows = [m.start() for m in re.finditer(r"If the user \*\*selected the PR offer\*\*", step5)]
     assert len(flows) == 3
-    footer = step5.index("plugin reference at the bottom")
+    footer = step5.index("ends with the plugin reference")
     assert footer > flows[-1]
     footer_line = step5[: footer].rsplit("\n", 1)[1]
     assert not re.match(r"\s*\d+\.", footer_line), "template must not be a step of one flow"
