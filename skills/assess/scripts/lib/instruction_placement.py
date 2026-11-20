@@ -23,7 +23,7 @@ Two lists. ``files`` covers the repository instruction files (the root
 locations and the nested and path-scoped files ``nested_instructions``
 grades). ``loaded_in_full`` covers agent definitions and ``SKILL.md`` files
 over ``LOADED_IN_FULL_MIN_LINES``, which load whole when invoked; it is
-informational and reported separately. A root ``agents/*.md`` file shaped as
+informational and reported separately. A ``.md`` file under the root ``agents/`` shaped as
 an agent definition counts even without a plugin manifest (#662).
 
 The tendency it compensates for is accretion: an always-loaded file grows a
@@ -521,7 +521,7 @@ def _is_agent_definition(path: Path) -> bool:
 
 
 def _manifestless_agents(root: Path) -> list[tuple[Path, str]]:
-    """Root ``agents/*.md`` agent definitions in a repository with no plugin
+    """Agent definitions under the root ``agents/`` (recursive) in a repository with no plugin
     manifest (#662). Claude Code loads them only once the directory is
     installed as a plugin, but they are written to load whole, so they belong
     in ``loaded_in_full``. ``_is_agent_definition`` keeps documents out."""
