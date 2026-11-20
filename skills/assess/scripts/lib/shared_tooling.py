@@ -163,18 +163,31 @@ def _include_lines(text: str) -> list[tuple[int, str, bool]]:
     return out
 
 
-def _flow_keys(text: str) -> list[tuple[str, str]]:
-    """``project`` / ``component`` keys of a flow-style include item.
+def _flow_keys(text: str) -> list[tuple[str, str, int]]:
+    """``project`` / ``component`` / ``ref`` keys of flow-style include items, with each
+    key's item number on the line (``[{project: a, ref: v1}, {project: b}]`` is two items).
 
     Only keys one brace deep count - the item's own keys - so a nested
     ``inputs: {project: x}`` is not read as a source.
     """
-    keys: list[tuple[str, str]] = []
+    keys: list[tuple[str, str, int]] = []
     for match in _INCLUDE_KEY.finditer(text):
         prefix = text[: match.start(1)]
         if prefix.count("{") - prefix.count("}") == 1:
-            keys.append((match.group(1), match.group(2)))
+            keys.append((match.group(1), match.group(2), _objects_opened(prefix)))
     return keys
+
+
+def _objects_opened(prefix: str) -> int:
+    """How many top-level ``{`` objects ``prefix`` has opened."""
+    depth = opened = 0
+    for ch in prefix:
+        if ch == "{":
+            opened += depth == 0
+            depth += 1
+        elif ch == "}":
+            depth = max(depth - 1, 0)
+    return opened
 
 
 def _include_keys(text: str) -> list[tuple[int, str, str, int]]:
@@ -191,8 +204,9 @@ def _include_keys(text: str) -> list[tuple[int, str, str, int]]:
     for number, line, inline in _include_lines(text):
         if inline:
             item_col = list_col = None
-            item += 1
-            keys += [(number, k, v, item) for k, v in _flow_keys(line)]
+            flow = _flow_keys(line)
+            keys += [(number, k, v, item + 1 + sub) for k, v, sub in flow]
+            item += 1 + max((sub for _, _, sub in flow), default=0)
             continue
         content = line.lstrip()
         col = len(line) - len(content)
@@ -207,7 +221,9 @@ def _include_keys(text: str) -> list[tuple[int, str, str, int]]:
             item_col = col
             item += 1
         if content.startswith(("{", "[")):
-            keys += [(number, k, v, item) for k, v in _flow_keys(content)]
+            flow = _flow_keys(content)
+            keys += [(number, k, v, item + sub) for k, v, sub in flow]
+            item += max((sub for _, _, sub in flow), default=0)
             continue
         if item_col is None:
             item_col = col

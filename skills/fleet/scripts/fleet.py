@@ -321,8 +321,8 @@ def _diagrams(out_dir: Path, no_diagrams: bool, rubric: Rubric | None, rows: lis
             return
         diagrams = build_diagrams(rubric, rows, window)
         write_diagrams(out_dir, diagrams)
-    except OSError as e:
-        print(f"fleet: diagrams: not written ({e})", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
+        print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
         return
     for diagram in diagrams:
         if diagram["skipped"] is not None:

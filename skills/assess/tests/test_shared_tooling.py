@@ -349,3 +349,12 @@ def test_component_and_reusable_workflow_refs() -> None:
                 "  b:\n    uses: org/ci/.github/workflows/test.yml\n")
     assert [e["ref"] for e in github_reusable_workflows(workflow, ".github/workflows/x.yml", True)] == [
         "v4", None]
+
+
+def test_a_one_line_flow_list_keeps_each_items_ref_apart() -> None:
+    inline = "include: [{project: grp/a, ref: v1}, {project: grp/b}]\n"
+    assert [(e["source"], e["ref"]) for e in gitlab_includes(inline, ".gitlab-ci.yml", True)] == [
+        ("grp/a", "v1"), ("grp/b", None)]
+    listed = "include:\n  - [{project: grp/c}, {ref: v2, project: grp/d}]\n  - project: grp/e\n"
+    assert [(e["source"], e["ref"]) for e in gitlab_includes(listed, ".gitlab-ci.yml", True)] == [
+        ("grp/c", None), ("grp/d", "v2"), ("grp/e", None)]
