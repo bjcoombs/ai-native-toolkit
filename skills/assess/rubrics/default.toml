@@ -45,9 +45,11 @@
 #   which is what /assess looks for. With no map the structure_drift block is
 #   omitted, so the row is unknown rather than 0.
 # - Layer 0 level 1 reads layer_grades.instruction_file_present: a committed
-#   instruction file at any known root location (CLAUDE.md, AGENTS.md,
-#   GEMINI.md, .cursorrules, Copilot), the presence /assess scores. A boolean, never
-#   null, so "no instruction file" is level 0, as /assess scores a null
+#   instruction file at any location in instruction_files.INSTRUCTION_FILE_PATHS
+#   (root CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules;
+#   .github/copilot-instructions.md, .github/claude-instructions.md,
+#   .github/claude-review-instructions.md; docs/CLAUDE.md, docs/AGENTS.md),
+#   the presence /assess scores. A boolean, never null, so "no instruction file" is level 0, as /assess scores a null
 #   instructions_grade Missing, and a missing layer_grades block is unknown.
 #   layer_grades.instructions_grade (the letter grade, null with no file) is
 #   available to a rubric too; this one does not grade on the letter, since
