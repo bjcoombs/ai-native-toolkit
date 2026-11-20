@@ -108,3 +108,23 @@ def test_anomalies_read_only_the_run_header() -> None:
               "instruction_files": {}, "diff": {}, "prior_stats_exists": False}
     codes = [a["code"] for a in core_scans.anomalies(header)]
     assert codes
+
+
+def test_detect_anomalies_reads_only_run_header_keys() -> None:
+    """The anomalies entry hands detect_anomalies the run header, not the whole
+    context; a read of any other key would silently get its default."""
+    read: set[str] = set()
+
+    class Recording(dict):
+        def get(self, key, default=None):
+            read.add(key)
+            return super().get(key, default)
+
+        def __getitem__(self, key):
+            read.add(key)
+            return super().__getitem__(key)
+
+    header = Recording({"stats_summary": {"files_scored": 10, "ccn": {}, "top_hotspots": []},
+                        "instruction_files": {}, "diff": {}, "prior_stats_exists": True})
+    core_scans.anomalies(header)
+    assert read and read <= set(run_setup.RUN_HEADER_KEYS)
