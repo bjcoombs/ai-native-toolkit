@@ -51,32 +51,6 @@ else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
 `winget install --scope user BurntSushi.ripgrep.MSVC` puts it even when no
 `PATH` alias is created. A `no_rg` reason names the lookups it tried.
 
-### Windows
-
-Python 3.11+ and Git for Windows are enough; uv and admin rights are not
-needed. A Claude Code session on Windows runs PowerShell, so use `python`
-(not `python3`) and these forms:
-
-<!-- chat-skip:start -->
-```powershell
-# dependencies, once, without uv
-python -m pip install --user networkx grimp lizard==1.23.0
-
-# only if rg is neither on PATH nor installed by winget
-$env:RG_PATH = "C:\tools\ripgrep\rg.exe"
-
-# every repository under a ghsync root
-python "${CLAUDE_SKILL_DIR}/scripts/fleet.py" "$HOME\dev\gitlab.example.com" --out fleet-out
-
-# the repositories in a list file
-python "${CLAUDE_SKILL_DIR}/scripts/fleet.py" --from-list repos.txt --out fleet-out
-```
-<!-- chat-skip:end -->
-
-`ghsync` and `ghreport` are bash scripts and need Git Bash on Windows. Without
-it, clone the repositories any other way, write one checkout path per line to a
-list file, and pass it with `--from-list`.
-
 | Flag | Meaning |
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
@@ -109,6 +83,34 @@ window, a `DIR` that cannot be created or written to (checked before any scan, s
 unusable run history location, or a `--compare` directory that is missing or
 malformed. A window reaching back before year 1 is accepted: every dated `HEAD` is
 inside it.
+
+### Windows
+
+Python 3.11+ and Git for Windows are enough; uv and admin rights are not
+needed.
+
+<!-- chat-skip:start -->
+A Claude Code session on Windows runs PowerShell, so use `python` (not
+`python3`) and these forms:
+
+```powershell
+# dependencies, once, without uv
+python -m pip install --user networkx grimp lizard==1.23.0
+
+# only if rg is neither on PATH nor installed by winget
+$env:RG_PATH = "C:\tools\ripgrep\rg.exe"
+
+# every repository under a ghsync root
+python "${CLAUDE_SKILL_DIR}/scripts/fleet.py" "$HOME\dev\gitlab.example.com" --out fleet-out
+
+# the repositories in a list file
+python "${CLAUDE_SKILL_DIR}/scripts/fleet.py" --from-list repos.txt --out fleet-out
+```
+<!-- chat-skip:end -->
+
+`ghsync` and `ghreport` are bash scripts and need Git Bash on Windows. Without
+it, clone the repositories any other way, write one checkout path per line to a
+list file, and pass it with `--from-list`.
 
 ## Output: `repos.jsonl`
 
