@@ -75,6 +75,12 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
     bumps the section says so and lists each action's old and new commit.
     Prints nothing when the floor core is untouched.
 
+``pin-bump-only``
+    Exits 0 only when every changed floor-core path is a workflow file whose
+    every changed line is a like-for-like ``uses:`` pin bump. CI runs the base
+    ref's copy for a Dependabot pull request to waive the sign-off (FLOOR.md
+    clause iii).
+
 ``clauses``
     Unconditional integrity check of ``FLOOR.md``: the file must exist, it must
     declare its ``floor-tokens`` block with at least the four tokens the floor
@@ -185,6 +191,9 @@ USES_PIN_RE = re.compile(
     r"\s*(?:#\s*([\w.+\-/ ]*?))?\s*$",
     re.ASCII,
 )
+
+# The only floor-core files a pin-bump exemption can cover.
+WORKFLOW_FILE_RE = re.compile(r"^\.github/workflows/[^/]+\.ya?ml$")
 
 # Text the summary may put in a code span as it stands: no backtick, no
 # angle bracket, no emphasis or link syntax, no leading or trailing space.
@@ -905,6 +914,61 @@ def cmd_signoff_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def pin_bump_refusal(
+    floor_core: list[tuple[str, bool]], diff_text: str
+) -> str | None:
+    """Why a floor-core change is NOT a pin-bump-only change, or ``None`` when
+    it is one. ``floor_core`` is ``(path, pure_text)`` per changed floor-core
+    path (see ``_path_detail``); ``diff_text`` is their ``-U0`` diff. Exempt
+    means: at least one path, every path a workflow file changed by text
+    modification alone, and the diff a like-for-like pin bump
+    (``pin_changes``) in which every pair changes its commit and carries a
+    new, non-empty version comment."""
+    if not floor_core:
+        return "no floor-core path changed"
+    for path, pure_text in floor_core:
+        if not WORKFLOW_FILE_RE.match(path):
+            return f"{path} is floor core and not a workflow file"
+        if not pure_text:
+            return f"{path} is not a plain text modification"
+    hunks = _pin_lines(diff_text)
+    if hunks is None or pin_changes(diff_text) is None:
+        return "a changed line is not a like-for-like `uses:` pin bump"
+    # Stricter than the summary: every pair is a real bump, commit AND a
+    # non-empty version comment that moves with it (FLOOR.md clause iii).
+    for removed, added in hunks:
+        for (action, old_commit, old_version), (_, new_commit, new_version) in zip(
+            removed, added
+        ):
+            if old_commit == new_commit:
+                return f"{action}: a pin line changed without a new commit"
+            if not new_version or new_version == old_version:
+                return f"{action}: the commit changed without a new version comment"
+    return None
+
+
+def cmd_pin_bump_only(args: argparse.Namespace) -> int:
+    """Exit 0 only when every floor-core change is a ``uses:`` pin bump in a
+    workflow file. CI asks this of the BASE ref's copy, for a Dependabot pull
+    request only, so a pull request never judges its own exemption."""
+    base = args.base
+    component_dirs = _protected_component_dirs(base)
+    changed = _git_out("diff", "--name-only", base, "HEAD").splitlines()
+    floor_core = [
+        path for path in dict.fromkeys(changed)
+        if path and classify_path(path, component_dirs) == ROLE_FLOOR_CORE
+    ]
+    details = [(path, _path_detail(base, path)[1]) for path in floor_core]
+    diff = _git_out("diff", "-U0", "--no-renames", base, "HEAD", "--", *floor_core) \
+        if floor_core else ""
+    refusal = pin_bump_refusal(details, diff)
+    if refusal is not None:
+        print(f"not pin-bump-only: {refusal}")
+        return 1
+    print("pin-bump-only: every floor-core change is a `uses:` pin bump")
+    return 0
+
+
 def cmd_clauses(args: argparse.Namespace) -> int:
     floor_text = _read_head(args.floor)
     if floor_text is None:
@@ -979,6 +1043,15 @@ def build_parser() -> argparse.ArgumentParser:
         "the pull request's head because HEAD there is the merge commit",
     )
     p_signoff.set_defaults(func=cmd_signoff_summary)
+
+    p_pins = sub.add_parser(
+        "pin-bump-only",
+        help="exit 0 only when the floor core changes by workflow `uses:` pin bumps alone",
+    )
+    p_pins.add_argument(
+        "--base", required=True, help="git ref for the merge-base (e.g. origin/main)"
+    )
+    p_pins.set_defaults(func=cmd_pin_bump_only)
 
     p_clauses = sub.add_parser("clauses", help="FLOOR.md four-clause integrity")
     p_clauses.add_argument("--floor", default=FLOOR_FILE, help="path to FLOOR.md")

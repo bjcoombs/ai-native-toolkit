@@ -17,6 +17,8 @@ dist/standalone-skills/
 !/action.yml
 !/.file-size-ratchet.toml
 !/Makefile
+!/evals/
+evals/**/results/
 
 # /assess output: we dogfood /assess on this repo, so its compounding wiki and
 # latest report ARE tracked (the report, both SVGs, the stats baseline for the
@@ -24,6 +26,7 @@ dist/standalone-skills/
 # regenerated every run, so they stay ignored to keep diffs clean.
 !/.assess/
 /.assess/run-context.json
+/.assess/run-context.counts-only.json
 /.assess/complexity-stats.prior.json
 /.assess/.cache/
 

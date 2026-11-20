@@ -485,6 +485,23 @@ def _dedupe(found: Discovered) -> Discovered:
     return out
 
 
+def loaded_config_files(root: Path) -> list[tuple[Path, FileKind]]:
+    """Every skill, command and agent file Claude Code loads from ``root``.
+
+    The discovery ``scan_claude_config`` uses (plugin files first, then
+    ``.claude/``, deduplicated by resolved path), for other scans that read the
+    same files (``lib.instruction_placement``). An unparsable manifest falls
+    back to the default plugin layout.
+    """
+    root = root.resolve()
+    manifest_path = root / ".claude-plugin" / "plugin.json"
+    found: Discovered = []
+    if manifest_path.is_file():
+        found = _plugin_files(root, _load_manifest(manifest_path)[0])
+    found.extend(_project_files(root))
+    return [(path, kind) for path, kind, _origin in _dedupe(found)]
+
+
 # --- the scan -----------------------------------------------------------------
 
 def _unavailable(reason: str) -> ClaudeConfigBlock:
