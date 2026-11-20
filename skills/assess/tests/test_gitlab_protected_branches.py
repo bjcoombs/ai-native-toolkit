@@ -167,6 +167,15 @@ def test_level_labels_and_live_only_keys_are_not_drift(world: World) -> None:
     assert scan_config_drift(world.root)["entries"] == []
 
 
+def test_explicit_null_grant_fields_match_omitted_ones(world: World) -> None:
+    world.remote(GITLAB_REMOTE)
+    _track(world, ".gitlab/main.json", {"name": "main",
+                                         "push_access_levels": [{"access_level": 40}],
+                                         "merge_access_levels": [{"access_level": 30}]})
+    world.serve(LIST, [_rule("main")])  # live levels carry user_id/group_id/deploy_key_id: null
+    assert scan_config_drift(world.root)["entries"] == []
+
+
 def test_gitlab_drift_is_reported_without_live_levels(world: World) -> None:
     world.remote(GITLAB_REMOTE)
     _track(world, ".gitlab/main.json", _rule("main"))

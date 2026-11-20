@@ -379,14 +379,15 @@ def _live_protection(slug: str, branch: str) -> dict[str, Any] | Missing:
 
 
 def _gitlab_levels(doc: Any) -> Any:
-    """``*_access_levels`` items projected onto ``GITLAB_LEVEL_FIELDS``, so a
-    label, an id or a key only the live API adds is never drift."""
+    """``*_access_levels`` items projected onto the non-null ``GITLAB_LEVEL_FIELDS``,
+    so a label, an id, a key only the live API adds, or an explicit null an
+    export omitted is never drift."""
     if not isinstance(doc, dict):
         return doc
     out = dict(doc)
     for key, value in doc.items():
         if key.endswith("_access_levels") and isinstance(value, list):
-            out[key] = [{f: item[f] for f in GITLAB_LEVEL_FIELDS if f in item}
+            out[key] = [{f: item[f] for f in GITLAB_LEVEL_FIELDS if item.get(f) is not None}
                         if isinstance(item, dict) else item for item in value]
     return out
 
