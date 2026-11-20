@@ -102,14 +102,24 @@ one way, not three. Pure subprocess + stdlib, no heavy dependencies.
 Churn follows renames (issue #425): `git_churn_scores`, `pick_churn_window` and
 `commit_epochs_by_file` (the per-commit walk behind `code_churn_since_doc_change`) take
 the `change_coupling.build_rename_map` paths and credit a commit made under an old name
-to the file's current name, once per commit, so the count matches `git log --follow` (a
-file committed five times, renamed, then committed once scores 7). `pick_churn_window`
+to the file's current name, once per commit. A rename-only commit (contract I425-2) is
+not a content change: `git log --follow` less such commits (a file committed five times,
+renamed with no edit, then committed once scores 6), and the same holds for the content
+clock, so a pure `git mv` neither adds doc churn nor resets a doc's last-change age. `pick_churn_window`
 builds the map when it is not given one; `rename_paths` does that for the treemap's
 `--by churn` call and prints a stderr note when the map is incomplete. `doc_staleness`
 shares one map per HEAD between the churn reads and the content clock, and marks every
 doc row `confidence: low` when the map is incomplete, which keeps it out of `lying_map`.
-Git's own rename detection is off (`--no-renames`) in both walks, so `diff.renames`
+Git's own rename detection is off (`--no-renames`) in every walk, so `diff.renames`
 does not move a count. Tests: `tests/test_rename_churn.py`.
+
+**`content_paths.py`**
+The paths one commit changed in content, from `git log --raw --no-abbrev --no-renames`
+(`RAW_LOG_ARGS`), folded to current names through the rename map. A delete and an add of
+the same blob under two names that fold together is a pure rename and is dropped; a
+rename that also edits changes the blob and counts. `git_churn_scores`,
+`commit_epochs_by_file` and `content_commit_clock` all read it. Tests:
+`tests/test_content_paths.py`, `tests/test_rename_churn.py`.
 Shallow history (issue #544): `content_commit_clock` reuses its
 `--is-shallow-repository` probe, and on a shallow clone reads the boundary commits
 from `git rev-parse --git-path shallow`. The clock's `truncated`, `boundary_epoch`

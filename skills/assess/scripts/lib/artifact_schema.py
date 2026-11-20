@@ -154,5 +154,7 @@ ARTIFACT_SCHEMA_VERSION = "1.14.0"
 #     ``run.sh`` beside it, so the pair ties for ``run.bats`` (issue #648); and a
 #     GitLab exact protected-branch rule combines with every matching wildcard,
 #     so a config_drift snapshot of the exact rule can report the wildcards'
-#     looser levels as drift.
+#     looser levels as drift; and a rename-only commit (no content change) is
+#     no longer churn or a content change (contract I425-2), so doc and code
+#     churn, doc ages, staleness ratios and lying_map can move.
 ASSESS_METHOD_VERSION = 14
