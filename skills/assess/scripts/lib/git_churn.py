@@ -19,7 +19,7 @@ import sys
 from collections.abc import Iterable, Mapping
 from functools import lru_cache
 from pathlib import Path
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 # Both names come from `assess_config`, the module that reads the config file,
 # so the pathspecs below are built from the same path it resolves. Aliased:
@@ -530,7 +530,7 @@ def content_commit_clock(
     )
 
 
-def _shallow_probe(top: str) -> str | None:
+def _shallow_probe(top: str) -> Literal["true", "false"] | None:
     """``git rev-parse --is-shallow-repository``: "true", "false", or None when
     the probe failed or timed out (it cannot vouch either way)."""
     try:
@@ -540,8 +540,12 @@ def _shallow_probe(top: str) -> str | None:
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
+    if probe.returncode != 0:
+        return None
     out = probe.stdout.strip()
-    return out if probe.returncode == 0 and out in ("true", "false") else None
+    if out == "true":
+        return "true"
+    return "false" if out == "false" else None
 
 
 def _shallow_boundary(top: str) -> dict[str, int]:
