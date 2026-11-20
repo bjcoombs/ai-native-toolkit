@@ -127,8 +127,11 @@ ARTIFACT_SCHEMA_VERSION = "1.13.0"
 #    whole-file size curve (issue #560), which moves instruction grades.
 # 8: a bats suite is a test file and credits its shell script (issue #593), so a
 #    co-located ``<stem>.bats`` can now produce self_referential_tests (E2).
-# 9: a leading HTML comment only one of a CLAUDE.md / AGENTS.md pair carries is
-#    compared, not stripped, so it turns a mirrored_instruction_files into a
-#    claude_shadows_agents; text after a header comment's ``-->`` (an H1
-#    included) is body (issue #632).
-ASSESS_METHOD_VERSION = 9
+# 9: a parallel-tree ``run.bats`` equally close to a ``run.sh`` and an
+#    extensionless ``run`` credits neither (issue #635), so a test_focus signal or a
+#    hotspot "Has test file" row can move.
+# 10: a leading HTML comment only one of a CLAUDE.md / AGENTS.md pair carries is
+#     compared, not stripped, so it turns a mirrored_instruction_files into a
+#     claude_shadows_agents; text after a header comment's ``-->`` (an H1
+#     included) is body (issue #632).
+ASSESS_METHOD_VERSION = 10
