@@ -127,6 +127,11 @@ def test_the_anchor_accepts_the_real_base_copy_classification(tmp_path):
         ('echo "merge-base: ${BASE_SHA}"', 'BASE_SHA="$(git rev-parse HEAD)"'),
         # the extract reads the head commit
         ('git show "${BASE_SHA}:scripts', 'git show "HEAD:scripts'),
+        # the floor-core call goes through a variable holding the head copy
+        (
+            BASE_CALL + " \\\n              --base \"${BASE_SHA}\" --changed --role",
+            'python "${HC}" protected \\\n              --base "${BASE_SHA}" --changed --role',
+        ),
         # a head-copy call appended after the base-copy one
         (
             '          if [ "${CLASSIFY_FAILED}" = "true" ]; then\n',

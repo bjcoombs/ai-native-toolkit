@@ -847,8 +847,11 @@ def _check_base_copy(script: str, filter_job: str, step_id: str) -> None:
             "does not then classify with `if ! <var>=\"$(python <path> protected "
             '... --role floor-core)"; then <flag>=true`'
         )
-    elif runs != {extract.group(1).replace('"', "")}:
-        problem = f"runs {sorted(runs)}, not only the extracted base copy {extract.group(1)!r}"
+    elif runs | {call.group(2).replace('"', "")} != {extract.group(1).replace('"', "")}:
+        problem = (
+            f"runs {sorted(runs | {call.group(2)})}, not only the extracted base copy "
+            f"{extract.group(1)!r}"
+        )
     elif not (
         call.group(3) == extract.group(2)
         and (branch := re.search(
