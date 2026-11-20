@@ -108,6 +108,10 @@ BREAKUP_MODULARITY_THRESHOLD = 0.25
 # scales better. Switch over at this node count (matches the PRD guidance).
 GREEDY_MAX_NODES = 500
 
+# modularity_reason when the module graph has no import edge: Q is undefined,
+# so modularity_q is null rather than a 0.0 that reads as tangled (issue #682).
+NO_IMPORT_EDGES = "no_import_edges"
+
 # Caps so a pathological repo can't bloat run-context.json.
 MAX_FOOTPRINTS = 200
 MAX_BURROW_EDGES = 100
@@ -156,7 +160,8 @@ class StructureBlock(TypedDict):
     keyhole_budget: int
     footprints: list[Footprint]
     sccs: list[list[str]]
-    modularity_q: float
+    modularity_q: float | None
+    modularity_reason: str | None
     front_door_ratio: float
     cross_package_edges: int
     internal_burrow_edges: list[BurrowEdge]
@@ -175,8 +180,10 @@ class StructureGraphResult:
     footprints: list[Footprint] = field(default_factory=list)
     # A2: strongly-connected components of length > 1 (import cycles = blobs).
     sccs: list[list[str]] = field(default_factory=list)
-    # A2: Newman modularity Q in [-0.5, 1] over the module graph.
-    modularity_q: float = 0.0
+    # A2: Newman modularity Q in [-0.5, 1] over the module graph. None when
+    # nothing was measured, with the code why in modularity_reason (#682).
+    modularity_q: float | None = None
+    modularity_reason: str | None = None
     # A3: fraction of cross-package inbound edges landing on a front door.
     front_door_ratio: float = 1.0
     # A3: the edges front_door_ratio is measured over. 0 means the ratio's 1.0
@@ -200,7 +207,8 @@ class StructureGraphResult:
             "keyhole_budget": self.keyhole_budget,
             "footprints": self.footprints,
             "sccs": self.sccs,
-            "modularity_q": round(self.modularity_q, 4),
+            "modularity_q": None if self.modularity_q is None else round(self.modularity_q, 4),
+            "modularity_reason": self.modularity_reason,
             "front_door_ratio": round(self.front_door_ratio, 4),
             "cross_package_edges": self.cross_package_edges,
             "internal_burrow_edges": self.internal_burrow_edges,
@@ -746,8 +754,10 @@ def analyze_structure(
     ]
     footprints.sort(key=lambda fp: (-fp["total"], fp["module"]))
 
-    # A2 SCCs + modularity.
+    # A2 SCCs + modularity. With no import edge there is no community structure
+    # to measure: Q would read 0.0, tangled, from nothing (issue #682).
     sccs, q = compute_modularity(graph)
+    edgeless = graph.number_of_edges() == 0
 
     # A3 front-door ratio.
     front_door_ratio, burrow_edges = compute_front_door_ratio(graph, package_set)
@@ -759,7 +769,8 @@ def analyze_structure(
         keyhole_budget=budget,
         footprints=footprints[:MAX_FOOTPRINTS],
         sccs=sccs[:MAX_SCCS],
-        modularity_q=q,
+        modularity_q=None if edgeless else q,
+        modularity_reason=NO_IMPORT_EDGES if edgeless else None,
         front_door_ratio=front_door_ratio,
         cross_package_edges=count_cross_package_edges(graph),
         internal_burrow_edges=burrow_edges[:MAX_BURROW_EDGES],

@@ -227,7 +227,12 @@ Degrades to `available: False` when `grimp`/`networkx` are absent rather than
 blocking the run, and when no importable Python package exists (nothing measured,
 not an empty graph whose modularity 0 would read as tangled code). `cross_package_edges` counts the
 import edges `front_door_ratio` is measured over; 0 means that ratio's 1.0 is vacuous
-(no package boundary is crossed).
+(no package boundary is crossed). A graph with packages but no import edges stays
+available with `modularity_q` null and `modularity_reason` `no_import_edges` (null when Q
+was measured): modules that never import each other have no community structure, and a
+0.0 would read as tangled, so the maturity model's Layer 2 row reads unknown (issue #682).
+Tests: `tests/test_structure_graph.py`, `tests/test_rubric_signals.py`,
+`tests/test_headless_layers.py` (a full signals run and a counts-only one).
 
 Packages resolve by path, never by import name. grimp's default finder asks
 `importlib.util.find_spec`, which answers from `sys.modules` first, so a target

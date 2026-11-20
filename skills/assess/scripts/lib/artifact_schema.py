@@ -106,11 +106,15 @@ constant each.
 # import edges front_door_ratio is measured over; 0 marks that ratio's 1.0 as
 # vacuous. Additive: no existing key moves, and complexity-stats.json is
 # unchanged.
-# 1.16.0: each run-context.json shared_tooling ci_includes entry gains
+# 1.16.0: run-context.json structure gains modularity_reason (issue #682), and
+# modularity_q is null when the import graph has no edges (modularity_reason
+# "no_import_edges"; null when Q was measured). A reader comparing modularity_q
+# as a number must skip null. complexity-stats.json is unchanged.
+# 1.17.0: each run-context.json shared_tooling ci_includes entry gains
 # ref_variable (issue #684): true when the ref holds a CI variable ($TPL_REF), so
 # a fleet map draws that include as "pin unknown" rather than unpinned. Additive:
 # ref stays null for it, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.16.0"
+ARTIFACT_SCHEMA_VERSION = "1.17.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -172,4 +176,7 @@ ARTIFACT_SCHEMA_VERSION = "1.16.0"
 # 16: a root ``agents/*.md`` shaped as an agent definition is reported in
 #     ``instruction_placement.loaded_in_full`` even without a plugin manifest
 #     (issue #662), so that list and the scorer evidence drawn from it can move.
-ASSESS_METHOD_VERSION = 16
+# 17: an import graph with no edges reports ``structure.modularity_q`` null with
+#     ``modularity_reason: no_import_edges`` instead of 0.0 (issue #682), so the
+#     scorer's Layer 2 evidence on such repositories can move.
+ASSESS_METHOD_VERSION = 17
