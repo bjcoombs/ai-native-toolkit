@@ -59,7 +59,6 @@ UNREGISTERED_SCANS: tuple[str, ...] = (
     "runtime",
     "derived_findings",
     "coverage_report",
-    "coverage_gate",
     "test_pressure",
     "test_focus",
     "promissory_markers",

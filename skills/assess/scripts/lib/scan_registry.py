@@ -43,9 +43,10 @@ from lib.shared_tooling import scan_shared_tooling
 
 # Names the core passes to ``run_scans``. A spec may read these, or the key of
 # any spec declared before it. ``history_window`` is the git-history window a
-# history-reading scan should honour: the stats sidecar's ``churn_window`` label
-# in ``assess_core`` (e.g. "commits (last 12mo)"), ``--window`` (e.g. "6mo") in
-# the headless signals run, or None for all history.
+# history-reading scan should honour, always in the ``<n>d|w|mo|y`` grammar
+# ("12mo") or None for all history: ``--window`` in the headless signals run,
+# the stats sidecar's churn window (normalised by ``window_from_churn_label``)
+# in ``assess_core``.
 PROVIDED_INPUTS = frozenset({"repo_root", "instruction_files", "scope", "excludes", "history_window"})
 
 STAGE_READ_SIDE = "read_side"

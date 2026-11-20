@@ -94,6 +94,8 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+`window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
+into the `history_window` scan input (`"12mo"`, None for all-time).
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
 pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
 scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
@@ -469,8 +471,9 @@ hand-wired assignments between the stages are gone. Currently registered:
 `repo_root` and
 `instruction_files`, the core provides `scope` (the absolute `--scope` path, or
 None), `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`) and
-`history_window` (the stats sidecar's `churn_window` label in `assess_core`,
-`--window` in the headless run, None for all history).
+`history_window` (a `<n>d|w|mo|y` window or None for all history: `--window` in the
+headless run, the stats sidecar's `churn_window` label normalised by
+`git_churn.window_from_churn_label` in `assess_core`).
 A spec sets `network=True` when it reads GitHub through `gh` (`config_drift`,
 `review_reality`, `gate_cost_estimate`, `agent_environment`), and may name an
 `offline_fn` - the same scan with its probe off, taking the same reads

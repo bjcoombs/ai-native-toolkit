@@ -173,14 +173,16 @@ def test_registry_migration_moves_a_name_from_unavailable_to_run(fixture_repo):
     assert signals.collect(fixture_repo, ["doc_graph"], specs) == {"doc_graph": {"available": True}}
 
 
+def test_unregistered_names_are_disjoint_from_the_registry():
+    """A migrated scan's name must leave UNREGISTERED_SCANS in the same PR."""
+    assert not set(signals.UNREGISTERED_SCANS) & {spec.key for spec in reg.SCANS}
+
+
 def test_unregistered_names_are_run_context_keys_the_core_assigns():
     """Guards the names-only list against typos: each is a key assess_core writes."""
     sources = (SCRIPTS / "assess_core.py").read_text(encoding="utf-8") + (
         SCRIPTS / "lib" / "context_blocks.py").read_text(encoding="utf-8")
-    registered = {spec.key for spec in reg.SCANS}
     for name in signals.UNREGISTERED_SCANS:
-        if name in registered:  # migrated; dropped at runtime, the core may no longer assign it
-            continue
         assert f'"{name}"' in sources, name
 
 
@@ -316,3 +318,15 @@ def test_type_schema_rejects_an_unmapped_annotation():
     with pytest.raises(TypeError):
         type_schema(float)
     assert type_schema(int | str) == {"type": ["integer", "string"]}
+
+
+def test_churn_labels_normalise_to_the_window_grammar():
+    from lib.git_churn import CHURN_WINDOWS, window_from_churn_label
+
+    assert window_from_churn_label("commits (last 12mo)") == "12mo"
+    assert window_from_churn_label("commits (last 5y)") == "5y"
+    assert window_from_churn_label("commits (all-time)") is None
+    assert window_from_churn_label(None) is None
+    for label, _since in CHURN_WINDOWS:
+        window = window_from_churn_label(f"commits ({label})")
+        assert window is None or signals.parse_window(window) == window
