@@ -129,18 +129,12 @@ def graded_instruction_files(grading: tuple[Any, ...]) -> dict[str, Any]:
 
 
 def rename_map(repo_root: Path) -> RenameMap:
-    """Historical path -> current path, from git's rename detection.
-
-    One of the git-churn call sites issues #424 and #425 rewrite.
-    """
+    """Historical path -> current path, from git's rename detection."""
     return build_rename_map(repo_root)
 
 
 def measured_commit(repo_root: Path) -> dict[str, Any]:
-    """The commit the scan measured (HEAD, dirty state, upstream lag).
-
-    One of the git-churn call sites issues #424 and #425 rewrite.
-    """
+    """The commit the scan measured (HEAD, dirty state, upstream lag)."""
     return git_commit_info(repo_root)
 
 

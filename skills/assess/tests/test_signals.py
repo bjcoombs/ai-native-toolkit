@@ -150,7 +150,7 @@ def test_a_scan_that_raises_is_unavailable_and_the_run_completes(fixture_repo):
     doc = signals.build_document(fixture_repo, specs=specs)
     assert doc["scans"]["broken"] == {"available": False, "reason": "broken scan failed: kaput"}
     assert doc["scans"]["fine"] == {"available": True}
-    jsonschema.validate(doc, build_schema())
+    jsonschema.validate(doc, build_schema(specs))
 
 
 def test_a_network_scan_never_calls_its_fn(fixture_repo):
@@ -326,12 +326,25 @@ def test_schema_rejects_an_unavailable_block_without_a_reason():
         "signals_schema_version": 1,
         "stamp": {"toolkit_commit": None, "plugin_version": "x", "scan_date": "2026-01-01",
                   "window": "6mo", "target_head": None, "target_dirty": None},
-        "scans": {"s": {"available": False}},
+        "scans": {"agent_ops": {"available": False}},
     }
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(doc, build_schema())
-    doc["scans"]["s"]["reason"] = "why"
+    doc["scans"]["agent_ops"]["reason"] = "why"
     jsonschema.validate(doc, build_schema())
+
+
+def test_schema_names_every_known_scan_and_rejects_others():
+    names = build_schema()["properties"]["scans"]["propertyNames"]["enum"]
+    assert names == sorted(signals.known_scans())
+    doc = {
+        "signals_schema_version": 1,
+        "stamp": {"toolkit_commit": None, "plugin_version": "x", "scan_date": "2026-01-01",
+                  "window": "6mo", "target_head": None, "target_dirty": None},
+        "scans": {"no_such_scan": {}},
+    }
+    with pytest.raises(jsonschema.ValidationError, match="no_such_scan"):
+        jsonschema.validate(doc, build_schema())
 
 
 def test_type_schema_rejects_an_unmapped_annotation():

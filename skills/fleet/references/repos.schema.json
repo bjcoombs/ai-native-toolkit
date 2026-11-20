@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/repos.schema.json",
+  "title": "fleet repository row",
+  "description": "One line of repos.jsonl written by skills/fleet/scripts/fleet.py. A failed row has a reason token and null signals_schema_version and scans. Generated from lib/fleet.py by lib/fleet_schema.py.",
+  "type": "object",
+  "properties": {
+    "fleet_row_version": {
+      "type": "integer"
+    },
+    "repo": {
+      "type": "string"
+    },
+    "group": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "failed"
+      ]
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(missing_checkout|not_a_git_work_tree|scan_timeout|invalid_output|scan_error|scan_exit_-?[0-9]+)$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "signals_schema_version": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "scans": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "if": {
+              "properties": {
+                "available": {
+                  "const": false
+                }
+              },
+              "required": [
+                "available"
+              ]
+            },
+            "then": {
+              "properties": {
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reason"
+              ]
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "fleet_row_version",
+    "group",
+    "reason",
+    "repo",
+    "scans",
+    "signals_schema_version",
+    "status"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reason": {
+            "type": "null"
+          },
+          "scans": {
+            "type": "object"
+          },
+          "signals_schema_version": {
+            "type": "integer"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "scans": {
+            "type": "null"
+          },
+          "signals_schema_version": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}
