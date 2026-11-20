@@ -10,11 +10,11 @@ import pytest
 from lib import fleet_groups as fg
 from lib.fleet import FLEET_ROW_VERSION, FleetRow
 from lib.fleet_group_schema import SCHEMA_PATH, build_schema, render, type_schema
-from lib.rubric import parse_rubric
-from lib.rubric_signals import DEFAULT_RUBRIC, load_default_rubric
+from lib.levels import parse_levels
+from lib.level_signals import DEFAULT_LEVELS, load_default_levels
 from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture
 
-RUBRIC_TOML = """\
+LEVELS_TOML = """\
 version = "fixture-1"
 
 [[rows]]
@@ -63,7 +63,7 @@ def _scans(lines: int, markets: list[str], ci: list[str] | None = None) -> dict[
             "shared_tooling": {"available": True, "marketplace_ids": markets, "ci_source_ids": ci or []}}
 
 
-RUBRIC = parse_rubric(tomllib.loads(RUBRIC_TOML))
+LEVELS = parse_levels(tomllib.loads(LEVELS_TOML))
 
 
 # --- settings ----------------------------------------------------------------
@@ -137,7 +137,7 @@ def test_group_rows_carry_levels_rules_settings_and_distinct_ids():
         _row("grpb/lib1", _scans(0, ["marketplace:mkt-a"])),
     ]
     by_scope = {"grpa": _fragment("grpa", "on"), "grpb": _fragment("grpb", "off")}
-    groups = fg.roll_up(reversed(rows), RUBRIC, by_scope)
+    groups = fg.roll_up(reversed(rows), LEVELS, by_scope)
 
     assert [g["group"] for g in groups] == ["grpa", "grpb"]
     grpa, grpb = groups
@@ -151,7 +151,7 @@ def test_group_rows_carry_levels_rules_settings_and_distinct_ids():
     assert levels["teamdocs"]["aggregation"] == {"rule": "min", "share": 1}
     assert {r["id"]: r["level"] for r in grpb["rubric"]} == {"org2fa": 0, "teamdocs": 0}
     assert grpa["rubric_version"] == "fixture-1"
-    tops = {row["id"]: len(row["levels"]) for row in RUBRIC["rows"]}
+    tops = {row["id"]: len(row["levels"]) for row in LEVELS["rows"]}
     assert {r["id"]: r["top_level"] for r in grpa["rubric"]} == tops  # #684: a share needs no model file
     for group in groups:
         jsonschema.validate(group, build_schema())
@@ -160,7 +160,7 @@ def test_group_rows_carry_levels_rules_settings_and_distinct_ids():
 def test_a_group_row_written_before_top_level_still_validates_and_loads(tmp_path):
     from lib.fleet_view import load_groups
     rows = [_row("grpa/svc1", _scans(20, []))]
-    (group,) = fg.roll_up(rows, RUBRIC, {"grpa": _fragment("grpa", "on")})
+    (group,) = fg.roll_up(rows, LEVELS, {"grpa": _fragment("grpa", "on")})
     legacy = {**group, "rubric": [{k: v for k, v in r.items() if k != "top_level"} for r in group["rubric"]]}
     jsonschema.validate(legacy, build_schema())  # top_level is additive, not required
     (tmp_path / "groups.jsonl").write_text(json.dumps(legacy) + "\n", encoding="utf-8")
@@ -169,7 +169,7 @@ def test_a_group_row_written_before_top_level_still_validates_and_loads(tmp_path
 
 def test_unknown_setting_and_failed_repo_give_unknown_never_zero():
     rows = [_row("grpa/svc1", _scans(20, [])), _row("grpa/broken", None)]
-    groups = fg.roll_up(rows, RUBRIC, {"grpa": _fragment("grpa", "unknown", "denied (HTTP 403)")})
+    groups = fg.roll_up(rows, LEVELS, {"grpa": _fragment("grpa", "unknown", "denied (HTTP 403)")})
     (grpa,) = groups
     assert (grpa["repos"], grpa["scanned"], grpa["failed"]) == (2, 1, 1)
     levels = {r["id"]: r for r in grpa["rubric"]}
@@ -191,7 +191,7 @@ def test_no_shared_tooling_evidence_gives_null_counts_not_zero():
     assert (some["shared_tooling_repos"], some["distinct_marketplaces"]) == (1, 0)
 
 
-def test_no_rubric_no_settings_and_full_output():
+def test_no_levels_no_settings_and_full_output():
     rows = [_row("g/r", _scans(1, ["marketplace:x"]))]
     (bare,) = fg.roll_up(rows, None, {})
     assert bare["rubric"] == [] and bare["rubric_version"] is None
@@ -207,7 +207,7 @@ def test_repo_signals_is_the_scans_map():
 
 
 def test_org_rows_also_read_scope_and_provider():
-    rubric = parse_rubric(tomllib.loads("""\
+    maturity_model = parse_levels(tomllib.loads("""\
 version = "p"
 [[rows]]
 id = "gl"
@@ -217,7 +217,7 @@ scope = "org"
   level = 1
   criteria = [{ signal = "provider", op = "eq", value = "gitlab" }, { signal = "scope", op = "eq", value = "top" }]
 """))
-    (row,) = fg.roll_up([_row("top/sub/r", _scans(1, []))], rubric, {"top": _fragment("top", "off")})
+    (row,) = fg.roll_up([_row("top/sub/r", _scans(1, []))], maturity_model, {"top": _fragment("top", "off")})
     assert row["settings_scope"] == "top" and row["rubric"][0]["level"] == 1
     assert fg.settings_signals(None, None) is None
 
@@ -250,11 +250,11 @@ def test_schema_mapper_rejects_an_unknown_type():
 
 
 def test_fleet_run_writes_group_rows_byte_identically(froot, tmp_path):  # noqa: F811
-    rubric = tmp_path / "rub.toml"
-    rubric.write_text(RUBRIC_TOML, encoding="utf-8")
+    maturity_model = tmp_path / "rub.toml"
+    maturity_model.write_text(LEVELS_TOML, encoding="utf-8")
     settings = tmp_path / "settings.json"
     settings.write_text(json.dumps([_fragment("grpa", "on"), _fragment("grpb", "off")]), encoding="utf-8")
-    argv = [str(froot), "--rubric", str(rubric), "--settings", str(settings)]
+    argv = [str(froot), "--rubric", str(maturity_model), "--settings", str(settings)]
 
     assert fleet_cli.main([*argv, "--out", str(tmp_path / "o1")]) == 0
     assert fleet_cli.main([*argv, "--out", str(tmp_path / "o2")]) == 0
@@ -299,28 +299,28 @@ def test_empty_settings_dir_exits_2(froot, tmp_path, capsys):  # noqa: F811
     assert not (tmp_path / "o").exists()
 
 
-def test_rubric_path_outside_the_namespace_exits_2(froot, tmp_path, capsys):  # noqa: F811
-    rubric = tmp_path / "bad.toml"
-    rubric.write_text(RUBRIC_TOML.replace("shared_tooling.available", "scans.shared_tooling.available"),
+def test_levels_path_outside_the_namespace_exits_2(froot, tmp_path, capsys):  # noqa: F811
+    maturity_model = tmp_path / "bad.toml"
+    maturity_model.write_text(LEVELS_TOML.replace("shared_tooling.available", "scans.shared_tooling.available"),
                       encoding="utf-8")
-    assert fleet_cli.main([str(froot), "--rubric", str(rubric), "--out", str(tmp_path / "o")]) == 2
+    assert fleet_cli.main([str(froot), "--rubric", str(maturity_model), "--out", str(tmp_path / "o")]) == 2
     assert "scans.shared_tooling.available" in capsys.readouterr().err
 
 
 def test_unknown_org_path_exits_2_naming_it(froot, tmp_path, capsys):  # noqa: F811
-    rubric = tmp_path / "bad.toml"
-    rubric.write_text(RUBRIC_TOML.replace("two_factor.value", "two_factor_required"), encoding="utf-8")
-    assert fleet_cli.main([str(froot), "--rubric", str(rubric), "--out", str(tmp_path / "o")]) == 2
+    maturity_model = tmp_path / "bad.toml"
+    maturity_model.write_text(LEVELS_TOML.replace("two_factor.value", "two_factor_required"), encoding="utf-8")
+    assert fleet_cli.main([str(froot), "--rubric", str(maturity_model), "--out", str(tmp_path / "o")]) == 2
     assert "two_factor_required" in capsys.readouterr().err
     assert not (tmp_path / "o").exists()
 
 
-def test_default_rubric_loads_and_rolls_up(froot, tmp_path):  # noqa: F811
+def test_default_levels_loads_and_rolls_up(froot, tmp_path):  # noqa: F811
     """The shipped rubric (#564) passes the same validation and yields a level or unknown per row."""
-    assert fleet_cli.main([str(froot), "--rubric", str(DEFAULT_RUBRIC), "--out", str(tmp_path / "o"),
+    assert fleet_cli.main([str(froot), "--rubric", str(DEFAULT_LEVELS), "--out", str(tmp_path / "o"),
                            "--jobs", "2"]) == 0
     rows = [json.loads(line) for line in (tmp_path / "o" / fg.GROUPS_FILE).read_text().splitlines()]
-    default = load_default_rubric()
+    default = load_default_levels()
     for row in rows:
         assert row["rubric_version"] == default["version"]
         assert [r["id"] for r in row["rubric"]] == [r["id"] for r in default["rows"]]
@@ -330,7 +330,7 @@ def test_default_rubric_loads_and_rolls_up(froot, tmp_path):  # noqa: F811
 
 def test_additive_repo_row_fields_are_tolerated():
     row = {**_row("g/r", _scans(1, ["marketplace:x"])), "active": True}
-    (group,) = fg.roll_up([row], RUBRIC, {})  # type: ignore[list-item]
+    (group,) = fg.roll_up([row], LEVELS, {})  # type: ignore[list-item]
     assert group["distinct_marketplaces"] == 1
 
 

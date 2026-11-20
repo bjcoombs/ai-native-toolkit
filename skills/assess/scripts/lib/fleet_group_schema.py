@@ -3,7 +3,7 @@
 Generated from the ``GroupRow`` TypedDict in ``lib/fleet_groups.py`` so the
 checked-in file cannot drift from the type mypy checks: ``tests/test_fleet_groups.py``
 fails when ``SCHEMA_PATH`` differs from ``render()``. Regenerate after
-changing ``GroupRow`` or ``RubricRowLevel``:
+changing ``GroupRow`` or ``RowLevel``:
 
     cd skills/assess && uv run --locked python scripts/lib/fleet_group_schema.py
 

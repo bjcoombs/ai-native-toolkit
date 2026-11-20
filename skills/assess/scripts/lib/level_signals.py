@@ -1,6 +1,6 @@
 """The signal namespace rubric paths are checked against, and the default rubric.
 
-``lib.rubric`` takes a pluggable ``PathValidator``; this module is the real
+``lib.levels`` takes a pluggable ``PathValidator``; this module is the real
 one. A rubric row's ``scope`` picks the namespace:
 
 - ``team`` paths read one repository's signals. The first segment is a block
@@ -22,7 +22,7 @@ one. A rubric row's ``scope`` picks the namespace:
   (``skills/ghreport/scripts/ghreport.sh``, "org / group settings"):
   ``scope``, ``provider``, and ``value`` / ``reason`` under each setting.
 
-``DEFAULT_RUBRIC`` (``skills/assess/rubrics/default.toml``) is a deterministic
+``DEFAULT_LEVELS`` (``skills/assess/levels/default.toml``) is a deterministic
 approximation of the 0-8 layers; its header says where and why it can disagree
 with the ``/assess`` layer verdicts.
 """
@@ -36,10 +36,10 @@ from pathlib import Path
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 from lib.counts_only_schema import ROOTS
-from lib.rubric import PathValidator, Rubric, Scope, load_rubric
+from lib.levels import PathValidator, MaturityModel, Scope, load_levels
 from lib.signals_schema import SCHEMA_PATH
 
-DEFAULT_RUBRIC = Path(__file__).resolve().parents[2] / "rubrics" / "default.toml"
+DEFAULT_LEVELS = Path(__file__).resolve().parents[2] / "levels" / "default.toml"
 
 # ghreport's settings fragment: {scope, provider, <setting>: {value, reason}}.
 ORG_SETTINGS = ("two_factor", "push_rules", "default_branch_protection", "rulesets")
@@ -112,7 +112,7 @@ def team_path_ok(path: str) -> bool:
 
 
 def signal_path_validator() -> PathValidator:
-    """The ``PathValidator`` for ``lib.rubric.load_rubric``."""
+    """The ``PathValidator`` for ``lib.levels.load_levels``."""
 
     def validate(scope: Scope, path: str) -> bool:
         return path in ORG_PATHS if scope == "org" else team_path_ok(path)
@@ -120,6 +120,6 @@ def signal_path_validator() -> PathValidator:
     return validate
 
 
-def load_default_rubric() -> Rubric:
+def load_default_levels() -> MaturityModel:
     """The shipped default rubric, paths checked against the schema."""
-    return load_rubric(DEFAULT_RUBRIC, signal_path_validator())
+    return load_levels(DEFAULT_LEVELS, signal_path_validator())

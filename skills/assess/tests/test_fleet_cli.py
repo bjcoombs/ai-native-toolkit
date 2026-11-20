@@ -19,7 +19,7 @@ from test_fleet import make_repo
 
 FLEET_SCRIPT = Path(__file__).resolve().parents[2] / "fleet" / "scripts" / "fleet.py"
 
-RUBRIC = """\
+LEVELS = """\
 version = "fixture-1"
 
 [[rows]]
@@ -94,7 +94,7 @@ def _long_strings(value: object, pattern: str = "") -> list[str]:
 
 def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "rub.toml").write_text(RUBRIC, encoding="utf-8")
+    (tmp_path / "rub.toml").write_text(LEVELS, encoding="utf-8")
     before = _snapshot(froot)
 
     assert fleet_cli.main([str(froot), "--rubric", "rub.toml", "--out", "out1"]) == 0

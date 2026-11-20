@@ -19,7 +19,7 @@ from lib.fleet_diagrams import build_diagrams, report_markdown  # noqa: E402
 from lib.fleet_groups import roll_up  # noqa: E402
 from lib.fleet_stamp import build_stamp  # noqa: E402
 from lib.fleet_view import read_repos  # noqa: E402
-from lib.rubric import Rubric, load_rubric  # noqa: E402
+from lib.levels import MaturityModel, load_levels  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_diagrams"
@@ -98,14 +98,14 @@ EARLIER_ROWS: tuple[FleetRow, ...] = (
 WINDOW = "6mo"
 
 
-def _run(rows: tuple[FleetRow, ...], levels: Rubric, day: date) -> FleetRun:
+def _run(rows: tuple[FleetRow, ...], levels: MaturityModel, day: date) -> FleetRun:
     stamp = build_stamp(list(rows), toolkit_commit=None, plugin_version="2.0.0", today=day,
                         window=WINDOW, rubric_version=levels["version"], counts_only=True,
                         paths_hashed=False, scans=None)
     return FleetRun(stamp, list(rows), roll_up(rows, levels, {}))
 
 
-def comparison(levels: Rubric, repos: list[FleetRow]) -> Comparison:
+def comparison(levels: MaturityModel, repos: list[FleetRow]) -> Comparison:
     """The ``--compare`` result of ``EARLIER_ROWS`` (2026-10-20) against ``repos`` (2026-11-20)."""
     return compare(_run(EARLIER_ROWS, levels, date(2026, 10, 20)),
                    _run(tuple(repos), levels, date(2026, 11, 20)))
@@ -118,7 +118,7 @@ def build(out: Path) -> None:
 
 def goldens(out: Path) -> dict[str, str]:
     """The golden renders of the run in ``out``: ``expected-<file>`` -> text."""
-    levels, repos = load_rubric(out / "levels.toml"), read_repos(out)
+    levels, repos = load_levels(out / "levels.toml"), read_repos(out)
     diagrams = build_diagrams(levels, repos, WINDOW, comparison=comparison(levels, repos))
     files = {f"expected-{d['file']}": d["svg"] for d in diagrams if d["svg"] is not None}
     return {**files, "expected-report.md": report_markdown(diagrams)}

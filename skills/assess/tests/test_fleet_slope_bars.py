@@ -13,12 +13,12 @@ from lib import fleet_svg as svg
 from lib.fleet import FleetRow
 from lib.fleet_compare import Comparison, GroupChange, LevelState, RowMove, not_comparable
 from lib.fleet_view import read_repos
-from lib.rubric import Rubric, load_rubric
+from lib.levels import MaturityModel, load_levels
 from fleet_diagrams_fixture import FIXTURES, WINDOW, comparison
 
 
-def _levels() -> Rubric:
-    return load_rubric(FIXTURES / "levels.toml")
+def _levels() -> MaturityModel:
+    return load_levels(FIXTURES / "levels.toml")
 
 
 def _repos() -> list[FleetRow]:
@@ -144,7 +144,7 @@ def test_slope_skips_say_why():
     levels, repos = _levels(), _repos()
     real = comparison(levels, repos)
 
-    def skipped(model: Rubric | None, compared: Comparison | None) -> str | None:
+    def skipped(model: MaturityModel | None, compared: Comparison | None) -> str | None:
         drawn = fd.build_diagrams(model, repos, WINDOW, comparison=compared)
         return next(d for d in drawn if d["file"] == fs.FILE)["skipped"]
 
@@ -212,11 +212,11 @@ def test_layer_bars_titles_are_escaped_and_without_unknowns_no_note():
 
 
 def test_layer_bars_skip_without_levels_team_rows_or_repositories():
-    def skipped(levels: Rubric | None, repos: list[FleetRow]) -> str | None:
+    def skipped(levels: MaturityModel | None, repos: list[FleetRow]) -> str | None:
         return next(d for d in fd.build_diagrams(levels, repos, WINDOW)
                     if d["file"] == flb.FILE)["skipped"]
     assert "no maturity model" in (skipped(None, _repos()) or "")
-    org_only: Rubric = {**_levels(), "rows": [r for r in _levels()["rows"] if r["scope"] == "org"]}
+    org_only: MaturityModel = {**_levels(), "rows": [r for r in _levels()["rows"] if r["scope"] == "org"]}
     assert "no team rows" in (skipped(org_only, _repos()) or "")
     assert skipped(_levels(), []) == "skipped: no repositories in the run."
 
@@ -261,7 +261,7 @@ def test_layer_bars_legend_and_notes_stay_inside_and_scale_to_a_large_fleet():
             "levels": [{**levels["rows"][2]["levels"][0], "level": n} for n in range(1, 9)]}
     gap = {**levels["rows"][1], "id": "gap", "title": "Unmeasured layer",
            "levels": [{"level": 1, "criteria": [{"signal": "not.collected", "op": "eq", "value": 1}]}]}
-    model: Rubric = {**levels, "rows": [*levels["rows"], wide, gap]}
+    model: MaturityModel = {**levels, "rows": [*levels["rows"], wide, gap]}
     bars = flb.layer_bars(model, many)
     text = flb.render_layer_bars(bars)
     assert "Level unknown for Unmeasured layer: all 157 repositories." in text

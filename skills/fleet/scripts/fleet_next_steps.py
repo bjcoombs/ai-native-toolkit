@@ -36,8 +36,8 @@ sys.path.insert(0, str(ASSESS_SCRIPTS))
 from lib.fleet_groups import SettingsError, load_settings  # noqa: E402
 from lib.fleet_view import FleetViewError, load_groups, read_repos  # noqa: E402
 from lib.fleet_next_steps import NextStepsError, build_pages, write_pages  # noqa: E402
-from lib.rubric import RubricError, load_rubric  # noqa: E402
-from lib.rubric_signals import DEFAULT_RUBRIC, signal_path_validator  # noqa: E402
+from lib.levels import LevelsError, load_levels  # noqa: E402
+from lib.level_signals import DEFAULT_LEVELS, signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 
 
@@ -45,7 +45,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Write per-team next-steps pages (Markdown) from a fleet run's output directory.")
     parser.add_argument("out", help="The fleet run's --out directory (repos.jsonl, groups.jsonl).")
-    parser.add_argument("--rubric", metavar="FILE", default=str(DEFAULT_RUBRIC),
+    parser.add_argument("--rubric", metavar="FILE", default=str(DEFAULT_LEVELS),
                         help="The rubric the fleet run used (default: the shipped default rubric).")
     parser.add_argument("--settings", metavar="PATH",
                         help="The ghreport settings the fleet run used, if any.")
@@ -57,12 +57,12 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = Path(args.out)
     settings: dict[str, JsonDict] = {}
     try:
-        rubric = load_rubric(Path(args.rubric), signal_path_validator())
+        maturity_model = load_levels(Path(args.rubric), signal_path_validator())
         if args.settings is not None:
             settings = load_settings(Path(args.settings))
-        pages = build_pages(rubric, read_repos(out_dir), load_groups(out_dir), settings)
+        pages = build_pages(maturity_model, read_repos(out_dir), load_groups(out_dir), settings)
         written = write_pages(out_dir, pages)
-    except (RubricError, SettingsError, FleetViewError, NextStepsError) as e:
+    except (LevelsError, SettingsError, FleetViewError, NextStepsError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     print(f"fleet next steps: {len(written) - 1} team pages -> {out_dir / 'teams'}", file=sys.stderr)

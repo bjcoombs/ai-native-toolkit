@@ -34,7 +34,7 @@ from lib import fleet_svg as svg
 from lib.fleet_compare import CAUSE_LEVEL, Comparison
 from lib.fleet_maturity import SCOPE, mean_share
 from lib.fleet_svg import THEMED_HATCH, LinearScale
-from lib.rubric import Rubric
+from lib.levels import MaturityModel
 
 TITLE = "Fleet maturity, before and after"
 FILE = "slope.svg"
@@ -81,7 +81,7 @@ class EndLabel(TypedDict):
     point: float  # the y of the line end it labels
 
 
-def slope_view(levels: Rubric, comparison: Comparison) -> SlopeView:
+def slope_view(levels: MaturityModel, comparison: Comparison) -> SlopeView:
     """Each group's then/now mean share and its biggest mover, sorted by group."""
     tops = {row["id"]: len(row["levels"]) for row in levels["rows"]}
     titles = {row["id"]: row["title"] for row in levels["rows"]}

@@ -11,10 +11,10 @@ reads that output back, and holds what both views need:
 - ``load_groups`` reads ``groups.jsonl`` (a file or the run's ``--out``
   directory), checks the fields a view reads, refuses a duplicate group and
   returns the rows sorted by group;
-- ``rubric_columns`` gives the rubric row ids in rubric order, the same for
+- ``level_columns`` gives the rubric row ids in rubric order, the same for
   every group (a run evaluates one rubric), refusing a run with no rubric;
-- ``run_rubric_version`` is the single ``rubric_version`` the run carries;
-- ``check_rubric`` matches an optional rubric file (row titles and top levels,
+- ``run_levels_version`` is the single ``rubric_version`` the run carries;
+- ``check_levels`` matches an optional rubric file (row titles and top levels,
   which ``groups.jsonl`` does not carry) to the run: same version, same rows;
 - ``compare_levels`` pairs each cell with an earlier run's level (#552 shape
   pending: an earlier ``groups.jsonl`` is the comparison input), refusing a
@@ -31,8 +31,8 @@ from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from lib.fleet import FLEET_ROW_VERSION, REPOS_FILE, FleetRow
-from lib.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RubricRowLevel
-from lib.rubric import Rubric
+from lib.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RowLevel
+from lib.levels import MaturityModel
 
 STATUS_LEVEL = "level"
 STATUS_UNKNOWN = "unknown"
@@ -136,7 +136,7 @@ def load_groups(path: Path) -> list[GroupRow]:
     return [rows[name] for name in sorted(rows)]
 
 
-def rubric_columns(groups: Sequence[GroupRow]) -> list[str]:
+def level_columns(groups: Sequence[GroupRow]) -> list[str]:
     """Rubric row ids in rubric order; every group must carry the same rows."""
     if not groups:
         raise FleetViewError("the run has no groups (no repository was scanned): nothing to draw")
@@ -149,7 +149,7 @@ def rubric_columns(groups: Sequence[GroupRow]) -> list[str]:
     return columns
 
 
-def run_rubric_version(groups: Sequence[GroupRow]) -> str | None:
+def run_levels_version(groups: Sequence[GroupRow]) -> str | None:
     """The run's rubric version; groups disagreeing is a malformed run."""
     versions = sorted({str(group["rubric_version"]) for group in groups})
     if len(versions) > 1:
@@ -157,20 +157,20 @@ def run_rubric_version(groups: Sequence[GroupRow]) -> str | None:
     return groups[0]["rubric_version"] if groups else None
 
 
-def check_rubric(rubric: Rubric, groups: Sequence[GroupRow]) -> None:
+def check_levels(maturity_model: MaturityModel, groups: Sequence[GroupRow]) -> None:
     """Refuse a rubric file that is not the one the run evaluated."""
-    version = run_rubric_version(groups)
+    version = run_levels_version(groups)
     if version is None:
         raise FleetViewError(f"the run has no rubric levels (fleet.py ran without --rubric), so "
-                             f"rubric file version {rubric['version']!r} cannot apply: rerun fleet.py "
+                             f"rubric file version {maturity_model['version']!r} cannot apply: rerun fleet.py "
                              "with --rubric")
-    if rubric["version"] != version:
-        raise FleetViewError(f"rubric file is version {rubric['version']!r}, the run used {version!r}")
-    if [row["id"] for row in rubric["rows"]] != rubric_columns(groups):
+    if maturity_model["version"] != version:
+        raise FleetViewError(f"rubric file is version {maturity_model['version']!r}, the run used {version!r}")
+    if [row["id"] for row in maturity_model["rows"]] != level_columns(groups):
         raise FleetViewError("rubric file rows differ from the run's rubric rows")
 
 
-def cell(group: GroupRow, row_id: str) -> RubricRowLevel:
+def cell(group: GroupRow, row_id: str) -> RowLevel:
     """The group's level entry for one rubric row."""
     for entry in group["rubric"]:
         if entry["id"] == row_id:
@@ -178,7 +178,7 @@ def cell(group: GroupRow, row_id: str) -> RubricRowLevel:
     raise FleetViewError(f"group {group['group']!r} has no rubric row {row_id!r}")
 
 
-def _change(now: RubricRowLevel, then: RubricRowLevel | None) -> Change:
+def _change(now: RowLevel, then: RowLevel | None) -> Change:
     if then is None:
         return {"kind": "new", "then": None, "delta": None}
     then_level = then["level"] if then["status"] == STATUS_LEVEL else None
@@ -202,7 +202,7 @@ def _incomparable_note(then_version: str | None, now_version: str | None) -> str
 def compare_levels(now: Sequence[GroupRow], then: Sequence[GroupRow]) -> Comparison:
     """Each current cell against the earlier run; not comparable across rubric versions."""
     removed = sorted({g["group"] for g in then} - {g["group"] for g in now})
-    now_version, then_version = run_rubric_version(now), run_rubric_version(then)
+    now_version, then_version = run_levels_version(now), run_levels_version(then)
     if then and now_version != then_version:
         return {"comparable": False, "removed_groups": removed, "changes": {},
                 "note": _incomparable_note(then_version, now_version)}

@@ -49,16 +49,16 @@ from lib.fleet_svg import (  # the level ramp is shared with the layer bars
     truncate,
 )
 
-from lib.fleet_groups import GroupRow, RubricRowLevel
+from lib.fleet_groups import GroupRow, RowLevel
 from lib.fleet_view import (
     STATUS_LEVEL,
     Change,
     Comparison,
     cell,
-    rubric_columns,
-    run_rubric_version,
+    level_columns,
+    run_levels_version,
 )
-from lib.rubric import Rubric
+from lib.levels import MaturityModel
 
 UNKNOWN_FILL = "url(#fleet-unknown)"
 _UNKNOWN_PATTERN = hatch_pattern("fleet-unknown", "#ffffff", "#8c8c8c")
@@ -86,12 +86,12 @@ class Column(TypedDict):
     top: int | None  # the row's top level; None without a rubric file
 
 
-def columns_for(groups: Sequence[GroupRow], rubric: Rubric | None) -> list[Column]:
+def columns_for(groups: Sequence[GroupRow], maturity_model: MaturityModel | None) -> list[Column]:
     """Columns in rubric order; titles and top levels from the rubric file when given."""
-    ids = rubric_columns(groups)
-    if rubric is None:
+    ids = level_columns(groups)
+    if maturity_model is None:
         return [{"id": row_id, "title": row_id, "top": None} for row_id in ids]
-    by_id = {row["id"]: row for row in rubric["rows"]}
+    by_id = {row["id"]: row for row in maturity_model["rows"]}
     return [{"id": row_id, "title": by_id[row_id]["title"],
              "top": max(level["level"] for level in by_id[row_id]["levels"])}
             for row_id in ids]
@@ -120,7 +120,7 @@ def change_text(change: Change) -> str:
     return "=" if delta == 0 else f"{delta:+d}"
 
 
-def _missing_text(entry: RubricRowLevel) -> str:
+def _missing_text(entry: RowLevel) -> str:
     if entry["missing_signals"]:
         return "missing " + ", ".join(entry["missing_signals"])
     return "no evidence (no repository scanned)"
@@ -204,7 +204,7 @@ def _cell_parts(x: float, y: float, group: GroupRow, column: Column, keys: dict[
 def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
                    comparison: Comparison | None = None) -> str:
     """The heat map as an SVG document string; the same inputs give the same bytes."""
-    version = run_rubric_version(groups)
+    version = run_levels_version(groups)
     keys = unknown_keys(groups, columns)
     row_labels = [truncate(g["group"], MAX_ROW_LABEL, keep_tail=True) for g in groups]
     col_labels = [truncate(c["title"], MAX_COL_LABEL) for c in columns]

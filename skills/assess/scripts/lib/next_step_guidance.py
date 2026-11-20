@@ -19,7 +19,7 @@ then states the signal expression alone. ``measure_hint(signal)`` says why a
 signal can be unavailable and how to get it measured, so an ``unknown`` level
 reads as a measurement gap, never as a failure.
 
-Every signal in the shipped ``rubrics/default.toml`` has wording here
+Every signal in the shipped ``levels/default.toml`` has wording here
 (``tests/test_fleet_next_steps.py`` checks it).
 """
 from __future__ import annotations
@@ -27,7 +27,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, TypedDict
 
-from lib.rubric import Scalar
+from lib.levels import Scalar
 
 
 class Guidance(TypedDict):

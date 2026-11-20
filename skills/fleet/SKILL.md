@@ -43,7 +43,7 @@ their rows `unknown`.
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
 | `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/run.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
-| `--rubric FILE` | A maturity rubric in the `lib/rubric.py` TOML format (an invalid rubric exits 2); its `version` is stamped in `run.json`. Each group row carries every rubric row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
+| `--rubric FILE` | A maturity rubric in the `lib/levels.py` TOML format (an invalid rubric exits 2); its `version` is stamped in `run.json`. Each group row carries every rubric row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
 | `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. Unreadable input exits 2. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
@@ -139,9 +139,9 @@ Logic: `skills/assess/scripts/lib/fleet_groups.py`.
 | `rubric_version` | The rubric's `version`; `null` without `--rubric`. |
 | `rubric` | One entry per rubric row: `id`, `scope`, `status` (`level` or `unknown`), `level` (a whole number, `null` when unknown), `top_level` (the row's number of levels, so a level reads as a share of it without the maturity model file; absent in rows written before it was added, which readers handle), `aggregation` (the team rule, `{rule, share}`; `null` for org rows), `missing_signals`, `unknown_repos`. |
 
-Rubric signal paths are checked at load against `lib/rubric_signals.py` (an
-unknown path exits 2 before any scan) and evaluated by `lib/rubric.py`, with no
-second threshold config. The shipped `skills/assess/rubrics/default.toml` uses
+Rubric signal paths are checked at load against `lib/level_signals.py` (an
+unknown path exits 2 before any scan) and evaluated by `lib/levels.py`, with no
+second threshold config. The shipped `skills/assess/levels/default.toml` uses
 the same namespace.
 
 - `team` rows read each repository's signal blocks by block name, as in a
@@ -317,8 +317,8 @@ It needs a run made with `--rubric`.
 
 <!-- chat-skip:start -->
 ```bash
-uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --rubric rubric.toml
-uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --rubric rubric.toml --compare last-sprint-out
+uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --rubric levels.toml
+uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --rubric levels.toml --compare last-sprint-out
 ```
 <!-- chat-skip:end -->
 
@@ -345,14 +345,14 @@ checked against `groups.jsonl` and a difference exits 2.
 
 <!-- chat-skip:start -->
 ```bash
-uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_next_steps.py" fleet-out --rubric rubric.toml --settings settings/
+uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_next_steps.py" fleet-out --rubric levels.toml --settings settings/
 ```
 <!-- chat-skip:end -->
 
 | Flag | Meaning |
 |------|---------|
 | `OUT` | The run's `--out` directory. Pages go to `OUT/teams.md` (index) and `OUT/teams/<group>.md`; the previous run's `*.md` pages there are removed first. |
-| `--rubric FILE` | The rubric the run used (default: the shipped `skills/assess/rubrics/default.toml`). A different `version` exits 2. |
+| `--rubric FILE` | The rubric the run used (default: the shipped `skills/assess/levels/default.toml`). A different `version` exits 2. |
 | `--settings PATH` | The ghreport settings the run used, in the `fleet.py --settings` forms. |
 
 Each page holds:

@@ -1,7 +1,7 @@
 # Default /assess rubric: a deterministic approximation of the 0-8 layers.
 #
-# Loaded by lib/rubric_signals.py (load_default_rubric) and evaluated by
-# lib/rubric.py. Each row is one layer; level 1 stands for Partial and level 2
+# Loaded by lib/level_signals.py (load_default_levels) and evaluated by
+# lib/levels.py. Each row is one layer; level 1 stands for Partial and level 2
 # for Present, so level 0 is Missing. Team rows read one repository's signals
 # (a headless document's "scans", or a full run-context.json) and roll up by
 # the minimum across the repositories passed in.

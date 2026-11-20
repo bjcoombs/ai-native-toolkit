@@ -16,7 +16,7 @@ import pytest
 from lib import fleet_diagrams as fd
 from lib import fleet_trends as ft
 from lib.fleet_groups import GroupRow
-from lib.rubric import Rubric
+from lib.levels import MaturityModel
 from fleet_trends_fixture import (CURRENT_STAMP, ENTRIES, FIXTURES, LEVELS, LONG, REPOS, TOP, build, goldens,
                                   group, runs, stamp)
 from svg_cascade import overridden_text_attributes
@@ -238,7 +238,7 @@ def test_delta_text():
 # --- in the report ------------------------------------------------------------------
 
 
-def _trend(history: list[ft.TrendRun] | None, levels: Rubric | None = LEVELS) -> fd.Diagram:
+def _trend(history: list[ft.TrendRun] | None, levels: MaturityModel | None = LEVELS) -> fd.Diagram:
     return next(d for d in fd.build_diagrams(levels, [], "6mo", history=history) if d["file"] == ft.FILE)
 
 
@@ -259,7 +259,7 @@ def test_three_runs_draw_and_embed():
 def test_no_history_and_no_levels_say_why():
     assert _trend(None)["skipped"] == fd.NO_HISTORY
     assert _trend([], levels=None)["skipped"] == fd.NO_LEVELS
-    org_only: Rubric = {"version": "v", "rows": [r for r in LEVELS["rows"] if r["scope"] == "org"]}
+    org_only: MaturityModel = {"version": "v", "rows": [r for r in LEVELS["rows"] if r["scope"] == "org"]}
     assert _trend([], levels=org_only)["skipped"] == fd.NO_TEAM_ROWS
 
 

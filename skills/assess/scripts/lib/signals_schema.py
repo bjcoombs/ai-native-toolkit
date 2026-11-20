@@ -10,7 +10,7 @@ checks: ``tests/test_signals.py`` fails when ``SCHEMA_PATH`` differs from
 The envelope is strict (every stamp field, no extra top-level keys). The
 ``scans`` map names only the scans the runner knows (``signals.known_scans``),
 so the schema publishes the block namespace rubric signal paths are checked
-against (``lib/rubric_signals.py``); regenerate after adding a scan. Per-scan
+against (``lib/level_signals.py``); regenerate after adding a scan. Per-scan
 blocks stay open objects - each scan owns its own shape - except that a block
 reporting ``"available": false`` must carry a string ``reason``.
 """

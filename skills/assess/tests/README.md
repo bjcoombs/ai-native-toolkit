@@ -141,8 +141,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_scan_registry_degrade.py` | `lib/scan_registry.py` - degrade by construction: every scan-table entry without a `GATE_REASONS` reason is forced to raise and the run carries the unavailable marker downstream |
 | `test_scc_coverage.py` | `lib/scc_coverage.py` - the implausibly-low scc complexity check, calibrated on real scc output for an under-counted shell script |
 | `test_counts_only.py` | `lib/counts_only.py` + `lib/counts_only_rules.py` + `lib/counts_only_schema.py` - the content-free run-context mode: every typed string field has a keep/drop/path rule, and the counts-only document drops copied text |
-| `test_rubric.py` | `lib/rubric.py` - TOML rubric loading and deterministic whole-level evaluation |
-| `test_rubric_signals.py` | `lib/rubric_signals.py` - schema-backed signal paths and the shipped default rubric |
+| `test_levels.py` | `lib/levels.py` - TOML rubric loading and deterministic whole-level evaluation |
+| `test_level_signals.py` | `lib/level_signals.py` - schema-backed signal paths and the shipped default rubric |
 | `test_layer_grades.py` | `lib/layer_grades.py` - deterministic layer grades as a registered signals block, with a counts-only rule |
 | `test_history_window.py` | `lib/history_window.py` - the one history-window grammar shared by `lib/git_churn.py`, `lib/ai_usage.py`, `lib/fleet_activity.py` and `lib/signals.py`, and the shallow-boundary reachability check |
 

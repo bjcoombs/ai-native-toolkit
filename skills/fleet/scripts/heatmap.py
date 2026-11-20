@@ -39,12 +39,12 @@ from lib.fleet_groups import GroupRow  # noqa: E402
 from lib.fleet_view import (  # noqa: E402
     Comparison,
     FleetViewError,
-    check_rubric,
+    check_levels,
     compare_levels,
     groups_file,
     load_groups,
 )
-from lib.rubric import Rubric, RubricError, load_rubric  # noqa: E402
+from lib.levels import MaturityModel, LevelsError, load_levels  # noqa: E402
 
 HEATMAP_FILE = "heatmap.svg"
 
@@ -103,17 +103,17 @@ def _compare(run: Path, earlier: Path, groups: list[GroupRow]) -> Comparison:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     run = Path(args.run)
-    rubric: Rubric | None = None
+    maturity_model: MaturityModel | None = None
     comparison: Comparison | None = None
     try:
         groups = load_groups(run)
         if args.rubric is not None:
-            rubric = load_rubric(Path(args.rubric))
-            check_rubric(rubric, groups)
-        columns = columns_for(groups, rubric)
+            maturity_model = load_levels(Path(args.rubric))
+            check_levels(maturity_model, groups)
+        columns = columns_for(groups, maturity_model)
         if args.compare is not None:
             comparison = _compare(run, Path(args.compare), groups)
-    except (FleetViewError, RubricError) as e:
+    except (FleetViewError, LevelsError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     out = Path(args.output) if args.output else groups_file(run).parent / HEATMAP_FILE

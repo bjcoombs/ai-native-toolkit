@@ -1,4 +1,4 @@
-"""lib/rubric_signals.py: schema-backed signal paths and the shipped default rubric."""
+"""lib/level_signals.py: schema-backed signal paths and the shipped default rubric."""
 from __future__ import annotations
 
 import copy
@@ -14,11 +14,11 @@ import pytest
 from lib.counts_only import counts_only_scans
 from lib.promissory_markers import scan_promissory_markers
 from lib.structure_graph import analyze_structure
-from lib.rubric import Group, RubricError, RubricResult, dumps_result, evaluate, load_rubric, resolve_signal
-from lib.rubric_signals import (
-    DEFAULT_RUBRIC,
+from lib.levels import Group, LevelsError, LevelsResult, dumps_result, evaluate, load_levels, resolve_signal
+from lib.level_signals import (
+    DEFAULT_LEVELS,
     ORG_PATHS,
-    load_default_rubric,
+    load_default_levels,
     scan_names,
     signal_path_validator,
     team_path_ok,
@@ -100,16 +100,16 @@ def two_package_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]
     return {"structure": dict(analyze_structure(root).as_dict())}
 
 
-def _run(data: dict[str, dict[str, Any]]) -> RubricResult:
+def _run(data: dict[str, dict[str, Any]]) -> LevelsResult:
     group: Group = {"name": "g", "settings": None, "repos": data}
-    return evaluate(load_default_rubric(), group)
+    return evaluate(load_default_levels(), group)
 
 
-def _levels(result: RubricResult) -> dict[str, int | None]:
+def _levels(result: LevelsResult) -> dict[str, int | None]:
     return {row["id"]: row["level"] for row in result["rows"]}
 
 
-def _row(result: RubricResult, row_id: str) -> Any:
+def _row(result: LevelsResult, row_id: str) -> Any:
     return next(r for r in result["rows"] if r["id"] == row_id)
 
 
@@ -164,15 +164,15 @@ def test_org_paths_are_the_ghreport_settings_fragment() -> None:
 
 
 def test_unknown_signal_path_fails_at_load_with_the_path_named(tmp_path: Path) -> None:
-    rubric = tmp_path / "r.toml"
-    rubric.write_text(
+    maturity_model = tmp_path / "r.toml"
+    maturity_model.write_text(
         'version = "v"\n[[rows]]\nid = "r"\ntitle = "R"\nscope = "team"\naggregation = "min"\n'
         '[[rows.levels]]\nlevel = 1\ncriteria = [\n'
         '  { signal = "observability.rung", op = "gte", value = 1 },\n'
         '  { signal = "observability.rungg", op = "gte", value = 1 },\n]\n',
         encoding="utf-8")
-    with pytest.raises(RubricError, match=r"team:observability\.rungg \(row 'r'\)"):
-        load_rubric(rubric, signal_path_validator())
+    with pytest.raises(LevelsError, match=r"team:observability\.rungg \(row 'r'\)"):
+        load_levels(maturity_model, signal_path_validator())
 
 
 def _scalar_leaves(prefix: str, node: Any) -> list[str]:
@@ -200,12 +200,12 @@ def test_every_scalar_in_real_output_is_an_accepted_path(
 # --- the default rubric ------------------------------------------------------
 
 
-def test_default_rubric_loads_against_the_schema() -> None:
-    rubric = load_default_rubric()
-    assert rubric["version"].startswith("default-")
-    assert all(row["scope"] == "team" for row in rubric["rows"])
-    assert all(len(row["levels"]) == 2 for row in rubric["rows"])  # Partial, Present
-    assert "disagree" in DEFAULT_RUBRIC.read_text(encoding="utf-8").lower()
+def test_default_levels_loads_against_the_schema() -> None:
+    maturity_model = load_default_levels()
+    assert maturity_model["version"].startswith("default-")
+    assert all(row["scope"] == "team" for row in maturity_model["rows"])
+    assert all(len(row["levels"]) == 2 for row in maturity_model["rows"])  # Partial, Present
+    assert "disagree" in DEFAULT_LEVELS.read_text(encoding="utf-8").lower()
 
 
 def test_every_default_signal_is_emitted_by_some_real_output(
@@ -218,7 +218,7 @@ def test_every_default_signal_is_emitted_by_some_real_output(
                  run_context]
     # review_reality needs GitHub; its fields are named in its module doc.
     offline = {"review_reality.reviewed_share", "review_reality.approved_share"}
-    signals = {c["signal"] for row in load_default_rubric()["rows"]
+    signals = {c["signal"] for row in load_default_levels()["rows"]
                for level in row["levels"] for c in level["criteria"]}
     never = sorted(
         s for s in signals - offline
@@ -227,7 +227,7 @@ def test_every_default_signal_is_emitted_by_some_real_output(
     assert never == []
 
 
-def test_default_rubric_on_the_golden_fixture_repos(golden_repos: dict[str, dict[str, Any]]) -> None:
+def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict[str, Any]]) -> None:
     result = _run(golden_repos)
     for name in golden_repos:
         assert _levels(_run({name: golden_repos[name]})) == {
@@ -250,7 +250,7 @@ def test_default_rubric_on_the_golden_fixture_repos(golden_repos: dict[str, dict
     assert layer1["unknown_repos"] == sorted(golden_repos)
 
 
-def test_default_rubric_on_the_golden_run_context() -> None:
+def test_default_levels_on_the_golden_run_context() -> None:
     """The captured full run predates most headless scans: Layers 1 and 4 are read."""
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
     result = _run({"toolkit": run_context})
@@ -289,9 +289,9 @@ def test_layer_two_reaches_present_only_across_a_package_boundary(
     assert _row(_run({"r": two_package_repo}), "layer-2-design")["level"] == 2
 
 
-def test_default_rubric_covers_every_layer_on_the_golden_run_context() -> None:
+def test_default_levels_covers_every_layer_on_the_golden_run_context() -> None:
     """Contract I564-2: one row per layer 0-8, each a whole level or a named unknown."""
-    rows = load_default_rubric()["rows"]
+    rows = load_default_levels()["rows"]
     assert len(rows) >= 9
     assert [row["id"].split("-")[1] for row in rows] == [str(n) for n in range(9)]
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
@@ -379,7 +379,7 @@ def test_another_tools_instruction_file_reaches_layer_zero_partial(tmp_path: Pat
     assert _row(_run({"r": scans}), "layer-0-instructions")["level"] == 1
 
 
-def test_a_rubric_row_on_a_layer_grade_loads_and_evaluates(
+def test_a_maturity_model_row_on_a_layer_grade_loads_and_evaluates(
     tmp_path: Path, golden_repos: dict[str, dict[str, Any]], instructed_repo: dict[str, Any],
 ) -> None:
     """Issue #620: a layer grade is a signal path; an unknown one fails at load."""
@@ -388,18 +388,18 @@ def test_a_rubric_row_on_a_layer_grade_loads_and_evaluates(
            '  { signal = "layer_grades.%s", op = "in", value = ["A", "B", "C", "D", "F"] },\n]\n')
     path = tmp_path / "r.toml"
     path.write_text(row % "instructions_grade", encoding="utf-8")
-    rubric = load_rubric(path, signal_path_validator())
+    maturity_model = load_levels(path, signal_path_validator())
     graded = instructed_repo["layer_grades"]["instructions_grade"]
     assert isinstance(graded, str)
-    result = evaluate(rubric, {"name": "g", "settings": None, "repos": {"r": instructed_repo}})
+    result = evaluate(maturity_model, {"name": "g", "settings": None, "repos": {"r": instructed_repo}})
     assert result["rows"][0]["level"] == 1
-    bare = evaluate(rubric, {"name": "g", "settings": None,
+    bare = evaluate(maturity_model, {"name": "g", "settings": None,
                              "repos": {"r": golden_repos["golden-doc-repo"]}})
     assert bare["rows"][0]["status"] == "unknown"   # null grade: no instruction file
 
     path.write_text(row % "layer_3_grade", encoding="utf-8")
-    with pytest.raises(RubricError, match=r"team:layer_grades\.layer_3_grade"):
-        load_rubric(path, signal_path_validator())
+    with pytest.raises(LevelsError, match=r"team:layer_grades\.layer_3_grade"):
+        load_levels(path, signal_path_validator())
 
 
 def test_counts_only_output_reaches_the_same_levels(

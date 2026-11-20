@@ -5,7 +5,7 @@ how many repositories sit at each level of that row. Every repository in the
 run is in every bar, so each bar is the same length and a wide pale band is
 where the whole fleet is behind.
 
-A repository's level for a row is ``lib.rubric.evaluate_row`` against its own
+A repository's level for a row is ``lib.levels.evaluate_row`` against its own
 ``scans``, as the quadrant and the team pages read it. A repository whose
 level for a row is undetermined (a failed scan, a signal the run did not
 collect) is a hatched "unknown" segment at the end of the bar, never drawn as
@@ -28,7 +28,7 @@ from lib import fleet_svg as svg
 from lib.fleet import FleetRow
 from lib.fleet_groups import repo_signals
 from lib.fleet_svg import HATCH_FILL, ORRD_9, STEP_TEXT, THEMED_HATCH, LinearScale
-from lib.rubric import Rubric, evaluate_row
+from lib.levels import MaturityModel, evaluate_row
 
 TITLE = "Fleet maturity by layer"
 FILE = "layer-bars.svg"
@@ -53,7 +53,7 @@ class LayerBar(TypedDict):
     unknown: list[str]  # repositories whose level for this row is undetermined, sorted
 
 
-def layer_bars(levels: Rubric, repos: Sequence[FleetRow]) -> list[LayerBar]:
+def layer_bars(levels: MaturityModel, repos: Sequence[FleetRow]) -> list[LayerBar]:
     """Per team row of the maturity model, in its order: repositories at each level and unknown."""
     ordered = sorted(repos, key=lambda r: r["repo"])
     signals = [(repo["repo"], repo_signals(repo)) for repo in ordered]

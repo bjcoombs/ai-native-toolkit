@@ -15,9 +15,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from lib.fleet_diagrams import build_diagrams, report_markdown  # noqa: E402
-from lib.fleet_groups import FLEET_GROUP_VERSION, GroupRow, RubricRowLevel  # noqa: E402
+from lib.fleet_groups import FLEET_GROUP_VERSION, GroupRow, RowLevel  # noqa: E402
 from lib.fleet_stamp import FLEET_STAMP_VERSION, FleetStamp  # noqa: E402
-from lib.rubric import Rubric  # noqa: E402
+from lib.levels import MaturityModel  # noqa: E402
 from lib.fleet_trends import TrendRun, history_runs, render_trend, series_runs, trend_run  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_trends"
@@ -37,7 +37,7 @@ def group(name: str, levels: tuple[int | None, ...], top: int | None = None,
           org: int | None = None) -> GroupRow:
     """A group row: team rows at ``levels``, each with ``top_level`` ``top`` unless None (an
     entry written before #684), plus an org row at ``org`` when given (left out of the mean)."""
-    rows: list[RubricRowLevel] = [
+    rows: list[RowLevel] = [
         {"id": f"row{i}", "scope": "team", "status": "unknown" if level is None else "level",
          "level": level, "aggregation": "min", "missing_signals": [], "unknown_repos": []}
         for i, level in enumerate(levels)]
@@ -57,7 +57,7 @@ def group(name: str, levels: tuple[int | None, ...], top: int | None = None,
 # before 2026-10-20 were written before groups.jsonl carried top_level (#684): the levels-2
 # one (2026-09-20) takes its top levels from this model, the levels-1 ones plot as plain means.
 TOP = 3
-LEVELS: Rubric = {"version": "levels-2", "rows": [
+LEVELS: MaturityModel = {"version": "levels-2", "rows": [
     {"id": f"row{i}", "title": f"Row {i}", "scope": "team",
      "levels": [{"level": n, "criteria": []} for n in range(1, TOP + 1)]} for i in range(2)] + [
     {"id": "org0", "title": "Org 0", "scope": "org", "levels": [{"level": 1, "criteria": []}]}]}

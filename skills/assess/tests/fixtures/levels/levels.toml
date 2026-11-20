@@ -1,4 +1,4 @@
-# Fixture rubric for tests/test_rubric.py: one org row, one team row.
+# Fixture rubric for tests/test_levels.py: one org row, one team row.
 version = "fixture-2026.11"
 
 [[rows]]

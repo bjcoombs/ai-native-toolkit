@@ -231,7 +231,7 @@ import edges `front_door_ratio` is measured over; 0 means that ratio's 1.0 is va
 available with `modularity_q` null and `modularity_reason` `no_import_edges` (null when Q
 was measured): modules that never import each other have no community structure, and a
 0.0 would read as tangled, so the maturity model's Layer 2 row reads unknown (issue #682).
-Tests: `tests/test_structure_graph.py`, `tests/test_rubric_signals.py`,
+Tests: `tests/test_structure_graph.py`, `tests/test_level_signals.py`,
 `tests/test_headless_layers.py` (a full signals run and a counts-only one).
 
 Packages resolve by path, never by import name. grimp's default finder asks
@@ -664,7 +664,7 @@ lizard's languages only. Tests:
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
 `SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, a `scans` map
 whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
-custom table, and the namespace `rubric_signals.py` checks paths against), open per-scan
+custom table, and the namespace `level_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
 `reason`. `tests/test_signals.py` fails when the checked-in file differs from
 `build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
@@ -716,11 +716,11 @@ no threshold config of its own. `load_settings` reads ghreport settings fragment
 `{available: false, reason}` so `rubric.resolve_signal` reads it unavailable and the
 org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
 else `set`; a value's reason `null`, an unavailable one's `unknown`). Rubric data follows
-`rubric_signals`' namespaces: `repo_signals` is a
+`level_signals`' namespaces: `repo_signals` is a
 repository's `scans` map (a failed repository's is empty, so it is an unknown
 repository, never a passing one) and `settings_signals` the normalised settings plus
 the fragment's `scope` and `provider`. The CLI loads the rubric with
-`rubric_signals.signal_path_validator()`.
+`level_signals.signal_path_validator()`.
 `write_groups` writes atomically with sorted keys.
 
 **`fleet_next_steps.py`**
@@ -758,11 +758,11 @@ then states the signal expression alone. `measure_hint(signal)` says why a signa
 be unavailable (a full `/assess` run only, a network read, an opt-in pass, a ghreport
 permission; for the `structure`, `stats_summary` and `promissory_markers` blocks a missing
 grimp, networkx, lizard or `rg`, and for `structure_drift` no ownership map). Every signal of
-`rubrics/default.toml` has wording (tested).
+`levels/default.toml` has wording (tested).
 
 **`fleet_group_schema.py`**
 Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
-`RubricRowLevel` (lists and floats included, `settings` values as `{value, reason}` or
+`RowLevel` (lists and floats included, `settings` values as `{value, reason}` or
 `{available: false, reason}`; a `NotRequired` key, such as `top_level`, is left out of
 `required`). `tests/test_fleet_groups.py` fails when the checked-in
 file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
@@ -777,9 +777,9 @@ and raises `FleetViewError` naming `file:line` otherwise; `read_repos` returns t
 `load_groups` takes the file or the run directory, checks the rubric-entry fields a view
 reads (`FleetViewError` names the line), refuses a duplicate
 group and sorts by group; an empty file (no repository scanned) is `[]`, and the heat
-map exits 2 on it while the team pages write an empty index. `rubric_columns` gives the rubric row ids in rubric order (the
-same for every group; a run without `--rubric` is refused), `run_rubric_version` the one
-version, `check_rubric` matches a rubric file (titles, top levels) to the run (a run
+map exits 2 on it while the team pages write an empty index. `level_columns` gives the rubric row ids in rubric order (the
+same for every group; a run without `--rubric` is refused), `run_levels_version` the one
+version, `check_levels` matches a rubric file (titles, top levels) to the run (a run
 without `--rubric` is refused as such, before any version check), and
 `compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,
 `delta` or `was`), marking the comparison not comparable across rubric versions (a run
@@ -1466,7 +1466,7 @@ a helper extraction.
 
 ### Scoring
 
-**`rubric.py`**
+**`levels.py`**
 Loads a caller-supplied maturity rubric (TOML via stdlib `tomllib`) and evaluates it
 from signals with no model in the path. Rows carry an id, a title, a scope (`org`:
 once per group from the group settings; `team`: per repository from its
@@ -1483,14 +1483,14 @@ is the resolved value only when it is a finite scalar, null otherwise, and
 `dumps_result` writes with `allow_nan=False`, so a result is always strict JSON (#602). Every level's unmet criteria are in the result for next-step guidance.
 A team roll-up applies the rule to the low and the high bounds and reports a level
 only when both agree; `unknown_repos` names the repositories whose level is open.
-`load_rubric` / `parse_rubric` raise `RubricError` before evaluation on a missing
+`load_levels` / `parse_levels` raise `LevelsError` before evaluation on a missing
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
 rejects. `evaluate` stamps the rubric version; `dumps_result` is byte-identical on
-rerun. Tests: `tests/test_rubric.py` with fixtures under `tests/fixtures/rubric/`.
+rerun. Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`.
 
-**`rubric_signals.py`**
-The real `PathValidator` for `rubric.py`, and the default rubric. A `team` path's first
+**`level_signals.py`**
+The real `PathValidator` for `levels.py`, and the default rubric. A `team` path's first
 segment must be a block name the published headless schema lists
 (`references/signals.schema.json`, `scans.propertyNames`, generated from
 `signals.known_scans`), so one rubric reads a headless document's `scans` or a full
@@ -1499,8 +1499,8 @@ rejected, and the deterministic layer grades are read through the `layer_grades`
 instead (`layer_grades.instructions_grade`). Where `counts_only_schema.ROOTS` types the block, every further segment must
 name a field and end on a scalar (no list, no object); an untyped block is open. An
 `org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
-`<setting>.value` / `.reason`). `load_default_rubric` loads
-`skills/assess/rubrics/default.toml`: one team row per layer 0-8, level 1 for
+`<setting>.value` / `.reason`). `load_default_levels` loads
+`skills/assess/levels/default.toml`: one team row per layer 0-8, level 1 for
 Partial and 2 for Present. Layers 2-4 have no deterministic grade, so their rows read
 proxies from the `structure`, `promissory_markers`, `structure_drift` and `stats_summary`
 blocks, which full and headless runs both produce (import-graph modularity and front doors; lint
@@ -1509,7 +1509,7 @@ so an absent signal is never credited (the practice /assess looks for can still 
 absent: the header says where). It can disagree with the `/assess` layer verdicts (the file header lists
 where); no instruction file reads level 0 through the never-null
 `layer_grades.instruction_file_present`, not `unknown`. Tests:
-`tests/test_rubric_signals.py`, on headless runs of the golden fixture repositories
+`tests/test_level_signals.py`, on headless runs of the golden fixture repositories
 and the golden `run-context.json`.
 
 **`instruction_files.py`**
@@ -2330,7 +2330,7 @@ whether one exists, so a rubric can score "no instruction file" as level 0 rathe
 than unknown. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
 default rubric's rows for them read proxies, and its header says how they diverge). A short token and a boolean, kept whole by the
 counts-only filter. Tests: `tests/test_layer_grades.py`, and the rubric rows in
-`tests/test_rubric_signals.py`.
+`tests/test_level_signals.py`.
 
 **`claude_config_fields.py`**
 The documented frontmatter field sets `claude_config` checks against: skill and
