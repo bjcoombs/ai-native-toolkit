@@ -57,14 +57,22 @@ constant each.
 # relocatable sections with line ranges, signals and a suggested home; agent and
 # SKILL.md files over 200 lines in a separate loaded_in_full list. Additive;
 # complexity-stats.json is unchanged.
-# 1.8.0: instruction files are scored on always-on size and share (issue #560).
+# 1.7.0 (also): run-context.json gains ai_usage (issue #547): the share of
+# commits in the history window with an AI-assistant Co-authored-by trailer, as
+# a lower bound with its window, merge rule and limits. Additive;
+# complexity-stats.json is unchanged.
+# 1.8.0: complexity-stats.json gains `files`, every scored file as {path, ccn},
+# uncapped and sorted by path, read by the doc-complexity join (issue #556).
+# Additive; run-context.json is unchanged. STATS_SCHEMA_VERSION moves 5->6, so
+# the cross-run diff is disarmed once against a pre-#556 snapshot.
+# 1.9.0: instruction files are scored on always-on size and share (issue #560).
 # Each instruction_files and nested_instructions.files entry gains the
 # subscores always_on_lines, always_on_pct, fetch_on_need_lines,
 # always_on_flagged, always_on_penalty and relocatable_penalty, and
 # instruction_file_size gains always_on_lines. bloat_penalty is now their
 # penalties' sum and size_grade_capped reads always-on lines. Additive: no key
 # moves or changes type, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.8.0"
+ARTIFACT_SCHEMA_VERSION = "1.9.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -73,6 +81,11 @@ ARTIFACT_SCHEMA_VERSION = "1.8.0"
 # with the version in the committed .assess/findings.json and explains the
 # finding moves instead of failing on them unexplained.
 # 1: the baseline (issue #554).
-# 2: instruction files are graded on always-on size and share instead of the
+# 2: churn counts follow renames, moving staleness ratios, lying_map and hotspot
+# ranks for files renamed inside the churn window (issue #425).
+# 3: the doc-complexity join reads complexity-stats.json's uncapped `files` list,
+#    so a complex file outside every top-10 list can now produce lying_map,
+#    unexplained_complexity or good_contract (issue #556).
+# 4: instruction files are graded on always-on size and share instead of the
 #    whole-file size curve (issue #560), which moves instruction grades.
-ASSESS_METHOD_VERSION = 2
+ASSESS_METHOD_VERSION = 4

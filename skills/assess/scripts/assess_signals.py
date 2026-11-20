@@ -68,7 +68,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--window", default=DEFAULT_WINDOW,
-        help="History window recorded in the run stamp, e.g. 6mo, 90d, 12w, 1y (default: %(default)s).",
+        help="History window stamped on the run and read by history scans (ai_usage), e.g. 6mo, 90d, 12w, 1y (default: %(default)s).",
     )
     add_cli_arguments(parser)
     parsed = parser.parse_args(argv)

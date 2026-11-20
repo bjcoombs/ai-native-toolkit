@@ -99,6 +99,17 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+Churn follows renames (issue #425): `git_churn_scores`, `pick_churn_window` and
+`commit_epochs_by_file` (the per-commit walk behind `code_churn_since_doc_change`) take
+the `change_coupling.build_rename_map` paths and credit a commit made under an old name
+to the file's current name, once per commit, so the count matches `git log --follow` (a
+file committed five times, renamed, then committed once scores 7). `pick_churn_window`
+builds the map when it is not given one; `rename_paths` does that for the treemap's
+`--by churn` call and prints a stderr note when the map is incomplete. `doc_staleness`
+shares one map per HEAD between the churn reads and the content clock, and marks every
+doc row `confidence: low` when the map is incomplete, which keeps it out of `lying_map`.
+Git's own rename detection is off (`--no-renames`) in both walks, so `diff.renames`
+does not move a count. Tests: `tests/test_rename_churn.py`.
 `window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
 into the `history_window` scan input (`"12mo"`, None for all-time).
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
@@ -133,6 +144,8 @@ Three signals derived from `git log`:
   (high = an island safe for keyhole edits).
 - B4 authorship: human/agent/mixed/unknown classification, e-mail-based and
   deliberately conservative (never labels a human's work "agent" on weak evidence).
+  The matcher (`identity_is_agent`, `coauthors_have_agent`, `AI_EMAIL_HINTS`) lives
+  in `agent_identity.py`; `AI_EMAIL_HINTS` is re-exported here.
 
 `parse_commit_file_sets` lists each commit's files under the names they had then.
 `build_rename_map` reads `git log --name-status -M --diff-filter=R` into a `RenameMap`:
@@ -539,8 +552,8 @@ the publish step never runs. Names in `UNREGISTERED_SCANS` (run-context blocks
 name a reported scan also holds is dropped at runtime. `select_scans` raises
 `UnknownScanError` naming every name in neither set. `build_stamp` records the toolkit
 commit, plugin version, UTC scan date, `--window` and the target's HEAD and dirty flag
-(each nullable outside git). The window is validated and stamped only: no registered
-scan reads a history window yet. Every git call runs inside `read_only_git` (`GIT_OPTIONAL_LOCKS=0`,
+(each nullable outside git). The window is validated, stamped and passed to the scans
+that read `history_window` (`ai_usage`). Every git call runs inside `read_only_git` (`GIT_OPTIONAL_LOCKS=0`,
 forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
 before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
 the network.
@@ -933,6 +946,16 @@ stamps, skipping `_NON_TOOL_VERSION_KEYS`). `prior_stamps` reads the prior snaps
 plugin and schema versions. Stdlib only. Tests: `tests/test_diff_reliability.py`,
 `tests/test_complexity_treemap.py`.
 
+**`stats_rows.py`**
+The per-file row lists `complexity-treemap.py` writes into `complexity-stats.json`.
+`top_lists` ranks the enriched rows into `top_hotspots` / `top_complex` / `top_large`
+(ten each, ties broken on path); `file_ccn_rows` emits `files`, every scored file as
+`{path, ccn}` (`FileCcnRow`), sorted by path with no cap. `doc_complexity_join.py`'s
+`_extract_file_ccn` reads `files`, so the join sees a complex file that made no top-10
+list (issue #556). Adding `files` moved `STATS_SCHEMA_VERSION` to 6, which disarms the
+cross-run diff once (`diff_reliability.py`). Stdlib only. Tests:
+`tests/test_stats_rows.py`.
+
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
 transitions: graduated (was in top list, now absent), regressed, restructured, new,
@@ -960,6 +983,28 @@ while adding +100 of new functions still regresses. `restructured` never reaches
 a helper extraction.
 
 ### Scoring
+
+**`rubric.py`**
+Loads a caller-supplied maturity rubric (TOML via stdlib `tomllib`) and evaluates it
+from signals with no model in the path. Rows carry an id, a title, a scope (`org`:
+once per group from the group settings; `team`: per repository from its
+`run-context.json`, rolled up by the declared `min` or `share` rule) and whole levels
+numbered 1..K, each a list of criteria (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`,
+`not_in`) over dotted signal paths. A row reaches level N only when every criterion of
+N and of every lower level holds. A missing key, a null, a path through an
+`available: false` block or a type mismatch makes the criterion `unknown`. A row then
+carries `bounds` (`low`: the definitely-met climb; `high`: below the first definitely
+unmet level above it, else K) and is `unknown` only when they differ, so it is never a
+false 0 or a false pass. `missing_signals` names every unavailable signal even when the
+level is known. Every level's unmet criteria are in the result for next-step guidance.
+A team roll-up applies the rule to the low and the high bounds and reports a level
+only when both agree; `unknown_repos` names the repositories whose level is open.
+`load_rubric` / `parse_rubric` raise `RubricError` before evaluation on a missing
+version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
+key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
+rejects. `evaluate` stamps the rubric version; `dumps_result` is byte-identical on
+rerun. No default rubric ships here. Tests: `tests/test_rubric.py` with fixtures under
+`tests/fixtures/rubric/`.
 
 **`instruction_files.py`**
 Finds and grades the instruction files at `INSTRUCTION_FILE_PATHS` through
@@ -1607,6 +1652,38 @@ network read, through `gh_cli` with a 10-second per-call cap: per-workflow
 median wall time of successful push runs on the default branch, or
 `{available: false, reason}`. Evidence only; it caps nothing.
 Tests: `tests/test_agent_environment.py`.
+
+**`agent_identity.py`**
+The one definition of an agent identity in a git history: `identity_is_agent(email,
+name)` (the `[bot]` marker on either, or an `AI_EMAIL_HINTS` e-mail; never a display
+name) and `coauthors_have_agent(field)` (any GS-separated `Co-authored-by` value whose
+bracketed e-mail is an agent). `is_ai_assistant` / `coauthors_have_ai_assistant` are
+the same matcher with non-Copilot `[bot]` accounts removed, for `ai_usage`: a GitHub
+squash merge credits every commit author as a co-author, so an automation bot's
+fix-up commit must not make a change read as AI-assisted. `COVERED_AGENTS` names the
+assistants that counts, in words with no address, for a block's stated limits; keep
+it in step with `AI_EMAIL_HINTS`.
+Consumers: `change_coupling.authorship_analysis`, `promissory_markers`,
+`understanding_analysis` and `ai_usage`. Widening the hints changes all four, so it is
+a change of its own. Tests: `tests/test_ai_usage.py`, `tests/test_change_coupling.py`.
+
+**`ai_usage.py`**
+AI-assisted change share (issue #547), a lower bound on agent use.
+`scan_ai_usage(repo_root, scope, history_window)` runs `git log --no-merges` over the
+`--scope` subtree (or the whole run root) in the window and emits `ai_usage: {available, window, since, merge_rule,
+total_commits, agent_trailer_commits, agent_trailer_share, lower_bound,
+covered_agents[], limits[]}`. A commit counts when any `Co-authored-by` trailer names an
+AI assistant per `agent_identity.coauthors_have_ai_assistant` (automation bots excluded); the share is null at zero commits.
+`merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
+churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
+the headless `--window`), or None for full history (`window: "all-time"`);
+`resolve_window` raises on anything else, which degrades the block. `limits` is the
+fixed `LIMITS` tuple (squash merges, stripped or missing trailers, agents outside
+`COVERED_AGENTS`, automation bots not counted). Counts, a share and fixed strings only: no name, e-mail or
+subject. A missing git, a timeout, a non-repository and a shallow clone (or one
+`rev-parse --is-shallow-repository` cannot confirm is full) each degrade to
+`available: false` with a fixed reason of their own: a truncated history can put the
+share above the true value. Tests: `tests/test_ai_usage.py`.
 
 **`shared_tooling.py`**
 Shared CI sources and agent marketplaces, per repository (issue #566), the

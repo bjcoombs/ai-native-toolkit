@@ -81,7 +81,6 @@ import uuid
 from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import cast
 
 import lizard
 import matplotlib.pyplot as plt
@@ -98,17 +97,17 @@ from lib.dart_complexity import (
 )
 from lib.git_churn import (
     churn_is_degenerate,
-    git_churn_scores,
-    pick_churn_window,
+    git_churn_scores, pick_churn_window, rename_paths,
 )
 from lib.generated_files import (
     GENERATED_NAME_PATTERNS,
     generated_reason,
 )
 from lib.run_context_types import (
-    Distribution, FnCcnBlock, GeneratedExclusion, HotspotRow, KeyholeBudget,
+    Distribution, FnCcnBlock, GeneratedExclusion, KeyholeBudget,
     ScoredHotspotRow, SizeBlock, SubtreeTokens,
 )
+from lib.stats_rows import file_ccn_rows, top_lists
 from lib.treemap_render import (
     ColoredFile, Rect, Rgba, adaptive_cap, blend_to_grey, build_tree, layout, plural, write_svg,
 )
@@ -485,7 +484,7 @@ def collect(root: Path, by: str = "complexity",
     aux_label: str | None = None
 
     if by == "churn":
-        churn = git_churn_scores(root, scope=scope)
+        churn = git_churn_scores(root, scope=scope, renames=rename_paths(root))
         if not churn:
             _git_not_found_warning(root)
             effective_by = "complexity"
@@ -757,7 +756,7 @@ def render(files: list[tuple[Path, int, float, str]],
 # ARTIFACT_SCHEMA_VERSION, which assess_core stamps on run-context.json; the
 # treemap keeps its own copy of the constant.
 # test_complexity_treemap asserts the two stay equal.
-ARTIFACT_SCHEMA_VERSION = "1.8.0"
+ARTIFACT_SCHEMA_VERSION = "1.9.0"
 
 
 def _new_run_id() -> str:
@@ -789,10 +788,11 @@ def _read_plugin_version() -> str:
 # is a structural change to the sidecar shape (a metric added/removed/redefined)
 # that voids the diff against an older snapshot until the next clean run
 # re-seeds the baseline (lib.diff_reliability._diff_is_reliable reads it).
-STATS_SCHEMA_VERSION = 5  # 2: generated-file content excludes + excluded_generated
+STATS_SCHEMA_VERSION = 6  # 2: generated-file content excludes + excluded_generated
                           # 3: generated test-report excludes + loc/est_tokens max_code/max_data
                           # 4: fn_ccn.source list + backend_by_language, rows max_fn_name
                           # 5: dart-scanner fills max_fn_ccn for Dart rows, moving their score
+                          # 6: files key, every scored file's {path, ccn} (#556)
 
 # scc language names counted as data, not code, for the `max_code` / `max_data`
 # split in the stats file. Data files stay in the treemap: a large hand-kept
@@ -1140,30 +1140,6 @@ def _provenance(files: list[tuple[Path, int, float, str]]) -> dict[str, object]:
     }
 
 
-def _strip_score(rows: list[ScoredHotspotRow]) -> list[HotspotRow]:
-    return [cast(HotspotRow, {k: v for k, v in r.items() if k != "_score"}) for r in rows]
-
-
-def _top_lists(enriched: list[ScoredHotspotRow]) -> dict[str, list[HotspotRow]]:
-    """``top_hotspots`` / ``top_complex`` / ``top_large``, ten rows each."""
-    # Ties break on the repository-relative path, ascending, under Python's
-    # default byte ordering for `str`. Without it a stable single-key sort
-    # hands ties back in scanner emission order, so which of a tied group
-    # makes the top ten depends on how lizard and scc happened to enumerate
-    # the tree - and membership of `top_hotspots` decides which files get a
-    # wiki page and a first-flagged date (issue #426). The primary keys are
-    # unchanged, so no file moves when the values differ; this is the same
-    # `(-primary, path)` shape the attention list took in #357.
-    by_score = sorted(enriched, key=lambda f: (-f["_score"], f["path"]))
-    by_ccn = sorted(enriched, key=lambda f: (-f["ccn"], f["path"]))
-    by_loc = sorted(enriched, key=lambda f: (-f["loc"], f["path"]))
-    return {
-        "top_hotspots": _strip_score(by_score[:10]),
-        "top_complex": _strip_score(by_ccn[:10]),
-        "top_large": _strip_score(by_loc[:10]),
-    }
-
-
 def write_stats(files: list[tuple[Path, int, float, str]],
                 aux_data: dict[Path, int] | None,
                 aux_label: str | None,
@@ -1223,6 +1199,9 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     backend scored one of its files or scc counted a decision point in one;
     data and markup (JSON, YAML, Markdown), where scc counts none, get no key,
     but CSS maps to null because scc counts decision points in it.
+
+    ``files`` lists every scored file as ``{path, ccn}``, sorted by path and
+    uncapped, for the doc-complexity join (issue #556).
 
     ``top_hotspots``, ``top_complex`` and ``top_large`` each rank on their own
     key (composite score, aggregate ccn, loc) and break ties on the
@@ -1289,7 +1268,11 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         "fn_ccn": _fn_ccn_block(files, fn_ccn_by_path, fn_backend_by_path,
                                 langs),
         "churn": (_distribution(churns) if aux_data is not None else None),
-        **_top_lists(enriched),
+        **top_lists(enriched),
+        # Every scored file as {path, ccn}, uncapped and sorted by path: the
+        # doc-complexity join reads it so a complex file outside every top-10
+        # list still reaches the join (issue #556).
+        "files": file_ccn_rows(enriched),
     }
 
     out_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
