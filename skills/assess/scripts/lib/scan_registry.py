@@ -35,6 +35,7 @@ from lib.agent_ops import scan_agent_ops
 from lib.ai_usage import scan_ai_usage
 from lib.claude_config import scan_claude_config
 from lib.config_drift import scan_config_drift
+from lib.coverage_gate import detect_coverage_gate
 from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
@@ -184,6 +185,14 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE),
     ScanSpec("review_reality", scan_review_reality, ("repo_root",), STAGE_READ_SIDE),
     ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE),
+    # Layer 6: is a coverage threshold *enforced*, not just measured? Each gate
+    # names its file, line and threshold as written; none found reads
+    # enforced: false, never inferred from coverage_report. A scoped run reads
+    # the scope plus the root CI and task-runner files (issue #488).
+    ScanSpec(
+        "coverage_gate", detect_coverage_gate,
+        ("repo_root", "scope", "excludes"), STAGE_READ_SIDE,
+    ),
     # Checkable claims in the graded instruction files ("`x.sh` is enforced in
     # CI", "Node 20.11.0 is pinned in `.nvmrc`"), verified against the repo; a
     # failed claim is a Layer 0 lying signal. Zeros when none.
