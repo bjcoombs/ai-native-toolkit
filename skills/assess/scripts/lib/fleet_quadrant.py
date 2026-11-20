@@ -6,7 +6,7 @@ maturity. Busy repositories with low maturity are where agents do the most
 damage soonest, so that quadrant is shaded and its dots drawn in the alarm colour.
 
 Maturity per repository re-evaluates each ``team`` row of the maturity model
-(``lib.rubric.evaluate_row``) against that repository's own ``scans``, as the
+(``lib.levels.evaluate_row``) against that repository's own ``scans``, as the
 team pages do (``lib/fleet_next_steps.py``). The repository's maturity is
 ``lib.fleet_maturity.mean_share``: each row's share of its top level, averaged
 over the rows that could be measured, the unit and row set the slope chart and
@@ -31,7 +31,7 @@ from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_groups import repo_signals
 from lib.fleet_maturity import SCOPE, known_shares, mean_share
 from lib.fleet_svg import THEMED_HATCH, Box, LinearScale
-from lib.rubric import Rubric, evaluate_row
+from lib.levels import MaturityModel, evaluate_row
 
 TITLE = "Fleet activity and maturity"
 FILE = "quadrant.svg"
@@ -71,7 +71,7 @@ def _commits(row: FleetRow) -> int | None:
     return total if isinstance(total, int) and not isinstance(total, bool) else None
 
 
-def repo_points(levels: Rubric, repos: Sequence[FleetRow]) -> list[RepoPoint]:
+def repo_points(levels: MaturityModel, repos: Sequence[FleetRow]) -> list[RepoPoint]:
     """Each repository's commit count and mean maturity, sorted by repository id."""
     team = [row for row in levels["rows"] if row["scope"] == SCOPE]
     points: list[RepoPoint] = []

@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from lib import fleet_groups as fg  # noqa: E402
 from lib.fleet import FLEET_ROW_VERSION, FleetRow  # noqa: E402
-from lib.rubric import load_rubric  # noqa: E402
+from lib.levels import load_levels  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_heatmap"
@@ -42,7 +42,7 @@ def _fragment(scope: str, two_factor: str) -> JsonDict:
 
 def build(out: Path) -> None:
     """Write ``out/groups.jsonl`` (this run) and ``out/earlier/groups.jsonl``."""
-    rubric = load_rubric(FIXTURES / "rubric.toml")
+    maturity_model = load_levels(FIXTURES / "levels.toml")
     settings = {"grpa": _fragment("grpa", "on"), "grpb": _fragment("grpb", "off"),
                 "grpc": _fragment("grpc", "unknown")}
     now = [_row("grpa/svc1", _scans(20)), _row("grpa/svc2", _scans(5)),
@@ -52,8 +52,8 @@ def build(out: Path) -> None:
     then = [_row("grpa/svc1", _scans(20)), _row("grpa/svc2", _scans(0)),
             _row("grpb/lib1", _scans(4)), _row("grpc/svc1", _scans(9)),
             _row("grpd/old", _scans(1))]
-    fg.write_groups(out, fg.roll_up(now, rubric, settings))
-    fg.write_groups(out / "earlier", fg.roll_up(then, rubric, settings))
+    fg.write_groups(out, fg.roll_up(now, maturity_model, settings))
+    fg.write_groups(out / "earlier", fg.roll_up(then, maturity_model, settings))
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ from lib.fleet_compare import FleetRun, compare, load_run, signal_changes
 from lib.fleet_groups import roll_up, write_groups
 from lib.fleet_view import FleetViewError
 from lib.fleet_stamp import FleetStamp, build_stamp, write_stamp
-from test_fleet_groups import RUBRIC
+from test_fleet_groups import LEVELS
 
 
 def _scans(lines: int, shared: bool = True) -> dict[str, Any]:
@@ -31,14 +31,14 @@ def _row(repo: str, scans: dict[str, Any] | None, active: bool = True) -> FleetR
 
 def _stamp(rows: list[FleetRow], **overrides: Any) -> FleetStamp:
     args: dict[str, Any] = {"toolkit_commit": "abc", "plugin_version": "1.2.0", "today": date(2026, 11, 20),
-                            "window": "6mo", "rubric_version": "fixture-1", "counts_only": True,
+                            "window": "6mo", "levels_version": "fixture-1", "counts_only": True,
                             "paths_hashed": False, "scans": None}
     args.update(overrides)
     return build_stamp(rows, **args)
 
 
 def _run(rows: list[FleetRow], **overrides: Any) -> FleetRun:
-    return FleetRun(_stamp(rows, **overrides), rows, roll_up(rows, RUBRIC, {}))
+    return FleetRun(_stamp(rows, **overrides), rows, roll_up(rows, LEVELS, {}))
 
 
 def _row_move(comparison: fc.Comparison, group: str, row_id: str) -> fc.RowMove:
@@ -105,8 +105,8 @@ def test_an_org_row_moves_with_settings_not_with_the_set():
     frag_on = {**frag_off, "two_factor": {"value": "on", "reason": None}}
     earlier_rows = [_row("g/a", _scans(1)), _row("g/b", _scans(1))]
     later_rows = [_row("g/a", _scans(1))]
-    earlier = FleetRun(_stamp(earlier_rows), earlier_rows, roll_up(earlier_rows, RUBRIC, {"g": frag_off}))
-    later = FleetRun(_stamp(later_rows), later_rows, roll_up(later_rows, RUBRIC, {"g": frag_on}))
+    earlier = FleetRun(_stamp(earlier_rows), earlier_rows, roll_up(earlier_rows, LEVELS, {"g": frag_off}))
+    later = FleetRun(_stamp(later_rows), later_rows, roll_up(later_rows, LEVELS, {"g": frag_on}))
     comparison = compare(earlier, later)
     move = _row_move(comparison, "g", "org2fa")
     assert move["moved"] and move["cause"] == fc.CAUSE_LEVEL
@@ -119,7 +119,7 @@ def test_an_org_row_on_both_sides_is_a_level_change_even_when_the_set_moved():
     later_rows = [_row("g/a", _scans(1))]
     earlier = _run(earlier_rows)
     later = _run(later_rows)
-    for entry in later.groups[0]["rubric"]:
+    for entry in later.groups[0]["levels"]:
         if entry["scope"] == "org":  # a level move with the settings unchanged
             entry["status"], entry["level"] = "level", 1
     comparison = compare(earlier, later)
@@ -143,7 +143,7 @@ def test_an_unchanged_rerun_shows_no_movement():
 
 
 @pytest.mark.parametrize(("override", "reason"), [
-    ({"rubric_version": "fixture-2"}, "rubric version changed"),
+    ({"levels_version": "fixture-2"}, "maturity-model version changed"),
     ({"window": "90d"}, "window changed"),
     ({"counts_only": False}, "counts-only mode changed"),
     ({"scans": ["agent_ops"]}, "scan selection changed"),

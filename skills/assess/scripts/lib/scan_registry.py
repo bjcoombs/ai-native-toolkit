@@ -516,7 +516,7 @@ SCANS: tuple[ScanSpec, ...] = (
     # stable id so a fleet roll-up counts distinct sources. Offline file reads.
     ScanSpec("shared_tooling", scan_shared_tooling, ("repo_root",), STAGE_POST_OFFERS),
     # Deterministic layer grades (issue #620): instructions_grade republished as
-    # a block, so a maturity rubric can name it in a headless or full run.
+    # a block, so a maturity model can name it in a headless or full run.
     ScanSpec("layer_grades", scan_layer_grades, ("instruction_grading",), STAGE_POST_OFFERS),
     # Instruction placement (Layer 0, issue #559): each instruction file split on
     # its headings, every section classified always-on or fetch-on-need, and the

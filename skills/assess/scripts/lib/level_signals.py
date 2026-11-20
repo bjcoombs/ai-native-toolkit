@@ -1,12 +1,12 @@
-"""The signal namespace rubric paths are checked against, and the default rubric.
+"""The signal namespace maturity model paths are checked against, and the default maturity model.
 
-``lib.rubric`` takes a pluggable ``PathValidator``; this module is the real
-one. A rubric row's ``scope`` picks the namespace:
+``lib.levels`` takes a pluggable ``PathValidator``; this module is the real
+one. A maturity model row's ``scope`` picks the namespace:
 
 - ``team`` paths read one repository's signals. The first segment is a block
   name from the published headless schema (``references/signals.schema.json``,
   ``scans.propertyNames``): the same name keys the block in a headless
-  document's ``scans`` and in a full ``run-context.json``, so one rubric reads
+  document's ``scans`` and in a full ``run-context.json``, so one maturity model reads
   either. Pass ``document["scans"]`` (or the run-context) as the repository's
   data. Where a block has a typed shape (``counts_only_schema.ROOTS``, the
   TypedDicts the counts-only allow-list is checked against) every further
@@ -15,14 +15,14 @@ one. A rubric row's ``scope`` picks the namespace:
   a typo there loads and evaluates ``unknown`` with the path named. Run-context
   keys outside the schema (``instructions_grade``, ``skills_count``) are
   rejected: a fleet run never has them. The deterministic layer grades are
-  published as the ``layer_grades`` block (``lib.layer_grades``), so a rubric
+  published as the ``layer_grades`` block (``lib.layer_grades``), so a maturity model
   names ``layer_grades.instructions_grade`` instead; a typed block, so an
   unknown field under it fails at load.
 - ``org`` paths read one group's settings fragment from ``ghreport``
   (``skills/ghreport/scripts/ghreport.sh``, "org / group settings"):
   ``scope``, ``provider``, and ``value`` / ``reason`` under each setting.
 
-``DEFAULT_RUBRIC`` (``skills/assess/rubrics/default.toml``) is a deterministic
+``DEFAULT_LEVELS`` (``skills/assess/levels/default.toml``) is a deterministic
 approximation of the 0-8 layers; its header says where and why it can disagree
 with the ``/assess`` layer verdicts.
 """
@@ -36,10 +36,10 @@ from pathlib import Path
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 from lib.counts_only_schema import ROOTS
-from lib.rubric import PathValidator, Rubric, Scope, load_rubric
+from lib.levels import PathValidator, MaturityModel, Scope, load_levels
 from lib.signals_schema import SCHEMA_PATH
 
-DEFAULT_RUBRIC = Path(__file__).resolve().parents[2] / "rubrics" / "default.toml"
+DEFAULT_LEVELS = Path(__file__).resolve().parents[2] / "levels" / "default.toml"
 
 # ghreport's settings fragment: {scope, provider, <setting>: {value, reason}}.
 ORG_SETTINGS = ("two_factor", "push_rules", "default_branch_protection", "rulesets")
@@ -112,7 +112,7 @@ def team_path_ok(path: str) -> bool:
 
 
 def signal_path_validator() -> PathValidator:
-    """The ``PathValidator`` for ``lib.rubric.load_rubric``."""
+    """The ``PathValidator`` for ``lib.levels.load_levels``."""
 
     def validate(scope: Scope, path: str) -> bool:
         return path in ORG_PATHS if scope == "org" else team_path_ok(path)
@@ -120,6 +120,6 @@ def signal_path_validator() -> PathValidator:
     return validate
 
 
-def load_default_rubric() -> Rubric:
-    """The shipped default rubric, paths checked against the schema."""
-    return load_rubric(DEFAULT_RUBRIC, signal_path_validator())
+def load_default_levels() -> MaturityModel:
+    """The shipped default maturity model, paths checked against the schema."""
+    return load_levels(DEFAULT_LEVELS, signal_path_validator())

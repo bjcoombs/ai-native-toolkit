@@ -26,7 +26,7 @@ from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 
 COMPARE_SCRIPT = Path(__file__).resolve().parents[2] / "fleet" / "scripts" / "fleet_compare.py"
-STAMP = {"fleet_stamp_version": 1, "rubric_version": None, "window": "6mo", "counts_only": True,
+STAMP = {"fleet_stamp_version": 1, "levels_version": None, "window": "6mo", "counts_only": True,
          "scans": None, "paths_hashed": False}
 
 
@@ -463,13 +463,13 @@ def _load_heatmap_cli() -> ModuleType:
 
 
 def test_heatmap_compare_uses_the_fleet_comparison_rule(froot2, tmp_path):
-    from test_fleet_groups import RUBRIC_TOML
+    from test_fleet_groups import LEVELS_TOML
     heatmap = _load_heatmap_cli()
-    rubric = tmp_path / "rubric.toml"
-    rubric.write_text(RUBRIC_TOML, encoding="utf-8")
+    maturity_model = tmp_path / "levels.toml"
+    maturity_model.write_text(LEVELS_TOML, encoding="utf-8")
 
     def run(out: str, *extra: str) -> Path:
-        assert fleet_cli.main([str(froot2), "--out", str(tmp_path / out), "--rubric", str(rubric),
+        assert fleet_cli.main([str(froot2), "--out", str(tmp_path / out), "--levels", str(maturity_model),
                                "--no-history", "--scans", "nested_instructions", *extra]) == 0
         return tmp_path / out
 
@@ -498,12 +498,12 @@ def test_compare_refuses_a_swallowed_root(froot2, tmp_path, capsys):
 
 
 def test_heatmap_reports_an_earlier_group_version_as_a_refusal(froot2, tmp_path):
-    from test_fleet_groups import RUBRIC_TOML
+    from test_fleet_groups import LEVELS_TOML
     heatmap = _load_heatmap_cli()
-    rubric = tmp_path / "rubric.toml"
-    rubric.write_text(RUBRIC_TOML, encoding="utf-8")
+    maturity_model = tmp_path / "levels.toml"
+    maturity_model.write_text(LEVELS_TOML, encoding="utf-8")
     for out in ("a", "b"):
-        assert fleet_cli.main([str(froot2), "--out", str(tmp_path / out), "--rubric", str(rubric),
+        assert fleet_cli.main([str(froot2), "--out", str(tmp_path / out), "--levels", str(maturity_model),
                                "--no-history", "--scans", "nested_instructions"]) == 0
     groups = tmp_path / "a" / "groups.jsonl"
     groups.write_text(groups.read_text(encoding="utf-8").replace('"fleet_group_version":1', '"fleet_group_version":99'),

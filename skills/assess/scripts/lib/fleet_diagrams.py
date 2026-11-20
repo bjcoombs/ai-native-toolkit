@@ -29,7 +29,7 @@ from lib import (fleet_layer_bars, fleet_maturity, fleet_quadrant, fleet_slope, 
 from lib.fleet import FleetRow
 from lib.fleet_compare import Comparison
 from lib.fleet_trends import TrendRun
-from lib.rubric import Rubric
+from lib.levels import MaturityModel
 
 REPORT_FILE = "report.md"
 # Each diagram's report heading and question, by file: the one source for a drawn
@@ -55,7 +55,7 @@ class Diagram(TypedDict):
     skipped: str | None  # the one-line reason, when skipped
 
 
-NO_LEVELS = "skipped: the run had no maturity model (--rubric), so no levels."
+NO_LEVELS = "skipped: the run had no maturity model (--levels), so no levels."
 NO_HISTORY = "skipped: the run is not kept in the run history (--no-history or --full), so no earlier runs."
 NO_TEAM_ROWS = "skipped: the maturity model has no team rows to measure maturity by."
 NO_REPOS = "skipped: no repositories in the run."
@@ -67,11 +67,11 @@ def _entry(file: str) -> Diagram:
     return {"file": file, "title": title, "question": question, "svg": None, "skipped": None}
 
 
-def _has_team_rows(levels: Rubric) -> bool:
+def _has_team_rows(levels: MaturityModel) -> bool:
     return any(row["scope"] == fleet_maturity.SCOPE for row in levels["rows"])
 
 
-def _quadrant(levels: Rubric | None, repos: Sequence[FleetRow], window: str) -> Diagram:
+def _quadrant(levels: MaturityModel | None, repos: Sequence[FleetRow], window: str) -> Diagram:
     entry = _entry(fleet_quadrant.FILE)
     if levels is None:
         entry["skipped"] = NO_LEVELS
@@ -93,7 +93,7 @@ def _tooling(repos: Sequence[FleetRow]) -> Diagram:
     return entry
 
 
-def _slope(levels: Rubric | None, comparison: Comparison | None) -> Diagram:
+def _slope(levels: MaturityModel | None, comparison: Comparison | None) -> Diagram:
     entry = _entry(fleet_slope.FILE)
     if comparison is None:
         entry["skipped"] = ("skipped: no earlier run compared (no --compare, or no history entry "
@@ -114,7 +114,7 @@ def _slope(levels: Rubric | None, comparison: Comparison | None) -> Diagram:
     return entry
 
 
-def _layer_bars(levels: Rubric | None, repos: Sequence[FleetRow]) -> Diagram:
+def _layer_bars(levels: MaturityModel | None, repos: Sequence[FleetRow]) -> Diagram:
     entry = _entry(fleet_layer_bars.FILE)
     if levels is None:
         entry["skipped"] = NO_LEVELS
@@ -129,7 +129,7 @@ def _layer_bars(levels: Rubric | None, repos: Sequence[FleetRow]) -> Diagram:
     return entry
 
 
-def _trend(levels: Rubric | None, history: Sequence[TrendRun] | None) -> Diagram:
+def _trend(levels: MaturityModel | None, history: Sequence[TrendRun] | None) -> Diagram:
     entry = _entry(fleet_trends.FILE)
     if levels is None:
         entry["skipped"] = NO_LEVELS
@@ -158,7 +158,7 @@ def _guarded(build: Callable[[], Diagram], file: str) -> Diagram:
         return entry
 
 
-def build_diagrams(levels: Rubric | None, repos: Sequence[FleetRow], window: str, *,
+def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], window: str, *,
                    history: Sequence[TrendRun] | None = None,
                    comparison: Comparison | None = None) -> list[Diagram]:
     """Every diagram for one run, in report order; never raises for a diagram's sake.

@@ -21,7 +21,7 @@ Writes are narrow and fail closed:
   existing directory on the way from the root to the entry may be a symlink;
 - a same-day entry is replaced only when it is this tool's (a readable
   ``run.json`` at the stamp version this code writes) and its stamp agrees on
-  rubric version, window, output mode, scan selection and path hashing, and
+  maturity-model version, window, output mode, scan selection and path hashing, and
   holds the same repository set (so a partial ``--from-list`` rerun never
   replaces the full-fleet entry); otherwise ``entry_conflict`` names why, the entry is kept, and
   ``choose_entry`` moves on to a suffixed sibling (``<date>.2``, ``<date>.3``,
@@ -45,6 +45,7 @@ from typing import Any
 from lib.fleet import REPOS_FILE
 from lib.fleet_doc_freshness import FRESHNESS_FILE
 from lib.fleet_groups import GROUPS_FILE
+from lib.fleet_legacy import upgrade
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 
 HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: run.json last
@@ -53,7 +54,7 @@ HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: ru
 # a same-day entry's stale copy is removed when the new run wrote none.
 OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE,)
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$")
-_MATCH_KEYS = ("rubric_version", "window", "counts_only", "scans", "paths_hashed")
+_MATCH_KEYS = ("levels_version", "window", "counts_only", "scans", "paths_hashed")
 _ENTRY = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\.([1-9][0-9]*))?$")
 MAX_SAME_DAY = 99
 
@@ -125,6 +126,7 @@ def entry_conflict(entry: Path, stamp: Mapping[str, Any], repos: frozenset[str] 
         return f"{run} is not a readable run stamp"
     if not isinstance(earlier, dict) or earlier.get("fleet_stamp_version") != FLEET_STAMP_VERSION:
         return f"{run} is not a run stamp this toolkit writes"
+    earlier = upgrade(earlier)  # an entry written before the 2.0.0 rename
     differs = [key for key in _MATCH_KEYS if earlier.get(key) != stamp.get(key)]
     if differs:
         return f"{entry} is a same-day run with a different {', '.join(differs)}"

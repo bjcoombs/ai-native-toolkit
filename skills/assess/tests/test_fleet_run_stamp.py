@@ -113,7 +113,7 @@ def test_scan_target_sets_active_only_when_asked(tmp_path, monkeypatch):
 def test_build_stamp_counts_and_serialises_deterministically(tmp_path):
     rows = [_row("a/x"), _row("a/y", active=False), _row("b/z", STATUS_FAILED)]
     stamp = build_stamp(rows, toolkit_commit="abc", plugin_version="1.0.0",
-                        today=date(2026, 11, 20), window="6mo", rubric_version=None, counts_only=True,
+                        today=date(2026, 11, 20), window="6mo", levels_version=None, counts_only=True,
                         paths_hashed=True, scans=["b", "a"])
     assert stamp["repositories"] == {"selected": 3, "scanned_ok": 2, "failed": 1, "qualifying": 1}
     assert stamp["scans"] == ["a", "b"]
@@ -130,7 +130,7 @@ def test_write_stamp_leaves_no_temp_file_on_failure(tmp_path, monkeypatch):
         raise OSError("disk full")
     monkeypatch.setattr(fleet_stamp.os, "replace", boom)
     stamp = build_stamp([], toolkit_commit=None, plugin_version="x", today=date(2026, 1, 1),
-                        window="6mo", rubric_version=None, counts_only=True, paths_hashed=False, scans=None)
+                        window="6mo", levels_version=None, counts_only=True, paths_hashed=False, scans=None)
     with pytest.raises(OSError):
         write_stamp(tmp_path, stamp)
     assert list(tmp_path.iterdir()) == []
@@ -312,7 +312,7 @@ def test_delete_after_removes_safe_clones_and_keeps_the_rest(tmp_path, monkeypat
     assert [r["active"] for r in rows] == [True, True]
     assert stamp["window"] == "6mo"
     assert stamp["scans"] == ["agent_ops"]
-    assert stamp["rubric_version"] is None
+    assert stamp["levels_version"] is None
     jsonschema.validate(stamp, build_stamp_schema())
     err = capsys.readouterr().err
     assert "deleted 1 clones, kept 1" in err

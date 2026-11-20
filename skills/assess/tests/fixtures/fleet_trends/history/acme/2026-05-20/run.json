@@ -1,1 +1,1 @@
-{"counts_only": true, "fleet_stamp_version": 1, "paths_hashed": false, "plugin_version": "2.0.0", "repositories": {"failed": 0, "qualifying": 2, "scanned_ok": 2, "selected": 2}, "rubric_version": "levels-1", "scan_date": "2026-05-20", "scans": null, "toolkit_commit": null, "window": "3mo"}
+{"counts_only": true, "fleet_stamp_version": 1, "levels_version": "levels-1", "paths_hashed": false, "plugin_version": "2.0.0", "repositories": {"failed": 0, "qualifying": 2, "scanned_ok": 2, "selected": 2}, "scan_date": "2026-05-20", "scans": null, "toolkit_commit": null, "window": "3mo"}

@@ -23,7 +23,7 @@ from lib import fleet_view as fv
 from lib.fleet import FLEET_ROW_VERSION
 from lib.fleet_group_schema import build_schema
 from lib.fleet_groups import GroupRow
-from lib.rubric import load_rubric
+from lib.levels import load_levels
 from fleet_heatmap_fixture import build
 from svg_cascade import overridden_text_attributes
 
@@ -45,7 +45,7 @@ cli = _load_cli()
 
 def _render(tmp_path: Path, *extra: str) -> str:
     out = tmp_path / "out.svg"
-    assert cli.main([str(FIXTURES), "--rubric", str(FIXTURES / "rubric.toml"),
+    assert cli.main([str(FIXTURES), "--levels", str(FIXTURES / "levels.toml"),
                      "--output", str(out), *extra]) == 0
     return out.read_text(encoding="utf-8")
 
@@ -132,7 +132,7 @@ def test_counts_in_the_subtitle_agree_in_number():
     groups = _groups()[:1]
     columns = fh.columns_for(groups, None)[:1]
     svg = fh.render_heatmap(groups, columns)
-    assert "1 group \u00b7 1 rubric row \u00b7" in svg
+    assert "1 group \u00b7 1 maturity model row \u00b7" in svg
 
 
 def test_svg_parses_has_a_background_and_no_stylesheet_override(tmp_path):
@@ -151,15 +151,15 @@ def test_comparison_text_and_removed_groups(tmp_path):
     assert "groups in the earlier run only: grpd" in texts
 
 
-def test_comparison_across_rubric_versions_is_not_shown(tmp_path):
-    earlier = [dict(g, rubric_version="fixture-0") for g in _groups()]
+def test_comparison_across_levels_versions_is_not_shown(tmp_path):
+    earlier = [dict(g, levels_version="fixture-0") for g in _groups()]
     path = _write_lines(tmp_path / "earlier.jsonl", list(earlier))
     svg = _render(tmp_path, "--compare", str(path))
-    assert "change not shown: the earlier run used rubric fixture-0, this run fixture-1" in svg
+    assert "change not shown: the earlier run used maturity model fixture-0, this run fixture-1" in svg
     assert "+2" not in svg
 
 
-def test_without_a_rubric_file_levels_index_the_ramp(tmp_path):
+def test_without_a_levels_file_levels_index_the_ramp(tmp_path):
     out = tmp_path / "plain.svg"
     assert cli.main([str(FIXTURES / "groups.jsonl"), "--output", str(out)]) == 0
     svg = out.read_text(encoding="utf-8")
@@ -219,8 +219,8 @@ def test_change_text(change, text):
 
 def test_unknown_with_no_missing_signal_says_no_evidence():
     (group, *_rest) = _groups()
-    entry = dict(group["rubric"][0], status="unknown", level=None, missing_signals=[])
-    empty: GroupRow = dict(group, rubric=[entry])  # type: ignore[assignment]
+    entry = dict(group["levels"][0], status="unknown", level=None, missing_signals=[])
+    empty: GroupRow = dict(group, levels=[entry])  # type: ignore[assignment]
     columns: list[fh.Column] = [{"id": entry["id"], "title": "t", "top": 1}]
     assert list(fh.unknown_keys([empty], columns)) == ["no evidence (no repository scanned)"]
 
@@ -232,8 +232,8 @@ def test_load_groups_reads_a_directory_or_a_file_sorted():
     by_dir = fv.load_groups(FIXTURES)
     assert by_dir == fv.load_groups(FIXTURES / "groups.jsonl")
     assert [g["group"] for g in by_dir] == sorted(g["group"] for g in by_dir)
-    assert fv.rubric_columns(by_dir) == ["org2fa", "teamdocs"]
-    assert fv.run_rubric_version(by_dir) == "fixture-1"
+    assert fv.level_columns(by_dir) == ["org2fa", "teamdocs"]
+    assert fv.run_levels_version(by_dir) == "fixture-1"
 
 
 def _one() -> dict[str, object]:
@@ -245,15 +245,15 @@ def _one() -> dict[str, object]:
     ([[1]], "not a JSON object"),
     ([dict(_one(), fleet_group_version=99)], "fleet_group_version is 99, expected 1"),
     ([dict(_one(), group=None)], "needs a string 'group'"),
-    ([dict(_one(), rubric=[{"id": "x"}])], "lacks one of"),
-    ([dict(_one(), rubric=[{"id": "x", "status": "maybe", "level": None,
+    ([dict(_one(), levels=[{"id": "x"}])], "lacks one of"),
+    ([dict(_one(), levels=[{"id": "x", "status": "maybe", "level": None,
                             "missing_signals": [], "unknown_repos": []}])], "no whole level"),
     ([_one(), _one()], "appears twice"),
-    ([{k: v for k, v in _one().items() if k != "rubric_version"}], "rubric_version"),
-    ([dict(_one(), rubric_version=3)], "rubric_version"),
-    ([dict(_one(), rubric=[{"id": "x", "status": "unknown", "level": None,
+    ([{k: v for k, v in _one().items() if k != "levels_version"}], "levels_version"),
+    ([dict(_one(), levels_version=3)], "levels_version"),
+    ([dict(_one(), levels=[{"id": "x", "status": "unknown", "level": None,
                             "missing_signals": "sig", "unknown_repos": []}])], "malformed"),
-    ([dict(_one(), rubric=[{"id": 1, "status": "unknown", "level": None,
+    ([dict(_one(), levels=[{"id": 1, "status": "unknown", "level": None,
                             "missing_signals": [], "unknown_repos": []}])], "malformed"),
 ])
 def test_load_groups_refuses_malformed_runs(tmp_path, rows, message):
@@ -277,7 +277,7 @@ def test_read_repos_reads_a_directory_or_a_file_sorted(tmp_path):
 def test_an_empty_run_loads_as_no_groups_and_the_heat_map_exits_2(tmp_path, capsys):
     (tmp_path / "groups.jsonl").write_text("", encoding="utf-8")
     assert fv.load_groups(tmp_path) == []
-    assert fv.run_rubric_version([]) is None
+    assert fv.run_levels_version([]) is None
     assert cli.main([str(tmp_path)]) == 2
     assert "no groups" in capsys.readouterr().err
     assert not (tmp_path / cli.HEATMAP_FILE).exists()
@@ -288,7 +288,7 @@ def test_an_empty_run_loads_as_no_groups_and_the_heat_map_exits_2(tmp_path, caps
 
 def test_a_boolean_level_is_not_a_whole_level(tmp_path):
     entry = {"id": "x", "status": "level", "level": True, "missing_signals": [], "unknown_repos": []}
-    path = _write_lines(tmp_path / "groups.jsonl", [dict(_one(), rubric=[entry])])
+    path = _write_lines(tmp_path / "groups.jsonl", [dict(_one(), levels=[entry])])
     with pytest.raises(fv.FleetViewError, match="no whole level"):
         fv.load_groups(path)
 
@@ -300,43 +300,43 @@ def test_load_groups_missing_file(tmp_path):
 
 def test_run_shape_errors():
     a, b, *_rest = _groups()
-    with pytest.raises(fv.FleetViewError, match="--rubric"):
-        fv.rubric_columns([dict(a, rubric=[])])  # type: ignore[list-item]
-    with pytest.raises(fv.FleetViewError, match="different rubric rows"):
-        fv.rubric_columns([a, dict(b, rubric=b["rubric"][:1])])  # type: ignore[list-item]
-    with pytest.raises(fv.FleetViewError, match="different rubric versions"):
-        fv.run_rubric_version([a, dict(b, rubric_version="other")])  # type: ignore[list-item]
-    with pytest.raises(fv.FleetViewError, match="no rubric row"):
+    with pytest.raises(fv.FleetViewError, match="--levels"):
+        fv.level_columns([dict(a, levels=[])])  # type: ignore[list-item]
+    with pytest.raises(fv.FleetViewError, match="different maturity model rows"):
+        fv.level_columns([a, dict(b, levels=b["levels"][:1])])  # type: ignore[list-item]
+    with pytest.raises(fv.FleetViewError, match="different maturity-model versions"):
+        fv.run_levels_version([a, dict(b, levels_version="other")])  # type: ignore[list-item]
+    with pytest.raises(fv.FleetViewError, match="no maturity model row"):
         fv.cell(a, "absent")
 
 
-def test_check_rubric_refuses_another_rubric(tmp_path):
-    rubric = load_rubric(FIXTURES / "rubric.toml")
-    fv.check_rubric(rubric, _groups())
+def test_check_levels_refuses_another_levels(tmp_path):
+    maturity_model = load_levels(FIXTURES / "levels.toml")
+    fv.check_levels(maturity_model, _groups())
     with pytest.raises(fv.FleetViewError, match="version"):
-        fv.check_rubric(dict(rubric, version="fixture-2"), _groups())  # type: ignore[arg-type]
+        fv.check_levels(dict(maturity_model, version="fixture-2"), _groups())  # type: ignore[arg-type]
     with pytest.raises(fv.FleetViewError, match="rows differ"):
-        fv.check_rubric(dict(rubric, rows=rubric["rows"][:1]), _groups())  # type: ignore[arg-type]
+        fv.check_levels(dict(maturity_model, rows=maturity_model["rows"][:1]), _groups())  # type: ignore[arg-type]
 
 
-def test_check_rubric_names_a_run_without_a_rubric():
-    rubric = load_rubric(FIXTURES / "rubric.toml")
-    bare = [dict(g, rubric_version=None, rubric=[]) for g in _groups()]
+def test_check_levels_names_a_run_without_a_levels():
+    maturity_model = load_levels(FIXTURES / "levels.toml")
+    bare = [dict(g, levels_version=None, levels=[]) for g in _groups()]
     with pytest.raises(fv.FleetViewError) as exc:
-        fv.check_rubric(rubric, bare)  # type: ignore[arg-type]
-    assert "without --rubric" in str(exc.value)
+        fv.check_levels(maturity_model, bare)  # type: ignore[arg-type]
+    assert "without --levels" in str(exc.value)
     assert "None" not in str(exc.value)
 
 
-def test_comparison_against_a_run_without_a_rubric_says_so():
-    bare = [dict(g, rubric_version=None, rubric=[]) for g in _groups()]
+def test_comparison_against_a_run_without_a_maturity_model_says_so():
+    bare = [dict(g, levels_version=None, levels=[]) for g in _groups()]
     then_bare = fv.compare_levels(_groups(), bare)  # type: ignore[arg-type]
     assert not then_bare["comparable"]
-    assert then_bare["note"] == ("change not shown: the earlier run had no rubric, "
-                                 "this run used rubric fixture-1")
+    assert then_bare["note"] == ("change not shown: the earlier run had no maturity model, "
+                                 "this run used maturity model fixture-1")
     now_bare = fv.compare_levels(bare, _groups())  # type: ignore[arg-type]
-    assert now_bare["note"] == ("change not shown: the earlier run used rubric fixture-1, "
-                                "this run had no rubric")
+    assert now_bare["note"] == ("change not shown: the earlier run used maturity model fixture-1, "
+                                "this run had no maturity model")
 
 
 def test_compare_levels_kinds():
@@ -356,17 +356,17 @@ def test_compare_levels_kinds():
 # --- CLI exit codes -------------------------------------------------------
 
 
-def test_cli_exits_2_on_a_run_without_rubric_levels(tmp_path, capsys):
-    path = _write_lines(tmp_path / "groups.jsonl", [dict(_one(), rubric=[], rubric_version=None)])
+def test_cli_exits_2_on_a_run_without_maturity_levels(tmp_path, capsys):
+    path = _write_lines(tmp_path / "groups.jsonl", [dict(_one(), levels=[], levels_version=None)])
     assert cli.main([str(path)]) == 2
-    assert "--rubric" in capsys.readouterr().err
+    assert "--levels" in capsys.readouterr().err
 
 
-def test_cli_exits_2_on_a_rubric_file_from_another_run(tmp_path, capsys):
+def test_cli_exits_2_on_a_levels_file_from_another_run(tmp_path, capsys):
     other = tmp_path / "other.toml"
     other.write_text(re.sub(r'version = "fixture-1"', 'version = "fixture-9"',
-                            (FIXTURES / "rubric.toml").read_text(encoding="utf-8")), encoding="utf-8")
-    assert cli.main([str(FIXTURES), "--rubric", str(other), "--output", str(tmp_path / "x.svg")]) == 2
+                            (FIXTURES / "levels.toml").read_text(encoding="utf-8")), encoding="utf-8")
+    assert cli.main([str(FIXTURES), "--levels", str(other), "--output", str(tmp_path / "x.svg")]) == 2
     assert "fixture-9" in capsys.readouterr().err
     assert not (tmp_path / "x.svg").exists()
 

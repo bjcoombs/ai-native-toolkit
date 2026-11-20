@@ -46,13 +46,14 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from lib import fleet_svg as svg
-from lib.fleet_groups import GROUPS_FILE, GroupRow, RubricRowLevel
+from lib.fleet_groups import GROUPS_FILE, GroupRow, RowLevel
+from lib.fleet_legacy import upgrade
 from lib.fleet_history import dated_entries, entry_repos
 from lib.fleet_maturity import SCOPE, mean_share
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 from lib.fleet_svg import THEMED_HATCH, LinearScale
 from lib.fleet_view import load_groups
-from lib.rubric import Rubric
+from lib.levels import MaturityModel
 
 TITLE = "Group maturity over time"
 FILE = "trend.svg"
@@ -93,9 +94,9 @@ class TrendRun(TypedDict):
 # --- reading the history ------------------------------------------------------
 
 
-def _known(group: GroupRow) -> list[RubricRowLevel]:
+def _known(group: GroupRow) -> list[RowLevel]:
     """The group's team rows with a whole level."""
-    return [row for row in group["rubric"] if row["scope"] == SCOPE and row["status"] == "level"
+    return [row for row in group["levels"] if row["scope"] == SCOPE and row["status"] == "level"
             and type(row["level"]) is int]
 
 
@@ -110,7 +111,7 @@ def group_mean(group: GroupRow) -> float | None:
     return mean_share((row["level"], row.get("top_level")) for row in _known(group))
 
 
-def with_top_levels(groups: Sequence[GroupRow], levels: Rubric | None,
+def with_top_levels(groups: Sequence[GroupRow], levels: MaturityModel | None,
                     version: str) -> list[GroupRow]:
     """``groups`` with each row lacking ``top_level`` given the row's level count from
     ``levels`` when the entry used that maturity-model version; else unchanged."""
@@ -119,20 +120,20 @@ def with_top_levels(groups: Sequence[GroupRow], levels: Rubric | None,
     tops = {row["id"]: len(row["levels"]) for row in levels["rows"]}
     filled: list[GroupRow] = []
     for group in groups:
-        rows: list[RubricRowLevel] = []
-        for row in group["rubric"]:
+        rows: list[RowLevel] = []
+        for row in group["levels"]:
             if "top_level" not in row and row["id"] in tops:
                 row = {**row, "top_level": tops[row["id"]]}
             rows.append(row)
-        filled.append({**group, "rubric": rows})
+        filled.append({**group, "levels": rows})
     return filled
 
 
 def trend_run(stamp: Mapping[str, Any], groups: Sequence[GroupRow],
-              levels: Rubric | None = None) -> TrendRun | None:
+              levels: MaturityModel | None = None) -> TrendRun | None:
     """One run's point per group; None when the run had no maturity model. ``levels`` (this
     run's maturity model) supplies top levels an entry of the same version did not record."""
-    version = stamp.get("rubric_version")
+    version = stamp.get("levels_version")
     if not isinstance(version, str) or not isinstance(stamp.get("scan_date"), str):
         return None
     groups = with_top_levels(groups, levels, version)
@@ -161,10 +162,12 @@ def _comparable(stamp: Any, current: FleetStamp) -> bool:
             and all(stamp.get(key) == current.get(key) for key in MATCH_KEYS))
 
 
-def _read_entry(entry: Path, current: FleetStamp, levels: Rubric | None) -> TrendRun | None:
+def _read_entry(entry: Path, current: FleetStamp, levels: MaturityModel | None) -> TrendRun | None:
     """The entry as a trend point; None when it is unreadable or not comparable."""
     try:
         stamp: Any = json.loads((entry / RUN_FILE).read_text(encoding="utf-8"))
+        if isinstance(stamp, dict):
+            stamp = upgrade(stamp)  # an entry written before the 2.0.0 rename
         if not _comparable(stamp, current):
             return None
         return trend_run(stamp, load_groups(entry / GROUPS_FILE), levels)
@@ -173,7 +176,7 @@ def _read_entry(entry: Path, current: FleetStamp, levels: Rubric | None) -> Tren
 
 
 def history_runs(org_dir: Path, current: FleetStamp, repos: frozenset[str],
-                 levels: Rubric | None = None) -> list[TrendRun]:
+                 levels: MaturityModel | None = None) -> list[TrendRun]:
     """Earlier comparable runs under ``org_dir``, one per scan date before this run's, oldest
     first; ``levels`` is this run's maturity model (``trend_run``)."""
     by_date: dict[str, list[tuple[int, Path, TrendRun]]] = {}

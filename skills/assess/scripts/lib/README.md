@@ -231,7 +231,12 @@ import edges `front_door_ratio` is measured over; 0 means that ratio's 1.0 is va
 available with `modularity_q` null and `modularity_reason` `no_import_edges` (null when Q
 was measured): modules that never import each other have no community structure, and a
 0.0 would read as tangled, so the maturity model's Layer 2 row reads unknown (issue #682).
-Tests: `tests/test_structure_graph.py`, `tests/test_rubric_signals.py`,
+`modularity_q` is therefore null in two cases: an edgeless graph (`modularity_reason`
+`no_import_edges`) and an unavailable block (`available` false; the cause is in
+`structure.reason`). A headless run reduces that block to the bare marker, whose reason
+opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`;
+`lib/headless_layers.py`), so `modularity_q` is absent there rather than null.
+Tests: `tests/test_structure_graph.py`, `tests/test_level_signals.py`,
 `tests/test_headless_layers.py` (a full signals run and a counts-only one).
 
 Packages resolve by path, never by import name. grimp's default finder asks
@@ -655,7 +660,7 @@ rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
 scc languages, no hotspot lists). Every unavailable block is the bare marker with a
 `code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_rg`,
 `not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
-and a rubric row reads `unknown`. It diverges from the full run in two places: no ownership
+and a maturity model row reads `unknown`. It diverges from the full run in two places: no ownership
 map reads `no_ownership_map` (the full run omits the block), and `stats_summary` covers
 lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
@@ -664,7 +669,7 @@ lizard's languages only. Tests:
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
 `SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, a `scans` map
 whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
-custom table, and the namespace `rubric_signals.py` checks paths against), open per-scan
+custom table, and the namespace `level_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
 `reason`. `tests/test_signals.py` fails when the checked-in file differs from
 `build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
@@ -705,7 +710,7 @@ readers consume it). Subprocess, not import, keeps it off the orchestrator layer
 The group roll-up behind `groups.jsonl` (issue #568). `roll_up` groups `FleetRow`s by
 `group` (sorted) and `group_row` builds each `GroupRow`: repository counts, distinct
 shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanned rows
-only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each rubric row's level through `rubric.evaluate` with its
+only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each maturity model row's level through `levels.evaluate` with its
 `top_level` (the row's number of levels, #684, so a history entry reads as a share of top
 level without the model file; additive and `NotRequired`, absent in older rows), with
 no threshold config of its own. `load_settings` reads ghreport settings fragments
@@ -713,22 +718,22 @@ no threshold config of its own. `load_settings` reads ghreport settings fragment
 `scope`, and raises `SettingsError` on a directory with no `*.json` fragment file;
 `settings_for` joins a group to the exact scope or the nearest ancestor;
 `normalise_settings` keeps each `{value, reason}` or, for `unknown`, turns it into
-`{available: false, reason}` so `rubric.resolve_signal` reads it unavailable and the
+`{available: false, reason}` so `levels.resolve_signal` reads it unavailable and the
 org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
-else `set`; a value's reason `null`, an unavailable one's `unknown`). Rubric data follows
-`rubric_signals`' namespaces: `repo_signals` is a
+else `set`; a value's reason `null`, an unavailable one's `unknown`). Maturity model data follows
+`level_signals`' namespaces: `repo_signals` is a
 repository's `scans` map (a failed repository's is empty, so it is an unknown
 repository, never a passing one) and `settings_signals` the normalised settings plus
-the fragment's `scope` and `provider`. The CLI loads the rubric with
-`rubric_signals.signal_path_validator()`.
+the fragment's `scope` and `provider`. The CLI loads the maturity model with
+`level_signals.signal_path_validator()`.
 `write_groups` writes atomically with sorted keys.
 
 **`fleet_next_steps.py`**
 The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
-(issue #571). `build_pages` re-runs `rubric.evaluate` per group on exactly the inputs
+(issue #571). `build_pages` re-runs `levels.evaluate` per group on exactly the inputs
 `fleet_groups` evaluated (`repo_signals`, `settings_for`, `settings_signals`), then
 checks each row's status and level against `groups.jsonl` and raises
-`NextStepsError` on any difference (a different `--rubric` or `--settings`, or files
+`NextStepsError` on any difference (a different `--levels` or `--settings`, or files
 from two runs). Each page: a levels table, then per row the next level's unmet
 criteria, collected cumulatively over levels 1..next (under `share` a repository can
 sit below the group level), one numbered step per criterion. A team step lists the
@@ -739,7 +744,7 @@ An `unknown` row (keyed on `status`, not on `missing_signals`) names each missin
 signal, how many repositories lack it and how to measure it, the rolled-up bounds,
 and the criteria measured repositories already fail above the high bound. Values
 print counts-only (`scalar`: numbers, booleans, `TOKEN_RE` tokens, else `set`);
-rubric titles are escaped (`text`), ids are code spans (`code`). `write_pages` writes
+maturity model titles are escaped (`text`), ids are code spans (`code`). `write_pages` writes
 `teams.md` and `teams/<group>.md` after `clear_pages` removes the previous run's
 `*.md` pages, and refuses a path that resolves outside the output directory;
 `page_path` refuses an id with an empty, dot or backslash segment. Golden pages:
@@ -747,7 +752,7 @@ rubric titles are escaped (`text`), ids are code spans (`code`). `write_pages` w
 module's docstring).
 
 **`next_step_guidance.py`**
-Repository-native wording for a rubric criterion. `guidance(signal, op, value)` gives
+Repository-native wording for a maturity model criterion. `guidance(signal, op, value)` gives
 the one change and a "done when" a maintainer checks without the plugin (a file
 state, a command, a platform setting), templated on the criterion's own operator and
 value. A compound check (`agent_environment.layer5_cap.applies`) is worded on the
@@ -758,11 +763,11 @@ then states the signal expression alone. `measure_hint(signal)` says why a signa
 be unavailable (a full `/assess` run only, a network read, an opt-in pass, a ghreport
 permission; for the `structure`, `stats_summary` and `promissory_markers` blocks a missing
 grimp, networkx, lizard or `rg`, and for `structure_drift` no ownership map). Every signal of
-`rubrics/default.toml` has wording (tested).
+`levels/default.toml` has wording (tested).
 
 **`fleet_group_schema.py`**
 Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
-`RubricRowLevel` (lists and floats included, `settings` values as `{value, reason}` or
+`RowLevel` (lists and floats included, `settings` values as `{value, reason}` or
 `{available: false, reason}`; a `NotRequired` key, such as `top_level`, is left out of
 `required`). `tests/test_fleet_groups.py` fails when the checked-in
 file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
@@ -774,22 +779,22 @@ heat map (#570) and the per-team pages (#571) read the run through it and never 
 `read_jsonl` reads one file, each line a JSON object at the expected envelope version,
 and raises `FleetViewError` naming `file:line` otherwise; `read_repos` returns the
 `repos.jsonl` rows sorted by repository id (a row needs `repo` and `group` ids).
-`load_groups` takes the file or the run directory, checks the rubric-entry fields a view
+`load_groups` takes the file or the run directory, checks the maturity model entry fields a view
 reads (`FleetViewError` names the line), refuses a duplicate
 group and sorts by group; an empty file (no repository scanned) is `[]`, and the heat
-map exits 2 on it while the team pages write an empty index. `rubric_columns` gives the rubric row ids in rubric order (the
-same for every group; a run without `--rubric` is refused), `run_rubric_version` the one
-version, `check_rubric` matches a rubric file (titles, top levels) to the run (a run
-without `--rubric` is refused as such, before any version check), and
+map exits 2 on it while the team pages write an empty index. `level_columns` gives the maturity model row ids in maturity model order (the
+same for every group; a run without `--levels` is refused), `run_levels_version` the one
+version, `check_levels` matches a maturity model file (titles, top levels) to the run (a run
+without `--levels` is refused as such, before any version check), and
 `compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,
-`delta` or `was`), marking the comparison not comparable across rubric versions (a run
-without a rubric is named as having none, not as rubric `None`).
+`delta` or `was`), marking the comparison not comparable across maturity-model versions (a run
+without a maturity model is named as having none, not as maturity model `None`).
 
 **`fleet_heatmap.py`**
 The leadership heat map behind `skills/fleet/scripts/heatmap.py` (#570), stdlib only (no
-`treemap_render`, which loads numpy). `render_heatmap` draws groups as rows and rubric
+`treemap_render`, which loads numpy). `render_heatmap` draws groups as rows and maturity model
 rows as columns from `fleet_view` data: fill from the hardcoded ColorBrewer OrRd 9-class
-ramp (`ORRD_9`; `ramp_step` scales a level by its row's top level when a rubric file
+ramp (`ORRD_9`; `ramp_step` scales a level by its row's top level when a maturity model file
 gives one, else indexes the ramp), text colour from the per-step `STEP_TEXT` table, and
 every known cell prints its level. `unknown` is the hatched `UNKNOWN_FILL`, never a ramp
 colour; the cell prints `?` and a key letter (`unknown_keys`, deduplicated in reading
@@ -833,7 +838,7 @@ scale. Pure arithmetic.
 The activity x maturity quadrant (#674). `repo_points(levels, repos)` gives each repository
 its commit count (`ai_usage.total_commits` over the run window; `None` for a failed scan or
 an unavailable block) and maturity: each `team` row re-evaluated against the repository's
-own `scans` (`rubric.evaluate_row`), as a share of the row's top level, averaged over the
+own `scans` (`levels.evaluate_row`), as a share of the row's top level, averaged over the
 rows that could be measured (`fleet_maturity.mean_share`; `None` when none could). Below 5 at
 the top, the commit axis ticks every whole commit (`count_ticks`, #684), never 0.2. `layout` places the plotted points
 and their labels (captions in `CAPTIONS` are obstacles); `render_quadrant` draws them with
@@ -867,7 +872,7 @@ carries a `*` explained under the chart.
 
 **`fleet_layer_bars.py`**
 The per-layer maturity bars (#675). `layer_bars(levels, repos)` evaluates every `team` row
-against each repository's own `scans` (`rubric.evaluate_row`) and counts repositories per
+against each repository's own `scans` (`levels.evaluate_row`) and counts repositories per
 level, with the undetermined ones (failed scan, uncollected signal) apart. `render_layer_bars`
 stacks them pale to dark on the heat map's ramp (`fleet_svg.ramp_step`, so a row's top level is
 the darkest step whatever its level count), the unknown segment hatched and its repositories
@@ -921,7 +926,7 @@ Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 
 **`fleet_stamp.py`**
 The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
-commit, plugin version, UTC scan date, effective window, rubric version, output mode
+commit, plugin version, UTC scan date, effective window, maturity-model version, output mode
 (`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
 `scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true). No path,
 salt, timing or input mode, so a
@@ -979,7 +984,7 @@ the old copy so an entry never mixes runs). `history_root` is
 or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` rejects a
 name that is not one plain path component, `entry_dir` refuses a symlinked directory on
 the way, and `entry_conflict` keeps a same-day entry that is not this tool's (no readable
-`run.json` at the current stamp version) or whose stamp differs in rubric version,
+`run.json` at the current stamp version) or whose stamp differs in maturity-model version,
 window, output mode, scan selection or path hashing, or that holds a different
 repository set (`entry_repos`), so a partial rerun never replaces a full-fleet entry;
 `choose_entry` then moves to
@@ -992,16 +997,29 @@ directory renamed into place in one step, and a replaced same-day entry loses it
 `run.json` before the new files move in (`run.json` last), so a failure part-way never
 leaves a mixed entry that `latest_matching` selects. Other files in an entry are kept.
 
+**`fleet_legacy.py`**
+Reads fleet output written before the 2.0.0 maturity-model rename (issue #670). `upgrade`
+moves each pre-rename key in a `run.json` stamp or `groups.jsonl` line to its new name
+(`RENAMED_KEYS`: the version key to `levels_version`, the row list to `levels`); a key
+already under its new name wins, and the input is never mutated. `fleet_view._check_row`,
+`fleet_compare.load_run`, `fleet_history.entry_conflict` and `fleet_trends` (history
+entries) call it. A pre-rename run then loads, matches as a same-day or baseline history
+entry, and counts in the trend history; `--compare` judges it by the usual rules, so a run
+from another plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
+never as a malformed stamp. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
+stay at 1 for this reason: their readers reject any other version. Tests:
+`tests/test_fleet_legacy.py`, over a pre-rename run in `tests/fixtures/fleet_legacy/`.
+
 **`fleet_compare.py`**
 Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
 `skills/fleet/scripts/fleet_compare.py`. `load_run` reads a run directory (raising
 `RunVersionError` for another envelope version or a run with no `run.json`, which callers
 turn into a not-comparable result). `comparability` reuses
 `diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
-adds rubric version, window, output mode, scan selection and path hashing; any reason
+adds maturity-model version, window, output mode, scan selection and path hashing; any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
-the row's `active`) apart from level movement: each group's rubric rows then and now with
+the row's `active`) apart from level movement: each group's maturity model rows then and now with
 a `cause` of `level` (set unchanged), `set` (the group or row on one side, or only a
 team row's set moved) or `set_and_level` (a team row's set and evidence moved). An org
 row reads the group's settings, not its repositories, so on both sides it is `level`. `signal_changes` lists the changed leaves of each repository's `scans` map.
@@ -1466,8 +1484,8 @@ a helper extraction.
 
 ### Scoring
 
-**`rubric.py`**
-Loads a caller-supplied maturity rubric (TOML via stdlib `tomllib`) and evaluates it
+**`levels.py`**
+Loads a caller-supplied maturity model (TOML via stdlib `tomllib`) and evaluates it
 from signals with no model in the path. Rows carry an id, a title, a scope (`org`:
 once per group from the group settings; `team`: per repository from its
 `run-context.json`, rolled up by the declared `min` or `share` rule) and whole levels
@@ -1483,24 +1501,27 @@ is the resolved value only when it is a finite scalar, null otherwise, and
 `dumps_result` writes with `allow_nan=False`, so a result is always strict JSON (#602). Every level's unmet criteria are in the result for next-step guidance.
 A team roll-up applies the rule to the low and the high bounds and reports a level
 only when both agree; `unknown_repos` names the repositories whose level is open.
-`load_rubric` / `parse_rubric` raise `RubricError` before evaluation on a missing
+`load_levels` / `parse_levels` raise `LevelsError` before evaluation on a missing
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
-rejects. `evaluate` stamps the rubric version; `dumps_result` is byte-identical on
-rerun. Tests: `tests/test_rubric.py` with fixtures under `tests/fixtures/rubric/`.
+rejects. `evaluate` stamps the maturity-model version; `dumps_result` is byte-identical on
+rerun. `add_renamed_flag` registers the pre-2.0.0 flag (`RENAMED_FLAG`) on a fleet script's
+parser, hidden from `--help`: any use of it exits 2 with one line naming `--levels` (#670).
+Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`; the renamed
+flag in `tests/test_fleet_legacy.py`.
 
-**`rubric_signals.py`**
-The real `PathValidator` for `rubric.py`, and the default rubric. A `team` path's first
+**`level_signals.py`**
+The real `PathValidator` for `levels.py`, and the default maturity model. A `team` path's first
 segment must be a block name the published headless schema lists
 (`references/signals.schema.json`, `scans.propertyNames`, generated from
-`signals.known_scans`), so one rubric reads a headless document's `scans` or a full
+`signals.known_scans`), so one maturity model reads a headless document's `scans` or a full
 `run-context.json`; run-context keys outside the schema (`instructions_grade`) are
 rejected, and the deterministic layer grades are read through the `layer_grades` block
 instead (`layer_grades.instructions_grade`). Where `counts_only_schema.ROOTS` types the block, every further segment must
 name a field and end on a scalar (no list, no object); an untyped block is open. An
 `org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
-`<setting>.value` / `.reason`). `load_default_rubric` loads
-`skills/assess/rubrics/default.toml`: one team row per layer 0-8, level 1 for
+`<setting>.value` / `.reason`). `load_default_levels` loads
+`skills/assess/levels/default.toml`: one team row per layer 0-8, level 1 for
 Partial and 2 for Present. Layers 2-4 have no deterministic grade, so their rows read
 proxies from the `structure`, `promissory_markers`, `structure_drift` and `stats_summary`
 blocks, which full and headless runs both produce (import-graph modularity and front doors; lint
@@ -1509,7 +1530,7 @@ so an absent signal is never credited (the practice /assess looks for can still 
 absent: the header says where). It can disagree with the `/assess` layer verdicts (the file header lists
 where); no instruction file reads level 0 through the never-null
 `layer_grades.instruction_file_present`, not `unknown`. Tests:
-`tests/test_rubric_signals.py`, on headless runs of the golden fixture repositories
+`tests/test_level_signals.py`, on headless runs of the golden fixture repositories
 and the golden `run-context.json`.
 
 **`instruction_files.py`**
@@ -2321,16 +2342,16 @@ Tests: `tests/test_shared_tooling.py`.
 
 **`layer_grades.py`**
 Deterministic layer grades as one registered block (issue #620), so the headless
-signals document carries them and a maturity rubric can name them.
+signals document carries them and a maturity model can name them.
 `scan_layer_grades(instruction_grading)` reads the setup grading
 (`run_setup.instruction_grading`) and writes `{instructions_grade,
 instruction_file_present}`: the best letter grade of the tracked, present instruction
 files (null with none, the top-level `instructions_grade` value, which stays) and
-whether one exists, so a rubric can score "no instruction file" as level 0 rather
+whether one exists, so a maturity model can score "no instruction file" as level 0 rather
 than unknown. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
-default rubric's rows for them read proxies, and its header says how they diverge). A short token and a boolean, kept whole by the
-counts-only filter. Tests: `tests/test_layer_grades.py`, and the rubric rows in
-`tests/test_rubric_signals.py`.
+default maturity model's rows for them read proxies, and its header says how they diverge). A short token and a boolean, kept whole by the
+counts-only filter. Tests: `tests/test_layer_grades.py`, and the maturity model rows in
+`tests/test_level_signals.py`.
 
 **`claude_config_fields.py`**
 The documented frontmatter field sets `claude_config` checks against: skill and

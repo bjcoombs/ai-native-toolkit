@@ -2,8 +2,8 @@
 
 One JSON object per run, beside ``repos.jsonl``, saying what produced it: the
 toolkit commit and plugin version, the scan date, the history window, the
-rubric version, the output mode and the repository counts. Comparisons
-(#552) refuse or flag runs whose stamps disagree on the rubric or window.
+maturity-model version, the output mode and the repository counts. Comparisons
+(#552) refuse or flag runs whose stamps disagree on the maturity model or window.
 
 Repository counts:
 
@@ -30,7 +30,9 @@ from typing import TypedDict
 
 from lib.fleet import STATUS_OK, FleetRow
 
-# Bumped when the stamp's keys change.
+# Bumped when the stamp's keys change, except for the 2.0.0 maturity-model key renames
+# (#670): readers reject any other version, so lib/fleet_legacy.py maps the old keys
+# instead and earlier history entries still match.
 FLEET_STAMP_VERSION = 1
 RUN_FILE = "run.json"
 
@@ -48,7 +50,7 @@ class FleetStamp(TypedDict):
     plugin_version: str
     scan_date: str  # UTC, YYYY-MM-DD
     window: str  # the effective --window, e.g. "6mo"
-    rubric_version: str | None  # None without --rubric
+    levels_version: str | None  # None without --levels
     counts_only: bool
     paths_hashed: bool  # never the salt itself
     scans: list[str] | None  # requested scans, sorted; None for all
@@ -67,7 +69,7 @@ def count_repositories(rows: list[FleetRow]) -> RepositoryCounts:
 
 def build_stamp(
     rows: list[FleetRow], *, toolkit_commit: str | None, plugin_version: str,
-    today: date, window: str, rubric_version: str | None, counts_only: bool, paths_hashed: bool,
+    today: date, window: str, levels_version: str | None, counts_only: bool, paths_hashed: bool,
     scans: list[str] | None,
 ) -> FleetStamp:
     return {
@@ -76,7 +78,7 @@ def build_stamp(
         "plugin_version": plugin_version,
         "scan_date": today.isoformat(),
         "window": window,
-        "rubric_version": rubric_version,
+        "levels_version": levels_version,
         "counts_only": counts_only,
         "paths_hashed": paths_hashed,
         "scans": sorted(scans) if scans is not None else None,

@@ -474,7 +474,7 @@ def _run_files(out: Path, freshness: bool) -> None:
     (out / "repos.jsonl").write_text('{"repo": "org/a"}\n')
     (out / "groups.jsonl").write_text("{}\n")
     (out / "run.json").write_text(json.dumps(
-        {"fleet_stamp_version": 1, "rubric_version": None, "window": "6mo", "counts_only": True,
+        {"fleet_stamp_version": 1, "levels_version": None, "window": "6mo", "counts_only": True,
          "scans": None, "paths_hashed": False}))
     path = out / fdf.FRESHNESS_FILE
     if freshness:
@@ -484,7 +484,7 @@ def _run_files(out: Path, freshness: bool) -> None:
 
 
 def test_history_keeps_doc_freshness_and_drops_a_stale_same_day_copy(tmp_path):
-    stamp = json.loads(json.dumps({"fleet_stamp_version": 1, "rubric_version": None, "window": "6mo",
+    stamp = json.loads(json.dumps({"fleet_stamp_version": 1, "levels_version": None, "window": "6mo",
                                    "counts_only": True, "scans": None, "paths_hashed": False}))
     out, entry = tmp_path / "out", tmp_path / "hist" / "org" / "2026-11-20"
     _run_files(out, freshness=True)
@@ -498,7 +498,7 @@ def test_history_keeps_doc_freshness_and_drops_a_stale_same_day_copy(tmp_path):
 
 
 def test_history_without_doc_freshness_is_unchanged(tmp_path):
-    stamp = json.loads(json.dumps({"fleet_stamp_version": 1, "rubric_version": None, "window": "6mo",
+    stamp = json.loads(json.dumps({"fleet_stamp_version": 1, "levels_version": None, "window": "6mo",
                                    "counts_only": True, "scans": None, "paths_hashed": False}))
     out, entry = tmp_path / "out", tmp_path / "hist" / "org" / "2026-11-20"
     _run_files(out, freshness=False)

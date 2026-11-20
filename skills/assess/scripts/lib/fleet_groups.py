@@ -10,23 +10,23 @@ Reads the ``repos.jsonl`` rows ``lib/fleet.py`` builds and writes one
   failed, degraded or was left out by ``--scans``), never a false 0;
   ``shared_tooling_repos`` says how many repositories the counts rest on;
 - the group settings joined from ghreport's settings fragments (#565);
-- each rubric row's whole level, or ``unknown``, with the aggregation rule used,
-  evaluated by ``lib/rubric.py`` (#563), and the row's ``top_level`` (its number of
+- each maturity model row's whole level, or ``unknown``, with the aggregation rule used,
+  evaluated by ``lib/levels.py`` (#563), and the row's ``top_level`` (its number of
   levels, #684), so a history entry can be read as a share of top level without the
   maturity model file. There is no second threshold config. ``top_level`` is
   additive: rows written before #684 lack it, and readers fall back.
 
-Rubric inputs:
+Maturity model inputs:
 
 - ``team`` rows run against each repository's ``scans`` map, the namespace
-  ``lib/rubric_signals.py`` validates (``nested_instructions.available``). A
+  ``lib/level_signals.py`` validates (``nested_instructions.available``). A
   failed repository joins the roll-up with no signals, so its level is unknown
   and a ``min`` team row never reads better than the evidence allows.
 - ``org`` rows run against the group's ghreport fragment (#565), the
-  ``rubric_signals.ORG_PATHS`` namespace: ``scope``, ``provider`` and
+  ``level_signals.ORG_PATHS`` namespace: ``scope``, ``provider`` and
   ``<setting>.value`` / ``.reason`` (``two_factor.value`` is ``"on"`` or
   ``"off"``). A value of ``"unknown"`` becomes an unavailable block, so the
-  rubric reports the row unknown, never a false 0. A group with no matching
+  maturity model reports the row unknown, never a false 0. A group with no matching
   fragment has no settings: every org row is unknown.
 
 Settings join: a fragment's ``scope`` matches a group exactly or, failing
@@ -50,10 +50,12 @@ from typing import Any, NotRequired, TypedDict
 
 from lib.counts_only_rules import TOKEN_RE
 from lib.fleet import STATUS_OK, FleetRow
-from lib.rubric import Aggregation, Rubric, evaluate
+from lib.levels import Aggregation, MaturityModel, evaluate
 from lib.run_context_types import JsonDict
 from lib.shared_tooling import distinct_ids
 
+# Not bumped for the 2.0.0 maturity-model key renames (#670): readers reject any other
+# version, so lib/fleet_legacy.py maps the old keys and earlier history lines still load.
 FLEET_GROUP_VERSION = 1
 GROUPS_FILE = "groups.jsonl"
 SETTINGS_META_KEYS = frozenset({"scope", "provider"})
@@ -65,7 +67,7 @@ class SettingsError(ValueError):
     """The settings input cannot be read; the message names the file and the fault."""
 
 
-class RubricRowLevel(TypedDict):
+class RowLevel(TypedDict):
     id: str
     scope: str  # "org" | "team"
     status: str  # "level" | "unknown"
@@ -87,8 +89,8 @@ class GroupRow(TypedDict):
     distinct_marketplaces: int | None
     settings_scope: str | None  # the fragment joined; None when none matched
     settings: JsonDict | None  # normalised (and, counts-only, reduced) settings
-    rubric_version: str | None  # None without a rubric
-    rubric: list[RubricRowLevel]
+    levels_version: str | None  # None without a maturity model
+    levels: list[RowLevel]
 
 
 # --- settings input --------------------------------------------------------
@@ -177,17 +179,17 @@ def settings_signals(fragment: Mapping[str, Any] | None, settings: JsonDict | No
 
 
 def repo_signals(row: FleetRow) -> JsonDict:
-    """A repository's rubric data: its ``scans`` map, empty for a failed row."""
+    """A repository's maturity model data: its ``scans`` map, empty for a failed row."""
     return dict(row["scans"] or {})
 
 
-def _rubric_levels(rubric: Rubric, group: str, settings: JsonDict | None,
-                   rows: Sequence[FleetRow]) -> list[RubricRowLevel]:
-    result = evaluate(rubric, {
+def _row_levels(maturity_model: MaturityModel, group: str, settings: JsonDict | None,
+                   rows: Sequence[FleetRow]) -> list[RowLevel]:
+    result = evaluate(maturity_model, {
         "name": group, "settings": settings,
         "repos": {row["repo"]: repo_signals(row) for row in rows},
     })
-    tops = {row["id"]: len(row["levels"]) for row in rubric["rows"]}
+    tops = {row["id"]: len(row["levels"]) for row in maturity_model["rows"]}
     return [{
         "id": r["id"], "scope": r["scope"], "status": r["status"], "level": r["level"],
         "top_level": tops[r["id"]], "aggregation": r.get("aggregation"), "missing_signals": r["missing_signals"],
@@ -195,7 +197,7 @@ def _rubric_levels(rubric: Rubric, group: str, settings: JsonDict | None,
     } for r in result["rows"]]
 
 
-def group_row(group: str, rows: Sequence[FleetRow], rubric: Rubric | None,
+def group_row(group: str, rows: Sequence[FleetRow], maturity_model: MaturityModel | None,
               by_scope: Mapping[str, JsonDict], counts_only: bool = True) -> GroupRow:
     """One group's roll-up row."""
     scope, settings = settings_for(group, by_scope)
@@ -219,18 +221,18 @@ def group_row(group: str, rows: Sequence[FleetRow], rubric: Rubric | None,
         "distinct_marketplaces": len(ids["marketplaces"]) if evidence else None,
         "settings_scope": scope,
         "settings": shown,
-        "rubric_version": rubric["version"] if rubric else None,
-        "rubric": _rubric_levels(rubric, group, org_data, rows) if rubric else [],
+        "levels_version": maturity_model["version"] if maturity_model else None,
+        "levels": _row_levels(maturity_model, group, org_data, rows) if maturity_model else [],
     }
 
 
-def roll_up(rows: Iterable[FleetRow], rubric: Rubric | None, by_scope: Mapping[str, JsonDict],
+def roll_up(rows: Iterable[FleetRow], maturity_model: MaturityModel | None, by_scope: Mapping[str, JsonDict],
             counts_only: bool = True) -> list[GroupRow]:
     """One row per group present in ``rows``, sorted by group."""
     groups: dict[str, list[FleetRow]] = {}
     for row in rows:
         groups.setdefault(row["group"], []).append(row)
-    return [group_row(name, sorted(members, key=lambda r: r["repo"]), rubric, by_scope, counts_only)
+    return [group_row(name, sorted(members, key=lambda r: r["repo"]), maturity_model, by_scope, counts_only)
             for name, members in sorted(groups.items())]
 
 

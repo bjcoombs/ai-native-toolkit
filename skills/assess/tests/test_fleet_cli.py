@@ -19,7 +19,7 @@ from test_fleet import make_repo
 
 FLEET_SCRIPT = Path(__file__).resolve().parents[2] / "fleet" / "scripts" / "fleet.py"
 
-RUBRIC = """\
+LEVELS = """\
 version = "fixture-1"
 
 [[rows]]
@@ -94,14 +94,14 @@ def _long_strings(value: object, pattern: str = "") -> list[str]:
 
 def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "rub.toml").write_text(RUBRIC, encoding="utf-8")
+    (tmp_path / "rub.toml").write_text(LEVELS, encoding="utf-8")
     before = _snapshot(froot)
 
-    assert fleet_cli.main([str(froot), "--rubric", "rub.toml", "--out", "out1"]) == 0
-    assert fleet_cli.main([str(froot), "--rubric", "rub.toml", "--out", "out2", "--jobs", "1"]) == 0
+    assert fleet_cli.main([str(froot), "--levels", "rub.toml", "--out", "out1"]) == 0
+    assert fleet_cli.main([str(froot), "--levels", "rub.toml", "--out", "out2", "--jobs", "1"]) == 0
     listing = tmp_path / "list.txt"
     listing.write_text("".join(f"{c}\n" for c in sorted(froot.glob("*/*/*-main"))), encoding="utf-8")
-    assert fleet_cli.main(["--from-list", str(listing), "--rubric", "rub.toml", "--out", "out3"]) == 0
+    assert fleet_cli.main(["--from-list", str(listing), "--levels", "rub.toml", "--out", "out3"]) == 0
 
     first = (tmp_path / "out1" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out2" / "repos.jsonl").read_bytes()
@@ -121,7 +121,7 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     stamp = (tmp_path / "out1" / "run.json").read_bytes()
     assert stamp == (tmp_path / "out2" / "run.json").read_bytes()
     assert stamp == (tmp_path / "out3" / "run.json").read_bytes()
-    assert json.loads(stamp)["rubric_version"] == "fixture-1"
+    assert json.loads(stamp)["levels_version"] == "fixture-1"
     assert str(froot).encode() not in stamp
     assert _snapshot(froot) == before, "the fleet run wrote into a target"
 
@@ -166,7 +166,7 @@ def test_diagrams_are_drawn_from_a_real_run_and_byte_identical(tmp_path, monkeyp
     monkeypatch.chdir(tmp_path)
     (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
     for out in ("d1", "d2"):
-        assert fleet_cli.main([str(root), "--rubric", "levels.toml", "--out", out, "--no-history"]) == 0
+        assert fleet_cli.main([str(root), "--levels", "levels.toml", "--out", out, "--no-history"]) == 0
     for name in ("quadrant.svg", "shared-tooling.svg", "report.md"):
         assert (tmp_path / "d1" / name).read_bytes() == (tmp_path / "d2" / name).read_bytes()
     rows = {r["repo"]: r for r in _rows(tmp_path / "d1")}
@@ -187,7 +187,7 @@ def test_the_slope_chart_is_drawn_only_with_compare(tmp_path, monkeypatch, capsy
     make_repo(root, "grpb/lib1")
     monkeypatch.chdir(tmp_path)
     (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
-    base = [str(root), "--rubric", "levels.toml", "--history-dir", "hist"]
+    base = [str(root), "--levels", "levels.toml", "--history-dir", "hist"]
     assert fleet_cli.main([*base, "--out", "first"]) == 0
     assert "slope.svg skipped: no earlier run compared" in capsys.readouterr().err
     first = (tmp_path / "first" / "report.md").read_text(encoding="utf-8")
@@ -239,7 +239,7 @@ def test_trend_lines_need_three_dated_runs_in_the_history(tmp_path, monkeypatch,
     make_repo(root, "grpb/lib1")
     monkeypatch.chdir(tmp_path)
     (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
-    args = [str(root), "--rubric", "levels.toml", "--history-dir", "hist"]
+    args = [str(root), "--levels", "levels.toml", "--history-dir", "hist"]
     assert fleet_cli.main([*args, "--out", "o1"]) == 0
     report = (tmp_path / "o1" / "report.md").read_text(encoding="utf-8")
     assert "Not drawn: skipped: 1 comparable dated run(s), the trend needs at least 3" in report
@@ -324,7 +324,7 @@ def test_usage_errors(froot, argv):
     assert exc.value.code == 2
 
 
-@pytest.mark.parametrize("case", ["no_root", "no_list", "empty", "rubric", "scans", "window", "inside"])
+@pytest.mark.parametrize("case", ["no_root", "no_list", "empty", "levels", "scans", "window", "inside"])
 def test_refusals_exit_2(froot, tmp_path, case, capsys):
     (tmp_path / "bad.toml").write_text('version = "x"\n[[rows]]\nid = "r"\n', encoding="utf-8")
     (tmp_path / "empty").mkdir()
@@ -332,7 +332,7 @@ def test_refusals_exit_2(froot, tmp_path, case, capsys):
         "no_root": [str(tmp_path / "absent")],
         "no_list": ["--from-list", str(tmp_path / "absent.txt")],
         "empty": [str(tmp_path / "empty")],
-        "rubric": [str(froot), "--rubric", str(tmp_path / "bad.toml")],
+        "levels": [str(froot), "--levels", str(tmp_path / "bad.toml")],
         "scans": [str(froot), "--scans", "no_such_scan"],
         "window": [str(froot), "--window", "soon"],
         "inside": [str(froot)],

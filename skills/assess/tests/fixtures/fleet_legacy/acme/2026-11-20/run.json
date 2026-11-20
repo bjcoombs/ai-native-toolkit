@@ -1,0 +1,19 @@
+{
+  "counts_only": true,
+  "fleet_stamp_version": 1,
+  "paths_hashed": false,
+  "plugin_version": "1.226.0",
+  "repositories": {
+    "failed": 0,
+    "qualifying": 2,
+    "scanned_ok": 2,
+    "selected": 2
+  },
+  "rubric_version": "fixture-1",
+  "scan_date": "2026-11-20",
+  "scans": [
+    "nested_instructions"
+  ],
+  "toolkit_commit": null,
+  "window": "6mo"
+}

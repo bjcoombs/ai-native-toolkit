@@ -3,7 +3,7 @@
 Generated from the ``GroupRow`` TypedDict in ``lib/fleet_groups.py`` so the
 checked-in file cannot drift from the type mypy checks: ``tests/test_fleet_groups.py``
 fails when ``SCHEMA_PATH`` differs from ``render()``. Regenerate after
-changing ``GroupRow`` or ``RubricRowLevel``:
+changing ``GroupRow`` or ``RowLevel``:
 
     cd skills/assess && uv run --locked python scripts/lib/fleet_group_schema.py
 
@@ -73,7 +73,7 @@ def type_schema(tp: Any) -> JsonDict:
 
 def build_schema() -> JsonDict:
     schema = type_schema(GroupRow)
-    level = schema["properties"]["rubric"]["items"]["properties"]
+    level = schema["properties"]["levels"]["items"]["properties"]
     level["scope"] = {"enum": ["org", "team"]}
     level["status"] = {"enum": ["level", "unknown"]}
     return {
@@ -83,7 +83,7 @@ def build_schema() -> JsonDict:
         "description": (
             "One line of groups.jsonl written by skills/fleet/scripts/fleet.py: a group's "
             "repository counts, distinct shared CI sources and marketplaces, joined ghreport "
-            "settings and each rubric row's whole level. Generated from lib/fleet_groups.py "
+            "settings and each maturity model row's whole level. Generated from lib/fleet_groups.py "
             "by lib/fleet_group_schema.py."
         ),
         **schema,

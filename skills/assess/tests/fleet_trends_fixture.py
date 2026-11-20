@@ -15,9 +15,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from lib.fleet_diagrams import build_diagrams, report_markdown  # noqa: E402
-from lib.fleet_groups import FLEET_GROUP_VERSION, GroupRow, RubricRowLevel  # noqa: E402
+from lib.fleet_groups import FLEET_GROUP_VERSION, GroupRow, RowLevel  # noqa: E402
 from lib.fleet_stamp import FLEET_STAMP_VERSION, FleetStamp  # noqa: E402
-from lib.rubric import Rubric  # noqa: E402
+from lib.levels import MaturityModel  # noqa: E402
 from lib.fleet_trends import TrendRun, history_runs, render_trend, series_runs, trend_run  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_trends"
@@ -29,7 +29,7 @@ REPOS = frozenset({"payments/api", "platform/gateway"})
 def stamp(scan_date: str, version: str | None, window: str = "6mo") -> FleetStamp:
     return {"fleet_stamp_version": FLEET_STAMP_VERSION, "toolkit_commit": None,
             "plugin_version": "2.0.0", "scan_date": scan_date, "window": window,
-            "rubric_version": version, "counts_only": True, "paths_hashed": False, "scans": None,
+            "levels_version": version, "counts_only": True, "paths_hashed": False, "scans": None,
             "repositories": {"selected": 2, "scanned_ok": 2, "failed": 0, "qualifying": 2}}
 
 
@@ -37,7 +37,7 @@ def group(name: str, levels: tuple[int | None, ...], top: int | None = None,
           org: int | None = None) -> GroupRow:
     """A group row: team rows at ``levels``, each with ``top_level`` ``top`` unless None (an
     entry written before #684), plus an org row at ``org`` when given (left out of the mean)."""
-    rows: list[RubricRowLevel] = [
+    rows: list[RowLevel] = [
         {"id": f"row{i}", "scope": "team", "status": "unknown" if level is None else "level",
          "level": level, "aggregation": "min", "missing_signals": [], "unknown_repos": []}
         for i, level in enumerate(levels)]
@@ -50,14 +50,14 @@ def group(name: str, levels: tuple[int | None, ...], top: int | None = None,
     return {"fleet_group_version": FLEET_GROUP_VERSION, "group": name, "repos": 2, "scanned": 2,
             "failed": 0, "shared_tooling_repos": 0, "distinct_ci_sources": None,
             "distinct_marketplaces": None, "settings_scope": None, "settings": None,
-            "rubric_version": None, "rubric": rows}
+            "levels_version": None, "levels": rows}
 
 
 # This run's maturity model (levels-2): two team rows of 3 levels and an org row. Entries
 # before 2026-10-20 were written before groups.jsonl carried top_level (#684): the levels-2
 # one (2026-09-20) takes its top levels from this model, the levels-1 ones plot as plain means.
 TOP = 3
-LEVELS: Rubric = {"version": "levels-2", "rows": [
+LEVELS: MaturityModel = {"version": "levels-2", "rows": [
     {"id": f"row{i}", "title": f"Row {i}", "scope": "team",
      "levels": [{"level": n, "criteria": []} for n in range(1, TOP + 1)]} for i in range(2)] + [
     {"id": "org0", "title": "Org 0", "scope": "org", "levels": [{"level": 1, "criteria": []}]}]}

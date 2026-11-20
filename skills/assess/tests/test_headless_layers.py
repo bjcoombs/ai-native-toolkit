@@ -20,8 +20,8 @@ from lib import signals
 from lib import structure_graph
 from lib.counts_only import reason_code
 from lib.counts_only_rules import ID, PATH, classify
-from lib.rubric import _UNAVAILABLE, evaluate, resolve_signal
-from lib.rubric_signals import load_default_rubric
+from lib.levels import _UNAVAILABLE, evaluate, resolve_signal
+from lib.level_signals import load_default_levels
 from lib.signals_schema import SCHEMA_PATH
 
 BLOCKS = ("structure", "stats_summary", "promissory_markers", "structure_drift")
@@ -247,7 +247,7 @@ def test_the_default_model_gives_layers_2_to_4_a_whole_level_from_counts_only(
     _git(target, "add", "-A")
     _git(target, "commit", "-qm", "second package")
     doc = _run(target, tmp_path / "co.json", "--counts-only")
-    result = evaluate(load_default_rubric(),
+    result = evaluate(load_default_levels(),
                       {"name": "g", "settings": None, "repos": {"r": doc["scans"]}})
     levels = {row["id"]: row["level"] for row in result["rows"]}
     assert resolve_signal(doc["scans"], "structure.cross_package_edges") > 0
@@ -297,7 +297,7 @@ def test_an_edgeless_graph_reads_layer_two_unknown_with_its_reason(
     assert block["available"] is True and block["edge_count"] == 0
     assert block["modularity_q"] is None
     assert block["modularity_reason"] == "no_import_edges"
-    result = evaluate(load_default_rubric(),
+    result = evaluate(load_default_levels(),
                       {"name": "g", "settings": None, "repos": {"r": doc["scans"]}})
     row = next(r for r in result["rows"] if r["id"] == "layer-2-design")
     assert (row["status"], row["level"]) == ("unknown", None)

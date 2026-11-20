@@ -24,15 +24,15 @@ from lib.fleet import FLEET_ROW_VERSION, FleetRow, write_rows
 from lib.fleet_groups import load_settings, roll_up, write_groups
 from lib.fleet_view import FleetViewError, load_groups, read_jsonl, read_repos
 from lib.next_step_guidance import guidance, measure_hint
-from lib.rubric import load_rubric
-from lib.rubric_signals import DEFAULT_RUBRIC, load_default_rubric, signal_path_validator
+from lib.levels import load_levels
+from lib.level_signals import DEFAULT_LEVELS, load_default_levels, signal_path_validator
 from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture
 
 FIXTURES = Path(__file__).parent / "fixtures" / "fleet_next_steps"
 EXPECTED = FIXTURES / "expected"
-RUBRIC_PATH = FIXTURES / "rubric.toml"
+LEVELS_PATH = FIXTURES / "levels.toml"
 SCRIPT = Path(__file__).resolve().parents[2] / "fleet" / "scripts" / "fleet_next_steps.py"
-RUBRIC = load_rubric(RUBRIC_PATH, signal_path_validator())
+LEVELS = load_levels(LEVELS_PATH, signal_path_validator())
 
 
 def _scans(*, bytes_: int = 900, lines: int = 40, named: int = 1, enforced: bool = True,
@@ -86,7 +86,7 @@ def fleet_run(out: Path) -> Path:
     out.mkdir(parents=True, exist_ok=True)
     settings.write_text(json.dumps(SETTINGS), encoding="utf-8")
     write_rows(out, REPOS)
-    write_groups(out, roll_up(REPOS, RUBRIC, load_settings(settings)))
+    write_groups(out, roll_up(REPOS, LEVELS, load_settings(settings)))
     return settings
 
 
@@ -103,7 +103,7 @@ cli = _load_cli()
 
 def _pages(tmp_path: Path) -> dict[str, str]:
     settings = fleet_run(tmp_path)
-    assert cli.main([str(tmp_path), "--rubric", str(RUBRIC_PATH), "--settings", str(settings)]) == 0
+    assert cli.main([str(tmp_path), "--levels", str(LEVELS_PATH), "--settings", str(settings)]) == 0
     return {p.relative_to(tmp_path).as_posix(): p.read_text(encoding="utf-8")
             for p in sorted(tmp_path.rglob("*.md"))}
 
@@ -129,7 +129,7 @@ def test_rerendering_the_same_run_is_byte_identical(tmp_path):
     second = _pages(tmp_path / "two")
     assert first == second
     settings = tmp_path / "one" / "settings.json"
-    assert cli.main([str(tmp_path / "one"), "--rubric", str(RUBRIC_PATH), "--settings", str(settings)]) == 0
+    assert cli.main([str(tmp_path / "one"), "--levels", str(LEVELS_PATH), "--settings", str(settings)]) == 0
     again = {p.relative_to(tmp_path / "one").as_posix(): p.read_text(encoding="utf-8")
              for p in sorted((tmp_path / "one").rglob("*.md"))}
     assert again == first
@@ -137,22 +137,22 @@ def test_rerendering_the_same_run_is_byte_identical(tmp_path):
 
 def test_page_levels_agree_with_groups_jsonl(tmp_path):
     pages = _pages(tmp_path)
-    titles = {row["id"]: row["title"] for row in RUBRIC["rows"]}
+    titles = {row["id"]: row["title"] for row in LEVELS["rows"]}
     for group in load_groups(tmp_path):
         page = pages[ns.page_path(group["group"]).as_posix()]
-        for entry in group["rubric"]:
+        for entry in group["levels"]:
             cell = "unknown" if entry["status"] == "unknown" else f"{entry['level']} of "
             assert f"| {ns.text(titles[entry['id']])} | {cell}" in page
 
 
 def test_every_row_below_top_names_an_unmet_criterion_and_its_repositories(tmp_path):
     pages = _pages(tmp_path)
-    tops = {row["id"]: len(row["levels"]) for row in RUBRIC["rows"]}
-    titles = {row["id"]: ns.text(row["title"]) for row in RUBRIC["rows"]}
+    tops = {row["id"]: len(row["levels"]) for row in LEVELS["rows"]}
+    titles = {row["id"]: ns.text(row["title"]) for row in LEVELS["rows"]}
     checked = 0
     for group in load_groups(tmp_path):
         page = pages[ns.page_path(group["group"]).as_posix()]
-        for entry in group["rubric"]:
+        for entry in group["levels"]:
             if entry["status"] != "level" or entry["level"] == tops[entry["id"]]:
                 continue
             section = page.split(f"## {titles[entry['id']]}\n", 1)[1].split("\n## ", 1)[0]
@@ -184,7 +184,7 @@ def test_steps_are_single_change_with_repository_native_done_when(tmp_path):
     assert steps
     done = re.findall(r"^   - Done when: (.+)$", page, flags=re.M)
     assert any("." not in "".join(re.findall(r"`([^`]+)`", d)) or "CLAUDE.md" in d for d in done)
-    signal_paths = {c["signal"] for row in RUBRIC["rows"] for lv in row["levels"] for c in lv["criteria"]}
+    signal_paths = {c["signal"] for row in LEVELS["rows"] for lv in row["levels"] for c in lv["criteria"]}
     native = [d for d in done if not any(s in d for s in signal_paths)]
     assert native, "at least one done-when names no signal path"
 
@@ -212,20 +212,20 @@ def test_unmapped_signal_falls_back_to_the_expression(tmp_path):
 # --- errors ------------------------------------------------------------------
 
 
-def test_a_different_rubric_version_exits_2(tmp_path, capsys):
+def test_a_different_levels_version_exits_2(tmp_path, capsys):
     settings = fleet_run(tmp_path)
-    assert cli.main([str(tmp_path), "--rubric", str(DEFAULT_RUBRIC), "--settings", str(settings)]) == 2
-    assert "rolled up with rubric 'next-steps-fixture-1'" in capsys.readouterr().err
+    assert cli.main([str(tmp_path), "--levels", str(DEFAULT_LEVELS), "--settings", str(settings)]) == 2
+    assert "rolled up with maturity model 'next-steps-fixture-1'" in capsys.readouterr().err
 
 
 def test_missing_settings_disagree_with_the_run_and_exit_2(tmp_path, capsys):
     fleet_run(tmp_path)
-    assert cli.main([str(tmp_path), "--rubric", str(RUBRIC_PATH)]) == 2
-    assert "pass the --rubric and --settings the fleet run used" in capsys.readouterr().err
+    assert cli.main([str(tmp_path), "--levels", str(LEVELS_PATH)]) == 2
+    assert "pass the --levels and --settings the fleet run used" in capsys.readouterr().err
 
 
 def test_missing_output_exits_2(tmp_path, capsys):
-    assert cli.main([str(tmp_path), "--rubric", str(RUBRIC_PATH)]) == 2
+    assert cli.main([str(tmp_path), "--levels", str(LEVELS_PATH)]) == 2
     assert "repos.jsonl: cannot read" in capsys.readouterr().err
 
 
@@ -233,15 +233,15 @@ def test_mismatched_group_sets_raise(tmp_path):
     fleet_run(tmp_path)
     groups = load_groups(tmp_path)
     with pytest.raises(ns.NextStepsError, match="different groups"):
-        ns.build_pages(RUBRIC, read_repos(tmp_path), groups[:1], load_settings(tmp_path / "settings.json"))
+        ns.build_pages(LEVELS, read_repos(tmp_path), groups[:1], load_settings(tmp_path / "settings.json"))
 
 
 def test_a_changed_row_set_raises(tmp_path):
     fleet_run(tmp_path)
     groups = load_groups(tmp_path)
-    groups[0]["rubric"].append({**groups[0]["rubric"][0], "id": "extra"})
-    with pytest.raises(ns.NextStepsError, match="different set of rubric rows"):
-        ns.build_pages(RUBRIC, read_repos(tmp_path), groups, load_settings(tmp_path / "settings.json"))
+    groups[0]["levels"].append({**groups[0]["levels"][0], "id": "extra"})
+    with pytest.raises(ns.NextStepsError, match="different set of maturity model rows"):
+        ns.build_pages(LEVELS, read_repos(tmp_path), groups, load_settings(tmp_path / "settings.json"))
 
 
 def test_stale_pages_are_removed_and_other_files_kept(tmp_path):
@@ -283,7 +283,7 @@ def test_read_jsonl_names_file_and_line(tmp_path, line, fault):
 def test_an_empty_run_writes_an_empty_index(tmp_path):
     for name in ("repos.jsonl", "groups.jsonl"):
         (tmp_path / name).write_text("", encoding="utf-8")
-    assert cli.main([str(tmp_path), "--rubric", str(RUBRIC_PATH)]) == 0
+    assert cli.main([str(tmp_path), "--levels", str(LEVELS_PATH)]) == 0
     assert (tmp_path / "teams.md").is_file()
     assert list(tmp_path.glob("teams/*.md")) == []
 
@@ -293,7 +293,7 @@ def test_readers_require_ids_and_sort(tmp_path):
     with pytest.raises(FleetViewError, match="no repo or group id"):
         read_repos(tmp_path)
     (tmp_path / "groups.jsonl").write_text('{"fleet_group_version": 1, "group": "g"}\n', encoding="utf-8")
-    with pytest.raises(FleetViewError, match="needs a string 'group' and a 'rubric' list"):
+    with pytest.raises(FleetViewError, match="needs a string 'group' and a 'levels' list"):
         load_groups(tmp_path)
     fleet_run(tmp_path)
     assert [r["repo"] for r in read_repos(tmp_path)] == sorted(r["repo"] for r in REPOS)
@@ -311,9 +311,9 @@ def test_formatting_is_counts_only_and_inert():
     assert ns.code("a`b") == "`` a`b ``" and ns.code("a|b", in_table=True) == "`a\\|b`"
 
 
-def test_every_default_rubric_signal_has_repository_native_wording():
-    rubric = load_default_rubric()
-    for row in rubric["rows"]:
+def test_every_default_levels_signal_has_repository_native_wording():
+    maturity_model = load_default_levels()
+    for row in maturity_model["rows"]:
         for level in row["levels"]:
             for c in level["criteria"]:
                 words = guidance(c["signal"], c["op"], c["value"])
@@ -375,22 +375,22 @@ def test_measure_hints():
     assert "`DESIGN.md`" in measure_hint("structure_drift.tier_0.matched_patterns")
 
 
-def test_default_rubric_toml_parses():
-    assert tomllib.loads(DEFAULT_RUBRIC.read_text(encoding="utf-8"))["version"]
+def test_default_levels_toml_parses():
+    assert tomllib.loads(DEFAULT_LEVELS.read_text(encoding="utf-8"))["version"]
 
 
 # --- end to end --------------------------------------------------------------
 
 
-def test_real_fleet_run_with_the_default_rubric_renders_pages(froot, tmp_path):  # noqa: F811
+def test_real_fleet_run_with_the_default_levels_renders_pages(froot, tmp_path):  # noqa: F811
     out = tmp_path / "out"
-    assert fleet_cli.main([str(froot), "--rubric", str(DEFAULT_RUBRIC), "--out", str(out)]) == 0
+    assert fleet_cli.main([str(froot), "--levels", str(DEFAULT_LEVELS), "--out", str(out)]) == 0
     assert cli.main([str(out)]) == 0
-    tops = {row["id"]: len(row["levels"]) for row in load_default_rubric()["rows"]}
-    titles = {row["id"]: ns.text(row["title"]) for row in load_default_rubric()["rows"]}
+    tops = {row["id"]: len(row["levels"]) for row in load_default_levels()["rows"]}
+    titles = {row["id"]: ns.text(row["title"]) for row in load_default_levels()["rows"]}
     for group in load_groups(out):
         page = (out / ns.page_path(group["group"])).read_text(encoding="utf-8")
-        for entry in group["rubric"]:
+        for entry in group["levels"]:
             section = page.split(f"## {titles[entry['id']]}\n", 1)[1].split("\n## ", 1)[0]
             if entry["status"] == "unknown":
                 assert "not a failure" in section
@@ -400,16 +400,16 @@ def test_real_fleet_run_with_the_default_rubric_renders_pages(froot, tmp_path): 
         p.read_text(encoding="utf-8") for p in out.rglob("*.md"))
 
 
-def test_a_run_without_a_rubric_says_so(froot, tmp_path, capsys):  # noqa: F811
+def test_a_run_without_a_maturity_model_says_so(froot, tmp_path, capsys):  # noqa: F811
     out = tmp_path / "out"
     assert fleet_cli.main([str(froot), "--out", str(out)]) == 0
     assert cli.main([str(out)]) == 2
-    assert "the fleet run had no --rubric" in capsys.readouterr().err
+    assert "the fleet run had no --levels" in capsys.readouterr().err
 
 
 def test_index_links_are_percent_encoded():
-    group = {"group": "my team", "repos": 1, "rubric": []}
-    page = ns.index_page(RUBRIC, [group])  # type: ignore[list-item]
+    group = {"group": "my team", "repos": 1, "levels": []}
+    page = ns.index_page(LEVELS, [group])  # type: ignore[list-item]
     assert "(teams/my%20team.md)" in page
 
 

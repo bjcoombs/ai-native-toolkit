@@ -1,4 +1,4 @@
-# Fixture rubric for the fleet next-steps golden pages (issue #571). Covers an
+# Fixture maturity model for the fleet next-steps golden pages (issue #571). Covers an
 # org row, a team min row, a team share row, an always-unknown row, a row every
 # group tops, and a signal with no repository-native wording.
 version = "next-steps-fixture-1"

@@ -1,12 +1,12 @@
-"""Caller-supplied maturity rubrics: TOML loader and deterministic evaluator.
+"""Caller-supplied maturity models: TOML loader and deterministic evaluator.
 
-An organisation running a maturity programme scores against its own rubric:
+An organisation running a maturity programme scores against its own maturity model:
 rows (practices or capabilities), each with numbered whole levels, each level
-a list of criteria over named signal paths. This module loads such a rubric
+a list of criteria over named signal paths. This module loads such a maturity model
 and evaluates it from signals alone, with no model in the path, so a fleet
 scan reaches the same levels every time.
 
-Rubric file (TOML, read with the stdlib ``tomllib``):
+Maturity model file (TOML, read with the stdlib ``tomllib``):
 
 ```toml
 version = "2026.11"            # stamped on every result
@@ -71,7 +71,7 @@ Semantics:
 - ``org`` rows run once against the group settings; settings of ``None`` (not
   gathered) make every org row unknown.
 
-Loading raises ``RubricError`` before any evaluation on a malformed rubric: a
+Loading raises ``LevelsError`` before any evaluation on a malformed maturity model: a
 missing version, an unset or invalid scope, a gap or duplicate in level
 numbering, an unknown operator or key, a team row with no aggregation rule, or
 a signal path the pluggable ``PathValidator`` rejects. ``dumps_result`` gives
@@ -79,6 +79,7 @@ byte-identical JSON for identical inputs.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import tomllib
@@ -107,9 +108,28 @@ _ROW_KEYS = frozenset({"id", "title", "scope", "aggregation", "share", "levels"}
 _LEVEL_KEYS = frozenset({"level", "criteria"})
 _CRITERION_KEYS = frozenset({"signal", "op", "value"})
 
+# The option that named the maturity-model file before 2.0.0 (#670). It is still
+# accepted by the parser so that using it fails loudly, never silently.
+RENAMED_FLAG = "--rubric"
+LEVELS_FLAG = "--levels"
 
-class RubricError(ValueError):
-    """The rubric cannot be loaded; the message names the row and the fault."""
+
+class _RenamedFlag(argparse.Action):
+    """Exit 2 with one line naming ``--levels``, whatever value (or none) follows."""
+
+    def __call__(self, parser: argparse.ArgumentParser, namespace: argparse.Namespace,
+                 values: object, option_string: str | None = None) -> None:
+        parser.exit(2, f"{parser.prog}: error: {RENAMED_FLAG} was renamed in 2.0.0: use {LEVELS_FLAG} FILE\n")
+
+
+def add_renamed_flag(parser: argparse.ArgumentParser) -> None:
+    """Register the pre-2.0.0 option on ``parser`` so using it exits 2 naming ``--levels``."""
+    parser.add_argument(RENAMED_FLAG, action=_RenamedFlag, nargs="?", default=argparse.SUPPRESS,
+                        help=argparse.SUPPRESS)
+
+
+class LevelsError(ValueError):
+    """The maturity model cannot be loaded; the message names the row and the fault."""
 
 
 class Criterion(TypedDict):
@@ -136,7 +156,7 @@ class Row(TypedDict):
     levels: list[Level]
 
 
-class Rubric(TypedDict):
+class MaturityModel(TypedDict):
     version: str
     rows: list[Row]
 
@@ -191,8 +211,8 @@ class RowResult(TypedDict):
     unknown_repos: NotRequired[list[str]]
 
 
-class RubricResult(TypedDict):
-    rubric_version: str
+class LevelsResult(TypedDict):
+    levels_version: str
     group: str
     rows: list[RowResult]
 
@@ -208,30 +228,30 @@ def known_paths(org: Iterable[str], team: Iterable[str]) -> PathValidator:
     return lambda scope, path: path in allowed[scope]
 
 
-def load_rubric(path: Path, validator: PathValidator | None = None) -> Rubric:
-    """Read and validate a TOML rubric file; raise ``RubricError`` on any fault."""
+def load_levels(path: Path, validator: PathValidator | None = None) -> MaturityModel:
+    """Read and validate a TOML maturity model file; raise ``LevelsError`` on any fault."""
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        raise RubricError(f"cannot read rubric {path.name}: {exc}") from exc
-    return parse_rubric(data, validator)
+        raise LevelsError(f"cannot read maturity model {path.name}: {exc}") from exc
+    return parse_levels(data, validator)
 
 
-def parse_rubric(data: Mapping[str, Any], validator: PathValidator | None = None) -> Rubric:
-    """Validate an already-parsed rubric table; raise ``RubricError`` on any fault."""
-    _check_keys(data, _ROOT_KEYS, "rubric")
+def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None) -> MaturityModel:
+    """Validate an already-parsed maturity model table; raise ``LevelsError`` on any fault."""
+    _check_keys(data, _ROOT_KEYS, "maturity model")
     version = data.get("version")
     if not isinstance(version, str) or not version.strip():
-        raise RubricError("rubric: 'version' must be a non-empty string")
+        raise LevelsError("maturity model: 'version' must be a non-empty string")
     raw_rows = data.get("rows")
     if not isinstance(raw_rows, list) or not raw_rows:
-        raise RubricError("rubric: 'rows' must be a non-empty array of tables")
+        raise LevelsError("maturity model: 'rows' must be a non-empty array of tables")
     rows: list[Row] = []
     seen: set[str] = set()
     for index, raw in enumerate(raw_rows):
         row = _parse_row(raw, index)
         if row["id"] in seen:
-            raise RubricError(f"row {row['id']!r}: duplicate row id")
+            raise LevelsError(f"row {row['id']!r}: duplicate row id")
         seen.add(row["id"])
         rows.append(row)
     if validator is not None:
@@ -242,26 +262,26 @@ def parse_rubric(data: Mapping[str, Any], validator: PathValidator | None = None
 def _check_keys(table: Mapping[str, Any], allowed: frozenset[str], where: str) -> None:
     unknown = sorted(set(table) - allowed)
     if unknown:
-        raise RubricError(f"{where}: unknown key(s) {', '.join(unknown)}")
+        raise LevelsError(f"{where}: unknown key(s) {', '.join(unknown)}")
 
 
 def _text(table: Mapping[str, Any], key: str, where: str) -> str:
     value = table.get(key)
     if not isinstance(value, str) or not value.strip():
-        raise RubricError(f"{where}: '{key}' must be a non-empty string")
+        raise LevelsError(f"{where}: '{key}' must be a non-empty string")
     return value
 
 
 def _parse_row(raw: Any, index: int) -> Row:
     if not isinstance(raw, dict):
-        raise RubricError(f"row #{index + 1}: must be a table")
+        raise LevelsError(f"row #{index + 1}: must be a table")
     row_id = _text(raw, "id", f"row #{index + 1}")
     where = f"row {row_id!r}"
     _check_keys(raw, _ROW_KEYS, where)
     title = _text(raw, "title", where)
     scope = raw.get("scope")
     if scope not in SCOPES:
-        raise RubricError(f"{where}: 'scope' must be one of {', '.join(SCOPES)} (got {scope!r})")
+        raise LevelsError(f"{where}: 'scope' must be one of {', '.join(SCOPES)} (got {scope!r})")
     aggregation = _parse_aggregation(raw, where, scope)
     levels = _parse_levels(raw.get("levels"), where)
     return {"id": row_id, "title": title, "scope": scope, "aggregation": aggregation, "levels": levels}
@@ -272,42 +292,42 @@ def _parse_aggregation(raw: Mapping[str, Any], where: str, scope: Scope) -> Aggr
     share: Any = raw.get("share")
     if scope == "org":
         if rule is not None or share is not None:
-            raise RubricError(f"{where}: an org row takes no aggregation rule")
+            raise LevelsError(f"{where}: an org row takes no aggregation rule")
         return None
     if rule not in AGGREGATION_RULES:
-        raise RubricError(
+        raise LevelsError(
             f"{where}: a team row needs 'aggregation' set to one of "
             f"{', '.join(AGGREGATION_RULES)} (got {rule!r})"
         )
     if rule == "min":
         if share is not None:
-            raise RubricError(f"{where}: 'share' applies only to aggregation = \"share\"")
+            raise LevelsError(f"{where}: 'share' applies only to aggregation = \"share\"")
         return {"rule": "min", "share": 1}
     if not _is_number(share) or not 0 < share <= 1:
-        raise RubricError(f"{where}: 'share' must be a number in (0, 1] (got {share!r})")
+        raise LevelsError(f"{where}: 'share' must be a number in (0, 1] (got {share!r})")
     return {"rule": "share", "share": share}
 
 
 def _parse_levels(raw: Any, where: str) -> list[Level]:
     if not isinstance(raw, list) or not raw:
-        raise RubricError(f"{where}: 'levels' must be a non-empty array of tables")
+        raise LevelsError(f"{where}: 'levels' must be a non-empty array of tables")
     levels: list[Level] = []
     for entry in raw:
         if not isinstance(entry, dict):
-            raise RubricError(f"{where}: each level must be a table")
+            raise LevelsError(f"{where}: each level must be a table")
         _check_keys(entry, _LEVEL_KEYS, where)
         number = entry.get("level")
         if not isinstance(number, int) or isinstance(number, bool):
-            raise RubricError(f"{where}: 'level' must be a whole number (got {number!r})")
+            raise LevelsError(f"{where}: 'level' must be a whole number (got {number!r})")
         criteria = entry.get("criteria")
         if not isinstance(criteria, list) or not criteria:
-            raise RubricError(f"{where} level {number}: 'criteria' must be a non-empty array")
+            raise LevelsError(f"{where} level {number}: 'criteria' must be a non-empty array")
         parsed = [_parse_criterion(c, f"{where} level {number}") for c in criteria]
         levels.append({"level": number, "criteria": parsed})
     levels.sort(key=lambda lv: lv["level"])
     numbers = [lv["level"] for lv in levels]
     if numbers != list(range(1, len(numbers) + 1)):
-        raise RubricError(
+        raise LevelsError(
             f"{where}: levels must be numbered 1..{len(numbers)} with no gap or "
             f"duplicate (got {numbers})"
         )
@@ -316,14 +336,14 @@ def _parse_levels(raw: Any, where: str) -> list[Level]:
 
 def _parse_criterion(raw: Any, where: str) -> Criterion:
     if not isinstance(raw, dict):
-        raise RubricError(f"{where}: each criterion must be a table")
+        raise LevelsError(f"{where}: each criterion must be a table")
     _check_keys(raw, _CRITERION_KEYS, where)
     signal = _text(raw, "signal", where)
     if any(not part for part in signal.split(".")):
-        raise RubricError(f"{where}: malformed signal path {signal!r}")
+        raise LevelsError(f"{where}: malformed signal path {signal!r}")
     op = raw.get("op")
     if op not in OPERATORS:
-        raise RubricError(f"{where}: unknown operator {op!r} (one of {', '.join(OPERATORS)})")
+        raise LevelsError(f"{where}: unknown operator {op!r} (one of {', '.join(OPERATORS)})")
     value: Any = raw.get("value")
     _check_operand(op, value, f"{where} {signal}")
     return {"signal": signal, "op": op, "value": value}
@@ -332,13 +352,13 @@ def _parse_criterion(raw: Any, where: str) -> Criterion:
 def _check_operand(op: str, value: Any, where: str) -> None:
     if op in _ORDER_OPS:
         if not _is_number(value):
-            raise RubricError(f"{where}: '{op}' needs a number (got {value!r})")
+            raise LevelsError(f"{where}: '{op}' needs a number (got {value!r})")
     elif op in _MEMBER_OPS:
         kinds = {_kind(v) for v in value} if isinstance(value, list) else {None}
         if not value or len(kinds) != 1 or None in kinds:
-            raise RubricError(f"{where}: '{op}' needs a non-empty array of one scalar type")
+            raise LevelsError(f"{where}: '{op}' needs a non-empty array of one scalar type")
     elif _kind(value) is None:
-        raise RubricError(f"{where}: '{op}' needs a string, number or boolean")
+        raise LevelsError(f"{where}: '{op}' needs a string, number or boolean")
 
 
 def _validate_paths(rows: list[Row], validator: PathValidator) -> None:
@@ -352,7 +372,7 @@ def _validate_paths(rows: list[Row], validator: PathValidator) -> None:
         }
     )
     if bad:
-        raise RubricError(f"unknown signal path(s): {'; '.join(bad)}")
+        raise LevelsError(f"unknown signal path(s): {'; '.join(bad)}")
 
 
 # --------------------------------------------------------------------------
@@ -479,7 +499,7 @@ def _share_level(levels: list[int], share: Fraction, top: int) -> int:
 
 def _team_result(row: Row, repos: dict[str, JsonDict]) -> RowResult:
     aggregation = row["aggregation"]
-    assert aggregation is not None  # parse_rubric guarantees it on team rows
+    assert aggregation is not None  # parse_levels guarantees it on team rows
     evaluations = {name: evaluate_row(row, repos[name]) for name in sorted(repos)}
     unknown = [name for name, ev in evaluations.items() if ev["level"] is None]
     missing = sorted({s for ev in evaluations.values() for s in ev["missing_signals"]})
@@ -514,16 +534,16 @@ def _org_result(row: Row, settings: JsonDict | None) -> RowResult:
     }
 
 
-def evaluate(rubric: Rubric, group: Group) -> RubricResult:
-    """Every row of ``rubric`` against ``group``, stamped with the rubric version."""
+def evaluate(maturity_model: MaturityModel, group: Group) -> LevelsResult:
+    """Every row of ``maturity_model`` against ``group``, stamped with the maturity-model version."""
     rows = [
         _org_result(row, group["settings"]) if row["scope"] == "org" else _team_result(row, group["repos"])
-        for row in rubric["rows"]
+        for row in maturity_model["rows"]
     ]
-    return {"rubric_version": rubric["version"], "group": group["name"], "rows": rows}
+    return {"levels_version": maturity_model["version"], "group": group["name"], "rows": rows}
 
 
-def dumps_result(result: RubricResult) -> str:
+def dumps_result(result: LevelsResult) -> str:
     """Canonical JSON: sorted keys, fixed indent, trailing newline.
 
     ``allow_nan=False``: a NaN or infinity anywhere raises ``ValueError``

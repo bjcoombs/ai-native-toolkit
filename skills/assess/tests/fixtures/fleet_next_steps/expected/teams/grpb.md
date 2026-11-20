@@ -1,6 +1,6 @@
 # Next steps: `grpb`
 
-Rubric `next-steps-fixture-1`. 1 repository: 1 scanned, 0 failed.
+Maturity model `next-steps-fixture-1`. 1 repository: 1 scanned, 0 failed.
 
 Each numbered step is one change: take or leave it on its own. "Done when" is checkable in the repository or its platform settings; the re-run check is optional.
 

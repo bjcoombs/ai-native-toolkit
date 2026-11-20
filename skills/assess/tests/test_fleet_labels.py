@@ -2,7 +2,7 @@
 
 The model choice is the one unverifiable step; everything around it is pinned
 here: the closed label set, the labels.jsonl schema and validation, the join to
-repos.jsonl, and that labels never touch repos.jsonl or any rubric score.
+repos.jsonl, and that labels never touch repos.jsonl or any maturity model score.
 """
 from __future__ import annotations
 
@@ -19,12 +19,12 @@ import pytest
 
 from lib import fleet_labels as fl
 from lib.fleet import REPOS_FILE, FleetRow, dumps_rows
-from lib.rubric import Group, dumps_result, evaluate, load_rubric
+from lib.levels import Group, dumps_result, evaluate, load_levels
 
 LIB = Path(__file__).resolve().parents[1] / "scripts" / "lib"
 SKILLS = Path(__file__).resolve().parents[2]
 LABELS_SCRIPT = SKILLS / "fleet" / "scripts" / "fleet_labels.py"
-RUBRIC_FIXTURES = Path(__file__).parent / "fixtures" / "rubric"
+LEVELS_FIXTURES = Path(__file__).parent / "fixtures" / "levels"
 
 
 def _load_cli() -> ModuleType:
@@ -324,19 +324,19 @@ def test_label_step_leaves_the_run_output_byte_identical(out: Path, tmp_path: Pa
     assert _tree_digest(out) == before
 
 
-def test_rubric_results_are_the_same_with_and_without_labels(out: Path):
-    rubric = load_rubric(RUBRIC_FIXTURES / "rubric.toml")
+def test_levels_results_are_the_same_with_and_without_labels(out: Path):
+    maturity_model = load_levels(LEVELS_FIXTURES / "levels.toml")
     signals = {p.stem: json.loads(p.read_text(encoding="utf-8"))
-               for p in sorted((RUBRIC_FIXTURES / "repos").glob("*.json"))}
-    settings = json.loads((RUBRIC_FIXTURES / "settings.json").read_text(encoding="utf-8"))
+               for p in sorted((LEVELS_FIXTURES / "repos").glob("*.json"))}
+    settings = json.loads((LEVELS_FIXTURES / "settings.json").read_text(encoding="utf-8"))
     group: Group = {"name": "g", "settings": settings, "repos": signals}
-    before = dumps_result(evaluate(rubric, group))
+    before = dumps_result(evaluate(maturity_model, group))
     rows = [_row(f"g/{name}", data) for name, data in signals.items()]
     labels, _ = fl.build_label_rows(rows, [{"path": r["repo"], "label": "docs", "confidence": 1}
                                            for r in rows], "haiku")
     fl.write_labels(out, labels)
     fl.labels_by_path(rows, labels)
-    assert dumps_result(evaluate(rubric, group)) == before
+    assert dumps_result(evaluate(maturity_model, group)) == before
     assert "label" not in before
 
 

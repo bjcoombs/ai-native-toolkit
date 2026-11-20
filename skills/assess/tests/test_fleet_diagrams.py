@@ -20,15 +20,15 @@ from lib import fleet_svg as svg
 from lib import fleet_tooling_map as ftm
 from lib.fleet import FleetRow
 from lib.fleet_view import read_repos
-from lib.rubric import Rubric, load_rubric
+from lib.levels import MaturityModel, load_levels
 from fleet_diagrams_fixture import FIXTURES, ROWS, WINDOW, build, comparison, goldens
 from svg_cascade import overridden_text_attributes
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
 
 
-def _levels() -> Rubric:
-    return load_rubric(FIXTURES / "levels.toml")
+def _levels() -> MaturityModel:
+    return load_levels(FIXTURES / "levels.toml")
 
 
 def _repos() -> list[FleetRow]:
@@ -306,7 +306,7 @@ def test_skipped_diagrams_say_why_in_the_report():
     no_levels = fd.build_diagrams(None, _repos(), WINDOW)
     assert no_levels[0]["svg"] is None
     assert "no maturity model" in (no_levels[0]["skipped"] or "")
-    org_only: Rubric = {**_levels(), "rows": [r for r in _levels()["rows"] if r["scope"] == "org"]}
+    org_only: MaturityModel = {**_levels(), "rows": [r for r in _levels()["rows"] if r["scope"] == "org"]}
     assert "no team rows" in (fd.build_diagrams(org_only, _repos(), WINDOW)[0]["skipped"] or "")
     empty = fd.build_diagrams(_levels(), [], WINDOW)
     by_file = {d["file"]: d["skipped"] for d in empty}

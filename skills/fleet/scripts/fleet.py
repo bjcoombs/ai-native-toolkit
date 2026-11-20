@@ -9,7 +9,7 @@ shape is ``skills/fleet/references/repos.schema.json``; the logic lives in
 line per group in ``<out>/groups.jsonl`` (``lib/fleet_groups.py``, schema
 ``skills/fleet/references/groups.schema.json``): repository counts, distinct
 shared CI sources and marketplaces, the joined ``--settings`` and each
-``--rubric`` row's whole level.
+``--levels`` row's whole level.
 
 Target repositories are never written to. With ``--delete-after`` a scanned
 clone is removed once its row is in hand, only when nothing in it would be
@@ -37,13 +37,13 @@ Exit codes:
        count is printed to stderr. Failures never change the exit code.
     2  usage error: no root and no --from-list, a root or list that does not
        exist, no repositories found, --out inside a target, an unreadable
-       --rubric or --settings (a settings directory with no fragment files included),
+       --levels or --settings (a settings directory with no fragment files included),
        a list entry whose ~user cannot be expanded, bad scan arguments, an --out that
        cannot be created or written (checked before any scan), an unusable history
        location, or an unreadable --compare run
 
 Run:
-    uv run fleet.py ROOT --out DIR [--rubric FILE] [--settings PATH] [--jobs N] [--window 6mo]
+    uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
         [--no-history] [--no-diagrams]
@@ -127,8 +127,8 @@ from lib.fleet_history import (  # noqa: E402
 from lib.fleet_trends import TrendRun, history_runs, series_runs, trend_run  # noqa: E402
 from lib.fleet_view import FleetViewError  # noqa: E402
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp, build_stamp, write_stamp  # noqa: E402
-from lib.rubric import Rubric, RubricError, load_rubric  # noqa: E402
-from lib.rubric_signals import signal_path_validator  # noqa: E402
+from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel  # noqa: E402
+from lib.level_signals import signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 from lib.signals import (  # noqa: E402
     DEFAULT_WINDOW,
@@ -167,9 +167,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--out", required=True, help="Output directory; repos.jsonl is written here.")
     parser.add_argument(
-        "--rubric", metavar="FILE",
-        help="Maturity rubric (TOML, lib/rubric.py format). Each group row in groups.jsonl "
-             "carries every rubric row's whole level (or unknown) and the aggregation rule used.",
+        "--levels", metavar="FILE",
+        help="Maturity model (TOML, lib/levels.py format). Each group row in groups.jsonl "
+             "carries every maturity model row's whole level (or unknown) and the aggregation rule used.",
     )
     parser.add_argument(
         "--settings", metavar="PATH",
@@ -216,6 +216,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help=f"Do not draw the diagrams (OUT/{REPORT_FILE} and its SVGs); any a previous run left "
              "are removed.",
     )
+    add_renamed_flag(parser)
     args = parser.parse_args(argv)
     if args.compare not in (None, LATEST) and _not_a_run(Path(args.compare)):
         parser.error(f"--compare took {args.compare!r} as the earlier run, but it holds no {RUN_FILE} "
@@ -334,7 +335,7 @@ def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
 
 def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
                    groups: list[GroupRow], rows: list[FleetRow],
-                   rubric: Rubric | None = None) -> list[TrendRun] | None:
+                   maturity_model: MaturityModel | None = None) -> list[TrendRun] | None:
     """The trend's runs: earlier comparable history entries, then this run from memory; None
     when the run is not kept in the history or had no maturity model. Never raises."""
     current = trend_run(stamp, groups)
@@ -342,13 +343,13 @@ def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
         return None
     try:
         repos = frozenset(row["repo"] for row in rows)
-        return series_runs(history_runs(org_dir, stamp, repos, rubric), current)
+        return series_runs(history_runs(org_dir, stamp, repos, maturity_model), current)
     except Exception as e:  # noqa: BLE001 - the history never fails a completed run
         print(f"fleet: diagrams: run history not read ({type(e).__name__})", file=sys.stderr)
         return None
 
 
-def _diagrams(out_dir: Path, no_diagrams: bool, rubric: Rubric | None, rows: list[FleetRow],
+def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | None, rows: list[FleetRow],
               window: str, *, history: list[TrendRun] | None = None,
               comparison: Comparison | None = None) -> None:
     """Draw the diagrams and their report, or clear them; a failure never changes the exit code."""
@@ -356,7 +357,7 @@ def _diagrams(out_dir: Path, no_diagrams: bool, rubric: Rubric | None, rows: lis
         if no_diagrams:
             clear_diagrams(out_dir)
             return
-        diagrams = build_diagrams(rubric, rows, window, history=history, comparison=comparison)
+        diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison)
         write_diagrams(out_dir, diagrams)
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
@@ -369,12 +370,12 @@ def _diagrams(out_dir: Path, no_diagrams: bool, rubric: Rubric | None, rows: lis
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    rubric: Rubric | None = None
+    maturity_model: MaturityModel | None = None
     scans: list[str] | None = None
     settings: dict[str, JsonDict] = {}
     try:
-        if args.rubric is not None:
-            rubric = load_rubric(Path(args.rubric), signal_path_validator())
+        if args.levels is not None:
+            maturity_model = load_levels(Path(args.levels), signal_path_validator())
         if args.settings is not None:
             settings = load_settings(Path(args.settings))
         if args.scans is not None:
@@ -382,7 +383,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.window is not None:
             parse_window(args.window)
         targets = _targets(args)
-    except (RubricError, SettingsError, UnknownScanError, ValueError, OSError) as e:
+    except (LevelsError, SettingsError, UnknownScanError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     if not targets:
@@ -399,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
     hash_salt = None if args.full else run_salt(args.hash_paths, args.hash_salt)
     planned: JsonDict = {
         "fleet_stamp_version": FLEET_STAMP_VERSION,
-        "rubric_version": rubric["version"] if rubric is not None else None, "window": window,
+        "levels_version": maturity_model["version"] if maturity_model is not None else None, "window": window,
         "counts_only": not args.full, "scans": sorted(scans) if scans is not None else None,
         "paths_hashed": hash_salt is not None,
     }
@@ -449,17 +450,17 @@ def main(argv: list[str] | None = None) -> int:
     freshness_path = write_freshness(out_dir, freshness.rows)
     rows = run_fleet(targets, options, args.jobs, after=deleter)
     path = write_rows(out_dir, rows)
-    groups = roll_up(rows, rubric, settings, counts_only=not args.full)
+    groups = roll_up(rows, maturity_model, settings, counts_only=not args.full)
     groups_path = write_groups(out_dir, groups)
     stamp = build_stamp(
         rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
-        today=today, window=window, rubric_version=rubric["version"] if rubric is not None else None,
+        today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
     )
     write_stamp(out_dir, stamp)
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
-    history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, rubric)
-    _diagrams(out_dir, args.no_diagrams, rubric, rows, window, history=history, comparison=comparison)
+    history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, maturity_model)
+    _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison)
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)

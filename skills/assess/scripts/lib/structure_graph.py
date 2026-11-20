@@ -716,7 +716,7 @@ def analyze_structure(
         ]
     if not package_dirs:
         # Nothing measured, not a measured empty graph: modularity 0.0 would
-        # read as tangled code in a rubric (issue #663).
+        # read as tangled code in a maturity model (issue #663).
         return StructureGraphResult(
             available=False,
             reason="no importable Python packages found",

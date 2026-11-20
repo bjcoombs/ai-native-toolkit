@@ -7,7 +7,7 @@ reads one; ``compare`` is a pure function of two loaded runs.
 Comparability follows ``diff_reliability._diff_is_reliable``: the plugin's
 major version and the stamp version must match. A comparison is also refused
 (``comparable: false`` with every reason, and no deltas) when the runs differ
-in rubric version, window, output mode, scan selection or path hashing, or when
+in maturity-model version, window, output mode, scan selection or path hashing, or when
 the earlier run's files are at another envelope version (``RunVersionError``
 from ``load_run`` becomes such a reason in ``not_comparable``).
 
@@ -19,7 +19,7 @@ Measured-set movement is reported apart from level movement. Per group:
 - ``no_longer_active`` / ``newly_active``: ``ok`` on both sides, ``active``
   true on one side and false on the other (#569's per-row flag).
 
-Each rubric row of each group carries its level then and now
+Each maturity model row of each group carries its level then and now
 (``{status, level}``, or null when the group or row is absent) and, when it
 moved, a ``cause``:
 
@@ -51,10 +51,11 @@ from typing import Any, TypedDict, cast
 from lib.diff_reliability import _diff_is_reliable
 from lib.fleet import FLEET_ROW_VERSION, REPOS_FILE, STATUS_OK, FleetRow
 from lib.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow
+from lib.fleet_legacy import upgrade
 from lib.fleet_view import FleetViewError, load_groups, read_repos
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 
-FLEET_COMPARE_VERSION = 1
+FLEET_COMPARE_VERSION = 2  # 2: levels_version replaced rubric_version (#670)
 COMPARE_FILE = "compare.json"
 
 CAUSE_LEVEL = "level"
@@ -120,7 +121,7 @@ class RepoSignals(TypedDict):
 class StampSummary(TypedDict):
     scan_date: str
     window: str
-    rubric_version: str | None
+    levels_version: str | None
     plugin_version: str
     toolkit_commit: str | None
 
@@ -159,7 +160,7 @@ def _first_version(path: Path, key: str) -> object:
 # The stamp keys a comparison reads, with the types they may hold.
 _STAMP_FIELDS: tuple[tuple[str, tuple[type, ...]], ...] = (
     ("scan_date", (str,)), ("window", (str,)), ("plugin_version", (str,)),
-    ("rubric_version", (str, type(None))), ("toolkit_commit", (str, type(None))),
+    ("levels_version", (str, type(None))), ("toolkit_commit", (str, type(None))),
     ("counts_only", (bool,)), ("paths_hashed", (bool,)), ("scans", (list, type(None))),
 )
 
@@ -190,6 +191,7 @@ def load_run(run_dir: Path) -> FleetRun:
         raise FleetViewError(f"{RUN_FILE}: cannot read ({exc})") from exc
     if not isinstance(stamp, dict):
         raise FleetViewError(f"{RUN_FILE}: not a JSON object")
+    stamp = upgrade(stamp)  # a run written before the 2.0.0 rename
     if stamp.get("fleet_stamp_version") != FLEET_STAMP_VERSION:
         raise RunVersionError(f"run stamp version {stamp.get('fleet_stamp_version')!r}, "
                               f"this toolkit reads {FLEET_STAMP_VERSION}")
@@ -213,7 +215,7 @@ def comparability(earlier: FleetStamp, later: FleetStamp) -> tuple[list[str], li
         earlier.get("fleet_stamp_version"), later.get("fleet_stamp_version"))
     if not reliable and note:
         reasons.append(note)
-    for key, label in (("rubric_version", "rubric version"), ("window", "window"),
+    for key, label in (("levels_version", "maturity-model version"), ("window", "window"),
                        ("counts_only", "counts-only mode"), ("scans", "scan selection"),
                        ("paths_hashed", "path hashing")):
         if earlier.get(key) != later.get(key):
@@ -224,7 +226,7 @@ def comparability(earlier: FleetStamp, later: FleetStamp) -> tuple[list[str], li
 
 def _summary(stamp: FleetStamp) -> StampSummary:
     return {"scan_date": stamp["scan_date"], "window": stamp["window"],
-            "rubric_version": stamp["rubric_version"], "plugin_version": stamp["plugin_version"],
+            "levels_version": stamp["levels_version"], "plugin_version": stamp["plugin_version"],
             "toolkit_commit": stamp["toolkit_commit"]}
 
 
@@ -300,7 +302,7 @@ def _levels(group: GroupRow | None) -> dict[str, tuple[str, LevelState]]:
     if group is None:
         return {}
     return {row["id"]: (row["scope"], {"status": row["status"], "level": row["level"]})
-            for row in group["rubric"]}
+            for row in group["levels"]}
 
 
 def _cause(scope: str, present_both: bool, set_moved: bool, evidence_moved: bool) -> str:
@@ -376,7 +378,7 @@ def compare(earlier: FleetRun, later: FleetRun) -> Comparison:
 def view_check(now: Path, then: Path) -> tuple[list[str], list[str]]:
     """For a level-only view of two runs (``heatmap.py --compare``): ``(reasons, set_moved)``.
 
-    ``reasons`` says why the runs are not comparable (this module's rule: rubric
+    ``reasons`` says why the runs are not comparable (this module's rule: maturity model
     version, window, output mode, scans, path hashing, plugin major version,
     file versions, a run with no ``run.json``); ``set_moved`` names the groups
     whose measured set moved, so a level change there is not read as a real
