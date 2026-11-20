@@ -1000,7 +1000,7 @@ once; `loaded_in_full`: agent and `SKILL.md` files from
 `claude_config.loaded_config_files` over 200 lines, largest first) is `{path, kind
 (instruction | agent | skill), total_lines, always_on_lines, always_on_share,
 fetch_on_need_lines, unclassified_lines, sections_total, flagged, relocatable[],
-relocatable_total}`, where `flagged` is always-on lines over 200 and share over
+relocatable_total}`, where `flagged` (instruction files only; always `false` in `loaded_in_full`) is always-on lines over 200 and share over
 0.5 and each `relocatable` entry (largest first, capped at 10) is `{heading,
 start_line, end_line, lines, signals[], home {kind, target}}`. `flagged` at block
 level lists the instruction files only; `loaded_in_full` is informational.

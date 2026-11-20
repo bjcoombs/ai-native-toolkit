@@ -226,6 +226,13 @@ def test_a_single_fetch_signal_leaves_the_section_unclassified() -> None:
     assert record["unclassified_lines"] >= 120
 
 
+def test_only_instruction_files_are_flagged() -> None:
+    text = "\n".join(f"Line {i} of prose with no section structure at all." for i in range(300))
+    assert analyse_file(text, "CLAUDE.md", "instruction", {})["flagged"] is True
+    assert analyse_file(text, "agents/a.md", "agent", {})["flagged"] is False
+    assert analyse_file(text, "skills/s/SKILL.md", "skill", {})["flagged"] is False
+
+
 def test_scoped_paths_suggest_a_nested_instruction_file() -> None:
     body = ["## Payments service", ""]
     body += [f"- Handler {i} lives in `services/payments/handler_{i}.py`; keep it pure." for i in range(60)]

@@ -406,7 +406,10 @@ def analyse_file(
         "fetch_on_need_lines": lines_by["fetch_on_need"],
         "unclassified_lines": lines_by["unclassified"],
         "sections_total": len(results),
-        "flagged": always_on > ALWAYS_ON_FLAG_LINES and share > ALWAYS_ON_FLAG_SHARE,
+        # Only instruction files are flagged: loaded_in_full is informational
+        # and never ranks.
+        "flagged": (kind == "instruction" and always_on > ALWAYS_ON_FLAG_LINES
+                    and share > ALWAYS_ON_FLAG_SHARE),
         "relocatable": moves[:MAX_RELOCATABLE_PER_FILE],
         "relocatable_total": len(moves),
     }
