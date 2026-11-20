@@ -2000,7 +2000,10 @@ Tests: `tests/test_coverage_gate.py`.
 **`sibling_tests.py`**
 The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
 `.test`, `.spec`, `_spec`, `test_<stem>`, `<stem>Test`, `<stem>Tests`, with a
-hyphenated stem also matched as underscores), the adjacent test directories
+hyphenated stem also matched as underscores, plus the one cross-extension rule
+from issue #593: `<stem>.bats` for a `.sh` or extensionless script, and any
+`*.bats` file is a test; `run.sh` and an extensionless `run` share the flat
+key `run.bats`), the adjacent test directories
 (`__tests__/` / `tests/` / `test/` / `spec/`), and the is-this-a-test rule, plus a
 layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
@@ -2045,7 +2048,12 @@ relative specifiers only (`import ... from`, `export ... from`, side-effect and
 dynamic `import`, `require`; `import type` and line-leading comments skipped;
 string literals are not parsed; a NodeNext `./foo.js` specifier also resolves to
 `foo.ts`); alias and package
-specifiers keep the name match, as do all other languages. Modules inside a test
+specifiers keep the name match. A bats suite with an `@test` line (issue #593)
+credits the files it `source`s / `.`s / `load`s by a suite-anchored path
+(`$BATS_TEST_DIRNAME/...`, or a relative `load`, `.bash` appended tried first); a
+cwd-relative `source`, another variable, a glob, a single-quoted (literal) anchor or a
+load after a `#` comment credits nothing. All other
+languages keep the name match. Modules inside a test
 directory are support, never credited. Every module a qualifying test imports
 directly is credited. Runs lazily, once per `TestIndex`, over the index's test
 and source lists (so the same excludes and tracked-files rule apply), capped at
@@ -2079,7 +2087,9 @@ the mutation offer consume. The mutation scope is `mutation_scope(block)`: the
 entries with test evidence (`covered_but_hollow`, `sibling_test_only`) in ranked
 order, minus any hot file that is itself a test (`sibling_tests.is_test_path`),
 so neither a file with no test nor a test file heads the mutation pass and comes
-back as an `untrusted_hotspot` for tests that do not exist; `assess_core --opt-in-mutation`
+back as an `untrusted_hotspot` for tests that do not exist, and limited to
+`MUTABLE_SUFFIXES` (the suffixes a mutation tool handles), so a credited `.sh`
+does not push a mutable file out of the capped pass; `assess_core --opt-in-mutation`
 and the SKILL.md Step 2d `jq` both apply it. Add cases in
 `tests/test_test_focus.py` alongside any change to a classification, ranking,
 or scope rule.

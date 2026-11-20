@@ -120,4 +120,6 @@ ARTIFACT_SCHEMA_VERSION = "1.12.0"
 #    clone's findings do not move.
 # 7: instruction files are graded on always-on size and share instead of the
 #    whole-file size curve (issue #560), which moves instruction grades.
-ASSESS_METHOD_VERSION = 7
+# 8: a bats suite is a test file and credits its shell script (issue #593), so a
+#    co-located ``<stem>.bats`` can now produce self_referential_tests (E2).
+ASSESS_METHOD_VERSION = 8
