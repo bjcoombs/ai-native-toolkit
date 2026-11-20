@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 
 import assess_core
+from lib import core_scans
 from lib.keyhole_signals import FINDING_ORDER
 from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_scope import resolve_scope
@@ -159,7 +160,7 @@ def test_e2e_refresh_matches_default_run_with_same_inputs(
     assert assess_core.run_opt_in_mutation(repo) == 0
     refreshed = _load(ctx_path)
 
-    monkeypatch.setattr(assess_core, "scan_test_pressure", lambda *a, **k: block)
+    monkeypatch.setattr(core_scans, "scan_test_pressure", lambda *a, **k: block)
     direct = assess_core.build_run_context(repo_root=repo, run_date="2026-10-08")
     for key in _PRODUCTS:
         assert refreshed[key] == direct[key], key

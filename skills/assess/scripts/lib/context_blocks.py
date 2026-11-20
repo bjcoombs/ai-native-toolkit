@@ -15,7 +15,7 @@ from typing import Any
 
 from lib.generated_files import matches_generated_name
 from lib.run_context_types import KeyholeIntegration
-from lib.scan_registry import safe as _safe
+from lib.degrade import safe as _safe
 from lib.structure_drift import SEAM_ALLOWLIST, detect_path_existence_drift
 
 
