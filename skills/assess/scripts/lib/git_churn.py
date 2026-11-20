@@ -19,7 +19,7 @@ import sys
 from collections.abc import Iterable, Mapping
 from functools import lru_cache
 from pathlib import Path
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 # Both names come from `assess_config`, the module that reads the config file,
 # so the pathspecs below are built from the same path it resolves. Aliased:
@@ -364,6 +364,14 @@ class ContentClock(NamedTuple):
     plain newest-commit read, the behaviour before this clock existed. In a
     shallow clone the maps are filled from the visible history, which can omit
     older content commits and bulk commits.
+
+    ``truncated`` is True when git confirms a shallow clone (issue #544); a
+    failed probe leaves it False and ``complete`` False, unknown rather than
+    truncated. ``boundary_epoch`` is the author time of the newest shallow
+    boundary commit: history before it may be missing. ``lower_bound`` names
+    the docs whose newest visible change is a boundary commit, so their age is
+    a lower bound (the real last change can be older). A boundary commit lists
+    every file, like a root commit, so it is never counted as bulk.
     """
 
     epochs: dict[Path, int]
@@ -373,6 +381,14 @@ class ContentClock(NamedTuple):
     doc_count: int
     complete: bool
     creation_fallback: frozenset[Path] = frozenset()
+    truncated: bool = False
+    boundary_epoch: int | None = None
+    lower_bound: frozenset[Path] = frozenset()
+
+    @property
+    def boundary_date(self) -> str | None:
+        """``YYYY-MM-DD`` of ``boundary_epoch``; None on a full history."""
+        return None if self.boundary_epoch is None else _dt_date(self.boundary_epoch)
 
     def epoch(self, path: Path) -> int | None:
         path = path.resolve()
@@ -451,16 +467,9 @@ def content_commit_clock(
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return ContentClock({}, frozenset(), (), 0, len(docs), False)
-    # Complete only when git confirms the history is not shallow; a failed or
-    # timed-out probe cannot vouch for it.
-    try:
-        probe = subprocess.run(
-            ["git", "-C", top, "rev-parse", "--is-shallow-repository"],
-            capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
-        )
-        full_history = probe.returncode == 0 and probe.stdout.strip() == "false"
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        full_history = False
+    shallow = _shallow_probe(top)
+    full_history = shallow == "false"
+    boundary = _shallow_boundary(top) if shallow == "true" else {}
     rename_to = dict(renames)
 
     # Parse newest first: (sha, epoch, docs in `docs` the commit touched).
@@ -476,8 +485,10 @@ def content_commit_clock(
                 commits[-1][2].add(p)
 
     need = max(BULK_COMMIT_MIN_DOCS, int(BULK_COMMIT_DOC_SHARE * len(docs)) + 1)
-    bulk = {sha for sha, _, touched in commits if len(touched) >= need}
+    bulk = {sha for sha, _, touched in commits
+            if len(touched) >= need and sha not in boundary}
     epochs: dict[Path, int] = {}
+    chosen: dict[Path, str] = {}
     pending: dict[Path, list[str]] = {}  # bulk commits seen before a doc resolves
     oldest: dict[Path, tuple[str, int]] = {}
     skipped: set[str] = set()
@@ -490,6 +501,7 @@ def content_commit_clock(
                 pending.setdefault(p, []).append(sha)
             else:
                 epochs[p] = at
+                chosen[p] = sha
                 skipped.update(pending.pop(p, []))
     # A doc whose every commit is bulk falls back to its oldest (its creation);
     # the bulk commits newer than that were still skipped.
@@ -512,7 +524,50 @@ def content_commit_clock(
         doc_count=len(docs),
         complete=full_history,
         creation_fallback=frozenset(pending),
+        truncated=shallow == "true",
+        boundary_epoch=max(boundary.values(), default=None),
+        lower_bound=frozenset(p for p, sha in chosen.items() if sha in boundary),
     )
+
+
+def _shallow_probe(top: str) -> Literal["true", "false"] | None:
+    """``git rev-parse --is-shallow-repository``: "true", "false", or None when
+    the probe failed or timed out (it cannot vouch either way)."""
+    try:
+        probe = subprocess.run(
+            ["git", "-C", top, "rev-parse", "--is-shallow-repository"],
+            capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if probe.returncode != 0:
+        return None
+    out = probe.stdout.strip()
+    if out == "true":
+        return "true"
+    return "false" if out == "false" else None
+
+
+def _shallow_boundary(top: str) -> dict[str, int]:
+    """The shallow boundary commits (``$GIT_DIR/shallow``) mapped to their
+    author time; empty when the file or the commits cannot be read."""
+    try:
+        rel = subprocess.run(
+            ["git", "-C", top, "rev-parse", "--git-path", "shallow"],
+            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout.strip()
+        shas = (Path(top) / rel).read_text().split()
+        if not shas:
+            return {}
+        out = subprocess.run(
+            ["git", "-C", top, "show", "-s", "--format=%H %at", *shas],
+            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError,
+            subprocess.TimeoutExpired, OSError):
+        return {}
+    rows = [ln.split() for ln in out.splitlines()]
+    return {r[0]: int(r[1]) for r in rows if len(r) == 2 and r[1].isdigit()}
 
 
 def _dt_date(epoch: int) -> str:

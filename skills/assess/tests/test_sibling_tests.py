@@ -133,7 +133,8 @@ PARALLEL = {
 def test_parallel_tree_basename_credits_the_three_layouts(tmp_path: Path) -> None:
     """A conventionally named test anywhere under a shared directory credits the
     source in the focus block and on the hotspot page, and enters the mutation
-    scope; a source with no test anywhere stays unsupported."""
+    scope when a mutation tool handles it (the Dart file does not); a source
+    with no test anywhere stays unsupported."""
     for src, test in PARALLEL.items():
         _touch(tmp_path, src)
         _touch(tmp_path, test)
@@ -143,7 +144,7 @@ def test_parallel_tree_basename_credits_the_three_layouts(tmp_path: Path) -> Non
     by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
     assert by_path == {**{p: "sibling_test_only" for p in PARALLEL},
                        "app/functions/bar.js": "unsupported"}
-    assert mutation_scope(block) == list(PARALLEL)
+    assert mutation_scope(block) == [p for p in PARALLEL if not p.endswith(".dart")]
     for src in PARALLEL:
         assert tc.sibling_test_match(tmp_path, src) == tc.MATCH_BASENAME, src
         assert run_wiki._has_sibling_test(tmp_path, src) is True, src
@@ -278,3 +279,64 @@ def test_parallel_tree_basename_unreadable_subtree_credits_nothing(
         assert tc.build_test_index(tmp_path) == tc.TestIndex()
     finally:
         locked.chmod(0o755)
+
+
+def test_bats_suite_in_root_tests_credits_shell_script(tmp_path: Path) -> None:
+    """Issue #593: ``scripts/launcher-common.sh`` and an extensionless
+    ``scripts/doctor`` with bats suites in a root ``tests/`` tree get
+    ``sibling_test_only``, through the bounded flat tier, and the hotspot page
+    agrees."""
+    for rel in ("scripts/launcher-common.sh", "tests/launcher-common.bats",
+                "scripts/doctor", "tests/doctor.bats", "scripts/lonely.sh"):
+        _touch(tmp_path, rel)
+    hot = ["scripts/launcher-common.sh", "scripts/doctor", "scripts/lonely.sh"]
+    assert tc.sibling_test_match(tmp_path, hot[0]) == tc.MATCH_FLAT
+    block = compute_test_focus(hot, None, None, repo_root=tmp_path)
+    by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
+    assert by_path == {hot[0]: "sibling_test_only", hot[1]: "sibling_test_only",
+                       hot[2]: "unsupported"}
+    assert run_wiki._has_sibling_test(tmp_path, hot[0]) is True
+    assert run_wiki._has_sibling_test(tmp_path, hot[2]) is False
+
+
+def test_bats_suite_in_adjacent_tests_dir_is_direct(tmp_path: Path) -> None:
+    """A suite in the script's adjacent ``tests/`` is co-located, so E2 sees
+    it as well."""
+    _touch(tmp_path, "scripts/fallback/vm-service.sh")
+    _touch(tmp_path, "scripts/fallback/tests/vm-service.bats")
+    assert tc.sibling_test_match(
+        tmp_path, "scripts/fallback/vm-service.sh") == tc.MATCH_DIRECT
+    assert ks._find_sibling_test(tmp_path, "scripts/fallback/vm-service.sh") is not None
+
+
+def test_bats_names_only_shell_sources_and_bats_files_are_tests(tmp_path: Path) -> None:
+    """``foo.bats`` is a test file; it credits ``foo.sh`` or ``foo`` but never
+    a ``foo.py`` beside it."""
+    assert tc.is_test_path("tests/launcher-common.bats")
+    assert "launcher-common.bats" in tc.sibling_test_names("launcher-common.sh")
+    assert "doctor.bats" in tc.sibling_test_names("doctor")
+    assert not any(n.endswith(".bats") for n in tc.sibling_test_names("foo.py"))
+    _touch(tmp_path, "tools/foo.py")
+    _touch(tmp_path, "tools/foo.bats")
+    assert tc.has_sibling_test(tmp_path, "tools/foo.py") is False
+
+
+def test_bats_flat_match_on_shared_name_is_dropped(tmp_path: Path) -> None:
+    """A root ``tests/run.bats`` cannot say which of two hot ``run.sh`` files it
+    tests, so neither is credited."""
+    for rel in ("a/run.sh", "b/run.sh", "tests/run.bats"):
+        _touch(tmp_path, rel)
+    block = compute_test_focus(["a/run.sh", "b/run.sh"], None, None, repo_root=tmp_path)
+    assert {e["test_signal"] for e in block["entries"]} == {"unsupported"}
+
+
+def test_bats_flat_match_shared_across_sh_and_extensionless_is_dropped(
+    tmp_path: Path,
+) -> None:
+    """``a/run.sh`` and ``b/run`` both name ``run.bats``, so a root
+    ``tests/run.bats`` credits neither."""
+    for rel in ("a/run.sh", "b/run", "tests/run.bats"):
+        _touch(tmp_path, rel)
+    block = compute_test_focus(["a/run.sh", "b/run"], None, None, repo_root=tmp_path)
+    assert {e["test_signal"] for e in block["entries"]} == {"unsupported"}
+    assert tc.shared_name_keys(["a/run.sh", "b/run"]) == frozenset({"run.bats"})

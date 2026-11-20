@@ -15,7 +15,6 @@ from typing import Any
 
 from lib.agent_instructions_grader import (
     detect_alias,
-    detect_skills_dir,
     grade_instructions,
     scan_sensitive_content,
 )
@@ -24,6 +23,7 @@ from lib.instruction_content import build_repo_context
 from lib.doc_staleness import content_clock
 from lib.git_churn import ContentClock, tracked_files
 from lib.instruction_discovery import discover_nested_instructions
+from lib.instruction_placement import detect_skills_dir, skill_texts
 from lib.run_context_types import NestedInstructionsBlock
 
 
@@ -88,11 +88,11 @@ def grade_instruction_files(
     """
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
-    # Detect skills directories once, before grading any file. A repo that
-    # factors guidance into on-demand skills has its size penalty halved, never
-    # waived: the root file still loads on every task (see compute_bloat_penalty).
+    # Detect skills once, before grading any file: the skills evidence, and the
+    # SKILL.md texts a section is compared against, so the grade rests on the
+    # same always-on split as the instruction_placement block (issue #560).
     skills_info = detect_skills_dir(repo_root)
-    skills_present = skills_info["skills_dirs_present"]
+    skills = skill_texts(repo_root)
     clock = content_clock(repo_root)  # one build for every candidate
     repo_ctx = build_repo_context(repo_root)  # commands and references resolve against it
     found: dict[str, dict[str, Any]] = {}
@@ -128,7 +128,7 @@ def grade_instruction_files(
         text = disk_text
         freshness = _file_freshness_days(candidate, clock)
         grade = grade_instructions(
-            text, freshness_days=freshness, skills_present=skills_present,
+            text, freshness_days=freshness, skills=skills,
             repo=repo_ctx, path=rel_path,
         )
         entry = {
@@ -265,11 +265,12 @@ def broken_instruction_refs(
 
 
 def instruction_file_size(instruction_files: dict[str, Any]) -> dict[str, Any]:
-    """Line/word counts and bloat penalty per graded instruction file."""
+    """Line/word counts, always-on lines and size penalty per graded instruction file."""
     return {
         path: {
             "line_count": meta["subscores"].get("line_count", 0),
             "word_count": meta["subscores"].get("word_count", 0),
+            "always_on_lines": meta["subscores"].get("always_on_lines", 0),
             "bloat_penalty": meta["subscores"].get("bloat_penalty", 0),
         }
         for path, meta in instruction_files.items()
@@ -297,7 +298,7 @@ def nested_instruction_surface(
         repo_root,
         tracked=tracked_files(repo_root),
         clock=content_clock(repo_root),
-        skills_present=bool(detect_skills_dir(repo_root)["skills_dirs_present"]),
+        skills=skill_texts(repo_root),
         repo=build_repo_context(repo_root),
         graded_elsewhere=frozenset(INSTRUCTION_FILE_PATHS),
         extra_exclude_dirs=extra_dirs,

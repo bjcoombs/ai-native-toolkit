@@ -228,7 +228,7 @@ def build_stale_hubs(
             continue
         priority = round(hub["pagerank"] * s["ratio"], 3)
         confidence = s.get("confidence", "high")
-        hubs.append({
+        entry = {
             "path": hub["path"],
             "pagerank": hub["pagerank"],
             "last_commit_days": s["last_commit_days"],
@@ -237,7 +237,11 @@ def build_stale_hubs(
             "subject_method": s.get("subject_method"),
             "confidence": confidence,
             "priority": priority,
-        })
+        }
+        # A shallow clone's boundary age is a lower bound (issue #544).
+        if "last_commit_days_bound" in s:
+            entry["last_commit_days_bound"] = s["last_commit_days_bound"]
+        hubs.append(entry)
     return sorted(
         hubs,
         key=lambda h: -(h["priority"] * (0.5 if h["confidence"] == "low" else 1.0)),
