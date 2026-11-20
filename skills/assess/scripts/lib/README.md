@@ -635,7 +635,10 @@ A list entry repeating an earlier id is skipped with a note on stderr. `run_flee
 a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
 `repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
 its schema version - no stamp field, path or timing - so reruns are byte-identical.
-`run_salt` draws one salt per run for `--hash-paths`. The row shape is the `FleetRow`
+`run_salt` draws one salt per run for `--hash-paths`. `run_fleet`'s optional `after`
+hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
+(`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
+`fleet_activity.is_active`); `null` when failed or not asked. The row shape is the `FleetRow`
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
@@ -708,9 +711,39 @@ from `skills/assess`.
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 `signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
-`if`/`then` tying `ok` to non-null `scans`. `tests/test_fleet.py` fails when the
-checked-in file differs; regenerate with `uv run --locked python scripts/lib/fleet_schema.py`
-from `skills/assess`.
+`if`/`then` tying `ok` to non-null `scans`; and `run.schema.json` from `FleetStamp`
+(`build_stamp_schema`, mapping the `scans` name list itself). `tests/test_fleet.py` and
+`tests/test_fleet_run_stamp.py` fail when a checked-in file differs; regenerate both with
+`uv run --locked python scripts/lib/fleet_schema.py` from `skills/assess`.
+
+**`fleet_stamp.py`**
+The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
+commit, plugin version, UTC scan date, effective window, rubric version, output mode
+(`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
+`scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true). No path,
+salt, timing or input mode, so a
+root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
+writes atomically with sorted keys.
+
+**`fleet_activity.py`**
+Whether a fleet repository is active (issue #569): `is_active` compares the checkout's
+`HEAD` committer date (`head_commit_date`, UTC, read
+from git with optional locks off) with `window_start(window, today)`, which counts back
+in whole days, months and years by calendar (clamped to month end), validating the
+window with `signals.parse_window`. Close to `ghsync --active-since`, not identical:
+ghsync counts 30-day months from now on platform dates. `scan_target` sets
+each ok row's `active` from `ScanOptions.active_since`, so it is read before
+`--delete-after` can remove the clone. An unreadable `HEAD` is not active.
+
+**`fleet_cleanup.py`**
+`--delete-after` (issue #569). `CloneDeleter` is a `run_fleet` `after` hook;
+`delete_clone` removes only the scanned `<repo>/<repo>-main` checkout, then `rmdir`s an
+empty `worktree/` and repository directory. `deletion_problem` fails closed with a
+keep-reason token (`KEEP_REASONS`): a non-ok row, a non-layout or symlinked path, a
+checkout that is not a main clone at its work-tree root, one holding a protected path
+(`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
+output, a stash, a commit on `HEAD` or any ref (`rev-list --all`) that no remote branch holds, a
+linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
 
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by

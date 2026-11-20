@@ -40,13 +40,14 @@ cli = _load_cli()
 
 def _row(repo: str, scans: dict[str, Any] | None = None, *, failed: bool = False) -> FleetRow:
     return {
-        "fleet_row_version": 1,
+        "fleet_row_version": 2,
         "repo": repo,
         "group": repo.rsplit("/", 1)[0],
         "status": "failed" if failed else "ok",
         "reason": "missing_checkout" if failed else None,
         "signals_schema_version": None if failed else 1,
         "scans": None if failed else (scans or {}),
+        "active": None if failed else True,
     }
 
 

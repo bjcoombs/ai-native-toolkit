@@ -106,10 +106,15 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     first = (tmp_path / "out1" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out2" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out3" / "repos.jsonl").read_bytes()
-    assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == ["groups.jsonl", "repos.jsonl"]
+    assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
     groups = (tmp_path / "out1" / "groups.jsonl").read_bytes()
     assert groups == (tmp_path / "out2" / "groups.jsonl").read_bytes()
     assert groups == (tmp_path / "out3" / "groups.jsonl").read_bytes()
+    stamp = (tmp_path / "out1" / "run.json").read_bytes()
+    assert stamp == (tmp_path / "out2" / "run.json").read_bytes()
+    assert stamp == (tmp_path / "out3" / "run.json").read_bytes()
+    assert json.loads(stamp)["rubric_version"] == "fixture-1"
+    assert str(froot).encode() not in stamp
     assert _snapshot(froot) == before, "the fleet run wrote into a target"
 
     rows = _rows(tmp_path / "out1")

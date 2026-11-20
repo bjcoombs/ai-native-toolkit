@@ -11,19 +11,24 @@ line per group in ``<out>/groups.jsonl`` (``lib/fleet_groups.py``, schema
 shared CI sources and marketplaces, the joined ``--settings`` and each
 ``--rubric`` row's whole level.
 
-Target repositories are never written to.
+Target repositories are never written to. With ``--delete-after`` a scanned
+clone is removed once its row is in hand, only when nothing in it would be
+lost (``lib/fleet_cleanup.py``). Every run also writes the run stamp
+``<out>/run.json`` (``lib/fleet_stamp.py``).
 
 Exit codes:
-    0  the run completed and repos.jsonl was written. Repositories that could
+    0  the run completed and repos.jsonl and run.json were written. Repositories that could
        not be scanned are rows with "status": "failed" and a reason token; the
        count is printed to stderr. Failures never change the exit code.
     2  usage error: no root and no --from-list, a root or list that does not
        exist, no repositories found, --out inside a target, an unreadable
-       --rubric or --settings, or bad scan arguments
+       --rubric or --settings, bad scan arguments, or an --out that cannot be
+       created
 
 Run:
     uv run fleet.py ROOT --out DIR [--rubric FILE] [--settings PATH] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
+        [--delete-after]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
 # /// script
@@ -34,6 +39,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -56,11 +62,22 @@ from lib.fleet import (  # noqa: E402
     targets_from_list,
     write_rows,
 )
+from lib.fleet_activity import window_start  # noqa: E402
+from lib.fleet_cleanup import CloneDeleter  # noqa: E402
 from lib.fleet_groups import SettingsError, load_settings, roll_up, write_groups  # noqa: E402
+from lib.fleet_stamp import build_stamp, write_stamp  # noqa: E402
 from lib.rubric import Rubric, RubricError, load_rubric  # noqa: E402
 from lib.rubric_signals import signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
-from lib.signals import UnknownScanError, parse_window, select_scans  # noqa: E402
+from lib.signals import (  # noqa: E402
+    DEFAULT_WINDOW,
+    TOOLKIT_ROOT,
+    UnknownScanError,
+    parse_window,
+    read_plugin_version,
+    select_scans,
+    toolkit_commit,
+)
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -105,6 +122,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                              "(hashes join within the run; reruns are not byte-identical).")
     parser.add_argument("--hash-salt", metavar="VALUE",
                         help="Hash paths under this salt (implies --hash-paths); reruns stay identical.")
+    parser.add_argument(
+        "--delete-after", action="store_true",
+        help="Delete each ghsync clone (<repo>-main) once it is scanned ok, only when it has no "
+             "local change, untracked or ignored file, stash, unpushed commit or linked worktree. "
+             "Anything else is kept and listed on stderr.",
+    )
     args = parser.parse_args(argv)
     if args.root is None and args.from_list is None:
         parser.error("give a ghsync ROOT or --from-list FILE")
@@ -131,9 +154,17 @@ def _targets(args: argparse.Namespace) -> list[Target]:
     return targets_from_list(parse_list(text), root, Path.cwd())
 
 
+def _report_deletions(deleter: CloneDeleter) -> None:
+    kept = deleter.kept()
+    print(f"fleet: --delete-after deleted {len(deleter.deleted())} clones, kept {len(kept)}", file=sys.stderr)
+    for repo, reason in kept:
+        print(f"  kept: {repo} ({reason})", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     rubric: Rubric | None = None
+    scans: list[str] | None = None
     settings: dict[str, JsonDict] = {}
     try:
         if args.rubric is not None:
@@ -141,7 +172,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.settings is not None:
             settings = load_settings(Path(args.settings))
         if args.scans is not None:
-            select_scans([s.strip() for s in args.scans.split(",") if s.strip()])
+            scans = [s.strip() for s in args.scans.split(",") if s.strip()]
+            select_scans(scans)
         if args.window is not None:
             parse_window(args.window)
         targets = _targets(args)
@@ -157,20 +189,35 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: --out {args.out} is inside target {inside.repo}; the fleet run never "
               "writes into a target", file=sys.stderr)
         return 2
+    today = datetime.now(timezone.utc).date()
+    window = args.window or DEFAULT_WINDOW
     options = ScanOptions(
         counts_only=not args.full,
         hash_salt=None if args.full else run_salt(args.hash_paths, args.hash_salt),
         window=args.window, scans=args.scans, timeout=args.timeout,
-        log_dir=out_dir / LOGS_DIR,
+        log_dir=out_dir / LOGS_DIR, active_since=window_start(window, today),
     )
-    rows = run_fleet(targets, options, args.jobs)
+    try:  # before any scan, so --delete-after never removes a clone whose results cannot land
+        out_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        print(f"error: cannot create --out {args.out}: {e.strerror}", file=sys.stderr)
+        return 2
+    deleter = CloneDeleter([out_dir, Path.cwd(), TOOLKIT_ROOT]) if args.delete_after else None
+    rows = run_fleet(targets, options, args.jobs, after=deleter)
     path = write_rows(out_dir, rows)
     groups_path = write_groups(out_dir, roll_up(rows, rubric, settings, counts_only=not args.full))
+    write_stamp(out_dir, build_stamp(
+        rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
+        today=today, window=window, rubric_version=rubric["version"] if rubric is not None else None,
+        counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
+    ))
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)
     for row in failed:
         print(f"  failed: {row['repo']} ({row['reason']})", file=sys.stderr)
+    if deleter is not None:
+        _report_deletions(deleter)
     return 0
 
 
