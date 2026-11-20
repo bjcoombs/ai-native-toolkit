@@ -1221,7 +1221,8 @@ that are present and not aliases, plus `nested_instructions.files`, each real fi
 once; `loaded_in_full`: agent and `SKILL.md` files from
 `claude_config.loaded_config_files` over 200 lines, largest first) is `{path, kind
 (instruction | agent | skill), total_lines, always_on_lines, always_on_share,
-fetch_on_need_lines, unclassified_lines, sections_total, flagged, relocatable[],
+always_on_words, fetch_on_need_lines, unclassified_lines, sections_total, flagged,
+relocatable[],
 relocatable_total}`, where `flagged` (instruction files only; always `false` in `loaded_in_full`) is always-on lines over 200 and share over
 0.5 and each `relocatable` entry (largest first, capped at 10) is `{heading,
 start_line, end_line, lines, signals[], home {kind, target}}`. `flagged` at block
@@ -1248,11 +1249,13 @@ small capped floor. Size is scored on always-on size and share (#560, replacing 
 the file with `instruction_placement.analyse_file` (given `skills`, the
 `skill_texts` map) and `placement_penalty` charges one point per 10 always-on lines
 past 200, capped at 30, plus one point per 10 fetch-on-need lines, capped at 30; a
-file over 400 always-on lines is capped at 59 (a B). Neither term reads the block's
+file over 400 always-on lines is capped at 59 (a B). Always-on lines are
+line-equivalents, the larger of the lines and the always-on words / 12, so a file of
+very long lines cannot dodge the term or the cap. Neither term reads the block's
 `flagged` (which also needs over half the file): gated on it, adding reference lines
 could lower a file's penalty. `always_on_flagged` mirrors `flagged` as evidence. The subscores `always_on_lines`,
 `always_on_pct`, `fetch_on_need_lines`, `always_on_flagged`, `always_on_penalty` and
-`relocatable_penalty` carry the split; `bloat_penalty` is their sum. Directory-tree
+`relocatable_penalty` (and `always_on_words`) carry the split; `bloat_penalty` is their sum. Directory-tree
 blocks, repository-overview sections and lines repeated from the root README cost points
 too (`instruction_content.py`). The A-F scale and the subscore keys downstream code reads
 (`positive_directives`, `tradeoff_phrases`, `path_references`, `verifiable_outcomes`,

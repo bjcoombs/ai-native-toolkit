@@ -42,6 +42,7 @@ def _record(always_on: int, fetch: int, flagged: bool) -> PlacementFile:
     return {
         "path": "CLAUDE.md", "kind": "instruction", "total_lines": total,
         "always_on_lines": always_on, "always_on_share": round(always_on / total, 2),
+        "always_on_words": always_on * 5,
         "fetch_on_need_lines": fetch, "unclassified_lines": 0, "sections_total": 1,
         "flagged": flagged, "relocatable": [], "relocatable_total": 0,
     }
@@ -173,11 +174,37 @@ def test_bloat_penalty_is_the_sum_of_both_terms() -> None:
     assert sub["bloat_penalty"] == sub["always_on_penalty"] + sub["relocatable_penalty"] == 11
 
 
-def test_word_count_alone_no_longer_costs_points() -> None:
-    """The #517 word leg is gone: the split is line-based."""
-    grade = grade_instructions(" ".join(["word"] * 9000) + "\n", 1, repo=None)
-    assert grade.subscores["word_count"] == 9000
-    assert grade.subscores["bloat_penalty"] == 0
+def test_very_long_lines_cannot_dodge_the_always_on_term() -> None:
+    """Always-on size counts 12 words as a line when that is more: the
+    claude-review case of 152 lines and 9,752 words pays the full always-on
+    penalty and the B cap, as the #517 word leg did."""
+    lines = [" ".join(["word"] * 64) for _ in range(151)] + ["tail " * 88]
+    text = "\n".join(lines) + "\n"
+    grade = grade_instructions(text, 1, repo=None)
+    sub = grade.subscores
+    assert (sub["line_count"], sub["word_count"]) == (152, 9752)
+    assert sub["always_on_words"] == 9752
+    assert sub["always_on_penalty"] == ALWAYS_ON_MAX_PENALTY
+    assert sub["size_grade_capped"] == 1
+    assert grade.score <= SIZE_GRADE_CAP_SCORE
+
+
+@pytest.mark.parametrize(("words", "penalty", "capped"), [
+    (2400, 0, False), (2412, 1, False), (3600, 10, False), (4800, 20, False),
+    (4812, 21, True),
+])
+def test_word_equivalents_follow_the_line_thresholds(words: int, penalty: int, capped: bool) -> None:
+    record = _record(100, 0, flagged=False)
+    record["always_on_words"] = words
+    result = placement_penalty(record)
+    assert (result["always_on_penalty"], result["capped"]) == (penalty, capped)
+
+
+def test_words_in_relocatable_sections_do_not_count_as_always_on() -> None:
+    text = _rules_block() + _kubernetes_section(300) + _filler(260)
+    record = analyse_file(text, "CLAUDE.md", "instruction", {})
+    kube_words = len(_kubernetes_section(300).split())
+    assert record["always_on_words"] == len(text.split()) - kube_words
 
 
 def test_monolith_fixture_is_flagged_and_capped(fixtures_dir: Path) -> None:

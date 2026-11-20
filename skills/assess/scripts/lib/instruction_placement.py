@@ -154,6 +154,7 @@ class PlacementFile(TypedDict):
     total_lines: int
     always_on_lines: int
     always_on_share: float
+    always_on_words: int
     fetch_on_need_lines: int
     unclassified_lines: int
     sections_total: int
@@ -412,8 +413,11 @@ def analyse_file(
     headed = sum(1 for s in sections if s.heading)
     results = [classify(s, rel, kind, skills, skills_dir, headed) for s in sections]
     lines_by: Counter[str] = Counter()
+    fetch_words = 0
     for c in results:
         lines_by[c.status] += len(c.section.lines)
+        if c.status == "fetch_on_need":
+            fetch_words += sum(len(line.split()) for line in c.section.lines)
     always_on = total - lines_by["fetch_on_need"]
     share = round(always_on / total, 2) if total else 0.0
     moves: list[RelocatableSection] = [
@@ -426,6 +430,7 @@ def analyse_file(
     return {
         "path": rel, "kind": kind, "total_lines": total,
         "always_on_lines": always_on, "always_on_share": share,
+        "always_on_words": len(text.split()) - fetch_words,
         "fetch_on_need_lines": lines_by["fetch_on_need"],
         "unclassified_lines": lines_by["unclassified"],
         "sections_total": len(results),

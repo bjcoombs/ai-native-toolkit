@@ -121,7 +121,10 @@ VERIFIABLE_PATTERNS = [
 #   block's ``flagged`` (which also needs more than half the file): with that
 #   gate, adding reference lines to a file could drop it under half and lower
 #   its penalty, so the score would reward the wrong action. ``flagged`` stays
-#   the block's advice flag.
+#   the block's advice flag. Lines are counted as line-equivalents: the
+#   larger of the always-on lines and always-on words / ``WORDS_PER_LINE``
+#   (about 12 words a line, the ratio the #517 word curve used), so a file of
+#   very long lines cannot dodge the term or the B cap.
 # - fetch-on-need lines: sections that belong in a skill, a nested file or an
 #   existing SKILL.md, which a two-line pointer would replace. This is the
 #   share term: a file that is mostly reference pays for it at any size, and a
@@ -137,6 +140,7 @@ VERIFIABLE_PATTERNS = [
 # what to move, so delegation is credited by moving it.
 ALWAYS_ON_LINES_PER_POINT = 10
 ALWAYS_ON_MAX_PENALTY = 30
+WORDS_PER_LINE = 12
 RELOCATABLE_LINES_PER_POINT = 10
 RELOCATABLE_MAX_PENALTY = 30
 ALWAYS_ON_GRADE_CAP_LINES = 2 * ALWAYS_ON_FLAG_LINES
@@ -356,18 +360,26 @@ class PlacementPenalty(TypedDict):
     capped: bool
 
 
+def always_on_equivalent_lines(record: PlacementFile) -> int:
+    """Always-on lines, or always-on words / ``WORDS_PER_LINE`` when larger."""
+    return max(record["always_on_lines"],
+               math.ceil(record["always_on_words"] / WORDS_PER_LINE))
+
+
 def placement_penalty(record: PlacementFile) -> PlacementPenalty:
     """Score one ``instruction_placement`` record on always-on size and share.
 
     ``always_on_penalty``: one point per ``ALWAYS_ON_LINES_PER_POINT``
-    always-on lines past ``ALWAYS_ON_FLAG_LINES``, capped at
+    always-on line-equivalents (``always_on_equivalent_lines``) past
+    ``ALWAYS_ON_FLAG_LINES``, capped at
     ``ALWAYS_ON_MAX_PENALTY``. ``relocatable_penalty``: one point per
     ``RELOCATABLE_LINES_PER_POINT`` fetch-on-need lines, capped at
     ``RELOCATABLE_MAX_PENALTY``. ``capped``: a file past
-    ``ALWAYS_ON_GRADE_CAP_LINES`` always-on lines grades at most B. Neither
+    ``ALWAYS_ON_GRADE_CAP_LINES`` always-on line-equivalents grades at most
+    B. Neither
     reads ``flagged``, so for a fixed split each grows with the lines added.
     """
-    always_on = record["always_on_lines"]
+    always_on = always_on_equivalent_lines(record)
     over = max(0, always_on - ALWAYS_ON_FLAG_LINES)
     return {
         "always_on_penalty": min(math.ceil(over / ALWAYS_ON_LINES_PER_POINT),
@@ -492,10 +504,11 @@ def grade_instructions(
         freshness penalty:        -10 if > 365 days, -5 if > 180
         bloat_penalty:            always-on size and share
                                   (``placement_penalty``): -1 per 10 always-on
-                                  lines past 200 (cap 30), plus -1 per 10
+                                  lines past 200 (cap 30), counting 12 words
+                                  as a line when that is more, plus -1 per 10
                                   fetch-on-need lines (cap 30)
-        size grade cap:           over 400 always-on lines the score is
-                                  capped at 59 (a B)
+        size grade cap:           over 400 always-on lines (or 4800 always-on
+                                  words) the score is capped at 59 (a B)
         content_penalty:          -10 for a directory-tree block, -5 for a
                                   repository-overview section, -8 / -15 when
                                   25% / 50% of the file's lines repeat the README
@@ -534,6 +547,7 @@ def grade_instructions(
     sub["word_count"] = len(text.split())
     placement = analyse_file(text, path or "CLAUDE.md", "instruction", skills or {})
     sub["always_on_lines"] = placement["always_on_lines"]
+    sub["always_on_words"] = placement["always_on_words"]
     sub["always_on_pct"] = round(placement["always_on_share"] * 100)
     sub["fetch_on_need_lines"] = placement["fetch_on_need_lines"]
     sub["always_on_flagged"] = int(placement["flagged"])

@@ -84,7 +84,8 @@ constant each.
 # Each instruction_files and nested_instructions.files entry gains the
 # subscores always_on_lines, always_on_pct, fetch_on_need_lines,
 # always_on_flagged, always_on_penalty and relocatable_penalty, and
-# instruction_file_size gains always_on_lines. bloat_penalty is now their
+# instruction_file_size gains always_on_lines (and the subscores and each
+# instruction_placement record always_on_words). bloat_penalty is now their
 # penalties' sum and size_grade_capped reads always-on lines. Additive: no key
 # moves or changes type, and complexity-stats.json is unchanged.
 ARTIFACT_SCHEMA_VERSION = "1.12.0"
