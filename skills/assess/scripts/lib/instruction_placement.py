@@ -97,7 +97,7 @@ _ALWAYS_ON_HEADING = re.compile(
 DIRECTIVE_SHARE = 0.3
 _DIRECTIVE = re.compile(
     r"^\s*(?:[-*+]|\d+[.)])?\s*(?:\*\*)?(?:never|always|do not|don'?t|must|only)\b"
-    r"|\b(?:MUST|NEVER|ALWAYS|DO NOT)\b",
+    r"|(?-i:\b(?:MUST|NEVER|ALWAYS|DO NOT)\b)",
     re.IGNORECASE,
 )
 # pointer_list: this share of the prose lines (three at least) are list items

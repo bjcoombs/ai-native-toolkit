@@ -10,6 +10,8 @@ import pytest
 from lib.instruction_placement import (
     ALWAYS_ON_FLAG_LINES,
     LOADED_IN_FULL_MIN_LINES,
+    Section,
+    always_on_signals,
     analyse_file,
     fence_mask,
     scan_instruction_placement,
@@ -191,6 +193,15 @@ def test_rules_heading_keeps_a_long_command_section_always_on() -> None:
     text = _kubernetes_section(300).replace("Kubernetes commands", "Kubernetes rules")
     record = analyse_file("# T\n## Intro\nx\n" + text, "CLAUDE.md", "instruction", {})
     assert record["relocatable"] == []
+
+
+def test_lowercase_must_mid_sentence_is_not_a_directive() -> None:
+    body = ["## Payments service", ""]
+    body += [f"Handler {i} in `services/payments/handler_{i}.py` must stay pure." for i in range(60)]
+    [*_, section] = split_sections(_rules_block() + "\n".join(body) + "\n")
+    assert "hard_rules" not in always_on_signals(section)
+    caps = section.lines[:2] + tuple(f"Handler {i} MUST stay pure." for i in range(4))
+    assert "hard_rules" in always_on_signals(Section(section.heading, 2, 1, 6, caps))
 
 
 def test_a_single_fetch_signal_leaves_the_section_unclassified() -> None:
