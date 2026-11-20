@@ -28,7 +28,7 @@ modules, so the boundary from #557/#558 stays as it is:
 
 Every unavailable block is the bare ``{"available": false, "reason": ...}``
 marker with a ``code: sentence`` reason, so the counts-only filter keeps a
-named code (``no_lizard``, ``no_grimp``, ``no_networkx``, ``no_rg``,
+named code (``no_lizard``, ``no_grimp``, ``no_networkx``, ``grimp_failed``, ``no_rg``,
 ``no_python_packages``, ``no_ownership_map``) and a maturity-model row reads
 unknown, never a level. The full run's blocks are unchanged.
 """
@@ -98,7 +98,9 @@ def _named(block: Any, codes: Sequence[tuple[str, str]]) -> JsonDict | None:
 
 def structure(scan: Any) -> JsonDict:
     """The import-graph block, or a named marker (no tool, no Python package)."""
-    marker = _named(scan, (("grimp", "no_grimp"), ("networkx", "no_networkx")))
+    marker = _named(scan, (("grimp not installed", "no_grimp"),
+                           ("networkx not installed", "no_networkx"),
+                           ("grimp failed", "grimp_failed")))
     if marker is not None:
         return marker
     if not scan.get("module_count"):

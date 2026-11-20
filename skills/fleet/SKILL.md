@@ -32,8 +32,9 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/fleet.py" --from-list repos.txt --out fleet-
 
 `uv run fleet.py ...` installs the script's three dependencies (networkx,
 grimp, lizard), which the per-repository scans need for the default maturity
-model's layer 2-4 blocks (import graph, file size, lint suppressions need `rg`
-on `PATH`). `python3 fleet.py ...` without them still runs; those blocks then
+model's layer 2 and 4 blocks (the import graph and file size); the layer 3
+block (lint suppressions) needs `rg` on `PATH` instead. lizard scores every
+tracked source file, so a very large repository can need a longer `--timeout`. `python3 fleet.py ...` without them still runs; those blocks then
 read unavailable with a named reason (`no_grimp`, `no_lizard`, `no_rg`) and
 their rows `unknown`.
 

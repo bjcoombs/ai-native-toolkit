@@ -110,6 +110,7 @@ def test_the_headless_module_is_outside_the_core() -> None:
 @pytest.mark.parametrize(("reason", "code"), [
     ("grimp not installed; static structure not assessed", "no_grimp"),
     ("networkx not installed; static structure not assessed", "no_networkx"),
+    ("grimp failed to build import graph (bad syntax)", "grimp_failed"),
 ])
 def test_structure_names_a_missing_tool(reason: str, code: str) -> None:
     block = hl.structure({"available": False, "reason": reason, "modularity_q": 0.0})
@@ -245,7 +246,7 @@ def test_no_tool_run_reads_unknown_with_named_reasons(
     assert git is not None
     (git_only / "git").symlink_to(git)
     monkeypatch.setenv("PATH", str(git_only))
-    monkeypatch.setattr(structure_graph, "grimp", None)
+    monkeypatch.setattr(structure_graph, "_GRIMP_AVAILABLE", False)
     monkeypatch.setattr(hl, "lizard_analyzer", lambda: None)
     doc = _run(target, tmp_path / "co.json", "--counts-only")
     jsonschema.validate(doc, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))

@@ -643,7 +643,7 @@ rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
 `not_probed`) and `stats_summary` (tracked source files scored by lizard in process:
 `files_scored`, `loc` and file-aggregate `ccn`, percentiles by numpy's linear rule; no
 scc languages, no hotspot lists). Every unavailable block is the bare marker with a
-`code: sentence` reason (`no_grimp`, `no_networkx`, `no_python_packages`, `no_rg`,
+`code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_rg`,
 `not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
 and a rubric row reads `unknown`. It diverges from the full run in two places: no Python
 package reads `no_python_packages` (the full run: modularity 0.0), and no ownership map
