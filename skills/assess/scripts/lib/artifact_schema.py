@@ -126,7 +126,13 @@ constant each.
 # marker drops modularity_q and opens its reason with a code: no_grimp,
 # no_networkx, grimp_failed or no_python_packages). run-context.json and
 # complexity-stats.json are otherwise unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.18.0"
+# 1.19.0: run-context.json gains agent_building (issue #689), an unscored
+# inventory of what the repository builds with agents (SDK slugs, agent config
+# kinds, counts-only code heuristic, API-client pairing, one class); /fleet
+# groups.jsonl lines gain agent_building class counts and the run writes
+# agent_clusters.json. Additive: no existing key moves, and complexity-stats.json
+# is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.19.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
