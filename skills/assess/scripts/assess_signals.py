@@ -8,7 +8,7 @@ callers scanning many repositories they may not own:
 - makes no network calls (network scans run offline or report unavailable),
 - renders no SVG and asks no consent questions.
 
-Scans still hand-wired in ``assess_core.py`` are listed as
+Blocks ``assess_core.py`` assembles through its own table entries are listed as
 ``{"available": false, "reason": ...}``. The output shape is published as
 ``skills/assess/references/signals.schema.json``.
 

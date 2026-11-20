@@ -37,23 +37,15 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.badge import write_findings_badge
-from lib.context_blocks import build_stale_hubs, dict_or, doc_to_code_edges
 from lib.counts_only import COUNTS_ONLY_FILE
 from lib.counts_only import add_cli_arguments as add_counts_only_arguments
 from lib.counts_only import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.coverage_report import load_coverage_data
-from lib.doc_staleness import analyze_doc_staleness
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_publish import publish_run
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
-from lib.scan_registry import (
-    STAGE_FINAL,
-    STAGE_POST_OFFERS,
-    STAGE_READ_SIDE,
-    STAGE_SETUP,
-    run_scans,
-)
+from lib.scan_registry import run_scans
 from lib.scan_registry import safe as _safe
 from lib.test_focus import mutation_scope
 from lib.test_pressure import scan_test_pressure
@@ -77,46 +69,18 @@ def build_run_context(
     staleness) see only the subtree, so the score/badge/wiki carry no signal
     from a sibling directory. None (the default) is a whole-repo run, unchanged.
 
-    Every block comes from the declared table in ``lib/scan_registry.py``,
-    except the doc-staleness keys assigned here (``HAND_WIRED``). The table only
-    reads; ``lib.run_publish.publish_run`` then writes index.md, log.md,
-    hotspots/*.md, badge.json and run-context.json.
+    Every block comes from the declared table in ``lib/scan_registry.py``. The
+    table only reads; ``lib.run_publish.publish_run`` then writes index.md,
+    log.md, hotspots/*.md, badge.json and run-context.json.
     """
     scan_inputs: dict[str, Any] = {
         "repo_root": repo_root, "requested_scope": scope,
         "run_date": run_date, "non_interactive": non_interactive,
     }
     ctx: dict[str, Any] = {}
-    run_scans(ctx, scan_inputs, STAGE_SETUP)
-    _attach_doc_staleness(ctx, scan_inputs)
-    run_scans(ctx, scan_inputs, STAGE_READ_SIDE)
-    run_scans(ctx, scan_inputs, STAGE_POST_OFFERS)
-    run_scans(ctx, scan_inputs, STAGE_FINAL)
+    run_scans(ctx, scan_inputs)
     publish_run(ctx, scan_inputs)
     return ctx
-
-
-def _attach_doc_staleness(ctx: dict[str, Any], state: dict[str, Any]) -> None:
-    """Assign the doc-staleness keys, still hand-wired (``HAND_WIRED``).
-
-    Held back from the table for the 2.0.0 rewrite (issues #424 and #425).
-    ``churn_degenerate`` is True when the git history is degenerate - every file
-    ~1 commit (shallow clone, fresh import, squashed tree) - so churn-derived
-    findings are discounted and the treemap saturation axis is inactive. Single
-    source of truth: the doc-staleness block (lib.git_churn.churn_is_degenerate).
-    """
-    dirs, patterns = state["excludes"]
-    doc_staleness = _safe(
-        "doc_staleness",
-        lambda: analyze_doc_staleness(
-            state["repo_root"], doc_to_code_edges=doc_to_code_edges(ctx["doc_graph"]),
-            extra_exclude_dirs=dirs, extra_exclude_patterns=patterns, scope=state["scope"],
-        ),
-    )
-    ctx["doc_staleness"] = doc_staleness
-    ctx["stale_hubs"] = build_stale_hubs(ctx["doc_graph"], doc_staleness)
-    ctx["churn_degenerate"] = bool(
-        dict_or(doc_staleness, {}).get("churn_degenerate", False))
 
 
 def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:

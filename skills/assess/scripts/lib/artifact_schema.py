@@ -88,7 +88,10 @@ ARTIFACT_SCHEMA_VERSION = "1.10.0"
 # ranks for files renamed inside the churn window (issue #425).
 # 3: the doc-complexity join reads complexity-stats.json's uncapped `files` list,
 #    so a complex file outside every top-10 list can now produce lying_map,
-#    unexplained_complexity or good_contract (issue #556).
+#    unexplained_complexity or good_contract (issue #556). The same list reaches
+#    candidate_dead_weight (keyhole_signals._high_complexity_paths) and
+#    orphaned_understanding (understanding_analysis._extract_file_ccn), which
+#    now also see every scored file.
 # 4: the complexity join takes doc ownership from the doc-staleness rule
 #    (lib.doc_ownership, issue #555): a README beside a design doc owns the
 #    directory's code, and a non-base doc owns none by directory.
