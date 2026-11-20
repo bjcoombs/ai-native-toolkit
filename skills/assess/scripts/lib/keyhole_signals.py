@@ -1255,15 +1255,12 @@ def _integrate_blocks(
     complexity_stats: JsonDict,
     doc_staleness: JsonDict,
     dead_code: JsonDict,
-    observability: JsonDict,
-    doc_join: JsonDict | None = None,
+    observability: JsonDict, doc_join: JsonDict | None = None,
 ) -> tuple[BehaviourBlock, DocumentationBlock, UnderstandingBlock, RuntimeBlock]:
     """The behaviour, documentation, understanding and runtime blocks.
 
     Each is built through ``_safe_block``, so a failure in one degrades that
-    block to ``available: False`` and leaves the rest intact. ``doc_join`` is
-    the doc x complexity join already computed by the scan table; None joins
-    here.
+    block to ``available: False`` and leaves the rest intact.
     """
     behaviour = _safe_block(
         "behaviour",
@@ -1273,10 +1270,8 @@ def _integrate_blocks(
 
     documentation = _safe_block(
         "documentation",
-        lambda: build_documentation_block(
-            doc_join if doc_join is not None
-            else analyze_doc_complexity_join(complexity_stats, doc_staleness, repo_root)
-        ),
+        lambda: build_documentation_block(doc_join if doc_join is not None else
+                                          analyze_doc_complexity_join(complexity_stats, doc_staleness, repo_root)),
         {"freshness_by_doc": {}, "complexity_coverage": {},
          "stale_doc_on_complexity": [], "unexplained_complexity": []},
     )
@@ -1508,11 +1503,9 @@ def integrate(
     recorded under a renamed path onto its current path; a git-history finding
     path that still does not exist is pruned and reported in
     ``pruned_finding_paths``. When the map is incomplete (git failed) nothing is
-    pruned: an unfolded old path is not evidence of a deletion.
-    ``doc_join`` is ``doc_complexity_join.analyze_doc_complexity_join``'s result
-    (the scan table's ``doc_join`` entry); None runs the join here.
-    Every block is built defensively - a failure in one degrades that block to
-    ``available: False`` and leaves the rest intact.
+    pruned: an unfolded old path is not evidence of a deletion. ``doc_join`` is
+    the scan table's doc x complexity join; None runs the join here. Every block
+    is built defensively: a failed one degrades to ``available: False`` alone.
 
     Each step lives in a named helper; this body only sequences them, so the
     order of ``derived_findings`` (``FINDING_ORDER`` via ``assemble_findings``)
