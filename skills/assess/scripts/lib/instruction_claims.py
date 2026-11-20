@@ -115,6 +115,8 @@ _NOT_A_TOOL = frozenset({
     "on", "or", "pin", "pinned", "pins", "require", "requires", "run", "runs", "set",
     "than", "the", "to", "use", "uses", "using", "v", "version", "versions", "was",
     "with",
+    "about", "as", "by", "currently", "for", "into", "now", "still", "today",
+    "via",
     # Qualifiers: "Node LTS 18", "the runtime 3.12", "stable 1.78".
     "current", "default", "engine", "latest", "lts", "max", "maximum", "min",
     "minimum", "release", "runtime", "sdk", "stable", "toolchain",

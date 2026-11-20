@@ -113,11 +113,13 @@ HISTORICAL_DOC_TREES = (
 )
 # Version files that pin exactly one tool: every pin in one is about that tool,
 # however a document words it, so its pins are never split by subject.
+# ``.sdkmanrc`` (one SDK per line) and ``go.mod`` (dependency versions) pin
+# several things and are split like ``.tool-versions``.
 SINGLE_TOOL_PIN_FILES = frozenset({
     ".nvmrc", ".node-version", ".python-version", ".ruby-version", ".go-version",
     ".java-version", ".terraform-version", ".bun-version", ".deno-version",
     ".php-version", ".elixir-version", ".erlang-version", ".crystal-version",
-    ".dvmrc", ".sdkmanrc", "rust-toolchain", "rust-toolchain.toml", "go.mod",
+    ".dvmrc", "rust-toolchain", "rust-toolchain.toml",
 })
 # List caps; the counts beside each list carry the full total.
 MAX_FAILURES = 50

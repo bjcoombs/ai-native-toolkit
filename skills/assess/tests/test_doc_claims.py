@@ -219,6 +219,25 @@ def test_a_single_tool_pin_file_is_never_split_by_wording(
     assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
 
 
+def test_sdkmanrc_holds_one_sdk_per_line_so_its_pins_split_by_tool(tmp_path: Path) -> None:
+    _write(tmp_path, ".sdkmanrc", "java=17.0.2-tem\nmaven=3.9.6\n")
+    _write(tmp_path, "docs/a.md", "Java 17.0.2 is pinned in `.sdkmanrc`.\n")
+    _write(tmp_path, "docs/b.md", "Maven 3.8.6 is pinned in `.sdkmanrc`.\n")
+    block = scan_doc_claims(tmp_path, [])
+    assert (block["failed"], block["contradictions_total"]) == (1, 0)
+
+
+@pytest.mark.parametrize("stale", [
+    "Node is pinned in `.tool-versions` as 18.19.0.",
+    "Node is pinned in `.tool-versions` (currently 18.19.0).",
+])
+def test_a_function_word_before_the_version_is_not_a_second_tool(
+        tmp_path: Path, stale: str) -> None:
+    _write(tmp_path, "docs/a.md", "Node 20.11.0 is pinned in `.tool-versions`.\n")
+    _write(tmp_path, "docs/b.md", stale + "\n")
+    assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
+
+
 def test_a_pin_naming_no_tool_joins_the_one_tool_named(tmp_path: Path) -> None:
     _write(tmp_path, "docs/a.md", "Node 20.11.0 is pinned in `.nvmrc`.\n")
     _write(tmp_path, "docs/b.md", "Version 18.19.0 is pinned in `.nvmrc`.\n")
