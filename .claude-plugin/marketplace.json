@@ -7,7 +7,7 @@
     {
       "name": "ai-native-toolkit",
       "source": "./",
-      "description": "Skills for AI-native development: /assess (codebase readiness scoring + complexity hotspot SVG) and /huddle (Six Thinking Hats deliberation with Fibonacci team sizing). Also bundles user-invoked personal workflow skills (/tm, /issues, /fix-pr, /fix-develop)."
+      "description": "Skills for AI-native development: /assess (codebase readiness scoring, complexity hotspot SVG and doc-navigability graph), /huddle (Six Thinking Hats deliberation with Fibonacci team sizing), /deslop, /skill-forge, /semantic-compress, /ghsync and /ghreport (clone, skipping archived and empty repos, and report on the GitHub or GitLab repos you can access), /fleet (headless /assess signals across many repositories, rolled up per group) and /doc-contradictions (finds docs that contradict each other or the code). Also bundles user-invoked personal workflow skills (/tm, /issues, /fix-pr, /fix-develop)."
     }
   ]
 }
