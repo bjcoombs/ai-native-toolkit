@@ -182,15 +182,15 @@ LABEL_OFFSETS: tuple[tuple[float, float, str], ...] = (
 
 
 def place_labels(points: Sequence[tuple[float, float, str]], bounds: Box, *, size: float = 11.5,
-                 radius: float = 6.5) -> list[PlacedLabel | None]:
+                 radius: float = 6.5, obstacles: Sequence[Box] = ()) -> list[PlacedLabel | None]:
     """A label per ``(x, y, label)`` point, placed greedily in input order.
 
     Each label takes the first ``LABEL_OFFSETS`` candidate whose box stays inside
-    ``bounds`` and overlaps no point disc (as a box) and no label placed before
-    it; a label that fits nowhere is ``None`` and the caller names it elsewhere.
+    ``bounds`` and overlaps no point disc (as a box), no ``obstacles`` box (fixed
+    captions) and no label placed before it; a label that fits nowhere is ``None`` and the caller names it elsewhere.
     The caller fixes the input order, so the layout is deterministic.
     """
-    discs = [Box(x - radius, y - radius, 2 * radius, 2 * radius) for x, y, _ in points]
+    discs = [*obstacles, *(Box(x - radius, y - radius, 2 * radius, 2 * radius) for x, y, _ in points)]
     height = size * 1.2
     placed: list[PlacedLabel | None] = []
     taken: list[Box] = []
@@ -209,6 +209,26 @@ def place_labels(points: Sequence[tuple[float, float, str]], bounds: Box, *, siz
         if choice is not None:
             taken.append(choice.box)
     return placed
+
+
+def text_box(x: float, y: float, content: str, size: float = 12, anchor: str = "start") -> Box:
+    """The estimated box of a ``<text>`` at baseline ``(x, y)``."""
+    width = text_width(content, size)
+    left = {"start": x, "middle": x - width / 2}.get(anchor, x - width)
+    return Box(left, y - size, width, size * 1.2)
+
+
+def hatched_note(x: float, y: float, lines: Sequence[str], *, size: float = 11.5,
+                 line_h: float = 16.0) -> tuple[list[str], float]:
+    """A hatched swatch then ``lines`` of text beside it, the shared "unknown" key.
+
+    Returns the elements and the height used. Needs ``THEMED_HATCH`` in the defs.
+    """
+    parts = [f'<rect x="{x:.1f}" y="{y + 2:.1f}" width="14.0" height="14.0" fill="{HATCH_FILL}" '
+             f'class="s-muted" stroke-width="1"/>']
+    for index, line in enumerate(lines):
+        parts.append(text(x + 22, y + 13 + index * line_h, line, size=size, cls="fg"))
+    return parts, len(lines) * line_h
 
 
 def spread_vertical(ys: Sequence[float], min_gap: float) -> list[float]:

@@ -106,7 +106,15 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     first = (tmp_path / "out1" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out2" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out3" / "repos.jsonl").read_bytes()
-    assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
+    assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == [
+        "groups.jsonl", "report.md", "repos.jsonl", "run.json", "shared-tooling.svg"]
+    for name in ("report.md", "shared-tooling.svg"):  # diagrams are byte-identical across runs
+        drawn = (tmp_path / "out1" / name).read_bytes()
+        assert drawn == (tmp_path / "out2" / name).read_bytes()
+        assert drawn == (tmp_path / "out3" / name).read_bytes()
+    report = (tmp_path / "out1" / "report.md").read_text(encoding="utf-8")
+    assert "[![Shared tooling](./shared-tooling.svg)](./shared-tooling.svg)" in report
+    assert "Not drawn: skipped: the maturity model has no team rows" in report
     groups = (tmp_path / "out1" / "groups.jsonl").read_bytes()
     assert groups == (tmp_path / "out2" / "groups.jsonl").read_bytes()
     assert groups == (tmp_path / "out3" / "groups.jsonl").read_bytes()
@@ -129,6 +137,23 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     assert isinstance(svc1, dict)
     assert svc1["shared_tooling"]["marketplace_ids"] == ["marketplace:mkt-a"]
     assert svc1["nested_instructions"]["budget"]["claude_code"]["files"] == ["CLAUDE.md"]
+
+
+def test_no_diagrams_draws_nothing_and_removes_a_previous_runs(froot, tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert fleet_cli.main([str(froot), "--out", "out", "--no-history"]) == 0
+    assert (tmp_path / "out" / "report.md").is_file()
+    assert "fleet: diagrams -> " in capsys.readouterr().err
+    assert fleet_cli.main([str(froot), "--out", "out", "--no-history", "--no-diagrams"]) == 0
+    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
+
+
+def test_a_diagram_write_failure_keeps_exit_0(tmp_path, monkeypatch, capsys):
+    def boom(*_args: object) -> None:
+        raise OSError("disk full")
+    monkeypatch.setattr(fleet_cli, "write_diagrams", boom)
+    fleet_cli._diagrams(tmp_path, False, None, [], "6mo")
+    assert "fleet: diagrams: not written (disk full)" in capsys.readouterr().err
 
 
 def test_a_broken_checkout_is_a_failed_row_and_the_run_completes(froot, tmp_path, capsys):

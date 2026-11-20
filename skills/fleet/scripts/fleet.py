@@ -16,6 +16,10 @@ clone is removed once its row is in hand, only when nothing in it would be
 lost (``lib/fleet_cleanup.py``). Every run also writes the run stamp
 ``<out>/run.json`` (``lib/fleet_stamp.py``).
 
+It also draws the fleet diagrams (``lib/fleet_diagrams.py``): ``<out>/report.md``
+embedding ``quadrant.svg`` and ``shared-tooling.svg``, or the reason each was
+skipped; ``--no-diagrams`` turns them off.
+
 A counts-only run is also kept in the run history,
 ``${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet/<org>/<date>/``
 (``--history-dir``, ``--history-org``, ``--no-history``; ``lib/fleet_history.py``).
@@ -38,7 +42,7 @@ Run:
     uv run fleet.py ROOT --out DIR [--rubric FILE] [--settings PATH] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
-        [--no-history]
+        [--no-history] [--no-diagrams]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
 # /// script
@@ -61,6 +65,7 @@ sys.path.insert(0, str(ASSESS_SCRIPTS))
 
 from lib.fleet import (  # noqa: E402
     DEFAULT_TIMEOUT,
+    FleetRow,
     LOGS_DIR,
     REPOS_FILE,
     STATUS_FAILED,
@@ -85,6 +90,12 @@ from lib.fleet_compare import (  # noqa: E402
     not_comparable,
     summary_lines,
     write_comparison,
+)
+from lib.fleet_diagrams import (  # noqa: E402
+    REPORT_FILE,
+    build_diagrams,
+    clear_diagrams,
+    write_diagrams,
 )
 from lib.fleet_groups import SettingsError, load_settings, roll_up, write_groups  # noqa: E402
 from lib.fleet_history import (  # noqa: E402
@@ -183,6 +194,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--history-org", metavar="NAME",
                         help="The <org> directory name in the history (default: from the repository ids).")
     parser.add_argument("--no-history", action="store_true", help="Do not keep this run in the history.")
+    parser.add_argument(
+        "--no-diagrams", action="store_true",
+        help=f"Do not draw the diagrams (OUT/{REPORT_FILE} and its SVGs); any a previous run left "
+             "are removed.",
+    )
     args = parser.parse_args(argv)
     if args.compare not in (None, LATEST) and _not_a_run(Path(args.compare)):
         parser.error(f"--compare took {args.compare!r} as the earlier run, but it holds no {RUN_FILE} "
@@ -296,6 +312,24 @@ def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
         print(f"fleet: compare: {line}", file=sys.stderr)
 
 
+def _diagrams(out_dir: Path, no_diagrams: bool, rubric: Rubric | None, rows: list[FleetRow],
+              window: str) -> None:
+    """Draw the diagrams and their report, or clear them; a failure never changes the exit code."""
+    try:
+        if no_diagrams:
+            clear_diagrams(out_dir)
+            return
+        diagrams = build_diagrams(rubric, rows, window)
+        write_diagrams(out_dir, diagrams)
+    except OSError as e:
+        print(f"fleet: diagrams: not written ({e})", file=sys.stderr)
+        return
+    for diagram in diagrams:
+        if diagram["skipped"] is not None:
+            print(f"fleet: diagrams: {diagram['file']} {diagram['skipped']}", file=sys.stderr)
+    print(f"fleet: diagrams -> {out_dir / REPORT_FILE}", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     rubric: Rubric | None = None
@@ -380,6 +414,7 @@ def main(argv: list[str] | None = None) -> int:
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
     )
     write_stamp(out_dir, stamp)
+    _diagrams(out_dir, args.no_diagrams, rubric, rows, window)
     _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
