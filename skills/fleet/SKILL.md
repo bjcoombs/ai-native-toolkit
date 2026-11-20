@@ -33,10 +33,23 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/fleet.py" --from-list repos.txt --out fleet-
 `uv run fleet.py ...` installs the script's three dependencies (networkx,
 grimp, lizard), which the per-repository scans need for the default maturity
 model's layer 2 and 4 blocks (the import graph and file size); the layer 3
-block (lint suppressions) needs `rg` on `PATH` instead. lizard scores every
+block (lint suppressions) needs ripgrep (`rg`) instead. lizard scores every
 tracked source file, so a very large repository can need a longer `--timeout`. `python3 fleet.py ...` without them still runs; those blocks then
 read unavailable with a named reason (`no_grimp`, `no_lizard`, `no_rg`) and
-their rows `unknown`.
+their rows `unknown`, and the run prints the install line for whatever is missing.
+
+**Without uv.** Install the three dependencies into the interpreter you run
+the script with, then run it with that interpreter:
+
+```bash
+python3 -m pip install --user networkx grimp lizard==1.23.0
+```
+
+**Finding `rg`.** The scans use `RG_PATH` when it names the ripgrep binary,
+else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
+`%LOCALAPPDATA%\Microsoft\WinGet\Packages\BurntSushi.ripgrep*`, where
+`winget install --scope user BurntSushi.ripgrep.MSVC` puts it even when no
+`PATH` alias is created. A `no_rg` reason names the lookups it tried.
 
 | Flag | Meaning |
 |------|---------|
@@ -70,6 +83,34 @@ window, a `DIR` that cannot be created or written to (checked before any scan, s
 unusable run history location, or a `--compare` directory that is missing or
 malformed. A window reaching back before year 1 is accepted: every dated `HEAD` is
 inside it.
+
+### Windows
+
+Python 3.11+ and Git for Windows are enough; uv and admin rights are not
+needed.
+
+<!-- chat-skip:start -->
+A Claude Code session on Windows runs PowerShell, so use `python` (not
+`python3`) and these forms:
+
+```powershell
+# dependencies, once, without uv
+python -m pip install --user networkx grimp lizard==1.23.0
+
+# only if rg is neither on PATH nor installed by winget
+$env:RG_PATH = "C:\tools\ripgrep\rg.exe"
+
+# every repository under a ghsync root
+python "${CLAUDE_SKILL_DIR}/scripts/fleet.py" "$HOME\dev\gitlab.example.com" --out fleet-out
+
+# the repositories in a list file
+python "${CLAUDE_SKILL_DIR}/scripts/fleet.py" --from-list repos.txt --out fleet-out
+```
+<!-- chat-skip:end -->
+
+`ghsync` and `ghreport` are bash scripts and need Git Bash on Windows. Without
+it, clone the repositories any other way, write one checkout path per line to a
+list file, and pass it with `--from-list`.
 
 ## Output: `repos.jsonl`
 

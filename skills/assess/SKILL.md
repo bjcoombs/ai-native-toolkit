@@ -312,6 +312,10 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT"
 
 Either SVG is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated - <reason>" in the report and continue. The doc graph shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
 
+<!-- chat-skip:start -->
+**Windows (PowerShell, no uv).** Install once with `python -m pip install --user networkx grimp lizard==1.23.0 squarify matplotlib numpy`, set `$AssessDir = "${CLAUDE_SKILL_DIR}"` and `$REPO_ROOT = git rev-parse --show-toplevel`, then run each `uv run` line in this skill as `python` with the same arguments. The full PowerShell sequence and the ripgrep lookup (`RG_PATH`, then `PATH`, then the WinGet package folder): `references/windows.md`.
+<!-- chat-skip:end -->
+
 Interactivity is an explicit signal, never a stdin probe: pass `--non-interactive` only on a headless/CI run, otherwise the run is interactive by default. See `references/consent-lifecycle.md` for why (`isatty()` misreads a subprocess).
 
 Now `$REPO_ROOT/.assess/run-context.json` contains the structured data you need for the prose sections. Read it before writing the report.
