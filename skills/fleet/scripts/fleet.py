@@ -9,7 +9,11 @@ shape is ``skills/fleet/references/repos.schema.json``; the logic lives in
 line per group in ``<out>/groups.jsonl`` (``lib/fleet_groups.py``, schema
 ``skills/fleet/references/groups.schema.json``): repository counts, distinct
 shared CI sources and marketplaces, the joined ``--settings`` and each
-``--levels`` row's whole level. ``<out>/fleet-data.json`` (``lib/fleet_data.py``, schema
+``--levels`` row's whole level, plus each group's agent-building class counts.
+Similar ``builds-agent`` repositories across groups are clustered into
+``<out>/agent_clusters.json`` (``lib/fleet_agent_building.py``): counts and SDK
+slugs only, member repositories named only with ``--name-agent-clusters``.
+``<out>/fleet-data.json`` (``lib/fleet_data.py``, schema
 ``skills/fleet/references/fleet-data.schema.json``) holds the org units tree per view
 (``lib/fleet_units.py``; ``--units`` maps it), each unit's roll-ups and each repository's
 units, web URL and per-row level, value and reason.
@@ -57,7 +61,7 @@ Run:
     uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--units FILE] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
-        [--no-history] [--no-diagrams] [--fleet-config FILE]
+        [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
 # /// script
@@ -106,6 +110,7 @@ from lib.fleet import (  # noqa: E402
     write_rows,
 )
 from lib.fleet_activity import window_start  # noqa: E402
+from lib.fleet_agent_building import clusters, write_clusters  # noqa: E402
 from lib.fleet_doc_freshness import freshness_rows, summary_line, write_freshness  # noqa: E402
 from lib.fleet_cleanup import CloneDeleter  # noqa: E402
 from lib.fleet_compare import (  # noqa: E402
@@ -253,6 +258,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--no-diagrams", action="store_true",
         help=f"Do not draw the diagrams (OUT/{REPORT_FILE} and its SVGs); any a previous run left "
              "are removed.",
+    )
+    parser.add_argument(
+        "--name-agent-clusters", action="store_true",
+        help="Name the member repositories and groups of each agent cluster in "
+             "OUT/agent_clusters.json. Off by default: a cluster carries counts and SDK slugs only.",
     )
     add_renamed_flag(parser)
     args = parser.parse_args(argv)
@@ -541,6 +551,8 @@ def main(argv: list[str] | None = None) -> int:
     path = write_rows(out_dir, rows)
     groups = roll_up(rows, maturity_model, settings, counts_only=not args.full)
     groups_path = write_groups(out_dir, groups)
+    agent_clusters = clusters(rows, name=args.name_agent_clusters)
+    write_clusters(out_dir, agent_clusters)
     stamp = build_stamp(
         rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
@@ -556,6 +568,9 @@ def main(argv: list[str] | None = None) -> int:
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)
+    print(f"fleet: agent clusters: {len(agent_clusters['clusters'])} over "
+          f"{agent_clusters['clustered_repos']} of {agent_clusters['builds_agent_repos']} builds-agent "
+          "repositories", file=sys.stderr)
     for row in failed:
         print(f"  failed: {row['repo']} ({row['reason']})", file=sys.stderr)
     if freshness_path is not None:

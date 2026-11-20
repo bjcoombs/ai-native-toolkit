@@ -9,6 +9,9 @@ Reads the ``repos.jsonl`` rows ``lib/fleet.py`` builds and writes one
   when no repository's ``shared_tooling`` block is available (every scan
   failed, degraded or was left out by ``--scans``), never a false 0;
   ``shared_tooling_repos`` says how many repositories the counts rest on;
+- ``agent_building``: scanned repositories per agent-building class
+  (``lib/fleet_agent_building.group_counts``, #689), null when no repository's
+  block is available; additive, so rows written before it lack the key;
 - the group settings joined from ghreport's settings fragments (#565);
 - each maturity model row's whole level, or ``unknown``, with the aggregation rule used,
   evaluated by ``lib/levels.py`` (#563), and the row's ``top_level`` (its number of
@@ -50,6 +53,7 @@ from typing import Any, NotRequired, TypedDict
 
 from lib.counts_only_rules import TOKEN_RE
 from lib.fleet import STATUS_OK, FleetRow
+from lib.fleet_agent_building import AgentBuildingCounts, group_counts
 from lib.levels import Aggregation, MaturityModel, evaluate
 from lib.run_context_types import JsonDict
 from lib.shared_tooling import distinct_ids
@@ -90,6 +94,7 @@ class GroupRow(TypedDict):
     shared_tooling_repos: int  # repositories with an available shared_tooling block
     distinct_ci_sources: int | None  # None: no repository gave shared_tooling evidence
     distinct_marketplaces: int | None
+    agent_building: NotRequired[AgentBuildingCounts | None]  # absent in rows before #689
     settings_scope: str | None  # the fragment joined; None when none matched
     settings: JsonDict | None  # normalised (and, counts-only, reduced) settings
     levels_version: str | None  # None without a maturity model
@@ -222,6 +227,7 @@ def group_row(group: str, rows: Sequence[FleetRow], maturity_model: MaturityMode
         "shared_tooling_repos": evidence,
         "distinct_ci_sources": len(ids["ci_sources"]) if evidence else None,
         "distinct_marketplaces": len(ids["marketplaces"]) if evidence else None,
+        "agent_building": group_counts(rows),
         "settings_scope": scope,
         "settings": shown,
         "levels_version": maturity_model["version"] if maturity_model else None,

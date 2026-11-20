@@ -77,6 +77,7 @@
       "propertyNames": {
         "enum": [
           "accretion_ratchet",
+          "agent_building",
           "agent_environment",
           "agent_harness",
           "agent_ops",

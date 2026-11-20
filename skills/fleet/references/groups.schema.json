@@ -35,6 +35,41 @@
         "null"
       ]
     },
+    "agent_building": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "repos": {
+              "type": "integer"
+            },
+            "builds_agent": {
+              "type": "integer"
+            },
+            "builds_mcp_server": {
+              "type": "integer"
+            },
+            "uses_agent_tooling": {
+              "type": "integer"
+            },
+            "none": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "builds_agent",
+            "builds_mcp_server",
+            "none",
+            "repos",
+            "uses_agent_tooling"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "settings_scope": {
       "type": [
         "string",
