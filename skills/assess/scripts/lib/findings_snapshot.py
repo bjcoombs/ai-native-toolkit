@@ -112,7 +112,12 @@ def committed_prior(ctx: dict[str, Any], repo_root: Path) -> FindingsSnapshot | 
     if on_disk is not None and on_disk["assess_method_version"] != ctx.get("assess_method_version"):
         return on_disk
     recorded = ctx.get("prior_findings_snapshot")
-    return recorded if isinstance(recorded, dict) else None
+    if not isinstance(recorded, dict):
+        return None
+    version = recorded.get("assess_method_version")
+    if not isinstance(version, int) or isinstance(version, bool):
+        return None
+    return build_snapshot(recorded.get("findings") or [], version)
 
 
 def write_snapshot(assess_dir: Path, snapshot: FindingsSnapshot) -> None:
