@@ -135,6 +135,20 @@ JOB_OUTPUT_RE = re.compile(
 )
 STEP_ID_RE = re.compile(r"^\s{6,}id:\s*(\S+)\s*$")
 CLASSIFIER_INVOCATION = ("floor_check.py protected", "--role floor-core")
+# ...and the script asked must be the BASE ref's copy (#583, #645): the head
+# copy is the one the pull request under review can edit. The step pins the
+# base as the merge-base, extracts the copy with ``git show`` and invokes that
+# extract, and each failure (no copy, a crash) sets a flag that, when set,
+# re-assigns the answer -- fail closed. Read with line continuations joined.
+BASE_SHA_ASSIGN = 'BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"'
+BASE_EXTRACT_RE = re.compile(
+    r'git show "\$\{BASE_SHA\}:scripts/floor_check\.py"\s*>\s*(\S+)'
+    r"(?:\s+2>\s*/dev/null)?\s*\|\|\s*(\w+)=true"
+)
+BASE_CALL_RE = re.compile(
+    r'if !\s*(\w+)="\$\(python3?\s+(\S+)\s+protected\b[^)]*--role floor-core[^)]*\)";'
+    r"\s*then\s+(\w+)=true\s"
+)
 # ``continue-on-error: true`` at step or job level makes a non-zero exit
 # non-fatal, which disarms every conversion step while leaving each guard and
 # script byte-identical. The key is rejected outright in the enforcement job.
@@ -805,6 +819,53 @@ def _check_reads_filter(
             "The floor-core answer has to come from the script's classification "
             "(FLOOR.md clause iii), not from a step that decides on its own."
         )
+    _check_base_copy(script, filter_job, step_id)
+
+
+def _check_base_copy(script: str, filter_job: str, step_id: str) -> None:
+    """Fail unless the classifying step runs the base ref's floor_check.py.
+
+    A step that calls ``python scripts/floor_check.py`` passes the invocation
+    check above but runs the pull request's own copy, which can classify its
+    own floor-core change as clean and skip the sign-off (FLOOR.md clause iii).
+    """
+    live = "\n".join(ln for ln in script.split("\n") if not ln.lstrip().startswith("#"))
+    text = re.sub(r"\\\n\s*", " ", live)
+    runs = {m.replace('"', "") for m in re.findall(r"python3?\s+(\S*floor_check\.py\S*)", text)}
+    where = f"step {step_id!r} of job {filter_job!r}"
+    extract = BASE_EXTRACT_RE.search(text)
+    call = BASE_CALL_RE.search(text)
+    if len(re.findall(r"(?<![\w$])BASE_SHA=", text)) != 1 or BASE_SHA_ASSIGN not in text:
+        problem = f"does not set BASE_SHA once, as `{BASE_SHA_ASSIGN}`"
+    elif not extract:
+        problem = (
+            'never extracts `git show "${BASE_SHA}:scripts/floor_check.py" > '
+            "<path> || <flag>=true`"
+        )
+    elif not call or extract.start() > call.start():
+        problem = (
+            "does not then classify with `if ! <var>=\"$(python <path> protected "
+            '... --role floor-core)"; then <flag>=true`'
+        )
+    elif runs != {extract.group(1).replace('"', "")}:
+        problem = f"runs {sorted(runs)}, not only the extracted base copy {extract.group(1)!r}"
+    elif not (
+        call.group(3) == extract.group(2)
+        and (branch := re.search(
+            r'if \[ "\$\{' + extract.group(2) + r'\}" = "true" \]; then\s(.*?)\sfi\b',
+            text, re.S,
+        ))
+        and re.search(r"(?<![\w$])" + call.group(1) + "=", branch.group(1))
+    ):
+        problem = "has no fail-closed branch that re-assigns the answer when the flag is set"
+    else:
+        return
+    raise AnchorError(
+        f"{where} {problem}. The floor-core answer must come from the BASE "
+        "ref's copy of scripts/floor_check.py, failing closed: the pull "
+        "request's own copy can classify its own change as clean and skip the "
+        "sign-off (FLOOR.md clause iii)."
+    )
 
 
 def _job_steps(lines: list[str]) -> list[list[str]]:

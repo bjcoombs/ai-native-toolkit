@@ -34,15 +34,15 @@ lines = 876
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."scripts/floor_anchor.py"]
-lines = 1067
-reason = "pre-existing; ratchet from 2026-10-07"
+lines = 1128
+reason = "pre-existing; ratchet from 2026-10-07. Raised for the base-copy classification pin (#645): floor core is an explicit file list in floor_check.py (FLOOR_CORE_PATHS), so a sibling module would sit outside the floor core and outside its sign-off"
 
 [ceilings."scripts/floor_check.py"]
 lines = 1070
 reason = "pre-existing; ratchet from 2026-10-07. Raised for pin-bump-only (#574): CI runs the base ref's copy via git show as one standalone file, so the subcommand cannot be split into a sibling module"
 
 [ceilings."scripts/tests/test_floor_anchor.py"]
-lines = 1208
+lines = 1186
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."scripts/tests/test_floor_check.py"]
