@@ -143,6 +143,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_counts_only.py` | `lib/counts_only.py` + `lib/counts_only_rules.py` + `lib/counts_only_schema.py` - the content-free run-context mode: every typed string field has a keep/drop/path rule, and the counts-only document drops copied text |
 | `test_rubric.py` | `lib/rubric.py` - TOML rubric loading and deterministic whole-level evaluation |
 | `test_rubric_signals.py` | `lib/rubric_signals.py` - schema-backed signal paths and the shipped default rubric |
+| `test_layer_grades.py` | `lib/layer_grades.py` - deterministic layer grades as a registered signals block, with a counts-only rule |
+| `test_history_window.py` | `lib/history_window.py` - the one history-window grammar shared by `lib/git_churn.py`, `lib/ai_usage.py`, `lib/fleet_activity.py` and `lib/signals.py`, and the shallow-boundary reachability check |
 
 ### Headless signals and fleet suites
 
@@ -158,6 +160,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_fleet_heatmap.py` | `lib/fleet_view.py` + `lib/fleet_heatmap.py` + `skills/fleet/scripts/heatmap.py` - the leadership heat map SVG against goldens in `fixtures/fleet_heatmap/` |
 | `fleet_heatmap_fixture.py` | builds the `fixtures/fleet_heatmap/` runs from `lib/fleet_groups.roll_up` (not a test module; regenerate with `uv run --locked python tests/fleet_heatmap_fixture.py`) |
 | `test_fleet_run_stamp.py` | `lib/fleet_stamp.py` + `lib/fleet_cleanup.py` - the fleet run stamp, per-repository activity and `--delete-after` |
+| `test_fleet_history.py` | `lib/fleet_history.py` + `skills/fleet/scripts/fleet.py` + `skills/fleet/scripts/fleet_compare.py` - the dated run history, the `--compare` wiring and the compare CLI |
+| `test_fleet_compare.py` | `lib/fleet_compare.py` - comparing two fleet runs without rescanning: level movement apart from measured-set movement, and the not-comparable reasons |
 
 ### Infrastructure suites
 
