@@ -1,25 +1,22 @@
-<!-- assess:run_id=20261120111555-1e13698c artifact_schema_version=1.12.0 -->
+<!-- assess:run_id=20261011125246-0d249381 artifact_schema_version=1.4.0 -->
 # Assess Wiki Index
 
-_Last updated: 2026-11-20_
+_Last updated: 2026-10-11_
 
 Catalog of every hotspot ever flagged by `/assess` in this repo. Status reflects the most recent run.
 
 | File | First Flagged | Last Seen | Status | Latest CCN | Latest LOC |
 |------|---------------|-----------|--------|------------|------------|
-| `skills/assess/scripts/complexity-treemap.py` | 2026-05-31 | 2026-11-20 | new | 201.0 | 818 |
-| `skills/assess/scripts/lib/keyhole_signals.py` | 2026-06-01 | 2026-11-20 | new | 248.0 | 860 |
-| `skills/assess/tests/test_complexity_treemap.py` | 2026-09-19 | 2026-11-20 | new | 189.0 | 1227 |
-| `skills/assess/scripts/lib/doc_graph.py` | 2026-05-31 | 2026-11-20 | new | 209.0 | 705 |
-| `skills/assess/scripts/lib/git_churn.py` | 2026-11-20 | 2026-11-20 | new | 132.0 | 433 |
-| `skills/assess/scripts/lib/wiki_writer.py` | 2026-10-07 | 2026-11-20 | new | 170.0 | 534 |
-| `skills/assess/tests/test_assess_core.py` | 2026-05-31 | 2026-11-20 | new | 62.0 | 518 |
-| `skills/assess/scripts/lib/scan_registry.py` | 2026-11-20 | 2026-11-20 | new | 53.0 | 328 |
-| `scripts/floor_check.py` | 2026-11-20 | 2026-11-20 | new | 199.0 | 629 |
-| `skills/assess/scripts/lib/doc_staleness.py` | 2026-05-31 | 2026-11-20 | new | 79.0 | 439 |
-| `skills/assess/scripts/assess_core.py` | 2026-05-31 | 2026-10-11 | graduated | 26.0 | 397 |
-| `skills/assess/scripts/assess_finalize.py` | 2026-10-08 | 2026-10-11 | graduated | 144.0 | 424 |
-| `scripts/floor_anchor.py` | 2026-09-19 | 2026-10-11 | graduated | 188.0 | 646 |
+| `skills/assess/scripts/complexity-treemap.py` | 2026-05-31 | 2026-10-11 | persistent | 214.0 | 847 |
+| `skills/assess/scripts/lib/keyhole_signals.py` | 2026-06-01 | 2026-10-11 | persistent | 247.0 | 860 |
+| `skills/assess/scripts/assess_core.py` | 2026-05-31 | 2026-10-11 | persistent | 26.0 | 397 |
+| `skills/assess/scripts/lib/doc_graph.py` | 2026-05-31 | 2026-10-11 | persistent | 209.0 | 705 |
+| `skills/assess/tests/test_complexity_treemap.py` | 2026-09-19 | 2026-10-11 | persistent | 189.0 | 1227 |
+| `skills/assess/scripts/lib/wiki_writer.py` | 2026-10-07 | 2026-10-11 | persistent | 170.0 | 534 |
+| `skills/assess/tests/test_assess_core.py` | 2026-05-31 | 2026-10-11 | persistent | 62.0 | 518 |
+| `skills/assess/scripts/assess_finalize.py` | 2026-10-08 | 2026-10-11 | persistent | 144.0 | 424 |
+| `skills/assess/scripts/lib/doc_staleness.py` | 2026-05-31 | 2026-10-11 | persistent | 119.0 | 499 |
+| `scripts/floor_anchor.py` | 2026-09-19 | 2026-10-11 | persistent | 188.0 | 646 |
 | `skills/assess/tests/test_keyhole_signals.py` | 2026-06-19 | 2026-10-08 | retired - file deleted | - | - |
 | `skills/assess/scripts/doc-graph-svg.py` | 2026-05-31 | 2026-10-07 | graduated | - | - |
 | `skills/assess/scripts/lib/liveness_scan.py` | 2026-05-31 | 2026-09-19 | graduated | - | - |

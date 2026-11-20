@@ -163,7 +163,7 @@ If the user **selected the PR offer** (fork flow, `CAN_PUSH=0` on the upstream, 
 3. Commit message, PR title, and body are unchanged from the direct flow.
 
 If the user **selected the upstream-issues offer** (read-only flow, `CAN_PUSH=0` on `READ` / `TRIAGE`, `NO_CONTRIBUTIONS=0`): host the report in the fork, then file the issues upstream. Nothing under `.assess/` is proposed for upstream.
-1. Resolve the fork and push the snapshot branch to it exactly as in step 1 of the no-contributions flow below (`FORK_SLUG` from the forks endpoint, the retry, the branch push), and stop there: open no PR, neither against upstream nor inside the fork.
+1. Resolve the fork and push the snapshot branch to it exactly as in step 1 of the no-contributions flow below (`FORK_SLUG` from the forks endpoint, the retry, the branch push), and stop there. Skip the rest of that step: do not align the fork with the assessed commit (no `BASE_SHA` comparison, no `assess/base-<YYYY-MM-DD>` branch push), write no PR body file, and open no PR, neither against upstream nor inside the fork.
 2. Build the report link from the pushed branch: `REPORT_URL="https://<host>/$FORK_SLUG/blob/<branch>/.assess/assess-report.md"` (`<host>` is the GitHub host the remote uses). Confirm it resolves with `gh api "repos/$FORK_SLUG/contents/.assess/assess-report.md?ref=<branch>"` before quoting it.
 3. Run Step 6 with the upstream repository (`$GH_SLUG`) as the tracker, using `$REPORT_URL` as each item's full-report link. If hosting was declined or failed, file the issues anyway: each body stands on its own without the link.
 4. Suggest disabling Actions on the fork, as in step 3 of the no-contributions flow.
@@ -182,7 +182,7 @@ If the user **selected the PR offer** (no-contributions flow, `NO_CONTRIBUTIONS=
    Snapshot of this codebase's AI-agent readiness, complexity hotspots, and doc navigability as of <YYYY-MM-DD>.
 
    - **AI Readiness:** <X / 8> — <maturity-label>
-   - **Hotspot leader:** `<top hotspot path>` (<loc> LOC, ccn <N>, <M> commits in window) - write `ccn ~<N> (approximate)` when the row is scc-only (`source` `scc`, `max_fn_ccn` null), and `ccn unreliable` when its path is in `stats_summary.complexity_unreliable`
+   - **Hotspot leader:** `<top hotspot path>` (<loc> LOC, ccn <N>, <M> commits in window) - write `ccn ~<N> (approximate)` when the row is scc-only (`source` `scc`, `max_fn_ccn` null), and `ccn ~<N> (unreliable)` when its path is in `stats_summary.complexity_unreliable`
    - **Top lying map:** `<top stale-hub doc>` (<N>d stale, subject churn <M>)
 
    ## Top 3 Actions
@@ -273,7 +273,7 @@ For each item, the item should contain:
 
 **Full-report link.** Use the assessment PR when one was opened, `$REPORT_URL` from Step 5's upstream-issues flow when the report is hosted in the user's fork, and omit the line when neither exists.
 
-A ccn figure in the body follows the report's caveat (issue #590): an scc-only figure (`source` `scc`, `max_fn_ccn` null) is written `ccn ~N (approximate, file-level scc)`, a path in `stats_summary.complexity_unreliable` gets `ccn unreliable` instead, and neither is offered as the reason the item is prioritised.
+A ccn figure in the body follows the report's caveat (issue #590): an scc-only figure (`source` `scc`, `max_fn_ccn` null) is written `ccn ~N (approximate)`, a path in `stats_summary.complexity_unreliable` gets `ccn ~N (unreliable)` instead, and neither is offered as the reason the item is prioritised.
 
 Example minimal body shape (adapt to the tracker's conventions):
 

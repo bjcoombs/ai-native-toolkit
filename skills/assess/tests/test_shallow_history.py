@@ -158,3 +158,23 @@ def test_report_names_the_truncation() -> None:
         "90d - shallow clone, history before 2026-08-01 missing")
     ctx["doc_staleness"]["history_truncated"] = False
     assert _render_churn_window(ctx) == "90d"
+
+
+def test_boundary_of_another_shallow_ref_is_ignored(tmp_path: Path) -> None:
+    """``$GIT_DIR/shallow`` also lists the boundary of a second shallow-fetched
+    branch; only HEAD's boundary dates HEAD's history (issue #633)."""
+    src = _history(tmp_path)
+    _git(src, "checkout", "-q", "-b", "other")
+    _commit(src, {"other.txt": "z"}, "other tip", 5)
+    _git(src, "checkout", "-q", "-")
+    clone = _shallow(src, tmp_path / "shallow", depth=3)
+    _git(clone, "fetch", "-q", "--depth=1", "origin", "other:other")
+    other_tip = _git(clone, "rev-parse", "other").strip()
+    shallow_file = clone / _git(clone, "rev-parse", "--git-path", "shallow").strip()
+    assert other_tip in shallow_file.read_text().split()  # the newer, unreachable boundary
+
+    block = analyze_doc_staleness(clone)
+    boundary = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=100)).date()
+    assert block["history_boundary_date"] in {
+        str(boundary), str(boundary - _dt.timedelta(days=1)),
+        str(boundary + _dt.timedelta(days=1))}

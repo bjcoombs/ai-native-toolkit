@@ -16,8 +16,5 @@
   "scripts/floor_anchor.py": "2026-09-19",
   "skills/assess/tests/test_complexity_treemap.py": "2026-09-19",
   "skills/assess/scripts/lib/wiki_writer.py": "2026-10-07",
-  "skills/assess/scripts/assess_finalize.py": "2026-10-08",
-  "skills/assess/scripts/lib/git_churn.py": "2026-11-20",
-  "skills/assess/scripts/lib/scan_registry.py": "2026-11-20",
-  "scripts/floor_check.py": "2026-11-20"
+  "skills/assess/scripts/assess_finalize.py": "2026-10-08"
 }

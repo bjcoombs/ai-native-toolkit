@@ -92,6 +92,9 @@ def grade_instruction_files(
     # SKILL.md texts a section is compared against, so the grade rests on the
     # same always-on split as the instruction_placement block (issue #560).
     skills_info = detect_skills_dir(repo_root)
+    # skill_texts deliberately ignores the run's scope and excludes: a file's
+    # grade compares against every SKILL.md in the repo, so fixing the
+    # placement block (scoped) and the grade separately would split them.
     skills = skill_texts(repo_root)
     clock = content_clock(repo_root)  # one build for every candidate
     repo_ctx = build_repo_context(repo_root)  # commands and references resolve against it

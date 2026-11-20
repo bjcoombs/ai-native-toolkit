@@ -1,16 +1,16 @@
-<!-- assess:run_id=20261120111555-1e13698c artifact_schema_version=1.12.0 -->
+<!-- assess:run_id=20261011125246-0d249381 artifact_schema_version=1.4.0 -->
 # Hotspot: `skills/assess/scripts/lib/doc_staleness.py`
 
-_First flagged: 2026-05-31. Last seen: 2026-11-20. Status: new._
+_First flagged: 2026-05-31. Last seen: 2026-10-11. Status: persistent._
 
 ## Current metrics
 
 | Metric | Value |
 |--------|-------|
-| LOC | 439 |
-| Cyclomatic complexity (file aggregate) | 79 |
-| Worst function | `analyze_doc_staleness` (16) |
-| Commits in churn window | 18 |
+| LOC | 499 |
+| Cyclomatic complexity (file aggregate) | 119 |
+| Worst function | `analyze_doc_staleness` (14) |
+| Commits in churn window | 15 |
 | Has test file | yes |
 
 ## History across runs
@@ -23,13 +23,12 @@ _First flagged: 2026-05-31. Last seen: 2026-11-20. Status: new._
 | 2026-10-08 | de900b5c | 499 | 119 | 14 | persistent |
 | 2026-10-08 | 32cb78d4 | 499 | 119 | 15 | persistent |
 | 2026-10-11 | 0d249381 | 499 | 119 | 15 | persistent |
-| 2026-11-20 | 1e13698c | 439 | 79 | 18 | new |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/scripts/lib/doc_staleness.py`:
 
-Hotspot (new). 439 LOC, aggregate cyclomatic complexity 79 (worst function `analyze_doc_staleness` 16), 18 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
+Hotspot (persistent). 499 LOC, aggregate cyclomatic complexity 119 (worst function `analyze_doc_staleness` 14), 15 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
 
 ## Suggested actions
 

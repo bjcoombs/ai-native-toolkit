@@ -114,11 +114,22 @@ Shallow history (issue #544): `content_commit_clock` reuses its
 `--is-shallow-repository` probe, and on a shallow clone reads the boundary commits
 from `git rev-parse --git-path shallow`. The clock's `truncated`, `boundary_epoch`
 (newest boundary, author time) and `lower_bound` (docs whose newest visible change is
-a boundary commit) feed `doc_staleness`. A boundary commit lists every file like a
+a boundary commit) feed `doc_staleness`. Only boundaries reachable from HEAD count
+(issue #633): `$GIT_DIR/shallow` also lists the boundaries of other shallow-fetched
+refs, so a boundary outside the clock's walk is kept only when
+`merge-base --is-ancestor` confirms it (or cannot say). A boundary commit lists every file like a
 root commit, so it is never counted as bulk. A failed probe is unknown, not
 truncated. Tests: `tests/test_shallow_history.py`.
 `window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
 into the `history_window` scan input (`"12mo"`, None for all-time).
+
+**`history_window.py`**
+The one history-window grammar (issue #601): `<n>d`, `<n>w`, `<n>mo`, `<n>y`.
+`split_window` returns `(count, unit)` or raises `ValueError`; `WINDOW_PATTERN` is the
+unanchored regex fragment. `signals.parse_window`, `ai_usage.resolve_window`,
+`fleet_activity.window_start`, `git_churn.window_from_churn_label` and the
+`run.schema.json` window pattern (`fleet_schema`) all read it. Tests:
+`tests/test_history_window.py`.
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
 pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
 scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
@@ -361,7 +372,8 @@ a fixture-backed test here alongside any predicate change.
 The one doc-to-code ownership rule (issues #424, #555), shared by `doc_staleness.py` and
 `doc_complexity_join.py`. Precedence: the nearest-ancestor base doc (one per directory,
 ranked by `BASE_DOC_PRECEDENCE`, so a `README.md` beside a `design.md` owns the
-directory's code), then a parallel `docs/` tree, explicit code links, and the empty
+directory's code; a skill's `SKILL.md` is a base doc ranked just after `README.md`, so it
+owns its skill's subtree, #614), then a parallel `docs/` tree, explicit code links, and the empty
 `repo-baseline` subject. `subject_spec` records each doc's method and roots as
 repo-relative POSIX keys (the keys `complexity-stats.json` uses, also under
 `/assess <path>`); `resolve_subjects` expands the specs over any set of code paths.
@@ -618,7 +630,8 @@ ghsync root or a list, one JSONL row per repository. `discover_root` walks
 `<root>/<path>/<repo>-main` at any depth (by layout, not by a valid `.git`, so a broken
 checkout is reported rather than skipped), never descending into a found repository,
 `worktree/` or a hidden directory. `targets_from_list` takes a checkout, its repository
-directory, a plain checkout or a root-relative path; `layout_id` gives both inputs the
+directory, a plain checkout or a root-relative path (an entry whose `~user` cannot be
+expanded is a `ValueError`, a usage error); `layout_id` gives both inputs the
 same `repo` id (the path under the root, prefixed with the root's name when one
 segment), a listed path outside the root falling back to `remote_path` (the `origin`
 URL's path) and then to its last two directory names. `scan_target` checks
@@ -649,11 +662,13 @@ shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanne
 only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each rubric row's level through `rubric.evaluate`, with
 no threshold config of its own. `load_settings` reads ghreport settings fragments
 (#565) from a file, an array or a directory (a render dir's `settings/`), keyed by
-`scope`; `settings_for` joins a group to the exact scope or the nearest ancestor;
+`scope`, and raises `SettingsError` on a directory with no `*.json` fragment file;
+`settings_for` joins a group to the exact scope or the nearest ancestor;
 `normalise_settings` keeps each `{value, reason}` or, for `unknown`, turns it into
 `{available: false, reason}` so `rubric.resolve_signal` reads it unavailable and the
 org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
-else `set`). Rubric data follows `rubric_signals`' namespaces: `repo_signals` is a
+else `set`; a value's reason `null`, an unavailable one's `unknown`). Rubric data follows
+`rubric_signals`' namespaces: `repo_signals` is a
 repository's `scans` map (a failed repository's is empty, so it is an unknown
 repository, never a passing one) and `settings_signals` the normalised settings plus
 the fragment's `scope` and `provider`. The CLI loads the rubric with
@@ -697,7 +712,7 @@ permission). Every signal of `rubrics/default.toml` has wording (tested).
 
 **`fleet_group_schema.py`**
 Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
-`RubricRowLevel` (lists and floats included, `settings` values as `{value}` or
+`RubricRowLevel` (lists and floats included, `settings` values as `{value, reason}` or
 `{available: false, reason}`). `tests/test_fleet_groups.py` fails when the checked-in
 file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
 from `skills/assess`.
@@ -713,9 +728,11 @@ reads (`FleetViewError` names the line), refuses a duplicate
 group and sorts by group; an empty file (no repository scanned) is `[]`, and the heat
 map exits 2 on it while the team pages write an empty index. `rubric_columns` gives the rubric row ids in rubric order (the
 same for every group; a run without `--rubric` is refused), `run_rubric_version` the one
-version, `check_rubric` matches a rubric file (titles, top levels) to the run, and
+version, `check_rubric` matches a rubric file (titles, top levels) to the run (a run
+without `--rubric` is refused as such, before any version check), and
 `compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,
-`delta` or `was`), marking the comparison not comparable across rubric versions.
+`delta` or `was`), marking the comparison not comparable across rubric versions (a run
+without a rubric is named as having none, not as rubric `None`).
 
 **`fleet_heatmap.py`**
 The leadership heat map behind `skills/fleet/scripts/heatmap.py` (#570), stdlib only (no
@@ -752,7 +769,8 @@ Whether a fleet repository is active (issue #569): `is_active` compares the chec
 `HEAD` committer date (`head_commit_date`, UTC, read
 from git with optional locks off) with `window_start(window, today)`, which counts back
 in whole days, months and years by calendar (clamped to month end), validating the
-window with `signals.parse_window`. Close to `ghsync --active-since`, not identical:
+window with `history_window.split_window`; a window reaching back before year 1 starts at
+`date.min`. Close to `ghsync --active-since`, not identical:
 ghsync counts 30-day months from now on platform dates. `scan_target` sets
 each ok row's `active` from `ScanOptions.active_since`, so it is read before
 `--delete-after` can remove the clone. An unreadable `HEAD` is not active.
@@ -760,12 +778,51 @@ each ok row's `active` from `ScanOptions.active_since`, so it is read before
 **`fleet_cleanup.py`**
 `--delete-after` (issue #569). `CloneDeleter` is a `run_fleet` `after` hook;
 `delete_clone` removes only the scanned `<repo>/<repo>-main` checkout, then `rmdir`s an
-empty `worktree/` and repository directory. `deletion_problem` fails closed with a
+empty `worktree/` and repository directory (a missing `worktree/` does not stop the
+repository directory's `rmdir`). `deletion_problem` fails closed with a
 keep-reason token (`KEEP_REASONS`): a non-ok row, a non-layout or symlinked path, a
 checkout that is not a main clone at its work-tree root, one holding a protected path
 (`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
 output, a stash, a commit on `HEAD` or any ref (`rev-list --all`) that no remote branch holds, a
 linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
+
+**`fleet_history.py`**
+The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
+and `run.json` kept in `<root>/<org>/<scan_date>/`. `history_root` is
+`${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet` (a relative or empty
+`XDG_DATA_HOME` ignored); `default_org` is the first segment every repository id shares,
+or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` rejects a
+name that is not one plain path component, `entry_dir` refuses a symlinked directory on
+the way, and `entry_conflict` keeps a same-day entry that is not this tool's (no readable
+`run.json` at the current stamp version) or whose stamp differs in rubric version,
+window, output mode, scan selection or path hashing, or that holds a different
+repository set (`entry_repos`), so a partial rerun never replaces a full-fleet entry;
+`choose_entry` then moves to
+`<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
+`latest_matching` finds the newest matching entry, preferring one over the same
+repository set, the default for a bare `--compare`.
+`persist` writes the three files to a hidden temp sibling first: a new entry is that
+directory renamed into place in one step, and a replaced same-day entry loses its
+`run.json` before the new files move in (`run.json` last), so a failure part-way never
+leaves a mixed entry that `latest_matching` selects. Other files in an entry are kept.
+
+**`fleet_compare.py`**
+Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
+`skills/fleet/scripts/fleet_compare.py`. `load_run` reads a run directory (raising
+`RunVersionError` for another envelope version or a run with no `run.json`, which callers
+turn into a not-comparable result). `comparability` reuses
+`diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
+adds rubric version, window, output mode, scan selection and path hashing; any reason
+gives `comparable: false` with no deltas. `compare` reports the measured-set movement
+(`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
+the row's `active`) apart from level movement: each group's rubric rows then and now with
+a `cause` of `level` (set unchanged), `set` (the group or row on one side, or only a
+team row's set moved) or `set_and_level` (a team row's set and evidence moved). An org
+row reads the group's settings, not its repositories, so on both sides it is `level`. `signal_changes` lists the changed leaves of each repository's `scans` map.
+`write_comparison` writes `compare.json` atomically; `clear_stale_comparison` removes
+only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate
+`heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
+plus the groups whose set moved), so the level-only view and `compare.json` share one rule.
 
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by
@@ -1188,8 +1245,9 @@ some shell quoting and scores a 2,000-line script near zero. `complexity-treemap
 writes the rows (`UnreliableCcnRow`, defined here) as `complexity_unreliable` in the stats sidecar
 (`STATS_SCHEMA_VERSION` 7), `run_setup.py` copies them into `stats_summary`,
 `anomaly_detector.py` reports `COMPLEXITY_UNRELIABLE`, and `assess_report.py` labels
-scc-only CCN cells `~N` and flagged ones `(unreliable)`. Ranking is unchanged. Stdlib
-only. Tests: `tests/test_scc_coverage.py`.
+scc-only CCN cells `~N (approximate)` and flagged ones `~N (unreliable)` (the skills' prose
+adds the `ccn` prefix: `ccn ~N (approximate)`, `ccn ~N (unreliable)`). Ranking is
+unchanged. Stdlib only. Tests: `tests/test_scc_coverage.py`.
 
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
@@ -1230,8 +1288,10 @@ N and of every lower level holds. A missing key, a null, a path through an
 `available: false` block or a type mismatch makes the criterion `unknown`. A row then
 carries `bounds` (`low`: the definitely-met climb; `high`: below the first definitely
 unmet level above it, else K) and is `unknown` only when they differ, so it is never a
-false 0 or a false pass. `missing_signals` names every unavailable signal even when the
-level is known. Every level's unmet criteria are in the result for next-step guidance.
+false 0 or a false pass. `missing_signals` names every signal whose criterion is
+unknown (unavailable or mistyped) even when the level is known. A criterion's `actual`
+is the resolved value only when it is a finite scalar, null otherwise, and
+`dumps_result` writes with `allow_nan=False`, so a result is always strict JSON (#602). Every level's unmet criteria are in the result for next-step guidance.
 A team roll-up applies the rule to the low and the high bounds and reports a level
 only when both agree; `unknown_repos` names the repositories whose level is open.
 `load_rubric` / `parse_rubric` raise `RubricError` before evaluation on a missing
@@ -1246,14 +1306,16 @@ segment must be a block name the published headless schema lists
 (`references/signals.schema.json`, `scans.propertyNames`, generated from
 `signals.known_scans`), so one rubric reads a headless document's `scans` or a full
 `run-context.json`; run-context keys outside the schema (`instructions_grade`) are
-rejected. Where `counts_only_schema.ROOTS` types the block, every further segment must
+rejected, and the deterministic layer grades are read through the `layer_grades` block
+instead (`layer_grades.instructions_grade`). Where `counts_only_schema.ROOTS` types the block, every further segment must
 name a field and end on a scalar (no list, no object); an untyped block is open. An
 `org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
 `<setting>.value` / `.reason`). `load_default_rubric` loads
 `skills/assess/rubrics/default.toml`: one team row per layer with a deterministic
-signal (0, 1, 5, 6, 7, 8), level 1 for Partial and 2 for Present. It can disagree with
-the `/assess` layer verdicts (the file header lists where); no instruction file reads
-level 0 through a never-null byte count, not `unknown`. Tests:
+signal (0, 1, 5, 6, 7, 8; the header says why 2-4 have none), level 1 for Partial and
+2 for Present. It can disagree with the `/assess` layer verdicts (the file header lists
+where); no instruction file reads level 0 through the never-null
+`layer_grades.instruction_file_present`, not `unknown`. Tests:
 `tests/test_rubric_signals.py`, on headless runs of the golden fixture repositories
 and the golden `run-context.json`.
 
@@ -1291,15 +1353,20 @@ Each file not already graded at an `INSTRUCTION_FILE_PATHS` location gets a
 Findings: `dead_glob` (a rule, not always loaded, none of whose scope patterns
 matches a tracked file or names a directory on disk; a nested rule's patterns are
 also tried relative to its own directory), `ignored_cursor_md`, `claude_shadows_agents`
-(a directory's `CLAUDE.md` differs from its `AGENTS.md` below the header and does
-not import it; `diff_lines` counts the differing body lines, one changed line
-counting once) and `repeats_parent` (at least half of a nested file's distinct
+(a directory's `CLAUDE.md` differs from its `AGENTS.md` once the header comments
+they account for are set aside, and does not import it; `diff_lines` counts the differing lines, body plus any header
+comment only one file carries, one changed line counting once) and `repeats_parent` (at least half of a nested file's distinct
 lines, over five or more, copy the nearest ancestor's). The two files are compared
 below their headers (`mirror_lines`: leading blank lines, one H1 and leading HTML
 comments dropped, whitespace collapsed, blank lines dropped), so a pair that
 matches there is reported as the informational `mirrored_instruction_files`, a
 hand-maintained mirror, not as shadowing (#589); a symlink or an import is
-neither. Files and findings are capped with `_total` counts, informational
+neither. Agents read header comments too, so `mirror_pair` drops only the
+comments both files carry and at most one per-file note on each side (paired in order);
+a comment only one file carries stays in the comparison, so an instruction
+hidden there makes the pair `claude_shadows_agents`, and a mirror whose paired
+notes differ says so in its detail (#632). Text after a header comment's `-->`
+ends the header unless it opens another comment, so an H1 there is body. Files and findings are capped with `_total` counts, informational
 mirrors last so the cap never drops a defect for one. Tests: `tests/test_instruction_discovery.py`.
 
 **`instruction_budget.py`**
@@ -1323,14 +1390,17 @@ section. `classify` labels each section `always_on`, `fetch_on_need` or
 `unclassified` (counted as always-on), precision over recall: any always-on signal
 (`identity_or_rules` heading, `hard_rules` directive density, `pointer_list` of links
 to documents) keeps a section, even one a skill restates, so a guardrail is never
-told to become a pointer; otherwise a section whose substantive lines overlap an
+told to become a pointer, unless the section is relocatable with a size signal
+(`SIZE_SIGNALS`: `command_reference` or `long_section`) among its fetch signals, so a
+heading rename or a few `Never` lines cannot flip it (#619); otherwise a section whose substantive lines overlap an
 existing `SKILL.md` by `SKILL_OVERLAP_MIN_PCT` (the
 `instruction_content.readme_overlap_pct` line overlap) is `duplicates_skill`, and
 any other section moves only when
 `MIN_FETCH_SIGNALS` of `scoped_heading` (one tool, language or platform),
 `scoped_paths` (backticked paths mostly under one top-level directory, unless the
 file already sits under it),
-`command_reference` (fence density) and `long_section` (60 lines or more, an absolute count so that
+`command_reference` (`FENCE_MIN_LINES` fenced lines or more, an absolute count so
+prose padding cannot dilute it, #619) and `long_section` (60 lines or more, an absolute count so that
 lines elsewhere cannot declassify a section, in a file with at least two headed
 sections) fire. Each threshold is a
 named constant with its rationale. Suggested homes: `existing_skill` (the
@@ -1380,9 +1450,15 @@ small capped floor. Size is scored on always-on size and share (#560, replacing 
 the file with `instruction_placement.analyse_file` (given `skills`, the
 `skill_texts` map) and `placement_penalty` charges one point per 10 always-on lines
 past 200, capped at 30, plus one point per 10 fetch-on-need lines, capped at 30; a
-file over 400 always-on lines is capped at 59 (a B). Always-on lines are
-line-equivalents, the larger of the lines and the always-on words / 12, so a file of
-very long lines cannot dodge the term or the cap. Neither term reads the block's
+file over 400 loaded lines (always-on and fetch-on-need) is capped at 59 (a B). Lines
+are line-equivalents, the larger of the lines and the words / 12, so a file of very
+long lines cannot dodge the term or the cap. Wording and padding inside a section never
+lower the penalty (#619): the always-on count is the loaded line-equivalents minus the
+fetch-on-need lines the relocatable term charges (fetch lines past its cap stay
+always-on), both terms are summed in lines and rounded once, and the cap reads the
+whole loaded file, so a section reclassified to fetch-on-need never earns points; on the
+placement side `command_reference` is an absolute fenced-line count and a size signal
+beats always-on wording. Tests: `tests/test_instruction_grading_robustness.py`. Neither term reads the block's
 `flagged` (which also needs over half the file): gated on it, adding reference lines
 could lower a file's penalty. `always_on_flagged` mirrors `flagged` as evidence. The subscores `always_on_lines`,
 `always_on_pct`, `fetch_on_need_lines`, `always_on_flagged`, `always_on_penalty` and
@@ -1601,10 +1677,16 @@ https/http (port kept), scp-like and `ssh://` (port dropped) remotes with nested
 groups, and rejects a host or path segment outside a strict character set (the remote
 comes from the assessed repository and reaches argv). `normalize_host` ports
 `ghsync.sh`'s `--host` normalisation. `branch_protection(project, branch, rules=None)` returns the
-protected-branch rule covering a branch (exact name first, else the first `*` wildcard
-rule in name order, via `branch_pattern`; a name holding `*` is answered only by its own
-rule), reusing a `protected_branches(project)` read when given one (config_drift reads the
-list once per scan), or None only from a readable list shorter than
+protected-branch rule covering a branch (exact name first, else the `*` wildcard rules
+matching it via `branch_pattern`; a name holding `*` is answered only by its own
+rule). Overlapping wildcards (`release/*` and `*-stable` on `release/1-stable`) are merged
+by `merge_rules` as GitLab applies them, never one picked by order: each `*_access_levels`
+list is the union of the rules' grants with the role grants collapsed to the most
+permissive (lowest non-zero `access_level`, `0` only when every role grant is `0`),
+`allow_force_push` and `code_owner_approval_required` are True when any rule sets them,
+and `name` joins the rule names in name order with `", "`. It reuses a
+`protected_branches(project)` read when given one (config_drift reads the list once per
+scan), and returns None only from a readable list shorter than
 `PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
 branch by name (the `ghreport.sh` fallback), so an exact rule on a later page outranks a
 first-page wildcard; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
@@ -1832,7 +1914,9 @@ verified when the path occurs in any CI configuration or in a task runner CI
 calls through such as `Makefile` or `package.json`; skipped when the repo has no
 CI configuration, since nothing can confirm or refute it) and `pin` ("pinned in"
 a backticked file plus exactly one dotted version in the sentence, verified when
-the file exists and contains the version as a substring) and `count` (a
+the file exists and contains the version as a substring; the word before the
+version, unless a function word, is kept as the claim's `subject`, the tool, for
+`doc_claims` and never reported) and `count` (a
 sentence of the form `<integer> <noun> ... <link> <backticked glob>`, where the
 link is a `COUNT_LINK_WORDS` word: in, under, matching, across, beneath, within,
 inside; the pattern is globbed from the repo root and matching files counted;
@@ -1876,8 +1960,14 @@ they are within `count_within_tolerance`. One finding per group lists every
 site, so both conflicting lines are cited; a claim the repo cannot verify still
 takes part. A skill's `SKILL.md` and `references/` claims resolve against
 `skills/<name>/` (`rebase_skill_claims`; the repo root only when just that reading
-exists), before verification and grouping. Pins group by pinned file, so a pin finding whose every version
-the file contains (two tools in one `.tool-versions`) is dropped. The kind is a pair of tables, `CROSS_DOC_VALUE` (claim -> value) and
+exists), before verification and grouping. Pins group by pinned file and tool
+(issue #610): the tool is the pin claim's `subject`, the word before the version
+(`Node 20.11.0`, `` `node` >= 20.11.0 `` and `**Node** 20.11.0` all give `node`), so a Node pin never contradicts a Python pin in one
+`.tool-versions`, even when one is stale or the file is missing. A file in
+`SINGLE_TOOL_PIN_FILES` (`.nvmrc`, `.python-version`, ...) pins one tool, so its
+pins are one group however they word it (`CPython 3.12`, `Node LTS 18`). A pin naming no
+tool joins its file's one named tool; when several are named it is compared
+with nothing, only verified on its own. A pin finding whose every version the file contains is still dropped. The kind is a pair of tables, `CROSS_DOC_VALUE` (claim -> value) and
 `CROSS_DOC_AGREE` (two values -> agree), mirroring `_EXTRACTORS` and
 `_VERIFIERS`. The core writes the run-context block `doc_claims`
 (`{files_scanned, excluded_trees, total, verified, failed, failures[...],
@@ -2022,6 +2112,19 @@ it count once. The two id lists credit git-tracked files only, as `agent_ops` do
 `available: false` blocks. YAML is read line by line (stdlib); offline, no `gh`.
 Tests: `tests/test_shared_tooling.py`.
 
+**`layer_grades.py`**
+Deterministic layer grades as one registered block (issue #620), so the headless
+signals document carries them and a maturity rubric can name them.
+`scan_layer_grades(instruction_grading)` reads the setup grading
+(`run_setup.instruction_grading`) and writes `{instructions_grade,
+instruction_file_present}`: the best letter grade of the tracked, present instruction
+files (null with none, the top-level `instructions_grade` value, which stays) and
+whether one exists, so a rubric can score "no instruction file" as level 0 rather
+than unknown. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
+default rubric's header says why). A short token and a boolean, kept whole by the
+counts-only filter. Tests: `tests/test_layer_grades.py`, and the rubric rows in
+`tests/test_rubric_signals.py`.
+
 **`claude_config_fields.py`**
 The documented frontmatter field sets `claude_config` checks against: skill and
 command fields, agent fields, the agent `experimental` keys, the fields plugin
@@ -2105,7 +2208,7 @@ The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
 hyphenated stem also matched as underscores, plus the one cross-extension rule
 from issue #593: `<stem>.bats` for a `.sh` or extensionless script, and any
 `*.bats` file is a test; `run.sh` and an extensionless `run` share the flat
-key `run.bats`), the adjacent test directories
+key `run.bats` and are rivals for a parallel-tree `run.bats`, issue #635), the adjacent test directories
 (`__tests__/` / `tests/` / `test/` / `spec/`), and the is-this-a-test rule, plus a
 layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any

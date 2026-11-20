@@ -29,7 +29,7 @@ share = 0.75
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "instructions_grade", op = "in", value = ["A", "B", "C"] }]
+  criteria = [{ signal = "layer_grades.instructions_grade", op = "in", value = ["A", "B", "C"] }]
 ```
 
 Semantics:
@@ -47,12 +47,17 @@ Semantics:
   ``unknown`` only when the bounds differ, so it is never reported as a false 0
   or a false pass; when a definitely unmet level caps it, the level is known
   even with a higher-level signal missing. ``missing_signals`` names every
-  unavailable signal either way, so a non-empty list does not by itself mean
-  ``unknown``. Every criterion at every level is evaluated, so the result does
+  signal whose criterion is unknown, unavailable or mistyped, either way, so a
+  non-empty list does not by itself mean ``unknown``. Every criterion at every level is evaluated, so the result does
   not depend on criterion order and the unmet criteria of every level are
   exposed for next-step guidance.
   Consequence: a null that a scan means as "absent" (``instructions_grade:
-  null``) reads as unknown here.
+  null``) reads as unknown here; ``layer_grades.instruction_file_present``
+  carries that absence as a boolean.
+- ``actual`` in a criterion outcome is the resolved value only when it is a
+  finite scalar; an object, a list or a non-finite number is reported as null
+  (its kind is already explained by ``type_mismatch``), so a result never
+  carries a NaN.
 - ``team`` rows run against each repository's ``run-context.json``, then roll
   up: ``min`` is the level every repository reaches, ``share`` the highest
   level reached by at least that share of the repositories passed in (the
@@ -417,10 +422,13 @@ def _evaluate_criterion(criterion: Criterion, data: JsonDict | None) -> Criterio
     }
     if actual is _UNAVAILABLE:
         return outcome
-    non_finite = isinstance(actual, float) and not math.isfinite(actual)
-    outcome["actual"] = None if non_finite else actual
+    kind = _kind(actual)
+    # Only a finite scalar is echoed (_kind is None for anything else): a dict
+    # or list may hold a NaN that json.loads accepted and dumps_result must
+    # never write (issue #602).
+    outcome["actual"] = None if kind is None else actual
     expected = _kind(value[0]) if isinstance(value, list) else _kind(value)
-    if _kind(actual) != expected:
+    if kind != expected:
         outcome["reason"] = "type_mismatch"
         return outcome
     outcome["reason"] = None
@@ -516,5 +524,9 @@ def evaluate(rubric: Rubric, group: Group) -> RubricResult:
 
 
 def dumps_result(result: RubricResult) -> str:
-    """Canonical JSON: sorted keys, fixed indent, trailing newline."""
-    return json.dumps(result, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+    """Canonical JSON: sorted keys, fixed indent, trailing newline.
+
+    ``allow_nan=False``: a NaN or infinity anywhere raises ``ValueError``
+    rather than writing a document no strict JSON parser reads.
+    """
+    return json.dumps(result, sort_keys=True, indent=2, ensure_ascii=False, allow_nan=False) + "\n"

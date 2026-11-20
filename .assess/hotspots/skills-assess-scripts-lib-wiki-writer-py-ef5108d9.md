@@ -1,7 +1,7 @@
-<!-- assess:run_id=20261120111555-1e13698c artifact_schema_version=1.12.0 -->
+<!-- assess:run_id=20261011125246-0d249381 artifact_schema_version=1.4.0 -->
 # Hotspot: `skills/assess/scripts/lib/wiki_writer.py`
 
-_First flagged: 2026-10-07. Last seen: 2026-11-20. Status: new._
+_First flagged: 2026-10-07. Last seen: 2026-10-11. Status: persistent._
 
 ## Current metrics
 
@@ -25,13 +25,12 @@ _First flagged: 2026-10-07. Last seen: 2026-11-20. Status: new._
 | 2026-10-08 | de900b5c | 534 | 170 | 17 | persistent |
 | 2026-10-08 | 32cb78d4 | 534 | 170 | 17 | persistent |
 | 2026-10-11 | 0d249381 | 534 | 170 | 17 | persistent |
-| 2026-11-20 | 1e13698c | 534 | 170 | 17 | new |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/scripts/lib/wiki_writer.py`:
 
-Hotspot (new). 534 LOC, aggregate cyclomatic complexity 170 (worst function `rewrite_log_entry` 13), 17 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.) Growth profile: monotonic (+1016 lines net over 17 commits to this file in 5 months, none a net reduction).
+Hotspot (persistent). 534 LOC, aggregate cyclomatic complexity 170 (worst function `rewrite_log_entry` 13), 17 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.) Growth profile: monotonic (+1016 lines net over 17 commits to this file in 5 months, none a net reduction).
 
 ## Suggested actions
 

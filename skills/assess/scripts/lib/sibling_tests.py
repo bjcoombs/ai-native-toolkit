@@ -37,7 +37,8 @@ once per run by :func:`build_test_index` (``git ls-files`` when the root is a
 git repository, a pruned walk otherwise; built-in excluded trees such as
 ``node_modules`` and ``tests/fixtures`` skipped). A test found this way belongs
 to the same-named source whose directory shares the deepest common ancestor
-with it; a tie across sources (two ``index.js`` equally close) credits none, and
+with it; a tie across sources (two ``index.js`` equally close, or a ``run.sh``
+and an extensionless ``run`` equally close to one ``run.bats``) credits none, and
 a common ancestor of only the repository root credits nothing. A non-git walk
 past :data:`MAX_INDEX_FILES`, or one that cannot read a directory, yields an
 empty index, so the tier credits nothing.
@@ -258,15 +259,26 @@ def _common_depth(a: tuple[str, ...], b: tuple[str, ...]) -> int:
     return depth
 
 
+def _rival_keys(rel_path: str, test_name: str) -> tuple[str, ...]:
+    """The :func:`name_key` values whose sources compete for ``test_name``: the
+    source's own key, and for a bats suite name both shell spellings, since
+    ``run.sh`` and an extensionless ``run`` each name ``run.bats``."""
+    p = Path(rel_path)
+    if test_name.endswith(BATS_SUFFIX) and p.suffix in BATS_SOURCE_SUFFIXES:
+        return tuple(name_key(p.stem + s) for s in sorted(BATS_SOURCE_SUFFIXES))
+    return (name_key(rel_path),)
+
+
 def _basename_match(index: TestIndex, rel_path: str) -> bool:
     """True when some conventionally named test in the index belongs to this
-    source: they share at least one directory, and no other same-named source
-    shares as deep a common ancestor with that test."""
+    source: they share at least one directory, and no other source that the
+    test's name also fits shares as deep a common ancestor with that test."""
     src_dirs = Path(rel_path).parts[:-1]
-    peers = list(index.sources_by_key.get(name_key(rel_path), []))
-    if src_dirs not in peers:
-        peers.append(src_dirs)  # an untracked source still competes for its test
     for name in sibling_test_names(Path(rel_path).name):
+        peers = [d for key in _rival_keys(rel_path, name)
+                 for d in index.sources_by_key.get(key, [])]
+        if src_dirs not in peers:
+            peers.append(src_dirs)  # an untracked source still competes for its test
         for test_dirs in index.tests_by_name.get(name, []):
             depth = _common_depth(src_dirs, test_dirs)
             if depth == 0:

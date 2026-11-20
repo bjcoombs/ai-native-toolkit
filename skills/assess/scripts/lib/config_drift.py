@@ -31,8 +31,9 @@ of the remote's provider is tracked the block is ``{"available": False,
 snapshot is never reported clean.
 
 A GitLab snapshot is diffed against the live rule covering its branch
-(``gitlab_cli.branch_protection``: the rule of the same name, else the first
-wildcard rule in name order that matches). A readable, complete list with no
+(``gitlab_cli.branch_protection``: the rule of the same name, else the
+matching wildcard rule; overlapping wildcards are merged as GitLab applies
+them, the most permissive level winning, so no single one is picked). A readable, complete list with no
 covering rule is an ``("branch_protection", "present", "absent")`` entry; a
 refused read (403 and 404 included: on GitLab a 404 usually means "no access")
 or an incomplete list degrades the whole block, never "no protection". Access

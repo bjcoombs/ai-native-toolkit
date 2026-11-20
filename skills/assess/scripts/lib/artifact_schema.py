@@ -92,7 +92,17 @@ constant each.
 # instruction_placement record always_on_words). bloat_penalty is now their
 # penalties' sum and size_grade_capped reads always-on lines. Additive: no key
 # moves or changes type, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.12.0"
+# 1.13.0: run-context.json gains layer_grades (issue #620): instructions_grade
+# and instruction_file_present as one registered block, so the headless signals
+# document carries them and a rubric can name them. Additive; the top-level
+# instructions_grade key stays, and complexity-stats.json is unchanged.
+# 1.14.0: each run-context.json nested_instructions claude_shadows_agents finding
+# gains diff_lines, the lines that differ between the two files' comparable
+# lines (body, plus any header comment only one file carries), and the
+# informational finding kind mirrored_instruction_files reports a CLAUDE.md kept
+# identical to its AGENTS.md below the header (issue #589; entry added by #632).
+# Additive: no existing key moves, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.14.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -122,4 +132,21 @@ ARTIFACT_SCHEMA_VERSION = "1.12.0"
 #    whole-file size curve (issue #560), which moves instruction grades.
 # 8: a bats suite is a test file and credits its shell script (issue #593), so a
 #    co-located ``<stem>.bats`` can now produce self_referential_tests (E2).
-ASSESS_METHOD_VERSION = 8
+# 9: a parallel-tree ``run.bats`` equally close to a ``run.sh`` and an
+#    extensionless ``run`` credits neither (issue #635), so a test_focus signal or a
+#    hotspot "Has test file" row can move.
+# 10: a skill's SKILL.md is a base doc ranked after README.md (issue #614), so it
+#     owns its skill directory's code in doc staleness and the complexity join.
+# 11: a leading HTML comment only one of a CLAUDE.md / AGENTS.md pair carries is
+#     compared, not stripped, so it turns a mirrored_instruction_files into a
+#     claude_shadows_agents; text after a header comment's ``-->`` (an H1
+#     included) is body (issue #632).
+# 12: wording and padding inside an instruction-file section no longer lower its
+#     penalty (issue #619): command_reference is an absolute fenced count, a size
+#     signal beats always-on wording, fetch lines past the relocatable cap count
+#     as always-on, and the B cap reads the whole loaded file. Instruction grades
+#     can move.
+# 13: doc_claims compares pins per (pinned file, tool) (issue #610), so a Node pin
+#     no longer contradicts a Python pin in one ``.tool-versions``; the L0
+#     "conflicting doc claims" row and scorer evidence can move.
+ASSESS_METHOD_VERSION = 13

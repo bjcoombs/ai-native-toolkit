@@ -380,6 +380,13 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `shared_tooling.ci_source_ids` | external id (hashed when hashing is on) |
 | `shared_tooling.marketplace_ids` | external id (hashed when hashing is on) |
 
+## layer_grades
+
+| Field | Kept as |
+|---|---|
+| `layer_grades.reason` | dropped |
+| `layer_grades.instructions_grade` | token |
+
 ## ai_usage
 
 | Field | Kept as |

@@ -1,8 +1,8 @@
 """Tests for lib/ai_usage.py and the shared matcher in lib/agent_identity.py.
 
-A real git fixture with pinned dates and known trailers: the counts are exact,
-merges are excluded, the window filters by commit date, and no identity string
-reaches the block.
+A real git fixture with dates relative to today and known trailers: the counts
+are exact, merges are excluded, the window filters by commit date, and no
+identity string reaches the block.
 """
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -33,7 +34,8 @@ IDENTITY_STRINGS = (
     "copilot-swe-agent",
 )
 
-RECENT = "2026-11-01T12:00:00+00:00"
+# Thirty days before today, so the 5y window always holds it (issue #601).
+RECENT = (datetime.now(timezone.utc) - timedelta(days=30)).replace(microsecond=0).isoformat()
 OLD = "2019-01-01T12:00:00+00:00"
 
 

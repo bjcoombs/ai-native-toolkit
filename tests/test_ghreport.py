@@ -403,6 +403,37 @@ def test_unreadable_ruleset_detail_is_unknown_not_off(tmp_path):
     assert _org_settings(res.stdout)["push_rules"] == "off"
 
 
+@pytest.mark.parametrize("jq16", [False, True], ids=["installed-jq", "jq16-empty-input"])
+@pytest.mark.parametrize("state", ["disabled", "evaluate"])
+def test_non_active_push_ruleset_reads_off_and_names_it(tmp_path, request, jq16, state):
+    """A push ruleset that is not active enforces nothing: push_rules reads
+    off, counts as off in the headline, and still names the ruleset (#594)."""
+    path_first = request.getfixturevalue("jq16_bin") if jq16 else None
+    res, _ = _run_with_org(tmp_path, {
+        "orgs/testorg": {"login": "testorg", "two_factor_requirement_enabled": True},
+        "orgs/testorg/rulesets": [
+            {"id": 2, "name": "no-big-files", "target": "push", "enforcement": state}],
+    }, "--no-file", path_first=path_first)
+    assert res.returncode == 0, res.stderr
+    settings = _org_settings(res.stdout)
+    assert settings["push_rules"] == f"off (not active: no-big-files ({state}))"
+    assert settings["rulesets"] == f"1: no-big-files ({state})"
+    # push_rules and default_branch_protection are off; two_factor is on.
+    assert "1 org(s): 2 setting(s) off, 0 unknown" in res.stdout
+
+
+def test_active_and_disabled_push_rulesets_are_not_off(tmp_path):
+    res, _ = _run_with_org(tmp_path, {
+        "orgs/testorg": {"login": "testorg", "two_factor_requirement_enabled": True},
+        "orgs/testorg/rulesets": [
+            {"id": 2, "name": "no-big-files", "target": "push", "enforcement": "active"},
+            {"id": 3, "name": "old-push", "target": "push", "enforcement": "disabled"}],
+    }, "--no-file")
+    assert res.returncode == 0, res.stderr
+    assert _org_settings(res.stdout)["push_rules"] == "no-big-files (active), old-push (disabled)"
+    assert "1 org(s): 1 setting(s) off, 0 unknown" in res.stdout
+
+
 def test_render_dir_settings_subdir_is_not_a_repo_row(fragments_dir, tmp_path):
     (fragments_dir / "settings").mkdir()
     (fragments_dir / "settings" / "org.json").write_text(json.dumps({

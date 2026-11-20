@@ -181,6 +181,94 @@ def test_a_pin_the_file_does_not_hold_still_contradicts(tmp_path: Path) -> None:
     assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
 
 
+@pytest.mark.parametrize("tool_versions", ["nodejs 20.11.0\npython 3.12.1\n", None])
+def test_pins_of_different_tools_in_one_file_never_contradict(
+        tmp_path: Path, tool_versions: str | None) -> None:
+    # Issue #610: the Python pin is stale (or the file is missing), yet a Node
+    # pin is no evidence against it.
+    if tool_versions is not None:
+        _write(tmp_path, ".tool-versions", tool_versions)
+    _write(tmp_path, "CLAUDE.md", "Node 20.11.0 is pinned in `.tool-versions`.\n")
+    _write(tmp_path, "docs/setup.md", "Python 3.11.4 is pinned in `.tool-versions`.\n")
+    block = scan_doc_claims(tmp_path, ["CLAUDE.md"])
+    assert block["failed"] == 1
+    assert block["contradictions_total"] == 0
+
+
+def test_a_same_tool_disagreement_in_a_shared_file_still_contradicts(tmp_path: Path) -> None:
+    _write(tmp_path, ".tool-versions", "nodejs 20.11.0\npython 3.12.1\n")
+    _write(tmp_path, "CLAUDE.md", "Node 20.11.0 is pinned in `.tool-versions`.\n")
+    _write(tmp_path, "docs/a.md", "Python 3.12.1 is pinned in `.tool-versions`.\n")
+    _write(tmp_path, "docs/b.md", "Node.js 18.19.0 is pinned in `.tool-versions`.\n")
+    block = scan_doc_claims(tmp_path, ["CLAUDE.md"])
+    assert block["contradictions_total"] == 1
+    assert _sites(block["contradictions"][0]) == [
+        ["CLAUDE.md", 1, "20.11.0"], ["docs/b.md", 1, "18.19.0"]]
+
+
+@pytest.mark.parametrize(("pin_file", "a", "b"), [
+    (".python-version", "Python 3.11", "CPython 3.12"),
+    (".nvmrc", "Node 20.11.0", "Node LTS 18.19.0"),
+    (".python-version", "Python 3.11", "The runtime 3.12"),
+    (".ruby-version", "Ruby 3.2.2", "MRI 3.3.0"),
+])
+def test_a_single_tool_pin_file_is_never_split_by_wording(
+        tmp_path: Path, pin_file: str, a: str, b: str) -> None:
+    _write(tmp_path, "docs/a.md", f"{a} is pinned in `{pin_file}`.\n")
+    _write(tmp_path, "docs/b.md", f"{b} is pinned in `{pin_file}`.\n")
+    assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
+
+
+def test_sdkmanrc_holds_one_sdk_per_line_so_its_pins_split_by_tool(tmp_path: Path) -> None:
+    _write(tmp_path, ".sdkmanrc", "java=17.0.2-tem\nmaven=3.9.6\n")
+    _write(tmp_path, "docs/a.md", "Java 17.0.2 is pinned in `.sdkmanrc`.\n")
+    _write(tmp_path, "docs/b.md", "Maven 3.8.6 is pinned in `.sdkmanrc`.\n")
+    block = scan_doc_claims(tmp_path, [])
+    assert (block["failed"], block["contradictions_total"]) == (1, 0)
+
+
+@pytest.mark.parametrize("stale", [
+    "Node is pinned in `.tool-versions` as 18.19.0.",
+    "Node is pinned in `.tool-versions` (currently 18.19.0).",
+])
+def test_a_function_word_before_the_version_is_not_a_second_tool(
+        tmp_path: Path, stale: str) -> None:
+    _write(tmp_path, "docs/a.md", "Node 20.11.0 is pinned in `.tool-versions`.\n")
+    _write(tmp_path, "docs/b.md", stale + "\n")
+    assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
+
+
+def test_a_pin_naming_no_tool_joins_the_one_tool_named(tmp_path: Path) -> None:
+    _write(tmp_path, "docs/a.md", "Node 20.11.0 is pinned in `.nvmrc`.\n")
+    _write(tmp_path, "docs/b.md", "Version 18.19.0 is pinned in `.nvmrc`.\n")
+    assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
+
+
+def test_a_pin_naming_no_tool_is_not_compared_when_several_are_named(tmp_path: Path) -> None:
+    _write(tmp_path, "docs/a.md", "Node 20.11.0 is pinned in `.tool-versions`.\n")
+    _write(tmp_path, "docs/b.md", "Python 3.12.1 is pinned in `.tool-versions`.\n")
+    _write(tmp_path, "docs/c.md", "Version 18.19.0 is pinned in `.tool-versions`.\n")
+    _write(tmp_path, "docs/d.md", "Version 3.11.4 is pinned in `.tool-versions`.\n")
+    block = scan_doc_claims(tmp_path, [])
+    # Unnamed pins are not compared with each other either: 18.19.0 and 3.11.4
+    # may be two tools. Each is still verified on its own.
+    assert block["contradictions_total"] == 0
+    assert block["failed"] == 4
+
+
+@pytest.mark.parametrize(("node", "python"), [
+    ("`node` 20.11.0", "`python` 3.11.4"),
+    ("**Node** 20.11.0", "**Python** 3.11.4"),
+    ("Node >= 20.11.0", "Python ~= 3.11.4"),
+])
+def test_markdown_and_operator_forms_still_split_by_tool(
+        tmp_path: Path, node: str, python: str) -> None:
+    _write(tmp_path, ".tool-versions", "nodejs 20.11.0\npython 3.12.1\n")
+    _write(tmp_path, "CLAUDE.md", f"{node} is pinned in `.tool-versions`.\n")
+    _write(tmp_path, "docs/setup.md", f"{python} is pinned in `.tool-versions`.\n")
+    assert scan_doc_claims(tmp_path, ["CLAUDE.md"])["contradictions_total"] == 0
+
+
 @pytest.mark.parametrize(("pin_file", "content", "a", "b"), [
     (".python-version", "11.2.0\n", "Python 1.2", "Python 11.2.0"),
     (".tool-versions", "nodejs 20.11.0\n", "Node 20.1", "Node 20.11.0"),

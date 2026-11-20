@@ -19,7 +19,7 @@ studies say helps an agent, not on how much the file says:
                          penalty for always-on lines past 200, another for
                          the lines that
                          belong in a skill or a nested file but load on every
-                         task, and a B cap past 400 always-on lines
+                         task, and a B cap past 400 loaded lines
     content penalties:   directory-tree blocks, repository-overview sections,
                          and lines repeated from the root README
     freshness:           days since last content change
@@ -122,9 +122,12 @@ VERIFIABLE_PATTERNS = [
 #   gate, adding reference lines to a file could drop it under half and lower
 #   its penalty, so the score would reward the wrong action. ``flagged`` stays
 #   the block's advice flag. Lines are counted as line-equivalents: the
-#   larger of the always-on lines and always-on words / ``WORDS_PER_LINE``
-#   (about 12 words a line, the ratio the #517 word curve used), so a file of
-#   very long lines cannot dodge the term or the B cap.
+#   larger of the file's lines and its words / ``WORDS_PER_LINE`` (about 12
+#   words a line, the ratio the #517 word curve used), less the fetch-on-need
+#   lines the relocatable term charges, so a file of very long lines cannot
+#   dodge the term or the B cap. The two terms are summed in lines and
+#   rounded once (``placement_penalty``), so near 200 lines a file with a few
+#   fetch-on-need lines can show an always-on point fewer than the bare count.
 # - fetch-on-need lines: sections that belong in a skill, a nested file or an
 #   existing SKILL.md, which a two-line pointer would replace. This is the
 #   share term: a file that is mostly reference pays for it at any size, and a
@@ -133,9 +136,13 @@ VERIFIABLE_PATTERNS = [
 # Both terms only grow as lines are added outside a section: a section's
 # classification reads its own text, the skills and the count of headed
 # sections (which only grows), never the file's total length, so lines added
-# elsewhere cannot declassify it. Past ``ALWAYS_ON_GRADE_CAP_LINES`` always-on
-# lines no amount of other credit
-# makes the file lean: the grade is capped at B (``SIZE_GRADE_CAP_SCORE``).
+# elsewhere cannot declassify it. Inside a section (#619), padding and wording
+# cannot move it back to always-on once a size signal fires
+# (``instruction_placement.SIZE_SIGNALS``), and a move the other way, to
+# fetch-on-need, never lowers the summed penalty or lifts the cap
+# (``placement_penalty``). Past ``ALWAYS_ON_GRADE_CAP_LINES`` loaded lines,
+# always-on or not, no amount of other credit makes the file lean: the grade is
+# capped at B (``SIZE_GRADE_CAP_SCORE``). Moving sections out is what lifts it.
 # Skills beside the file no longer halve anything: the placement split names
 # what to move, so delegation is credited by moving it.
 ALWAYS_ON_LINES_PER_POINT = 10
@@ -360,34 +367,56 @@ class PlacementPenalty(TypedDict):
     capped: bool
 
 
-def always_on_equivalent_lines(record: PlacementFile) -> int:
-    """Always-on lines, or always-on words / ``WORDS_PER_LINE`` when larger."""
-    return max(record["always_on_lines"],
-               math.ceil(record["always_on_words"] / WORDS_PER_LINE))
+def loaded_equivalent_lines(record: PlacementFile, fetch_words: int = 0) -> int:
+    """Every loaded line, or every loaded word / ``WORDS_PER_LINE`` when larger.
+
+    Always-on and fetch-on-need alike: the whole file loads on every task until
+    a section moves out, so this reads the same however the sections classify.
+    ``fetch_words`` is the words in fetch-on-need sections (the record holds
+    only the always-on words).
+    """
+    words = record["always_on_words"] + fetch_words
+    return max(record["total_lines"], math.ceil(words / WORDS_PER_LINE))
 
 
-def placement_penalty(record: PlacementFile) -> PlacementPenalty:
+def placement_penalty(record: PlacementFile, fetch_words: int = 0) -> PlacementPenalty:
     """Score one ``instruction_placement`` record on always-on size and share.
 
+    ``relocatable_penalty``: one point per ``RELOCATABLE_LINES_PER_POINT``
+    fetch-on-need lines, capped at ``RELOCATABLE_MAX_PENALTY``.
     ``always_on_penalty``: one point per ``ALWAYS_ON_LINES_PER_POINT``
-    always-on line-equivalents (``always_on_equivalent_lines``) past
-    ``ALWAYS_ON_FLAG_LINES``, capped at
-    ``ALWAYS_ON_MAX_PENALTY``. ``relocatable_penalty``: one point per
-    ``RELOCATABLE_LINES_PER_POINT`` fetch-on-need lines, capped at
-    ``RELOCATABLE_MAX_PENALTY``. ``capped``: a file past
-    ``ALWAYS_ON_GRADE_CAP_LINES`` always-on line-equivalents grades at most
-    B. Neither
-    reads ``flagged``, so for a fixed split each grows with the lines added.
+    always-on line-equivalents past ``ALWAYS_ON_FLAG_LINES``, capped at
+    ``ALWAYS_ON_MAX_PENALTY``. ``capped``: a file past
+    ``ALWAYS_ON_GRADE_CAP_LINES`` loaded line-equivalents grades at most B.
+
+    Reclassifying a section from always-on to fetch-on-need never lowers the
+    sum or lifts the cap (#619), so a section that a padding line pushes past
+    ``LONG_SECTION_MIN_LINES`` cannot earn points:
+
+    - the always-on line-equivalents are the loaded line-equivalents
+      (``loaded_equivalent_lines``, which reclassification does not change)
+      minus the fetch-on-need lines the relocatable term charges. Fetch lines
+      past its cap are charged nothing there, so they stay in the always-on
+      count instead of going free. For a line-dominated file under the cap
+      this is the always-on line count;
+    - both terms are summed in lines and rounded up once, then split, since
+      two separate roundings let a move lose a point;
+    - ``capped`` reads the loaded line-equivalents, so only moving text out of
+      the file lifts the B cap.
+
+    Neither term reads ``flagged``.
     """
-    always_on = always_on_equivalent_lines(record)
-    over = max(0, always_on - ALWAYS_ON_FLAG_LINES)
+    loaded = loaded_equivalent_lines(record, fetch_words)
+    charged = min(record["fetch_on_need_lines"],
+                  RELOCATABLE_MAX_PENALTY * RELOCATABLE_LINES_PER_POINT)
+    over = min(max(0, loaded - charged - ALWAYS_ON_FLAG_LINES),
+               ALWAYS_ON_MAX_PENALTY * ALWAYS_ON_LINES_PER_POINT)
+    relocatable = math.ceil(charged / RELOCATABLE_LINES_PER_POINT)
+    total = math.ceil((over + charged) / ALWAYS_ON_LINES_PER_POINT)
     return {
-        "always_on_penalty": min(math.ceil(over / ALWAYS_ON_LINES_PER_POINT),
-                                 ALWAYS_ON_MAX_PENALTY),
-        "relocatable_penalty": min(
-            math.ceil(record["fetch_on_need_lines"] / RELOCATABLE_LINES_PER_POINT),
-            RELOCATABLE_MAX_PENALTY),
-        "capped": always_on > ALWAYS_ON_GRADE_CAP_LINES,
+        "always_on_penalty": total - relocatable,
+        "relocatable_penalty": relocatable,
+        "capped": loaded > ALWAYS_ON_GRADE_CAP_LINES,
     }
 
 
@@ -507,8 +536,9 @@ def grade_instructions(
                                   lines past 200 (cap 30), counting 12 words
                                   as a line when that is more, plus -1 per 10
                                   fetch-on-need lines (cap 30)
-        size grade cap:           over 400 always-on lines (or 4800 always-on
-                                  words) the score is capped at 59 (a B)
+        size grade cap:           over 400 loaded lines (or 4800 words),
+                                  always-on or fetch-on-need, the score is
+                                  capped at 59 (a B)
         content_penalty:          -10 for a directory-tree block, -5 for a
                                   repository-overview section, -8 / -15 when
                                   25% / 50% of the file's lines repeat the README
@@ -576,7 +606,7 @@ def grade_instructions(
     score += _capped(sub["verifiable_outcomes"], VERIFIABLE_POINTS, VERIFIABLE_CAP)
     score -= _freshness_penalty(freshness_days)
 
-    size = placement_penalty(placement)
+    size = placement_penalty(placement, len(text.split()) - placement["always_on_words"])
     sub["always_on_penalty"] = size["always_on_penalty"]
     sub["relocatable_penalty"] = size["relocatable_penalty"]
     bloat_penalty = size["always_on_penalty"] + size["relocatable_penalty"]
