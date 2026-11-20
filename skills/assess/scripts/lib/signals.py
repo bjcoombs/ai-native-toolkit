@@ -133,7 +133,8 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW) -> dict[str, Any
     """The registry's ``PROVIDED_INPUTS``, built the way ``assess_core`` builds them.
 
     ``scope`` is None: a headless run measures the whole checkout.
-    ``history_window`` carries ``--window`` for history-reading scans (#547).
+    ``history_window`` carries ``--window`` for history-reading scans
+    (``ai_usage``, #547).
     Besides the ``build_run_context`` arguments, it supplies the setup values
     ``instruction_files``, ``scope``, ``excludes`` and ``history_window``
     itself; the table never recomputes a name the runner provides.
