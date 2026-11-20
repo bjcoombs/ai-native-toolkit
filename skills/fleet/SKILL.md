@@ -284,12 +284,15 @@ code, and the run history still keeps only its three files. `--no-diagrams` turn
 |------|----------|------------|
 | `quadrant.svg` | Which busy repositories are least mature? | Each repository's commits in the window (`ai_usage.total_commits`, non-merge) across, and up its mean maturity: every `team` row of the `--rubric` maturity model evaluated on that repository alone, as a share of the row's top level, averaged over the rows that could be measured. The busy (at or above the median) and below-half quadrant is shaded. Skipped without `--rubric` or without team rows. |
 | `shared-tooling.svg` | What breaks if a shared template changes, and who drifted off it? | `shared_tooling`: repositories linked to the CI sources and marketplaces they reference, with each item's dependent count. Drift: a CI include pinned to a ref other than the fleet's most common ref for that source (ties go to the lexically greatest ref) is dashed, and the SVG caption states this rule; an unpinned include is counted as unpinned, not drift; a pin counts-only could not keep is dotted as unknown. |
+| `slope.svg` | What moved since the earlier run, and which row moved it? | The `--compare` result: each group's mean level (a row's level as a share of its top level) in the earlier run and this one, over the rows with a known level in both runs, labelled with the row that moved most; a `*` marks a move where the group's measured set of repositories moved too. Skipped without `--compare`, or when the runs are not comparable. |
+| `layer-bars.svg` | Which layer is the org-wide weak spot? | One bar per `team` row of the maturity model, split by how many repositories reach each level (the heat map's pale-to-dark ramp); repositories whose level is undetermined are a hatched segment and named. |
 
 Unknown is never drawn as zero: a repository with no measured row or no commit count, or no
-`shared_tooling` evidence, is named on a hatched strip. Colours follow the viewer's light or
+`shared_tooling` evidence, a group with no row known in both compared runs, or a repository
+with an undetermined level for a layer, is named on a hatched strip or segment. Colours follow the viewer's light or
 dark scheme. The SVGs have no script and no external font or link, and the same run draws the
 same bytes. Logic: `lib/fleet_diagrams.py`, `lib/fleet_quadrant.py`,
-`lib/fleet_tooling_map.py`, on the shared helpers in `lib/fleet_svg.py`.
+`lib/fleet_tooling_map.py`, `lib/fleet_slope.py`, `lib/fleet_layer_bars.py`, on the shared helpers in `lib/fleet_svg.py`.
 
 ## Leadership heat map: `heatmap.py`
 

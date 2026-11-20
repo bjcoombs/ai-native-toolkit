@@ -13,3 +13,15 @@ Which busy repositories are least mature?
 What breaks if a shared template changes, and who drifted off it?
 
 [![Shared tooling](./shared-tooling.svg)](./shared-tooling.svg)
+
+## Before and after
+
+What moved since the earlier run, and which row moved it?
+
+[![Before and after](./slope.svg)](./slope.svg)
+
+## Maturity by layer
+
+Which layer is the org-wide weak spot?
+
+[![Maturity by layer](./layer-bars.svg)](./layer-bars.svg)

@@ -8,14 +8,18 @@ from ``skills/assess``, then review the diff.
 from __future__ import annotations
 
 import sys
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from lib.fleet import FLEET_ROW_VERSION, FleetRow, write_rows  # noqa: E402
+from lib.fleet_compare import Comparison, FleetRun, compare  # noqa: E402
 from lib.fleet_diagrams import build_diagrams, report_markdown  # noqa: E402
+from lib.fleet_groups import roll_up  # noqa: E402
+from lib.fleet_stamp import build_stamp  # noqa: E402
 from lib.fleet_view import read_repos  # noqa: E402
-from lib.rubric import load_rubric  # noqa: E402
+from lib.rubric import Rubric, load_rubric  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_diagrams"
@@ -74,7 +78,37 @@ ROWS: tuple[FleetRow, ...] = (
 )
 
 
+# The earlier run for the slope chart (#675): payments and data climbed since, platform slipped,
+# web lost a repository with no level moving (web/admin is new), mobile was not in it.
+EARLIER_ROWS: tuple[FleetRow, ...] = (
+    _row("payments/api", _scans(0, 190, 3)),
+    _row("payments/ledger", _scans(0, 150, 0)),
+    _row("payments/fraud", _scans(80, 55, 30)),
+    _row("platform/gateway", _scans(90, 130, 45)),
+    _row("platform/auth", _scans(70, 120, 45)),
+    _row("platform/infra", _scans(60, 30, 45)),
+    _row("data/pipeline", _scans(20, 160, 0)),
+    _row("data/warehouse", _scans(60, 20, 0)),
+    _row("data/notebooks", _scans(None, 10)),
+    _row("web/storefront", _scans(40, 240, 50)),
+    _row("web/design<&>\"sys", _scans(90, 40, 20)),
+)
+
+
 WINDOW = "6mo"
+
+
+def _run(rows: tuple[FleetRow, ...], levels: Rubric, day: date) -> FleetRun:
+    stamp = build_stamp(list(rows), toolkit_commit=None, plugin_version="2.0.0", today=day,
+                        window=WINDOW, rubric_version=levels["version"], counts_only=True,
+                        paths_hashed=False, scans=None)
+    return FleetRun(stamp, list(rows), roll_up(rows, levels, {}))
+
+
+def comparison(levels: Rubric, repos: list[FleetRow]) -> Comparison:
+    """The ``--compare`` result of ``EARLIER_ROWS`` (2026-10-20) against ``repos`` (2026-11-20)."""
+    return compare(_run(EARLIER_ROWS, levels, date(2026, 10, 20)),
+                   _run(tuple(repos), levels, date(2026, 11, 20)))
 
 
 def build(out: Path) -> None:
@@ -84,7 +118,8 @@ def build(out: Path) -> None:
 
 def goldens(out: Path) -> dict[str, str]:
     """The golden renders of the run in ``out``: ``expected-<file>`` -> text."""
-    diagrams = build_diagrams(load_rubric(out / "levels.toml"), read_repos(out), WINDOW)
+    levels, repos = load_rubric(out / "levels.toml"), read_repos(out)
+    diagrams = build_diagrams(levels, repos, WINDOW, comparison=comparison(levels, repos))
     files = {f"expected-{d['file']}": d["svg"] for d in diagrams if d["svg"] is not None}
     return {**files, "expected-report.md": report_markdown(diagrams)}
 

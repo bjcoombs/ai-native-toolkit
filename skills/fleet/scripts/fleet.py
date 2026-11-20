@@ -19,8 +19,8 @@ lost (``lib/fleet_cleanup.py``). Every run also writes the run stamp
 (``lib/fleet_doc_freshness.py``); without any, no such file is written.
 
 It also draws the fleet diagrams (``lib/fleet_diagrams.py``): ``<out>/report.md``
-embedding ``quadrant.svg`` and ``shared-tooling.svg``, or the reason each was
-skipped; ``--no-diagrams`` turns them off.
+embedding ``quadrant.svg``, ``shared-tooling.svg``, ``slope.svg`` (from the
+``--compare`` result) and ``layer-bars.svg``, or the reason each was skipped; ``--no-diagrams`` turns them off.
 
 A counts-only run is also kept in the run history,
 ``${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet/<org>/<date>/``
@@ -85,6 +85,7 @@ from lib.fleet_activity import window_start  # noqa: E402
 from lib.fleet_doc_freshness import freshness_rows, summary_line, write_freshness  # noqa: E402
 from lib.fleet_cleanup import CloneDeleter  # noqa: E402
 from lib.fleet_compare import (  # noqa: E402
+    Comparison,
     FleetRun,
     RunVersionError,
     clear_stale_comparison,
@@ -297,8 +298,10 @@ def _load_earlier(run_dir: str | None, org_dir: Path | None, planned: JsonDict,
 
 
 def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
-                      earlier: FleetRun | str | None) -> None:
-    """Keep the run in the history and write ``compare.json``; neither ever loses the ``--out`` results."""
+                      earlier: FleetRun | str | None) -> Comparison | None:
+    """Keep the run in the history and write ``compare.json``; neither ever loses the ``--out`` results.
+
+    Returns the comparison written, None when nothing was compared."""
     if entry is not None:
         try:
             kept = persist(out_dir, entry, later.stamp, frozenset(row["repo"] for row in later.repos))
@@ -307,22 +310,23 @@ def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
             print(f"fleet: history: not recorded ({e}); results are in {out_dir}", file=sys.stderr)
     if earlier is None:  # nothing to compare: a compare.json left by an earlier run would mislead
         clear_stale_comparison(out_dir)
-        return
+        return None
     comparison = (compare(earlier, later) if isinstance(earlier, FleetRun)
                   else not_comparable(later.stamp, [earlier]))
     write_comparison(out_dir, comparison)
     for line in summary_lines(comparison):
         print(f"fleet: compare: {line}", file=sys.stderr)
+    return comparison
 
 
 def _diagrams(out_dir: Path, no_diagrams: bool, rubric: Rubric | None, rows: list[FleetRow],
-              window: str) -> None:
+              window: str, comparison: Comparison | None = None) -> None:
     """Draw the diagrams and their report, or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
             clear_diagrams(out_dir)
             return
-        diagrams = build_diagrams(rubric, rows, window)
+        diagrams = build_diagrams(rubric, rows, window, comparison=comparison)
         write_diagrams(out_dir, diagrams)
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
@@ -423,8 +427,8 @@ def main(argv: list[str] | None = None) -> int:
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
     )
     write_stamp(out_dir, stamp)
-    _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
-    _diagrams(out_dir, args.no_diagrams, rubric, rows, window)
+    comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
+    _diagrams(out_dir, args.no_diagrams, rubric, rows, window, comparison)
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)
