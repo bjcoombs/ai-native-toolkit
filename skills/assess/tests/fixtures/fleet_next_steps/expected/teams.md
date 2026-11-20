@@ -1,6 +1,6 @@
 # Team next steps
 
-Rubric `next-steps-fixture-1`: 7 rows. One page per group.
+Maturity model `next-steps-fixture-1`: 7 rows. One page per group.
 
 | Group | Repositories | Rows at top level | Rows with next steps | Rows unknown |
 |-------|--------------|-------------------|----------------------|--------------|

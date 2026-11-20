@@ -1,7 +1,7 @@
 """Leadership heat map from one fleet run (issue #570).
 
 Reads ``<out>/groups.jsonl`` written by ``fleet.py --levels`` and writes one SVG:
-groups as rows, rubric rows as columns, each cell the whole level reached,
+groups as rows, maturity model rows as columns, each cell the whole level reached,
 ``unknown`` hatched apart from level 0 with the missing signal named in a key.
 No rescan, no model, no network: the same run gives a byte-identical file. The
 logic lives in ``skills/assess/scripts/lib/fleet_heatmap.py`` and the shared
@@ -9,8 +9,8 @@ reader in ``lib/fleet_view.py``.
 
 Exit codes:
     0  the SVG was written
-    2  usage error: unreadable or malformed groups.jsonl, a run without rubric
-       levels, a --levels file that is not the run's rubric, or an unreadable
+    2  usage error: unreadable or malformed groups.jsonl, a run without maturity model
+       levels, a --levels file that is not the run's maturity model, or an unreadable
        --compare run
 
 Run:
@@ -56,13 +56,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("run", help="The fleet run: its --out directory or its groups.jsonl.")
     parser.add_argument(
         "--levels", metavar="FILE",
-        help="The rubric file the run used: gives column titles and each row's top level, so "
+        help="The maturity model file the run used: gives column titles and each row's top level, so "
              "colour is scaled per row. Refused when its version or rows differ from the run's.",
     )
     parser.add_argument(
         "--compare", metavar="EARLIER_RUN",
         help="An earlier fleet run (directory or groups.jsonl): each cell shows its change. "
-             "Not shown, with a note, when the rubric versions differ.",
+             "Not shown, with a note, when the maturity-model versions differ.",
     )
     parser.add_argument("--output", metavar="FILE",
                         help=f"SVG path (default: {HEATMAP_FILE} beside groups.jsonl).")
@@ -87,7 +87,7 @@ def _compare(run: Path, earlier: Path, groups: list[GroupRow]) -> Comparison:
     """The level change per cell, gated by the fleet comparison rule (``lib/fleet_compare.py``).
 
     Two stamped run directories are refused on any fleet_compare reason (window,
-    scans and the rest, not only the rubric version), and a note names the groups
+    scans and the rest, not only the maturity-model version), and a note names the groups
     whose measured set moved. A bare ``groups.jsonl`` compares levels only.
     """
     reasons, set_moved = view_check(run, earlier)  # before load_groups: a version refusal is a note
@@ -119,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     out = Path(args.output) if args.output else groups_file(run).parent / HEATMAP_FILE
     _write(out, render_heatmap(groups, columns, comparison))
-    print(f"heatmap: {len(groups)} groups x {len(columns)} rubric rows -> {out}", file=sys.stderr)
+    print(f"heatmap: {len(groups)} groups x {len(columns)} maturity model rows -> {out}", file=sys.stderr)
     return 0
 
 

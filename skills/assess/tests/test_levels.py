@@ -1,4 +1,4 @@
-"""lib/levels.py: TOML rubric loading and deterministic whole-level evaluation."""
+"""lib/levels.py: TOML maturity model loading and deterministic whole-level evaluation."""
 from __future__ import annotations
 
 import copy
@@ -58,7 +58,7 @@ def _maturity_model(*rows: dict[str, Any]) -> dict[str, Any]:
     return {"version": "v1", "rows": list(rows)}
 
 
-# --- fixture rubric end to end ----------------------------------------------
+# --- fixture maturity model end to end ----------------------------------------------
 
 
 def test_fixture_levels_reaches_expected_whole_levels() -> None:
@@ -417,9 +417,9 @@ def test_huge_integer_signal_compares_without_overflow() -> None:
 def test_unreadable_toml_fails_at_load(tmp_path: Path) -> None:
     bad = tmp_path / "bad.toml"
     bad.write_text("version = \n", encoding="utf-8")
-    with pytest.raises(LevelsError, match="cannot read rubric bad.toml"):
+    with pytest.raises(LevelsError, match="cannot read maturity model bad.toml"):
         load_levels(bad)
-    with pytest.raises(LevelsError, match="cannot read rubric"):
+    with pytest.raises(LevelsError, match="cannot read maturity model"):
         load_levels(tmp_path / "absent.toml")
 
 

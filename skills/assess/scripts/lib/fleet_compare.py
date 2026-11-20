@@ -7,7 +7,7 @@ reads one; ``compare`` is a pure function of two loaded runs.
 Comparability follows ``diff_reliability._diff_is_reliable``: the plugin's
 major version and the stamp version must match. A comparison is also refused
 (``comparable: false`` with every reason, and no deltas) when the runs differ
-in rubric version, window, output mode, scan selection or path hashing, or when
+in maturity-model version, window, output mode, scan selection or path hashing, or when
 the earlier run's files are at another envelope version (``RunVersionError``
 from ``load_run`` becomes such a reason in ``not_comparable``).
 
@@ -19,7 +19,7 @@ Measured-set movement is reported apart from level movement. Per group:
 - ``no_longer_active`` / ``newly_active``: ``ok`` on both sides, ``active``
   true on one side and false on the other (#569's per-row flag).
 
-Each rubric row of each group carries its level then and now
+Each maturity model row of each group carries its level then and now
 (``{status, level}``, or null when the group or row is absent) and, when it
 moved, a ``cause``:
 
@@ -378,7 +378,7 @@ def compare(earlier: FleetRun, later: FleetRun) -> Comparison:
 def view_check(now: Path, then: Path) -> tuple[list[str], list[str]]:
     """For a level-only view of two runs (``heatmap.py --compare``): ``(reasons, set_moved)``.
 
-    ``reasons`` says why the runs are not comparable (this module's rule: rubric
+    ``reasons`` says why the runs are not comparable (this module's rule: maturity model
     version, window, output mode, scans, path hashing, plugin major version,
     file versions, a run with no ``run.json``); ``set_moved`` names the groups
     whose measured set moved, so a level change there is not read as a real

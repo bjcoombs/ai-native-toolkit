@@ -168,8 +168,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--out", required=True, help="Output directory; repos.jsonl is written here.")
     parser.add_argument(
         "--levels", metavar="FILE",
-        help="Maturity rubric (TOML, lib/levels.py format). Each group row in groups.jsonl "
-             "carries every rubric row's whole level (or unknown) and the aggregation rule used.",
+        help="Maturity model (TOML, lib/levels.py format). Each group row in groups.jsonl "
+             "carries every maturity model row's whole level (or unknown) and the aggregation rule used.",
     )
     parser.add_argument(
         "--settings", metavar="PATH",

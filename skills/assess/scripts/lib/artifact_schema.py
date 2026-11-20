@@ -94,7 +94,7 @@ constant each.
 # moves or changes type, and complexity-stats.json is unchanged.
 # 1.13.0: run-context.json gains layer_grades (issue #620): instructions_grade
 # and instruction_file_present as one registered block, so the headless signals
-# document carries them and a rubric can name them. Additive; the top-level
+# document carries them and a maturity model can name them. Additive; the top-level
 # instructions_grade key stays, and complexity-stats.json is unchanged.
 # 1.14.0: each run-context.json nested_instructions claude_shadows_agents finding
 # gains diff_lines, the lines that differ between the two files' comparable

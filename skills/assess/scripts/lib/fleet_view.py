@@ -11,14 +11,14 @@ reads that output back, and holds what both views need:
 - ``load_groups`` reads ``groups.jsonl`` (a file or the run's ``--out``
   directory), checks the fields a view reads, refuses a duplicate group and
   returns the rows sorted by group;
-- ``level_columns`` gives the rubric row ids in rubric order, the same for
-  every group (a run evaluates one rubric), refusing a run with no rubric;
+- ``level_columns`` gives the maturity model row ids in maturity model order, the same for
+  every group (a run evaluates one maturity model), refusing a run with no maturity model;
 - ``run_levels_version`` is the single ``levels_version`` the run carries;
-- ``check_levels`` matches an optional rubric file (row titles and top levels,
+- ``check_levels`` matches an optional maturity model file (row titles and top levels,
   which ``groups.jsonl`` does not carry) to the run: same version, same rows;
 - ``compare_levels`` pairs each cell with an earlier run's level (#552 shape
   pending: an earlier ``groups.jsonl`` is the comparison input), refusing a
-  comparison across rubric versions with a note rather than a misleading delta.
+  comparison across maturity-model versions with a note rather than a misleading delta.
 
 Pure stdlib, no orchestrator import, deterministic: no set iteration reaches
 output order.
@@ -55,7 +55,7 @@ class Change(TypedDict):
 class Comparison(TypedDict):
     comparable: bool
     note: str | None  # why the change is not shown, when not comparable
-    changes: dict[str, dict[str, Change]]  # group -> rubric row id -> change
+    changes: dict[str, dict[str, Change]]  # group -> maturity model row id -> change
     removed_groups: list[str]  # groups only the earlier run has
 
 
@@ -110,14 +110,14 @@ def _check_row(data: dict[str, Any], where: str) -> GroupRow:
         raise FleetViewError(f"{where}: needs 'levels_version' (a string or null)")
     for entry in data["levels"]:
         if not isinstance(entry, dict) or any(key not in entry for key in _ROW_FIELDS):
-            raise FleetViewError(f"{where}: a rubric entry lacks one of {', '.join(_ROW_FIELDS)}")
+            raise FleetViewError(f"{where}: a maturity model entry lacks one of {', '.join(_ROW_FIELDS)}")
         lists = (entry["missing_signals"], entry["unknown_repos"])
         if not isinstance(entry["id"], str) or not all(
                 isinstance(items, list) and all(isinstance(i, str) for i in items) for items in lists):
-            raise FleetViewError(f"{where}: rubric row {entry['id']!r} has a malformed id or signal list")
+            raise FleetViewError(f"{where}: maturity model row {entry['id']!r} has a malformed id or signal list")
         known = entry["status"] == STATUS_LEVEL and type(entry["level"]) is int  # bool is not a level
         if not known and entry["status"] != STATUS_UNKNOWN:
-            raise FleetViewError(f"{where}: rubric row {entry['id']!r} has no whole level")
+            raise FleetViewError(f"{where}: maturity model row {entry['id']!r} has no whole level")
     row: GroupRow = data  # type: ignore[assignment]  # checked above for the fields views read
     return row
 
@@ -139,45 +139,45 @@ def load_groups(path: Path) -> list[GroupRow]:
 
 
 def level_columns(groups: Sequence[GroupRow]) -> list[str]:
-    """Rubric row ids in rubric order; every group must carry the same rows."""
+    """Maturity model row ids in maturity model order; every group must carry the same rows."""
     if not groups:
         raise FleetViewError("the run has no groups (no repository was scanned): nothing to draw")
     columns = [entry["id"] for entry in groups[0]["levels"]]
     if not columns:
-        raise FleetViewError("the run has no rubric levels: rerun fleet.py with --levels")
+        raise FleetViewError("the run has no maturity model levels: rerun fleet.py with --levels")
     for group in groups[1:]:
         if [entry["id"] for entry in group["levels"]] != columns:
-            raise FleetViewError(f"group {group['group']!r} carries different rubric rows")
+            raise FleetViewError(f"group {group['group']!r} carries different maturity model rows")
     return columns
 
 
 def run_levels_version(groups: Sequence[GroupRow]) -> str | None:
-    """The run's rubric version; groups disagreeing is a malformed run."""
+    """The run's maturity-model version; groups disagreeing is a malformed run."""
     versions = sorted({str(group["levels_version"]) for group in groups})
     if len(versions) > 1:
-        raise FleetViewError(f"groups carry different rubric versions: {', '.join(versions)}")
+        raise FleetViewError(f"groups carry different maturity-model versions: {', '.join(versions)}")
     return groups[0]["levels_version"] if groups else None
 
 
 def check_levels(maturity_model: MaturityModel, groups: Sequence[GroupRow]) -> None:
-    """Refuse a rubric file that is not the one the run evaluated."""
+    """Refuse a maturity model file that is not the one the run evaluated."""
     version = run_levels_version(groups)
     if version is None:
-        raise FleetViewError(f"the run has no rubric levels (fleet.py ran without --levels), so "
-                             f"rubric file version {maturity_model['version']!r} cannot apply: rerun fleet.py "
+        raise FleetViewError(f"the run has no maturity model levels (fleet.py ran without --levels), so "
+                             f"maturity model file version {maturity_model['version']!r} cannot apply: rerun fleet.py "
                              "with --levels")
     if maturity_model["version"] != version:
-        raise FleetViewError(f"rubric file is version {maturity_model['version']!r}, the run used {version!r}")
+        raise FleetViewError(f"maturity model file is version {maturity_model['version']!r}, the run used {version!r}")
     if [row["id"] for row in maturity_model["rows"]] != level_columns(groups):
-        raise FleetViewError("rubric file rows differ from the run's rubric rows")
+        raise FleetViewError("maturity model file rows differ from the run's maturity model rows")
 
 
 def cell(group: GroupRow, row_id: str) -> RowLevel:
-    """The group's level entry for one rubric row."""
+    """The group's level entry for one maturity model row."""
     for entry in group["levels"]:
         if entry["id"] == row_id:
             return entry
-    raise FleetViewError(f"group {group['group']!r} has no rubric row {row_id!r}")
+    raise FleetViewError(f"group {group['group']!r} has no maturity model row {row_id!r}")
 
 
 def _change(now: RowLevel, then: RowLevel | None) -> Change:
@@ -195,14 +195,14 @@ def _change(now: RowLevel, then: RowLevel | None) -> Change:
 def _incomparable_note(then_version: str | None, now_version: str | None) -> str:
     """Why two runs' levels are not compared; a run without --levels is named as having none."""
     if then_version is None:
-        return f"change not shown: the earlier run had no rubric, this run used rubric {now_version}"
+        return f"change not shown: the earlier run had no maturity model, this run used maturity model {now_version}"
     if now_version is None:
-        return f"change not shown: the earlier run used rubric {then_version}, this run had no rubric"
-    return f"change not shown: the earlier run used rubric {then_version}, this run {now_version}"
+        return f"change not shown: the earlier run used maturity model {then_version}, this run had no maturity model"
+    return f"change not shown: the earlier run used maturity model {then_version}, this run {now_version}"
 
 
 def compare_levels(now: Sequence[GroupRow], then: Sequence[GroupRow]) -> Comparison:
-    """Each current cell against the earlier run; not comparable across rubric versions."""
+    """Each current cell against the earlier run; not comparable across maturity-model versions."""
     removed = sorted({g["group"] for g in then} - {g["group"] for g in now})
     now_version, then_version = run_levels_version(now), run_levels_version(then)
     if then and now_version != then_version:

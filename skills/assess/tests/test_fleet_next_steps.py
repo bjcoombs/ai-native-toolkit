@@ -215,7 +215,7 @@ def test_unmapped_signal_falls_back_to_the_expression(tmp_path):
 def test_a_different_levels_version_exits_2(tmp_path, capsys):
     settings = fleet_run(tmp_path)
     assert cli.main([str(tmp_path), "--levels", str(DEFAULT_LEVELS), "--settings", str(settings)]) == 2
-    assert "rolled up with rubric 'next-steps-fixture-1'" in capsys.readouterr().err
+    assert "rolled up with maturity model 'next-steps-fixture-1'" in capsys.readouterr().err
 
 
 def test_missing_settings_disagree_with_the_run_and_exit_2(tmp_path, capsys):
@@ -240,7 +240,7 @@ def test_a_changed_row_set_raises(tmp_path):
     fleet_run(tmp_path)
     groups = load_groups(tmp_path)
     groups[0]["levels"].append({**groups[0]["levels"][0], "id": "extra"})
-    with pytest.raises(ns.NextStepsError, match="different set of rubric rows"):
+    with pytest.raises(ns.NextStepsError, match="different set of maturity model rows"):
         ns.build_pages(LEVELS, read_repos(tmp_path), groups, load_settings(tmp_path / "settings.json"))
 
 

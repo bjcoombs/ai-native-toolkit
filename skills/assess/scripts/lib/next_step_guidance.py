@@ -1,6 +1,6 @@
-"""Repository-native wording for a rubric criterion: the change and its "done when".
+"""Repository-native wording for a maturity model criterion: the change and its "done when".
 
-A team page (``lib/fleet_next_steps.py``) turns each unmet rubric criterion into
+A team page (``lib/fleet_next_steps.py``) turns each unmet maturity model criterion into
 one next step a team can accept or decline on its own. A signal path such as
 ``agent_environment.check.named_total`` means nothing to a maintainer without
 the plugin, so each step leads with:
@@ -12,7 +12,7 @@ the plugin, so each step leads with:
 The signal expression follows on the page as the optional re-run check.
 
 ``guidance(signal, op, value)`` builds the wording from the criterion's own
-operator and value, so a caller's rubric that reuses a signal with another
+operator and value, so a caller's maturity model that reuses a signal with another
 threshold gets that threshold. It returns ``None`` for a signal it has no
 wording for, or an operator/value shape the wording does not fit; the page
 then states the signal expression alone. ``measure_hint(signal)`` says why a

@@ -2,7 +2,7 @@
 
 The model choice is the one unverifiable step; everything around it is pinned
 here: the closed label set, the labels.jsonl schema and validation, the join to
-repos.jsonl, and that labels never touch repos.jsonl or any rubric score.
+repos.jsonl, and that labels never touch repos.jsonl or any maturity model score.
 """
 from __future__ import annotations
 

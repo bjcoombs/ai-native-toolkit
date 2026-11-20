@@ -1,6 +1,6 @@
 """Leadership heat map SVG from one fleet run's ``groups.jsonl`` (issue #570).
 
-Groups are rows, rubric rows are columns, and each cell is the whole level the
+Groups are rows, maturity model rows are columns, and each cell is the whole level the
 group reached on that row. Reads only what ``lib/fleet_view.py`` loads: no
 rescan, no model.
 
@@ -9,7 +9,7 @@ Encoding:
 - Fill: the ColorBrewer OrRd 9-class sequential ramp, hardcoded (no matplotlib,
   whose colormaps can shift between versions), so output is byte-identical
   across machines. Pale is level 0 (nothing reached), darker is a higher level
-  reached. With a rubric file a level is placed on the ramp by its share of its
+  reached. With a maturity model file a level is placed on the ramp by its share of its
   row's top level (``level * 8 / top``, rounded half up), so a row's top level
   is always the darkest step; without one the level indexes the ramp directly
   (capped at the last step). The legend states which.
@@ -23,7 +23,7 @@ Encoding:
   on dark ones).
 - Change against an earlier run (``fleet_view.compare_levels``) is text under
   the level: ``+1``, ``-1``, ``=``, ``new``, ``was 2`` or ``was ?``. Across
-  rubric versions no change is drawn and a note says why.
+  maturity-model versions no change is drawn and a note says why.
 
 The canvas has its own white background, so it reads the same on light and
 dark pages. Text is escaped with ``html.escape``; labels are sized and
@@ -77,17 +77,17 @@ KEY_WRAP = 96
 MIN_WIDTH = 640.0
 HEAD_H = 58.0  # title and subtitle
 
-SVG_TITLE = "Fleet rubric levels"
+SVG_TITLE = "Fleet maturity model levels"
 
 
 class Column(TypedDict):
     id: str
     title: str
-    top: int | None  # the row's top level; None without a rubric file
+    top: int | None  # the row's top level; None without a maturity model file
 
 
 def columns_for(groups: Sequence[GroupRow], maturity_model: MaturityModel | None) -> list[Column]:
-    """Columns in rubric order; titles and top levels from the rubric file when given."""
+    """Columns in maturity model order; titles and top levels from the maturity model file when given."""
     ids = level_columns(groups)
     if maturity_model is None:
         return [{"id": row_id, "title": row_id, "top": None} for row_id in ids]
@@ -218,8 +218,8 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
     show_change = comparison is not None and comparison["comparable"]
 
     body: list[str] = []
-    subtitle = (f"rubric {version} · {_count(len(groups), 'group')} · "
-                f"{_count(len(columns), 'rubric row')} · darker = higher level reached")
+    subtitle = (f"maturity model {version} · {_count(len(groups), 'group')} · "
+                f"{_count(len(columns), 'maturity model row')} · darker = higher level reached")
     body.append(_text(PAD, PAD + 18, SVG_TITLE, size=18, weight="bold"))
     body.append(_text(PAD, PAD + 40, subtitle, fill=MUTED))
     for index, label in enumerate(col_labels):
@@ -260,7 +260,7 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
         y += 10
 
     scale = ("level as a share of the row's top level" if all(c["top"] is not None for c in columns)
-             else "whole level (no rubric file: not scaled to each row's top level)")
+             else "whole level (no maturity model file: not scaled to each row's top level)")
     body.append(_text(PAD, y, f"Legend: {scale}", weight="bold"))
     y += 10
     entries: list[tuple[str, str]] = [(ORRD_9[step], label)
@@ -289,7 +289,7 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
                 PAD * 2 + widest * CHAR_W, MIN_WIDTH)
     width = float(math.ceil(width))
     height = float(math.ceil(y + PAD))
-    desc = ("Heat map of fleet groups (rows) against rubric rows (columns); each cell is the "
+    desc = ("Heat map of fleet groups (rows) against maturity model rows (columns); each cell is the "
             "whole level reached, darker is higher; hatched cells are unknown, not level 0.")
     style = ('<style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", '
              'Helvetica, Arial, sans-serif; }</style>')

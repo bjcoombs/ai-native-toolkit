@@ -20,7 +20,7 @@ unverifiable step:
   path with sorted keys, so the same answers give the same bytes.
 - ``check_labels`` validates a written file against ``repos.jsonl``.
 - ``labels_by_path`` and ``filter_rows`` are the only read path: display and
-  filter. Labels never enter a ``FleetRow``, a rubric ``Group`` or any score;
+  filter. Labels never enter a ``FleetRow``, a maturity model ``Group`` or any score;
   ``tests/test_fleet_labels.py`` pins that nothing in the gathering or scoring
   modules imports this one.
 

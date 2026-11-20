@@ -1,10 +1,10 @@
 """Per-team next-steps pages in Markdown from one fleet run (issue #571).
 
 Reads a fleet run's output (``repos.jsonl`` and ``groups.jsonl``, through
-``lib/fleet_view.py``) plus the rubric and settings the run used, and renders
+``lib/fleet_view.py``) plus the maturity model and settings the run used, and renders
 one page per group, with no rescan:
 
-- the group's level on every rubric row, with the roll-up rule;
+- the group's level on every maturity model row, with the roll-up rule;
 - for each row below its top level, the unmet criteria of the next level, one
   numbered step per criterion, so a team can take or leave each on its own.
   Each step leads with the change and a "done when" in the repository's own
@@ -19,15 +19,15 @@ Levels come from re-running ``lib.levels.evaluate`` on the same inputs the
 roll-up (``lib/fleet_groups.py``) evaluated: each repository's ``scans`` and
 the group's joined settings fragment. ``build_pages`` checks every row's
 status and level against ``groups.jsonl`` and raises ``NextStepsError`` on any
-difference (a different rubric or settings than the run used), so a page never
+difference (a different maturity model or settings than the run used), so a page never
 disagrees with the run.
 
-Counts-only: a page holds repository and group ids, rubric titles and
+Counts-only: a page holds repository and group ids, maturity model titles and
 operands (caller-authored, printed in clear), counts and the actual values of
 criteria. An actual value is a number, a boolean, a short token (``TOKEN_RE``) or ``set``
 for any other string, the same reduction ``groups.jsonl`` applies to settings.
 
-Output is deterministic: rows in rubric order, repositories sorted, no date.
+Output is deterministic: rows in maturity model order, repositories sorted, no date.
 ``write_pages`` writes ``<out>/teams.md`` (the index) and
 ``<out>/teams/<group>.md`` (a group id's segments as directories), after
 removing the ``*.md`` pages a previous run left under ``<out>/teams/``.
@@ -66,7 +66,7 @@ class NextStepsError(ValueError):
 
 
 def text(value: str) -> str:
-    """Caller-supplied text (a rubric title) as inert Markdown on one line."""
+    """Caller-supplied text (a maturity model title) as inert Markdown on one line."""
     return _MD_SPECIAL.sub(r"\\\1", " ".join(value.split()))
 
 
@@ -95,7 +95,7 @@ def scalar(value: Any) -> str:
 
 
 def operand(value: Any) -> str:
-    """A rubric operand: caller-authored, so a string prints in clear as a code span."""
+    """A maturity model operand: caller-authored, so a string prints in clear as a code span."""
     if isinstance(value, list):
         return "[" + ", ".join(operand(v) for v in value) + "]"
     return code(value) if isinstance(value, str) else scalar(value)
@@ -114,7 +114,7 @@ def _key(c: Criterion | CriterionOutcome) -> tuple[str, str, str]:
 
 def evaluate_group(maturity_model: MaturityModel, group: str, rows: Sequence[FleetRow],
                    by_scope: Mapping[str, JsonDict]) -> list[RowResult]:
-    """The rubric result for one group, built exactly as ``fleet_groups`` builds it."""
+    """The maturity model result for one group, built exactly as ``fleet_groups`` builds it."""
     scope, settings = settings_for(group, by_scope)
     org_data = settings_signals(by_scope[scope] if scope else None, settings)
     result = evaluate(maturity_model, {"name": group, "settings": org_data,
@@ -131,7 +131,7 @@ def _check_agrees(group: GroupRow, results: Sequence[RowResult]) -> None:
                 f"{result['status']} {result['level']}, which groups.jsonl does not record; pass "
                 "the --levels and --settings the fleet run used")
     if len(recorded) != len(results):
-        raise NextStepsError(f"group {group['group']!r}: groups.jsonl has a different set of rubric rows")
+        raise NextStepsError(f"group {group['group']!r}: groups.jsonl has a different set of maturity model rows")
 
 
 # --- one row -----------------------------------------------------------------
@@ -320,7 +320,7 @@ def group_page(maturity_model: MaturityModel, group: GroupRow, rows: Sequence[Fl
     failed = {row["repo"]: row["reason"] or "failed" for row in rows if row["status"] != STATUS_OK}
     signals = {row["repo"]: repo_signals(row) for row in rows}
     lines = [f"# Next steps: {code(group['group'])}", "",
-             f"Rubric {code(maturity_model['version'])}. {_repos(group['repos'])}: "
+             f"Maturity model {code(maturity_model['version'])}. {_repos(group['repos'])}: "
              f"{group['scanned']} scanned, {group['failed']} failed.", "",
              "Each numbered step is one change: take or leave it on its own. \"Done when\" is "
              "checkable in the repository or its platform settings; the re-run check is optional.",
@@ -343,7 +343,7 @@ def page_path(group: str) -> Path:
 
 def index_page(maturity_model: MaturityModel, groups: Sequence[GroupRow]) -> str:
     lines = ["# Team next steps", "",
-             f"Rubric {code(maturity_model['version'])}: {len(maturity_model['rows'])} rows. One page per group.", "",
+             f"Maturity model {code(maturity_model['version'])}: {len(maturity_model['rows'])} rows. One page per group.", "",
              "| Group | Repositories | Rows at top level | Rows with next steps | Rows unknown |",
              "|-------|--------------|-------------------|----------------------|--------------|"]
     tops = {row["id"]: len(row["levels"]) for row in maturity_model["rows"]}
@@ -372,7 +372,7 @@ def build_pages(maturity_model: MaturityModel, repos: Iterable[FleetRow], groups
                                  "rerun fleet.py with --levels")
         if group["levels_version"] != maturity_model["version"]:
             raise NextStepsError(
-                f"groups.jsonl was rolled up with rubric {group['levels_version']!r}, not "
+                f"groups.jsonl was rolled up with maturity model {group['levels_version']!r}, not "
                 f"{maturity_model['version']!r}; pass the --levels the fleet run used")
         rows = sorted(members[group["group"]], key=lambda r: r["repo"])
         results = evaluate_group(maturity_model, group["group"], rows, by_scope)

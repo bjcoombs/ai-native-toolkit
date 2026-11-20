@@ -141,8 +141,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_scan_registry_degrade.py` | `lib/scan_registry.py` - degrade by construction: every scan-table entry without a `GATE_REASONS` reason is forced to raise and the run carries the unavailable marker downstream |
 | `test_scc_coverage.py` | `lib/scc_coverage.py` - the implausibly-low scc complexity check, calibrated on real scc output for an under-counted shell script |
 | `test_counts_only.py` | `lib/counts_only.py` + `lib/counts_only_rules.py` + `lib/counts_only_schema.py` - the content-free run-context mode: every typed string field has a keep/drop/path rule, and the counts-only document drops copied text |
-| `test_levels.py` | `lib/levels.py` - TOML rubric loading and deterministic whole-level evaluation |
-| `test_level_signals.py` | `lib/level_signals.py` - schema-backed signal paths and the shipped default rubric |
+| `test_levels.py` | `lib/levels.py` - TOML maturity model loading and deterministic whole-level evaluation |
+| `test_level_signals.py` | `lib/level_signals.py` - schema-backed signal paths and the shipped default maturity model |
 | `test_layer_grades.py` | `lib/layer_grades.py` - deterministic layer grades as a registered signals block, with a counts-only rule |
 | `test_history_window.py` | `lib/history_window.py` - the one history-window grammar shared by `lib/git_churn.py`, `lib/ai_usage.py`, `lib/fleet_activity.py` and `lib/signals.py`, and the shallow-boundary reachability check |
 
@@ -154,8 +154,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_signals_counts_only.py` | `scripts/assess_signals.py --counts-only` - the content-free headless document validates against the schema, hashes paths and shared-tooling ids, and keeps a reason on every unavailable block |
 | `test_fleet.py` | `lib/fleet.py` + `lib/fleet_schema.py` - the fleet runner core: targets, per-repository rows, isolated failures |
 | `test_fleet_cli.py` | `skills/fleet/scripts/fleet.py` (relative to the repo root) - end to end over real `assess_signals` runs |
-| `test_fleet_groups.py` | `lib/fleet_groups.py` - the group roll-up with rubric levels and joined group settings |
-| `test_fleet_labels.py` | `lib/fleet_labels.py` + `skills/fleet/scripts/fleet_labels.py` - the closed label set, the `labels.jsonl` schema and its join to `repos.jsonl`; labels never touch a rubric score |
+| `test_fleet_groups.py` | `lib/fleet_groups.py` - the group roll-up with maturity model levels and joined group settings |
+| `test_fleet_labels.py` | `lib/fleet_labels.py` + `skills/fleet/scripts/fleet_labels.py` - the closed label set, the `labels.jsonl` schema and its join to `repos.jsonl`; labels never touch a maturity model score |
 | `test_fleet_next_steps.py` | `lib/fleet_next_steps.py` + `lib/next_step_guidance.py` + `lib/fleet_view.py` + `skills/fleet/scripts/fleet_next_steps.py` - per-team next-steps pages against goldens in `fixtures/fleet_next_steps/expected/` |
 | `test_fleet_heatmap.py` | `lib/fleet_view.py` + `lib/fleet_heatmap.py` + `skills/fleet/scripts/heatmap.py` - the leadership heat map SVG against goldens in `fixtures/fleet_heatmap/` |
 | `fleet_heatmap_fixture.py` | builds the `fixtures/fleet_heatmap/` runs from `lib/fleet_groups.roll_up` (not a test module; regenerate with `uv run --locked python tests/fleet_heatmap_fixture.py`) |

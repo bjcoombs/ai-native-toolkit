@@ -1,12 +1,12 @@
-"""Caller-supplied maturity rubrics: TOML loader and deterministic evaluator.
+"""Caller-supplied maturity models: TOML loader and deterministic evaluator.
 
-An organisation running a maturity programme scores against its own rubric:
+An organisation running a maturity programme scores against its own maturity model:
 rows (practices or capabilities), each with numbered whole levels, each level
-a list of criteria over named signal paths. This module loads such a rubric
+a list of criteria over named signal paths. This module loads such a maturity model
 and evaluates it from signals alone, with no model in the path, so a fleet
 scan reaches the same levels every time.
 
-Rubric file (TOML, read with the stdlib ``tomllib``):
+Maturity model file (TOML, read with the stdlib ``tomllib``):
 
 ```toml
 version = "2026.11"            # stamped on every result
@@ -71,7 +71,7 @@ Semantics:
 - ``org`` rows run once against the group settings; settings of ``None`` (not
   gathered) make every org row unknown.
 
-Loading raises ``LevelsError`` before any evaluation on a malformed rubric: a
+Loading raises ``LevelsError`` before any evaluation on a malformed maturity model: a
 missing version, an unset or invalid scope, a gap or duplicate in level
 numbering, an unknown operator or key, a team row with no aggregation rule, or
 a signal path the pluggable ``PathValidator`` rejects. ``dumps_result`` gives
@@ -129,7 +129,7 @@ def add_renamed_flag(parser: argparse.ArgumentParser) -> None:
 
 
 class LevelsError(ValueError):
-    """The rubric cannot be loaded; the message names the row and the fault."""
+    """The maturity model cannot be loaded; the message names the row and the fault."""
 
 
 class Criterion(TypedDict):
@@ -229,23 +229,23 @@ def known_paths(org: Iterable[str], team: Iterable[str]) -> PathValidator:
 
 
 def load_levels(path: Path, validator: PathValidator | None = None) -> MaturityModel:
-    """Read and validate a TOML rubric file; raise ``LevelsError`` on any fault."""
+    """Read and validate a TOML maturity model file; raise ``LevelsError`` on any fault."""
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        raise LevelsError(f"cannot read rubric {path.name}: {exc}") from exc
+        raise LevelsError(f"cannot read maturity model {path.name}: {exc}") from exc
     return parse_levels(data, validator)
 
 
 def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None) -> MaturityModel:
-    """Validate an already-parsed rubric table; raise ``LevelsError`` on any fault."""
-    _check_keys(data, _ROOT_KEYS, "rubric")
+    """Validate an already-parsed maturity model table; raise ``LevelsError`` on any fault."""
+    _check_keys(data, _ROOT_KEYS, "maturity model")
     version = data.get("version")
     if not isinstance(version, str) or not version.strip():
-        raise LevelsError("rubric: 'version' must be a non-empty string")
+        raise LevelsError("maturity model: 'version' must be a non-empty string")
     raw_rows = data.get("rows")
     if not isinstance(raw_rows, list) or not raw_rows:
-        raise LevelsError("rubric: 'rows' must be a non-empty array of tables")
+        raise LevelsError("maturity model: 'rows' must be a non-empty array of tables")
     rows: list[Row] = []
     seen: set[str] = set()
     for index, raw in enumerate(raw_rows):
@@ -535,7 +535,7 @@ def _org_result(row: Row, settings: JsonDict | None) -> RowResult:
 
 
 def evaluate(maturity_model: MaturityModel, group: Group) -> LevelsResult:
-    """Every row of ``rubric`` against ``group``, stamped with the rubric version."""
+    """Every row of ``maturity_model`` against ``group``, stamped with the maturity-model version."""
     rows = [
         _org_result(row, group["settings"]) if row["scope"] == "org" else _team_result(row, group["repos"])
         for row in maturity_model["rows"]

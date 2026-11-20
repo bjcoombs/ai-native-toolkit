@@ -1,4 +1,4 @@
-"""lib/level_signals.py: schema-backed signal paths and the shipped default rubric."""
+"""lib/level_signals.py: schema-backed signal paths and the shipped default maturity model."""
 from __future__ import annotations
 
 import copy
@@ -197,7 +197,7 @@ def test_every_scalar_in_real_output_is_an_accepted_path(
     assert rejected == []
 
 
-# --- the default rubric ------------------------------------------------------
+# --- the default maturity model ------------------------------------------------------
 
 
 def test_default_levels_loads_against_the_schema() -> None:
@@ -406,7 +406,7 @@ def test_counts_only_output_reaches_the_same_levels(
     golden_repos: dict[str, dict[str, Any]], instructed_repo: dict[str, Any],
     suppressed_repo: dict[str, Any], two_package_repo: dict[str, Any],
 ) -> None:
-    """A fleet run is counts-only by default; the rubric reads only kept fields."""
+    """A fleet run is counts-only by default; the maturity model reads only kept fields."""
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
     full = {**golden_repos, "instructed": instructed_repo, "suppressed": suppressed_repo,
             "two_package": two_package_repo,

@@ -316,7 +316,7 @@ def test_unknown_org_path_exits_2_naming_it(froot, tmp_path, capsys):  # noqa: F
 
 
 def test_default_levels_loads_and_rolls_up(froot, tmp_path):  # noqa: F811
-    """The shipped rubric (#564) passes the same validation and yields a level or unknown per row."""
+    """The shipped maturity model (#564) passes the same validation and yields a level or unknown per row."""
     assert fleet_cli.main([str(froot), "--levels", str(DEFAULT_LEVELS), "--out", str(tmp_path / "o"),
                            "--jobs", "2"]) == 0
     rows = [json.loads(line) for line in (tmp_path / "o" / fg.GROUPS_FILE).read_text().splitlines()]

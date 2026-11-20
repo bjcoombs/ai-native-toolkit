@@ -132,7 +132,7 @@ def test_counts_in_the_subtitle_agree_in_number():
     groups = _groups()[:1]
     columns = fh.columns_for(groups, None)[:1]
     svg = fh.render_heatmap(groups, columns)
-    assert "1 group \u00b7 1 rubric row \u00b7" in svg
+    assert "1 group \u00b7 1 maturity model row \u00b7" in svg
 
 
 def test_svg_parses_has_a_background_and_no_stylesheet_override(tmp_path):
@@ -155,7 +155,7 @@ def test_comparison_across_levels_versions_is_not_shown(tmp_path):
     earlier = [dict(g, levels_version="fixture-0") for g in _groups()]
     path = _write_lines(tmp_path / "earlier.jsonl", list(earlier))
     svg = _render(tmp_path, "--compare", str(path))
-    assert "change not shown: the earlier run used rubric fixture-0, this run fixture-1" in svg
+    assert "change not shown: the earlier run used maturity model fixture-0, this run fixture-1" in svg
     assert "+2" not in svg
 
 
@@ -302,11 +302,11 @@ def test_run_shape_errors():
     a, b, *_rest = _groups()
     with pytest.raises(fv.FleetViewError, match="--levels"):
         fv.level_columns([dict(a, levels=[])])  # type: ignore[list-item]
-    with pytest.raises(fv.FleetViewError, match="different rubric rows"):
+    with pytest.raises(fv.FleetViewError, match="different maturity model rows"):
         fv.level_columns([a, dict(b, levels=b["levels"][:1])])  # type: ignore[list-item]
-    with pytest.raises(fv.FleetViewError, match="different rubric versions"):
+    with pytest.raises(fv.FleetViewError, match="different maturity-model versions"):
         fv.run_levels_version([a, dict(b, levels_version="other")])  # type: ignore[list-item]
-    with pytest.raises(fv.FleetViewError, match="no rubric row"):
+    with pytest.raises(fv.FleetViewError, match="no maturity model row"):
         fv.cell(a, "absent")
 
 
@@ -332,11 +332,11 @@ def test_comparison_against_a_run_without_a_maturity_model_says_so():
     bare = [dict(g, levels_version=None, levels=[]) for g in _groups()]
     then_bare = fv.compare_levels(_groups(), bare)  # type: ignore[arg-type]
     assert not then_bare["comparable"]
-    assert then_bare["note"] == ("change not shown: the earlier run had no rubric, "
-                                 "this run used rubric fixture-1")
+    assert then_bare["note"] == ("change not shown: the earlier run had no maturity model, "
+                                 "this run used maturity model fixture-1")
     now_bare = fv.compare_levels(bare, _groups())  # type: ignore[arg-type]
-    assert now_bare["note"] == ("change not shown: the earlier run used rubric fixture-1, "
-                                "this run had no rubric")
+    assert now_bare["note"] == ("change not shown: the earlier run used maturity model fixture-1, "
+                                "this run had no maturity model")
 
 
 def test_compare_levels_kinds():

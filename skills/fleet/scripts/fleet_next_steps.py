@@ -2,18 +2,18 @@
 
 Reads ``OUT/repos.jsonl`` and ``OUT/groups.jsonl`` from a ``fleet.py`` run and
 writes ``OUT/teams.md`` (an index) and one Markdown page per group under
-``OUT/teams/``: the group's level on each rubric row, the unmet criteria of
+``OUT/teams/``: the group's level on each maturity model row, the unmet criteria of
 the next level as single-change steps with the repositories holding it back,
 and for an ``unknown`` row the signals that could not be measured. No rescan;
 the logic lives in ``skills/assess/scripts/lib/fleet_next_steps.py``.
 
-Pass the rubric and settings the fleet run used: every page level is checked
+Pass the maturity model and settings the fleet run used: every page level is checked
 against ``groups.jsonl`` and a difference exits 2.
 
 Exit codes:
     0  pages written
     2  unreadable or inconsistent inputs (a missing or malformed JSONL file, an
-       invalid rubric or settings, a rubric or settings that differ from the run's)
+       invalid maturity model or settings, a maturity model or settings that differ from the run's)
 
 Run:
     uv run fleet_next_steps.py OUT [--levels FILE] [--settings PATH]
@@ -46,7 +46,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         description="Write per-team next-steps pages (Markdown) from a fleet run's output directory.")
     parser.add_argument("out", help="The fleet run's --out directory (repos.jsonl, groups.jsonl).")
     parser.add_argument("--levels", metavar="FILE", default=str(DEFAULT_LEVELS),
-                        help="The rubric the fleet run used (default: the shipped default rubric).")
+                        help="The maturity model the fleet run used (default: the shipped default maturity model).")
     parser.add_argument("--settings", metavar="PATH",
                         help="The ghreport settings the fleet run used, if any.")
     add_renamed_flag(parser)

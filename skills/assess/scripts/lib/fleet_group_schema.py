@@ -83,7 +83,7 @@ def build_schema() -> JsonDict:
         "description": (
             "One line of groups.jsonl written by skills/fleet/scripts/fleet.py: a group's "
             "repository counts, distinct shared CI sources and marketplaces, joined ghreport "
-            "settings and each rubric row's whole level. Generated from lib/fleet_groups.py "
+            "settings and each maturity model row's whole level. Generated from lib/fleet_groups.py "
             "by lib/fleet_group_schema.py."
         ),
         **schema,

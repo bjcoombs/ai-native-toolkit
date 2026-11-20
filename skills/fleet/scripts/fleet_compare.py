@@ -11,7 +11,7 @@ Exit codes:
     0  compared
     2  a run directory is missing or malformed (a stamp missing a key, a bad
        JSON line), or --write cannot be written
-    3  the runs are not comparable (different rubric version, window, output
+    3  the runs are not comparable (different maturity-model version, window, output
        mode, scan selection, path hashing, major plugin version, or either
        run's file versions); the JSON still says why
 

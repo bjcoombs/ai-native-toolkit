@@ -10,13 +10,13 @@ Reads the ``repos.jsonl`` rows ``lib/fleet.py`` builds and writes one
   failed, degraded or was left out by ``--scans``), never a false 0;
   ``shared_tooling_repos`` says how many repositories the counts rest on;
 - the group settings joined from ghreport's settings fragments (#565);
-- each rubric row's whole level, or ``unknown``, with the aggregation rule used,
+- each maturity model row's whole level, or ``unknown``, with the aggregation rule used,
   evaluated by ``lib/levels.py`` (#563), and the row's ``top_level`` (its number of
   levels, #684), so a history entry can be read as a share of top level without the
   maturity model file. There is no second threshold config. ``top_level`` is
   additive: rows written before #684 lack it, and readers fall back.
 
-Rubric inputs:
+Maturity model inputs:
 
 - ``team`` rows run against each repository's ``scans`` map, the namespace
   ``lib/level_signals.py`` validates (``nested_instructions.available``). A
@@ -26,7 +26,7 @@ Rubric inputs:
   ``level_signals.ORG_PATHS`` namespace: ``scope``, ``provider`` and
   ``<setting>.value`` / ``.reason`` (``two_factor.value`` is ``"on"`` or
   ``"off"``). A value of ``"unknown"`` becomes an unavailable block, so the
-  rubric reports the row unknown, never a false 0. A group with no matching
+  maturity model reports the row unknown, never a false 0. A group with no matching
   fragment has no settings: every org row is unknown.
 
 Settings join: a fragment's ``scope`` matches a group exactly or, failing
@@ -89,7 +89,7 @@ class GroupRow(TypedDict):
     distinct_marketplaces: int | None
     settings_scope: str | None  # the fragment joined; None when none matched
     settings: JsonDict | None  # normalised (and, counts-only, reduced) settings
-    levels_version: str | None  # None without a rubric
+    levels_version: str | None  # None without a maturity model
     levels: list[RowLevel]
 
 
@@ -179,7 +179,7 @@ def settings_signals(fragment: Mapping[str, Any] | None, settings: JsonDict | No
 
 
 def repo_signals(row: FleetRow) -> JsonDict:
-    """A repository's rubric data: its ``scans`` map, empty for a failed row."""
+    """A repository's maturity model data: its ``scans`` map, empty for a failed row."""
     return dict(row["scans"] or {})
 
 

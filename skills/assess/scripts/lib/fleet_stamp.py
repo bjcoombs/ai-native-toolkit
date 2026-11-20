@@ -2,8 +2,8 @@
 
 One JSON object per run, beside ``repos.jsonl``, saying what produced it: the
 toolkit commit and plugin version, the scan date, the history window, the
-rubric version, the output mode and the repository counts. Comparisons
-(#552) refuse or flag runs whose stamps disagree on the rubric or window.
+maturity-model version, the output mode and the repository counts. Comparisons
+(#552) refuse or flag runs whose stamps disagree on the maturity model or window.
 
 Repository counts:
 
