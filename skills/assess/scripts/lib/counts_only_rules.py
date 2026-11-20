@@ -554,6 +554,43 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
     },
 }
 
+# The fleet's ``fleet-data.json`` (lib/fleet_data.py, issue #703): field pattern -> class,
+# the dotted keys from the top of that document, list levels left out. Kept apart from
+# RULES so its field names never widen the run-context record keys ``field_names`` keeps.
+# ``key`` fields (unit and repository keys, and the references to them) are PATH: kept in
+# clear, or hashed under the run's salt with spaces allowed, so they always join; under
+# hashing a name, owner and web URL never appear. Maturity-model fields (``model.*``,
+# ``repos.rows.row`` and ``.signal``) come from the caller's --levels file, not from a
+# repository, and are kept as written, as the team next-steps pages print them.
+FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
+    "views.view": TOKEN,
+    "views.units.key": PATH,
+    "views.units.parent": PATH,
+    "views.units.view": TOKEN,
+    "views.units.kind": TOKEN,
+    "views.units.source": TOKEN,
+    "views.units.name": DROP,
+    "views.units.owners": DROP,
+    "views.units.levels.weakest.repo": PATH,
+    "views.units.overall.weakest.repo": PATH,
+    "repos.key": PATH,
+    "repos.status": TOKEN,
+    "repos.reason": TOKEN,
+    "repos.web_url": ID,
+    "repos.owners": DROP,
+    "repos.units.view": TOKEN,
+    "repos.units.unit": PATH,
+    "repos.rows.status": TOKEN,
+    "repos.rows.value": TOKEN,
+    "repos.rows.reason": TOKEN,
+}
+
+
+def classify_fleet_data(pattern: str) -> FieldClass:
+    """The class of a ``fleet-data.json`` string field; an unlisted one is dropped."""
+    return FLEET_DATA_RULES.get(pattern, DROP)
+
+
 # Every rule, flattened. A pattern listed under two blocks is a table error
 # (the tests check the flat count equals the sum of the blocks).
 FLAT_RULES: Final[dict[str, FieldClass]] = {

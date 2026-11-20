@@ -9,7 +9,10 @@ shape is ``skills/fleet/references/repos.schema.json``; the logic lives in
 line per group in ``<out>/groups.jsonl`` (``lib/fleet_groups.py``, schema
 ``skills/fleet/references/groups.schema.json``): repository counts, distinct
 shared CI sources and marketplaces, the joined ``--settings`` and each
-``--levels`` row's whole level.
+``--levels`` row's whole level. ``<out>/fleet-data.json`` (``lib/fleet_data.py``, schema
+``skills/fleet/references/fleet-data.schema.json``) holds the org units tree per view
+(``lib/fleet_units.py``; ``--units`` maps it), each unit's roll-ups and each repository's
+units, web URL and per-row level, value and reason.
 
 Target repositories are never written to. With ``--delete-after`` a scanned
 clone is removed once its row is in hand, only when nothing in it would be
@@ -37,13 +40,14 @@ Exit codes:
        count is printed to stderr. Failures never change the exit code.
     2  usage error: no root and no --from-list, a root or list that does not
        exist, no repositories found, --out inside a target, an unreadable
-       --levels or --settings (a settings directory with no fragment files included),
+       --levels, --settings or --units (a settings directory with no fragment files included,
+       or a units file naming a missing unit),
        a list entry whose ~user cannot be expanded, bad scan arguments, an --out that
        cannot be created or written (checked before any scan), an unusable history
        location, or an unreadable --compare run
 
 Run:
-    uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--jobs N] [--window 6mo]
+    uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--units FILE] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
         [--no-history] [--no-diagrams]
@@ -113,7 +117,19 @@ from lib.fleet_diagrams import (  # noqa: E402
     clear_diagrams,
     write_diagrams,
 )
+from lib.fleet_data import FLEET_DATA_FILE, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
 from lib.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups  # noqa: E402
+from lib.fleet_repo_facts import collect_facts  # noqa: E402
+from lib.fleet_units import (  # noqa: E402
+    Tree,
+    UnitsError,
+    UnitsMap,
+    build_trees,
+    empty_map,
+    load_units,
+    repo_owners,
+    unmatched_repos,
+)
 from lib.fleet_history import (  # noqa: E402
     HistoryError,
     choose_entry,
@@ -176,6 +192,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Group settings from ghreport (#565): a JSON fragment file, a JSON array of "
              "fragments, or a directory of fragment files (a ghreport --render-dir works: its "
              "settings/ subdirectory is read). Joined to each group by scope, nearest ancestor first.",
+    )
+    parser.add_argument(
+        "--units", metavar="FILE",
+        help="Org units mapping (TOML, lib/fleet_units.py format): declared units and repository "
+             "placements for the ownership and system views of OUT/fleet-data.json. It overrides "
+             "the tree inferred from repository paths, GitHub teams and CODEOWNERS.",
     )
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1,
                         help="Repositories scanned in parallel (default: CPU count).")
@@ -368,22 +390,38 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
     print(f"fleet: diagrams -> {out_dir / REPORT_FILE}", file=sys.stderr)
 
 
+def _write_fleet_data(out_dir: Path, stamp: FleetStamp, rows: list[FleetRow],
+                      maturity_model: MaturityModel | None, trees: list[Tree], full: bool,
+                      hash_salt: str | None, units: UnitsMap, codeowners: dict[str, list[str]],
+                      web_urls: dict[str, str | None]) -> None:
+    """``OUT/fleet-data.json`` (lib/fleet_data.py), before the run is kept in the history."""
+    data = build_fleet_data(stamp, rows, maturity_model, trees,
+                            owners=repo_owners(units, codeowners, (row["repo"] for row in rows)),
+                            web_urls=web_urls, privacy=privacy_for(full, hash_salt))
+    write_fleet_data(out_dir, data)
+    print(f"fleet: units: {sum(len(v['units']) for v in data['views'])} units -> {FLEET_DATA_FILE}",
+          file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     maturity_model: MaturityModel | None = None
     scans: list[str] | None = None
     settings: dict[str, JsonDict] = {}
+    units: UnitsMap = empty_map()
     try:
         if args.levels is not None:
             maturity_model = load_levels(Path(args.levels), signal_path_validator())
         if args.settings is not None:
             settings = load_settings(Path(args.settings))
+        if args.units is not None:
+            units = load_units(Path(args.units))
         if args.scans is not None:
             scans = select_scans([s.strip() for s in args.scans.split(",") if s.strip()])
         if args.window is not None:
             parse_window(args.window)
         targets = _targets(args)
-    except (LevelsError, SettingsError, UnknownScanError, ValueError, OSError) as e:
+    except (LevelsError, SettingsError, UnitsError, UnknownScanError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     if not targets:
@@ -440,6 +478,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: run history: {e} (use --history-org, --history-dir or --no-history)",
               file=sys.stderr)
         return 2
+    # Web URLs and CODEOWNERS are read before any scan, so --delete-after cannot remove a
+    # checkout first; the trees are built now, so a mapping that names a missing unit exits 2.
+    facts = collect_facts(targets, args.jobs)
+    codeowners = {repo: list(f.owners) for repo, f in facts.items()}
+    try:
+        trees = build_trees((t.repo for t in targets), units, settings, codeowners)
+    except UnitsError as e:
+        print(f"error: --units {args.units}: {e}", file=sys.stderr)
+        return 2
+    for repo in unmatched_repos(units, (t.repo for t in targets)):
+        print(f"fleet: units: {repo} is mapped but not in this run; skipped", file=sys.stderr)
     protected = [out_dir, Path.cwd(), TOOLKIT_ROOT, *([entry] if entry is not None else [])]
     deleter = CloneDeleter(protected) if args.delete_after else None
     # Cross-repo doc freshness (#664) reads both checkouts: before any scan, so
@@ -458,6 +507,8 @@ def main(argv: list[str] | None = None) -> int:
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
     )
     write_stamp(out_dir, stamp)
+    _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
+                      {repo: f.web_url for repo, f in facts.items()})
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, maturity_model)
     _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison)

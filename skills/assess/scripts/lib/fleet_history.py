@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.fleet import REPOS_FILE
+from lib.fleet_data import FLEET_DATA_FILE
 from lib.fleet_doc_freshness import FRESHNESS_FILE
 from lib.fleet_groups import GROUPS_FILE
 from lib.fleet_legacy import upgrade
@@ -52,7 +53,8 @@ HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: ru
 # Kept when the run wrote them (``doc_freshness.jsonl`` exists only when a docs
 # repository declares ``[[describes]]``, #664); moved in before ``run.json``, and
 # a same-day entry's stale copy is removed when the new run wrote none.
-OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE,)
+# ``fleet-data.json`` (#703) is optional so entries written before it still load.
+OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE, FLEET_DATA_FILE)
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$")
 _MATCH_KEYS = ("levels_version", "window", "counts_only", "scans", "paths_hashed")
 _ENTRY = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\.([1-9][0-9]*))?$")

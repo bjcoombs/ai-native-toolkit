@@ -719,7 +719,8 @@ no threshold config of its own. `load_settings` reads ghreport settings fragment
 `settings_for` joins a group to the exact scope or the nearest ancestor;
 `normalise_settings` keeps each `{value, reason}` or, for `unknown`, turns it into
 `{available: false, reason}` so `levels.resolve_signal` reads it unavailable and the
-org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
+org row is unknown, never 0; a fragment's `teams` list (#703, read by `fleet_units`) is not a
+setting (`NOT_SETTINGS`). `reduce_settings` is the counts-only form (token values,
 else `set`; a value's reason `null`, an unavailable one's `unknown`). Maturity model data follows
 `level_signals`' namespaces: `repo_signals` is a
 repository's `scans` map (a failed repository's is empty, so it is an unknown
@@ -772,6 +773,52 @@ Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
 `required`). `tests/test_fleet_groups.py` fails when the checked-in
 file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
 from `skills/assess`.
+
+**`fleet_units.py`**
+The fleet's org units (#703, parent #692): one `Tree` per view (`ownership`, `system`),
+each a sorted list of `Unit` (`id`, `name`, `kind`, `parent`, `owners`, `source`) and a
+`placement` map, repository id to unit id, so a repository sits once per view.
+`build_trees` infers the ownership view from repository paths (every prefix of a GitLab
+`path_with_namespace` group is a unit), then GitHub teams from an optional `teams` list on
+a GitHub settings fragment (deepest team wins, then the first slug), then, for a
+repository in a one-segment group that no team placed, a CODEOWNERS catch-all team handle
+under that group, and
+finally applies the `--units` mapping (`load_units` / `parse_units`, TOML `[[unit]]` and
+`[[repo]]`), which always wins. The system view comes from the mapping only. Inferred units
+with no repository left are dropped; their kind follows their place (root `org`, a unit
+holding a repository `team`, else `division` then `department`). Every fault raises
+`UnitsError` naming the entry (an unknown key or kind, a duplicate, a missing parent or
+unit, a cycle). `repo_owners` gives each repository the mapping's owners, else its
+CODEOWNERS ones; `unmatched_repos` names mapped repositories the run did not include.
+
+**`fleet_repo_facts.py`**
+What the units tree and `fleet-data.json` read from each checkout before any scan
+(#703): `web_url` normalises the `origin` remote (scp, `ssh://`, `http(s)://`) to
+`https://<host>/<path>`, dropping credentials, port and `.git`, and gives None for a
+local remote; `default_owners` takes the owners on the last catch-all rule of the first
+CODEOWNERS file in `.github/`, `.gitlab/`, the root or `docs/`, skipping GitLab section
+headers. `collect_facts` reads every target with a worker pool; a checkout that cannot be
+read gives no URL and no owners.
+
+**`fleet_data.py`**
+`fleet-data.json`, the versioned bundle the fleet artifact reads (#703, `FLEET_DATA_VERSION`;
+#704 and #705 build on it). `build_fleet_data` joins the run stamp, the maturity model rows,
+the unit trees and the repository rows. `repo_cells` evaluates each `team` row per
+repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
+or `reason` when unknown; `not_scanned` for a failed row). `row_roll_up` gives each unit,
+per team row, `fleet_maturity.mean_share` over the repositories below it, `measured` of
+`repos`, and the weakest measured repository (lowest share, then key); `overall_roll_up`
+does the same over each repository's own mean share. `org` rows stay in `groups.jsonl`.
+`Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
+names and owners and writes a non-token value as `set`; with a salt every unit and
+repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
+`write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
+
+**`fleet_data_schema.py`**
+Generates `skills/fleet/references/fleet-data.schema.json` from the `FleetData` TypedDict
+with `fleet_group_schema.type_schema`, adding the enums. `tests/test_fleet_data.py` fails
+when the checked-in file differs; regenerate with
+`uv run --locked python scripts/lib/fleet_data_schema.py` from `skills/assess`.
 
 **`fleet_view.py`**
 The shared reader for the views built on one fleet run's output (#553): the
@@ -976,8 +1023,8 @@ linked worktree, or a git call that cannot run. Outcomes never reach a row or th
 
 **`fleet_history.py`**
 The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
-and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl` when the
-run wrote one (`OPTIONAL_HISTORY_FILES`, #664; a same-day replacement without it removes
+and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl` and `fleet-data.json` when the
+run wrote them (`OPTIONAL_HISTORY_FILES`, #664 and #703; a same-day replacement without it removes
 the old copy so an entry never mixes runs). `history_root` is
 `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet` (a relative or empty
 `XDG_DATA_HOME` ignored); `default_org` is the first segment every repository id shares,
@@ -1302,7 +1349,9 @@ run-context holds with no rule. A block that degraded to the scan table's unavai
 one set of flags. `counts_only_scans` applies the filter to the `scans` map of an
 `assess_signals.py --counts-only` document and keeps each unavailable block listed with
 its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `render_doc`
-generates `references/counts-only.md`, the per-block field list. Tests:
+generates `references/counts-only.md`, the per-block field list (plus the
+`fleet-data.json` table). `hash_value` hashes one key the way a kept path is hashed, for
+the fleet's unit and repository keys (#703). Tests:
 `tests/test_counts_only.py`, `tests/test_signals_counts_only.py`.
 
 **`counts_only_rules.py`**
@@ -1315,7 +1364,9 @@ they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus th
 fields and rule segments), so a map keyed by a login or a function name is dropped
 rather than kept unhashed. Adding a run-context string field or block means adding its
 rule or field name here and regenerating `references/counts-only.md`.
-Tests: `tests/test_counts_only.py`.
+`FLEET_DATA_RULES` and `classify_fleet_data` classify the fleet's `fleet-data.json`
+fields (#703), kept apart from `RULES` so their names never widen the run-context field
+names. Tests: `tests/test_counts_only.py`, `tests/test_fleet_data.py`.
 
 **`counts_only_schema.py`**
 Derives the string fields the allow-list must cover from the block TypedDicts in

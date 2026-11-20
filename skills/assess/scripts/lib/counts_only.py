@@ -35,6 +35,7 @@ from typing import Any
 from lib.counts_only_rules import (
     DROP,
     EXTRA_FIELD_NAMES,
+    FLEET_DATA_RULES,
     ID,
     FLAT_RULES,
     IDENTIFIER_KEYED_MAPS,
@@ -215,6 +216,12 @@ def hash_path(value: str, salt: str) -> str | None:
     return _Filter(True, salt).path(value, allow_space=True)
 
 
+def hash_value(value: str, salt: str) -> str:
+    """``value`` as ``h:`` plus 16 hex digits under ``salt``, the hash every kept path gets,
+    for a key that must always hash (a fleet unit or repository key, #703)."""
+    return _Filter(True, salt)._hashed(value)
+
+
 def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
     """Field patterns in ``ctx`` that hold a string but have no rule.
 
@@ -319,6 +326,17 @@ def render_doc() -> str:
     for block, rules in RULES.items():
         lines += ["", f"## {block}", "", "| Field | Kept as |", "|---|---|"]
         lines += [f"| `{p}` | {_CLASS_LABEL[c]} |" for p, c in rules.items()]
+    lines += [
+        "", "## fleet-data.json (the fleet skill)", "",
+        "Patterns from the top of `fleet-data.json`, not of a run-context. A",
+        "unit or repository key is always kept (hashed, spaces allowed, under",
+        "path hashing); under hashing no name, owner or web URL is written.",
+        "Maturity-model fields (`model.*`, `repos.rows.row`, `repos.rows.signal`)",
+        "come from the `--levels` file and are kept as written. A string",
+        "`repos.rows.value` that is not a token is written `set`.",
+        "", "| Field | Kept as |", "|---|---|",
+    ]
+    lines += [f"| `{p}` | {_CLASS_LABEL[c]} |" for p, c in FLEET_DATA_RULES.items()]
     return "\n".join(lines) + "\n"
 
 
