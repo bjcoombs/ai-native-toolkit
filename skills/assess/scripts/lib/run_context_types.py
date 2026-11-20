@@ -606,6 +606,13 @@ class HotspotRow(TypedDict):
     source: str
 
 
+class FileCcnRow(TypedDict):
+    """One ``files`` row of complexity-stats.json: a scored file's aggregate CCN."""
+
+    path: str
+    ccn: float
+
+
 class ScoredHotspotRow(HotspotRow):
     """A row before ranking, carrying the private composite score."""
 

@@ -60,6 +60,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_change_coupling.py` | `lib/change_coupling.py` - B1 change-coupling pairs, B2 containment ratio, B4 authorship; synthetic git histories built in tmp dirs |
 | `test_coupling_analysis.py` | `lib/coupling_analysis.py` - B3 static-vs-historical disagreement; hidden-coupling, bleeding-module, and refactor-boundary classification with mocked inputs |
 | `test_doc_complexity_join.py` | `lib/doc_complexity_join.py` - Signal C: doc_value formula, slop-doc guard, threshold behaviour; mocked complexity-stats and staleness inputs |
+| `test_rename_churn.py` | `lib/git_churn.py` + `lib/doc_staleness.py` - churn counts that follow renames (issue #425): parity with `git log --follow`, twin histories with and without a rename giving the same finding, and low confidence when the rename map is incomplete |
 | `test_doc_staleness.py` | `lib/doc_staleness.py` - doc->code association (base-doc, parallel docs/, code links, repo-wide fallback), churn-relative staleness ratios, and the lying-map rule that counts only the subject's commits after the doc's last edit |
 | `test_doc_modularity.py` | `lib/doc_staleness.py` - the `modularity` block: size-weighted coverage, the large-repo flag, and a base-doc directory ratio that counts only code directories |
 | `test_structure_graph.py` | `lib/structure_graph.py` - A1 footprint additivity, A2 SCCs and Q range, A3 front-door vs burrow, A4 cut-lines, graceful degradation |
@@ -68,6 +69,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_test_pressure.py` | `lib/test_pressure/` - mutation tier output parsing, cheap heuristics (test/source ratio, assertion density, gap signal) |
 | `test_ci_workflow.py` | `lib/ci_workflow.py` - template substitution (version, branch, tool steps, path filters), path-filtered workflow detection, literal-dollar escaping, YAML well-formedness, and the `actions/checkout` pin matching this repo's gate workflow and `README.md` |
 | `test_stats_diff.py` | `lib/stats_diff.py` - hotspot transition classification (graduated, regressed, restructured, new, persistent; restructured when the worst function falls while summed complexity rises) and sidecar loading |
+| `test_stats_rows.py` | `lib/stats_rows.py` + `scripts/complexity-treemap.py` - the top-10 lists and the uncapped `files` key, that the doc-complexity join sees a complex file outside every top list, and the one-time diff disarm from the stats schema bump |
 | `test_wiki_writer.py` | `lib/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
 | `test_git_commit_info.py` | `lib/git_churn.py` (`git_commit_info`) - commit snapshot with SHA/timestamp for staleness warnings |
 | `test_instruction_bloat.py` | `lib/agent_instructions_grader.py` - size-curve penalty from 200 lines, halved by skills delegation, B cap past 400 lines or 4800 words |
@@ -79,6 +81,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_agent_instructions_grader.py` | `lib/agent_instructions_grader.py` - heuristic grading of agent instruction files, the verified-commands vs directive-monolith fixture pair, findings |
 | `test_agent_harness.py` | `lib/agent_harness.py` - the committed agent harness inventory and its secret-exposure findings: a planted fixture with one of each finding kind, a clean fixture with the near misses, and this repository |
 | `test_agent_environment.py` | `lib/agent_environment.py` - the agent working-environment block: the CI-only, eligible-for-Present and malformed `copilot-setup-steps.yml` fixtures, each setup source, check-command classification, lockfile rows, and the `gh` CI-duration probe against a fake `gh` |
+| `test_ai_usage.py` | `lib/ai_usage.py` and `lib/agent_identity.py` - exact trailer counts on a dated fixture (human-only, human plus agent, an automation `[bot]` not counted, Copilot, out-of-window and merge commits), `--scope` subtree counting, automation-bot exclusion, window resolution, the no-identity-string check, and a distinct degrade reason for no repository, a shallow clone, missing git and a timeout |
 | `test_shared_tooling.py` | `lib/shared_tooling.py` - shared CI sources and agent marketplaces: GitLab includes, GitHub reusable workflows, marketplace manifests and `extraKnownMarketplaces`, tracked-only credit, and the distinct-marketplace roll-up fixture from #550 |
 | `test_agent_ops.py` | `lib/agent_ops.py` - agent-operations guardrail scan (Layer 8 evidence) |
 | `test_anomaly_detector.py` | `lib/anomaly_detector.py` - anomaly detection on run output |
