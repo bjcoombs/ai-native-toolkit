@@ -181,6 +181,26 @@ def test_diagrams_are_drawn_from_a_real_run_and_byte_identical(tmp_path, monkeyp
     assert 'stroke-dasharray="5 4"><title>grpb/lib1 → gitlab_project:grp/ci-templates @ v5' in tooling
 
 
+def test_the_slope_chart_is_drawn_only_with_compare(tmp_path, monkeypatch, capsys):
+    root = tmp_path / "sroot"
+    make_repo(root, "grpa/svc1", files={"CLAUDE.md": "rules\n"})
+    make_repo(root, "grpb/lib1")
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
+    base = [str(root), "--rubric", "levels.toml", "--history-dir", "hist"]
+    assert fleet_cli.main([*base, "--out", "first"]) == 0
+    assert "slope.svg skipped: no earlier run compared" in capsys.readouterr().err
+    first = (tmp_path / "first" / "report.md").read_text(encoding="utf-8")
+    assert "Not drawn: skipped: no earlier run compared (no --compare, or no history entry matched this run)." in first
+    assert "[![Maturity by layer](./layer-bars.svg)](./layer-bars.svg)" in first
+    assert not (tmp_path / "first" / "slope.svg").exists()
+    assert fleet_cli.main([*base, "--out", "second", "--compare"]) == 0
+    slope = (tmp_path / "second" / "slope.svg").read_text(encoding="utf-8")
+    assert "grpa 1.00" in slope and "grpb 0.00" in slope
+    report = (tmp_path / "second" / "report.md").read_text(encoding="utf-8")
+    assert "[![Before and after](./slope.svg)](./slope.svg)" in report
+
+
 def test_a_raising_renderer_keeps_exit_0_and_the_history(froot, tmp_path, monkeypatch, capsys):
     from lib import fleet_tooling_map
 

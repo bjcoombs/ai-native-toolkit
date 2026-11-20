@@ -39,7 +39,15 @@ from collections.abc import Sequence
 from typing import TypedDict
 
 from lib import fleet_svg
-from lib.fleet_svg import CHAR_W, hatch_pattern, truncate
+from lib.fleet_svg import (  # the level ramp is shared with the layer bars
+    CHAR_W,
+    ORRD_9,
+    STEP_TEXT,
+    TEXT_DARK,
+    hatch_pattern,
+    ramp_step,
+    truncate,
+)
 
 from lib.fleet_groups import GroupRow, RubricRowLevel
 from lib.fleet_view import (
@@ -52,14 +60,6 @@ from lib.fleet_view import (
 )
 from lib.rubric import Rubric
 
-# ColorBrewer OrRd, 9 classes (colorbrewer2.org), pale to dark.
-ORRD_9 = ("#fff7ec", "#fee8c8", "#fdd49e", "#fdbb84", "#fc8d59",
-          "#ef6548", "#d7301f", "#b30000", "#7f0000")
-TOP_STEP = len(ORRD_9) - 1
-TEXT_DARK = "#1a1a1a"
-TEXT_LIGHT = "#ffffff"
-# Text colour per ramp step: dark text while it out-contrasts white.
-STEP_TEXT = (TEXT_DARK,) * 6 + (TEXT_LIGHT,) * 3
 UNKNOWN_FILL = "url(#fleet-unknown)"
 _UNKNOWN_PATTERN = hatch_pattern("fleet-unknown", "#ffffff", "#8c8c8c")
 MUTED = "#5f6368"
@@ -95,13 +95,6 @@ def columns_for(groups: Sequence[GroupRow], rubric: Rubric | None) -> list[Colum
     return [{"id": row_id, "title": by_id[row_id]["title"],
              "top": max(level["level"] for level in by_id[row_id]["levels"])}
             for row_id in ids]
-
-
-def ramp_step(level: int, top: int | None) -> int:
-    """The OrRd step for a whole level: its share of ``top``, else the level itself."""
-    if top is None or top <= 0:
-        return max(0, min(level, TOP_STEP))
-    return max(0, min((level * 2 * TOP_STEP + top) // (2 * top), TOP_STEP))
 
 
 def key_label(index: int) -> str:

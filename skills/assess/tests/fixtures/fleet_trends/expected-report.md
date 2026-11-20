@@ -19,3 +19,15 @@ Not drawn: skipped: no repositories in the run.
 Is each team improving?
 
 [![Group trends](./trend.svg)](./trend.svg)
+
+## Before and after
+
+What moved since the earlier run, and which row moved it?
+
+Not drawn: skipped: no earlier run compared (no --compare, or no history entry matched this run).
+
+## Maturity by layer
+
+Which layer is the org-wide weak spot?
+
+Not drawn: skipped: the maturity model has no team rows to measure a repository by.
