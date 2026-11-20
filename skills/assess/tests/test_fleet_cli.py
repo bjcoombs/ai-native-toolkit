@@ -162,7 +162,7 @@ def test_diagrams_are_drawn_from_a_real_run_and_byte_identical(tmp_path, monkeyp
     root = tmp_path / "droot"
     make_repo(root, "grpa/svc1", files={"CLAUDE.md": "rules\n", ".gitlab-ci.yml": _ci("v4")})
     make_repo(root, "grpa/svc2", files={".gitlab-ci.yml": _ci("v4")})
-    make_repo(root, "grpb/lib1", files={".gitlab-ci.yml": _ci("release/1.2")})
+    make_repo(root, "grpb/lib1", files={".gitlab-ci.yml": _ci("v5")})
     monkeypatch.chdir(tmp_path)
     (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
     for out in ("d1", "d2"):
@@ -173,12 +173,26 @@ def test_diagrams_are_drawn_from_a_real_run_and_byte_identical(tmp_path, monkeyp
     scans = rows["grpb/lib1"]["scans"]
     assert isinstance(scans, dict)
     assert isinstance(scans["ai_usage"]["total_commits"], int)
-    assert [e["ref"] for e in scans["shared_tooling"]["ci_includes"]] == ["release/1.2"]
+    assert [e["ref"] for e in scans["shared_tooling"]["ci_includes"]] == ["v5"]
     quadrant = (tmp_path / "d1" / "quadrant.svg").read_text(encoding="utf-8")
     assert "grpa/svc1: " in quadrant  # plotted, with its tooltip
     tooling = (tmp_path / "d1" / "shared-tooling.svg").read_text(encoding="utf-8")
     assert "1 pinned off the fleet's most common ref (dashed)" in tooling
-    assert 'stroke-dasharray="5 4"><title>grpb/lib1 → gitlab_project:grp/ci-templates @ release/1.2' in tooling
+    assert 'stroke-dasharray="5 4"><title>grpb/lib1 → gitlab_project:grp/ci-templates @ v5' in tooling
+
+
+def test_a_raising_renderer_keeps_exit_0_and_the_history(froot, tmp_path, monkeypatch, capsys):
+    from lib import fleet_tooling_map
+
+    def bug(*_args: object) -> str:
+        raise RuntimeError("render bug")
+    monkeypatch.setattr(fleet_tooling_map, "render_tooling_map", bug)
+    monkeypatch.chdir(tmp_path)
+    assert fleet_cli.main([str(froot), "--out", "out", "--history-dir", "hist"]) == 0
+    assert sorted(p.name for p in (tmp_path / "hist").glob("*/*/*")) == ["groups.jsonl", "repos.jsonl", "run.json"]
+    report = (tmp_path / "out" / "report.md").read_text(encoding="utf-8")
+    assert "Not drawn: skipped: drawing failed (RuntimeError)." in report
+    assert "shared-tooling.svg skipped: drawing failed (RuntimeError)." in capsys.readouterr().err
 
 
 def test_no_diagrams_draws_nothing_and_removes_a_previous_runs(froot, tmp_path, monkeypatch, capsys):

@@ -2183,7 +2183,7 @@ ci_source_ids[], marketplace_ids[]}`. `ci_includes` rows (`kind`, `source`, `id`
 (`github_reusable_workflow`, keyed on the repository). `ref` is the pin kept apart
 from the id (#674): a GitLab include item's own `ref:` (joined by include item, so a
 `ref:` under `inputs:` is not it), a component's or workflow's `@ref`, `null` when
-unpinned; counts-only keeps it as an `ID` (hashed with `--hash-paths`, equality still holds). Local includes, templates,
+unpinned; counts-only keeps it when it is a token (`v4`, `1.2.0`, a SHA) and drops it otherwise (`release/1.2`). Local includes, templates,
 `./.github/workflows` references, a job's `trigger:`, keys in nested lists
 (`inputs:`, `rules:`), step-level `uses:` and `run:` script text are skipped.
 Symlinks and paths resolving outside the repository are not read. `marketplaces`

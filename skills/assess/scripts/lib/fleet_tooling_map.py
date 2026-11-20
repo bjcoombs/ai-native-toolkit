@@ -33,7 +33,7 @@ from lib.fleet_svg import THEMED_HATCH
 TITLE = "Fleet shared tooling"
 FILE = "shared-tooling.svg"
 PAD = 16.0
-TOP = 96.0
+TOP = 112.0
 ROW_H = 26.0
 CURVE_W = 300.0
 MAX_REPO_LABEL = 48
@@ -162,6 +162,9 @@ def render_tooling_map(view: ToolingView) -> str:
     body = [svg.text(PAD, PAD + 18, TITLE, size=18, weight="bold", cls="fg"),
             svg.text(PAD, PAD + 40, f"{len(repos)} repositories → {len(items)} shared CI sources "
                      f"and marketplaces · {drift_note}", cls="muted"),
+            svg.text(PAD, PAD + 58, "Drift: a CI pin that differs from the most common ref the fleet "
+                     "pins for that source (ties: the lexically greatest ref); unpinned is not drift.",
+                     size=11.5, cls="muted"),
             svg.text(lx - 12, TOP - 22, "REPOSITORY", size=11, anchor="end", cls="muted"),
             svg.text(rx, TOP - 22, "SHARED ITEM · DEPENDENTS", size=11, cls="muted")]
     for link in links:

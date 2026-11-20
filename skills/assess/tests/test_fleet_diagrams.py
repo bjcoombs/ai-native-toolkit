@@ -165,14 +165,29 @@ def test_a_dropped_ref_is_pin_unknown_never_in_step():
     assert "pinned v1 · 1 unpinned" in text
 
 
-def test_counts_only_keeps_a_ref_with_a_slash():
+def test_counts_only_keeps_a_token_ref_and_drops_a_slash_ref_to_pin_unknown():
     from lib.counts_only import counts_only_scans
     block = {"available": True, "ci_includes": [{"kind": "gitlab_project", "source": "s",
                                                  "id": "gitlab_project:x", "ref": "release/1.2",
                                                  "path": ".gitlab-ci.yml", "line": 1, "tracked": True}],
              "marketplaces": [], "ci_source_ids": ["gitlab_project:x"], "marketplace_ids": []}
     out = counts_only_scans({"shared_tooling": block})
-    assert out["shared_tooling"]["ci_includes"][0]["ref"] == "release/1.2"
+    assert "ref" not in out["shared_tooling"]["ci_includes"][0]
+    row: FleetRow = {"fleet_row_version": 2, "repo": "g/r", "group": "g", "status": "ok", "reason": None,
+                     "signals_schema_version": 1, "active": True, "scans": out}
+    assert ftm.tooling_view([row])["links"][0]["pin_unknown"] is True
+    block["ci_includes"][0]["ref"] = "v4.1"
+    assert counts_only_scans({"shared_tooling": block})["shared_tooling"]["ci_includes"][0]["ref"] == "v4.1"
+
+
+def test_a_raising_renderer_is_a_skip_line_naming_the_error(monkeypatch):
+    def bug(*_args: object) -> str:
+        raise ValueError("render bug")
+    monkeypatch.setattr(fq, "render_quadrant", bug)
+    diagrams = fd.build_diagrams(_levels(), _repos(), WINDOW)
+    assert diagrams[0]["skipped"] == "skipped: drawing failed (ValueError)."
+    assert diagrams[1]["svg"] is not None  # the other diagram is still drawn
+    assert "Not drawn: skipped: drawing failed (ValueError)." in fd.report_markdown(diagrams)
 
 
 def test_drift_is_a_pin_off_the_fleets_most_common_ref():

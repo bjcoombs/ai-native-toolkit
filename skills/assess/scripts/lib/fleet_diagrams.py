@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TypedDict
 
@@ -63,9 +63,24 @@ def _tooling(repos: Sequence[FleetRow]) -> Diagram:
     return entry
 
 
+def _guarded(build: Callable[[], Diagram], file: str, title: str, question: str) -> Diagram:
+    """One diagram; a renderer that raises becomes a skip line naming the error class, so one
+    broken picture never costs the others, the report or the run."""
+    try:
+        return build()
+    except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
+        return {"file": file, "title": title, "question": question, "svg": None,
+                "skipped": f"skipped: drawing failed ({type(e).__name__})."}
+
+
 def build_diagrams(levels: Rubric | None, repos: Sequence[FleetRow], window: str) -> list[Diagram]:
-    """Every diagram for one run, in report order."""
-    return [_quadrant(levels, repos, window), _tooling(repos)]
+    """Every diagram for one run, in report order; never raises for a diagram's sake."""
+    return [
+        _guarded(lambda: _quadrant(levels, repos, window), fleet_quadrant.FILE,
+                 "Activity and maturity", "Which busy repositories are least mature?"),
+        _guarded(lambda: _tooling(repos), fleet_tooling_map.FILE, "Shared tooling",
+                 "What breaks if a shared template changes, and who drifted off it?"),
+    ]
 
 
 def report_markdown(diagrams: Sequence[Diagram]) -> str:
