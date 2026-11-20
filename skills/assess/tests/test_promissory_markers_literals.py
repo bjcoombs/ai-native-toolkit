@@ -348,7 +348,7 @@ def test_summary_is_byte_stable_whatever_order_rg_returns(
 
     def reversed_rg(cmd: list[str], cwd: Path) -> str:
         out = real_run(cmd, cwd)
-        return "\n".join(reversed(out.splitlines())) if cmd[0] == "rg" else out
+        return "\n".join(reversed(out.splitlines())) if "--no-heading" in cmd else out
 
     monkeypatch.setattr(pm, "_run", reversed_rg)
     assert dump() == forward

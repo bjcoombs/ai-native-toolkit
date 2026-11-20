@@ -62,6 +62,7 @@ from lib.signals import (  # noqa: E402
     parse_window,
     select_scans,
 )
+from lib.tool_lookup import warn_missing_packages  # noqa: E402
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -111,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    warn_missing_packages()  # a no-uv run: say how to install what the layer blocks need
     document = build_document(repo_root, requested, args.window)
     if args.counts_only:
         # Content-free mode: free text, identities and the target's commit

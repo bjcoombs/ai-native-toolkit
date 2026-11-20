@@ -665,6 +665,19 @@ map reads `no_ownership_map` (the full run omits the block), and `stats_summary`
 lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
 
+**`tool_lookup.py`**
+Finds the external tools the headless scans need, Windows included (#711). `find_rg`
+resolves ripgrep from `RG_PATH` (when it names a file), then `shutil.which`, then on
+Windows only the WinGet package folder
+`%LOCALAPPDATA%\Microsoft\WinGet\Packages\BurntSushi.ripgrep*` (searched recursively
+for `rg.exe`, last path in sorted order), since a user-scope winget install may not create the
+`Links` alias. `RG_MISSING_REASON` names the three lookups and keeps the substring
+`rg not on PATH` that `headless_layers.promissory_markers` maps to `no_rg`.
+`missing_packages` lists the layer 2-4 packages (networkx, grimp, `lizard==1.23.0`) that
+do not import, and `warn_missing_packages` prints the `pip_hint` no-uv install line to
+stderr; `assess_signals.py` and `fleet.py` call it once before scanning. Advisory only:
+exit codes do not change. Standard library only. Tests: `tests/test_tool_lookup.py`.
+
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
 `SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, a `scans` map
@@ -1835,7 +1848,8 @@ deadline can go stale too. The `unactioned_intent` action states the
 `stale_touches_threshold` it applied. Honours the shared excludes and the
 generated-file filter (codegen `ignore_for_file` boilerplate is not debt), and
 degrades aging to `aging_reliable: False` on degenerate history (same verdict as
-`git_churn`).
+`git_churn`). The `rg` binary comes from `tool_lookup.find_rg`, resolved once per
+scan; when none runs the scan is unavailable with `tool_lookup.RG_MISSING_REASON`.
 Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
 sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
