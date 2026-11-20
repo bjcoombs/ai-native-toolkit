@@ -20,7 +20,9 @@
     },
     {
       "name": "lying_map",
-      "paths": []
+      "paths": [
+        "skills/assess/tests/README.md"
+      ]
     },
     {
       "name": "unexplained_complexity",
