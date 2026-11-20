@@ -26,6 +26,16 @@ reads (``origin``, else the sole remote):
   succeeds. Any probe failure means "not GitLab", so the caller degrades
   exactly as it did before this seam existed.
 
+Protected branches (:func:`branch_protection`): the rule covering a branch is
+read from ``projects/<id>/protected_branches``. A rule named exactly as the
+branch wins; otherwise the first rule, in name order, whose name read as a
+wildcard (``*`` is GitLab's only wildcard) matches. "Unprotected" is said only
+from a readable, complete list (fewer than ``PROTECTED_PAGE`` rules) with no
+covering rule. A full page with no cover falls back to the single-branch read
+(``protected_branches/<branch>``, the ``ghreport`` fallback); when that too has
+no answer the read raises ``truncated``. A 403 or 404 on GitLab usually means
+"no access", so it raises like any other refusal, never "unprotected".
+
 Typical use::
 
     try:
@@ -84,6 +94,10 @@ _UNREACHABLE_RE = re.compile(
     r"|network is unreachable|tls handshake|i/o timeout",
     re.IGNORECASE,
 )
+
+
+# GitLab's REST page maximum; a protected-branch list this long may continue.
+PROTECTED_PAGE = 100
 
 
 @dataclass(frozen=True)
@@ -223,3 +237,42 @@ def glab_api(project: GitlabProject, path: str) -> Any:
         raise GhUnavailable(
             f"glab_bad_json: `glab {' '.join(args)}` did not return JSON"
         ) from None
+
+
+def branch_pattern(name: str) -> re.Pattern[str]:
+    """A GitLab protected-branch name as a regex: ``*`` is the only wildcard."""
+    return re.compile("^" + ".*".join(re.escape(p) for p in name.split("*")) + "$")
+
+
+def branch_protection(project: GitlabProject, branch: str) -> dict[str, Any] | None:
+    """The protected-branch rule covering ``branch``, or None when unprotected.
+
+    See the module docstring for the matching order. Raises GhUnavailable on
+    any refused or malformed read, and when the list may be incomplete.
+    """
+    enc = project.encoded
+    got = glab_api(project, f"projects/{enc}/protected_branches?per_page={PROTECTED_PAGE}")
+    if not isinstance(got, list):
+        raise GhUnavailable("glab_bad_json: the protected branch list was not a list")
+    rules = [r for r in got if isinstance(r, dict) and isinstance(r.get("name"), str)]
+    if len(rules) != len(got):
+        raise GhUnavailable("glab_bad_json: a protected branch has no name")
+    exact = next((r for r in rules if r["name"] == branch), None)
+    if exact is not None:
+        return exact
+    wild = sorted((r for r in rules if "*" in r["name"]), key=lambda r: str(r["name"]))
+    cover = next((r for r in wild if branch_pattern(r["name"]).match(branch)), None)
+    if cover is not None:
+        return cover
+    if len(got) < PROTECTED_PAGE:
+        return None
+    try:
+        single = glab_api(project, f"projects/{enc}/protected_branches/{quote(branch, safe='')}")
+    except GhUnavailable as e:
+        raise GhUnavailable(
+            f"truncated: {len(got)} protected branches listed without {branch}"
+            f" and the single-branch read gave no answer ({e.reason})"
+        ) from None
+    if not isinstance(single, dict):
+        raise GhUnavailable("glab_bad_json: the protected branch was not an object")
+    return single
