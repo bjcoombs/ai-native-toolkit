@@ -767,6 +767,41 @@ checkout that is not a main clone at its work-tree root, one holding a protected
 output, a stash, a commit on `HEAD` or any ref (`rev-list --all`) that no remote branch holds, a
 linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
 
+**`fleet_history.py`**
+The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
+and `run.json` kept in `<root>/<org>/<scan_date>/`. `history_root` is
+`${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet` (a relative or empty
+`XDG_DATA_HOME` ignored); `default_org` is the first segment every repository id shares,
+or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` rejects a
+name that is not one plain path component, `entry_dir` refuses a symlinked directory on
+the way, and `entry_conflict` keeps a same-day entry that is not this tool's (no readable
+`run.json` at the current stamp version) or whose stamp differs in rubric version,
+window, output mode, scan selection or path hashing, or that holds a different
+repository set (`entry_repos`), so a partial rerun never replaces a full-fleet entry;
+`choose_entry` then moves to
+`<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
+`latest_matching` finds the newest matching entry, preferring one over the same
+repository set, the default for a bare `--compare`.
+`persist` only `os.replace`s the three files (`run.json` last) and never deletes.
+
+**`fleet_compare.py`**
+Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
+`skills/fleet/scripts/fleet_compare.py`. `load_run` reads a run directory (raising
+`RunVersionError` for another envelope version or a run with no `run.json`, which callers
+turn into a not-comparable result). `comparability` reuses
+`diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
+adds rubric version, window, output mode, scan selection and path hashing; any reason
+gives `comparable: false` with no deltas. `compare` reports the measured-set movement
+(`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
+the row's `active`) apart from level movement: each group's rubric rows then and now with
+a `cause` of `level` (set unchanged), `set` (only the set moved) or `set_and_level` (the
+set and the evidence moved; team rows read repository signals, org rows the group's
+settings). `signal_changes` lists the changed leaves of each repository's `scans` map.
+`write_comparison` writes `compare.json` atomically; `clear_stale_comparison` removes
+only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate
+`heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
+plus the groups whose set moved), so the level-only view and `compare.json` share one rule.
+
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by
 `skills/fleet/scripts/fleet_labels.py`. `digest` reduces a `FleetRow` to the facts a
@@ -2122,7 +2157,7 @@ The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
 hyphenated stem also matched as underscores, plus the one cross-extension rule
 from issue #593: `<stem>.bats` for a `.sh` or extensionless script, and any
 `*.bats` file is a test; `run.sh` and an extensionless `run` share the flat
-key `run.bats`), the adjacent test directories
+key `run.bats` and are rivals for a parallel-tree `run.bats`, issue #635), the adjacent test directories
 (`__tests__/` / `tests/` / `test/` / `spec/`), and the is-this-a-test rule, plus a
 layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
