@@ -207,6 +207,13 @@ def counts_only(
     return _Filter(hash_paths, salt).mapping("", ctx)
 
 
+def hash_path(value: str, salt: str) -> str | None:
+    """``value`` hashed as ``counts_only(..., hash_paths=True, salt=salt)`` hashes
+    a path, so a fleet file written beside the scans joins with them; None when
+    ``value`` is not path-like."""
+    return _Filter(True, salt).path(value)
+
+
 def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
     """Field patterns in ``ctx`` that hold a string but have no rule.
 

@@ -14,7 +14,9 @@ shared CI sources and marketplaces, the joined ``--settings`` and each
 Target repositories are never written to. With ``--delete-after`` a scanned
 clone is removed once its row is in hand, only when nothing in it would be
 lost (``lib/fleet_cleanup.py``). Every run also writes the run stamp
-``<out>/run.json`` (``lib/fleet_stamp.py``).
+``<out>/run.json`` (``lib/fleet_stamp.py``). A docs repository that declares
+``[[describes]]`` mappings gets one row per mapping in ``<out>/doc_freshness.jsonl``
+(``lib/fleet_doc_freshness.py``); without any, no such file is written.
 
 A counts-only run is also kept in the run history,
 ``${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet/<org>/<date>/``
@@ -75,6 +77,7 @@ from lib.fleet import (  # noqa: E402
     write_rows,
 )
 from lib.fleet_activity import window_start  # noqa: E402
+from lib.fleet_doc_freshness import freshness_rows, summary_line, write_freshness  # noqa: E402
 from lib.fleet_cleanup import CloneDeleter  # noqa: E402
 from lib.fleet_compare import (  # noqa: E402
     FleetRun,
@@ -370,6 +373,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     protected = [out_dir, Path.cwd(), TOOLKIT_ROOT, *([entry] if entry is not None else [])]
     deleter = CloneDeleter(protected) if args.delete_after else None
+    # Cross-repo doc freshness (#664) reads both checkouts: before any scan, so
+    # --delete-after cannot remove one first. Opt-in: nothing without [[describes]].
+    freshness = freshness_rows(targets, full=args.full, hash_salt=hash_salt)
+    for message in freshness.errors:
+        print(f"fleet: describes: {message}", file=sys.stderr)
+    freshness_path = write_freshness(out_dir, freshness.rows)
     rows = run_fleet(targets, options, args.jobs, after=deleter)
     path = write_rows(out_dir, rows)
     groups = roll_up(rows, rubric, settings, counts_only=not args.full)
@@ -386,6 +395,9 @@ def main(argv: list[str] | None = None) -> int:
           file=sys.stderr)
     for row in failed:
         print(f"  failed: {row['repo']} ({row['reason']})", file=sys.stderr)
+    if freshness_path is not None:
+        print(f"fleet: doc freshness: {summary_line(freshness.rows)} -> {freshness_path.name}",
+              file=sys.stderr)
     if deleter is not None:
         _report_deletions(deleter)
     return 0

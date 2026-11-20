@@ -81,6 +81,7 @@ from lib.git_churn import (
     tracked_files,
 )
 from lib.change_coupling import RenameMap
+from lib.fleet_doc_freshness import DeclaredMapping, declared_block
 from lib.run_context_types import BulkCommit, DocToCodeEdge
 
 
@@ -146,6 +147,8 @@ class DocStalenessBlock(TypedDict):
     history_boundary_date: str | None
     association: DocAssociation
     modularity: DocModularity
+    # ``[[describes]]`` cross-repo mappings (#664): listed, measured only by /fleet.
+    declared_cross_repo: NotRequired[list[DeclaredMapping]]
 
 
 # A repo at or above this many hand-written code files is "large" enough that
@@ -664,7 +667,8 @@ def analyze_doc_staleness(
     pct_code_under_base = code_under_base / len(code_files) if code_files else 0.0
     pct_docs_mapping = docs_mapping_to_code / len(docs) if docs else 0.0
 
-    return {
+    declared = declared_block(repo_root)
+    block: DocStalenessBlock = {
         "available": True,
         "churn_window": churn_label,
         # Churn-measurement reliability, independent of doc->code association
@@ -703,3 +707,6 @@ def analyze_doc_staleness(
             code_files, base_doc_dirs, code_dirs, pct_code_under_base,
         ),
     }
+    if declared:  # omitted when nothing is declared: the feature is opt-in
+        block["declared_cross_repo"] = declared
+    return block

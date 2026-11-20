@@ -26,6 +26,13 @@ working_notes_ignore = ["docs/chapters"]
 [[generated]]
 path = "notes"
 source = "data/jira.tsv"
+
+# Cross-repo doc freshness (issue #664), measured by /fleet only: `path` (a doc
+# or folder here) describes `scope` (required, paths inside fleet repo `repo`).
+[[describes]]
+path = "services/billing.md"
+repo = "grp/billing"
+scope = ["api/"]
 ```
 
 The exclude lists feed every scan. There is no per-scan override knob -
@@ -338,6 +345,104 @@ def load_generated_sources(repo_root: Path) -> list[tuple[str, list[str]]]:
             continue
         out.append((path.strip(), sources))
     return out
+
+
+class DescribesMapping(TypedDict):
+    """One valid ``[[describes]]`` entry: repo-relative POSIX paths."""
+
+    path: str
+    repo: str
+    scope: list[str]
+
+
+class DescribesConfig(NamedTuple):
+    """``load_describes``: the valid mappings and one message per rejected entry."""
+
+    mappings: list[DescribesMapping]
+    errors: list[str]
+
+
+SCOPE_REMEDIATION = (
+    "name the documented surface inside the service, for example "
+    'scope = ["api/"], ["openapi.yaml"] or ["proto/"]; '
+    'scope = ["."] maps the whole repository and is reported as low confidence'
+)
+
+
+def _clean_rel(raw: object, *, allow_root: bool) -> str | None:
+    """``raw`` as a repo-relative POSIX path, or None when it is not one.
+
+    These become git pathspecs, so an absolute path, a ``..`` segment and a
+    leading ``:`` (pathspec magic) are rejected rather than resolved.
+    """
+    if not isinstance(raw, str):
+        return None
+    path = raw.strip().replace("\\", "/")
+    if path.startswith(("/", ":", "~")) or not path.isprintable():
+        return None
+    while path.startswith("./"):
+        path = path[2:]
+    path = path.rstrip("/")
+    if path == ".":
+        return path if allow_root else None
+    if not path or ".." in path.split("/"):
+        return None
+    return path
+
+
+def _describes_entry(i: int, entry: object) -> DescribesMapping | str:
+    """A valid mapping, or the message saying why entry ``i`` is rejected."""
+    where = f"[[describes]] entry {i}"
+    if not isinstance(entry, dict):
+        return f"{where} is not a table"
+    path = _clean_rel(entry.get("path"), allow_root=False)
+    if path is None:
+        return f"{where} needs path = a doc or folder relative to this repository's root"
+    where = f"{where} (path = {path!r})"
+    repo = entry.get("repo")
+    if not isinstance(repo, str) or not repo.strip() or any(c.isspace() for c in repo.strip()):
+        return f"{where} needs repo = a fleet repository id such as \"grp/billing\""
+    if "scope" not in entry:
+        return f"{where} has no scope: {SCOPE_REMEDIATION}"
+    raw = entry["scope"]
+    raws = [raw] if isinstance(raw, str) else raw if isinstance(raw, list) else []
+    scope = [_clean_rel(s, allow_root=True) for s in raws]
+    if not scope or any(s is None for s in scope):
+        return f"{where} has an empty or invalid scope {raw!r}: {SCOPE_REMEDIATION}"
+    return {"path": path, "repo": repo.strip().strip("/"),
+            "scope": sorted({s for s in scope if s is not None})}
+
+
+def load_describes(repo_root: Path) -> DescribesConfig:
+    """Return the ``[[describes]]`` cross-repo doc mappings (issue #664).
+
+    A docs repository declares which service surface each of its docs describes,
+    so ``/fleet`` can count the service commits since the doc last changed::
+
+        [[describes]]
+        path = "services/billing.md"   # a doc or folder in this repository
+        repo = "grp/billing"           # a repository id in the fleet
+        scope = ["api/"]               # required: the documented surface
+
+    Unlike the other loaders this one does not skip a bad entry silently: a
+    mapping nobody can measure must be visible, so each rejected entry yields a
+    message (a missing ``scope`` names the remediation). Only declared mappings
+    are ever used; nothing is inferred from links in the docs.
+    """
+    raw = load_config(repo_root).get("describes")
+    if raw is None:
+        return DescribesConfig([], [])
+    if not isinstance(raw, list):
+        return DescribesConfig([], ["describes must be an array of tables: [[describes]]"])
+    mappings: list[DescribesMapping] = []
+    errors: list[str] = []
+    for i, entry in enumerate(raw, 1):
+        parsed = _describes_entry(i, entry)
+        if isinstance(parsed, str):
+            errors.append(parsed)
+        else:
+            mappings.append(parsed)
+    return DescribesConfig(mappings, errors)
 
 
 def load_excludes(repo_root: Path) -> tuple[set[str], list[str]]:
