@@ -875,6 +875,8 @@ def test_help_documents_gitlab_flags(env: Env) -> None:
         "--partial",
         "--filter",
         "--shallow-since",
+        "--active-since",
+        "--porcelain-json",
     ):
         assert flag in res.stdout, flag
     # The whole header block prints, ending at its closing rule.
