@@ -80,7 +80,19 @@ constant each.
 # (lib.scc_coverage, issue #590), and run-context.json copies it into
 # stats_summary and reports a COMPLEXITY_UNRELIABLE anomaly when it is non-empty.
 # Additive. STATS_SCHEMA_VERSION moves 6->7. No ranking or finding moves.
-ARTIFACT_SCHEMA_VERSION = "1.11.0"
+# 1.11.0 (also): doc_staleness gains history_truncated and
+# history_boundary_date, and its rows (and stale_hubs) an optional
+# last_commit_days_bound: "lower" (issue #544). Additive; complexity-stats.json
+# is unchanged.
+# 1.12.0: instruction files are scored on always-on size and share (issue #560).
+# Each instruction_files and nested_instructions.files entry gains the
+# subscores always_on_lines, always_on_pct, fetch_on_need_lines,
+# always_on_flagged, always_on_penalty and relocatable_penalty, and
+# instruction_file_size gains always_on_lines (and the subscores and each
+# instruction_placement record always_on_words). bloat_penalty is now their
+# penalties' sum and size_grade_capped reads always-on lines. Additive: no key
+# moves or changes type, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.12.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -103,6 +115,11 @@ ARTIFACT_SCHEMA_VERSION = "1.11.0"
 # 5: a CLAUDE.md identical to its AGENTS.md below the header (H1 and leading
 #    HTML comments) is the informational mirrored_instruction_files, not the
 #    capping claude_shadows_agents (issue #589).
-# 6: a bats suite is a test file and credits its shell script (issue #593), so a
+# 6: on a shallow clone every doc-staleness row is confidence "low", which keeps
+#    it out of lying_map and halves its stale-hub priority (issue #544). A full
+#    clone's findings do not move.
+# 7: instruction files are graded on always-on size and share instead of the
+#    whole-file size curve (issue #560), which moves instruction grades.
+# 8: a bats suite is a test file and credits its shell script (issue #593), so a
 #    co-located ``<stem>.bats`` can now produce self_referential_tests (E2).
-ASSESS_METHOD_VERSION = 6
+ASSESS_METHOD_VERSION = 8

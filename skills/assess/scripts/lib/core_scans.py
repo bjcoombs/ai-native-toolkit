@@ -165,7 +165,7 @@ def skills_blocks(grading: tuple[Any, ...]) -> dict[str, Any]:
 
 
 def instruction_sizes(instruction_files: dict[str, Any]) -> Any:
-    """Per-file size curve and bloat penalty."""
+    """Per-file size, always-on lines and size penalty."""
     return instruction_file_size(instruction_files)
 
 
