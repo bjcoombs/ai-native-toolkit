@@ -69,6 +69,9 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org meridianhub --root ~/dev/gith
 | `--dry-run` | Show what would be cloned/updated without making changes. On GitLab it creates no directory and writes no `.gh_archived_repos`; on GitHub it still refreshes `.gh_archived_repos` in the root |
 | `--limit N` | Process only the first N repos (useful for a quick test) |
 | `--quiet` | Suppress per-repository chatter, including the `Cloning` / `Cloned` lines; keep failures and the final summary |
+| `--partial` | Shorthand for `--filter blob:none` |
+| `--filter SPEC` | New clones only: pass `--filter=SPEC` to `git clone` (after `--` on `gh repo clone`). `blob:none` keeps full history and fetches file contents only for the checkout. See [Analysis-only mirrors](#analysis-only-mirrors) |
+| `--shallow-since DATE` | New clones only: pass `--shallow-since=DATE` to `git clone`, cutting history before DATE (single-branch). See [Analysis-only mirrors](#analysis-only-mirrors) |
 | `--org NAME` | GitHub only. Org or personal account to sync (default: basename of `--root` / cwd) |
 | `--list-teams` | GitHub only. List your teams in the org (with repo counts) and exit; orgs only |
 | `--host HOST` | GitLab only. Host to sync (default: `gitlab.com`); `https://` and a trailing `/` are accepted, and so is a web port (`host:8443`) |
@@ -142,6 +145,35 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab --host gitlab.exa
 
 Step 2 builds the same layout as a discovery run and makes no API call.
 Edit the list to drop projects; `--limit` applies to it too.
+
+## Analysis-only mirrors
+
+For a root that is cloned to be scanned once (for example by `/assess`)
+rather than worked in, `--partial` and `--shallow-since` cut clone time
+and disk:
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org my-org --partial
+bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org my-org --shallow-since 2025-01-01
+```
+
+- **Partial clones still fetch blobs for content-reading scans.** A
+  `blob:none` clone has every commit and tree, so `git log --name-only` and
+  churn and staleness scans match a full clone. Any git command that reads
+  file contents from history fetches the missing blobs lazily from the
+  remote, one round trip at a time: `git log -M` rename detection,
+  `--numstat`, and `git blame` in the `/assess` scans all do. Expect those
+  scans to be slow and to need network access.
+- **`--shallow-since` drops history before DATE**, which changes churn and
+  staleness results. The clone is single-branch, so a worktree added
+  later for another branch never sees that branch move. A repository with no commits after DATE may come back
+  with its full history instead.
+- **Existing clones are never converted.** These flags apply only to
+  repositories cloned in this run; a sync of an existing clone only
+  fetches and fast-forwards, so a full clone stays full. Git records the
+  mode in each clone, so downstream tools read it there rather than from a
+  marker file: `git config remote.origin.partialclonefilter` and
+  `git rev-parse --is-shallow-repository`.
 
 ## Layout produced
 

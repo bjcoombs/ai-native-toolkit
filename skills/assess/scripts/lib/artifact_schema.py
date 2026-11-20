@@ -65,14 +65,18 @@ constant each.
 # uncapped and sorted by path, read by the doc-complexity join (issue #556).
 # Additive; run-context.json is unchanged. STATS_SCHEMA_VERSION moves 5->6, so
 # the cross-run diff is disarmed once against a pre-#556 snapshot.
-# 1.9.0: instruction files are scored on always-on size and share (issue #560).
+# 1.9.0: run-context.json gains doc_claims (issue #491): the instruction-claim
+# kinds verified across the doc set, and cross-document contradictions (two
+# files giving one checkable claim different values, every site cited).
+# Additive; complexity-stats.json is unchanged.
+# 1.10.0: instruction files are scored on always-on size and share (issue #560).
 # Each instruction_files and nested_instructions.files entry gains the
 # subscores always_on_lines, always_on_pct, fetch_on_need_lines,
 # always_on_flagged, always_on_penalty and relocatable_penalty, and
 # instruction_file_size gains always_on_lines. bloat_penalty is now their
 # penalties' sum and size_grade_capped reads always-on lines. Additive: no key
 # moves or changes type, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.9.0"
+ARTIFACT_SCHEMA_VERSION = "1.10.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

@@ -50,6 +50,7 @@ from lib.config_drift import scan_config_drift
 from lib.degrade import safe as safe  # re-exported: callers import it from here
 from lib.degrade import unavailable
 from lib.coverage_gate import detect_coverage_gate
+from lib.doc_claims import scan_doc_claims
 from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
@@ -536,6 +537,15 @@ SCANS: tuple[ScanSpec, ...] = (
     # excluded. Matcher: lib.agent_identity.
     ScanSpec(
         "ai_usage", scan_ai_usage, ("repo_root", "scope", "history_window"), STAGE_POST_OFFERS,
+    ),
+    # Checkable claims across the doc set (issue #491): the instruction_claims
+    # kinds run over docs/ (minus the historical design records),
+    # skills/*/references/ and skills/*/SKILL.md, plus the cross-document kind
+    # - two files pinning different versions in one file or counting one glob
+    # differently, citing every site. Layer 0 lying-signal evidence.
+    ScanSpec(
+        "doc_claims", scan_doc_claims,
+        ("repo_root", "instruction_files", "scope", "excludes"), STAGE_POST_OFFERS,
     ),
 )
 
