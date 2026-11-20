@@ -102,8 +102,11 @@ def load_settings(path: Path) -> dict[str, JsonDict]:
     """ghreport settings fragments by scope, from a file (object or array) or a directory."""
     if not path.exists():
         raise SettingsError(f"settings {path}: not found")
+    files = _fragments_in(path)
+    if not files:
+        raise SettingsError(f"settings {path}: no fragment files (*.json)")
     by_scope: dict[str, JsonDict] = {}
-    for file in _fragments_in(path):
+    for file in files:
         try:
             data: Any = json.loads(file.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
@@ -119,7 +122,7 @@ def load_settings(path: Path) -> dict[str, JsonDict]:
 
 
 def normalise_settings(fragment: Mapping[str, Any]) -> JsonDict:
-    """Each setting as ``{value}``, or ``{available: false, reason}`` when unknown or malformed."""
+    """Each setting as ``{value, reason}``, or ``{available: false, reason}`` when unknown or malformed."""
     out: JsonDict = {}
     for key in sorted(k for k in fragment if k not in SETTINGS_META_KEYS):
         raw = fragment[key]
@@ -133,7 +136,10 @@ def normalise_settings(fragment: Mapping[str, Any]) -> JsonDict:
 
 
 def reduce_settings(settings: JsonDict) -> JsonDict:
-    """The counts-only form: token values kept, any other value ``set``, reasons dropped."""
+    """The counts-only form: token values kept, any other value ``set``.
+
+    Reasons are dropped: ``null`` beside a value, ``unknown`` on an unavailable setting.
+    """
     out: JsonDict = {}
     for key, block in settings.items():
         if block.get("available") is False:

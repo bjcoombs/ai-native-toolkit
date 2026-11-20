@@ -126,6 +126,8 @@ def delete_clone(target: Target, row: FleetRow, protected: Iterable[Path]) -> st
     for directory in (checkout.parent / "worktree", checkout.parent):
         try:
             directory.rmdir()  # only succeeds when empty
+        except FileNotFoundError:
+            continue  # no worktree/ beside the clone: the repository directory may still be empty
         except OSError:
             break
     return DELETED

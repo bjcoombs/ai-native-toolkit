@@ -326,12 +326,21 @@ def test_every_default_rubric_signal_has_repository_native_wording():
     ("observability.rung", "gt", 1, "OBSERVABILITY.md"),
     ("review_reality.reviewed_share", "gt", 0, "Have some merged"),
     ("review_reality.reviewed_share", "gte", 0.8, "at least 80% of the"),
+    ("review_reality.reviewed_share", "gt", 0.5, "Have more than 50% of the"),
+    ("review_reality.approved_share", "gte", 0.5, "(at least 50% of merged"),
+    ("review_reality.approved_share", "gt", 0.5, "(more than 50% of merged"),
     ("two_factor.value", "in", ["on", "full"], "one of `on`, `full`"),
     ("rulesets.value", "ne", "off", "from `off`"),
 ])
 def test_guidance_templates_on_the_criterion(signal, op, value, needle):
     words = guidance(signal, op, value)
     assert words is not None and needle in words["change"] + words["done_when"]
+
+
+@pytest.mark.parametrize("signal", ["review_reality.reviewed_share", "review_reality.approved_share"])
+def test_a_strict_bound_is_never_worded_at_least(signal):
+    words = guidance(signal, "gt", 0.5)
+    assert words is not None and "at least 50%" not in words["change"]
 
 
 @pytest.mark.parametrize(("signal", "op", "value"), [

@@ -128,13 +128,15 @@ def _ccn_cell(row: dict[str, Any], unreliable: set[str]) -> tuple[str, bool]:
     """A hotspot's CCN cell, and whether it is an approximate scc figure.
 
     A file scc scored at file level only (``source`` scc, no ``max_fn_ccn``)
-    carries a keyword count, not a parsed complexity: it reads ``~N``, and
-    ``~N (unreliable)`` when ``complexity_unreliable`` flagged it (issue #590).
+    carries a keyword count, not a parsed complexity: it reads ``~N (approximate)``,
+    and ``~N (unreliable)`` when ``complexity_unreliable`` flagged it (issue #590).
+    The skills' prose spells the same figures ``ccn ~N (approximate)`` and
+    ``ccn ~N (unreliable)``.
     """
     cell = _fmt(row.get("ccn"))
     if row.get("source") != "scc" or row.get("max_fn_ccn") is not None:
         return cell, False
-    flag = " (unreliable)" if row.get("path") in unreliable else ""
+    flag = " (unreliable)" if row.get("path") in unreliable else " (approximate)"
     return f"~{cell}{flag}", True
 
 
@@ -161,9 +163,9 @@ def render_hotspots_table(ctx: dict[str, Any]) -> str:
     if approximate:
         lines.append("")
         lines.append(
-            "_`~` marks an approximate CCN: scc's file-level keyword count, with no "
+            "_`~N (approximate)` is scc's file-level keyword count, with no "
             "per-function data. Rank those rows on churn and size, not on CCN; "
-            "`(unreliable)` means the count is implausibly low for the file's size._"
+            "`~N (unreliable)` means the count is implausibly low for the file's size._"
         )
     return "\n".join(lines)
 

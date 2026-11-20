@@ -267,6 +267,26 @@ def test_bad_settings_exit_2(froot, tmp_path, capsys):  # noqa: F811
     assert not (tmp_path / "o").exists()
 
 
+@pytest.mark.parametrize("layout", ["empty", "no_json", "empty_render_dir"])
+def test_a_settings_dir_with_no_fragment_files_is_an_error(tmp_path, layout):
+    folder = tmp_path / "settings_in"
+    folder.mkdir()
+    if layout == "no_json":
+        (folder / "notes.txt").write_text("x", encoding="utf-8")
+    if layout == "empty_render_dir":
+        (folder / "settings").mkdir()
+    with pytest.raises(fg.SettingsError, match="no fragment files"):
+        fg.load_settings(folder)
+
+
+def test_empty_settings_dir_exits_2(froot, tmp_path, capsys):  # noqa: F811
+    (tmp_path / "empty").mkdir()
+    assert fleet_cli.main([str(froot), "--settings", str(tmp_path / "empty"),
+                           "--out", str(tmp_path / "o")]) == 2
+    assert "no fragment files" in capsys.readouterr().err
+    assert not (tmp_path / "o").exists()
+
+
 def test_rubric_path_outside_the_namespace_exits_2(froot, tmp_path, capsys):  # noqa: F811
     rubric = tmp_path / "bad.toml"
     rubric.write_text(RUBRIC_TOML.replace("shared_tooling.available", "scans.shared_tooling.available"),
