@@ -191,7 +191,7 @@ def test_ramp_step(level, top, step):
 
 def test_text_colour_table_covers_every_step():
     assert len(fh.STEP_TEXT) == len(fh.ORRD_9)
-    assert fh.STEP_TEXT[0] == fh.TEXT_DARK and fh.STEP_TEXT[-1] == fh.TEXT_LIGHT
+    assert fh.STEP_TEXT[0] == fh.TEXT_DARK and fh.STEP_TEXT[-1] == fleet_svg.TEXT_LIGHT
 
 
 @pytest.mark.parametrize(("index", "label"), [(0, "a"), (25, "z"), (26, "aa"), (27, "ab"), (701, "zz")])

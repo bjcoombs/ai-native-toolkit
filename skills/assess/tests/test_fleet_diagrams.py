@@ -21,7 +21,7 @@ from lib import fleet_tooling_map as ftm
 from lib.fleet import FleetRow
 from lib.fleet_view import read_repos
 from lib.rubric import Rubric, load_rubric
-from fleet_diagrams_fixture import FIXTURES, ROWS, WINDOW, build, goldens
+from fleet_diagrams_fixture import FIXTURES, ROWS, WINDOW, build, comparison, goldens
 from svg_cascade import overridden_text_attributes
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
@@ -36,7 +36,8 @@ def _repos() -> list[FleetRow]:
 
 
 def _drawn() -> list[fd.Diagram]:
-    return fd.build_diagrams(_levels(), _repos(), WINDOW)
+    return fd.build_diagrams(_levels(), _repos(), WINDOW,
+                             comparison=comparison(_levels(), _repos()))
 
 
 # --- fixture and goldens ------------------------------------------------------
@@ -65,7 +66,8 @@ def test_svg_is_self_contained_and_well_formed(diagram):
     assert re.findall(r"https?://[^\s\"']+", text) == ["http://www.w3.org/2000/svg"]
     assert "prefers-color-scheme: dark" in text
     assert overridden_text_attributes(text) == []
-    assert "web/design&lt;&amp;&gt;\"sys" in text
+    if diagram["file"] in (fq.FILE, ftm.FILE):  # the diagrams that name repositories
+        assert "web/design&lt;&amp;&gt;\"sys" in text
 
 
 # --- quadrant -----------------------------------------------------------------
@@ -249,6 +251,9 @@ def test_skipped_diagrams_say_why_in_the_report():
     empty = fd.build_diagrams(_levels(), [], WINDOW)
     by_file = {d["file"]: d["skipped"] for d in empty}
     assert by_file["quadrant.svg"] == by_file["shared-tooling.svg"] == "skipped: no repositories in the run."
+    assert by_file["layer-bars.svg"] == "skipped: no repositories in the run."
+    assert by_file["slope.svg"] == (
+        "skipped: no earlier run compared (no --compare, or no history entry matched this run).")
     report = fd.report_markdown(no_levels)
     assert "Not drawn: skipped: the run had no maturity model" in report
     assert "[![Shared tooling](./shared-tooling.svg)](./shared-tooling.svg)" in report
