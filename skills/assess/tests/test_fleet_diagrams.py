@@ -7,6 +7,7 @@ semantic tests say what a byte comparison cannot. Regenerate the fixture and gol
 """
 from __future__ import annotations
 
+import math
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -73,9 +74,9 @@ def test_svg_is_self_contained_and_well_formed(diagram):
 def test_repo_points_measure_commits_and_mean_share_of_top_level():
     points = {p["repo"]: p for p in fq.repo_points(_levels(), _repos())}
     # instructions 1 of 2, agent use 1 of 3 (3 agent commits)
-    assert points["payments/api"] == {"repo": "payments/api", "commits": 212,
-                                      "maturity": pytest.approx((1 / 2 + 1 / 3) / 2),
-                                      "measured_rows": 2, "team_rows": 2}
+    api = points["payments/api"]
+    assert (api["commits"], api["measured_rows"], api["team_rows"]) == (212, 2, 2)
+    assert math.isclose(api["maturity"] or 0, (1 / 2 + 1 / 3) / 2)
     # no instruction signal: only agent use (level 0) is measured, so the mean is 0, not unknown
     assert points["data/notebooks"]["measured_rows"] == 1
     assert points["data/notebooks"]["maturity"] == 0.0
@@ -239,7 +240,7 @@ def test_text_escapes_and_classes():
     assert element == ('<text x="1.0" y="2.0" font-size="12" text-anchor="start" class="t-muted">'
                        'a&lt;b&amp;c<title>t&lt;</title></text>')
     box = svg.text_box(10, 20, "abc", 12, "middle")
-    assert (box.x, box.y, box.w, box.h) == pytest.approx((-0.5, 8, 21, 14.4))
+    assert all(math.isclose(a, b) for a, b in zip((box.x, box.y, box.w, box.h), (-0.5, 8, 21, 14.4)))
 
 
 def test_theme_style_defines_every_role_for_both_schemes():
