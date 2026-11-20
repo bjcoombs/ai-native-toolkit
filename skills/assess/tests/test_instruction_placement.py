@@ -303,6 +303,48 @@ def test_loaded_in_full_lists_agents_and_skills_over_the_floor(tmp_path: Path) -
     assert block["thresholds"]["always_on_lines"] == ALWAYS_ON_FLAG_LINES
 
 
+def _agent_body(lines: int) -> str:
+    """A body of ``lines`` lines under several headings."""
+    out: list[str] = []
+    for h in range(5):
+        out += [f"## Step {h}", ""]
+        out += [f"- Check item {h}.{i} before handing the result back." for i in range(lines // 5 - 2)]
+    return "\n".join(out[:lines]) + "\n"
+
+
+def test_root_agents_without_a_manifest_are_reported_when_shaped_as_agents(
+    tmp_path: Path,
+) -> None:
+    """Repo E (contract I559-4, #662): a 250-line ``agents/big.md`` with agent
+    frontmatter, a 30-line CLAUDE.md and no plugin manifest."""
+    _write(tmp_path, "CLAUDE.md", "# Repo\n" + "".join(f"- rule {i}\n" for i in range(29)))
+    head = "---\nname: big\ndescription: Reviews a change.\n---\n# Big\n"
+    _write(tmp_path, "agents/big.md", head + _agent_body(245))
+    _write(tmp_path, "agents/described.md", "---\ndescription: d\n---\n" + _agent_body(240))
+    # Ordinary docs that happen to live in agents/: no frontmatter, or
+    # frontmatter without name or description.
+    _write(tmp_path, "agents/guide.md", "# Guide\n" + _agent_body(240))
+    _write(tmp_path, "agents/notes.md", "---\ntitle: notes\n---\n" + _agent_body(240))
+    _write(tmp_path, "agents/excluded/x.md", head + _agent_body(245))
+    block = scan_instruction_placement(
+        tmp_path, {"CLAUDE.md": {"present": True}}, None, None, ({"excluded"}, []))
+    assert [f["path"] for f in block["files"]] == ["CLAUDE.md"]
+    loaded = {f["path"]: f for f in block["loaded_in_full"]}
+    assert set(loaded) == {"agents/big.md", "agents/described.md"}
+    big = loaded["agents/big.md"]
+    assert big["kind"] == "agent"
+    assert big["total_lines"] == 250
+    assert 0 < big["always_on_share"] <= 1
+
+
+def test_root_agents_without_a_manifest_follow_the_scope(tmp_path: Path) -> None:
+    head = "---\nname: big\n---\n"
+    _write(tmp_path, "pkg/agents/big.md", head + _agent_body(240))
+    _write(tmp_path, "agents/other.md", head + _agent_body(240))
+    block = scan_instruction_placement(tmp_path, {}, None, tmp_path / "pkg")
+    assert [f["path"] for f in block["loaded_in_full"]] == ["pkg/agents/big.md"]
+
+
 def test_aliases_absent_files_and_symlinks_are_analysed_once(tmp_path: Path) -> None:
     _write(tmp_path, "CLAUDE.md", "# A\nx\n")
     (tmp_path / "AGENTS.md").symlink_to("CLAUDE.md")

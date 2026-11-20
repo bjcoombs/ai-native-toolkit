@@ -1420,7 +1420,9 @@ loaded_in_full_min_lines}, files[], flagged[], loaded_in_full[],
 loaded_in_full_considered}`. Each file record (`files`: the root instruction files
 that are present and not aliases, plus `nested_instructions.files`, each real file
 once; `loaded_in_full`: agent and `SKILL.md` files from
-`claude_config.loaded_config_files` over 200 lines, largest first) is `{path, kind
+`claude_config.loaded_config_files`, plus root `agents/**/*.md` files with `name` or
+`description` frontmatter when there is no `.claude-plugin/plugin.json` (#662; a file
+without that frontmatter is treated as a document), over 200 lines, largest first) is `{path, kind
 (instruction | agent | skill), total_lines, always_on_lines, always_on_share,
 always_on_words, fetch_on_need_lines, unclassified_lines, sections_total, flagged,
 relocatable[],
