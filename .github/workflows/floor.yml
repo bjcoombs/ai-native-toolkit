@@ -41,6 +41,10 @@
 #     classification, as it stood before this pull request) and goes to the
 #     run's step summary and to one pull-request comment, updated in place. A
 #     read-only token (Dependabot, forks) skips the comment only.
+#     One exemption: a pull request authored by dependabot[bot] whose
+#     floor-core change is workflow `uses:` pin bumps alone is not floor-core
+#     for the trigger, as judged by the base ref's copy of the script
+#     (`pin-bump-only`), so a pull request cannot exempt itself.
 #
 #   floor self-anchor (E2, fail-closed on repo settings):
 #     Query the live GitHub API and FAIL (fail-closed) if either floor check
@@ -399,6 +403,8 @@ jobs:
 
       - name: Detect changes to protected paths
         id: filter
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
           echo "merge-base: ${BASE_SHA}"
@@ -423,7 +429,26 @@ jobs:
           # iii). Same script, same base, so the two answers cannot drift.
           FLOOR_CORE="$(python scripts/floor_check.py protected \
             --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"
-          if printf '%s\n' "${FLOOR_CORE}" | grep -q .; then
+          # The one exemption (FLOOR.md clause iii): a Dependabot pull request
+          # whose floor-core change is workflow `uses:` pin bumps alone. The
+          # verdict is the BASE ref's copy of the script, never the pull
+          # request's own, so no pull request can exempt itself; a base that
+          # predates the subcommand exempts nothing.
+          PIN_BUMP_ONLY=false
+          if printf '%s\n' "${FLOOR_CORE}" | grep -q . \
+              && [ "${PR_AUTHOR}" = "dependabot[bot]" ]; then
+            CHECKER="${RUNNER_TEMP}/floor_check_base.py"
+            if git show "${BASE_SHA}:scripts/floor_check.py" > "${CHECKER}" 2> /dev/null \
+                && python "${CHECKER}" pin-bump-only --help > /dev/null 2>&1 \
+                && python "${CHECKER}" pin-bump-only --base "${BASE_SHA}"; then
+              PIN_BUMP_ONLY=true
+            fi
+          fi
+          if [ "${PIN_BUMP_ONLY}" = "true" ]; then
+            echo "floor_core_changed=false" >> "$GITHUB_OUTPUT"
+            echo "Floor core changed by Dependabot action-pin bumps only: exempt from sign-off (FLOOR.md clause iii, judged by scripts/floor_check.py at the base ${BASE_SHA})."
+            printf '%s\n' "${FLOOR_CORE}"
+          elif printf '%s\n' "${FLOOR_CORE}" | grep -q .; then
             echo "floor_core_changed=true" >> "$GITHUB_OUTPUT"
             echo "Floor core changed: a maintainer sign-off WILL be requested."
             printf '%s\n' "${FLOOR_CORE}"
