@@ -356,8 +356,9 @@ query_project_gitlab() {
 # One JSON fragment per org (GitHub) or group (GitLab):
 #   {scope, provider, two_factor, push_rules, default_branch_protection, rulesets}
 # Each setting is {value, reason}: value is the setting, "off", or "unknown";
-# reason is null unless value is "unknown". A failed or unreadable call is
-# always "unknown" with the reason, never "off".
+# reason is null unless value is "unknown". An optional note qualifies a
+# readable value (push_rules "off" names its non-active rulesets in it).
+# A failed or unreadable call is always "unknown" with the reason, never "off".
 
 # The reason for an unreadable response, from a call's captured output.
 http_reason() {
@@ -398,8 +399,9 @@ query_org_settings_github() {
         fi
     fi
 
-    # Rulesets carry push rules (target "push") and default-branch protection
-    # for new repositories (an active branch ruleset on ~DEFAULT_BRANCH or ~ALL
+    # Rulesets carry push rules (an active ruleset with target "push"; when
+    # every push ruleset is non-active, off with them named in a note) and
+    # default-branch protection for new repositories (an active branch ruleset on ~DEFAULT_BRANCH or ~ALL
     # of every repository). The list omits conditions, so each active branch
     # ruleset is read in full; one unreadable detail makes the verdict unknown.
     if raw=$(gh api "orgs/$ORG/rulesets?per_page=100" --paginate 2>&1) \
@@ -429,7 +431,10 @@ query_org_settings_github() {
        push_rules:(
          if $rs_err!="" then unk($rs_err)
          else ([$rs[] | select(.target=="push")]) as $p
-           | if ($p|length)==0 then val("off") else val($p|names) end end),
+           | if ($p|length)==0 then val("off")
+             elif ([$p[] | select(.enforcement=="active")]|length)==0 then
+               val("off") + {note:("not active: " + ($p|names))}
+             else val($p|names) end end),
        default_branch_protection:(
          if $rs_err!="" then unk($rs_err)
          elif $detail_err!="" then unk($detail_err)
@@ -537,7 +542,8 @@ render_settings() {
       sort_by(.scope)[] as $s
       | "- \($s.scope)",
         ($f[] as $k | ($s[$k] // {value:"unknown", reason:"missing from the fragment"})
-         | "  - \($k): \(.value)\(if .value=="unknown" then " (\(.reason // "no reason given"))" else "" end)")'
+         | "  - \($k): \(.value)\(if .value=="unknown" then " (\(.reason // "no reason given"))"
+                                   elif (.note|type)=="string" then " (\(.note))" else "" end)")'
 }
 settings_legend() {
     echo "Each setting is its value, \`off\`, or \`unknown\` with the reason it could not be read (no access, tier, or endpoint missing). \`unknown\` is never counted as \`off\`."

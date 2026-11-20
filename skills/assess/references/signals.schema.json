@@ -99,6 +99,7 @@
           "gate_cost_estimate",
           "instruction_claims",
           "instruction_placement",
+          "layer_grades",
           "nested_instructions",
           "observability",
           "promissory_markers",

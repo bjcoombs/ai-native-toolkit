@@ -100,6 +100,8 @@ def test_scan_names_come_from_the_published_schema() -> None:
     "coverage_gate.enforced",                      # untyped block: open
     "review_reality.anything.deeper",              # untyped block: open
     "agent_ops.available",                         # every block may report status
+    "layer_grades.instructions_grade",             # deterministic layer grade (#620)
+    "layer_grades.instruction_file_present",
 ])
 def test_team_paths_accepted(path: str) -> None:
     assert team_path_ok(path)
@@ -115,6 +117,8 @@ def test_team_paths_accepted(path: str) -> None:
     "agent_environment.check.named.command",   # steps into a list
     "observability.rung.deeper",               # past a scalar
     "stats_summary.loc.no_such",
+    "layer_grades.layer_3_grade",              # no such layer grade
+    "layer_grades",                            # ends on an object
 ])
 def test_team_paths_rejected(path: str) -> None:
     assert not team_path_ok(path)
@@ -220,7 +224,7 @@ def test_default_rubric_on_the_golden_run_context() -> None:
         "layer-7-review": None,
         "layer-8-agent-ops": None,
     }
-    assert "nested_instructions.budget.claude_code.bytes" in _row(
+    assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]
     assert dumps_result(result) == dumps_result(_run({"toolkit": copy.deepcopy(run_context)}))
 
@@ -236,13 +240,50 @@ def test_no_instruction_file_is_zero_but_a_missing_block_is_unknown(
     golden_repos: dict[str, dict[str, Any]],
 ) -> None:
     scans = copy.deepcopy(golden_repos["golden-doc-repo"])
-    assert scans["nested_instructions"]["budget"]["claude_code"]["bytes"] == 0
+    assert scans["layer_grades"] == {"instructions_grade": None, "instruction_file_present": False}
     assert _row(_run({"r": scans}), "layer-0-instructions")["level"] == 0
 
-    del scans["nested_instructions"]
+    del scans["layer_grades"]
     row = _row(_run({"r": scans}), "layer-0-instructions")
     assert (row["status"], row["level"]) == ("unknown", None)
-    assert "nested_instructions.budget.claude_code.bytes" in row["missing_signals"]
+    assert "layer_grades.instruction_file_present" in row["missing_signals"]
+
+
+def test_another_tools_instruction_file_reaches_layer_zero_partial(tmp_path: Path) -> None:
+    """A committed Copilot file is an instruction file; the Claude Code budget is 0."""
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "golden-doc-repo", repo)
+    (repo / ".github").mkdir(exist_ok=True)
+    (repo / ".github" / "copilot-instructions.md").write_text(
+        "# Guide\n\nRun the tests before pushing.\n", encoding="utf-8")
+    scans = _scans(_commit(repo))
+    assert scans["layer_grades"]["instruction_file_present"] is True
+    assert scans["layer_grades"]["instructions_grade"] in {"A", "B", "C", "D", "F"}
+    assert scans["nested_instructions"]["budget"]["claude_code"]["bytes"] == 0
+    assert _row(_run({"r": scans}), "layer-0-instructions")["level"] == 1
+
+
+def test_a_rubric_row_on_a_layer_grade_loads_and_evaluates(
+    tmp_path: Path, golden_repos: dict[str, dict[str, Any]], instructed_repo: dict[str, Any],
+) -> None:
+    """Issue #620: a layer grade is a signal path; an unknown one fails at load."""
+    row = ('version = "v"\n[[rows]]\nid = "graded"\ntitle = "G"\nscope = "team"\n'
+           'aggregation = "min"\n[[rows.levels]]\nlevel = 1\ncriteria = [\n'
+           '  { signal = "layer_grades.%s", op = "in", value = ["A", "B", "C", "D", "F"] },\n]\n')
+    path = tmp_path / "r.toml"
+    path.write_text(row % "instructions_grade", encoding="utf-8")
+    rubric = load_rubric(path, signal_path_validator())
+    graded = instructed_repo["layer_grades"]["instructions_grade"]
+    assert isinstance(graded, str)
+    result = evaluate(rubric, {"name": "g", "settings": None, "repos": {"r": instructed_repo}})
+    assert result["rows"][0]["level"] == 1
+    bare = evaluate(rubric, {"name": "g", "settings": None,
+                             "repos": {"r": golden_repos["golden-doc-repo"]}})
+    assert bare["rows"][0]["status"] == "unknown"   # null grade: no instruction file
+
+    path.write_text(row % "layer_3_grade", encoding="utf-8")
+    with pytest.raises(RubricError, match=r"team:layer_grades\.layer_3_grade"):
+        load_rubric(path, signal_path_validator())
 
 
 def test_counts_only_output_reaches_the_same_levels(

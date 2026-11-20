@@ -25,14 +25,21 @@ from lib.history_window import split_window
 
 
 def window_start(window: str, today: date) -> date:
-    """The first day inside ``window`` counting back from ``today`` (months and years by calendar)."""
+    """The first day inside ``window`` counting back from ``today`` (months and years by calendar).
+
+    A window reaching back before year 1 (``3000y``, ``999999999d``) starts at
+    ``date.min``: every dated ``HEAD`` is inside it.
+    """
     n, unit = split_window(window)  # the one window grammar (lib/history_window.py); raises ValueError
-    if unit in ("d", "w"):
-        return today - timedelta(days=n * (7 if unit == "w" else 1))
-    months = n * (12 if unit == "y" else 1)
-    year, month = divmod(today.year * 12 + (today.month - 1) - months, 12)
-    month += 1
-    return date(year, month, min(today.day, calendar.monthrange(year, month)[1]))
+    try:
+        if unit in ("d", "w"):
+            return today - timedelta(days=n * (7 if unit == "w" else 1))
+        months = n * (12 if unit == "y" else 1)
+        year, month = divmod(today.year * 12 + (today.month - 1) - months, 12)
+        month += 1
+        return date(year, month, min(today.day, calendar.monthrange(year, month)[1]))
+    except (ValueError, OverflowError):  # before date.min, or past timedelta's range
+        return date.min
 
 
 def head_commit_date(checkout: Path) -> date | None:
