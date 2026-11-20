@@ -98,6 +98,17 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+Churn follows renames (issue #425): `git_churn_scores`, `pick_churn_window` and
+`commit_epochs_by_file` (the per-commit walk behind `code_churn_since_doc_change`) take
+the `change_coupling.build_rename_map` paths and credit a commit made under an old name
+to the file's current name, once per commit, so the count matches `git log --follow` (a
+file committed five times, renamed, then committed once scores 7). `pick_churn_window`
+builds the map when it is not given one; `rename_paths` does that for the treemap's
+`--by churn` call and prints a stderr note when the map is incomplete. `doc_staleness`
+shares one map per HEAD between the churn reads and the content clock, and marks every
+doc row `confidence: low` when the map is incomplete, which keeps it out of `lying_map`.
+Git's own rename detection is off (`--no-renames`) in both walks, so `diff.renames`
+does not move a count. Tests: `tests/test_rename_churn.py`.
 `window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
 into the `history_window` scan input (`"12mo"`, None for all-time).
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`

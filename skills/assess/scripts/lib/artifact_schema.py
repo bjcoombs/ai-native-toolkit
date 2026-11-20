@@ -61,4 +61,6 @@ ARTIFACT_SCHEMA_VERSION = "1.6.0"
 # with the version in the committed .assess/findings.json and explains the
 # finding moves instead of failing on them unexplained.
 # 1: the baseline (issue #554).
-ASSESS_METHOD_VERSION = 1
+# 2: churn counts follow renames, moving staleness ratios, lying_map and hotspot
+# ranks for files renamed inside the churn window (issue #425).
+ASSESS_METHOD_VERSION = 2
