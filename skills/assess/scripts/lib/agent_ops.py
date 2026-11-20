@@ -26,7 +26,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from lib.git_churn import tracked_files
+from lib.git_churn import is_tracked, tracked_files
 
 # Candidate settings files, repo-root-relative. Order is the report order.
 _SETTINGS_PATHS = (
@@ -43,16 +43,6 @@ _ROUTINE_DIRS = (
 _HOOKS_DIR = ".claude/hooks"
 
 
-def _is_tracked(path: Path, tracked: frozenset[Path] | None) -> bool:
-    """Whether ``path`` is git-tracked; untracked when tracking is unknowable."""
-    if tracked is None:
-        return False
-    try:
-        return path.resolve() in tracked
-    except OSError:
-        return False
-
-
 def _count_list(value: Any) -> int:
     return len(value) if isinstance(value, list) else 0
 
@@ -66,7 +56,7 @@ def _scan_settings_file(
         return None
     entry: dict[str, Any] = {
         "path": rel,
-        "tracked": _is_tracked(path, tracked),
+        "tracked": is_tracked(path, tracked),
         "parse_ok": False,
         "allow_count": 0,
         "deny_count": 0,
@@ -106,7 +96,7 @@ def _scan_dir(
                 if not p.is_file() or p.name.startswith("."):
                     continue
                 file_count += 1
-                if _is_tracked(p, tracked):
+                if is_tracked(p, tracked):
                     tracked_count += 1
         except OSError:
             pass

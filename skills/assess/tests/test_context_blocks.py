@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import assess_core
 from assess_core import build_run_context
 from assess_core_helpers import (
     _minimal_repo,
@@ -18,7 +17,7 @@ from assess_core_helpers import (
     _seed_assess,
     _write_min_stats,
 )
-from lib import context_blocks
+from lib import context_blocks, core_scans
 
 
 def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
@@ -173,7 +172,7 @@ def test_failed_liveness_scan_is_not_scored_rung_0(tmp_path: Path, monkeypatch) 
     def boom(*_a, **_k):
         raise RuntimeError("liveness blew up")
 
-    monkeypatch.setattr(assess_core, "scan_liveness", boom)
+    monkeypatch.setattr(core_scans, "scan_liveness", boom)
     ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
     assert ctx["observability"]["available"] is False
     assert ctx["observability"]["rung"] is None  # not 0
@@ -190,7 +189,7 @@ def test_failed_liveness_fallback_blocks_exact_shape(tmp_path: Path, monkeypatch
     def boom(*_a, **_k):
         raise RuntimeError("liveness blew up")
 
-    monkeypatch.setattr(assess_core, "scan_liveness", boom)
+    monkeypatch.setattr(core_scans, "scan_liveness", boom)
     ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
     reason = ctx["observability"]["reason"]
     assert reason and reason == ctx["dead_code"]["reason"]

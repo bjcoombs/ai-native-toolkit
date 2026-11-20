@@ -13,6 +13,7 @@ scripts (which also pull in lizard/matplotlib/squarify).
 from __future__ import annotations
 
 import math
+import re
 import subprocess
 import sys
 from collections.abc import Iterable
@@ -485,8 +486,33 @@ CHURN_WINDOWS: list[tuple[str, str | None]] = [
     ("last 5y",   "5 years ago"),
     ("all-time",  None),
 ]
+_WINDOW_IN_LABEL = re.compile(r"\blast ([1-9][0-9]*(?:d|w|mo|y))\b")
+
+
+def window_from_churn_label(label: str | None) -> str | None:
+    """The ``<n>d|w|mo|y`` window in a churn label, or None for all history.
+
+    ``pick_churn_window`` labels its window ``"commits (last 12mo)"``; scans
+    read ``history_window`` in the headless runner's ``--window`` grammar
+    (``"12mo"``), so ``assess_core`` normalises through here. ``all-time``, a
+    missing label or any unrecognised one means all history (None).
+    """
+    match = _WINDOW_IN_LABEL.search(label or "")
+    return match.group(1) if match else None
+
+
 MIN_MAX = 3          # max commits per file must clear this for visible gradient
 MIN_COVERAGE_PCT = 10.0   # % of scored files with any activity in the window
+
+
+def is_tracked(path: Path, tracked: frozenset[Path] | None) -> bool:
+    """Whether ``path`` is in a ``tracked_files`` set; untracked when unknowable."""
+    if tracked is None:
+        return False
+    try:
+        return path.resolve() in tracked
+    except OSError:
+        return False
 
 
 def pick_churn_window(
