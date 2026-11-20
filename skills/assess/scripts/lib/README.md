@@ -1931,10 +1931,11 @@ and `name` joins the rule names in name order with `", "`, except that a merge w
 exact rule keeps the exact rule's `name`, so a config_drift snapshot of that rule sees
 the wildcards' settings, never a renamed rule. It reuses a
 `protected_branches(project)` read when given one (config_drift reads the list once per
-scan), and returns None only from a readable list shorter than
-`PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
-branch by name (the `ghreport.sh` fallback), so an exact rule on a later page combines with the
-first-page wildcards; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
+scan). `protected_branches` reads `PROTECTED_PAGE` (100) rules a page until a short page
+ends the list (as `ghreport.sh` does with `--paginate`), so an exact rule and every
+wildcard on any page merge; a refused or malformed later page raises, never a partial
+merge, and a list still full after `PROTECTED_MAX_PAGES` (20) pages raises `truncated`.
+None comes only from that complete list with no cover. A 403 or 404 raises
 like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.py`,
 `tests/test_gitlab_protected_branches.py` (stubbed `glab`/`gh` as the whole `PATH`, offline).
 
