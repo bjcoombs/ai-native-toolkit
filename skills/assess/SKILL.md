@@ -211,7 +211,7 @@ jq '.capability_offers' "$REPO_ROOT/.assess/run-context.json"
 
 Run the bundled treemap script alongside the deterministic core - see the chained block below.
 
-The script prints a one-line summary (file count, lizard vs scc coverage, churn window chosen, top 5 biggest files). The stats sidecar contains percentiles (p50/p95/max for LOC, CCN, churn) and ranked lists of the top 10 files by hotspot score, raw CCN, and raw LOC. Both feed the report.
+The script prints a one-line summary (file count, lizard vs scc coverage, churn window chosen, top 5 biggest files). The stats sidecar contains percentiles (p50/p95/max for LOC, CCN, churn) and ranked lists of the top 10 files by hotspot score, raw CCN, and raw LOC, plus every scored file's CCN in an uncapped `files` list. Both feed the report. A file scc scored at file level only (`source` `scc`, no `max_fn_ccn`) carries a keyword count, not a parsed complexity: `assess_report.py` renders it as `~N (approximate)`, or `~N (unreliable)` when `complexity_unreliable` lists the path because the count is implausibly low for the file's size.
 
 **Dependencies:** the script uses PEP 723 inline metadata (`lizard`, `squarify`, `matplotlib`, `numpy`). `uv` resolves them on first run.
 
