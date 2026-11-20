@@ -2405,10 +2405,10 @@ reads e-mail and username) come from `compile_config_rules` over the
 name; `COVERED_AUTHOR_AGENTS` names them in words. Order: a dependency bot (always,
 whatever a rule says), then config rules in order (first match credited), then
 pinned agents, then a GitLab access-token user (`is_gitlab_token_user`:
-`project_<id>_bot_<hex>`, `group_<id>_bot_<hex>`, the older `project_<id>_bot[<n>]`,
-by username or its `@noreply.<host>` e-mail; never by display name, which is the
+`project_<id>_bot_<hex>`, `group_<id>_bot_<hex>`, by username or its `@noreply.<host>` e-mail; never by display name, which is the
 token's owner-chosen name), which is `agent` under `token_users_as_agents` and
-`token_user` otherwise. Strings are cut to `MAX_MATCH_LENGTH` before matching.
+`token_user` otherwise. Strings are cut to `MAX_MATCH_LENGTH` before matching (input size only; the fleet
+`--timeout` bounds a pathological repository pattern).
 Tests: `tests/test_ai_usage.py`, `tests/test_ai_usage_authors.py`,
 `tests/test_change_coupling.py`.
 

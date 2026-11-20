@@ -40,6 +40,7 @@ from lib.fleet_config import (  # noqa: E402
     parse_fleet_config,
 )
 from lib.level_signals import signal_path_validator  # noqa: E402
+from lib.signals import collect  # noqa: E402
 from lib.levels import load_levels  # noqa: E402
 
 RECENT = (datetime.now(timezone.utc) - timedelta(days=30)).replace(microsecond=0).isoformat()
@@ -200,7 +201,7 @@ def test_username_form_honours_config_rules_and_promotion() -> None:
 @pytest.mark.parametrize(("value", "token"), [
     ("project_123_bot_4ffca233d8298ea1", True),
     ("group_123_bot_4ffca233d8298ea1", True),
-    ("project_5_bot", True), ("project_5_bot2", True),
+    ("project_5_bot", False),
     ("project_123_bot_4ffca233d8298ea1@noreply.gitlab.example.com", True),
     ("project_123_bot_4ffca233d8298ea1@example.com", False),
     ("project_bot", False), ("user_1_bot_ab", False), ("my_project_1_bot_ab", False),
@@ -255,4 +256,23 @@ def test_repository_rules_extend_the_fleet_rules_after_them() -> None:
     assert merged.config["ai_usage"]["agent_identities"] == [{"pattern": "^a"}, {"pattern": "^b"}]
     bad = merge_repo_sections(empty_config(), {"ai_usage": {"agent_identities": [{"pattern": "("}]}})
     assert bad.config["ai_usage"] == {} and len(bad.warnings) == 1
-    assert "(" not in bad.warnings[0].split(":")[0]
+    assert "(" not in bad.warnings[0]  # the bad pattern is never quoted
+
+
+def test_headless_run_merges_fleet_and_repository_rules(repo: Path) -> None:
+    """The registry input end to end: the fleet rule keeps index 0, the repository's
+    .assess/config.toml rule follows, and counts-only keeps the integers only."""
+    (repo / ".assess").mkdir()
+    (repo / ".assess" / "config.toml").write_text(
+        '[[ai_usage.agent_identities]]\npattern = "^devin-ai-integration"\nfield = "username"\n',
+        encoding="utf-8")
+    fleet = _config(f'[[ai_usage.agent_identities]]\npattern = "{PATTERN}"\n')
+    scans = collect(repo, ["ai_usage"], window="5y", fleet_config=fleet)
+    block = scans["ai_usage"]
+    assert block["agent_identity_rule_commits"] == [2, 1]
+    assert block["agent_authored_commits"] == 5
+    reduced = counts_only_scans(scans)
+    assert reduced["ai_usage"]["agent_identity_rule_commits"] == [2, 1]
+    text = json.dumps(reduced)
+    for needle in IDENTITY_STRINGS:
+        assert needle not in text

@@ -136,8 +136,10 @@ def coauthors_have_ai_assistant(coauthor_field: str) -> bool:
 #    (``is_gitlab_token_user``), counted apart and never as an agent;
 # 5. ``other``: everyone else, people and automation such as github-actions.
 #
-# A string longer than ``MAX_MATCH_LENGTH`` is cut before matching, which bounds
-# the cost of a repository-supplied pattern.
+# A string longer than ``MAX_MATCH_LENGTH`` is cut before matching. That limits
+# the input, not the cost of a pathological pattern (nested quantifiers stay
+# exponential); the fleet run's per-repository ``--timeout`` is the backstop, so
+# a repository's own pattern can fail only its own row.
 
 RuleField = Literal["email", "username", "name"]
 RULE_FIELDS: tuple[RuleField, ...] = ("email", "username", "name")
@@ -171,11 +173,9 @@ AGENT_RULES: tuple[IdentityRule, ...] = (
     rule(r"^google-labs-jules\[bot\]$"),         # Jules
     rule(r"^chatgpt-codex-connector\[bot\]$"),   # OpenAI Codex
     rule(r"^cursoragent@cursor\.com$", "email"),  # Cursor background agent
-    rule(r"^cursor\[bot\]$"),                    # Cursor
     rule(r"^openhands@all-hands\.dev$", "email"),  # OpenHands
     rule(r"^openhands-agent$"),                  # OpenHands
     rule(r"^amazon-q-developer\[bot\]$"),        # Amazon Q Developer
-    rule(r"^sweep-ai\[bot\]$"),                  # Sweep
 )
 
 # The agents AGENT_RULES recognise as commit authors, in words with no address,
@@ -189,7 +189,6 @@ COVERED_AUTHOR_AGENTS = (
     "Cursor (background agent)",
     "OpenHands",
     "Amazon Q Developer",
-    "Sweep",
 )
 
 # Dependency update bots: a bucket of their own, never an agent.
@@ -203,9 +202,8 @@ DEPENDENCY_BOT_RULES: tuple[IdentityRule, ...] = (
 )
 
 # GitLab access-token users: ``project_<id>_bot_<hex>`` and ``group_<id>_bot_<hex>``
-# (GitLab's "Bot users for projects" / "Bot users for groups"), plus the older
-# ``project_<id>_bot`` / ``project_<id>_bot<n>`` form from before the random suffix.
-_TOKEN_USER = re.compile(r"^(?:project|group)_\d+_bot(?:_[0-9a-f]+|\d*)$", re.IGNORECASE)
+# (GitLab's "Bot users for projects" / "Bot users for groups").
+_TOKEN_USER = re.compile(r"^(?:project|group)_\d+_bot_[0-9a-f]+$", re.IGNORECASE)
 _NOREPLY_LOGIN = re.compile(r"^(?:\d+[+-])?([^@+]+)@users\.noreply\.", re.IGNORECASE)
 
 

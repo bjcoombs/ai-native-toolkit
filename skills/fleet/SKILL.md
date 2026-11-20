@@ -273,7 +273,8 @@ tables are `lib/fleet_config.py` (`SECTION_KEYS`).
 
 Read by the `ai_usage` scan (`lib/agent_identity.py`, `AuthorMatcher`) to count the
 commits an in-house agent authored, beside the pinned agent apps (Claude, the
-Copilot coding agent, Devin, Jules, Codex, Cursor, OpenHands, Amazon Q, Sweep).
+Copilot coding agent, Devin, Jules, Codex, the Cursor background agent, OpenHands,
+Amazon Q Developer).
 
 ```toml
 [ai_usage]

@@ -140,7 +140,7 @@ def table_list(fields: Mapping[str, Validator], required: frozenset[str] = froze
     return validate
 
 
-# The sections and the keys each defines. Empty until the consumer issues add theirs.
+# The sections and the keys each defines; each consumer issue adds its own.
 SectionKeys = Mapping[str, Validator]
 SECTION_KEYS: Mapping[str, SectionKeys] = {
     "ai_usage": {  # #695
