@@ -66,6 +66,11 @@ class DocUnit(TypedDict):
     doc_value: float
     finding: str | None
     confidence: str | None
+    # Discovered code files only (the staleness row's count), while
+    # complexity_summarised sums the join subject over the scored files
+    # (complexity-stats.json ``files``). The two populations differ: a base doc
+    # owning only files the treemap scores but discovery skips (Lua, say) can
+    # report subject_code_count 0 with non-zero complexity_summarised.
     subject_code_count: int
     recommendation: str | None
 

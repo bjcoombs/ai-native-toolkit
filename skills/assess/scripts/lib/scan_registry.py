@@ -25,11 +25,12 @@ copied into the run context in the order the callable returns them - one entry
 for a call that yields several blocks, such as the run header or the keyhole
 integration. Its value is also kept under ``key`` for later specs to read.
 
-``stage`` names the point in ``build_run_context`` where an entry runs, which
-keeps the key order of ``run-context.json`` unchanged. The core still assigns
-the ``HAND_WIRED`` keys by hand between ``STAGE_SETUP`` and
-``STAGE_READ_SIDE`` (the doc-staleness block, held back for the 2.0.0 rewrite
-in issues #424 and #425); the stages collapse once those are gone.
+``stage`` orders entries whose key must sit somewhere other than their table
+position in ``run-context.json``: ``build_run_context`` makes one
+``run_scans`` call, which runs the stages in ``STAGES`` order and each stage in
+table order. Every block is a table entry (#558); only ``anomalies`` uses a
+stage for placement, staying the last scan key however many entries follow
+it in the table.
 """
 from __future__ import annotations
 
@@ -69,15 +70,6 @@ STAGE_READ_SIDE = "read_side"
 STAGE_POST_OFFERS = "post_offers"
 STAGE_FINAL = "final"
 STAGES = (STAGE_SETUP, STAGE_READ_SIDE, STAGE_POST_OFFERS, STAGE_FINAL)
-
-# Run-context keys the core still assigns by hand, and the first stage that may
-# read them. Held back for child B of issue #418 (#424 and #425 rewrite them).
-HAND_WIRED: Mapping[str, str] = {
-    "doc_staleness": STAGE_READ_SIDE,
-    "stale_hubs": STAGE_READ_SIDE,
-    "churn_degenerate": STAGE_READ_SIDE,
-}
-
 
 class ScanRegistryError(ValueError):
     """The scan table is malformed (duplicate key, unknown stage or read)."""
@@ -130,21 +122,16 @@ def _accepts(fn: Callable[..., Any], count: int) -> bool:
     return True
 
 
-def validate(
-    specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUTS,
-    hand_wired: Mapping[str, str] = HAND_WIRED,
-) -> None:
+def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUTS) -> None:
     """Raise ``ScanRegistryError`` unless every spec can run in table order.
 
-    Stages run in ``STAGES`` order, so a read must name a provided input, a
-    hand-wired key the core has assigned by the reading stage, or a key whose
-    producer is declared earlier *and* runs at the same or an earlier stage.
-    The run-context keys the table writes (published keys and spread keys) must
-    be distinct from each other and from the hand-wired keys.
+    Stages run in ``STAGES`` order, so a read must name a provided input or a
+    key whose producer is declared earlier *and* runs at the same or an earlier
+    stage. The run-context keys the table writes (published keys and spread
+    keys) must be distinct.
     """
     produced_at: dict[str, int] = {name: -1 for name in provided}
-    produced_at.update({name: STAGES.index(stage) for name, stage in hand_wired.items()})
-    written: set[str] = set(hand_wired)
+    written: set[str] = set()
     for spec in specs:
         if spec.key in produced_at:
             raise ScanRegistryError(f"scan {spec.key!r} is declared twice or shadows a provided input")
@@ -224,10 +211,13 @@ def _spread(spec: ScanSpec, ctx: dict[str, Any], value: Any, degraded: bool) -> 
 def run_scans(
     ctx: dict[str, Any],
     inputs: MutableMapping[str, Any],
-    stage: str,
+    stage: str | None = None,
     specs: Iterable[ScanSpec] | None = None,
 ) -> None:
     """Run every spec of ``stage`` in table order, writing its result.
+
+    ``stage`` None runs every stage in ``STAGES`` order: the whole table, as
+    ``build_run_context`` does.
 
     A published spec's value is assigned to ``ctx[spec.key]``; a private spec's
     value is stored in ``inputs[spec.key]``; a spread spec's mapping is copied
@@ -237,7 +227,12 @@ def run_scans(
     the core, so it raises ``ScanRegistryError`` and stops the run, while a
     failure inside the scan itself degrades.
     """
-    for spec in SCANS if specs is None else specs:
+    table = tuple(SCANS if specs is None else specs)
+    if stage is None:
+        for each in STAGES:
+            run_scans(ctx, inputs, each, table)
+        return
+    for spec in table:
         if spec.stage != stage:
             continue
         args = tuple(_resolve(spec, name, inputs, ctx) for name in spec.reads)
@@ -345,11 +340,24 @@ SCANS: tuple[ScanSpec, ...] = (
     ),
     ScanSpec("working_notes", cs.working_notes, ("repo_root",), STAGE_SETUP, private=True,
              degrade=False, gate_reason=_SELF_DEGRADING),
-    # Layer 0 navigability: the doc graph. The core then assigns the
-    # HAND_WIRED doc-staleness keys before STAGE_READ_SIDE.
+    # Layer 0 navigability: the doc graph.
     ScanSpec("doc_graph", cs.doc_graph, ("repo_root", "excludes", "scope", "working_notes"),
              STAGE_SETUP),
     # -- STAGE_READ_SIDE ------------------------------------------------------
+    # Doc staleness: each doc's last content change against its code subject's
+    # churn, following renames (#425), over the doc graph's doc->code edges.
+    ScanSpec("doc_staleness", cs.doc_staleness, ("repo_root", "doc_graph", "excludes", "scope"),
+             STAGE_READ_SIDE),
+    ScanSpec("stale_hubs", cs.stale_hubs, ("doc_graph", "doc_staleness"), STAGE_READ_SIDE,
+             degrade=False, gate_reason=_UNWRAPPED),
+    # Degenerate git history (every file ~1 commit): churn-derived findings are
+    # discounted. Read off the doc-staleness block, its single source of truth.
+    ScanSpec("churn_degenerate", cs.churn_degenerate, ("doc_staleness",), STAGE_READ_SIDE,
+             degrade=False, gate_reason=_UNWRAPPED),
+    # The doc x complexity join (Signal C), read by the keyhole documentation
+    # block. A failed join degrades that block, not the run.
+    ScanSpec("doc_join", cs.doc_join, ("current", "doc_staleness", "repo_root"),
+             STAGE_READ_SIDE, private=True, label="documentation"),
     # Instruction-surface integrity (Layer 0): uncommitted instruction files,
     # broken instruction references, and redacted sensitive content (#56).
     ScanSpec("untracked_instruction_files", cs.untracked_instruction_files,
@@ -437,7 +445,7 @@ SCANS: tuple[ScanSpec, ...] = (
         "keyhole", cs.keyhole,
         ("repo_root", "current", "doc_staleness", "liveness_blocks", "structure_scan",
          "test_pressure", "promissory", "accretion_ratchet", "archetype", "excludes", "scope",
-         "rename_map"),
+         "rename_map", "doc_join"),
         STAGE_READ_SIDE, private=True, degrade=False, gate_reason=_SELF_DEGRADING,
     ),
     ScanSpec("keyhole_blocks", cs.keyhole_blocks, ("keyhole",), STAGE_READ_SIDE,
