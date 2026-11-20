@@ -311,3 +311,81 @@ def test_unknown_git_tracking_is_unavailable_not_empty(tmp_path: Path) -> None:
     assert "tracking unknown" in block["reason"]
     assert [m["tracked"] for m in block["marketplaces"]] == [False]
     assert distinct_ids([block])["marketplaces"] == []
+
+
+# ── Pinned refs (#674) ──────────────────────────────────────────────────────
+
+
+def test_gitlab_project_ref_joins_its_own_include_item() -> None:
+    text = """\
+include:
+  - ref: v3
+    project: 'grp/ci-a'
+    file: '/a.yml'
+  - project: grp/ci-b
+    file: /b.yml
+  - {project: grp/ci-c, ref: "v1.2", file: /c.yml}
+  - project: grp/ci-d
+    inputs:
+      ref: not-the-pin
+    ref: main
+"""
+    refs = [(e["source"], e["ref"]) for e in gitlab_includes(text, ".gitlab-ci.yml", True)]
+    assert refs == [("grp/ci-a", "v3"), ("grp/ci-b", None), ("grp/ci-c", "v1.2"), ("grp/ci-d", "main")]
+
+
+def test_gitlab_single_mapping_and_inline_ref() -> None:
+    block = "include:\n  project: grp/ci\n  ref: v9\n  file: x.yml\n"
+    assert [e["ref"] for e in gitlab_includes(block, ".gitlab-ci.yml", True)] == ["v9"]
+    inline = "include: {project: grp/ci, ref: v8}\n"
+    assert [e["ref"] for e in gitlab_includes(inline, ".gitlab-ci.yml", True)] == ["v8"]
+
+
+def test_component_and_reusable_workflow_refs() -> None:
+    component = "include:\n  - component: $CI_SERVER_FQDN/grp/comp/build@1.4.0\n  - component: grp/comp/lint\n"
+    assert [(e["source"], e["ref"]) for e in gitlab_includes(component, ".gitlab-ci.yml", True)] == [
+        ("grp/comp/build", "1.4.0"), ("grp/comp/lint", None)]
+    workflow = ("jobs:\n  a:\n    uses: org/ci/.github/workflows/build.yml@v4\n"
+                "  b:\n    uses: org/ci/.github/workflows/test.yml\n")
+    assert [e["ref"] for e in github_reusable_workflows(workflow, ".github/workflows/x.yml", True)] == [
+        "v4", None]
+
+
+def test_a_one_line_flow_list_keeps_each_items_ref_apart() -> None:
+    inline = "include: [{project: grp/a, ref: v1}, {project: grp/b}]\n"
+    assert [(e["source"], e["ref"]) for e in gitlab_includes(inline, ".gitlab-ci.yml", True)] == [
+        ("grp/a", "v1"), ("grp/b", None)]
+    listed = "include:\n  - [{project: grp/c}, {ref: v2, project: grp/d}]\n  - project: grp/e\n"
+    assert [(e["source"], e["ref"]) for e in gitlab_includes(listed, ".gitlab-ci.yml", True)] == [
+        ("grp/c", None), ("grp/d", "v2"), ("grp/e", None)]
+
+
+def test_a_flow_mapping_across_lines_keeps_its_ref() -> None:
+    text = "include:\n  - {project: grp/a,\n     ref: v1}\n  - project: grp/b\n    ref: v2\n"
+    assert [(e["source"], e["ref"], e["line"]) for e in gitlab_includes(text, ".gitlab-ci.yml", True)] == [
+        ("grp/a", "v1", 2), ("grp/b", "v2", 4)]
+    inline = "include: [{project: grp/c,\n  ref: v3}, {project: grp/d}]\nstages: [x]\n"
+    assert [(e["source"], e["ref"]) for e in gitlab_includes(inline, ".gitlab-ci.yml", True)] == [
+        ("grp/c", "v3"), ("grp/d", None)]
+
+
+def test_a_bracket_in_a_rules_regex_never_swallows_later_items() -> None:
+    text = """\
+include:
+  - project: grp/a
+    rules:
+      - if: '$CI_COMMIT_TAG =~ /^v\\[/'
+  - project: grp/b
+    ref: v2
+  - {project: grp/c, file: "/x[1.yml"}
+  - project: grp/d
+"""
+    assert [(e["source"], e["ref"]) for e in gitlab_includes(text, ".gitlab-ci.yml", True)] == [
+        ("grp/a", None), ("grp/b", "v2"), ("grp/c", None), ("grp/d", None)]
+
+
+def test_a_ref_holding_a_ci_variable_is_not_a_pin() -> None:
+    text = "include:\n  - project: grp/a\n    ref: $TPL_REF\n  - component: grp/c/x@${VERSION}\n"
+    assert [e["ref"] for e in gitlab_includes(text, ".gitlab-ci.yml", True)] == [None, None]
+    workflow = "jobs:\n  a:\n    uses: org/ci/.github/workflows/b.yml@$REF\n"
+    assert [e["ref"] for e in github_reusable_workflows(workflow, ".github/workflows/x.yml", True)] == [None]

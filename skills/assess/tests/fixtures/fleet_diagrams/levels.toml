@@ -1,0 +1,42 @@
+version = "diagrams-fixture-1"
+
+[[rows]]
+id = "org2fa"
+title = "Two-factor"
+scope = "org"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "two_factor.value", op = "eq", value = "on" }]
+
+[[rows]]
+id = "instructions"
+title = "Agent instructions"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "nested_instructions.budget.claude_code.lines", op = "gt", value = 0 }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [{ signal = "nested_instructions.budget.claude_code.lines", op = "gt", value = 50 }]
+
+[[rows]]
+id = "agent-use"
+title = "Agent use"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "ai_usage.agent_trailer_commits", op = "gt", value = 0 }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [{ signal = "ai_usage.agent_trailer_commits", op = "gt", value = 10 }]
+
+  [[rows.levels]]
+  level = 3
+  criteria = [{ signal = "ai_usage.agent_trailer_commits", op = "gt", value = 40 }]

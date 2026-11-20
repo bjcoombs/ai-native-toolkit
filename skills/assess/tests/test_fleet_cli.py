@@ -106,7 +106,15 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     first = (tmp_path / "out1" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out2" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out3" / "repos.jsonl").read_bytes()
-    assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
+    assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == [
+        "groups.jsonl", "report.md", "repos.jsonl", "run.json", "shared-tooling.svg"]
+    for name in ("report.md", "shared-tooling.svg"):  # diagrams are byte-identical across runs
+        drawn = (tmp_path / "out1" / name).read_bytes()
+        assert drawn == (tmp_path / "out2" / name).read_bytes()
+        assert drawn == (tmp_path / "out3" / name).read_bytes()
+    report = (tmp_path / "out1" / "report.md").read_text(encoding="utf-8")
+    assert "[![Shared tooling](./shared-tooling.svg)](./shared-tooling.svg)" in report
+    assert "Not drawn: skipped: the maturity model has no team rows" in report
     groups = (tmp_path / "out1" / "groups.jsonl").read_bytes()
     assert groups == (tmp_path / "out2" / "groups.jsonl").read_bytes()
     assert groups == (tmp_path / "out3" / "groups.jsonl").read_bytes()
@@ -129,6 +137,85 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     assert isinstance(svc1, dict)
     assert svc1["shared_tooling"]["marketplace_ids"] == ["marketplace:mkt-a"]
     assert svc1["nested_instructions"]["budget"]["claude_code"]["files"] == ["CLAUDE.md"]
+
+
+TEAM_LEVELS = """\
+version = "diagrams-e2e-1"
+
+[[rows]]
+id = "instructions"
+title = "Agent instructions"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "nested_instructions.budget.claude_code.lines", op = "gt", value = 0 }]
+"""
+
+
+def _ci(ref: str) -> str:
+    return f"include:\n  - project: grp/ci-templates\n    ref: {ref}\n    file: /build.yml\n"
+
+
+def test_diagrams_are_drawn_from_a_real_run_and_byte_identical(tmp_path, monkeypatch):
+    root = tmp_path / "droot"
+    make_repo(root, "grpa/svc1", files={"CLAUDE.md": "rules\n", ".gitlab-ci.yml": _ci("v4")})
+    make_repo(root, "grpa/svc2", files={".gitlab-ci.yml": _ci("v4")})
+    make_repo(root, "grpb/lib1", files={".gitlab-ci.yml": _ci("v5")})
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
+    for out in ("d1", "d2"):
+        assert fleet_cli.main([str(root), "--rubric", "levels.toml", "--out", out, "--no-history"]) == 0
+    for name in ("quadrant.svg", "shared-tooling.svg", "report.md"):
+        assert (tmp_path / "d1" / name).read_bytes() == (tmp_path / "d2" / name).read_bytes()
+    rows = {r["repo"]: r for r in _rows(tmp_path / "d1")}
+    scans = rows["grpb/lib1"]["scans"]
+    assert isinstance(scans, dict)
+    assert isinstance(scans["ai_usage"]["total_commits"], int)
+    assert [e["ref"] for e in scans["shared_tooling"]["ci_includes"]] == ["v5"]
+    quadrant = (tmp_path / "d1" / "quadrant.svg").read_text(encoding="utf-8")
+    assert "grpa/svc1: " in quadrant  # plotted, with its tooltip
+    tooling = (tmp_path / "d1" / "shared-tooling.svg").read_text(encoding="utf-8")
+    assert "1 pinned off the fleet's most common ref (dashed)" in tooling
+    assert 'stroke-dasharray="5 4"><title>grpb/lib1 → gitlab_project:grp/ci-templates @ v5' in tooling
+
+
+def test_a_raising_renderer_keeps_exit_0_and_the_history(froot, tmp_path, monkeypatch, capsys):
+    from lib import fleet_tooling_map
+
+    def bug(*_args: object) -> str:
+        raise RuntimeError("render bug")
+    monkeypatch.setattr(fleet_tooling_map, "render_tooling_map", bug)
+    monkeypatch.chdir(tmp_path)
+    assert fleet_cli.main([str(froot), "--out", "out", "--history-dir", "hist"]) == 0
+    assert sorted(p.name for p in (tmp_path / "hist").glob("*/*/*")) == ["groups.jsonl", "repos.jsonl", "run.json"]
+    report = (tmp_path / "out" / "report.md").read_text(encoding="utf-8")
+    assert "Not drawn: skipped: drawing failed (RuntimeError)." in report
+    assert "shared-tooling.svg skipped: drawing failed (RuntimeError)." in capsys.readouterr().err
+
+
+def test_no_diagrams_draws_nothing_and_removes_a_previous_runs(froot, tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert fleet_cli.main([str(froot), "--out", "out", "--no-history"]) == 0
+    assert (tmp_path / "out" / "report.md").is_file()
+    assert "fleet: diagrams -> " in capsys.readouterr().err
+    assert fleet_cli.main([str(froot), "--out", "out", "--no-history", "--no-diagrams"]) == 0
+    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
+
+
+def test_a_diagram_write_failure_keeps_exit_0(tmp_path, monkeypatch, capsys):
+    def boom(*_args: object) -> None:
+        raise OSError("disk full")
+    monkeypatch.setattr(fleet_cli, "write_diagrams", boom)
+    fleet_cli._diagrams(tmp_path, False, None, [], "6mo")
+    assert "fleet: diagrams: not written (OSError: disk full)" in capsys.readouterr().err
+
+    def bug(*_args: object) -> None:
+        raise ValueError("render bug")
+    monkeypatch.setattr(fleet_cli, "build_diagrams", bug)
+    fleet_cli._diagrams(tmp_path, False, None, [], "6mo")
+    assert "fleet: diagrams: not written (ValueError: render bug)" in capsys.readouterr().err
 
 
 def test_a_broken_checkout_is_a_failed_row_and_the_run_completes(froot, tmp_path, capsys):

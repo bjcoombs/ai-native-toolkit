@@ -16,7 +16,9 @@ count distinct sources and marketplaces per group:
 
 Every entry carries a stable ``id`` so a roll-up dedupes on it. A CI source is
 identified by the project, component or repository it comes from (lowercased;
-the version and the GitLab host are dropped). A marketplace is identified by
+the version and the GitLab host are dropped); the pinned version is kept apart
+as ``ref`` (a GitLab include's ``ref:``, a component's or reusable workflow's
+``@ref``; null when unpinned), so a fleet map can show a pin that drifted (#674). A marketplace is identified by
 its name, the key Claude Code itself uses to tell marketplaces apart, so a
 manifest and a settings entry naming the same marketplace collapse to one.
 ``distinct_ids`` is that roll-up over several blocks.
@@ -52,6 +54,7 @@ class CiInclude(TypedDict):
     kind: CiKind
     source: str
     id: str
+    ref: str | None  # the pinned version: GitLab ``ref:``, component or workflow ``@ref``
     path: str
     line: int
     tracked: bool
@@ -90,10 +93,10 @@ _TOP_LEVEL_INCLUDE = re.compile(r"""^(?:include|"include"|'include')\s*:(.*)$"""
 _TOP_LEVEL_JOBS = re.compile(r"""^(?:jobs|"jobs"|'jobs')\s*:""")
 _JOB_USES = re.compile(r"""^(?:uses|"uses"|'uses')\s*:(.*)$""")
 _INCLUDE_VALUE = r"""("[^"]*"|'[^']*'|(?:\$\{[^}]*\}|[^\s,}#])+)"""
-_INCLUDE_KEY = re.compile(r"(?:^|[\s{,])(project|component)\s*:\s*" + _INCLUDE_VALUE)
-_BLOCK_KEY = re.compile(r"^(project|component)\s*:\s*" + _INCLUDE_VALUE)
+_INCLUDE_KEY = re.compile(r"(?:^|[\s{,])(project|component|ref)\s*:\s*" + _INCLUDE_VALUE)
+_BLOCK_KEY = re.compile(r"^(project|component|ref)\s*:\s*" + _INCLUDE_VALUE)
 _REUSABLE_REF = re.compile(
-    r"""^([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)/\.github/workflows/[^\s"'#]+"""
+    r"""^([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)/\.github/workflows/[^\s"'#@]+(?:@([^\s"'#]+))?"""
 )
 _HOST_VARS = ("$CI_SERVER_FQDN", "${CI_SERVER_FQDN}", "$CI_SERVER_HOST", "${CI_SERVER_HOST}")
 
@@ -117,6 +120,18 @@ def _strip_comment(line: str) -> str:
         elif ch == "#" and (i == 0 or line[i - 1].isspace()):
             return line[:i]
     return line
+
+
+def pin(ref: str | None) -> str | None:
+    """A pinned ref as recorded: None when absent or when it holds a CI variable (``$TPL_REF``),
+    whose value the file does not say, so ``--full`` and counts-only agree."""
+    ref = (ref or "").strip()
+    return None if not ref or "$" in ref else ref
+
+
+def _component_ref(raw: str) -> str | None:
+    """``host/group/project/name@1.0`` -> ``1.0``; None without a version."""
+    return pin(raw.partition("@")[2])
 
 
 def _component_source(raw: str) -> str:
@@ -151,36 +166,93 @@ def _include_lines(text: str) -> list[tuple[int, str, bool]]:
             continue
         if inside:
             out.append((number, line, False))
-    return out
+    return _join_flow(out)
 
 
-def _flow_keys(text: str) -> list[tuple[str, str]]:
-    """``project`` / ``component`` keys of a flow-style include item.
+def _flow_depth(line: str) -> int:
+    """Net ``{``/``[`` opened by ``line``, ignoring brackets inside quoted scalars."""
+    depth = 0
+    quote = ""
+    for ch in line:
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+    return depth
+
+
+def _join_flow(rows: list[tuple[int, str, bool]]) -> list[tuple[int, str, bool]]:
+    """Join a flow collection that spans lines (``- {project: a,`` then ``ref: v1}``)
+    into its first row, so its keys stay one item.
+
+    Only a row that opens a flow collection (its value, after an optional ``- ``,
+    starts with ``{`` or ``[``) starts a join, and quoted brackets are not counted,
+    so a bracket in a ``rules: if:`` regex never swallows the items after it.
+    """
+    joined: list[tuple[int, str, bool]] = []
+    depth = 0
+    for number, line, inline in rows:
+        if depth > 0:
+            first, text, flag = joined[-1]
+            joined[-1] = (first, f"{text} {line.strip()}", flag)
+            depth = max(depth + _flow_depth(line), 0)
+            continue
+        joined.append((number, line, inline))
+        value = line.strip()
+        value = value[1:].lstrip() if value.startswith("-") else value
+        if value.startswith(("{", "[")):
+            depth = max(_flow_depth(value), 0)
+    return joined
+
+
+def _flow_keys(text: str) -> list[tuple[str, str, int]]:
+    """``project`` / ``component`` / ``ref`` keys of flow-style include items, with each
+    key's item number on the line (``[{project: a, ref: v1}, {project: b}]`` is two items).
 
     Only keys one brace deep count - the item's own keys - so a nested
     ``inputs: {project: x}`` is not read as a source.
     """
-    keys: list[tuple[str, str]] = []
+    keys: list[tuple[str, str, int]] = []
     for match in _INCLUDE_KEY.finditer(text):
         prefix = text[: match.start(1)]
         if prefix.count("{") - prefix.count("}") == 1:
-            keys.append((match.group(1), match.group(2)))
+            keys.append((match.group(1), match.group(2), _objects_opened(prefix)))
     return keys
 
 
-def _include_keys(text: str) -> list[tuple[int, str, str]]:
-    """(line, key, raw value) for each include item's own source key.
+def _objects_opened(prefix: str) -> int:
+    """How many top-level ``{`` objects ``prefix`` has opened."""
+    depth = opened = 0
+    for ch in prefix:
+        if ch == "{":
+            opened += depth == 0
+            depth += 1
+        elif ch == "}":
+            depth = max(depth - 1, 0)
+    return opened
+
+
+def _include_keys(text: str) -> list[tuple[int, str, str, int]]:
+    """(line, key, raw value, item) for each include item's own source and ``ref`` key.
 
     A block-style key counts only at the include item's own indentation, so
     ``project:`` under a component's ``inputs:`` is an input, not a source.
+    ``item`` numbers the include items, so a ``ref:`` joins its own item's project.
     """
-    keys: list[tuple[int, str, str]] = []
+    keys: list[tuple[int, str, str, int]] = []
     item_col: int | None = None
     list_col: int | None = None
+    item = 0
     for number, line, inline in _include_lines(text):
         if inline:
             item_col = list_col = None
-            keys += [(number, k, v) for k, v in _flow_keys(line)]
+            flow = _flow_keys(line)
+            keys += [(number, k, v, item + 1 + sub) for k, v, sub in flow]
+            item += 1 + max((sub for _, _, sub in flow), default=0)
             continue
         content = line.lstrip()
         col = len(line) - len(content)
@@ -193,34 +265,42 @@ def _include_keys(text: str) -> list[tuple[int, str, str]]:
             col += len(content) - len(rest)
             content = rest
             item_col = col
+            item += 1
         if content.startswith(("{", "[")):
-            keys += [(number, k, v) for k, v in _flow_keys(content)]
+            flow = _flow_keys(content)
+            keys += [(number, k, v, item + sub) for k, v, sub in flow]
+            item += max((sub for _, _, sub in flow), default=0)
             continue
         if item_col is None:
             item_col = col
         match = _BLOCK_KEY.match(content)
         if match and col == item_col:
-            keys.append((number, match.group(1), match.group(2)))
+            keys.append((number, match.group(1), match.group(2), item))
     return keys
 
 
 def gitlab_includes(text: str, path: str, tracked: bool) -> list[CiInclude]:
     """``include: project:`` / ``include: component:`` entries in a GitLab CI file."""
     entries: list[CiInclude] = []
-    for number, key, raw_value in _include_keys(text):
+    keys = _include_keys(text)
+    refs = {item: pin(_unquote(v)) for _, k, v, item in keys if k == "ref"}
+    for number, key, raw_value, item in keys:
         value = _unquote(raw_value)
-        if not value:
+        if not value or key == "ref":
             continue
         if key == "project":
             source = value.strip("/")
             kind: CiKind = "gitlab_project"
+            ref = refs.get(item)
         else:
             source = _component_source(value)
             kind = "gitlab_component"
+            ref = _component_ref(value)
         entries.append({
             "kind": kind,
             "source": source,
             "id": f"{kind}:{source.lower()}",
+            "ref": ref,
             "path": path,
             "line": number,
             "tracked": tracked,
@@ -285,6 +365,7 @@ def github_reusable_workflows(text: str, path: str, tracked: bool) -> list[CiInc
             "kind": "github_reusable_workflow",
             "source": repo,
             "id": f"github_reusable_workflow:{repo.lower()}",
+            "ref": pin(match.group(2)),
             "path": path,
             "line": number,
             "tracked": tracked,

@@ -769,7 +769,63 @@ colour; the cell prints `?` and a key letter (`unknown_keys`, deduplicated in re
 order) and the key names the missing signals in visible text. A comparison adds
 `change_text` under the level. White background, `html.escape`d text, labels truncated
 by character count, fixed number formatting: the same run gives the same bytes. Golden
-renders: `tests/fixtures/fleet_heatmap/` (regeneration command in its README).
+renders: `tests/fixtures/fleet_heatmap/` (regeneration command in its README). Its text,
+truncation, hatch pattern and document head come from `fleet_svg` with the heat map's own
+literal colours, so the goldens stayed byte-identical through the move.
+
+**`fleet_svg.py`**
+Shared SVG helpers for every fleet diagram (#674; the heat map, the quadrant, the
+shared-tooling map, and the slope, layer-bar and trend charts of #675/#676). The API:
+
+| Helper | Use |
+|---|---|
+| `esc(s)` | Escape element text (`&`, `<`, `>`). |
+| `text(x, y, s, *, size, fill, anchor, weight, extra, tooltip, cls)` | One `<text>`; one-decimal coordinates. Pass `fill` (a colour, the heat map) or `cls` (a `THEME` role, themed diagrams), and `tooltip` for a `<title>`. |
+| `text_width(s, size)`, `text_box(x, y, s, size, anchor)`, `truncate(s, limit, keep_tail)` | Sizing by character count (`CHAR_W` at 12px), no font metrics. |
+| `LinearScale(lo, hi, start, end)`, `.ticks(n)`, `nice_ceiling(v)`, `tick_label(v)` | Axes: a linear map (y runs `end` < `start`), even ticks, a 1/2/5 x 10^k axis top. |
+| `hatch_pattern(id, background, stroke, width, classes)`, `THEMED_HATCH`, `HATCH_FILL` | The diagonal hatch for unknown, never zero; themed diagrams put `THEMED_HATCH` in the defs and fill with `HATCH_FILL`. |
+| `hatched_note(x, y, lines)` | The "unknown" key: a hatched swatch with wrapped lines naming what is unknown. |
+| `place_labels(points, bounds, *, size, radius, obstacles)` -> `PlacedLabel \| None` per point | Greedy collision nudging: the first `LABEL_OFFSETS` candidate inside `bounds` that hits no disc, obstacle box or earlier label; `None` means "name it elsewhere". Renderer and overlap test read the same boxes. |
+| `spread_vertical(ys, min_gap)` | End labels (trend, slope) pushed apart to `min_gap`, order kept. |
+| `overlaps(a, b)`, `Box` | The box test. |
+| `THEME`, `theme_style()` | Role -> (light, dark) colours as `t-`/`f-` (fill) and `s-` (stroke) classes, dark under `prefers-color-scheme`. The only `text` rule sets `font-family`, so it never overrides a text's attributes (`tests/svg_cascade.py`). |
+| `document(w, h, title, desc, body, *, style, defs, background)` | The whole file: prolog, `viewBox`, `<title>`, `<desc>`, style, defs and a full-canvas background (`f-bg` unless a colour is given). |
+
+No script, no external font or link; fixed number formatting. Tests: `tests/test_fleet_diagrams.py`.
+
+**`fleet_quadrant.py`**
+The activity x maturity quadrant (#674). `repo_points(levels, repos)` gives each repository
+its commit count (`ai_usage.total_commits` over the run window; `None` for a failed scan or
+an unavailable block) and maturity: each `team` row re-evaluated against the repository's
+own `scans` (`rubric.evaluate_row`), as a share of the row's top level, averaged over the
+rows that could be measured (`None` when none could). `layout` places the plotted points
+and their labels (captions in `CAPTIONS` are obstacles); `render_quadrant` draws them with
+the busy-and-immature quadrant (at or above the median commits, below half the top level,
+`at_risk`) shaded, and names every repository with an unknown axis on a hatched strip,
+never at zero, and every label that fit nowhere under the plot.
+
+**`fleet_tooling_map.py`**
+The shared-tooling map (#674). `tooling_view(repos)` reads each scanned repository's
+`shared_tooling` block: links to its tracked CI source and marketplace ids with the refs it
+pins (`ci_includes[].ref`), the repositories that share nothing, and those with no evidence
+(failed, absent or unavailable block). `common_refs` is each item's most pinned ref (ties:
+lexically greatest); `drifted` marks a link pinned off it, drawn dashed. An unpinned include
+is not drift (counted as unpinned); an include whose `ref` key is absent (dropped by
+counts-only) is "pin unknown", drawn dotted. A run whose blocks carry no `ref` (before #674)
+says "drift not shown" instead. `render_tooling_map` draws
+repositories left, items right with their dependent counts, and the unknown repositories on
+a hatched strip.
+
+**`fleet_diagrams.py`**
+The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#674).
+`build_diagrams(levels, repos, window)` returns a `Diagram` per picture (`file`, `title`,
+`question`, and `svg` or the one-line `skipped` reason: no maturity model, no team rows, no
+repositories). `report_markdown` embeds each with a relative clickable image link or says
+why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
+report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
+stale picture. A new diagram (#675, #676) adds its module, its `FILE` to `DIAGRAM_FILES` and
+an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (regenerate with
+`uv run --locked python tests/fleet_diagrams_fixture.py` from `skills/assess`).
 
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
@@ -2156,11 +2212,14 @@ Shared CI sources and agent marketplaces, per repository (issue #566), the
 file-content half of the organisation-wide evidence in #550.
 `scan_shared_tooling(repo_root)` writes `{available, ci_includes[], marketplaces[],
 ci_source_ids[], marketplace_ids[]}`. `ci_includes` rows (`kind`, `source`, `id`,
-`path`, `line`, `tracked`) come from the top-level `include:` section of
+`ref`, `path`, `line`, `tracked`) come from the top-level `include:` section of
 `.gitlab-ci.yml` (`project:` -> `gitlab_project`, `component:` ->
 `gitlab_component` with the host and `@version` dropped) and from `uses:
 <owner>/<repo>/.github/workflows/...` in `.github/workflows/*.yml`
-(`github_reusable_workflow`, keyed on the repository). Local includes, templates,
+(`github_reusable_workflow`, keyed on the repository). `ref` is the pin kept apart
+from the id (#674): a GitLab include item's own `ref:` (joined by include item, so a
+`ref:` under `inputs:` is not it), a component's or workflow's `@ref`, `null` when
+unpinned; counts-only keeps it when it is a token (`v4`, `1.2.0`, a SHA) and drops it otherwise (`release/1.2`). Local includes, templates,
 `./.github/workflows` references, a job's `trigger:`, keys in nested lists
 (`inputs:`, `rules:`), step-level `uses:` and `run:` script text are skipped.
 Symlinks and paths resolving outside the repository are not read. `marketplaces`

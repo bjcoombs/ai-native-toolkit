@@ -37,7 +37,7 @@ no third-party dependencies.
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
-| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl` and `DIR/run.json`; a `DIR` inside any target is refused. |
+| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/run.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--rubric FILE` | A maturity rubric in the `lib/rubric.py` TOML format (an invalid rubric exits 2); its `version` is stamped in `run.json`. Each group row carries every rubric row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
 | `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. Unreadable input exits 2. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
@@ -52,6 +52,7 @@ no third-party dependencies.
 | `--history-dir DIR` | Run history root (default `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`). |
 | `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
 | `--no-history` | Do not keep this run in the history. |
+| `--no-diagrams` | Do not draw the [diagrams](#output-reportmd-and-diagrams) (`DIR/report.md` and its SVGs); any a previous run left in `DIR` are removed. |
 
 **Exit codes.** `0`: the run completed and `repos.jsonl` and `run.json` were written, including
 when some repositories failed (each is a `failed` row; stderr prints the count
@@ -271,6 +272,25 @@ row's set and evidence both moved and the change cannot be split. An org row
 reads the group's settings, not its repositories, so on both sides it is always
 `level` (`settings_changed` says whether the settings moved).
 
+## Output: `report.md` and diagrams
+
+Every run draws diagrams from its own rows, with no model call, and writes them beside
+`groups.jsonl` with `DIR/report.md` embedding each one as a relative image link (it renders
+in GitHub and GitLab Markdown previews). A diagram that cannot be drawn is skipped and the
+report says why in one line; stderr names it too. A diagram failure never changes the exit
+code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
+
+| File | Question | Built from |
+|------|----------|------------|
+| `quadrant.svg` | Which busy repositories are least mature? | Each repository's commits in the window (`ai_usage.total_commits`, non-merge) across, and up its mean maturity: every `team` row of the `--rubric` maturity model evaluated on that repository alone, as a share of the row's top level, averaged over the rows that could be measured. The busy (at or above the median) and below-half quadrant is shaded. Skipped without `--rubric` or without team rows. |
+| `shared-tooling.svg` | What breaks if a shared template changes, and who drifted off it? | `shared_tooling`: repositories linked to the CI sources and marketplaces they reference, with each item's dependent count. Drift: a CI include pinned to a ref other than the fleet's most common ref for that source (ties go to the lexically greatest ref) is dashed, and the SVG caption states this rule; an unpinned include is counted as unpinned, not drift; a pin counts-only could not keep is dotted as unknown. |
+
+Unknown is never drawn as zero: a repository with no measured row or no commit count, or no
+`shared_tooling` evidence, is named on a hatched strip. Colours follow the viewer's light or
+dark scheme. The SVGs have no script and no external font or link, and the same run draws the
+same bytes. Logic: `lib/fleet_diagrams.py`, `lib/fleet_quadrant.py`,
+`lib/fleet_tooling_map.py`, on the shared helpers in `lib/fleet_svg.py`.
+
 ## Leadership heat map: `heatmap.py`
 
 `heatmap.py` renders one SVG from a run's `groups.jsonl`, with no rescan: groups
@@ -421,6 +441,6 @@ so a label leans mostly on the repository's name. Present them as such.
 
 The logic lives in `skills/assess/scripts/lib/fleet.py`, `lib/fleet_stamp.py`,
 `lib/fleet_history.py`, `lib/fleet_compare.py`,
-`lib/fleet_activity.py`, `lib/fleet_cleanup.py` and
+`lib/fleet_activity.py`, `lib/fleet_cleanup.py`, `lib/fleet_diagrams.py` and
 `skills/assess/scripts/lib/fleet_labels.py` (see that package's
 `lib/README.md`).

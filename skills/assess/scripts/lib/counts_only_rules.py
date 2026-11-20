@@ -394,6 +394,10 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "shared_tooling.ci_includes.kind": TOKEN,
         "shared_tooling.ci_includes.source": DROP,
         "shared_tooling.ci_includes.id": ID,
+        # A pinned version (v4, 1.2.0, main, a SHA), compared for equality across
+        # the fleet (#674): kept when it is a short token. A dropped ref reads as
+        # "pin unknown" in the shared-tooling map, never as in step.
+        "shared_tooling.ci_includes.ref": TOKEN,
         "shared_tooling.marketplaces.kind": TOKEN,
         "shared_tooling.marketplaces.name": DROP,
         "shared_tooling.marketplaces.source": DROP,
