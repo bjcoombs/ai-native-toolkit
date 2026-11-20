@@ -9,7 +9,10 @@ shape is ``skills/fleet/references/repos.schema.json``; the logic lives in
 line per group in ``<out>/groups.jsonl`` (``lib/fleet_groups.py``, schema
 ``skills/fleet/references/groups.schema.json``): repository counts, distinct
 shared CI sources and marketplaces, the joined ``--settings`` and each
-``--levels`` row's whole level.
+``--levels`` row's whole level, plus each group's agent-building class counts.
+Similar ``builds-agent`` repositories across groups are clustered into
+``<out>/agent_clusters.json`` (``lib/fleet_agent_building.py``): counts and SDK
+slugs only, member repositories named only with ``--name-agent-clusters``.
 
 Target repositories are never written to. With ``--delete-after`` a scanned
 clone is removed once its row is in hand, only when nothing in it would be
@@ -23,6 +26,12 @@ embedding ``quadrant.svg``, ``shared-tooling.svg``, ``trend.svg`` (group trend l
 over the run history, ``lib/fleet_trends.py``), ``slope.svg`` (from the ``--compare``
 result) and ``layer-bars.svg``, or the reason each was skipped;
 ``--no-diagrams`` turns them off.
+
+``--fleet-config FILE`` (``lib/fleet_config.py``, #706) is validated before any scan
+and every repository scan gets the same copy of it; a repository's own
+``.assess/config.toml`` sections extend it for that repository. ``run.json``
+records its canonical sha256 and per-section entry counts, never a value, and
+runs with different configs do not compare.
 
 A counts-only run is also kept in the run history,
 ``${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet/<org>/<date>/``
@@ -40,13 +49,14 @@ Exit codes:
        --levels or --settings (a settings directory with no fragment files included),
        a list entry whose ~user cannot be expanded, bad scan arguments, an --out that
        cannot be created or written (checked before any scan), an unusable history
-       location, or an unreadable --compare run
+       location, an unreadable --compare run, or an unreadable or invalid
+       --fleet-config (the message names the key)
 
 Run:
     uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
-        [--no-history] [--no-diagrams]
+        [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
 # /// script
@@ -68,6 +78,7 @@ import argparse
 import os
 import sys
 import tempfile
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -94,6 +105,7 @@ from lib.fleet import (  # noqa: E402
     write_rows,
 )
 from lib.fleet_activity import window_start  # noqa: E402
+from lib.fleet_agent_building import clusters, write_clusters  # noqa: E402
 from lib.fleet_doc_freshness import freshness_rows, summary_line, write_freshness  # noqa: E402
 from lib.fleet_cleanup import CloneDeleter  # noqa: E402
 from lib.fleet_compare import (  # noqa: E402
@@ -113,6 +125,7 @@ from lib.fleet_diagrams import (  # noqa: E402
     clear_diagrams,
     write_diagrams,
 )
+from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config  # noqa: E402
 from lib.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups  # noqa: E402
 from lib.fleet_history import (  # noqa: E402
     HistoryError,
@@ -178,6 +191,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
              "fragments, or a directory of fragment files (a ghreport --render-dir works: its "
              "settings/ subdirectory is read). Joined to each group by scope, nearest ancestor first.",
     )
+    parser.add_argument(
+        "--fleet-config", metavar="FILE",
+        help="Fleet settings (TOML): the [ai_usage], [review] and [platform] sections, validated "
+             "before any scan and passed to every repository scan. A repository's own "
+             ".assess/config.toml sections extend it. run.json records its sha256.",
+    )
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1,
                         help="Repositories scanned in parallel (default: CPU count).")
     parser.add_argument("--window", default=None,
@@ -216,6 +235,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--no-diagrams", action="store_true",
         help=f"Do not draw the diagrams (OUT/{REPORT_FILE} and its SVGs); any a previous run left "
              "are removed.",
+    )
+    parser.add_argument(
+        "--name-agent-clusters", action="store_true",
+        help="Name the member repositories and groups of each agent cluster in "
+             "OUT/agent_clusters.json. Off by default: a cluster carries counts and SDK slugs only.",
     )
     add_renamed_flag(parser)
     args = parser.parse_args(argv)
@@ -369,12 +393,29 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
     print(f"fleet: diagrams -> {out_dir / REPORT_FILE}", file=sys.stderr)
 
 
+def _scan_all(targets: list[Target], options: ScanOptions, jobs: int, deleter: CloneDeleter | None,
+              fleet_config_text: str | None) -> list[FleetRow]:
+    """Every scan. With ``--fleet-config``, each reads one private copy of the text validated
+    before any scan, by absolute path, so an edit mid-run cannot reach some scans only."""
+    if fleet_config_text is None:
+        return run_fleet(targets, options, jobs, after=deleter)
+    with tempfile.TemporaryDirectory(prefix="fleet-config-") as tmp:
+        copy = Path(tmp).resolve() / "fleet-config.toml"
+        copy.write_text(fleet_config_text, encoding="utf-8")
+        return run_fleet(targets, replace(options, fleet_config=copy), jobs, after=deleter)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     maturity_model: MaturityModel | None = None
     scans: list[str] | None = None
     settings: dict[str, JsonDict] = {}
+    fleet_config: FleetConfig | None = None
+    fleet_config_text: str | None = None
     try:
+        if args.fleet_config is not None:
+            fleet_config_text = read_fleet_config(Path(args.fleet_config))
+            fleet_config = parse_fleet_config(fleet_config_text)
         if args.levels is not None:
             maturity_model = load_levels(Path(args.levels), signal_path_validator())
         if args.settings is not None:
@@ -384,6 +425,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.window is not None:
             parse_window(args.window)
         targets = _targets(args)
+    except FleetConfigError as e:
+        print(f"error: --fleet-config {args.fleet_config}: {e}", file=sys.stderr)
+        return 2
     except (LevelsError, SettingsError, UnknownScanError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -404,6 +448,7 @@ def main(argv: list[str] | None = None) -> int:
         "levels_version": maturity_model["version"] if maturity_model is not None else None, "window": window,
         "counts_only": not args.full, "scans": sorted(scans) if scans is not None else None,
         "paths_hashed": hash_salt is not None,
+        "fleet_config_sha256": config_sha256(fleet_config) if fleet_config is not None else None,
     }
     keeps_history = not args.no_history and not args.full
     try:
@@ -451,14 +496,17 @@ def main(argv: list[str] | None = None) -> int:
     freshness_path = write_freshness(out_dir, freshness.rows)
     # Each scan runs with this interpreter: one hint here, not one per repository.
     warn_missing_packages()
-    rows = run_fleet(targets, options, args.jobs, after=deleter)
+    rows = _scan_all(targets, options, args.jobs, deleter, fleet_config_text)
     path = write_rows(out_dir, rows)
     groups = roll_up(rows, maturity_model, settings, counts_only=not args.full)
     groups_path = write_groups(out_dir, groups)
+    agent_clusters = clusters(rows, name=args.name_agent_clusters)
+    write_clusters(out_dir, agent_clusters)
     stamp = build_stamp(
         rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
+        fleet_config=fleet_config,
     )
     write_stamp(out_dir, stamp)
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
@@ -467,6 +515,9 @@ def main(argv: list[str] | None = None) -> int:
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)
+    print(f"fleet: agent clusters: {len(agent_clusters['clusters'])} over "
+          f"{agent_clusters['clustered_repos']} of {agent_clusters['builds_agent_repos']} builds-agent "
+          "repositories", file=sys.stderr)
     for row in failed:
         print(f"  failed: {row['repo']} ({row['reason']})", file=sys.stderr)
     if freshness_path is not None:

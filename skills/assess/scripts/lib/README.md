@@ -667,8 +667,9 @@ the scan degrades. The core provides the `build_run_context` arguments
 (`repo_root`, `requested_scope`, `run_date`, `non_interactive`); `scope` (the
 absolute `--scope` path, or None), `instruction_files`, `excludes` (the
 `(dirs, patterns)` pair from `.assess/config.toml`) and `history_window` (the stats
-sidecar's churn window via `git_churn.window_from_churn_label`, or None) are setup
-specs. `build_run_context` makes one `run_scans` call with no stage, which runs the
+sidecar's churn window via `git_churn.window_from_churn_label`, or None) and
+`fleet_config` (the repository's `[ai_usage]`, `[review]` and `[platform]` sections,
+`lib/fleet_config.py`) are setup specs. `build_run_context` makes one `run_scans` call with no stage, which runs the
 stages (`setup`, `read_side`, `post_offers`, `final`) in that order and each in table
 order (#558). Only `anomalies` relies on its stage, staying the last scan key while
 later entries append to the table.
@@ -721,7 +722,8 @@ The headless, signals-only run behind `assess_signals.py` (issue #545). `collect
 the selected registry scans, plus the registry keys they read, through `run_scans` with
 inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 `grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`,
-`history_window` set to `--window` for history-reading scans, and the
+`history_window` set to `--window` for history-reading scans, `fleet_config` merged from
+`--fleet-config` and the target's `.assess/config.toml` (`fleet_config.repo_fleet_config`), and the
 `build_run_context` arguments `requested_scope=None`, `run_date` and
 `non_interactive=True`), so a raising scan degrades through `safe` and the run
 completes. A name the runner provides is never recomputed from the table. A
@@ -813,11 +815,27 @@ hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
+**`fleet_agent_building.py`**
+The fleet roll-up of the `agent_building` block (issue #689), read from `repos.jsonl`
+rows (counts-only rows carry every field it reads). `group_counts` gives a group's
+scanned repositories per class, the `groups.jsonl` `agent_building` field (`null` with
+no available block, never a false 0). `clusters(rows, name=False)` links two
+`builds-agent` repositories when they have the same class, a Jaccard similarity of
+their `sdks` sets of at least 0.5 (two empty sets are not similar), and the same
+`pairing` value; clusters are the connected components of that relation with two or
+more members (union-find). Each cluster carries `id`, `agent_class`, `size`, `groups`
+(distinct groups spanned), `sdks` (union), `shared_sdks` (intersection) and `pairing`;
+`repo_ids` and `group_ids` only with `name=True` (`fleet.py --name-agent-clusters`).
+Clusters sort by size, then SDK union, then pairing, never by a repository name.
+`write_clusters` writes `agent_clusters.json` atomically on every run, so a rerun
+without the naming flag replaces a named file. The file is not kept in the run
+history. Tests: `tests/test_fleet_agent_building.py`.
+
 **`fleet_groups.py`**
 The group roll-up behind `groups.jsonl` (issue #568). `roll_up` groups `FleetRow`s by
 `group` (sorted) and `group_row` builds each `GroupRow`: repository counts, distinct
 shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanned rows
-only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each maturity model row's level through `levels.evaluate` with its
+only; null with no available block, `shared_tooling_repos` counting the evidence), the agent-building class counts (`fleet_agent_building.group_counts`, #689; `NotRequired`, absent in older rows), the joined settings, and each maturity model row's level through `levels.evaluate` with its
 `top_level` (the row's number of levels, #684, so a history entry reads as a share of top
 level without the model file; additive and `NotRequired`, absent in older rows), with
 no threshold config of its own. `load_settings` reads ghreport settings fragments
@@ -1004,8 +1022,8 @@ report heading and question to `HEADINGS` (one source for a drawn, skipped or fa
 **`fleet_trends.py`**
 Group trend lines across the dated run history (#676). `history_runs(org_dir, stamp, repos)`
 reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
-`groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode and
-path hashing and records a maturity-model version; unreadable entries are passed over. One
+`groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode,
+path hashing and `--fleet-config` hash and records a maturity-model version; unreadable entries are passed over. One
 run per date: the entry over this run's repository set, else the highest suffix.
 `trend_run(stamp, groups, levels)` is one run's point per group: `group_mean`, the
 `fleet_maturity.mean_share` of the group's known team rows over their `top_level` (#684, the
@@ -1035,10 +1053,41 @@ Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
 commit, plugin version, UTC scan date, effective window, maturity-model version, output mode
 (`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
-`scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true). No path,
+`scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true), plus
+`fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
+without one, absent before #706 and read as null, so the stamp version stays 1). No path,
 salt, timing or input mode, so a
 root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
 writes atomically with sorted keys.
+
+**`fleet_config.py`**
+The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
+`[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
+#696 and #714). API:
+- `load_fleet_config(path)` / `parse_fleet_config(text)` validate against `SECTION_KEYS`
+  and raise `FleetConfigError` naming the key (`review.foo`) and expected kind, never the
+  value; both CLIs exit 2 on it.
+- `ai_usage_section` / `review_section` / `platform_section` return the typed section
+  (`AiUsageSection`, `ReviewSection`, `PlatformSection`; `total=False` TypedDicts).
+- `merge_repo_sections(fleet, repo_config)` and `repo_fleet_config(repo_root, fleet)`: the
+  merge rule. A repository's `.assess/config.toml` sections extend the fleet file: list
+  keys are the fleet entries in order then the repository's new ones (fleet indices are
+  stable); a scalar the fleet sets keeps the fleet value (a differing repository value is
+  ignored with a warning); an unset scalar takes the repository value. Repository input
+  that does not validate is skipped with a stderr warning, never raised.
+- `config_sha256` (sorted-key JSON of the validated config: comments and key order do not
+  count, list order does) and `section_entries` (a list counts its items, else 1) feed
+  the run stamp.
+
+Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
+(`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`, or
+any `Validator`), the key in the section's TypedDict, and a row in `skills/fleet/SKILL.md`.
+A scan reads the merged config through the registry input `fleet_config` (a private setup
+spec, `run_setup.fleet_config`, in `/assess`; `signals.build_inputs` supplies it merged with
+the fleet file in the headless run). The value is private, never a run-context block, so it
+needs no counts-only rule; a consumer reports counts only. Comparability: `fleet_compare`,
+`fleet_history._MATCH_KEYS` and `fleet_trends.MATCH_KEYS` all key on
+`fleet_config_sha256`. Tests: `tests/test_fleet_config.py`.
 
 **`fleet_doc_freshness.py`**
 Cross-repo doc freshness (issue #664), opt-in: a docs repository's `[[describes]]`
@@ -1095,7 +1144,7 @@ or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` re
 name that is not one plain path component, `entry_dir` refuses a symlinked directory on
 the way, and `entry_conflict` keeps a same-day entry that is not this tool's (no readable
 `run.json` at the current stamp version) or whose stamp differs in maturity-model version,
-window, output mode, scan selection or path hashing, or that holds a different
+window, output mode, scan selection, path hashing or `--fleet-config` hash, or that holds a different
 repository set (`entry_repos`), so a partial rerun never replaces a full-fleet entry;
 `choose_entry` then moves to
 `<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
@@ -1126,7 +1175,8 @@ Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
 `RunVersionError` for another envelope version or a run with no `run.json`, which callers
 turn into a not-comparable result). `comparability` reuses
 `diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
-adds maturity-model version, window, output mode, scan selection and path hashing; any reason
+adds maturity-model version, window, output mode, scan selection, path hashing and the
+`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config); any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
@@ -1344,7 +1394,9 @@ folder->source provenance map (issue #178) consumed by `doc_provenance.py`, and 
 `assess_core.py` and `doc-graph-svg.py`. `resolve_excludes`
 is the single shared path that combines config excludes with CLI `--exclude`; both the treemap
 CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.
-Degrades silently on missing or malformed config rather than blocking the run.
+Degrades silently on missing or malformed config rather than blocking the run. The
+`[ai_usage]`, `[review]` and `[platform]` sections are read by `fleet_config.py`, not here
+(they extend a `--fleet-config` file, #706).
 
 **`decline_markers.py`**
 Reads the `.assess/.no-<tool>` markers that record a permanent decline of an optional
@@ -2020,10 +2072,11 @@ and `name` joins the rule names in name order with `", "`, except that a merge w
 exact rule keeps the exact rule's `name`, so a config_drift snapshot of that rule sees
 the wildcards' settings, never a renamed rule. It reuses a
 `protected_branches(project)` read when given one (config_drift reads the list once per
-scan), and returns None only from a readable list shorter than
-`PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
-branch by name (the `ghreport.sh` fallback), so an exact rule on a later page combines with the
-first-page wildcards; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
+scan). `protected_branches` reads `PROTECTED_PAGE` (100) rules a page until a short page
+ends the list (as `ghreport.sh` does with `--paginate`), so an exact rule and every
+wildcard on any page merge; a refused or malformed later page raises, never a partial
+merge, and a list still full after `PROTECTED_MAX_PAGES` (20) pages raises `truncated`.
+None comes only from that complete list with no cover. A 403 or 404 raises
 like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.py`,
 `tests/test_gitlab_protected_branches.py` (stubbed `glab`/`gh` as the whole `PATH`, offline).
 
@@ -2485,6 +2538,47 @@ Claude Code tells marketplaces apart by, so a manifest and a settings entry nami
 it count once. The two id lists credit git-tracked files only, as `agent_ops` does. Outside a git checkout (or when git fails) the block is `available: false` with a `reason`, so a roll-up never reads unknown tracking as "shares nothing"; entries are still listed. `is_tracked` lives in `git_churn` beside `tracked_files`, shared with `agent_ops`.
 `distinct_ids(blocks)` is the fleet roll-up: the union of the id lists, skipping
 `available: false` blocks. YAML is read line by line (stdlib); offline, no `gh`.
+
+**`agent_building.py`**
+What a repository builds with agents, per repository (issue #689): an inventory, not
+scored, and named by no maturity model row. `scan_agent_building(repo_root)` writes
+`{available, agent_class, sdks[], agent_framework, llm_sdk, manifests, config[],
+ci_agents[], tool_loop_files, mcp_server_files, source_files_read, source_files_capped,
+issue_trackers[], git_hosts[], pairing}`. Evidence: (a) dependency names from the
+manifests `agent_manifests.reader_for` recognises (`package.json`, `pyproject.toml`,
+`requirements*.txt`, `Pipfile`, `go.mod`, `pom.xml`, Gradle, `Cargo.toml`, `Gemfile`,
+`*.csproj`), mapped through the pinned `agent_building_vocab.PACKAGES` table to slugs of
+kind `framework`, `llm`, `mcp`, `tracker` or `git_host`; (b) `config` kinds
+`instruction_file` (`instruction_files.INSTRUCTION_FILE_PATHS`), `mcp_json`,
+`claude_agents` and `ci_agent_job` (`CI_AGENT_PATTERNS` in `.gitlab-ci.yml` and
+`.github/workflows/*.yml`); (c) the count of source files matching
+`TOOL_LOOP_PATTERNS` and `MCP_SERVER_PATTERNS`; (d) issue-tracker and Git-host clients
+from manifests or `ENDPOINT_PATTERNS`, `pairing` when both are present. Every string is
+a vocabulary slug, so counts-only keeps the block whole. `classify` is the class rule,
+first match wins: `builds-agent` (an agent framework, or a model SDK with a tool-call
+loop or the pairing), `builds-mcp-server` (an MCP server pattern), `uses-agent-tooling`
+(any config kind), else `none`. A model SDK with no loop and no pairing is `none`.
+Git-tracked files only, symlinks skipped; manifests and source under
+`doc_graph.is_excluded_path` trees, and test files (`is_test_path`), are not read by
+the heuristic; at most `MAX_SOURCE_FILES` files of `MAX_FILE_BYTES`. The vocabulary
+patterns use `[.]` and `[(]` so the module never matches its own source. Outside a git
+checkout the block is `available: false`. `agent_identity` is not used: it matches git
+commit identities, and this scan reads files. Tests: `tests/test_agent_building.py`.
+
+**`agent_building_vocab.py`**
+The pinned vocabulary of `agent_building` (issue #689): `PACKAGES` maps a declared
+dependency name (exact, or a `*` prefix family) to `(slug, kind)`; `lookup` tries the
+name as written and PEP 503-normalised (`normalise`), exact before the longest prefix.
+`TOOL_LOOP_PATTERNS`, `MCP_SERVER_PATTERNS`, `ENDPOINT_PATTERNS` and
+`CI_AGENT_PATTERNS` are the code, endpoint and CI heuristics. Widening a table changes
+classes, so it is a change of its own. Tests: `tests/test_agent_building.py`.
+
+**`agent_manifests.py`**
+Dependency names declared in one manifest file (issue #689), stdlib only: one reader
+per format (`package_json`, `pyproject`, `requirements`, `pipfile`, `go_mod`,
+`pom_xml`, `gradle`, `cargo_toml`, `gemfile`, `csproj`), and `reader_for(basename)`
+picking one. A file a reader cannot parse yields no names. Tests:
+`tests/test_agent_building.py`.
 Tests: `tests/test_shared_tooling.py`.
 
 **`layer_grades.py`**

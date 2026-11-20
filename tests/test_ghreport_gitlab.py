@@ -439,6 +439,9 @@ ALPHA = "projects/grp/alpha"
         ({f"{ALPHA}/protected_branches": [[]]}, 5, "unprotected"),
         ({f"{ALPHA}/protected_branches": [[{"name": "ma*"}]]}, 5, "protected"),
         ({f"{ALPHA}/protected_branches": [[{"name": "m.in"}]]}, 5, "unprotected"),
+        # Issue #677: the covering wildcard only on a later page is still read.
+        ({f"{ALPHA}/protected_branches": [[{"name": f"feature/{i}"} for i in range(100)],
+                                          [{"name": "ma*"}]]}, 5, "protected"),
         ({f"{ALPHA}/protected_branches": 403, f"{ALPHA}/protected_branches/main": [{"name": "main"}]},
          5, "protected"),
     ],

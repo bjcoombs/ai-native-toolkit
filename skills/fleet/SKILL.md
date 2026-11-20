@@ -59,9 +59,10 @@ else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
-| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/run.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
+| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--levels FILE` | A maturity model in the `lib/levels.py` TOML format (an invalid maturity model exits 2); its `version` is stamped in `run.json`. Each group row carries every maturity model row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
 | `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. Unreadable input exits 2. |
+| `--fleet-config FILE` | Fleet settings (TOML) passed to every repository scan. Validated before any scan: an unknown section or key, or a value of the wrong kind, exits 2 and names the key. See [Fleet settings](#fleet-settings---fleet-config). |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
 | `--scans a,b` | Only these scans (default: all). |
@@ -74,13 +75,14 @@ else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
 | `--history-dir DIR` | Run history root (default `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`). |
 | `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
 | `--no-history` | Do not keep this run in the history. |
+| `--name-agent-clusters` | Name the member repositories and groups of each cluster in `DIR/agent_clusters.json`. Off by default, in counts-only and `--full` alike: a cluster then carries counts and SDK slugs only. See [agent clusters](#output-agent_clustersjson). |
 | `--no-diagrams` | Do not draw the [diagrams](#output-reportmd-and-diagrams) (`DIR/report.md` and its SVGs); any a previous run left in `DIR` are removed. |
 
 **Exit codes.** `0`: the run completed and `repos.jsonl` and `run.json` were written, including
 when some repositories failed (each is a `failed` row; stderr prints the count
 and the failed ids). `2`: usage error - no `ROOT` and no `--from-list`, a root
 or list that does not exist, no repositories found, `--out` inside a target, an
-invalid `--levels` or `--settings` (a settings directory with no `*.json` fragment
+invalid `--levels`, `--settings` or `--fleet-config` (a settings directory with no `*.json` fragment
 file included), a list entry whose `~user` cannot be expanded, an unknown scan, a bad
 window, a `DIR` that cannot be created or written to (checked before any scan, so
 `--delete-after` never removes a clone whose results could not be written), an
@@ -179,6 +181,7 @@ Logic: `skills/assess/scripts/lib/fleet_groups.py`.
 | `repos`, `scanned`, `failed` | Repository rows in the group, those with `status: ok`, and the rest. |
 | `shared_tooling_repos` | Repositories whose `shared_tooling` block is available: the evidence the two counts below rest on. |
 | `distinct_ci_sources`, `distinct_marketplaces` | Distinct shared CI sources and agent marketplaces the group's scanned repositories reference (`shared_tooling` ids, git-tracked files only). A marketplace manifest and a settings entry naming it count once. `null` when `shared_tooling_repos` is 0 (every scan failed or degraded, or `--scans` left the block out), never a false 0. |
+| `agent_building` | Scanned repositories per agent-building class: `{repos, builds_agent, builds_mcp_server, uses_agent_tooling, none}`, where `repos` counts those with an available `agent_building` block. An inventory, not a level. `null` when no repository's block is available, never a false 0; absent in rows written before it was added. Classes: see [agent clusters](#output-agent_clustersjson). |
 | `settings_scope` | The settings fragment joined: the one whose `scope` equals the group, else the nearest ancestor (a top-level GitLab group covers its subgroups); `null` when none matches. |
 | `settings` | That fragment's settings, each `{value, reason}` or `{available: false, reason}` when ghreport read it as `unknown`. Counts-only (the default) keeps a value that is a short token (`on`, `off`, `full`) and writes any value that is not a short token (a list of rule or ruleset names) as `set`, with an unavailable setting's reason reduced to `unknown` and a value's reason to `null`; `--full` keeps them. `null` without a match. |
 | `levels_version` | The maturity model's `version`; `null` without `--levels`. |
@@ -208,6 +211,49 @@ earlier history entries still load and match. `--compare` against a 1.x run from
 Group rows contain no timing or per-run stamp, so a rerun over unchanged
 inputs on the same day is byte-identical.
 
+## Output: `agent_clusters.json`
+
+Which teams are building the same agent? Written on every run from the
+`agent_building` blocks in `repos.jsonl` (an unscored inventory, issue #689).
+Logic: `skills/assess/scripts/lib/fleet_agent_building.py`; per-repository scan:
+`skills/assess/scripts/lib/agent_building.py`. Not kept in the run history.
+
+Each repository gets one class, first match wins:
+
+1. `builds-agent`: an agent framework is declared in a dependency manifest
+   (LangChain, LangGraph, the Claude Agent SDK, OpenAI Agents, CrewAI ...), or a
+   model SDK is declared (Anthropic, OpenAI, Gemini ...) and either a source file
+   matches a tool-call loop or the repository has the API-client pairing.
+2. `builds-mcp-server`: a source file registers MCP server tools, resources or prompts.
+3. `uses-agent-tooling`: agent configuration only: an agent hint file (`CLAUDE.md`,
+   `AGENTS.md` ...), `.mcp.json`, `.claude/agents/`, or a CI job that runs an agent.
+4. `none`: otherwise, including a model SDK with no tool-call loop and no pairing.
+
+The pairing is an issue-tracker API client (Jira, Linear) and a Git-host API
+client (GitHub, GitLab) in the same repository, from manifests or REST endpoints
+in source: the marker of a ticket-to-merge-request agent. Test files, vendored
+trees and untracked files are not evidence. SDKs, config kinds, trackers and
+hosts are slugs from a pinned vocabulary, so counts-only keeps them.
+
+Cluster rule: two `builds-agent` repositories are linked when they have the same
+class, the Jaccard similarity of their SDK and framework sets is at least 0.5
+(two empty sets are not similar), and they have the same pairing value (both
+carry the issue-tracker plus Git-host marker, or neither does). Clusters are the
+connected components of that relation; a single repository is not a cluster.
+Deterministic and offline.
+
+| Key | Value |
+|-----|-------|
+| `agent_clusters_version` | File version (1). |
+| `rule` | The cluster rule in words. |
+| `named` | `true` with `--name-agent-clusters`. |
+| `evidence_repos` | Scanned repositories with an available `agent_building` block. |
+| `builds_agent_repos`, `clustered_repos` | `builds-agent` repositories, and how many of them are in a cluster. |
+| `clusters` | Largest first, then by SDK union and pairing (never by name): `id` (`c1`, `c2` ...), `agent_class`, `size`, `groups` (distinct groups spanned), `sdks` (union), `shared_sdks` (intersection), `pairing`. Only with `--name-agent-clusters`: `repo_ids` and `group_ids`. |
+
+Without the naming flag no repository id or group name appears in the file, so a
+cluster says that two teams build similar agents without saying which.
+
 ## Output: `run.json`
 
 One JSON object per run beside `repos.jsonl`, keys sorted, saying what produced
@@ -224,10 +270,53 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `counts_only` | `false` with `--full`. |
 | `paths_hashed` | `true` with `--hash-paths` or `--hash-salt` (never the salt). |
 | `scans` | The `--scans` names, deduplicated and sorted (`--scans a,a` stamps `["a"]`); `null` for all. |
+| `fleet_config_sha256` | sha256 of the `--fleet-config` file's canonical form; `null` without one. A comparability key. Absent in a run from before #706, which reads as `null`. |
+| `fleet_config_entries` | Entries per section (`ai_usage`, `review`, `platform`): a list counts its items, any other key 1. `null` without `--fleet-config`. Never a pattern or value. |
 | `repositories` | `selected` (every row), `scanned_ok` (rows `ok`), `failed` (rows `failed`) and `qualifying` (rows `ok` with `active` true). |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and
 any `--jobs` over unchanged checkouts on the same day write the same bytes.
+
+## Fleet settings: `--fleet-config`
+
+One TOML file of fleet-wide lists and settings, with one section per consumer:
+
+```toml
+[ai_usage]   # agent identities (#695)
+[review]     # AI review components in CI (#696)
+[platform]   # --platform settings (#714)
+```
+
+The sections are known and may be empty or left out. Each consumer adds its keys;
+until it does, any key in a section is unknown and exits 2. The loader and the key
+tables are `lib/fleet_config.py` (`SECTION_KEYS`).
+
+- **Validation.** `fleet.py` validates the file before any scan. A TOML error, an
+  unknown section or key, or a value of the wrong kind exits 2 with the key named
+  (`error: --fleet-config FILE: review.foo: unknown key ...`). The message never
+  quotes a value.
+- **Same config everywhere.** Every repository scan gets one private copy of the
+  validated file (`assess_signals.py --fleet-config`), so an edit during the run
+  reaches no scan.
+- **Per-repository extension.** A repository's `.assess/config.toml` may carry the
+  same sections. They extend the fleet file for that repository and never replace
+  it. A list key is the fleet's entries in order, then the repository's entries
+  not already present: a repository can add an entry, never remove one, and a
+  fleet entry keeps its index everywhere. A scalar the fleet file sets keeps the
+  fleet value; a different repository value is ignored with a warning naming the
+  key. A scalar the fleet file leaves unset takes the repository's value. A key
+  that does not validate in a repository file is skipped with a warning, never a
+  failed row. Interactive `/assess` reads the repository's sections alone.
+- **Stamp and comparison.** `run.json` records `fleet_config_sha256` and
+  `fleet_config_entries`. The hash covers the validated content as sorted-key
+  JSON with empty sections left out: comments, whitespace, key order and a new
+  empty section do not change it, and list order does. A file with only empty
+  sections still differs from no file (`null`).
+  Runs with different hashes are not comparable (`fleet config changed ...`), a
+  same-day run with a different config gets its own history entry, and the trend
+  lines join only runs with the same hash.
+- **Counts-only.** No config value reaches `repos.jsonl`, `run.json` or any
+  other output: consumers report per-rule counts by position, never by pattern.
 
 ## `--delete-after`
 
@@ -290,7 +379,7 @@ unambiguous.
 `--compare RUN_DIR` reads the earlier run before scanning and writes
 `DIR/compare.json`, with a summary on stderr. A bare `--compare` picks the
 latest history entry (by date, then suffix) whose stamp matches this run's
-maturity-model version, window, output mode, scans and path hashing, preferring one
+maturity-model version, window, output mode, scans, path hashing and `--fleet-config` hash, preferring one
 over the same repository set, so a partial rerun is not taken as the baseline;
 with none, stderr says so and nothing is compared. To compare two existing runs without
 rescanning:
@@ -307,7 +396,8 @@ run being at another file version), `2` when a directory is missing or
 malformed (a `run.json` missing a key the comparison reads).
 
 **Not comparable.** Runs that differ in maturity-model version, window, counts-only
-mode, scan selection or path hashing, in the plugin's major version (the
+mode, scan selection, path hashing or `--fleet-config` (`fleet_config_sha256`; a run
+with no config and a run from before the key read alike), in the plugin's major version (the
 `/assess` stats-diff rule), or in file versions (a run from before `run.json`)
 give `comparable: false` with every reason in `reasons` and no deltas.
 
@@ -348,7 +438,7 @@ scale. The layer bars draw team rows too and name the org rows under the bars.
 |------|----------|------------|
 | `quadrant.svg` | Which busy repositories are least mature? | Each repository's commits in the window (`ai_usage.total_commits`, non-merge) across, and up its mean maturity: every `team` row of the `--levels` maturity model evaluated on that repository alone, as a share of the row's top level, averaged over the rows that could be measured. The busy (at or above the median) and below-half quadrant is shaded. Skipped without `--levels` or without team rows. |
 | `shared-tooling.svg` | What breaks if a shared template changes, and who drifted off it? | `shared_tooling`: repositories linked to the CI sources and marketplaces they reference, with each item's dependent count. Drift: a CI include pinned to a ref other than the fleet's most common ref for that source (ties go to the lexically greatest ref) is dashed, and the SVG caption states this rule; an unpinned include is counted as unpinned, not drift; a pin counts-only could not keep, or a ref that is a CI variable (`$TPL_REF`), is dotted as pin unknown, never unpinned or drift. |
-| `trend.svg` | Is each team improving? | The run history: each group's mean maturity (each known team row's level as a share of its `top_level`, the slope chart's unit) in every comparable dated run, oldest left, this run right. Comparable: same window, scans, output mode and path hashing, with a maturity model; one run per date, the newest 12. A change of maturity-model version breaks every line, marked by a dashed rule. A history entry written before `groups.jsonl` carried `top_level` takes the top levels from this run's maturity model when it used the same version; otherwise (an older maturity-model version) it is not drawn, so the axis is always 0 to 1 share of top level, and the caption names it ("N earlier runs on an older maturity-model version not shown"). End labels give the last value and the change over the last unbroken stretch. Skipped with fewer than 3 comparable share runs (the skip line names any runs left out), without `--levels` or without team rows, or when the run is not kept in the history (`--no-history`, `--full`). |
+| `trend.svg` | Is each team improving? | The run history: each group's mean maturity (each known team row's level as a share of its `top_level`, the slope chart's unit) in every comparable dated run, oldest left, this run right. Comparable: same window, scans, output mode, path hashing and `--fleet-config` hash, with a maturity model; one run per date, the newest 12. A change of maturity-model version breaks every line, marked by a dashed rule. A history entry written before `groups.jsonl` carried `top_level` takes the top levels from this run's maturity model when it used the same version; otherwise (an older maturity-model version) it is not drawn, so the axis is always 0 to 1 share of top level, and the caption names it ("N earlier runs on an older maturity-model version not shown"). End labels give the last value and the change over the last unbroken stretch. Skipped with fewer than 3 comparable share runs (the skip line names any runs left out), without `--levels` or without team rows, or when the run is not kept in the history (`--no-history`, `--full`). |
 | `slope.svg` | What moved since the earlier run, and which row moved it? | The `--compare` result: each group's mean level (a team row's level as a share of its top level) in the earlier run and this one, over the team rows with a known level in both runs, labelled with the row that moved most; a `*` marks a move where the group's measured set of repositories moved too. Skipped when no earlier run was compared (no `--compare`, or a bare `--compare` matched no history entry), when the runs are not comparable (the reasons are named), without `--levels` or without team rows, or when no group has a team row with a known level in both runs. |
 | `layer-bars.svg` | Which layer is the org-wide weak spot? | One bar per `team` row of the maturity model, split by how many repositories reach each level (the heat map's pale-to-dark ramp); repositories whose level is undetermined are a hatched segment and named. Skipped without `--levels`, without team rows, or with no repositories in the run. |
 
@@ -378,7 +468,7 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --levels levels.toml -
 |------|---------|
 | `RUN` | The run's `--out` directory or its `groups.jsonl`. |
 | `--levels FILE` | The maturity model file the run used: column titles and each row's top level, so a row's top level is always the darkest colour. Without it the columns show row ids and the level indexes the colour ramp directly. A file whose version or rows differ from the run's exits 2. |
-| `--compare EARLIER_RUN` | An earlier run (directory or `groups.jsonl`): each cell shows its change (`+1`, `-1`, `=`, `new`, `was 2`, `was ?`) and groups only the earlier run has are listed. When both are run directories with a `run.json`, the [fleet comparison rule](#run-history-and-comparison) applies: runs that differ in maturity-model version, window, output mode, scans, path hashing or plugin major version are not compared (a note says why), and a note names the groups whose measured set moved, so a change there is not read as a level change (`fleet_compare.py` gives each cell's cause). When both are run directories holding `repos.jsonl` but only one has a `run.json` (a run from before the stamp), the pair is refused the same way. A bare `groups.jsonl` (or a directory holding only one) is compared on levels only, refused across maturity-model versions. |
+| `--compare EARLIER_RUN` | An earlier run (directory or `groups.jsonl`): each cell shows its change (`+1`, `-1`, `=`, `new`, `was 2`, `was ?`) and groups only the earlier run has are listed. When both are run directories with a `run.json`, the [fleet comparison rule](#run-history-and-comparison) applies: runs that differ in maturity-model version, window, output mode, scans, path hashing, `--fleet-config` hash or plugin major version are not compared (a note says why), and a note names the groups whose measured set moved, so a change there is not read as a level change (`fleet_compare.py` gives each cell's cause). When both are run directories holding `repos.jsonl` but only one has a `run.json` (a run from before the stamp), the pair is refused the same way. A bare `groups.jsonl` (or a directory holding only one) is compared on levels only, refused across maturity-model versions. |
 | `--output FILE` | The SVG path (default `heatmap.svg` beside `groups.jsonl`). |
 
 Encoding: the ColorBrewer OrRd ramp (colour-blind safe), pale for level 0 and
