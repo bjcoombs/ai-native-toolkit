@@ -160,7 +160,7 @@ For a dangling reference, the right verb depends on the target's actual state - 
 
 When multiple instruction files are present (e.g. CLAUDE.md and AGENTS.md as symlinks of the same content), list each in the report.
 
-This replaces the prior subjective "is it generic?" check. The grader credits verified commands most and existing paths next, gives directives and tradeoff reasoning only a capped floor, and penalizes size past 200 lines (halved, not waived, with skills; capped at B past 400 lines or 4800 words), directory trees, overview sections, README repetition and staleness.
+This replaces the prior subjective "is it generic?" check. The grader credits verified commands most and existing paths next, gives directives and tradeoff reasoning only a capped floor, and penalizes always-on size and share (always-on lines past 200 when over half the file, lines in sections that belong elsewhere; capped at B past 400 always-on lines), directory trees, overview sections, README repetition and staleness.
 
 #### 0b - Navigability (measured as a graph, not a presence check)
 
