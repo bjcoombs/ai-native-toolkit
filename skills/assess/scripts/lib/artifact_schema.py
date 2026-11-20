@@ -75,14 +75,19 @@ constant each.
 # lib.doc_ownership (issue #555). A repo-baseline row's subject_code_count is now
 # 0 (it owns no subject), the same value the documentation block reports.
 # complexity-stats.json is unchanged.
-# 1.11.0: instruction files are scored on always-on size and share (issue #560).
+# 1.11.0: complexity-stats.json gains complexity_unreliable, the scc-only files
+# whose ccn is an order of magnitude below their language's median density
+# (lib.scc_coverage, issue #590), and run-context.json copies it into
+# stats_summary and reports a COMPLEXITY_UNRELIABLE anomaly when it is non-empty.
+# Additive. STATS_SCHEMA_VERSION moves 6->7. No ranking or finding moves.
+# 1.12.0: instruction files are scored on always-on size and share (issue #560).
 # Each instruction_files and nested_instructions.files entry gains the
 # subscores always_on_lines, always_on_pct, fetch_on_need_lines,
 # always_on_flagged, always_on_penalty and relocatable_penalty, and
 # instruction_file_size gains always_on_lines. bloat_penalty is now their
 # penalties' sum and size_grade_capped reads always-on lines. Additive: no key
 # moves or changes type, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.11.0"
+ARTIFACT_SCHEMA_VERSION = "1.12.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

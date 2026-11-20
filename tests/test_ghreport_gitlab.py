@@ -33,8 +33,9 @@ HOST = "gl.test"
 
 GROUPS = {"grp": 1, "grp/sub": 2, "grp/sub/deep": 3, "grp/empty": 4}
 
-# A page is a JSON array, or one object for a single-resource endpoint.
-Pages = list[list[dict[str, object]] | dict[str, object]]
+# A page is a JSON array, one object for a single-resource endpoint, or a
+# str served as a raw body.
+Pages = list[list[dict[str, object]] | dict[str, object] | str]
 Endpoints = dict[str, "Pages | int"]
 
 
@@ -224,7 +225,7 @@ class Env:
                 (data / f"{key}.err").write_text(str(value))
                 continue
             for n, page in enumerate(value, start=1):
-                (data / f"{key}.{n}.json").write_text(json.dumps(page))
+                (data / f"{key}.{n}.json").write_text(page if isinstance(page, str) else json.dumps(page))
         self.glab_log = tmp_path / "glab.log"
         self.gh_log = tmp_path / "gh.log"
         home = tmp_path / "home"
@@ -239,6 +240,10 @@ class Env:
             "GLAB_OK_HOST": HOST,
             "GIT_CONFIG_GLOBAL": os.devnull,
         }
+
+    def path_first(self, directory: Path) -> None:
+        """Put a directory ahead of the stubs on PATH."""
+        self.env["PATH"] = f"{directory}{os.pathsep}{self.env['PATH']}"
 
     def run(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -759,6 +764,24 @@ def test_group_settings_error_body_is_unknown(tmp_path: Path) -> None:
     settings = _settings(res.stdout, "grp")
     assert settings["two_factor"] == "unknown (unreadable response)"
     assert settings["push_rules"] == "unknown (unreadable response)"
+
+
+@pytest.mark.parametrize("jq16", [False, True], ids=["installed-jq", "jq16-empty-input"])
+def test_empty_group_settings_body_is_unknown(tmp_path: Path, request: pytest.FixtureRequest, jq16: bool) -> None:
+    """A group or push-rule endpoint that exits 0 with an empty body reads
+    unknown on jq 1.6's empty-input `-e` behaviour too, and the project table
+    still renders (issue #603)."""
+    env = Env(tmp_path, {"groups/grp": [""], "groups/grp/push_rule": [""]})
+    if jq16:
+        env.path_first(request.getfixturevalue("jq16_bin"))
+    res = env.run("--host", HOST, "--no-file")
+    assert res.returncode == 0, res.stderr
+    settings = _settings(res.stdout, "grp")
+    assert settings["two_factor"] == "unknown (unreadable response)"
+    assert settings["push_rules"] == "unknown (unreadable response)"
+    rows = [ln for ln in res.stdout.splitlines()
+            if ln.startswith("| ") and "Project" not in ln and "---" not in ln]
+    assert len(rows) == 5
 
 
 def test_group_flag_scopes_the_settings(env: Env) -> None:

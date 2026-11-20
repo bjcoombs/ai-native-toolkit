@@ -74,6 +74,18 @@ def detect_anomalies(context: JsonDict) -> list[Anomaly]:
                 detail=f"file={kind}, line_count={file_info.get('line_count')}, grade=F",
             ))
 
+    unreliable = stats.get("complexity_unreliable") or []
+    if unreliable:
+        # scc under-counted these files (lib.scc_coverage, issue #590). Counts
+        # only: the paths stay in stats_summary.complexity_unreliable.
+        languages = {row.get("language") for row in unreliable}
+        found.append(Anomaly(
+            code="COMPLEXITY_UNRELIABLE",
+            description="scc complexity is implausibly low for some files; their ccn is not a ranking signal.",
+            detail=f"files={len(unreliable)}, languages={len(languages)}, "
+                   f"max_loc={max(int(row.get('loc', 0)) for row in unreliable)}",
+        ))
+
     hotspot_count = len(hotspots)
     new_count = diff.get("new", 0)
     persistent_count = diff.get("persistent", 0)

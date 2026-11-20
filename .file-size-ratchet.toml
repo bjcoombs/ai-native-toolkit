@@ -54,8 +54,8 @@ lines = 819
 reason = "raised by #468: mypy strict type annotations; lowered to 819 after #497"
 
 [ceilings."skills/assess/scripts/complexity-treemap.py"]
-lines = 1517
-reason = "raised by #468: mypy strict type annotations; lowered to 1517 after #556 (top lists moved to lib/stats_rows.py)"
+lines = 1493
+reason = "raised by #468: mypy strict type annotations; lowered to 1517 after #556 (top lists moved to lib/stats_rows.py); lowered to 1493 after #590 (backend_by_language moved to lib/scc_coverage.py)"
 
 [ceilings."skills/assess/scripts/lib/doc_graph.py"]
 lines = 1107
