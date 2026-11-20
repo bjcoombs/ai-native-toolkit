@@ -50,9 +50,9 @@ from typing import Any, TypedDict
 # classification must be defined exactly once (PRD Open Question 6 - never
 # libel a human author), and the velocity clock's "human-authored commit" test
 # has to agree with what `authorship_analysis` already called a human.
+from lib.agent_identity import identity_is_agent as _identity_is_agent
 from lib.change_coupling import (
     GIT_TIMEOUT_SECONDS,
-    _identity_is_agent,
     repo_top,
 )
 from lib.run_context_types import JsonDict

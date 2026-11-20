@@ -1,0 +1,36 @@
+# Fixture rubric for tests/test_rubric.py: one org row, one team row.
+version = "fixture-2026.11"
+
+[[rows]]
+id = "two-factor"
+title = "Enforced two-factor authentication"
+scope = "org"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "two_factor_required", op = "eq", value = true }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [{ signal = "default_branch_protection.required_reviews", op = "gte", value = 1 }]
+
+[[rows]]
+id = "agent-ready"
+title = "Agent-ready repository"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "instructions_grade", op = "in", value = ["A", "B", "C"] }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [
+    { signal = "test_pressure.ci_integrated", op = "eq", value = true },
+    { signal = "skills_count", op = "gte", value = 1 },
+  ]
+
+  [[rows.levels]]
+  level = 3
+  criteria = [{ signal = "coverage_report.line_rate", op = "gte", value = 0.8 }]

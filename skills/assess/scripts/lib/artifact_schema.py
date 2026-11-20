@@ -57,6 +57,10 @@ constant each.
 # relocatable sections with line ranges, signals and a suggested home; agent and
 # SKILL.md files over 200 lines in a separate loaded_in_full list. Additive;
 # complexity-stats.json is unchanged.
+# 1.7.0 (also): run-context.json gains ai_usage (issue #547): the share of
+# commits in the history window with an AI-assistant Co-authored-by trailer, as
+# a lower bound with its window, merge rule and limits. Additive;
+# complexity-stats.json is unchanged.
 # 1.8.0: each run-context.json doc_staleness.docs row gains subject_roots (the
 # ownership rule's roots), base_doc_dir (the directory the doc is the base doc
 # of, or null) and subject_paths (up to 20 sorted subject paths), from
@@ -72,7 +76,9 @@ ARTIFACT_SCHEMA_VERSION = "1.8.0"
 # with the version in the committed .assess/findings.json and explains the
 # finding moves instead of failing on them unexplained.
 # 1: the baseline (issue #554).
-# 2: the complexity join takes doc ownership from the doc-staleness rule
+# 2: churn counts follow renames, moving staleness ratios, lying_map and hotspot
+# ranks for files renamed inside the churn window (issue #425).
+# 3: the complexity join takes doc ownership from the doc-staleness rule
 #    (lib.doc_ownership, issue #555): a README beside a design doc owns the
 #    directory's code, and a non-base doc owns none by directory.
-ASSESS_METHOD_VERSION = 2
+ASSESS_METHOD_VERSION = 3

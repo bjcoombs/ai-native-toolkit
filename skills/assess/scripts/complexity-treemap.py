@@ -98,8 +98,7 @@ from lib.dart_complexity import (
 )
 from lib.git_churn import (
     churn_is_degenerate,
-    git_churn_scores,
-    pick_churn_window,
+    git_churn_scores, pick_churn_window, rename_paths,
 )
 from lib.generated_files import (
     GENERATED_NAME_PATTERNS,
@@ -485,7 +484,7 @@ def collect(root: Path, by: str = "complexity",
     aux_label: str | None = None
 
     if by == "churn":
-        churn = git_churn_scores(root, scope=scope)
+        churn = git_churn_scores(root, scope=scope, renames=rename_paths(root))
         if not churn:
             _git_not_found_warning(root)
             effective_by = "complexity"
