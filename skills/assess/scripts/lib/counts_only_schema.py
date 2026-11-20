@@ -52,6 +52,7 @@ from lib.run_context_types import (
 from lib.run_context_types import (
     BehaviourBlock as _BehaviourBlock,
 )
+from lib.shared_tooling import SharedToolingBlock
 from lib.structure_drift import EmptyOwnershipPattern
 from lib.structure_graph import StructureBlock
 from lib.understanding_analysis import UnderstandingModule
@@ -93,6 +94,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("structure", StructureBlock),
     ("structure_drift.tier_0.empty_ownership_patterns", EmptyOwnershipPattern),
     ("sensitive_instruction_content.{}", SensitiveFinding),
+    ("shared_tooling", SharedToolingBlock),
     ("test_pressure", TestPressureUnavailable),
     ("stats_summary.loc", SizeBlock),
     ("stats_summary.est_tokens", SizeBlock),

@@ -68,7 +68,7 @@ from lib.interactivity import build_offers_block
 from lib.doc_graph import build_doc_graph
 from lib.gap_actions import build_gap_actions
 from lib.doc_staleness import analyze_doc_staleness
-from lib.git_churn import git_commit_info
+from lib.git_churn import git_commit_info, window_from_churn_label
 from lib.instruction_files import (
     broken_instruction_refs,
     detect_ancestor_instructions,
@@ -488,6 +488,7 @@ def build_run_context(
     scan_inputs = {
         "repo_root": repo_root, "instruction_files": instruction_files,
         "scope": scope_abs, "excludes": (extra_exclude_dirs, extra_exclude_patterns),
+        "history_window": window_from_churn_label(current.get("churn_window")),
     }
     run_scans(ctx, scan_inputs, STAGE_READ_SIDE)
 

@@ -35,6 +35,7 @@ from typing import Any
 from lib.counts_only_rules import (
     DROP,
     EXTRA_FIELD_NAMES,
+    ID,
     FLAT_RULES,
     IDENTIFIER_KEYED_MAPS,
     KEY_RE,
@@ -111,8 +112,15 @@ class _Filter:
         self._key = key.encode("utf-8")
 
     def path(self, value: str) -> str | None:
-        if not _is_pathlike(value):
-            return None
+        return self._hashed(value) if _is_pathlike(value) else None
+
+    def identifier(self, value: str) -> str | None:
+        """An external id: no whitespace or e-mail, hashed like a path."""
+        ok = (0 < len(value) <= _MAX_PATH and value.isprintable()
+              and not any(c.isspace() for c in value) and not _EMAIL_RE.search(value))
+        return self._hashed(value) if ok else None
+
+    def _hashed(self, value: str) -> str:
         if not self.hash_paths:
             return value
         digest = hmac.new(self._key, value.encode("utf-8"), hashlib.sha256)
@@ -121,6 +129,8 @@ class _Filter:
     def string(self, cls: FieldClass | None, value: str) -> str | None:
         if cls == PATH:
             return self.path(value)
+        if cls == ID:
+            return self.identifier(value)
         if cls == TOKEN and TOKEN_RE.match(value):
             return value
         return None
@@ -162,7 +172,7 @@ class _Filter:
         cls = classify(pattern)
         if cls == DROP and not any(isinstance(v, (Mapping, list)) for v in value):
             return True, len(value)
-        if value and all(isinstance(v, str) for v in value) and cls not in (PATH, TOKEN):
+        if value and all(isinstance(v, str) for v in value) and cls not in (PATH, TOKEN, ID):
             return True, len(value)
         out: list[Any] = []
         for item in value:
@@ -218,7 +228,8 @@ def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
     return sorted(found)
 
 
-_CLASS_LABEL = {PATH: "path (hashed when hashing is on)", TOKEN: "token", DROP: "dropped"}
+_CLASS_LABEL = {PATH: "path (hashed when hashing is on)", TOKEN: "token",
+                ID: "external id (hashed when hashing is on)", DROP: "dropped"}
 
 
 def render_doc() -> str:
@@ -238,7 +249,12 @@ def render_doc() -> str:
         "```",
         "",
         "`assess_core.py --counts-only` writes `run-context.counts-only.json` beside",
-        "`run-context.json`. Every number, boolean and null in every block is kept.",
+        "`run-context.json`. `assess_signals.py --counts-only` filters each block",
+        "under `scans` in its `--out` document the same way, keeps only the code",
+        "of an unavailable block's `reason` (`no_remote`, `not_registered`, or",
+        "`unavailable`), and writes `stamp.target_head` as null.",
+        "",
+        "Every number, boolean and null in every block is kept.",
         "A string is kept only when its field is listed below as a path or a",
         "token; every other string, listed or not, is dropped. A dropped list of",
         "strings is replaced by its length. A token is kept only while it is a",
@@ -253,11 +269,13 @@ def render_doc() -> str:
         "A field pattern is the dotted run of keys from the top of",
         "`run-context.json`, list levels left out, `{}` for the key of a",
         "path-keyed map and `*` for any key. A field named `path`, `file`,",
-        "`file_a`, `file_b`, `test_file` or `source_file` is a path in every block.",
+        "`file_a`, `file_b`, `test_file` or `source_file` is a path in every block,",
+        "and a field named `reason` is dropped in every block without its own rule.",
         "",
         "Not filtered: the wiki pages, hotspot pages, badge and report the run",
         "also writes stay in the target repository's `.assess/` directory and",
-        "carry full text. Only `run-context.counts-only.json` is content-free.",
+        "carry full text. Only `run-context.counts-only.json` (and an",
+        "`assess_signals.py --counts-only` document) is content-free.",
         "",
         "## Path-keyed maps",
         "",
@@ -286,10 +304,12 @@ def add_cli_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--counts-only", action="store_true",
         help=(
-            "Also write run-context.counts-only.json: counts, grades, scores, "
-            "booleans, kinds and repo-relative paths only, with free text, "
+            "Content-free output: counts, grades, scores, booleans, kinds and "
+            "repo-relative paths only, with free text, "
             "commands, commit subjects and identities dropped. For sharing a "
-            "scan of a repository you do not own. "
+            "scan of a repository you do not own. assess_core writes "
+            "run-context.counts-only.json beside run-context.json; "
+            "assess_signals filters its --out document. "
             "Fields kept: references/counts-only.md."
         ),
     )
@@ -319,9 +339,48 @@ def validate_cli_args(parser: argparse.ArgumentParser, parsed: argparse.Namespac
         parser.error("--counts-only applies to a full run, not --opt-in-mutation")
 
 
+def hash_options(parsed: argparse.Namespace) -> tuple[bool, str | None]:
+    """``(hash_paths, salt)`` from the parsed flags; a salt implies hashing."""
+    salt: str | None = parsed.hash_salt
+    return bool(parsed.hash_paths) or salt is not None, salt
+
+
 def apply_cli(ctx: Mapping[str, Any], parsed: argparse.Namespace) -> JsonDict | None:
     """The counts-only copy the parsed flags ask for, or None without ``--counts-only``."""
     if not parsed.counts_only:
         return None
-    salt: str | None = parsed.hash_salt
-    return counts_only(ctx, hash_paths=bool(parsed.hash_paths) or salt is not None, salt=salt)
+    hash_paths, salt = hash_options(parsed)
+    return counts_only(ctx, hash_paths=hash_paths, salt=salt)
+
+
+def reason_code(reason: object) -> str:
+    """The machine code of an unavailable block's reason, or ``"unavailable"``.
+
+    Reasons are written ``code: sentence`` (``no_remote: no github.com remote
+    ...``); the code before the colon is kept when it is a token, the sentence
+    never is.
+    """
+    code = str(reason).split(":", 1)[0].strip() if reason is not None else ""
+    return code if TOKEN_RE.match(code) else "unavailable"
+
+
+def counts_only_scans(
+    scans: Mapping[str, Any], *, hash_paths: bool = False, salt: str | None = None,
+) -> JsonDict:
+    """``counts_only`` over the ``scans`` map of an ``assess_signals`` document.
+
+    The scan names are run-context keys, so the same rules apply. A block that
+    reports ``available: false`` is always listed and keeps a ``reason`` (the
+    signals schema requires one), reduced to its code by ``reason_code``.
+    """
+    out = counts_only(scans, hash_paths=hash_paths, salt=salt)
+    for name, block in scans.items():
+        if not (isinstance(block, Mapping) and block.get("available") is False):
+            continue
+        filtered = out.get(name)
+        if not isinstance(filtered, dict):
+            # A block whose ready shape is dropped text (a list of strings)
+            # still reports that it was not run.
+            filtered = out[name] = {"available": False}
+        filtered["reason"] = reason_code(block.get("reason"))
+    return out

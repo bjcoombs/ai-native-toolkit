@@ -8,12 +8,15 @@ levels left out and the key of a path-keyed map written ``{}``:
 ``behaviour.hidden_coupling_findings.coupled_pairs.file_a`` and
 ``instruction_files["CLAUDE.md"].grade`` is ``instruction_files.{}.grade``.
 
-Three classes:
+Four classes:
 
 - ``PATH``: a repo-relative path, directory, glob or dotted module name. Kept
   as written, or replaced by a salted hash when path hashing is on.
 - ``TOKEN``: a kind, grade, band, status, date or version. Kept only while it
   is a short slug (``TOKEN_RE``); anything longer or with spaces is dropped.
+- ``ID``: a stable identifier of another repository or marketplace, the join
+  key of a fleet roll-up (``kind:owner/repo``). Kept while it has no
+  whitespace or e-mail address; hashed with the paths when hashing is on.
 - ``DROP``: free text, file contents, commands, commit subjects, program names
   and identities. Removed (a dropped list of strings becomes its length).
 
@@ -24,16 +27,18 @@ shapes beside their builders) and fail on any string field missing here, so a
 new field is classified on purpose rather than dropped by accident.
 
 Lookup order for a pattern: the exact pattern, then ``<parent>.*``, then a
-global leaf rule (``**.<leaf>``).
+global leaf rule (``**.<leaf>``): path field names are paths, and a ``reason``
+is dropped text wherever no rule says otherwise.
 """
 from __future__ import annotations
 
 import re
 from typing import Final, Literal
 
-FieldClass = Literal["path", "token", "drop"]
+FieldClass = Literal["path", "token", "id", "drop"]
 PATH: Final = "path"
 TOKEN: Final = "token"
+ID: Final = "id"
 DROP: Final = "drop"
 
 # A kept token: a slug of at most 40 characters with no spaces, slashes or "@"
@@ -116,6 +121,9 @@ EXTRA_FIELD_NAMES: Final = frozenset({
 GLOBAL_PATH_LEAVES: Final = frozenset({
     "path", "file", "file_a", "file_b", "test_file", "source_file",
 })
+
+# Field names that hold free text wherever they appear, unless a rule says so.
+GLOBAL_DROP_LEAVES: Final = frozenset({"reason"})
 
 # Maps whose keys are repo-relative paths (hashed like a path value).
 PATH_KEYED_MAPS: Final = frozenset({
@@ -340,6 +348,21 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "capability_offers.build_files": PATH,
         "accretion_ratchet.reason": DROP,
     },
+    "shared_tooling": {
+        # Source and marketplace ids name another repository or a marketplace,
+        # not this one's content; they are the join key for a fleet roll-up
+        # (#550), so they are kept and hashed with --hash-paths.
+        "shared_tooling.reason": DROP,
+        "shared_tooling.ci_includes.kind": TOKEN,
+        "shared_tooling.ci_includes.source": DROP,
+        "shared_tooling.ci_includes.id": ID,
+        "shared_tooling.marketplaces.kind": TOKEN,
+        "shared_tooling.marketplaces.name": DROP,
+        "shared_tooling.marketplaces.source": DROP,
+        "shared_tooling.marketplaces.id": ID,
+        "shared_tooling.ci_source_ids": ID,
+        "shared_tooling.marketplace_ids": ID,
+    },
     "agent_harness": {
         "agent_harness.reason": DROP,
         "agent_harness.executes.kind": TOKEN,
@@ -483,4 +506,6 @@ def classify(pattern: str) -> FieldClass | None:
         return FLAT_RULES[f"{parent}.*"]
     if leaf in GLOBAL_PATH_LEAVES:
         return PATH
+    if leaf in GLOBAL_DROP_LEAVES:
+        return DROP
     return None

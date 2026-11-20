@@ -94,6 +94,8 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+`window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
+into the `history_window` scan input (`"12mo"`, None for all-time).
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
 pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
 scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
@@ -465,10 +467,46 @@ degrades. `stage` exists to keep
 hand-wired assignments between the stages are gone. Currently registered:
 `agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
 `instruction_claims`, `claude_config`, `nested_instructions`, `agent_harness`,
-`agent_environment`. Besides
+`agent_environment`, `coverage_gate`, `shared_tooling`. Besides
 `repo_root` and
 `instruction_files`, the core provides `scope` (the absolute `--scope` path, or
-None) and `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`).
+None), `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`) and
+`history_window` (a `<n>d|w|mo|y` window or None for all history: `--window` in the
+headless run, the stats sidecar's `churn_window` label normalised by
+`git_churn.window_from_churn_label` in `assess_core`).
+A spec sets `network=True` when it reads GitHub through `gh` (`config_drift`,
+`review_reality`, `gate_cost_estimate`, `agent_environment`), and may name an
+`offline_fn` - the same scan with its probe off, taking the same reads
+(`agent_environment` with `probe_ci=False`). `assess_core` ignores both; the headless
+runner in `signals.py` reads them. `validate` rejects an `offline_fn` on a scan that is
+not `network`, or one that cannot take the spec's reads.
+
+**`signals.py`**
+The headless, signals-only run behind `assess_signals.py` (issue #545). `collect` runs
+the selected registry scans, plus the registry keys they read, through `run_scans` with
+inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
+`grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`, and
+`history_window` set to `--window` for history-reading scans), so a raising
+scan degrades through `safe` and the run completes. A `network` scan runs its
+`offline_fn` or is reported `{"available": false, "reason": NETWORK_REASON}`. Names in
+`UNREGISTERED_SCANS` (run-context blocks `assess_core` still assigns by hand) are
+reported unavailable with `UNREGISTERED_REASON`; a name the registry also holds is
+dropped at runtime, so migrating a scan needs no edit here. `select_scans` raises
+`UnknownScanError` naming every name in neither set. `build_stamp` records the toolkit
+commit, plugin version, UTC scan date, `--window` and the target's HEAD and dirty flag
+(each nullable outside git). The window is validated and stamped only: no registered
+scan reads a history window yet. Every git call runs inside `read_only_git` (`GIT_OPTIONAL_LOCKS=0`,
+forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
+before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
+the network.
+
+**`signals_schema.py`**
+Generates the published `references/signals.schema.json` from the `SignalsDocument` and
+`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, open per-scan
+blocks, and an `if`/`then` rule that an `"available": false` block carries a string
+`reason`. `tests/test_signals.py` fails when the checked-in file differs from
+`build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
+from `skills/assess`.
 
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads
@@ -704,13 +742,17 @@ so hashes join across runs. `unclassified_strings` lists the string fields a
 run-context holds with no rule. `add_cli_arguments` / `validate_cli_args` /
 `apply_cli` give `assess_core.py --counts-only` (which writes
 `run-context.counts-only.json` beside `run-context.json`) and the headless entry point
-one set of flags. `render_doc` generates `references/counts-only.md`, the per-block
-field list. Tests: `tests/test_counts_only.py`.
+one set of flags. `counts_only_scans` applies the filter to the `scans` map of an
+`assess_signals.py --counts-only` document and keeps each unavailable block listed with
+its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `render_doc`
+generates `references/counts-only.md`, the per-block field list. Tests:
+`tests/test_counts_only.py`, `tests/test_signals_counts_only.py`.
 
 **`counts_only_rules.py`**
 The counts-only allow-list: `RULES` maps each block's field patterns (dotted keys, list
 levels left out, `{}` for a path-keyed map key) to path, token or dropped text, with
-`PATH_KEYED_MAPS`, `IDENTIFIER_KEYED_MAPS` (kind- or tool-keyed maps), the global path
+an `ID` class for external join keys such as `shared_tooling` source ids (kept, hashed
+with the paths), `PATH_KEYED_MAPS`, `IDENTIFIER_KEYED_MAPS` (kind- or tool-keyed maps), the global path
 field names and `classify`. Every other object is a record whose keys survive only when
 they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus the typed
 fields and rule segments), so a map keyed by a login or a function name is dropped
@@ -1416,6 +1458,29 @@ network read, through `gh_cli` with a 10-second per-call cap: per-workflow
 median wall time of successful push runs on the default branch, or
 `{available: false, reason}`. Evidence only; it caps nothing.
 Tests: `tests/test_agent_environment.py`.
+
+**`shared_tooling.py`**
+Shared CI sources and agent marketplaces, per repository (issue #566), the
+file-content half of the organisation-wide evidence in #550.
+`scan_shared_tooling(repo_root)` writes `{available, ci_includes[], marketplaces[],
+ci_source_ids[], marketplace_ids[]}`. `ci_includes` rows (`kind`, `source`, `id`,
+`path`, `line`, `tracked`) come from the top-level `include:` section of
+`.gitlab-ci.yml` (`project:` -> `gitlab_project`, `component:` ->
+`gitlab_component` with the host and `@version` dropped) and from `uses:
+<owner>/<repo>/.github/workflows/...` in `.github/workflows/*.yml`
+(`github_reusable_workflow`, keyed on the repository). Local includes, templates,
+`./.github/workflows` references, a job's `trigger:`, keys in nested lists
+(`inputs:`, `rules:`), step-level `uses:` and `run:` script text are skipped.
+Symlinks and paths resolving outside the repository are not read. `marketplaces`
+rows (`kind`, `name`, `source`, `id`, `path`, `tracked`) are the
+`.claude-plugin/marketplace.json` manifest (`manifest`) and each
+`extraKnownMarketplaces` entry in `.claude/settings.json` (`settings`, `source` as
+`<kind>:<repo|url|path>`). A marketplace's `id` is its lowercased name, the key
+Claude Code tells marketplaces apart by, so a manifest and a settings entry naming
+it count once. The two id lists credit git-tracked files only, as `agent_ops` does. Outside a git checkout (or when git fails) the block is `available: false` with a `reason`, so a roll-up never reads unknown tracking as "shares nothing"; entries are still listed. `is_tracked` lives in `git_churn` beside `tracked_files`, shared with `agent_ops`.
+`distinct_ids(blocks)` is the fleet roll-up: the union of the id lists, skipping
+`available: false` blocks. YAML is read line by line (stdlib); offline, no `gh`.
+Tests: `tests/test_shared_tooling.py`.
 
 **`claude_config_fields.py`**
 The documented frontmatter field sets `claude_config` checks against: skill and

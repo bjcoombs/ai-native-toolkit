@@ -10,7 +10,12 @@ uv run python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_onl
 ```
 
 `assess_core.py --counts-only` writes `run-context.counts-only.json` beside
-`run-context.json`. Every number, boolean and null in every block is kept.
+`run-context.json`. `assess_signals.py --counts-only` filters each block
+under `scans` in its `--out` document the same way, keeps only the code
+of an unavailable block's `reason` (`no_remote`, `not_registered`, or
+`unavailable`), and writes `stamp.target_head` as null.
+
+Every number, boolean and null in every block is kept.
 A string is kept only when its field is listed below as a path or a
 token; every other string, listed or not, is dropped. A dropped list of
 strings is replaced by its length. A token is kept only while it is a
@@ -25,11 +30,13 @@ salt is never written to the output.
 A field pattern is the dotted run of keys from the top of
 `run-context.json`, list levels left out, `{}` for the key of a
 path-keyed map and `*` for any key. A field named `path`, `file`,
-`file_a`, `file_b`, `test_file` or `source_file` is a path in every block.
+`file_a`, `file_b`, `test_file` or `source_file` is a path in every block,
+and a field named `reason` is dropped in every block without its own rule.
 
 Not filtered: the wiki pages, hotspot pages, badge and report the run
 also writes stay in the target repository's `.assess/` directory and
-carry full text. Only `run-context.counts-only.json` is content-free.
+carry full text. Only `run-context.counts-only.json` (and an
+`assess_signals.py --counts-only` document) is content-free.
 
 ## Path-keyed maps
 
@@ -315,6 +322,21 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `capability_offers.build_system` | token |
 | `capability_offers.build_files` | path (hashed when hashing is on) |
 | `accretion_ratchet.reason` | dropped |
+
+## shared_tooling
+
+| Field | Kept as |
+|---|---|
+| `shared_tooling.reason` | dropped |
+| `shared_tooling.ci_includes.kind` | token |
+| `shared_tooling.ci_includes.source` | dropped |
+| `shared_tooling.ci_includes.id` | external id (hashed when hashing is on) |
+| `shared_tooling.marketplaces.kind` | token |
+| `shared_tooling.marketplaces.name` | dropped |
+| `shared_tooling.marketplaces.source` | dropped |
+| `shared_tooling.marketplaces.id` | external id (hashed when hashing is on) |
+| `shared_tooling.ci_source_ids` | external id (hashed when hashing is on) |
+| `shared_tooling.marketplace_ids` | external id (hashed when hashing is on) |
 
 ## agent_harness
 

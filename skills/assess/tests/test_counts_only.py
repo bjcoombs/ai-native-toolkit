@@ -238,7 +238,7 @@ _NOT_BLOCKS = {
     "FinalizeInput", "ActionLifecycle", "KeyholeIntegration", "FindingProducts",
     "BehaviourFields", "FindingPaths", "MutationGroupRecord", "ScoredHotspotRow",
     "MutationConfig", "MutationRunResult", "DocSignal", "SourceTree", "Distribution",
-    "InstructionTotals",
+    "InstructionTotals", "SignalsDocument", "SignalsStamp",
 }
 
 
