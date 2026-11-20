@@ -81,7 +81,7 @@ Agent(
 )
 ```
 
-Pass `model: "haiku"` on every call even though the agent's frontmatter already says `haiku`. When the harness has not loaded the agent definition it runs the spawn on the lead's model, and the explicit `model` keeps it on Haiku. If `doc-contradictions-comparer` is not an available agent type, spawn `subagent_type: "general-purpose"` with `model: "haiku"`, read `${CLAUDE_SKILL_DIR}/../../agents/doc-contradictions-comparer.md` and put its body (below the frontmatter) at the top of the brief, and add "Read-only: use Read, Grep and Glob only."
+Pass `model: "haiku"` on every call even though the agent's frontmatter already says `haiku`. When the harness has not loaded the agent definition it runs the spawn on the lead's model, and the explicit `model` keeps it on Haiku. If `doc-contradictions-comparer` is not an available agent type, spawn `subagent_type: "general-purpose"` with `model: "haiku"`, read `${CLAUDE_SKILL_DIR}/../../agents/doc-contradictions-comparer.md` and put its body (below the frontmatter) at the top of the brief, and add "Read-only: use Read, Grep and Glob only." That subagent still holds Write, Edit and Bash, so this fallback is read-only by instruction only, not by its tool set.
 
 The brief names:
 
@@ -100,12 +100,12 @@ When there are two or more clusters and at least one hub, spawn **one more** com
 
 For each finding in every comparer's array:
 
-1. **Citation check (mechanical).** First, drop the finding if either side's `quote` is empty, only whitespace, or contains a newline: `rg -nF -f` with an empty pattern matches every line, so such a quote would pass on any line. List it under "Dropped by citation check" with the reason. Otherwise, for each side, write the quote verbatim to a temporary file with your file-writing tool, not through a shell string (code quotes often hold `'` or `"`), then run `rg -nF -f <quote-file> -- '<path>'`. The `rg` hit numbers are the only evidence; never move a line number by reasoning about the file or counting lines yourself.
+1. **Citation check (mechanical).** First, drop the finding if either side's `quote` is empty, only whitespace, or contains a newline: `rg -nF -f` with an empty pattern matches every line, so such a quote would pass on any line. List it under "Dropped by citation check" with the reason. Otherwise, for each side, write the quote verbatim to a file under `$REPO_ROOT/.doc-contradictions/quotes/` (excluded from the doc scan) with your file-writing tool, not through a shell string (code quotes often hold `'` or `"`), then run `rg -nF -f <quote-file> -- '<path>'`. The `rg` hit numbers are the only evidence; never move a line number by reasoning about the file or counting lines yourself.
    - The cited `line` is among the hits: keep the finding as cited.
    - The cited `line` is not a hit, but exactly one hit lies within two lines of it: replace `line` with that hit.
    - Otherwise (no hit, the file is missing, or several nearby hits): drop the finding and list it under "Dropped by citation check" with the `rg` result.
 
-   Do not re-judge the contradiction itself.
+   Do not re-judge the contradiction itself. When every finding is checked, delete `$REPO_ROOT/.doc-contradictions/quotes/`, so the run leaves nothing outside `report.md`.
 2. **Excluded paths.** Drop a finding that cites an excluded path, and count it in the header's `Dropped (cited an excluded path)` line.
 3. **Dedupe.** Two findings that cite the same pair of locations (in either order) are one finding: keep the higher confidence and both explanations.
 
