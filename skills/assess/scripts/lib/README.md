@@ -1914,7 +1914,9 @@ verified when the path occurs in any CI configuration or in a task runner CI
 calls through such as `Makefile` or `package.json`; skipped when the repo has no
 CI configuration, since nothing can confirm or refute it) and `pin` ("pinned in"
 a backticked file plus exactly one dotted version in the sentence, verified when
-the file exists and contains the version as a substring) and `count` (a
+the file exists and contains the version as a substring; the word before the
+version, unless a function word, is kept as the claim's `subject`, the tool, for
+`doc_claims` and never reported) and `count` (a
 sentence of the form `<integer> <noun> ... <link> <backticked glob>`, where the
 link is a `COUNT_LINK_WORDS` word: in, under, matching, across, beneath, within,
 inside; the pattern is globbed from the repo root and matching files counted;
@@ -1958,8 +1960,14 @@ they are within `count_within_tolerance`. One finding per group lists every
 site, so both conflicting lines are cited; a claim the repo cannot verify still
 takes part. A skill's `SKILL.md` and `references/` claims resolve against
 `skills/<name>/` (`rebase_skill_claims`; the repo root only when just that reading
-exists), before verification and grouping. Pins group by pinned file, so a pin finding whose every version
-the file contains (two tools in one `.tool-versions`) is dropped. The kind is a pair of tables, `CROSS_DOC_VALUE` (claim -> value) and
+exists), before verification and grouping. Pins group by pinned file and tool
+(issue #610): the tool is the pin claim's `subject`, the word before the version
+(`Node 20.11.0`, `` `node` >= 20.11.0 `` and `**Node** 20.11.0` all give `node`), so a Node pin never contradicts a Python pin in one
+`.tool-versions`, even when one is stale or the file is missing. A file in
+`SINGLE_TOOL_PIN_FILES` (`.nvmrc`, `.python-version`, ...) pins one tool, so its
+pins are one group however they word it (`CPython 3.12`, `Node LTS 18`). A pin naming no
+tool joins its file's one named tool; when several are named it is compared
+with nothing, only verified on its own. A pin finding whose every version the file contains is still dropped. The kind is a pair of tables, `CROSS_DOC_VALUE` (claim -> value) and
 `CROSS_DOC_AGREE` (two values -> agree), mirroring `_EXTRACTORS` and
 `_VERIFIERS`. The core writes the run-context block `doc_claims`
 (`{files_scanned, excluded_trees, total, verified, failed, failures[...],

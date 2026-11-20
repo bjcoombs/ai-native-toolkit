@@ -455,3 +455,37 @@ def test_count_claim_is_extracted_with_its_number_and_pattern() -> None:
     claims = extract_claims("# Agents\n\nThe plugin ships 5 commands in `cmds/*.md`.\n")
     assert [(c.kind, c.line, c.path, c.fields) for c in claims] == [
         ("count", 3, "cmds/*.md", {"claimed": 5})]
+
+
+@pytest.mark.parametrize(("sentence", "subject"), [
+    ("Node 20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("Node.js v20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("We use Python version 3.11 pinned in `.tool-versions`.", "python"),
+    ("Pinned in `.tool-versions`: golang 1.22.", "go"),
+    ("Version 3.11 is pinned in `.python-version`.", None),
+    ("It is 3.11, pinned in `.python-version`.", None),
+    ("3.11 is pinned in `.python-version`.", None),
+    ("CPython 3.12 is pinned in `.python-version`.", "python"),
+    ("Node LTS 18.19.0 is pinned in `.nvmrc`.", None),
+    ("Node is pinned in `.tool-versions` as 18.19.0.", None),
+    ("Terraform is pinned in `.tool-versions` (currently 1.6.0).", None),
+    ("Python is set to 3.12, pinned in `.tool-versions`.", None),
+    ("Node uses 20.11.0, pinned in `.tool-versions`.", None),
+    ("`node` 20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("**Node** 20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("_Python_ 3.11.4 is pinned in `.tool-versions`.", "python"),
+    ("Node >= 20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("`python` ~= 3.11.4 is pinned in `.tool-versions`.", "python"),
+    ("Node ^20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("Ruby ~> 3.2.2 is pinned in `.tool-versions`.", "ruby"),
+    ("Node=20.11.0 is pinned in `.tool-versions`.", "node"),
+])
+def test_a_pin_keeps_the_tool_it_names_as_its_subject(sentence: str, subject: str | None) -> None:
+    [claim] = extract_claims(sentence + "\n")
+    assert claim.subject == subject
+
+
+def test_a_pin_subject_is_not_part_of_the_failure(tmp_path: Path) -> None:
+    (tmp_path / "CLAUDE.md").write_text("Node 20.11.0 is pinned in `.nvmrc`.\n")
+    [failure] = scan_instruction_claims(tmp_path, ["CLAUDE.md"])["failures"]
+    assert "subject" not in failure
