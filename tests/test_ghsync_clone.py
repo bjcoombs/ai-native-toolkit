@@ -59,7 +59,11 @@ case "$1" in
  {"name":"arch-one","isArchived":true,"defaultBranchRef":{"name":"main"}}]
 JSON
         ;;
-      clone) exec git clone -q "https://github.com/$3.git" "$4" ;;
+      clone)
+        # Forward what follows -- to git clone, as gh does.
+        repo=$3; dest=$4; shift 4
+        [ "${1:-}" = "--" ] && shift
+        exec git clone -q "$@" "https://github.com/$repo.git" "$dest" ;;
       view) echo "main" ;;
     esac ;;
 esac
@@ -90,6 +94,7 @@ class Env:
             "[user]\n\tname = Test\n\temail = test@example.com\n"
             "[init]\n\tdefaultBranch = main\n"
             "[commit]\n\tgpgsign = false\n"
+            "[uploadpack]\n\tallowFilter = true\n"
             f'[url "file://{self.bare}/"]\n\tinsteadOf = https://github.com/\n'
         )
         self.env = {
@@ -121,13 +126,19 @@ class Env:
         self.git("commit", "-q", "-m", "init", cwd=work)
         self.git("push", "-q", "origin", "main", cwd=work)
 
-    def advance(self, path: str) -> str:
+    def advance(self, path: str, date: str | None = None) -> str:
         """Push a new commit to the bare repo's main; return its SHA."""
         work = self.tmp / "seed" / path
         with (work / "CHANGES").open("a") as fh:
             fh.write("more\n")
         self.git("add", "CHANGES", cwd=work)
-        self.git("commit", "-q", "-m", "advance", cwd=work)
+        if date:
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "advance"], cwd=work, check=True,
+                env={**self.env, "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date},
+            )
+        else:
+            self.git("commit", "-q", "-m", "advance", cwd=work)
         self.git("push", "-q", "origin", "main", cwd=work)
         return self.git("rev-parse", "HEAD", cwd=work)
 
@@ -276,3 +287,77 @@ def test_quiet_clone_passes_q_to_git(env: Env) -> None:
     assert clones and all(ln.endswith(" -- -q") for ln in clones), clones
     assert "*** Cloning" not in res.stdout
     assert "*** Cloned" not in res.stdout
+
+
+# ---- analysis-only mirrors: --partial / --filter, --shallow-since ----------
+
+
+def _config(env: Env, cwd: Path, key: str) -> str | None:
+    res = subprocess.run(
+        ["git", "config", "--get", key], cwd=cwd, env=env.env,
+        capture_output=True, text=True,
+    )
+    return res.stdout.strip() if res.returncode == 0 else None
+
+
+def _missing_objects(env: Env, cwd: Path) -> list[str]:
+    out = env.git("rev-list", "--objects", "--missing=print", "--all", cwd=cwd)
+    return [ln for ln in out.splitlines() if ln.startswith("?")]
+
+
+def _clone_line(env: Env, path: str) -> str:
+    return next(ln for ln in env.gh_log.read_text().splitlines()
+                if ln.startswith(f"gh repo clone {ORG}/{path} "))
+
+
+def test_partial_clone_keeps_history_without_historic_blobs(env: Env) -> None:
+    env.advance("alpha")
+    env.advance("alpha")
+    res = env.run("--partial")
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "filtering not recognized" not in res.stdout + res.stderr
+    assert _clone_line(env, "alpha").endswith(" -- --filter=blob:none -q")
+    checkout = env.checkout("alpha")
+    assert _config(env, checkout, "remote.origin.partialclonefilter") == "blob:none"
+    # The first CHANGES blob is history-only, so the partial clone lacks it.
+    assert _missing_objects(env, checkout)
+    seed = env.tmp / "seed" / "alpha"
+    log = ("log", "--name-only", "--format=%H %s")
+    assert env.git(*log, cwd=checkout) == env.git(*log, cwd=seed)
+
+
+def test_filter_spec_is_passed_through(env: Env) -> None:
+    res = env.run("--filter=tree:0", "--limit", "1")
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert _clone_line(env, "alpha").endswith(" -- --filter=tree:0 -q")
+
+
+def test_shallow_since_truncates_history(env: Env) -> None:
+    new = env.advance("alpha", date="2099-01-01T00:00:00")
+    res = env.run("--shallow-since", "2098-01-01")
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert _clone_line(env, "alpha").endswith(" -- --shallow-since=2098-01-01 -q")
+    checkout = env.checkout("alpha")
+    assert env.git("rev-parse", "--is-shallow-repository", cwd=checkout) == "true"
+    assert env.git("rev-list", "HEAD", cwd=checkout).split() == [new]
+
+
+def test_clone_flags_never_convert_an_existing_full_clone(env: Env) -> None:
+    assert env.run().returncode == 0
+    new = env.advance("alpha", date="2099-01-01T00:00:00")
+    res = env.run("--partial", "--shallow-since", "2098-01-01")
+    assert res.returncode == 0, res.stdout + res.stderr
+    checkout = env.checkout("alpha")
+    assert env.head("alpha") == new
+    assert env.git("rev-parse", "--is-shallow-repository", cwd=checkout) == "false"
+    assert _config(env, checkout, "remote.origin.partialclonefilter") is None
+    assert _config(env, checkout, "remote.origin.promisor") is None
+    assert _missing_objects(env, checkout) == []
+
+
+@pytest.mark.parametrize("args", [["--filter="], ["--shallow-since="], ["--filter"]])
+def test_clone_flag_without_value_fails(env: Env, args: list[str]) -> None:
+    res = env.run(*args)
+    assert res.returncode != 0
+    assert "needs a" in res.stdout + res.stderr
+    assert not env.gh_log.exists()
