@@ -108,10 +108,10 @@ def _clamp(value: float, low: float, high: float) -> float:
 def _extract_file_ccn(complexity_stats: JsonDict) -> dict[str, float]:
     """Build path -> max-CCN from whatever per-file lists the stats expose.
 
-    ``complexity-stats.json`` carries per-file CCN only in its ranked lists
-    (``top_complex`` / ``top_hotspots`` / ``top_large``); we union them (and an
-    optional full ``files`` list, for forward-compatibility) and keep the
-    highest CCN seen per path. Percentiles live elsewhere in the dict and are
+    ``complexity-stats.json`` carries every scored file's CCN in its ``files``
+    list (stats schema 6, issue #556); we union it with the ranked lists
+    (``top_complex`` / ``top_hotspots`` / ``top_large``, all an older sidecar
+    has) and keep the highest CCN seen per path. Percentiles live elsewhere in the dict and are
     read separately for the threshold.
     """
     ccn: dict[str, float] = {}

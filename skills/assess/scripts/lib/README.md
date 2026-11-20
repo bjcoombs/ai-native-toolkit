@@ -958,6 +958,16 @@ stamps, skipping `_NON_TOOL_VERSION_KEYS`). `prior_stamps` reads the prior snaps
 plugin and schema versions. Stdlib only. Tests: `tests/test_diff_reliability.py`,
 `tests/test_complexity_treemap.py`.
 
+**`stats_rows.py`**
+The per-file row lists `complexity-treemap.py` writes into `complexity-stats.json`.
+`top_lists` ranks the enriched rows into `top_hotspots` / `top_complex` / `top_large`
+(ten each, ties broken on path); `file_ccn_rows` emits `files`, every scored file as
+`{path, ccn}` (`FileCcnRow`), sorted by path with no cap. `doc_complexity_join.py`'s
+`_extract_file_ccn` reads `files`, so the join sees a complex file that made no top-10
+list (issue #556). Adding `files` moved `STATS_SCHEMA_VERSION` to 6, which disarms the
+cross-run diff once (`diff_reliability.py`). Stdlib only. Tests:
+`tests/test_stats_rows.py`.
+
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
 transitions: graduated (was in top list, now absent), regressed, restructured, new,
@@ -1326,8 +1336,16 @@ failure returns None so the caller degrades exactly as before. `parse_remote` re
 https/http (port kept), scp-like and `ssh://` (port dropped) remotes with nested
 groups, and rejects a host or path segment outside a strict character set (the remote
 comes from the assessed repository and reaches argv). `normalize_host` ports
-`ghsync.sh`'s `--host` normalisation. Tests: `tests/test_review_reality_gitlab.py`
-(stubbed `glab`/`gh` as the whole `PATH`, offline).
+`ghsync.sh`'s `--host` normalisation. `branch_protection(project, branch, rules=None)` returns the
+protected-branch rule covering a branch (exact name first, else the first `*` wildcard
+rule in name order, via `branch_pattern`; a name holding `*` is answered only by its own
+rule), reusing a `protected_branches(project)` read when given one (config_drift reads the
+list once per scan), or None only from a readable list shorter than
+`PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
+branch by name (the `ghreport.sh` fallback), so an exact rule on a later page outranks a
+first-page wildcard; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
+like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.py`,
+`tests/test_gitlab_protected_branches.py` (stubbed `glab`/`gh` as the whole `PATH`, offline).
 
 **`config_drift.py`**
 Layer 5 lying signal: tracked GitHub configuration snapshots diffed against the
@@ -1337,7 +1355,16 @@ live setting via `gh_cli`. Snapshots are ruleset exports - tracked JSON with a
 a file missing either is skipped, never reported - and classic branch-protection exports - tracked JSON under
 `.github/` with `required_status_checks`, `enforce_admins` or
 `required_pull_request_reviews` at the top level (branch from the export's `url`,
-else the file stem). The diff is snapshot-driven (keys only the API returns are
+else the file stem) - and, on GitLab, protected-branch exports: tracked JSON under
+`.gitlab/` with `push_access_levels` or `merge_access_levels` at the top level (branch
+from its `name`, a name or `*` wildcard, else the file stem), diffed against
+`gitlab_cli.branch_protection` with each access level compared on `access_level`,
+`user_id`, `group_id` and `deploy_key_id` only. A GitLab remote (`gitlab_cli.open_gitlab`) compares only
+GitLab snapshots and any other remote only GitHub ones; `snapshots` lists the compared
+kind, and a repo whose snapshots are all of the other provider's kind is `available:
+False` with reason `other_provider`, never clean. On GitLab a refused protected-branch
+read (403 or 404) or an incomplete list degrades the block; only a complete readable
+list without a covering rule is a `branch_protection` drift entry. The diff is snapshot-driven (keys only the API returns are
 not drift), ignores ids, timestamps and links, and folds the `{"enabled": X}` read
 shape into `X`. Lists are sets. Write-shape restriction lists (plain user, team
 and app names) compare against the read shape's objects projected onto
@@ -1361,7 +1388,8 @@ identities in `key`, and up to three added names per changed list; never a live
 object or a whole live list;
 with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case
-in `tests/test_config_drift.py` alongside any change to discovery or the diff.
+in `tests/test_config_drift.py` (GitLab: `tests/test_gitlab_protected_branches.py`)
+alongside any change to discovery or the diff.
 
 **`review_reality.py`**
 Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
@@ -1399,9 +1427,11 @@ and `bot_review_share` are null (approvals are the only evidence read), and
 null. `review_required` reads the project's approval rules: a non-`report_approver`
 rule needing 1+ approvals with no branch scope, or a protected-branch name or `*`
 wildcard matching the default branch, is True; a rule scoped to all protected branches
-is unknown; a refused read is null. Any refused merge-request or approvals read (403
+covers it when `gitlab_cli.branch_protection` finds the default branch protected, does
+not when the complete list leaves it unprotected, and is null when that read (made at
+most once) is refused or incomplete; a refused read is null. Any refused merge-request or approvals read (403
 and 404 included) degrades the whole block. Tests: `tests/test_review_reality.py`,
-`tests/test_review_reality_gitlab.py`.
+`tests/test_review_reality_gitlab.py`, `tests/test_gitlab_protected_branches.py`.
 
 **`gate_cost.py`**
 Actions cost of the CI gate the assess-pr skill offers, so the offer can state it.

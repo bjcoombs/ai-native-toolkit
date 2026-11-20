@@ -61,10 +61,14 @@ constant each.
 # commits in the history window with an AI-assistant Co-authored-by trailer, as
 # a lower bound with its window, merge rule and limits. Additive;
 # complexity-stats.json is unchanged.
-# 1.7.0 (also): doc_staleness gains history_truncated and history_boundary_date,
+# 1.8.0: complexity-stats.json gains `files`, every scored file as {path, ccn},
+# uncapped and sorted by path, read by the doc-complexity join (issue #556).
+# Additive; run-context.json is unchanged. STATS_SCHEMA_VERSION moves 5->6, so
+# the cross-run diff is disarmed once against a pre-#556 snapshot.
+# 1.8.0 (also): doc_staleness gains history_truncated and history_boundary_date,
 # and its rows (and stale_hubs) an optional last_commit_days_bound: "lower"
 # (issue #544). Additive; complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.7.0"
+ARTIFACT_SCHEMA_VERSION = "1.8.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -75,7 +79,10 @@ ARTIFACT_SCHEMA_VERSION = "1.7.0"
 # 1: the baseline (issue #554).
 # 2: churn counts follow renames, moving staleness ratios, lying_map and hotspot
 # ranks for files renamed inside the churn window (issue #425).
-# 3: on a shallow clone every doc-staleness row is confidence "low", which keeps
-# it out of lying_map and halves its stale-hub priority (issue #544). A full
-# clone's findings do not move.
-ASSESS_METHOD_VERSION = 3
+# 3: the doc-complexity join reads complexity-stats.json's uncapped `files` list,
+#    so a complex file outside every top-10 list can now produce lying_map,
+#    unexplained_complexity or good_contract (issue #556).
+# 4: on a shallow clone every doc-staleness row is confidence "low", which keeps
+#    it out of lying_map and halves its stale-hub priority (issue #544). A full
+#    clone's findings do not move.
+ASSESS_METHOD_VERSION = 4

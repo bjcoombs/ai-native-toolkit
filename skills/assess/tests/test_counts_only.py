@@ -271,6 +271,9 @@ _NOT_BLOCKS = {
     "InstructionTotals", "SignalsDocument", "SignalsStamp",
     # assess_gate output, not a run-context block.
     "MethodChange", "PathMove",
+    # complexity-stats.json `files` row; assess_core does not copy it into the
+    # run-context (issue #556).
+    "FileCcnRow",
 }
 
 
