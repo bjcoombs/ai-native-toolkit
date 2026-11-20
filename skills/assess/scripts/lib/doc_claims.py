@@ -17,10 +17,15 @@ cross-document kind, still with no model:
 Like the per-file kinds, the cross-document kind is a pair of tables: an
 extractor per claim kind in ``CROSS_DOC_VALUE`` (claim -> the value two files
 can disagree on) and a verifier per kind in ``CROSS_DOC_AGREE`` (two values ->
-whether they agree). Pins are grouped by pinned file, not by tool, so a shared
-file such as ``.tool-versions`` can hold two different true pins: a pin finding
-whose every version the file contains is dropped (``_reconciled``). Two pins agree when one version's dotted components are a
-prefix of the other's (``3.11`` and ``3.11.9``, matching the lenient pin check;
+whether they agree). Pins are grouped by pinned file and tool (issue #610):
+a shared file such as ``.tool-versions`` holds one version per tool, so a Node
+pin never contradicts a Python pin, even when one of them is stale or the file
+is missing. The tool is the claim's ``subject`` (the word before the version);
+a pin naming no tool joins its file's one named tool, or, when the file's pins
+name several, the other unnamed pins only. A pin finding whose every version
+the file contains is still dropped (``_reconciled``), for two true pins whose
+tool could not be told apart. Two pins agree when one version's dotted
+components are a prefix of the other's (``3.11`` and ``3.11.9``, matching the lenient pin check;
 ``1.2`` and ``11.2`` do not). Two counts agree within the per-file tolerance
 (``count_within_tolerance``: the larger of 10% or 2). An enforcement claim
 carries no value, so it has no cross-document form.
@@ -244,21 +249,43 @@ def _contradiction(kind: str, path: str, sites: list[_Site]) -> DocContradiction
 
 
 def find_contradictions(claims_by_file: Iterable[tuple[str, Path, list[Claim]]]) -> list[DocContradiction]:
-    """One finding per (kind, path) whose files disagree, listing every site.
+    """One finding per (kind, path, subject) whose files disagree, listing every site.
 
     ``claims_by_file`` holds (repo-relative path, resolved path, claims); two
     entries with the same resolved path are one file, and a file that
     disagrees only with itself is not a cross-document contradiction.
     """
-    groups: dict[tuple[str, str], list[_Site]] = {}
+    groups: dict[tuple[str, str], list[tuple[str | None, _Site]]] = {}
     for rel, real, claims in claims_by_file:
         for claim in claims:
             value_of = CROSS_DOC_VALUE.get(claim.kind)
             if value_of is not None:
                 groups.setdefault((claim.kind, claim.path), []).append(
-                    _Site(rel, claim.line, value_of(claim), real))
-    found = (_contradiction(kind, path, sites) for (kind, path), sites in sorted(groups.items()))
+                    (claim.subject, _Site(rel, claim.line, value_of(claim), real)))
+    found = (_contradiction(kind, path, sites)
+             for (kind, path), subjects in sorted(groups.items())
+             for sites in _by_subject(subjects))
     return [c for c in found if c is not None]
+
+
+def _by_subject(sites: list[tuple[str | None, _Site]]) -> list[list[_Site]]:
+    """Split one (kind, path) group so only claims about the same subject meet.
+
+    A pin naming its tool is compared with the pins naming the same tool. A
+    claim naming none (every count; a pin with no tool word) joins the group's
+    one named subject, or, when the group names several, forms its own group:
+    which tool it means is a guess.
+    """
+    named: dict[str, list[_Site]] = {}
+    unnamed: list[_Site] = []
+    for subject, site in sites:
+        if subject is None:
+            unnamed.append(site)
+        else:
+            named.setdefault(subject, []).append(site)
+    if len(named) <= 1:
+        return [[site for _, site in sites]]
+    return [named[subject] for subject in sorted(named)] + [unnamed]
 
 
 def _reconciled(root: Path, contradiction: DocContradiction) -> bool:

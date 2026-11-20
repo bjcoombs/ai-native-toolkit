@@ -455,3 +455,23 @@ def test_count_claim_is_extracted_with_its_number_and_pattern() -> None:
     claims = extract_claims("# Agents\n\nThe plugin ships 5 commands in `cmds/*.md`.\n")
     assert [(c.kind, c.line, c.path, c.fields) for c in claims] == [
         ("count", 3, "cmds/*.md", {"claimed": 5})]
+
+
+@pytest.mark.parametrize(("sentence", "subject"), [
+    ("Node 20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("Node.js v20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("We use Python version 3.11 pinned in `.tool-versions`.", "python"),
+    ("Pinned in `.tool-versions`: golang 1.22.", "go"),
+    ("Version 3.11 is pinned in `.python-version`.", None),
+    ("It is 3.11, pinned in `.python-version`.", None),
+    ("3.11 is pinned in `.python-version`.", None),
+])
+def test_a_pin_keeps_the_tool_it_names_as_its_subject(sentence: str, subject: str | None) -> None:
+    [claim] = extract_claims(sentence + "\n")
+    assert claim.subject == subject
+
+
+def test_a_pin_subject_is_not_part_of_the_failure(tmp_path: Path) -> None:
+    (tmp_path / "CLAUDE.md").write_text("Node 20.11.0 is pinned in `.nvmrc`.\n")
+    [failure] = scan_instruction_claims(tmp_path, ["CLAUDE.md"])["failures"]
+    assert "subject" not in failure

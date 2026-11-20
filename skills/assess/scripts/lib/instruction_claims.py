@@ -26,7 +26,10 @@ Claim kinds:
   Verified when the file exists and contains the version as a substring (so
   ``3.11`` verifies against a file holding ``3.11.9``: the check under-reports
   rather than accuse). A missing file is a failed claim; a sentence with no
-  version, or with two different versions, is skipped.
+  version, or with two different versions, is skipped. The word just before the
+  version (``Node 20.11.0``, ``Python version 3.11``) is kept as the claim's
+  ``subject``, the tool pinned, unless it is a function word ("is", "at",
+  "version"); it is not reported, only used to compare pins across documents.
 - ``count``: an integer followed by a word ("43 pgTAP suites") in a sentence
   that also names one backticked glob pattern (``supabase/tests/*.sql``). The
   pattern is matched relative to the repository root and the matching files
@@ -106,6 +109,14 @@ _BACKTICK_SPAN = re.compile(r"`([^`]+)`")
 _ENFORCEMENT_TRIGGER = re.compile(r"(?i:\benforced\b|\bruns in\b|\bchecked by\b)|\bCI\b")
 
 _PINNED_IN = re.compile(r"pinned in\s+`([^`\s]+)`", re.IGNORECASE)
+# Words that sit before a version without naming a tool ("is 3.11", "at 20.1").
+_NOT_A_TOOL = frozenset({
+    "a", "an", "and", "are", "at", "be", "from", "in", "is", "need", "needs", "of",
+    "on", "or", "pin", "pinned", "pins", "require", "requires", "run", "runs", "set",
+    "than", "the", "to", "use", "uses", "using", "v", "version", "versions", "was",
+    "with",
+})
+_TOOL_ALIASES = {"nodejs": "node", "node.js": "node", "golang": "go", "python3": "python"}
 _VERSION = re.compile(r"(?<![\d.])(\d+(?:\.\d+)+)(?!\.?\d)")
 
 # A count: an integer, not part of a version, decimal, list or percentage,
@@ -166,6 +177,9 @@ class Claim:
     line: int
     path: str
     fields: dict[str, Any] = field(default_factory=dict)
+    # What the claim is about, beyond its path: a pin's tool (``node``), or
+    # None when the sentence does not name one. Never part of a failure.
+    subject: str | None = None
 
 
 def _paragraphs(text: str) -> Iterable[list[tuple[int, str]]]:
@@ -254,7 +268,24 @@ def _pin_claims(sentence: str, line: int) -> list[Claim]:
     versions = set(_VERSION.findall(rest))
     if len(versions) != 1:
         return []
-    return [Claim("pin", line, pins[0], {"version": versions.pop()})]
+    version = versions.pop()
+    return [Claim("pin", line, pins[0], {"version": version},
+                  subject=_pinned_tool(rest, version))]
+
+
+def _pinned_tool(sentence: str, version: str) -> str | None:
+    """The tool a pin sentence names just before its version, lowercased and
+    with common aliases folded (``Node.js`` -> ``node``); None when that word
+    is a function word, or there is none."""
+    match = re.search(
+        rf"(?<![\w.+-])([A-Za-z][\w.+-]*?)\.?[\s:=@]+(?:version\s+)?v?{re.escape(version)}(?!\.?\d)",
+        sentence)
+    if match is None:
+        return None
+    word = match.group(1).lower()
+    if word in _NOT_A_TOOL:
+        return None
+    return _TOOL_ALIASES.get(word, word)
 
 
 def _count_claims(sentence: str, line: int) -> list[Claim]:
