@@ -136,6 +136,27 @@ Every `test_*.py` file in this directory has a row below.
 | `test_test_focus.py` | `lib/test_focus.py` - `compute_test_focus` and mutation scope |
 | `test_vault_queries.py` | `lib/vault_queries.py` - vault-native navigation query parser |
 | `test_wiki_state.py` | `lib/wiki_state.py` - first-flagged dates and their rekeying through the rename map |
+| `test_run_setup.py` | `lib/run_setup.py` + `lib/core_scans.py` + `lib/run_publish.py` - the setup-stage scan adapters and the publish step |
+| `test_scan_registry_degrade.py` | `lib/scan_registry.py` - degrade by construction: every scan-table entry without a `GATE_REASONS` reason is forced to raise and the run carries the unavailable marker downstream |
+| `test_scc_coverage.py` | `lib/scc_coverage.py` - the implausibly-low scc complexity check, calibrated on real scc output for an under-counted shell script |
+| `test_counts_only.py` | `lib/counts_only.py` + `lib/counts_only_rules.py` + `lib/counts_only_schema.py` - the content-free run-context mode: every typed string field has a keep/drop/path rule, and the counts-only document drops copied text |
+| `test_rubric.py` | `lib/rubric.py` - TOML rubric loading and deterministic whole-level evaluation |
+| `test_rubric_signals.py` | `lib/rubric_signals.py` - schema-backed signal paths and the shipped default rubric |
+
+### Headless signals and fleet suites
+
+| Suite | Pins |
+|---|---|
+| `test_signals.py` | `scripts/assess_signals.py` + `lib/signals.py` + `lib/signals_schema.py` - the headless signals entry point and its committed JSON schema |
+| `test_signals_counts_only.py` | `scripts/assess_signals.py --counts-only` - the content-free headless document validates against the schema, hashes paths and shared-tooling ids, and keeps a reason on every unavailable block |
+| `test_fleet.py` | `lib/fleet.py` + `lib/fleet_schema.py` - the fleet runner core: targets, per-repository rows, isolated failures |
+| `test_fleet_cli.py` | `skills/fleet/scripts/fleet.py` (relative to the repo root) - end to end over real `assess_signals` runs |
+| `test_fleet_groups.py` | `lib/fleet_groups.py` - the group roll-up with rubric levels and joined group settings |
+| `test_fleet_labels.py` | `lib/fleet_labels.py` + `skills/fleet/scripts/fleet_labels.py` - the closed label set, the `labels.jsonl` schema and its join to `repos.jsonl`; labels never touch a rubric score |
+| `test_fleet_next_steps.py` | `lib/fleet_next_steps.py` + `lib/next_step_guidance.py` + `lib/fleet_view.py` + `skills/fleet/scripts/fleet_next_steps.py` - per-team next-steps pages against goldens in `fixtures/fleet_next_steps/expected/` |
+| `test_fleet_heatmap.py` | `lib/fleet_view.py` + `lib/fleet_heatmap.py` + `skills/fleet/scripts/heatmap.py` - the leadership heat map SVG against goldens in `fixtures/fleet_heatmap/` |
+| `fleet_heatmap_fixture.py` | builds the `fixtures/fleet_heatmap/` runs from `lib/fleet_groups.roll_up` (not a test module; regenerate with `uv run --locked python tests/fleet_heatmap_fixture.py`) |
+| `test_fleet_run_stamp.py` | `lib/fleet_stamp.py` + `lib/fleet_cleanup.py` - the fleet run stamp, per-repository activity and `--delete-after` |
 
 ### Infrastructure suites
 
