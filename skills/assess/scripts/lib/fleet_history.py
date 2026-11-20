@@ -161,17 +161,22 @@ def _entry_order(path: Path) -> tuple[str, int] | None:
     return (match.group(1), int(match.group(2) or 1)) if match else None
 
 
+def dated_entries(org_dir: Path) -> list[tuple[tuple[str, int], Path]]:
+    """Every ``<date>[.<n>]`` directory under ``org_dir`` (no symlinks), oldest first, with its
+    ``(date, suffix)`` order; empty when ``org_dir`` is missing or a symlink."""
+    if not org_dir.is_dir() or org_dir.is_symlink():
+        return []
+    return sorted((order, p) for p in org_dir.iterdir()
+                  if (order := _entry_order(p)) is not None and p.is_dir() and not p.is_symlink())
+
+
 def latest_matching(org_dir: Path, stamp: Mapping[str, Any], repos: frozenset[str] | None = None) -> Path | None:
     """The newest ``<date>[.<n>]`` entry under ``org_dir`` holding a run whose stamp matches ``stamp``.
 
     With ``repos``, the newest such entry over exactly that repository set wins
     when there is one, so a partial rerun is not taken as the baseline.
     """
-    if not org_dir.is_dir() or org_dir.is_symlink():
-        return None
-    entries = [(order, p) for p in org_dir.iterdir()
-               if (order := _entry_order(p)) is not None and p.is_dir() and not p.is_symlink()]
-    matching = [entry for _order, entry in sorted(entries, reverse=True)
+    matching = [entry for _order, entry in reversed(dated_entries(org_dir))
                 if (entry / RUN_FILE).is_file() and entry_conflict(entry, stamp) is None]
     same_set = [entry for entry in matching if repos is not None and entry_repos(entry) == repos]
     if same_set:

@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import html
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 CHAR_W = 7.0  # average glyph advance at 12px, used in place of font metrics
@@ -160,11 +160,14 @@ THEMED_HATCH = hatch_pattern(THEMED_HATCH_ID, "", "", "2.4", classes=("f-bg", "s
 HATCH_FILL = f"url(#{THEMED_HATCH_ID})"
 
 
-def theme_style() -> str:
-    """The embedded ``<style>``: ``t-``/``f-`` (fill) and ``s-`` (stroke) classes per role."""
+def theme_style(extra: Mapping[str, tuple[str, str]] | None = None) -> str:
+    """The embedded ``<style>``: ``t-``/``f-`` (fill) and ``s-`` (stroke) classes per role in
+    ``THEME``, plus any ``extra`` roles a diagram adds (such as series colours)."""
+    roles = {**THEME, **(extra or {})}
+
     def rules(index: int) -> str:
         return "".join(f".t-{role},.f-{role}{{fill:{colours[index]}}}.s-{role}{{stroke:{colours[index]}}}"
-                       for role, colours in THEME.items())
+                       for role, colours in roles.items())
     return (f"<style>text {{ font-family: {FONT_STACK}; }}{rules(0)}"
             f"@media (prefers-color-scheme: dark){{{rules(1)}}}</style>")
 

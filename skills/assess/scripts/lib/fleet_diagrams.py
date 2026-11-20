@@ -9,10 +9,10 @@ report beside ``groups.jsonl``, removing any diagram file a previous run left
 that this run did not draw, so a stale picture never sits beside new data;
 ``clear_diagrams`` removes them all (``fleet.py --no-diagrams``).
 
-The slope chart and the layer bars (#675) follow; the slope chart reads the
-``--compare`` result (``comparison``) and is skipped without one. A later
-diagram (trend: #676) adds its file name to ``DIAGRAM_FILES`` and its entry to
-``build_diagrams``. Deterministic: entries
+The slope chart and the layer bars (#675) follow the trend; the slope chart reads
+the ``--compare`` result (``comparison``) and is skipped without one; the trend
+(#676, ``lib/fleet_trends.py``) reads the run history. A new diagram adds its file
+name to ``DIAGRAM_FILES`` and its entry to ``build_diagrams``. Deterministic: entries
 in a fixed order, no date in the report.
 """
 from __future__ import annotations
@@ -23,13 +23,14 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TypedDict
 
-from lib import fleet_layer_bars, fleet_quadrant, fleet_slope, fleet_tooling_map
+from lib import fleet_layer_bars, fleet_quadrant, fleet_slope, fleet_tooling_map, fleet_trends
 from lib.fleet import FleetRow
 from lib.fleet_compare import Comparison
+from lib.fleet_trends import TrendRun
 from lib.rubric import Rubric
 
 REPORT_FILE = "report.md"
-DIAGRAM_FILES = (fleet_quadrant.FILE, fleet_tooling_map.FILE, fleet_slope.FILE,
+DIAGRAM_FILES = (fleet_quadrant.FILE, fleet_tooling_map.FILE, fleet_trends.FILE, fleet_slope.FILE,
                  fleet_layer_bars.FILE)
 SLOPE_TITLE, SLOPE_QUESTION = "Before and after", "What moved since the earlier run, and which row moved it?"
 BARS_TITLE, BARS_QUESTION = "Maturity by layer", "Which layer is the org-wide weak spot?"
@@ -43,12 +44,18 @@ class Diagram(TypedDict):
     skipped: str | None  # the one-line reason, when skipped
 
 
+TREND_TITLE = "Group trends"
+TREND_QUESTION = "Is each team improving?"
+NO_LEVELS = "skipped: the run had no maturity model (--rubric), so no levels."
+NO_HISTORY = "skipped: the run is not kept in the run history (--no-history or --full), so no earlier runs."
+
+
 def _quadrant(levels: Rubric | None, repos: Sequence[FleetRow], window: str) -> Diagram:
     entry: Diagram = {"file": fleet_quadrant.FILE, "title": "Activity and maturity",
                       "question": "Which busy repositories are least mature?",
                       "svg": None, "skipped": None}
     if levels is None:
-        entry["skipped"] = "skipped: the run had no maturity model (--rubric), so no levels."
+        entry["skipped"] = NO_LEVELS
     elif not any(row["scope"] == "team" for row in levels["rows"]):
         entry["skipped"] = "skipped: the maturity model has no team rows to measure a repository by."
     elif not repos:
@@ -105,6 +112,21 @@ def _layer_bars(levels: Rubric | None, repos: Sequence[FleetRow]) -> Diagram:
     return entry
 
 
+def _trend(levels: Rubric | None, history: Sequence[TrendRun] | None) -> Diagram:
+    entry: Diagram = {"file": fleet_trends.FILE, "title": TREND_TITLE, "question": TREND_QUESTION,
+                      "svg": None, "skipped": None}
+    if levels is None:
+        entry["skipped"] = NO_LEVELS
+    elif history is None:
+        entry["skipped"] = NO_HISTORY
+    elif len(history) < fleet_trends.MIN_RUNS:
+        entry["skipped"] = (f"skipped: {len(history)} comparable dated run(s), the trend needs at least "
+                            f"{fleet_trends.MIN_RUNS} (same window, scans and output mode, with a maturity model).")
+    else:
+        entry["svg"] = fleet_trends.render_trend(history)
+    return entry
+
+
 def _guarded(build: Callable[[], Diagram], file: str, title: str, question: str) -> Diagram:
     """One diagram; a renderer that raises becomes a skip line naming the error class, so one
     broken picture never costs the others, the report or the run."""
@@ -116,9 +138,12 @@ def _guarded(build: Callable[[], Diagram], file: str, title: str, question: str)
 
 
 def build_diagrams(levels: Rubric | None, repos: Sequence[FleetRow], window: str, *,
+                   history: Sequence[TrendRun] | None = None,
                    comparison: Comparison | None = None) -> list[Diagram]:
     """Every diagram for one run, in report order; never raises for a diagram's sake.
 
+    ``history`` is the trend's runs, oldest first and this run last
+    (``fleet_trends.history_runs`` and ``series_runs``); None when no history was read.
     ``comparison`` is this run's ``--compare`` result, None without ``--compare``.
     """
     return [
@@ -126,6 +151,7 @@ def build_diagrams(levels: Rubric | None, repos: Sequence[FleetRow], window: str
                  "Activity and maturity", "Which busy repositories are least mature?"),
         _guarded(lambda: _tooling(repos), fleet_tooling_map.FILE, "Shared tooling",
                  "What breaks if a shared template changes, and who drifted off it?"),
+        _guarded(lambda: _trend(levels, history), fleet_trends.FILE, TREND_TITLE, TREND_QUESTION),
         _guarded(lambda: _slope(levels, comparison), fleet_slope.FILE, SLOPE_TITLE, SLOPE_QUESTION),
         _guarded(lambda: _layer_bars(levels, repos), fleet_layer_bars.FILE, BARS_TITLE,
                  BARS_QUESTION),

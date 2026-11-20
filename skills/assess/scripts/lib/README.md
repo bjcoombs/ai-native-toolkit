@@ -808,7 +808,7 @@ shared-tooling map, and the slope, layer-bar and trend charts of #675/#676). The
 | `place_labels(points, bounds, *, size, radius, obstacles)` -> `PlacedLabel \| None` per point | Greedy collision nudging: the first `LABEL_OFFSETS` candidate inside `bounds` that hits no disc, obstacle box or earlier label; `None` means "name it elsewhere". Renderer and overlap test read the same boxes. |
 | `spread_vertical(ys, min_gap)` | End labels (trend, slope) pushed apart to `min_gap`, order kept. |
 | `overlaps(a, b)`, `Box` | The box test. |
-| `THEME`, `theme_style()` | Role -> (light, dark) colours as `t-`/`f-` (fill) and `s-` (stroke) classes, dark under `prefers-color-scheme`. The only `text` rule sets `font-family`, so it never overrides a text's attributes (`tests/svg_cascade.py`). |
+| `THEME`, `theme_style(extra)` | Role -> (light, dark) colours (plus a diagram's `extra` roles, such as the trend's series colours) as `t-`/`f-` (fill) and `s-` (stroke) classes, dark under `prefers-color-scheme`. The only `text` rule sets `font-family`, so it never overrides a text's attributes (`tests/svg_cascade.py`). |
 | `document(w, h, title, desc, body, *, style, defs, background)` | The whole file: prolog, `viewBox`, `<title>`, `<desc>`, style, defs and a full-canvas background (`f-bg` unless a colour is given). |
 
 No script, no external font or link; fixed number formatting. Tests: `tests/test_fleet_diagrams.py`.
@@ -858,15 +858,34 @@ under the bars.
 
 **`fleet_diagrams.py`**
 The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#674).
-`build_diagrams(levels, repos, window, *, comparison=None)` returns a `Diagram` per picture
+`build_diagrams(levels, repos, window, *, history, comparison)` returns a `Diagram` per picture
 (`file`, `title`, `question`, and `svg` or the one-line `skipped` reason: no maturity model, no
-team rows, no repositories; for the slope chart also no `--compare`, runs not comparable, or no
-row known in both runs). `fleet.py` passes the comparison `_keep_and_compare` wrote. `report_markdown` embeds each with a relative clickable image link or says
+team rows, no repositories; for the trend no run history or fewer than 3 comparable runs; for
+the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
+is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
+`comparison` is the result `_keep_and_compare` wrote. `report_markdown` embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. A new diagram (#676) adds its module, its `FILE` to `DIAGRAM_FILES` and
 an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (regenerate with
 `uv run --locked python tests/fleet_diagrams_fixture.py` from `skills/assess`).
+
+**`fleet_trends.py`**
+Group trend lines across the dated run history (#676). `history_runs(org_dir, stamp, repos)`
+reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
+`groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode and
+path hashing and records a maturity-model version; unreadable entries are passed over. One
+run per date: the entry over this run's repository set, else the highest suffix.
+`trend_run(stamp, groups)` is one run's point per group, `mean_level` the plain mean of the
+group's known row levels (the history keeps no maturity model and `groups.jsonl` rows no
+per-row level list, so levels are not scaled; the axis says it is not comparable to the
+slope chart's share of top level);
+`series_runs` appends this run (from memory) and keeps the newest `MAX_RUNS`. `layout`
+splits each line at an unknown or absent value and at a maturity-model version change
+(marked by a dashed rule), and spaces end labels with `fleet_svg.spread_vertical`
+(`LABEL_GAP`); `render_trend` draws it, naming every gap on a hatched note, never at zero.
+`fleet_diagrams` skips it below `MIN_RUNS` (3). Golden render: `tests/fixtures/fleet_trends/`
+(regenerate with `uv run --locked python tests/fleet_trends_fixture.py` from `skills/assess`).
 
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
@@ -944,7 +963,8 @@ repository set (`entry_repos`), so a partial rerun never replaces a full-fleet e
 `choose_entry` then moves to
 `<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
 `latest_matching` finds the newest matching entry, preferring one over the same
-repository set, the default for a bare `--compare`.
+repository set, the default for a bare `--compare`. `dated_entries` lists the
+`<date>[.<n>]` directories oldest first (also read by `fleet_trends`).
 `persist` writes the three files to a hidden temp sibling first: a new entry is that
 directory renamed into place in one step, and a replaced same-day entry loses its
 `run.json` before the new files move in (`run.json` last), so a failure part-way never
