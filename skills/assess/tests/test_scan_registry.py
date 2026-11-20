@@ -277,10 +277,10 @@ def test_the_doc_staleness_keys_are_table_entries_in_their_old_order():
 def test_the_run_context_carries_only_declared_keys_in_table_order(tmp_path):
     """No private value leaks into run-context.json, and the key order is the
     table's, stage by stage."""
-    from assess_core import build_run_context
+    from assess_core import build_and_publish_run
     from assess_core_helpers import _minimal_repo
 
-    ctx = build_run_context(repo_root=_minimal_repo(tmp_path), run_date="2026-11-20",
+    ctx = build_and_publish_run(repo_root=_minimal_repo(tmp_path), run_date="2026-11-20",
                             non_interactive=True)
     declared: list[str] = []
     for stage in reg.STAGES:
@@ -311,7 +311,7 @@ def test_a_raising_doc_staleness_scan_degrades_its_keys_and_the_run_continues(
 ):
     """doc_staleness ran through ``safe`` when hand-wired; as a table entry it
     still degrades under its own label, and its readers see the marker."""
-    from assess_core import build_run_context
+    from assess_core import build_and_publish_run
     from assess_core_helpers import _minimal_repo
     from lib import core_scans
 
@@ -319,7 +319,7 @@ def test_a_raising_doc_staleness_scan_degrades_its_keys_and_the_run_continues(
         raise RuntimeError("kaput")
 
     monkeypatch.setattr(core_scans, "analyze_doc_staleness", boom)
-    ctx = build_run_context(repo_root=_minimal_repo(tmp_path), run_date="2026-11-20",
+    ctx = build_and_publish_run(repo_root=_minimal_repo(tmp_path), run_date="2026-11-20",
                             non_interactive=True)
     assert ctx["doc_staleness"] == {"available": False,
                                     "reason": "doc_staleness scan failed: kaput"}
@@ -328,7 +328,7 @@ def test_a_raising_doc_staleness_scan_degrades_its_keys_and_the_run_continues(
 
 
 def test_a_raising_doc_join_degrades_only_the_documentation_block(tmp_path, monkeypatch):
-    from assess_core import build_run_context
+    from assess_core import build_and_publish_run
     from assess_core_helpers import _minimal_repo
     from lib import core_scans
 
@@ -336,7 +336,7 @@ def test_a_raising_doc_join_degrades_only_the_documentation_block(tmp_path, monk
         raise RuntimeError("kaput")
 
     monkeypatch.setattr(core_scans, "analyze_doc_complexity_join", boom)
-    ctx = build_run_context(repo_root=_minimal_repo(tmp_path), run_date="2026-11-20",
+    ctx = build_and_publish_run(repo_root=_minimal_repo(tmp_path), run_date="2026-11-20",
                             non_interactive=True)
     documentation = ctx["documentation"]
     assert documentation["available"] is False

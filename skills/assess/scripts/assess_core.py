@@ -5,11 +5,13 @@ Reads:
     {repo_root}/.assess/complexity-stats.prior.json (if it exists)
     {repo_root}/CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, .github/copilot-instructions.md (any that exist)
 
-Writes:
+Writes (from ``main`` / ``build_and_publish_run``; ``build_run_context`` alone
+writes nothing):
     {repo_root}/.assess/run-context.json   (everything the LLM needs)
     {repo_root}/.assess/index.md           (regenerated each run)
     {repo_root}/.assess/log.md             (appended each run)
     {repo_root}/.assess/hotspots/*.md      (one per top hotspot)
+    {repo_root}/.assess/badge.json, findings.json
 
 Run:
     uv run assess_core.py <repo_root>
@@ -70,17 +72,41 @@ def build_run_context(
     from a sibling directory. None (the default) is a whole-repo run, unchanged.
 
     Every block comes from the declared table in ``lib/scan_registry.py``. The
-    table only reads; ``lib.run_publish.publish_run`` then writes index.md,
-    log.md, hotspots/*.md, badge.json and run-context.json.
+    table only reads, so this function has no file-system side effects: it
+    creates no ``.assess/`` directory and writes no artifact. The publish step
+    (index.md, log.md, hotspots/*.md, badge.json, findings.json and
+    run-context.json, through ``lib.run_publish.publish_run``) is
+    ``build_and_publish_run``'s, which ``main`` calls.
     """
+    return _scan(repo_root, run_date, non_interactive, scope)[0]
+
+
+def build_and_publish_run(
+    *, repo_root: Path, run_date: str, non_interactive: bool = False,
+    scope: Path | None = None,
+) -> dict[str, Any]:
+    """``build_run_context``, then the publish step that writes the artifacts.
+
+    The CLI run: ``publish_run`` writes the wiki, badge, findings snapshot and
+    run-context.json, and fills the context keys only it can know
+    (``pruned_hotspots``, ``log_integrity``, ``prior_findings_snapshot``, ...).
+    """
+    ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope)
+    publish_run(ctx, scan_inputs)
+    return ctx
+
+
+def _scan(
+    repo_root: Path, run_date: str, non_interactive: bool, scope: Path | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Run the scan table; return the context and the inputs it filled."""
     scan_inputs: dict[str, Any] = {
         "repo_root": repo_root, "requested_scope": scope,
         "run_date": run_date, "non_interactive": non_interactive,
     }
     ctx: dict[str, Any] = {}
     run_scans(ctx, scan_inputs)
-    publish_run(ctx, scan_inputs)
-    return ctx
+    return ctx, scan_inputs
 
 
 def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
@@ -208,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_opt_in_mutation(repo_root, scope=parsed.scope)
     run_date = datetime.now().strftime("%Y-%m-%d")
     try:
-        ctx = build_run_context(
+        ctx = build_and_publish_run(
             repo_root=repo_root, run_date=run_date,
             non_interactive=parsed.non_interactive,
             scope=parsed.scope,

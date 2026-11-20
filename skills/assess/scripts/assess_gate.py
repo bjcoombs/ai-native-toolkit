@@ -13,7 +13,8 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   reliable diff; on a first run or an unreliable diff it is skipped, never
   fired - a freshly-cloned repo never trips a regression gate on its first PR.
 
-A third, explanatory part: when the committed ``.assess/findings.json`` was
+A third, explanatory part: when the committed ``.assess/findings.json`` (read
+from disk, or the prior the run recorded before rewriting it) was
 written under another finding method version (``ASSESS_METHOD_VERSION``), the
 log states that the method change is not a code change, lists the findings that
 appeared and cleared by path against that snapshot (which also reflect any code
@@ -47,7 +48,7 @@ from typing import Any, NotRequired, TypedDict
 
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
-from lib.findings_snapshot import method_change
+from lib.findings_snapshot import committed_prior, method_change
 from lib.run_context_types import JsonDict, MethodChange
 
 
@@ -397,6 +398,10 @@ def main(argv: list[str] | None = None) -> int:
         if config_path is not None
         else load_gate_config(repo_root)
     )
+    # Compare against the committed findings.json, not only the prior the
+    # pipeline recorded: the gate may run on a snapshot edited or checked out
+    # after the last pipeline run (#661).
+    ctx["prior_findings_snapshot"] = committed_prior(ctx, repo_root)
     verdict = evaluate(ctx, gate)
     print(format_verdict(verdict))
     return 1 if verdict["failed"] else 0

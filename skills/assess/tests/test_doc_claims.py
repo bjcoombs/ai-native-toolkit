@@ -354,11 +354,11 @@ def test_find_contradictions_ignores_kinds_without_a_value() -> None:
 
 
 def test_build_run_context_carries_the_block(tmp_path: Path) -> None:
-    from assess_core import build_run_context
+    from assess_core import build_and_publish_run
 
     _write(tmp_path, "docs/a.md", PIN_311)
     _write(tmp_path, "docs/b.md", PIN_312)
-    ctx = build_run_context(repo_root=tmp_path, run_date="2026-11-20")
+    ctx = build_and_publish_run(repo_root=tmp_path, run_date="2026-11-20")
     assert ctx["doc_claims"]["contradictions_total"] == 1
     written = json.loads((tmp_path / ".assess" / "run-context.json").read_text())
     assert written["doc_claims"]["files_scanned"] == 2

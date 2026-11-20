@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from assess_report import render_report
 from golden import normalize_report
 
@@ -58,7 +58,7 @@ def _build_parity_fixture(repo: Path) -> Path:
 
 
 def _render_parity_report(repo: Path) -> str:
-    ctx = build_run_context(repo_root=repo, run_date="2026-01-01")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-01-01")
     return normalize_report(render_report(ctx, "parity-fixture"))
 
 

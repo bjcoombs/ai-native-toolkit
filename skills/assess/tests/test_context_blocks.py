@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from assess_core_helpers import (
     _minimal_repo,
     _renamed_and_deleted_history,
@@ -42,7 +42,7 @@ def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
     (repo / "src" / "app.py").write_text("def f():\n    return 2\n")
     commit("change")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-29")
 
     # (1) All five new blocks present.
     for key in ("structure", "behaviour", "documentation", "understanding", "runtime"):
@@ -86,7 +86,7 @@ def test_stale_hubs_join_centrality_and_staleness(tmp_path: Path) -> None:
     for i in range(3):
         (repo / f"leaf{i}.md").write_text("see [hub](hub.md)")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     # Each stale-hub row carries both the centrality and staleness factors,
     # plus the subject_method + confidence that surface coarse-proxy entries.
     if ctx["stale_hubs"]:
@@ -108,7 +108,7 @@ def test_stale_hubs_confidence_low_for_repo_baseline(tmp_path: Path) -> None:
     for i in range(3):
         (repo / f"leaf{i}.md").write_text("see [hub](hub.md)")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     # All docs here are floating (no co-location, no parallel docs/, no explicit
     # links), so every staleness entry falls back to repo-baseline.
     assert ctx["doc_staleness"]["available"] is True
@@ -173,7 +173,7 @@ def test_failed_liveness_scan_is_not_scored_rung_0(tmp_path: Path, monkeypatch) 
         raise RuntimeError("liveness blew up")
 
     monkeypatch.setattr(core_scans, "scan_liveness", boom)
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     assert ctx["observability"]["available"] is False
     assert ctx["observability"]["rung"] is None  # not 0
     assert "reason" in ctx["observability"]
@@ -190,7 +190,7 @@ def test_failed_liveness_fallback_blocks_exact_shape(tmp_path: Path, monkeypatch
         raise RuntimeError("liveness blew up")
 
     monkeypatch.setattr(core_scans, "scan_liveness", boom)
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     reason = ctx["observability"]["reason"]
     assert reason and reason == ctx["dead_code"]["reason"]
     assert ctx["dead_code"] == {
@@ -210,7 +210,7 @@ def test_failed_liveness_fallback_blocks_exact_shape(tmp_path: Path, monkeypatch
 def test_coverage_report_block_absent_shape(tmp_path: Path) -> None:
     """With no coverage report on disk the block is the bare not-found shape."""
     repo = _minimal_repo(tmp_path)
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     assert ctx["coverage_report"] == {"available": False, "source": "none found"}
 
 
@@ -251,7 +251,7 @@ def test_accretion_ratchet_block_present_and_well_formed(git_repo) -> None:
         "top_large": [{"path": "src/grower.py", "loc": 50}],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-06-17")
 
     assert "accretion_ratchet" in ctx
     block = ctx["accretion_ratchet"]
@@ -286,7 +286,7 @@ def test_accretion_ratchet_noise_budget_filters_non_hotspots(git_repo) -> None:
         "top_large": [{"path": "src/in_band.py", "loc": 50}],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-06-17")
     paths = [f["path"] for f in ctx["accretion_ratchet"]["files"]]
     assert "src/in_band.py" in paths
     assert "src/out_of_band.py" not in paths  # grew, but not a hotspot -> filtered
@@ -297,7 +297,7 @@ def test_accretion_ratchet_degenerate_history_unreliable(tmp_path: Path) -> None
     with the degrade shape (a failed scan is never read as 'no accretion')."""
     repo = _minimal_repo(tmp_path)  # plain dir, not a git repo
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-06-17")
     block = ctx["accretion_ratchet"]
     assert block["available"] is False
     assert block["files"] == []
@@ -324,7 +324,7 @@ def test_accretion_ratchet_files_sorted_worst_first(git_repo) -> None:
         "top_large": [{"path": "src/big.py", "loc": 80}, {"path": "src/small.py", "loc": 40}],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-06-17")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-06-17")
     files = ctx["accretion_ratchet"]["files"]
     nets = [f["net_additions"] for f in files]
     assert nets == sorted(nets, reverse=True)  # worst (largest growth) first
@@ -355,7 +355,7 @@ def test_accretion_skips_documentation_and_archive_paths_excluded_end_to_end(git
         "top_hotspots": rows, "top_complex": rows, "top_large": rows,
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
     acc_paths = [f["path"] for f in ctx["accretion_ratchet"]["files"]]
     assert "notes/PLAN.md" not in acc_paths
     assert "src/big.py" in acc_paths
@@ -379,7 +379,7 @@ def test_archive_paths_excluded_block_empty_without_archive(git_repo) -> None:
     (repo / "README.md").write_text("# Repo\n")
     commit("init")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
     assert ctx["excluded_as_archive"] == {"affected_finding_paths": [], "count": 0}
 
 
@@ -390,7 +390,7 @@ def test_pruned_finding_paths_block_after_rename_and_delete(git_repo) -> None:
     repo, commit = git_repo
     _renamed_and_deleted_history(repo, commit)
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
     hidden = next(f["paths"] for f in ctx["derived_findings"]
                   if f["name"] == "hidden_coupling")
     assert "new" in hidden
@@ -418,7 +418,7 @@ def test_pruned_finding_paths_block_empty_without_dead_paths(git_repo) -> None:
     (repo / "README.md").write_text("# Repo\n")
     commit("init")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
     assert ctx["pruned_finding_paths"] == {
         "paths": [], "count": 0, "rename_map_complete": True}
 
@@ -437,7 +437,7 @@ def test_structure_drift_block_omitted_without_ownership_map(git_repo) -> None:
     (repo / "a.py").write_text("x = 1\n")
     commit("init")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     assert "structure_drift" not in ctx
 
 
@@ -455,7 +455,7 @@ def test_structure_drift_block_present_with_codeowners(git_repo) -> None:
     (repo / "CODEOWNERS").write_text("src/** @team\nghost/** @nobody\n")
     commit("init")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     assert "structure_drift" in ctx
     sd = ctx["structure_drift"]
     assert sd["tier_0"]["available"] is True
@@ -514,7 +514,7 @@ def test_excluded_by_config_block_present_and_empty_without_excludes(git_repo) -
     (repo / "README.md").write_text("# Repo\n")
     commit("init")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
     block = ctx["excluded_by_config"]
     assert block["dirs"] == []
     assert block["patterns"] == []
@@ -542,7 +542,7 @@ def test_excluded_by_config_discloses_suppressed_finding(git_repo) -> None:
         (island / "a.py").write_text(f"x = {i}\n")
         commit(f"c{i}")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
     block = ctx["excluded_by_config"]
     assert block["dirs"] == ["island"]
     assert block["count"] == len(block["affected_finding_paths"])
@@ -572,7 +572,7 @@ def test_excluded_generated_header_list_copied_from_stats(git_repo) -> None:
     (repo / "README.md").write_text("# Repo\n")
     commit("init")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
     assert ctx["excluded_generated"] == rows
 
 
@@ -582,5 +582,5 @@ def test_excluded_generated_header_list_empty_for_old_stats(git_repo) -> None:
     _write_min_stats(repo / ".assess")
     (repo / "README.md").write_text("# Repo\n")
     commit("init")
-    ctx = build_run_context(repo_root=repo, run_date="2026-09-18")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
     assert ctx["excluded_generated"] == []

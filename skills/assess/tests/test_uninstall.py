@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 
 # skills/assess/tests/ -> skills/assess is two parents up.
 ASSESS_DIR = Path(__file__).resolve().parents[1]
@@ -23,7 +23,7 @@ def test_run_context_carries_uninstall_path(tmp_path: Path) -> None:
         "files_scored": 1, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }))
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["uninstall_instructions_path"] == "references/uninstall.md"
 
 

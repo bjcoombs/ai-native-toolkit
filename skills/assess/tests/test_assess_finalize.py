@@ -959,12 +959,12 @@ def test_finalize_evidence_refusal_through_core_and_cli(tmp_path: Path) -> None:
     import subprocess
     import sys
 
-    from assess_core import build_run_context
+    from assess_core import build_and_publish_run
 
     root = tmp_path / "repo"
     (root / ".assess").mkdir(parents=True)
     _seed_evidence_repo(root / ".assess")
-    ctx = build_run_context(repo_root=root, run_date="2026-09-18", non_interactive=True)
+    ctx = build_and_publish_run(repo_root=root, run_date="2026-09-18", non_interactive=True)
     den = int(ctx["archetype"].get("denominator") or 8)
     cache = root / ".assess" / ".cache"
     cache.mkdir(exist_ok=True)
