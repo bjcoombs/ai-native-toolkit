@@ -64,10 +64,12 @@ from lib.git_churn import (
     GIT_TIMEOUT_SECONDS,
     ContentClock,
     churn_is_degenerate,
+    commit_epochs_by_file,
     content_commit_clock,
     pick_churn_window,
     tracked_files,
 )
+from lib.change_coupling import RenameMap
 from lib.run_context_types import BulkCommit, DocToCodeEdge
 
 
@@ -171,14 +173,19 @@ class DocStaleness:
     # `last_commit_days` is the doc's creation date, not a content age (a doc
     # regenerated in bulk on every release). "content" otherwise.
     last_change_basis: str = "content"
+    # False when the rename map could not be read (issue #425): both churn
+    # counts may miss commits made under an old name.
+    renames_followed: bool = True
 
     @property
     def confidence(self) -> str:
         # repo-baseline uses repo-wide churn (no derivable subject), so a
         # stale-ratio computed against it is a coarse proxy. Mark it low so a
         # reader knows to discount before acting on the ranking. A creation-date
-        # fallback is low for the same reason: its age is not a content age.
-        if self.subject_method == "repo-baseline" or self.last_change_basis == "creation":
+        # fallback is low for the same reason: its age is not a content age, and
+        # so is a churn count that could not follow renames.
+        if (self.subject_method == "repo-baseline" or self.last_change_basis == "creation"
+                or not self.renames_followed):
             return "low"
         return "high"
 
@@ -276,28 +283,38 @@ def content_clock(repo_root: Path) -> ContentClock:
     the doc-staleness metric and the instruction grader agree on which commits
     are bulk. Both calls share one build per HEAD (see `_clock_at`).
     """
+    repo_root = repo_root.resolve()
+    return _clock_at(repo_root, _head(repo_root))
+
+
+def _head(repo_root: Path) -> str | None:
+    """HEAD's sha, the cache key for the clock and the rename map; None on failure."""
     import subprocess
 
-    repo_root = repo_root.resolve()
     try:
-        head = subprocess.run(
+        return subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
             capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip() or None
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        head = None
-    return _clock_at(repo_root, head)
+        return None
+
+
+@lru_cache(maxsize=4)
+def _renames_at(repo_root: Path, head: str | None) -> RenameMap:
+    """The rename map, built once per (repo, HEAD) for the clock and the churn."""
+    from lib.change_coupling import build_rename_map
+
+    return build_rename_map(repo_root)
 
 
 @lru_cache(maxsize=4)
 def _clock_at(repo_root: Path, head: str | None) -> ContentClock:
     """Build the clock once per (repo, HEAD): doc discovery, rename map, git pass."""
-    from lib.change_coupling import build_rename_map
-
     # A rename map that could not be read leaves renames unfollowed, so the scan
     # is not complete: a renamed doc whose only visible commit is a bulk rename
     # falls back to a creation date.
-    rename_map = build_rename_map(repo_root)
+    rename_map = _renames_at(repo_root, head)
     renames = tuple(sorted(rename_map.paths.items()))
     clock = content_commit_clock(
         repo_root, frozenset(discover_doc_files(repo_root)), head, renames
@@ -376,42 +393,6 @@ def _window_since(churn_label: str | None) -> str | None:
     return None
 
 
-def commit_epochs_by_file(
-    repo_root: Path, since: str | None,
-) -> dict[Path, list[tuple[int, int]]] | None:
-    """{abs_path: [(author epoch, commit index)]} over the churn window.
-
-    The per-commit counterpart of `git_churn.git_churn_scores`: the same walk,
-    keeping each commit's author time (`%at`, the clock the doc side uses) so a
-    caller can count only the commits after a given moment. The commit index
-    lets a caller count distinct commits rather than file-commits. None when
-    git fails.
-    """
-    import subprocess
-
-    cmd = ["git", "-C", str(repo_root), "log", "--relative",
-           "--pretty=format:%x00%at", "--name-only"]
-    if since:
-        cmd.append(f"--since={since}")
-    try:
-        raw = subprocess.run(
-            cmd, capture_output=True, text=True, check=True,
-            timeout=GIT_TIMEOUT_SECONDS,
-        ).stdout
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
-            FileNotFoundError):
-        return None
-    epochs: dict[Path, list[tuple[int, int]]] = {}
-    current = (0, -1)
-    for line in raw.splitlines():
-        line = line.strip()
-        if line.startswith("\x00"):
-            current = (int(line[1:] or 0), current[1] + 1)
-        elif line:
-            epochs.setdefault((repo_root / line).resolve(), []).append(current)
-    return epochs
-
-
 def subject_epochs(
     files: list[Path], epochs: dict[Path, list[tuple[int, int]]] | None,
 ) -> list[int] | None:
@@ -479,6 +460,7 @@ class _ChurnContext:
     repo_wide_code_churn: int
     clock: ContentClock
     generated_sources: list[tuple[str, list[str]]]
+    renames_complete: bool = True
 
 
 def _resolve_docs(
@@ -629,6 +611,7 @@ def _doc_row(
         provenance_sources=prov_source_rels,
         provenance_generated_by=generated_by,
         source_newer=src_newer,
+        renames_followed=ctx.renames_complete,
     )
 
 
@@ -703,7 +686,11 @@ def analyze_doc_staleness(
 
     # Churn: pick a window over the code files (the subject we care about), then
     # score both docs and code in that window for the ratio.
-    churn_map, churn_label = pick_churn_window(repo_root, code_files + docs)
+    # Both churn reads follow renames through the clock's rename map (#425).
+    head = _head(repo_root)
+    rename_map = _renames_at(repo_root, head)
+    churn_map, churn_label = pick_churn_window(
+        repo_root, code_files + docs, rename_map.paths)
     if churn_map is None:
         churn_map = {}
         churn_label = None
@@ -722,9 +709,10 @@ def analyze_doc_staleness(
     # Per-commit author times over the same window, for the behind-the-subject
     # cap. A repo-baseline doc measures against every code file, so that list is
     # sorted once here rather than per doc.
-    commit_epochs = commit_epochs_by_file(repo_root, _window_since(churn_label))
+    commit_epochs = commit_epochs_by_file(
+        repo_root, _window_since(churn_label), rename_map.paths)
     # Last content change per doc, skipping bulk mechanical commits (#333).
-    clock = content_clock(repo_root)
+    clock = _clock_at(repo_root, head)
     ctx = _ChurnContext(
         repo_root=repo_root,
         code_files=code_files,
@@ -734,6 +722,7 @@ def analyze_doc_staleness(
         repo_wide_code_churn=sum(churn_map.get(c, 0) for c in code_files),
         clock=clock,
         generated_sources=generated_sources,
+        renames_complete=rename_map.complete,
     )
 
     base_doc_dirs = _build_base_doc_dirs(repo_root, docs)

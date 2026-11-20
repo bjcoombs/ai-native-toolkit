@@ -384,6 +384,17 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "shared_tooling.ci_source_ids": ID,
         "shared_tooling.marketplace_ids": ID,
     },
+    "ai_usage": {
+        # window is the <n>d|w|mo|y grammar or "all-time"; since is the git
+        # expression behind it ("12 months ago"), redundant with window.
+        # covered_agents and limits are fixed sentences: kept as their length.
+        "ai_usage.reason": DROP,
+        "ai_usage.window": TOKEN,
+        "ai_usage.since": DROP,
+        "ai_usage.merge_rule": TOKEN,
+        "ai_usage.covered_agents": DROP,
+        "ai_usage.limits": DROP,
+    },
     "agent_harness": {
         "agent_harness.reason": DROP,
         "agent_harness.executes.kind": TOKEN,

@@ -321,7 +321,7 @@ def test_relocatable_list_is_capped_with_a_total(cap: int) -> None:
 
 
 def test_registered_after_the_scans_it_reads() -> None:
-    keys = [s.key for s in SCANS]
+    keys = [spec.key for spec in SCANS]
     spec = SCANS[keys.index("instruction_placement")]
     assert "nested_instructions" in spec.reads
     assert keys.index("nested_instructions") < keys.index("instruction_placement")

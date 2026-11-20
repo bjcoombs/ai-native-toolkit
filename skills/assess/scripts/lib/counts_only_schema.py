@@ -22,6 +22,7 @@ from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 from lib.agent_environment import AgentEnvironmentBlock
 from lib.agent_harness import AgentHarnessBlock
 from lib.agent_instructions_grader import SensitiveFinding
+from lib.ai_usage import AiUsageBlock
 from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
 from lib.coverage_gate import CoverageGate
@@ -100,6 +101,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("shared_tooling", SharedToolingBlock),
     ("prior_findings_snapshot", FindingsSnapshot),
     ("instruction_placement", InstructionPlacementBlock),
+    ("ai_usage", AiUsageBlock),
     ("doc_claims", DocClaimsBlock),
     ("test_pressure", TestPressureUnavailable),
     ("stats_summary.loc", SizeBlock),

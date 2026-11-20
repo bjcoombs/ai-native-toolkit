@@ -368,6 +368,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `shared_tooling.ci_source_ids` | external id (hashed when hashing is on) |
 | `shared_tooling.marketplace_ids` | external id (hashed when hashing is on) |
 
+## ai_usage
+
+| Field | Kept as |
+|---|---|
+| `ai_usage.reason` | dropped |
+| `ai_usage.window` | token |
+| `ai_usage.since` | dropped |
+| `ai_usage.merge_rule` | token |
+| `ai_usage.covered_agents` | dropped |
+| `ai_usage.limits` | dropped |
+
 ## agent_harness
 
 | Field | Kept as |
