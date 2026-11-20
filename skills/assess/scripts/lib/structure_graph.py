@@ -158,6 +158,7 @@ class StructureBlock(TypedDict):
     sccs: list[list[str]]
     modularity_q: float
     front_door_ratio: float
+    cross_package_edges: int
     internal_burrow_edges: list[BurrowEdge]
     breakup_candidates: list[BreakupCandidate]
     module_count: int
@@ -178,6 +179,9 @@ class StructureGraphResult:
     modularity_q: float = 0.0
     # A3: fraction of cross-package inbound edges landing on a front door.
     front_door_ratio: float = 1.0
+    # A3: the edges front_door_ratio is measured over. 0 means the ratio's 1.0
+    # is vacuous (no package boundary is crossed), not evidence of contracts.
+    cross_package_edges: int = 0
     # A3: the burrowing edges (imports that reach into another package's
     # internals instead of its public API).
     internal_burrow_edges: list[BurrowEdge] = field(default_factory=list)
@@ -198,6 +202,7 @@ class StructureGraphResult:
             "sccs": self.sccs,
             "modularity_q": round(self.modularity_q, 4),
             "front_door_ratio": round(self.front_door_ratio, 4),
+            "cross_package_edges": self.cross_package_edges,
             "internal_burrow_edges": self.internal_burrow_edges,
             "breakup_candidates": self.breakup_candidates,
             "module_count": self.module_count,
@@ -477,6 +482,16 @@ def compute_front_door_ratio(
     return ratio, burrow_edges
 
 
+def count_cross_package_edges(graph: nx.DiGraph) -> int:
+    """A3: how many import edges cross a top-level package boundary.
+
+    The denominator of ``compute_front_door_ratio``. Zero means that ratio is
+    the vacuous 1.0, so a reader can tell "every boundary import uses the front
+    door" from "no boundary is crossed" (issue #663).
+    """
+    return sum(1 for a, b in graph.edges() if _top_package(a) != _top_package(b))
+
+
 # --------------------------------------------------------------------------
 # A4 -- breakup candidates
 # --------------------------------------------------------------------------
@@ -692,8 +707,10 @@ def analyze_structure(
             p for p in package_dirs if p.resolve().is_relative_to(scope_abs)
         ]
     if not package_dirs:
+        # Nothing measured, not a measured empty graph: modularity 0.0 would
+        # read as tangled code in a rubric (issue #663).
         return StructureGraphResult(
-            available=True,
+            available=False,
             reason="no importable Python packages found",
             keyhole_budget=budget,
         )
@@ -744,6 +761,7 @@ def analyze_structure(
         sccs=sccs[:MAX_SCCS],
         modularity_q=q,
         front_door_ratio=front_door_ratio,
+        cross_package_edges=count_cross_package_edges(graph),
         internal_burrow_edges=burrow_edges[:MAX_BURROW_EDGES],
         breakup_candidates=breakup,
         module_count=graph.number_of_nodes(),
