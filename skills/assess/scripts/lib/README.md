@@ -974,11 +974,13 @@ frontmatter, at the shallowest level (the next one down when a single heading is
 document title); deeper headings roll into their section, text before the first
 heading is a section with an empty heading, and a file with no headings is one
 section. `classify` labels each section `always_on`, `fetch_on_need` or
-`unclassified` (counted as always-on), precision over recall: a section whose
-substantive lines overlap an existing `SKILL.md` by `SKILL_OVERLAP_MIN_PCT` (the
-`instruction_content.readme_overlap_pct` line overlap) is `duplicates_skill`;
-otherwise any always-on signal (`identity_or_rules` heading, `hard_rules` directive
-density, `pointer_list` of links to documents) keeps it, and it moves only when
+`unclassified` (counted as always-on), precision over recall: any always-on signal
+(`identity_or_rules` heading, `hard_rules` directive density, `pointer_list` of links
+to documents) keeps a section, even one a skill restates, so a guardrail is never
+told to become a pointer; otherwise a section whose substantive lines overlap an
+existing `SKILL.md` by `SKILL_OVERLAP_MIN_PCT` (the
+`instruction_content.readme_overlap_pct` line overlap) is `duplicates_skill`, and
+any other section moves only when
 `MIN_FETCH_SIGNALS` of `scoped_heading` (one tool, language or platform),
 `scoped_paths` (backticked paths mostly under one top-level directory),
 `command_reference` (fence density) and `long_section` fire. Each threshold is a

@@ -177,6 +177,18 @@ def test_section_duplicating_a_skill_names_that_skill(tmp_path: Path) -> None:
     assert move["home"] == {"kind": "existing_skill", "target": "skills/release/SKILL.md"}
 
 
+def test_rules_a_skill_restates_stay_always_on(tmp_path: Path) -> None:
+    rules = [f"- Never deploy service {i} without the release owner's sign-off." for i in range(8)]
+    _write(tmp_path, "skills/release/SKILL.md",
+           "---\nname: release\n---\n# Release\n" + "\n".join(rules) + "\n")
+    text = "# CLAUDE.md\n\n## Rules\n" + "\n".join(rules) + "\n## Other\nshort\n"
+    _write(tmp_path, "CLAUDE.md", text)
+    block = scan_instruction_placement(tmp_path, {"CLAUDE.md": _instruction_entry()}, None)
+    record = block["files"][0]
+    assert record["relocatable"] == []
+    assert record["fetch_on_need_lines"] == 0
+
+
 def test_two_skills_sharing_a_section_point_one_way(tmp_path: Path) -> None:
     _plugin(tmp_path)
     shared = "## Phase 0\n" + "\n".join(

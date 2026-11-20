@@ -9,10 +9,11 @@ the report can name the sections to move, with line ranges and a suggested
 home. No model is involved, and nothing here changes a grade: the block is
 evidence and advice only (the score on always-on size is #560).
 
-Precision over recall. A section is relocatable only when the text is already
-in a skill, or when at least ``MIN_FETCH_SIGNALS`` fetch-on-need signals fire
-and no always-on signal does. Anything else stays where it is, and a section
-that matches nothing clearly is ``unclassified`` and counted as always-on.
+Precision over recall. An always-on signal keeps a section where it is, even
+when a skill restates it. Otherwise a section is relocatable only when the text
+is already in a skill, or when at least ``MIN_FETCH_SIGNALS`` fetch-on-need
+signals fire. Anything else stays where it is, and a section that matches
+nothing clearly is ``unclassified`` and counted as always-on.
 
 Two lists. ``files`` covers the repository instruction files (the root
 locations and the nested and path-scoped files ``nested_instructions``
@@ -367,13 +368,16 @@ def classify(
     section: Section, file_lines: int, rel: str, kind: FileKind,
     skills: Mapping[str, str], skills_dir: str = ".claude/skills",
 ) -> Classified:
+    # Always-on signals win, even over a duplicate: a rules, identity or
+    # pointer section a skill restates is still a guardrail every session needs,
+    # so it is never told to become a pointer.
+    keep = always_on_signals(section)
+    if keep:
+        return Classified(section, "always_on", tuple(keep), None)
     duplicate = _duplicated_skill(section, skills, rel)
     if duplicate:
         return Classified(section, "fetch_on_need", ("duplicates_skill",),
                           {"kind": "existing_skill", "target": duplicate})
-    keep = always_on_signals(section)
-    if keep:
-        return Classified(section, "always_on", tuple(keep), None)
     fetch = fetch_signals(section, file_lines)
     if len(fetch) >= MIN_FETCH_SIGNALS:
         return Classified(section, "fetch_on_need", tuple(fetch),
