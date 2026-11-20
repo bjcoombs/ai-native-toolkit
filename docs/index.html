@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Native Toolkit</title>
-<meta name="description" content="A Claude Code plugin and standalone Agent Skills that make a codebase legible to AI contributors: /assess scores AI-readiness and maps complexity hotspots, /huddle runs Six Thinking Hats deliberation, /deslop removes the signs of AI writing.">
+<meta name="description" content="A Claude Code plugin and standalone Agent Skills that make a codebase legible to AI contributors: /assess scores AI-readiness and maps complexity hotspots, /huddle runs Six Thinking Hats deliberation, /deslop removes the signs of AI writing, /fleet measures many repositories at once, /doc-contradictions finds docs that disagree.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#7a1712">
 <link rel="canonical" href="https://bjcoombs.github.io/ai-native-toolkit/">
@@ -311,15 +311,15 @@
       <dl class="legend" data-kind="skill">
         <div>
           <dt>/ghsync</dt>
-          <dd>Bulk-clones and fast-forward syncs every GitHub repo you can access across an org or personal account.</dd>
+          <dd>Bulk-clones and fast-forward syncs every GitHub repo you can access across an org or personal account, or every GitLab project across your groups. Partial and shallow clones for analysis-only mirrors.</dd>
         </div>
         <div>
           <dt>/ghreport</dt>
-          <dd>Read-only org repo state report: open PRs, default-branch CI, security alerts and branch protection per repo.</dd>
+          <dd>Read-only org repo state report: open PRs or merge requests, default-branch CI, security alerts and branch protection per repo, plus org or group settings. GitHub or GitLab.</dd>
         </div>
         <div>
           <dt>/fleet</dt>
-          <dd>Runs the headless /assess signals across every repository under a /ghsync root or in a list, one counts-only JSON line per repository.</dd>
+          <dd>Runs the headless /assess signals across every repository under a /ghsync root or in a list, one counts-only JSON line per repository. Rolls them up per group through a maturity rubric, keeps a run history to compare against, and draws a heat map and per-team next-steps pages.</dd>
         </div>
         <div>
           <dt>/doc-contradictions</dt>
@@ -340,6 +340,7 @@
         <div><dt>/fix-pr</dt><dd>Iterates on a PR's CI failures and review comments until it is green.</dd></div>
         <div><dt>/fix-develop</dt><dd>Fix loop for failing CI on the repo's default branch.</dd></div>
       </dl>
+      <p class="note">Each skill's full behaviour, flags and outputs are in its <code>SKILL.md</code>, indexed in the <a href="https://github.com/bjcoombs/ai-native-toolkit/blob/main/skills/README.md">skills catalog</a>.</p>
       <p class="note">The workflow commands bake in one author's daily setup: a <code>&lt;repo&gt;-main/</code> plus <code>worktree/</code> layout, GitHub and the <code>gh</code> CLI, Task Master, review bots, and the Agent Teams flag. Read the <a href="https://github.com/bjcoombs/ai-native-toolkit#adapting-for-your-workflow">adapting notes</a> before relying on them elsewhere.</p>
     </div>
   </section>

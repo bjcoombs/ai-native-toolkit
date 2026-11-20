@@ -28,6 +28,13 @@ The headline pieces are five **skills**:
 - **`/skill-forge`** - harden a skill (draft or existing) through judge-panel refinement rounds until it clears a strict 3-tier promotion gate. A prove-and-promote quality gate that runs after authoring, built on the same team-lead pattern as `/huddle` - and proven by forging itself.
 - **`/semantic-compress`** - shrink an LLM-directed document (a prompt, instruction set, or skill) while preserving what it does: point at core knowledge the model already holds, keep project-specific detail verbatim, and - in Claude Code - gate whole-document distillation on an A/B behavioural-equivalence check so every cut is proven, not guessed. Includes a directive-clarity pass that rewrites latent-action instructions into ones that name the action.
 
+Four more skills work across many repositories or across a doc set, and run in Claude Code only:
+
+- **[`/ghsync`](skills/ghsync/SKILL.md)** - clone and keep in sync every GitHub or GitLab repository you can access. Partial (`--partial`) and shallow (`--shallow-since`) clones for analysis-only mirrors, `--active-since` to skip dormant repositories, and `--porcelain-json` for per-repository metadata.
+- **[`/ghreport`](skills/ghreport/SKILL.md)** - a read-only report of each repository's remote state (open PRs or merge requests, default-branch CI, security alerts, branch protection), plus org or group settings.
+- **[`/fleet`](skills/fleet/SKILL.md)** - run the headless `/assess` signals across every repository under a `/ghsync` root or in a list, roll them up per group through a maturity rubric, keep a dated run history to compare against, and render a heat map SVG and per-team next-steps pages. No model in the gathering path.
+- **[`/doc-contradictions`](skills/doc-contradictions/SKILL.md)** - find documents that contradict each other or the code they describe, with one read-only Haiku comparer per doc cluster and both sides of each finding cited as `path:line`.
+
 ## What `/assess` produces
 
 Two paired SVG views from a single run, on a real ~650k-LOC monorepo (file paths sanitized). The first asks _can an agent find its way?_ The second asks _what's risky to change?_
@@ -112,7 +119,7 @@ The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can 
 | 7: Review Bots | write | Design-level feedback (CodeRabbit, claude[bot]) catching what linters can't |
 | 8: AI Project Management | meta | Retros, task tracking, the feedback loop that keeps the contracts above current |
 
-The Layer 0 navigability model - treating the docs as a link graph an agent must traverse - adapts the **"Lint"** health-check from [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (hubs, orphans, connectivity, an `index.md` catalog and `log.md`), making its *structural* checks deterministic. The semantic ones it also lists - contradictions between pages, concepts lacking a page - stay out of scope (an LLM/Phase-2 job).
+The Layer 0 navigability model - treating the docs as a link graph an agent must traverse - adapts the **"Lint"** health-check from [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (hubs, orphans, connectivity, an `index.md` catalog and `log.md`), making its *structural* checks deterministic. The semantic ones it also lists stay out of the deterministic core: contradictions between pages are what [`/doc-contradictions`](skills/doc-contradictions/SKILL.md) looks for, and concepts lacking a page are not checked.
 
 The report's "What this score unlocks" section maps the maturity band onto the adoption ladder from [Boris Cherny's *Steps of AI Adoption*](https://www.threads.com/@boris_cherny/post/Da4CkQnEea-) (July 2026) - Gated → Assisted → Parallel → Supervised autonomy → AI-native. The mapping works because Cherny's per-step guardrails are these layers seen from the org side (self-verification loops = L5/L6, automated review = L7, agent instructions = L0, encoded permissions/routines = L8): the score bounds how far up his ladder a team can safely operate this repo, without claiming anything about how the team actually works. Layer 8's `agent_ops` signals (committed permission allowlists, hooks, sandbox rules, routine definitions) score the repo-observable subset of those guardrails.
 
@@ -123,6 +130,19 @@ A codebase can be 8/8 and still on fire (great scaffolding, legacy debt) or 2/8 
 **The compounding payoff.** Contracts are front-loaded - types, lint rules, architecture tests, agent instructions all take time to write. The payoff compounds: every new service, feature, and contributor inherits the contracts that already exist. Skip them and you lose 15-45 minutes per AI session to convention drift, rework, and false signals - forever. Run `/assess` periodically to ratchet the score upward; each layer you add closes a recurring cost.
 
 A stats sidecar (`complexity-stats.json`) accompanies the report with percentiles and ranked file lists that feed the treemap and the report's hotspot callouts.
+
+### What else the deterministic core checks
+
+The per-module detail is in [`skills/assess/scripts/lib/README.md`](skills/assess/scripts/lib/README.md). Among the checks and behaviours there:
+
+- **Scan registry.** Every run-context block is declared once in `scan_registry.py`. A scan that cannot run (no remote, no `gh`, an unreadable endpoint) reports itself as unavailable with a reason instead of stopping the run.
+- **Headless signals.** `assess_signals.py` runs the scans with no model and writes one JSON document ([schema](skills/assess/references/signals.schema.json)). With `--counts-only` it keeps numbers and a fixed list of path and token fields and drops all other text ([field list](skills/assess/references/counts-only.md)); `--hash-paths` replaces paths with salted hashes. `/fleet` is built on this entry point.
+- **GitLab remotes.** Through `glab`, review reality and configuration drift read GitLab merge requests and protected branches, as they read GitHub through `gh`.
+- **Instruction files.** The `instruction_placement` scan names sections of an always-loaded instruction file that belong elsewhere, and the instruction grade counts always-on lines past 200 and lines that belong elsewhere. Checkable claims an instruction file makes, such as a script being enforced in CI, are verified against the repository; `doc_claims` runs the same checks over the wider doc set and adds a cross-document kind.
+- **History honesty.** Churn follows renames, so a renamed file keeps its history. On a shallow clone, the doc-staleness clock and the accretion signal mark their results as truncated or unreliable instead of reading the cut-off history as real.
+- **Tests.** `.bats` files count as tests for shell scripts.
+- **Method versioning.** Each run writes `.assess/findings.json` with the finding method version and every finding's paths. When a later toolkit release changes how findings are decided, the CI gate compares that committed snapshot with its own run and states that the method change is not a code change.
+- **Repositories you do not maintain.** On a read-only target that takes contributions, the end-of-run offer files the Top 3 Actions as issues upstream, each linking the full report hosted in your fork.
 
 ### Build artifacts and generated code are filtered by default
 
@@ -153,7 +173,7 @@ Two badges come with it - GitHub's native status badge for the gate workflow, an
 
 Warn-only by default: the only thing that can fail a PR is what `.assess/config.toml` opts into (`fail_on` findings, complexity floors, `fail_on_regression`). Because the version rides a `uses:` pin on an immutable release tag, **Dependabot and Renovate detect new toolkit releases and open upgrade PRs automatically** - add a `.github/dependabot.yml` with the `github-actions` ecosystem and the gate keeps itself current. The `/assess` end-of-run "freeze into CI" offer emits this workflow, with actions pinned to commit SHAs and the toolkit pinned to the newest published tag.
 
-> **Portability split.** The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session. The workflow commands (`/tm`, `/issues`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
+> **Portability split.** The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, `/ghsync`, `/ghreport`, `/fleet`, `/doc-contradictions`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session. The workflow commands (`/tm`, `/issues`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
 
 ## Install
 
@@ -164,7 +184,7 @@ From inside a Claude Code session (not a shell - `/plugin` is a Claude Code comm
 /plugin install ai-native-toolkit@ai-native-toolkit
 ```
 
-Skills appear namespaced: `/ai-native-toolkit:assess`, `/ai-native-toolkit:huddle`, `/ai-native-toolkit:deslop`. Update with `/plugin update ai-native-toolkit`. Remove with `/plugin remove ai-native-toolkit`. The plugin doesn't touch your existing `~/.claude/` files.
+Skills appear namespaced: `/ai-native-toolkit:assess`, `/ai-native-toolkit:fleet`, `/ai-native-toolkit:doc-contradictions`, and so on. Update with `/plugin update ai-native-toolkit`. Remove with `/plugin remove ai-native-toolkit`. The plugin doesn't touch your existing `~/.claude/` files.
 
 ## Standalone skill ZIPs (any AI assistant)
 
@@ -259,6 +279,23 @@ After writing, the skill asks whether to open a PR in the target repo with the r
 
 Spawns a Fibonacci-sized team (default 3) that cycles through De Bono's six hats - facts, feelings, risks, benefits, alternatives, synthesis - and returns a structured recommendation. Use `/6hats <q>` for a faster solo variant.
 
+### Measure a fleet of repositories
+
+```text
+/ai-native-toolkit:ghsync --org my-org --root ~/dev/github.com/my-org --partial
+/ai-native-toolkit:fleet ~/dev/github.com/my-org --out fleet-out
+```
+
+`/ghsync` mirrors the org into `--root`, which must already exist; `/fleet` runs the headless `/assess` signals on each checkout and writes `repos.jsonl` (one counts-only line per repository), `groups.jsonl` and `run.json` to `fleet-out/`. See [`skills/fleet/SKILL.md`](skills/fleet/SKILL.md) for the rubric roll-up, `--compare`, `--delete-after`, the heat map and the next-steps pages.
+
+### Check the docs for contradictions
+
+```text
+/ai-native-toolkit:doc-contradictions
+```
+
+Writes `.doc-contradictions/report.md` in the current repository: one entry per contradiction, both sides cited as `path:line`, each with a confidence. It never edits a document or source file.
+
 ## What's in the box
 
 ### Skills (auto-discovered by Claude Code)
@@ -267,15 +304,15 @@ Full catalog and per-skill base docs: [`skills/README.md`](skills/README.md).
 
 | Skill | Description |
 |-------|-------------|
-| `/assess` | Layered AI-readiness assessment (0-8 contract model) plus a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) and [`doc-graph-svg.py`](skills/assess/scripts/doc-graph-svg.py) so the agent runs them with no external setup. Filters build artifacts and generated code by default (opt-out with `--include-artifacts`); warns when one file dominates LOC. Offers to install optional `scc` for repos heavy in markdown/JSON/YAML. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
-| `/huddle` | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board). Three execution modes: solo flat-parallel, phased sub-agent (default fallback), and team mode (needs Agent Teams capability flag). |
-| `/deslop` | Detect and remove the telltale signs of AI writing - puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations. Two modes: a silent quality gate while writing prose, or an explicit de-slop/audit pass. Ships a [`references/full-checklist.md`](skills/deslop/references/full-checklist.md) A-F catalog derived from Wikipedia's "Signs of AI writing" (revision of 15 November 2026) - the skill flags itself for re-derivation if it goes stale, since the tells drift with model generations. |
-| `/ghsync` | Bulk clone and keep in sync every GitHub or GitLab repo you can access - built for onboarding into a new enterprise. On GitLab (`--provider gitlab --host <host>`), covers every group you belong to with nested subgroups and shared projects, laid out by `path_with_namespace`; `--porcelain` plus `--from-list` split discovery from cloning for hosts reachable only from another network. For an org, unions the repos reachable through your teams with the org's repo list (so direct-collaborator and public repos count); for a personal account, uses the account's repo list. Deduplicates, then clones new ones and fast-forward syncs existing checkouts and their worktrees into a `<repo>/<repo>-main` + `<repo>/worktree` layout. Org defaults to the directory you run from. Never clobbers local work (uncommitted or off-default-branch repos are fetched, not pulled) and reports every exception in a summary. Ships [`ghsync.sh`](skills/ghsync/scripts/ghsync.sh); needs `gh` + `jq` (or `glab` + `jq` for GitLab), supports GitHub Enterprise via `GH_HOST`. |
-| `/ghreport` | Read-only org repo state report for GitHub or GitLab. Reuses `/ghsync`'s repo discovery but, instead of cloning, queries each repo's remote state - on GitHub open PRs, CI on the default branch, open security alerts (Dependabot / code-scanning / secret-scanning), and branch protection; on GitLab (`--provider gitlab --host <host>`, optionally `--group <path>`) open merge requests, the latest default-branch pipeline, open vulnerabilities and default-branch protection - and rolls it into a terminal summary plus a timestamped markdown file. Endpoints the token or tier cannot read are reported as no-access / unknown, never as a clean zero. Needs `gh` + `jq` (or `glab` + `jq` for GitLab). |
-| `/fleet` | Runs the headless `/assess` signals (`assess_signals.py`) across every repository under a `/ghsync` root or in a `--from-list` file, each in its own process from a worker pool, and writes one counts-only JSON line per repository to `repos.jsonl` (schema: [`repos.schema.json`](skills/fleet/references/repos.schema.json)). It then rolls the rows up to one line per group in `groups.jsonl` (schema: [`groups.schema.json`](skills/fleet/references/groups.schema.json)): repository counts, distinct shared CI sources and marketplaces, the `ghreport` group settings passed with `--settings`, and each `--rubric` row's whole level (or `unknown`) with its aggregation rule. `fleet_next_steps.py` renders one Markdown page per group from that output: each row's level, the next level's unmet criteria as single-change steps with repository-native "done when" checks, and the repositories holding the group back. `heatmap.py` renders that run as a leadership heat map SVG (groups by rubric rows, ColorBrewer OrRd, `unknown` hatched apart from level 0 with the missing signal named, change against an earlier run with `--compare`). Deterministic (two runs over unchanged checkouts on the same day are byte-identical, except with `--hash-paths` and no `--hash-salt`), never writes to a target, and a repository that cannot be scanned becomes a `failed` row with a reason token instead of stopping the run. No model in the path. Optional `--label` step: a Haiku subagent labels each repository from its row (`service`, `library`, `infrastructure`, `mirror`, `docs`, `other`) into a separate `labels.jsonl` ([schema](skills/fleet/references/labels.schema.json)), display and filter only, never scored. |
-| `/doc-contradictions` | Find documents that contradict each other or the code they describe. Clusters the doc set by the doc graph and shared subject code, fans out one read-only Haiku comparer per cluster plus a cross-cluster pass over hub docs, and writes a Markdown report: one entry per contradiction, both sides cited as `path:line`, with a confidence. Historical intent records (`docs/design/`, `docs/superpowers/`) are excluded by default. Plugin-only (needs subagents). |
-| `/semantic-compress` | Optimize an LLM-directed document while preserving what it does, gated on the `ab-equivalence` library skill's A/B harness. Two transforms in one optimizer family: **compress** (a local core->pointer pass plus an A/B-validated distill loop producing the smallest behaviourally-equivalent document) and **directive-clarity** (rewrites latent-action instructions - bare negations, facts-not-actions, vague pointers - into directives that name the action, validated by a measured directness gain at zero regression). Both rest on a [cognitive-ergonomics](skills/semantic-compress/references/cognitive-ergonomics.md) frame whose claims are hypotheses the harness measures, never asserts. |
-| `/skill-forge` | Harden a skill or agent instruction file (`CLAUDE.md`, `AGENTS.md`, ...) through judge-panel refinement rounds until it clears a 3-tier promotion gate, then promote it. |
+| [`/assess`](skills/assess/SKILL.md) | Layered AI-readiness assessment (0-8 contract model) plus a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) and [`doc-graph-svg.py`](skills/assess/scripts/doc-graph-svg.py) so the agent runs them with no external setup. Filters build artifacts and generated code by default (opt-out with `--include-artifacts`); warns when one file dominates LOC. Offers to install optional `scc` for repos heavy in markdown/JSON/YAML. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
+| [`/huddle`](skills/huddle/SKILL.md) | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board). Three execution modes: solo flat-parallel, phased sub-agent (default fallback), and team mode (needs Agent Teams capability flag). |
+| [`/deslop`](skills/deslop/SKILL.md) | Detect and remove the telltale signs of AI writing - puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations. Two modes: a silent quality gate while writing prose, or an explicit de-slop/audit pass. Ships a [`references/full-checklist.md`](skills/deslop/references/full-checklist.md) A-F catalog derived from Wikipedia's "Signs of AI writing" (revision of 15 November 2026) - the skill flags itself for re-derivation if it goes stale, since the tells drift with model generations. |
+| [`/ghsync`](skills/ghsync/SKILL.md) | Bulk clone and keep in sync every GitHub or GitLab repo you can access - built for onboarding into a new enterprise. On GitLab (`--provider gitlab --host <host>`), covers every group you belong to with nested subgroups and shared projects, laid out by `path_with_namespace`; `--porcelain` plus `--from-list` split discovery from cloning for hosts reachable only from another network. For an org, unions the repos reachable through your teams with the org's repo list (so direct-collaborator and public repos count); for a personal account, uses the account's repo list. Deduplicates, then clones new ones and fast-forward syncs existing checkouts and their worktrees into a `<repo>/<repo>-main` + `<repo>/worktree` layout. Org defaults to the directory you run from. Never clobbers local work (uncommitted or off-default-branch repos are fetched, not pulled) and reports every exception in a summary. For analysis-only mirrors, `--partial` (`--filter blob:none`) and `--shallow-since DATE` shape new clones; `--active-since DURATION` keeps only repositories with a recent default-branch commit, and `--porcelain-json` prints one JSON object of metadata per repository instead of cloning. Ships [`ghsync.sh`](skills/ghsync/scripts/ghsync.sh); needs `gh` + `jq` (or `glab` + `jq` for GitLab), supports GitHub Enterprise via `GH_HOST`. |
+| [`/ghreport`](skills/ghreport/SKILL.md) | Read-only org repo state report for GitHub or GitLab. Reuses `/ghsync`'s repo discovery but, instead of cloning, queries each repo's remote state - on GitHub open PRs, CI on the default branch, open security alerts (Dependabot / code-scanning / secret-scanning), and branch protection; on GitLab (`--provider gitlab --host <host>`, optionally `--group <path>`) open merge requests, the latest default-branch pipeline, open vulnerabilities and default-branch protection - and rolls it into a terminal summary plus a timestamped markdown file. Endpoints the token or tier cannot read are reported as no-access / unknown, never as a clean zero. After the per-repo table, an org or group settings section reports two-factor enforcement, push rules, default-branch protection and rulesets. Needs `gh` + `jq` (or `glab` + `jq` for GitLab). |
+| [`/fleet`](skills/fleet/SKILL.md) | Runs the headless `/assess` signals (`assess_signals.py`) across every repository under a `/ghsync` root or in a `--from-list` file, each in its own process from a worker pool, and writes one counts-only JSON line per repository to `repos.jsonl` (schema: [`repos.schema.json`](skills/fleet/references/repos.schema.json)). It then rolls the rows up to one line per group in `groups.jsonl` (schema: [`groups.schema.json`](skills/fleet/references/groups.schema.json)): repository counts, distinct shared CI sources and marketplaces, the `ghreport` group settings passed with `--settings`, and each `--rubric` row's whole level (or `unknown`) with its aggregation rule. `fleet_next_steps.py` renders one Markdown page per group from that output: each row's level, the next level's unmet criteria as single-change steps with repository-native "done when" checks, and the repositories holding the group back. `heatmap.py` renders that run as a leadership heat map SVG (groups by rubric rows, ColorBrewer OrRd, `unknown` hatched apart from level 0 with the missing signal named, change against an earlier run with `--compare`). Each counts-only run is kept in a dated run history, so `--compare` can show what moved since the last run; `--delete-after` deletes each clone once it is scanned to keep disk use flat. Deterministic (two runs over unchanged checkouts on the same day are byte-identical, except with `--hash-paths` and no `--hash-salt`), never writes to a target, and a repository that cannot be scanned becomes a `failed` row with a reason token instead of stopping the run. No model in the path. Optional `--label` step: a Haiku subagent labels each repository from its row (`service`, `library`, `infrastructure`, `mirror`, `docs`, `other`) into a separate `labels.jsonl` ([schema](skills/fleet/references/labels.schema.json)), display and filter only, never scored. |
+| [`/doc-contradictions`](skills/doc-contradictions/SKILL.md) | Find documents that contradict each other or the code they describe. Clusters the doc set by the doc graph and shared subject code, fans out one read-only Haiku comparer per cluster plus a cross-cluster pass over hub docs, and writes a Markdown report: one entry per contradiction, both sides cited as `path:line`, with a confidence. Historical intent records (`docs/design/`, `docs/superpowers/`) are excluded by default. Plugin-only (needs subagents). |
+| [`/semantic-compress`](skills/semantic-compress/SKILL.md) | Optimize an LLM-directed document while preserving what it does, gated on the `ab-equivalence` library skill's A/B harness. Two transforms in one optimizer family: **compress** (a local core->pointer pass plus an A/B-validated distill loop producing the smallest behaviourally-equivalent document) and **directive-clarity** (rewrites latent-action instructions - bare negations, facts-not-actions, vague pointers - into directives that name the action, validated by a measured directness gain at zero regression). Both rest on a [cognitive-ergonomics](skills/semantic-compress/references/cognitive-ergonomics.md) frame whose claims are hypotheses the harness measures, never asserts. |
+| [`/skill-forge`](skills/skill-forge/SKILL.md) | Harden a skill or agent instruction file (`CLAUDE.md`, `AGENTS.md`, ...) through judge-panel refinement rounds until it clears a 3-tier promotion gate, then promote it. |
 
 Also auto-discovered, but not invoked directly: the library skills `marathon`, `pr-review-merge` and `ab-equivalence`, and the `/assess` render-time helpers `assess-findings` and `assess-pr`.
 
@@ -287,18 +324,18 @@ Portable:
 
 | Skill | Description |
 |---------|-------------|
-| `/6hats <question>` | Solo Six Hats analysis - alias for `/huddle` at team size 1 |
-| `/understand <thing>` | Deep understanding mode (nemawashi) - exhaustive context-gathering before action |
+| [`/6hats <question>`](skills/6hats/SKILL.md) | Solo Six Hats analysis - alias for `/huddle` at team size 1 |
+| [`/understand <thing>`](skills/understand/SKILL.md) | Deep understanding mode (nemawashi) - exhaustive context-gathering before action |
 
 Workflow (personal setup, opt-in - see [Adapting](#adapting-for-your-workflow)):
 
 | Skill | Description |
 |---------|-------------|
-| `/tm` | Task Master orchestration - context-aware: starts, reviews, or cleans up tasks based on current state |
-| `/issues` | GitHub-issue marathon - triage open issues (tag `agent-ready` or post clarifying questions), then run agent-ready ones to merge with Agent Teams; mirrors `/tm`'s plan-then-marathon flow |
-| `/tm-marathon-config-example` | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` and `/issues` |
-| `/fix-pr` | Autonomous PR fixing loop - iterates on CI failures and review comments until green |
-| `/fix-develop` | Autonomous fix loop for failing CI on the repo's default branch |
+| [`/tm`](skills/tm/SKILL.md) | Task Master orchestration - context-aware: starts, reviews, or cleans up tasks based on current state |
+| [`/issues`](skills/issues/SKILL.md) | GitHub-issue marathon - triage open issues (tag `agent-ready` or post clarifying questions), then run agent-ready ones to merge with Agent Teams; mirrors `/tm`'s plan-then-marathon flow |
+| [`/tm-marathon-config-example`](skills/tm-marathon-config-example/SKILL.md) | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` and `/issues` |
+| [`/fix-pr`](skills/fix-pr/SKILL.md) | Autonomous PR fixing loop - iterates on CI failures and review comments until green |
+| [`/fix-develop`](skills/fix-develop/SKILL.md) | Autonomous fix loop for failing CI on the repo's default branch |
 
 `/tm` and `/issues` share the `marathon` skill (team orchestration engine: DAG analysis, waves, crash recovery, retrospective); all four workflow skills share the `pr-review-merge` skill (review-to-green loop + smart merge) as a single source of truth. Each workflow supplies a thin work-source adapter; the skills own the execution.
 
@@ -341,7 +378,7 @@ What am I not considering? What's the lazy solution that might work?
 
 ## Adapting for your workflow
 
-The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, `/6hats`, `/understand` and their agents) are reusable as-is. The workflow skills embed assumptions you will likely need to override:
+The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, `/ghsync`, `/ghreport`, `/fleet`, `/doc-contradictions`, `/6hats`, `/understand` and their agents) are reusable as-is. The workflow skills embed assumptions you will likely need to override:
 
 - **Directory layout** - `skills/tm/SKILL.md`, `skills/issues/SKILL.md`, `skills/fix-pr/SKILL.md`, `skills/fix-develop/SKILL.md` all assume `~/dev/github.com/<org>/<repo>/<repo>-main/` + sibling `worktree/`. Edit the path patterns to match your structure.
 - **Default branch** - `/fix-develop` derives the branch via `gh repo view --json defaultBranchRef`. `/tm` uses a `$BASE_BRANCH` variable. Other workflow skills may still reference `develop` in prose; check before relying on them on a `main`-default repo.
