@@ -2,9 +2,10 @@
 
 Deterministic library modules for the `/assess` engine. No LLM calls anywhere in this
 package - every function is a pure transform of filesystem, git, or pre-computed signal
-data, with two bounded exceptions. Live GitHub reads are confined to `gh_cli.py`; they
-are optional (they need a github.com remote and an authenticated `gh`) and degrade to
-`available: False` with a reason, never to a clean result. The opt-in mutation pass's uv
+data, with two bounded exceptions. Live platform reads are confined to `gh_cli.py`
+(GitHub) and `gitlab_cli.py` (GitLab); they are optional (they need a github.com or
+GitLab remote and an authenticated `gh` or `glab`) and degrade to `available: False`
+with a reason, never to a clean result. The opt-in mutation pass's uv
 runner (`test_pressure/mutmut3.py`) may fetch mutmut, pytest and the assessed package's
 dependencies from the package index on first use, into a scratch environment; it runs
 only on explicit consent and degrades to a named `reason`. The LLM reads
@@ -1216,7 +1217,26 @@ only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
 `gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403), `not_found`
 (HTTP 404), `gh_timeout`, `gh_error`, `gh_bad_json`. A scan must degrade on it,
 never report a clean result. Tests fake `gh` with a script first on `PATH`
-(`tests/test_config_drift.py`).
+(`tests/test_config_drift.py`). `git_remote_url` (the remote both providers read)
+lives here and is shared with `gitlab_cli`.
+
+**`gitlab_cli.py`**
+The GitLab side of the platform seam, with `gh_cli`'s contract: the `glab` binary as a
+subprocess with `--hostname` on every call, no token read, JSON parsed in Python, every
+call capped (`GLAB_TIMEOUT_SECONDS`, 20; the self-managed probe
+`GLAB_PROBE_TIMEOUT_SECONDS`, 8). Failures raise `gh_cli.GhUnavailable`: `glab_not_installed`,
+`not_authenticated`, `unreachable` (ghsync's network patterns, or a probe timeout),
+`no_access` (HTTP 401/403), `not_found` (HTTP 404), `glab_timeout`, `glab_error` (any
+other non-zero exit), `glab_bad_json`. `open_gitlab` detects the provider from the
+remote: github.com or no remote returns None without invoking `glab`; a `gitlab.com`
+remote is GitLab and must pass `glab auth status --hostname gitlab.com` (else it
+raises); any other host is GitLab only when that probe passes for it, and any probe
+failure returns None so the caller degrades exactly as before. `parse_remote` reads
+https/http (port kept), scp-like and `ssh://` (port dropped) remotes with nested
+groups, and rejects a host or path segment outside a strict character set (the remote
+comes from the assessed repository and reaches argv). `normalize_host` ports
+`ghsync.sh`'s `--host` normalisation. Tests: `tests/test_review_reality_gitlab.py`
+(stubbed `glab`/`gh` as the whole `PATH`, offline).
 
 **`config_drift.py`**
 Layer 5 lying signal: tracked GitHub configuration snapshots diffed against the
@@ -1279,7 +1299,18 @@ where an AI reviewer comments on every change but nobody approves. Both are null
 when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
 rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
 the block. A failed pull-request read degrades the whole block to `available:
-False`. Tests: `tests/test_review_reality.py`.
+False`. On a GitLab remote (`gitlab_cli.open_gitlab`) the same block comes from the
+`DEFAULT_LIMIT` most recently created merged merge requests and one `approvals` read
+each: `approved_share` (approved by an account other than the author),
+`self_merged_share` (`merge_user`, else `merged_by`, is the author); `reviewed_share`
+and `bot_review_share` are null (approvals are the only evidence read), and
+`hollow_required_review` is False only when approvals alone clear the threshold, else
+null. `review_required` reads the project's approval rules: a non-`report_approver`
+rule needing 1+ approvals with no branch scope, or a protected-branch name or `*`
+wildcard matching the default branch, is True; a rule scoped to all protected branches
+is unknown; a refused read is null. Any refused merge-request or approvals read (403
+and 404 included) degrades the whole block. Tests: `tests/test_review_reality.py`,
+`tests/test_review_reality_gitlab.py`.
 
 **`gate_cost.py`**
 Actions cost of the CI gate the assess-pr skill offers, so the offer can state it.
