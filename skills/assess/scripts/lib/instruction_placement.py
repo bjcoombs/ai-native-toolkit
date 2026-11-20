@@ -292,9 +292,19 @@ def dominant_directory(section: Section) -> str | None:
 
 
 def _duplicated_skill(section: Section, skills: Mapping[str, str], self_rel: str) -> str | None:
+    """The ``SKILL.md`` that already holds the section's text, if any.
+
+    One-way between skills: when the file is itself a skill, only a skill whose
+    path sorts before it counts, so of two skills sharing a section the
+    lexically first keeps the canonical copy and only the other is told to
+    point at it. Following both pointers would delete the text from both.
+    """
     text = "\n".join(section.lines)
+    is_skill = self_rel in skills
     for rel, skill_text in sorted(skills.items()):
-        if rel != self_rel and readme_overlap_pct(text, skill_text) >= SKILL_OVERLAP_MIN_PCT:
+        if rel == self_rel or (is_skill and rel > self_rel):
+            continue
+        if readme_overlap_pct(text, skill_text) >= SKILL_OVERLAP_MIN_PCT:
             return rel
     return None
 

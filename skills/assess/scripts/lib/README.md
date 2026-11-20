@@ -985,7 +985,10 @@ density, `pointer_list` of links to documents) keeps it, and it moves only when
 named constant with its rationale. Suggested homes: `existing_skill` (the
 duplicated `SKILL.md`), `nested_instruction_file` (`<dir>/<basename>` for
 `scoped_paths`), `skill` (`<skills dir>/<slug>/SKILL.md`), and for agent and skill
-files `reference_doc` (`<skill dir>/references/<slug>.md`, or `null` for an agent).
+files `reference_doc` (`<skill dir>/references/<slug>.md`, or `null` for an agent), or
+`existing_skill` when the text is already in another skill. Between two skills the
+pointer is one-way: a skill counts as the duplicate's home only when its path sorts
+before the file's, so the lexically first keeps the canonical copy.
 `scan_instruction_placement(repo_root, instruction_files, nested_instructions,
 scope, excludes)` runs from the `scan_registry` table. The block, which #560 reads
 to score on always-on size:

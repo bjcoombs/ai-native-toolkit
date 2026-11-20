@@ -177,6 +177,22 @@ def test_section_duplicating_a_skill_names_that_skill(tmp_path: Path) -> None:
     assert move["home"] == {"kind": "existing_skill", "target": "skills/release/SKILL.md"}
 
 
+def test_two_skills_sharing_a_section_point_one_way(tmp_path: Path) -> None:
+    _plugin(tmp_path)
+    shared = "## Phase 0\n" + "\n".join(
+        f"Step {i}: detect whether the team tools are available before spawning." for i in range(8))
+    filler = "\n".join(f"Line {i} of skill-specific guidance for this workflow." for i in range(220))
+    for name in ("alpha", "beta"):
+        _write(tmp_path, f"skills/{name}/SKILL.md",
+               f"---\nname: {name}\n---\n# {name}\n" + shared + f"\n## Own\n{filler}\n")
+    block = scan_instruction_placement(tmp_path, {}, None)
+    homes = {f["path"]: [m["home"] for m in f["relocatable"] if m["heading"] == "Phase 0"]
+             for f in block["loaded_in_full"]}
+    assert homes["skills/alpha/SKILL.md"] == []
+    assert homes["skills/beta/SKILL.md"] == [
+        {"kind": "existing_skill", "target": "skills/alpha/SKILL.md"}]
+
+
 def test_scorer_agent_appears_in_the_loaded_in_full_report_on_this_repo() -> None:
     block = scan_instruction_placement(REPO_ROOT, {}, None)
     entries = {f["path"]: f for f in block["loaded_in_full"]}
