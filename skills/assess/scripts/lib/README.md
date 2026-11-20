@@ -854,7 +854,9 @@ reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
 path hashing and records a maturity-model version; unreadable entries are passed over. One
 run per date: the entry over this run's repository set, else the highest suffix.
 `trend_run(stamp, groups)` is one run's point per group, `mean_level` the plain mean of the
-group's known row levels (the history keeps no maturity model, so levels are not scaled);
+group's known row levels (the history keeps no maturity model and `groups.jsonl` rows no
+per-row level list, so levels are not scaled; the axis says it is not comparable to the
+slope chart's share of top level);
 `series_runs` appends this run (from memory) and keeps the newest `MAX_RUNS`. `layout`
 splits each line at an unknown or absent value and at a maturity-model version change
 (marked by a dashed rule), and spaces end labels with `fleet_svg.spread_vertical`

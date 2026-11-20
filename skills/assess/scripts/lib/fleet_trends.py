@@ -6,7 +6,9 @@ left, this run on the right. ``--compare`` sees two runs; this sees the history.
 **Mean level.** A group's mean level in a run is the plain mean of the whole
 levels of its maturity-model rows (``groups.jsonl``, org and team rows alike)
 that have a level. The history keeps no maturity model, so a row's top level is
-not known for an old run and the level is not scaled. A group with no row at a
+not known for an old run and the level is not scaled: groups.jsonl rows carry
+``level`` but no per-row level list. The slope chart (#675) plots a share of each
+row's top level instead, so the y-axis says the two are not comparable. A group with no row at a
 level, or absent from a run, has no value there: its line breaks and the gap is
 named on a hatched note, never drawn at zero.
 
@@ -61,6 +63,9 @@ NAME_CHARS = 22  # group name budget in an end label
 TICK_W = 78.0  # room one date tick label needs
 WRAP = 104
 LINE_H = 16.0
+# The slope chart (#675) plots a share of each row's top level; the history keeps no
+# maturity model or per-row level list, so the trend's unscaled mean is not on that scale.
+AXIS_NOTE = "(not comparable to the slope chart)"
 MATCH_KEYS = ("window", "scans", "counts_only", "paths_hashed")
 
 # Series colours (light, dark), assigned to groups in sorted order; past the eighth
@@ -301,8 +306,9 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
     body.append(svg.text((PLOT_L + PLOT_R) / 2, bottom + 38, "Fleet run (scan date)", anchor="middle",
                          cls="muted"))
     mid = PLOT_T + PLOT_H / 2
-    body.append(svg.text(20, mid, "Mean level", anchor="middle", cls="muted",
-                         extra=f' transform="rotate(-90 20 {mid:.1f})"'))
+    for ax, line, size in ((18.0, "Mean level", 12.0), (32.0, AXIS_NOTE, 10.5)):
+        body.append(svg.text(ax, mid, line, size=size, anchor="middle", cls="muted",
+                             extra=f' transform="rotate(-90 {ax:.0f} {mid:.1f})"'))
     cursor = max(bottom + 60, max((label.y for label in plan.labels), default=0.0) + 20)
     body.append(svg.text(PLOT_L, cursor, "End label: group, its level in its last run, and the change "
                          "over its last unbroken stretch", size=11.5, cls="muted"))

@@ -78,6 +78,9 @@ def test_history_keeps_comparable_runs_before_today_oldest_first():
 
 
 def test_mean_level_is_the_mean_of_known_row_levels():
+    assert set(group("g", (1,))["rubric"][0]) >= {"level", "status"}  # no per-row level list to scale by
+    assert "levels" not in group("g", (1,))["rubric"][0]
+    assert ft.AXIS_NOTE in ft.render_trend(runs(FIXTURES))
     assert ft.mean_level(group("g", (1, 2, None))) == 1.5
     assert ft.mean_level(group("g", (None, None))) is None
 
