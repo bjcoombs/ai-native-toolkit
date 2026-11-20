@@ -173,15 +173,27 @@ def test_registry_migration_moves_a_name_from_unavailable_to_run(fixture_repo):
     assert signals.collect(fixture_repo, ["doc_graph"], specs) == {"doc_graph": {"available": True}}
 
 
-def test_unregistered_names_are_disjoint_from_the_registry():
-    """A migrated scan's name must leave UNREGISTERED_SCANS in the same PR."""
-    assert not set(signals.UNREGISTERED_SCANS) & {spec.key for spec in reg.SCANS}
+def test_unregistered_names_are_disjoint_from_the_reported_scans():
+    """A scan reported headless must leave UNREGISTERED_SCANS in the same PR."""
+    reported = {spec.key for spec in reg.SCANS if signals._reported(spec)}
+    assert not set(signals.UNREGISTERED_SCANS) & reported
+
+
+def test_the_core_entries_are_not_reported_as_scans():
+    """#557 moved the core's blocks into the table; their provenance, scalar
+    and list keys never become scan names."""
+    known = set(signals.known_scans())
+    assert not {"run_id", "plugin_version", "anomalies", "current", "run_header"} & known
+    assert "doc_graph" in known and "doc_graph" in signals.UNREGISTERED_SCANS
 
 
 def test_unregistered_names_are_run_context_keys_the_core_assigns():
     """Guards the names-only list against typos: each is a key assess_core writes."""
-    sources = (SCRIPTS / "assess_core.py").read_text(encoding="utf-8") + (
-        SCRIPTS / "lib" / "context_blocks.py").read_text(encoding="utf-8")
+    sources = "".join(
+        path.read_text(encoding="utf-8")
+        for path in (SCRIPTS / "assess_core.py", SCRIPTS / "lib" / "context_blocks.py",
+                     SCRIPTS / "lib" / "run_setup.py", SCRIPTS / "lib" / "scan_registry.py")
+    )
     for name in signals.UNREGISTERED_SCANS:
         assert f'"{name}"' in sources, name
 
@@ -230,8 +242,9 @@ def test_the_network_flag_marks_exactly_the_gh_scans():
 
 def test_the_window_reaches_a_scan_that_reads_history_window(fixture_repo):
     specs = (ScanSpec("hist", lambda window: {"saw": window}, ("history_window",), reg.STAGE_READ_SIDE),)
-    reg.validate(specs)
-    assert set(signals.build_inputs(fixture_repo, "90d")) == set(reg.PROVIDED_INPUTS)
+    inputs = signals.build_inputs(fixture_repo, "90d")
+    reg.validate(specs, provided=inputs)
+    assert set(inputs) >= set(reg.PROVIDED_INPUTS)
     doc = signals.build_document(fixture_repo, ["hist"], "90d", specs=specs)
     assert doc["scans"] == {"hist": {"saw": "90d"}}
 
