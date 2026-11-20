@@ -1,35 +1,34 @@
 {
-  "artifact_schema_version": "1.4.0",
-  "run_id": "20261011125530-c10b6f3d",
-  "plugin_version": "1.96.0",
-  "schema_version": 5,
+  "artifact_schema_version": "1.12.0",
+  "run_id": "20261120111553-b2571a77",
+  "plugin_version": "1.225.0",
+  "schema_version": 7,
   "lizard_version": "1.23.0",
-  "scc_version": "3.7.0",
-  "files_scored": 244,
+  "files_scored": 315,
   "excluded_generated": [],
   "scoring_coverage": {
-    "lizard": 238,
-    "scc": 6
+    "lizard": 315,
+    "scc": 0
   },
   "churn_window": "commits (last 12mo)",
   "churn_degenerate": false,
   "loc": {
-    "p50": 169.0,
-    "p95": 545.1999999999999,
+    "p50": 171.0,
+    "p95": 534.3,
     "max": 1227.0,
     "max_code": 1227.0,
-    "max_data": 78.0,
-    "total": 52991
+    "max_data": 0.0,
+    "total": 67201
   },
   "est_tokens": {
-    "p50": 2850.5,
-    "p95": 9312.8,
-    "max": 19417.0,
-    "max_code": 19417.0,
-    "max_data": 1572.0,
-    "total": 889486,
+    "p50": 2845.0,
+    "p95": 9003.1,
+    "max": 19418.0,
+    "max_code": 19418.0,
+    "max_data": 0.0,
+    "total": 1106829,
     "budget": {
-      "total": 889486,
+      "total": 1106829,
       "budget": 200000,
       "budget_basis": "estimate (~4 chars/token, documented default)",
       "chars_per_token": 4,
@@ -38,15 +37,15 @@
       "over_budget_subtrees": [
         {
           "path": "skills",
-          "est_tokens": 730474
+          "est_tokens": 921839
         }
       ]
     }
   },
   "ccn": {
     "basis": "file-aggregate",
-    "p50": 34.0,
-    "p95": 151.54999999999998,
+    "p50": 36.0,
+    "p95": 147.60000000000002,
     "max": 264.0
   },
   "fn_ccn": {
@@ -57,52 +56,49 @@
         "approximate": false
       }
     ],
-    "backend_by_language": {
-      "Makefile": null,
-      "TOML": null
-    },
-    "function_count": 4542,
+    "backend_by_language": {},
+    "function_count": 5910,
     "p50": 2.0,
     "p95": 9.0,
     "max": 33.0
   },
   "churn": {
     "p50": 2.0,
-    "p95": 14.849999999999994,
-    "max": 70.0
+    "p95": 14.300000000000011,
+    "max": 75.0
   },
   "top_hotspots": [
     {
       "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 847,
-      "est_tokens": 17610,
-      "ccn": 214.0,
+      "loc": 818,
+      "est_tokens": 17285,
+      "ccn": 201.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 14.0,
       "max_fn_name": "lizard_scores",
-      "commits": 34,
+      "commits": 43,
       "source": "lizard"
     },
     {
       "path": "skills/assess/scripts/lib/keyhole_signals.py",
       "loc": 860,
-      "est_tokens": 17957,
-      "ccn": 247.0,
+      "est_tokens": 18003,
+      "ccn": 248.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 11.0,
       "max_fn_name": "render_findings_markdown",
-      "commits": 26,
+      "commits": 27,
       "source": "lizard"
     },
     {
-      "path": "skills/assess/scripts/assess_core.py",
-      "loc": 397,
-      "est_tokens": 9238,
-      "ccn": 26.0,
+      "path": "skills/assess/tests/test_complexity_treemap.py",
+      "loc": 1227,
+      "est_tokens": 19418,
+      "ccn": 189.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 13.0,
-      "max_fn_name": "build_run_context",
-      "commits": 70,
+      "max_fn_ccn": 6.0,
+      "max_fn_name": "test_write_stats_tie_break_by_path_takes_first_ten_in_path_order",
+      "commits": 34,
       "source": "lizard"
     },
     {
@@ -113,18 +109,18 @@
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 15.0,
       "max_fn_name": "_derive_signals",
-      "commits": 23,
+      "commits": 24,
       "source": "lizard"
     },
     {
-      "path": "skills/assess/tests/test_complexity_treemap.py",
-      "loc": 1227,
-      "est_tokens": 19417,
-      "ccn": 189.0,
+      "path": "skills/assess/scripts/lib/git_churn.py",
+      "loc": 433,
+      "est_tokens": 8548,
+      "ccn": 132.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 6.0,
-      "max_fn_name": "test_write_stats_tie_break_by_path_takes_first_ten_in_path_order",
-      "commits": 26,
+      "max_fn_ccn": 27.0,
+      "max_fn_name": "content_commit_clock",
+      "commits": 14,
       "source": "lizard"
     },
     {
@@ -141,45 +137,45 @@
     {
       "path": "skills/assess/tests/test_assess_core.py",
       "loc": 518,
-      "est_tokens": 7553,
+      "est_tokens": 7555,
       "ccn": 62.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 6.0,
       "max_fn_name": "_gap_repo",
-      "commits": 46,
+      "commits": 56,
       "source": "lizard"
     },
     {
-      "path": "skills/assess/scripts/assess_finalize.py",
-      "loc": 424,
-      "est_tokens": 9001,
-      "ccn": 144.0,
+      "path": "skills/assess/scripts/lib/scan_registry.py",
+      "loc": 328,
+      "est_tokens": 7625,
+      "ccn": 53.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 11.0,
-      "max_fn_name": "_validate_evidence",
-      "commits": 16,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/lib/doc_staleness.py",
-      "loc": 499,
-      "est_tokens": 8402,
-      "ccn": 119.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 14.0,
-      "max_fn_name": "analyze_doc_staleness",
+      "max_fn_ccn": 27.0,
+      "max_fn_name": "validate",
       "commits": 15,
       "source": "lizard"
     },
     {
-      "path": "scripts/floor_anchor.py",
-      "loc": 646,
-      "est_tokens": 12580,
-      "ccn": 188.0,
+      "path": "scripts/floor_check.py",
+      "loc": 629,
+      "est_tokens": 11099,
+      "ccn": 199.0,
       "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 15.0,
-      "max_fn_name": "_workflow_job_names",
+      "max_fn_ccn": 22.0,
+      "max_fn_name": "cmd_markers",
       "commits": 7,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/lib/doc_staleness.py",
+      "loc": 439,
+      "est_tokens": 7646,
+      "ccn": 79.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 16.0,
+      "max_fn_name": "analyze_doc_staleness",
+      "commits": 18,
       "source": "lizard"
     }
   ],
@@ -198,12 +194,12 @@
     {
       "path": "skills/assess/scripts/lib/keyhole_signals.py",
       "loc": 860,
-      "est_tokens": 17957,
-      "ccn": 247.0,
+      "est_tokens": 18003,
+      "ccn": 248.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 11.0,
       "max_fn_name": "render_findings_markdown",
-      "commits": 26,
+      "commits": 27,
       "source": "lizard"
     },
     {
@@ -215,17 +211,6 @@
       "max_fn_ccn": 15.0,
       "max_fn_name": "_run_group",
       "commits": 5,
-      "source": "lizard"
-    },
-    {
-      "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 847,
-      "est_tokens": 17610,
-      "ccn": 214.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 14.0,
-      "max_fn_name": "lizard_scores",
-      "commits": 34,
       "source": "lizard"
     },
     {
@@ -247,18 +232,40 @@
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 15.0,
       "max_fn_name": "_derive_signals",
-      "commits": 23,
+      "commits": 24,
+      "source": "lizard"
+    },
+    {
+      "path": "skills/assess/scripts/complexity-treemap.py",
+      "loc": 818,
+      "est_tokens": 17285,
+      "ccn": 201.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 14.0,
+      "max_fn_name": "lizard_scores",
+      "commits": 43,
+      "source": "lizard"
+    },
+    {
+      "path": "scripts/floor_check.py",
+      "loc": 629,
+      "est_tokens": 11099,
+      "ccn": 199.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 22.0,
+      "max_fn_name": "cmd_markers",
+      "commits": 7,
       "source": "lizard"
     },
     {
       "path": "skills/assess/tests/test_complexity_treemap.py",
       "loc": 1227,
-      "est_tokens": 19417,
+      "est_tokens": 19418,
       "ccn": 189.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 6.0,
       "max_fn_name": "test_write_stats_tie_break_by_path_takes_first_ten_in_path_order",
-      "commits": 26,
+      "commits": 34,
       "source": "lizard"
     },
     {
@@ -282,40 +289,29 @@
       "max_fn_name": "frontmatter_hooks",
       "commits": 1,
       "source": "lizard"
-    },
-    {
-      "path": "scripts/floor_check.py",
-      "loc": 579,
-      "est_tokens": 10210,
-      "ccn": 179.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 22.0,
-      "max_fn_name": "cmd_markers",
-      "commits": 5,
-      "source": "lizard"
     }
   ],
   "top_large": [
     {
       "path": "skills/assess/tests/test_complexity_treemap.py",
       "loc": 1227,
-      "est_tokens": 19417,
+      "est_tokens": 19418,
       "ccn": 189.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 6.0,
       "max_fn_name": "test_write_stats_tie_break_by_path_takes_first_ten_in_path_order",
-      "commits": 26,
+      "commits": 34,
       "source": "lizard"
     },
     {
       "path": "scripts/tests/test_floor_check.py",
       "loc": 998,
-      "est_tokens": 13790,
+      "est_tokens": 13789,
       "ccn": 159.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 6.0,
       "max_fn_name": "test_protected_role_filter_returns_only_the_floor_core",
-      "commits": 5,
+      "commits": 6,
       "source": "lizard"
     },
     {
@@ -332,12 +328,12 @@
     {
       "path": "skills/assess/scripts/lib/keyhole_signals.py",
       "loc": 860,
-      "est_tokens": 17957,
-      "ccn": 247.0,
+      "est_tokens": 18003,
+      "ccn": 248.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 11.0,
       "max_fn_name": "render_findings_markdown",
-      "commits": 26,
+      "commits": 27,
       "source": "lizard"
     },
     {
@@ -353,13 +349,24 @@
     },
     {
       "path": "skills/assess/scripts/complexity-treemap.py",
-      "loc": 847,
-      "est_tokens": 17610,
-      "ccn": 214.0,
+      "loc": 818,
+      "est_tokens": 17285,
+      "ccn": 201.0,
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 14.0,
       "max_fn_name": "lizard_scores",
-      "commits": 34,
+      "commits": 43,
+      "source": "lizard"
+    },
+    {
+      "path": "tests/test_ghsync_gitlab.py",
+      "loc": 772,
+      "est_tokens": 9361,
+      "ccn": 113.0,
+      "ccn_basis": "file-aggregate",
+      "max_fn_ccn": 6.0,
+      "max_fn_name": "__init__",
+      "commits": 5,
       "source": "lizard"
     },
     {
@@ -370,7 +377,7 @@
       "ccn_basis": "file-aggregate",
       "max_fn_ccn": 15.0,
       "max_fn_name": "_derive_signals",
-      "commits": 23,
+      "commits": 24,
       "source": "lizard"
     },
     {
@@ -394,17 +401,1269 @@
       "max_fn_name": "_workflow_job_names",
       "commits": 7,
       "source": "lizard"
+    }
+  ],
+  "files": [
+    {
+      "path": "scripts/canaries/drive_interactive.mjs",
+      "ccn": 37.0
+    },
+    {
+      "path": "scripts/canaries/run_canaries.py",
+      "ccn": 147.0
+    },
+    {
+      "path": "scripts/contract/complete_gate.py",
+      "ccn": 4.0
+    },
+    {
+      "path": "scripts/contract/contract_location.py",
+      "ccn": 7.0
+    },
+    {
+      "path": "scripts/contract/freeze.py",
+      "ccn": 87.0
+    },
+    {
+      "path": "scripts/contract/record_readiness.py",
+      "ccn": 14.0
+    },
+    {
+      "path": "scripts/contract/spawn_verifier.py",
+      "ccn": 33.0
+    },
+    {
+      "path": "scripts/contract/start_gate.py",
+      "ccn": 10.0
+    },
+    {
+      "path": "scripts/contract/tiers.py",
+      "ccn": 12.0
+    },
+    {
+      "path": "scripts/contract/validate_completion.py",
+      "ccn": 100.0
+    },
+    {
+      "path": "scripts/contract/verifier.py",
+      "ccn": 51.0
+    },
+    {
+      "path": "scripts/floor_anchor.py",
+      "ccn": 188.0
+    },
+    {
+      "path": "scripts/floor_check.py",
+      "ccn": 199.0
+    },
+    {
+      "path": "scripts/standalone_skill_config.py",
+      "ccn": 1.0
+    },
+    {
+      "path": "scripts/tests/test_cli_source.py",
+      "ccn": 13.0
+    },
+    {
+      "path": "scripts/tests/test_floor_anchor.py",
+      "ccn": 94.0
+    },
+    {
+      "path": "scripts/tests/test_floor_anchor_protection.py",
+      "ccn": 15.0
+    },
+    {
+      "path": "scripts/tests/test_floor_check.py",
+      "ccn": 159.0
+    },
+    {
+      "path": "scripts/tests/test_floor_pin_exempt.py",
+      "ccn": 33.0
+    },
+    {
+      "path": "scripts/tests/test_floor_text_oracle.py",
+      "ccn": 35.0
+    },
+    {
+      "path": "scripts/tests/test_integration.py",
+      "ccn": 89.0
+    },
+    {
+      "path": "scripts/tests/test_transform.py",
+      "ccn": 54.0
+    },
+    {
+      "path": "scripts/transform_skill.py",
+      "ccn": 44.0
+    },
+    {
+      "path": "skills/assess/scripts/assess_core.py",
+      "ccn": 13.0
+    },
+    {
+      "path": "skills/assess/scripts/assess_emit_workflow.py",
+      "ccn": 71.0
+    },
+    {
+      "path": "skills/assess/scripts/assess_finalize.py",
+      "ccn": 144.0
+    },
+    {
+      "path": "skills/assess/scripts/assess_gate.py",
+      "ccn": 85.0
+    },
+    {
+      "path": "skills/assess/scripts/assess_report.py",
+      "ccn": 118.0
+    },
+    {
+      "path": "skills/assess/scripts/assess_signals.py",
+      "ccn": 14.0
+    },
+    {
+      "path": "skills/assess/scripts/complexity-treemap.py",
+      "ccn": 201.0
+    },
+    {
+      "path": "skills/assess/scripts/doc-graph-svg.py",
+      "ccn": 119.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/__init__.py",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/accretion_ratchet.py",
+      "ccn": 39.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/agent_environment.py",
+      "ccn": 212.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/agent_harness.py",
+      "ccn": 180.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/agent_identity.py",
+      "ccn": 17.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/agent_instructions_grader.py",
+      "ccn": 76.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/agent_ops.py",
+      "ccn": 25.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/ai_usage.py",
+      "ccn": 18.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/anomaly_detector.py",
+      "ccn": 19.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/archetype.py",
+      "ccn": 53.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/artifact_schema.py",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/assess_config.py",
+      "ccn": 56.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/badge.py",
+      "ccn": 27.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/change_coupling.py",
+      "ccn": 102.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/ci_workflow.py",
+      "ccn": 37.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/claude_config.py",
+      "ccn": 155.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/claude_config_fields.py",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/command_index.py",
+      "ccn": 125.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/command_resolver.py",
+      "ccn": 264.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/config_drift.py",
+      "ccn": 161.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/context_blocks.py",
+      "ccn": 56.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/core_scans.py",
+      "ccn": 42.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/counts_only.py",
+      "ccn": 102.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/counts_only_rules.py",
+      "ccn": 6.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/counts_only_schema.py",
+      "ccn": 42.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/coupling_analysis.py",
+      "ccn": 19.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/coverage_gate.py",
+      "ccn": 120.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/coverage_report.py",
+      "ccn": 44.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/dart_capabilities.py",
+      "ccn": 36.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/dart_complexity.py",
+      "ccn": 87.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/decline_markers.py",
+      "ccn": 37.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/degrade.py",
+      "ccn": 3.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/diff_reliability.py",
+      "ccn": 31.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/doc_claims.py",
+      "ccn": 63.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/doc_complexity_join.py",
+      "ccn": 42.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/doc_graph.py",
+      "ccn": 209.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/doc_graph_layout.py",
+      "ccn": 29.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/doc_links.py",
+      "ccn": 71.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/doc_ownership.py",
+      "ccn": 67.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/doc_provenance.py",
+      "ccn": 57.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/doc_staleness.py",
+      "ccn": 79.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/evidence_check.py",
+      "ccn": 94.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/findings_snapshot.py",
+      "ccn": 37.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/fleet.py",
+      "ccn": 110.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/fleet_activity.py",
+      "ccn": 9.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/fleet_cleanup.py",
+      "ccn": 39.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/fleet_group_schema.py",
+      "ccn": 14.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/fleet_groups.py",
+      "ccn": 62.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/fleet_heatmap.py",
+      "ccn": 82.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/fleet_labels.py",
+      "ccn": 115.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/fleet_next_steps.py",
+      "ccn": 147.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/fleet_schema.py",
+      "ccn": 7.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/fleet_stamp.py",
+      "ccn": 10.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/fleet_view.py",
+      "ccn": 73.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/gap_actions.py",
+      "ccn": 21.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/gate_cost.py",
+      "ccn": 17.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/generated_files.py",
+      "ccn": 22.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/gh_cli.py",
+      "ccn": 34.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/git_churn.py",
+      "ccn": 132.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/gitlab_cli.py",
+      "ccn": 59.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/import_credit.py",
+      "ccn": 120.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/instruction_budget.py",
+      "ccn": 40.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/instruction_claims.py",
+      "ccn": 98.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/instruction_content.py",
+      "ccn": 89.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/instruction_discovery.py",
+      "ccn": 152.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/instruction_files.py",
+      "ccn": 33.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/instruction_globs.py",
+      "ccn": 61.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/instruction_placement.py",
+      "ccn": 136.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/interactivity.py",
+      "ccn": 9.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/jvm_capabilities.py",
+      "ccn": 80.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/keyhole_signals.py",
+      "ccn": 248.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/liveness_scan.py",
+      "ccn": 127.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/mutation_cap.py",
+      "ccn": 31.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/mutation_refresh.py",
+      "ccn": 30.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/next_step_guidance.py",
+      "ccn": 78.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/ownership_parser.py",
+      "ccn": 86.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/promissory_markers.py",
+      "ccn": 122.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/python_regions.py",
+      "ccn": 30.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/raw_source.py",
+      "ccn": 86.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/review_reality.py",
+      "ccn": 141.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/rubric.py",
+      "ccn": 122.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/rubric_signals.py",
+      "ccn": 31.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/run_context_types.py",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/run_publish.py",
+      "ccn": 2.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/run_scope.py",
+      "ccn": 9.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/run_setup.py",
+      "ccn": 28.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/run_wiki.py",
+      "ccn": 28.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/scan_registry.py",
+      "ccn": 53.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/scc_coverage.py",
+      "ccn": 25.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/shared_tooling.py",
+      "ccn": 114.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/sibling_tests.py",
+      "ccn": 90.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/signals.py",
+      "ccn": 55.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/signals_schema.py",
+      "ccn": 13.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/stats_diff.py",
+      "ccn": 31.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/stats_rows.py",
+      "ccn": 7.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/structure_drift.py",
+      "ccn": 87.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/structure_graph.py",
+      "ccn": 120.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/test_focus.py",
+      "ccn": 63.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/test_pressure/__init__.py",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/test_pressure/aggregate.py",
+      "ccn": 8.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/test_pressure/common.py",
+      "ccn": 16.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/test_pressure/heuristics.py",
+      "ccn": 124.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/test_pressure/mutation.py",
+      "ccn": 131.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/test_pressure/mutmut3.py",
+      "ccn": 223.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/treemap_render.py",
+      "ccn": 60.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/understanding_analysis.py",
+      "ccn": 32.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/untrusted_hotspot.py",
+      "ccn": 14.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/vault_queries.py",
+      "ccn": 49.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/wiki_state.py",
+      "ccn": 46.0
+    },
+    {
+      "path": "skills/assess/scripts/lib/wiki_writer.py",
+      "ccn": 170.0
+    },
+    {
+      "path": "skills/assess/tests/assess_core_helpers.py",
+      "ccn": 6.0
+    },
+    {
+      "path": "skills/assess/tests/conftest.py",
+      "ccn": 9.0
+    },
+    {
+      "path": "skills/assess/tests/fixtures/golden-doc-repo/src/app.py",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/assess/tests/fixtures/golden-svg-repo/hot.py",
+      "ccn": 21.0
+    },
+    {
+      "path": "skills/assess/tests/fixtures/golden-svg-repo/simple_stable.py",
+      "ccn": 2.0
+    },
+    {
+      "path": "skills/assess/tests/fixtures/hollow_test_repo/src/processor.py",
+      "ccn": 3.0
+    },
+    {
+      "path": "skills/assess/tests/fixtures/hollow_test_repo/tests/test_processor.py",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/assess/tests/fixtures/honest_test_repo/tests/test_processor.py",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/assess/tests/fixtures/instruction_grading/repo/src/app.ts",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/assess/tests/fixtures/instruction_grading/repo/src/routes/index.ts",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/assess/tests/fixtures/instruction_grading/repo/tests/app.test.ts",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/assess/tests/fixtures/maven_project/Sample.java",
+      "ccn": 2.0
+    },
+    {
+      "path": "skills/assess/tests/fleet_heatmap_fixture.py",
+      "ccn": 9.0
+    },
+    {
+      "path": "skills/assess/tests/golden.py",
+      "ccn": 9.0
+    },
+    {
+      "path": "skills/assess/tests/keyhole_helpers.py",
+      "ccn": 5.0
+    },
+    {
+      "path": "skills/assess/tests/svg_cascade.py",
+      "ccn": 17.0
+    },
+    {
+      "path": "skills/assess/tests/test_accretion_ratchet.py",
+      "ccn": 70.0
+    },
+    {
+      "path": "skills/assess/tests/test_accretion_ratchet_threshold.py",
+      "ccn": 3.0
+    },
+    {
+      "path": "skills/assess/tests/test_action_contract.py",
+      "ccn": 42.0
+    },
+    {
+      "path": "skills/assess/tests/test_agent_environment.py",
+      "ccn": 63.0
+    },
+    {
+      "path": "skills/assess/tests/test_agent_harness.py",
+      "ccn": 72.0
+    },
+    {
+      "path": "skills/assess/tests/test_agent_instructions_grader.py",
+      "ccn": 51.0
+    },
+    {
+      "path": "skills/assess/tests/test_agent_ops.py",
+      "ccn": 12.0
+    },
+    {
+      "path": "skills/assess/tests/test_ai_usage.py",
+      "ccn": 30.0
+    },
+    {
+      "path": "skills/assess/tests/test_anomaly_detector.py",
+      "ccn": 35.0
+    },
+    {
+      "path": "skills/assess/tests/test_archetype.py",
+      "ccn": 27.0
+    },
+    {
+      "path": "skills/assess/tests/test_assess_config.py",
+      "ccn": 23.0
+    },
+    {
+      "path": "skills/assess/tests/test_assess_core.py",
+      "ccn": 62.0
+    },
+    {
+      "path": "skills/assess/tests/test_assess_delivery.py",
+      "ccn": 16.0
+    },
+    {
+      "path": "skills/assess/tests/test_assess_finalize.py",
+      "ccn": 80.0
+    },
+    {
+      "path": "skills/assess/tests/test_assess_gate.py",
+      "ccn": 60.0
+    },
+    {
+      "path": "skills/assess/tests/test_assess_report.py",
+      "ccn": 79.0
+    },
+    {
+      "path": "skills/assess/tests/test_badge.py",
+      "ccn": 13.0
+    },
+    {
+      "path": "skills/assess/tests/test_change_coupling.py",
+      "ccn": 60.0
+    },
+    {
+      "path": "skills/assess/tests/test_ci_workflow.py",
+      "ccn": 37.0
+    },
+    {
+      "path": "skills/assess/tests/test_claude_config.py",
+      "ccn": 76.0
+    },
+    {
+      "path": "skills/assess/tests/test_command_index.py",
+      "ccn": 20.0
+    },
+    {
+      "path": "skills/assess/tests/test_command_resolver.py",
+      "ccn": 56.0
+    },
+    {
+      "path": "skills/assess/tests/test_complexity_treemap.py",
+      "ccn": 189.0
+    },
+    {
+      "path": "skills/assess/tests/test_config_drift.py",
+      "ccn": 74.0
+    },
+    {
+      "path": "skills/assess/tests/test_context_blocks.py",
+      "ccn": 69.0
+    },
+    {
+      "path": "skills/assess/tests/test_counts_only.py",
+      "ccn": 75.0
+    },
+    {
+      "path": "skills/assess/tests/test_coupling_analysis.py",
+      "ccn": 31.0
+    },
+    {
+      "path": "skills/assess/tests/test_coverage_gate.py",
+      "ccn": 51.0
+    },
+    {
+      "path": "skills/assess/tests/test_coverage_report.py",
+      "ccn": 19.0
+    },
+    {
+      "path": "skills/assess/tests/test_dart_capabilities.py",
+      "ccn": 29.0
+    },
+    {
+      "path": "skills/assess/tests/test_dart_complexity.py",
+      "ccn": 8.0
+    },
+    {
+      "path": "skills/assess/tests/test_decline_markers.py",
+      "ccn": 17.0
+    },
+    {
+      "path": "skills/assess/tests/test_decomposition_parity.py",
+      "ccn": 17.0
+    },
+    {
+      "path": "skills/assess/tests/test_diff_reliability.py",
+      "ccn": 11.0
+    },
+    {
+      "path": "skills/assess/tests/test_doc_claims.py",
+      "ccn": 37.0
+    },
+    {
+      "path": "skills/assess/tests/test_doc_complexity_join.py",
+      "ccn": 24.0
+    },
+    {
+      "path": "skills/assess/tests/test_doc_graph.py",
+      "ccn": 149.0
+    },
+    {
+      "path": "skills/assess/tests/test_doc_graph_layout.py",
+      "ccn": 13.0
+    },
+    {
+      "path": "skills/assess/tests/test_doc_graph_svg.py",
+      "ccn": 64.0
+    },
+    {
+      "path": "skills/assess/tests/test_doc_links.py",
+      "ccn": 16.0
+    },
+    {
+      "path": "skills/assess/tests/test_doc_modularity.py",
+      "ccn": 10.0
+    },
+    {
+      "path": "skills/assess/tests/test_doc_ownership.py",
+      "ccn": 25.0
+    },
+    {
+      "path": "skills/assess/tests/test_doc_provenance.py",
+      "ccn": 19.0
+    },
+    {
+      "path": "skills/assess/tests/test_doc_staleness.py",
+      "ccn": 142.0
+    },
+    {
+      "path": "skills/assess/tests/test_emit_workflow.py",
+      "ccn": 53.0
+    },
+    {
+      "path": "skills/assess/tests/test_evidence_check.py",
+      "ccn": 41.0
+    },
+    {
+      "path": "skills/assess/tests/test_findings_snapshot.py",
+      "ccn": 21.0
+    },
+    {
+      "path": "skills/assess/tests/test_fleet.py",
+      "ccn": 65.0
+    },
+    {
+      "path": "skills/assess/tests/test_fleet_cli.py",
+      "ccn": 35.0
+    },
+    {
+      "path": "skills/assess/tests/test_fleet_groups.py",
+      "ccn": 54.0
+    },
+    {
+      "path": "skills/assess/tests/test_fleet_heatmap.py",
+      "ccn": 66.0
+    },
+    {
+      "path": "skills/assess/tests/test_fleet_labels.py",
+      "ccn": 73.0
+    },
+    {
+      "path": "skills/assess/tests/test_fleet_next_steps.py",
+      "ccn": 92.0
+    },
+    {
+      "path": "skills/assess/tests/test_fleet_run_stamp.py",
+      "ccn": 55.0
+    },
+    {
+      "path": "skills/assess/tests/test_gap_actions.py",
+      "ccn": 16.0
+    },
+    {
+      "path": "skills/assess/tests/test_gate_cost.py",
+      "ccn": 24.0
+    },
+    {
+      "path": "skills/assess/tests/test_generated_files.py",
+      "ccn": 22.0
+    },
+    {
+      "path": "skills/assess/tests/test_git_churn.py",
+      "ccn": 9.0
+    },
+    {
+      "path": "skills/assess/tests/test_git_commit_info.py",
+      "ccn": 13.0
+    },
+    {
+      "path": "skills/assess/tests/test_gitlab_protected_branches.py",
+      "ccn": 50.0
+    },
+    {
+      "path": "skills/assess/tests/test_golden_baseline.py",
+      "ccn": 36.0
+    },
+    {
+      "path": "skills/assess/tests/test_golden_svg_render.py",
+      "ccn": 30.0
+    },
+    {
+      "path": "skills/assess/tests/test_hotspot_orphan_invariant.py",
+      "ccn": 36.0
+    },
+    {
+      "path": "skills/assess/tests/test_import_credit.py",
+      "ccn": 43.0
+    },
+    {
+      "path": "skills/assess/tests/test_instruction_bloat.py",
+      "ccn": 36.0
+    },
+    {
+      "path": "skills/assess/tests/test_instruction_budget.py",
+      "ccn": 22.0
+    },
+    {
+      "path": "skills/assess/tests/test_instruction_claims.py",
+      "ccn": 78.0
+    },
+    {
+      "path": "skills/assess/tests/test_instruction_content.py",
+      "ccn": 33.0
+    },
+    {
+      "path": "skills/assess/tests/test_instruction_discovery.py",
+      "ccn": 70.0
+    },
+    {
+      "path": "skills/assess/tests/test_instruction_files.py",
+      "ccn": 21.0
+    },
+    {
+      "path": "skills/assess/tests/test_instruction_globs.py",
+      "ccn": 11.0
+    },
+    {
+      "path": "skills/assess/tests/test_instruction_placement.py",
+      "ccn": 69.0
+    },
+    {
+      "path": "skills/assess/tests/test_interactivity.py",
+      "ccn": 17.0
+    },
+    {
+      "path": "skills/assess/tests/test_jvm_capabilities.py",
+      "ccn": 56.0
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_accretion.py",
+      "ccn": 24.0
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_attention.py",
+      "ccn": 33.0
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_blocks.py",
+      "ccn": 6.0
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_hidden_coupling.py",
+      "ccn": 49.0
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_override_contradicts.py",
+      "ccn": 3.0
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_render.py",
+      "ccn": 60.0
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_suppression.py",
+      "ccn": 27.0
+    },
+    {
+      "path": "skills/assess/tests/test_keyhole_untrusted_hotspot.py",
+      "ccn": 6.0
+    },
+    {
+      "path": "skills/assess/tests/test_liveness_scan.py",
+      "ccn": 77.0
+    },
+    {
+      "path": "skills/assess/tests/test_log_supersede.py",
+      "ccn": 19.0
+    },
+    {
+      "path": "skills/assess/tests/test_mutation_cap.py",
+      "ccn": 6.0
+    },
+    {
+      "path": "skills/assess/tests/test_mutation_cap_partial.py",
+      "ccn": 14.0
+    },
+    {
+      "path": "skills/assess/tests/test_mutation_refresh.py",
+      "ccn": 63.0
+    },
+    {
+      "path": "skills/assess/tests/test_mutmut3.py",
+      "ccn": 71.0
+    },
+    {
+      "path": "skills/assess/tests/test_mutmut3_layout.py",
+      "ccn": 77.0
+    },
+    {
+      "path": "skills/assess/tests/test_mutmut3_runner.py",
+      "ccn": 36.0
+    },
+    {
+      "path": "skills/assess/tests/test_no_contributions_scan.py",
+      "ccn": 52.0
+    },
+    {
+      "path": "skills/assess/tests/test_ownership_parser.py",
+      "ccn": 34.0
     },
     {
       "path": "skills/assess/tests/test_promissory_markers.py",
-      "loc": 588,
-      "est_tokens": 8002,
-      "ccn": 116.0,
-      "ccn_basis": "file-aggregate",
-      "max_fn_ccn": 15.0,
-      "max_fn_name": "test_todo_position_matrix",
-      "commits": 7,
-      "source": "lizard"
+      "ccn": 116.0
+    },
+    {
+      "path": "skills/assess/tests/test_promissory_markers_literals.py",
+      "ccn": 53.0
+    },
+    {
+      "path": "skills/assess/tests/test_raw_source.py",
+      "ccn": 81.0
+    },
+    {
+      "path": "skills/assess/tests/test_rename_churn.py",
+      "ccn": 32.0
+    },
+    {
+      "path": "skills/assess/tests/test_review_reality.py",
+      "ccn": 33.0
+    },
+    {
+      "path": "skills/assess/tests/test_review_reality_gitlab.py",
+      "ccn": 64.0
+    },
+    {
+      "path": "skills/assess/tests/test_rubric.py",
+      "ccn": 47.0
+    },
+    {
+      "path": "skills/assess/tests/test_rubric_signals.py",
+      "ccn": 49.0
+    },
+    {
+      "path": "skills/assess/tests/test_run_setup.py",
+      "ccn": 22.0
+    },
+    {
+      "path": "skills/assess/tests/test_run_wiki.py",
+      "ccn": 60.0
+    },
+    {
+      "path": "skills/assess/tests/test_scan_registry.py",
+      "ccn": 88.0
+    },
+    {
+      "path": "skills/assess/tests/test_scan_registry_degrade.py",
+      "ccn": 22.0
+    },
+    {
+      "path": "skills/assess/tests/test_scc_coverage.py",
+      "ccn": 36.0
+    },
+    {
+      "path": "skills/assess/tests/test_scope.py",
+      "ccn": 35.0
+    },
+    {
+      "path": "skills/assess/tests/test_scorer_evidence.py",
+      "ccn": 42.0
+    },
+    {
+      "path": "skills/assess/tests/test_self_architecture.py",
+      "ccn": 21.0
+    },
+    {
+      "path": "skills/assess/tests/test_self_dogfood.py",
+      "ccn": 23.0
+    },
+    {
+      "path": "skills/assess/tests/test_shallow_history.py",
+      "ccn": 19.0
+    },
+    {
+      "path": "skills/assess/tests/test_shared_tooling.py",
+      "ccn": 42.0
+    },
+    {
+      "path": "skills/assess/tests/test_sibling_tests.py",
+      "ccn": 56.0
+    },
+    {
+      "path": "skills/assess/tests/test_signals.py",
+      "ccn": 71.0
+    },
+    {
+      "path": "skills/assess/tests/test_signals_counts_only.py",
+      "ccn": 25.0
+    },
+    {
+      "path": "skills/assess/tests/test_smoke.py",
+      "ccn": 2.0
+    },
+    {
+      "path": "skills/assess/tests/test_stats_diff.py",
+      "ccn": 36.0
+    },
+    {
+      "path": "skills/assess/tests/test_stats_rows.py",
+      "ccn": 22.0
+    },
+    {
+      "path": "skills/assess/tests/test_structure_drift.py",
+      "ccn": 71.0
+    },
+    {
+      "path": "skills/assess/tests/test_structure_graph.py",
+      "ccn": 49.0
+    },
+    {
+      "path": "skills/assess/tests/test_svg_cascade.py",
+      "ccn": 4.0
+    },
+    {
+      "path": "skills/assess/tests/test_symlink_walks.py",
+      "ccn": 25.0
+    },
+    {
+      "path": "skills/assess/tests/test_test_focus.py",
+      "ccn": 88.0
+    },
+    {
+      "path": "skills/assess/tests/test_test_pressure.py",
+      "ccn": 95.0
+    },
+    {
+      "path": "skills/assess/tests/test_understanding_analysis.py",
+      "ccn": 25.0
+    },
+    {
+      "path": "skills/assess/tests/test_uninstall.py",
+      "ccn": 9.0
+    },
+    {
+      "path": "skills/assess/tests/test_vault_queries.py",
+      "ccn": 17.0
+    },
+    {
+      "path": "skills/assess/tests/test_wiki_state.py",
+      "ccn": 6.0
+    },
+    {
+      "path": "skills/assess/tests/test_wiki_writer.py",
+      "ccn": 89.0
+    },
+    {
+      "path": "skills/doc-contradictions/tests/fixtures/clean-set/src/limits.py",
+      "ccn": 1.0
+    },
+    {
+      "path": "skills/doc-contradictions/tests/fixtures/doc-vs-code-default/src/cache.py",
+      "ccn": 6.0
+    },
+    {
+      "path": "skills/doc-contradictions/tests/fixtures/excluded-historical/src/consumer.py",
+      "ccn": 3.0
+    },
+    {
+      "path": "skills/fleet/scripts/fleet.py",
+      "ccn": 37.0
+    },
+    {
+      "path": "skills/fleet/scripts/fleet_labels.py",
+      "ccn": 21.0
+    },
+    {
+      "path": "skills/fleet/scripts/fleet_next_steps.py",
+      "ccn": 4.0
+    },
+    {
+      "path": "skills/fleet/scripts/heatmap.py",
+      "ccn": 8.0
+    },
+    {
+      "path": "skills/skill-forge/tests/fixtures/flawed-instruction-file/check_counts.py",
+      "ccn": 4.0
+    },
+    {
+      "path": "tests/canaries/known-good/reference_implementation/porcelain.py",
+      "ccn": 13.0
+    },
+    {
+      "path": "tests/conftest.py",
+      "ccn": 2.0
+    },
+    {
+      "path": "tests/contract/test_canary_harness.py",
+      "ccn": 34.0
+    },
+    {
+      "path": "tests/contract/test_complete_gate.py",
+      "ccn": 11.0
+    },
+    {
+      "path": "tests/contract/test_completion_record.py",
+      "ccn": 38.0
+    },
+    {
+      "path": "tests/contract/test_contract_location.py",
+      "ccn": 20.0
+    },
+    {
+      "path": "tests/contract/test_custody.py",
+      "ccn": 66.0
+    },
+    {
+      "path": "tests/contract/test_freeze.py",
+      "ccn": 50.0
+    },
+    {
+      "path": "tests/contract/test_readiness.py",
+      "ccn": 32.0
+    },
+    {
+      "path": "tests/contract/test_start_gate.py",
+      "ccn": 14.0
+    },
+    {
+      "path": "tests/contract/test_tiers.py",
+      "ccn": 15.0
+    },
+    {
+      "path": "tests/contract/test_verifier.py",
+      "ccn": 28.0
+    },
+    {
+      "path": "tests/test_file_size_ratchet.py",
+      "ccn": 30.0
+    },
+    {
+      "path": "tests/test_ghreport.py",
+      "ccn": 55.0
+    },
+    {
+      "path": "tests/test_ghreport_gitlab.py",
+      "ccn": 132.0
+    },
+    {
+      "path": "tests/test_ghsync_activity.py",
+      "ccn": 61.0
+    },
+    {
+      "path": "tests/test_ghsync_clone.py",
+      "ccn": 50.0
+    },
+    {
+      "path": "tests/test_ghsync_gitlab.py",
+      "ccn": 113.0
+    },
+    {
+      "path": "tests/test_ghsync_porcelain.py",
+      "ccn": 5.0
+    },
+    {
+      "path": "tests/test_landing_page.py",
+      "ccn": 20.0
+    },
+    {
+      "path": "tests/test_plugin_contract.py",
+      "ccn": 115.0
+    },
+    {
+      "path": "tests/test_skill_forge_instruction_files.py",
+      "ccn": 24.0
     }
-  ]
+  ],
+  "complexity_unreliable": []
 }

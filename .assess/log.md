@@ -172,3 +172,16 @@
 
 ---
 <!-- chain:08dc3a03e8e5e473 -->
+<!-- assess:run_id=20261120111555-1e13698c artifact_schema_version=1.12.0 -->
+## 2026-11-20 (v1.225.0, run 1e13698c)
+
+- **Files scored:** 315
+- **AI Readiness:** 0.0 / 8 ((LLM fills in))
+- **Instructions grade:** A
+- **Hotspot transitions:** 0 graduated, 0 regressed, 0 restructured, 10 new, 0 persistent
+- **Top action:** Deterministic ranker not yet wired (LLM picks Top 3)
+
+[Full report](./assess-report.md)
+
+---
+<!-- chain:d78ddee4c3c8ac16 -->
