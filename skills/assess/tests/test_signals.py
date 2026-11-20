@@ -1,6 +1,7 @@
 """Tests for the headless signals entry point (issue #545)."""
 from __future__ import annotations
 
+import ast
 import json
 import os
 import subprocess
@@ -39,6 +40,9 @@ def fixture_repo(tmp_path: Path) -> Path:
     _git(repo.parent, "init", "-q", str(repo))
     _git(repo, "config", "user.email", "t@example.com")
     _git(repo, "config", "user.name", "t")
+    # A GitHub remote: without one the gh_cli scans stop at no_remote before
+    # calling gh, and the no_gh tripwire could not fire.
+    _git(repo, "remote", "add", "origin", "https://github.com/example/example.git")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "init")
     return repo
@@ -180,8 +184,43 @@ def test_unregistered_names_are_run_context_keys_the_core_assigns():
         assert f'"{name}"' in sources, name
 
 
+def _lib_imports(module: str) -> set[str]:
+    """The ``lib.*`` modules ``module`` imports directly (a package: any of its files)."""
+    base = SCRIPTS / "lib" / module
+    files = sorted(base.glob("*.py")) if base.is_dir() else [base.with_suffix(".py")]
+    found: set[str] = set()
+    for path in files:
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ImportFrom) and node.module == "lib":
+                found.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and (node.module or "").startswith("lib."):
+                found.add(node.module.split(".")[1])
+            elif isinstance(node, ast.Import):
+                found.update(a.name.split(".")[1] for a in node.names if a.name.startswith("lib."))
+    return found
+
+
+def _reaches_gh(module: str) -> bool:
+    """True when ``module`` imports ``lib.gh_cli``, directly or through other lib modules."""
+    seen: set[str] = set()
+    pending = [module]
+    while pending:
+        current = pending.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        pending.extend(_lib_imports(current))
+    return "gh_cli" in seen
+
+
 def test_the_network_flag_marks_exactly_the_gh_scans():
+    """A scan is ``network`` iff its module reaches ``lib.gh_cli`` (the only network client)."""
+    reaching = {
+        spec.key for spec in reg.SCANS
+        if _reaches_gh(spec.fn.__module__.removeprefix("lib."))
+    }
     network = {spec.key for spec in reg.SCANS if spec.network}
+    assert network == reaching
     assert {"review_reality", "config_drift", "gate_cost_estimate", "agent_environment"} <= network
     offline = {spec.key for spec in reg.SCANS if spec.offline_fn is not None}
     assert offline <= network
