@@ -99,6 +99,9 @@ def test_method_change_lists_appeared_and_cleared_by_path() -> None:
     assert change["downgrade"] is False
     assert ".assess/findings.json" in change["refreeze"]
     assert "assess_core.py" in change["refreeze"]
+    # The same steps, in the same order, as the gate action's render step.
+    assert (change["refreeze"].index("complexity-treemap.py")
+            < change["refreeze"].index("assess_core.py"))
 
 
 def test_older_method_than_snapshot_points_at_the_pin_not_a_refreeze() -> None:

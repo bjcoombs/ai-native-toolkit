@@ -29,10 +29,15 @@ from lib.run_context_types import FindingPaths, FindingsSnapshot, MethodChange, 
 FINDINGS_SNAPSHOT_FILE = "findings.json"
 
 # Printed by the gate on a method-version mismatch. ``{snapshot}`` is the
-# snapshot's repo-relative path.
+# snapshot's repo-relative path. The headless form runs the same two steps, in
+# the same order, as the gate action's render step (action.yml): the treemap
+# refreshes complexity-stats.json, then the core computes the findings from it.
 REFREEZE_COMMAND = (
-    "re-run /assess (or, headless, `uv run scripts/assess_core.py <repo_root>` "
-    "from the assess skill directory) and commit {snapshot}"
+    "re-run /assess, or headless from the assess skill directory: "
+    "`uv run scripts/complexity-treemap.py <repo_root> "
+    "-o <repo_root>/.assess/complexity-heatmap.svg "
+    "--stats <repo_root>/.assess/complexity-stats.json && "
+    "uv run scripts/assess_core.py <repo_root>`; then commit {snapshot}"
 )
 
 # Printed instead when this run's method version is older than the snapshot's:
