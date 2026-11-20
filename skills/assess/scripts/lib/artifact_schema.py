@@ -141,7 +141,12 @@ ARTIFACT_SCHEMA_VERSION = "1.14.0"
 #     compared, not stripped, so it turns a mirrored_instruction_files into a
 #     claude_shadows_agents; text after a header comment's ``-->`` (an H1
 #     included) is body (issue #632).
-# 12: doc_claims compares pins per (pinned file, tool) (issue #610), so a Node pin
+# 12: wording and padding inside an instruction-file section no longer lower its
+#     penalty (issue #619): command_reference is an absolute fenced count, a size
+#     signal beats always-on wording, fetch lines past the relocatable cap count
+#     as always-on, and the B cap reads the whole loaded file. Instruction grades
+#     can move.
+# 13: doc_claims compares pins per (pinned file, tool) (issue #610), so a Node pin
 #     no longer contradicts a Python pin in one ``.tool-versions``; the L0
 #     "conflicting doc claims" row and scorer evidence can move.
-ASSESS_METHOD_VERSION = 12
+ASSESS_METHOD_VERSION = 13

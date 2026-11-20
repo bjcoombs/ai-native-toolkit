@@ -14,6 +14,7 @@ from lib.instruction_placement import (
     always_on_signals,
     analyse_file,
     fence_mask,
+    fetch_signals,
     scan_instruction_placement,
     split_sections,
 )
@@ -217,9 +218,25 @@ def test_scorer_agent_appears_in_the_loaded_in_full_report_on_this_repo() -> Non
 # --- signals and homes --------------------------------------------------------------
 
 
-def test_rules_heading_keeps_a_long_command_section_always_on() -> None:
+def test_rules_heading_does_not_keep_a_long_command_section_always_on() -> None:
+    """Size signals beat wording (#619): a 300-line fenced section renamed onto
+    an always-on word stays relocatable, so the rename cannot lower the penalty."""
     text = _kubernetes_section(300).replace("Kubernetes commands", "Kubernetes rules")
     record = analyse_file("# T\n## Intro\nx\n" + text, "CLAUDE.md", "instruction", {})
+    [move] = record["relocatable"]
+    assert move["heading"] == "Kubernetes rules"
+    assert {"command_reference", "long_section"} <= set(move["signals"])
+
+
+def test_rules_heading_keeps_a_scoped_section_without_a_size_signal_always_on() -> None:
+    """Without a size signal the #419 rule holds: always-on wording wins over
+    a scoped heading and scoped paths."""
+    body = ["## Python rules", ""]
+    body += [f"- `src/pkg/mod_{i}.py` keeps its imports sorted." for i in range(10)]
+    text = "# T\n## Intro\nx\n" + "\n".join(body) + "\n"
+    [section] = [s for s in split_sections(text) if s.heading == "Python rules"]
+    assert {"scoped_heading", "scoped_paths"} <= set(fetch_signals(section))
+    record = analyse_file(text, "CLAUDE.md", "instruction", {})
     assert record["relocatable"] == []
 
 
