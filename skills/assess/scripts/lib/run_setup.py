@@ -213,6 +213,9 @@ by the same step just before it rewrites findings.json.
             "est_tokens": current.get("est_tokens", {}),
             "ccn": current.get("ccn", {}),
             "top_hotspots": current.get("top_hotspots", []),
+            # scc-only files with implausibly low ccn (issue #590); [] for an
+            # older sidecar that predates the check.
+            "complexity_unreliable": current.get("complexity_unreliable", []),
         },
         "instruction_files": grading[0],
         "instructions_grade": grading[1],

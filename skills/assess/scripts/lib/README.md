@@ -627,6 +627,31 @@ its schema version - no stamp field, path or timing - so reruns are byte-identic
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
+**`fleet_groups.py`**
+The group roll-up behind `groups.jsonl` (issue #568). `roll_up` groups `FleetRow`s by
+`group` (sorted) and `group_row` builds each `GroupRow`: repository counts, distinct
+shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanned rows
+only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each rubric row's level through `rubric.evaluate`, with
+no threshold config of its own. `load_settings` reads ghreport settings fragments
+(#565) from a file, an array or a directory (a render dir's `settings/`), keyed by
+`scope`; `settings_for` joins a group to the exact scope or the nearest ancestor;
+`normalise_settings` keeps each `{value, reason}` or, for `unknown`, turns it into
+`{available: false, reason}` so `rubric.resolve_signal` reads it unavailable and the
+org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
+else `set`). Rubric data follows `rubric_signals`' namespaces: `repo_signals` is a
+repository's `scans` map (a failed repository's is empty, so it is an unknown
+repository, never a passing one) and `settings_signals` the normalised settings plus
+the fragment's `scope` and `provider`. The CLI loads the rubric with
+`rubric_signals.signal_path_validator()`.
+`write_groups` writes atomically with sorted keys.
+
+**`fleet_group_schema.py`**
+Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
+`RubricRowLevel` (lists and floats included, `settings` values as `{value}` or
+`{available: false, reason}`). `tests/test_fleet_groups.py` fails when the checked-in
+file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
+from `skills/assess`.
+
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 `signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
@@ -1026,6 +1051,21 @@ list (issue #556). Its other readers see every scored file too: `candidate_dead_
 cross-run diff once (`diff_reliability.py`). Stdlib only. Tests:
 `tests/test_stats_rows.py`.
 
+**`scc_coverage.py`**
+What scc's file-level complexity covers. `DATA_LANGUAGES` (JSON, YAML, JSONL) splits
+code from data; `backend_by_language` maps each scc language to its per-function
+backend, or null when scc alone scored a file of it with decision points.
+`complexity_unreliable` flags scc-only code files whose density (ccn per NLOC) is under
+`UNRELIABLE_DENSITY_RATIO` (0.1) of their language's median, for files of at least
+`MIN_UNRELIABLE_NLOC` (200) in a language with at least two files of
+`MIN_MEDIAN_NLOC` (20) or more (issue #590): scc's keyword counter loses its place on
+some shell quoting and scores a 2,000-line script near zero. `complexity-treemap.py`
+writes the rows (`UnreliableCcnRow`, defined here) as `complexity_unreliable` in the stats sidecar
+(`STATS_SCHEMA_VERSION` 7), `run_setup.py` copies them into `stats_summary`,
+`anomaly_detector.py` reports `COMPLEXITY_UNRELIABLE`, and `assess_report.py` labels
+scc-only CCN cells `~N` and flagged ones `(unreliable)`. Ranking is unchanged. Stdlib
+only. Tests: `tests/test_scc_coverage.py`.
+
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
 transitions: graduated (was in top list, now absent), regressed, restructured, new,
@@ -1122,10 +1162,16 @@ Each file not already graded at an `INSTRUCTION_FILE_PATHS` location gets a
 Findings: `dead_glob` (a rule, not always loaded, none of whose scope patterns
 matches a tracked file or names a directory on disk; a nested rule's patterns are
 also tried relative to its own directory), `ignored_cursor_md`, `claude_shadows_agents`
-(a directory's `CLAUDE.md` differs from its `AGENTS.md` and does not import it) and
-`repeats_parent` (at least half of a nested file's distinct lines, over five or
-more, copy the nearest ancestor's). Files and findings are capped with `_total`
-counts. Tests: `tests/test_instruction_discovery.py`.
+(a directory's `CLAUDE.md` differs from its `AGENTS.md` below the header and does
+not import it; `diff_lines` counts the differing body lines, one changed line
+counting once) and `repeats_parent` (at least half of a nested file's distinct
+lines, over five or more, copy the nearest ancestor's). The two files are compared
+below their headers (`mirror_lines`: leading blank lines, one H1 and leading HTML
+comments dropped, whitespace collapsed, blank lines dropped), so a pair that
+matches there is reported as the informational `mirrored_instruction_files`, a
+hand-maintained mirror, not as shadowing (#589); a symlink or an import is
+neither. Files and findings are capped with `_total` counts, informational
+mirrors last so the cap never drops a defect for one. Tests: `tests/test_instruction_discovery.py`.
 
 **`instruction_budget.py`**
 The always-loaded instruction text per tool for the root context, in lines, words,
@@ -1843,6 +1889,8 @@ it is one reviewed edit (re-read the pages, change the sets, move the date).
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
 CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts and
 grades only, no paths or code) so they are safe to include in self-feedback issues.
+`COMPLEXITY_UNRELIABLE` fires when `stats_summary.complexity_unreliable` is non-empty
+(`scc_coverage.py`); its detail counts files and languages and gives the largest NLOC.
 
 **`coverage_report.py`**
 Parses an *existing* coverage report into the shape the `test_pressure` scan's

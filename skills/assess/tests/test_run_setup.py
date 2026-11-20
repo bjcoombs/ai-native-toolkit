@@ -49,6 +49,25 @@ def test_run_header_emits_its_declared_keys_in_order(tmp_path: Path) -> None:
     assert header["scope_slug"] is None
 
 
+def _header_for(current: dict) -> dict:
+    return run_setup.run_header(
+        "id", "2026-11-20", (None, None, ""), {"available": False},
+        current, None,
+        ({}, None, [], [], {}, {}), StatsDiff(), (set(), []),
+    )
+
+
+def test_run_header_copies_complexity_unreliable() -> None:
+    """A schema-7 sidecar's complexity_unreliable reaches stats_summary (#590);
+    a schema-6 sidecar without the key reads as an empty list."""
+    row = {"path": "scripts/doctor.sh", "language": "Shell", "loc": 2150,
+           "ccn": 5.0, "density": 0.0023, "language_median_density": 0.18}
+    current = {"schema_version": 7, "files_scored": 2, "complexity_unreliable": [row]}
+    assert _header_for(current)["stats_summary"]["complexity_unreliable"] == [row]
+    older = {"schema_version": 6, "files_scored": 2}
+    assert _header_for(older)["stats_summary"]["complexity_unreliable"] == []
+
+
 def test_stats_diff_drops_a_graduation_caused_by_the_generated_filter() -> None:
     prior = {"top_hotspots": [{"path": "gen.py", "score": 9}, {"path": "src.py", "score": 8}]}
     current = {"top_hotspots": []}
