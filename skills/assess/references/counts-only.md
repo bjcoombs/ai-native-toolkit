@@ -462,6 +462,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | Field | Kept as |
 |---|---|
 | `structure.reason` | dropped |
+| `structure.modularity_reason` | token |
 | `structure.footprints.module` | path (hashed when hashing is on) |
 | `structure.sccs` | path (hashed when hashing is on) |
 | `structure.breakup_candidates.package` | path (hashed when hashing is on) |

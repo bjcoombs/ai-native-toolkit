@@ -468,6 +468,7 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
     },
     "structure": {
         "structure.reason": DROP,
+        "structure.modularity_reason": TOKEN,
         "structure.footprints.module": PATH,
         "structure.sccs": PATH,
         "structure.breakup_candidates.package": PATH,

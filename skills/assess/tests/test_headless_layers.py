@@ -282,6 +282,28 @@ def test_no_tool_run_reads_unknown_with_named_reasons(
             assert resolve_signal(scans, signal) is _UNAVAILABLE, signal
 
 
+@pytest.mark.parametrize("counts_only", [False, True])
+def test_an_edgeless_graph_reads_layer_two_unknown_with_its_reason(
+    tmp_path: Path, counts_only: bool,
+) -> None:
+    """Modules that never import each other: modularity null, named, never level 0 (#682)."""
+    repo = tmp_path / "edgeless"
+    for rel in ("pkg/__init__.py", "pkg/a.py", "pkg/b.py"):
+        _write(repo, rel, "x = 1\n")
+    _git(repo.parent, "init", "-q", str(repo))
+    doc = _run(repo, tmp_path / "out.json", *(["--counts-only"] if counts_only else []))
+    jsonschema.validate(doc, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
+    block = doc["scans"]["structure"]
+    assert block["available"] is True and block["edge_count"] == 0
+    assert block["modularity_q"] is None
+    assert block["modularity_reason"] == "no_import_edges"
+    result = evaluate(load_default_rubric(),
+                      {"name": "g", "settings": None, "repos": {"r": doc["scans"]}})
+    row = next(r for r in result["rows"] if r["id"] == "layer-2-design")
+    assert (row["status"], row["level"]) == ("unknown", None)
+    assert "structure.modularity_q" in row["missing_signals"]
+
+
 def test_a_headless_run_reports_no_block_as_not_registered(target: Path, tmp_path: Path) -> None:
     doc = _run(target, tmp_path / "full.json")
     for name in BLOCKS:

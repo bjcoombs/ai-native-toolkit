@@ -368,6 +368,7 @@ def test_measure_hints():
     assert "ghreport" in measure_hint("two_factor.value")
     assert "`coverage_gate` scan" in measure_hint("coverage_gate.enforced")
     assert "`no_grimp`" in measure_hint("structure.modularity_q")
+    assert "no_import_edges" in measure_hint("structure.modularity_q")
     assert "`no_lizard`" in measure_hint("stats_summary.loc.p95")
     assert "full `/assess` run" not in measure_hint("structure_drift.tier_0.matched_patterns")
     assert "no lint suppressions" in measure_hint("promissory_markers.families.suppression.total")
