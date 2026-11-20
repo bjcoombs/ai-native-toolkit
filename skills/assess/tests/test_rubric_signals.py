@@ -313,6 +313,19 @@ def test_layer_two_is_unknown_on_a_repository_with_no_python_package(tmp_path: P
     assert "structure.modularity_q" in row["missing_signals"]
 
 
+def test_layer_two_is_unknown_on_an_import_graph_with_no_edges(tmp_path: Path) -> None:
+    """Modules that never import each other: modularity is unmeasured, not tangled (#682)."""
+    (tmp_path / "pkg").mkdir()
+    for name in ("__init__", "a", "b"):
+        (tmp_path / "pkg" / f"{name}.py").write_text("x = 1\n", encoding="utf-8")
+    structure = analyze_structure(tmp_path).as_dict()
+    assert structure["available"] is True
+    assert structure["modularity_reason"] == "no_import_edges"
+    row = _row(_run({"r": {"structure": dict(structure)}}), "layer-2-design")
+    assert (row["status"], row["level"]) == ("unknown", None)
+    assert "structure.modularity_q" in row["missing_signals"]
+
+
 def test_layer_three_reads_the_suppression_footprint(suppressed_repo: dict[str, Any]) -> None:
     row = _row(_run({"r": suppressed_repo}), "layer-3-linters")
     assert row["level"] == 2   # one fresh suppression: a linter runs, none stale

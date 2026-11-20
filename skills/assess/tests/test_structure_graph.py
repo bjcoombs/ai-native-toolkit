@@ -42,6 +42,40 @@ def test_no_packages_is_unavailable_not_an_empty_graph(tmp_path):
     assert result.available is False
     assert result.footprints == []
     assert "no importable" in result.reason
+    assert result.as_dict()["modularity_q"] is None   # unmeasured is null, not 0.0
+
+
+@pytest.mark.parametrize("flag", ["_GRIMP_AVAILABLE", "_NETWORKX_AVAILABLE"])
+def test_an_unavailable_block_emits_null_modularity(monkeypatch, tmp_path, flag):
+    monkeypatch.setattr(sg, flag, False)
+    block = sg.analyze_structure(tmp_path).as_dict()
+    assert block["available"] is False
+    assert block["modularity_q"] is None
+
+
+def test_an_edgeless_graph_has_no_modularity_not_zero(tmp_path):
+    """Modules that never import each other: Q is undefined, not 0.0 (issue #682)."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    for name in ("__init__", "a", "b"):
+        (pkg / f"{name}.py").write_text("x = 1\n")
+    block = sg.analyze_structure(tmp_path).as_dict()
+    assert block["available"] is True and block["module_count"] == 3
+    assert block["edge_count"] == 0
+    assert block["modularity_q"] is None
+    assert block["modularity_reason"] == sg.NO_IMPORT_EDGES == "no_import_edges"
+
+
+def test_a_graph_with_edges_measures_modularity_with_no_reason(tmp_path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg import b\n")
+    (pkg / "b.py").write_text("x = 1\n")
+    block = sg.analyze_structure(tmp_path).as_dict()
+    assert block["edge_count"] > 0
+    assert isinstance(block["modularity_q"], float)
+    assert block["modularity_reason"] is None
 
 
 # --------------------------------------------------------------------------

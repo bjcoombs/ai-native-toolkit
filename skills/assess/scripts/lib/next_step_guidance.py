@@ -331,7 +331,9 @@ _MEASURE_HINTS = {
     "structure": _NEEDS.format("structure", "grimp or networkx is missing (`no_grimp`, "
                                "`no_networkx`)") + " The import graph reads Python only: a "
                  "repository with no importable Python package reads unknown "
-                 "(`no_python_packages`).",
+                 "(`no_python_packages`). An import graph with no edges leaves "
+                 "`modularity_q` null (`modularity_reason: no_import_edges`): modules "
+                 "that never import each other have no community structure to measure.",
     "stats_summary": _NEEDS.format("stats_summary", "lizard is missing (`no_lizard`)"),
     "promissory_markers": _NEEDS.format("promissory_markers", "`rg` is not on `PATH` "
                                         "(`no_rg`)") + " A repository with no lint "
