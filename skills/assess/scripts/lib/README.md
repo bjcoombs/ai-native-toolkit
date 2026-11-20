@@ -1578,7 +1578,8 @@ group when two different files (by resolved path) disagree: two pins disagree
 unless one version's dotted components prefix the other's, two counts unless
 they are within `count_within_tolerance`. One finding per group lists every
 site, so both conflicting lines are cited; a claim the repo cannot verify still
-takes part. The kind is a pair of tables, `CROSS_DOC_VALUE` (claim -> value) and
+takes part. Pins group by pinned file, so a pin finding whose every version
+the file contains (two tools in one `.tool-versions`) is dropped. The kind is a pair of tables, `CROSS_DOC_VALUE` (claim -> value) and
 `CROSS_DOC_AGREE` (two values -> agree), mirroring `_EXTRACTORS` and
 `_VERIFIERS`. The core writes the run-context block `doc_claims`
 (`{files_scanned, excluded_trees, total, verified, failed, failures[...],

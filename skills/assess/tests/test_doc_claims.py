@@ -124,7 +124,7 @@ def test_a_doc_that_is_also_an_instruction_file_is_left_to_instruction_claims(tm
 
 @pytest.mark.skipif(os.name == "nt", reason="symlinks")
 def test_a_symlinked_doc_is_one_file_not_a_contradiction(tmp_path: Path) -> None:
-    _write(tmp_path, "CLAUDE.md", PIN_311 + "\nNode 20 is pinned in `.python-version`.\n")
+    _write(tmp_path, "CLAUDE.md", PIN_311 + "\nPython 3.12 is pinned in `.python-version`.\n")
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "AGENTS.md").symlink_to(tmp_path / "CLAUDE.md")
     block = scan_doc_claims(tmp_path, ["CLAUDE.md"])
@@ -164,6 +164,21 @@ def test_three_files_make_one_finding_listing_every_site(tmp_path: Path) -> None
     assert block["contradictions_total"] == 1
     assert _sites(block["contradictions"][0]) == [
         ["docs/a.md", 1, 10], ["docs/b.md", 1, 40], ["docs/c.md", 1, 10]]
+
+
+def test_true_pins_of_different_tools_in_one_file_do_not_contradict(tmp_path: Path) -> None:
+    _write(tmp_path, ".tool-versions", "nodejs 20.11.0\npython 3.12.1\n")
+    _write(tmp_path, "docs/a.md", "Node 20.11.0 is pinned in `.tool-versions`.\n")
+    _write(tmp_path, "docs/b.md", "Python 3.12.1 is pinned in `.tool-versions`.\n")
+    block = scan_doc_claims(tmp_path, [])
+    assert (block["verified"], block["contradictions_total"]) == (2, 0)
+
+
+def test_a_pin_the_file_does_not_hold_still_contradicts(tmp_path: Path) -> None:
+    _write(tmp_path, ".python-version", "3.12.1\n")
+    _write(tmp_path, "docs/a.md", PIN_311)
+    _write(tmp_path, "docs/b.md", PIN_312)
+    assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
 
 
 def test_different_paths_and_enforcement_claims_never_contradict(tmp_path: Path) -> None:

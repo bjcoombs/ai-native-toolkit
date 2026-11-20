@@ -17,7 +17,9 @@ cross-document kind, still with no model:
 Like the per-file kinds, the cross-document kind is a pair of tables: an
 extractor per claim kind in ``CROSS_DOC_VALUE`` (claim -> the value two files
 can disagree on) and a verifier per kind in ``CROSS_DOC_AGREE`` (two values ->
-whether they agree). Two pins agree when one version's dotted components are a
+whether they agree). Pins are grouped by pinned file, not by tool, so a shared
+file such as ``.tool-versions`` can hold two different true pins: a pin finding
+whose every version the file contains is dropped (``_reconciled``). Two pins agree when one version's dotted components are a
 prefix of the other's (``3.11`` and ``3.11.9``, matching the lenient pin check;
 ``1.2`` and ``11.2`` do not). Two counts agree within the per-file tolerance
 (``count_within_tolerance``: the larger of 10% or 2). An enforcement claim
@@ -42,6 +44,7 @@ from typing import Any, NamedTuple, TypedDict
 
 from lib.assess_config import is_user_excluded
 from lib.doc_graph import is_excluded_path, is_repo_file
+from lib.evidence_check import is_referenced_in
 from lib.git_churn import tracked_files
 from lib.instruction_claims import (
     Claim,
@@ -199,6 +202,19 @@ def find_contradictions(claims_by_file: Iterable[tuple[str, Path, list[Claim]]])
     return [c for c in found if c is not None]
 
 
+def _reconciled(root: Path, contradiction: DocContradiction) -> bool:
+    """True when the repo shows every value of a pin finding is true.
+
+    A shared pin file (``.tool-versions``) holds one version per tool, so
+    "Node 20.11.0" and "Python 3.12.1" pinned in it can both hold: a group of
+    pins the file contains every version of is not a disagreement.
+    """
+    if contradiction["kind"] != "pin":
+        return False
+    return all(is_referenced_in(root, str(site["value"]), contradiction["path"])
+               for site in contradiction["sites"])
+
+
 def scan_doc_claims(
     repo_root: Path | str,
     instruction_files: Iterable[str],
@@ -235,7 +251,7 @@ def scan_doc_claims(
         if verify:
             scanned += 1
             tally_claims(block, root, rel, claims, ci_configured)
-    contradictions = find_contradictions(pool)
+    contradictions = [c for c in find_contradictions(pool) if not _reconciled(root, c)]
     return {
         "files_scanned": scanned,
         "excluded_trees": list(HISTORICAL_DOC_TREES),
