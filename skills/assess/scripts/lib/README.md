@@ -866,8 +866,9 @@ is the trend's runs (`fleet_trends`), `None` when the run is not kept in the his
 `comparison` is the result `_keep_and_compare` wrote. `report_markdown` embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
-stale picture. A new diagram (#676) adds its module, its `FILE` to `DIAGRAM_FILES` and
-an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (regenerate with
+stale picture. A new diagram (#676) adds its module, its `FILE` with its
+report heading and question to `HEADINGS` (one source for a drawn, skipped or failed diagram,
+#684; `DIAGRAM_FILES` follows it) and an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (regenerate with
 `uv run --locked python tests/fleet_diagrams_fixture.py` from `skills/assess`).
 
 **`fleet_trends.py`**

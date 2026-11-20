@@ -125,6 +125,11 @@ def layout(points: Sequence[RepoPoint]) -> tuple[list[RepoPoint], LinearScale, L
     return plotted, x, y, svg.place_labels(anchors, bounds, obstacles=captions)
 
 
+def count_ticks(top: float) -> int:
+    """Commit-axis tick steps: one per commit below 5, so a count axis never shows 0.2."""
+    return int(top) if top < 5 else 5
+
+
 def _wrapped(prefix: str, items: Sequence[str]) -> list[str]:
     return textwrap.wrap(prefix + ", ".join(items), WRAP)
 
@@ -144,7 +149,7 @@ def render_quadrant(points: Sequence[RepoPoint], window: str) -> str:
                 f'height="{sy - PLOT_T:.1f}" class="f-accent" opacity="0.06"/>')
     body.append(f'<rect x="{sx:.1f}" y="{sy:.1f}" width="{PLOT_R - sx:.1f}" '
                 f'height="{bottom - sy:.1f}" class="f-bad" opacity="0.08"/>')
-    for tick in x.ticks(5):
+    for tick in x.ticks(count_ticks(x.hi)):
         tx = x(tick)
         body.append(f'<line x1="{tx:.1f}" y1="{PLOT_T:.1f}" x2="{tx:.1f}" y2="{bottom:.1f}" '
                     f'class="s-rule" stroke-width="0.6"/>')

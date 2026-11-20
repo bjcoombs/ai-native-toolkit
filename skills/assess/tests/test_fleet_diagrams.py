@@ -117,6 +117,19 @@ def test_in_a_quiet_window_a_repository_with_no_commits_is_never_busy():
     assert [fq.at_risk(p, split) for p in quiet] == [False, False, True]
 
 
+@pytest.mark.parametrize(("busiest", "ticks"), [(0, ["0", "1"]), (1, ["0", "1"]), (2, ["0", "1", "2"]),
+                                               (4, ["0", "1", "2", "3", "4", "5"])])
+def test_a_quiet_window_has_whole_commit_ticks(busiest, ticks):
+    points: list[fq.RepoPoint] = [{"repo": "g/r", "commits": busiest, "maturity": 0.5,
+                                   "measured_rows": 1, "team_rows": 1}]
+    text = fq.render_quadrant(points, WINDOW)
+    # x tick labels sit 18px under the plot, centred
+    labels = re.findall(r'y="{:.1f}"[^>]*text-anchor="middle"[^>]*>([^<]*)<'.format(fq.PLOT_T + fq.PLOT_H + 18),
+                        text)
+    assert labels == ticks
+    assert fq.count_ticks(10.0) == 5
+
+
 def test_quadrant_labels_never_overlap_each_other_points_or_captions():
     plotted, x, y, labels = fq.layout(fq.repo_points(_levels(), _repos()))
     boxes = [label.box for label in labels if label is not None]
@@ -199,6 +212,20 @@ def test_a_raising_renderer_is_a_skip_line_naming_the_error(monkeypatch):
     assert diagrams[0]["skipped"] == "skipped: drawing failed (ValueError)."
     assert diagrams[1]["svg"] is not None  # the other diagram is still drawn
     assert "Not drawn: skipped: drawing failed (ValueError)." in fd.report_markdown(diagrams)
+
+
+def test_drawn_skipped_and_failed_diagrams_share_one_heading(monkeypatch):
+    drawn = {d["file"]: (d["title"], d["question"]) for d in _drawn()}
+    skipped = {d["file"]: (d["title"], d["question"]) for d in fd.build_diagrams(None, [], WINDOW)}
+    assert drawn == skipped == fd.HEADINGS
+    assert fd.DIAGRAM_FILES == tuple(fd.HEADINGS)
+
+    def bug(*_args: object) -> str:
+        raise ValueError("render bug")
+    for module, name in ((fq, "render_quadrant"), (ftm, "render_tooling_map")):
+        monkeypatch.setattr(module, name, bug)
+    failed = {d["file"]: (d["title"], d["question"]) for d in fd.build_diagrams(_levels(), _repos(), WINDOW)}
+    assert failed == fd.HEADINGS
 
 
 def test_drift_is_a_pin_off_the_fleets_most_common_ref():
