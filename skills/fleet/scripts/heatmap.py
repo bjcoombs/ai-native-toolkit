@@ -89,11 +89,11 @@ def _compare(run: Path, earlier: Path, groups: list[GroupRow]) -> Comparison:
     scans and the rest, not only the rubric version), and a note names the groups
     whose measured set moved. A bare ``groups.jsonl`` compares levels only.
     """
-    comparison = compare_levels(groups, load_groups(earlier))
-    reasons, set_moved = view_check(run, earlier)
+    reasons, set_moved = view_check(run, earlier)  # before load_groups: a version refusal is a note
     if reasons:
-        return {**comparison, "comparable": False, "changes": {},
+        return {"comparable": False, "changes": {}, "removed_groups": [],
                 "note": "change not shown: " + "; ".join(reasons)}
+    comparison = compare_levels(groups, load_groups(earlier))
     if set_moved and comparison["comparable"]:
         return {**comparison, "note": "measured set changed in " + ", ".join(set_moved)
                 + ": a change there may not be a level change (fleet_compare.py names the cause)"}

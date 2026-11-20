@@ -130,7 +130,7 @@ class Comparison(TypedDict):
     reasons: list[str]  # why not comparable; empty when comparable
     notes: list[str]
     earlier: StampSummary | None  # None when the earlier stamp could not be read
-    later: StampSummary
+    later: StampSummary | None  # None when the later run could not be read at this version
     movement: bool  # any set, level or signal movement
     repositories: SetChanges
     groups: list[GroupChange]
@@ -155,12 +155,28 @@ def _first_version(path: Path, key: str) -> object:
     return None
 
 
+# The stamp keys a comparison reads, with the types they may hold.
+_STAMP_FIELDS: tuple[tuple[str, tuple[type, ...]], ...] = (
+    ("scan_date", (str,)), ("window", (str,)), ("plugin_version", (str,)),
+    ("rubric_version", (str, type(None))), ("toolkit_commit", (str, type(None))),
+    ("counts_only", (bool,)), ("paths_hashed", (bool,)), ("scans", (list, type(None))),
+)
+
+
+def _check_stamp(stamp: dict[str, Any]) -> None:
+    """Raise ``FleetViewError`` when a current-version stamp lacks a key a comparison reads."""
+    for key, types in _STAMP_FIELDS:
+        if key not in stamp or not isinstance(stamp[key], types):
+            raise FleetViewError(f"{RUN_FILE}: missing or malformed {key!r}")
+
+
 def load_run(run_dir: Path) -> FleetRun:
     """One run's stamp, repository rows and group rows.
 
     Raises ``RunVersionError`` when a file is at another envelope version (or
     there is no ``run.json``: a run from before #569), ``FleetViewError`` when
-    a file is missing or malformed.
+    a file is missing or malformed (including a stamp without the keys a
+    comparison reads).
     """
     stamp_path = run_dir / RUN_FILE
     if not stamp_path.is_file():
@@ -176,6 +192,7 @@ def load_run(run_dir: Path) -> FleetRun:
     if stamp.get("fleet_stamp_version") != FLEET_STAMP_VERSION:
         raise RunVersionError(f"run stamp version {stamp.get('fleet_stamp_version')!r}, "
                               f"this toolkit reads {FLEET_STAMP_VERSION}")
+    _check_stamp(stamp)
     for name, key, version in ((REPOS_FILE, "fleet_row_version", FLEET_ROW_VERSION),
                                (GROUPS_FILE, "fleet_group_version", FLEET_GROUP_VERSION)):
         found = _first_version(run_dir / name, key)
@@ -215,11 +232,12 @@ def _empty_set() -> SetChanges:
             "no_longer_active": [], "newly_active": []}
 
 
-def not_comparable(later: FleetStamp, reasons: list[str], earlier: FleetStamp | None = None) -> Comparison:
-    """A refusal: the reasons, both stamps, no deltas."""
+def not_comparable(later: FleetStamp | None, reasons: list[str], earlier: FleetStamp | None = None) -> Comparison:
+    """A refusal: the reasons, the stamps that could be read, no deltas."""
     return {"fleet_compare_version": FLEET_COMPARE_VERSION, "comparable": False, "reasons": reasons,
             "notes": [], "earlier": _summary(earlier) if earlier is not None else None,
-            "later": _summary(later), "movement": False, "repositories": _empty_set(),
+            "later": _summary(later) if later is not None else None, "movement": False,
+            "repositories": _empty_set(),
             "groups": [], "repos": []}
 
 
@@ -365,7 +383,8 @@ def view_check(now: Path, then: Path) -> tuple[list[str], list[str]]:
     one. Both are empty when either path is not a run directory (a bare
     ``groups.jsonl``, or a directory holding only one): the view then compares
     levels only. A pair of run directories where one lacks ``run.json`` is
-    refused, as ``fleet_compare.py`` refuses it.
+    refused, as ``fleet_compare.py`` refuses it. A malformed run raises
+    ``FleetViewError`` (the caller's exit 2), as in ``fleet_compare.py``.
     """
     def run_dir(path: Path) -> bool:
         return path.is_dir() and ((path / RUN_FILE).is_file() or (path / REPOS_FILE).is_file())
@@ -374,7 +393,7 @@ def view_check(now: Path, then: Path) -> tuple[list[str], list[str]]:
         return [], []
     try:
         earlier, later = load_run(then), load_run(now)
-    except (RunVersionError, FleetViewError) as exc:
+    except RunVersionError as exc:
         return [str(exc)], []
     result = compare(earlier, later)
     if not result["comparable"]:
@@ -416,8 +435,12 @@ def _show(state: LevelState | None) -> str:
 def write_comparison(out_dir: Path, comparison: Comparison) -> Path:
     """Write ``<out_dir>/compare.json`` through a temp file and ``os.replace``."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    target = out_dir / COMPARE_FILE
-    fd, tmp = tempfile.mkstemp(dir=out_dir, prefix=f".{COMPARE_FILE}.", suffix=".tmp")
+    return write_comparison_file(out_dir / COMPARE_FILE, comparison)
+
+
+def write_comparison_file(target: Path, comparison: Comparison) -> Path:
+    """Write ``comparison`` to ``target`` through a temp file beside it and ``os.replace``."""
+    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(dumps_comparison(comparison))

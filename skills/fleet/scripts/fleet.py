@@ -59,6 +59,7 @@ sys.path.insert(0, str(ASSESS_SCRIPTS))
 from lib.fleet import (  # noqa: E402
     DEFAULT_TIMEOUT,
     LOGS_DIR,
+    REPOS_FILE,
     STATUS_FAILED,
     ScanOptions,
     Target,
@@ -94,7 +95,7 @@ from lib.fleet_history import (  # noqa: E402
     safe_component,
 )
 from lib.fleet_view import FleetViewError  # noqa: E402
-from lib.fleet_stamp import FLEET_STAMP_VERSION, build_stamp, write_stamp  # noqa: E402
+from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, build_stamp, write_stamp  # noqa: E402
 from lib.rubric import Rubric, RubricError, load_rubric  # noqa: E402
 from lib.rubric_signals import signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
@@ -110,6 +111,11 @@ from lib.signals import (  # noqa: E402
 
 
 LATEST = "latest"  # bare --compare: the newest matching history entry
+
+
+def _not_a_run(path: Path) -> bool:
+    """A directory that holds neither ``run.json`` nor ``repos.jsonl`` (a ghsync root, say)."""
+    return path.is_dir() and not (path / RUN_FILE).is_file() and not (path / REPOS_FILE).is_file()
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -175,6 +181,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                         help="The <org> directory name in the history (default: from the repository ids).")
     parser.add_argument("--no-history", action="store_true", help="Do not keep this run in the history.")
     args = parser.parse_args(argv)
+    if args.compare not in (None, LATEST) and _not_a_run(Path(args.compare)):
+        parser.error(f"--compare took {args.compare!r} as the earlier run, but it holds no {RUN_FILE} "
+                     f"or {REPOS_FILE}: did it swallow ROOT? Put ROOT first "
+                     "(fleet.py ROOT --out DIR --compare [RUN_DIR]) or write --compare=RUN_DIR")
     if args.root is None and args.from_list is None:
         parser.error("give a ghsync ROOT or --from-list FILE")
     if args.full and (args.hash_paths or args.hash_salt is not None):

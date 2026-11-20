@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+import shutil
 import subprocess
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -30,7 +32,15 @@ os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 # The fleet runner keeps each run under ${XDG_DATA_HOME}/ai-native-toolkit/fleet
 # by default (#552): point it at a throwaway directory so no test writes into
 # the real ~/.local/share.
-os.environ["XDG_DATA_HOME"] = tempfile.mkdtemp(prefix="assess-tests-xdg-")
+_XDG_DATA_HOME = tempfile.mkdtemp(prefix="assess-tests-xdg-")
+os.environ["XDG_DATA_HOME"] = _XDG_DATA_HOME
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _remove_xdg_data_home() -> Iterator[None]:
+    """Delete the redirected XDG_DATA_HOME after the last test; the redirect stays for the session."""
+    yield
+    shutil.rmtree(_XDG_DATA_HOME, ignore_errors=True)
 
 
 @pytest.fixture

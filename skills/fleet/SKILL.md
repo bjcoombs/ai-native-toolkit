@@ -195,6 +195,12 @@ replaces the full-fleet entry). Otherwise the entry is kept and the run goes to 
 run); stderr names the kept entry, why, and where this run went. A failed
 history write never loses the `--out` results.
 
+Put `ROOT` before `--compare`: `fleet.py ROOT --out DIR --compare [RUN_DIR]`.
+Since `RUN_DIR` is optional, `fleet.py --compare ROOT ...` would read `ROOT` as
+the earlier run; the command refuses a `--compare` directory holding neither
+`run.json` nor `repos.jsonl` and says so. `--compare=RUN_DIR` is always
+unambiguous.
+
 `--compare RUN_DIR` reads the earlier run before scanning and writes
 `DIR/compare.json`, with a summary on stderr. A bare `--compare` picks the
 latest history entry (by date, then suffix) whose stamp matches this run's
@@ -209,8 +215,10 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_compare.py" EARLIER_DIR LATER_DIR [--w
 ```
 <!-- chat-skip:end -->
 
-It prints the same JSON to stdout and exits `0` when compared, `3` when the runs
-are not comparable, `2` when a directory is missing or malformed.
+It prints the same JSON to stdout (`--write FILE` replaces FILE atomically) and
+exits `0` when compared, `3` when the runs are not comparable (including either
+run being at another file version), `2` when a directory is missing or
+malformed (a `run.json` missing a key the comparison reads).
 
 **Not comparable.** Runs that differ in rubric version, window, counts-only
 mode, scan selection or path hashing, in the plugin's major version (the

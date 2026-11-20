@@ -368,10 +368,19 @@ def test_compare_script_exit_codes(froot2, tmp_path, capsys):
     assert compare_cli.main([str(tmp_path / "absent"), str(tmp_path / "b")]) == 2
     assert compare_cli.main([str(tmp_path / "a"), str(tmp_path / "b"), "--write",
                              str(tmp_path / "nodir" / "x.json")]) == 2
-    (tmp_path / "a" / "run.json").unlink()
+    stamp = json.loads((tmp_path / "b" / "run.json").read_text(encoding="utf-8"))
+    (tmp_path / "b" / "run.json").write_text(json.dumps({**stamp, "fleet_stamp_version": 9}), encoding="utf-8")
     capsys.readouterr()
     assert compare_cli.main([str(tmp_path / "a"), str(tmp_path / "b")]) == 3
+    later_refused = json.loads(capsys.readouterr().out)
+    assert "later run:" in later_refused["reasons"][0] and later_refused["later"] is None
+    (tmp_path / "a" / "run.json").unlink()
+    assert compare_cli.main([str(tmp_path / "a"), str(tmp_path / "c")]) == 3
     assert "earlier run:" in json.loads(capsys.readouterr().out)["reasons"][0]
+    del stamp["scan_date"]
+    (tmp_path / "c" / "run.json").write_text(json.dumps(stamp), encoding="utf-8")
+    assert compare_cli.main([str(tmp_path / "b"), str(tmp_path / "c")]) == 2
+    assert "missing or malformed 'scan_date'" in capsys.readouterr().err
 
 
 def test_compare_script_runs_standalone(froot2, tmp_path):
@@ -422,6 +431,29 @@ def test_heatmap_compare_uses_the_fleet_comparison_rule(froot2, tmp_path):
     assert "measured set changed" not in (tmp_path / "g.svg").read_text(encoding="utf-8")
 
 
+def test_compare_refuses_a_swallowed_root(froot2, tmp_path, capsys):
+    with pytest.raises(SystemExit) as exc:
+        fleet_cli.main(["--compare", str(froot2), "--out", str(tmp_path / "o")])
+    assert exc.value.code == 2
+    assert "did it swallow ROOT?" in capsys.readouterr().err
+
+
+def test_heatmap_reports_an_earlier_group_version_as_a_refusal(froot2, tmp_path):
+    from test_fleet_groups import RUBRIC_TOML
+    heatmap = _load_heatmap_cli()
+    rubric = tmp_path / "rubric.toml"
+    rubric.write_text(RUBRIC_TOML, encoding="utf-8")
+    for out in ("a", "b"):
+        assert fleet_cli.main([str(froot2), "--out", str(tmp_path / out), "--rubric", str(rubric),
+                               "--no-history", "--scans", "nested_instructions"]) == 0
+    groups = tmp_path / "a" / "groups.jsonl"
+    groups.write_text(groups.read_text(encoding="utf-8").replace('"fleet_group_version":1', '"fleet_group_version":99'),
+                      encoding="utf-8")
+    assert heatmap.main([str(tmp_path / "b"), "--compare", str(tmp_path / "a"),
+                         "--output", str(tmp_path / "v.svg")]) == 0
+    assert "fleet_group_version 99" in (tmp_path / "v.svg").read_text(encoding="utf-8")
+
+
 def test_view_check_refuses_a_one_side_stamped_pair(tmp_path):
     from lib.fleet_compare import view_check
     stamped, old, groups_only = tmp_path / "stamped", tmp_path / "old", tmp_path / "groups"
@@ -454,6 +486,16 @@ def test_an_unsafe_first_segment_with_history_exits_2_naming_the_fixes(tmp_path,
     assert fleet_cli.main([*base, "--out", str(tmp_path / "o")]) == 2
     assert "--history-org" in capsys.readouterr().err
     assert fleet_cli.main([*base, "--out", str(tmp_path / "o2"), "--history-org", "mine"]) == 0
+
+
+def test_view_check_raises_on_a_malformed_run(tmp_path):
+    from lib.fleet_compare import view_check
+    from lib.fleet_view import FleetViewError
+    for name in ("now", "then"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "run.json").write_text("[1]", encoding="utf-8")
+    with pytest.raises(FleetViewError):
+        view_check(tmp_path / "now", tmp_path / "then")
 
 
 def test_view_check_reports_unreadable_runs(tmp_path):

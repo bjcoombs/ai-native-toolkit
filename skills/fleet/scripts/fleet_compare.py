@@ -9,10 +9,11 @@ history entry (``<history>/<org>/<date>/``), holding ``repos.jsonl``,
 
 Exit codes:
     0  compared
-    2  a run directory is missing or malformed
+    2  a run directory is missing or malformed (a stamp missing a key, a bad
+       JSON line), or --write cannot be written
     3  the runs are not comparable (different rubric version, window, output
-       mode, scan selection, path hashing, major plugin version or file
-       version); the JSON still says why
+       mode, scan selection, path hashing, major plugin version, or either
+       run's file versions); the JSON still says why
 
 Run:
     uv run fleet_compare.py EARLIER LATER [--write FILE]
@@ -33,12 +34,14 @@ ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
 from lib.fleet_compare import (  # noqa: E402
+    FleetRun,
     RunVersionError,
     compare,
     dumps_comparison,
     load_run,
     not_comparable,
     summary_lines,
+    write_comparison_file,
 )
 from lib.fleet_view import FleetViewError  # noqa: E402
 
@@ -51,19 +54,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("later", help="The later run directory.")
     parser.add_argument("--write", metavar="FILE", help="Write the comparison JSON here instead of stdout.")
     args = parser.parse_args(argv)
+    runs: dict[str, FleetRun] = {}
+    problems: list[str] = []
     try:
-        later = load_run(Path(args.later))
-        try:
-            comparison = compare(load_run(Path(args.earlier)), later)
-        except RunVersionError as e:
-            comparison = not_comparable(later.stamp, [f"earlier run: {e}"])
-    except (RunVersionError, FleetViewError) as e:
+        for side, path in (("earlier", args.earlier), ("later", args.later)):
+            try:
+                runs[side] = load_run(Path(path))
+            except RunVersionError as e:  # another file version: not comparable, either side
+                problems.append(f"{side} run: {e}")
+    except FleetViewError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    if problems:
+        comparison = not_comparable(runs["later"].stamp if "later" in runs else None, problems,
+                                    runs["earlier"].stamp if "earlier" in runs else None)
+    else:
+        comparison = compare(runs["earlier"], runs["later"])
     text = dumps_comparison(comparison)
     if args.write:
         try:
-            Path(args.write).write_text(text, encoding="utf-8")
+            write_comparison_file(Path(args.write), comparison)
         except OSError as e:
             print(f"error: cannot write {args.write}: {e.strerror}", file=sys.stderr)
             return 2
