@@ -148,6 +148,34 @@ def _typeddicts_in(tp: Any) -> Iterator[Any]:
             yield from _typeddicts_in(arg)
 
 
+def typed_field_names() -> frozenset[str]:
+    """Every field name of a typed block shape: the keys a record may carry."""
+    return frozenset(
+        name for td in reached_typeddicts() for name in get_type_hints(td)
+    )
+
+
+def typed_identifier_maps() -> list[str]:
+    """Patterns of typed ``dict[str, X]`` fields that are not path-keyed."""
+    found: set[str] = set()
+
+    def walk(pattern: str, tp: Any, seen: frozenset[Any]) -> None:
+        origin = get_origin(tp)
+        if origin in _UNIONS or origin is list:
+            for arg in get_args(tp):
+                walk(pattern, arg, seen)
+        elif origin is dict:
+            if pattern not in PATH_KEYED_MAPS and get_args(tp)[1] is not Any:
+                found.add(pattern)
+        elif _is_typeddict(tp) and tp not in seen:
+            for name, field_tp in get_type_hints(tp).items():
+                walk(f"{pattern}.{name}", field_tp, seen | {tp})
+
+    for root, tp in ROOTS:
+        walk(root, tp, frozenset())
+    return sorted(found)
+
+
 def reached_typeddicts() -> set[Any]:
     """Every TypedDict the ``ROOTS`` walk visits, nested shapes included."""
     return {td for _root, tp in ROOTS for td in _typeddicts_in(tp)}

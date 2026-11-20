@@ -45,6 +45,24 @@ carry full text. Only `run-context.counts-only.json` is content-free.
 - `understanding.human_anchor_by_path`
 - `understanding.intent_source_by_path`
 
+## Identifier-keyed maps
+
+Keys are kinds, tools or subscore names, kept while they are identifiers.
+Every other object is a record: a key survives only when it is a known
+field name, so a map keyed by a login, a function or a directory is dropped.
+
+- `agent_harness.counts_by_kind`
+- `agent_harness.executes_by_kind`
+- `claude_config.counts_by_kind`
+- `claude_config.files_by_kind`
+- `doc_staleness.association.methods`
+- `instruction_files.{}.subscores`
+- `nested_instructions.files.subscores`
+- `prior_tool_versions`
+- `promissory_markers.families`
+- `stats_summary.fn_ccn.backend_by_language`
+- `tool_versions`
+
 ## run identity
 
 | Field | Kept as |
@@ -289,6 +307,8 @@ carry full text. Only `run-context.counts-only.json` is content-free.
 | `config_drift.entries.tracked` | dropped |
 | `config_drift.entries.live` | dropped |
 | `config_drift.snapshots.kind` | token |
+| `config_drift.snapshots.doc` | dropped |
+| `config_drift.snapshots.branch` | dropped |
 | `review_reality.reason` | dropped |
 | `gate_cost_estimate.reason` | dropped |
 | `gate_cost_estimate.assumption` | dropped |
@@ -426,9 +446,11 @@ carry full text. Only `run-context.counts-only.json` is content-free.
 | `gap_actions.signal` | token |
 | `gap_actions.action` | dropped |
 | `gap_actions.paths` | path (hashed when hashing is on) |
-| `excluded_by_config` | path (hashed when hashing is on) |
-| `excluded_as_archive` | path (hashed when hashing is on) |
-| `pruned_finding_paths` | path (hashed when hashing is on) |
+| `excluded_by_config.affected_finding_paths` | path (hashed when hashing is on) |
+| `excluded_by_config.dirs` | path (hashed when hashing is on) |
+| `excluded_by_config.patterns` | path (hashed when hashing is on) |
+| `excluded_as_archive.affected_finding_paths` | path (hashed when hashing is on) |
+| `pruned_finding_paths.paths` | path (hashed when hashing is on) |
 | `archived_finding_paths` | path (hashed when hashing is on) |
 
 ## decline markers and offers

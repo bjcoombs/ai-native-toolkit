@@ -24,9 +24,20 @@ from lib.counts_only import (
     unclassified_strings,
     validate_cli_args,
 )
-from lib.counts_only_rules import FLAT_RULES, PATH, RULES, TOKEN, classify
+from lib.counts_only_rules import (
+    FLAT_RULES,
+    IDENTIFIER_KEYED_MAPS,
+    PATH,
+    RULES,
+    TOKEN,
+    classify,
+)
 import lib.run_context_types as rct
-from lib.counts_only_schema import reached_typeddicts, typed_string_fields
+from lib.counts_only_schema import (
+    reached_typeddicts,
+    typed_identifier_maps,
+    typed_string_fields,
+)
 
 N = 40  # the free-text threshold the maintainer fixed for the golden test
 DOC = Path(__file__).resolve().parents[1] / "references" / "counts-only.md"
@@ -85,10 +96,12 @@ def test_dropped_list_of_strings_becomes_its_length() -> None:
 
 def test_unclassified_block_field_is_dropped() -> None:
     """A new scan field that carries text cannot leak before it is classified."""
-    ctx = {"brand_new_scan": {"available": True, "count": 4, "evidence": SECRET,
-                              "lines": [SECRET, SECRET]}}
-    assert counts_only(ctx) == {"brand_new_scan": {"available": True, "count": 4, "lines": 2}}
-    assert unclassified_strings(ctx) == ["brand_new_scan.evidence", "brand_new_scan.lines"]
+    ctx = {"agent_ops": {"available": True, "count": 4, "detail": SECRET,
+                         "lines": [SECRET, SECRET], "evidence": SECRET},
+           "brand_new_scan": {"available": True, "count": 4}}
+    assert counts_only(ctx) == {"agent_ops": {"available": True, "count": 4, "lines": 2}}
+    assert unclassified_strings(ctx) == [
+        "agent_ops.detail", "agent_ops.evidence", "agent_ops.lines", "brand_new_scan?"]
 
 
 def test_agent_harness_program_names_and_details_are_dropped() -> None:
@@ -151,7 +164,26 @@ def test_map_keys_that_are_data_are_dropped_outside_path_keyed_maps() -> None:
     assert out == {"tool_versions": {"lizard": "1.23.0"},
                    "promissory_markers": {"families": {"suppression": {"total": 3}}}}
     assert unclassified_strings({"tool_versions": {"some file.py": "x"}}) == [
-        "tool_versions.<key?>"]
+        "tool_versions.some file.py?"]
+
+
+def test_slug_shaped_data_keys_in_an_undeclared_map_are_dropped() -> None:
+    """A map keyed by a login, a function or a one-segment directory does not
+    survive just because its keys look like identifiers, hashing on or off."""
+    ctx = {"review_reality": {"available": True, "merged_count": 4,
+                              "by_reviewer": {"jdoe": 3, "asmith": 1}},
+           "dead_code": {"candidate_count": 2, "handle_payment_refund": 1, "src": 4}}
+    for out in (counts_only(ctx), counts_only(ctx, hash_paths=True)):
+        assert out == {"review_reality": {"available": True, "merged_count": 4},
+                       "dead_code": {"candidate_count": 2}}
+    assert unclassified_strings(ctx) == [
+        "dead_code.handle_payment_refund?", "dead_code.src?", "review_reality.by_reviewer?",
+    ]
+
+
+def test_every_typed_identifier_keyed_map_is_declared() -> None:
+    """A typed ``dict[str, X]`` field is declared path-keyed or identifier-keyed."""
+    assert [m for m in typed_identifier_maps() if m not in IDENTIFIER_KEYED_MAPS] == []
 
 
 # --- path hashing -------------------------------------------------------------
@@ -242,6 +274,13 @@ def _assert_content_free(out: dict[str, Any]) -> None:
 
 def test_golden_baseline_has_no_free_text_in_counts_only_mode() -> None:
     _assert_content_free(counts_only(golden.load_golden_run_context()))
+
+
+def test_golden_baseline_has_no_unknown_record_key() -> None:
+    """The golden's normalized sentinels sit at numeric fields, so only keys are checked."""
+    unknown = [p for p in unclassified_strings(golden.load_golden_run_context())
+               if p.endswith("?")]
+    assert unknown == []
 
 
 def _git(repo: Path, *args: str) -> None:

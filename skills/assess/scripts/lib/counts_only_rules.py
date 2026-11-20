@@ -40,9 +40,77 @@ DROP: Final = "drop"
 # (so no sentence, path or e-mail address passes as a kind).
 TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,39}$")
 
-# A map key outside PATH_KEYED_MAPS is kept only when it is an identifier-like
-# name (a kind, a tool, a subscore); anything else is data and is dropped.
+# A key of an IDENTIFIER_KEYED_MAPS map is kept only when it is an
+# identifier-like name (a kind, a tool, a subscore).
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
+
+# Maps whose keys are kinds, tools or subscore names, kept while they match
+# KEY_RE. Every other dict is a record: a key survives there only when it is a
+# known field name (``EXTRA_FIELD_NAMES``, a rule segment, or a field of a
+# typed block shape), so a map keyed by a login, a function name or a
+# one-segment directory is dropped rather than kept unhashed.
+IDENTIFIER_KEYED_MAPS: Final = frozenset({
+    "tool_versions",
+    "prior_tool_versions",
+    "agent_harness.executes_by_kind",
+    "agent_harness.counts_by_kind",
+    "claude_config.counts_by_kind",
+    "claude_config.files_by_kind",
+    "doc_staleness.association.methods",
+    "promissory_markers.families",
+    "instruction_files.{}.subscores",
+    "nested_instructions.files.subscores",
+    "stats_summary.fn_ccn.backend_by_language",
+})
+
+# Record field names of blocks with no TypedDict (built as dict literals). The
+# typed blocks' field names come from ``counts_only_schema``.
+EXTRA_FIELD_NAMES: Final = frozenset({
+    # top-level keys
+    "agent_ops", "attention_low_signal", "diff", "diff_detail", "diff_reliable",
+    "diff_trend_reset", "instruction_file_size", "interactive", "log_integrity",
+    "prior_stats_exists", "skills_count", "skills_present", "churn_degenerate",
+    "reoffer_mutation", "capability_offers", "available",
+    # accretion_ratchet
+    "reliable", "deletion_fraction_threshold", "total_in_band", "net_additions",
+    "commit_count", "deletion_fraction", "time_span_months",
+    # agent_ops
+    "settings", "hooks_dir", "routine_dirs", "summary", "tracked_count",
+    "permissions_encoded", "hooks_present", "routines_present", "parse_ok",
+    "allow_count", "deny_count", "ask_count", "hook_events", "sandbox_configured",
+    "tracked", "present", "file_count",
+    # archetype
+    "applicable_layers", "contradiction_details", "denominator", "na_layers",
+    "override", "override_contradicts_signals", "code_file_ratio", "doc_file_count",
+    "other_file_count", "has_runtime_surface", "documented", "gist_cited",
+    "signals_found", "code_file_count", "kb_maintenance", "signals",
+    # coverage, claims, config drift, review reality, gate cost
+    "enforced", "failed", "verified", "dropped", "count", "removed", "added",
+    "sample", "merged_count", "oldest_merged_days_ago", "reviewed_share",
+    "approved_share", "bot_review_share", "self_merged_share", "review_required",
+    "hollow_required_review", "required_approval_bypassed", "runs_per_month",
+    "minutes_per_run", "minutes_per_month", "capped", "private", "branch", "doc",
+    "format", "build_system", "build_files", "actual", "claimed", "parsed",
+    # diff and hotspot wiki
+    "graduated", "new", "persistent", "regressed", "restructured", "ccn_delta",
+    "commits_delta", "loc_delta", "max_fn_ccn_delta", "files_scored", "behind",
+    "dirty", "valid", "broken_at_entry", "priority",
+    # excludes and pruned paths
+    "affected_finding_paths", "dirs", "patterns", "rename_map_complete",
+    # promissory markers
+    "aging_reliable", "families", "stale_by_file", "stale_touches_threshold",
+    "todo_bare", "todo_linked", "total_markers", "total_stale",
+    "stale_agent_introduced", "agent_introduced", "justified", "linked", "stale",
+    "family", "text", "commit", "survived_touches", "severity",
+    # structure_drift tier 1, test_focus, instruction files
+    "tier_1", "allowlist_pairs_count", "seam_allowlist_applied", "matched_patterns",
+    "total_patterns",
+    "human_cochange_agree_count", "human_grouped_never_cochange_count",
+    "human_grouped_static_splits_count", "human_split_but_cochange_count",
+    "human_split_static_fuses_count", "human_static_agree_count",
+    "coverage_present", "total_focus_targets", "entries", "word_count",
+    "bloat_penalty", "markers", "declined_by", "declined_at", "version", "reoffer",
+})
 
 # Field names that hold a repo-relative path wherever they appear.
 GLOBAL_PATH_LEAVES: Final = frozenset({
@@ -263,6 +331,8 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "config_drift.entries.tracked": DROP,
         "config_drift.entries.live": DROP,
         "config_drift.snapshots.kind": TOKEN,
+        "config_drift.snapshots.doc": DROP,
+        "config_drift.snapshots.branch": DROP,
         "review_reality.reason": DROP,
         "gate_cost_estimate.reason": DROP,
         "gate_cost_estimate.assumption": DROP,
@@ -373,9 +443,11 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "gap_actions.signal": TOKEN,
         "gap_actions.action": DROP,
         "gap_actions.paths": PATH,
-        "excluded_by_config": PATH,
-        "excluded_as_archive": PATH,
-        "pruned_finding_paths": PATH,
+        "excluded_by_config.affected_finding_paths": PATH,
+        "excluded_by_config.dirs": PATH,
+        "excluded_by_config.patterns": PATH,
+        "excluded_as_archive.affected_finding_paths": PATH,
+        "pruned_finding_paths.paths": PATH,
         "archived_finding_paths": PATH,
     },
     "decline markers and offers": {

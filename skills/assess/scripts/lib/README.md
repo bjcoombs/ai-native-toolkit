@@ -710,14 +710,20 @@ field list. Tests: `tests/test_counts_only.py`.
 **`counts_only_rules.py`**
 The counts-only allow-list: `RULES` maps each block's field patterns (dotted keys, list
 levels left out, `{}` for a path-keyed map key) to path, token or dropped text, with
-`PATH_KEYED_MAPS`, the global path field names and `classify`. Adding a run-context
-string field means adding its rule here and regenerating `references/counts-only.md`.
+`PATH_KEYED_MAPS`, `IDENTIFIER_KEYED_MAPS` (kind- or tool-keyed maps), the global path
+field names and `classify`. Every other object is a record whose keys survive only when
+they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus the typed
+fields and rule segments), so a map keyed by a login or a function name is dropped
+rather than kept unhashed. Adding a run-context string field or block means adding its
+rule or field name here and regenerating `references/counts-only.md`.
 Tests: `tests/test_counts_only.py`.
 
 **`counts_only_schema.py`**
 Derives the string fields the allow-list must cover from the block TypedDicts in
 `run_context_types.py` and beside their builders (`ROOTS` places each shape in
-run-context.json). `typed_string_fields` walks them, so a typed shape that gains a
+run-context.json). `typed_field_names` supplies the record keys `counts_only` keeps,
+`typed_identifier_maps` the typed maps that must be declared, and `typed_string_fields`
+walks them, so a typed shape that gains a
 string field fails `tests/test_counts_only.py` until the field is classified, even when
 no fixture run populates the block.
 

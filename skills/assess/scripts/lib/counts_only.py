@@ -29,10 +29,14 @@ import hmac
 import re
 import secrets
 from collections.abc import Mapping
+from functools import cache
 from typing import Any
 
 from lib.counts_only_rules import (
     DROP,
+    EXTRA_FIELD_NAMES,
+    FLAT_RULES,
+    IDENTIFIER_KEYED_MAPS,
     KEY_RE,
     PATH,
     PATH_KEYED_MAPS,
@@ -42,6 +46,7 @@ from lib.counts_only_rules import (
     FieldClass,
     classify,
 )
+from lib.counts_only_schema import typed_field_names
 from lib.run_context_types import JsonDict
 
 # The longest path kept; a longer "path" is more likely prose than a file.
@@ -58,6 +63,29 @@ def _child(pattern: str, key: str) -> str:
 # A URL or other ``scheme:`` value, and an e-mail address: never a repo path.
 _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _EMAIL_RE = re.compile(r"[^\s/@]+@[^\s/@]+\.[A-Za-z]{2,}")
+
+
+@cache
+def field_names() -> frozenset[str]:
+    """The record keys kept outside the declared maps.
+
+    The fields of the typed block shapes, every segment a rule names, and
+    ``EXTRA_FIELD_NAMES`` for the blocks built as dict literals. Any other key
+    of a record is treated as data and dropped.
+    """
+    rule_segments = {seg for pattern in FLAT_RULES for seg in pattern.split(".")}
+    return typed_field_names() | rule_segments | EXTRA_FIELD_NAMES
+
+
+def _key_kind(pattern: str, key: object) -> str | None:
+    """``"path"``, ``"identifier"``, ``"field"``, or None for a data key to drop."""
+    if pattern in PATH_KEYED_MAPS:
+        return "path"
+    if not isinstance(key, str):
+        return None
+    if pattern in IDENTIFIER_KEYED_MAPS:
+        return "identifier" if KEY_RE.match(key) else None
+    return "field" if key in field_names() else None
 
 
 def _is_pathlike(value: str) -> bool:
@@ -114,13 +142,14 @@ class _Filter:
 
     def mapping(self, pattern: str, value: Mapping[str, Any]) -> JsonDict:
         out: JsonDict = {}
-        path_keyed = pattern in PATH_KEYED_MAPS
         for key, item in value.items():
-            if path_keyed:
+            kind = _key_kind(pattern, key)
+            new_key: str | None
+            if kind == "path":
                 new_key = self.path(str(key))
                 child = _child(pattern, "{}")
             else:
-                new_key = key if isinstance(key, str) and KEY_RE.match(key) else None
+                new_key = str(key) if kind is not None else None
                 child = _child(pattern, str(key))
             if new_key is None:
                 continue
@@ -161,8 +190,8 @@ def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
     Run over an unfiltered run-context. The filter drops these fields, so the
     output is safe either way; an entry here means a field is being dropped by
     default rather than by decision, and the tests fail until it is classified.
-    Data keys of a map that is not declared path-keyed are reported as
-    ``<map>.<key?>``.
+    A record key that is not a known field name (and is not a key of a
+    declared path- or identifier-keyed map) is reported as ``<pattern>.<key>?``.
     """
     found: set[str] = set()
 
@@ -173,15 +202,14 @@ def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
         elif isinstance(value, Mapping):
             if classify(pattern) == DROP:
                 return
-            path_keyed = pattern in PATH_KEYED_MAPS
             for key, item in value.items():
-                if path_keyed:
+                kind = _key_kind(pattern, key)
+                if kind == "path":
                     walk(_child(pattern, "{}"), item)
-                    continue
-                if not (isinstance(key, str) and KEY_RE.match(key)):
-                    found.add(_child(pattern, "<key?>"))
-                    continue
-                walk(_child(pattern, key), item)
+                elif kind is None:
+                    found.add(_child(pattern, f"{key}?"))
+                else:
+                    walk(_child(pattern, str(key)), item)
         elif isinstance(value, list):
             for item in value:
                 walk(pattern, item)
@@ -235,6 +263,16 @@ def render_doc() -> str:
         "",
     ]
     lines += [f"- `{m}`" for m in sorted(PATH_KEYED_MAPS)]
+    lines += [
+        "",
+        "## Identifier-keyed maps",
+        "",
+        "Keys are kinds, tools or subscore names, kept while they are identifiers.",
+        "Every other object is a record: a key survives only when it is a known",
+        "field name, so a map keyed by a login, a function or a directory is dropped.",
+        "",
+    ]
+    lines += [f"- `{m}`" for m in sorted(IDENTIFIER_KEYED_MAPS)]
     for block, rules in RULES.items():
         lines += ["", f"## {block}", "", "| Field | Kept as |", "|---|---|"]
         lines += [f"| `{p}` | {_CLASS_LABEL[c]} |" for p, c in rules.items()]
