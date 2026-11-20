@@ -242,6 +242,16 @@ gitlab_count() {
     jq -s "if all(.[]; type==\"array\") then [.[][] | select($1)] | length else error(\"not a list\") end"
 }
 
+# True when the body ($2) is one JSON object carrying the key $1. Reads the
+# body through `input` under -n, so an empty or blank body is an error on
+# every jq: jq 1.6 `-e` exits 0 when there is no input at all (1.7 exits 4),
+# which would let an empty body pass as readable. A second value after the
+# object fails too, as `--argjson` would reject the body later.
+json_object_with() {
+    jq -en --arg k "$1" 'input as $b | ($b | type=="object" and has($k)) and ([inputs] | length == 0)' \
+        <<< "$2" >/dev/null 2>&1
+}
+
 # Same contract as query_repo, with GitLab fields: open_mrs / draft_mrs,
 # pipeline ("success" or "failed" from the newest finished pipeline,
 # "none" with no finished pipeline), vulnerabilities, and empty_repo. An
@@ -255,7 +265,7 @@ query_project_gitlab() {
 
     local proj_json
     if ! proj_json=$(gitlab_api "projects/$enc" 2>/dev/null) \
-        || ! jq -e 'type=="object" and has("path_with_namespace")' <<< "$proj_json" >/dev/null 2>&1; then
+        || ! json_object_with path_with_namespace "$proj_json"; then
         jq -n --arg repo "$path" \
             '{repo:$repo, unreachable:true, default_branch:"?", open_mrs:"no-access", draft_mrs:0,
               pipeline:"unknown", vulnerabilities:"no-access", protection:"unknown"}' > "$out"
@@ -376,7 +386,7 @@ settings_all_unknown() {
 
 query_org_settings_github() {
     local out=$1 raw org_json='{}' org_err="" rs_json='[]' rs_err="" details='[]' detail_err=""
-    if raw=$(gh api "orgs/$ORG" 2>&1) && jq -e 'type=="object" and has("login")' <<< "$raw" >/dev/null 2>&1; then
+    if raw=$(gh api "orgs/$ORG" 2>&1) && json_object_with login "$raw"; then
         org_json=$raw
     else
         org_err=$(http_reason "$raw")
@@ -397,7 +407,7 @@ query_org_settings_github() {
         rs_json=$raw
         local id d
         for id in $(jq -r '.[] | select(.target=="branch" and .enforcement=="active") | .id' <<< "$rs_json"); do
-            if d=$(gh api "orgs/$ORG/rulesets/$id" 2>&1) && jq -e 'type=="object" and has("id")' <<< "$d" >/dev/null 2>&1; then
+            if d=$(gh api "orgs/$ORG/rulesets/$id" 2>&1) && json_object_with id "$d"; then
                 details=$(jq -c --argjson d "$d" '. + [$d]' <<< "$details")
             else
                 detail_err="ruleset $id unreadable: $(http_reason "$d")"
@@ -439,14 +449,14 @@ query_org_settings_github() {
 query_group_settings_gitlab() {
     local group=$1 out=$2 enc raw g_json='{}' g_err="" pr_json='{}' pr_err=""
     enc=$(gitlab_encode "$group")
-    if raw=$(gitlab_api "groups/$enc" 2>&1) && jq -e 'type=="object" and has("full_path")' <<< "$raw" >/dev/null 2>&1; then
+    if raw=$(gitlab_api "groups/$enc" 2>&1) && json_object_with full_path "$raw"; then
         g_json=$raw
     else
         g_err=$(http_reason "$raw")
     fi
     # A paid-tier endpoint. GitLab answers 404 both for a group with no push
     # rule and for one the token cannot see, so any failure stays unknown.
-    if raw=$(gitlab_api "groups/$enc/push_rule" 2>&1) && jq -e 'type=="object" and has("id")' <<< "$raw" >/dev/null 2>&1; then
+    if raw=$(gitlab_api "groups/$enc/push_rule" 2>&1) && json_object_with id "$raw"; then
         pr_json=$raw
     else
         pr_err=$(http_reason "$raw")
@@ -809,21 +819,28 @@ echo "Querying state for ${#repos[@]} repo(s) ..." >&2
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-# Org / group settings, into a subdirectory the per-repo glob skips.
+# Org / group settings, into a subdirectory the per-repo glob skips. A
+# settings query that fails outright degrades to all-unknown for its scope
+# rather than aborting the per-repository report. Called on the left of `||`,
+# the query functions run with errexit off: a step inside them must turn its
+# own failure into an `unknown` with a reason (as each API read does), never
+# fall through to a verdict such as `off`.
 mkdir -p "$TMP_DIR/settings"
 if [ "$PROVIDER" = gitlab ]; then
     if settings_groups=$(gitlab_settings_groups); then
         s_i=0
         while IFS= read -r settings_group; do
             [ -n "$settings_group" ] || continue
-            query_group_settings_gitlab "$settings_group" "$TMP_DIR/settings/$s_i.json"
+            query_group_settings_gitlab "$settings_group" "$TMP_DIR/settings/$s_i.json" \
+                || settings_all_unknown "$settings_group" "settings query failed" "$TMP_DIR/settings/$s_i.json"
             s_i=$((s_i + 1))
         done <<< "$settings_groups"
     else
         settings_all_unknown "$GITLAB_HOST" "group list unreadable" "$TMP_DIR/settings/0.json"
     fi
 else
-    query_org_settings_github "$TMP_DIR/settings/org.json"
+    query_org_settings_github "$TMP_DIR/settings/org.json" \
+        || settings_all_unknown "$ORG" "settings query failed" "$TMP_DIR/settings/org.json"
 fi
 
 i=0
