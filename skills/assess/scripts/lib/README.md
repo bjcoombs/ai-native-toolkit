@@ -792,6 +792,45 @@ this run's method is older than the snapshot's, the toolkit pin to raise instead
 which `assess_gate` prints as an explanation (it never fails the gate by itself). Tests:
 `tests/test_findings_snapshot.py`.
 
+**`counts_only.py`**
+The content-free run-context mode for scans of repositories you do not own (#546).
+`counts_only(ctx, hash_paths=, salt=)` returns a copy that keeps every number, boolean
+and null and only the strings whose field `counts_only_rules` classifies as a path or a
+short token (kind, grade, band, date, version); free text, commands, commit subjects,
+program names and identities are dropped, and a dropped list of strings becomes its
+length. A string field with no rule is dropped too (allow-list, not deny-list). Path
+hashing is opt-in: HMAC-SHA256 under a random per-call salt, or a fixed `--hash-salt`
+so hashes join across runs. `unclassified_strings` lists the string fields a
+run-context holds with no rule. `add_cli_arguments` / `validate_cli_args` /
+`apply_cli` give `assess_core.py --counts-only` (which writes
+`run-context.counts-only.json` beside `run-context.json`) and the headless entry point
+one set of flags. `counts_only_scans` applies the filter to the `scans` map of an
+`assess_signals.py --counts-only` document and keeps each unavailable block listed with
+its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `render_doc`
+generates `references/counts-only.md`, the per-block field list. Tests:
+`tests/test_counts_only.py`, `tests/test_signals_counts_only.py`.
+
+**`counts_only_rules.py`**
+The counts-only allow-list: `RULES` maps each block's field patterns (dotted keys, list
+levels left out, `{}` for a path-keyed map key) to path, token or dropped text, with
+an `ID` class for external join keys such as `shared_tooling` source ids (kept, hashed
+with the paths), `PATH_KEYED_MAPS`, `IDENTIFIER_KEYED_MAPS` (kind- or tool-keyed maps), the global path
+field names and `classify`. Every other object is a record whose keys survive only when
+they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus the typed
+fields and rule segments), so a map keyed by a login or a function name is dropped
+rather than kept unhashed. Adding a run-context string field or block means adding its
+rule or field name here and regenerating `references/counts-only.md`.
+Tests: `tests/test_counts_only.py`.
+
+**`counts_only_schema.py`**
+Derives the string fields the allow-list must cover from the block TypedDicts in
+`run_context_types.py` and beside their builders (`ROOTS` places each shape in
+run-context.json). `typed_field_names` supplies the record keys `counts_only` keeps,
+`typed_identifier_maps` the typed maps that must be declared, and `typed_string_fields`
+walks them, so a typed shape that gains a
+string field fails `tests/test_counts_only.py` until the field is classified, even when
+no fixture run populates the block.
+
 **`run_wiki.py`**
 Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
 top hotspot (status from the stats diff, first-flagged date, the `Has test file` row
@@ -966,6 +1005,47 @@ cycle-guarded, tracked files inside the repo only; the rest listed in
 `skipped_imports`), and root `.claude/rules` files with no `paths`. Codex: the
 root `AGENTS.override.md` or `AGENTS.md` against 32 KiB, plus the heaviest
 root-down chain (`deepest_chain`). Tests: `tests/test_instruction_budget.py`.
+
+**`instruction_placement.py`**
+Per-section placement of instruction text (#559, part of #419), no model, no grade
+effect. `split_sections` splits a file on ATX headings outside fences (`fence_mask`, CommonMark closing: same character, at least the opening length, nothing after) and
+frontmatter, at the shallowest level (the next one down when a single heading is a
+document title); deeper headings roll into their section, text before the first
+heading is a section with an empty heading, and a file with no headings is one
+section. `classify` labels each section `always_on`, `fetch_on_need` or
+`unclassified` (counted as always-on), precision over recall: any always-on signal
+(`identity_or_rules` heading, `hard_rules` directive density, `pointer_list` of links
+to documents) keeps a section, even one a skill restates, so a guardrail is never
+told to become a pointer; otherwise a section whose substantive lines overlap an
+existing `SKILL.md` by `SKILL_OVERLAP_MIN_PCT` (the
+`instruction_content.readme_overlap_pct` line overlap) is `duplicates_skill`, and
+any other section moves only when
+`MIN_FETCH_SIGNALS` of `scoped_heading` (one tool, language or platform),
+`scoped_paths` (backticked paths mostly under one top-level directory),
+`command_reference` (fence density) and `long_section` fire. Each threshold is a
+named constant with its rationale. Suggested homes: `existing_skill` (the
+duplicated `SKILL.md`), `nested_instruction_file` (`<dir>/<basename>` for
+`scoped_paths`), `skill` (`<skills dir>/<slug>/SKILL.md`), and for agent and skill
+files `reference_doc` (`<skill dir>/references/<slug>.md`, or `null` for an agent), or
+`existing_skill` when the text is already in another skill. Between two skills the
+pointer is one-way: a skill counts as the duplicate's home only when its path sorts
+before the file's, so the lexically first keeps the canonical copy.
+`scan_instruction_placement(repo_root, instruction_files, nested_instructions,
+scope, excludes)` runs from the `scan_registry` table. The block, which #560 reads
+to score on always-on size:
+`{available, thresholds {always_on_lines, always_on_share,
+loaded_in_full_min_lines}, files[], flagged[], loaded_in_full[],
+loaded_in_full_considered}`. Each file record (`files`: the root instruction files
+that are present and not aliases, plus `nested_instructions.files`, each real file
+once; `loaded_in_full`: agent and `SKILL.md` files from
+`claude_config.loaded_config_files` over 200 lines, largest first) is `{path, kind
+(instruction | agent | skill), total_lines, always_on_lines, always_on_share,
+fetch_on_need_lines, unclassified_lines, sections_total, flagged, relocatable[],
+relocatable_total}`, where `flagged` (instruction files only; always `false` in `loaded_in_full`) is always-on lines over 200 and share over
+0.5 and each `relocatable` entry (largest first, capped at 10) is `{heading,
+start_line, end_line, lines, signals[], home {kind, target}}`. `flagged` at block
+level lists the instruction files only; `loaded_in_full` is informational.
+Tests: `tests/test_instruction_placement.py`.
 
 **`instruction_globs.py`**
 The scope frontmatter line parser (`paths`, `applyTo`, `globs`, `alwaysApply`; no
@@ -1477,6 +1557,8 @@ the key normalises to a documented one), `unsupported_value` (closed sets and th
 files_scanned, files_by_kind, finding_count, counts_by_kind, findings[]}`, or
 `{available: false, reason, snapshot_date}` when the root has no `.claude/` and no
 plugin manifest. It feeds Layer 0 evidence and is not counted in the badge.
+`loaded_config_files(root)` exposes the same discovery (plugin files first, then
+`.claude/`, deduplicated) as `(path, kind)` pairs for `instruction_placement`.
 Tests: `tests/test_claude_config.py` (fixture: `tests/fixtures/claude_config_plugin/`).
 
 **`agent_harness.py`**

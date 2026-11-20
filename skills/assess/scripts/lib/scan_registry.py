@@ -52,6 +52,7 @@ from lib.coverage_gate import detect_coverage_gate
 from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
+from lib.instruction_placement import scan_instruction_placement
 from lib.review_reality import scan_review_reality
 from lib.shared_tooling import scan_shared_tooling
 
@@ -517,6 +518,16 @@ SCANS: tuple[ScanSpec, ...] = (
     # (`.claude-plugin/marketplace.json`, `extraKnownMarketplaces`), each with a
     # stable id so a fleet roll-up counts distinct sources. Offline file reads.
     ScanSpec("shared_tooling", scan_shared_tooling, ("repo_root",), STAGE_POST_OFFERS),
+    # Instruction placement (Layer 0, issue #559): each instruction file split on
+    # its headings, every section classified always-on or fetch-on-need, and the
+    # sections to move named with line ranges and a suggested home; agent and
+    # SKILL.md files over 200 lines reported separately. Advice only, no grade
+    # change. Reads nested_instructions for the nested files.
+    ScanSpec(
+        "instruction_placement", scan_instruction_placement,
+        ("repo_root", "instruction_files", "nested_instructions", "scope", "excludes"),
+        STAGE_POST_OFFERS,
+    ),
 )
 
 validate(SCANS)

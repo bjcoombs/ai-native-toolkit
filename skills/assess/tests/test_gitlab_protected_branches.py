@@ -20,7 +20,10 @@ from lib.config_drift import find_snapshots, scan_config_drift  # noqa: E402
 from lib.gh_cli import GhUnavailable  # noqa: E402
 from lib.gitlab_cli import GitlabProject, branch_protection  # noqa: E402
 from lib.review_reality import gitlab_review_required  # noqa: E402
-from test_review_reality_gitlab import ENC, PROJECT, World, _git, world  # noqa: E402,F401
+import test_review_reality_gitlab as _stubs  # noqa: E402
+from test_review_reality_gitlab import ENC, PROJECT, World, _git  # noqa: E402
+
+world = _stubs.world  # the offline glab/gh stub fixture
 
 LIST = f"projects/{ENC}/protected_branches?per_page=100"
 GITLAB_REMOTE = f"https://gitlab.com/{PROJECT}.git"
