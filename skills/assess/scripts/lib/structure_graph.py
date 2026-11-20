@@ -182,7 +182,7 @@ class StructureGraphResult:
     sccs: list[list[str]] = field(default_factory=list)
     # A2: Newman modularity Q in [-0.5, 1] over the module graph. None when
     # nothing was measured, with the code why in modularity_reason (#682).
-    modularity_q: float | None = 0.0
+    modularity_q: float | None = None
     modularity_reason: str | None = None
     # A3: fraction of cross-package inbound edges landing on a front door.
     front_door_ratio: float = 1.0

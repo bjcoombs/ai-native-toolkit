@@ -42,6 +42,15 @@ def test_no_packages_is_unavailable_not_an_empty_graph(tmp_path):
     assert result.available is False
     assert result.footprints == []
     assert "no importable" in result.reason
+    assert result.as_dict()["modularity_q"] is None   # unmeasured is null, not 0.0
+
+
+@pytest.mark.parametrize("flag", ["_GRIMP_AVAILABLE", "_NETWORKX_AVAILABLE"])
+def test_an_unavailable_block_emits_null_modularity(monkeypatch, tmp_path, flag):
+    monkeypatch.setattr(sg, flag, False)
+    block = sg.analyze_structure(tmp_path).as_dict()
+    assert block["available"] is False
+    assert block["modularity_q"] is None
 
 
 def test_an_edgeless_graph_has_no_modularity_not_zero(tmp_path):
