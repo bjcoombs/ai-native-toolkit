@@ -118,14 +118,13 @@ TOKEN_BLOCK_FENCE = "```floor-tokens"
 # fewer than this is refused.
 MINIMUM_TOKEN_COUNT = 4
 
-# FLOOR.md clause integrity: each clause must carry its anchor AND its
-# distinctive phrases, so gutting the prose while keeping the anchor comment
-# still fails.
+# FLOOR.md clause integrity: each clause's own section (anchor to the next anchor
+# or heading) must carry its distinctive phrases, so gutting the prose fails.
 REQUIRED_CLAUSES = {
     "i": ("<!-- floor-clause:i -->", "run-complete"),
     "ii": ("<!-- floor-clause:ii -->", "unamendable"),
     "iii": ("<!-- floor-clause:iii -->", "out-of-band", "floor-signoff"),
-    "iv": ("<!-- floor-clause:iv -->", "immutab"),
+    "iv": ("<!-- floor-clause:iv -->", "Immutability covers clauses iii and iv"),
 }
 
 # ── Component shapes ─────────────────────────────────────────────────────────
@@ -359,15 +358,16 @@ def classify_path(path: str, component_dirs) -> str | None:
 
 
 def missing_clauses(floor_text: str | None) -> list[str]:
-    """Clause ids whose anchor or key phrase is missing from ``FLOOR.md``.
+    """Clause ids whose anchor, or a key phrase within its section, is missing.
 
-    ``None`` (file absent) reports every clause missing.
-    """
+    ``None`` (file absent) reports every clause missing."""
     if floor_text is None:
         return list(REQUIRED_CLAUSES)
     missing = []
-    for clause_id, required in REQUIRED_CLAUSES.items():
-        if any(token not in floor_text for token in required):
+    for clause_id, (anchor, *phrases) in REQUIRED_CLAUSES.items():
+        _, found, rest = floor_text.partition(anchor)
+        section = re.split(r"<!-- floor-clause:|\n## ", rest, maxsplit=1)[0]
+        if not found or any(phrase not in section for phrase in phrases):
             missing.append(clause_id)
     return missing
 
