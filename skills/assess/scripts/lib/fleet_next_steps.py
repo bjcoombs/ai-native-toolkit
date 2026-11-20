@@ -129,7 +129,7 @@ def _check_agrees(group: GroupRow, results: Sequence[RowResult]) -> None:
             raise NextStepsError(
                 f"group {group['group']!r} row {result['id']!r}: re-evaluation gives "
                 f"{result['status']} {result['level']}, which groups.jsonl does not record; pass "
-                "the --rubric and --settings the fleet run used")
+                "the --levels and --settings the fleet run used")
     if len(recorded) != len(results):
         raise NextStepsError(f"group {group['group']!r}: groups.jsonl has a different set of rubric rows")
 
@@ -368,12 +368,12 @@ def build_pages(maturity_model: MaturityModel, repos: Iterable[FleetRow], groups
     pages: dict[str, str] = {INDEX_FILE: index_page(maturity_model, groups)}
     for group in groups:
         if group["levels_version"] is None:
-            raise NextStepsError("the fleet run had no --rubric, so groups.jsonl holds no levels; "
-                                 "rerun fleet.py with --rubric")
+            raise NextStepsError("the fleet run had no --levels, so groups.jsonl holds no levels; "
+                                 "rerun fleet.py with --levels")
         if group["levels_version"] != maturity_model["version"]:
             raise NextStepsError(
                 f"groups.jsonl was rolled up with rubric {group['levels_version']!r}, not "
-                f"{maturity_model['version']!r}; pass the --rubric the fleet run used")
+                f"{maturity_model['version']!r}; pass the --levels the fleet run used")
         rows = sorted(members[group["group"]], key=lambda r: r["repo"])
         results = evaluate_group(maturity_model, group["group"], rows, by_scope)
         _check_agrees(group, results)

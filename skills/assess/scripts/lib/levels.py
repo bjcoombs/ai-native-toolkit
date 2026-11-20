@@ -79,6 +79,7 @@ byte-identical JSON for identical inputs.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import tomllib
@@ -106,6 +107,25 @@ _ROOT_KEYS = frozenset({"version", "rows"})
 _ROW_KEYS = frozenset({"id", "title", "scope", "aggregation", "share", "levels"})
 _LEVEL_KEYS = frozenset({"level", "criteria"})
 _CRITERION_KEYS = frozenset({"signal", "op", "value"})
+
+# The option that named the maturity-model file before 2.0.0 (#670). It is still
+# accepted by the parser so that using it fails loudly, never silently.
+RENAMED_FLAG = "--rubric"
+LEVELS_FLAG = "--levels"
+
+
+class _RenamedFlag(argparse.Action):
+    """Exit 2 with one line naming ``--levels``, whatever value (or none) follows."""
+
+    def __call__(self, parser: argparse.ArgumentParser, namespace: argparse.Namespace,
+                 values: object, option_string: str | None = None) -> None:
+        parser.exit(2, f"{parser.prog}: error: {RENAMED_FLAG} was renamed in 2.0.0: use {LEVELS_FLAG} FILE\n")
+
+
+def add_renamed_flag(parser: argparse.ArgumentParser) -> None:
+    """Register the pre-2.0.0 option on ``parser`` so using it exits 2 naming ``--levels``."""
+    parser.add_argument(RENAMED_FLAG, action=_RenamedFlag, nargs="?", default=argparse.SUPPRESS,
+                        help=argparse.SUPPRESS)
 
 
 class LevelsError(ValueError):

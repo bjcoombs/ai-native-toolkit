@@ -19,6 +19,6 @@ committed ones differ from a fresh build). After a deliberate change, regenerate
 ```bash
 uv run --locked python tests/fleet_heatmap_fixture.py
 F=tests/fixtures/fleet_heatmap
-uv run --locked python ../fleet/scripts/heatmap.py $F --rubric $F/levels.toml --output $F/expected.svg
-uv run --locked python ../fleet/scripts/heatmap.py $F --rubric $F/levels.toml --compare $F/earlier --output $F/expected-compare.svg
+uv run --locked python ../fleet/scripts/heatmap.py $F --levels $F/levels.toml --output $F/expected.svg
+uv run --locked python ../fleet/scripts/heatmap.py $F --levels $F/levels.toml --compare $F/earlier --output $F/expected-compare.svg
 ```

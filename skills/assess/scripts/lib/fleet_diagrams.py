@@ -55,7 +55,7 @@ class Diagram(TypedDict):
     skipped: str | None  # the one-line reason, when skipped
 
 
-NO_LEVELS = "skipped: the run had no maturity model (--rubric), so no levels."
+NO_LEVELS = "skipped: the run had no maturity model (--levels), so no levels."
 NO_HISTORY = "skipped: the run is not kept in the run history (--no-history or --full), so no earlier runs."
 NO_TEAM_ROWS = "skipped: the maturity model has no team rows to measure maturity by."
 NO_REPOS = "skipped: no repositories in the run."

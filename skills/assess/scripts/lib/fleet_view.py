@@ -144,7 +144,7 @@ def level_columns(groups: Sequence[GroupRow]) -> list[str]:
         raise FleetViewError("the run has no groups (no repository was scanned): nothing to draw")
     columns = [entry["id"] for entry in groups[0]["levels"]]
     if not columns:
-        raise FleetViewError("the run has no rubric levels: rerun fleet.py with --rubric")
+        raise FleetViewError("the run has no rubric levels: rerun fleet.py with --levels")
     for group in groups[1:]:
         if [entry["id"] for entry in group["levels"]] != columns:
             raise FleetViewError(f"group {group['group']!r} carries different rubric rows")
@@ -163,9 +163,9 @@ def check_levels(maturity_model: MaturityModel, groups: Sequence[GroupRow]) -> N
     """Refuse a rubric file that is not the one the run evaluated."""
     version = run_levels_version(groups)
     if version is None:
-        raise FleetViewError(f"the run has no rubric levels (fleet.py ran without --rubric), so "
+        raise FleetViewError(f"the run has no rubric levels (fleet.py ran without --levels), so "
                              f"rubric file version {maturity_model['version']!r} cannot apply: rerun fleet.py "
-                             "with --rubric")
+                             "with --levels")
     if maturity_model["version"] != version:
         raise FleetViewError(f"rubric file is version {maturity_model['version']!r}, the run used {version!r}")
     if [row["id"] for row in maturity_model["rows"]] != level_columns(groups):
@@ -193,7 +193,7 @@ def _change(now: RowLevel, then: RowLevel | None) -> Change:
 
 
 def _incomparable_note(then_version: str | None, now_version: str | None) -> str:
-    """Why two runs' levels are not compared; a run without --rubric is named as having none."""
+    """Why two runs' levels are not compared; a run without --levels is named as having none."""
     if then_version is None:
         return f"change not shown: the earlier run had no rubric, this run used rubric {now_version}"
     if now_version is None:

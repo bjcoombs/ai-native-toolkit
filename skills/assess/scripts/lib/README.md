@@ -731,7 +731,7 @@ The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
 (issue #571). `build_pages` re-runs `rubric.evaluate` per group on exactly the inputs
 `fleet_groups` evaluated (`repo_signals`, `settings_for`, `settings_signals`), then
 checks each row's status and level against `groups.jsonl` and raises
-`NextStepsError` on any difference (a different `--rubric` or `--settings`, or files
+`NextStepsError` on any difference (a different `--levels` or `--settings`, or files
 from two runs). Each page: a levels table, then per row the next level's unmet
 criteria, collected cumulatively over levels 1..next (under `share` a repository can
 sit below the group level), one numbered step per criterion. A team step lists the
@@ -781,9 +781,9 @@ and raises `FleetViewError` naming `file:line` otherwise; `read_repos` returns t
 reads (`FleetViewError` names the line), refuses a duplicate
 group and sorts by group; an empty file (no repository scanned) is `[]`, and the heat
 map exits 2 on it while the team pages write an empty index. `level_columns` gives the rubric row ids in rubric order (the
-same for every group; a run without `--rubric` is refused), `run_levels_version` the one
+same for every group; a run without `--levels` is refused), `run_levels_version` the one
 version, `check_levels` matches a rubric file (titles, top levels) to the run (a run
-without `--rubric` is refused as such, before any version check), and
+without `--levels` is refused as such, before any version check), and
 `compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,
 `delta` or `was`), marking the comparison not comparable across rubric versions (a run
 without a rubric is named as having none, not as rubric `None`).

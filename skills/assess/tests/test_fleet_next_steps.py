@@ -103,7 +103,7 @@ cli = _load_cli()
 
 def _pages(tmp_path: Path) -> dict[str, str]:
     settings = fleet_run(tmp_path)
-    assert cli.main([str(tmp_path), "--rubric", str(LEVELS_PATH), "--settings", str(settings)]) == 0
+    assert cli.main([str(tmp_path), "--levels", str(LEVELS_PATH), "--settings", str(settings)]) == 0
     return {p.relative_to(tmp_path).as_posix(): p.read_text(encoding="utf-8")
             for p in sorted(tmp_path.rglob("*.md"))}
 
@@ -129,7 +129,7 @@ def test_rerendering_the_same_run_is_byte_identical(tmp_path):
     second = _pages(tmp_path / "two")
     assert first == second
     settings = tmp_path / "one" / "settings.json"
-    assert cli.main([str(tmp_path / "one"), "--rubric", str(LEVELS_PATH), "--settings", str(settings)]) == 0
+    assert cli.main([str(tmp_path / "one"), "--levels", str(LEVELS_PATH), "--settings", str(settings)]) == 0
     again = {p.relative_to(tmp_path / "one").as_posix(): p.read_text(encoding="utf-8")
              for p in sorted((tmp_path / "one").rglob("*.md"))}
     assert again == first
@@ -214,18 +214,18 @@ def test_unmapped_signal_falls_back_to_the_expression(tmp_path):
 
 def test_a_different_levels_version_exits_2(tmp_path, capsys):
     settings = fleet_run(tmp_path)
-    assert cli.main([str(tmp_path), "--rubric", str(DEFAULT_LEVELS), "--settings", str(settings)]) == 2
+    assert cli.main([str(tmp_path), "--levels", str(DEFAULT_LEVELS), "--settings", str(settings)]) == 2
     assert "rolled up with rubric 'next-steps-fixture-1'" in capsys.readouterr().err
 
 
 def test_missing_settings_disagree_with_the_run_and_exit_2(tmp_path, capsys):
     fleet_run(tmp_path)
-    assert cli.main([str(tmp_path), "--rubric", str(LEVELS_PATH)]) == 2
-    assert "pass the --rubric and --settings the fleet run used" in capsys.readouterr().err
+    assert cli.main([str(tmp_path), "--levels", str(LEVELS_PATH)]) == 2
+    assert "pass the --levels and --settings the fleet run used" in capsys.readouterr().err
 
 
 def test_missing_output_exits_2(tmp_path, capsys):
-    assert cli.main([str(tmp_path), "--rubric", str(LEVELS_PATH)]) == 2
+    assert cli.main([str(tmp_path), "--levels", str(LEVELS_PATH)]) == 2
     assert "repos.jsonl: cannot read" in capsys.readouterr().err
 
 
@@ -283,7 +283,7 @@ def test_read_jsonl_names_file_and_line(tmp_path, line, fault):
 def test_an_empty_run_writes_an_empty_index(tmp_path):
     for name in ("repos.jsonl", "groups.jsonl"):
         (tmp_path / name).write_text("", encoding="utf-8")
-    assert cli.main([str(tmp_path), "--rubric", str(LEVELS_PATH)]) == 0
+    assert cli.main([str(tmp_path), "--levels", str(LEVELS_PATH)]) == 0
     assert (tmp_path / "teams.md").is_file()
     assert list(tmp_path.glob("teams/*.md")) == []
 
@@ -384,7 +384,7 @@ def test_default_levels_toml_parses():
 
 def test_real_fleet_run_with_the_default_levels_renders_pages(froot, tmp_path):  # noqa: F811
     out = tmp_path / "out"
-    assert fleet_cli.main([str(froot), "--rubric", str(DEFAULT_LEVELS), "--out", str(out)]) == 0
+    assert fleet_cli.main([str(froot), "--levels", str(DEFAULT_LEVELS), "--out", str(out)]) == 0
     assert cli.main([str(out)]) == 0
     tops = {row["id"]: len(row["levels"]) for row in load_default_levels()["rows"]}
     titles = {row["id"]: ns.text(row["title"]) for row in load_default_levels()["rows"]}
@@ -404,7 +404,7 @@ def test_a_run_without_a_maturity_model_says_so(froot, tmp_path, capsys):  # noq
     out = tmp_path / "out"
     assert fleet_cli.main([str(froot), "--out", str(out)]) == 0
     assert cli.main([str(out)]) == 2
-    assert "the fleet run had no --rubric" in capsys.readouterr().err
+    assert "the fleet run had no --levels" in capsys.readouterr().err
 
 
 def test_index_links_are_percent_encoded():

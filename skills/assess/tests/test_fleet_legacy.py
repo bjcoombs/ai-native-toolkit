@@ -5,6 +5,8 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 from lib import fleet_trends as ft
 from lib.fleet_compare import comparability, load_run
 from lib.fleet_history import entry_conflict, entry_repos, latest_matching
@@ -14,6 +16,8 @@ from lib.fleet_view import load_groups
 from lib.levels import load_levels
 from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
+from test_fleet_heatmap import cli as heatmap_cli
+from test_fleet_next_steps import cli as next_steps_cli
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LEGACY_ORG = FIXTURES / "fleet_legacy" / "acme"
@@ -89,10 +93,23 @@ def test_fleet_compare_against_a_pre_rename_run(tmp_path, capsys):
     shutil.copytree(LEGACY, earlier)
     out = tmp_path / "out"
     code = fleet_cli.main([str(root), "--out", str(out), "--scans", "nested_instructions",
-                           "--rubric", str(LEVELS_FILE), "--no-diagrams", "--no-history",
+                           "--levels", str(LEVELS_FILE), "--no-diagrams", "--no-history",
                            "--compare", str(earlier)])
     assert code == 0, capsys.readouterr().err
     comparison = json.loads((out / "compare.json").read_text(encoding="utf-8"))
     assert comparison["earlier"]["levels_version"] == "fixture-1"
     assert not any("maturity-model version" in reason for reason in comparison["reasons"])
     assert entry_repos(earlier) == REPOS
+
+
+@pytest.mark.parametrize("script", ["fleet", "heatmap", "next_steps"])
+@pytest.mark.parametrize("flag", [["--rubric", "x.toml"], ["--rubric=x.toml"], ["--rubric"]])
+def test_the_pre_rename_flag_exits_2_naming_levels(script, flag, tmp_path, capsys):
+    main = {"fleet": fleet_cli.main, "heatmap": heatmap_cli.main, "next_steps": next_steps_cli.main}[script]
+    with pytest.raises(SystemExit) as exit_info:
+        main([str(tmp_path), *flag])
+    assert exit_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    [line] = captured.err.splitlines()
+    assert line.endswith("error: --rubric was renamed in 2.0.0: use --levels FILE")

@@ -43,7 +43,7 @@ their rows `unknown`.
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
 | `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/run.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
-| `--rubric FILE` | A maturity rubric in the `lib/levels.py` TOML format (an invalid rubric exits 2); its `version` is stamped in `run.json`. Each group row carries every rubric row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
+| `--levels FILE` | A maturity rubric in the `lib/levels.py` TOML format (an invalid rubric exits 2); its `version` is stamped in `run.json`. Each group row carries every rubric row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
 | `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. Unreadable input exits 2. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
@@ -63,7 +63,7 @@ their rows `unknown`.
 when some repositories failed (each is a `failed` row; stderr prints the count
 and the failed ids). `2`: usage error - no `ROOT` and no `--from-list`, a root
 or list that does not exist, no repositories found, `--out` inside a target, an
-invalid `--rubric` or `--settings` (a settings directory with no `*.json` fragment
+invalid `--levels` or `--settings` (a settings directory with no `*.json` fragment
 file included), a list entry whose `~user` cannot be expanded, an unknown scan, a bad
 window, a `DIR` that cannot be created or written to (checked before any scan, so
 `--delete-after` never removes a clone whose results could not be written), an
@@ -136,7 +136,7 @@ Logic: `skills/assess/scripts/lib/fleet_groups.py`.
 | `distinct_ci_sources`, `distinct_marketplaces` | Distinct shared CI sources and agent marketplaces the group's scanned repositories reference (`shared_tooling` ids, git-tracked files only). A marketplace manifest and a settings entry naming it count once. `null` when `shared_tooling_repos` is 0 (every scan failed or degraded, or `--scans` left the block out), never a false 0. |
 | `settings_scope` | The settings fragment joined: the one whose `scope` equals the group, else the nearest ancestor (a top-level GitLab group covers its subgroups); `null` when none matches. |
 | `settings` | That fragment's settings, each `{value, reason}` or `{available: false, reason}` when ghreport read it as `unknown`. Counts-only (the default) keeps a value that is a short token (`on`, `off`, `full`) and writes any value that is not a short token (a list of rule or ruleset names) as `set`, with an unavailable setting's reason reduced to `unknown` and a value's reason to `null`; `--full` keeps them. `null` without a match. |
-| `rubric_version` | The rubric's `version`; `null` without `--rubric`. |
+| `rubric_version` | The rubric's `version`; `null` without `--levels`. |
 | `rubric` | One entry per rubric row: `id`, `scope`, `status` (`level` or `unknown`), `level` (a whole number, `null` when unknown), `top_level` (the row's number of levels, so a level reads as a share of it without the maturity model file; absent in rows written before it was added, which readers handle), `aggregation` (the team rule, `{rule, share}`; `null` for org rows), `missing_signals`, `unknown_repos`. |
 
 Rubric signal paths are checked at load against `lib/level_signals.py` (an
@@ -168,7 +168,7 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `plugin_version` | `.claude-plugin/plugin.json` `version`. |
 | `scan_date` | The UTC date of the run, `YYYY-MM-DD`. |
 | `window` | The effective history window (`6mo` when `--window` is not given). |
-| `rubric_version` | The `--rubric` file's `version`; `null` without `--rubric`. |
+| `rubric_version` | The `--levels` file's `version`; `null` without `--levels`. |
 | `counts_only` | `false` with `--full`. |
 | `paths_hashed` | `true` with `--hash-paths` or `--hash-salt` (never the salt). |
 | `scans` | The `--scans` names, deduplicated and sorted (`--scans a,a` stamps `["a"]`); `null` for all. |
@@ -294,11 +294,11 @@ scale. The layer bars draw team rows too and name the org rows under the bars.
 
 | File | Question | Built from |
 |------|----------|------------|
-| `quadrant.svg` | Which busy repositories are least mature? | Each repository's commits in the window (`ai_usage.total_commits`, non-merge) across, and up its mean maturity: every `team` row of the `--rubric` maturity model evaluated on that repository alone, as a share of the row's top level, averaged over the rows that could be measured. The busy (at or above the median) and below-half quadrant is shaded. Skipped without `--rubric` or without team rows. |
+| `quadrant.svg` | Which busy repositories are least mature? | Each repository's commits in the window (`ai_usage.total_commits`, non-merge) across, and up its mean maturity: every `team` row of the `--levels` maturity model evaluated on that repository alone, as a share of the row's top level, averaged over the rows that could be measured. The busy (at or above the median) and below-half quadrant is shaded. Skipped without `--levels` or without team rows. |
 | `shared-tooling.svg` | What breaks if a shared template changes, and who drifted off it? | `shared_tooling`: repositories linked to the CI sources and marketplaces they reference, with each item's dependent count. Drift: a CI include pinned to a ref other than the fleet's most common ref for that source (ties go to the lexically greatest ref) is dashed, and the SVG caption states this rule; an unpinned include is counted as unpinned, not drift; a pin counts-only could not keep, or a ref that is a CI variable (`$TPL_REF`), is dotted as pin unknown, never unpinned or drift. |
-| `trend.svg` | Is each team improving? | The run history: each group's mean maturity (each known team row's level as a share of its `top_level`, the slope chart's unit) in every comparable dated run, oldest left, this run right. Comparable: same window, scans, output mode and path hashing, with a maturity model; one run per date, the newest 12. A change of maturity-model version breaks every line, marked by a dashed rule. A history entry written before `groups.jsonl` carried `top_level` takes the top levels from this run's maturity model when it used the same version; otherwise (an older maturity-model version) it is not drawn, so the axis is always 0 to 1 share of top level, and the caption names it ("N earlier runs on an older maturity-model version not shown"). End labels give the last value and the change over the last unbroken stretch. Skipped with fewer than 3 comparable share runs (the skip line names any runs left out), without `--rubric` or without team rows, or when the run is not kept in the history (`--no-history`, `--full`). |
-| `slope.svg` | What moved since the earlier run, and which row moved it? | The `--compare` result: each group's mean level (a team row's level as a share of its top level) in the earlier run and this one, over the team rows with a known level in both runs, labelled with the row that moved most; a `*` marks a move where the group's measured set of repositories moved too. Skipped when no earlier run was compared (no `--compare`, or a bare `--compare` matched no history entry), when the runs are not comparable (the reasons are named), without `--rubric` or without team rows, or when no group has a team row with a known level in both runs. |
-| `layer-bars.svg` | Which layer is the org-wide weak spot? | One bar per `team` row of the maturity model, split by how many repositories reach each level (the heat map's pale-to-dark ramp); repositories whose level is undetermined are a hatched segment and named. Skipped without `--rubric`, without team rows, or with no repositories in the run. |
+| `trend.svg` | Is each team improving? | The run history: each group's mean maturity (each known team row's level as a share of its `top_level`, the slope chart's unit) in every comparable dated run, oldest left, this run right. Comparable: same window, scans, output mode and path hashing, with a maturity model; one run per date, the newest 12. A change of maturity-model version breaks every line, marked by a dashed rule. A history entry written before `groups.jsonl` carried `top_level` takes the top levels from this run's maturity model when it used the same version; otherwise (an older maturity-model version) it is not drawn, so the axis is always 0 to 1 share of top level, and the caption names it ("N earlier runs on an older maturity-model version not shown"). End labels give the last value and the change over the last unbroken stretch. Skipped with fewer than 3 comparable share runs (the skip line names any runs left out), without `--levels` or without team rows, or when the run is not kept in the history (`--no-history`, `--full`). |
+| `slope.svg` | What moved since the earlier run, and which row moved it? | The `--compare` result: each group's mean level (a team row's level as a share of its top level) in the earlier run and this one, over the team rows with a known level in both runs, labelled with the row that moved most; a `*` marks a move where the group's measured set of repositories moved too. Skipped when no earlier run was compared (no `--compare`, or a bare `--compare` matched no history entry), when the runs are not comparable (the reasons are named), without `--levels` or without team rows, or when no group has a team row with a known level in both runs. |
+| `layer-bars.svg` | Which layer is the org-wide weak spot? | One bar per `team` row of the maturity model, split by how many repositories reach each level (the heat map's pale-to-dark ramp); repositories whose level is undetermined are a hatched segment and named. Skipped without `--levels`, without team rows, or with no repositories in the run. |
 
 Unknown is never drawn as zero: a repository with no measured row or no commit count, or no
 `shared_tooling` evidence, a group with no row known in both compared runs, or a repository
@@ -313,19 +313,19 @@ on the shared helpers in `lib/fleet_svg.py`.
 
 `heatmap.py` renders one SVG from a run's `groups.jsonl`, with no rescan: groups
 as rows, rubric rows as columns, each cell the whole level the group reached.
-It needs a run made with `--rubric`.
+It needs a run made with `--levels`.
 
 <!-- chat-skip:start -->
 ```bash
-uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --rubric levels.toml
-uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --rubric levels.toml --compare last-sprint-out
+uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --levels levels.toml
+uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --levels levels.toml --compare last-sprint-out
 ```
 <!-- chat-skip:end -->
 
 | Flag | Meaning |
 |------|---------|
 | `RUN` | The run's `--out` directory or its `groups.jsonl`. |
-| `--rubric FILE` | The rubric file the run used: column titles and each row's top level, so a row's top level is always the darkest colour. Without it the columns show row ids and the level indexes the colour ramp directly. A file whose version or rows differ from the run's exits 2. |
+| `--levels FILE` | The rubric file the run used: column titles and each row's top level, so a row's top level is always the darkest colour. Without it the columns show row ids and the level indexes the colour ramp directly. A file whose version or rows differ from the run's exits 2. |
 | `--compare EARLIER_RUN` | An earlier run (directory or `groups.jsonl`): each cell shows its change (`+1`, `-1`, `=`, `new`, `was 2`, `was ?`) and groups only the earlier run has are listed. When both are run directories with a `run.json`, the [fleet comparison rule](#run-history-and-comparison) applies: runs that differ in rubric version, window, output mode, scans, path hashing or plugin major version are not compared (a note says why), and a note names the groups whose measured set moved, so a change there is not read as a level change (`fleet_compare.py` gives each cell's cause). When both are run directories holding `repos.jsonl` but only one has a `run.json` (a run from before the stamp), the pair is refused the same way. A bare `groups.jsonl` (or a directory holding only one) is compared on levels only, refused across rubric versions. |
 | `--output FILE` | The SVG path (default `heatmap.svg` beside `groups.jsonl`). |
 
@@ -335,7 +335,7 @@ darker for a higher level reached, with the level printed in every cell. An
 key letter, and the key under the grid names the missing signals. The canvas
 has its own white background. The same run gives a byte-identical file. Exit
 codes: `0` written, `2` an unreadable or malformed run, a run without rubric
-levels, a mismatched `--rubric` or an unreadable `--compare` run.
+levels, a mismatched `--levels` or an unreadable `--compare` run.
 
 ## Team next-steps pages
 
@@ -345,14 +345,14 @@ checked against `groups.jsonl` and a difference exits 2.
 
 <!-- chat-skip:start -->
 ```bash
-uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_next_steps.py" fleet-out --rubric levels.toml --settings settings/
+uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_next_steps.py" fleet-out --levels levels.toml --settings settings/
 ```
 <!-- chat-skip:end -->
 
 | Flag | Meaning |
 |------|---------|
 | `OUT` | The run's `--out` directory. Pages go to `OUT/teams.md` (index) and `OUT/teams/<group>.md`; the previous run's `*.md` pages there are removed first. |
-| `--rubric FILE` | The rubric the run used (default: the shipped `skills/assess/levels/default.toml`). A different `version` exits 2. |
+| `--levels FILE` | The rubric the run used (default: the shipped `skills/assess/levels/default.toml`). A different `version` exits 2. |
 | `--settings PATH` | The ghreport settings the run used, in the `fleet.py --settings` forms. |
 
 Each page holds:

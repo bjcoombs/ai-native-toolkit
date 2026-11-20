@@ -50,7 +50,7 @@ class FleetStamp(TypedDict):
     plugin_version: str
     scan_date: str  # UTC, YYYY-MM-DD
     window: str  # the effective --window, e.g. "6mo"
-    levels_version: str | None  # None without --rubric
+    levels_version: str | None  # None without --levels
     counts_only: bool
     paths_hashed: bool  # never the salt itself
     scans: list[str] | None  # requested scans, sorted; None for all

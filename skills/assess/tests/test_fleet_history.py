@@ -469,7 +469,7 @@ def test_heatmap_compare_uses_the_fleet_comparison_rule(froot2, tmp_path):
     maturity_model.write_text(LEVELS_TOML, encoding="utf-8")
 
     def run(out: str, *extra: str) -> Path:
-        assert fleet_cli.main([str(froot2), "--out", str(tmp_path / out), "--rubric", str(maturity_model),
+        assert fleet_cli.main([str(froot2), "--out", str(tmp_path / out), "--levels", str(maturity_model),
                                "--no-history", "--scans", "nested_instructions", *extra]) == 0
         return tmp_path / out
 
@@ -503,7 +503,7 @@ def test_heatmap_reports_an_earlier_group_version_as_a_refusal(froot2, tmp_path)
     maturity_model = tmp_path / "levels.toml"
     maturity_model.write_text(LEVELS_TOML, encoding="utf-8")
     for out in ("a", "b"):
-        assert fleet_cli.main([str(froot2), "--out", str(tmp_path / out), "--rubric", str(maturity_model),
+        assert fleet_cli.main([str(froot2), "--out", str(tmp_path / out), "--levels", str(maturity_model),
                                "--no-history", "--scans", "nested_instructions"]) == 0
     groups = tmp_path / "a" / "groups.jsonl"
     groups.write_text(groups.read_text(encoding="utf-8").replace('"fleet_group_version":1', '"fleet_group_version":99'),

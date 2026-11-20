@@ -9,7 +9,7 @@ shape is ``skills/fleet/references/repos.schema.json``; the logic lives in
 line per group in ``<out>/groups.jsonl`` (``lib/fleet_groups.py``, schema
 ``skills/fleet/references/groups.schema.json``): repository counts, distinct
 shared CI sources and marketplaces, the joined ``--settings`` and each
-``--rubric`` row's whole level.
+``--levels`` row's whole level.
 
 Target repositories are never written to. With ``--delete-after`` a scanned
 clone is removed once its row is in hand, only when nothing in it would be
@@ -37,13 +37,13 @@ Exit codes:
        count is printed to stderr. Failures never change the exit code.
     2  usage error: no root and no --from-list, a root or list that does not
        exist, no repositories found, --out inside a target, an unreadable
-       --rubric or --settings (a settings directory with no fragment files included),
+       --levels or --settings (a settings directory with no fragment files included),
        a list entry whose ~user cannot be expanded, bad scan arguments, an --out that
        cannot be created or written (checked before any scan), an unusable history
        location, or an unreadable --compare run
 
 Run:
-    uv run fleet.py ROOT --out DIR [--rubric FILE] [--settings PATH] [--jobs N] [--window 6mo]
+    uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
         [--no-history] [--no-diagrams]
@@ -127,7 +127,7 @@ from lib.fleet_history import (  # noqa: E402
 from lib.fleet_trends import TrendRun, history_runs, series_runs, trend_run  # noqa: E402
 from lib.fleet_view import FleetViewError  # noqa: E402
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp, build_stamp, write_stamp  # noqa: E402
-from lib.levels import MaturityModel, LevelsError, load_levels  # noqa: E402
+from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel  # noqa: E402
 from lib.level_signals import signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 from lib.signals import (  # noqa: E402
@@ -167,7 +167,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--out", required=True, help="Output directory; repos.jsonl is written here.")
     parser.add_argument(
-        "--rubric", metavar="FILE",
+        "--levels", metavar="FILE",
         help="Maturity rubric (TOML, lib/levels.py format). Each group row in groups.jsonl "
              "carries every rubric row's whole level (or unknown) and the aggregation rule used.",
     )
@@ -216,6 +216,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help=f"Do not draw the diagrams (OUT/{REPORT_FILE} and its SVGs); any a previous run left "
              "are removed.",
     )
+    add_renamed_flag(parser)
     args = parser.parse_args(argv)
     if args.compare not in (None, LATEST) and _not_a_run(Path(args.compare)):
         parser.error(f"--compare took {args.compare!r} as the earlier run, but it holds no {RUN_FILE} "
@@ -373,8 +374,8 @@ def main(argv: list[str] | None = None) -> int:
     scans: list[str] | None = None
     settings: dict[str, JsonDict] = {}
     try:
-        if args.rubric is not None:
-            maturity_model = load_levels(Path(args.rubric), signal_path_validator())
+        if args.levels is not None:
+            maturity_model = load_levels(Path(args.levels), signal_path_validator())
         if args.settings is not None:
             settings = load_settings(Path(args.settings))
         if args.scans is not None:

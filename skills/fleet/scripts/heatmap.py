@@ -1,6 +1,6 @@
 """Leadership heat map from one fleet run (issue #570).
 
-Reads ``<out>/groups.jsonl`` written by ``fleet.py --rubric`` and writes one SVG:
+Reads ``<out>/groups.jsonl`` written by ``fleet.py --levels`` and writes one SVG:
 groups as rows, rubric rows as columns, each cell the whole level reached,
 ``unknown`` hatched apart from level 0 with the missing signal named in a key.
 No rescan, no model, no network: the same run gives a byte-identical file. The
@@ -10,11 +10,11 @@ reader in ``lib/fleet_view.py``.
 Exit codes:
     0  the SVG was written
     2  usage error: unreadable or malformed groups.jsonl, a run without rubric
-       levels, a --rubric file that is not the run's rubric, or an unreadable
+       levels, a --levels file that is not the run's rubric, or an unreadable
        --compare run
 
 Run:
-    uv run heatmap.py RUN [--rubric FILE] [--compare EARLIER_RUN] [--output FILE]
+    uv run heatmap.py RUN [--levels FILE] [--compare EARLIER_RUN] [--output FILE]
 """
 # /// script
 # requires-python = ">=3.11"
@@ -44,7 +44,7 @@ from lib.fleet_view import (  # noqa: E402
     groups_file,
     load_groups,
 )
-from lib.levels import MaturityModel, LevelsError, load_levels  # noqa: E402
+from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel  # noqa: E402
 
 HEATMAP_FILE = "heatmap.svg"
 
@@ -55,7 +55,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("run", help="The fleet run: its --out directory or its groups.jsonl.")
     parser.add_argument(
-        "--rubric", metavar="FILE",
+        "--levels", metavar="FILE",
         help="The rubric file the run used: gives column titles and each row's top level, so "
              "colour is scaled per row. Refused when its version or rows differ from the run's.",
     )
@@ -66,6 +66,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--output", metavar="FILE",
                         help=f"SVG path (default: {HEATMAP_FILE} beside groups.jsonl).")
+    add_renamed_flag(parser)
     return parser.parse_args(argv)
 
 
@@ -107,8 +108,8 @@ def main(argv: list[str] | None = None) -> int:
     comparison: Comparison | None = None
     try:
         groups = load_groups(run)
-        if args.rubric is not None:
-            maturity_model = load_levels(Path(args.rubric))
+        if args.levels is not None:
+            maturity_model = load_levels(Path(args.levels))
             check_levels(maturity_model, groups)
         columns = columns_for(groups, maturity_model)
         if args.compare is not None:

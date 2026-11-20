@@ -45,7 +45,7 @@ cli = _load_cli()
 
 def _render(tmp_path: Path, *extra: str) -> str:
     out = tmp_path / "out.svg"
-    assert cli.main([str(FIXTURES), "--rubric", str(FIXTURES / "levels.toml"),
+    assert cli.main([str(FIXTURES), "--levels", str(FIXTURES / "levels.toml"),
                      "--output", str(out), *extra]) == 0
     return out.read_text(encoding="utf-8")
 
@@ -300,7 +300,7 @@ def test_load_groups_missing_file(tmp_path):
 
 def test_run_shape_errors():
     a, b, *_rest = _groups()
-    with pytest.raises(fv.FleetViewError, match="--rubric"):
+    with pytest.raises(fv.FleetViewError, match="--levels"):
         fv.level_columns([dict(a, levels=[])])  # type: ignore[list-item]
     with pytest.raises(fv.FleetViewError, match="different rubric rows"):
         fv.level_columns([a, dict(b, levels=b["levels"][:1])])  # type: ignore[list-item]
@@ -324,7 +324,7 @@ def test_check_levels_names_a_run_without_a_levels():
     bare = [dict(g, levels_version=None, levels=[]) for g in _groups()]
     with pytest.raises(fv.FleetViewError) as exc:
         fv.check_levels(maturity_model, bare)  # type: ignore[arg-type]
-    assert "without --rubric" in str(exc.value)
+    assert "without --levels" in str(exc.value)
     assert "None" not in str(exc.value)
 
 
@@ -359,14 +359,14 @@ def test_compare_levels_kinds():
 def test_cli_exits_2_on_a_run_without_maturity_levels(tmp_path, capsys):
     path = _write_lines(tmp_path / "groups.jsonl", [dict(_one(), levels=[], levels_version=None)])
     assert cli.main([str(path)]) == 2
-    assert "--rubric" in capsys.readouterr().err
+    assert "--levels" in capsys.readouterr().err
 
 
 def test_cli_exits_2_on_a_levels_file_from_another_run(tmp_path, capsys):
     other = tmp_path / "other.toml"
     other.write_text(re.sub(r'version = "fixture-1"', 'version = "fixture-9"',
                             (FIXTURES / "levels.toml").read_text(encoding="utf-8")), encoding="utf-8")
-    assert cli.main([str(FIXTURES), "--rubric", str(other), "--output", str(tmp_path / "x.svg")]) == 2
+    assert cli.main([str(FIXTURES), "--levels", str(other), "--output", str(tmp_path / "x.svg")]) == 2
     assert "fixture-9" in capsys.readouterr().err
     assert not (tmp_path / "x.svg").exists()
 

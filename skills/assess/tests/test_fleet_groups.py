@@ -254,7 +254,7 @@ def test_fleet_run_writes_group_rows_byte_identically(froot, tmp_path):  # noqa:
     maturity_model.write_text(LEVELS_TOML, encoding="utf-8")
     settings = tmp_path / "settings.json"
     settings.write_text(json.dumps([_fragment("grpa", "on"), _fragment("grpb", "off")]), encoding="utf-8")
-    argv = [str(froot), "--rubric", str(maturity_model), "--settings", str(settings)]
+    argv = [str(froot), "--levels", str(maturity_model), "--settings", str(settings)]
 
     assert fleet_cli.main([*argv, "--out", str(tmp_path / "o1")]) == 0
     assert fleet_cli.main([*argv, "--out", str(tmp_path / "o2")]) == 0
@@ -303,21 +303,21 @@ def test_levels_path_outside_the_namespace_exits_2(froot, tmp_path, capsys):  # 
     maturity_model = tmp_path / "bad.toml"
     maturity_model.write_text(LEVELS_TOML.replace("shared_tooling.available", "scans.shared_tooling.available"),
                       encoding="utf-8")
-    assert fleet_cli.main([str(froot), "--rubric", str(maturity_model), "--out", str(tmp_path / "o")]) == 2
+    assert fleet_cli.main([str(froot), "--levels", str(maturity_model), "--out", str(tmp_path / "o")]) == 2
     assert "scans.shared_tooling.available" in capsys.readouterr().err
 
 
 def test_unknown_org_path_exits_2_naming_it(froot, tmp_path, capsys):  # noqa: F811
     maturity_model = tmp_path / "bad.toml"
     maturity_model.write_text(LEVELS_TOML.replace("two_factor.value", "two_factor_required"), encoding="utf-8")
-    assert fleet_cli.main([str(froot), "--rubric", str(maturity_model), "--out", str(tmp_path / "o")]) == 2
+    assert fleet_cli.main([str(froot), "--levels", str(maturity_model), "--out", str(tmp_path / "o")]) == 2
     assert "two_factor_required" in capsys.readouterr().err
     assert not (tmp_path / "o").exists()
 
 
 def test_default_levels_loads_and_rolls_up(froot, tmp_path):  # noqa: F811
     """The shipped rubric (#564) passes the same validation and yields a level or unknown per row."""
-    assert fleet_cli.main([str(froot), "--rubric", str(DEFAULT_LEVELS), "--out", str(tmp_path / "o"),
+    assert fleet_cli.main([str(froot), "--levels", str(DEFAULT_LEVELS), "--out", str(tmp_path / "o"),
                            "--jobs", "2"]) == 0
     rows = [json.loads(line) for line in (tmp_path / "o" / fg.GROUPS_FILE).read_text().splitlines()]
     default = load_default_levels()
