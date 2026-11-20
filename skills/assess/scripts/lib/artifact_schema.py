@@ -92,7 +92,11 @@ constant each.
 # instruction_placement record always_on_words). bloat_penalty is now their
 # penalties' sum and size_grade_capped reads always-on lines. Additive: no key
 # moves or changes type, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.12.0"
+# 1.13.0: run-context.json gains layer_grades (issue #620): instructions_grade
+# and instruction_file_present as one registered block, so the headless signals
+# document carries them and a rubric can name them. Additive; the top-level
+# instructions_grade key stays, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.13.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
