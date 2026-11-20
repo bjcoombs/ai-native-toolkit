@@ -30,7 +30,8 @@ The scan is static and bounded:
   directory: ``$BATS_TEST_DIRNAME/<path>`` (braces and quotes allowed), or a
   bare relative ``load <path>``, which bats itself resolves against the suite
   (with ``.bash`` appended first, as bats-core does). A path that still holds
-  a variable, a command substitution or a glob, or a bare relative ``source`` (resolved
+  a variable (or a single-quoted, literal anchor), a command substitution or
+  a glob, a load after a ``#`` comment, or a bare relative ``source`` (resolved
   against the caller's working directory, which the scan cannot know), credits
   nothing. Other languages keep only the name match.
 - Every module a qualifying test imports directly is credited, not only the
@@ -265,10 +266,32 @@ def js_imports(source: str, test_dir: str, files: frozenset[str]) -> list[str]:
     return out
 
 
+_SINGLE_QUOTED_DOLLAR_RE = re.compile(r"'[^'\n]*\$[^'\n]*'")
+
+
+def _strip_comment(line: str) -> str:
+    """``line`` up to its shell comment: a ``#`` outside quotes at the start
+    of a word (line start or after whitespace) ends the code, so a
+    commented-out load, whole-line or trailing, is not evidence."""
+    quote = ""
+    for i, ch in enumerate(line):
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1].isspace()):
+            return line[:i]
+    return line
+
+
 def _bats_target(command: str, arg: str, test_dir: str) -> str | None:
     """The repo-relative path one ``source`` / ``.`` / ``load`` argument names,
     or ``None`` when it is not anchored at the suite's directory or still holds
-    shell expansion after the anchor."""
+    shell expansion after the anchor. A ``$`` inside single quotes is literal
+    to the shell, so a single-quoted anchor names no directory."""
+    if _SINGLE_QUOTED_DOLLAR_RE.search(arg):
+        return None
     path = arg.replace('"', "").replace("'", "")
     anchored = _BATS_DIR_RE.match(path)
     if anchored:
@@ -291,9 +314,7 @@ def bats_sources(source: str, test_dir: str, files: frozenset[str]) -> list[str]
         return []
     out: list[str] = []
     for line in source.splitlines():
-        if line.lstrip().startswith("#"):
-            continue  # a commented-out load is not evidence
-        for command, arg in _BATS_LOAD_RE.findall(line):
+        for command, arg in _BATS_LOAD_RE.findall(_strip_comment(line)):
             target = _bats_target(command, arg, test_dir)
             if target is None:
                 continue

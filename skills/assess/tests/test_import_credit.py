@@ -393,3 +393,24 @@ def test_bats_load_prefers_dot_bash_like_bats_core(tmp_path: Path) -> None:
     index = tc.build_test_index(tmp_path)
     assert tc.sibling_test_match(tmp_path, "scripts/helper.bash", index) == tc.MATCH_IMPORT
     assert tc.sibling_test_match(tmp_path, "scripts/helper", index) != tc.MATCH_IMPORT
+
+
+@pytest.mark.parametrize("line", [
+    "source '$BATS_TEST_DIRNAME/../scripts/common.sh'",  # literal $ in single quotes
+    'true # disabled; source "$BATS_TEST_DIRNAME/../scripts/common.sh"',
+    'run x  # load ../scripts/common.sh',
+])
+def test_bats_single_quoted_anchor_or_trailing_comment_credits_nothing(
+    tmp_path: Path, line: str,
+) -> None:
+    _write(tmp_path, {"scripts/common.sh": "f() { :; }\n",
+                      "tests/launcher.bats": line + BATS_TEST})
+    assert _credited(tmp_path, "scripts/common.sh") is False
+
+
+def test_bats_hash_inside_quotes_is_not_a_comment(tmp_path: Path) -> None:
+    _write(tmp_path, {"scripts/common.sh": "f() { :; }\n",
+                      "tests/launcher.bats":
+                          'echo "a # b"; source "$BATS_TEST_DIRNAME/../scripts/common.sh"'
+                          + BATS_TEST})
+    assert _credited(tmp_path, "scripts/common.sh") is True

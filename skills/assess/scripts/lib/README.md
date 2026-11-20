@@ -2002,7 +2002,8 @@ The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
 `.test`, `.spec`, `_spec`, `test_<stem>`, `<stem>Test`, `<stem>Tests`, with a
 hyphenated stem also matched as underscores, plus the one cross-extension rule
 from issue #593: `<stem>.bats` for a `.sh` or extensionless script, and any
-`*.bats` file is a test), the adjacent test directories
+`*.bats` file is a test; `run.sh` and an extensionless `run` share the flat
+key `run.bats`), the adjacent test directories
 (`__tests__/` / `tests/` / `test/` / `spec/`), and the is-this-a-test rule, plus a
 layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
@@ -2050,7 +2051,8 @@ string literals are not parsed; a NodeNext `./foo.js` specifier also resolves to
 specifiers keep the name match. A bats suite with an `@test` line (issue #593)
 credits the files it `source`s / `.`s / `load`s by a suite-anchored path
 (`$BATS_TEST_DIRNAME/...`, or a relative `load`, `.bash` appended tried first); a
-cwd-relative `source`, another variable or a glob credits nothing. All other
+cwd-relative `source`, another variable, a glob, a single-quoted (literal) anchor or a
+load after a `#` comment credits nothing. All other
 languages keep the name match. Modules inside a test
 directory are support, never credited. Every module a qualifying test imports
 directly is credited. Runs lazily, once per `TestIndex`, over the index's test

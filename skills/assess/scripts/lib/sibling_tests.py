@@ -168,13 +168,24 @@ def name_key(rel_path: str) -> str:
     return Path(rel_path).name.replace("-", "_")
 
 
+def _flat_keys(rel_path: str) -> frozenset[str]:
+    """The keys a flat-tree test name may stand for: the :func:`name_key`, and
+    for a shell script its bats suite name, which ``run.sh`` and an
+    extensionless ``run`` share."""
+    p = Path(rel_path)
+    if p.suffix in BATS_SOURCE_SUFFIXES and p.stem:
+        return frozenset({name_key(rel_path), p.stem + BATS_SUFFIX})
+    return frozenset({name_key(rel_path)})
+
+
 def shared_name_keys(paths: Iterable[str]) -> frozenset[str]:
     """Name keys carried by more than one path: a flat-tree match on such a
-    name cannot say which of them the test belongs to."""
+    name cannot say which of them the test belongs to. ``run.sh`` and ``run``
+    share the key ``run.bats``."""
     counts: dict[str, int] = {}
     for path in paths:
-        key = name_key(path)
-        counts[key] = counts.get(key, 0) + 1
+        for key in _flat_keys(path):
+            counts[key] = counts.get(key, 0) + 1
     return frozenset(k for k, n in counts.items() if n > 1)
 
 
@@ -387,4 +398,4 @@ def has_sibling_test(
     match = sibling_test_match(repo_root, rel_path, index)
     if match in (MATCH_DIRECT, MATCH_BASENAME, MATCH_IMPORT):
         return True
-    return match == MATCH_FLAT and name_key(rel_path) not in shared_names
+    return match == MATCH_FLAT and _flat_keys(rel_path).isdisjoint(shared_names)

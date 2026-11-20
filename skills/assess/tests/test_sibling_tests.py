@@ -328,3 +328,15 @@ def test_bats_flat_match_on_shared_name_is_dropped(tmp_path: Path) -> None:
         _touch(tmp_path, rel)
     block = compute_test_focus(["a/run.sh", "b/run.sh"], None, None, repo_root=tmp_path)
     assert {e["test_signal"] for e in block["entries"]} == {"unsupported"}
+
+
+def test_bats_flat_match_shared_across_sh_and_extensionless_is_dropped(
+    tmp_path: Path,
+) -> None:
+    """``a/run.sh`` and ``b/run`` both name ``run.bats``, so a root
+    ``tests/run.bats`` credits neither."""
+    for rel in ("a/run.sh", "b/run", "tests/run.bats"):
+        _touch(tmp_path, rel)
+    block = compute_test_focus(["a/run.sh", "b/run"], None, None, repo_root=tmp_path)
+    assert {e["test_signal"] for e in block["entries"]} == {"unsupported"}
+    assert tc.shared_name_keys(["a/run.sh", "b/run"]) == frozenset({"run.bats"})
