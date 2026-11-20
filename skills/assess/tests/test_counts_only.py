@@ -254,9 +254,11 @@ def test_type_walk_reaches_the_issue_examples() -> None:
 # file shapes, builder intermediates) or are only base classes of reached ones.
 _NOT_BLOCKS = {
     "FinalizeInput", "ActionLifecycle", "KeyholeIntegration", "FindingProducts",
-    "BehaviourFields", "FindingPaths", "MutationGroupRecord", "ScoredHotspotRow",
+    "BehaviourFields", "MutationGroupRecord", "ScoredHotspotRow",
     "MutationConfig", "MutationRunResult", "DocSignal", "SourceTree", "Distribution",
     "InstructionTotals", "SignalsDocument", "SignalsStamp",
+    # assess_gate output, not a run-context block.
+    "MethodChange", "PathMove",
 }
 
 

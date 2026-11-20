@@ -459,6 +459,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 
 | Field | Kept as |
 |---|---|
+| `prior_findings_snapshot.findings.name` | token |
+| `prior_findings_snapshot.findings.paths` | path (hashed when hashing is on) |
 | `derived_findings.name` | token |
 | `derived_findings.paths` | path (hashed when hashing is on) |
 | `derived_findings.action` | dropped |

@@ -75,7 +75,7 @@ EXTRA_FIELD_NAMES: Final = frozenset({
     "agent_ops", "attention_low_signal", "diff", "diff_detail", "diff_reliable",
     "diff_trend_reset", "instruction_file_size", "interactive", "log_integrity",
     "prior_stats_exists", "skills_count", "skills_present", "churn_degenerate",
-    "reoffer_mutation", "capability_offers", "available",
+    "reoffer_mutation", "capability_offers", "available", "assess_method_version",
     # accretion_ratchet
     "reliable", "deletion_fraction_threshold", "total_in_band", "net_additions",
     "commit_count", "deletion_fraction", "time_span_months",
@@ -455,6 +455,8 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "understanding.modules.recommendation": DROP,
     },
     "findings and attention": {
+        "prior_findings_snapshot.findings.name": TOKEN,
+        "prior_findings_snapshot.findings.paths": PATH,
         "derived_findings.name": TOKEN,
         "derived_findings.paths": PATH,
         "derived_findings.action": DROP,
