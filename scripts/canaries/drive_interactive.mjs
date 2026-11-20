@@ -35,7 +35,7 @@ const CANVAS_METHODS = [
 ];
 
 function extractScript(html) {
-  const matches = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  const matches = [...html.matchAll(/<script>([\s\S]*?)<\/script\s*>/gi)];
   if (matches.length === 0) {
     throw new Error('build has no <script> block to drive');
   }
