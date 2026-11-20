@@ -380,6 +380,12 @@ def test_non_finite_signal_is_unknown_and_serialises() -> None:
     json.loads(dumps_result(result), parse_constant=lambda c: pytest.fail(f"non-JSON constant {c}"))
 
 
+def test_huge_integer_signal_compares_without_overflow() -> None:
+    row = parse_rubric(_rubric(_team_row([_lv(1, {"signal": "s", "op": "gte", "value": 1.5})])))["rows"][0]
+    ev = evaluate_row(row, json.loads('{"s": ' + "9" * 400 + "}"))
+    assert (ev["status"], ev["level"]) == ("level", 1)
+
+
 def test_unreadable_toml_fails_at_load(tmp_path: Path) -> None:
     bad = tmp_path / "bad.toml"
     bad.write_text("version = \n", encoding="utf-8")

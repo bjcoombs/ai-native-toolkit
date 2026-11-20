@@ -44,6 +44,7 @@ from lib import run_setup as rs
 from lib.agent_environment import scan_agent_environment
 from lib.agent_harness import scan_agent_harness
 from lib.agent_ops import scan_agent_ops
+from lib.ai_usage import scan_ai_usage
 from lib.claude_config import scan_claude_config
 from lib.config_drift import scan_config_drift
 from lib.degrade import safe as safe  # re-exported: callers import it from here
@@ -527,6 +528,13 @@ SCANS: tuple[ScanSpec, ...] = (
         "instruction_placement", scan_instruction_placement,
         ("repo_root", "instruction_files", "nested_instructions", "scope", "excludes"),
         STAGE_POST_OFFERS,
+    ),
+    # AI-assisted change share (issue #547): commits in the churn window with an
+    # AI-assistant Co-authored-by trailer, as counts and a share. A lower bound
+    # on agent use, never an estimate; merge commits and automation bots
+    # excluded. Matcher: lib.agent_identity.
+    ScanSpec(
+        "ai_usage", scan_ai_usage, ("repo_root", "scope", "history_window"), STAGE_POST_OFFERS,
     ),
 )
 

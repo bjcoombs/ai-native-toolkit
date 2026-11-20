@@ -57,6 +57,10 @@ constant each.
 # relocatable sections with line ranges, signals and a suggested home; agent and
 # SKILL.md files over 200 lines in a separate loaded_in_full list. Additive;
 # complexity-stats.json is unchanged.
+# 1.7.0 (also): run-context.json gains ai_usage (issue #547): the share of
+# commits in the history window with an AI-assistant Co-authored-by trailer, as
+# a lower bound with its window, merge rule and limits. Additive;
+# complexity-stats.json is unchanged.
 ARTIFACT_SCHEMA_VERSION = "1.7.0"
 
 # The finding method version: which rules decide the findings a run produces.

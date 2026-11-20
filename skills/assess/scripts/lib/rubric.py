@@ -360,7 +360,9 @@ def _is_number(value: Any) -> bool:
     serialise to invalid JSON, so neither an operand nor a signal may be one."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
-    return math.isfinite(value)
+    # An int is always finite; math.isfinite would convert it to float and
+    # raise OverflowError on a huge JSON integer, aborting a fleet run.
+    return isinstance(value, int) or math.isfinite(value)
 
 
 def _kind(value: Any) -> str | None:

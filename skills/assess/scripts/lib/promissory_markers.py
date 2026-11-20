@@ -57,12 +57,14 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from lib.change_coupling import _coauthors_have_agent, _identity_is_agent
+    from lib.agent_identity import coauthors_have_agent as _coauthors_have_agent
+    from lib.agent_identity import identity_is_agent as _identity_is_agent
     from lib.git_churn import churn_is_degenerate
     from lib.python_regions import PyRegions, load_regions
 except ImportError:  # standalone CLI: script dir is lib/, put scripts/ on path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from lib.change_coupling import _coauthors_have_agent, _identity_is_agent
+    from lib.agent_identity import coauthors_have_agent as _coauthors_have_agent
+    from lib.agent_identity import identity_is_agent as _identity_is_agent
     from lib.git_churn import churn_is_degenerate
     from lib.python_regions import PyRegions, load_regions
 
