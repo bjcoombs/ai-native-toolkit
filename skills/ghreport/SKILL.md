@@ -71,7 +71,12 @@ changes the per-repo table, headline or Needs attention list.
 
 On GitLab the section covers `--group`, or each top-level group you belong
 to. A GitHub personal account has no org settings, so its four fields read
-`unknown` with the `orgs/` 404. The field names are the same on both providers.
+`unknown (personal account: no org settings)`. If the GitLab group list
+cannot be read, the section still appears, as one entry for the host with
+every field `unknown (group list unreadable)`. On GitLab,
+`default_branch_protection` reads `off` only when developers can push and
+force push is allowed; force push allowed with stricter push access is
+appended as `force push: allowed`. The field names are the same on both providers.
 
 Every value is the setting's value, `off`, or `unknown` with the reason
 (`denied: no access or tier (HTTP 403)`, `not found: no access, tier, or

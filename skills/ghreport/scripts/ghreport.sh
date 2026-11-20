@@ -364,12 +364,26 @@ JQ_SETTING_DEFS='
   def val($v): {value:$v, reason:null};
 '
 
+# A fragment with every setting unknown for one reason.
+settings_all_unknown() {
+    jq -n --arg scope "$1" --arg provider "$PROVIDER" --arg r "$2" '
+      {value:"unknown", reason:$r} as $u
+      | {scope:$scope, provider:$provider, two_factor:$u, push_rules:$u,
+         default_branch_protection:$u, rulesets:$u}' > "$3"
+}
+
 query_org_settings_github() {
     local out=$1 raw org_json='{}' org_err="" rs_json='[]' rs_err="" details='[]' detail_err=""
     if raw=$(gh api "orgs/$ORG" 2>&1) && jq -e 'type=="object" and has("login")' <<< "$raw" >/dev/null 2>&1; then
         org_json=$raw
     else
         org_err=$(http_reason "$raw")
+        # A personal account answers orgs/ with a 404 because it has no org
+        # settings at all; say so rather than suggest missing access.
+        if [ "$(gh api "users/$ORG" --jq '.type' 2>/dev/null || true)" = "User" ]; then
+            settings_all_unknown "$ORG" "personal account: no org settings" "$out"
+            return
+        fi
     fi
 
     # Rulesets carry push rules (target "push") and default-branch protection
@@ -469,8 +483,10 @@ query_group_settings_gitlab() {
          elif ($g.default_branch_protection_defaults|type)=="object"
               and ($g.default_branch_protection_defaults|length)>0 then
            $g.default_branch_protection_defaults as $d
-           | if $d.allow_force_push==true then val("off")
-             else val("push: \($d.allowed_to_push // [] | levels), merge: \($d.allowed_to_merge // [] | levels)") end
+           | ($d.allowed_to_push // [] | any(.[]; (.access_level // 0) > 0 and (.access_level // 0) <= 30)) as $dev_push
+           | if $d.allow_force_push==true and $dev_push then val("off")
+             else val("push: \($d.allowed_to_push // [] | levels), merge: \($d.allowed_to_merge // [] | levels)"
+                      + (if $d.allow_force_push==true then ", force push: allowed" else "" end)) end
          else unk("field missing from the groups API") end),
        rulesets:unk("endpoint missing: GitLab has no group rulesets")}' \
         --arg scope "$group" --argjson g "$g_json" --arg g_err "$g_err" \
@@ -478,15 +494,18 @@ query_group_settings_gitlab() {
 }
 
 # The groups a settings section covers: --group, else each group you belong
-# to whose parent you do not, as discovery starts from them.
+# to whose parent you do not, as discovery starts from them. Fails when the
+# group list cannot be read, so the caller can report that rather than drop
+# the section.
 gitlab_settings_groups() {
     if [ -n "$GITLAB_GROUP" ]; then
         echo "$GITLAB_GROUP"
         return
     fi
     local raw
-    raw=$(gitlab_api_all "groups?min_access_level=10&per_page=100" 2>/dev/null) || return 0
-    jq -rs 'if all(.[]; type=="array") then [.[][] | .full_path // empty] else [] end
+    raw=$(gitlab_api_all "groups?min_access_level=10&per_page=100" 2>/dev/null) || return 1
+    jq -e -s 'length>0 and all(.[]; type=="array")' <<< "$raw" >/dev/null 2>&1 || return 1
+    jq -rs '[.[][] | .full_path // empty]
             | . as $all | .[] | select(. as $p | any($all[]; . as $q | $q != $p and ($p | startswith($q + "/"))) | not)' \
         <<< "$raw" 2>/dev/null | sort -u
 }
@@ -791,12 +810,16 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 # Org / group settings, into a subdirectory the per-repo glob skips.
 mkdir -p "$TMP_DIR/settings"
 if [ "$PROVIDER" = gitlab ]; then
-    s_i=0
-    while IFS= read -r settings_group; do
-        [ -n "$settings_group" ] || continue
-        query_group_settings_gitlab "$settings_group" "$TMP_DIR/settings/$s_i.json"
-        s_i=$((s_i + 1))
-    done < <(gitlab_settings_groups)
+    if settings_groups=$(gitlab_settings_groups); then
+        s_i=0
+        while IFS= read -r settings_group; do
+            [ -n "$settings_group" ] || continue
+            query_group_settings_gitlab "$settings_group" "$TMP_DIR/settings/$s_i.json"
+            s_i=$((s_i + 1))
+        done <<< "$settings_groups"
+    else
+        settings_all_unknown "$GITLAB_HOST" "group list unreadable" "$TMP_DIR/settings/0.json"
+    fi
 else
     query_org_settings_github "$TMP_DIR/settings/org.json"
 fi

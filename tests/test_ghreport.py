@@ -261,7 +261,7 @@ case "$sub" in
 esac
 path=$1
 case "$path" in
-  users/*) echo "Organization" ;;
+  users/*) echo "${GH_USER_TYPE:-Organization}" ;;
   user/teams) echo "" ;;
   orgs/*)
     key=${path%%\?*}
@@ -422,3 +422,15 @@ def test_render_dir_without_settings_has_no_settings_section(fragments_dir, tmp_
     assert "Org settings" not in res.stdout
     body = next(tmp_path.glob("org-state-demo-*.md")).read_text()
     assert "## Org settings" not in body
+
+
+def test_personal_account_names_the_reason(tmp_path, monkeypatch):
+    """A personal account has no org settings: the 404 is explained as that,
+    not as missing access, and no ruleset call is made."""
+    monkeypatch.setenv("GH_USER_TYPE", "User")
+    res, _ = _run_with_org(tmp_path, {}, "--no-file")
+    assert res.returncode == 0, res.stderr
+    settings = _org_settings(res.stdout)
+    assert set(settings) == set(ORG_SETTINGS)
+    assert set(settings.values()) == {"unknown (personal account: no org settings)"}
+    assert "rulesets" not in (tmp_path / "gh.log").read_text()

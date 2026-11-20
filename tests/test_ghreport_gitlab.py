@@ -126,7 +126,8 @@ def _endpoints() -> Endpoints:
 
 # Endpoints are looked up after the query string is dropped and %2F decoded;
 # numeric group ids resolve through ids/<id>. A file <key>.err holds an HTTP
-# status to fail with.
+# status to fail with; <key>.fail-after holds a call count after which the
+# endpoint answers 500.
 GLAB_STUB = r"""#!/usr/bin/env bash
 echo "glab $*" >> "$GLAB_LOG"
 case "$1" in
@@ -163,6 +164,14 @@ case "$1" in
       endpoint="groups/$gpath${BASH_REMATCH[2]}"
     fi
     key=${endpoint//\//__}
+    if [ -f "$GLAB_DATA/$key.fail-after" ]; then
+      calls=$(( $(cat "$GLAB_DATA/$key.count" 2>/dev/null || echo 0) + 1 ))
+      echo "$calls" > "$GLAB_DATA/$key.count"
+      if [ "$calls" -gt "$(cat "$GLAB_DATA/$key.fail-after")" ]; then
+        echo "glab: 500 (HTTP 500)" >&2
+        exit 1
+      fi
+    fi
     if [ -f "$GLAB_DATA/$key.err" ]; then
       code=$(cat "$GLAB_DATA/$key.err")
       echo "glab: $code (HTTP $code)" >&2
@@ -779,3 +788,35 @@ def test_settings_cover_only_top_level_member_groups(tmp_path: Path) -> None:
     assert "- grp\n" in section
     assert "- grp/sub" not in section
     assert not any("groups/grp%2Fsub/push_rule" in c for c in env.api_calls())
+
+
+@pytest.mark.parametrize(
+    ("push", "force", "expected"),
+    [
+        (40, True, "push: maintainers, merge: developers, force push: allowed"),
+        (30, True, "off"),
+        (30, False, "push: developers, merge: developers"),
+    ],
+)
+def test_force_push_alone_is_not_off(tmp_path: Path, push: int, force: bool, expected: str) -> None:
+    """GitLab's unprotected preset is developers push plus force push; force
+    push with maintainers-only push is reported, not called off."""
+    defaults = {"allowed_to_push": [{"access_level": push}],
+                "allowed_to_merge": [{"access_level": 30}], "allow_force_push": force}
+    env = Env(tmp_path, {"groups/grp": _group_json(default_branch_protection_defaults=defaults)})
+    res = env.run("--host", HOST, "--no-file")
+    assert _settings(res.stdout, "grp")["default_branch_protection"] == expected
+
+
+def test_unreadable_group_list_keeps_the_section(tmp_path: Path) -> None:
+    """Discovery reads the group list once; the settings read fails. The
+    section stays, every setting unknown, rather than disappearing."""
+    env = Env(tmp_path)
+    (tmp_path / "glab-data" / "groups.fail-after").write_text("1")
+    res = env.run("--host", HOST, "--no-file")
+    assert res.returncode == 0, res.stderr
+    assert "5 project(s)" in res.stdout
+    settings = _settings(res.stdout, HOST)
+    assert set(settings) == set(SETTINGS)
+    assert set(settings.values()) == {"unknown (group list unreadable)"}
+    assert "1 group(s): 0 setting(s) off, 4 unknown" in res.stdout
