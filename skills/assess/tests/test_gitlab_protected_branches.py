@@ -73,6 +73,14 @@ def test_wildcard_metacharacters_are_literal(world: World) -> None:
     assert branch_protection(P, "release/[0-9]-x") is not None
 
 
+def test_a_wildcard_name_is_answered_only_by_its_own_rule(world: World) -> None:
+    world.serve(LIST, [_rule("*"), _rule("release/*", force=True)])
+    got = branch_protection(P, "release/*")
+    assert got is not None and got["allow_force_push"] is True
+    world.serve(LIST, [_rule("*")])
+    assert branch_protection(P, "release/*") is None
+
+
 def test_complete_list_without_a_cover_is_unprotected(world: World) -> None:
     world.serve(LIST, [_rule("release/*")])
     assert branch_protection(P, "main") is None
@@ -239,6 +247,17 @@ def test_mixed_snapshots_on_gitlab_list_only_the_compared_kind(world: World) -> 
     assert block["available"] is True and block["entries"] == []
     assert block["snapshots"] == [{"file": ".gitlab/main.json", "kind": "gitlab_protected_branch"}]
     assert world.calls("ghlog") == []
+
+
+def test_deleted_wildcard_rule_is_drift_and_the_list_is_read_once(world: World) -> None:
+    world.remote(GITLAB_REMOTE)
+    _track(world, ".gitlab/main.json", _rule("main"))
+    _track(world, ".gitlab/release.json", _rule("release/*"))
+    world.serve(LIST, [_rule("*"), _rule("main")])
+    block = scan_config_drift(world.root)
+    assert block["entries"] == [{"file": ".gitlab/release.json", "key": "branch_protection",
+                                 "tracked": "present", "live": "absent"}]
+    assert sum("protected_branches" in c for c in world.calls()) == 1
 
 
 def test_no_snapshots_makes_no_platform_call(world: World) -> None:

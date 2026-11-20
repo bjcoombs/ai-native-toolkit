@@ -29,7 +29,8 @@ reads (``origin``, else the sole remote):
 Protected branches (:func:`branch_protection`): the rule covering a branch is
 read from ``projects/<id>/protected_branches``. A rule named exactly as the
 branch wins; otherwise the first rule, in name order, whose name read as a
-wildcard (``*`` is GitLab's only wildcard) matches. "Unprotected" is said only
+wildcard (``*`` is GitLab's only wildcard) matches; a name holding ``*`` is
+answered only by the rule of that name. "Unprotected" is said only
 from a readable, complete list (fewer than ``PROTECTED_PAGE`` rules) with no
 covering rule. A full page (which may continue) without an exact rule asks for
 the branch by name (``protected_branches/<branch>``, the ``ghreport``
@@ -246,35 +247,53 @@ def branch_pattern(name: str) -> re.Pattern[str]:
     return re.compile("^" + ".*".join(re.escape(p) for p in name.split("*")) + "$")
 
 
-def branch_protection(project: GitlabProject, branch: str) -> dict[str, Any] | None:
-    """The protected-branch rule covering ``branch``, or None when unprotected.
+def protected_branches(project: GitlabProject) -> list[dict[str, Any]]:
+    """The first page of the project's protected-branch rules, each with a name.
 
-    See the module docstring for the matching order. Raises GhUnavailable on
-    any refused or malformed read, and when the list may be incomplete.
+    Raises GhUnavailable on a refused or malformed read. Read it once and pass
+    it to :func:`branch_protection` for every branch a scan asks about.
     """
-    enc = project.encoded
-    got = glab_api(project, f"projects/{enc}/protected_branches?per_page={PROTECTED_PAGE}")
+    got = glab_api(project, f"projects/{project.encoded}/protected_branches"
+                            f"?per_page={PROTECTED_PAGE}")
     if not isinstance(got, list):
         raise GhUnavailable("glab_bad_json: the protected branch list was not a list")
     rules = [r for r in got if isinstance(r, dict) and isinstance(r.get("name"), str)]
     if len(rules) != len(got):
         raise GhUnavailable("glab_bad_json: a protected branch has no name")
+    return rules
+
+
+def branch_protection(project: GitlabProject, branch: str,
+                      rules: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    """The protected-branch rule covering ``branch``, or None when unprotected.
+
+    ``rules`` is a :func:`protected_branches` read to reuse; it is read here
+    when omitted. See the module docstring for the matching order. A
+    ``branch`` holding ``*`` is a rule name, not a branch: only the rule of
+    that name answers for it, never another wildcard. Raises GhUnavailable on
+    any refused or malformed read, and when the list may be incomplete.
+    """
+    if rules is None:
+        rules = protected_branches(project)
     exact = next((r for r in rules if r["name"] == branch), None)
     if exact is not None:
         return exact
-    wild = sorted((r for r in rules if "*" in r["name"]), key=lambda r: str(r["name"]))
-    cover = next((r for r in wild if branch_pattern(r["name"]).match(branch)), None)
-    if len(got) < PROTECTED_PAGE:
+    cover = None
+    if "*" not in branch:
+        wild = sorted((r for r in rules if "*" in r["name"]), key=lambda r: str(r["name"]))
+        cover = next((r for r in wild if branch_pattern(r["name"]).match(branch)), None)
+    if len(rules) < PROTECTED_PAGE:
         return cover
     # A full page may continue: an exact rule on a later page outranks a
     # wildcard on this one, so ask for the branch by name first.
+    enc = project.encoded
     try:
         single = glab_api(project, f"projects/{enc}/protected_branches/{quote(branch, safe='')}")
     except GhUnavailable as e:
         if cover is not None:
             return cover
         raise GhUnavailable(
-            f"truncated: {len(got)} protected branches listed without {branch}"
+            f"truncated: {len(rules)} protected branches listed without {branch}"
             f" and the single-branch read gave no answer ({e.reason})"
         ) from None
     if not isinstance(single, dict):

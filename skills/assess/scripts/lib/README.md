@@ -1324,9 +1324,11 @@ failure returns None so the caller degrades exactly as before. `parse_remote` re
 https/http (port kept), scp-like and `ssh://` (port dropped) remotes with nested
 groups, and rejects a host or path segment outside a strict character set (the remote
 comes from the assessed repository and reaches argv). `normalize_host` ports
-`ghsync.sh`'s `--host` normalisation. `branch_protection(project, branch)` returns the
+`ghsync.sh`'s `--host` normalisation. `branch_protection(project, branch, rules=None)` returns the
 protected-branch rule covering a branch (exact name first, else the first `*` wildcard
-rule in name order, via `branch_pattern`), or None only from a readable list shorter than
+rule in name order, via `branch_pattern`; a name holding `*` is answered only by its own
+rule), reusing a `protected_branches(project)` read when given one (config_drift reads the
+list once per scan), or None only from a readable list shorter than
 `PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
 branch by name (the `ghreport.sh` fallback), so an exact rule on a later page outranks a
 first-page wildcard; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises

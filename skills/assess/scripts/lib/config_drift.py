@@ -87,7 +87,7 @@ from typing import Any
 from urllib.parse import quote
 
 from lib.gh_cli import GhUnavailable, gh_api, open_github, unavailable
-from lib.gitlab_cli import GitlabProject, branch_protection, open_gitlab
+from lib.gitlab_cli import GitlabProject, branch_protection, open_gitlab, protected_branches
 from lib.git_churn import tracked_files
 
 # Metadata the API adds or rewrites on every read; never configuration.
@@ -394,9 +394,10 @@ def _gitlab_levels(doc: Any) -> Any:
 def _gitlab_entries(project: GitlabProject,
                     snapshots: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Drift entries for GitLab protected-branch snapshots; raises GhUnavailable."""
+    rules = protected_branches(project)  # one list read per scan
     entries: list[dict[str, Any]] = []
     for snap in snapshots:
-        live = branch_protection(project, snap["branch"])
+        live = branch_protection(project, snap["branch"], rules)
         diffs = ([("branch_protection", "present", "absent")] if live is None
                  else diff_values(_gitlab_levels(snap["doc"]), _gitlab_levels(live)))
         entries += [{"file": snap["file"], "key": k, "tracked": t, "live": lv}
