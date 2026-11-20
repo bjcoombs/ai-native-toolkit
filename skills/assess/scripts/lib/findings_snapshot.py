@@ -86,8 +86,12 @@ def load_snapshot(assess_dir: Path) -> FindingsSnapshot | None:
     version = raw.get("assess_method_version")
     findings = raw.get("findings")
     # A hand-edited file may hold the version as a numeric string ("12").
-    if isinstance(version, str) and version.strip().isdigit():
-        version = int(version)
+    # ``isdigit`` alone would accept "²", which ``int`` rejects.
+    if isinstance(version, str):
+        try:
+            version = int(version.strip())
+        except ValueError:
+            return None
     if not isinstance(version, int) or isinstance(version, bool):
         return None
     if not isinstance(findings, list):

@@ -332,3 +332,12 @@ def test_committed_prior_keeps_the_recorded_prior_when_disk_is_current(
     recorded = build_snapshot([{"name": "lying_map", "paths": ["a.py"]}], 1)
     assert committed_prior(_ctx(recorded, [], version=2), tmp_path) == recorded
     assert committed_prior(_ctx(None, [], version=2), tmp_path) is None
+
+
+def test_load_snapshot_non_integer_string_version_is_none(tmp_path: Path) -> None:
+    """A hand-edited version string ``int`` cannot parse ("²", "v12", "") reads
+    as no snapshot instead of crashing the gate."""
+    for version in ("\u00b2", "v12", "", "1.5"):
+        (tmp_path / FINDINGS_SNAPSHOT_FILE).write_text(
+            json.dumps({"assess_method_version": version, "findings": []}))
+        assert load_snapshot(tmp_path) is None, version
