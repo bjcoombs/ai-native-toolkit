@@ -43,4 +43,8 @@ A leaf module so the orchestrator and the lib modules that write artifacts
 # agent setup, the check command an instruction file names, lockfiles per
 # manifest, copilot-setup-steps.yml findings, the Layer 5 Partial cap and the
 # optional gh CI-duration probe. Additive; complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.4.0"
+# 1.5.0: run-context.json gains doc_claims (issue #491): the instruction-claim
+# kinds verified across the doc set, and cross-document contradictions (two
+# files giving one checkable claim different values, every site cited).
+# Additive; complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.5.0"

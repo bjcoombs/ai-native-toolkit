@@ -93,6 +93,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_decline_markers.py` | `lib/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
 | `test_diff_reliability.py` | `lib/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
 | `test_doc_provenance.py` | `lib/doc_provenance.py` - provenance-aware staleness of generated docs |
+| `test_doc_claims.py` | `lib/doc_claims.py` - claim checks across the doc set and cross-document contradictions |
 | `test_evidence_check.py` | `lib/evidence_check.py` - deterministic re-check of scorer evidence |
 | `test_scorer_evidence.py` | `lib/evidence_check.py` - the layer scorer's structured evidence contract |
 | `test_gap_actions.py` | `lib/gap_actions.py` - the deterministic Top 3 gap candidates |
