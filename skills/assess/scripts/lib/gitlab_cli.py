@@ -28,9 +28,11 @@ reads (``origin``, else the sole remote):
 
 Protected branches (:func:`branch_protection`): the rule covering a branch is
 read from ``projects/<id>/protected_branches``. A rule named exactly as the
-branch wins; otherwise the first rule, in name order, whose name read as a
-wildcard (``*`` is GitLab's only wildcard) matches; a name holding ``*`` is
-answered only by the rule of that name. "Unprotected" is said only
+branch wins; otherwise every rule whose name read as a wildcard (``*`` is
+GitLab's only wildcard) matches covers it, and several covering wildcards are
+merged as GitLab applies them (:func:`merge_rules`: the most permissive level
+wins), never one picked by order; a name holding ``*`` is answered only by the
+rule of that name. "Unprotected" is said only
 from a readable, complete list (fewer than ``PROTECTED_PAGE`` rules) with no
 covering rule. A full page (which may continue) without an exact rule asks for
 the branch by name (``protected_branches/<branch>``, the ``ghreport``
@@ -247,6 +249,60 @@ def branch_pattern(name: str) -> re.Pattern[str]:
     return re.compile("^" + ".*".join(re.escape(p) for p in name.split("*")) + "$")
 
 
+_GRANTEES = ("user_id", "group_id", "deploy_key_id")
+
+
+def _merge_levels(lists: list[list[Any]]) -> list[Any]:
+    """Access level lists of overlapping rules as the one list GitLab enforces.
+
+    GitLab grants an action when any matching rule's level allows it, so the
+    grants are a union. Role grants (no user, group or deploy key) collapse to
+    the most permissive one: the lowest non-zero ``access_level`` (a role at or
+    above it passes), or ``0`` ("No one") when every role grant is ``0``.
+    """
+    roles: list[dict[str, Any]] = []
+    others: list[Any] = []
+    seen: list[Any] = []
+    for item in (i for levels in lists for i in levels):
+        if not isinstance(item, dict):
+            key: Any = item
+        elif (isinstance(item.get("access_level"), int)
+              and all(item.get(k) is None for k in _GRANTEES)):
+            roles.append(item)
+            continue
+        else:  # the same grant on two rules carries two ids: compare the grant
+            key = tuple(item.get(k) for k in ("access_level", *_GRANTEES))
+        if key not in seen:
+            seen.append(key)
+            others.append(item)
+    if roles:
+        allowed = [r for r in roles if r["access_level"] > 0]
+        best = min(allowed or roles, key=lambda r: int(r["access_level"]))
+        others.insert(0, best)
+    return others
+
+
+def merge_rules(rules: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Overlapping wildcard rules covering one branch, merged as GitLab applies them.
+
+    None for no rule, the rule itself for one. For several (in name order):
+    every ``*_access_levels`` list is merged by :func:`_merge_levels`,
+    ``allow_force_push`` and ``code_owner_approval_required`` are True when any
+    rule sets them (GitLab checks each across every matching rule), ``name``
+    joins the rule names with ``", "``, and any other key is the first rule's.
+    """
+    if len(rules) < 2:
+        return rules[0] if rules else None
+    merged = dict(rules[0])
+    merged["name"] = ", ".join(str(r["name"]) for r in rules)
+    for key in {k for r in rules for k in r if k.endswith("_access_levels")}:
+        merged[key] = _merge_levels([r[key] for r in rules if isinstance(r.get(key), list)])
+    for flag in ("allow_force_push", "code_owner_approval_required"):
+        if any(flag in r for r in rules):
+            merged[flag] = any(r.get(flag) is True for r in rules)
+    return merged
+
+
 def protected_branches(project: GitlabProject) -> list[dict[str, Any]]:
     """The first page of the project's protected-branch rules, each with a name.
 
@@ -281,7 +337,7 @@ def branch_protection(project: GitlabProject, branch: str,
     cover = None
     if "*" not in branch:
         wild = sorted((r for r in rules if "*" in r["name"]), key=lambda r: str(r["name"]))
-        cover = next((r for r in wild if branch_pattern(r["name"]).match(branch)), None)
+        cover = merge_rules([r for r in wild if branch_pattern(r["name"]).match(branch)])
     if len(rules) < PROTECTED_PAGE:
         return cover
     # A full page may continue: an exact rule on a later page outranks a

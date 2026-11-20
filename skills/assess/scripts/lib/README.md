@@ -1651,10 +1651,16 @@ https/http (port kept), scp-like and `ssh://` (port dropped) remotes with nested
 groups, and rejects a host or path segment outside a strict character set (the remote
 comes from the assessed repository and reaches argv). `normalize_host` ports
 `ghsync.sh`'s `--host` normalisation. `branch_protection(project, branch, rules=None)` returns the
-protected-branch rule covering a branch (exact name first, else the first `*` wildcard
-rule in name order, via `branch_pattern`; a name holding `*` is answered only by its own
-rule), reusing a `protected_branches(project)` read when given one (config_drift reads the
-list once per scan), or None only from a readable list shorter than
+protected-branch rule covering a branch (exact name first, else the `*` wildcard rules
+matching it via `branch_pattern`; a name holding `*` is answered only by its own
+rule). Overlapping wildcards (`release/*` and `*-stable` on `release/1-stable`) are merged
+by `merge_rules` as GitLab applies them, never one picked by order: each `*_access_levels`
+list is the union of the rules' grants with the role grants collapsed to the most
+permissive (lowest non-zero `access_level`, `0` only when every role grant is `0`),
+`allow_force_push` and `code_owner_approval_required` are True when any rule sets them,
+and `name` joins the rule names in name order with `", "`. It reuses a
+`protected_branches(project)` read when given one (config_drift reads the list once per
+scan), and returns None only from a readable list shorter than
 `PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
 branch by name (the `ghreport.sh` fallback), so an exact rule on a later page outranks a
 first-page wildcard; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
