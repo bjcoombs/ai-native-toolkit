@@ -19,9 +19,11 @@ unavailable to run without an edit here.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -227,15 +229,42 @@ def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT)
     }
 
 
+@contextmanager
+def read_only_git() -> Iterator[None]:
+    """Force ``GIT_OPTIONAL_LOCKS=0`` for the duration, restoring the prior value.
+
+    ``git status`` (run by the stamp and by scans) may otherwise refresh and
+    rewrite the target's ``.git/index``. Forced rather than defaulted, so an
+    inherited ``GIT_OPTIONAL_LOCKS=1`` cannot reopen that write; scoped, so
+    ``assess_core`` and the caller's environment are unchanged afterwards.
+    """
+    prior = os.environ.get("GIT_OPTIONAL_LOCKS")
+    os.environ["GIT_OPTIONAL_LOCKS"] = "0"
+    try:
+        yield
+    finally:
+        if prior is None:
+            os.environ.pop("GIT_OPTIONAL_LOCKS", None)
+        else:
+            os.environ["GIT_OPTIONAL_LOCKS"] = prior
+
+
 def build_document(
     repo_root: Path, requested: Sequence[str] | None = None, window: str = DEFAULT_WINDOW,
     toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SCANS,
 ) -> SignalsDocument:
-    """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments."""
+    """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
+
+    Every git call runs with optional locks off (``read_only_git``). The stamp
+    is read once, before the scans: the caller keeps the target checkout fixed
+    for the run (a fleet caller scans checkouts it controls), and the stamp
+    describes that checkout. A checkout that moves mid-run is not detected.
+    """
     selected = select_scans(requested, specs)
     window = parse_window(window)
-    return {
-        "signals_schema_version": SIGNALS_SCHEMA_VERSION,
-        "stamp": build_stamp(repo_root, window, toolkit_root),
-        "scans": collect(repo_root, selected, specs, window),
-    }
+    with read_only_git():
+        return {
+            "signals_schema_version": SIGNALS_SCHEMA_VERSION,
+            "stamp": build_stamp(repo_root, window, toolkit_root),
+            "scans": collect(repo_root, selected, specs, window),
+        }

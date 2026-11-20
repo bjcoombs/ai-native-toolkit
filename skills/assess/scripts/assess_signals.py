@@ -29,7 +29,12 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
+
+# No __pycache__ from the imports below: scanning the toolkit checkout itself
+# must not write into it either.
+sys.dont_write_bytecode = True
 
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -88,13 +93,25 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    # git status may refresh the target's index; optional locks off keeps the
-    # run from writing anything under the target's .git either.
-    os.environ.setdefault("GIT_OPTIONAL_LOCKS", "0")
     document = build_document(repo_root, requested, args.window)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(document, indent=2, default=str) + "\n", encoding="utf-8")
+    _write_atomically(out, json.dumps(document, indent=2, default=str) + "\n")
     return 0
+
+
+def _write_atomically(out: Path, text: str) -> None:
+    """Write through a temp file and ``os.replace``: a hard link at ``out`` into
+    the target is unlinked from the name, never truncated, and a failed write
+    leaves no partial document."""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=out.parent, prefix=f".{out.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, out)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 if __name__ == "__main__":

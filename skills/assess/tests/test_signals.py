@@ -227,11 +227,47 @@ def test_the_network_flag_marks_exactly_the_gh_scans():
 
 
 def test_the_window_reaches_a_scan_that_reads_history_window(fixture_repo):
-    specs = (ScanSpec("hist", lambda root: {"available": True}, ("repo_root",), reg.STAGE_READ_SIDE),)
-    inputs = signals.build_inputs(fixture_repo, "90d")
-    assert inputs["history_window"] == "90d"
-    assert set(reg.PROVIDED_INPUTS) <= set(inputs)
-    assert signals.collect(fixture_repo, ["hist"], specs, "90d") == {"hist": {"available": True}}
+    specs = (ScanSpec("hist", lambda window: {"saw": window}, ("history_window",), reg.STAGE_READ_SIDE),)
+    reg.validate(specs)
+    assert set(signals.build_inputs(fixture_repo, "90d")) == set(reg.PROVIDED_INPUTS)
+    doc = signals.build_document(fixture_repo, ["hist"], "90d", specs=specs)
+    assert doc["scans"] == {"hist": {"saw": "90d"}}
+
+
+def test_git_runs_with_optional_locks_off_and_the_env_is_restored(fixture_repo, monkeypatch):
+    monkeypatch.setenv("GIT_OPTIONAL_LOCKS", "1")
+    seen = {}
+
+    def probe(_root):
+        seen["locks"] = os.environ.get("GIT_OPTIONAL_LOCKS")
+        return {"available": True}
+
+    specs = (ScanSpec("probe", probe, ("repo_root",), reg.STAGE_READ_SIDE),)
+    signals.build_document(fixture_repo, specs=specs)
+    assert seen["locks"] == "0"
+    assert os.environ["GIT_OPTIONAL_LOCKS"] == "1"
+
+    monkeypatch.delenv("GIT_OPTIONAL_LOCKS")
+    signals.build_document(fixture_repo, specs=specs)
+    assert "GIT_OPTIONAL_LOCKS" not in os.environ
+
+
+def test_out_replaces_a_hard_link_instead_of_writing_through_it(fixture_repo, tmp_path):
+    inside = fixture_repo / "CLAUDE.md"
+    before = inside.read_text(encoding="utf-8")
+    out = tmp_path / "linked.json"
+    os.link(inside, out)
+    assert _run(fixture_repo, out, "--scans", "agent_ops") == 0
+    assert inside.read_text(encoding="utf-8") == before
+    assert json.loads(out.read_text(encoding="utf-8"))["scans"]["agent_ops"]
+    assert [p.name for p in tmp_path.glob(".linked.json.*")] == []
+
+
+def test_undecodable_config_degrades_to_defaults(fixture_repo, tmp_path):
+    (fixture_repo / ".assess").mkdir()
+    (fixture_repo / ".assess" / "config.toml").write_bytes(b"\xff\xfe[assess]\n")
+    doc = signals.build_document(fixture_repo, ["agent_ops"])
+    assert doc["scans"]["agent_ops"]
 
 
 def test_window_parsing():

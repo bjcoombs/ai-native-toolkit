@@ -34,14 +34,18 @@ from lib.agent_harness import scan_agent_harness
 from lib.agent_ops import scan_agent_ops
 from lib.claude_config import scan_claude_config
 from lib.config_drift import scan_config_drift
+from lib.coverage_gate import detect_coverage_gate
 from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.review_reality import scan_review_reality
 
 # Names the core passes to ``run_scans``. A spec may read these, or the key of
-# any spec declared before it.
-PROVIDED_INPUTS = frozenset({"repo_root", "instruction_files", "scope", "excludes"})
+# any spec declared before it. ``history_window`` is the git-history window a
+# history-reading scan should honour: the stats sidecar's ``churn_window`` label
+# in ``assess_core`` (e.g. "commits (last 12mo)"), ``--window`` (e.g. "6mo") in
+# the headless signals run, or None for all history.
+PROVIDED_INPUTS = frozenset({"repo_root", "instruction_files", "scope", "excludes", "history_window"})
 
 STAGE_READ_SIDE = "read_side"
 STAGE_POST_OFFERS = "post_offers"
@@ -196,6 +200,14 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE, network=True),
     ScanSpec("review_reality", scan_review_reality, ("repo_root",), STAGE_READ_SIDE, network=True),
     ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE, network=True),
+    # Layer 6: is a coverage threshold *enforced*, not just measured? Each gate
+    # names its file, line and threshold as written; none found reads
+    # enforced: false, never inferred from coverage_report. A scoped run reads
+    # the scope plus the root CI and task-runner files (issue #488).
+    ScanSpec(
+        "coverage_gate", detect_coverage_gate,
+        ("repo_root", "scope", "excludes"), STAGE_READ_SIDE,
+    ),
     # Checkable claims in the graded instruction files ("`x.sh` is enforced in
     # CI", "Node 20.11.0 is pinned in `.nvmrc`"), verified against the repo; a
     # failed claim is a Layer 0 lying signal. Zeros when none.

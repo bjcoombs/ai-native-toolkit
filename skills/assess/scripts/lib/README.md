@@ -465,10 +465,12 @@ degrades. `stage` exists to keep
 hand-wired assignments between the stages are gone. Currently registered:
 `agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
 `instruction_claims`, `claude_config`, `nested_instructions`, `agent_harness`,
-`agent_environment`. Besides
+`agent_environment`, `coverage_gate`. Besides
 `repo_root` and
 `instruction_files`, the core provides `scope` (the absolute `--scope` path, or
-None) and `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`).
+None), `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`) and
+`history_window` (the stats sidecar's `churn_window` label in `assess_core`,
+`--window` in the headless run, None for all history).
 A spec sets `network=True` when it reads GitHub through `gh` (`config_drift`,
 `review_reality`, `gate_cost_estimate`, `agent_environment`), and may name an
 `offline_fn` - the same scan with its probe off, taking the same reads
@@ -490,7 +492,10 @@ dropped at runtime, so migrating a scan needs no edit here. `select_scans` raise
 `UnknownScanError` naming every name in neither set. `build_stamp` records the toolkit
 commit, plugin version, UTC scan date, `--window` and the target's HEAD and dirty flag
 (each nullable outside git). The window is validated and stamped only: no registered
-scan reads a history window yet. Nothing here writes or reaches the network.
+scan reads a history window yet. Every git call runs inside `read_only_git` (`GIT_OPTIONAL_LOCKS=0`,
+forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
+before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
+the network.
 
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
@@ -1443,8 +1448,16 @@ separately. Stdlib only, imports no orchestrator. Add fixtures + cases in
 
 **`coverage_gate.py`**
 Answers the Layer 6 question measurement cannot: is a line-coverage threshold
-*enforced*? `detect_coverage_gate` walks config files (built-in excludes, depth 4,
-so a monorepo package's own config counts) and emits the run-context
+*enforced*? `detect_coverage_gate(repo_root, scope, excludes)` runs from the scan
+registry and walks config files (built-in and user excludes via
+`assess_config.is_user_excluded`, depth 4 below the walk base, so a monorepo
+package's own config counts). A scoped run walks the scope plus the root CI and
+task-runner files (`.github/workflows/`, composite actions, CircleCI, root
+`Makefile`, `justfile`, `.gitlab-ci.yml`, ...), which run the gates for the scoped
+package; a package-level config outside the scope is dropped. A root CI gate is
+reported for every scoped run whether or not its command targets the scope, so a
+scoped run appends `NOT_DETECTED_SCOPED` to `not_detected` naming that and the
+dropped root package configs. It emits the run-context
 `coverage_gate` block: `{available, enforced, gates, not_detected}`, each gate
 `{file, line, tool, form, threshold, unit, metric}`. Forms read: coverage.py
 `fail_under` in `[tool.coverage.report]` (`pyproject.toml`), `[report]`
@@ -1457,16 +1470,27 @@ task-runner files; Jest `coverageThreshold` (config or
 `package.json`, or `--check-coverage --lines N`); JaCoCo `<minimum>` in a `pom.xml`
 and `minimum =` in a `build.gradle(.kts)` that applies JaCoCo. The threshold is
 reported as written (`unit` `percent`, `ratio` for a JaCoCo `0.80`, or
-`uncovered_count` for a negative Jest value), never rescaled. Gates are typed by the `CoverageGate` TypedDict. `enforced` is true when
+`uncovered_count` for a negative Jest value), never rescaled; a templated value
+(`--cov-fail-under=${{ env.COV_MIN }}`, `$COV_MIN`, `$(COV_MIN)`) is a gate with
+`threshold: null`. coverage.py and pytest-cov gates carry `metric: total` when the
+same config sets `branch = true` in its run section (or the line passes
+`--cov-branch`), `lines` otherwise; on a gate in a CI or task-runner file, `lines`
+means branch mode was not determined (coverage.py reads the package's own config at
+run time, which is not resolved). A templated value may also be Make's escaped
+`$$COV_MIN`. Jest, Vitest and nyc/c8 metrics are read inside
+the braced object the anchor opens or sits in, so one Jest project's threshold is
+never credited to another and a one-line `"c8": {...}` is counted once. Gates are
+typed by the `CoverageGate` TypedDict. `enforced` is true when
 any gate has a non-zero threshold, or a null one from nyc/c8 (which check at a
-built-in default); `fail_under = 0` and a Jest/Vitest anchor whose threshold was
+built-in default) or a templated coverage.py / pytest-cov flag; `fail_under = 0` and a Jest/Vitest anchor whose threshold was
 not read are listed but gate nothing.
 Nothing found is `enforced: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
 other CI systems, Codecov / Coveralls status targets, Kover, scoverage, tarpaulin, SimpleCov) so an empty
 result reads as "none of these forms". A configured threshold proves the tool
 fails below it when coverage runs; whether CI runs coverage is the Layer 5 read.
-Stdlib plus `lib.doc_graph.is_excluded_path`. Tests: `tests/test_coverage_gate.py`.
+Stdlib plus `lib.doc_graph.is_excluded_path` and `lib.assess_config.is_user_excluded`.
+Tests: `tests/test_coverage_gate.py`.
 
 **`sibling_tests.py`**
 The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
