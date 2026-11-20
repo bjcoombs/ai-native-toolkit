@@ -40,13 +40,15 @@ run id, stats and diff, instruction grading, first-flagged map) are entries too;
 adapters live in `run_setup.py`, the read-side adapters in `core_scans.py`. The
 doc-staleness keys and the doc x complexity join joined the table last (#558), so the
 core assigns no key by hand. The table only reads: `run_publish.py` writes the wiki,
-badge and `run-context.json` after the scans (#557).
+badge and `run-context.json` after the scans (#557), so `build_run_context` has no
+file-system side effects and `build_and_publish_run` adds the publish step (#660).
 
 Seeing these two files in the same commit as `assess_core.py` is expected, not a
 defect.
 
-The core keeps only the orchestration: `build_run_context` (one `run_scans` call and
-the publish call), `run_opt_in_mutation` and `main`.
+The core keeps only the orchestration: `build_run_context` (one `run_scans` call,
+writing nothing), `build_and_publish_run` (the same, then the publish call, which
+`main` uses), `run_opt_in_mutation` and `main`.
 Its helpers live in seven modules, one per seam: `instruction_files.py`
 (instruction-file grading), `diff_reliability.py` (cross-run diff trust),
 `wiki_state.py` (first-flagged dates and run supersession), `run_wiki.py` (the wiki
@@ -102,14 +104,27 @@ one way, not three. Pure subprocess + stdlib, no heavy dependencies.
 Churn follows renames (issue #425): `git_churn_scores`, `pick_churn_window` and
 `commit_epochs_by_file` (the per-commit walk behind `code_churn_since_doc_change`) take
 the `change_coupling.build_rename_map` paths and credit a commit made under an old name
-to the file's current name, once per commit, so the count matches `git log --follow` (a
-file committed five times, renamed, then committed once scores 7). `pick_churn_window`
+to the file's current name, once per commit. A rename-only commit (contract I425-2) is
+not a content change: `git log --follow` less such commits (a file committed five times,
+renamed with no edit, then committed once scores 6), and the same holds for the content
+clock, so a pure `git mv` neither adds doc churn nor resets a doc's last-change age. `pick_churn_window`
 builds the map when it is not given one; `rename_paths` does that for the treemap's
 `--by churn` call and prints a stderr note when the map is incomplete. `doc_staleness`
 shares one map per HEAD between the churn reads and the content clock, and marks every
 doc row `confidence: low` when the map is incomplete, which keeps it out of `lying_map`.
-Git's own rename detection is off (`--no-renames`) in both walks, so `diff.renames`
+Git's own rename detection is off (`--no-renames`) in every walk, so `diff.renames`
 does not move a count. Tests: `tests/test_rename_churn.py`.
+
+**`content_paths.py`**
+The paths one commit changed in content, from `git log --raw --no-abbrev --no-renames`
+plus `--full-diff` (`RAW_LOG_ARGS`), folded to current names through the rename map.
+`--full-diff` lets a rename from outside a pathspec (a scope, a sub-directory root, the
+clock's doc globs) pair up; `within`, the walk's pathspec as a predicate, keeps the
+counted paths to those the commit touched inside it. A delete and an add of
+the same blob under two names that fold together is a pure rename and is dropped; a
+rename that also edits changes the blob and counts. `git_churn_scores`,
+`commit_epochs_by_file` and `content_commit_clock` all read it. Tests:
+`tests/test_content_paths.py`, `tests/test_rename_churn.py`.
 Shallow history (issue #544): `content_commit_clock` reuses its
 `--is-shallow-repository` probe, and on a shallow clone reads the boundary commits
 from `git rev-parse --git-path shallow`. The clock's `truncated`, `boundary_epoch`
@@ -125,7 +140,8 @@ into the `history_window` scan input (`"12mo"`, None for all-time).
 
 **`history_window.py`**
 The one history-window grammar (issue #601): `<n>d`, `<n>w`, `<n>mo`, `<n>y`.
-`split_window` returns `(count, unit)` or raises `ValueError`; `WINDOW_PATTERN` is the
+`split_window` returns `(count, unit)` or raises `ValueError`; it matches the whole
+string (`re.fullmatch`), so `"6mo\n"` is rejected as the ECMA-262 schema pattern rejects it; `WINDOW_PATTERN` is the
 unanchored regex fragment. `signals.parse_window`, `ai_usage.resolve_window`,
 `fleet_activity.window_start`, `git_churn.window_from_churn_label` and the
 `run.schema.json` window pattern (`fleet_schema`) all read it. Tests:
@@ -572,7 +588,8 @@ only, which holds every key `detect_anomalies` inspects. No logic of its own. Te
 `tests/test_run_setup.py`, and the run-context tests that patch a scan here.
 
 **`run_publish.py`**
-The run's side effects, applied after every scan (#557): `publish_run` creates the
+The run's side effects, applied after every scan (#557) by
+`assess_core.build_and_publish_run`, never by `build_run_context` (#660): `publish_run` creates the
 artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four wiki
 keys the run header reserved in place, writes `badge.json`, reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
@@ -1072,8 +1089,11 @@ The committed findings snapshot (#554). `build_snapshot` reduces `derived_findin
 names and sorted paths plus `ASSESS_METHOD_VERSION`; `write_snapshot` writes it to
 `findings.json` in the run's artifact directory, with no run id or date so an unchanged
 finding set leaves the file byte-identical. `load_snapshot` reads the previous file back
-before the run overwrites it (`None` when absent or malformed), and `run_publish`
-records it as `prior_findings_snapshot`. `method_change` compares that snapshot with
+before the run overwrites it (`None` when absent or malformed; a numeric-string
+version is read as its integer), and `run_publish` records it as
+`prior_findings_snapshot`. `committed_prior` picks the snapshot the gate compares
+against: the `findings.json` on disk when its method version differs from this run's
+(the gate run directly on a committed snapshot, #661), else the recorded prior. `method_change` compares that snapshot with
 the current findings: on a method-version mismatch it lists the paths that appeared and
 cleared per finding, the snapshot path and the re-freeze command (on a downgrade, when
 this run's method is older than the snapshot's, the toolkit pin to raise instead),
@@ -1451,7 +1471,8 @@ when they exist at HEAD, and directives, tradeoff phrases and verifiable outcome
 small capped floor. Size is scored on always-on size and share (#560, replacing the
 #517 whole-file curve, its skills halving and its word leg): `grade_instructions` splits
 the file with `instruction_placement.analyse_file` (given `skills`, the
-`skill_texts` map) and `placement_penalty` charges one point per 10 always-on lines
+`skill_texts` map) and `placement_penalty` (whose `fetch_words` is a required
+keyword, as is `loaded_equivalent_lines`'s, so no caller can understate the loaded words) charges one point per 10 always-on lines
 past 200, capped at 30, plus one point per 10 fetch-on-need lines, capped at 30; a
 file over 400 loaded lines (always-on and fetch-on-need) is capped at 59 (a B). Lines
 are line-equivalents, the larger of the lines and the words / 12, so a file of very
@@ -1680,19 +1701,24 @@ https/http (port kept), scp-like and `ssh://` (port dropped) remotes with nested
 groups, and rejects a host or path segment outside a strict character set (the remote
 comes from the assessed repository and reaches argv). `normalize_host` ports
 `ghsync.sh`'s `--host` normalisation. `branch_protection(project, branch, rules=None)` returns the
-protected-branch rule covering a branch (exact name first, else the `*` wildcard rules
-matching it via `branch_pattern`; a name holding `*` is answered only by its own
-rule). Overlapping wildcards (`release/*` and `*-stable` on `release/1-stable`) are merged
+protected-branch rules covering a branch: the rule of that exact name and every `*`
+wildcard rule matching it via `branch_pattern`, combined, since GitLab applies every
+matching rule and an exact name does not override a wildcard (issue #648; a name holding
+`*` is answered only by its own rule). Covering rules (`main` and `m*` on `main`, or
+`release/*` and `*-stable` on `release/1-stable`) are merged
 by `merge_rules` as GitLab applies them, never one picked by order: each `*_access_levels`
 list is the union of the rules' grants with the role grants collapsed to the most
 permissive (lowest non-zero `access_level`, `0` only when every role grant is `0`),
-`allow_force_push` and `code_owner_approval_required` are True when any rule sets them,
-and `name` joins the rule names in name order with `", "`. It reuses a
+`allow_force_push` and `code_owner_approval_required` are True when any rule sets them
+(force push follows the most permissive rule, code-owner approval the most restrictive),
+and `name` joins the rule names in name order with `", "`, except that a merge with an
+exact rule keeps the exact rule's `name`, so a config_drift snapshot of that rule sees
+the wildcards' settings, never a renamed rule. It reuses a
 `protected_branches(project)` read when given one (config_drift reads the list once per
 scan), and returns None only from a readable list shorter than
 `PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
-branch by name (the `ghreport.sh` fallback), so an exact rule on a later page outranks a
-first-page wildcard; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
+branch by name (the `ghreport.sh` fallback), so an exact rule on a later page combines with the
+first-page wildcards; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
 like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.py`,
 `tests/test_gitlab_protected_branches.py` (stubbed `glab`/`gh` as the whole `PATH`, offline).
 

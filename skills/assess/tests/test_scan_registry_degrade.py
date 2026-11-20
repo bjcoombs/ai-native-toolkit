@@ -52,7 +52,7 @@ def _raising_table(key: str) -> tuple[reg.ScanSpec, ...]:
 
 @pytest.mark.parametrize("key", NEWLY_DEGRADING)
 def test_a_raising_entry_degrades_and_every_reader_accepts_the_marker(key, tmp_path, monkeypatch):
-    from assess_core import build_run_context
+    from assess_core import build_and_publish_run
     from assess_core_helpers import _minimal_repo
     from assess_gate import evaluate, format_verdict
     from assess_report import render_report
@@ -63,7 +63,7 @@ def test_a_raising_entry_degrades_and_every_reader_accepts_the_marker(key, tmp_p
 
     monkeypatch.setattr(reg, "SCANS", _raising_table(key))
     repo = _minimal_repo(tmp_path)
-    ctx = build_run_context(repo_root=repo, run_date="2026-11-20", non_interactive=True)
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-11-20", non_interactive=True)
 
     marker = {"available": False, "reason": f"{key} scan failed: kaput"}
     assert ctx[key] == marker

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from assess_finalize import FinalizeValidationError, finalize_run
 from lib.badge import maturity_band
 from lib.wiki_writer import (
@@ -55,7 +55,7 @@ def repo(tmp_path: Path) -> Path:
 
 
 def _run(repo: Path) -> dict:
-    return build_run_context(repo_root=repo, run_date=DAY, non_interactive=True)
+    return build_and_publish_run(repo_root=repo, run_date=DAY, non_interactive=True)
 
 
 def _stage_finalize(assess_dir: Path, run_id: str) -> None:
@@ -235,9 +235,9 @@ def test_core_replaces_superseded_same_day_entry_without_git(tmp_path: Path) -> 
     root = tmp_path / "plain"
     (root / "src").mkdir(parents=True)
     (root / "src" / "hot.py").write_text("def hot(a):\n    return a\n", encoding="utf-8")
-    first = build_run_context(repo_root=root, run_date=DAY, non_interactive=True)
+    first = build_and_publish_run(repo_root=root, run_date=DAY, non_interactive=True)
     assert first["measured_commit"]["available"] is False
-    second = build_run_context(repo_root=root, run_date=DAY, non_interactive=True)
+    second = build_and_publish_run(repo_root=root, run_date=DAY, non_interactive=True)
     assess_dir = root / ".assess"
     assert _day_headings(assess_dir) == 1
     assert second["run_id"] in (assess_dir / "log.md").read_text(encoding="utf-8")

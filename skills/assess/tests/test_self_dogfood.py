@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from assess_finalize import _write_actions_contract
 from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION
 from lib.keyhole_signals import FINDING_MODE_VALUES, mode_for_finding
@@ -123,7 +123,7 @@ def dogfood_run(tmp_path_factory, request) -> dict:
     fixtures_dir = Path(request.fspath).parent / "fixtures"
     root = tmp_path_factory.mktemp("dogfood")
     repo = _build_dogfood_repo(root, fixtures_dir)
-    ctx = build_run_context(
+    ctx = build_and_publish_run(
         repo_root=repo, run_date="2026-07-07", non_interactive=True,
     )
     assess_dir = repo / ".assess"

@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from assess_finalize import finalize_run
 from lib.badge import maturity_band
 from lib.wiki_writer import (
@@ -199,7 +199,7 @@ def _stats(assess_dir: Path, paths: list[str]) -> None:
 
 
 def _core(repo: Path, day: str = _EXCLUDE_DAY) -> dict:
-    return build_run_context(repo_root=repo, run_date=day, non_interactive=True)
+    return build_and_publish_run(repo_root=repo, run_date=day, non_interactive=True)
 
 
 def _finalize(assess_dir: Path, ctx: dict) -> None:

@@ -403,14 +403,14 @@ def test_non_git_tree_uses_filesystem(tmp_path: Path) -> None:
 
 
 def test_run_context_carries_block(git_repo: Any) -> None:
-    from assess_core import build_run_context
+    from assess_core import build_and_publish_run
     from assess_core_helpers import _seed_assess
 
     repo, commit = git_repo
     _seed_assess(repo)
     _monorepo(repo)
     commit("monorepo")
-    ctx = build_run_context(repo_root=repo, run_date="2026-10-09")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-10-09")
     block = ctx["nested_instructions"]
     assert block["available"] is True
     assert block["budget"]["claude_code"]["files"][0] == "CLAUDE.md"
