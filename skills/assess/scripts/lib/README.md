@@ -639,7 +639,13 @@ inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 `non_interactive=True`), so a raising scan degrades through `safe` and the run
 completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
-`{"available": false, "reason": NETWORK_REASON}`. Only published, single-key scans
+`{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
+both providers). `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
+one exception: a network scan in `PLATFORM_SCANS` (an explicit list, `review_reality`
+today), or a network spec one of them reads, runs its `fn`. Extension point for #715 and
+#716: append a new platform block's name to `PLATFORM_SCANS`; register a sample of merged
+changes several blocks share as a private `network=True` spec they `read`, and it runs
+once under `--platform` as their dependency. Only published, single-key scans
 outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
 #557) are reported; the core's entries run only when a reported scan reads one, and
 the publish step never runs. The runner's table is `SIGNAL_SCANS` (`signal_scans`): the
@@ -950,7 +956,9 @@ commit, plugin version, UTC scan date, effective window, maturity-model version,
 (`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
 `scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true), plus
 `fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
-without one, absent before #706 and read as null, so the stamp version stays 1). No path,
+without one, absent before #706 and read as null, so the stamp version stays 1), and
+`platform` (#714: `--platform` ran the platform pass; absent before #714 and read as
+false through `fleet_legacy.stamp_value`). No path,
 salt, timing or input mode, so a
 root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
 writes atomically with sorted keys.
@@ -958,7 +966,8 @@ writes atomically with sorted keys.
 **`fleet_config.py`**
 The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
 `[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
-#696 and #714). API:
+#696 and #714; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
+--platform-jobs` and `--platform-timeout`). API:
 - `load_fleet_config(path)` / `parse_fleet_config(text)` validate against `SECTION_KEYS`
   and raise `FleetConfigError` naming the key (`review.foo`) and expected kind, never the
   value; both CLIs exit 2 on it.
@@ -971,7 +980,8 @@ The fleet settings file, `--fleet-config FILE` (issue #706), with the known sect
   ignored with a warning); an unset scalar takes the repository value. Repository input
   that does not validate is skipped with a stderr warning, never raised.
 - `config_sha256` (sorted-key JSON of the validated config: comments and key order do not
-  count, list order does) and `section_entries` (a list counts its items, else 1) feed
+  count, list order does; `UNHASHED_KEYS`, settings of how a run goes such as `[platform]
+  jobs` and `timeout`, are left out so they never break comparability) and `section_entries` (a list counts its items, else 1) feed
   the run stamp.
 
 Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
@@ -1051,6 +1061,23 @@ directory renamed into place in one step, and a replaced same-day entry loses it
 `run.json` before the new files move in (`run.json` last), so a failure part-way never
 leaves a mixed entry that `latest_matching` selects. Other files in an entry are kept.
 
+**`fleet_platform.py`**
+The fleet platform pass, `fleet.py --platform` (issue #714). `run_platform(rows, targets,
+options, jobs=, timeout=, names=, after=)` runs after the offline scan: one more
+`assess_signals.py --platform --scans <names>` child per `ok` row (`fleet.run_signals`,
+the offline scan's output mode and salt, `--platform-jobs` workers, `--platform-timeout`
+each, stderr tails in `<logs>/<repo>.platform.stderr`) and `join`s its blocks into the
+row's `scans` by repository. It never changes `status` or `reason`, so a slow host cannot
+make an offline row `scan_timeout`: a child that times out, exits non-zero, raises or
+omits a block gives that block `available: false` with `platform_timeout`,
+`platform_exit_<code>`, `platform_error` or `platform_invalid_output` (the code only in
+counts-only output). Failed rows are not read. `names` is `platform_scans(--scans)`:
+`signals.PLATFORM_SCANS` narrowed by `--scans`. All children share one response cache
+directory (`platform_cli.CACHE_ENV`) that the pass creates and removes. `after` (the
+`--delete-after` hook) runs on each row after its platform read, so a clone outlives the
+read of its remote. A new platform block (#715, #716) needs no change here: see
+`signals.py`. Tests: `tests/test_fleet_platform.py`.
+
 **`fleet_legacy.py`**
 Reads fleet output written before the 2.0.0 maturity-model rename (issue #670). `upgrade`
 moves each pre-rename key in a `run.json` stamp or `groups.jsonl` line to its new name
@@ -1060,7 +1087,10 @@ already under its new name wins, and the input is never mutated. `fleet_view._ch
 entries) call it. A pre-rename run then loads, matches as a same-day or baseline history
 entry, and counts in the trend history; `--compare` judges it by the usual rules, so a run
 from another plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
-never as a malformed stamp. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
+never as a malformed stamp. `stamp_value(stamp, key)` reads a stamp key added later with a
+non-null default (`STAMP_DEFAULTS`: `platform` is false before #714); every comparability
+check (`fleet_compare.comparability`, `fleet_history.entry_conflict`, `fleet_trends`)
+reads its keys through it on both sides. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
 stay at 1 for this reason: their readers reject any other version. Tests:
 `tests/test_fleet_legacy.py`, over a pre-rename run in `tests/fixtures/fleet_legacy/`.
 
@@ -1071,7 +1101,8 @@ Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
 turn into a not-comparable result). `comparability` reuses
 `diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
 adds maturity-model version, window, output mode, scan selection, path hashing and the
-`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config); any reason
+`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config) and
+`platform` (a pre-#714 stamp is false); any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
@@ -1932,10 +1963,24 @@ only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
 `gh_json(args)` calls. Every failure raises `GhUnavailable` with a reason that
 `unavailable()` turns into `{"available": False, "reason"}`: `no_remote`,
 `gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403), `not_found`
-(HTTP 404), `gh_timeout`, `gh_error`, `gh_bad_json`. A scan must degrade on it,
+(HTTP 404), `rate_limited` (HTTP 429 after the backoff), `gh_timeout`, `gh_error`,
+`gh_bad_json`. `gh` runs through `platform_cli.run_cli`. A scan must degrade on it,
 never report a clean result. Tests fake `gh` with a script first on `PATH`
 (`tests/test_config_drift.py`). `git_remote_url` (the remote both providers read)
 lives here and is shared with `gitlab_cli`.
+
+**`platform_cli.py`**
+How `gh_cli._run_gh` and `gitlab_cli._run_glab` run their binary (issue #714). `run_cli`
+closes stdin and sets `GH_PROMPT_DISABLED`, `NO_PROMPT` (glab) and `GIT_TERMINAL_PROMPT=0`
+over the inherited environment, so a prompt fails the call. A reply reporting HTTP 429 is
+retried up to `MAX_RETRIES` (3) times, waiting the printed `Retry-After` seconds when the
+CLI shows the header, else `BASE_WAIT * 2**attempt`, at most `MAX_WAIT` (60s) per wait;
+`SLEEP` is replaceable in tests. When `CACHE_ENV` (`ASSESS_PLATFORM_CACHE`) names a
+directory, a successful call's stdout is stored under the sha256 of its argv and the same
+argv is answered from it for the rest of the run (any process); failures are never stored.
+Only the fleet platform pass sets it, to a temporary directory it removes. Callers keep
+their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
+`tests/test_platform_cli.py`.
 
 **`gitlab_cli.py`**
 The GitLab side of the platform seam, with `gh_cli`'s contract: the `glab` binary as a
@@ -1943,8 +1988,9 @@ subprocess with `--hostname` on every call, no token read, JSON parsed in Python
 call capped (`GLAB_TIMEOUT_SECONDS`, 20; the self-managed probe
 `GLAB_PROBE_TIMEOUT_SECONDS`, 8). Failures raise `gh_cli.GhUnavailable`: `glab_not_installed`,
 `not_authenticated`, `unreachable` (ghsync's network patterns, or a probe timeout),
-`no_access` (HTTP 401/403), `not_found` (HTTP 404), `glab_timeout`, `glab_error` (any
-other non-zero exit), `glab_bad_json`. `open_gitlab` detects the provider from the
+`no_access` (HTTP 401/403), `not_found` (HTTP 404), `rate_limited` (HTTP 429 after the
+backoff), `glab_timeout`, `glab_error` (any other non-zero exit), `glab_bad_json`. `glab`
+runs through `platform_cli.run_cli`. `open_gitlab` detects the provider from the
 remote: github.com or no remote returns None without invoking `glab`; a `gitlab.com`
 remote is GitLab and must pass `glab auth status --hostname gitlab.com` (else it
 raises); any other host is GitLab only when that probe passes for it, and any probe

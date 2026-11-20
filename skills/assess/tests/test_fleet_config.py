@@ -353,3 +353,22 @@ def test_a_history_entry_from_before_706_still_matches_and_loads(tmp_path):
     assert fh.entry_conflict(entry, dict(_stamp(None))) is None
     assert fh.latest_matching(entry.parent, dict(_stamp(None))) == entry
     assert load_run(entry).stamp.get("fleet_config_sha256") is None
+
+
+# --- [platform] (#714) -----------------------------------------------------
+
+
+def test_platform_jobs_and_timeout_validate_and_leave_the_hash_alone():
+    config = fcfg.parse_fleet_config("[platform]\njobs = 2\ntimeout = 90\n")
+    assert fcfg.platform_section(config) == {"jobs": 2, "timeout": 90}
+    assert fcfg.config_sha256(config) == fcfg.config_sha256(fcfg.empty_config())
+    assert fcfg.section_entries(config)["platform"] == 2
+    for bad, message in (("jobs = 0", "platform.jobs: expected a whole number"),
+                         ("timeout = \"x\"", "platform.timeout: expected a whole number")):
+        with pytest.raises(fcfg.FleetConfigError, match=message):
+            fcfg.parse_fleet_config(f"[platform]\n{bad}\n")
+
+
+def test_signals_command_passes_platform_only_when_set():
+    assert "--platform" not in signals_command(Path("/c"), Path("/o.json"), ScanOptions())
+    assert "--platform" in signals_command(Path("/c"), Path("/o.json"), ScanOptions(platform=True))

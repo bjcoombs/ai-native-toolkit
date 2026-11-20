@@ -20,7 +20,7 @@ Exit codes:
 
 Run:
     uv run assess_signals.py <repo> --out FILE.json [--scans a,b,c] [--window 6mo]
-        [--counts-only [--hash-paths | --hash-salt VALUE]] [--fleet-config FILE]
+        [--counts-only [--hash-paths | --hash-salt VALUE]] [--fleet-config FILE] [--platform]
 """
 # /// script
 # requires-python = ">=3.11"
@@ -86,6 +86,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Fleet settings (TOML, lib/fleet_config.py): the [ai_usage], [review] and [platform] "
              "sections, extended by the target's .assess/config.toml sections.",
     )
+    parser.add_argument(
+        "--platform", action="store_true",
+        help="Make the platform reads (gh or glab) of the scans in lib/signals.py PLATFORM_SCANS "
+             "instead of reporting them unavailable. Off by default: no network call.",
+    )
     add_cli_arguments(parser)
     parsed = parser.parse_args(argv)
     validate_cli_args(parser, parsed)
@@ -127,7 +132,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     warn_missing_packages()  # a no-uv run: say how to install what the layer blocks need
-    document = build_document(repo_root, requested, args.window, fleet_config=fleet_config)
+    document = build_document(repo_root, requested, args.window, fleet_config=fleet_config,
+                              platform=args.platform)
     if args.counts_only:
         # Content-free mode: free text, identities and the target's commit
         # are dropped; references/counts-only.md lists what each block keeps.
