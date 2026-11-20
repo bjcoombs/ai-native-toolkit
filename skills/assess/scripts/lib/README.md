@@ -808,11 +808,12 @@ shared-tooling map, and the slope, layer-bar and trend charts of #675/#676). The
 | `text_width(s, size)`, `text_box(x, y, s, size, anchor)`, `truncate(s, limit, keep_tail)` | Sizing by character count (`CHAR_W` at 12px), no font metrics. |
 | `LinearScale(lo, hi, start, end)`, `.ticks(n)`, `nice_ceiling(v)`, `tick_label(v)` | Axes: a linear map (y runs `end` < `start`), even ticks, a 1/2/5 x 10^k axis top. |
 | `hatch_pattern(id, background, stroke, width, classes)`, `THEMED_HATCH`, `HATCH_FILL` | The diagonal hatch for unknown, never zero; themed diagrams put `THEMED_HATCH` in the defs and fill with `HATCH_FILL`. |
+| `ORRD_9`, `ramp_step(level, top)`, `STEP_TEXT` | The level ramp (#675 moved it here from the heat map): pale to dark by a level's share of its row's top level, and the fixed text colour that reads on each step. The heat map and the layer bars colour a level alike. |
 | `hatched_note(x, y, lines)` | The "unknown" key: a hatched swatch with wrapped lines naming what is unknown. |
 | `place_labels(points, bounds, *, size, radius, obstacles)` -> `PlacedLabel \| None` per point | Greedy collision nudging: the first `LABEL_OFFSETS` candidate inside `bounds` that hits no disc, obstacle box or earlier label; `None` means "name it elsewhere". Renderer and overlap test read the same boxes. |
 | `spread_vertical(ys, min_gap)` | End labels (trend, slope) pushed apart to `min_gap`, order kept. |
 | `overlaps(a, b)`, `Box` | The box test. |
-| `THEME`, `theme_style()` | Role -> (light, dark) colours as `t-`/`f-` (fill) and `s-` (stroke) classes, dark under `prefers-color-scheme`. The only `text` rule sets `font-family`, so it never overrides a text's attributes (`tests/svg_cascade.py`). |
+| `THEME`, `theme_style(extra)` | Role -> (light, dark) colours (plus a diagram's `extra` roles, such as the trend's series colours) as `t-`/`f-` (fill) and `s-` (stroke) classes, dark under `prefers-color-scheme`. The only `text` rule sets `font-family`, so it never overrides a text's attributes (`tests/svg_cascade.py`). |
 | `document(w, h, title, desc, body, *, style, defs, background)` | The whole file: prolog, `viewBox`, `<title>`, `<desc>`, style, defs and a full-canvas background (`f-bg` unless a colour is given). |
 
 No script, no external font or link; fixed number formatting. Tests: `tests/test_fleet_diagrams.py`.
@@ -840,16 +841,56 @@ says "drift not shown" instead. `render_tooling_map` draws
 repositories left, items right with their dependent counts, and the unknown repositories on
 a hatched strip.
 
+**`fleet_slope.py`**
+The before/after slope chart (#675), from the `--compare` result (`fleet_compare.Comparison`)
+and the maturity model alone. `slope_view(levels, comparison)` gives each group its mean level
+share (level over the row's top level) then and now, taken only over the rows with a known
+level in both runs, so a row going unknown to known never moves a line, and its biggest mover
+(largest share change, ties to the lower row id) with the comparison's `cause`. A group added,
+removed or with no row known in both runs is named on a hatched strip, never at zero.
+`end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
+both `render_slope` and its gap test. A mover whose `cause` is `set` or `set_and_level`
+carries a `*` explained under the chart.
+
+**`fleet_layer_bars.py`**
+The per-layer maturity bars (#675). `layer_bars(levels, repos)` evaluates every `team` row
+against each repository's own `scans` (`rubric.evaluate_row`) and counts repositories per
+level, with the undetermined ones (failed scan, uncollected signal) apart. `render_layer_bars`
+stacks them pale to dark on the heat map's ramp (`fleet_svg.ramp_step`, so a row's top level is
+the darkest step whatever its level count), the unknown segment hatched and its repositories
+named, never counted as level 0; `org` rows, which have no per-repository level, are named
+under the bars.
+
 **`fleet_diagrams.py`**
 The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#674).
-`build_diagrams(levels, repos, window)` returns a `Diagram` per picture (`file`, `title`,
-`question`, and `svg` or the one-line `skipped` reason: no maturity model, no team rows, no
-repositories). `report_markdown` embeds each with a relative clickable image link or says
+`build_diagrams(levels, repos, window, *, history, comparison)` returns a `Diagram` per picture
+(`file`, `title`, `question`, and `svg` or the one-line `skipped` reason: no maturity model, no
+team rows, no repositories; for the trend no run history or fewer than 3 comparable runs; for
+the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
+is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
+`comparison` is the result `_keep_and_compare` wrote. `report_markdown` embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
-stale picture. A new diagram (#675, #676) adds its module, its `FILE` to `DIAGRAM_FILES` and
+stale picture. A new diagram (#676) adds its module, its `FILE` to `DIAGRAM_FILES` and
 an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (regenerate with
 `uv run --locked python tests/fleet_diagrams_fixture.py` from `skills/assess`).
+
+**`fleet_trends.py`**
+Group trend lines across the dated run history (#676). `history_runs(org_dir, stamp, repos)`
+reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
+`groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode and
+path hashing and records a maturity-model version; unreadable entries are passed over. One
+run per date: the entry over this run's repository set, else the highest suffix.
+`trend_run(stamp, groups)` is one run's point per group, `mean_level` the plain mean of the
+group's known row levels (the history keeps no maturity model and `groups.jsonl` rows no
+per-row level list, so levels are not scaled; the axis says it is not comparable to the
+slope chart's share of top level);
+`series_runs` appends this run (from memory) and keeps the newest `MAX_RUNS`. `layout`
+splits each line at an unknown or absent value and at a maturity-model version change
+(marked by a dashed rule), and spaces end labels with `fleet_svg.spread_vertical`
+(`LABEL_GAP`); `render_trend` draws it, naming every gap on a hatched note, never at zero.
+`fleet_diagrams` skips it below `MIN_RUNS` (3). Golden render: `tests/fixtures/fleet_trends/`
+(regenerate with `uv run --locked python tests/fleet_trends_fixture.py` from `skills/assess`).
 
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
@@ -927,7 +968,8 @@ repository set (`entry_repos`), so a partial rerun never replaces a full-fleet e
 `choose_entry` then moves to
 `<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
 `latest_matching` finds the newest matching entry, preferring one over the same
-repository set, the default for a bare `--compare`.
+repository set, the default for a bare `--compare`. `dated_entries` lists the
+`<date>[.<n>]` directories oldest first (also read by `fleet_trends`).
 `persist` writes the three files to a hidden temp sibling first: a new entry is that
 directory renamed into place in one step, and a replaced same-day entry loses its
 `run.json` before the new files move in (`run.json` last), so a failure part-way never

@@ -15,6 +15,9 @@ same inputs. This module holds what they share, so no diagram copies it:
 - **Scales.** ``LinearScale`` maps a domain onto a pixel range and gives
   evenly stepped ticks; ``nice_ceiling`` rounds an axis maximum up to 1, 2 or
   5 times a power of ten.
+- **Level ramp.** ``ORRD_9`` (pale to dark), ``ramp_step`` (a level's step by
+  its share of the row's top level) and ``STEP_TEXT`` (the text colour that
+  reads on each step): the heat map and the layer bars colour a level alike.
 - **Hatching.** ``hatch_pattern`` is the diagonal hatch that marks unknown,
   never zero. The heat map keeps its literal white-and-grey pattern; the
   themed diagrams use ``THEMED_HATCH``, coloured by class.
@@ -40,7 +43,7 @@ from __future__ import annotations
 
 import html
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 CHAR_W = 7.0  # average glyph advance at 12px, used in place of font metrics
@@ -58,6 +61,23 @@ THEME: dict[str, tuple[str, str]] = {
     "unk": ("#9aa39f", "#5f6a66"),
 }
 THEMED_HATCH_ID = "fleet-hatch"
+
+# The level ramp (heat map and layer bars): ColorBrewer OrRd, 9 classes
+# (colorbrewer2.org), pale to dark; fixed colours that read on both backgrounds.
+ORRD_9 = ("#fff7ec", "#fee8c8", "#fdd49e", "#fdbb84", "#fc8d59",
+          "#ef6548", "#d7301f", "#b30000", "#7f0000")
+TOP_STEP = len(ORRD_9) - 1
+TEXT_DARK = "#1a1a1a"
+TEXT_LIGHT = "#ffffff"
+# Text colour per ramp step: dark text while it out-contrasts white.
+STEP_TEXT = (TEXT_DARK,) * 6 + (TEXT_LIGHT,) * 3
+
+
+def ramp_step(level: int, top: int | None) -> int:
+    """The OrRd step for a whole level: its share of ``top``, else the level itself."""
+    if top is None or top <= 0:
+        return max(0, min(level, TOP_STEP))
+    return max(0, min((level * 2 * TOP_STEP + top) // (2 * top), TOP_STEP))
 
 
 def esc(content: str) -> str:
@@ -140,11 +160,14 @@ THEMED_HATCH = hatch_pattern(THEMED_HATCH_ID, "", "", "2.4", classes=("f-bg", "s
 HATCH_FILL = f"url(#{THEMED_HATCH_ID})"
 
 
-def theme_style() -> str:
-    """The embedded ``<style>``: ``t-``/``f-`` (fill) and ``s-`` (stroke) classes per role."""
+def theme_style(extra: Mapping[str, tuple[str, str]] | None = None) -> str:
+    """The embedded ``<style>``: ``t-``/``f-`` (fill) and ``s-`` (stroke) classes per role in
+    ``THEME``, plus any ``extra`` roles a diagram adds (such as series colours)."""
+    roles = {**THEME, **(extra or {})}
+
     def rules(index: int) -> str:
         return "".join(f".t-{role},.f-{role}{{fill:{colours[index]}}}.s-{role}{{stroke:{colours[index]}}}"
-                       for role, colours in THEME.items())
+                       for role, colours in roles.items())
     return (f"<style>text {{ font-family: {FONT_STACK}; }}{rules(0)}"
             f"@media (prefers-color-scheme: dark){{{rules(1)}}}</style>")
 
