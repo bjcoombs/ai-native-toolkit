@@ -17,15 +17,13 @@ from lib import fleet_diagrams as fd
 from lib import fleet_trends as ft
 from lib.fleet_groups import GroupRow
 from lib.rubric import Rubric
-from fleet_trends_fixture import CURRENT_STAMP, ENTRIES, FIXTURES, LONG, REPOS, build, goldens, group, runs, stamp
+from fleet_trends_fixture import (CURRENT_STAMP, ENTRIES, FIXTURES, LEVELS, LONG, REPOS, TOP, build, goldens,
+                                  group, runs, stamp)
 from svg_cascade import overridden_text_attributes
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
-LEVELS: Rubric = {"version": "levels-2", "rows": []}  # build_diagrams only checks it is present
-
-
-def _run(label: str, version: str, means: dict[str, float | None]) -> ft.TrendRun:
-    return {"label": label, "levels_version": version, "means": means}
+def _run(label: str, version: str, means: dict[str, float | None], scaled: bool = False) -> ft.TrendRun:
+    return {"label": label, "levels_version": version, "means": means, "scaled": scaled}
 
 
 def _entry(org: Path, name: str, groups: list[GroupRow], version: str | None = "levels-2",
@@ -77,12 +75,60 @@ def test_history_keeps_comparable_runs_before_today_oldest_first():
     assert labels == ["2026-06-20", "2026-07-20", "2026-08-20", "2026-09-20", "2026-10-20", "2026-11-20"]
 
 
-def test_mean_level_is_the_mean_of_known_row_levels():
-    assert set(group("g", (1,))["rubric"][0]) >= {"level", "status"}  # no per-row level list to scale by
-    assert "levels" not in group("g", (1,))["rubric"][0]
-    assert ft.AXIS_NOTE in ft.render_trend(runs(FIXTURES))
+def test_mean_level_is_the_mean_of_known_team_row_levels():
     assert ft.mean_level(group("g", (1, 2, None))) == 1.5
+    assert ft.mean_level(group("g", (1, 2), org=0)) == 1.5  # org rows are left out
     assert ft.mean_level(group("g", (None, None))) is None
+
+
+def test_a_group_mean_is_the_mean_share_of_top_level_over_known_team_rows():
+    assert ft.group_mean(group("g", (1, 2, None), top=4, org=0)) == (1 / 4 + 2 / 4) / 2
+    assert ft.group_mean(group("g", (None,), top=4)) is None
+
+
+def test_a_run_with_top_levels_is_a_share_and_one_without_is_a_marked_plain_mean():
+    new = ft.trend_run(stamp("2026-01-01", "v"), [group("g", (1, 2), top=TOP)])
+    old = ft.trend_run(stamp("2026-01-01", "v"), [group("g", (1, 2))])
+    assert new is not None and old is not None
+    assert (new["scaled"], new["means"]["g"]) == (True, 0.5)
+    assert (old["scaled"], old["means"]["g"]) == (False, 1.5)
+    # one known team row without a top level makes the whole run a plain mean
+    mixed = ft.trend_run(stamp("2026-01-01", "v"), [group("g", (1,), top=TOP), group("h", (2,))])
+    assert mixed is not None and mixed["scaled"] is False
+
+
+def test_an_older_entry_of_this_runs_model_version_takes_its_top_levels(tmp_path):
+    org = tmp_path / "acme"
+    _entry(org, "2026-01-01", [group("g", (1, 2))], version="levels-2")
+    _entry(org, "2026-02-01", [group("g", (1, 2))], version="levels-1")
+    found = ft.history_runs(org, CURRENT_STAMP, REPOS, LEVELS)
+    assert [(r["label"], r["scaled"], r["means"]["g"]) for r in found] == [
+        ("2026-01-01", True, 0.5), ("2026-02-01", False, 1.5)]
+    assert all(not r["scaled"] for r in ft.history_runs(org, CURRENT_STAMP, REPOS))  # no model given
+
+
+def test_a_legacy_entry_is_still_plotted_hollow_and_explained():
+    content = ft.render_trend(runs(FIXTURES))
+    assert ft.MIXED_NOTE in content and ft.AXIS_LABEL in content
+    assert "Hollow points: runs kept before the history recorded each row" in content
+    assert content.count('class="f-bg s-series') > 0
+    assert "(plain mean level) on 2026-06-20" in content
+    scaled_only = [r for r in runs(FIXTURES) if r["scaled"]]
+    plain = ft.render_trend(scaled_only)
+    assert ft.MIXED_NOTE not in plain and "Hollow points" not in plain and "f-bg s-series" not in plain
+    assert ft.layout(scaled_only).y_ticks == [0.0, 0.25, 0.5, 0.75, 1.0]
+
+
+def test_a_unit_change_breaks_the_line_like_a_version_change():
+    drawn = [_run("a", "v", {"g": 1.0}), _run("b", "v", {"g": 0.5}, scaled=True),
+             _run("c", "v", {"g": 0.75}, scaled=True)]
+    assert ft._segments(drawn, "g") == [[0], [1, 2]]
+    plan = ft.layout(drawn)
+    assert plan.breaks == [1]
+    assert (plan.labels[0].delta, plan.labels[0].scaled) == (0.25, True)
+    content = ft.render_trend(drawn)
+    assert "share of top level</text>" in content
+    assert "g 0.75" in content and "+0.25" in content
 
 
 def test_a_run_without_a_maturity_model_is_not_a_point(tmp_path):
@@ -177,7 +223,7 @@ def test_end_labels_never_overlap_even_when_every_group_ends_level():
 def test_a_long_group_name_is_truncated_with_the_full_name_as_tooltip():
     content = ft.render_trend(runs(FIXTURES))
     assert f"<title>{LONG}</title>" in content
-    assert "platform/infrastructu… 2.5" in content
+    assert "platform/infrastructu… 0.83" in content
 
 
 def test_group_names_are_escaped():
@@ -194,6 +240,7 @@ def test_date_ticks_thin_out_but_keep_the_last_run():
 
 def test_delta_text():
     assert [ft._delta_text(d) for d in (None, 0.0, 0.5, -0.2)] == ["", "0.0", "+0.5", "-0.2"]
+    assert [ft._delta_text(d, scaled=True) for d in (0.0, 0.25)] == ["0.00", "+0.25"]
 
 
 # --- in the report ------------------------------------------------------------------
@@ -220,6 +267,8 @@ def test_three_runs_draw_and_embed():
 def test_no_history_and_no_levels_say_why():
     assert _trend(None)["skipped"] == fd.NO_HISTORY
     assert _trend([], levels=None)["skipped"] == fd.NO_LEVELS
+    org_only: Rubric = {"version": "v", "rows": [r for r in LEVELS["rows"] if r["scope"] == "org"]}
+    assert _trend([], levels=org_only)["skipped"] == fd.NO_TEAM_ROWS
 
 
 def test_a_raising_trend_renderer_is_a_skip_line(monkeypatch):
@@ -237,5 +286,6 @@ def test_trend_file_is_cleared_with_the_others(tmp_path):
 
 
 def test_fixture_entries_cover_a_version_change_and_another_window():
-    assert {version for _, version, _, _ in ENTRIES} == {"levels-1", "levels-2"}
-    assert {window for _, _, window, _ in ENTRIES} == {"3mo", "6mo"}
+    assert {version for _, version, _, _, _ in ENTRIES} == {"levels-1", "levels-2"}
+    assert {top for *_, top in ENTRIES} == {None, TOP}  # legacy entries and ones with top levels
+    assert {window for _, _, window, _, _ in ENTRIES} == {"3mo", "6mo"}

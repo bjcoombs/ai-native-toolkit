@@ -6,7 +6,7 @@ Drawn from this run's output with no model call; unknown is hatched and named, n
 
 Which busy repositories are least mature?
 
-Not drawn: skipped: the maturity model has no team rows to measure a repository by.
+Not drawn: skipped: no repositories in the run.
 
 ## Shared tooling
 
@@ -30,4 +30,4 @@ Not drawn: skipped: no earlier run compared (no --compare, or no history entry m
 
 Which layer is the org-wide weak spot?
 
-Not drawn: skipped: the maturity model has no team rows to measure a repository by.
+Not drawn: skipped: no repositories in the run.

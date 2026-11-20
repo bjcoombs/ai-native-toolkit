@@ -119,6 +119,9 @@
               "null"
             ]
           },
+          "top_level": {
+            "type": "integer"
+          },
           "aggregation": {
             "anyOf": [
               {

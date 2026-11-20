@@ -71,6 +71,16 @@ def test_fixture_view_means_movers_and_causes():
     assert (by["mobile"]["then"], by["mobile"]["absent"]) == (None, "added")
 
 
+def test_org_rows_are_left_out_of_the_mean_the_counts_and_the_mover():
+    org_move: RowMove = {**_move("org2fa", 0, 1), "scope": "org"}
+    view = fs.slope_view(_levels(), _comparison([_group("g", [org_move, _move("instructions", 1, 1)])]))
+    group = view["groups"][0]
+    assert (group["then"], group["now"], group["paired_rows"], group["rows"]) == (0.5, 0.5, 1, 1)
+    assert group["mover"] is None  # the org row moved, but it is not a team row
+    only_org = fs.slope_view(_levels(), _comparison([_group("o", [org_move])]))["groups"][0]
+    assert (only_org["then"], only_org["now"]) == (None, None)
+
+
 def test_a_row_unknown_in_one_run_is_left_out_so_the_line_does_not_move():
     levels = _levels()
     view = fs.slope_view(levels, _comparison([
@@ -147,7 +157,7 @@ def test_slope_skips_say_why():
     assert "no maturity model" in (skipped(None, real) or "")
     nothing = _comparison([_group("g", [_move("instructions", None, 1)])])
     assert skipped(levels, nothing) == (
-        "skipped: no group has a row with a known level in both runs.")
+        "skipped: no group has a team row with a known level in both runs.")
 
 
 def test_a_raising_slope_renderer_is_a_skip_line(monkeypatch):
@@ -239,7 +249,7 @@ def test_long_slope_labels_stay_inside_the_canvas():
 
 def test_rows_left_out_of_a_mean_are_named_visibly():
     text = fs.render_slope(_fixture_view())
-    assert "Rows left out of a mean, not known in both runs (left out/rows): data\u00a0(2/3)" in text
+    assert "Rows left out of a mean, not known in both runs (left out/rows): data\u00a0(1/2)" in text
 
 
 def test_layer_bars_legend_and_notes_stay_inside_and_scale_to_a_large_fleet():

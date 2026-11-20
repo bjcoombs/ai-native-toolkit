@@ -700,7 +700,9 @@ readers consume it). Subprocess, not import, keeps it off the orchestrator layer
 The group roll-up behind `groups.jsonl` (issue #568). `roll_up` groups `FleetRow`s by
 `group` (sorted) and `group_row` builds each `GroupRow`: repository counts, distinct
 shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanned rows
-only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each rubric row's level through `rubric.evaluate`, with
+only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each rubric row's level through `rubric.evaluate` with its
+`top_level` (the row's number of levels, #684, so a history entry reads as a share of top
+level without the model file; additive and `NotRequired`, absent in older rows), with
 no threshold config of its own. `load_settings` reads ghreport settings fragments
 (#565) from a file, an array or a directory (a render dir's `settings/`), keyed by
 `scope`, and raises `SettingsError` on a directory with no `*.json` fragment file;
@@ -756,7 +758,8 @@ grimp, networkx, lizard or `rg`, and for `structure_drift` no ownership map). Ev
 **`fleet_group_schema.py`**
 Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
 `RubricRowLevel` (lists and floats included, `settings` values as `{value, reason}` or
-`{available: false, reason}`). `tests/test_fleet_groups.py` fails when the checked-in
+`{available: false, reason}`; a `NotRequired` key, such as `top_level`, is left out of
+`required`). `tests/test_fleet_groups.py` fails when the checked-in
 file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
 from `skills/assess`.
 
@@ -813,12 +816,21 @@ shared-tooling map, and the slope, layer-bar and trend charts of #675/#676). The
 
 No script, no external font or link; fixed number formatting. Tests: `tests/test_fleet_diagrams.py`.
 
+**`fleet_maturity.py`**
+The one maturity mean the quadrant, the slope chart and the trend lines share (#684).
+`mean_share(cells)` averages each known `(level, top)` pair's share of top level, leaving out
+an unknown level or a missing top level (`None` when nothing is left, never 0);
+`known_shares` lists them. `SCOPE` is the row set, `team` rows: the only rows a single
+repository can be measured by, so the group charts use them too and the three read on one
+scale. Pure arithmetic.
+
 **`fleet_quadrant.py`**
 The activity x maturity quadrant (#674). `repo_points(levels, repos)` gives each repository
 its commit count (`ai_usage.total_commits` over the run window; `None` for a failed scan or
 an unavailable block) and maturity: each `team` row re-evaluated against the repository's
 own `scans` (`rubric.evaluate_row`), as a share of the row's top level, averaged over the
-rows that could be measured (`None` when none could). `layout` places the plotted points
+rows that could be measured (`fleet_maturity.mean_share`; `None` when none could). Below 5 at
+the top, the commit axis ticks every whole commit (`count_ticks`, #684), never 0.2. `layout` places the plotted points
 and their labels (captions in `CAPTIONS` are obstacles); `render_quadrant` draws them with
 the busy-and-immature quadrant (at or above the median commits, below half the top level,
 `at_risk`) shaded, and names every repository with an unknown axis on a hatched strip,
@@ -840,8 +852,8 @@ a hatched strip.
 **`fleet_slope.py`**
 The before/after slope chart (#675), from the `--compare` result (`fleet_compare.Comparison`)
 and the maturity model alone. `slope_view(levels, comparison)` gives each group its mean level
-share (level over the row's top level) then and now, taken only over the rows with a known
-level in both runs, so a row going unknown to known never moves a line, and its biggest mover
+share (`fleet_maturity.mean_share`, team rows only, #684) then and now, taken only over the team
+rows with a known level in both runs (org rows are out of the mean, the counts and the mover), so a row going unknown to known never moves a line, and its biggest mover
 (largest share change, ties to the lower row id) with the comparison's `cause`. A group added,
 removed or with no row known in both runs is named on a hatched strip, never at zero.
 `end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
@@ -878,13 +890,17 @@ reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
 `groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode and
 path hashing and records a maturity-model version; unreadable entries are passed over. One
 run per date: the entry over this run's repository set, else the highest suffix.
-`trend_run(stamp, groups)` is one run's point per group, `mean_level` the plain mean of the
-group's known row levels (the history keeps no maturity model and `groups.jsonl` rows no
-per-row level list, so levels are not scaled; the axis says it is not comparable to the
-slope chart's share of top level);
+`trend_run(stamp, groups, levels)` is one run's point per group: `group_mean`, the
+`fleet_maturity.mean_share` of the group's known team rows over their `top_level` (#684, the
+slope chart's and quadrant's unit and row set). An entry without `top_level` takes it from
+this run's maturity model (`levels`, passed through `history_runs`) when it used the same
+version (`with_top_levels`); otherwise a run with any known team row lacking it is marked
+`scaled: false` and `mean_level` (the plain mean of the known team-row levels) stands in,
+drawn hollow and named in a caption, the axis noting it;
 `series_runs` appends this run (from memory) and keeps the newest `MAX_RUNS`. `layout`
-splits each line at an unknown or absent value and at a maturity-model version change
-(marked by a dashed rule), and spaces end labels with `fleet_svg.spread_vertical`
+splits each line at an unknown or absent value, at a maturity-model version change and at a
+change between share and plain-mean runs (each marked by a dashed rule); the value axis is
+0 to 1 when every run is a share, whole levels otherwise, and spaces end labels with `fleet_svg.spread_vertical`
 (`LABEL_GAP`); `render_trend` draws it, naming every gap on a hatched note, never at zero.
 `fleet_diagrams` skips it below `MIN_RUNS` (3). Golden render: `tests/fixtures/fleet_trends/`
 (regenerate with `uv run --locked python tests/fleet_trends_fixture.py` from `skills/assess`).

@@ -24,7 +24,8 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TypedDict
 
-from lib import fleet_layer_bars, fleet_quadrant, fleet_slope, fleet_tooling_map, fleet_trends
+from lib import (fleet_layer_bars, fleet_maturity, fleet_quadrant, fleet_slope, fleet_tooling_map,
+                 fleet_trends)
 from lib.fleet import FleetRow
 from lib.fleet_compare import Comparison
 from lib.fleet_trends import TrendRun
@@ -56,7 +57,7 @@ class Diagram(TypedDict):
 
 NO_LEVELS = "skipped: the run had no maturity model (--rubric), so no levels."
 NO_HISTORY = "skipped: the run is not kept in the run history (--no-history or --full), so no earlier runs."
-NO_TEAM_ROWS = "skipped: the maturity model has no team rows to measure a repository by."
+NO_TEAM_ROWS = "skipped: the maturity model has no team rows to measure maturity by."
 NO_REPOS = "skipped: no repositories in the run."
 
 
@@ -66,11 +67,15 @@ def _entry(file: str) -> Diagram:
     return {"file": file, "title": title, "question": question, "svg": None, "skipped": None}
 
 
+def _has_team_rows(levels: Rubric) -> bool:
+    return any(row["scope"] == fleet_maturity.SCOPE for row in levels["rows"])
+
+
 def _quadrant(levels: Rubric | None, repos: Sequence[FleetRow], window: str) -> Diagram:
     entry = _entry(fleet_quadrant.FILE)
     if levels is None:
         entry["skipped"] = NO_LEVELS
-    elif not any(row["scope"] == "team" for row in levels["rows"]):
+    elif not _has_team_rows(levels):
         entry["skipped"] = NO_TEAM_ROWS
     elif not repos:
         entry["skipped"] = NO_REPOS
@@ -98,10 +103,12 @@ def _slope(levels: Rubric | None, comparison: Comparison | None) -> Diagram:
                             + "; ".join(comparison["reasons"]) + ").")
     elif levels is None:
         entry["skipped"] = NO_LEVELS
+    elif not _has_team_rows(levels):
+        entry["skipped"] = NO_TEAM_ROWS
     else:
         view = fleet_slope.slope_view(levels, comparison)
         if not fleet_slope.plotted(view):
-            entry["skipped"] = "skipped: no group has a row with a known level in both runs."
+            entry["skipped"] = "skipped: no group has a team row with a known level in both runs."
         else:
             entry["svg"] = fleet_slope.render_slope(view)
     return entry
@@ -111,7 +118,7 @@ def _layer_bars(levels: Rubric | None, repos: Sequence[FleetRow]) -> Diagram:
     entry = _entry(fleet_layer_bars.FILE)
     if levels is None:
         entry["skipped"] = NO_LEVELS
-    elif not any(row["scope"] == "team" for row in levels["rows"]):
+    elif not _has_team_rows(levels):
         entry["skipped"] = NO_TEAM_ROWS
     elif not repos:
         entry["skipped"] = NO_REPOS
@@ -126,6 +133,8 @@ def _trend(levels: Rubric | None, history: Sequence[TrendRun] | None) -> Diagram
     entry = _entry(fleet_trends.FILE)
     if levels is None:
         entry["skipped"] = NO_LEVELS
+    elif not _has_team_rows(levels):
+        entry["skipped"] = NO_TEAM_ROWS
     elif history is None:
         entry["skipped"] = NO_HISTORY
     elif len(history) < fleet_trends.MIN_RUNS:

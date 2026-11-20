@@ -333,7 +333,8 @@ def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
 
 
 def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
-                   groups: list[GroupRow], rows: list[FleetRow]) -> list[TrendRun] | None:
+                   groups: list[GroupRow], rows: list[FleetRow],
+                   rubric: Rubric | None = None) -> list[TrendRun] | None:
     """The trend's runs: earlier comparable history entries, then this run from memory; None
     when the run is not kept in the history or had no maturity model. Never raises."""
     current = trend_run(stamp, groups)
@@ -341,7 +342,7 @@ def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
         return None
     try:
         repos = frozenset(row["repo"] for row in rows)
-        return series_runs(history_runs(org_dir, stamp, repos), current)
+        return series_runs(history_runs(org_dir, stamp, repos, rubric), current)
     except Exception as e:  # noqa: BLE001 - the history never fails a completed run
         print(f"fleet: diagrams: run history not read ({type(e).__name__})", file=sys.stderr)
         return None
@@ -457,7 +458,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     write_stamp(out_dir, stamp)
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
-    history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows)
+    history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, rubric)
     _diagrams(out_dir, args.no_diagrams, rubric, rows, window, history=history, comparison=comparison)
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",

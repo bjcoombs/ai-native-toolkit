@@ -6,8 +6,10 @@ Built from ``lib.fleet_compare.Comparison`` alone (the deltas ``--compare``
 already writes to ``compare.json``) plus the maturity model for each row's top
 level; nothing is re-scanned.
 
-Each row's level counts as its share of the row's top level, as in the
-quadrant, so rows with different numbers of levels weigh alike. A group's mean
+Each row's level counts as its share of the row's top level over the ``team``
+rows (``lib.fleet_maturity``: the unit and row set the quadrant and trend lines
+use), so rows with different numbers of levels weigh alike; org rows are left
+out of the mean, the counts and the mover. A group's mean
 is taken only over the rows with a known level in *both* runs: a row that went
 from unknown to known (or back) is left out, so a line never moves because
 evidence appeared or vanished. A group with no such row (added or removed
@@ -30,6 +32,7 @@ from typing import TypedDict
 
 from lib import fleet_svg as svg
 from lib.fleet_compare import CAUSE_LEVEL, Comparison
+from lib.fleet_maturity import SCOPE, mean_share
 from lib.fleet_svg import THEMED_HATCH, LinearScale
 from lib.rubric import Rubric
 
@@ -60,7 +63,7 @@ class GroupSlope(TypedDict):
     then: float | None  # mean share of top level over paired rows; None: no paired row
     now: float | None
     paired_rows: int  # rows with a known level in both runs
-    rows: int  # rows of the maturity model the group carries on either side
+    rows: int  # team rows of the maturity model the group carries on either side
     mover: Mover | None  # the row that moved most; None when no paired row moved
     absent: str | None  # "added" | "removed" when the group is in one run only
 
@@ -84,12 +87,13 @@ def slope_view(levels: Rubric, comparison: Comparison) -> SlopeView:
     titles = {row["id"]: row["title"] for row in levels["rows"]}
     groups: list[GroupSlope] = []
     for change in sorted(comparison["groups"], key=lambda g: g["group"]):
-        then_shares: list[float] = []
-        now_shares: list[float] = []
+        then_cells: list[tuple[int, int]] = []
+        now_cells: list[tuple[int, int]] = []
         mover: Mover | None = None
         best = 0.0
         then_present = now_present = False
-        for row in sorted(change["rows"], key=lambda r: r["id"]):
+        rows = sorted((r for r in change["rows"] if r["scope"] == SCOPE), key=lambda r: r["id"])
+        for row in rows:
             then_present = then_present or row["then"] is not None
             now_present = now_present or row["now"] is not None
             top = tops.get(row["id"])
@@ -97,8 +101,8 @@ def slope_view(levels: Rubric, comparison: Comparison) -> SlopeView:
             b = row["now"]["level"] if row["now"] is not None else None
             if not top or a is None or b is None:
                 continue
-            then_shares.append(a / top)
-            now_shares.append(b / top)
+            then_cells.append((a, top))
+            now_cells.append((b, top))
             moved = abs(b - a) / top
             if moved > best:
                 best = moved
@@ -108,9 +112,9 @@ def slope_view(levels: Rubric, comparison: Comparison) -> SlopeView:
                   else "removed" if then_present and not now_present else None)
         groups.append({
             "group": change["group"],
-            "then": sum(then_shares) / len(then_shares) if then_shares else None,
-            "now": sum(now_shares) / len(now_shares) if now_shares else None,
-            "paired_rows": len(then_shares), "rows": len(change["rows"]),
+            "then": mean_share(then_cells),
+            "now": mean_share(now_cells),
+            "paired_rows": len(then_cells), "rows": len(rows),
             "mover": mover, "absent": absent,
         })
     earlier, later = comparison["earlier"], comparison["later"]
@@ -177,8 +181,8 @@ def render_slope(view: SlopeView) -> str:
             svg.text(PAD, PAD + 40, f"{len(view['groups'])} groups · mean maturity in "
                      f"{view['earlier']} and {view['later']}, labelled with the row that moved most",
                      cls="muted"),
-            svg.text(PAD, PAD + 58, "Maturity: each row's level as a share of its top level, "
-                     "averaged over the rows with a known level in both runs", size=11.5,
+            svg.text(PAD, PAD + 58, "Maturity: each team row's level as a share of its top level, "
+                     "averaged over the team rows with a known level in both runs", size=11.5,
                      cls="muted")]
     for tick in Y.ticks(4):
         ty = Y(tick)
