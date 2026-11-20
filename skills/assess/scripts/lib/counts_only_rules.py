@@ -396,6 +396,11 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "shared_tooling.ci_source_ids": ID,
         "shared_tooling.marketplace_ids": ID,
     },
+    "layer_grades": {
+        # A letter grade (A-F) or null; the presence flag is a boolean.
+        "layer_grades.reason": DROP,
+        "layer_grades.instructions_grade": TOKEN,
+    },
     "ai_usage": {
         # window is the <n>d|w|mo|y grammar or "all-time"; since is the git
         # expression behind it ("12 months ago"), redundant with window.

@@ -56,6 +56,7 @@ from lib.run_context_types import (
 from lib.run_context_types import (
     BehaviourBlock as _BehaviourBlock,
 )
+from lib.layer_grades import LayerGradesBlock
 from lib.scc_coverage import UnreliableCcnRow
 from lib.shared_tooling import SharedToolingBlock
 from lib.structure_drift import EmptyOwnershipPattern
@@ -101,6 +102,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("structure_drift.tier_0.empty_ownership_patterns", EmptyOwnershipPattern),
     ("sensitive_instruction_content.{}", SensitiveFinding),
     ("shared_tooling", SharedToolingBlock),
+    ("layer_grades", LayerGradesBlock),
     ("prior_findings_snapshot", FindingsSnapshot),
     ("instruction_placement", InstructionPlacementBlock),
     ("ai_usage", AiUsageBlock),

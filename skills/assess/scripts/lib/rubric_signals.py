@@ -14,7 +14,10 @@ one. A rubric row's ``scope`` picks the namespace:
   scalar. A block without a typed shape is open: any sub-path is accepted, so
   a typo there loads and evaluates ``unknown`` with the path named. Run-context
   keys outside the schema (``instructions_grade``, ``skills_count``) are
-  rejected: a fleet run never has them.
+  rejected: a fleet run never has them. The deterministic layer grades are
+  published as the ``layer_grades`` block (``lib.layer_grades``), so a rubric
+  names ``layer_grades.instructions_grade`` instead; a typed block, so an
+  unknown field under it fails at load.
 - ``org`` paths read one group's settings fragment from ``ghreport``
   (``skills/ghreport/scripts/ghreport.sh``, "org / group settings"):
   ``scope``, ``provider``, and ``value`` / ``reason`` under each setting.

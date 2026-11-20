@@ -373,7 +373,7 @@ def mirror_pair(a: str, b: str) -> tuple[list[str], list[str], bool]:
     cb, body_b = _split_header(b.splitlines())
     own_a = [c for c in ca if c not in cb]
     own_b = [c for c in cb if c not in ca]
-    paired = min(len(own_a), len(own_b))
+    paired = min(1, len(own_a), len(own_b))  # one per-file note a side, no more
     return (own_a[paired:] + _norm(body_a), own_b[paired:] + _norm(body_b),
             paired > 0)
 
@@ -430,7 +430,8 @@ def _shadowing(
             "kind": "claude_shadows_agents", "path": claude[0].rel, "parent": agent.rel,
             "diff_lines": diff,
             "detail": f"Claude Code reads `{claude[0].rel}` and never `{agent.rel}`, "
-                      f"which differs by {diff} line(s) below the header; add "
+                      f"which differs by {diff} line(s), header comments only one "
+                      "file carries included; add "
                       "`@AGENTS.md` to the CLAUDE.md or make one a symlink to the other",
         })
     return shadows, mirrors

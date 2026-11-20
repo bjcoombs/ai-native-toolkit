@@ -199,11 +199,70 @@ def test_persist_leaves_no_temp_file_on_failure(tmp_path, monkeypatch):
 
     def boom(*_args: object) -> None:
         raise OSError("disk full")
-    monkeypatch.setattr(fh.os, "replace", boom)
-    entry = tmp_path / "entry"
+    monkeypatch.setattr(fh.os, "rename", boom)
+    entry = tmp_path / "org" / "entry"
     with pytest.raises(OSError):
         persist(out, entry, STAMP, frozenset())  # type: ignore[arg-type]
-    assert list(entry.iterdir()) == []
+    assert list(entry.parent.iterdir()) == []
+
+
+def test_a_new_entry_is_staged_and_renamed_in_whole(tmp_path):
+    out = _out(tmp_path / "out", REPOS)
+    entry = tmp_path / "org" / "2026-11-20"
+    assert persist(out, entry, STAMP, REPOS) == entry  # type: ignore[arg-type]
+    assert sorted(p.name for p in entry.parent.iterdir()) == ["2026-11-20"]
+    assert sorted(p.name for p in entry.iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
+
+
+def _out(out: Path, repos: frozenset[str], marker: str = "new") -> Path:
+    out.mkdir(parents=True)
+    (out / "run.json").write_text(json.dumps({**STAMP, "marker": marker}), encoding="utf-8")
+    (out / "repos.jsonl").write_text("".join(json.dumps({"repo": r, "marker": marker}) + "\n"
+                                             for r in sorted(repos)), encoding="utf-8")
+    (out / "groups.jsonl").write_text(marker + "\n", encoding="utf-8")
+    return out
+
+
+@pytest.mark.parametrize("fail_at", ["repos.jsonl", "groups.jsonl", "run.json"])
+def test_a_failed_same_day_replace_never_leaves_a_mixed_entry_that_is_selected(tmp_path, monkeypatch, fail_at):
+    org = tmp_path / "org"
+    entry = _put(org / "2026-11-20", {**STAMP, "marker": "old"})
+    (entry / "groups.jsonl").write_text("old\n", encoding="utf-8")
+    out = _out(tmp_path / "out", REPOS)
+    real_replace = os.replace
+
+    def flaky(src: object, dst: object) -> None:
+        if Path(str(dst)) == entry / fail_at:
+            raise OSError("disk full")
+        real_replace(src, dst)  # type: ignore[arg-type]
+    monkeypatch.setattr(fh.os, "replace", flaky)
+    with pytest.raises(OSError):
+        persist(out, entry, STAMP, REPOS)  # type: ignore[arg-type]
+    monkeypatch.undo()
+    assert [p.name for p in org.iterdir()] == ["2026-11-20"]  # no staging directory left
+    groups = (entry / "groups.jsonl").read_text(encoding="utf-8")
+    repos = (entry / "repos.jsonl").read_text(encoding="utf-8")
+    run = entry / "run.json"
+    if fail_at == "repos.jsonl":  # nothing new landed: the earlier run is whole and still selected
+        assert groups == "old\n" and json.loads(run.read_text(encoding="utf-8"))["marker"] == "old"
+        assert latest_matching(org, STAMP, REPOS) == entry
+    else:  # part of the new run landed: the entry has no run.json, so it is never read as a run
+        assert not run.exists()
+        assert '"marker": "new"' in repos
+        assert latest_matching(org, STAMP, REPOS) is None
+        assert entry_conflict(entry, STAMP, REPOS) is not None
+
+
+def test_a_replaced_same_day_entry_is_the_new_run_in_whole(tmp_path):
+    org = tmp_path / "org"
+    entry = _put(org / "2026-11-20", {**STAMP, "marker": "old"})
+    (entry / "notes.txt").write_text("mine", encoding="utf-8")
+    persist(_out(tmp_path / "out", REPOS), entry, STAMP, REPOS)  # type: ignore[arg-type]
+    assert json.loads((entry / "run.json").read_text(encoding="utf-8"))["marker"] == "new"
+    assert (entry / "groups.jsonl").read_text(encoding="utf-8") == "new\n"
+    assert (entry / "notes.txt").read_text(encoding="utf-8") == "mine"
+    assert sorted(p.name for p in org.iterdir()) == ["2026-11-20"]
+    assert latest_matching(org, STAMP, REPOS) == entry
 
 
 # --- the command -----------------------------------------------------------

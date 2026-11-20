@@ -253,6 +253,27 @@ def test_mirror_pair_strips_shared_and_paired_comments_only() -> None:
     assert discovery.mirror_pair("<!-- s -->\nx", "<!-- s -->\nx") == (["x"], ["x"], False)
 
 
+def test_only_one_differing_note_per_side_is_paired_away() -> None:
+    # Three unshared comments a side: one note pairs off, the other two are compared.
+    a = "<!-- note a -->\n<!-- Run make check. -->\n<!-- Use uv. -->\nbody"
+    b = "<!-- note b -->\n<!-- Run make test. -->\n<!-- Use pip. -->\nbody"
+    c_lines, a_lines, differ = discovery.mirror_pair(a, b)
+    assert differ
+    assert c_lines == ["<!-- Run make check. -->", "<!-- Use uv. -->", "body"]
+    assert a_lines == ["<!-- Run make test. -->", "<!-- Use pip. -->", "body"]
+
+
+def test_three_differing_comments_a_side_is_not_a_mirror(git_repo: Any) -> None:
+    repo, commit = git_repo
+    head = "<!-- note {} -->\n<!-- Run make {}. -->\n<!-- Use {}. -->\n"
+    _write(repo, "CLAUDE.md", "# C\n" + head.format("c", "check", "uv") + MIRROR_BODY)
+    _write(repo, "AGENTS.md", "# A\n" + head.format("a", "test", "pip") + MIRROR_BODY)
+    commit("three comments a side")
+    findings = _block(repo)["findings"]
+    assert [(f["kind"], f.get("diff_lines")) for f in findings] == [("claude_shadows_agents", 2)]
+    assert "header comments only one file carries included" in findings[0]["detail"]
+
+
 def test_findings_cap_truncates_mirrors_before_defects(
     git_repo: Any, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

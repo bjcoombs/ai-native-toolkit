@@ -229,3 +229,26 @@ def test_bumped_method_version_fixture_produces_gate_message(tmp_path: Path, cap
     assert "Re-freeze:" in out
     # The run rewrote the snapshot at the current method version.
     assert json.loads(snap_path.read_text())["assess_method_version"] == ASSESS_METHOD_VERSION
+
+
+def test_fail_on_failure_with_method_change_exits_1_and_explains(
+        tmp_path: Path, capsys) -> None:
+    """Issue #614: a frozen ``fail_on: [lying_map]`` that fires together with a
+    snapshot from an older method fails the gate (exit 1) and still states the
+    method change is not a code change."""
+    assess = tmp_path / ".assess"
+    assess.mkdir()
+    (assess / "config.toml").write_text('[gate]\nfail_on = ["lying_map"]\n',
+                                        encoding="utf-8")
+    prior = {"assess_method_version": ASSESS_METHOD_VERSION - 1,
+             "findings": [{"name": "lying_map", "paths": []}]}
+    ctx = _ctx(prior, [{"name": "lying_map", "paths": ["src/app.py"]}],
+               version=ASSESS_METHOD_VERSION)
+    (assess / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
+    assert main([str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert (f"from version {ASSESS_METHOD_VERSION - 1} to {ASSESS_METHOD_VERSION}"
+            in out)
+    assert "not a code change" in out
+    assert "appeared (1):\n      lying_map: src/app.py" in out
+    assert "FAIL" in out and "lying_map" in out

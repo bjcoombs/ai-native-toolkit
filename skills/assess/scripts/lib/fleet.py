@@ -187,7 +187,10 @@ def _under(path: Path, root: Path) -> bool:
 
 def _locate(entry: str, root: Path | None, base: Path) -> tuple[Path, Path]:
     """``(repo_dir, checkout)`` for one list entry."""
-    path = Path(entry).expanduser()
+    try:
+        path = Path(entry).expanduser()
+    except RuntimeError as e:  # ~nosuchuser/repo: no such user's home
+        raise ValueError(f"list entry {entry!r}: cannot expand {entry.split('/', 1)[0]!r} ({e})") from e
     if not path.is_absolute():
         # With a root, a relative entry is a root path (ghsync --porcelain)
         # unless it exists only from the working directory; an uncloned one
