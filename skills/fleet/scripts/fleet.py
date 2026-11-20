@@ -227,7 +227,8 @@ def _history_entry(args: argparse.Namespace, targets: list[Target], org_dir: Pat
         print("fleet: history: --full output is not kept in the run history", file=sys.stderr)
         return None
     assert org_dir is not None  # resolved by main whenever the history is kept
-    entry, passed = choose_entry(org_dir.parent, org_dir.name, scan_date, planned)
+    entry, passed = choose_entry(org_dir.parent, org_dir.name, scan_date, planned,
+                                 frozenset(t.repo for t in targets))
     inside = out_inside_target(entry, targets)
     if inside is not None:
         raise HistoryError(f"history directory {entry} is inside target {inside.repo}")
@@ -239,7 +240,8 @@ def _history_entry(args: argparse.Namespace, targets: list[Target], org_dir: Pat
     return entry
 
 
-def _load_earlier(run_dir: str | None, org_dir: Path | None, planned: JsonDict) -> FleetRun | str | None:
+def _load_earlier(run_dir: str | None, org_dir: Path | None, planned: JsonDict,
+                  repos: frozenset[str]) -> FleetRun | str | None:
     """The ``--compare`` run, the reason it cannot be compared, or None (no ``--compare``, or
     no matching history entry for a bare ``--compare``).
 
@@ -249,7 +251,7 @@ def _load_earlier(run_dir: str | None, org_dir: Path | None, planned: JsonDict) 
         return None
     if run_dir == LATEST:
         assert org_dir is not None  # resolved by main for a bare --compare
-        latest = latest_matching(org_dir, planned)
+        latest = latest_matching(org_dir, planned, repos)
         if latest is None:
             print(f"fleet: compare: no earlier run in {org_dir} matches this run's stamp; "
                   "nothing compared", file=sys.stderr)
@@ -267,7 +269,8 @@ def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
     """Keep the run in the history and write ``compare.json``; neither ever loses the ``--out`` results."""
     if entry is not None:
         try:
-            print(f"fleet: history -> {persist(out_dir, entry, later.stamp)}", file=sys.stderr)
+            kept = persist(out_dir, entry, later.stamp, frozenset(row["repo"] for row in later.repos))
+            print(f"fleet: history -> {kept}", file=sys.stderr)
         except (HistoryError, OSError) as e:
             print(f"fleet: history: not recorded ({e}); results are in {out_dir}", file=sys.stderr)
     if earlier is None:  # nothing to compare: a compare.json left by an earlier run would mislead
@@ -323,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
         org_dir = (_history_org_dir(args, targets) if keeps_history or args.compare == LATEST
                    else None)
         # read before any scan: the same-day history entry may be replaced
-        earlier = _load_earlier(args.compare, org_dir, planned)
+        earlier = _load_earlier(args.compare, org_dir, planned, frozenset(t.repo for t in targets))
     except HistoryError as e:
         print(f"error: run history: {e} (use --history-org, --history-dir or --no-history)",
               file=sys.stderr)

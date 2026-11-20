@@ -109,21 +109,43 @@ def test_a_foreign_run_json_is_never_replaced(tmp_path, content):
     assert entry_conflict(entry, STAMP) is not None
 
 
+REPOS = frozenset({"org/a", "org/b"})
+
+
+def _put(entry: Path, stamp: object, repos: frozenset[str] = REPOS) -> Path:
+    entry.mkdir(parents=True, exist_ok=True)
+    (entry / "run.json").write_text(json.dumps(stamp), encoding="utf-8")
+    (entry / "repos.jsonl").write_text("".join(json.dumps({"repo": r}) + "\n" for r in sorted(repos)),
+                                       encoding="utf-8")
+    return entry
+
+
 def test_choose_entry_moves_to_a_suffixed_sibling(tmp_path):
     root = tmp_path / "hist"
-    first, passed = choose_entry(root, "org", "2026-11-20", STAMP)
+    first, passed = choose_entry(root, "org", "2026-11-20", STAMP, REPOS)
     assert first.name == "2026-11-20" and passed == []
-    first.mkdir(parents=True)
-    (first / "run.json").write_text(json.dumps(STAMP), encoding="utf-8")
-    assert choose_entry(root, "org", "2026-11-20", STAMP) == (first, [])
+    _put(first, STAMP)
+    assert choose_entry(root, "org", "2026-11-20", STAMP, REPOS) == (first, [])
     other = {**STAMP, "window": "90d"}
-    second, passed = choose_entry(root, "org", "2026-11-20", other)
+    second, passed = choose_entry(root, "org", "2026-11-20", other, REPOS)
     assert second.name == "2026-11-20.2" and "different window" in passed[0]
-    second.mkdir()
-    (second / "run.json").write_text(json.dumps(other), encoding="utf-8")
-    assert choose_entry(root, "org", "2026-11-20", other)[0] == second
-    third, passed = choose_entry(root, "org", "2026-11-20", {**STAMP, "window": "1y"})
+    _put(second, other)
+    assert choose_entry(root, "org", "2026-11-20", other, REPOS)[0] == second
+    third, passed = choose_entry(root, "org", "2026-11-20", {**STAMP, "window": "1y"}, REPOS)
     assert third.name == "2026-11-20.3" and len(passed) == 2
+
+
+def test_a_partial_rerun_never_replaces_the_full_fleet_entry(tmp_path):
+    root = tmp_path / "hist"
+    full = _put(root / "org" / "2026-11-20", STAMP)
+    entry, passed = choose_entry(root, "org", "2026-11-20", STAMP, frozenset({"org/a"}))
+    assert entry.name == "2026-11-20.2"
+    assert "different repository set (2 repositories, this run 1)" in passed[0]
+    assert (full / "repos.jsonl").read_text(encoding="utf-8").count("\n") == 2
+    (full / "repos.jsonl").write_text("{bad\n", encoding="utf-8")
+    assert "not readable" in (entry_conflict(full, STAMP, REPOS) or "")
+    (full / "repos.jsonl").write_text("[1]\n", encoding="utf-8")
+    assert "not readable" in (entry_conflict(full, STAMP, REPOS) or "")
 
 
 def test_choose_entry_gives_up_past_the_cap(tmp_path, monkeypatch):
@@ -133,7 +155,7 @@ def test_choose_entry_gives_up_past_the_cap(tmp_path, monkeypatch):
         (root / "org" / name).mkdir(parents=True)
         (root / "org" / name / "run.json").write_text("{", encoding="utf-8")
     with pytest.raises(HistoryError, match="same-day entries"):
-        choose_entry(root, "org", "2026-11-20", STAMP)
+        choose_entry(root, "org", "2026-11-20", STAMP, REPOS)
 
 
 def test_latest_matching_picks_the_newest_matching_entry(tmp_path):
@@ -142,13 +164,16 @@ def test_latest_matching_picks_the_newest_matching_entry(tmp_path):
     other = {**STAMP, "window": "90d"}
     for name, stamp in (("2026-11-01", STAMP), ("2026-11-20", STAMP), ("2026-11-20.2", other),
                         ("2026-11-20.10", other), ("2026-12-01", other), ("notes", STAMP)):
-        (org / name).mkdir(parents=True)
-        (org / name / "run.json").write_text(json.dumps(stamp), encoding="utf-8")
+        _put(org / name, stamp)
     (org / "2026-12-02").mkdir()  # no run.json
     (org / "2026-12-03").symlink_to(org / "2026-11-01")
     assert latest_matching(org, STAMP) == org / "2026-11-20"
     assert latest_matching(org, other) == org / "2026-12-01"
     assert latest_matching(org, {**STAMP, "window": "1y"}) is None
+    # a newer partial rerun is passed over for the newest entry over the same set
+    _put(org / "2026-11-20.3", STAMP, frozenset({"org/a"}))
+    assert latest_matching(org, STAMP, REPOS) == org / "2026-11-20"
+    assert latest_matching(org, STAMP, frozenset({"org/z"})) == org / "2026-11-20.3"
 
 
 def test_persist_replaces_only_its_three_files(tmp_path):
@@ -159,11 +184,11 @@ def test_persist_replaces_only_its_three_files(tmp_path):
     entry = tmp_path / "hist" / "org" / "2026-11-20"
     entry.mkdir(parents=True)
     (entry / "notes.txt").write_text("mine", encoding="utf-8")
-    persist(out, entry, STAMP)  # type: ignore[arg-type]
+    persist(out, entry, STAMP, frozenset())  # type: ignore[arg-type]
     assert sorted(p.name for p in entry.iterdir()) == ["groups.jsonl", "notes.txt", "repos.jsonl", "run.json"]
     assert (entry / "notes.txt").read_text(encoding="utf-8") == "mine"
     with pytest.raises(HistoryError):
-        persist(out, entry, {**STAMP, "window": "1y"})  # type: ignore[arg-type]
+        persist(out, entry, {**STAMP, "window": "1y"}, frozenset())  # type: ignore[arg-type]
 
 
 def test_persist_leaves_no_temp_file_on_failure(tmp_path, monkeypatch):
@@ -177,7 +202,7 @@ def test_persist_leaves_no_temp_file_on_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(fh.os, "replace", boom)
     entry = tmp_path / "entry"
     with pytest.raises(OSError):
-        persist(out, entry, STAMP)  # type: ignore[arg-type]
+        persist(out, entry, STAMP, frozenset())  # type: ignore[arg-type]
     assert list(entry.iterdir()) == []
 
 
@@ -253,6 +278,20 @@ def test_a_same_day_run_with_another_window_goes_beside_the_entry(froot2, tmp_pa
     assert _run(froot2, tmp_path / "o4", hist, "--window", "1y", "--compare") == 0
     assert "nothing compared" in capsys.readouterr().err
     assert not (tmp_path / "o4" / "compare.json").exists()
+
+
+def test_a_partial_list_rerun_goes_beside_the_full_entry(froot2, tmp_path, capsys):
+    hist = tmp_path / "hist"
+    assert _run(froot2, tmp_path / "o1", hist) == 0
+    (full,) = _entries(hist)
+    before = (full / "repos.jsonl").read_bytes()
+    listing = tmp_path / "list.txt"
+    listing.write_text("acme/svc1\n", encoding="utf-8")
+    assert int(fleet_cli.main(["--from-list", str(listing), str(froot2), "--out", str(tmp_path / "o2"),
+                               "--scans", "nested_instructions", "--history-dir", str(hist)])) == 0
+    assert (full / "repos.jsonl").read_bytes() == before
+    assert [p.name for p in _entries(hist)] == [full.name, f"{full.name}.2"]
+    assert "different repository set" in capsys.readouterr().err
 
 
 def test_full_and_no_history_runs_are_not_kept(froot2, tmp_path, capsys):

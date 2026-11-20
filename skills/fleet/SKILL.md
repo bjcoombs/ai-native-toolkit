@@ -189,7 +189,8 @@ only when the history is used: a kept run or a bare `--compare`. With
 resolved, so an id whose first segment is not a safe directory name (`My
 Projects/svc`) still runs; otherwise pass `--history-org`. A same-day rerun replaces the day's entry only when that entry is a
 fleet run with the same rubric version, window, output mode, scans and path
-hashing. Otherwise the entry is kept and the run goes to a suffixed sibling,
+hashing over the same repository set (a partial `--from-list` rerun never
+replaces the full-fleet entry). Otherwise the entry is kept and the run goes to a suffixed sibling,
 `<date>.2`, `<date>.3` and so on (the first that is free or holds a matching
 run); stderr names the kept entry, why, and where this run went. A failed
 history write never loses the `--out` results.
@@ -197,8 +198,9 @@ history write never loses the `--out` results.
 `--compare RUN_DIR` reads the earlier run before scanning and writes
 `DIR/compare.json`, with a summary on stderr. A bare `--compare` picks the
 latest history entry (by date, then suffix) whose stamp matches this run's
-rubric version, window, output mode, scans and path hashing; with none, stderr
-says so and nothing is compared. To compare two existing runs without
+rubric version, window, output mode, scans and path hashing, preferring one
+over the same repository set, so a partial rerun is not taken as the baseline;
+with none, stderr says so and nothing is compared. To compare two existing runs without
 rescanning:
 
 <!-- chat-skip:start -->

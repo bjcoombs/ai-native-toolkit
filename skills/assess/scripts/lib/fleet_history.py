@@ -18,13 +18,15 @@ Writes are narrow and fail closed:
   existing directory on the way from the root to the entry may be a symlink;
 - a same-day entry is replaced only when it is this tool's (a readable
   ``run.json`` at the stamp version this code writes) and its stamp agrees on
-  rubric version, window, output mode, scan selection and path hashing;
-  otherwise ``entry_conflict`` names why, the entry is kept, and
+  rubric version, window, output mode, scan selection and path hashing, and
+  holds the same repository set (so a partial ``--from-list`` rerun never
+  replaces the full-fleet entry); otherwise ``entry_conflict`` names why, the entry is kept, and
   ``choose_entry`` moves on to a suffixed sibling (``<date>.2``, ``<date>.3``,
   ...), taking the first that is free or holds a matching run.
 
 ``latest_matching`` finds the newest entry (by date, then suffix) whose stamp
-matches a planned run: the default earlier run for ``--compare``.
+matches a planned run, preferring one with the same repository set: the
+default earlier run for ``--compare``.
 """
 from __future__ import annotations
 
@@ -83,8 +85,23 @@ def entry_dir(root: Path, org: str, scan_date: str) -> Path:
     return entry
 
 
-def entry_conflict(entry: Path, stamp: Mapping[str, Any]) -> str | None:
-    """Why the same-day ``entry`` must be kept rather than replaced; None when it may be."""
+def entry_repos(entry: Path) -> frozenset[str] | None:
+    """The repository ids in ``entry/repos.jsonl``; None when it cannot be read."""
+    try:
+        lines = (entry / REPOS_FILE).read_text(encoding="utf-8").splitlines()
+        rows = [json.loads(line) for line in lines if line.strip()]
+    except (OSError, ValueError):
+        return None
+    if not all(isinstance(row, dict) and isinstance(row.get("repo"), str) for row in rows):
+        return None
+    return frozenset(row["repo"] for row in rows)
+
+
+def entry_conflict(entry: Path, stamp: Mapping[str, Any], repos: frozenset[str] | None = None) -> str | None:
+    """Why the same-day ``entry`` must be kept rather than replaced; None when it may be.
+
+    With ``repos``, the entry must also hold exactly that repository set.
+    """
     if not entry.exists():
         return None
     if not entry.is_dir():
@@ -102,19 +119,28 @@ def entry_conflict(entry: Path, stamp: Mapping[str, Any]) -> str | None:
     differs = [key for key in _MATCH_KEYS if earlier.get(key) != stamp.get(key)]
     if differs:
         return f"{entry} is a same-day run with a different {', '.join(differs)}"
+    if repos is not None:
+        held = entry_repos(entry)
+        if held is None:
+            return f"{entry / REPOS_FILE} is not readable"
+        if held != repos:
+            return (f"{entry} is a same-day run over a different repository set "
+                    f"({len(held)} repositories, this run {len(repos)})")
     return None
 
 
-def choose_entry(root: Path, org: str, scan_date: str, stamp: Mapping[str, Any]) -> tuple[Path, list[str]]:
+def choose_entry(root: Path, org: str, scan_date: str, stamp: Mapping[str, Any],
+                 repos: frozenset[str]) -> tuple[Path, list[str]]:
     """The entry this run is kept in, and why each earlier same-day candidate was passed over.
 
     ``<date>``, then ``<date>.2``, ``<date>.3``, ...: the first that is free or
-    holds a run with a matching stamp. Raises ``HistoryError`` past ``MAX_SAME_DAY``.
+    holds a run with a matching stamp over the same ``repos``. Raises
+    ``HistoryError`` past ``MAX_SAME_DAY``.
     """
     passed: list[str] = []
     for n in range(1, MAX_SAME_DAY + 1):
         entry = entry_dir(root, org, scan_date if n == 1 else f"{scan_date}.{n}")
-        conflict = entry_conflict(entry, stamp)
+        conflict = entry_conflict(entry, stamp, repos)
         if conflict is None:
             return entry, passed
         passed.append(conflict)
@@ -126,16 +152,22 @@ def _entry_order(path: Path) -> tuple[str, int] | None:
     return (match.group(1), int(match.group(2) or 1)) if match else None
 
 
-def latest_matching(org_dir: Path, stamp: Mapping[str, Any]) -> Path | None:
-    """The newest ``<date>[.<n>]`` entry under ``org_dir`` holding a run whose stamp matches ``stamp``."""
+def latest_matching(org_dir: Path, stamp: Mapping[str, Any], repos: frozenset[str] | None = None) -> Path | None:
+    """The newest ``<date>[.<n>]`` entry under ``org_dir`` holding a run whose stamp matches ``stamp``.
+
+    With ``repos``, the newest such entry over exactly that repository set wins
+    when there is one, so a partial rerun is not taken as the baseline.
+    """
     if not org_dir.is_dir() or org_dir.is_symlink():
         return None
     entries = [(order, p) for p in org_dir.iterdir()
                if (order := _entry_order(p)) is not None and p.is_dir() and not p.is_symlink()]
-    for _order, entry in sorted(entries, reverse=True):
-        if (entry / RUN_FILE).is_file() and entry_conflict(entry, stamp) is None:
-            return entry
-    return None
+    matching = [entry for _order, entry in sorted(entries, reverse=True)
+                if (entry / RUN_FILE).is_file() and entry_conflict(entry, stamp) is None]
+    same_set = [entry for entry in matching if repos is not None and entry_repos(entry) == repos]
+    if same_set:
+        return same_set[0]
+    return matching[0] if matching else None
 
 
 def _replace(source: Path, target: Path) -> None:
@@ -150,9 +182,9 @@ def _replace(source: Path, target: Path) -> None:
         raise
 
 
-def persist(out_dir: Path, entry: Path, stamp: FleetStamp) -> Path:
+def persist(out_dir: Path, entry: Path, stamp: FleetStamp, repos: frozenset[str]) -> Path:
     """Copy the run's three files from ``out_dir`` into ``entry``; raises ``HistoryError`` on a conflict."""
-    conflict = entry_conflict(entry, stamp)
+    conflict = entry_conflict(entry, stamp, repos)
     if conflict is not None:
         raise HistoryError(conflict)
     entry.mkdir(parents=True, exist_ok=True)

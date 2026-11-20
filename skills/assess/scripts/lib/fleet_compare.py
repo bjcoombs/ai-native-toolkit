@@ -274,7 +274,7 @@ def set_changes(then: dict[str, FleetRow], now: dict[str, FleetRow]) -> SetChang
 
 
 def _any(changes: SetChanges) -> bool:
-    return any(changes[key] for key in changes)  # type: ignore[literal-required]
+    return any(changes.values())
 
 
 def _levels(group: GroupRow | None) -> dict[str, tuple[str, LevelState]]:
@@ -393,8 +393,10 @@ def summary_lines(comparison: Comparison) -> list[str]:
     if not comparison["movement"]:
         return ["no movement"]
     sets = comparison["repositories"]
-    lines = [f"{key.replace('_', ' ')}: {', '.join(sets[key])}"  # type: ignore[literal-required]
-             for key in sets if sets[key]]  # type: ignore[literal-required]
+    named = (("added", sets["added"]), ("removed", sets["removed"]),
+             ("no longer scanned", sets["no_longer_scanned"]), ("newly scanned", sets["newly_scanned"]),
+             ("no longer active", sets["no_longer_active"]), ("newly active", sets["newly_active"]))
+    lines = [f"{label}: {', '.join(repos)}" for label, repos in named if repos]
     if comparison["repos"]:
         lines.append(f"signals changed in: {', '.join(r['repo'] for r in comparison['repos'])}")
     for group in comparison["groups"]:
