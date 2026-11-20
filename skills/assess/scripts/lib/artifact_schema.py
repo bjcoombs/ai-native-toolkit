@@ -102,7 +102,11 @@ constant each.
 # informational finding kind mirrored_instruction_files reports a CLAUDE.md kept
 # identical to its AGENTS.md below the header (issue #589; entry added by #632).
 # Additive: no existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.14.0"
+# 1.15.0: run-context.json structure gains cross_package_edges (issue #663), the
+# import edges front_door_ratio is measured over; 0 marks that ratio's 1.0 as
+# vacuous. Additive: no existing key moves, and complexity-stats.json is
+# unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.15.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -157,4 +161,8 @@ ARTIFACT_SCHEMA_VERSION = "1.14.0"
 #     looser levels as drift; and a rename-only commit (no content change) is
 #     no longer churn or a content change (contract I425-2), so doc and code
 #     churn, doc ages, staleness ratios and lying_map can move.
-ASSESS_METHOD_VERSION = 14
+# 15: a repository with no importable Python package reports ``structure``
+#     ``available: false`` instead of an empty graph (issue #663), so keyhole
+#     static metrics and structure_drift tier 1 skip it; findings that read the
+#     static graph can move on such repositories.
+ASSESS_METHOD_VERSION = 15
