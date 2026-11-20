@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.assess_config import load_excludes
+from lib.fleet_config import FleetConfig, repo_fleet_config
 from lib.git_churn import git_commit_info
 from lib.history_window import split_window
 from lib.headless_layers import HEADLESS_SCANS
@@ -158,15 +159,17 @@ def parse_window(window: str) -> str:
     return window
 
 
-def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW) -> dict[str, Any]:
+def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
+                 fleet_config: FleetConfig | None = None) -> dict[str, Any]:
     """The registry's ``PROVIDED_INPUTS``, built the way ``assess_core`` builds them.
 
     ``scope`` is None: a headless run measures the whole checkout.
     ``history_window`` carries ``--window`` for history-reading scans
-    (``ai_usage``, #547).
+    (``ai_usage``, #547). ``fleet_config`` is the ``--fleet-config`` file merged
+    with the target's ``.assess/config.toml`` sections (``lib/fleet_config.py``, #706).
     Besides the ``build_run_context`` arguments, it supplies the setup values
-    ``instruction_files``, ``scope``, ``excludes`` and ``history_window``
-    itself; the table never recomputes a name the runner provides.
+    ``instruction_files``, ``scope``, ``excludes``, ``history_window`` and
+    ``fleet_config`` itself; the table never recomputes a name the runner provides.
     """
     instruction_files = grade_instruction_files(repo_root)[0]
     return {
@@ -178,6 +181,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW) -> dict[str, Any
         "scope": None,
         "excludes": load_excludes(repo_root),
         "history_window": window,
+        "fleet_config": repo_fleet_config(repo_root, fleet_config),
     }
 
 
@@ -207,10 +211,10 @@ def _unavailable(reason: str) -> JsonDict:
 
 def collect(
     repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
-    window: str = DEFAULT_WINDOW,
+    window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None,
 ) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read) offline; one block per name."""
-    inputs = build_inputs(repo_root, window)
+    inputs = build_inputs(repo_root, window, fleet_config)
     needed = _with_dependencies(selected, specs, inputs)
     ctx: dict[str, Any] = {}
     runnable: list[ScanSpec] = []
@@ -304,6 +308,7 @@ def read_only_git() -> Iterator[None]:
 def build_document(
     repo_root: Path, requested: Sequence[str] | None = None, window: str = DEFAULT_WINDOW,
     toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
+    fleet_config: FleetConfig | None = None,
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
 
@@ -318,5 +323,5 @@ def build_document(
         return {
             "signals_schema_version": SIGNALS_SCHEMA_VERSION,
             "stamp": build_stamp(repo_root, window, toolkit_root),
-            "scans": collect(repo_root, selected, specs, window),
+            "scans": collect(repo_root, selected, specs, window, fleet_config),
         }

@@ -928,10 +928,41 @@ Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
 commit, plugin version, UTC scan date, effective window, maturity-model version, output mode
 (`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
-`scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true). No path,
+`scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true), plus
+`fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
+without one, absent before #706 and read as null, so the stamp version stays 1). No path,
 salt, timing or input mode, so a
 root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
 writes atomically with sorted keys.
+
+**`fleet_config.py`**
+The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
+`[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
+#696 and #714). API:
+- `load_fleet_config(path)` / `parse_fleet_config(text)` validate against `SECTION_KEYS`
+  and raise `FleetConfigError` naming the key (`review.foo`) and expected kind, never the
+  value; both CLIs exit 2 on it.
+- `ai_usage_section` / `review_section` / `platform_section` return the typed section
+  (`AiUsageSection`, `ReviewSection`, `PlatformSection`; `total=False` TypedDicts).
+- `merge_repo_sections(fleet, repo_config)` and `repo_fleet_config(repo_root, fleet)`: the
+  merge rule. A repository's `.assess/config.toml` sections extend the fleet file: list
+  keys are the fleet entries in order then the repository's new ones (fleet indices are
+  stable); a scalar the fleet sets keeps the fleet value (a differing repository value is
+  ignored with a warning); an unset scalar takes the repository value. Repository input
+  that does not validate is skipped with a stderr warning, never raised.
+- `config_sha256` (sorted-key JSON of the validated config: comments and key order do not
+  count, list order does) and `section_entries` (a list counts its items, else 1) feed
+  the run stamp.
+
+Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
+(`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`, or
+any `Validator`), the key in the section's TypedDict, and a row in `skills/fleet/SKILL.md`.
+A scan reads the merged config through the registry input `fleet_config` (a private setup
+spec, `run_setup.fleet_config`, in `/assess`; `signals.build_inputs` supplies it merged with
+the fleet file in the headless run). The value is private, never a run-context block, so it
+needs no counts-only rule; a consumer reports counts only. Comparability: `fleet_compare`,
+`fleet_history._MATCH_KEYS` and `fleet_trends.MATCH_KEYS` all key on
+`fleet_config_sha256`. Tests: `tests/test_fleet_config.py`.
 
 **`fleet_doc_freshness.py`**
 Cross-repo doc freshness (issue #664), opt-in: a docs repository's `[[describes]]`

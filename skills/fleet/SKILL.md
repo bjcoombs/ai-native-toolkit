@@ -45,6 +45,7 @@ their rows `unknown`.
 | `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/run.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--levels FILE` | A maturity model in the `lib/levels.py` TOML format (an invalid maturity model exits 2); its `version` is stamped in `run.json`. Each group row carries every maturity model row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
 | `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. Unreadable input exits 2. |
+| `--fleet-config FILE` | Fleet settings (TOML) passed to every repository scan. Validated before any scan: an unknown section or key, or a value of the wrong kind, exits 2 and names the key. See [Fleet settings](#fleet-settings---fleet-config). |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
 | `--scans a,b` | Only these scans (default: all). |
@@ -63,7 +64,7 @@ their rows `unknown`.
 when some repositories failed (each is a `failed` row; stderr prints the count
 and the failed ids). `2`: usage error - no `ROOT` and no `--from-list`, a root
 or list that does not exist, no repositories found, `--out` inside a target, an
-invalid `--levels` or `--settings` (a settings directory with no `*.json` fragment
+invalid `--levels`, `--settings` or `--fleet-config` (a settings directory with no `*.json` fragment
 file included), a list entry whose `~user` cannot be expanded, an unknown scan, a bad
 window, a `DIR` that cannot be created or written to (checked before any scan, so
 `--delete-after` never removes a clone whose results could not be written), an
@@ -179,10 +180,51 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `counts_only` | `false` with `--full`. |
 | `paths_hashed` | `true` with `--hash-paths` or `--hash-salt` (never the salt). |
 | `scans` | The `--scans` names, deduplicated and sorted (`--scans a,a` stamps `["a"]`); `null` for all. |
+| `fleet_config_sha256` | sha256 of the `--fleet-config` file's canonical form; `null` without one. A comparability key. Absent in a run from before #706, which reads as `null`. |
+| `fleet_config_entries` | Entries per section (`ai_usage`, `review`, `platform`): a list counts its items, any other key 1. `null` without `--fleet-config`. Never a pattern or value. |
 | `repositories` | `selected` (every row), `scanned_ok` (rows `ok`), `failed` (rows `failed`) and `qualifying` (rows `ok` with `active` true). |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and
 any `--jobs` over unchanged checkouts on the same day write the same bytes.
+
+## Fleet settings: `--fleet-config`
+
+One TOML file of fleet-wide lists and settings, with one section per consumer:
+
+```toml
+[ai_usage]   # agent identities (#695)
+[review]     # AI review components in CI (#696)
+[platform]   # --platform settings (#714)
+```
+
+The sections are known and may be empty or left out. Each consumer adds its keys;
+until it does, any key in a section is unknown and exits 2. The loader and the key
+tables are `lib/fleet_config.py` (`SECTION_KEYS`).
+
+- **Validation.** `fleet.py` validates the file before any scan. A TOML error, an
+  unknown section or key, or a value of the wrong kind exits 2 with the key named
+  (`error: --fleet-config FILE: review.foo: unknown key ...`). The message never
+  quotes a value.
+- **Same config everywhere.** Every repository scan gets one private copy of the
+  validated file (`assess_signals.py --fleet-config`), so an edit during the run
+  reaches no scan.
+- **Per-repository extension.** A repository's `.assess/config.toml` may carry the
+  same sections. They extend the fleet file for that repository and never replace
+  it. A list key is the fleet's entries in order, then the repository's entries
+  not already present: a repository can add an entry, never remove one, and a
+  fleet entry keeps its index everywhere. A scalar the fleet file sets keeps the
+  fleet value; a different repository value is ignored with a warning naming the
+  key. A scalar the fleet file leaves unset takes the repository's value. A key
+  that does not validate in a repository file is skipped with a warning, never a
+  failed row. Interactive `/assess` reads the repository's sections alone.
+- **Stamp and comparison.** `run.json` records `fleet_config_sha256` and
+  `fleet_config_entries`. The hash covers the validated content as sorted-key
+  JSON: comments, whitespace and key order do not change it, and list order does.
+  Runs with different hashes are not comparable (`fleet config changed ...`), a
+  same-day run with a different config gets its own history entry, and the trend
+  lines join only runs with the same hash.
+- **Counts-only.** No config value reaches `repos.jsonl`, `run.json` or any
+  other output: consumers report per-rule counts by position, never by pattern.
 
 ## `--delete-after`
 
@@ -262,7 +304,8 @@ run being at another file version), `2` when a directory is missing or
 malformed (a `run.json` missing a key the comparison reads).
 
 **Not comparable.** Runs that differ in maturity-model version, window, counts-only
-mode, scan selection or path hashing, in the plugin's major version (the
+mode, scan selection, path hashing or `--fleet-config` (`fleet_config_sha256`; a run
+with no config and a run from before the key read alike), in the plugin's major version (the
 `/assess` stats-diff rule), or in file versions (a run from before `run.json`)
 give `comparable: false` with every reason in `reasons` and no deltas.
 

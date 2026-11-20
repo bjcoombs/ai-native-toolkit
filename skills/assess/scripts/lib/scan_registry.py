@@ -62,8 +62,8 @@ from lib.shared_tooling import scan_shared_tooling
 
 # Names the core passes to ``run_scans``: the arguments of
 # ``build_run_context``. A spec may read these, or the key of any spec declared
-# before it (``instruction_files``, ``scope``, ``excludes`` and ``history_window``
-# are setup specs).
+# before it (``instruction_files``, ``scope``, ``excludes``, ``history_window`` and
+# ``fleet_config`` are setup specs).
 PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive"})
 
 STAGE_SETUP = "setup"
@@ -306,6 +306,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # history. The headless signals run provides `--window` instead.
     ScanSpec("history_window", rs.history_window, ("current",), STAGE_SETUP, private=True,
              degrade=False, gate_reason=_SETUP),
+    # The fleet settings sections (#706): the repository's own `.assess/config.toml`
+    # sections here; the headless signals run provides them merged with `--fleet-config`.
+    ScanSpec("fleet_config", rs.fleet_config, ("repo_root",), STAGE_SETUP, private=True,
+             degrade=False, gate_reason=_SELF_DEGRADING),
     ScanSpec("measured_commit", rs.measured_commit, ("repo_root",), STAGE_SETUP, private=True,
              degrade=False, gate_reason=_SETUP),
     ScanSpec("superseded", rs.superseded_run, ("assess_dir", "run_date", "measured_commit"),

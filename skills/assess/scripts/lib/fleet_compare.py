@@ -7,7 +7,9 @@ reads one; ``compare`` is a pure function of two loaded runs.
 Comparability follows ``diff_reliability._diff_is_reliable``: the plugin's
 major version and the stamp version must match. A comparison is also refused
 (``comparable: false`` with every reason, and no deltas) when the runs differ
-in maturity-model version, window, output mode, scan selection or path hashing, or when
+in maturity-model version, window, output mode, scan selection, path hashing or
+``--fleet-config`` (its ``fleet_config_sha256``; a stamp from before #706 reads as
+no fleet config), or when
 the earlier run's files are at another envelope version (``RunVersionError``
 from ``load_run`` becomes such a reason in ``not_comparable``).
 
@@ -217,7 +219,7 @@ def comparability(earlier: FleetStamp, later: FleetStamp) -> tuple[list[str], li
         reasons.append(note)
     for key, label in (("levels_version", "maturity-model version"), ("window", "window"),
                        ("counts_only", "counts-only mode"), ("scans", "scan selection"),
-                       ("paths_hashed", "path hashing")):
+                       ("paths_hashed", "path hashing"), ("fleet_config_sha256", "fleet config")):
         if earlier.get(key) != later.get(key):
             reasons.append(f"{label} changed {earlier.get(key)!r}->{later.get(key)!r}")
     notes = [HASH_NOTE] if earlier.get("paths_hashed") and later.get("paths_hashed") else []

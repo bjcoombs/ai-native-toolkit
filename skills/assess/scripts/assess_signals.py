@@ -15,11 +15,12 @@ Blocks ``assess_core.py`` assembles through its own table entries are listed as
 Exit codes:
     0  document written
     2  usage error: unknown scan name, bad --window, --out inside the target,
-       or a target that is not a directory
+       a target that is not a directory, or an unreadable or invalid
+       --fleet-config (the message names the key)
 
 Run:
     uv run assess_signals.py <repo> --out FILE.json [--scans a,b,c] [--window 6mo]
-        [--counts-only [--hash-paths | --hash-salt VALUE]]
+        [--counts-only [--hash-paths | --hash-salt VALUE]] [--fleet-config FILE]
 """
 # /// script
 # requires-python = ">=3.11"
@@ -54,6 +55,7 @@ from lib.counts_only import (  # noqa: E402
     hash_options,
     validate_cli_args,
 )
+from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config  # noqa: E402
 from lib.signals import (  # noqa: E402
     DEFAULT_WINDOW,
     UnknownScanError,
@@ -78,6 +80,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--window", default=DEFAULT_WINDOW,
         help="History window stamped on the run and read by history scans (ai_usage), e.g. 6mo, 90d, 12w, 1y (default: %(default)s).",
     )
+    parser.add_argument(
+        "--fleet-config", metavar="FILE",
+        help="Fleet settings (TOML, lib/fleet_config.py): the [ai_usage], [review] and [platform] "
+             "sections, extended by the target's .assess/config.toml sections.",
+    )
     add_cli_arguments(parser)
     parsed = parser.parse_args(argv)
     validate_cli_args(parser, parsed)
@@ -99,6 +106,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: --out {args.out} is inside the target repository; "
               "the signals run never writes into the target", file=sys.stderr)
         return 2
+    fleet_config: FleetConfig | None = None
+    if args.fleet_config is not None:
+        try:
+            fleet_config = load_fleet_config(Path(args.fleet_config))
+        except FleetConfigError as e:
+            print(f"error: --fleet-config {args.fleet_config}: {e}", file=sys.stderr)
+            return 2
     requested = None
     if args.scans is not None:
         requested = [name.strip() for name in args.scans.split(",") if name.strip()]
@@ -111,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    document = build_document(repo_root, requested, args.window)
+    document = build_document(repo_root, requested, args.window, fleet_config=fleet_config)
     if args.counts_only:
         # Content-free mode: free text, identities and the target's commit
         # are dropped; references/counts-only.md lists what each block keeps.
