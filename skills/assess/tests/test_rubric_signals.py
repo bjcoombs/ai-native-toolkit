@@ -12,6 +12,8 @@ from typing import Any
 import pytest
 
 from lib.counts_only import counts_only_scans
+from lib.promissory_markers import scan_promissory_markers
+from lib.structure_graph import analyze_structure
 from lib.rubric import Group, RubricError, RubricResult, dumps_result, evaluate, load_rubric, resolve_signal
 from lib.rubric_signals import (
     DEFAULT_RUBRIC,
@@ -69,6 +71,33 @@ def instructed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     (repo / ".claude" / "settings.json").write_text(
         json.dumps({"permissions": {"allow": ["Bash(make check)"]}}), encoding="utf-8")
     return _scans(_commit(repo))
+
+
+@pytest.fixture(scope="module")
+def suppressed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    """A full run's promissory_markers block for a repository with one lint suppression."""
+    repo = tmp_path_factory.mktemp("suppressed") / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("import os  # noqa: F401\n", encoding="utf-8")
+    return {"promissory_markers": scan_promissory_markers(_commit(repo)).summary()}
+
+
+@pytest.fixture(scope="module")
+def two_package_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    """A full run's structure block for two packages, one importing the other's front door."""
+    root = tmp_path_factory.mktemp("two_package")
+    for name, init, modules in (
+        ("core", "from core.api import run\n", {
+            "api": "from core import store, rules\ndef run(): return store.X + rules.Y\n",
+            "store": "X = 1\n", "rules": "from core import store\nY = store.X\n"}),
+        ("app", "", {"cli": "import core\nfrom app import views\n",
+                     "views": "from app import forms\n", "forms": "Z = 1\n"}),
+    ):
+        (root / name).mkdir()
+        (root / name / "__init__.py").write_text(init, encoding="utf-8")
+        for stem, src in modules.items():
+            (root / name / f"{stem}.py").write_text(src, encoding="utf-8")
+    return {"structure": dict(analyze_structure(root).as_dict())}
 
 
 def _run(data: dict[str, dict[str, Any]]) -> RubricResult:
@@ -181,10 +210,12 @@ def test_default_rubric_loads_against_the_schema() -> None:
 
 def test_every_default_signal_is_emitted_by_some_real_output(
     golden_repos: dict[str, dict[str, Any]], instructed_repo: dict[str, Any],
+    suppressed_repo: dict[str, Any], two_package_repo: dict[str, Any],
 ) -> None:
     """Catches a typo in an open block, which the validator cannot."""
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
-    documents = [*golden_repos.values(), instructed_repo, run_context]
+    documents = [*golden_repos.values(), instructed_repo, suppressed_repo, two_package_repo,
+                 run_context]
     # review_reality needs GitHub; its fields are named in its module doc.
     offline = {"review_reality.reviewed_share", "review_reality.approved_share"}
     signals = {c["signal"] for row in load_default_rubric()["rows"]
@@ -202,6 +233,9 @@ def test_default_rubric_on_the_golden_fixture_repos(golden_repos: dict[str, dict
         assert _levels(_run({name: golden_repos[name]})) == {
             "layer-0-instructions": 0,   # no CLAUDE.md: level 0, not unknown
             "layer-1-liveness": None,    # only a full /assess run measures the rung
+            "layer-2-design": None,      # structure, stats_summary, promissory_markers
+            "layer-3-linters": None,     # and structure_drift: full /assess run only
+            "layer-4-architecture": None,
             "layer-5-ci": 0,
             "layer-6-coverage": 0,
             "layer-7-review": None,      # needs GitHub
@@ -213,12 +247,18 @@ def test_default_rubric_on_the_golden_fixture_repos(golden_repos: dict[str, dict
 
 
 def test_default_rubric_on_the_golden_run_context() -> None:
-    """The captured full run predates the headless scans, so only Layer 1 is read."""
+    """The captured full run predates most headless scans: Layers 1 and 4 are read."""
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
     result = _run({"toolkit": run_context})
     assert _levels(result) == {
         "layer-0-instructions": None,
         "layer-1-liveness": 0,   # observability.rung = 0 in the capture
+        # modularity_q 0.5662 meets level 1; the capture is one package (all lib.*)
+        # and predates cross_package_edges, so its front_door_ratio 1.0 is no
+        # evidence: level 1 or 2, unknown.
+        "layer-2-design": None,
+        "layer-3-linters": None,  # no promissory_markers block in the capture
+        "layer-4-architecture": 2,  # 115 matched ownership patterns, loc p95 483.65
         "layer-5-ci": None,
         "layer-6-coverage": None,
         "layer-7-review": None,
@@ -226,7 +266,66 @@ def test_default_rubric_on_the_golden_run_context() -> None:
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]
+    layer2 = _row(result, "layer-2-design")
+    assert layer2["repos"]["toolkit"]["bounds"] == [1, 2]
+    assert layer2["missing_signals"] == ["structure.cross_package_edges"]
+    # A current run of this single-package capture reports no boundary crossed.
+    single = copy.deepcopy(run_context)
+    single["structure"]["cross_package_edges"] = 0
+    assert _row(_run({"toolkit": single}), "layer-2-design")["level"] == 1
     assert dumps_result(result) == dumps_result(_run({"toolkit": copy.deepcopy(run_context)}))
+
+
+def test_layer_two_reaches_present_only_across_a_package_boundary(
+    two_package_repo: dict[str, Any],
+) -> None:
+    structure = two_package_repo["structure"]
+    assert structure["cross_package_edges"] > 0 and structure["front_door_ratio"] == 1.0
+    assert structure["modularity_q"] >= 0.3
+    assert _row(_run({"r": two_package_repo}), "layer-2-design")["level"] == 2
+
+
+def test_default_rubric_covers_every_layer_on_the_golden_run_context() -> None:
+    """Contract I564-2: one row per layer 0-8, each a whole level or a named unknown."""
+    rows = load_default_rubric()["rows"]
+    assert len(rows) >= 9
+    assert [row["id"].split("-")[1] for row in rows] == [str(n) for n in range(9)]
+    run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
+    for row in _run({"toolkit": run_context})["rows"]:
+        if row["status"] == "level":
+            assert isinstance(row["level"], int) and not isinstance(row["level"], bool), row
+        else:
+            assert (row["status"], row["level"]) == ("unknown", None), row
+            assert row["missing_signals"], row
+
+
+def test_layer_two_is_unknown_on_a_repository_with_no_python_package(tmp_path: Path) -> None:
+    """The import graph is Python-only: no package is unmeasured, not modularity 0."""
+    (tmp_path / "index.js").write_text("module.exports = 1;\n", encoding="utf-8")
+    structure = analyze_structure(tmp_path).as_dict()
+    assert structure["available"] is False
+    row = _row(_run({"r": {"structure": structure}}), "layer-2-design")
+    assert (row["status"], row["level"]) == ("unknown", None)
+    assert "structure.modularity_q" in row["missing_signals"]
+
+
+def test_layer_three_reads_the_suppression_footprint(suppressed_repo: dict[str, Any]) -> None:
+    row = _row(_run({"r": suppressed_repo}), "layer-3-linters")
+    assert row["level"] == 2   # one fresh suppression: a linter runs, none stale
+
+    stale = copy.deepcopy(suppressed_repo)
+    stale["promissory_markers"]["families"]["suppression"]["stale"] = 11
+    assert _row(_run({"r": stale}), "layer-3-linters")["level"] == 1
+
+    shallow = copy.deepcopy(suppressed_repo)   # degenerate history: stale 0 says nothing
+    shallow["promissory_markers"]["aging_reliable"] = False
+    assert _row(_run({"r": shallow}), "layer-3-linters")["level"] == 1
+
+    none = copy.deepcopy(suppressed_repo)
+    del none["promissory_markers"]["families"]["suppression"]
+    row = _row(_run({"r": none}), "layer-3-linters")
+    assert (row["status"], row["level"]) == ("unknown", None)   # no footprint is not credit
+    assert "promissory_markers.families.suppression.total" in row["missing_signals"]
 
 
 def test_instructions_raise_layer_zero_and_five(instructed_repo: dict[str, Any]) -> None:
@@ -288,9 +387,13 @@ def test_a_rubric_row_on_a_layer_grade_loads_and_evaluates(
 
 def test_counts_only_output_reaches_the_same_levels(
     golden_repos: dict[str, dict[str, Any]], instructed_repo: dict[str, Any],
+    suppressed_repo: dict[str, Any], two_package_repo: dict[str, Any],
 ) -> None:
     """A fleet run is counts-only by default; the rubric reads only kept fields."""
-    full = {**golden_repos, "instructed": instructed_repo}
+    run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
+    full = {**golden_repos, "instructed": instructed_repo, "suppressed": suppressed_repo,
+            "two_package": two_package_repo,
+            "run_context": {k: v for k, v in run_context.items() if k in scan_names()}}
     counts = {name: counts_only_scans(scans) for name, scans in full.items()}
     for name in full:
         assert _levels(_run({name: counts[name]})) == _levels(_run({name: full[name]}))

@@ -36,10 +36,10 @@ def test_degrades_when_networkx_missing(monkeypatch, tmp_path):
     assert "networkx" in result.reason
 
 
-def test_no_packages_is_available_but_empty(tmp_path):
+def test_no_packages_is_unavailable_not_an_empty_graph(tmp_path):
     (tmp_path / "loose.py").write_text("x = 1\n")  # no __init__.py anywhere
     result = sg.analyze_structure(tmp_path)
-    assert result.available is True
+    assert result.available is False
     assert result.footprints == []
     assert "no importable" in result.reason
 
@@ -155,6 +155,15 @@ def test_intra_package_edges_are_not_contract_edges():
     ratio, burrow = sg.compute_front_door_ratio(g, packages={"pkg"})
     assert ratio == 1.0
     assert burrow == []
+    assert sg.count_cross_package_edges(g) == 0   # the 1.0 above is vacuous
+
+
+def test_cross_package_edges_counts_front_doors_and_burrows():
+    g = nx.DiGraph()
+    g.add_edge("app", "pkg")            # front door
+    g.add_edge("app", "pkg.internal")   # burrow
+    g.add_edge("pkg.a", "pkg.b")        # intra-package: not counted
+    assert sg.count_cross_package_edges(g) == 2
 
 
 # --------------------------------------------------------------------------

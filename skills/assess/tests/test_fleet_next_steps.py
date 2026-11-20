@@ -331,6 +331,11 @@ def test_every_default_rubric_signal_has_repository_native_wording():
     ("review_reality.approved_share", "gt", 0.5, "(more than 50% of merged"),
     ("two_factor.value", "in", ["on", "full"], "one of `on`, `full`"),
     ("rulesets.value", "ne", "off", "from `off`"),
+    ("structure.modularity_q", "gte", 0.3, "at least 0.3"),
+    ("structure.front_door_ratio", "gte", 0.9, "At least 90% of imports"),
+    ("promissory_markers.families.suppression.stale", "lte", 10, "10 or fewer suppressions"),
+    ("stats_summary.loc.p95", "lte", 500, "500 lines or fewer"),
+    ("structure_drift.tier_0.matched_patterns", "gt", 0, "CODEOWNERS"),
 ])
 def test_guidance_templates_on_the_criterion(signal, op, value, needle):
     words = guidance(signal, op, value)
@@ -349,7 +354,10 @@ def test_a_strict_bound_is_never_worded_at_least(signal):
     ("agent_environment.check.named_total", "gt", 3), ("instruction_claims.failed", "gt", 0),
     ("agent_environment.layer5_cap.applies", "eq", True), ("two_factor.value", "lt", 1),
     ("nested_instructions.budget.claude_code.bytes", "lt", 5), ("unknown.signal", "eq", 1),
-    ("review_reality.approved_share", "lt", 0.5),
+    ("review_reality.approved_share", "lt", 0.5), ("structure.modularity_q", "lt", 0.3),
+    ("promissory_markers.families.suppression.total", "eq", 0), ("stats_summary.loc.p95", "gt", 5),
+    ("structure.front_door_ratio", "lt", 0.9), ("structure_drift.tier_0.matched_patterns", "eq", 0),
+    ("promissory_markers.families.suppression.stale", "gt", 10),
 ])
 def test_guidance_declines_shapes_it_does_not_fit(signal, op, value):
     assert guidance(signal, op, value) is None
@@ -359,6 +367,9 @@ def test_measure_hints():
     assert "full `/assess` run" in measure_hint("observability.rung")
     assert "ghreport" in measure_hint("two_factor.value")
     assert "`coverage_gate` scan" in measure_hint("coverage_gate.enforced")
+    assert "full `/assess` run" in measure_hint("structure.modularity_q")
+    assert "no lint suppressions" in measure_hint("promissory_markers.families.suppression.total")
+    assert "`DESIGN.md`" in measure_hint("structure_drift.tier_0.matched_patterns")
 
 
 def test_default_rubric_toml_parses():
