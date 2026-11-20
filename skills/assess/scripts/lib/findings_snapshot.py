@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.run_context_types import FindingPaths, FindingsSnapshot, MethodChange, PathMove
+from lib.run_scope import assess_dir_for
 
 FINDINGS_SNAPSHOT_FILE = "findings.json"
 
@@ -107,8 +108,7 @@ def committed_prior(ctx: dict[str, Any], repo_root: Path) -> FindingsSnapshot | 
     is absent) the recorded prior stands.
     """
     slug = ctx.get("scope_slug")
-    artifact_dir = repo_root / ".assess" / slug if isinstance(slug, str) and slug else repo_root / ".assess"
-    on_disk = load_snapshot(artifact_dir)
+    on_disk = load_snapshot(assess_dir_for(repo_root, slug if isinstance(slug, str) else ""))
     if on_disk is not None and on_disk["assess_method_version"] != ctx.get("assess_method_version"):
         return on_disk
     recorded = ctx.get("prior_findings_snapshot")
