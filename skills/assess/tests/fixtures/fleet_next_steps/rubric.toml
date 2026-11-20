@@ -1,0 +1,80 @@
+# Fixture rubric for the fleet next-steps golden pages (issue #571). Covers an
+# org row, a team min row, a team share row, an always-unknown row, a row every
+# group tops, and a signal with no repository-native wording.
+version = "next-steps-fixture-1"
+
+[[rows]]
+id = "org-settings"
+title = "Group settings"
+scope = "org"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "two_factor.value", op = "eq", value = "on" }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [{ signal = "push_rules.value", op = "eq", value = "on" }]
+
+[[rows]]
+id = "instructions"
+title = "Agent instructions"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "nested_instructions.budget.claude_code.bytes", op = "gt", value = 0 }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [
+    { signal = "agent_environment.check.named_total", op = "gt", value = 0 },
+    { signal = "nested_instructions.budget.claude_code.lines", op = "lte", value = 200 },
+  ]
+
+[[rows]]
+id = "coverage"
+title = "Coverage | mutation"
+scope = "team"
+aggregation = "share"
+share = 0.5
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "coverage_gate.enforced", op = "eq", value = true }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [{ signal = "test_pressure.mutation_run", op = "eq", value = true }]
+
+[[rows]]
+id = "observability"
+title = "Runtime legibility"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "observability.rung", op = "gte", value = 1 }]
+
+[[rows]]
+id = "permissions"
+title = "Agent permissions"
+scope = "team"
+aggregation = "share"
+share = 0.5
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "agent_ops.summary.permissions_encoded", op = "eq", value = true }]
+
+[[rows]]
+id = "tooling"
+title = "Shared tooling"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "shared_tooling.available", op = "eq", value = true }]
