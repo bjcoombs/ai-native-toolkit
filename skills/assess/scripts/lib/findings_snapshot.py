@@ -8,11 +8,12 @@ the run reads the previous snapshot back and records it in ``run-context.json``
 as ``prior_findings_snapshot``; in CI that is the committed file, because the
 checkout is fresh.
 
-When the prior snapshot's method version differs from this run's, the findings
-moved because the method changed, not because code did. ``method_change``
-compares the two and lists, per finding, the paths that appeared and cleared, so
-``assess_gate.py`` can explain the move and print the re-freeze command instead
-of failing on findings with no stated cause.
+When the prior snapshot's method version differs from this run's, the method
+moved findings on unchanged code. ``method_change`` compares the two and lists,
+per finding, the paths that appeared and cleared (which also carry any code
+changed since the snapshot was committed), so ``assess_gate.py`` can name the
+method change and print the re-freeze command instead of leaving the moves
+with no stated cause.
 
 The file carries no run id or date: a run whose findings did not move leaves it
 byte-identical, so it only shows in a diff when a finding moved.
@@ -32,6 +33,16 @@ FINDINGS_SNAPSHOT_FILE = "findings.json"
 REFREEZE_COMMAND = (
     "re-run /assess (or, headless, `uv run scripts/assess_core.py <repo_root>` "
     "from the assess skill directory) and commit {snapshot}"
+)
+
+# Printed instead when this run's method version is older than the snapshot's:
+# CI runs a toolkit release behind the one that wrote the snapshot (the gate
+# workflow pins a published tag), so re-freezing with it would only undo the
+# newer method, and the note would come back on the next upgrade.
+RAISE_PIN_COMMAND = (
+    "raise the toolkit version on the gate workflow's "
+    "`uses: bjcoombs/ai-native-toolkit@v<version>` line to a release at finding "
+    "method version {prior} or later; leave {snapshot} as committed"
 )
 
 
@@ -95,7 +106,9 @@ def method_change(ctx: dict[str, Any]) -> MethodChange | None:
     never committed) or when the versions match. Otherwise every
     ``(finding, path)`` present now and not in the snapshot is ``appeared``, and
     every one in the snapshot and gone now is ``cleared``; both are sorted by
-    finding, then path.
+    finding, then path. ``downgrade`` is set when this run's method version
+    is older than the snapshot's (CI pinned to an older toolkit release); the
+    remedy is then raising that pin, not re-freezing.
     """
     prior = ctx.get("prior_findings_snapshot")
     current_version = ctx.get("assess_method_version")
@@ -115,11 +128,17 @@ def method_change(ctx: dict[str, Any]) -> MethodChange | None:
     slug = ctx.get("scope_slug")
     snapshot = f".assess/{slug}/{FINDINGS_SNAPSHOT_FILE}" if slug else (
         f".assess/{FINDINGS_SNAPSHOT_FILE}")
+    downgrade = prior_version > current_version
+    refreeze = (
+        RAISE_PIN_COMMAND.format(prior=prior_version, snapshot=snapshot)
+        if downgrade else REFREEZE_COMMAND.format(snapshot=snapshot)
+    )
     return {
         "prior_method_version": prior_version,
         "method_version": current_version,
+        "downgrade": downgrade,
         "appeared": appeared,
         "cleared": cleared,
         "snapshot": snapshot,
-        "refreeze": REFREEZE_COMMAND.format(snapshot=snapshot),
+        "refreeze": refreeze,
     }

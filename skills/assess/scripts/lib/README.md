@@ -704,8 +704,9 @@ finding set leaves the file byte-identical. `load_snapshot` reads the previous f
 before the run overwrites it (`None` when absent or malformed), and `build_run_context`
 records it as `prior_findings_snapshot`. `method_change` compares that snapshot with
 the current findings: on a method-version mismatch it lists the paths that appeared and
-cleared per finding, the snapshot path and the re-freeze command, which `assess_gate`
-prints as an explanation (it never fails the gate by itself). Tests:
+cleared per finding, the snapshot path and the re-freeze command (on a downgrade, when
+this run's method is older than the snapshot's, the toolkit pin to raise instead),
+which `assess_gate` prints as an explanation (it never fails the gate by itself). Tests:
 `tests/test_findings_snapshot.py`.
 
 **`run_wiki.py`**

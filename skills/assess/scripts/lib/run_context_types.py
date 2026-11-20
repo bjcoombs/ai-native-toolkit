@@ -464,6 +464,8 @@ class MethodChange(TypedDict):
 
     prior_method_version: int
     method_version: int
+    # True when this run's method is older than the snapshot's.
+    downgrade: bool
     appeared: list[PathMove]
     cleared: list[PathMove]
     snapshot: str

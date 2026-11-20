@@ -15,8 +15,10 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
 
 A third, explanatory part: when the committed ``.assess/findings.json`` was
 written under another finding method version (``ASSESS_METHOD_VERSION``), the
-log states that no code changed, lists the findings that appeared and cleared
-by path against that snapshot, and prints the re-freeze command. It explains
+log states that the method change is not a code change, lists the findings that
+appeared and cleared by path against that snapshot (which also reflect any code
+changed since it was committed), and prints the re-freeze command, or, when
+this run's toolkit is older than the snapshot's, the pin to raise instead. It explains
 the other checks' results and never fails the gate by itself.
 
 The defaults are warn-only: with no config, every finding is reported but
@@ -278,8 +280,10 @@ METHOD_CHANGE_MAX_PATHS = 20
 
 
 def _format_method_change(change: MethodChange | None) -> list[str]:
-    """The method-version note: no code changed, the findings that appeared
-    and cleared against the committed snapshot, and the re-freeze command.
+    """The method-version note: the method change is not a code change, the
+    findings that appeared and cleared against the committed snapshot (which
+    also carry any code changed since it), and the re-freeze command, or on a
+    downgrade the toolkit pin to raise.
     Empty when the versions match or there is no committed snapshot."""
     if not change:
         return []
@@ -287,9 +291,14 @@ def _format_method_change(change: MethodChange | None) -> list[str]:
         f"  NOTE method change: the /assess finding method changed from "
         f"version {change['prior_method_version']} to {change['method_version']} "
         f"since {change['snapshot']} was committed.",
-        "    No code changed to cause this: the rules that decide findings did. "
-        "Findings against the committed snapshot:",
+        "    The method change is not a code change: it moves findings on "
+        "unchanged code. The moves below combine it with any code changed "
+        "since the snapshot was committed, this PR's included.",
     ]
+    if change["downgrade"]:
+        lines.append(
+            "    This run's toolkit is older than the one that wrote the "
+            "snapshot, so re-freezing with it would undo the newer method.")
     for label, moves in (("appeared", change["appeared"]), ("cleared", change["cleared"])):
         if not moves:
             lines.append(f"    {label}: none")

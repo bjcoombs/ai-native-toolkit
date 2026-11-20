@@ -96,7 +96,27 @@ def test_method_change_lists_appeared_and_cleared_by_path() -> None:
         {"finding": "lying_map", "path": "gone.py"},
     ]
     assert change["snapshot"] == ".assess/findings.json"
+    assert change["downgrade"] is False
     assert ".assess/findings.json" in change["refreeze"]
+    assert "assess_core.py" in change["refreeze"]
+
+
+def test_older_method_than_snapshot_points_at_the_pin_not_a_refreeze() -> None:
+    """CI pinned to an older toolkit than the one that wrote the snapshot:
+    re-freezing would undo the newer method, so the remedy is the pin."""
+    prior = {"assess_method_version": 3, "findings": [
+        {"name": "lying_map", "paths": ["a.py"]}]}
+    change = method_change(_ctx(prior, [], version=2))
+    assert change is not None
+    assert change["downgrade"] is True
+    assert "uses: bjcoombs/ai-native-toolkit@v" in change["refreeze"]
+    assert "method version 3 or later" in change["refreeze"]
+    assert "assess_core.py" not in change["refreeze"]
+    out = format_verdict(evaluate(_ctx(prior, [], version=2), {}))
+    assert "from version 3 to 2" in out
+    assert "older than the one that wrote the snapshot" in out
+    assert "cleared (1):\n      lying_map: a.py" in out
+    assert "Re-freeze: raise the toolkit version" in out
 
 
 def test_method_change_names_the_scoped_snapshot() -> None:
@@ -115,7 +135,8 @@ def test_gate_states_no_code_changed_and_prints_refreeze() -> None:
     verdict = evaluate(ctx, {})
     out = format_verdict(verdict)
     assert "finding method changed from version 1 to 2" in out
-    assert "No code changed" in out
+    assert "not a code change" in out
+    assert "this PR's included" in out
     assert "appeared (1):\n      lying_map: new.py" in out
     assert "cleared (1):\n      lying_map: gone.py" in out
     assert "Re-freeze:" in out and "assess_core.py" in out
@@ -176,7 +197,7 @@ def test_bumped_method_version_fixture_produces_gate_message(tmp_path: Path, cap
     out = capsys.readouterr().out
     assert (f"from version {ASSESS_METHOD_VERSION - 1} to {ASSESS_METHOD_VERSION}"
             in out)
-    assert "No code changed" in out
+    assert "not a code change" in out
     assert "retired_finding: src/old.py" in out
     assert "Re-freeze:" in out
     # The run rewrote the snapshot at the current method version.
