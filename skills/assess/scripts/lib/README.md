@@ -126,6 +126,8 @@ Three signals derived from `git log`:
   (high = an island safe for keyhole edits).
 - B4 authorship: human/agent/mixed/unknown classification, e-mail-based and
   deliberately conservative (never labels a human's work "agent" on weak evidence).
+  The matcher (`identity_is_agent`, `coauthors_have_agent`, `AI_EMAIL_HINTS`) lives
+  in `agent_identity.py`; `AI_EMAIL_HINTS` is re-exported here.
 
 `parse_commit_file_sets` lists each commit's files under the names they had then.
 `build_rename_map` reads `git log --name-status -M --diff-filter=R` into a `RenameMap`:
@@ -465,10 +467,11 @@ degrades. `stage` exists to keep
 hand-wired assignments between the stages are gone. Currently registered:
 `agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
 `instruction_claims`, `claude_config`, `nested_instructions`, `agent_harness`,
-`agent_environment`. Besides
+`agent_environment`, `ai_usage`. Besides
 `repo_root` and
 `instruction_files`, the core provides `scope` (the absolute `--scope` path, or
-None) and `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`).
+None), `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`) and
+`history_window` (the stats sidecar's `churn_window` label, or None).
 
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads
@@ -1381,6 +1384,31 @@ network read, through `gh_cli` with a 10-second per-call cap: per-workflow
 median wall time of successful push runs on the default branch, or
 `{available: false, reason}`. Evidence only; it caps nothing.
 Tests: `tests/test_agent_environment.py`.
+
+**`agent_identity.py`**
+The one definition of an agent identity in a git history: `identity_is_agent(email,
+name)` (the `[bot]` marker on either, or an `AI_EMAIL_HINTS` e-mail; never a display
+name) and `coauthors_have_agent(field)` (any GS-separated `Co-authored-by` value whose
+bracketed e-mail is an agent). `COVERED_AGENTS` names the covered agents in words, with
+no address, for a block's stated limits; keep it in step with `AI_EMAIL_HINTS`.
+Consumers: `change_coupling.authorship_analysis`, `promissory_markers`,
+`understanding_analysis` and `ai_usage`. Widening the hints changes all four, so it is
+a change of its own. Tests: `tests/test_ai_usage.py`, `tests/test_change_coupling.py`.
+
+**`ai_usage.py`**
+AI-assisted change share (issue #547), a lower bound on agent use.
+`scan_ai_usage(repo_root, history_window)` runs `git log --no-merges` over the run
+root in the window and emits `ai_usage: {available, window, since, merge_rule,
+total_commits, agent_trailer_commits, agent_trailer_share, lower_bound,
+covered_agents[], limits[]}`. A commit counts when any `Co-authored-by` trailer names an
+agent per `agent_identity.coauthors_have_agent`; the share is null at zero commits.
+`merge_rule` is always `"excluded"`. `history_window` is the churn label
+`pick_churn_window` chose (`"commits (last 12mo)"`, from the stats sidecar), a
+headless `<n>d|w|mo|y` window, or None for full history (`window: "all-time"`);
+`resolve_window` raises on anything else, which degrades the block. `limits` is the
+fixed `LIMITS` tuple (squash merges, stripped or missing trailers, agents outside
+`COVERED_AGENTS`). Counts, a share and fixed strings only: no name, e-mail or
+subject. No git history degrades to `available: false`. Tests: `tests/test_ai_usage.py`.
 
 **`claude_config_fields.py`**
 The documented frontmatter field sets `claude_config` checks against: skill and

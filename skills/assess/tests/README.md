@@ -78,6 +78,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_agent_instructions_grader.py` | `lib/agent_instructions_grader.py` - heuristic grading of agent instruction files, the verified-commands vs directive-monolith fixture pair, findings |
 | `test_agent_harness.py` | `lib/agent_harness.py` - the committed agent harness inventory and its secret-exposure findings: a planted fixture with one of each finding kind, a clean fixture with the near misses, and this repository |
 | `test_agent_environment.py` | `lib/agent_environment.py` - the agent working-environment block: the CI-only, eligible-for-Present and malformed `copilot-setup-steps.yml` fixtures, each setup source, check-command classification, lockfile rows, and the `gh` CI-duration probe against a fake `gh` |
+| `test_ai_usage.py` | `lib/ai_usage.py` and `lib/agent_identity.py` - exact trailer counts on a dated fixture (human-only, human plus agent, `[bot]`, Copilot, out-of-window and merge commits), window resolution, the no-identity-string check, the no-git degrade |
 | `test_agent_ops.py` | `lib/agent_ops.py` - agent-operations guardrail scan (Layer 8 evidence) |
 | `test_anomaly_detector.py` | `lib/anomaly_detector.py` - anomaly detection on run output |
 | `test_archetype.py` | `lib/archetype.py` - repository archetype detection |

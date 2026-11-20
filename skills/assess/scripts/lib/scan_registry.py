@@ -32,6 +32,7 @@ from typing import Any
 from lib.agent_environment import scan_agent_environment
 from lib.agent_harness import scan_agent_harness
 from lib.agent_ops import scan_agent_ops
+from lib.ai_usage import scan_ai_usage
 from lib.claude_config import scan_claude_config
 from lib.config_drift import scan_config_drift
 from lib.gate_cost import estimate_gate_cost
@@ -41,7 +42,9 @@ from lib.review_reality import scan_review_reality
 
 # Names the core passes to ``run_scans``. A spec may read these, or the key of
 # any spec declared before it.
-PROVIDED_INPUTS = frozenset({"repo_root", "instruction_files", "scope", "excludes"})
+PROVIDED_INPUTS = frozenset({
+    "repo_root", "instruction_files", "scope", "excludes", "history_window",
+})
 
 STAGE_READ_SIDE = "read_side"
 STAGE_POST_OFFERS = "post_offers"
@@ -223,6 +226,12 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec(
         "agent_environment", scan_agent_environment,
         ("repo_root", "instruction_files", "agent_harness", "excludes"), STAGE_POST_OFFERS,
+    ),
+    # AI-assisted change share (issue #547): commits in the churn window with an
+    # agent Co-authored-by trailer, as counts and a share. A lower bound on agent
+    # use, never an estimate; merge commits excluded. Matcher: lib.agent_identity.
+    ScanSpec(
+        "ai_usage", scan_ai_usage, ("repo_root", "history_window"), STAGE_POST_OFFERS,
     ),
 )
 

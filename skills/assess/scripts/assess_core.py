@@ -491,6 +491,7 @@ def build_run_context(
     scan_inputs = {
         "repo_root": repo_root, "instruction_files": instruction_files,
         "scope": scope_abs, "excludes": (extra_exclude_dirs, extra_exclude_patterns),
+        "history_window": current.get("churn_window"),
     }
     run_scans(ctx, scan_inputs, STAGE_READ_SIDE)
 
