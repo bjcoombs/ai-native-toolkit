@@ -217,15 +217,23 @@ recorded as a graduated hotspot. Pure stdlib; an unreadable file is never exclud
 ### Static analysis
 
 **`structure_graph.py`**
-Python import-graph analysis (Signals A1-A4) via `grimp` + `networkx`:
+Import-graph analysis (Signals A1-A4) via `networkx`, over the graph a language builder
+returns (`import_graph.py`); nothing in it assumes a language:
 - A1 comprehension footprint: direct-dependency surface area for a unit.
 - A2 blob vs modular: strongly-connected components and Newman modularity Q.
-- A3 contracts: front-door vs burrow (internals-reaching) inbound edges.
+- A3 contracts: front-door vs burrow (internals-reaching) inbound edges, across the
+  builder's package boundaries (`package_of`) into its `front_doors`.
 - A4 breakup candidates: packages whose sub-modules form separable clusters.
 
-Degrades to `available: False` when `grimp`/`networkx` are absent rather than
-blocking the run, and when no importable Python package exists (nothing measured,
-not an empty graph whose modularity 0 would read as tangled code). `cross_package_edges` counts the
+Every registered builder graphs its language; the largest graph is measured and its
+language is the block's `language` field (null when nothing was measured). Degrades to
+`available: False` when `networkx` is absent, when a builder's tool is missing or fails
+and no other language was graphed, and when nothing could be graphed (nothing measured,
+not an empty graph whose modularity 0 would read as tangled code). With no graph the
+reason names the dominant source language (issues #707, #708):
+`no_import_graph_<language>: ...` when no builder graphed it, `no importable Python
+packages found` for a Python repository, `no_source_files: ...` with no source in a
+recognised language. `cross_package_edges` counts the
 import edges `front_door_ratio` is measured over; 0 means that ratio's 1.0 is vacuous
 (no package boundary is crossed). A graph with packages but no import edges stays
 available with `modularity_q` null and `modularity_reason` `no_import_edges` (null when Q
@@ -234,10 +242,87 @@ was measured): modules that never import each other have no community structure,
 `modularity_q` is therefore null in two cases: an edgeless graph (`modularity_reason`
 `no_import_edges`) and an unavailable block (`available` false; the cause is in
 `structure.reason`). A headless run reduces that block to the bare marker, whose reason
-opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`;
-`lib/headless_layers.py`), so `modularity_q` is absent there rather than null.
-Tests: `tests/test_structure_graph.py`, `tests/test_level_signals.py`,
-`tests/test_headless_layers.py` (a full signals run and a counts-only one).
+opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`,
+`no_import_graph_<language>`, `no_source_files`; `lib/headless_layers.py`), so
+`modularity_q` is absent there rather than null.
+`structure_drift.py` builds its module map and communities from the same selected graph
+(`import_graph.select_graph`, `import_digraph`).
+Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python golden),
+`tests/test_level_signals.py`, `tests/test_headless_layers.py` (a full signals run and a
+counts-only one).
+
+**`import_graph.py`**
+The language-neutral builder interface (issue #708). A builder is any object with a
+`language` token and `build(repo_root, extra_exclude_dirs, scope) -> ModuleGraph | None`
+(the `ImportGraphBuilder` protocol). `build` returns `None` when the repository holds
+nothing in its language, and raises `GraphUnavailable(reason)` when its tool is missing
+or fails; the reason sentence then reaches the block. A `ModuleGraph` carries:
+
+| Field | Meaning |
+|-------|---------|
+| `language` | the token the block reports and the `no_import_graph_<language>` suffix |
+| `modules` | sorted module ids; module ids are paths or path-like names, hashed by the counts-only PATH rule |
+| `edges` | importer -> the modules it imports directly; a target outside `modules` is ignored |
+| `front_doors` | the modules a package exposes as its public API (A3) |
+| `module_file` | module -> absolute source file; a module without one reads size 0 |
+| `package_of` | module -> package boundary id (A3 contract edges, A4 per-package splits) |
+| `surfaces` | module -> public definitions it exposes (A1); leave empty when the language has no measure, and every module reads 0 |
+| `name_collisions` | packages sharing a name, disclosed rather than merged |
+
+`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder and
+keeps one graph per language; the largest (most modules, then most internal edges, then
+the language token) is returned. With no graph the reason is the first builder failure in
+registration order, else `no_graph_reason`, which counts source files per language
+(`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
+`scope`) and names the dominant one. Imports no graph tool.
+
+Worked example: a builder for a language whose package is a directory and whose front
+door is the directory's `index` file.
+
+```python
+from pathlib import Path
+
+from lib.import_graph import GraphUnavailable, ModuleGraph
+
+
+class IndexDirBuilder:
+    language = "typescript"
+
+    def build(self, repo_root: Path, extra_exclude_dirs: set[str],
+              scope: Path | None) -> ModuleGraph | None:
+        root = scope or repo_root
+        files = sorted(p for p in root.rglob("*.ts")
+                       if not set(p.relative_to(repo_root).parts) & extra_exclude_dirs)
+        if not files:
+            return None                        # nothing to graph: the dominant-language reason applies
+        try:
+            imports = read_imports(files)      # your scan: module id -> module ids it imports
+        except OSError as e:
+            raise GraphUnavailable(f"typescript import scan failed ({e})") from e
+        ids = {p: p.relative_to(repo_root).with_suffix("").as_posix() for p in files}
+        return ModuleGraph(
+            language=self.language,
+            modules=sorted(ids.values()),
+            edges=imports,
+            front_doors={m for m in ids.values() if m.rsplit("/", 1)[-1] == "index"},
+            module_file={m: p for p, m in ids.items()},
+            package_of={m: m.rsplit("/", 1)[0] if "/" in m else "." for m in ids.values()},
+        )
+```
+
+Register it by appending to `BUILDERS` in `import_graph_builders.py`. A new block field
+or reason code still needs its counts-only rule (`counts_only_rules.py`) and a note in
+the maturity model header (`levels/default.toml`).
+Tests: `tests/test_import_graph.py`.
+
+**`import_graph_python.py`**
+The Python builder (`PYTHON_BUILDER`): `discover_packages` finds the top-level directories
+holding an `__init__.py`, `grimp` reads their imports, and `module_graph` turns the result
+into a `ModuleGraph`. A package is the top dotted component, front doors are the package
+roots and every `__init__` module, and the public surface is the count of public top-level
+`def` / `class` definitions read with `ast`. With packages but no grimp it raises
+`GraphUnavailable` (`grimp not installed; ...`); a grimp failure raises `grimp failed to
+build import graph (...)`.
 
 Packages resolve by path, never by import name. grimp's default finder asks
 `importlib.util.find_spec`, which answers from `sys.modules` first, so a target
@@ -253,8 +338,12 @@ between builds is unresolved, not only an import of the colliding name, since
 which copy wins depends on a runtime `sys.path`. The finder implements both shapes of
 grimp's package-finder port (`determine_package_directory` before 3.14,
 `determine_package_directories` from 3.14), so the `grimp>=3.0` floor holds.
-`structure_drift.py` builds its module map and communities through the same
-`build_import_map` / `import_digraph`.
+Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py`.
+
+**`import_graph_builders.py`**
+The registered builders (`BUILDERS`), one per language; `structure_graph` and
+`structure_drift` both read it. Order decides only which failure is reported when no
+graph is built.
 
 ### Document analysis
 
@@ -652,13 +741,13 @@ the network.
 **`headless_layers.py`**
 The headless runner's entries for the four blocks the default maturity model's layer 2-4
 rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
-`structure_scan`, needs grimp and networkx), `promissory_markers` (the private
+`structure_scan`, needs networkx and a language builder's tool, grimp for Python), `promissory_markers` (the private
 `promissory` scan, needs `rg`), `structure_drift` (tier 0 from the ownership map via
 `context_blocks.structure_drift_tier_0`; tier 1 needs the keyhole co-change pairs and is
 `not_probed`) and `stats_summary` (tracked source files scored by lizard in process:
 `files_scored`, `loc` and file-aggregate `ccn`, percentiles by numpy's linear rule; no
 scc languages, no hotspot lists). Every unavailable block is the bare marker with a
-`code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_rg`,
+`code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_import_graph_<language>`, `no_source_files`, `no_rg`,
 `not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
 and a maturity model row reads `unknown`. It diverges from the full run in two places: no ownership
 map reads `no_ownership_map` (the full run omits the block), and `stats_summary` covers

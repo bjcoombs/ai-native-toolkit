@@ -10,10 +10,13 @@ headless run never builds. ``HEADLESS_SCANS`` gives the headless runner
 (``lib/signals.py``) one reportable entry per block instead, outside the core
 modules, so the boundary from #557/#558 stays as it is:
 
-- ``structure`` reads the core's private ``structure_scan`` (the import graph,
-  which needs grimp and networkx). A repository with no importable Python
-  package reports unavailable (``no_python_packages``), as the full run does,
-  so a Go or JavaScript repository reads unknown on layer 2 rather than 0.
+- ``structure`` reads the core's private ``structure_scan`` (the import graph:
+  networkx, plus each language builder's tool, grimp for Python). A repository
+  with no import graph reports unavailable with a reason naming its dominant
+  language, as the full run does: ``no_import_graph_<language>`` (a Go or
+  JavaScript repository with no builder for its language reads unknown on
+  layer 2 rather than 0), ``no_python_packages`` for a Python repository with
+  no importable package, ``no_source_files`` for a repository with no source.
 - ``promissory_markers`` reads the core's private ``promissory`` scan (needs
   ``rg``).
 - ``structure_drift`` builds tier 0 (declared ownership patterns against the
@@ -28,7 +31,8 @@ modules, so the boundary from #557/#558 stays as it is:
 Every unavailable block is the bare ``{"available": false, "reason": ...}``
 marker with a ``code: sentence`` reason, so the counts-only filter keeps a
 named code (``no_lizard``, ``no_grimp``, ``no_networkx``, ``grimp_failed``, ``no_rg``,
-``no_python_packages``, ``no_ownership_map``) and a maturity-model row reads
+``no_python_packages``, ``no_import_graph_<language>``, ``no_source_files``,
+``no_ownership_map``) and a maturity-model row reads
 unknown, never a level. The full run's blocks are unchanged.
 """
 from __future__ import annotations
@@ -96,7 +100,11 @@ def _named(block: Any, codes: Sequence[tuple[str, str]]) -> JsonDict | None:
 
 
 def structure(scan: Any) -> JsonDict:
-    """The import-graph block, or a named marker (no tool, no Python package)."""
+    """The import-graph block, or a named marker (no tool, no graph).
+
+    A reason the scan already opens with a code (``no_import_graph_go: ...``,
+    ``no_source_files: ...``) is kept whole, so ``reason_code`` reads that code.
+    """
     marker = _named(scan, (("grimp not installed", "no_grimp"),
                            ("networkx not installed", "no_networkx"),
                            ("grimp failed", "grimp_failed"),
