@@ -708,7 +708,9 @@ passes their union across the repositories a step lists and annotates each repos
 with its own. `guidance` returns `None` for a signal or shape it has no wording for, and the page
 then states the signal expression alone. `measure_hint(signal)` says why a signal can
 be unavailable (a full `/assess` run only, a network read, an opt-in pass, a ghreport
-permission). Every signal of `rubrics/default.toml` has wording (tested).
+permission; the `structure`, `stats_summary`, `structure_drift` and
+`promissory_markers` blocks a full `/assess` run only). Every signal of
+`rubrics/default.toml` has wording (tested).
 
 **`fleet_group_schema.py`**
 Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
@@ -1311,9 +1313,11 @@ instead (`layer_grades.instructions_grade`). Where `counts_only_schema.ROOTS` ty
 name a field and end on a scalar (no list, no object); an untyped block is open. An
 `org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
 `<setting>.value` / `.reason`). `load_default_rubric` loads
-`skills/assess/rubrics/default.toml`: one team row per layer with a deterministic
-signal (0, 1, 5, 6, 7, 8; the header says why 2-4 have none), level 1 for Partial and
-2 for Present. It can disagree with the `/assess` layer verdicts (the file header lists
+`skills/assess/rubrics/default.toml`: one team row per layer 0-8, level 1 for
+Partial and 2 for Present. Layers 2-4 have no deterministic grade, so their rows read
+proxies from full-run blocks (import-graph modularity and front doors; lint
+suppressions; an ownership map and file size), each starting from positive evidence
+so an absent practice is never credited. It can disagree with the `/assess` layer verdicts (the file header lists
 where); no instruction file reads level 0 through the never-null
 `layer_grades.instruction_file_present`, not `unknown`. Tests:
 `tests/test_rubric_signals.py`, on headless runs of the golden fixture repositories
@@ -2121,7 +2125,7 @@ instruction_file_present}`: the best letter grade of the tracked, present instru
 files (null with none, the top-level `instructions_grade` value, which stays) and
 whether one exists, so a rubric can score "no instruction file" as level 0 rather
 than unknown. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
-default rubric's header says why). A short token and a boolean, kept whole by the
+default rubric's rows for them read proxies, and its header says how they diverge). A short token and a boolean, kept whole by the
 counts-only filter. Tests: `tests/test_layer_grades.py`, and the rubric rows in
 `tests/test_rubric_signals.py`.
 

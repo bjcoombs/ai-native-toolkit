@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from lib.counts_only import counts_only_scans
+from lib.promissory_markers import scan_promissory_markers
 from lib.rubric import Group, RubricError, RubricResult, dumps_result, evaluate, load_rubric, resolve_signal
 from lib.rubric_signals import (
     DEFAULT_RUBRIC,
@@ -69,6 +70,15 @@ def instructed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     (repo / ".claude" / "settings.json").write_text(
         json.dumps({"permissions": {"allow": ["Bash(make check)"]}}), encoding="utf-8")
     return _scans(_commit(repo))
+
+
+@pytest.fixture(scope="module")
+def suppressed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    """A full run's promissory_markers block for a repository with one lint suppression."""
+    repo = tmp_path_factory.mktemp("suppressed") / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("import os  # noqa: F401\n", encoding="utf-8")
+    return {"promissory_markers": scan_promissory_markers(_commit(repo)).summary()}
 
 
 def _run(data: dict[str, dict[str, Any]]) -> RubricResult:
@@ -181,10 +191,11 @@ def test_default_rubric_loads_against_the_schema() -> None:
 
 def test_every_default_signal_is_emitted_by_some_real_output(
     golden_repos: dict[str, dict[str, Any]], instructed_repo: dict[str, Any],
+    suppressed_repo: dict[str, Any],
 ) -> None:
     """Catches a typo in an open block, which the validator cannot."""
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
-    documents = [*golden_repos.values(), instructed_repo, run_context]
+    documents = [*golden_repos.values(), instructed_repo, suppressed_repo, run_context]
     # review_reality needs GitHub; its fields are named in its module doc.
     offline = {"review_reality.reviewed_share", "review_reality.approved_share"}
     signals = {c["signal"] for row in load_default_rubric()["rows"]
@@ -202,6 +213,9 @@ def test_default_rubric_on_the_golden_fixture_repos(golden_repos: dict[str, dict
         assert _levels(_run({name: golden_repos[name]})) == {
             "layer-0-instructions": 0,   # no CLAUDE.md: level 0, not unknown
             "layer-1-liveness": None,    # only a full /assess run measures the rung
+            "layer-2-design": None,      # structure, stats_summary, promissory_markers
+            "layer-3-linters": None,     # and structure_drift: full /assess run only
+            "layer-4-architecture": None,
             "layer-5-ci": 0,
             "layer-6-coverage": 0,
             "layer-7-review": None,      # needs GitHub
@@ -213,12 +227,15 @@ def test_default_rubric_on_the_golden_fixture_repos(golden_repos: dict[str, dict
 
 
 def test_default_rubric_on_the_golden_run_context() -> None:
-    """The captured full run predates the headless scans, so only Layer 1 is read."""
+    """The captured full run predates most headless scans: Layers 1, 2 and 4 are read."""
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
     result = _run({"toolkit": run_context})
     assert _levels(result) == {
         "layer-0-instructions": None,
         "layer-1-liveness": 0,   # observability.rung = 0 in the capture
+        "layer-2-design": 2,     # modularity_q 0.5662, front_door_ratio 1.0
+        "layer-3-linters": None,  # no promissory_markers block in the capture
+        "layer-4-architecture": 2,  # 115 matched ownership patterns, loc p95 483.65
         "layer-5-ci": None,
         "layer-6-coverage": None,
         "layer-7-review": None,
@@ -227,6 +244,35 @@ def test_default_rubric_on_the_golden_run_context() -> None:
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]
     assert dumps_result(result) == dumps_result(_run({"toolkit": copy.deepcopy(run_context)}))
+
+
+def test_default_rubric_covers_every_layer_on_the_golden_run_context() -> None:
+    """Contract I564-2: one row per layer 0-8, each a whole level or a named unknown."""
+    rows = load_default_rubric()["rows"]
+    assert len(rows) >= 9
+    assert [row["id"].split("-")[1] for row in rows] == [str(n) for n in range(9)]
+    run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
+    for row in _run({"toolkit": run_context})["rows"]:
+        if row["status"] == "level":
+            assert isinstance(row["level"], int) and not isinstance(row["level"], bool), row
+        else:
+            assert (row["status"], row["level"]) == ("unknown", None), row
+            assert row["missing_signals"], row
+
+
+def test_layer_three_reads_the_suppression_footprint(suppressed_repo: dict[str, Any]) -> None:
+    row = _row(_run({"r": suppressed_repo}), "layer-3-linters")
+    assert row["level"] == 2   # one fresh suppression: a linter runs, none stale
+
+    stale = copy.deepcopy(suppressed_repo)
+    stale["promissory_markers"]["families"]["suppression"]["stale"] = 11
+    assert _row(_run({"r": stale}), "layer-3-linters")["level"] == 1
+
+    none = copy.deepcopy(suppressed_repo)
+    del none["promissory_markers"]["families"]["suppression"]
+    row = _row(_run({"r": none}), "layer-3-linters")
+    assert (row["status"], row["level"]) == ("unknown", None)   # no footprint is not credit
+    assert "promissory_markers.families.suppression.total" in row["missing_signals"]
 
 
 def test_instructions_raise_layer_zero_and_five(instructed_repo: dict[str, Any]) -> None:

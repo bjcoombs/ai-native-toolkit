@@ -19,7 +19,8 @@ Fields:
 
 Only Layer 0 has a deterministic grade today. Layers 2 (code design), 3
 (linters) and 4 (architecture tests) are judged by the assess-layer-scorer
-reading configuration and code, so no field stands for them here.
+reading configuration and code, so no field stands for them here. The default
+rubric's rows for them read proxies from other blocks instead.
 
 Grades are short tokens and the flag a boolean, so the counts-only filter keeps
 the block whole. Pure: it reads the setup grading the core already ran.
