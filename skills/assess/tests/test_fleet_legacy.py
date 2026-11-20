@@ -76,8 +76,11 @@ def test_history_matches_a_pre_rename_entry():
     assert latest_matching(LEGACY_ORG, other, REPOS) is None
 
 
-def test_trend_history_counts_a_pre_rename_entry():
-    runs = ft.history_runs(LEGACY_ORG, _stamp(), REPOS, load_levels(LEVELS_FILE))
+@pytest.mark.parametrize("plugin_version", ["1.226.0", "2.0.0"])
+def test_trend_history_counts_a_pre_rename_entry(plugin_version):
+    """The trend matches on window, scans and output mode, not the plugin version, so a 2.x
+    run keeps drawing 1.x history entries (unlike --compare, which refuses a major change)."""
+    runs = ft.history_runs(LEGACY_ORG, _stamp(plugin_version=plugin_version), REPOS, load_levels(LEVELS_FILE))
     assert [(run["label"], run["levels_version"], run["scaled"]) for run in runs] == [
         ("2026-11-20", "fixture-1", True)]
     # Without the upgrade the entry would name no model version, and trend_run drops such a run.
