@@ -122,9 +122,12 @@ VERIFIABLE_PATTERNS = [
 #   gate, adding reference lines to a file could drop it under half and lower
 #   its penalty, so the score would reward the wrong action. ``flagged`` stays
 #   the block's advice flag. Lines are counted as line-equivalents: the
-#   larger of the always-on lines and always-on words / ``WORDS_PER_LINE``
-#   (about 12 words a line, the ratio the #517 word curve used), so a file of
-#   very long lines cannot dodge the term or the B cap.
+#   larger of the file's lines and its words / ``WORDS_PER_LINE`` (about 12
+#   words a line, the ratio the #517 word curve used), less the fetch-on-need
+#   lines the relocatable term charges, so a file of very long lines cannot
+#   dodge the term or the B cap. The two terms are summed in lines and
+#   rounded once (``placement_penalty``), so near 200 lines a file with a few
+#   fetch-on-need lines can show an always-on point fewer than the bare count.
 # - fetch-on-need lines: sections that belong in a skill, a nested file or an
 #   existing SKILL.md, which a two-line pointer would replace. This is the
 #   share term: a file that is mostly reference pays for it at any size, and a
@@ -362,12 +365,6 @@ class PlacementPenalty(TypedDict):
     always_on_penalty: int
     relocatable_penalty: int
     capped: bool
-
-
-def always_on_equivalent_lines(record: PlacementFile) -> int:
-    """Always-on lines, or always-on words / ``WORDS_PER_LINE`` when larger."""
-    return max(record["always_on_lines"],
-               math.ceil(record["always_on_words"] / WORDS_PER_LINE))
 
 
 def loaded_equivalent_lines(record: PlacementFile, fetch_words: int = 0) -> int:

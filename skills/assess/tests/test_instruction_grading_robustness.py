@@ -62,12 +62,14 @@ def _commands(heading: str, fenced: int, prose: int = 0, directives: int = 0) ->
 
 
 def _non_increasing_score(texts: list[str]) -> None:
-    """Penalty, B cap and score never move the wrong way along ``texts``."""
-    subs = [_sub(t) for t in texts]
-    penalties = [s["bloat_penalty"] for s in subs]
-    capped = [s["size_grade_capped"] for s in subs]
+    """Penalty and B cap never fall, and the score never rises, along ``texts``."""
+    grades = [grade_instructions(t, 1, repo=None, path="CLAUDE.md") for t in texts]
+    penalties = [g.subscores["bloat_penalty"] for g in grades]
+    capped = [g.subscores["size_grade_capped"] for g in grades]
+    scores = [g.score for g in grades]
     assert penalties == sorted(penalties), penalties
     assert capped == sorted(capped), capped
+    assert scores == sorted(scores, reverse=True), scores
 
 
 # --- command_reference density ----------------------------------------------------------
@@ -115,13 +117,18 @@ def test_adding_never_lines_to_a_command_section_never_lowers_the_penalty(fenced
     _non_increasing_score(texts)
 
 
-def test_never_lines_on_a_long_scoped_section_never_lower_the_penalty() -> None:
+@pytest.mark.parametrize("change", ["rename", "directives"])
+def test_wording_on_a_long_scoped_section_never_lowers_the_penalty(change: str) -> None:
     """``long_section`` is a size signal too: a 70-line Python section does not
-    become always-on because two of its lines start with Never."""
+    become always-on when renamed to "Python conventions" or when a third of
+    its lines turn into Never rules."""
     base = _rules(40)
     plain = _prose("Python notes", 70)
-    ruled = plain + "- Never import from the vendored tree.\n- Never pin a minor version.\n"
-    before, after = _sub(base + plain), _sub(base + ruled)
+    if change == "rename":
+        changed = plain.replace("Python notes", "Python conventions")
+    else:
+        changed = plain + "".join(f"- Never import vendored module {i}.\n" for i in range(30))
+    before, after = _sub(base + plain), _sub(base + changed)
     assert before["relocatable_penalty"] == 7
     assert after["bloat_penalty"] >= before["bloat_penalty"]
 
