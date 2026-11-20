@@ -16,19 +16,26 @@ clone is removed once its row is in hand, only when nothing in it would be
 lost (``lib/fleet_cleanup.py``). Every run also writes the run stamp
 ``<out>/run.json`` (``lib/fleet_stamp.py``).
 
+A counts-only run is also kept in the run history,
+``${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet/<org>/<date>/``
+(``--history-dir``, ``--history-org``, ``--no-history``; ``lib/fleet_history.py``).
+``--compare RUN_DIR`` compares this run with an earlier one and writes
+``<out>/compare.json`` (``lib/fleet_compare.py``).
+
 Exit codes:
     0  the run completed and repos.jsonl and run.json were written. Repositories that could
        not be scanned are rows with "status": "failed" and a reason token; the
        count is printed to stderr. Failures never change the exit code.
     2  usage error: no root and no --from-list, a root or list that does not
        exist, no repositories found, --out inside a target, an unreadable
-       --rubric or --settings, bad scan arguments, or an --out that cannot be
-       created
+       --rubric or --settings, bad scan arguments, an --out that cannot be
+       created, an unusable history location, or an unreadable --compare run
 
 Run:
     uv run fleet.py ROOT --out DIR [--rubric FILE] [--settings PATH] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
-        [--delete-after]
+        [--delete-after] [--compare RUN_DIR] [--history-dir DIR] [--history-org NAME]
+        [--no-history]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
 # /// script
@@ -64,7 +71,27 @@ from lib.fleet import (  # noqa: E402
 )
 from lib.fleet_activity import window_start  # noqa: E402
 from lib.fleet_cleanup import CloneDeleter  # noqa: E402
+from lib.fleet_compare import (  # noqa: E402
+    FleetRun,
+    RunVersionError,
+    clear_stale_comparison,
+    compare,
+    load_run,
+    not_comparable,
+    summary_lines,
+    write_comparison,
+)
 from lib.fleet_groups import SettingsError, load_settings, roll_up, write_groups  # noqa: E402
+from lib.fleet_history import (  # noqa: E402
+    HistoryError,
+    default_org,
+    entry_conflict,
+    entry_dir,
+    history_root,
+    persist,
+    safe_component,
+)
+from lib.fleet_inputs import FleetInputError  # noqa: E402
 from lib.fleet_stamp import build_stamp, write_stamp  # noqa: E402
 from lib.rubric import Rubric, RubricError, load_rubric  # noqa: E402
 from lib.rubric_signals import signal_path_validator  # noqa: E402
@@ -128,6 +155,19 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
              "local change, untracked or ignored file, stash, unpushed commit or linked worktree. "
              "Anything else is kept and listed on stderr.",
     )
+    parser.add_argument(
+        "--compare", metavar="RUN_DIR",
+        help="An earlier run (an --out directory or a history entry) to compare this run with; "
+             "writes OUT/compare.json and a summary on stderr.",
+    )
+    parser.add_argument(
+        "--history-dir", metavar="DIR",
+        help="Run history root (default: ${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet). "
+             "Each counts-only run is kept in DIR/<org>/<date>/.",
+    )
+    parser.add_argument("--history-org", metavar="NAME",
+                        help="The <org> directory name in the history (default: from the repository ids).")
+    parser.add_argument("--no-history", action="store_true", help="Do not keep this run in the history.")
     args = parser.parse_args(argv)
     if args.root is None and args.from_list is None:
         parser.error("give a ghsync ROOT or --from-list FILE")
@@ -161,6 +201,63 @@ def _report_deletions(deleter: CloneDeleter) -> None:
         print(f"  kept: {repo} ({reason})", file=sys.stderr)
 
 
+def _history_entry(args: argparse.Namespace, targets: list[Target], scan_date: str,
+                   planned: JsonDict) -> Path | None:
+    """The history directory this run will be kept in, created; None when it is not kept.
+
+    Raises ``HistoryError`` or ``OSError`` when the location cannot be used.
+    """
+    if args.no_history:
+        return None
+    if args.full:
+        print("fleet: history: --full output is not kept in the run history", file=sys.stderr)
+        return None
+    root = Path(args.history_dir) if args.history_dir else history_root(os.environ, Path.home())
+    org = (safe_component(args.history_org, "--history-org") if args.history_org is not None
+           else default_org(t.repo for t in targets))
+    entry = entry_dir(root, org, scan_date)
+    inside = out_inside_target(entry, targets)
+    if inside is not None:
+        raise HistoryError(f"history directory {entry} is inside target {inside.repo}")
+    conflict = entry_conflict(entry, planned)
+    if conflict is not None:
+        print(f"fleet: history: kept {conflict}; this run is not recorded", file=sys.stderr)
+        return None
+    entry.mkdir(parents=True, exist_ok=True)
+    return entry
+
+
+def _load_earlier(run_dir: str | None) -> FleetRun | str | None:
+    """The ``--compare`` run, the reason it cannot be compared, or None without ``--compare``.
+
+    Raises ``FleetInputError`` when the directory is missing or malformed.
+    """
+    if run_dir is None:
+        return None
+    try:
+        return load_run(Path(run_dir))
+    except RunVersionError as e:
+        return str(e)
+
+
+def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
+                      earlier: FleetRun | str | None) -> None:
+    """Keep the run in the history and write ``compare.json``; neither ever loses the ``--out`` results."""
+    if entry is not None:
+        try:
+            print(f"fleet: history -> {persist(out_dir, entry, later.stamp)}", file=sys.stderr)
+        except (HistoryError, OSError) as e:
+            print(f"fleet: history: not recorded ({e}); results are in {out_dir}", file=sys.stderr)
+    if earlier is None:
+        clear_stale_comparison(out_dir)
+        return
+    comparison = (compare(earlier, later) if isinstance(earlier, FleetRun)
+                  else not_comparable(later.stamp, [earlier]))
+    write_comparison(out_dir, comparison)
+    for line in summary_lines(comparison):
+        print(f"fleet: compare: {line}", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     rubric: Rubric | None = None
@@ -191,9 +288,20 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     today = datetime.now(timezone.utc).date()
     window = args.window or DEFAULT_WINDOW
+    try:  # read before any scan: the same-day history entry may be replaced
+        earlier = _load_earlier(args.compare)
+    except FleetInputError as e:
+        print(f"error: --compare {args.compare}: {e}", file=sys.stderr)
+        return 2
+    hash_salt = None if args.full else run_salt(args.hash_paths, args.hash_salt)
+    planned: JsonDict = {
+        "rubric_version": rubric["version"] if rubric is not None else None, "window": window,
+        "counts_only": not args.full, "scans": sorted(scans) if scans is not None else None,
+        "paths_hashed": hash_salt is not None,
+    }
     options = ScanOptions(
         counts_only=not args.full,
-        hash_salt=None if args.full else run_salt(args.hash_paths, args.hash_salt),
+        hash_salt=hash_salt,
         window=args.window, scans=args.scans, timeout=args.timeout,
         log_dir=out_dir / LOGS_DIR, active_since=window_start(window, today),
     )
@@ -202,15 +310,24 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as e:
         print(f"error: cannot create --out {args.out}: {e.strerror}", file=sys.stderr)
         return 2
-    deleter = CloneDeleter([out_dir, Path.cwd(), TOOLKIT_ROOT]) if args.delete_after else None
+    try:
+        entry = _history_entry(args, targets, today.isoformat(), planned)
+    except (HistoryError, OSError) as e:
+        print(f"error: run history: {e} (use --history-dir or --no-history)", file=sys.stderr)
+        return 2
+    protected = [out_dir, Path.cwd(), TOOLKIT_ROOT, *([entry] if entry is not None else [])]
+    deleter = CloneDeleter(protected) if args.delete_after else None
     rows = run_fleet(targets, options, args.jobs, after=deleter)
     path = write_rows(out_dir, rows)
-    groups_path = write_groups(out_dir, roll_up(rows, rubric, settings, counts_only=not args.full))
-    write_stamp(out_dir, build_stamp(
+    groups = roll_up(rows, rubric, settings, counts_only=not args.full)
+    groups_path = write_groups(out_dir, groups)
+    stamp = build_stamp(
         rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
         today=today, window=window, rubric_version=rubric["version"] if rubric is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
-    ))
+    )
+    write_stamp(out_dir, stamp)
+    _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)

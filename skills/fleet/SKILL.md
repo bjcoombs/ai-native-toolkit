@@ -1,6 +1,6 @@
 ---
 name: fleet
-description: "Run the headless /assess signals across every repository under a ghsync root (or in a list file) and write one counts-only JSON line per repository, deterministically and without writing to any target. Each repository runs assess_signals.py in its own process from a worker pool; one that cannot be scanned is a failed row with a reason token and never stops the run. No model in the gathering path; an optional post-gather step (--label) has a small model label each repository (service, library, infrastructure, mirror, docs, other) into a separate labels.jsonl for display and filtering only. TRIGGER when the user types /fleet, wants to measure a team, group or whole estate rather than one repository, asks to run /assess signals across all repos in a ghsync checkout or a list of repos, wants per-repository signal JSONL for a fleet roll-up, or wants the repositories in a fleet run labelled or grouped by kind."
+description: "Run the headless /assess signals across every repository under a ghsync root (or in a list file) and write one counts-only JSON line per repository, deterministically and without writing to any target. Each repository runs assess_signals.py in its own process from a worker pool; one that cannot be scanned is a failed row with a reason token and never stops the run. No model in the gathering path; an optional post-gather step (--label) has a small model label each repository (service, library, infrastructure, mirror, docs, other) into a separate labels.jsonl for display and filtering only. Each counts-only run is kept in a dated run history and can be compared with an earlier run (level movement apart from measured-set movement). TRIGGER when the user types /fleet, wants to measure a team, group or whole estate rather than one repository, asks to run /assess signals across all repos in a ghsync checkout or a list of repos, wants per-repository signal JSONL for a fleet roll-up, wants the repositories in a fleet run labelled or grouped by kind, or asks what moved since the last fleet run or sprint."
 ---
 
 # fleet: headless signals across a ghsync root
@@ -48,6 +48,10 @@ no third-party dependencies.
 | `--hash-paths` | Counts-only paths hashed under one salt drawn for this run: hashes join within the run, but reruns are not byte-identical. |
 | `--hash-salt VALUE` | Hash paths under this salt; reruns stay byte-identical and join across runs. |
 | `--delete-after` | Delete each clone once it is scanned, to keep disk use flat over a large estate. Narrow and fail-closed; see [`--delete-after`](#--delete-after). |
+| `--compare RUN_DIR` | Compare this run with an earlier one (an `--out` directory or a history entry) and write `DIR/compare.json`; see [Run history and comparison](#run-history-and-comparison). |
+| `--history-dir DIR` | Run history root (default `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`). |
+| `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
+| `--no-history` | Do not keep this run in the history. |
 
 **Exit codes.** `0`: the run completed and `repos.jsonl` and `run.json` were written, including
 when some repositories failed (each is a `failed` row; stderr prints the count
@@ -55,7 +59,8 @@ and the failed ids). `2`: usage error - no `ROOT` and no `--from-list`, a root
 or list that does not exist, no repositories found, `--out` inside a target, an
 invalid `--rubric` or `--settings`, an unknown scan, a bad window, or a `DIR`
 that cannot be created (checked before any scan, so `--delete-after` never
-removes a clone whose results could not be written).
+removes a clone whose results could not be written), an unusable run history
+location, or a `--compare` directory that is missing or malformed.
 
 ## Output: `repos.jsonl`
 
@@ -163,6 +168,60 @@ kept counts and each kept repository with its reason token (`scan_not_ok`,
 `not_ghsync_layout`, `symlink`, `not_a_main_clone`, `holds_protected_path`,
 `local_changes`, `stash`, `unpushed_commits`, `linked_worktrees`, `git_error`,
 `delete_error`). Deletion never changes `repos.jsonl` or `run.json`.
+
+## Run history and comparison
+
+Each counts-only run is also kept, so a programme can see what moved since the
+last sprint. The run's `repos.jsonl`, `groups.jsonl` and `run.json` are copied
+to `<history>/<org>/<scan_date>/`, where `<history>` is `--history-dir` or
+`${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`, and `<org>` is
+`--history-org` or the first segment every repository id shares (the distinct
+ones sorted and joined by `+` when they differ, e.g. `grpa+grpb`). A `--full`
+run is not kept: the history holds only counts-only output, so it can live
+outside the scanned repositories.
+
+The history fails closed. Only those three files are written (through a temp
+file, `run.json` last); nothing is ever deleted. `<org>` and the date must each
+be one plain directory name, no directory on the way may be a symlink, and the
+history may not be inside a target (exit 2 before any scan; `--no-history`
+skips it). A same-day rerun replaces the day's entry only when that entry is a
+fleet run with the same rubric version, window, output mode, scans and path
+hashing; otherwise the entry is kept and stderr says this run was not recorded.
+A failed history write never loses the `--out` results.
+
+`--compare RUN_DIR` reads the earlier run before scanning and writes
+`DIR/compare.json`, with a summary on stderr. To compare two existing runs
+without rescanning:
+
+<!-- chat-skip:start -->
+```bash
+uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_compare.py" EARLIER_DIR LATER_DIR [--write FILE]
+```
+<!-- chat-skip:end -->
+
+It prints the same JSON to stdout and exits `0` when compared, `3` when the runs
+are not comparable, `2` when a directory is missing or malformed.
+
+**Not comparable.** Runs that differ in rubric version, window, counts-only
+mode, scan selection or path hashing, in the plugin's major version (the
+`/assess` stats-diff rule), or in file versions (a run from before `run.json`)
+give `comparable: false` with every reason in `reasons` and no deltas.
+
+**`compare.json`** (keys sorted, no absolute paths):
+
+| Key | Value |
+|-----|-------|
+| `comparable`, `reasons`, `notes` | Whether the runs compare; why not; caveats (with hashed paths on both sides, hashes compare only under one `--hash-salt`). |
+| `earlier`, `later` | Each run's `scan_date`, `window`, `rubric_version`, `plugin_version`, `toolkit_commit`. |
+| `movement` | `false` when nothing moved: an unchanged rerun. |
+| `repositories` | Measured-set movement across the fleet: `added`, `removed`, `no_longer_scanned` / `newly_scanned` (ok on one side, failed on the other), `no_longer_active` / `newly_active` (the rows' `active` flag). |
+| `groups` | Per group: `set` (the same lists for the group) and `set_changed`, `settings_changed`, and `rows`: every rubric row's `then` and `now` (`{status, level}`, `null` when absent), `moved`, and `cause` when moved. |
+| `repos` | Per repository scanned on both sides, the `signals` that changed: dotted `path` into `scans`, `then` and `now` (a side where the leaf is absent omits its key). |
+
+`cause` separates a real change from a change in what was measured: `level`
+when the group's set is unchanged, `set` when only the set moved (team rows
+read the repositories, org rows the group's settings), `set_and_level` when the
+set and the evidence both moved and the change cannot be split.
 
 ## Team next-steps pages
 
@@ -285,6 +344,7 @@ model's guess: the counts-only signals say little about what a repository is,
 so a label leans mostly on the repository's name. Present them as such.
 
 The logic lives in `skills/assess/scripts/lib/fleet.py`, `lib/fleet_stamp.py`,
+`lib/fleet_history.py`, `lib/fleet_compare.py`,
 `lib/fleet_activity.py`, `lib/fleet_cleanup.py` and
 `skills/assess/scripts/lib/fleet_labels.py` (see that package's
 `lib/README.md`).

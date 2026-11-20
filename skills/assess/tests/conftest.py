@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime as _dt
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,10 @@ import pytest
 os.environ["GIT_CONFIG_GLOBAL"] = os.devnull
 os.environ["GIT_CONFIG_SYSTEM"] = os.devnull
 os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
+# The fleet runner keeps each run under ${XDG_DATA_HOME}/ai-native-toolkit/fleet
+# by default (#552): point it at a throwaway directory so no test writes into
+# the real ~/.local/share.
+os.environ["XDG_DATA_HOME"] = tempfile.mkdtemp(prefix="assess-tests-xdg-")
 
 
 @pytest.fixture
