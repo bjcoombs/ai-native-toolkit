@@ -69,14 +69,20 @@ constant each.
 # kinds verified across the doc set, and cross-document contradictions (two
 # files giving one checkable claim different values, every site cited).
 # Additive; complexity-stats.json is unchanged.
-# 1.10.0: instruction files are scored on always-on size and share (issue #560).
+# 1.10.0: each run-context.json doc_staleness.docs row gains subject_roots (the
+# ownership rule's roots), base_doc_dir (the directory the doc is the base doc
+# of, or null) and subject_paths (up to 20 sorted subject paths), from
+# lib.doc_ownership (issue #555). A repo-baseline row's subject_code_count is now
+# 0 (it owns no subject), the same value the documentation block reports.
+# complexity-stats.json is unchanged.
+# 1.11.0: instruction files are scored on always-on size and share (issue #560).
 # Each instruction_files and nested_instructions.files entry gains the
 # subscores always_on_lines, always_on_pct, fetch_on_need_lines,
 # always_on_flagged, always_on_penalty and relocatable_penalty, and
 # instruction_file_size gains always_on_lines. bloat_penalty is now their
 # penalties' sum and size_grade_capped reads always-on lines. Additive: no key
 # moves or changes type, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.10.0"
+ARTIFACT_SCHEMA_VERSION = "1.11.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -90,6 +96,9 @@ ARTIFACT_SCHEMA_VERSION = "1.10.0"
 # 3: the doc-complexity join reads complexity-stats.json's uncapped `files` list,
 #    so a complex file outside every top-10 list can now produce lying_map,
 #    unexplained_complexity or good_contract (issue #556).
-# 4: instruction files are graded on always-on size and share instead of the
+# 4: the complexity join takes doc ownership from the doc-staleness rule
+#    (lib.doc_ownership, issue #555): a README beside a design doc owns the
+#    directory's code, and a non-base doc owns none by directory.
+# 5: instruction files are graded on always-on size and share instead of the
 #    whole-file size curve (issue #560), which moves instruction grades.
-ASSESS_METHOD_VERSION = 4
+ASSESS_METHOD_VERSION = 5
