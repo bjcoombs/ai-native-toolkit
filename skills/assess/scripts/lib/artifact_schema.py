@@ -65,7 +65,11 @@ constant each.
 # uncapped and sorted by path, read by the doc-complexity join (issue #556).
 # Additive; run-context.json is unchanged. STATS_SCHEMA_VERSION moves 5->6, so
 # the cross-run diff is disarmed once against a pre-#556 snapshot.
-ARTIFACT_SCHEMA_VERSION = "1.8.0"
+# 1.9.0: run-context.json gains doc_claims (issue #491): the instruction-claim
+# kinds verified across the doc set, and cross-document contradictions (two
+# files giving one checkable claim different values, every site cited).
+# Additive; complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.9.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
