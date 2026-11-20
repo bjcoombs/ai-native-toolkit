@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import assess_core
 from assess_core import build_run_context
 from assess_core_helpers import _minimal_repo
+from lib import core_scans
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -66,7 +66,7 @@ def test_test_pressure_scan_failure_degrades_not_crashes(tmp_path: Path, monkeyp
     def boom(*_a, **_k):
         raise RuntimeError("simulated test_pressure failure")
 
-    monkeypatch.setattr(assess_core, "scan_test_pressure", boom)
+    monkeypatch.setattr(core_scans, "scan_test_pressure", boom)
     ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
     tp = ctx["test_pressure"]
     assert tp["available"] is False

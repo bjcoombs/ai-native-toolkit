@@ -43,4 +43,8 @@ A leaf module so the orchestrator and the lib modules that write artifacts
 # agent setup, the check command an instruction file names, lockfiles per
 # manifest, copilot-setup-steps.yml findings, the Layer 5 Partial cap and the
 # optional gh CI-duration probe. Additive; complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.4.0"
+# 1.5.0: run-context.json gains shared_tooling (issue #566): per repository, the
+# shared CI sources its pipelines include and the agent marketplaces it hosts or
+# names, each with a stable id a fleet roll-up counts distinct. Additive; no
+# existing key moves, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.5.0"
