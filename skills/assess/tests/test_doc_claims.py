@@ -94,14 +94,14 @@ def test_a_false_pin_in_a_doc_is_a_failure(tmp_path: Path) -> None:
 
 def test_two_docs_pinning_different_versions_cite_both_lines(tmp_path: Path) -> None:
     _write(tmp_path, "docs/a.md", PIN_311)
-    _write(tmp_path, "skills/s/references/b.md", PIN_312)
+    _write(tmp_path, "docs/sub/b.md", PIN_312)
     block = scan_doc_claims(tmp_path, [])
     # The pinned file is missing, so both fail against the repo; they also
     # disagree with each other.
     assert block["contradictions_total"] == 1
     found = block["contradictions"][0]
     assert (found["kind"], found["path"]) == ("pin", ".python-version")
-    assert _sites(found) == [["docs/a.md", 3, "3.11"], ["skills/s/references/b.md", 5, "3.12"]]
+    assert _sites(found) == [["docs/a.md", 3, "3.11"], ["docs/sub/b.md", 5, "3.12"]]
     json.dumps(block)
 
 
@@ -191,6 +191,34 @@ def test_a_version_inside_a_longer_one_does_not_reconcile(
     _write(tmp_path, "docs/a.md", f"{a} is pinned in `{pin_file}`.\n")
     _write(tmp_path, "docs/b.md", f"{b} is pinned in `{pin_file}`.\n")
     assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
+
+
+def test_skill_docs_resolve_paths_against_their_skill(tmp_path: Path) -> None:
+    for i in range(8):
+        _write(tmp_path, f"skills/b/references/g{i}.md", "text\n")
+    for i in range(3):
+        _write(tmp_path, f"skills/a/references/g{i}.md", "text\n")
+        _write(tmp_path, f"references/r{i}.md", "text\n")
+    _write(tmp_path, "skills/a/SKILL.md", "Read the 3 guides in `references/*.md`.\n")
+    _write(tmp_path, "skills/b/SKILL.md", "Read the 8 guides in `references/*.md`.\n")
+    block = scan_doc_claims(tmp_path, [])
+    # Two skills, two directories: both true, and no contradiction between them.
+    assert (block["total"], block["verified"], block["contradictions_total"]) == (2, 2, 0)
+
+
+def test_a_skill_doc_falls_back_to_the_root_when_only_that_exists(tmp_path: Path) -> None:
+    _write(tmp_path, ".nvmrc", "20.11.0\n")
+    _write(tmp_path, "skills/a/references/setup.md", "Node 20.11.0 is pinned in `.nvmrc`.\n")
+    block = scan_doc_claims(tmp_path, [])
+    assert (block["total"], block["verified"]) == (1, 1)
+
+
+def test_a_doc_outside_skills_is_not_rebased(tmp_path: Path) -> None:
+    from lib.doc_claims import rebase_skill_claims
+
+    claims = extract_claims("Keep 3 suites in `tests/*.sql`.\n")
+    assert rebase_skill_claims(tmp_path, "docs/a.md", claims) == claims
+    assert rebase_skill_claims(tmp_path, "skills/a/notes/x.md", claims) == claims
 
 
 def test_different_paths_and_enforcement_claims_never_contradict(tmp_path: Path) -> None:

@@ -25,6 +25,11 @@ prefix of the other's (``3.11`` and ``3.11.9``, matching the lenient pin check;
 (``count_within_tolerance``: the larger of 10% or 2). An enforcement claim
 carries no value, so it has no cross-document form.
 
+Paths in a skill's ``SKILL.md`` or ``references/`` are skill-relative, so
+their claims resolve against ``skills/<name>/`` (``rebase_skill_claims``),
+falling back to the repo root only when just that reading exists; claims are
+grouped by that resolved target.
+
 Scope: the Markdown under ``docs/``, ``skills/*/references/`` and every
 ``skills/*/SKILL.md`` (from the ``--scope`` directory when one is set), minus
 ``HISTORICAL_DOC_TREES`` (design records, ADRs and RFCs: they describe past
@@ -40,6 +45,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, NamedTuple, TypedDict
 
@@ -163,6 +169,51 @@ def doc_claim_files(
     return sorted(found)
 
 
+def _skill_dir(rel: str) -> str | None:
+    """``skills/<name>`` (under any scope prefix) for a skill's ``SKILL.md`` or a
+    file under its ``references/``; None for any other document."""
+    parts = Path(rel).parts
+    for i in range(len(parts) - 3, -1, -1):
+        if parts[i] != "skills":
+            continue
+        rest = parts[i + 2:]
+        if rest == ("SKILL.md",) or (len(rest) > 1 and rest[0] == "references"):
+            return Path(*parts[:i + 2]).as_posix()
+    return None
+
+
+def _target_exists(root: Path, path: str) -> bool:
+    """Whether the file a claim names, or a glob's wildcard-free directory, exists."""
+    fixed: list[str] = []
+    for part in Path(path).parts:
+        if re.search(r"[*?]", part):
+            break
+        fixed.append(part)
+    return bool(fixed) and root.joinpath(*fixed).exists()
+
+
+def rebase_skill_claims(root: Path, rel: str, claims: list[Claim]) -> list[Claim]:
+    """Resolve a skill document's claim paths against its skill directory.
+
+    A ``SKILL.md`` or skill reference names ``references/*.md`` or
+    ``scripts/x.sh`` relative to ``skills/<name>/``. Each claim path is rewritten
+    to ``skills/<name>/<path>`` unless only the repo-root reading exists, so two
+    skills' ``references/*.md`` are two different targets, verified and grouped
+    apart. Other documents' claims are returned unchanged.
+    """
+    skill = _skill_dir(rel)
+    if skill is None:
+        return claims
+    out: list[Claim] = []
+    for claim in claims:
+        local = f"{skill}/{claim.path}"
+        if _target_exists(root, claim.path) and not _target_exists(root, local):
+            out.append(claim)
+        else:
+            out.append(replace(claim, path=local))
+    return out
+
+
 def _read(root: Path, rel: str) -> tuple[Path, str] | None:
     candidate = root / rel
     try:
@@ -260,6 +311,8 @@ def scan_doc_claims(
         real, text = read
         seen.add(real)
         claims = extract_claims(text)
+        if verify:
+            claims = rebase_skill_claims(root, rel, claims)
         pool.append((rel, real, claims))
         if verify:
             scanned += 1
