@@ -224,3 +224,81 @@ def test_scan_is_registered() -> None:
     spec = next(s for s in SCANS if s.key == "shared_tooling")
     assert spec.fn is scan_shared_tooling
     assert spec.reads == ("repo_root",)
+
+
+# ── review follow-ups ───────────────────────────────────────────────────────
+
+def test_gitlab_nested_lists_neither_add_nor_drop_sources() -> None:
+    text = (
+        "include:\n"
+        "  - component: g/p/c@1\n"
+        "    inputs:\n"
+        "      targets:\n"
+        "        - project: not/a/source\n"
+        "  - file: x.yml\n"
+        "    rules:\n"
+        "      - if: $CI\n"
+        "    project: after/rules\n"
+        "\"include\":\n"
+        "  project: quoted/key\n"
+    )
+    assert [e["source"] for e in gitlab_includes(text, "f", True)] == [
+        "g/p/c", "after/rules", "quoted/key",
+    ]
+
+
+def test_gitlab_mapping_form_with_nested_list_keeps_later_keys() -> None:
+    text = "include:\n  rules:\n    - if: $X\n  project: g/p\n"
+    assert [e["source"] for e in gitlab_includes(text, "f", True)] == ["g/p"]
+
+
+def test_reusable_workflow_only_at_job_level_and_on_next_line() -> None:
+    text = (
+        "jobs:\n"
+        "  echo:\n"
+        "    runs-on: x\n"
+        "    steps:\n"
+        "      - run: |\n"
+        "          echo 'uses: acme/ci/.github/workflows/build.yml@v1'\n"
+        "  split:\n"
+        "    uses:\n"
+        "      'org/shared/.github/workflows/deploy.yml@main'\n"
+        "\"jobs\": {}\n"
+        "other:\n"
+        "  uses: not/jobs/.github/workflows/x.yml@1\n"
+    )
+    entries = github_reusable_workflows(text, "w.yml", True)
+    assert [(e["source"], e["line"]) for e in entries] == [("org/shared", 8)]
+
+
+def test_symlinks_and_paths_outside_the_repo_are_not_read(tmp_path: Path) -> None:
+    outside = tmp_path / "sibling"
+    _write(outside, "settings.json", {"extraKnownMarketplaces": {"x": {}}})
+    _write(outside, "wf.yml", "jobs:\n  a:\n    uses: o/r/.github/workflows/w.yml@1\n")
+    repo = tmp_path / "repo"
+    (repo / ".claude").mkdir(parents=True)
+    (repo / ".github" / "workflows").mkdir(parents=True)
+    (repo / ".claude" / "settings.json").symlink_to(outside / "settings.json")
+    (repo / ".github" / "workflows" / "wf.yml").symlink_to(outside / "wf.yml")
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    block = scan_shared_tooling(repo)
+    assert block["marketplaces"] == [] and block["ci_includes"] == []
+
+
+def test_unlistable_workflow_dir_keeps_other_evidence(git_repo, monkeypatch) -> None:
+    repo, commit = git_repo
+    _write(repo, ".gitlab-ci.yml", "include:\n  - project: g/p\n")
+    _write(repo, ".github/workflows/ci.yml", "jobs: {}\n")
+    _write(repo, ".claude-plugin/marketplace.json", {"name": "m"})
+    commit("init")
+    real_iterdir = Path.iterdir
+
+    def broken(self: Path):  # type: ignore[no-untyped-def]
+        if self.name == "workflows":
+            raise PermissionError("denied")
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", broken)
+    block = scan_shared_tooling(repo)
+    assert block["ci_source_ids"] == ["gitlab_project:g/p"]
+    assert block["marketplace_ids"] == ["marketplace:m"]

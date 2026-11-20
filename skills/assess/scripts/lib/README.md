@@ -1392,7 +1392,9 @@ ci_source_ids[], marketplace_ids[]}`. `ci_includes` rows (`kind`, `source`, `id`
 `gitlab_component` with the host and `@version` dropped) and from `uses:
 <owner>/<repo>/.github/workflows/...` in `.github/workflows/*.yml`
 (`github_reusable_workflow`, keyed on the repository). Local includes, templates,
-`./.github/workflows` references and a job's `trigger:` are skipped. `marketplaces`
+`./.github/workflows` references, a job's `trigger:`, keys in nested lists
+(`inputs:`, `rules:`), step-level `uses:` and `run:` script text are skipped.
+Symlinks and paths resolving outside the repository are not read. `marketplaces`
 rows (`kind`, `name`, `source`, `id`, `path`, `tracked`) are the
 `.claude-plugin/marketplace.json` manifest (`manifest`) and each
 `extraKnownMarketplaces` entry in `.claude/settings.json` (`settings`, `source` as

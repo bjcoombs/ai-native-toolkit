@@ -8,7 +8,7 @@ count distinct sources and marketplaces per group:
 
 - Shared CI sources: ``include: project:`` and ``include: component:`` entries
   in ``.gitlab-ci.yml``, and ``uses: <owner>/<repo>/.github/workflows/...``
-  reusable-workflow references in ``.github/workflows/*.yml``. Local includes
+  job-level reusable-workflow references in ``.github/workflows/*.yml``. Local includes
   and ``./.github/workflows`` references are not shared, so they are skipped.
 - Agent marketplaces: a ``.claude-plugin/marketplace.json`` manifest (the
   repository hosts a marketplace) and each ``extraKnownMarketplaces`` entry in
@@ -85,12 +85,14 @@ class DistinctIds(TypedDict):
     marketplaces: list[str]
 
 
-_TOP_LEVEL_INCLUDE = re.compile(r"^include\s*:(.*)$")
+_TOP_LEVEL_INCLUDE = re.compile(r"""^(?:include|"include"|'include')\s*:(.*)$""")
+_TOP_LEVEL_JOBS = re.compile(r"""^(?:jobs|"jobs"|'jobs')\s*:""")
+_JOB_USES = re.compile(r"""^(?:uses|"uses"|'uses')\s*:(.*)$""")
 _INCLUDE_VALUE = r"""("[^"]*"|'[^']*'|(?:\$\{[^}]*\}|[^\s,}#])+)"""
 _INCLUDE_KEY = re.compile(r"(?:^|[\s{,])(project|component)\s*:\s*" + _INCLUDE_VALUE)
 _BLOCK_KEY = re.compile(r"^(project|component)\s*:\s*" + _INCLUDE_VALUE)
-_REUSABLE_USES = re.compile(
-    r"""\buses\s*:\s*["']?([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)/\.github/workflows/[^\s"'#]+"""
+_REUSABLE_REF = re.compile(
+    r"""^([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)/\.github/workflows/[^\s"'#]+"""
 )
 _HOST_VARS = ("$CI_SERVER_FQDN", "${CI_SERVER_FQDN}", "$CI_SERVER_HOST", "${CI_SERVER_HOST}")
 
@@ -173,13 +175,19 @@ def _include_keys(text: str) -> list[tuple[int, str, str]]:
     """
     keys: list[tuple[int, str, str]] = []
     item_col: int | None = None
+    list_col: int | None = None
     for number, line, inline in _include_lines(text):
         if inline:
+            item_col = list_col = None
             keys += [(number, k, v) for k, v in _flow_keys(line)]
             continue
         content = line.lstrip()
         col = len(line) - len(content)
         if content.startswith("-"):
+            if list_col is None and item_col is None:
+                list_col = col
+            if col != list_col:
+                continue  # an item of a nested list (rules:, inputs:), never a source
             rest = content[1:].lstrip()
             col += len(content) - len(rest)
             content = rest
@@ -219,19 +227,67 @@ def gitlab_includes(text: str, path: str, tracked: bool) -> list[CiInclude]:
     return entries
 
 
-def github_reusable_workflows(text: str, path: str, tracked: bool) -> list[CiInclude]:
-    """``uses: owner/repo/.github/workflows/<file>@ref`` references in a workflow."""
-    entries: list[CiInclude] = []
+def _job_uses(text: str) -> list[tuple[int, str]]:
+    """(line, value) for each ``uses:`` key directly under a ``jobs.<job_id>``.
+
+    Only a job's own key calls a reusable workflow: a step's ``- uses:`` is an
+    action and a ``run:`` script that prints ``uses:`` calls nothing, and both
+    sit deeper than the job's keys. A value on the following line is read too.
+    """
+    rows: list[tuple[int, str]] = []
+    in_jobs = False
+    job_col: int | None = None
+    body_col: int | None = None
+    pending: int | None = None
     for number, raw in enumerate(text.splitlines(), start=1):
-        for repo in _REUSABLE_USES.findall(_strip_comment(raw)):
-            entries.append({
-                "kind": "github_reusable_workflow",
-                "source": repo,
-                "id": f"github_reusable_workflow:{repo.lower()}",
-                "path": path,
-                "line": number,
-                "tracked": tracked,
-            })
+        line = _strip_comment(raw).rstrip()
+        if not line.strip():
+            continue
+        content = line.lstrip()
+        col = len(line) - len(content)
+        if pending is not None:
+            if body_col is not None and col > body_col:
+                rows.append((pending, content))
+                pending = None
+                continue
+            pending = None
+        if col == 0:
+            in_jobs = _TOP_LEVEL_JOBS.match(line) is not None
+            job_col = body_col = None
+            continue
+        if not in_jobs or (job_col is not None and col < job_col):
+            continue
+        if job_col is None or col == job_col:
+            job_col, body_col = col, None
+            continue
+        if body_col is None:
+            body_col = col
+        match = _JOB_USES.match(content) if col == body_col else None
+        if match:
+            value = match.group(1).strip()
+            if value:
+                rows.append((number, value))
+            else:
+                pending = number
+    return rows
+
+
+def github_reusable_workflows(text: str, path: str, tracked: bool) -> list[CiInclude]:
+    """Job-level ``uses: owner/repo/.github/workflows/<file>@ref`` references."""
+    entries: list[CiInclude] = []
+    for number, value in _job_uses(text):
+        match = _REUSABLE_REF.match(_unquote(value))
+        if match is None:
+            continue
+        repo = match.group(1)
+        entries.append({
+            "kind": "github_reusable_workflow",
+            "source": repo,
+            "id": f"github_reusable_workflow:{repo.lower()}",
+            "path": path,
+            "line": number,
+            "tracked": tracked,
+        })
     return entries
 
 
@@ -307,6 +363,21 @@ def _is_tracked(path: Path, tracked: frozenset[Path] | None) -> bool:
         return False
 
 
+def _in_repo_file(repo_root: Path, path: Path) -> bool:
+    """A regular file inside the repository: no symlink, no read outside it.
+
+    A symlink is skipped outright, so a link never borrows its target's
+    tracked status or reads a sibling checkout's file under this repo's path.
+    """
+    try:
+        if path.is_symlink() or not path.is_file():
+            return False
+        path.resolve().relative_to(repo_root)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def _read_text(path: Path) -> str | None:
     try:
         return path.read_text(encoding="utf-8", errors="replace")
@@ -316,15 +387,20 @@ def _read_text(path: Path) -> str | None:
 
 def _workflow_files(repo_root: Path) -> list[Path]:
     root = repo_root / _WORKFLOWS_DIR
-    if not root.is_dir():
+    try:
+        children = list(root.iterdir()) if root.is_dir() else []
+    except OSError:
         return []
-    return sorted(p for p in root.iterdir() if p.is_file() and p.suffix in (".yml", ".yaml"))
+    return sorted(
+        p for p in children
+        if p.suffix in (".yml", ".yaml") and _in_repo_file(repo_root, p)
+    )
 
 
 def _ci_includes(repo_root: Path, tracked: frozenset[Path] | None) -> list[CiInclude]:
     entries: list[CiInclude] = []
     gitlab = repo_root / _GITLAB_CI
-    if gitlab.is_file() and (text := _read_text(gitlab)) is not None:
+    if _in_repo_file(repo_root, gitlab) and (text := _read_text(gitlab)) is not None:
         entries += gitlab_includes(text, _GITLAB_CI, _is_tracked(gitlab, tracked))
     for workflow in _workflow_files(repo_root):
         if (text := _read_text(workflow)) is not None:
@@ -336,12 +412,12 @@ def _ci_includes(repo_root: Path, tracked: frozenset[Path] | None) -> list[CiInc
 def _marketplaces(repo_root: Path, tracked: frozenset[Path] | None) -> list[MarketplaceRef]:
     entries: list[MarketplaceRef] = []
     manifest = repo_root / _MARKETPLACE_MANIFEST
-    if manifest.is_file():
+    if _in_repo_file(repo_root, manifest):
         entries += manifest_marketplace(
             _read_json(manifest), _MARKETPLACE_MANIFEST, _is_tracked(manifest, tracked)
         )
     settings = repo_root / _SETTINGS
-    if settings.is_file():
+    if _in_repo_file(repo_root, settings):
         entries += settings_marketplaces(
             _read_json(settings), _SETTINGS, _is_tracked(settings, tracked)
         )
