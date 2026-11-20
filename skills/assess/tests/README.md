@@ -60,6 +60,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_change_coupling.py` | `lib/change_coupling.py` - B1 change-coupling pairs, B2 containment ratio, B4 authorship; synthetic git histories built in tmp dirs |
 | `test_coupling_analysis.py` | `lib/coupling_analysis.py` - B3 static-vs-historical disagreement; hidden-coupling, bleeding-module, and refactor-boundary classification with mocked inputs |
 | `test_doc_complexity_join.py` | `lib/doc_complexity_join.py` - Signal C: doc_value formula, slop-doc guard, threshold behaviour; mocked complexity-stats and staleness inputs |
+| `test_doc_ownership.py` | `lib/doc_ownership.py` - the one doc-to-code ownership rule: spec expansion per method, the README-beside-design.md tie-break through both blocks, one `subject_code_count`, the export cap, scoped-run keys |
 | `test_rename_churn.py` | `lib/git_churn.py` + `lib/doc_staleness.py` - churn counts that follow renames (issue #425): parity with `git log --follow`, twin histories with and without a rename giving the same finding, and low confidence when the rename map is incomplete |
 | `test_doc_staleness.py` | `lib/doc_staleness.py` - doc->code association (base-doc, parallel docs/, code links, repo-wide fallback), churn-relative staleness ratios, and the lying-map rule that counts only the subject's commits after the doc's last edit |
 | `test_doc_modularity.py` | `lib/doc_staleness.py` - the `modularity` block: size-weighted coverage, the large-repo flag, and a base-doc directory ratio that counts only code directories |
@@ -91,6 +92,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_claude_config.py` | `lib/claude_config.py` - legacy command files and Claude Code frontmatter the runtime ignores, plugin path overrides, scope, and the unchanged run-context of an unconfigured repo |
 | `test_config_drift.py` | `lib/config_drift.py` + `lib/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
 | `test_review_reality_gitlab.py` | `lib/gitlab_cli.py` + the GitLab path of `lib/review_reality.py` - provider detection, `glab` refusal mapping, merged merge request approvals |
+| `test_gitlab_protected_branches.py` | `lib/gitlab_cli.branch_protection` + the GitLab paths of `lib/config_drift.py` and `lib/review_reality.py` - wildcard protected-branch matching, 403/404 as unavailable, GitLab protected-branch snapshots, rules scoped to all protected branches |
 | `test_context_blocks.py` | `lib/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
 | `test_coverage_gate.py` | `lib/coverage_gate.py` - enforced coverage-threshold detector |
 | `test_coverage_report.py` | `lib/coverage_report.py` - coverage-report parser |
@@ -99,6 +101,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_decline_markers.py` | `lib/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
 | `test_diff_reliability.py` | `lib/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
 | `test_doc_provenance.py` | `lib/doc_provenance.py` - provenance-aware staleness of generated docs |
+| `test_doc_claims.py` | `lib/doc_claims.py` - claim checks across the doc set and cross-document contradictions |
 | `test_evidence_check.py` | `lib/evidence_check.py` - deterministic re-check of scorer evidence |
 | `test_scorer_evidence.py` | `lib/evidence_check.py` - the layer scorer's structured evidence contract |
 | `test_gap_actions.py` | `lib/gap_actions.py` - the deterministic Top 3 gap candidates |

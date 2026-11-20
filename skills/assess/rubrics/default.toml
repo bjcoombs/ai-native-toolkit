@@ -1,0 +1,131 @@
+# Default /assess rubric: a deterministic approximation of the 0-8 layers.
+#
+# Loaded by lib/rubric_signals.py (load_default_rubric) and evaluated by
+# lib/rubric.py. Each row is one layer; level 1 stands for Partial and level 2
+# for Present, so level 0 is Missing. Team rows read one repository's signals
+# (a headless document's "scans", or a full run-context.json) and roll up by
+# the minimum across the repositories passed in.
+#
+# These levels CAN DISAGREE with the /assess layer verdicts on the same
+# repository. The assess-layer-scorer agent starts from the deterministic
+# grades and then applies judgement (integrity overrides, reading the code,
+# the knowledge-base archetype's N/A layers); a rubric reads signals only.
+# Known gaps:
+#
+# - Layers 2 (code design), 3 (linters) and 4 (architecture tests) have no row:
+#   /assess judges them by reading configuration and code, and no scan reports
+#   a signal for them. The rubric reports nothing for these layers rather than
+#   a proxy that reads as a verdict.
+# - Layer 0 reads presence from the size of the always-loaded Claude Code
+#   instruction text (root CLAUDE.md, its imports, unscoped .claude/rules),
+#   which is 0, never null, when there is none. So "no instruction file" is
+#   level 0, as /assess scores a null instructions_grade Missing, and a missing
+#   nested_instructions block is unknown. instructions_grade itself is a
+#   run-context key outside the headless schema, so a rubric cannot name it.
+#   A repository with only AGENTS.md reads level 0 here; /assess credits it.
+# - Layer 1 reads the observability rung, which only a full /assess run
+#   produces: a headless run reports it unavailable, so the row is unknown.
+# - Layer 7 reads review_reality, which needs GitHub: a headless run makes no
+#   network calls, so the row is unknown there.
+# - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence of
+#   repeated AI work cycles, which no scan measures.
+#
+# Changing a criterion changes results: bump "version" with every edit.
+
+version = "default-2026.11.1"
+
+[[rows]]
+id = "layer-0-instructions"
+title = "Layer 0: agent instructions"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [
+    { signal = "nested_instructions.budget.claude_code.bytes", op = "gt", value = 0 },
+  ]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [
+    { signal = "agent_environment.check.named_total", op = "gt", value = 0 },
+    { signal = "instruction_claims.failed", op = "eq", value = 0 },
+    { signal = "nested_instructions.budget.claude_code.lines", op = "lte", value = 200 },
+  ]
+
+[[rows]]
+id = "layer-1-liveness"
+title = "Layer 1: runtime legibility"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "observability.rung", op = "gte", value = 1 }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [{ signal = "observability.rung", op = "gte", value = 3 }]
+
+[[rows]]
+id = "layer-5-ci"
+title = "Layer 5: CI and the agent's local check"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "agent_environment.check.named_total", op = "gt", value = 0 }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [{ signal = "agent_environment.layer5_cap.applies", op = "eq", value = false }]
+
+[[rows]]
+id = "layer-6-coverage"
+title = "Layer 6: coverage gates and truth pressure"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "coverage_gate.enforced", op = "eq", value = true }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [{ signal = "test_pressure.mutation_run", op = "eq", value = true }]
+
+[[rows]]
+id = "layer-7-review"
+title = "Layer 7: review on merged pull requests"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "review_reality.reviewed_share", op = "gt", value = 0 }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [
+    { signal = "review_reality.reviewed_share", op = "gte", value = 0.8 },
+    { signal = "review_reality.approved_share", op = "gte", value = 0.5 },
+  ]
+
+[[rows]]
+id = "layer-8-agent-ops"
+title = "Layer 8: AI project management"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "agent_ops.summary.permissions_encoded", op = "eq", value = true }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [
+    { signal = "agent_ops.summary.hooks_present", op = "eq", value = true },
+    { signal = "agent_ops.summary.routines_present", op = "eq", value = true },
+  ]

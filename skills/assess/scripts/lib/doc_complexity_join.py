@@ -34,11 +34,13 @@ must score **strictly safer** than a hollow stale summary (``lying_map``,
 ``doc_value < 0``), and it does: ``0 > negative``. Recommendations are advice
 for a human, never an instruction to synthesise prose.
 
-**Doc->code mapping is deliberately fuzzy** -- nearest-ancestor by path
-proximity over the paths already present in the two input artifacts. It is a
-*candidate* signal pointing a human at a unit, not a verdict, so no filesystem
-read or symbol resolution is required (and the function stays trivially
-testable from mocked dicts).
+**Doc->code mapping is the doc-staleness ownership rule** (``lib.doc_ownership``,
+issue #555): each ``doc_staleness.docs`` row carries its ``subject_method`` and
+``subject_roots``, and ``doc_subjects`` expands them over the scored files with
+``resolve_subjects``. The staleness ratio and the complexity a doc summarises
+therefore describe the same code, and ``subject_code_count`` is the staleness
+row's value (the doc's whole subject, not only its scored files). No filesystem
+read is needed, so the function stays testable from mocked dicts.
 
 This module is **standalone**: it consumes the JSON-serialisable outputs of the
 complexity treemap (``complexity-stats.json``) and ``analyze_doc_staleness`` and
@@ -48,9 +50,10 @@ the core.
 """
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import TypedDict
 
+from lib.doc_ownership import SubjectSpec, resolve_subjects
 from lib.run_context_types import JsonDict
 
 
@@ -63,6 +66,11 @@ class DocUnit(TypedDict):
     doc_value: float
     finding: str | None
     confidence: str | None
+    # Discovered code files only (the staleness row's count), while
+    # complexity_summarised sums the join subject over the scored files
+    # (complexity-stats.json ``files``). The two populations differ: a base doc
+    # owning only files the treemap scores but discovery skips (Lua, say) can
+    # report subject_code_count 0 with non-zero complexity_summarised.
     subject_code_count: int
     recommendation: str | None
 
@@ -170,41 +178,25 @@ def _signed_freshness(doc: JsonDict) -> float:
                         -1.0, 1.0), 3)
 
 
-def _doc_dir_parts(doc_path: str) -> tuple[str, ...]:
-    """Directory the doc lives in, as path parts (() for a repo-root doc)."""
-    return PurePosixPath(doc_path).parent.parts
-
-
-def _covers(doc_dir: tuple[str, ...], code_parts: tuple[str, ...]) -> bool:
-    """True if ``code`` sits in the doc's directory or any subdirectory."""
-    return code_parts[: len(doc_dir)] == doc_dir
-
-
-def _assign_code_to_docs(
-    code_paths: list[str], doc_paths: list[str],
+def doc_subjects(
+    code_paths: list[str], docs: list[JsonDict],
 ) -> dict[str, list[str]]:
-    """Assign each code file to its *nearest-ancestor* doc by path proximity.
+    """Each staleness doc's subject among `code_paths` (stats-relative keys).
 
-    A doc covers code in its own directory and below; when several docs cover
-    the same file the deepest (longest directory prefix) wins -- the same
-    nearest-match rule ``CODEOWNERS`` and the doc-staleness metric use. Ties
-    break on doc path for determinism. Files no doc covers are simply absent
-    from the result (they become ``unexplained_complexity`` candidates).
+    The single read of the ownership rule for the join: the specs come from the
+    rows' ``subject_method`` / ``subject_roots`` / ``base_doc_dir``. A row
+    without them (an older run-context) has an empty subject rather than a
+    second, guessed rule.
     """
-    doc_dirs = {d: _doc_dir_parts(d) for d in doc_paths}
-    assignment: dict[str, list[str]] = {d: [] for d in doc_paths}
-    for code in code_paths:
-        code_parts = PurePosixPath(code).parts
-        candidates = [
-            (len(dir_parts), doc)
-            for doc, dir_parts in doc_dirs.items()
-            if _covers(dir_parts, code_parts)
-        ]
-        if not candidates:
-            continue
-        _, nearest = max(candidates, key=lambda t: (t[0], t[1]))
-        assignment[nearest].append(code)
-    return assignment
+    specs: dict[str, SubjectSpec] = {}
+    for d in docs:
+        base_dir = d.get("base_doc_dir")
+        specs[d["path"]] = {
+            "method": str(d.get("subject_method") or ""),
+            "roots": [str(r) for r in d.get("subject_roots") or []],
+            "base_dir": str(base_dir) if base_dir is not None else None,
+        }
+    return resolve_subjects(code_paths, specs)
 
 
 def analyze_doc_complexity_join(
@@ -219,7 +211,7 @@ def analyze_doc_complexity_join(
             ``ratio`` / ``confidence`` under ``docs``).
         repo_root: repository root. Accepted for signature parity with the rest
             of the pipeline; the join itself needs no filesystem access (the
-            doc->code mapping is path-proximity over the input artifacts), which
+            doc->code mapping expands the staleness rows' ownership specs), which
             keeps it deterministic and testable from mocked dicts.
 
     Returns a JSON-serialisable dict::
@@ -259,8 +251,7 @@ def analyze_doc_complexity_join(
     # lying_map. Cap every doc's confidence to "low" so the existing
     # low-confidence guard below suppresses the lying_map classification.
     churn_degenerate = bool(doc_staleness.get("churn_degenerate", False))
-    doc_paths = [d["path"] for d in docs_in]
-    assignment = _assign_code_to_docs(list(file_ccn), doc_paths)
+    assignment = doc_subjects(list(file_ccn), docs_in)
     covered_code = {c for codes in assignment.values() for c in codes}
 
     units: list[DocUnit] = []
@@ -322,7 +313,7 @@ def analyze_doc_complexity_join(
             "doc_value": doc_value,
             "finding": finding,
             "confidence": confidence,
-            "subject_code_count": len(subject),
+            "subject_code_count": int(doc.get("subject_code_count", len(subject))),
             "recommendation": _RECOMMENDATIONS.get(finding) if finding else None,
         }
         units.append(unit)

@@ -81,7 +81,8 @@ def test_complex_file_outside_top_lists_yields_lying_map(tmp_path: Path) -> None
     stats = _write_repo_stats(tmp_path)
     staleness = {"available": True, "docs": [{
         "path": "pkg/README.md", "ratio": 4.0, "confidence": "high",
-        "subject_method": "nearest-ancestor",
+        "subject_method": "nearest-ancestor", "subject_roots": ["pkg"],
+        "base_doc_dir": "pkg",
     }]}
     result = analyze_doc_complexity_join(stats, staleness, tmp_path)
     assert [u["path"] for u in result["findings"]["lying_maps"]] == ["pkg/README.md"]
