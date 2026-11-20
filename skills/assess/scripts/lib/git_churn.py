@@ -31,6 +31,7 @@ from lib.assess_config import (
     CONFIG_FILE as ASSESS_CONFIG_FILE,
 )
 from lib.change_coupling import build_rename_map
+from lib.history_window import WINDOW_PATTERN
 from lib.run_context_types import BulkCommit, JsonDict
 
 # Cap every git call so a stuck invocation (huge repo, lock contention, a hung
@@ -368,9 +369,10 @@ class ContentClock(NamedTuple):
     ``truncated`` is True when git confirms a shallow clone (issue #544); a
     failed probe leaves it False and ``complete`` False, unknown rather than
     truncated. ``boundary_epoch`` is the author time of the newest shallow
-    boundary commit: history before it may be missing. ``lower_bound`` names
-    the docs whose newest visible change is a boundary commit, so their age is
-    a lower bound (the real last change can be older). A boundary commit lists
+    boundary commit reachable from HEAD (issue #633): history before it may be
+    missing. ``lower_bound`` names the docs whose newest visible change is a
+    boundary commit, so their age is a lower bound (the real last change can be
+    older). A boundary commit lists
     every file, like a root commit, so it is never counted as bulk.
     """
 
@@ -484,6 +486,10 @@ def content_commit_clock(
             if p in docs:
                 commits[-1][2].add(p)
 
+    # $GIT_DIR/shallow also lists other shallow refs' boundaries (#633).
+    walked = {sha for sha, _, _ in commits}
+    boundary = {sha: at for sha, at in boundary.items()
+                if sha in walked or _reaches_from_head(top, sha)}
     need = max(BULK_COMMIT_MIN_DOCS, int(BULK_COMMIT_DOC_SHARE * len(docs)) + 1)
     bulk = {sha for sha, _, touched in commits
             if len(touched) >= need and sha not in boundary}
@@ -570,6 +576,18 @@ def _shallow_boundary(top: str) -> dict[str, int]:
     return {r[0]: int(r[1]) for r in rows if len(r) == 2 and r[1].isdigit()}
 
 
+def _reaches_from_head(top: str, sha: str) -> bool:
+    """Whether ``sha`` is an ancestor of HEAD; kept (True) when git cannot say."""
+    try:
+        code = subprocess.run(
+            ["git", "-C", top, "merge-base", "--is-ancestor", sha, "HEAD"],
+            capture_output=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
+        ).returncode
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return True
+    return code != 1
+
+
 def _dt_date(epoch: int) -> str:
     import datetime as _dt
 
@@ -623,7 +641,7 @@ CHURN_WINDOWS: list[tuple[str, str | None]] = [
     ("last 5y",   "5 years ago"),
     ("all-time",  None),
 ]
-_WINDOW_IN_LABEL = re.compile(r"\blast ([1-9][0-9]*(?:d|w|mo|y))\b")
+_WINDOW_IN_LABEL = re.compile(rf"\blast ({WINDOW_PATTERN})\b")
 
 
 def window_from_churn_label(label: str | None) -> str | None:

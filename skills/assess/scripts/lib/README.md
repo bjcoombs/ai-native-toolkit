@@ -114,11 +114,22 @@ Shallow history (issue #544): `content_commit_clock` reuses its
 `--is-shallow-repository` probe, and on a shallow clone reads the boundary commits
 from `git rev-parse --git-path shallow`. The clock's `truncated`, `boundary_epoch`
 (newest boundary, author time) and `lower_bound` (docs whose newest visible change is
-a boundary commit) feed `doc_staleness`. A boundary commit lists every file like a
+a boundary commit) feed `doc_staleness`. Only boundaries reachable from HEAD count
+(issue #633): `$GIT_DIR/shallow` also lists the boundaries of other shallow-fetched
+refs, so a boundary outside the clock's walk is kept only when
+`merge-base --is-ancestor` confirms it (or cannot say). A boundary commit lists every file like a
 root commit, so it is never counted as bulk. A failed probe is unknown, not
 truncated. Tests: `tests/test_shallow_history.py`.
 `window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
 into the `history_window` scan input (`"12mo"`, None for all-time).
+
+**`history_window.py`**
+The one history-window grammar (issue #601): `<n>d`, `<n>w`, `<n>mo`, `<n>y`.
+`split_window` returns `(count, unit)` or raises `ValueError`; `WINDOW_PATTERN` is the
+unanchored regex fragment. `signals.parse_window`, `ai_usage.resolve_window`,
+`fleet_activity.window_start`, `git_churn.window_from_churn_label` and the
+`run.schema.json` window pattern (`fleet_schema`) all read it. Tests:
+`tests/test_history_window.py`.
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
 pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
 scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
@@ -758,7 +769,7 @@ Whether a fleet repository is active (issue #569): `is_active` compares the chec
 `HEAD` committer date (`head_commit_date`, UTC, read
 from git with optional locks off) with `window_start(window, today)`, which counts back
 in whole days, months and years by calendar (clamped to month end), validating the
-window with `signals.parse_window`; a window reaching back before year 1 starts at
+window with `history_window.split_window`; a window reaching back before year 1 starts at
 `date.min`. Close to `ghsync --active-since`, not identical:
 ghsync counts 30-day months from now on platform dates. `scan_target` sets
 each ok row's `active` from `ScanOptions.active_since`, so it is read before
@@ -1342,15 +1353,20 @@ Each file not already graded at an `INSTRUCTION_FILE_PATHS` location gets a
 Findings: `dead_glob` (a rule, not always loaded, none of whose scope patterns
 matches a tracked file or names a directory on disk; a nested rule's patterns are
 also tried relative to its own directory), `ignored_cursor_md`, `claude_shadows_agents`
-(a directory's `CLAUDE.md` differs from its `AGENTS.md` below the header and does
-not import it; `diff_lines` counts the differing body lines, one changed line
-counting once) and `repeats_parent` (at least half of a nested file's distinct
+(a directory's `CLAUDE.md` differs from its `AGENTS.md` once the header comments
+they account for are set aside, and does not import it; `diff_lines` counts the differing lines, body plus any header
+comment only one file carries, one changed line counting once) and `repeats_parent` (at least half of a nested file's distinct
 lines, over five or more, copy the nearest ancestor's). The two files are compared
 below their headers (`mirror_lines`: leading blank lines, one H1 and leading HTML
 comments dropped, whitespace collapsed, blank lines dropped), so a pair that
 matches there is reported as the informational `mirrored_instruction_files`, a
 hand-maintained mirror, not as shadowing (#589); a symlink or an import is
-neither. Files and findings are capped with `_total` counts, informational
+neither. Agents read header comments too, so `mirror_pair` drops only the
+comments both files carry and at most one per-file note on each side (paired in order);
+a comment only one file carries stays in the comparison, so an instruction
+hidden there makes the pair `claude_shadows_agents`, and a mirror whose paired
+notes differ says so in its detail (#632). Text after a header comment's `-->`
+ends the header unless it opens another comment, so an H1 there is body. Files and findings are capped with `_total` counts, informational
 mirrors last so the cap never drops a defect for one. Tests: `tests/test_instruction_discovery.py`.
 
 **`instruction_budget.py`**
