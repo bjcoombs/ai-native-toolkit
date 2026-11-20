@@ -70,7 +70,8 @@ changes the per-repo table, headline or Needs attention list.
 | `rulesets` | `orgs/{org}/rulesets`: count, names and enforcement | always `unknown`: GitLab has no group rulesets |
 
 On GitLab the section covers `--group`, or each top-level group you belong
-to. The field names are the same on both providers.
+to. A GitHub personal account has no org settings, so its four fields read
+`unknown` with the `orgs/` 404. The field names are the same on both providers.
 
 Every value is the setting's value, `off`, or `unknown` with the reason
 (`denied: no access or tier (HTTP 403)`, `not found: no access, tier, or
