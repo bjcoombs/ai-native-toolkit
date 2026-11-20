@@ -69,6 +69,12 @@ Delete any matching line (typically `<!-- assess-archetype: knowledge-base -->`)
   gh issue list --label assess-finding --state open 2>/dev/null
   ```
 
+  On a read-only target, the upstream-issues offer files the Top 3 Actions on the upstream repository without the `assess-finding` label, so the search above misses them. Also list the open issues you authored there (`<owner>/<repo>` is the upstream, not your fork):
+
+  ```bash
+  gh issue list --repo <owner>/<repo> --author @me --state open 2>/dev/null
+  ```
+
 ## Verify
 
 After the steps above, no assessment artifact should remain:
