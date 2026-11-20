@@ -18,6 +18,7 @@ import jsonschema
 import pytest
 
 from lib import fleet_heatmap as fh
+from lib import fleet_svg
 from lib import fleet_view as fv
 from lib.fleet import FLEET_ROW_VERSION
 from lib.fleet_group_schema import build_schema
@@ -199,9 +200,9 @@ def test_key_label(index, label):
 
 
 def test_truncate():
-    assert fh.truncate("short", 10) == "short"
-    assert fh.truncate("abcdefghij", 5) == "abcd…"
-    assert fh.truncate("abcdefghij", 5, keep_tail=True) == "…ghij"
+    assert fleet_svg.truncate("short", 10) == "short"
+    assert fleet_svg.truncate("abcdefghij", 5) == "abcd…"
+    assert fleet_svg.truncate("abcdefghij", 5, keep_tail=True) == "…ghij"
 
 
 @pytest.mark.parametrize(("change", "text"), [

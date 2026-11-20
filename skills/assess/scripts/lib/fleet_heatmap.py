@@ -38,6 +38,9 @@ import textwrap
 from collections.abc import Sequence
 from typing import TypedDict
 
+from lib import fleet_svg
+from lib.fleet_svg import CHAR_W, hatch_pattern, truncate
+
 from lib.fleet_groups import GroupRow, RubricRowLevel
 from lib.fleet_view import (
     STATUS_LEVEL,
@@ -58,11 +61,7 @@ TEXT_LIGHT = "#ffffff"
 # Text colour per ramp step: dark text while it out-contrasts white.
 STEP_TEXT = (TEXT_DARK,) * 6 + (TEXT_LIGHT,) * 3
 UNKNOWN_FILL = "url(#fleet-unknown)"
-_UNKNOWN_PATTERN = (
-    '<pattern id="fleet-unknown" width="6" height="6" patternUnits="userSpaceOnUse" '
-    'patternTransform="rotate(45)"><rect width="6" height="6" fill="#ffffff"/>'
-    '<line x1="0" y1="0" x2="0" y2="6" stroke="#8c8c8c" stroke-width="1.6"/></pattern>'
-)
+_UNKNOWN_PATTERN = hatch_pattern("fleet-unknown", "#ffffff", "#8c8c8c")
 MUTED = "#5f6368"
 GRID_STROKE = "#ffffff"
 FRAME_STROKE = "#bdbdbd"
@@ -70,7 +69,6 @@ FRAME_STROKE = "#bdbdbd"
 PAD = 16.0
 CELL_W = 64.0
 CELL_H = 40.0
-CHAR_W = 7.0  # average glyph advance at 12px, used in place of font metrics
 LINE_H = 18.0
 SWATCH = 16.0
 MAX_ROW_LABEL = 40
@@ -116,13 +114,6 @@ def key_label(index: int) -> str:
     return label
 
 
-def truncate(text: str, limit: int, keep_tail: bool = False) -> str:
-    """At most ``limit`` characters, an ellipsis marking the cut."""
-    if len(text) <= limit:
-        return text
-    return "…" + text[-(limit - 1):] if keep_tail else text[:limit - 1] + "…"
-
-
 def _count(n: int, noun: str) -> str:
     return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
@@ -156,10 +147,8 @@ def unknown_keys(groups: Sequence[GroupRow], columns: Sequence[Column]) -> dict[
 def _text(x: float, y: float, content: str, *, size: int = 12, fill: str = TEXT_DARK,
           anchor: str = "start", weight: str | None = None, extra: str = "",
           tooltip: str | None = None) -> str:
-    bold = f' font-weight="{weight}"' if weight else ""
-    hover = "" if tooltip is None else f"<title>{html.escape(tooltip, quote=False)}</title>"
-    return (f'<text x="{x:.1f}" y="{y:.1f}" font-size="{size}" fill="{fill}" '
-            f'text-anchor="{anchor}"{bold}{extra}>{html.escape(content, quote=False)}{hover}</text>')
+    return fleet_svg.text(x, y, content, size=size, fill=fill, anchor=anchor, weight=weight,
+                          extra=extra, tooltip=tooltip)
 
 
 def _legend_entries(groups: Sequence[GroupRow], columns: Sequence[Column]) -> list[tuple[int, str]]:
@@ -309,15 +298,7 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
     height = float(math.ceil(y + PAD))
     desc = ("Heat map of fleet groups (rows) against rubric rows (columns); each cell is the "
             "whole level reached, darker is higher; hatched cells are unknown, not level 0.")
-    head = [
-        '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" '
-        f'width="{width:.0f}" height="{height:.0f}" role="img">',
-        f'<title>{SVG_TITLE}</title>',
-        f'<desc>{html.escape(desc)}</desc>',
-        '<style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", '
-        'Helvetica, Arial, sans-serif; }</style>',
-        f'<defs>{_UNKNOWN_PATTERN}</defs>',
-        f'<rect x="0" y="0" width="{width:.0f}" height="{height:.0f}" fill="#ffffff"/>',
-    ]
-    return "\n".join([*head, *body, "</svg>", ""])
+    style = ('<style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", '
+             'Helvetica, Arial, sans-serif; }</style>')
+    return fleet_svg.document(width, height, SVG_TITLE, desc, body, style=style,
+                              defs=_UNKNOWN_PATTERN, background="#ffffff")
