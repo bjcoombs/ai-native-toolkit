@@ -5,7 +5,10 @@ Reads the ``repos.jsonl`` rows ``lib/fleet.py`` builds and writes one
 
 - repository counts (rows, scanned, failed);
 - the distinct shared CI sources and marketplaces the group's repositories
-  reference (``shared_tooling.distinct_ids``, git-tracked files only);
+  reference (``shared_tooling.distinct_ids``, git-tracked files only), null
+  when no repository's ``shared_tooling`` block is available (every scan
+  failed, degraded or was left out by ``--scans``), never a false 0;
+  ``shared_tooling_repos`` says how many repositories the counts rest on;
 - the group settings joined from ghreport's settings fragments (#565);
 - each rubric row's whole level, or ``unknown``, with the aggregation rule used,
   evaluated by ``lib/rubric.py`` (#563). There is no second threshold config.
@@ -75,8 +78,9 @@ class GroupRow(TypedDict):
     repos: int
     scanned: int  # rows with status ok
     failed: int
-    distinct_ci_sources: int
-    distinct_marketplaces: int
+    shared_tooling_repos: int  # repositories with an available shared_tooling block
+    distinct_ci_sources: int | None  # None: no repository gave shared_tooling evidence
+    distinct_marketplaces: int | None
     settings_scope: str | None  # the fragment joined; None when none matched
     settings: JsonDict | None  # normalised (and, counts-only, reduced) settings
     rubric_version: str | None  # None without a rubric
@@ -189,6 +193,9 @@ def group_row(group: str, rows: Sequence[FleetRow], rubric: Rubric | None,
     blocks = [row["scans"]["shared_tooling"] for row in ok
               if row["scans"] and isinstance(row["scans"].get("shared_tooling"), dict)]
     ids = distinct_ids(blocks)
+    # Repositories whose shared_tooling block is evidence; with none, the counts are
+    # unknown (null), never a false 0.
+    evidence = sum(1 for block in blocks if block.get("available"))
     shown = settings if settings is None or not counts_only else reduce_settings(settings)
     return {
         "fleet_group_version": FLEET_GROUP_VERSION,
@@ -196,8 +203,9 @@ def group_row(group: str, rows: Sequence[FleetRow], rubric: Rubric | None,
         "repos": len(rows),
         "scanned": len(ok),
         "failed": len(rows) - len(ok),
-        "distinct_ci_sources": len(ids["ci_sources"]),
-        "distinct_marketplaces": len(ids["marketplaces"]),
+        "shared_tooling_repos": evidence,
+        "distinct_ci_sources": len(ids["ci_sources"]) if evidence else None,
+        "distinct_marketplaces": len(ids["marketplaces"]) if evidence else None,
         "settings_scope": scope,
         "settings": shown,
         "rubric_version": rubric["version"] if rubric else None,

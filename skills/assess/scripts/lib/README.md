@@ -625,11 +625,11 @@ readers consume it). Subprocess, not import, keeps it off the orchestrator layer
 The group roll-up behind `groups.jsonl` (issue #568). `roll_up` groups `FleetRow`s by
 `group` (sorted) and `group_row` builds each `GroupRow`: repository counts, distinct
 shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanned rows
-only), the joined settings, and each rubric row's level through `rubric.evaluate`, with
+only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each rubric row's level through `rubric.evaluate`, with
 no threshold config of its own. `load_settings` reads ghreport settings fragments
 (#565) from a file, an array or a directory (a render dir's `settings/`), keyed by
 `scope`; `settings_for` joins a group to the exact scope or the nearest ancestor;
-`normalise_settings` turns each `{value, reason}` into `{value}` or, for `unknown`,
+`normalise_settings` keeps each `{value, reason}` or, for `unknown`, turns it into
 `{available: false, reason}` so `rubric.resolve_signal` reads it unavailable and the
 org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
 else `set`). Rubric data follows `rubric_signals`' namespaces: `repo_signals` is a

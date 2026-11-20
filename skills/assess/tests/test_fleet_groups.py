@@ -167,6 +167,17 @@ def test_unknown_setting_and_failed_repo_give_unknown_never_zero():
     jsonschema.validate(grpa, build_schema())
 
 
+def test_no_shared_tooling_evidence_gives_null_counts_not_zero():
+    degraded = {"shared_tooling": {"available": False, "reason": "no_git"}}
+    rows = [_row("g/a", None), _row("g/b", degraded), _row("g/c", {"other": {}})]
+    (group,) = fg.roll_up(rows, None, {})
+    assert group["shared_tooling_repos"] == 0
+    assert group["distinct_ci_sources"] is None and group["distinct_marketplaces"] is None
+    jsonschema.validate(group, build_schema())
+    (some,) = fg.roll_up([*rows, _row("g/d", _scans(1, []))], None, {})
+    assert (some["shared_tooling_repos"], some["distinct_marketplaces"]) == (1, 0)
+
+
 def test_no_rubric_no_settings_and_full_output():
     rows = [_row("g/r", _scans(1, ["marketplace:x"]))]
     (bare,) = fg.roll_up(rows, None, {})

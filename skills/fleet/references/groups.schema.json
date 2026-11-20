@@ -20,11 +20,20 @@
     "failed": {
       "type": "integer"
     },
-    "distinct_ci_sources": {
+    "shared_tooling_repos": {
       "type": "integer"
     },
+    "distinct_ci_sources": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
     "distinct_marketplaces": {
-      "type": "integer"
+      "type": [
+        "integer",
+        "null"
+      ]
     },
     "settings_scope": {
       "type": [
@@ -173,7 +182,8 @@
     "rubric_version",
     "scanned",
     "settings",
-    "settings_scope"
+    "settings_scope",
+    "shared_tooling_repos"
   ],
   "additionalProperties": false
 }
