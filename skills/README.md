@@ -22,7 +22,7 @@ Claude Code only; not in the standalone-ZIP build.
 |-------|----------|-------------|
 | `/ghsync` | [`ghsync/SKILL.md`](./ghsync/SKILL.md) | Bulk-clone and fast-forward sync every GitHub repo you can access across an org |
 | `/ghreport` | [`ghreport/SKILL.md`](./ghreport/SKILL.md) | Read-only org repo state report - open PRs, default-branch CI, security alerts and branch protection per repo, reusing `/ghsync`'s repo discovery |
-| `/fleet` | [`fleet/SKILL.md`](./fleet/SKILL.md) | Headless `/assess` signals across every repository under a `/ghsync` root or in a list: one counts-only JSON line per repository, byte-identical on rerun, failures isolated as rows |
+| `/fleet` | [`fleet/SKILL.md`](./fleet/SKILL.md) | Headless `/assess` signals across every repository under a `/ghsync` root or in a list: one counts-only JSON line per repository, byte-identical on rerun, failures isolated as rows; optional model labels in a separate `labels.jsonl` |
 | `/doc-contradictions` | [`doc-contradictions/SKILL.md`](./doc-contradictions/SKILL.md) | Find documents that contradict each other or the code they describe; one read-only Haiku comparer per doc cluster, a Markdown report citing both sides as `path:line`. Ships [evals](../evals/doc-contradictions/README.md) |
 
 ## User-invoked

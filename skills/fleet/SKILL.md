@@ -1,6 +1,6 @@
 ---
 name: fleet
-description: "Run the headless /assess signals across every repository under a ghsync root (or in a list file) and write one counts-only JSON line per repository, deterministically and without writing to any target. Each repository runs assess_signals.py in its own process from a worker pool; one that cannot be scanned is a failed row with a reason token and never stops the run. No model in the gathering path. TRIGGER when the user types /fleet, wants to measure a team, group or whole estate rather than one repository, asks to run /assess signals across all repos in a ghsync checkout or a list of repos, or wants per-repository signal JSONL for a fleet roll-up."
+description: "Run the headless /assess signals across every repository under a ghsync root (or in a list file) and write one counts-only JSON line per repository, deterministically and without writing to any target. Each repository runs assess_signals.py in its own process from a worker pool; one that cannot be scanned is a failed row with a reason token and never stops the run. No model in the gathering path; an optional post-gather step (--label) has a small model label each repository (service, library, infrastructure, mirror, docs, other) into a separate labels.jsonl for display and filtering only. TRIGGER when the user types /fleet, wants to measure a team, group or whole estate rather than one repository, asks to run /assess signals across all repos in a ghsync checkout or a list of repos, wants per-repository signal JSONL for a fleet roll-up, or wants the repositories in a fleet run labelled or grouped by kind."
 ---
 
 # fleet: headless signals across a ghsync root
@@ -10,7 +10,9 @@ them: it runs the headless signals entry point (`assess_signals.py`) on every
 repository and writes one JSON line per repository, the same way every time, so
 two people measuring the same estate get the same numbers.
 
-It is a pure script: no subagent, no model, no network call.
+Gathering is a pure script: no subagent, no model, no network call. The only
+model step is the optional labelling below, which runs after gathering and
+writes its own file.
 
 ## How to run it
 
@@ -88,5 +90,65 @@ with hashing on.
   the runner, since `assess_signals.py` degrades it to unavailable blocks.
 - **Deterministic.** Rows are sorted by id, never by completion order.
 
-The logic lives in `skills/assess/scripts/lib/fleet.py` (see that package's
+## Optional: repository labels (`--label`)
+
+Off by default. When the user asks for `--label` (or for the fleet to be
+labelled or grouped by kind), run this step after `fleet.py` has written
+`repos.jsonl`. `fleet.py` itself takes no `--label` flag and never calls a
+model; the step is two deterministic commands around one model call.
+
+Each repository gets exactly one label from a closed set: `service`,
+`library`, `infrastructure`, `mirror`, `docs`, `other`. Anything else the model
+answers becomes `other`. The model reads a compact digest of each
+`repos.jsonl` row (its path, status and counts-only facts), never source.
+
+<!-- chat-skip:start -->
+1. Print the prompt for each batch (25 repositories each; stderr names the
+   batch count):
+
+   ```bash
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_labels.py" prompt fleet-out --batch 0
+   ```
+
+2. For each batch, spawn one `general-purpose` subagent with the Agent tool,
+   `model: "haiku"`, giving it the printed prompt verbatim and nothing else.
+   Batches are independent: spawn them in one message. Collect every reply,
+   unedited, into one answers file.
+
+3. Write and check `labels.jsonl` (`--model` is the model id that answered,
+   e.g. `claude-haiku-5-5`; it is recorded on every row):
+
+   ```bash
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_labels.py" write fleet-out --model claude-haiku-5-5 --answers answers.txt
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_labels.py" check fleet-out
+   ```
+
+Outside Claude Code the same model call works headless:
+`fleet_labels.py prompt fleet-out | claude -p --model haiku --tools "" > answers.txt`.
+<!-- chat-skip:end -->
+
+`write` prints how many repositories were answered and lists the missing,
+coerced, unknown and duplicate paths. Report those to the user; a missing
+answer is written as `other` with confidence 0, not retried silently.
+
+**`labels.jsonl`** sits beside `repos.jsonl`, one row per repository, sorted by
+`path`, keys sorted. Schema:
+[`references/labels.schema.json`](references/labels.schema.json).
+
+| Key | Value |
+|-----|-------|
+| `path` | The `repos.jsonl` `repo` id: the join key. |
+| `label` | One of the six labels. |
+| `confidence` | The model's own confidence, 0 to 1; 0 when it gave none or a missing answer. |
+| `model` | The model id passed to `write`, never one the model reports. |
+
+**Display and filter only.** Labels may group or filter what is shown to the
+user. They never enter `repos.jsonl`, never change a rubric level or which
+repositories a group roll-up counts, and are never compared across runs.
+`repos.jsonl` is byte-identical with and without the label step. Labels are a
+model's guess: the counts-only signals say little about what a repository is,
+so a label leans mostly on the repository's name. Present them as such.
+
+The logic lives in `skills/assess/scripts/lib/fleet.py` and
+`skills/assess/scripts/lib/fleet_labels.py` (see that package's
 `lib/README.md`).
