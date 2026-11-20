@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION
+from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION, ASSESS_METHOD_VERSION
 from lib.assess_config import load_excludes
 from lib.change_coupling import RenameMap, build_rename_map
 from lib.context_blocks import generated_exclusion
@@ -44,12 +44,13 @@ WIKI_KEYS = (
 
 # The run header's keys, in their published order.
 RUN_HEADER_KEYS = (
-    "run_id", "artifact_schema_version", "run_date", "scope", "scope_slug",
-    "measured_commit", "prior_stats_exists", "stats_summary", "instruction_files",
+    "run_id", "artifact_schema_version", "assess_method_version", "run_date", "scope",
+    "scope_slug", "measured_commit", "prior_stats_exists", "stats_summary", "instruction_files",
     "instructions_grade", "diff", "diff_reliable", "diff_version_note", "diff_trend_reset",
     "prior_plugin_version", "schema_version", "prior_schema_version", "tool_versions",
     "prior_tool_versions", "diff_detail", "pruned_hotspots", "retired_excluded_hotspots",
     "dropped_first_flagged", "provisional_first_flagged", "log_integrity",
+    "prior_findings_snapshot",
 )
 
 PLUGIN_JSON = Path(__file__).resolve().parents[4] / ".claude-plugin" / "plugin.json"
@@ -179,15 +180,17 @@ def run_header(
     measured_commit: dict[str, Any], current: dict[str, Any], prior: dict[str, Any] | None,
     grading: tuple[Any, ...], diff: StatsDiff, unfinalized: tuple[set[str], list[str]],
 ) -> dict[str, Any]:
-    """The first 25 run-context keys, in their published order.
+    """The first 27 run-context keys, in their published order.
 
     Run provenance (``run_id``; ``artifact_schema_version``, distinct from the
-    stats-layout ``schema_version``), the monorepo scope (both null / "" for a
+    stats-layout ``schema_version``; ``assess_method_version``, the finding
+    method the gate compares with the committed findings.json), the monorepo scope (both null / "" for a
     whole-repo run), the measured commit, the stats summary, the instruction
     grades, the hotspot diff and its comparability (a MAJOR plugin bump resets
     the trend; a backend version change or an unstamped prior voids the diff),
     and the wiki-state keys. The four ``WIKI_KEYS`` are reserved here and filled
-    by the publish step after the wiki is written.
+    by the publish step after the wiki is written, and ``prior_findings_snapshot``
+by the same step just before it rewrites findings.json.
     """
     _, scope_rel, scope_slug = scope
     prior_version, prior_schema = prior_stamps(prior)
@@ -198,6 +201,7 @@ def run_header(
     header: dict[str, Any] = {
         "run_id": run_id,
         "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+        "assess_method_version": ASSESS_METHOD_VERSION,
         "run_date": run_date,
         "scope": scope_rel,
         "scope_slug": scope_slug or None,
@@ -233,5 +237,8 @@ def run_header(
         "dropped_first_flagged": None,
         "provisional_first_flagged": sorted(provisional),
         "log_integrity": None,
+        # Reserved like the WIKI_KEYS: lib/run_publish.py reads the previous
+        # findings.json into it just before rewriting that file (#554).
+        "prior_findings_snapshot": None,
     }
     return header
