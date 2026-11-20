@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from assess_core_helpers import _renamed_and_deleted_history
 from lib import wiki_state
 
@@ -32,7 +32,7 @@ def test_first_flagged_unknown_when_prior_seeded_without_history(tmp_path: Path)
         "top_hotspots": [{"path": "src/old.go", "loc": 510, "ccn": 21, "commits": 6}],
     }))
     # No first-flagged.json on disk.
-    build_run_context(repo_root=repo, run_date="2026-05-22")
+    build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     page = next((assess_dir / "hotspots").iterdir()).read_text(encoding="utf-8")
     assert "First flagged: unknown" in page
     assert "First flagged: 2026-05-22" not in page
@@ -52,7 +52,7 @@ def test_first_flagged_stamps_today_for_genuinely_new_hotspot(tmp_path: Path) ->
         "plugin_version": "1.12.0", "files_scored": 50, "loc": {}, "ccn": {},
         "top_hotspots": [{"path": "src/fresh.go", "loc": 400, "ccn": 18, "commits": 4}],
     }))
-    build_run_context(repo_root=repo, run_date="2026-05-22")
+    build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     fresh_page = next(p for p in (assess_dir / "hotspots").iterdir()
                       if p.name.startswith("src-fresh-go-"))
     assert "First flagged: 2026-05-22" in fresh_page.read_text(encoding="utf-8")
@@ -75,7 +75,7 @@ def test_first_flagged_rekeyed_through_rename_map(git_repo) -> None:
         "top_complex": [], "top_large": [],
     }))
 
-    build_run_context(repo_root=repo, run_date="2026-09-18")
+    build_and_publish_run(repo_root=repo, run_date="2026-09-18")
     assert json.loads((assess_dir / "first-flagged.json").read_text()) == {
         "new/x.py": "2026-01-01", "other/z.py": "2026-02-02",
     }

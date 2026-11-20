@@ -96,7 +96,7 @@ def _default_run(
     repo: Path, focus: dict | None = None, scope: Path | None = None,
 ) -> Path:
     """Run the default pass and return run-context.json, optionally seeding test_focus."""
-    ctx = assess_core.build_run_context(repo_root=repo, run_date="2026-10-08", scope=scope)
+    ctx = assess_core.build_and_publish_run(repo_root=repo, run_date="2026-10-08", scope=scope)
     slug = resolve_scope(repo, scope)[2]
     ctx_path = (repo / ".assess" / slug if slug else repo / ".assess") / "run-context.json"
     if focus is not None:
@@ -161,7 +161,7 @@ def test_e2e_refresh_matches_default_run_with_same_inputs(
     refreshed = _load(ctx_path)
 
     monkeypatch.setattr(core_scans, "scan_test_pressure", lambda *a, **k: block)
-    direct = assess_core.build_run_context(repo_root=repo, run_date="2026-10-08")
+    direct = assess_core.build_and_publish_run(repo_root=repo, run_date="2026-10-08")
     for key in _PRODUCTS:
         assert refreshed[key] == direct[key], key
 

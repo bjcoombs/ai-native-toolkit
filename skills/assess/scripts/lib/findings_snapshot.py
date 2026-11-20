@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.run_context_types import FindingPaths, FindingsSnapshot, MethodChange, PathMove
+from lib.run_scope import assess_dir_for
 
 FINDINGS_SNAPSHOT_FILE = "findings.json"
 
@@ -84,11 +85,43 @@ def load_snapshot(assess_dir: Path) -> FindingsSnapshot | None:
         return None
     version = raw.get("assess_method_version")
     findings = raw.get("findings")
+    # A hand-edited file may hold the version as a numeric string ("12").
+    # ``isdigit`` alone would accept "²", which ``int`` rejects.
+    if isinstance(version, str):
+        try:
+            version = int(version.strip())
+        except ValueError:
+            return None
     if not isinstance(version, int) or isinstance(version, bool):
         return None
     if not isinstance(findings, list):
         return None
     return build_snapshot(findings, version)
+
+
+def committed_prior(ctx: dict[str, Any], repo_root: Path) -> FindingsSnapshot | None:
+    """The snapshot the gate compares this run against.
+
+    The run recorded ``prior_findings_snapshot`` before overwriting
+    ``findings.json``; in CI, where the pipeline runs just before the gate, that
+    is the committed file. When the gate is run directly against a committed
+    snapshot (no fresh pipeline run since it was edited or checked out), the
+    file on disk is the one the repository accepted and the recorded value is
+    stale. So the on-disk snapshot wins whenever its method version differs from
+    this run's; otherwise (the run just rewrote it at the current version, or it
+    is absent) the recorded prior stands.
+    """
+    slug = ctx.get("scope_slug")
+    on_disk = load_snapshot(assess_dir_for(repo_root, slug if isinstance(slug, str) else ""))
+    if on_disk is not None and on_disk["assess_method_version"] != ctx.get("assess_method_version"):
+        return on_disk
+    recorded = ctx.get("prior_findings_snapshot")
+    if not isinstance(recorded, dict):
+        return None
+    version = recorded.get("assess_method_version")
+    if not isinstance(version, int) or isinstance(version, bool):
+        return None
+    return build_snapshot(recorded.get("findings") or [], version)
 
 
 def write_snapshot(assess_dir: Path, snapshot: FindingsSnapshot) -> None:

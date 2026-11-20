@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from lib.dart_capabilities import scan_dart_capabilities
 from lib.liveness_scan import scan_liveness
 
@@ -193,7 +193,7 @@ def test_non_dart_repo_gets_no_dart_tool_entry(tmp_path: Path) -> None:
 # ── run-context wiring ─────────────────────────────────────────────────────
 
 def test_run_context_carries_language_capabilities_dart(tmp_path: Path) -> None:
-    ctx = build_run_context(repo_root=_flutter_app(tmp_path, analysis_options=True),
+    ctx = build_and_publish_run(repo_root=_flutter_app(tmp_path, analysis_options=True),
                             run_date="2026-09-18", non_interactive=True)
     dart = ctx["language_capabilities"]["dart"]
     assert set(dart) == {"linting", "liveness"}
@@ -210,6 +210,6 @@ def test_run_context_carries_language_capabilities_dart(tmp_path: Path) -> None:
 
 def test_run_context_omits_language_capabilities_without_dart(tmp_path: Path) -> None:
     _write(tmp_path, "a.py", "x = 1\n")
-    ctx = build_run_context(repo_root=tmp_path, run_date="2026-09-18",
+    ctx = build_and_publish_run(repo_root=tmp_path, run_date="2026-09-18",
                             non_interactive=True)
     assert "dart" not in (ctx.get("language_capabilities") or {})
