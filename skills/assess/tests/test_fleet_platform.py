@@ -16,7 +16,7 @@ import pytest
 from lib import fleet_platform
 from lib.fleet import SCAN_TIMEOUT, STATUS_FAILED, STATUS_OK, FleetRow, ScanOptions, Target
 from lib.fleet_platform import failure_reason, join, platform_scans, run_platform
-from lib.fleet_schema import build_stamp_schema
+from lib.fleet_schema import build_schema, build_stamp_schema
 from lib.run_context_types import JsonDict
 from lib.signals import NETWORK_REASON, PLATFORM_SCANS
 from test_fleet import make_repo
@@ -188,6 +188,7 @@ def test_platform_joins_the_read_and_stamps_the_run(world, tmp_path):
     assert rows[0]["scans"]["agent_ops"]["available"] is True
     assert stamp["platform"] is True
     jsonschema.validate(stamp, build_stamp_schema())
+    jsonschema.validate(rows[0], build_schema())
 
 
 def test_a_hanging_host_never_turns_the_row_into_scan_timeout(world, tmp_path):
@@ -196,6 +197,7 @@ def test_a_hanging_host_never_turns_the_row_into_scan_timeout(world, tmp_path):
     assert rows[0]["status"] == "ok" and rows[0]["reason"] is None
     assert rows[0]["scans"]["review_reality"] == {"available": False, "reason": "platform_timeout"}
     assert rows[0]["scans"]["agent_ops"]["available"] is True
+    jsonschema.validate(rows[0], build_schema())
 
 
 def test_platform_settings_come_from_the_fleet_config_and_the_flag_wins(world, tmp_path, monkeypatch):

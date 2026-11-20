@@ -4,9 +4,10 @@
 :func:`run_cli`. It adds, for every call:
 
 - **No prompt.** stdin is ``/dev/null`` and the environment sets
-  ``GH_PROMPT_DISABLED``, ``NO_PROMPT`` (glab) and ``GIT_TERMINAL_PROMPT=0``,
-  so a credential or confirmation prompt fails the call instead of waiting for
-  a person who is not there. The rest of the environment is inherited.
+  ``GH_PROMPT_DISABLED``, ``NO_PROMPT`` (glab's documented prompt switch; the
+  closed stdin is what guarantees no prompt can wait) and
+  ``GIT_TERMINAL_PROMPT=0``, so a credential or confirmation prompt fails the
+  call instead of waiting for a person who is not there. The rest of the environment is inherited.
 - **429 backoff.** A call whose output reports HTTP 429 is retried up to
   ``MAX_RETRIES`` times. Each wait is the ``Retry-After`` seconds when the CLI
   printed that header (``gh api --include`` does; a plain call does not), else

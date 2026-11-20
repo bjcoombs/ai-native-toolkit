@@ -6,6 +6,8 @@ callers scanning many repositories they may not own:
 
 - never writes into the target repository (``--out`` inside it is refused),
 - makes no network calls (network scans run offline or report unavailable),
+  except under the opt-in ``--platform``, where the scans in
+  ``lib/signals.py`` ``PLATFORM_SCANS`` read GitHub or GitLab through gh or glab,
 - renders no SVG and asks no consent questions.
 
 Blocks ``assess_core.py`` assembles through its own table entries are listed as

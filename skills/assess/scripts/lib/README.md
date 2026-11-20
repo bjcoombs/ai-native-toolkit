@@ -3,7 +3,8 @@
 Deterministic library modules for the `/assess` engine. No LLM calls anywhere in this
 package - every function is a pure transform of filesystem, git, or pre-computed signal
 data, with two bounded exceptions. Live platform reads are confined to `gh_cli.py`
-(GitHub) and `gitlab_cli.py` (GitLab); they are optional (they need a github.com or
+(GitHub) and `gitlab_cli.py` (GitLab), which run their CLI through `platform_cli.py`;
+the headless runner makes them only under `--platform`. They are optional (they need a github.com or
 GitLab remote and an authenticated `gh` or `glab`) and degrade to `available: False`
 with a reason, never to a clean result. The opt-in mutation pass's uv
 runner (`test_pressure/mutmut3.py`) may fetch mutmut, pytest and the assessed package's

@@ -10,7 +10,8 @@ them: it runs the headless signals entry point (`assess_signals.py`) on every
 repository and writes one JSON line per repository plus a run stamp, the same
 way every time, so two people measuring the same estate get the same numbers.
 
-Gathering is a pure script: no subagent, no model, no network call. The only
+Gathering is a pure script: no subagent, no model, and no network call unless you
+pass the opt-in [`--platform`](#platform-pass---platform). The only
 model step is the optional labelling below, which runs after gathering and
 writes its own file.
 
@@ -250,6 +251,9 @@ until it does, any key in a section is unknown and exits 2.
 | `[platform] jobs` | Default for `--platform-jobs` (a whole number of at least 1); the flag wins. |
 | `[platform] timeout` | Default for `--platform-timeout`, in seconds; the flag wins. |
 
+Both are read from the `--fleet-config` file only: the pass is fleet-wide, so a
+repository's own `[platform]` values have no effect.
+
 `[platform] jobs` and `timeout` say how a run goes, not what it measures, so they
 are left out of `fleet_config_sha256`: changing them never breaks comparability. The loader and the key
 tables are `lib/fleet_config.py` (`SECTION_KEYS`).
@@ -304,7 +308,8 @@ remotes) or `glab` (GitLab remotes) logged in.
   (`GH_PROMPT_DISABLED`, `NO_PROMPT`, `GIT_TERMINAL_PROMPT=0`). An HTTP 429 is
   retried up to 3 times, waiting the `Retry-After` seconds when the CLI prints
   it, else 2, 4 and 8 seconds (at most 60 per wait); still limited, the block is
-  `rate_limited`. `--platform-jobs` caps the concurrent reads. One response
+  `rate_limited`. Plain `gh api` and `glab api` calls do not print response
+  headers, so in practice the 2, 4 and 8 second fallback applies. `--platform-jobs` caps the concurrent reads. One response
   cache per run, in a temporary directory removed when the pass ends, answers a
   repeated request (an auth probe, a bot-account lookup) once; it never lands in
   `DIR`, the history or a target.
@@ -525,7 +530,11 @@ invalid maturity model or settings, or inputs that disagree with the run.
   crashes, hangs past `--timeout` or writes an unreadable document becomes a
   `failed` row; the other repositories complete. A broken `.git` is checked by
   the runner, since `assess_signals.py` degrades it to unavailable blocks.
-- **Deterministic.** Rows are sorted by id, never by completion order.
+- **Deterministic.** Rows are sorted by id, never by completion order. A
+  `--platform` run reads live platform state, so its platform blocks can differ
+  between two runs on the same day.
+- **No network by default.** Only `--platform` makes `gh` or `glab` calls, in
+  its own pass; a platform failure never fails a row.
 
 ## Optional: repository labels (`--label`)
 
