@@ -1,7 +1,8 @@
-"""The artifact schema version every /assess run stamps on its outputs.
+"""The artifact schema and method versions every /assess run stamps on its outputs.
 
 A leaf module so the orchestrator and the lib modules that write artifacts
-(the hotspot wiki pages, the index, the log) read one constant.
+(the hotspot wiki pages, the index, the log, the findings snapshot) read one
+constant each.
 """
 
 # Artifact schema version, stamped on every artifact the run produces
@@ -47,9 +48,22 @@ A leaf module so the orchestrator and the lib modules that write artifacts
 # shared CI sources its pipelines include and the agent marketplaces it hosts or
 # names, each with a stable id a fleet roll-up counts distinct. Additive; no
 # existing key moves, and complexity-stats.json is unchanged.
-# 1.6.0: run-context.json gains instruction_placement (issue #559): each
+# 1.6.0: run-context.json gains assess_method_version and
+# prior_findings_snapshot, and each run writes .assess/findings.json, the
+# committed snapshot of finding names and paths (issue #554). Additive: no
+# existing key moves, and complexity-stats.json is unchanged.
+# 1.7.0: run-context.json gains instruction_placement (issue #559): each
 # instruction file split on its headings, its always-on lines and share, and the
 # relocatable sections with line ranges, signals and a suggested home; agent and
 # SKILL.md files over 200 lines in a separate loaded_in_full list. Additive;
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.6.0"
+ARTIFACT_SCHEMA_VERSION = "1.7.0"
+
+# The finding method version: which rules decide the findings a run produces.
+# Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
+# artifact shape, not finding semantics). Bump it, by one, in any change that
+# moves which findings a run produces on unchanged code; the CI gate compares it
+# with the version in the committed .assess/findings.json and explains the
+# finding moves instead of failing on them unexplained.
+# 1: the baseline (issue #554).
+ASSESS_METHOD_VERSION = 1
