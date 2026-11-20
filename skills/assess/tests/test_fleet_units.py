@@ -235,6 +235,19 @@ def test_default_owners_take_the_last_catch_all_rule() -> None:
     assert default_owners("/src/ @a\n") == ()
 
 
+def test_codeowners_outside_the_checkout_are_never_read(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "CODEOWNERS").write_text("* @evil/team\n", encoding="utf-8")
+    checkout = tmp_path / "svc"
+    checkout.mkdir()
+    (checkout / ".github").symlink_to(outside, target_is_directory=True)
+    assert repo_facts(Target("acme/svc", checkout)).owners == ()
+    (checkout / "docs").mkdir()
+    (checkout / "docs" / "CODEOWNERS").write_text("* @acme/eng\n", encoding="utf-8")
+    assert repo_facts(Target("acme/svc", checkout)).owners == ("@acme/eng",)
+
+
 def _git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
 

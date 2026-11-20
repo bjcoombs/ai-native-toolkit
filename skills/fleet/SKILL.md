@@ -281,7 +281,9 @@ next level and its measured value; at the top level both are `null`; an unknown 
 names the signal that could not be read and `reason` (`unavailable`, `type_mismatch`, or
 `not_scanned` for a failed repository).
 
-**Privacy.** `--full` keeps everything. Counts-only (the default) keeps keys, tokens and
+**Privacy.** `--full` keeps everything. Counts-only (the default) keeps keys, which carry
+the group and team paths (`ownership/acme/platform`) and repository ids unless
+`--hash-paths` or `--hash-salt` is given, and tokens and
 web URLs (so the host name of each remote appears, in `--out` and the run history), writes a string `value` that is not a short token as `set`, and drops unit
 names and owners (`owner_count` stays). With `--hash-paths` or `--hash-salt`, every unit
 and repository key, and every reference to one, is hashed (`h:` plus 16 hex digits) and no

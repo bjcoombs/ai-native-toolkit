@@ -79,9 +79,12 @@ def default_owners(text: str) -> tuple[str, ...]:
 
 
 def codeowners_text(checkout: Path) -> str | None:
+    """The first CODEOWNERS file's text; a file resolving outside the checkout (a
+    symlinked ``.github/``, say) is never read."""
+    root = checkout.resolve()
     for name in CODEOWNERS_FILES:
         path = checkout / name
-        if path.is_file() and not path.is_symlink():
+        if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(root):
             try:
                 return path.read_text(encoding="utf-8", errors="replace")
             except OSError:
