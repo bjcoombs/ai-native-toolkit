@@ -135,7 +135,7 @@ model; the step is two deterministic commands around one model call.
 
 Each repository gets exactly one label from a closed set: `service`,
 `library`, `infrastructure`, `mirror`, `docs`, `other`. Anything else the model
-answers becomes `other`. The model reads a compact digest of each
+answers becomes `other`. The model is given a compact digest of each
 `repos.jsonl` row (its path, status and counts-only facts), never source.
 
 <!-- chat-skip:start -->
@@ -148,7 +148,10 @@ answers becomes `other`. The model reads a compact digest of each
    ```
 
 2. For each batch, spawn one `general-purpose` subagent with the Agent tool,
-   `model: "haiku"`, giving it the printed prompt verbatim and nothing else.
+   `model: "haiku"`, giving it the printed prompt verbatim, preceded by one
+   line: "Answer from this prompt alone; do not use any tools." The subagent
+   has file tools, so that line, not the tool set, is what keeps it off the
+   repositories here; the headless form below removes the tools outright.
    Batches are independent: spawn them in one message. Collect every reply,
    unedited, into one answers file.
 

@@ -200,7 +200,7 @@ def build_prompt(rows: Iterable[FleetRow]) -> str:
 
 
 def parse_answers(text: str) -> list[JsonDict]:
-    """JSON objects from a model reply: a JSON array, or one object per line amid fences and prose."""
+    """JSON objects from a model reply: a JSON array, or one object (or one-line array) per line amid fences and prose."""
     stripped = text.strip()
     try:
         whole = json.loads(stripped)
@@ -213,7 +213,7 @@ def parse_answers(text: str) -> list[JsonDict]:
     answers: list[JsonDict] = []
     for line in text.splitlines():
         line = line.strip().rstrip(",")
-        if not line or _FENCE.match(line) or not line.startswith("{"):
+        if not line or _FENCE.match(line) or not line.startswith(("{", "[")):
             continue
         try:
             item = json.loads(line)
@@ -221,6 +221,8 @@ def parse_answers(text: str) -> list[JsonDict]:
             continue
         if isinstance(item, dict):
             answers.append(item)
+        elif isinstance(item, list):  # one batch replied as a one-line array
+            answers.extend(i for i in item if isinstance(i, dict))
     return answers
 
 
@@ -324,8 +326,8 @@ def _row_problems(row: Any, where: str) -> list[str]:
     problems = []
     if set(row) != _ROW_KEYS:
         problems.append(f"{where}: keys {sorted(row)} are not {sorted(_ROW_KEYS)}")
-    if not isinstance(row.get("path"), str):
-        problems.append(f"{where}: path is not a string")
+    if not isinstance(row.get("path"), str) or not row["path"]:
+        problems.append(f"{where}: path is not a non-empty string")
     if row.get("label") not in LABELS:
         problems.append(f"{where}: label {row.get('label')!r} is not one of {', '.join(LABELS)}")
     confidence = row.get("confidence")

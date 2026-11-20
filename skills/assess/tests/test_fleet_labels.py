@@ -162,6 +162,12 @@ def test_parse_answers_reads_a_json_array_or_single_object():
     assert fl.parse_answers("") == []
 
 
+def test_parse_answers_reads_a_one_line_array_amid_other_batches():
+    # Batch replies concatenated into one answers file: one batch answered as an array.
+    text = '[{"path": "a", "label": "docs"}, 3]\n{"path": "b", "label": "docs"}\n'
+    assert [a["path"] for a in fl.parse_answers(text)] == ["a", "b"]
+
+
 def test_build_label_rows_one_row_per_repo_and_coercions():
     answers = [
         {"path": "grpa/svc1", "label": "Service", "confidence": 0.93},
@@ -220,9 +226,12 @@ def test_schema_rejects_what_check_rejects():
     good = {"path": "a/b", "label": "docs", "confidence": 0.5, "model": "m"}
     assert not list(validator.iter_errors(good))
     for bad in ({**good, "label": "sdk"}, {**good, "confidence": 1.5}, {**good, "model": ""},
-                {**good, "extra": 1}, {k: v for k, v in good.items() if k != "model"}):
+                {**good, "extra": 1}, {k: v for k, v in good.items() if k != "model"},
+                {**good, "path": ""}):
         assert list(validator.iter_errors(bad))
         assert fl.check_labels(json.dumps(bad), ["a/b"])
+    empty = fl.check_labels(json.dumps({**good, "path": ""}), [""])
+    assert any("path is not a non-empty string" in p for p in empty)
 
 
 def test_check_labels_names_every_problem():
