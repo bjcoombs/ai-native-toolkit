@@ -433,7 +433,9 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "structure.name_collisions.paths": PATH,
     },
     "structure_drift": {
-        "structure_drift.tier_0.empty_ownership_patterns.pattern": PATH,
+        # Backticked text from architecture docs and CODEOWNERS, not paths from
+        # the file tree: a package scope or an internal hostname can sit here.
+        "structure_drift.tier_0.empty_ownership_patterns.pattern": DROP,
         "structure_drift.tier_0.empty_ownership_patterns.declared_in": DROP,
         "structure_drift.tier_0.empty_ownership_patterns.owners": DROP,
     },

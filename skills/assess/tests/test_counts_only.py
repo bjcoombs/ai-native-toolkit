@@ -132,9 +132,21 @@ def test_identities_are_dropped() -> None:
     assert out["decline_markers"] == [{"path": ".assess/decline.json", "tool": "mutmut",
                                        "declined_at": "2026-07-07", "version": "1.54.4",
                                        "reoffer": False}]
-    assert out["structure_drift"]["tier_0"]["empty_ownership_patterns"] == [
-        {"pattern": "src/**", "owners": 1}]
+    assert out["structure_drift"]["tier_0"]["empty_ownership_patterns"] == [{"owners": 1}]
     assert "jane" not in json.dumps(out)
+
+
+@pytest.mark.parametrize("pattern", ["@scope/pkg", "ci.build.acme.net", "src/**"])
+def test_ownership_patterns_from_docs_are_dropped(pattern: str) -> None:
+    """Declared boundaries are backticked doc text, so a private package scope
+    or an internal hostname would otherwise survive as a "path"."""
+    ctx = {"structure_drift": {"tier_0": {"available": True, "total_patterns": 1,
+                                          "empty_ownership_patterns": [
+                                              {"pattern": pattern, "declared_in": "docs/a.md::x",
+                                               "owners": []}]}}}
+    for out in (counts_only(ctx), counts_only(ctx, hash_paths=True)):
+        assert pattern not in json.dumps(out)
+        assert out["structure_drift"]["tier_0"]["empty_ownership_patterns"] == [{"owners": 0}]
 
 
 def test_token_field_keeps_only_short_slugs() -> None:

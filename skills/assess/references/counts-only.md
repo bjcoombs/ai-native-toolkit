@@ -428,7 +428,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 
 | Field | Kept as |
 |---|---|
-| `structure_drift.tier_0.empty_ownership_patterns.pattern` | path (hashed when hashing is on) |
+| `structure_drift.tier_0.empty_ownership_patterns.pattern` | dropped |
 | `structure_drift.tier_0.empty_ownership_patterns.declared_in` | dropped |
 | `structure_drift.tier_0.empty_ownership_patterns.owners` | dropped |
 
