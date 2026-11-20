@@ -710,7 +710,8 @@ and raises `FleetViewError` naming `file:line` otherwise; `read_repos` returns t
 `repos.jsonl` rows sorted by repository id (a row needs `repo` and `group` ids).
 `load_groups` takes the file or the run directory, checks the rubric-entry fields a view
 reads (`FleetViewError` names the line), refuses a duplicate
-group and sorts by group. `rubric_columns` gives the rubric row ids in rubric order (the
+group and sorts by group; an empty file (no repository scanned) is `[]`, and the heat
+map exits 2 on it while the team pages write an empty index. `rubric_columns` gives the rubric row ids in rubric order (the
 same for every group; a run without `--rubric` is refused), `run_rubric_version` the one
 version, `check_rubric` matches a rubric file (titles, top levels) to the run, and
 `compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,

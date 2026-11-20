@@ -113,7 +113,7 @@ def _check_row(data: dict[str, Any], where: str) -> GroupRow:
         if not isinstance(entry["id"], str) or not all(
                 isinstance(items, list) and all(isinstance(i, str) for i in items) for items in lists):
             raise FleetViewError(f"{where}: rubric row {entry['id']!r} has a malformed id or signal list")
-        known = entry["status"] == STATUS_LEVEL and isinstance(entry["level"], int)
+        known = entry["status"] == STATUS_LEVEL and type(entry["level"]) is int  # bool is not a level
         if not known and entry["status"] != STATUS_UNKNOWN:
             raise FleetViewError(f"{where}: rubric row {entry['id']!r} has no whole level")
     row: GroupRow = data  # type: ignore[assignment]  # checked above for the fields views read
@@ -121,7 +121,10 @@ def _check_row(data: dict[str, Any], where: str) -> GroupRow:
 
 
 def load_groups(path: Path) -> list[GroupRow]:
-    """The run's group rows, sorted by group; raise ``FleetViewError`` on any fault."""
+    """The run's group rows, sorted by group; raise ``FleetViewError`` on any fault.
+
+    An empty file (a run where no repository could be scanned) gives ``[]``: a
+    view decides what an empty run means for it."""
     file = groups_file(path)
     rows: dict[str, GroupRow] = {}
     for number, data in read_jsonl(file, "fleet_group_version", FLEET_GROUP_VERSION):
@@ -130,13 +133,13 @@ def load_groups(path: Path) -> list[GroupRow]:
         if row["group"] in rows:
             raise FleetViewError(f"{where}: group {row['group']!r} appears twice")
         rows[row["group"]] = row
-    if not rows:
-        raise FleetViewError(f"{file.name}: no group rows")
     return [rows[name] for name in sorted(rows)]
 
 
 def rubric_columns(groups: Sequence[GroupRow]) -> list[str]:
     """Rubric row ids in rubric order; every group must carry the same rows."""
+    if not groups:
+        raise FleetViewError("the run has no groups (no repository was scanned): nothing to draw")
     columns = [entry["id"] for entry in groups[0]["rubric"]]
     if not columns:
         raise FleetViewError("the run has no rubric levels: rerun fleet.py with --rubric")
@@ -151,7 +154,7 @@ def run_rubric_version(groups: Sequence[GroupRow]) -> str | None:
     versions = sorted({str(group["rubric_version"]) for group in groups})
     if len(versions) > 1:
         raise FleetViewError(f"groups carry different rubric versions: {', '.join(versions)}")
-    return groups[0]["rubric_version"]
+    return groups[0]["rubric_version"] if groups else None
 
 
 def check_rubric(rubric: Rubric, groups: Sequence[GroupRow]) -> None:
@@ -187,7 +190,7 @@ def compare_levels(now: Sequence[GroupRow], then: Sequence[GroupRow]) -> Compari
     """Each current cell against the earlier run; not comparable across rubric versions."""
     removed = sorted({g["group"] for g in then} - {g["group"] for g in now})
     now_version, then_version = run_rubric_version(now), run_rubric_version(then)
-    if now_version != then_version:
+    if then and now_version != then_version:
         return {"comparable": False, "removed_groups": removed, "changes": {},
                 "note": f"change not shown: the earlier run used rubric {then_version}, "
                         f"this run {now_version}"}

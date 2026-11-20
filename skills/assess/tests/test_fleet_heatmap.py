@@ -240,7 +240,6 @@ def _one() -> dict[str, object]:
 
 
 @pytest.mark.parametrize(("rows", "message"), [
-    ([], "no group rows"),
     (["not json"], "groups.jsonl:1: not JSON"),
     ([[1]], "not a JSON object"),
     ([dict(_one(), fleet_group_version=99)], "fleet_group_version is 99, expected 1"),
@@ -272,6 +271,25 @@ def test_read_repos_reads_a_directory_or_a_file_sorted(tmp_path):
     _write_lines(tmp_path / "repos.jsonl", [{"fleet_row_version": FLEET_ROW_VERSION, "repo": "g/a"}])
     with pytest.raises(fv.FleetViewError, match="repos.jsonl:1: no repo or group id"):
         fv.read_repos(tmp_path)
+
+
+def test_an_empty_run_loads_as_no_groups_and_the_heat_map_exits_2(tmp_path, capsys):
+    (tmp_path / "groups.jsonl").write_text("", encoding="utf-8")
+    assert fv.load_groups(tmp_path) == []
+    assert fv.run_rubric_version([]) is None
+    assert cli.main([str(tmp_path)]) == 2
+    assert "no groups" in capsys.readouterr().err
+    assert not (tmp_path / cli.HEATMAP_FILE).exists()
+    comparison = fv.compare_levels(_groups(), [])
+    assert comparison["comparable"]
+    assert comparison["changes"]["grpa"]["org2fa"]["kind"] == "new"
+
+
+def test_a_boolean_level_is_not_a_whole_level(tmp_path):
+    entry = {"id": "x", "status": "level", "level": True, "missing_signals": [], "unknown_repos": []}
+    path = _write_lines(tmp_path / "groups.jsonl", [dict(_one(), rubric=[entry])])
+    with pytest.raises(fv.FleetViewError, match="no whole level"):
+        fv.load_groups(path)
 
 
 def test_load_groups_missing_file(tmp_path):

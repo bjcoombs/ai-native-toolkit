@@ -280,6 +280,14 @@ def test_read_jsonl_names_file_and_line(tmp_path, line, fault):
         read_jsonl(path, "fleet_row_version", FLEET_ROW_VERSION)
 
 
+def test_an_empty_run_writes_an_empty_index(tmp_path):
+    for name in ("repos.jsonl", "groups.jsonl"):
+        (tmp_path / name).write_text("", encoding="utf-8")
+    assert cli.main([str(tmp_path), "--rubric", str(RUBRIC_PATH)]) == 0
+    assert (tmp_path / "teams.md").is_file()
+    assert list(tmp_path.glob("teams/*.md")) == []
+
+
 def test_readers_require_ids_and_sort(tmp_path):
     (tmp_path / "repos.jsonl").write_text(f'{{"fleet_row_version": {FLEET_ROW_VERSION}}}\n', encoding="utf-8")
     with pytest.raises(FleetViewError, match="no repo or group id"):
