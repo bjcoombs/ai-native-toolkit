@@ -37,16 +37,16 @@ The seam is narrowing. Every run-context block is declared once in `scan_registr
 (`SCANS`) and run by one loop, so adding a scan edits its own module, its test, that
 table and this file - not `assess_core.py`. The setup steps (scope, artifact directory,
 run id, stats and diff, instruction grading, first-flagged map) are entries too; their
-adapters live in `run_setup.py`, the read-side adapters in `core_scans.py`. Only the
-doc-staleness keys (`scan_registry.HAND_WIRED`) are still assigned by hand, held back
-for the 2.0.0 rewrite (#424, #425). The table only reads: `run_publish.py` writes the
-wiki, badge and `run-context.json` after the scans (#557).
+adapters live in `run_setup.py`, the read-side adapters in `core_scans.py`. The
+doc-staleness keys and the doc x complexity join joined the table last (#558), so the
+core assigns no key by hand. The table only reads: `run_publish.py` writes the wiki,
+badge and `run-context.json` after the scans (#557).
 
 Seeing these two files in the same commit as `assess_core.py` is expected, not a
 defect.
 
-The core keeps only the orchestration: `build_run_context` (the stage calls, the
-hand-wired doc-staleness keys and the publish call), `run_opt_in_mutation` and `main`.
+The core keeps only the orchestration: `build_run_context` (one `run_scans` call and
+the publish call), `run_opt_in_mutation` and `main`.
 Its helpers live in seven modules, one per seam: `instruction_files.py`
 (instruction-file grading), `diff_reliability.py` (cross-run diff trust),
 `wiki_state.py` (first-flagged dates and run supersession), `run_wiki.py` (the wiki
@@ -405,7 +405,9 @@ comes from the source-vs-doc comparison (a direct, high-confidence signal that b
 the churn-ratio confidence guards) instead of the ratio. Which code a doc covers comes
 from the staleness rows through `doc_subjects` (the `doc_ownership.py` rule), and each
 unit's `subject_code_count` is the staleness row's value, so both blocks report one count
-per document. `_extract_file_ccn` is the single read of the stats' per-file CCN.
+per document. That count covers discovered code files only, while `complexity_summarised`
+sums the join subject over the scored files, so a base doc owning only files discovery
+skips (Lua, say) can report `subject_code_count` 0 with non-zero complexity. `_extract_file_ccn` is the single read of the stats' per-file CCN.
 
 ### Ownership and structure drift
 
@@ -488,8 +490,8 @@ Runs no scan of its own besides Tier 0. Tests: `tests/test_context_blocks.py`.
 **`scan_registry.py`**
 The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
 the `key`, the callable, the names it `reads` (passed positionally: a core-provided
-input from `PROVIDED_INPUTS`, a `HAND_WIRED` key, or the key of an earlier spec), the
-`stage` of `build_run_context` it runs at, and whether it degrades. By default the
+input from `PROVIDED_INPUTS` or the key of an earlier spec), its `stage`, and whether it
+degrades. By default the
 value is published as `ctx[key]`; a `private` spec's value (the stats, the diff, a raw
 scan result) is kept in the inputs mapping for later specs and never reaches
 `run-context.json`; a `spread` spec returns a mapping whose keys, all declared, are
@@ -510,15 +512,16 @@ the scan degrades. The core provides the `build_run_context` arguments
 absolute `--scope` path, or None), `instruction_files`, `excludes` (the
 `(dirs, patterns)` pair from `.assess/config.toml`) and `history_window` (the stats
 sidecar's churn window via `git_churn.window_from_churn_label`, or None) are setup
-specs. Stages
-(`setup`, `read_side`, `post_offers`, `final`) keep `run-context.json` key order;
-they collapse once the `HAND_WIRED` doc-staleness keys move here.
+specs. `build_run_context` makes one `run_scans` call with no stage, which runs the
+stages (`setup`, `read_side`, `post_offers`, `final`) in that order and each in table
+order (#558). Only `anomalies` relies on its stage, staying the last scan key while
+later entries append to the table.
 
 **`run_setup.py`**
 Setup-stage adapters for the scan table (#557): `run_scope`, `run_assess_dir`,
 `new_run_id`, `current_stats` / `prior_stats`, `stats_diff` (dropping a graduation the
 generated-file filter caused), `instruction_grading`, `rename_map` and
-`measured_commit` (the git-churn call sites #424 and #425 rewrite), `config_excludes`,
+`measured_commit`, `config_excludes`,
 `first_flagged`, `superseded_run`, `unfinalized_exclusions`, `read_plugin_version`, and
 `run_header`, which returns the first 27 run-context keys (`RUN_HEADER_KEYS`) with the
 four `WIKI_KEYS` and `prior_findings_snapshot` reserved as None for the publish step. Reads only. Tests:
@@ -529,7 +532,12 @@ Read-side adapters for the scan table (#557): one callable per registered block,
 taking its reads positionally and calling the scan module or `context_blocks`
 serialiser that owns the block's shape (doc graph, liveness, structure, coverage,
 test pressure and focus, promissory markers, accretion, the keyhole integration and
-its disclosures, decline markers, offers, anomalies). `anomalies` reads the run header
+its disclosures, decline markers, offers, anomalies), plus the doc-staleness entries
+(#558): `doc_staleness` (over the doc graph's doc->code edges, degrading under its own
+label), `stale_hubs`, `churn_degenerate` and the private `doc_join`
+(`analyze_doc_complexity_join`), which the keyhole integration reads for its
+`documentation` block; a failed join degrades that block with reason
+`documentation scan failed: ...`. `anomalies` reads the run header
 only, which holds every key `detect_anomalies` inspects. No logic of its own. Tests:
 `tests/test_run_setup.py`, and the run-context tests that patch a scan here.
 
@@ -970,7 +978,9 @@ The per-file row lists `complexity-treemap.py` writes into `complexity-stats.jso
 (ten each, ties broken on path); `file_ccn_rows` emits `files`, every scored file as
 `{path, ccn}` (`FileCcnRow`), sorted by path with no cap. `doc_complexity_join.py`'s
 `_extract_file_ccn` reads `files`, so the join sees a complex file that made no top-10
-list (issue #556). Adding `files` moved `STATS_SCHEMA_VERSION` to 6, which disarms the
+list (issue #556). Its other readers see every scored file too: `candidate_dead_weight`
+(through `keyhole_signals._high_complexity_paths`) and `orphaned_understanding`
+(through `understanding_analysis._extract_file_ccn`). Adding `files` moved `STATS_SCHEMA_VERSION` to 6, which disarms the
 cross-run diff once (`diff_reliability.py`). Stdlib only. Tests:
 `tests/test_stats_rows.py`.
 

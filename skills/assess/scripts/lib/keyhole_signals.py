@@ -1256,11 +1256,14 @@ def _integrate_blocks(
     doc_staleness: JsonDict,
     dead_code: JsonDict,
     observability: JsonDict,
+    doc_join: JsonDict | None = None,
 ) -> tuple[BehaviourBlock, DocumentationBlock, UnderstandingBlock, RuntimeBlock]:
     """The behaviour, documentation, understanding and runtime blocks.
 
     Each is built through ``_safe_block``, so a failure in one degrades that
-    block to ``available: False`` and leaves the rest intact.
+    block to ``available: False`` and leaves the rest intact. ``doc_join`` is
+    the doc x complexity join already computed by the scan table; None joins
+    here.
     """
     behaviour = _safe_block(
         "behaviour",
@@ -1271,7 +1274,8 @@ def _integrate_blocks(
     documentation = _safe_block(
         "documentation",
         lambda: build_documentation_block(
-            analyze_doc_complexity_join(complexity_stats, doc_staleness, repo_root)
+            doc_join if doc_join is not None
+            else analyze_doc_complexity_join(complexity_stats, doc_staleness, repo_root)
         ),
         {"freshness_by_doc": {}, "complexity_coverage": {},
          "stale_doc_on_complexity": [], "unexplained_complexity": []},
@@ -1481,6 +1485,7 @@ def integrate(
     exclude_patterns: list[str] | None = None,
     scope: Path | None = None,
     rename_map: RenameMap | None = None,
+    doc_join: JsonDict | None = None,
 ) -> KeyholeIntegration:
     """Build the five run-context blocks + derived findings + attention list.
 
@@ -1504,6 +1509,8 @@ def integrate(
     path that still does not exist is pruned and reported in
     ``pruned_finding_paths``. When the map is incomplete (git failed) nothing is
     pruned: an unfolded old path is not evidence of a deletion.
+    ``doc_join`` is ``doc_complexity_join.analyze_doc_complexity_join``'s result
+    (the scan table's ``doc_join`` entry); None runs the join here.
     Every block is built defensively - a failure in one degrades that block to
     ``available: False`` and leaves the rest intact.
 
@@ -1520,7 +1527,7 @@ def integrate(
 
     behaviour, documentation, understanding, runtime = _integrate_blocks(
         repo_root, commit_sets, structure,
-        complexity_stats, doc_staleness, dead_code, observability,
+        complexity_stats, doc_staleness, dead_code, observability, doc_join,
     )
 
     dead_weight = candidate_dead_weight_paths(
