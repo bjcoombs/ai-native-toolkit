@@ -52,9 +52,9 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
     rejected destination.
 
 ``protected``
-    Directory-*role* classification of a changed-path list -- the one path
-    decision the CI workflow makes, so the workflow itself carries no path
-    literals to keep in sync. A path is protected when it falls in one of four
+    Directory-*role* classification of a changed-path list -- the basis of
+    the one path decision the CI workflow makes (``path-filter``), so the
+    workflow itself carries no path literals to keep in sync. A path is protected when it falls in one of four
     roles: it lives under the component directory of a marked file (marked at
     the base ref *or* on the head side, so a component marked in the PR itself
     is protected from that PR on), it is gate code, it is canary code or
@@ -77,9 +77,9 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
 
 ``pin-bump-only``
     Exits 0 only when every changed floor-core path is a workflow file whose
-    every changed line is a like-for-like ``uses:`` pin bump. CI runs the base
-    ref's copy for a Dependabot pull request to waive the sign-off (FLOOR.md
-    clause iii).
+    every changed line is a like-for-like ``uses:`` pin bump. CI applies the
+    same verdict through the base ref's copy of ``path-filter`` for a
+    Dependabot pull request to waive the sign-off (FLOOR.md clause iii).
 
 ``path-filter``
     The canary path filter's whole decision, so the workflow step is a fixed
@@ -976,8 +976,8 @@ def _pin_bump_verdict(base: str, floor_core: list[str]) -> str | None:
 
 def cmd_pin_bump_only(args: argparse.Namespace) -> int:
     """Exit 0 only when every floor-core change is a ``uses:`` pin bump in a
-    workflow file. CI asks this of the BASE ref's copy, for a Dependabot pull
-    request only, so a pull request never judges its own exemption."""
+    workflow file. CI reaches the same verdict through the BASE ref's copy of
+    ``path-filter``, so a pull request never judges its own exemption."""
     roles = _diff_roles(args.base)
     floor_core = [path for path, role in roles.items() if role == ROLE_FLOOR_CORE]
     refusal = _pin_bump_verdict(args.base, floor_core)

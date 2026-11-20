@@ -133,7 +133,6 @@ JOB_OUTPUT_RE = re.compile(
     + r":\s*\$\{\{\s*steps\.([A-Za-z0-9_-]+)\.outputs\." + FLOOR_CORE_OUTPUT
     + r"\s*\}\}\s*$"
 )
-STEP_ID_RE = re.compile(r"^\s{6,}id:\s*(\S+)\s*$")
 # ...and that step must ask the BASE ref's copy of floor_check.py (#583, #645):
 # the head copy is the one the pull request under review can edit. The decision
 # lives in the script's ``path-filter`` subcommand, so the step is a fixed text
@@ -815,12 +814,39 @@ def _check_reads_filter(
             "script; either way the review is never requested."
         )
     step_id = outputs[0].group(1)
+    # Loose on purpose: a quoted or commented id, or one inside another step's
+    # run block, counts as a claim, so a decoy makes two producers, not zero.
+    claim = re.compile(r"^\s+id:\s*['\"]?" + re.escape(step_id) + r"['\"]?\s*(?:#.*)?$")
     producer = [
         step
-        for step in _job_steps(jobs[filter_job])
-        if any((m := STEP_ID_RE.match(line)) and m.group(1) == step_id for line in step)
+        for step in _steps_by_indent(jobs[filter_job])
+        if any(claim.match(line) for line in step)
     ]
     _check_filter_step(producer, filter_job, step_id)
+
+
+def _steps_by_indent(lines: list[str]) -> list[list[str]]:
+    """Split a job's ``steps:`` list as YAML does: by indentation alone.
+
+    A step runs to the next ``- `` at the list's own indent; anything deeper,
+    even a run-block line shaped like ``- key: value``, stays in it. A line
+    shallower than the list (a job key after ``steps:``) ends the list.
+    """
+    steps: list[list[str]] = []
+    indent: int | None = None
+    for line in lines:
+        if indent is None:
+            if STEP_START_RE.match(line):
+                indent = _indent(line)
+                steps.append([line])
+            continue
+        if line.strip() and not line.lstrip().startswith("#") and _indent(line) < indent:
+            break
+        if line.strip() and _indent(line) == indent and line.lstrip().startswith("- "):
+            steps.append([line])
+        else:
+            steps[-1].append(line)
+    return steps
 
 
 def _check_filter_step(producer: list[list[str]], filter_job: str, step_id: str) -> None:
@@ -843,7 +869,7 @@ def _check_filter_step(producer: list[list[str]], filter_job: str, step_id: str)
     if text != FILTER_STEP:
         found = "no such step" if not producer else (
             f"{len(producer)} steps carry that id" if len(producer) > 1
-            else f"first difference at line {_first_difference(text, FILTER_STEP)}"
+            else "its text differs"
         )
         raise AnchorError(
             f"step {step_id!r} of job {filter_job!r}, which produces "
@@ -858,26 +884,6 @@ def _check_filter_step(producer: list[list[str]], filter_job: str, step_id: str)
 
 def _indent(line: str) -> int:
     return len(line) - len(line.lstrip())
-
-
-def _first_difference(found: str, expected: str) -> int:
-    """1-based line number of the first line where ``found`` departs from ``expected``."""
-    pairs = zip(found.splitlines(), expected.splitlines())
-    for number, (got, want) in enumerate(pairs, start=1):
-        if got != want:
-            return number
-    return min(len(found.splitlines()), len(expected.splitlines())) + 1
-
-
-def _job_steps(lines: list[str]) -> list[list[str]]:
-    """Split a job's lines into its steps (the lines before the first are dropped)."""
-    steps: list[list[str]] = []
-    for line in lines:
-        if STEP_START_RE.match(line):
-            steps.append([line])
-        elif steps:
-            steps[-1].append(line)
-    return steps
 
 
 def _step_guard(step: list[str]) -> str | None:
@@ -971,7 +977,7 @@ def _check_refusal_is_red(
             )
         steps = [
             (guard, _step_run(step))
-            for step in _job_steps(lines)
+            for step in _steps_by_indent(lines)
             if (guard := _step_guard(step)) is not None
         ]
 

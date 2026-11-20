@@ -15,6 +15,7 @@ import floor_anchor
 from tests.test_floor_anchor import FLOOR_YML_WIRED, _floor_yml
 from tests import test_floor_pin_exempt as pin
 from tests.test_floor_pin_exempt import DEPENDABOT, _bump, _commit, _git, _run_filter
+from floor_check import main
 
 # The pin-exemption suite's `repo` fixture: a base holding the floor core.
 repo = pin.repo
@@ -127,6 +128,30 @@ def test_path_filter_prints_both_outputs_last(repo):
     assert "floor-core: scripts/floor_check.py" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "author, extra, expected",
+    [
+        ("someone", "", "run_canaries=true\nfloor_core_changed=true\n"),
+        (DEPENDABOT, "", "run_canaries=true\nfloor_core_changed=false\n"),
+        (DEPENDABOT, "      - run: echo extra\n", "run_canaries=true\nfloor_core_changed=true\n"),
+    ],
+)
+def test_path_filter_stdout_is_exactly_the_two_outputs(repo, capsys, author, extra, expected):
+    base = _head(repo)
+    _bump(repo, extra=extra)
+    _commit(repo, "bump")
+    assert main(["path-filter", "--base", base, "--author", author, "--actor", author]) == 0
+    assert capsys.readouterr().out == expected
+
+
+def test_path_filter_on_an_unprotected_change_says_false_twice(repo, capsys):
+    base = _head(repo)
+    (repo / "notes.md").write_text("x\n", encoding="utf-8")
+    _commit(repo, "unprotected")
+    assert main(["path-filter", "--base", base]) == 0
+    assert capsys.readouterr().out == "run_canaries=false\nfloor_core_changed=false\n"
+
+
 # The self-anchor pins the filter step byte for byte (#645, #679): each rewrite
 # of the repository's real step below must fail it, and the bypass shapes from
 # #679 are the first four.
@@ -184,6 +209,12 @@ def test_the_anchor_accepts_a_clean_change_beside_the_step(tmp_path):
         ),
         # #679: the answer overwritten after the fail-closed branch
         (WRITE, WRITE + '          echo "floor_core_changed=false" >> "$GITHUB_OUTPUT"\n'),
+        # ...behind a run-block line shaped like a new step
+        (
+            WRITE,
+            WRITE + "          - x: y || true\n"
+            '          echo "floor_core_changed=false" >> "$GITHUB_OUTPUT"\n',
+        ),
         # the step calls the head copy directly
         ('python "${BASE_COPY}" path-filter', "python scripts/floor_check.py path-filter"),
         # the "base" is the head
@@ -232,6 +263,13 @@ def test_the_anchor_fails_when_the_step_stops_running_the_base_copy(
         (
             "    steps:\n      - name: Detect",
             "    steps:\n      - name: Decoy\n        id: filter\n        run: true\n"
+            "      - name: Detect",
+            "2 steps carry that id",
+        ),
+        # ...even when the decoy quotes the id
+        (
+            "    steps:\n      - name: Detect",
+            "    steps:\n      - name: Decoy\n        id: 'filter'  # x\n        run: true\n"
             "      - name: Detect",
             "2 steps carry that id",
         ),
