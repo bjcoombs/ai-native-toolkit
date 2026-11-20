@@ -66,7 +66,7 @@ changes the per-repo table, headline or Needs attention list.
 | Field | GitHub (per org) | GitLab (per group) |
 |-------|------------------|--------------------|
 | `two_factor` | `orgs/{org}` `two_factor_requirement_enabled` (owners only) | `groups/{id}` `require_two_factor_authentication` |
-| `push_rules` | org rulesets with target `push` | `groups/{id}/push_rule`: the enabled rules (a paid tier) |
+| `push_rules` | org rulesets with target `push`; `off` unless one is `active` | `groups/{id}/push_rule`: the enabled rules (a paid tier) |
 | `default_branch_protection` | active org branch rulesets on `~DEFAULT_BRANCH` (or `~ALL`) of `~ALL` repositories, read in full from `orgs/{org}/rulesets/{id}` | `groups/{id}` `default_branch_protection`, else `default_branch_protection_defaults` |
 | `rulesets` | `orgs/{org}/rulesets`: count, names and enforcement | always `unknown`: GitLab has no group rulesets |
 
@@ -78,6 +78,16 @@ every field `unknown (group list unreadable)`. On GitLab,
 `default_branch_protection` reads `off` only when developers can push and
 force push is allowed; force push allowed with stricter push access is
 appended as `force push: allowed`. The field names are the same on both providers.
+
+On GitHub, `push_rules` reads `off` when no push ruleset is `active`; any
+`disabled` or `evaluate` push rulesets are named after it, as in
+`off (not active: no-big-files (disabled))`, and still count as off.
+`default_branch_protection` matches rulesets by name targeting only: a
+ruleset counts when `conditions.repository_name.include` contains `~ALL`.
+Exclusions (`repository_name.exclude`) are not evaluated, so `ruleset: <name>`
+can overstate coverage, and a ruleset that reaches every repository through
+`repository_property` or `repository_id` targeting is not counted, so the
+field can read `off` while such a ruleset applies.
 
 Every value is the setting's value, `off`, or `unknown` with the reason
 (`denied: no access or tier (HTTP 403)`, `not found: no access, tier, or
