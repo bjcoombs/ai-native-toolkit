@@ -646,6 +646,30 @@ Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
 file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
 from `skills/assess`.
 
+**`fleet_view.py`**
+The shared reader for the views built on one fleet run's `groups.jsonl` (#553): the
+heat map (#570) and the per-team pages (#571) read it, never `repos.jsonl` or a rescan.
+`load_groups` takes the file or the run directory, checks `fleet_group_version` and the
+rubric-entry fields a view reads (`FleetViewError` names the line), refuses a duplicate
+group and sorts by group. `rubric_columns` gives the rubric row ids in rubric order (the
+same for every group; a run without `--rubric` is refused), `run_rubric_version` the one
+version, `check_rubric` matches a rubric file (titles, top levels) to the run, and
+`compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,
+`delta` or `was`), marking the comparison not comparable across rubric versions.
+
+**`fleet_heatmap.py`**
+The leadership heat map behind `skills/fleet/scripts/heatmap.py` (#570), stdlib only (no
+`treemap_render`, which loads numpy). `render_heatmap` draws groups as rows and rubric
+rows as columns from `fleet_view` data: fill from the hardcoded ColorBrewer OrRd 9-class
+ramp (`ORRD_9`; `ramp_step` scales a level by its row's top level when a rubric file
+gives one, else indexes the ramp), text colour from the per-step `STEP_TEXT` table, and
+every known cell prints its level. `unknown` is the hatched `UNKNOWN_FILL`, never a ramp
+colour; the cell prints `?` and a key letter (`unknown_keys`, deduplicated in reading
+order) and the key names the missing signals in visible text. A comparison adds
+`change_text` under the level. White background, `html.escape`d text, labels truncated
+by character count, fixed number formatting: the same run gives the same bytes. Golden
+renders: `tests/fixtures/fleet_heatmap/` (regeneration command in its README).
+
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 `signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an

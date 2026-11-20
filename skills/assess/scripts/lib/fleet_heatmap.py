@@ -1,0 +1,318 @@
+"""Leadership heat map SVG from one fleet run's ``groups.jsonl`` (issue #570).
+
+Groups are rows, rubric rows are columns, and each cell is the whole level the
+group reached on that row. Reads only what ``lib/fleet_view.py`` loads: no
+rescan, no model.
+
+Encoding:
+
+- Fill: the ColorBrewer OrRd 9-class sequential ramp, hardcoded (no matplotlib,
+  whose colormaps can shift between versions), so output is byte-identical
+  across machines. Pale is level 0 (nothing reached), darker is a higher level
+  reached. With a rubric file a level is placed on the ramp by its share of its
+  row's top level (``level * 8 / top``, rounded half up), so a row's top level
+  is always the darkest step; without one the level indexes the ramp directly
+  (capped at the last step). The legend states which.
+- ``unknown``: white with grey diagonal hatching (the ``UNMEASURED_FILL`` idea
+  in ``doc-graph-svg.py``), never a ramp colour, so it cannot read as level 0.
+  The cell prints ``?`` and a key letter; the key under the grid names the
+  missing signals for each distinct set, in visible text (an SVG shown as an
+  image has no tooltips; ``<title>`` repeats it on hover).
+- Colour is never the only channel: every known cell prints its level, and the
+  text colour per ramp step comes from a fixed table (dark on pale steps, white
+  on dark ones).
+- Change against an earlier run (``fleet_view.compare_levels``) is text under
+  the level: ``+1``, ``-1``, ``=``, ``new``, ``was 2`` or ``was ?``. Across
+  rubric versions no change is drawn and a note says why.
+
+The canvas has its own white background, so it reads the same on light and
+dark pages. Text is escaped with ``html.escape``; labels are sized and
+truncated by character count (no font metrics), and every number is formatted
+with a fixed precision, so the same run renders byte-identical files.
+"""
+from __future__ import annotations
+
+import html
+import math
+import textwrap
+from collections.abc import Sequence
+from typing import TypedDict
+
+from lib.fleet_groups import GroupRow, RubricRowLevel
+from lib.fleet_view import (
+    STATUS_LEVEL,
+    Change,
+    Comparison,
+    cell,
+    rubric_columns,
+    run_rubric_version,
+)
+from lib.rubric import Rubric
+
+# ColorBrewer OrRd, 9 classes (colorbrewer2.org), pale to dark.
+ORRD_9 = ("#fff7ec", "#fee8c8", "#fdd49e", "#fdbb84", "#fc8d59",
+          "#ef6548", "#d7301f", "#b30000", "#7f0000")
+TOP_STEP = len(ORRD_9) - 1
+TEXT_DARK = "#1a1a1a"
+TEXT_LIGHT = "#ffffff"
+# Text colour per ramp step: dark text while it out-contrasts white.
+STEP_TEXT = (TEXT_DARK,) * 6 + (TEXT_LIGHT,) * 3
+UNKNOWN_FILL = "url(#fleet-unknown)"
+_UNKNOWN_PATTERN = (
+    '<pattern id="fleet-unknown" width="6" height="6" patternUnits="userSpaceOnUse" '
+    'patternTransform="rotate(45)"><rect width="6" height="6" fill="#ffffff"/>'
+    '<line x1="0" y1="0" x2="0" y2="6" stroke="#8c8c8c" stroke-width="1.6"/></pattern>'
+)
+MUTED = "#5f6368"
+GRID_STROKE = "#ffffff"
+FRAME_STROKE = "#bdbdbd"
+
+PAD = 16.0
+CELL_W = 64.0
+CELL_H = 40.0
+CHAR_W = 7.0  # average glyph advance at 12px, used in place of font metrics
+LINE_H = 18.0
+SWATCH = 16.0
+MAX_ROW_LABEL = 40
+MAX_COL_LABEL = 32
+KEY_WRAP = 96
+MIN_WIDTH = 640.0
+HEAD_H = 58.0  # title and subtitle
+
+SVG_TITLE = "Fleet rubric levels"
+
+
+class Column(TypedDict):
+    id: str
+    title: str
+    top: int | None  # the row's top level; None without a rubric file
+
+
+def columns_for(groups: Sequence[GroupRow], rubric: Rubric | None) -> list[Column]:
+    """Columns in rubric order; titles and top levels from the rubric file when given."""
+    ids = rubric_columns(groups)
+    if rubric is None:
+        return [{"id": row_id, "title": row_id, "top": None} for row_id in ids]
+    by_id = {row["id"]: row for row in rubric["rows"]}
+    return [{"id": row_id, "title": by_id[row_id]["title"],
+             "top": max(level["level"] for level in by_id[row_id]["levels"])}
+            for row_id in ids]
+
+
+def ramp_step(level: int, top: int | None) -> int:
+    """The OrRd step for a whole level: its share of ``top``, else the level itself."""
+    if top is None or top <= 0:
+        return max(0, min(level, TOP_STEP))
+    return max(0, min((level * 2 * TOP_STEP + top) // (2 * top), TOP_STEP))
+
+
+def key_label(index: int) -> str:
+    """a, b, ... z, aa, ab, ...: a short, stable label for the nth unknown-key entry."""
+    label = ""
+    index += 1
+    while index:
+        index, rem = divmod(index - 1, 26)
+        label = chr(ord("a") + rem) + label
+    return label
+
+
+def truncate(text: str, limit: int, keep_tail: bool = False) -> str:
+    """At most ``limit`` characters, an ellipsis marking the cut."""
+    if len(text) <= limit:
+        return text
+    return "…" + text[-(limit - 1):] if keep_tail else text[:limit - 1] + "…"
+
+
+def change_text(change: Change) -> str:
+    if change["kind"] == "new":
+        return "new"
+    if change["kind"] == "was":
+        return f"was {'?' if change['then'] is None else change['then']}"
+    delta = change["delta"] or 0
+    return "=" if delta == 0 else f"{delta:+d}"
+
+
+def _missing_text(entry: RubricRowLevel) -> str:
+    if entry["missing_signals"]:
+        return "missing " + ", ".join(entry["missing_signals"])
+    return "no evidence (no repository scanned)"
+
+
+def unknown_keys(groups: Sequence[GroupRow], columns: Sequence[Column]) -> dict[str, str]:
+    """Missing-signals text -> key label, numbered in grid reading order."""
+    keys: dict[str, str] = {}
+    for group in groups:
+        for column in columns:
+            entry = cell(group, column["id"])
+            if entry["status"] != STATUS_LEVEL:
+                keys.setdefault(_missing_text(entry), key_label(len(keys)))
+    return keys
+
+
+def _text(x: float, y: float, content: str, *, size: int = 12, fill: str = TEXT_DARK,
+          anchor: str = "start", weight: str | None = None, extra: str = "",
+          tooltip: str | None = None) -> str:
+    bold = f' font-weight="{weight}"' if weight else ""
+    hover = "" if tooltip is None else f"<title>{html.escape(tooltip, quote=False)}</title>"
+    return (f'<text x="{x:.1f}" y="{y:.1f}" font-size="{size}" fill="{fill}" '
+            f'text-anchor="{anchor}"{bold}{extra}>{html.escape(content, quote=False)}{hover}</text>')
+
+
+def _legend_entries(groups: Sequence[GroupRow], columns: Sequence[Column]) -> list[tuple[int, str]]:
+    """(ramp step, label) per step the map can use, in ramp order."""
+    labels: dict[int, list[str]] = {}
+    if all(column["top"] is not None for column in columns):
+        for top in sorted({column["top"] or 0 for column in columns}):
+            for level in range(top + 1):
+                labels.setdefault(ramp_step(level, top), []).append(f"{level} of {top}")
+    else:
+        seen = [cell(g, c["id"])["level"] for g in groups for c in columns]
+        highest = max([level for level in seen if level is not None], default=0)
+        for level in range(highest + 1):
+            labels.setdefault(ramp_step(level, None), []).append(f"level {level}")
+    entries = []
+    for step in sorted(labels):
+        text = "0 (none reached)" if step == 0 else " / ".join(dict.fromkeys(labels[step]))
+        entries.append((step, text))
+    return entries
+
+
+def _cell_parts(x: float, y: float, group: GroupRow, column: Column, keys: dict[str, str],
+                change: Change | None) -> list[str]:
+    entry = cell(group, column["id"])
+    cx = x + CELL_W / 2
+    known = entry["status"] == STATUS_LEVEL and entry["level"] is not None
+    if known:
+        level = entry["level"] or 0
+        step = ramp_step(level, column["top"])
+        fill, ink = ORRD_9[step], STEP_TEXT[step]
+        of_top = "" if column["top"] is None else f" of {column['top']}"
+        label, tip = str(level), f"level {level}{of_top}"
+    else:
+        missing = _missing_text(entry)
+        fill, ink = UNKNOWN_FILL, TEXT_DARK
+        label = f"? {keys[missing]}"
+        tip = f"unknown: {missing}"
+        if entry["unknown_repos"]:
+            tip += f"; {len(entry['unknown_repos'])} repositories without a level"
+    if change is not None:
+        tip += f"; change: {change_text(change)}"
+    title = html.escape(f"{group['group']} · {column['title']}: {tip}", quote=False)
+    parts = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{CELL_W:.1f}" height="{CELL_H:.1f}" '
+             f'fill="{fill}" stroke="{GRID_STROKE}" stroke-width="1"><title>{title}</title></rect>']
+    text_y = y + (16.0 if change is not None else CELL_H / 2 + 5)
+    if not known:
+        # A white plate keeps the label clear of the hatch lines.
+        parts.append(f'<rect x="{cx - 18:.1f}" y="{text_y - 12:.1f}" width="36.0" height="16.0" '
+                     f'fill="#ffffff"/>')
+    parts.append(_text(cx, text_y, label, size=14, fill=ink, anchor="middle", weight="bold"))
+    if change is not None:
+        if not known:
+            parts.append(f'<rect x="{cx - 22:.1f}" y="{y + 23:.1f}" width="44.0" height="13.0" '
+                         f'fill="#ffffff"/>')
+        parts.append(_text(cx, y + 33, change_text(change), size=10, fill=ink, anchor="middle"))
+    return parts
+
+
+def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
+                   comparison: Comparison | None = None) -> str:
+    """The heat map as an SVG document string; the same inputs give the same bytes."""
+    version = run_rubric_version(groups)
+    keys = unknown_keys(groups, columns)
+    row_labels = [truncate(g["group"], MAX_ROW_LABEL, keep_tail=True) for g in groups]
+    col_labels = [truncate(c["title"], MAX_COL_LABEL) for c in columns]
+    longest_col = max(len(label) for label in col_labels)
+    header_h = math.ceil(longest_col * CHAR_W * math.sqrt(0.5)) + 12.0
+    label_w = max(len(label) for label in row_labels) * CHAR_W + 12.0
+    grid_x = PAD + label_w
+    grid_y = PAD + HEAD_H + header_h
+    grid_w = len(columns) * CELL_W
+    grid_h = len(groups) * CELL_H
+    show_change = comparison is not None and comparison["comparable"]
+
+    body: list[str] = []
+    subtitle = (f"rubric {version} · {len(groups)} groups · {len(columns)} rubric rows"
+                " · darker = higher level reached")
+    body.append(_text(PAD, PAD + 18, SVG_TITLE, size=18, weight="bold"))
+    body.append(_text(PAD, PAD + 40, subtitle, fill=MUTED))
+    for index, label in enumerate(col_labels):
+        cx = grid_x + index * CELL_W + CELL_W / 2
+        cy = grid_y - 8
+        full = columns[index]["title"]
+        body.append(_text(cx, cy, label, extra=f' transform="rotate(-45 {cx:.1f} {cy:.1f})"',
+                          tooltip=full if label != full else None))
+    for row_index, group in enumerate(groups):
+        y = grid_y + row_index * CELL_H
+        cut = row_labels[row_index] != group["group"]
+        body.append(_text(grid_x - 8, y + CELL_H / 2 + 4, row_labels[row_index], anchor="end",
+                          tooltip=group["group"] if cut else None))
+        for col_index, column in enumerate(columns):
+            change = (comparison["changes"][group["group"]][column["id"]]
+                      if comparison is not None and show_change else None)
+            body.extend(_cell_parts(grid_x + col_index * CELL_W, y, group, column, keys, change))
+    body.append(f'<rect x="{grid_x:.1f}" y="{grid_y:.1f}" width="{grid_w:.1f}" '
+                f'height="{grid_h:.1f}" fill="none" stroke="{FRAME_STROKE}" stroke-width="1"/>')
+
+    y = grid_y + grid_h + 28
+    widest = 0
+    notes: list[str] = []
+    if comparison is not None:
+        if comparison["note"]:
+            notes.append(comparison["note"])
+        else:
+            notes.append("change since the earlier run is shown under each level: +n / -n, "
+                         "= unchanged, new, was n / was ? (the level was known / unknown)")
+        if comparison["removed_groups"]:
+            notes.append("groups in the earlier run only: " + ", ".join(comparison["removed_groups"]))
+    for note in notes:
+        for line in textwrap.wrap(note, KEY_WRAP):
+            body.append(_text(PAD, y, line, fill=MUTED))
+            widest = max(widest, len(line))
+            y += LINE_H
+    if notes:
+        y += 10
+
+    scale = ("level as a share of the row's top level" if all(c["top"] is not None for c in columns)
+             else "whole level (no rubric file: not scaled to each row's top level)")
+    body.append(_text(PAD, y, f"Legend: {scale}", weight="bold"))
+    y += 10
+    entries: list[tuple[str, str]] = [(ORRD_9[step], label)
+                                      for step, label in _legend_entries(groups, columns)]
+    entries.append((UNKNOWN_FILL, "unknown: not measured, never level 0 (? and a key letter)"))
+    for fill, label in entries:
+        body.append(f'<rect x="{PAD:.1f}" y="{y:.1f}" width="{SWATCH:.1f}" height="{SWATCH:.1f}" '
+                    f'fill="{fill}" stroke="{FRAME_STROKE}" stroke-width="1"/>')
+        body.append(_text(PAD + SWATCH + 8, y + 12, label))
+        widest = max(widest, len(label) + 4)
+        y += LINE_H + 4
+
+    if keys:
+        y += 18
+        body.append(_text(PAD, y, "Unknown cells: the signal that was missing", weight="bold"))
+        y += LINE_H + 2
+        for text, label in keys.items():
+            for index, line in enumerate(textwrap.wrap(text, KEY_WRAP)):
+                if index == 0:
+                    body.append(_text(PAD, y, label, weight="bold"))
+                body.append(_text(PAD + 28, y, line))
+                widest = max(widest, len(line) + 4)
+                y += LINE_H
+
+    width = max(grid_x + grid_w + longest_col * CHAR_W * math.sqrt(0.5) + PAD,
+                PAD * 2 + widest * CHAR_W, MIN_WIDTH)
+    width = float(math.ceil(width))
+    height = float(math.ceil(y + PAD))
+    desc = ("Heat map of fleet groups (rows) against rubric rows (columns); each cell is the "
+            "whole level reached, darker is higher; hatched cells are unknown, not level 0.")
+    head = [
+        '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" '
+        f'width="{width:.0f}" height="{height:.0f}" role="img">',
+        f'<title>{SVG_TITLE}</title>',
+        f'<desc>{html.escape(desc)}</desc>',
+        '<style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", '
+        'Helvetica, Arial, sans-serif; }</style>',
+        f'<defs>{_UNKNOWN_PATTERN}</defs>',
+        f'<rect x="0" y="0" width="{width:.0f}" height="{height:.0f}" fill="#ffffff"/>',
+    ]
+    return "\n".join([*head, *body, "</svg>", ""])

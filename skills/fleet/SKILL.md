@@ -113,6 +113,34 @@ the same namespace.
 Group rows contain no timing or per-run stamp, so a rerun over unchanged
 inputs on the same day is byte-identical.
 
+## Leadership heat map: `heatmap.py`
+
+`heatmap.py` renders one SVG from a run's `groups.jsonl`, with no rescan: groups
+as rows, rubric rows as columns, each cell the whole level the group reached.
+It needs a run made with `--rubric`.
+
+<!-- chat-skip:start -->
+```bash
+uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --rubric rubric.toml
+uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --rubric rubric.toml --compare last-sprint-out
+```
+<!-- chat-skip:end -->
+
+| Flag | Meaning |
+|------|---------|
+| `RUN` | The run's `--out` directory or its `groups.jsonl`. |
+| `--rubric FILE` | The rubric file the run used: column titles and each row's top level, so a row's top level is always the darkest colour. Without it the columns show row ids and the level indexes the colour ramp directly. A file whose version or rows differ from the run's exits 2. |
+| `--compare EARLIER_RUN` | An earlier run (directory or `groups.jsonl`): each cell shows its change (`+1`, `-1`, `=`, `new`, `was 2`, `was ?`) and groups only the earlier run has are listed. Runs on different rubric versions are not compared; a note says why. |
+| `--output FILE` | The SVG path (default `heatmap.svg` beside `groups.jsonl`). |
+
+Encoding: the ColorBrewer OrRd ramp (colour-blind safe), pale for level 0 and
+darker for a higher level reached, with the level printed in every cell. An
+`unknown` cell is white with grey hatching, never level 0: it prints `?` and a
+key letter, and the key under the grid names the missing signals. The canvas
+has its own white background. The same run gives a byte-identical file. Exit
+codes: `0` written, `2` an unreadable or malformed run, a run without rubric
+levels, a mismatched `--rubric` or an unreadable `--compare` run.
+
 ## Guarantees
 
 - **Never writes to a target.** Scans run with `GIT_OPTIONAL_LOCKS=0`, from a
