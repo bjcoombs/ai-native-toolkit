@@ -11,7 +11,10 @@ Reads the ``repos.jsonl`` rows ``lib/fleet.py`` builds and writes one
   ``shared_tooling_repos`` says how many repositories the counts rest on;
 - the group settings joined from ghreport's settings fragments (#565);
 - each rubric row's whole level, or ``unknown``, with the aggregation rule used,
-  evaluated by ``lib/rubric.py`` (#563). There is no second threshold config.
+  evaluated by ``lib/rubric.py`` (#563), and the row's ``top_level`` (its number of
+  levels, #684), so a history entry can be read as a share of top level without the
+  maturity model file. There is no second threshold config. ``top_level`` is
+  additive: rows written before #684 lack it, and readers fall back.
 
 Rubric inputs:
 
@@ -43,7 +46,7 @@ import os
 import tempfile
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from lib.counts_only_rules import TOKEN_RE
 from lib.fleet import STATUS_OK, FleetRow
@@ -67,6 +70,7 @@ class RubricRowLevel(TypedDict):
     scope: str  # "org" | "team"
     status: str  # "level" | "unknown"
     level: int | None  # whole level; None when unknown
+    top_level: NotRequired[int]  # the row's number of levels; absent in rows before #684
     aggregation: Aggregation | None  # the team rule used; None for org rows
     missing_signals: list[str]
     unknown_repos: list[str]  # team rows: repositories whose own level is undetermined
@@ -183,9 +187,10 @@ def _rubric_levels(rubric: Rubric, group: str, settings: JsonDict | None,
         "name": group, "settings": settings,
         "repos": {row["repo"]: repo_signals(row) for row in rows},
     })
+    tops = {row["id"]: len(row["levels"]) for row in rubric["rows"]}
     return [{
         "id": r["id"], "scope": r["scope"], "status": r["status"], "level": r["level"],
-        "aggregation": r.get("aggregation"), "missing_signals": r["missing_signals"],
+        "top_level": tops[r["id"]], "aggregation": r.get("aggregation"), "missing_signals": r["missing_signals"],
         "unknown_repos": r.get("unknown_repos", []),
     } for r in result["rows"]]
 

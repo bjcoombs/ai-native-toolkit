@@ -117,6 +117,19 @@ def test_in_a_quiet_window_a_repository_with_no_commits_is_never_busy():
     assert [fq.at_risk(p, split) for p in quiet] == [False, False, True]
 
 
+@pytest.mark.parametrize(("busiest", "ticks"), [(0, ["0", "1"]), (1, ["0", "1"]), (2, ["0", "1", "2"]),
+                                               (4, ["0", "1", "2", "3", "4", "5"])])
+def test_a_quiet_window_has_whole_commit_ticks(busiest, ticks):
+    points: list[fq.RepoPoint] = [{"repo": "g/r", "commits": busiest, "maturity": 0.5,
+                                   "measured_rows": 1, "team_rows": 1}]
+    text = fq.render_quadrant(points, WINDOW)
+    # x tick labels sit 18px under the plot, centred
+    labels = re.findall(r'y="{:.1f}"[^>]*text-anchor="middle"[^>]*>([^<]*)<'.format(fq.PLOT_T + fq.PLOT_H + 18),
+                        text)
+    assert labels == ticks
+    assert fq.count_ticks(10.0) == 5
+
+
 def test_quadrant_labels_never_overlap_each_other_points_or_captions():
     plotted, x, y, labels = fq.layout(fq.repo_points(_levels(), _repos()))
     boxes = [label.box for label in labels if label is not None]
@@ -176,6 +189,39 @@ def test_a_dropped_ref_is_pin_unknown_never_in_step():
     assert "pinned v1 · 1 unpinned" in text
 
 
+def test_a_variable_ref_is_pin_unknown_never_unpinned_or_drift():
+    base = {"kind": "gitlab_project", "id": "gitlab_project:x", "tracked": True}
+    variable = {**base, "ref": None, "ref_variable": True}
+    view = ftm.tooling_view(_rows_with([{**base, "ref": "v1", "ref_variable": False}, variable]))
+    flags = [(link["refs"], link["unpinned"], link["pin_unknown"]) for link in view["links"]]
+    assert flags == [(["v1"], False, False), ([], False, True)]
+    assert not any(ftm.drifted(link, ftm.common_refs(view["links"])) for link in view["links"])
+    text = ftm.render_tooling_map(view)
+    assert 'stroke-dasharray="1 3"><title>g/r1 → gitlab_project:x @ (pin unknown)' in text
+    assert "1 unpinned" not in text  # a variable pin is not counted as unpinned
+
+
+def test_a_fleet_pinned_only_by_variables_still_draws_pins_unknown():
+    variable = {"kind": "gitlab_project", "id": "gitlab_project:x", "tracked": True, "ref": None,
+                "ref_variable": True}
+    view = ftm.tooling_view(_rows_with([variable, variable]))
+    assert view["refs_collected"] is True
+    text = ftm.render_tooling_map(view)
+    assert "2 pins unknown (dotted)" in text
+    assert "drift not shown" not in text
+    assert text.count('stroke-dasharray="1 3"') == 2
+
+
+def test_counts_only_keeps_ref_variable():
+    from lib.counts_only import counts_only_scans
+    entry = {"kind": "gitlab_project", "source": "s", "id": "gitlab_project:x", "ref": None,
+             "ref_variable": True, "path": ".gitlab-ci.yml", "line": 1, "tracked": True}
+    block = {"available": True, "ci_includes": [entry], "marketplaces": [],
+             "ci_source_ids": ["gitlab_project:x"], "marketplace_ids": []}
+    kept = counts_only_scans({"shared_tooling": block})["shared_tooling"]["ci_includes"][0]
+    assert (kept["ref"], kept["ref_variable"]) == (None, True)
+
+
 def test_counts_only_keeps_a_token_ref_and_drops_a_slash_ref_to_pin_unknown():
     from lib.counts_only import counts_only_scans
     block = {"available": True, "ci_includes": [{"kind": "gitlab_project", "source": "s",
@@ -199,6 +245,20 @@ def test_a_raising_renderer_is_a_skip_line_naming_the_error(monkeypatch):
     assert diagrams[0]["skipped"] == "skipped: drawing failed (ValueError)."
     assert diagrams[1]["svg"] is not None  # the other diagram is still drawn
     assert "Not drawn: skipped: drawing failed (ValueError)." in fd.report_markdown(diagrams)
+
+
+def test_drawn_skipped_and_failed_diagrams_share_one_heading(monkeypatch):
+    drawn = {d["file"]: (d["title"], d["question"]) for d in _drawn()}
+    skipped = {d["file"]: (d["title"], d["question"]) for d in fd.build_diagrams(None, [], WINDOW)}
+    assert drawn == skipped == fd.HEADINGS
+    assert fd.DIAGRAM_FILES == tuple(fd.HEADINGS)
+
+    def bug(*_args: object) -> str:
+        raise ValueError("render bug")
+    for module, name in ((fq, "render_quadrant"), (ftm, "render_tooling_map")):
+        monkeypatch.setattr(module, name, bug)
+    failed = {d["file"]: (d["title"], d["question"]) for d in fd.build_diagrams(_levels(), _repos(), WINDOW)}
+    assert failed == fd.HEADINGS
 
 
 def test_drift_is_a_pin_off_the_fleets_most_common_ref():

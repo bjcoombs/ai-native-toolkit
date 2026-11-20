@@ -1,96 +1,69 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 494" width="760" height="494" role="img">
 <title>Group maturity over time</title>
-<desc>Line chart of each fleet group&#x27;s mean maturity level across dated fleet runs, oldest on the left; a line breaks where the maturity-model version changes, and runs where a group has no level are listed on a hatched note, not drawn at zero.</desc>
+<desc>Line chart of each fleet group&#x27;s mean share of top level across dated fleet runs, oldest on the left; a line breaks where the maturity-model version changes, older runs without top levels are named, not drawn, and runs where a group has no level are listed on a hatched note, not drawn at zero.</desc>
 <style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }.t-bg,.f-bg{fill:#ffffff}.s-bg{stroke:#ffffff}.t-fg,.f-fg{fill:#1d2321}.s-fg{stroke:#1d2321}.t-muted,.f-muted{fill:#5d6763}.s-muted{stroke:#5d6763}.t-rule,.f-rule{fill:#d9dedb}.s-rule{stroke:#d9dedb}.t-accent,.f-accent{fill:#1f6f6b}.s-accent{stroke:#1f6f6b}.t-bad,.f-bad{fill:#b33a2e}.s-bad{stroke:#b33a2e}.t-warn,.f-warn{fill:#b7791f}.s-warn{stroke:#b7791f}.t-unk,.f-unk{fill:#9aa39f}.s-unk{stroke:#9aa39f}.t-series0,.f-series0{fill:#1f6f6b}.s-series0{stroke:#1f6f6b}.t-series1,.f-series1{fill:#b7791f}.s-series1{stroke:#b7791f}.t-series2,.f-series2{fill:#6b4fbb}.s-series2{stroke:#6b4fbb}.t-series3,.f-series3{fill:#b33a2e}.s-series3{stroke:#b33a2e}.t-series4,.f-series4{fill:#2f6db5}.s-series4{stroke:#2f6db5}.t-series5,.f-series5{fill:#4f7f22}.s-series5{stroke:#4f7f22}.t-series6,.f-series6{fill:#a8458a}.s-series6{stroke:#a8458a}.t-series7,.f-series7{fill:#5d6763}.s-series7{stroke:#5d6763}@media (prefers-color-scheme: dark){.t-bg,.f-bg{fill:#1a201e}.s-bg{stroke:#1a201e}.t-fg,.f-fg{fill:#e6ebe8}.s-fg{stroke:#e6ebe8}.t-muted,.f-muted{fill:#9aa5a0}.s-muted{stroke:#9aa5a0}.t-rule,.f-rule{fill:#2c3532}.s-rule{stroke:#2c3532}.t-accent,.f-accent{fill:#5fb8b1}.s-accent{stroke:#5fb8b1}.t-bad,.f-bad{fill:#ec7a6c}.s-bad{stroke:#ec7a6c}.t-warn,.f-warn{fill:#e0a84a}.s-warn{stroke:#e0a84a}.t-unk,.f-unk{fill:#5f6a66}.s-unk{stroke:#5f6a66}.t-series0,.f-series0{fill:#5fb8b1}.s-series0{stroke:#5fb8b1}.t-series1,.f-series1{fill:#e0a84a}.s-series1{stroke:#e0a84a}.t-series2,.f-series2{fill:#a993f0}.s-series2{stroke:#a993f0}.t-series3,.f-series3{fill:#ec7a6c}.s-series3{stroke:#ec7a6c}.t-series4,.f-series4{fill:#7fb0ec}.s-series4{stroke:#7fb0ec}.t-series5,.f-series5{fill:#9ccc6b}.s-series5{stroke:#9ccc6b}.t-series6,.f-series6{fill:#e08cc8}.s-series6{stroke:#e08cc8}.t-series7,.f-series7{fill:#b5bfba}.s-series7{stroke:#b5bfba}}</style>
 <defs><pattern id="fleet-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="f-bg"/><line x1="0" y1="0" x2="0" y2="6" class="s-unk" stroke-width="2.4"/></pattern></defs>
 <rect x="0" y="0" width="760" height="494" class="f-bg"/>
 <text x="16.0" y="34.0" font-size="18" text-anchor="start" class="t-fg" font-weight="bold">Group maturity over time</text>
-<text x="16.0" y="56.0" font-size="12" text-anchor="start" class="t-muted">6 dated runs, 2026-06-20 to 2026-11-20 · mean maturity level per group (rows with a level)</text>
-<text x="16.0" y="74.0" font-size="11.5" text-anchor="start" class="t-muted">Maturity model levels-1 (3 runs), levels-2 (3 runs); each line breaks where the version changes</text>
+<text x="16.0" y="56.0" font-size="12" text-anchor="start" class="t-muted">3 dated runs, 2026-09-20 to 2026-11-20 · mean share of top level per group (team rows with a level)</text>
+<text x="16.0" y="74.0" font-size="11.5" text-anchor="start" class="t-muted">Maturity model levels-2 throughout</text>
 <line x1="56.0" y1="364.0" x2="520.0" y2="364.0" class="s-rule" stroke-width="0.6"/>
 <text x="46.0" y="368.0" font-size="11" text-anchor="end" class="t-muted">0</text>
-<line x1="56.0" y1="277.3" x2="520.0" y2="277.3" class="s-rule" stroke-width="0.6"/>
-<text x="46.0" y="281.3" font-size="11" text-anchor="end" class="t-muted">1</text>
-<line x1="56.0" y1="190.7" x2="520.0" y2="190.7" class="s-rule" stroke-width="0.6"/>
-<text x="46.0" y="194.7" font-size="11" text-anchor="end" class="t-muted">2</text>
+<line x1="56.0" y1="299.0" x2="520.0" y2="299.0" class="s-rule" stroke-width="0.6"/>
+<text x="46.0" y="303.0" font-size="11" text-anchor="end" class="t-muted">0.25</text>
+<line x1="56.0" y1="234.0" x2="520.0" y2="234.0" class="s-rule" stroke-width="0.6"/>
+<text x="46.0" y="238.0" font-size="11" text-anchor="end" class="t-muted">0.5</text>
+<line x1="56.0" y1="169.0" x2="520.0" y2="169.0" class="s-rule" stroke-width="0.6"/>
+<text x="46.0" y="173.0" font-size="11" text-anchor="end" class="t-muted">0.75</text>
 <line x1="56.0" y1="104.0" x2="520.0" y2="104.0" class="s-rule" stroke-width="0.6"/>
-<text x="46.0" y="108.0" font-size="11" text-anchor="end" class="t-muted">3</text>
-<text x="56.0" y="382.0" font-size="11" text-anchor="middle" class="t-muted">2026-06-20</text>
-<text x="148.8" y="382.0" font-size="11" text-anchor="middle" class="t-muted">2026-07-20</text>
-<text x="241.6" y="382.0" font-size="11" text-anchor="middle" class="t-muted">2026-08-20</text>
-<text x="334.4" y="382.0" font-size="11" text-anchor="middle" class="t-muted">2026-09-20</text>
-<text x="427.2" y="382.0" font-size="11" text-anchor="middle" class="t-muted">2026-10-20</text>
+<text x="46.0" y="108.0" font-size="11" text-anchor="end" class="t-muted">1</text>
+<text x="56.0" y="382.0" font-size="11" text-anchor="middle" class="t-muted">2026-09-20</text>
+<text x="288.0" y="382.0" font-size="11" text-anchor="middle" class="t-muted">2026-10-20</text>
 <text x="520.0" y="382.0" font-size="11" text-anchor="middle" class="t-muted">2026-11-20</text>
-<line x1="288.0" y1="90.0" x2="288.0" y2="364.0" class="s-muted" stroke-dasharray="4 4"/>
-<text x="292.0" y="86.0" font-size="11" text-anchor="start" class="t-muted">maturity model levels-2</text>
-<polyline points="56.0,277.3 148.8,234.0" fill="none" class="s-series0" stroke-width="2"/>
-<circle cx="56.0" cy="277.3" r="3.5" class="f-series0"><title>data: 1.00 on 2026-06-20</title></circle>
-<circle cx="148.8" cy="234.0" r="3.5" class="f-series0"><title>data: 1.50 on 2026-07-20</title></circle>
-<polyline points="334.4,234.0 427.2,190.7 520.0,190.7" fill="none" class="s-series0" stroke-width="2"/>
-<circle cx="334.4" cy="234.0" r="3.5" class="f-series0"><title>data: 1.50 on 2026-09-20</title></circle>
-<circle cx="427.2" cy="190.7" r="3.5" class="f-series0"><title>data: 2.00 on 2026-10-20</title></circle>
-<circle cx="520.0" cy="190.7" r="3.5" class="f-series0"><title>data: 2.00 on 2026-11-20</title></circle>
-<polyline points="56.0,277.3 148.8,277.3 241.6,320.7" fill="none" class="s-series1" stroke-width="2"/>
-<circle cx="56.0" cy="277.3" r="3.5" class="f-series1"><title>mobile: 1.00 on 2026-06-20</title></circle>
-<circle cx="148.8" cy="277.3" r="3.5" class="f-series1"><title>mobile: 1.00 on 2026-07-20</title></circle>
-<circle cx="241.6" cy="320.7" r="3.5" class="f-series1"><title>mobile: 0.50 on 2026-08-20</title></circle>
-<circle cx="334.4" cy="320.7" r="3.5" class="f-series1"><title>mobile: 0.50 on 2026-09-20</title></circle>
-<circle cx="520.0" cy="320.7" r="3.5" class="f-series1"><title>mobile: 0.50 on 2026-11-20</title></circle>
-<polyline points="56.0,320.7 148.8,277.3 241.6,277.3" fill="none" class="s-series2" stroke-width="2"/>
-<circle cx="56.0" cy="320.7" r="3.5" class="f-series2"><title>payments: 0.50 on 2026-06-20</title></circle>
-<circle cx="148.8" cy="277.3" r="3.5" class="f-series2"><title>payments: 1.00 on 2026-07-20</title></circle>
-<circle cx="241.6" cy="277.3" r="3.5" class="f-series2"><title>payments: 1.00 on 2026-08-20</title></circle>
-<polyline points="334.4,234.0 427.2,234.0 520.0,190.7" fill="none" class="s-series2" stroke-width="2"/>
-<circle cx="334.4" cy="234.0" r="3.5" class="f-series2"><title>payments: 1.50 on 2026-09-20</title></circle>
-<circle cx="427.2" cy="234.0" r="3.5" class="f-series2"><title>payments: 1.50 on 2026-10-20</title></circle>
-<circle cx="520.0" cy="190.7" r="3.5" class="f-series2"><title>payments: 2.00 on 2026-11-20</title></circle>
-<polyline points="56.0,190.7 148.8,190.7 241.6,147.3" fill="none" class="s-series3" stroke-width="2"/>
-<circle cx="56.0" cy="190.7" r="3.5" class="f-series3"><title>platform: 2.00 on 2026-06-20</title></circle>
-<circle cx="148.8" cy="190.7" r="3.5" class="f-series3"><title>platform: 2.00 on 2026-07-20</title></circle>
-<circle cx="241.6" cy="147.3" r="3.5" class="f-series3"><title>platform: 2.50 on 2026-08-20</title></circle>
-<polyline points="334.4,147.3 427.2,147.3 520.0,147.3" fill="none" class="s-series3" stroke-width="2"/>
-<circle cx="334.4" cy="147.3" r="3.5" class="f-series3"><title>platform: 2.50 on 2026-09-20</title></circle>
-<circle cx="427.2" cy="147.3" r="3.5" class="f-series3"><title>platform: 2.50 on 2026-10-20</title></circle>
-<circle cx="520.0" cy="147.3" r="3.5" class="f-series3"><title>platform: 2.50 on 2026-11-20</title></circle>
-<polyline points="56.0,234.0 148.8,234.0 241.6,190.7" fill="none" class="s-series4" stroke-width="2"/>
-<circle cx="56.0" cy="234.0" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 1.50 on 2026-06-20</title></circle>
-<circle cx="148.8" cy="234.0" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 1.50 on 2026-07-20</title></circle>
-<circle cx="241.6" cy="190.7" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 2.00 on 2026-08-20</title></circle>
-<polyline points="334.4,234.0 427.2,190.7 520.0,147.3" fill="none" class="s-series4" stroke-width="2"/>
-<circle cx="334.4" cy="234.0" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 1.50 on 2026-09-20</title></circle>
-<circle cx="427.2" cy="190.7" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 2.00 on 2026-10-20</title></circle>
-<circle cx="520.0" cy="147.3" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 2.50 on 2026-11-20</title></circle>
-<polyline points="56.0,277.3 148.8,234.0 241.6,190.7" fill="none" class="s-series5" stroke-width="2"/>
-<circle cx="56.0" cy="277.3" r="3.5" class="f-series5"><title>web: 1.00 on 2026-06-20</title></circle>
-<circle cx="148.8" cy="234.0" r="3.5" class="f-series5"><title>web: 1.50 on 2026-07-20</title></circle>
-<circle cx="241.6" cy="190.7" r="3.5" class="f-series5"><title>web: 2.00 on 2026-08-20</title></circle>
-<polyline points="334.4,190.7 427.2,190.7 520.0,147.3" fill="none" class="s-series5" stroke-width="2"/>
-<circle cx="334.4" cy="190.7" r="3.5" class="f-series5"><title>web: 2.00 on 2026-09-20</title></circle>
-<circle cx="427.2" cy="190.7" r="3.5" class="f-series5"><title>web: 2.00 on 2026-10-20</title></circle>
-<circle cx="520.0" cy="147.3" r="3.5" class="f-series5"><title>web: 2.50 on 2026-11-20</title></circle>
+<polyline points="56.0,234.0 288.0,190.7 520.0,190.7" fill="none" class="s-series0" stroke-width="2"/>
+<circle cx="56.0" cy="234.0" r="3.5" class="f-series0"><title>data: 0.50 on 2026-09-20</title></circle>
+<circle cx="288.0" cy="190.7" r="3.5" class="f-series0"><title>data: 0.67 on 2026-10-20</title></circle>
+<circle cx="520.0" cy="190.7" r="3.5" class="f-series0"><title>data: 0.67 on 2026-11-20</title></circle>
+<circle cx="56.0" cy="320.7" r="3.5" class="f-series1"><title>mobile: 0.17 on 2026-09-20</title></circle>
+<circle cx="520.0" cy="320.7" r="3.5" class="f-series1"><title>mobile: 0.17 on 2026-11-20</title></circle>
+<polyline points="56.0,234.0 288.0,234.0 520.0,190.7" fill="none" class="s-series2" stroke-width="2"/>
+<circle cx="56.0" cy="234.0" r="3.5" class="f-series2"><title>payments: 0.50 on 2026-09-20</title></circle>
+<circle cx="288.0" cy="234.0" r="3.5" class="f-series2"><title>payments: 0.50 on 2026-10-20</title></circle>
+<circle cx="520.0" cy="190.7" r="3.5" class="f-series2"><title>payments: 0.67 on 2026-11-20</title></circle>
+<polyline points="56.0,147.3 288.0,147.3 520.0,147.3" fill="none" class="s-series3" stroke-width="2"/>
+<circle cx="56.0" cy="147.3" r="3.5" class="f-series3"><title>platform: 0.83 on 2026-09-20</title></circle>
+<circle cx="288.0" cy="147.3" r="3.5" class="f-series3"><title>platform: 0.83 on 2026-10-20</title></circle>
+<circle cx="520.0" cy="147.3" r="3.5" class="f-series3"><title>platform: 0.83 on 2026-11-20</title></circle>
+<polyline points="56.0,234.0 288.0,190.7 520.0,147.3" fill="none" class="s-series4" stroke-width="2"/>
+<circle cx="56.0" cy="234.0" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 0.50 on 2026-09-20</title></circle>
+<circle cx="288.0" cy="190.7" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 0.67 on 2026-10-20</title></circle>
+<circle cx="520.0" cy="147.3" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 0.83 on 2026-11-20</title></circle>
+<polyline points="56.0,190.7 288.0,190.7 520.0,147.3" fill="none" class="s-series5" stroke-width="2"/>
+<circle cx="56.0" cy="190.7" r="3.5" class="f-series5"><title>web: 0.67 on 2026-09-20</title></circle>
+<circle cx="288.0" cy="190.7" r="3.5" class="f-series5"><title>web: 0.67 on 2026-10-20</title></circle>
+<circle cx="520.0" cy="147.3" r="3.5" class="f-series5"><title>web: 0.83 on 2026-11-20</title></circle>
 <line x1="525.0" y1="190.7" x2="534.0" y2="195.3" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="199.3" font-size="12.0" text-anchor="start" class="t-series0" font-weight="600">data 2.0<title>data</title></text>
-<text x="600.0" y="199.3" font-size="11" text-anchor="start" class="t-accent">+0.5</text>
+<text x="538.0" y="199.3" font-size="12.0" text-anchor="start" class="t-series0" font-weight="600">data 0.67<title>data</title></text>
+<text x="607.0" y="199.3" font-size="11" text-anchor="start" class="t-accent">+0.17</text>
 <line x1="525.0" y1="320.7" x2="534.0" y2="320.7" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="324.7" font-size="12.0" text-anchor="start" class="t-series1" font-weight="600">mobile 0.5<title>mobile</title></text>
+<text x="538.0" y="324.7" font-size="12.0" text-anchor="start" class="t-series1" font-weight="600">mobile 0.17<title>mobile</title></text>
 <line x1="525.0" y1="190.7" x2="534.0" y2="211.3" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="215.3" font-size="12.0" text-anchor="start" class="t-series2" font-weight="600">payments 2.0<title>payments</title></text>
-<text x="628.0" y="215.3" font-size="11" text-anchor="start" class="t-accent">+0.5</text>
+<text x="538.0" y="215.3" font-size="12.0" text-anchor="start" class="t-series2" font-weight="600">payments 0.67<title>payments</title></text>
+<text x="635.0" y="215.3" font-size="11" text-anchor="start" class="t-accent">+0.17</text>
 <line x1="525.0" y1="147.3" x2="534.0" y2="147.3" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="151.3" font-size="12.0" text-anchor="start" class="t-series3" font-weight="600">platform 2.5<title>platform</title></text>
-<text x="628.0" y="151.3" font-size="11" text-anchor="start" class="t-muted">0.0</text>
+<text x="538.0" y="151.3" font-size="12.0" text-anchor="start" class="t-series3" font-weight="600">platform 0.83<title>platform</title></text>
+<text x="635.0" y="151.3" font-size="11" text-anchor="start" class="t-muted">0.00</text>
 <line x1="525.0" y1="147.3" x2="534.0" y2="163.3" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="167.3" font-size="12.0" text-anchor="start" class="t-series4" font-weight="600">platform/infrastructu… 2.5<title>platform/infrastructure-and-shared-services</title></text>
-<text x="726.0" y="167.3" font-size="11" text-anchor="start" class="t-accent">+1.0</text>
+<text x="538.0" y="167.3" font-size="12.0" text-anchor="start" class="t-series4" font-weight="600">platform/infrastructu… 0.83<title>platform/infrastructure-and-shared-services</title></text>
+<text x="733.0" y="167.3" font-size="11" text-anchor="start" class="t-accent">+0.33</text>
 <line x1="525.0" y1="147.3" x2="534.0" y2="179.3" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="183.3" font-size="12.0" text-anchor="start" class="t-series5" font-weight="600">web 2.5<title>web</title></text>
-<text x="593.0" y="183.3" font-size="11" text-anchor="start" class="t-accent">+0.5</text>
+<text x="538.0" y="183.3" font-size="12.0" text-anchor="start" class="t-series5" font-weight="600">web 0.83<title>web</title></text>
+<text x="600.0" y="183.3" font-size="11" text-anchor="start" class="t-accent">+0.17</text>
 <text x="288.0" y="402.0" font-size="12" text-anchor="middle" class="t-muted">Fleet run (scan date)</text>
-<text x="18.0" y="234.0" font-size="12.0" text-anchor="middle" class="t-muted" transform="rotate(-90 18 234.0)">Mean level</text>
-<text x="32.0" y="234.0" font-size="10.5" text-anchor="middle" class="t-muted" transform="rotate(-90 32 234.0)">(not comparable to the slope chart)</text>
-<text x="56.0" y="424.0" font-size="11.5" text-anchor="start" class="t-muted">End label: group, its level in its last run, and the change over its last unbroken stretch</text>
-<rect x="56.0" y="448.0" width="14.0" height="14.0" fill="url(#fleet-hatch)" class="s-muted" stroke-width="1"/>
-<text x="78.0" y="459.0" font-size="11.5" text-anchor="start" class="t-fg">Gaps in a line, unknown is not zero: data (no level on 2026-08-20), mobile (not in the run on</text>
-<text x="78.0" y="475.0" font-size="11.5" text-anchor="start" class="t-fg">2026-10-20)</text>
+<text x="22.0" y="234.0" font-size="12.0" text-anchor="middle" class="t-muted" transform="rotate(-90 22 234.0)">Mean share of top level</text>
+<text x="56.0" y="424.0" font-size="11.5" text-anchor="start" class="t-muted">End label: group, its mean in its last run, and the change over its last unbroken stretch</text>
+<text x="56.0" y="440.0" font-size="11.5" text-anchor="start" class="t-muted">3 earlier runs on an older maturity-model version not shown: 2026-06-20, 2026-07-20, 2026-08-20</text>
+<rect x="56.0" y="464.0" width="14.0" height="14.0" fill="url(#fleet-hatch)" class="s-muted" stroke-width="1"/>
+<text x="78.0" y="475.0" font-size="11.5" text-anchor="start" class="t-fg">Gaps in a line, unknown is not zero: mobile (not in the run on 2026-10-20)</text>
 </svg>

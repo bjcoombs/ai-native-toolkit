@@ -705,7 +705,9 @@ readers consume it). Subprocess, not import, keeps it off the orchestrator layer
 The group roll-up behind `groups.jsonl` (issue #568). `roll_up` groups `FleetRow`s by
 `group` (sorted) and `group_row` builds each `GroupRow`: repository counts, distinct
 shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanned rows
-only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each rubric row's level through `rubric.evaluate`, with
+only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each rubric row's level through `rubric.evaluate` with its
+`top_level` (the row's number of levels, #684, so a history entry reads as a share of top
+level without the model file; additive and `NotRequired`, absent in older rows), with
 no threshold config of its own. `load_settings` reads ghreport settings fragments
 (#565) from a file, an array or a directory (a render dir's `settings/`), keyed by
 `scope`, and raises `SettingsError` on a directory with no `*.json` fragment file;
@@ -761,7 +763,8 @@ grimp, networkx, lizard or `rg`, and for `structure_drift` no ownership map). Ev
 **`fleet_group_schema.py`**
 Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
 `RubricRowLevel` (lists and floats included, `settings` values as `{value, reason}` or
-`{available: false, reason}`). `tests/test_fleet_groups.py` fails when the checked-in
+`{available: false, reason}`; a `NotRequired` key, such as `top_level`, is left out of
+`required`). `tests/test_fleet_groups.py` fails when the checked-in
 file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
 from `skills/assess`.
 
@@ -818,12 +821,21 @@ shared-tooling map, and the slope, layer-bar and trend charts of #675/#676). The
 
 No script, no external font or link; fixed number formatting. Tests: `tests/test_fleet_diagrams.py`.
 
+**`fleet_maturity.py`**
+The one maturity mean the quadrant, the slope chart and the trend lines share (#684).
+`mean_share(cells)` averages each known `(level, top)` pair's share of top level, leaving out
+an unknown level or a missing top level (`None` when nothing is left, never 0);
+`known_shares` lists them. `SCOPE` is the row set, `team` rows: the only rows a single
+repository can be measured by, so the group charts use them too and the three read on one
+scale. Pure arithmetic.
+
 **`fleet_quadrant.py`**
 The activity x maturity quadrant (#674). `repo_points(levels, repos)` gives each repository
 its commit count (`ai_usage.total_commits` over the run window; `None` for a failed scan or
 an unavailable block) and maturity: each `team` row re-evaluated against the repository's
 own `scans` (`rubric.evaluate_row`), as a share of the row's top level, averaged over the
-rows that could be measured (`None` when none could). `layout` places the plotted points
+rows that could be measured (`fleet_maturity.mean_share`; `None` when none could). Below 5 at
+the top, the commit axis ticks every whole commit (`count_ticks`, #684), never 0.2. `layout` places the plotted points
 and their labels (captions in `CAPTIONS` are obstacles); `render_quadrant` draws them with
 the busy-and-immature quadrant (at or above the median commits, below half the top level,
 `at_risk`) shaded, and names every repository with an unknown axis on a hatched strip,
@@ -836,16 +848,17 @@ pins (`ci_includes[].ref`), the repositories that share nothing, and those with 
 (failed, absent or unavailable block). `common_refs` is each item's most pinned ref (ties:
 lexically greatest); `drifted` marks a link pinned off it, drawn dashed. An unpinned include
 is not drift (counted as unpinned); an include whose `ref` key is absent (dropped by
-counts-only) is "pin unknown", drawn dotted. A run whose blocks carry no `ref` (before #674)
-says "drift not shown" instead. `render_tooling_map` draws
+counts-only) or whose ref is a CI variable (`ref_variable`, #684) is "pin unknown", drawn
+dotted, never unpinned or drift. A run whose blocks carry neither `ref` nor `ref_variable`
+(before #674) says "drift not shown" instead. `render_tooling_map` draws
 repositories left, items right with their dependent counts, and the unknown repositories on
 a hatched strip.
 
 **`fleet_slope.py`**
 The before/after slope chart (#675), from the `--compare` result (`fleet_compare.Comparison`)
 and the maturity model alone. `slope_view(levels, comparison)` gives each group its mean level
-share (level over the row's top level) then and now, taken only over the rows with a known
-level in both runs, so a row going unknown to known never moves a line, and its biggest mover
+share (`fleet_maturity.mean_share`, team rows only, #684) then and now, taken only over the team
+rows with a known level in both runs (org rows are out of the mean, the counts and the mover), so a row going unknown to known never moves a line, and its biggest mover
 (largest share change, ties to the lower row id) with the comparison's `cause`. A group added,
 removed or with no row known in both runs is named on a hatched strip, never at zero.
 `end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
@@ -871,8 +884,9 @@ is the trend's runs (`fleet_trends`), `None` when the run is not kept in the his
 `comparison` is the result `_keep_and_compare` wrote. `report_markdown` embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
-stale picture. A new diagram (#676) adds its module, its `FILE` to `DIAGRAM_FILES` and
-an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (regenerate with
+stale picture. A new diagram (#676) adds its module, its `FILE` with its
+report heading and question to `HEADINGS` (one source for a drawn, skipped or failed diagram,
+#684; `DIAGRAM_FILES` follows it) and an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (regenerate with
 `uv run --locked python tests/fleet_diagrams_fixture.py` from `skills/assess`).
 
 **`fleet_trends.py`**
@@ -881,10 +895,13 @@ reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
 `groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode and
 path hashing and records a maturity-model version; unreadable entries are passed over. One
 run per date: the entry over this run's repository set, else the highest suffix.
-`trend_run(stamp, groups)` is one run's point per group, `mean_level` the plain mean of the
-group's known row levels (the history keeps no maturity model and `groups.jsonl` rows no
-per-row level list, so levels are not scaled; the axis says it is not comparable to the
-slope chart's share of top level);
+`trend_run(stamp, groups, levels)` is one run's point per group: `group_mean`, the
+`fleet_maturity.mean_share` of the group's known team rows over their `top_level` (#684, the
+slope chart's and quadrant's unit and row set). An entry without `top_level` takes it from
+this run's maturity model (`levels`, passed through `history_runs`) when it used the same
+version (`with_top_levels`); otherwise a run with any known team row lacking it is marked
+`scaled: false` and not drawn (`share_runs`), so the axis is always 0 to 1, and `hidden_note`
+names it in the caption, or in the skip line when fewer than `MIN_RUNS` share runs remain;
 `series_runs` appends this run (from memory) and keeps the newest `MAX_RUNS`. `layout`
 splits each line at an unknown or absent value and at a maturity-model version change
 (marked by a dashed rule), and spaces end labels with `fleet_svg.spread_vertical`
@@ -2279,14 +2296,16 @@ Shared CI sources and agent marketplaces, per repository (issue #566), the
 file-content half of the organisation-wide evidence in #550.
 `scan_shared_tooling(repo_root)` writes `{available, ci_includes[], marketplaces[],
 ci_source_ids[], marketplace_ids[]}`. `ci_includes` rows (`kind`, `source`, `id`,
-`ref`, `path`, `line`, `tracked`) come from the top-level `include:` section of
+`ref`, `ref_variable`, `path`, `line`, `tracked`) come from the top-level `include:` section of
 `.gitlab-ci.yml` (`project:` -> `gitlab_project`, `component:` ->
 `gitlab_component` with the host and `@version` dropped) and from `uses:
 <owner>/<repo>/.github/workflows/...` in `.github/workflows/*.yml`
 (`github_reusable_workflow`, keyed on the repository). `ref` is the pin kept apart
 from the id (#674): a GitLab include item's own `ref:` (joined by include item, so a
 `ref:` under `inputs:` is not it), a component's or workflow's `@ref`, `null` when
-unpinned; counts-only keeps it when it is a token (`v4`, `1.2.0`, a SHA) and drops it otherwise (`release/1.2`). Local includes, templates,
+unpinned. A ref holding a CI variable (`$TPL_REF`, `@${VERSION}`) is recorded as `ref`
+`null` with `ref_variable` true (#684): pinned, to a value the file does not say, so `--full`
+and counts-only agree and the map draws it as "pin unknown". Counts-only keeps a `ref` that is a token (`v4`, `1.2.0`, a SHA) and drops it otherwise (`release/1.2`). Local includes, templates,
 `./.github/workflows` references, a job's `trigger:`, keys in nested lists
 (`inputs:`, `rules:`), step-level `uses:` and `run:` script text are skipped.
 Symlinks and paths resolving outside the repository are not read. `marketplaces`

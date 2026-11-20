@@ -16,7 +16,7 @@ import json
 import sys
 import types
 from pathlib import Path
-from typing import Any, Union, get_args, get_origin, get_type_hints, is_typeddict
+from typing import Any, NotRequired, Union, get_args, get_origin, get_type_hints, is_typeddict
 
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -54,10 +54,14 @@ def type_schema(tp: Any) -> JsonDict:
         return {"anyOf": members}
     if is_typeddict(tp):
         hints = get_type_hints(tp)
+        # ``__required_keys__`` misses ``NotRequired`` under postponed annotations; read the
+        # marker from the resolved hints instead.
+        optional = {name for name, hint in get_type_hints(tp, include_extras=True).items()
+                    if get_origin(hint) is NotRequired}
         return {
             "type": "object",
             "properties": {name: type_schema(hint) for name, hint in hints.items()},
-            "required": sorted(tp.__required_keys__),
+            "required": sorted(set(hints) - optional),
             "additionalProperties": False,
         }
     if origin is list:

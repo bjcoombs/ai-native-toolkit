@@ -151,8 +151,20 @@ def test_group_rows_carry_levels_rules_settings_and_distinct_ids():
     assert levels["teamdocs"]["aggregation"] == {"rule": "min", "share": 1}
     assert {r["id"]: r["level"] for r in grpb["rubric"]} == {"org2fa": 0, "teamdocs": 0}
     assert grpa["rubric_version"] == "fixture-1"
+    tops = {row["id"]: len(row["levels"]) for row in RUBRIC["rows"]}
+    assert {r["id"]: r["top_level"] for r in grpa["rubric"]} == tops  # #684: a share needs no model file
     for group in groups:
         jsonschema.validate(group, build_schema())
+
+
+def test_a_group_row_written_before_top_level_still_validates_and_loads(tmp_path):
+    from lib.fleet_view import load_groups
+    rows = [_row("grpa/svc1", _scans(20, []))]
+    (group,) = fg.roll_up(rows, RUBRIC, {"grpa": _fragment("grpa", "on")})
+    legacy = {**group, "rubric": [{k: v for k, v in r.items() if k != "top_level"} for r in group["rubric"]]}
+    jsonschema.validate(legacy, build_schema())  # top_level is additive, not required
+    (tmp_path / "groups.jsonl").write_text(json.dumps(legacy) + "\n", encoding="utf-8")
+    assert "top_level" not in load_groups(tmp_path)[0]["rubric"][0]
 
 
 def test_unknown_setting_and_failed_repo_give_unknown_never_zero():

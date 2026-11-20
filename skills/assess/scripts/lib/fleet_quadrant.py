@@ -7,9 +7,10 @@ damage soonest, so that quadrant is shaded and its dots drawn in the alarm colou
 
 Maturity per repository re-evaluates each ``team`` row of the maturity model
 (``lib.rubric.evaluate_row``) against that repository's own ``scans``, as the
-team pages do (``lib/fleet_next_steps.py``). Rows have different top levels, so
-a row's level counts as its share of the row's top level, and the repository's
-maturity is the mean share over the rows that could be measured. A repository
+team pages do (``lib/fleet_next_steps.py``). The repository's maturity is
+``lib.fleet_maturity.mean_share``: each row's share of its top level, averaged
+over the rows that could be measured, the unit and row set the slope chart and
+trend lines use too. A repository
 with no measured row, or no commit count (a failed scan, an unavailable
 ``ai_usage`` block), is never drawn at zero: it is named on a hatched strip
 under the plot with what is unknown.
@@ -28,6 +29,7 @@ from typing import TypedDict
 from lib import fleet_svg as svg
 from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_groups import repo_signals
+from lib.fleet_maturity import SCOPE, known_shares, mean_share
 from lib.fleet_svg import THEMED_HATCH, Box, LinearScale
 from lib.rubric import Rubric, evaluate_row
 
@@ -71,19 +73,14 @@ def _commits(row: FleetRow) -> int | None:
 
 def repo_points(levels: Rubric, repos: Sequence[FleetRow]) -> list[RepoPoint]:
     """Each repository's commit count and mean maturity, sorted by repository id."""
-    team = [row for row in levels["rows"] if row["scope"] == "team"]
+    team = [row for row in levels["rows"] if row["scope"] == SCOPE]
     points: list[RepoPoint] = []
     for repo in sorted(repos, key=lambda r: r["repo"]):
         data = repo_signals(repo)
-        shares = []
-        for row in team:
-            level = evaluate_row(row, data)["level"]
-            if level is not None:
-                shares.append(level / len(row["levels"]))
+        cells = [(evaluate_row(row, data)["level"], len(row["levels"])) for row in team]
         points.append({
-            "repo": repo["repo"], "commits": _commits(repo),
-            "maturity": sum(shares) / len(shares) if shares else None,
-            "measured_rows": len(shares), "team_rows": len(team),
+            "repo": repo["repo"], "commits": _commits(repo), "maturity": mean_share(cells),
+            "measured_rows": len(known_shares(cells)), "team_rows": len(team),
         })
     return points
 
@@ -125,6 +122,11 @@ def layout(points: Sequence[RepoPoint]) -> tuple[list[RepoPoint], LinearScale, L
     return plotted, x, y, svg.place_labels(anchors, bounds, obstacles=captions)
 
 
+def count_ticks(top: float) -> int:
+    """Commit-axis tick steps: one per commit below 5, so a count axis never shows 0.2."""
+    return int(top) if top < 5 else 5
+
+
 def _wrapped(prefix: str, items: Sequence[str]) -> list[str]:
     return textwrap.wrap(prefix + ", ".join(items), WRAP)
 
@@ -144,7 +146,7 @@ def render_quadrant(points: Sequence[RepoPoint], window: str) -> str:
                 f'height="{sy - PLOT_T:.1f}" class="f-accent" opacity="0.06"/>')
     body.append(f'<rect x="{sx:.1f}" y="{sy:.1f}" width="{PLOT_R - sx:.1f}" '
                 f'height="{bottom - sy:.1f}" class="f-bad" opacity="0.08"/>')
-    for tick in x.ticks(5):
+    for tick in x.ticks(count_ticks(x.hi)):
         tx = x(tick)
         body.append(f'<line x1="{tx:.1f}" y1="{PLOT_T:.1f}" x2="{tx:.1f}" y2="{bottom:.1f}" '
                     f'class="s-rule" stroke-width="0.6"/>')
