@@ -30,6 +30,14 @@ def test_split_window_rejects(window: str) -> None:
         split_window(window)
 
 
+@pytest.mark.parametrize("window", ["6mo\n", "6mo\r\n", " 6mo", "6mo "])
+def test_split_window_rejects_surrounding_whitespace(window: str) -> None:
+    """``$`` matches before a trailing newline; the whole string must match, as
+    the ECMA-262 ``run.schema.json`` pattern requires (issue #648)."""
+    with pytest.raises(ValueError):
+        split_window(window)
+
+
 @pytest.mark.parametrize("window", VALID + INVALID)
 def test_every_reader_agrees_with_the_grammar(window: str) -> None:
     """signals, ai_usage, fleet_activity and the churn-label normaliser accept

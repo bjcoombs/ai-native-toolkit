@@ -56,6 +56,27 @@ def test_exact_rule_reports_its_settings(world: World) -> None:
     assert got is not None and got["name"] == "main" and got["allow_force_push"] is True
 
 
+def test_exact_rule_combines_with_matching_wildcards(world: World) -> None:
+    # GitLab applies every matching rule (issue #648): an exact "main" does not
+    # override "m*", so the looser wildcard's push and force push apply, and
+    # the exact rule's code-owner requirement holds.
+    exact = _rule("main", push=40, merge=40)
+    exact["code_owner_approval_required"] = True
+    world.serve(LIST, [_rule("m*", push=30, merge=40, force=True), exact, _rule("release/*")])
+    got = branch_protection(P, "main")
+    assert got is not None and got["name"] == "main" and got["id"] == exact["id"]
+    assert [lv["access_level"] for lv in got["push_access_levels"]] == [30]
+    assert [lv["access_level"] for lv in got["merge_access_levels"]] == [40]
+    assert got["allow_force_push"] is True  # most permissive
+    assert got["code_owner_approval_required"] is True  # most restrictive
+
+
+def test_exact_rule_without_a_matching_wildcard_is_returned_as_is(world: World) -> None:
+    exact = _rule("main", force=True)
+    world.serve(LIST, [exact, _rule("release/*", push=0)])
+    assert branch_protection(P, "main") == exact
+
+
 def test_a_single_wildcard_rule_covers_the_branch(world: World) -> None:
     world.serve(LIST, [_rule("release/*"), _rule("ma*n")])
     got = branch_protection(P, "main")
@@ -139,6 +160,23 @@ def test_full_page_prefers_a_later_exact_rule_to_a_wildcard(world: World) -> Non
     world.serve(f"projects/{ENC}/protected_branches/main", _rule("main", force=True))
     got = branch_protection(P, "main")
     assert got is not None and got["name"] == "main"
+
+
+def test_full_page_exact_rule_from_the_single_read_combines_with_wildcards(
+        world: World) -> None:
+    world.serve(LIST, [_rule("m*", push=30)] + [_rule(f"feature/{i}") for i in range(99)])
+    world.serve(f"projects/{ENC}/protected_branches/main", _rule("main", push=40))
+    got = branch_protection(P, "main")
+    assert got is not None and got["name"] == "main"
+    assert [lv["access_level"] for lv in got["push_access_levels"]] == [30]
+
+
+def test_full_page_single_read_without_a_name_is_unavailable(world: World) -> None:
+    world.serve(LIST, [_rule("m*")] + [_rule(f"feature/{i}") for i in range(99)])
+    world.serve(f"projects/{ENC}/protected_branches/main", {"id": 1})
+    with pytest.raises(GhUnavailable) as e:
+        branch_protection(P, "main")
+    assert e.value.reason.startswith("glab_bad_json")
 
 
 def test_full_page_without_a_cover_falls_back_to_the_single_read(world: World) -> None:
@@ -239,6 +277,18 @@ def test_overlapping_wildcards_are_not_false_drift(world: World) -> None:
     assert [(e["key"], e["tracked"], e["live"]) for e in block["entries"]] == [
         ("name", "release/1-stable", "*-stable, release/*"),
     ]
+
+
+def test_exact_snapshot_reports_a_looser_wildcard_as_settings_drift(world: World) -> None:
+    # The exact rule is unchanged, but GitLab also applies "m*" (issue #648):
+    # the effective push level drifts, the rule's name does not.
+    world.remote(GITLAB_REMOTE)
+    _track(world, ".gitlab/main.json", _rule("main", push=40))
+    world.serve(LIST, [_rule("main", push=40), _rule("m*", push=30)])
+    block = scan_config_drift(world.root)
+    assert block["available"] is True
+    entries = block["entries"]
+    assert entries and all(e["key"].startswith("push_access_levels") for e in entries)
 
 
 def test_unprotected_branch_is_drift(world: World) -> None:
