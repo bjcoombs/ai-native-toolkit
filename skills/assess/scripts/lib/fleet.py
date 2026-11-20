@@ -56,6 +56,8 @@ FLEET_ROW_VERSION = 1
 REPOS_FILE = "repos.jsonl"
 SIGNALS_SCRIPT = Path(__file__).resolve().parents[1] / "assess_signals.py"
 DEFAULT_TIMEOUT = 600
+LOGS_DIR = "logs"
+STDERR_TAIL_CHARS = 4000
 
 STATUS_OK = "ok"
 STATUS_FAILED = "failed"
@@ -101,6 +103,7 @@ class ScanOptions:
     window: str | None = None
     scans: str | None = None  # comma-separated, passed through
     timeout: int = DEFAULT_TIMEOUT
+    log_dir: Path | None = None  # set: a scan_exit_* row's stderr tail lands in <log_dir>/<repo>.stderr
 
 
 ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
@@ -174,7 +177,7 @@ def _locate(entry: str, root: Path | None, base: Path) -> tuple[Path, Path]:
         only_from_base = from_base.exists() and not (root is not None and (root / path).exists())
         path = root / path if root is not None and not only_from_base else from_base
     path = path.resolve()
-    if path.name == checkout_name(path.parent) and path.is_dir():
+    if path.name == checkout_name(path.parent):  # by name: a missing checkout keeps its id
         return path.parent, path
     if _is_repo_dir(path) or not (path / ".git").exists():
         return path, path / checkout_name(path)
@@ -281,10 +284,29 @@ def scan_target(target: Target, scratch: Path, options: ScanOptions) -> FleetRow
     except OSError:
         return _row(target, reason=SCAN_ERROR)
     if done.returncode != 0:
+        write_stderr_tail(options.log_dir, target, done.stderr)
         return _row(target, reason=f"scan_exit_{done.returncode}")
     document = _load_document(out)
     out.unlink(missing_ok=True)
     return _row(target, reason=INVALID_OUTPUT) if document is None else _row(target, document=document)
+
+
+def write_stderr_tail(log_dir: Path | None, target: Target, stderr: str | None) -> Path | None:
+    """The last ``STDERR_TAIL_CHARS`` of a failed scan's stderr, beside the rows, never in one.
+
+    Written to ``<log_dir>/<repo>.stderr`` (the id's segments as directories)
+    for diagnosis; the row keeps only its reason token. A write that fails is
+    skipped: the log is a convenience, the row is the record.
+    """
+    if log_dir is None:
+        return None
+    path = log_dir / f"{target.repo}.stderr"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text((stderr or "")[-STDERR_TAIL_CHARS:], encoding="utf-8")
+    except OSError:
+        return None
+    return path
 
 
 def _guarded(scan: ScanFn, target: Target, scratch: Path, options: ScanOptions) -> FleetRow:

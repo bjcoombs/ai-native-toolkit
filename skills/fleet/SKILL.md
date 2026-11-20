@@ -66,6 +66,11 @@ One line per repository, sorted by `repo`, keys sorted. Schema:
 | `signals_schema_version` | The `assess_signals` document version; `null` when failed. |
 | `scans` | The `assess_signals.py` `scans` map (counts-only unless `--full`); the block shapes are `skills/assess/references/signals.schema.json` and `skills/assess/references/counts-only.md`. `null` when failed. |
 
+**`logs/<repo>.stderr`.** When a scan process exits non-zero, the last 4000
+characters of its stderr go to `DIR/logs/<repo>.stderr` (the id's segments as
+directories) for diagnosis. The row keeps only its `scan_exit_<code>` token. A
+log is written only for such a failure and is overwritten by the next run.
+
 Rows carry no absolute path, timing, error text or per-repository stamp, so
 two runs over unchanged checkouts on the same day are byte-identical (except
 with `--hash-paths` and no salt). Repository ids are kept in clear text even

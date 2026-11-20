@@ -2,7 +2,8 @@
 
 Runs ``skills/assess/scripts/assess_signals.py`` once per repository, each in
 its own process from a worker pool, counts-only by default, and writes one JSON
-line per repository to ``<out>/repos.jsonl``, sorted by repository id. The row
+line per repository to ``<out>/repos.jsonl``, sorted by repository id. A scan
+process that exits non-zero leaves its stderr tail in ``<out>/logs/<repo>.stderr``. The row
 shape is ``skills/fleet/references/repos.schema.json``; the logic lives in
 ``skills/assess/scripts/lib/fleet.py``.
 
@@ -39,6 +40,7 @@ sys.path.insert(0, str(ASSESS_SCRIPTS))
 
 from lib.fleet import (  # noqa: E402
     DEFAULT_TIMEOUT,
+    LOGS_DIR,
     STATUS_FAILED,
     ScanOptions,
     Target,
@@ -142,6 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         counts_only=not args.full,
         hash_salt=None if args.full else run_salt(args.hash_paths, args.hash_salt),
         window=args.window, scans=args.scans, timeout=args.timeout,
+        log_dir=out_dir / LOGS_DIR,
     )
     rows = run_fleet(targets, options, args.jobs)
     path = write_rows(out_dir, rows)

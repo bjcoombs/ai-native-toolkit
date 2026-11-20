@@ -598,7 +598,8 @@ URL's path) and then to its last two directory names. `scan_target` checks
 `assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0`, counts-only unless
 told otherwise, from a scratch directory, with a timeout; every failure becomes a
 `failed` row with a reason token (`FAILURE_REASONS` or `scan_exit_<code>`), never
-message text. `run_fleet` maps targets over a thread pool of those processes, isolates
+message text. A `scan_exit_<code>` failure's stderr tail goes to `write_stderr_tail`
+(`<out>/logs/<repo>.stderr`, when `ScanOptions.log_dir` is set), never into the row. `run_fleet` maps targets over a thread pool of those processes, isolates
 a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
 `repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
 its schema version - no stamp field, path or timing - so reruns are byte-identical.

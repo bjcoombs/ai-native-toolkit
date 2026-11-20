@@ -110,6 +110,16 @@ def test_uncloned_porcelain_entry_keeps_its_layout_id(tmp_path):
     assert fleet.checkout_problem(targets[0].checkout) == fleet.MISSING_CHECKOUT
 
 
+def test_missing_listed_checkout_keeps_its_layout_id(tmp_path):
+    root = tmp_path / "froot"
+    root.mkdir()
+    entry = str(root / "grpa" / "svc1" / "svc1-main")
+    for base_root in (root, None):
+        targets = fleet.targets_from_list([entry], base_root, tmp_path)
+        assert [t.repo for t in targets] == ["grpa/svc1"]
+        assert fleet.checkout_problem(targets[0].checkout) == fleet.MISSING_CHECKOUT
+
+
 def test_list_entry_relative_to_the_working_directory(tmp_path):
     make_repo(tmp_path / "froot", "grpa/svc1")
     targets = fleet.targets_from_list(["froot/grpa/svc1/svc1-main"], None, tmp_path)
@@ -190,6 +200,24 @@ def _fake_signals(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str) ->
     script.write_text("import sys, json, time\nout = sys.argv[sys.argv.index('--out') + 1]\n" + body,
                       encoding="utf-8")
     monkeypatch.setattr(fleet, "SIGNALS_SCRIPT", script)
+
+
+def test_scan_exit_writes_a_stderr_tail_beside_the_rows(tmp_path, monkeypatch):
+    _fake_signals(tmp_path, monkeypatch, "sys.stderr.write('x' * 5000 + 'Traceback: boom')\nsys.exit(4)\n")
+    logs = tmp_path / "out" / fleet.LOGS_DIR
+    row = fleet.scan_target(Target("grp/sub/r", make_checkout(tmp_path / "r")), tmp_path,
+                            ScanOptions(log_dir=logs))
+    assert row["reason"] == "scan_exit_4"
+    assert "boom" not in json.dumps(row)
+    tail = (logs / "grp" / "sub" / "r.stderr").read_text(encoding="utf-8")
+    assert tail.endswith("Traceback: boom") and len(tail) == fleet.STDERR_TAIL_CHARS
+
+
+def test_stderr_tail_is_skipped_without_a_log_dir_or_on_a_write_error(tmp_path):
+    target = Target("g/r", tmp_path)
+    assert fleet.write_stderr_tail(None, target, "err") is None
+    (tmp_path / "blocked").write_text("", encoding="utf-8")  # a file where the directory goes
+    assert fleet.write_stderr_tail(tmp_path / "blocked", target, "err") is None
 
 
 @pytest.mark.parametrize(("body", "reason"), [
