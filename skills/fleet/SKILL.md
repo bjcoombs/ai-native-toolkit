@@ -70,7 +70,7 @@ One line per repository, sorted by `repo`, keys sorted. Schema:
 | `status` | `ok` or `failed`. |
 | `reason` | `null` when ok; a token when failed: `missing_checkout`, `not_a_git_work_tree`, `scan_timeout`, `invalid_output`, `scan_error`, or `scan_exit_<code>`. |
 | `signals_schema_version` | The `assess_signals` document version; `null` when failed. |
-| `active` | `true` when the checkout's `HEAD` was committed inside the window (`--window`, default `6mo`, counting back from the run's UTC date; the `ghsync --active-since` meaning, read locally from git); `null` when failed. |
+| `active` | `true` when the committer date of the checkout's `HEAD` falls inside the window (`--window`, default `6mo`, counting back from the run's UTC date in whole days, months and years by calendar), read locally from git; `null` when failed. Close to `ghsync --active-since` but not identical: ghsync counts 30-day months from the current time on platform dates, so cutoffs can differ by a few days. |
 | `scans` | The `assess_signals.py` `scans` map (counts-only unless `--full`); the block shapes are `skills/assess/references/signals.schema.json` and `skills/assess/references/counts-only.md`. `null` when failed. |
 
 **`logs/<repo>.stderr`.** When a scan process exits non-zero, the last 4000
@@ -151,8 +151,9 @@ miss. Right after a repository's row is in hand, its checkout
   `.git` directory at its work-tree root, not a linked worktree);
 - `git status --porcelain --ignored` is empty: no change, no untracked or
   ignored file (a local `.env` keeps the clone);
-- no stash, no commit on a local branch or `HEAD` that no remote branch holds
-  (a clone with no remote is always kept), and no linked worktree;
+- no stash, no commit on `HEAD`, a local branch or a tag that no remote branch
+  holds (a local-only tag, or a clone with no remote, keeps it), and no linked
+  worktree;
 - it is not, and does not contain, `--out`, the working directory or the toolkit
   itself.
 

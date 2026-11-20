@@ -158,6 +158,7 @@ def test_sibling_worktree_content_survives(tmp_path):
     ("stash", fleet_cleanup.KEEP_STASH),
     ("unpushed", fleet_cleanup.KEEP_UNPUSHED),
     ("unpushed_branch", fleet_cleanup.KEEP_UNPUSHED),
+    ("local_tag", fleet_cleanup.KEEP_UNPUSHED),
     ("linked_worktree", fleet_cleanup.KEEP_WORKTREES),
     ("protected_out", fleet_cleanup.KEEP_PROTECTED),
     ("protected_self", fleet_cleanup.KEEP_PROTECTED),
@@ -186,6 +187,11 @@ def test_a_clone_with_something_to_lose_is_kept(tmp_path, setup, reason, monkeyp
         _git(checkout, "branch", "side")
         _git(checkout, "checkout", "-q", "side")
         _git(checkout, "commit", "-q", "--allow-empty", "-m", "local")
+        _git(checkout, "checkout", "-q", "main")
+    elif setup == "local_tag":
+        _git(checkout, "checkout", "-q", "--detach")
+        _git(checkout, "commit", "-q", "--allow-empty", "-m", "tagged only")
+        _git(checkout, "tag", "v-local")
         _git(checkout, "checkout", "-q", "main")
     elif setup == "linked_worktree":
         _git(checkout, "worktree", "add", "-q", str(checkout.parent / "worktree" / "feat"), "-b", "feat")

@@ -13,8 +13,8 @@ when nothing in it would be lost:
   ``.git`` directory at the work-tree root, not a linked worktree);
 - ``git status --porcelain --ignored`` is empty: no change, untracked or
   ignored file;
-- there is no stash, no commit on a local branch or ``HEAD`` that no remote
-  branch holds, and no linked worktree;
+- there is no stash, no commit on ``HEAD``, a local branch or a tag that no
+  remote branch holds (a local-only tag keeps the clone), and no linked worktree;
 - it is not, and does not contain, a protected path (the output directory,
   the working directory, the toolkit itself).
 
@@ -83,7 +83,8 @@ def _git_problem(checkout: Path) -> str | None:
             return KEEP_LOCAL_CHANGES
         if _git_out(checkout, "for-each-ref", "refs/stash").strip():
             return KEEP_STASH
-        unpushed = _git_out(checkout, "rev-list", "--count", "HEAD", "--branches", "--not", "--remotes")
+        unpushed = _git_out(checkout, "rev-list", "--count", "HEAD", "--branches", "--tags",
+                            "--not", "--remotes")
         if unpushed.strip() != "0":
             return KEEP_UNPUSHED
         listing = _git_out(checkout, "worktree", "list", "--porcelain")

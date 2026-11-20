@@ -720,10 +720,12 @@ root run, a list run and any `--jobs` give the same bytes on the same day. `writ
 writes atomically with sorted keys.
 
 **`fleet_activity.py`**
-Whether a fleet repository is active (issue #569), the `ghsync --active-since` meaning:
-`is_active` compares the checkout's `HEAD` commit date (`head_commit_date`, UTC, read
+Whether a fleet repository is active (issue #569): `is_active` compares the checkout's
+`HEAD` committer date (`head_commit_date`, UTC, read
 from git with optional locks off) with `window_start(window, today)`, which counts back
-in whole days, months and years by calendar (clamped to month end). `scan_target` sets
+in whole days, months and years by calendar (clamped to month end), validating the
+window with `signals.parse_window`. Close to `ghsync --active-since`, not identical:
+ghsync counts 30-day months from now on platform dates. `scan_target` sets
 each ok row's `active` from `ScanOptions.active_since`, so it is read before
 `--delete-after` can remove the clone. An unreadable `HEAD` is not active.
 
@@ -734,7 +736,7 @@ empty `worktree/` and repository directory. `deletion_problem` fails closed with
 keep-reason token (`KEEP_REASONS`): a non-ok row, a non-layout or symlinked path, a
 checkout that is not a main clone at its work-tree root, one holding a protected path
 (`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
-output, a stash, a commit on `HEAD` or a local branch that no remote branch holds, a
+output, a stash, a commit on `HEAD`, a local branch or a tag that no remote branch holds, a
 linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
 
 **`fleet_labels.py`**

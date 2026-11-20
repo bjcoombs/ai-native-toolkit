@@ -1,30 +1,33 @@
 """Whether a fleet repository is active inside the history window (issue #569).
 
-"Active" has the ``ghsync --active-since`` meaning: the checkout's ``HEAD``
-was committed inside the window. It is read locally from git, never from a
-platform API. The window counts back from the run's UTC scan date in whole
-days (months and years by calendar), so the answer is fixed for a day and a
-rerun on the same day is byte-identical. Each ``ok`` fleet row carries it as
+"Active" means the committer date of the checkout's ``HEAD`` falls inside the
+window. It is read locally from git, never from a platform API. The window
+counts back from the run's UTC scan date in whole days, with months and years
+by calendar (clamped to the month end), so the answer is fixed for a day and a
+rerun on the same day is byte-identical.
+
+This is close to, but not the same as, ``ghsync --active-since``: ghsync reads
+the platform's activity and head-commit dates and counts 30-day months and
+365-day years back from the current time, so the two cutoffs can differ by a
+few days. #601 tracks unifying the window grammar. Each ``ok`` fleet row carries it as
 ``active``; the run stamp counts those rows as ``qualifying``.
 """
 from __future__ import annotations
 
 import calendar
 import os
-import re
 import subprocess
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-_WINDOW = re.compile(r"^([1-9][0-9]*)(d|w|mo|y)$")
+from lib.signals import parse_window
 
 
 def window_start(window: str, today: date) -> date:
     """The first day inside ``window`` counting back from ``today`` (months and years by calendar)."""
-    match = _WINDOW.match(window)
-    if match is None:
-        raise ValueError(f"invalid window {window!r}: expected <n>d, <n>w, <n>mo or <n>y")
-    n, unit = int(match.group(1)), match.group(2)
+    parse_window(window)  # the one window grammar (lib/signals.py); raises ValueError
+    unit = "mo" if window.endswith("mo") else window[-1]
+    n = int(window[: -len(unit)])
     if unit in ("d", "w"):
         return today - timedelta(days=n * (7 if unit == "w" else 1))
     months = n * (12 if unit == "y" else 1)

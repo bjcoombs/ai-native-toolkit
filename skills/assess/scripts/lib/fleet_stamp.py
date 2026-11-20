@@ -10,9 +10,10 @@ Repository counts:
 - ``selected``: targets the run was given (every row);
 - ``scanned_ok``: rows with ``status`` ``ok``;
 - ``failed``: rows with ``status`` ``failed``;
-- ``qualifying``: ok rows with ``active`` true, the ``ghsync --active-since``
-  meaning (lib/fleet_activity.py). The window runs back from ``scan_date``
-  (UTC, whole days), so the count is fixed for a day.
+- ``qualifying``: ok rows with ``active`` true: the ``HEAD`` committer date
+  is inside the window (lib/fleet_activity.py). The window runs back from
+  ``scan_date`` (UTC, whole days, months by calendar), so the count is fixed
+  for a day.
 
 The stamp holds no absolute path, salt, timing or input mode, so a root run,
 a list run and any ``--jobs`` value over unchanged checkouts on the same day
