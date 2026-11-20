@@ -20,10 +20,7 @@
     },
     {
       "name": "lying_map",
-      "paths": [
-        "README.md",
-        "skills/README.md"
-      ]
+      "paths": []
     },
     {
       "name": "unexplained_complexity",
