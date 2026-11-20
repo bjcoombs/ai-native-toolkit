@@ -92,7 +92,12 @@ constant each.
 # instruction_placement record always_on_words). bloat_penalty is now their
 # penalties' sum and size_grade_capped reads always-on lines. Additive: no key
 # moves or changes type, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.12.0"
+# 1.13.0: each run-context.json nested_instructions claude_shadows_agents finding
+# gains diff_lines, the body lines that differ below the header, and the
+# informational finding kind mirrored_instruction_files reports a CLAUDE.md kept
+# identical to its AGENTS.md below the header (issue #589; entry added by #632).
+# Additive: no existing key moves, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.13.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -122,4 +127,8 @@ ARTIFACT_SCHEMA_VERSION = "1.12.0"
 #    whole-file size curve (issue #560), which moves instruction grades.
 # 8: a bats suite is a test file and credits its shell script (issue #593), so a
 #    co-located ``<stem>.bats`` can now produce self_referential_tests (E2).
-ASSESS_METHOD_VERSION = 8
+# 9: a leading HTML comment only one of a CLAUDE.md / AGENTS.md pair carries is
+#    compared, not stripped, so it turns a mirrored_instruction_files into a
+#    claude_shadows_agents; text after a header comment's ``-->`` (an H1
+#    included) is body (issue #632).
+ASSESS_METHOD_VERSION = 9

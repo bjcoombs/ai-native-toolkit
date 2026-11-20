@@ -170,6 +170,7 @@ def test_mirror_differing_only_in_header_is_informational(git_repo: Any) -> None
         ("mirrored_instruction_files", "CLAUDE.md", "AGENTS.md")]
     assert "diff_lines" not in findings[0]
     assert "drift" not in findings[0]["detail"]
+    assert "header comments differ" in findings[0]["detail"]
 
 
 def test_mirror_with_one_changed_body_line_still_shadows_with_count(git_repo: Any) -> None:
@@ -200,6 +201,8 @@ def test_text_after_a_closing_comment_is_body() -> None:
     assert discovery.mirror_lines("<!--\nnote\n--> keep this\nrest") == ["keep this", "rest"]
     # A tail that opens another comment is still header.
     assert discovery.mirror_lines("<!-- a --><!-- b -->\nrest") == ["rest"]
+    # A tail ends the header, so an H1 after `-->` is body too (issue #632).
+    assert discovery.mirror_lines("<!-- a --> # Title\nbody") == ["# Title", "body"]
     # `<!-->` never closes the comment it opens, so it is body, not a crash.
     assert discovery.mirror_lines("<!-->\nrest") == ["<!-->", "rest"]
 
@@ -211,6 +214,43 @@ def test_differing_text_after_comment_close_is_not_a_mirror(git_repo: Any) -> No
     commit("tail differs")
     findings = _block(repo)["findings"]
     assert [(f["kind"], f.get("diff_lines")) for f in findings] == [("claude_shadows_agents", 1)]
+
+
+def test_extra_instruction_in_one_files_leading_comment_is_not_a_mirror(git_repo: Any) -> None:
+    # Agents read raw markdown, so a comment only one file carries is an instruction
+    # the other tool never sees (issue #632).
+    repo, commit = git_repo
+    _write(repo, "CLAUDE.md", "<!-- Agents: always run make check -->\n"
+           + _mirror("Project notes", "Read by Claude Code.", MIRROR_BODY))
+    _write(repo, "AGENTS.md", _mirror("AGENTS.md", "Read by agents.md tools.", MIRROR_BODY))
+    commit("hidden instruction")
+    findings = _block(repo)["findings"]
+    assert [(f["kind"], f.get("diff_lines")) for f in findings] == [("claude_shadows_agents", 1)]
+
+
+def test_comment_in_only_one_file_is_compared(git_repo: Any) -> None:
+    repo, commit = git_repo
+    _write(repo, "CLAUDE.md", "# C\n<!-- Always run make check. -->\n" + MIRROR_BODY)
+    _write(repo, "AGENTS.md", "# A\n" + MIRROR_BODY)
+    commit("comment on one side")
+    assert [f["kind"] for f in _block(repo)["findings"]] == ["claude_shadows_agents"]
+
+
+def test_shared_header_comment_mirror_says_same_instructions(git_repo: Any) -> None:
+    repo, commit = git_repo
+    _write(repo, "CLAUDE.md", "# C\n<!-- Keep in sync. -->\n" + MIRROR_BODY)
+    _write(repo, "AGENTS.md", "# A\n<!--   Keep in sync. -->\n" + MIRROR_BODY)
+    commit("identical comments")
+    findings = _block(repo)["findings"]
+    assert [f["kind"] for f in findings] == ["mirrored_instruction_files"]
+    assert "both tools read the same instructions" in findings[0]["detail"]
+
+
+def test_mirror_pair_strips_shared_and_paired_comments_only() -> None:
+    a = "<!-- shared -->\n<!-- note a -->\nbody"
+    b = "<!-- note b -->\n<!-- shared -->\n<!-- extra -->\nbody"
+    assert discovery.mirror_pair(a, b) == (["body"], ["<!-- extra -->", "body"], True)
+    assert discovery.mirror_pair("<!-- s -->\nx", "<!-- s -->\nx") == (["x"], ["x"], False)
 
 
 def test_findings_cap_truncates_mirrors_before_defects(

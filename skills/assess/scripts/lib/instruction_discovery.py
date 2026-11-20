@@ -314,13 +314,18 @@ def _comment_close(lines: list[str], start: int) -> tuple[int, str] | None:
     return None
 
 
-def _strip_header(lines: list[str]) -> list[str]:
-    """Drop a file's header: leading blanks, one H1 and leading HTML comments.
+def _split_header(lines: list[str]) -> tuple[list[str], list[str]]:
+    """Split a file into its header comments and its body.
 
-    Only the prefix before the first other line goes; an unterminated ``<!--``
-    is body, so it never swallows the file.
+    The header is leading blanks, one H1 and leading HTML comments; each comment
+    comes back whitespace-collapsed, so a pair can tell which comments both
+    files share. Only the prefix before the first other line goes; an
+    unterminated ``<!--`` is body, so it never swallows the file. Text after a
+    comment's ``-->`` on its line ends the header unless it opens another
+    comment, so ``<!-- a --> # Title`` keeps ``# Title`` as body.
     """
     lines = list(lines)
+    comments: list[str] = []
     i, seen_h1 = 0, False
     while i < len(lines):
         s = lines[i].strip()
@@ -333,20 +338,44 @@ def _strip_header(lines: list[str]) -> list[str]:
             if close is None:
                 break
             end, tail = close
-            # Text after the comment's close on that line is body, not header.
-            if tail.strip():
-                lines[end], i = tail, end
-            else:
+            inner = "\n".join(lines[i:end + 1])
+            inner = inner[inner.index("<!--"):len(inner) - len(tail)]
+            comments.append(" ".join(inner.split()))
+            lines[end], i = tail, end
+            if not tail.strip():
                 i = end + 1
+            elif not tail.strip().startswith("<!--"):
+                break  # text after the comment's close is body, not header
         else:
             break
-    return lines[i:]
+    return comments, lines[i:]
+
+
+def _norm(body: list[str]) -> list[str]:
+    return [" ".join(line.split()) for line in body if line.strip()]
 
 
 def mirror_lines(text: str) -> list[str]:
     """A file's body below its header, whitespace-collapsed, blank lines dropped."""
-    body = _strip_header(text.splitlines())
-    return [" ".join(line.split()) for line in body if line.strip()]
+    return _norm(_split_header(text.splitlines())[1])
+
+
+def mirror_pair(a: str, b: str) -> tuple[list[str], list[str], bool]:
+    """Two files' comparable lines, and whether their header comments differ.
+
+    Agents read raw markdown, header comments included, so only comments the
+    two files can account for leave the comparison: a comment both carry, then
+    one per-file note on each side paired in order (each file saying which tool
+    reads it). A comment in only one file stays, ahead of its body, so an
+    instruction hidden there is a difference, not a mirror (issue #632).
+    """
+    ca, body_a = _split_header(a.splitlines())
+    cb, body_b = _split_header(b.splitlines())
+    own_a = [c for c in ca if c not in cb]
+    own_b = [c for c in cb if c not in ca]
+    paired = min(len(own_a), len(own_b))
+    return (own_a[paired:] + _norm(body_a), own_b[paired:] + _norm(body_b),
+            paired > 0)
 
 
 def diff_line_count(a: list[str], b: list[str]) -> int:
@@ -381,19 +410,22 @@ def _shadowing(
         loaded, _skipped = follow_imports([c.rel for c in claude], repo_root, is_tracked)
         if agent.rel in loaded:
             continue
-        agent_lines = mirror_lines(agent.body)
-        if not agent_lines and not any(mirror_lines(c.body) for c in claude):
+        pairs = [(c, *mirror_pair(c.body, agent.body)) for c in claude]
+        if not any(c_lines or a_lines for _c, c_lines, a_lines, _n in pairs):
             continue  # two empty files carry nothing to shadow or mirror
-        mirror = next((c for c in claude if mirror_lines(c.body) == agent_lines), None)
+        mirror = next((p for p in pairs if p[1] == p[2]), None)
         if mirror is not None:
+            notes = ("their header comments differ, and agents read those too"
+                     if mirror[3] else "both tools read the same instructions")
             mirrors.append({
-                "kind": "mirrored_instruction_files", "path": mirror.rel, "parent": agent.rel,
-                "detail": f"`{mirror.rel}` and `{agent.rel}` are kept identical below "
-                          "their headers, a hand-maintained mirror; both tools read "
-                          "the same instructions",
+                "kind": "mirrored_instruction_files", "path": mirror[0].rel,
+                "parent": agent.rel,
+                "detail": f"`{mirror[0].rel}` and `{agent.rel}` are kept identical below "
+                          f"their headers, a hand-maintained mirror; {notes}",
             })
             continue
-        diff = diff_line_count(mirror_lines(claude[0].body), agent_lines)
+        _first, first_lines, agent_lines, _n = pairs[0]
+        diff = diff_line_count(first_lines, agent_lines)
         shadows.append({
             "kind": "claude_shadows_agents", "path": claude[0].rel, "parent": agent.rel,
             "diff_lines": diff,

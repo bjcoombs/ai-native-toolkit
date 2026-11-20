@@ -1299,7 +1299,12 @@ below their headers (`mirror_lines`: leading blank lines, one H1 and leading HTM
 comments dropped, whitespace collapsed, blank lines dropped), so a pair that
 matches there is reported as the informational `mirrored_instruction_files`, a
 hand-maintained mirror, not as shadowing (#589); a symlink or an import is
-neither. Files and findings are capped with `_total` counts, informational
+neither. Agents read header comments too, so `mirror_pair` drops only the
+comments both files carry and one per-file note on each side (paired in order);
+a comment only one file carries stays in the comparison, so an instruction
+hidden there makes the pair `claude_shadows_agents`, and a mirror whose paired
+notes differ says so in its detail (#632). Text after a header comment's `-->`
+ends the header unless it opens another comment, so an H1 there is body. Files and findings are capped with `_total` counts, informational
 mirrors last so the cap never drops a defect for one. Tests: `tests/test_instruction_discovery.py`.
 
 **`instruction_budget.py`**
