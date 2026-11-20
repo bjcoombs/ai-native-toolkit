@@ -469,6 +469,18 @@ def _read_text(path: Path) -> str | None:
         return None
 
 
+def pulls_jobs_from_elsewhere(text: str, gitlab: bool) -> bool:
+    """A CI file whose jobs can come from a file this checkout does not hold.
+
+    GitLab: any top-level ``include:`` (local, template, remote, project or
+    component). GitHub: a job-level ``uses:`` that calls a reusable workflow in
+    another repository (``./`` references point at an indexed local workflow).
+    """
+    if gitlab:
+        return bool(_include_lines(text))
+    return any(not _unquote(value).startswith("./") for _, value in _job_uses(text))
+
+
 def _workflow_files(repo_root: Path) -> list[Path]:
     root = repo_root / _WORKFLOWS_DIR
     try:

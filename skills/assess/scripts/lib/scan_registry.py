@@ -46,6 +46,7 @@ from lib.agent_environment import scan_agent_environment
 from lib.agent_harness import scan_agent_harness
 from lib.agent_ops import scan_agent_ops
 from lib.ai_usage import scan_ai_usage
+from lib.ci_checks import scan_ci_checks
 from lib.claude_config import scan_claude_config
 from lib.config_drift import scan_config_drift
 from lib.degrade import safe as safe  # re-exported: callers import it from here
@@ -519,6 +520,11 @@ SCANS: tuple[ScanSpec, ...] = (
     # (`.claude-plugin/marketplace.json`, `extraKnownMarketplaces`), each with a
     # stable id so a fleet roll-up counts distinct sources. Offline file reads.
     ScanSpec("shared_tooling", scan_shared_tooling, ("repo_root",), STAGE_POST_OFFERS),
+    # CI checks (issue #698): whether a GitHub Actions or GitLab CI line runs a
+    # test or lint command (check_command.is_check_command); null when no
+    # check is found but a CI file pulls jobs from elsewhere (include:, a remote
+    # reusable workflow). Layer 5 level 1 of the default maturity model. Offline.
+    ScanSpec("ci_checks", scan_ci_checks, ("repo_root",), STAGE_POST_OFFERS),
     # Deterministic layer grades (issue #620): instructions_grade republished as
     # a block, so a maturity model can name it in a headless or full run.
     ScanSpec("layer_grades", scan_layer_grades, ("instruction_grading",), STAGE_POST_OFFERS),

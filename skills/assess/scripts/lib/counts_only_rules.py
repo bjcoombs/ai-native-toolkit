@@ -405,6 +405,11 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "shared_tooling.ci_source_ids": ID,
         "shared_tooling.marketplace_ids": ID,
     },
+    "ci_checks": {
+        # Counts, a tri-state boolean and the basis token (issue #698).
+        "ci_checks.reason": DROP,
+        "ci_checks.basis": TOKEN,
+    },
     "layer_grades": {
         # A letter grade (A-F) or null; the presence flag is a boolean.
         "layer_grades.reason": DROP,

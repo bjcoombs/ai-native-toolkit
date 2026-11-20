@@ -246,7 +246,8 @@ def _git(root: Path, *args: str) -> str | None:
     try:
         out = subprocess.run(
             ["git", "-C", str(root), *args],
-            capture_output=True, text=True, check=True, timeout=30,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=30,
         )
     except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired):
         return None

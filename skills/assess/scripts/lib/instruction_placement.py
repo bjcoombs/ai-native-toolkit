@@ -480,9 +480,9 @@ def detect_skills_dir(repo_root: Path) -> JsonDict:
     skill_files: list[str] = []
     for sp in skills_paths:
         if sp.is_dir():
-            found_dirs.append(str(sp.relative_to(repo_root)))
+            found_dirs.append(sp.relative_to(repo_root).as_posix())
             for skill_md in sp.glob("*/SKILL.md"):
-                skill_files.append(str(skill_md.relative_to(repo_root)))
+                skill_files.append(skill_md.relative_to(repo_root).as_posix())
     return {
         "skills_dirs_present": len(found_dirs) > 0,
         "skills_dirs": found_dirs,
