@@ -215,7 +215,7 @@ def _history_org_dir(args: argparse.Namespace, targets: list[Target]) -> Path:
     return entry_dir(root, org, "x").parent  # validates root and org
 
 
-def _history_entry(args: argparse.Namespace, targets: list[Target], org_dir: Path, scan_date: str,
+def _history_entry(args: argparse.Namespace, targets: list[Target], org_dir: Path | None, scan_date: str,
                    planned: JsonDict) -> Path | None:
     """The history directory this run will be kept in, created; None when it is not kept.
 
@@ -226,6 +226,7 @@ def _history_entry(args: argparse.Namespace, targets: list[Target], org_dir: Pat
     if args.full:
         print("fleet: history: --full output is not kept in the run history", file=sys.stderr)
         return None
+    assert org_dir is not None  # resolved by main whenever the history is kept
     entry, passed = choose_entry(org_dir.parent, org_dir.name, scan_date, planned)
     inside = out_inside_target(entry, targets)
     if inside is not None:
@@ -238,7 +239,7 @@ def _history_entry(args: argparse.Namespace, targets: list[Target], org_dir: Pat
     return entry
 
 
-def _load_earlier(run_dir: str | None, org_dir: Path, planned: JsonDict) -> FleetRun | str | None:
+def _load_earlier(run_dir: str | None, org_dir: Path | None, planned: JsonDict) -> FleetRun | str | None:
     """The ``--compare`` run, the reason it cannot be compared, or None (no ``--compare``, or
     no matching history entry for a bare ``--compare``).
 
@@ -247,6 +248,7 @@ def _load_earlier(run_dir: str | None, org_dir: Path, planned: JsonDict) -> Flee
     if run_dir is None:
         return None
     if run_dir == LATEST:
+        assert org_dir is not None  # resolved by main for a bare --compare
         latest = latest_matching(org_dir, planned)
         if latest is None:
             print(f"fleet: compare: no earlier run in {org_dir} matches this run's stamp; "
@@ -315,12 +317,16 @@ def main(argv: list[str] | None = None) -> int:
         "counts_only": not args.full, "scans": sorted(scans) if scans is not None else None,
         "paths_hashed": hash_salt is not None,
     }
+    keeps_history = not args.no_history and not args.full
     try:
-        org_dir = _history_org_dir(args, targets)
+        # <org> is resolved only when the history is used: kept, or searched by a bare --compare
+        org_dir = (_history_org_dir(args, targets) if keeps_history or args.compare == LATEST
+                   else None)
         # read before any scan: the same-day history entry may be replaced
         earlier = _load_earlier(args.compare, org_dir, planned)
     except HistoryError as e:
-        print(f"error: run history: {e} (use --history-dir or --history-org)", file=sys.stderr)
+        print(f"error: run history: {e} (use --history-org, --history-dir or --no-history)",
+              file=sys.stderr)
         return 2
     except FleetViewError as e:
         print(f"error: --compare {args.compare}: {e}", file=sys.stderr)
@@ -339,7 +345,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         entry = _history_entry(args, targets, org_dir, today.isoformat(), planned)
     except (HistoryError, OSError) as e:
-        print(f"error: run history: {e} (use --history-dir or --no-history)", file=sys.stderr)
+        print(f"error: run history: {e} (use --history-org, --history-dir or --no-history)",
+              file=sys.stderr)
         return 2
     protected = [out_dir, Path.cwd(), TOOLKIT_ROOT, *([entry] if entry is not None else [])]
     deleter = CloneDeleter(protected) if args.delete_after else None

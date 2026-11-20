@@ -183,8 +183,11 @@ outside the scanned repositories.
 The history fails closed. Only those three files are written (through a temp
 file, `run.json` last); nothing is ever deleted. `<org>` and the date must each
 be one plain directory name, no directory on the way may be a symlink, and the
-history may not be inside a target (exit 2 before any scan; `--no-history`
-skips it). A same-day rerun replaces the day's entry only when that entry is a
+history may not be inside a target (exit 2 before any scan). These checks run
+only when the history is used: a kept run or a bare `--compare`. With
+`--no-history` or `--full` (and an explicit `--compare RUN_DIR`) `<org>` is never
+resolved, so an id whose first segment is not a safe directory name (`My
+Projects/svc`) still runs; otherwise pass `--history-org`. A same-day rerun replaces the day's entry only when that entry is a
 fleet run with the same rubric version, window, output mode, scans and path
 hashing. Otherwise the entry is kept and the run goes to a suffixed sibling,
 `<date>.2`, `<date>.3` and so on (the first that is free or holds a matching
@@ -245,7 +248,7 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --rubric rubric.toml -
 |------|---------|
 | `RUN` | The run's `--out` directory or its `groups.jsonl`. |
 | `--rubric FILE` | The rubric file the run used: column titles and each row's top level, so a row's top level is always the darkest colour. Without it the columns show row ids and the level indexes the colour ramp directly. A file whose version or rows differ from the run's exits 2. |
-| `--compare EARLIER_RUN` | An earlier run (directory or `groups.jsonl`): each cell shows its change (`+1`, `-1`, `=`, `new`, `was 2`, `was ?`) and groups only the earlier run has are listed. When both are run directories with a `run.json`, the [fleet comparison rule](#run-history-and-comparison) applies: runs that differ in rubric version, window, output mode, scans, path hashing or plugin major version are not compared (a note says why), and a note names the groups whose measured set moved, so a change there is not read as a level change (`fleet_compare.py` gives each cell's cause). A bare `groups.jsonl` is compared on levels only, refused across rubric versions. |
+| `--compare EARLIER_RUN` | An earlier run (directory or `groups.jsonl`): each cell shows its change (`+1`, `-1`, `=`, `new`, `was 2`, `was ?`) and groups only the earlier run has are listed. When both are run directories with a `run.json`, the [fleet comparison rule](#run-history-and-comparison) applies: runs that differ in rubric version, window, output mode, scans, path hashing or plugin major version are not compared (a note says why), and a note names the groups whose measured set moved, so a change there is not read as a level change (`fleet_compare.py` gives each cell's cause). When both are run directories holding `repos.jsonl` but only one has a `run.json` (a run from before the stamp), the pair is refused the same way. A bare `groups.jsonl` (or a directory holding only one) is compared on levels only, refused across rubric versions. |
 | `--output FILE` | The SVG path (default `heatmap.svg` beside `groups.jsonl`). |
 
 Encoding: the ColorBrewer OrRd ramp (colour-blind safe), pale for level 0 and

@@ -383,6 +383,40 @@ def test_heatmap_compare_uses_the_fleet_comparison_rule(froot2, tmp_path):
     assert "measured set changed" not in (tmp_path / "g.svg").read_text(encoding="utf-8")
 
 
+def test_view_check_refuses_a_one_side_stamped_pair(tmp_path):
+    from lib.fleet_compare import view_check
+    stamped, old, groups_only = tmp_path / "stamped", tmp_path / "old", tmp_path / "groups"
+    for d in (stamped, old, groups_only):
+        d.mkdir()
+    (stamped / "run.json").write_text("{}", encoding="utf-8")
+    (old / "repos.jsonl").write_text("", encoding="utf-8")
+    (groups_only / "groups.jsonl").write_text("", encoding="utf-8")
+    reasons, _ = view_check(stamped, old)
+    assert reasons and "before the run stamp" in reasons[0]
+    assert view_check(stamped, groups_only) == ([], [])
+
+
+@pytest.mark.parametrize("flags", [["--no-history"], ["--full"], ["--no-history", "--compare", "EARLIER"]])
+def test_an_unsafe_first_segment_runs_when_history_is_not_used(tmp_path, flags):
+    root = tmp_path / "My Projects"
+    make_repo(root, "svc")
+    earlier = tmp_path / "earlier"
+    base = [str(root), "--scans", "nested_instructions", "--history-dir", str(tmp_path / "hist")]
+    assert fleet_cli.main([*base, "--out", str(earlier), "--no-history"]) == 0
+    argv = [str(earlier) if f == "EARLIER" else f for f in flags]
+    assert fleet_cli.main([*base, "--out", str(tmp_path / "out"), *argv]) == 0
+    assert not (tmp_path / "hist").exists()
+
+
+def test_an_unsafe_first_segment_with_history_exits_2_naming_the_fixes(tmp_path, capsys):
+    root = tmp_path / "My Projects"
+    make_repo(root, "svc")
+    base = [str(root), "--scans", "nested_instructions", "--history-dir", str(tmp_path / "hist")]
+    assert fleet_cli.main([*base, "--out", str(tmp_path / "o")]) == 2
+    assert "--history-org" in capsys.readouterr().err
+    assert fleet_cli.main([*base, "--out", str(tmp_path / "o2"), "--history-org", "mine"]) == 0
+
+
 def test_view_check_reports_unreadable_runs(tmp_path):
     from lib.fleet_compare import view_check
     for name in ("now", "then"):

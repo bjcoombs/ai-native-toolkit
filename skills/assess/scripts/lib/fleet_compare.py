@@ -360,15 +360,20 @@ def view_check(now: Path, then: Path) -> tuple[list[str], list[str]]:
 
     ``reasons`` says why the runs are not comparable (this module's rule: rubric
     version, window, output mode, scans, path hashing, plugin major version,
-    file versions); ``set_moved`` names the groups whose measured set moved, so
-    a level change there is not read as a real one. Both are empty when either
-    path is not a stamped run directory (a bare ``groups.jsonl``): the view then
-    compares levels only.
+    file versions, a run with no ``run.json``); ``set_moved`` names the groups
+    whose measured set moved, so a level change there is not read as a real
+    one. Both are empty when either path is not a run directory (a bare
+    ``groups.jsonl``, or a directory holding only one): the view then compares
+    levels only. A pair of run directories where one lacks ``run.json`` is
+    refused, as ``fleet_compare.py`` refuses it.
     """
-    if not ((now / RUN_FILE).is_file() and (then / RUN_FILE).is_file()):
+    def run_dir(path: Path) -> bool:
+        return path.is_dir() and ((path / RUN_FILE).is_file() or (path / REPOS_FILE).is_file())
+
+    if not (run_dir(now) and run_dir(then)):
         return [], []
     try:
-        later, earlier = load_run(now), load_run(then)
+        earlier, later = load_run(then), load_run(now)
     except (RunVersionError, FleetViewError) as exc:
         return [str(exc)], []
     result = compare(earlier, later)
