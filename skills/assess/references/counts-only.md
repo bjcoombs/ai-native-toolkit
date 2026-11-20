@@ -119,6 +119,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `stats_summary.top_large.ccn_basis` | token |
 | `stats_summary.top_large.source` | token |
 | `stats_summary.top_large.max_fn_name` | dropped |
+| `stats_summary.complexity_unreliable.path` | path (hashed when hashing is on) |
+| `stats_summary.complexity_unreliable.language` | token |
 
 ## hotspot wiki
 

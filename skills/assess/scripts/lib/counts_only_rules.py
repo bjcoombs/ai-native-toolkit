@@ -180,6 +180,8 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "stats_summary.top_large.ccn_basis": TOKEN,
         "stats_summary.top_large.source": TOKEN,
         "stats_summary.top_large.max_fn_name": DROP,
+        "stats_summary.complexity_unreliable.path": PATH,
+        "stats_summary.complexity_unreliable.language": TOKEN,
     },
     "hotspot wiki": {
         "pruned_hotspots": PATH,
