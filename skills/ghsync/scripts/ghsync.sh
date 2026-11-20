@@ -596,7 +596,13 @@ provider_clone() {
     local dest=$2
     case "$PROVIDER" in
         github)
-            gh repo clone "$ORG/$path" "$dest" 2>&1
+            # gh passes arguments after -- to git clone; -q silences git's
+            # own "Cloning into" line under --quiet.
+            if [ "$QUIET_MODE" = true ]; then
+                gh repo clone "$ORG/$path" "$dest" -- -q 2>&1
+            else
+                gh repo clone "$ORG/$path" "$dest" 2>&1
+            fi
             ;;
         gitlab)
             git clone -q "$(gitlab_clone_url "$path")" "$dest" 2>&1
@@ -1075,12 +1081,17 @@ update_repo() {
             echo "$repo" >> "${GHSYNC_STATUS_DIR}/failed"
         fi
     else
-        # Clone new repo
-        clear_line
-        echo "*** Cloning $repo"
+        # Clone new repo. The progress lines are per-repository chatter, so
+        # --quiet drops them; a failed clone is always reported.
+        if [ "$QUIET_MODE" = false ]; then
+            clear_line
+            echo "*** Cloning $repo"
+        fi
 
         if [ "$DRY_RUN" = true ]; then
-            echo "*** [DRY-RUN] Would clone $repo into proper structure"
+            if [ "$QUIET_MODE" = false ]; then
+                echo "*** [DRY-RUN] Would clone $repo into proper structure"
+            fi
             echo "$repo" >> "${GHSYNC_STATUS_DIR}/updated"
         else
             mkdir -p "$main_path"
@@ -1091,8 +1102,10 @@ update_repo() {
                 # deep directory trees (200+ char filenames)
                 git -C "$main_path" config core.longpaths true
                 echo "$repo" >> "${GHSYNC_STATUS_DIR}/updated"
-                clear_line
-                echo "*** Cloned $repo"
+                if [ "$QUIET_MODE" = false ]; then
+                    clear_line
+                    echo "*** Cloned $repo"
+                fi
             else
                 clear_line
                 echo "*** Failed to clone $repo"

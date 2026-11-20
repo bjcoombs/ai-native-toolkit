@@ -50,15 +50,34 @@ Privacy: no title, login or user name is written to the block - only counts,
 shares and booleans. A failed pull-request read degrades the whole block to
 ``{"available": False, "reason"}`` (``no_access`` on HTTP 403). GitHub access
 goes through ``gh_cli``.
+
+GitLab. When ``gitlab_cli.open_gitlab`` resolves the remote to a GitLab
+project, the same block is built from merged merge requests through ``glab``:
+the ``DEFAULT_LIMIT`` most recently created merged merge requests, then each
+one's ``approvals`` read. ``approved_share`` counts a merge request approved by
+an account other than its author and ``self_merged_share`` one whose
+``merge_user`` (else ``merged_by``) is its author. Approvals are the only
+review evidence read, so ``reviewed_share`` and ``bot_review_share`` are None,
+and ``hollow_required_review`` is False only where approvals alone clear the
+threshold (an approval is a review), else None. ``review_required`` reads the
+project's approval rules: a rule (other than a ``report_approver`` rule)
+requiring one or more approvals that covers the default branch - no branch
+scope, or a protected-branch name or wildcard matching it - is True; a rule
+scoped to "all protected branches" is unknown (protected-branch reads are
+not part of this scan); a refused read is None, never False. Any failed or
+refused merge-request or approvals read (403, 404 included) degrades the
+whole block, never reads as "no reviews".
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 from lib.gh_cli import GhUnavailable, gh_api, gh_json, open_github, unavailable
+from lib.gitlab_cli import GitlabProject, glab_api, open_gitlab
 
 # Merged pull requests sampled per run.
 DEFAULT_LIMIT = 30
@@ -275,8 +294,130 @@ def summarize(prs: list[dict[str, Any]], required: bool | None,
     }
 
 
+def _username(actor: Any) -> str | None:
+    if isinstance(actor, dict):
+        name = actor.get("username")
+        if isinstance(name, str) and name:
+            return name.lower()
+    return None
+
+
+def _branch_pattern(name: str) -> re.Pattern[str]:
+    """A GitLab protected-branch name as a regex: ``*`` is the only wildcard."""
+    return re.compile("^" + ".*".join(re.escape(p) for p in name.split("*")) + "$")
+
+
+def _rule_covers(rule: dict[str, Any], branch: str) -> bool | None:
+    """Whether an approval rule applies to ``branch``; None when undecidable."""
+    if rule.get("applies_to_all_protected_branches"):
+        return None
+    scopes = rule.get("protected_branches") or []
+    if not isinstance(scopes, list):
+        return None
+    if not scopes:
+        return True
+    names = [b.get("name") for b in scopes if isinstance(b, dict)]
+    if any(not isinstance(n, str) for n in names) or len(names) != len(scopes):
+        return None
+    return any(_branch_pattern(n).match(branch) for n in names if isinstance(n, str))
+
+
+def gitlab_review_required(project: GitlabProject) -> bool | None:
+    """Whether the GitLab project's approval rules require an approval on the
+    default branch (see the module docstring). None when unreadable or
+    undecidable, never False on a refusal."""
+    enc = project.encoded
+    try:
+        meta = glab_api(project, f"projects/{enc}")
+        rules = glab_api(project, f"projects/{enc}/approval_rules?per_page=100")
+    except GhUnavailable:
+        return None
+    branch = meta.get("default_branch") if isinstance(meta, dict) else None
+    if not isinstance(branch, str) or not branch or not isinstance(rules, list):
+        return None
+    unknown = False
+    for rule in rules:
+        if not isinstance(rule, dict):
+            unknown = True
+            continue
+        if rule.get("rule_type") == "report_approver":
+            continue
+        need = rule.get("approvals_required")
+        if not isinstance(need, int) or need < 1:
+            continue
+        covers = _rule_covers(rule, branch)
+        if covers:
+            return True
+        if covers is None:
+            unknown = True
+    return None if unknown else False
+
+
+def _approved_by_other(approvals: Any, author: str | None) -> bool:
+    if not isinstance(approvals, dict):
+        raise GhUnavailable("glab_bad_json: merge request approvals were not an object")
+    for entry in approvals.get("approved_by") or []:
+        user = _username(entry.get("user")) if isinstance(entry, dict) else None
+        if user is not None and user != author:
+            return True
+    return False
+
+
+def scan_gitlab_review_reality(project: GitlabProject,
+                               limit: int = DEFAULT_LIMIT,
+                               now: datetime | None = None) -> dict[str, Any]:
+    """The ``review_reality`` block for a GitLab project (see module docstring)."""
+    now = now or datetime.now(timezone.utc)
+    enc = project.encoded
+    try:
+        got = glab_api(project, f"projects/{enc}/merge_requests?state=merged"
+                                f"&order_by=created_at&sort=desc&per_page={limit}")
+        if not isinstance(got, list):
+            return unavailable("glab_bad_json: the merged merge request list was not a list")
+        mrs = [mr for mr in got if isinstance(mr, dict)][:limit]
+        approved = self_merged = 0
+        ages: list[int] = []
+        for mr in mrs:
+            iid = mr.get("iid")
+            if not isinstance(iid, int):
+                return unavailable("glab_bad_json: a merged merge request has no iid")
+            author = _username(mr.get("author"))
+            merger = _username(mr.get("merge_user")) or _username(mr.get("merged_by"))
+            approvals = glab_api(project, f"projects/{enc}/merge_requests/{iid}/approvals")
+            approved += _approved_by_other(approvals, author)
+            self_merged += author is not None and author == merger
+            age = _days_ago(mr.get("merged_at"), now)
+            if age is not None:
+                ages.append(age)
+    except GhUnavailable as e:
+        return unavailable(e.reason)
+    total = len(mrs)
+    required = gitlab_review_required(project)
+    approved_share = _share(approved, total)
+    bypassed = _flag(required, approved_share, total)
+    return {
+        "available": True,
+        "merged_count": total,
+        "oldest_merged_days_ago": max(ages) if ages else None,
+        "reviewed_share": None,
+        "approved_share": approved_share,
+        "bot_review_share": None,
+        "self_merged_share": _share(self_merged, total),
+        "review_required": required,
+        # reviewed >= approved, so approvals can only clear the hollow flag.
+        "hollow_required_review": False if bypassed is False else None,
+        "required_approval_bypassed": bypassed,
+    }
+
+
 def scan_review_reality(repo_root: Path, limit: int = DEFAULT_LIMIT) -> dict[str, Any]:
     """Build the ``review_reality`` run-context block (see module docstring)."""
+    try:
+        project = open_gitlab(repo_root)
+    except GhUnavailable as e:
+        return unavailable(e.reason)
+    if project is not None:
+        return scan_gitlab_review_reality(project, limit)
     try:
         repo = open_github(repo_root)
         got = gh_json(["pr", "list", "--repo", repo.slug, "--state", "merged",
