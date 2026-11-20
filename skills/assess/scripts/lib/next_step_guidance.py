@@ -86,6 +86,14 @@ def _flag(change: str, done_when: str) -> Wording:
     return wording
 
 
+def _flag_count(change: str, done_when: str) -> Wording:
+    """Wording for a ``gt 0`` / ``gte 1`` count criterion."""
+    def wording(op: str, value: Operand) -> Guidance | None:
+        fits = op == "gt" and value == 0 or op == "gte" and value == 1
+        return {"change": change, "done_when": done_when} if fits else None
+    return wording
+
+
 def _instructions_present(op: str, value: Operand) -> Guidance | None:
     if not (op == "gt" and value == 0 or op == "gte" and value == 1):
         return None
@@ -280,6 +288,9 @@ _WORDING: dict[str, Wording] = {
     "observability.rung": _observability,
     "structure.modularity_q": _modularity,
     "structure.front_door_ratio": _front_doors,
+    "structure.cross_package_edges": _flag_count(
+        "Split the code into more than one top-level package, with imports between them.",
+        "At least one module imports from a different top-level package of the repository."),
     "promissory_markers.families.suppression.total": _suppressions_present,
     "promissory_markers.families.suppression.stale": _suppressions_stale,
     "structure_drift.tier_0.matched_patterns": _ownership_map,

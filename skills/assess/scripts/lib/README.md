@@ -223,7 +223,9 @@ Python import-graph analysis (Signals A1-A4) via `grimp` + `networkx`:
 
 Degrades to `available: False` when `grimp`/`networkx` are absent rather than
 blocking the run, and when no importable Python package exists (nothing measured,
-not an empty graph whose modularity 0 would read as tangled code).
+not an empty graph whose modularity 0 would read as tangled code). `cross_package_edges` counts the
+import edges `front_door_ratio` is measured over; 0 means that ratio's 1.0 is vacuous
+(no package boundary is crossed).
 
 Packages resolve by path, never by import name. grimp's default finder asks
 `importlib.util.find_spec`, which answers from `sys.modules` first, so a target

@@ -102,7 +102,11 @@ constant each.
 # informational finding kind mirrored_instruction_files reports a CLAUDE.md kept
 # identical to its AGENTS.md below the header (issue #589; entry added by #632).
 # Additive: no existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.14.0"
+# 1.15.0: run-context.json structure gains cross_package_edges (issue #663), the
+# import edges front_door_ratio is measured over; 0 marks that ratio's 1.0 as
+# vacuous. Additive: no existing key moves, and complexity-stats.json is
+# unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.15.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
