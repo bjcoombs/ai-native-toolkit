@@ -381,7 +381,7 @@ def view_check(now: Path, then: Path) -> tuple[list[str], list[str]]:
     """For a level-only view of two runs (``heatmap.py --compare``): ``(reasons, set_moved)``.
 
     ``reasons`` says why the runs are not comparable (this module's rule: maturity model
-    version, window, output mode, scans, path hashing, plugin major version,
+    version, window, output mode, scans, path hashing, fleet config, plugin major version,
     file versions, a run with no ``run.json``); ``set_moved`` names the groups
     whose measured set moved, so a level change there is not read as a real
     one. Both are empty when either path is not a run directory (a bare

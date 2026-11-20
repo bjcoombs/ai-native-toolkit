@@ -573,8 +573,9 @@ the scan degrades. The core provides the `build_run_context` arguments
 (`repo_root`, `requested_scope`, `run_date`, `non_interactive`); `scope` (the
 absolute `--scope` path, or None), `instruction_files`, `excludes` (the
 `(dirs, patterns)` pair from `.assess/config.toml`) and `history_window` (the stats
-sidecar's churn window via `git_churn.window_from_churn_label`, or None) are setup
-specs. `build_run_context` makes one `run_scans` call with no stage, which runs the
+sidecar's churn window via `git_churn.window_from_churn_label`, or None) and
+`fleet_config` (the repository's `[ai_usage]`, `[review]` and `[platform]` sections,
+`lib/fleet_config.py`) are setup specs. `build_run_context` makes one `run_scans` call with no stage, which runs the
 stages (`setup`, `read_side`, `post_offers`, `final`) in that order and each in table
 order (#558). Only `anomalies` relies on its stage, staying the last scan key while
 later entries append to the table.
@@ -627,7 +628,8 @@ The headless, signals-only run behind `assess_signals.py` (issue #545). `collect
 the selected registry scans, plus the registry keys they read, through `run_scans` with
 inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 `grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`,
-`history_window` set to `--window` for history-reading scans, and the
+`history_window` set to `--window` for history-reading scans, `fleet_config` merged from
+`--fleet-config` and the target's `.assess/config.toml` (`fleet_config.repo_fleet_config`), and the
 `build_run_context` arguments `requested_scope=None`, `run_date` and
 `non_interactive=True`), so a raising scan degrades through `safe` and the run
 completes. A name the runner provides is never recomputed from the table. A
@@ -897,8 +899,8 @@ report heading and question to `HEADINGS` (one source for a drawn, skipped or fa
 **`fleet_trends.py`**
 Group trend lines across the dated run history (#676). `history_runs(org_dir, stamp, repos)`
 reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
-`groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode and
-path hashing and records a maturity-model version; unreadable entries are passed over. One
+`groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode,
+path hashing and `--fleet-config` hash and records a maturity-model version; unreadable entries are passed over. One
 run per date: the entry over this run's repository set, else the highest suffix.
 `trend_run(stamp, groups, levels)` is one run's point per group: `group_mean`, the
 `fleet_maturity.mean_share` of the group's known team rows over their `top_level` (#684, the
@@ -1016,7 +1018,7 @@ or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` re
 name that is not one plain path component, `entry_dir` refuses a symlinked directory on
 the way, and `entry_conflict` keeps a same-day entry that is not this tool's (no readable
 `run.json` at the current stamp version) or whose stamp differs in maturity-model version,
-window, output mode, scan selection or path hashing, or that holds a different
+window, output mode, scan selection, path hashing or `--fleet-config` hash, or that holds a different
 repository set (`entry_repos`), so a partial rerun never replaces a full-fleet entry;
 `choose_entry` then moves to
 `<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
@@ -1047,7 +1049,8 @@ Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
 `RunVersionError` for another envelope version or a run with no `run.json`, which callers
 turn into a not-comparable result). `comparability` reuses
 `diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
-adds maturity-model version, window, output mode, scan selection and path hashing; any reason
+adds maturity-model version, window, output mode, scan selection, path hashing and the
+`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config); any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
@@ -1265,7 +1268,9 @@ folder->source provenance map (issue #178) consumed by `doc_provenance.py`, and 
 `assess_core.py` and `doc-graph-svg.py`. `resolve_excludes`
 is the single shared path that combines config excludes with CLI `--exclude`; both the treemap
 CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.
-Degrades silently on missing or malformed config rather than blocking the run.
+Degrades silently on missing or malformed config rather than blocking the run. The
+`[ai_usage]`, `[review]` and `[platform]` sections are read by `fleet_config.py`, not here
+(they extend a `--fleet-config` file, #706).
 
 **`decline_markers.py`**
 Reads the `.assess/.no-<tool>` markers that record a permanent decline of an optional

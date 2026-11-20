@@ -49,8 +49,8 @@ interactive ``/assess``) the fleet side is empty and the repository's sections
 apply alone.
 
 Canonical form. ``config_sha256`` hashes the validated config as sorted-key
-JSON: comments, whitespace and key order in the file do not change it, list
-order does (it is meaningful).
+JSON with empty sections left out: comments, whitespace, key order and a newly
+defined empty section do not change it; list order does (it is meaningful).
 """
 from __future__ import annotations
 
@@ -216,7 +216,10 @@ def load_fleet_config(path: Path, schema: Mapping[str, SectionKeys] | None = Non
 
 
 def canonical_json(config: FleetConfig) -> str:
-    return json.dumps(config, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    """Sorted-key JSON with empty sections left out, so adding a section later leaves
+    every stored hash unchanged."""
+    present = {name: section for name, section in config.items() if section}
+    return json.dumps(present, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
 def config_sha256(config: FleetConfig) -> str:

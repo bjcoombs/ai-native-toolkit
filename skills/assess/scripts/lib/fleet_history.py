@@ -21,7 +21,8 @@ Writes are narrow and fail closed:
   existing directory on the way from the root to the entry may be a symlink;
 - a same-day entry is replaced only when it is this tool's (a readable
   ``run.json`` at the stamp version this code writes) and its stamp agrees on
-  maturity-model version, window, output mode, scan selection and path hashing, and
+  maturity-model version, window, output mode, scan selection, path hashing and
+  ``--fleet-config`` hash, and
   holds the same repository set (so a partial ``--from-list`` rerun never
   replaces the full-fleet entry); otherwise ``entry_conflict`` names why, the entry is kept, and
   ``choose_entry`` moves on to a suffixed sibling (``<date>.2``, ``<date>.3``,

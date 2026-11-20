@@ -329,3 +329,27 @@ def test_fleet_gives_every_scan_the_same_copy_and_stamps_the_hash(tmp_path, monk
     for path in out.rglob("*"):
         if path.is_file():
             assert SENTINEL not in path.read_text(encoding="utf-8", errors="replace")
+
+
+def test_a_new_empty_section_leaves_every_stored_hash_unchanged():
+    config = _parse(FULL)
+    widened: Any = {**config, "later": {}}
+    assert fcfg.config_sha256(widened) == fcfg.config_sha256(config)
+    assert fcfg.config_sha256(fcfg.empty_config()) == fcfg.config_sha256(_parse("[review]\n"))
+
+
+def test_a_history_entry_from_before_706_still_matches_and_loads(tmp_path):
+    from lib.fleet import write_rows
+    from lib.fleet_compare import load_run
+    from lib.fleet_groups import write_groups
+
+    rows = [_row("grp/a")]
+    entry = tmp_path / "org" / "2026-11-19"
+    entry.mkdir(parents=True)
+    write_rows(entry, rows)
+    write_groups(entry, roll_up(rows, LEVELS, {}))
+    old = {k: v for k, v in _stamp(None).items() if not k.startswith("fleet_config")}
+    (entry / "run.json").write_text(json.dumps(old), encoding="utf-8")
+    assert fh.entry_conflict(entry, dict(_stamp(None))) is None
+    assert fh.latest_matching(entry.parent, dict(_stamp(None))) == entry
+    assert load_run(entry).stamp.get("fleet_config_sha256") is None
