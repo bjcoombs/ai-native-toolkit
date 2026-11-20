@@ -91,6 +91,7 @@
           "dead_code",
           "derived_findings",
           "diff",
+          "doc_claims",
           "doc_graph",
           "doc_staleness",
           "documentation",
