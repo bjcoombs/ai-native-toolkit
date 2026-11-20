@@ -240,6 +240,15 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "instruction_claims.failures.version": DROP,
         "instruction_claims.failures.reason": DROP,
     },
+    "doc_claims": {
+        "doc_claims.excluded_trees": PATH,
+        "doc_claims.failures.kind": TOKEN,
+        "doc_claims.failures.version": DROP,
+        "doc_claims.failures.reason": DROP,
+        "doc_claims.contradictions.kind": TOKEN,
+        "doc_claims.contradictions.sites.value": DROP,
+        "doc_claims.contradictions.conflict_pair.value": DROP,
+    },
     "doc_graph": {
         "doc_graph.reason": DROP,
         "doc_graph.orphans": PATH,

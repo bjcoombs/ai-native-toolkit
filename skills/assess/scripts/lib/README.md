@@ -1608,7 +1608,38 @@ The core writes the result as the run-context block `instruction_claims`
 nothing matched; `{available: false, reason}` with no counts when the scan itself
 raised, since it runs from the `scan_registry` table); failures feed Layer 0 evidence and a Lying Signals row. A new
 claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
-(which returns the extra failure fields). Tests: `tests/test_instruction_claims.py`.
+(which returns the extra failure fields). `tally_claims` and `has_ci_config` are
+public for `doc_claims`. Tests: `tests/test_instruction_claims.py`.
+
+**`doc_claims.py`**
+Runs the `instruction_claims` kinds over the doc set and adds one cross-document
+kind (issue #491), no model. `scan_doc_claims(repo_root, instruction_files,
+scope, excludes)` reads the tracked Markdown matching `DOC_CLAIM_GLOBS` (`docs/**/*.md`,
+`skills/*/references/**/*.md`, `skills/*/SKILL.md`) from the `--scope` directory
+(default the repo root), minus `HISTORICAL_DOC_TREES` (`docs/design`,
+`docs/superpowers` and the ADR and RFC trees, matched from that directory), the built-in
+excluded trees and the user's excludes, and verifies each document's claims with
+`instruction_claims.tally_claims`. The graded instruction files join the
+comparison but are not re-verified (a document that resolves to one, such as
+`docs/CLAUDE.md`, is left to `instruction_claims`). The cross-document kind,
+`contradiction`, groups `pin` and `count` claims by kind and path and reports a
+group when two different files (by resolved path) disagree: two pins disagree
+unless one version's dotted components prefix the other's, two counts unless
+they are within `count_within_tolerance`. One finding per group lists every
+site, so both conflicting lines are cited; a claim the repo cannot verify still
+takes part. A skill's `SKILL.md` and `references/` claims resolve against
+`skills/<name>/` (`rebase_skill_claims`; the repo root only when just that reading
+exists), before verification and grouping. Pins group by pinned file, so a pin finding whose every version
+the file contains (two tools in one `.tool-versions`) is dropped. The kind is a pair of tables, `CROSS_DOC_VALUE` (claim -> value) and
+`CROSS_DOC_AGREE` (two values -> agree), mirroring `_EXTRACTORS` and
+`_VERIFIERS`. The core writes the run-context block `doc_claims`
+(`{files_scanned, excluded_trees, total, verified, failed, failures[...],
+contradictions_total, contradictions[{kind, path, sites[{file, line, value}],
+conflict_pair}]}` (`conflict_pair`: the first two sites from different files that
+disagree),
+lists capped at `MAX_FAILURES` and `MAX_CONTRADICTIONS`; `{available: false,
+reason}` when the scan raised). Rules that conflict in meaning stay out of the
+core. Tests: `tests/test_doc_claims.py`.
 
 **`claude_config.py`**
 Flags Claude Code configuration the runtime treats as legacy or silently ignores
