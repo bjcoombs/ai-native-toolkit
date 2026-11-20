@@ -1,5 +1,5 @@
 {
-  "assess_method_version": 6,
+  "assess_method_version": 7,
   "findings": [
     {
       "name": "hidden_coupling",
@@ -20,9 +20,7 @@
     },
     {
       "name": "lying_map",
-      "paths": [
-        "skills/assess/tests/README.md"
-      ]
+      "paths": []
     },
     {
       "name": "unexplained_complexity",
@@ -51,6 +49,7 @@
         "scripts/tests/test_floor_anchor.py",
         "scripts/tests/test_floor_check.py",
         "skills/assess/scripts/lib/git_churn.py",
+        "skills/assess/scripts/lib/scan_registry.py",
         "skills/assess/scripts/lib/test_pressure/mutmut3.py",
         "skills/assess/scripts/lib/wiki_writer.py",
         "skills/assess/tests/test_assess_finalize.py",
