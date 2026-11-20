@@ -490,7 +490,7 @@ def _run_dependency_analyze(repo_root: Path) -> str | None:
     try:
         proc = subprocess.run(
             ["mvn", "-q", "dependency:analyze"],
-            cwd=str(repo_root), capture_output=True, text=True,
+            cwd=str(repo_root), capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=300, check=False,
         )
     except (OSError, subprocess.TimeoutExpired):

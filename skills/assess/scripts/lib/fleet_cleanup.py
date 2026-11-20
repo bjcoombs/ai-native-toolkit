@@ -26,9 +26,11 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 import subprocess
+import sys
 import threading
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from lib.fleet import STATUS_OK, FleetRow, Target, checkout_name
@@ -62,6 +64,7 @@ def _git_out(checkout: Path, *args: str) -> str:
     try:
         done = subprocess.run(
             ["git", "-C", str(checkout), *args], capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
             check=True, timeout=60, env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         )
     except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired) as e:
@@ -113,6 +116,26 @@ def deletion_problem(target: Target, row: FleetRow, protected: Iterable[Path]) -
     return _git_problem(checkout)
 
 
+def _clear_read_only(func: Callable[..., object], path: str, exc: object) -> None:
+    """rmtree's error hook: make a file writable and retry its deletion once.
+
+    Git marks pack and object files read-only, and Windows refuses to delete a
+    read-only file. Any other failure, and a second failure, propagate to
+    ``delete_clone`` (``exc`` is the exception, or onerror's exc_info tuple).
+    """
+    if func not in (os.unlink, os.remove, os.rmdir):
+        raise exc if isinstance(exc, BaseException) else sys.exc_info()[1] or OSError(path)
+    os.chmod(path, os.stat(path).st_mode | stat.S_IWRITE)
+    func(path)
+
+
+def _rmtree(path: Path) -> None:
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_clear_read_only)
+    else:  # pragma: no cover - Python 3.11 has only onerror
+        shutil.rmtree(path, onerror=_clear_read_only)
+
+
 def delete_clone(target: Target, row: FleetRow, protected: Iterable[Path]) -> str:
     """Delete ``target``'s checkout when ``deletion_problem`` allows; ``deleted`` or a keep reason."""
     problem = deletion_problem(target, row, protected)
@@ -120,7 +143,7 @@ def delete_clone(target: Target, row: FleetRow, protected: Iterable[Path]) -> st
         return problem
     checkout = target.checkout.resolve()
     try:
-        shutil.rmtree(checkout)
+        _rmtree(checkout)
     except OSError:
         return KEEP_DELETE_ERROR
     for directory in (checkout.parent / "worktree", checkout.parent):

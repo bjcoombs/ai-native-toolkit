@@ -94,6 +94,11 @@ ever cut, this note is where the intended boundary is written down.
 
 ## Module reference
 
+Windows portability (#712): every text-mode `subprocess.run` names
+`encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` on every `git ls-files -z` listing, whose paths must
+round-trip), and a repo-relative path is rendered with `.as_posix()`, never `str()`.
+`tests/test_windows_portability.py` guards both across `scripts/`.
+
 ### Data collection
 
 **`git_churn.py`**
@@ -687,7 +692,7 @@ same `repo` id (the path under the root, prefixed with the root's name when one
 segment), a listed path outside the root falling back to `remote_path` (the `origin`
 URL's path) and then to its last two directory names. `scan_target` checks
 `checkout_problem` first (`assess_signals` exits 0 on a broken `.git`), then runs
-`assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0`, counts-only unless
+`assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0` and `PYTHONUTF8=1` (#712), counts-only unless
 told otherwise, from a scratch directory, with a timeout; every failure becomes a
 `failed` row with a reason token (`FAILURE_REASONS` or `scan_exit_<code>`), never
 message text. A `scan_exit_<code>` failure's stderr tail goes to `write_stderr_tail`
@@ -973,6 +978,9 @@ checkout that is not a main clone at its work-tree root, one holding a protected
 (`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
 output, a stash, a commit on `HEAD` or any ref (`rev-list --all`) that no remote branch holds, a
 linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
+The `rmtree` error hook (`_clear_read_only`, #712) makes a read-only file writable and
+retries its deletion once, since Windows refuses to delete git's read-only objects; any
+other failure keeps the clone as `delete_error`.
 
 **`fleet_history.py`**
 The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`

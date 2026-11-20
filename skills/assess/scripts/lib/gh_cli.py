@@ -95,7 +95,8 @@ def git_remote_url(repo_root: Path) -> str | None:
         try:
             proc = subprocess.run(
                 ["git", "-C", str(repo_root), *args],
-                capture_output=True, text=True, timeout=GH_TIMEOUT_SECONDS,
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=GH_TIMEOUT_SECONDS,
             )
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return None
@@ -126,7 +127,8 @@ def _run_gh(args: list[str], timeout: int = GH_TIMEOUT_SECONDS) -> str:
     shown = " ".join(cmd)
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
+            cmd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=timeout,
         )
     except FileNotFoundError:
         raise GhUnavailable("gh_not_installed: the gh CLI is not on PATH") from None

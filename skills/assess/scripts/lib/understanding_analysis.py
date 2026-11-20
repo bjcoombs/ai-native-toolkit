@@ -155,7 +155,8 @@ def _days_since_last_human_commit(repo_top: str, path: str) -> int | None:
     try:
         raw = subprocess.run(
             ["git", "-C", repo_top, "log", "--no-merges", f"--format={fmt}", "--", path],
-            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return None

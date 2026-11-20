@@ -87,8 +87,8 @@ def _build_name_index(
     by_stem: dict[str, list[Path]] = {}
     for d in docs:
         rel = d.relative_to(repo_root)
-        by_relpath[str(rel).lower()] = d
-        by_relpath[str(rel.with_suffix("")).lower()] = d
+        by_relpath[rel.as_posix().lower()] = d
+        by_relpath[rel.with_suffix("").as_posix().lower()] = d
         by_name.setdefault(d.name.lower(), []).append(d)
         by_stem.setdefault(d.stem.lower(), []).append(d)
     return by_relpath, by_name, by_stem

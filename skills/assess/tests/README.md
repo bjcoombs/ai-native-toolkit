@@ -160,6 +160,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_fleet_heatmap.py` | `lib/fleet_view.py` + `lib/fleet_heatmap.py` + `skills/fleet/scripts/heatmap.py` - the leadership heat map SVG against goldens in `fixtures/fleet_heatmap/` |
 | `fleet_heatmap_fixture.py` | builds the `fixtures/fleet_heatmap/` runs from `lib/fleet_groups.roll_up` (not a test module; regenerate with `uv run --locked python tests/fleet_heatmap_fixture.py`) |
 | `test_fleet_run_stamp.py` | `lib/fleet_stamp.py` + `lib/fleet_cleanup.py` - the fleet run stamp, per-repository activity and `--delete-after` |
+| `test_windows_portability.py` | Windows correctness across `scripts/` (#712): every text-mode subprocess call names UTF-8 (checked under an emulated ASCII locale), repo-relative paths render with `/`, and `lib/fleet_cleanup.py` deletes read-only files under emulated Windows deletion semantics |
 | `test_fleet_legacy.py` | `lib/fleet_legacy.py` - a run written before the 2.0.0 maturity-model rename (`fixtures/fleet_legacy/`) loads, compares and counts in the history and trend |
 | `test_fleet_history.py` | `lib/fleet_history.py` + `skills/fleet/scripts/fleet.py` + `skills/fleet/scripts/fleet_compare.py` - the dated run history, the `--compare` wiring and the compare CLI |
 | `test_fleet_compare.py` | `lib/fleet_compare.py` - comparing two fleet runs without rescanning: level movement apart from measured-set movement, and the not-comparable reasons |
