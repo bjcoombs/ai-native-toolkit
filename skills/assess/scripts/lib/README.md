@@ -488,8 +488,8 @@ Setup-stage adapters for the scan table (#557): `run_scope`, `run_assess_dir`,
 generated-file filter caused), `instruction_grading`, `rename_map` and
 `measured_commit` (the git-churn call sites #424 and #425 rewrite), `config_excludes`,
 `first_flagged`, `superseded_run`, `unfinalized_exclusions`, `read_plugin_version`, and
-`run_header`, which returns the first 25 run-context keys (`RUN_HEADER_KEYS`) with the
-four `WIKI_KEYS` reserved as None for the publish step. Reads only. Tests:
+`run_header`, which returns the first 27 run-context keys (`RUN_HEADER_KEYS`) with the
+four `WIKI_KEYS` and `prior_findings_snapshot` reserved as None for the publish step. Reads only. Tests:
 `tests/test_run_setup.py`.
 
 **`core_scans.py`**
@@ -504,8 +504,9 @@ only, which holds every key `detect_anomalies` inspects. No logic of its own. Te
 **`run_publish.py`**
 The run's side effects, applied after every scan (#557): `publish_run` creates the
 artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four wiki
-keys the run header reserved in place, writes `badge.json` and then
-`run-context.json`. Tests: `tests/test_run_setup.py`.
+keys the run header reserved in place, writes `badge.json`, reads the previous
+`findings.json` into `prior_findings_snapshot` and rewrites it
+(`findings_snapshot`), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
 
 **`degrade.py`**
 `safe` and `unavailable`: the "a broken scan never blocks the assessment" wrapper and
@@ -772,6 +773,23 @@ no prompts and an audit trail. Pure stdlib, no side effects. Called by
 writes (run-context.json, the badge, the wiki pages); the version history is in the
 module comment. `complexity-treemap.py` carries a copy that
 `tests/test_complexity_treemap.py` holds equal to it.
+It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
+independent of plugin releases, bumped by one in any change that moves which findings
+a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
+`findings.json`.
+
+**`findings_snapshot.py`**
+The committed findings snapshot (#554). `build_snapshot` reduces `derived_findings` to
+names and sorted paths plus `ASSESS_METHOD_VERSION`; `write_snapshot` writes it to
+`findings.json` in the run's artifact directory, with no run id or date so an unchanged
+finding set leaves the file byte-identical. `load_snapshot` reads the previous file back
+before the run overwrites it (`None` when absent or malformed), and `run_publish`
+records it as `prior_findings_snapshot`. `method_change` compares that snapshot with
+the current findings: on a method-version mismatch it lists the paths that appeared and
+cleared per finding, the snapshot path and the re-freeze command (on a downgrade, when
+this run's method is older than the snapshot's, the toolkit pin to raise instead),
+which `assess_gate` prints as an explanation (it never fails the gate by itself). Tests:
+`tests/test_findings_snapshot.py`.
 
 **`run_wiki.py`**
 Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
