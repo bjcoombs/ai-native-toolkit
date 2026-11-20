@@ -132,6 +132,32 @@ def test_the_anchor_accepts_the_real_base_copy_classification(tmp_path):
             BASE_CALL + " \\\n              --base \"${BASE_SHA}\" --changed --role",
             'python "${HC}" protected \\\n              --base "${BASE_SHA}" --changed --role',
         ),
+        # the floor-core call adds an interpreter flag
+        (BASE_CALL + " \\\n              --base \"${BASE_SHA}\" --changed --role",
+         'python -I "${BASE_SCRIPTS}"/floor_check.py protected \\\n'
+         '              --base "${BASE_SHA}" --changed --role'),
+        # the floor-core call uses another interpreter name
+        (BASE_CALL + " \\\n              --base \"${BASE_SHA}\" --changed --role",
+         'python3.12 "${BASE_SCRIPTS}"/floor_check.py protected \\\n'
+         '              --base "${BASE_SHA}" --changed --role'),
+        # the head copy overwrites the extract between extract and call
+        (
+            "          if ! PROTECTED=",
+            '          cp scripts/floor_check.py "${BASE_SCRIPTS}/floor_check.py"\n'
+            "          if ! PROTECTED=",
+        ),
+        # ...or through a glob that never spells the script's name
+        (
+            "          if ! PROTECTED=",
+            '          cp scripts/floor_ch*.py "${BASE_SCRIPTS}/floor_check.py"\n'
+            "          if ! PROTECTED=",
+        ),
+        # a command hidden in an echo message
+        (
+            "          if ! PROTECTED=",
+            '          echo "$(cp scripts/floor_check.py ${BASE_SCRIPTS}/)"\n'
+            "          if ! PROTECTED=",
+        ),
         # a head-copy call appended after the base-copy one
         (
             '          if [ "${CLASSIFY_FAILED}" = "true" ]; then\n',

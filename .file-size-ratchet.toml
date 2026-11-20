@@ -34,7 +34,7 @@ lines = 876
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."scripts/floor_anchor.py"]
-lines = 1131
+lines = 1143
 reason = "pre-existing; ratchet from 2026-10-07. Raised for the base-copy classification pin (#645): floor core is an explicit file list in floor_check.py (FLOOR_CORE_PATHS), so a sibling module would sit outside the floor core and outside its sign-off"
 
 [ceilings."scripts/floor_check.py"]

@@ -136,19 +136,25 @@ JOB_OUTPUT_RE = re.compile(
 STEP_ID_RE = re.compile(r"^\s{6,}id:\s*(\S+)\s*$")
 CLASSIFIER_INVOCATION = ("floor_check.py protected", "--role floor-core")
 # ...and the script asked must be the BASE ref's copy (#583, #645): the head
-# copy is the one the pull request under review can edit. The step pins the
-# base as the merge-base, extracts the copy with ``git show`` and invokes that
-# extract, and each failure (no copy, a crash) sets a flag that, when set,
-# re-assigns the answer -- fail closed. Read with line continuations joined.
-BASE_SHA_ASSIGN = 'BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"'
+# copy is the one the pull request under review can edit. Read with comments
+# dropped, continuations joined, plain ``echo`` messages (no ``$(``) removed and
+# quotes stripped, the step must pin the base as the merge-base, extract the
+# copy with ``git show`` (a failure sets a flag), run that extract in exactly
+# one ``if ! <var>=$(python <extract> protected ... --role floor-core)`` whose
+# failure sets the same flag, and re-assign ``<var>`` when the flag is set --
+# fail closed. Structurally, ``floor_check.py`` appears nowhere but in the
+# extract and its path, and the path only as ``python <path> protected`` or
+# ``pin-bump-only``: a copy, redirect, alias, flag or other interpreter fails.
+BASE_SHA_ASSIGN = "BASE_SHA=$(git merge-base origin/${{ github.base_ref }} HEAD)"
 BASE_EXTRACT_RE = re.compile(
-    r'git show "\$\{BASE_SHA\}:scripts/floor_check\.py"\s*>\s*(\S+)'
+    r"git show \$\{BASE_SHA\}:scripts/floor_check\.py\s*>\s*(\S+)"
     r"(?:\s+2>\s*/dev/null)?\s*\|\|\s*(\w+)=true"
 )
 BASE_CALL_RE = re.compile(
-    r'if !\s*(\w+)="\$\(python3?\s+(\S+)\s+protected\b[^)]*--role floor-core[^)]*\)";'
+    r"if !\s*(\w+)=\$\(python\s+(\S+)\s+protected\b[^)]*--role floor-core[^)]*\);"
     r"\s*then\s+(\w+)=true\s"
 )
+BASE_USE_RE = r"(?:^|[\s(])python {} (?:protected|pin-bump-only)\b"
 # ``continue-on-error: true`` at step or job level makes a non-zero exit
 # non-fatal, which disarms every conversion step while leaving each guard and
 # script byte-identical. The key is rejected outright in the enforcement job.
@@ -830,11 +836,11 @@ def _check_base_copy(script: str, filter_job: str, step_id: str) -> None:
     own floor-core change as clean and skip the sign-off (FLOOR.md clause iii).
     """
     live = "\n".join(ln for ln in script.split("\n") if not ln.lstrip().startswith("#"))
-    text = re.sub(r"\\\n\s*", " ", live)
-    runs = {m.replace('"', "") for m in re.findall(r"python3?\s+(\S*floor_check\.py\S*)", text)}
-    where = f"step {step_id!r} of job {filter_job!r}"
+    text = re.sub(r'echo "[^"$`]*(?:\$\{\w+\}[^"$`]*)*"', "echo", re.sub(r"\\\n\s*", " ", live))
+    text = text.replace('"', "")
     extract = BASE_EXTRACT_RE.search(text)
-    call = BASE_CALL_RE.search(text)
+    calls = list(BASE_CALL_RE.finditer(text))
+    problem = ""
     if len(re.findall(r"(?<![\w$])BASE_SHA=", text)) != 1 or BASE_SHA_ASSIGN not in text:
         problem = f"does not set BASE_SHA once, as `{BASE_SHA_ASSIGN}`"
     elif not extract:
@@ -842,33 +848,39 @@ def _check_base_copy(script: str, filter_job: str, step_id: str) -> None:
             'never extracts `git show "${BASE_SHA}:scripts/floor_check.py" > '
             "<path> || <flag>=true`"
         )
-    elif not call or extract.start() > call.start():
+    elif len(calls) != 1 or calls[0].start() < extract.end():
         problem = (
-            "does not then classify with `if ! <var>=\"$(python <path> protected "
-            '... --role floor-core)"; then <flag>=true`'
+            "does not then classify, once, with `if ! <var>=\"$(python <path> "
+            'protected ... --role floor-core)"; then <flag>=true`'
         )
-    elif runs | {call.group(2).replace('"', "")} != {extract.group(1).replace('"', "")}:
-        problem = (
-            f"runs {sorted(runs | {call.group(2)})}, not only the extracted base copy "
-            f"{extract.group(1)!r}"
-        )
-    elif not (
-        call.group(3) == extract.group(2)
-        and (branch := re.search(
-            r'if \[ "\$\{' + extract.group(2) + r'\}" = "true" \]; then\s(.*?)\sfi\b',
-            text, re.S,
-        ))
-        and re.search(r"(?<![\w$])" + call.group(1) + "=", branch.group(1))
-    ):
-        problem = "has no fail-closed branch that re-assigns the answer when the flag is set"
     else:
-        return
-    raise AnchorError(
-        f"{where} {problem}. The floor-core answer must come from the BASE "
-        "ref's copy of scripts/floor_check.py, failing closed: the pull "
-        "request's own copy can classify its own change as clean and skip the "
-        "sign-off (FLOOR.md clause iii)."
-    )
+        path, call = extract.group(1), calls[0]
+        rest = text[: extract.start()] + text[extract.end():]
+        uses = len(re.findall(BASE_USE_RE.format(re.escape(path)), rest))
+        if call.group(2) != path or rest.count(path) != uses:
+            problem = (
+                f"names the extracted base copy {path!r} other than as `python "
+                f"{path} protected|pin-bump-only`, or classifies with "
+                f"{call.group(2)!r}"
+            )
+        elif "floor_check.py" in rest.replace(path, ""):
+            problem = "names floor_check.py outside the base-copy extract and its path"
+        elif not (
+            call.group(3) == extract.group(2)
+            and (branch := re.search(
+                r"if \[ \$\{" + extract.group(2) + r"\} = true \]; then\s(.*?)\sfi\b",
+                text, re.S,
+            ))
+            and re.search(r"(?<![\w$])" + call.group(1) + "=", branch.group(1))
+        ):
+            problem = "has no fail-closed branch that re-assigns the answer when the flag is set"
+    if problem:
+        raise AnchorError(
+            f"step {step_id!r} of job {filter_job!r} {problem}. The floor-core "
+            "answer must come from the BASE ref's copy of scripts/floor_check.py, "
+            "failing closed: the pull request's own copy can classify its own "
+            "change as clean and skip the sign-off (FLOOR.md clause iii)."
+        )
 
 
 def _job_steps(lines: list[str]) -> list[list[str]]:
