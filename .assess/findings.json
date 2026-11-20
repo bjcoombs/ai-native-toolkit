@@ -1,5 +1,5 @@
 {
-  "assess_method_version": 2,
+  "assess_method_version": 3,
   "findings": [
     {
       "name": "hidden_coupling",
@@ -20,7 +20,9 @@
     },
     {
       "name": "lying_map",
-      "paths": []
+      "paths": [
+        "skills/README.md"
+      ]
     },
     {
       "name": "unexplained_complexity",
